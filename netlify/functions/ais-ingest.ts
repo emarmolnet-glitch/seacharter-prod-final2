@@ -1,17 +1,14 @@
 import type { Config } from "@netlify/functions";
-import { sql } from "drizzle-orm";
-import { db } from "../../db/index.js";
-import { vesselsMaster } from "../../db/schema.js";
+import { upsertVessels, type VesselRecord } from "./vessel-store.js";
 
 const AISSTREAM_ENDPOINT = "https://api.aisstream.io/v0/vessels";
 const BOUNDING_BOX = {
-  minLat: 20.0,
-  maxLat: 46.0,
-  minLon: -20.0,
-  maxLon: 16.0,
+  minLat: -60.0,
+  maxLat: 60.0,
+  minLon: -180.0,
+  maxLon: 180.0,
 };
-
-type VesselRow = typeof vesselsMaster.$inferInsert;
+const BULK_CARRIER_SHIP_TYPES = Array.from({ length: 10 }, (_, index) => 70 + index);
 
 function pickObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -47,7 +44,7 @@ function getRealData(payload: unknown): unknown[] {
   return Array.isArray(realData) ? realData : [];
 }
 
-function normalizeVessel(item: unknown): VesselRow | null {
+function normalizeVessel(item: unknown): VesselRecord | null {
   const vessel = pickObject(item);
   const message = pickObject(vessel.Message);
   const position = pickObject(message.PositionReport ?? vessel.PositionReport);
@@ -83,8 +80,9 @@ function normalizeVessel(item: unknown): VesselRow | null {
     eta: toText(readNested(merged, ["eta", "ETA", "Eta"])),
     source: "AISStream",
     rawData: item,
-    lastSeenAt: new Date(),
-    updatedAt: new Date(),
+    lastSeenAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
   };
 }
 
@@ -108,6 +106,7 @@ export default async (req: Request) => {
       APIKey: apiKey,
       BoundingBox: [[BOUNDING_BOX.minLat, BOUNDING_BOX.minLon], [BOUNDING_BOX.maxLat, BOUNDING_BOX.maxLon]],
       boundingBox: BOUNDING_BOX,
+      FiltersShipType: BULK_CARRIER_SHIP_TYPES,
     }),
   });
 
@@ -120,34 +119,15 @@ export default async (req: Request) => {
   }
 
   const payload = await aisResponse.json();
-  const rows = getRealData(payload).map(normalizeVessel).filter((row): row is VesselRow => row !== null);
+  const realData = getRealData(payload);
+  console.log("[AISStream] vessels received:", realData.length);
+  const rows = realData.map(normalizeVessel).filter((row): row is VesselRecord => row !== null);
 
   if (rows.length === 0) {
-    return Response.json({ inserted: 0, updated: 0, skipped: getRealData(payload).length });
+    return Response.json({ inserted: 0, updated: 0, skipped: realData.length });
   }
 
-  await db
-    .insert(vesselsMaster)
-    .values(rows)
-    .onConflictDoUpdate({
-      target: vesselsMaster.imoNumber,
-      set: {
-        mmsi: sql`excluded."mmsi"`,
-        vesselName: sql`excluded."vesselName"`,
-        shipType: sql`excluded."shipType"`,
-        latitude: sql`excluded."latitude"`,
-        longitude: sql`excluded."longitude"`,
-        speed: sql`excluded."speed"`,
-        course: sql`excluded."course"`,
-        heading: sql`excluded."heading"`,
-        navigationalStatus: sql`excluded."navigationalStatus"`,
-        destination: sql`excluded."destination"`,
-        eta: sql`excluded."eta"`,
-        rawData: sql`excluded."rawData"`,
-        lastSeenAt: sql`excluded."lastSeenAt"`,
-        updatedAt: sql`now()`,
-      },
-    });
+  await upsertVessels(rows);
 
   return Response.json({ insertedOrUpdated: rows.length, boundingBox: BOUNDING_BOX });
 };

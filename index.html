@@ -33,8 +33,15 @@
     <script src="/map_loader.js"></script>
     <!-- Maritime Routing Library -->
     <script type="module">
-        import * as searouteModule from 'https://cdn.jsdelivr.net/npm/searoute-ts@1.2.1/+esm';
-        window.seaRoute = searouteModule.seaRoute || searouteModule.searoute || searouteModule.default;
+        window.seaRouteReady = import('https://cdn.jsdelivr.net/npm/searoute-ts@2.0.0/+esm')
+            .then((searouteModule) => {
+                window.seaRoute = searouteModule.seaRoute || searouteModule.searoute || searouteModule.default;
+                return window.seaRoute;
+            })
+            .catch((err) => {
+                console.warn('[Routing Engine] No se pudo cargar searoute-ts en el navegador.', err);
+                return null;
+            });
     </script>
     <!-- Librerías de Extracción de Texto para el Auditor IA -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
@@ -12384,6 +12391,20 @@
             return pinned.filter((coord) => Number.isFinite(coord[0]) && Number.isFinite(coord[1]));
         }
 
+        async function ensureSeaRouteAvailable(timeoutMs = 2500) {
+            if (window.seaRoute) return window.seaRoute;
+            if (!window.seaRouteReady || typeof window.seaRouteReady.then !== 'function') return null;
+
+            try {
+                return await Promise.race([
+                    window.seaRouteReady,
+                    new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs))
+                ]);
+            } catch (_) {
+                return null;
+            }
+        }
+
         /**
          * Calcula la ruta marítima completa de manera secuencial pasando por los chokepoints requeridos.
          * Divide el viaje en sub-segmentos independientes, calcula la distancia de cada uno y une los trayectos.
@@ -12446,6 +12467,7 @@
             let totalDistance = 0;
             let combinedCoordinates = [];
             let segmentCalculatedCount = 0;
+            const localSeaRoute = await ensureSeaRouteAvailable();
 
             // Bucle iterativo para calcular cada sub-segmento secuencial
             for (let i = 0; i < sequentialNodes.length - 1; i++) {
@@ -12456,10 +12478,15 @@
                 let segCoords = [];
                 let segmentSuccess = false;
 
-                if (window.seaRoute) {
+                if (localSeaRoute) {
                     try {
                         // Llamamos al algoritmo actual (seaRoute) para calcular la ruta más corta del sub-segmento
-                        const routeGeoJSON = window.seaRoute([segStart.lon, segStart.lat], [segEnd.lon, segEnd.lat]);
+                        const routeGeoJSON = localSeaRoute([segStart.lon, segStart.lat], [segEnd.lon, segEnd.lat], {
+                            units: 'nauticalmiles',
+                            appendOriginDestination: true,
+                            returnPassages: true,
+                            maxSnapDistanceKm: 250
+                        });
                         segDistance = routeGeoJSON.properties.length;
                         
                         // Extraemos la geometría (coordenadas) para unirlas y dibujarlas en el mapa

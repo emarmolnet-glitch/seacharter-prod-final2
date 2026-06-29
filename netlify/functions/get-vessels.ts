@@ -1,7 +1,4 @@
-import { desc } from "drizzle-orm";
-import { sql } from "drizzle-orm";
-import { db } from "../../db/index.js";
-import { vesselsMaster } from "../../db/schema.js";
+import { readVessels, sortByLastSeen, upsertVessels, type VesselRecord } from "./vessel-store.js";
 
 const AISSTREAM_ENDPOINT = "https://api.aisstream.io/v0/vessels";
 const BOUNDING_BOX = {
@@ -10,8 +7,6 @@ const BOUNDING_BOX = {
   minLon: -20.0,
   maxLon: 16.0,
 };
-
-type VesselRow = typeof vesselsMaster.$inferInsert;
 
 function pickObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -47,7 +42,7 @@ function getRealData(payload: unknown): unknown[] {
   return Array.isArray(realData) ? realData : [];
 }
 
-function normalizeLiveVessel(item: unknown): VesselRow | null {
+function normalizeLiveVessel(item: unknown): VesselRecord | null {
   const vessel = pickObject(item);
   const message = pickObject(vessel.Message);
   const position = pickObject(message.PositionReport ?? vessel.PositionReport);
@@ -80,12 +75,13 @@ function normalizeLiveVessel(item: unknown): VesselRow | null {
     eta: toText(readNested(merged, ["eta", "ETA", "Eta"])),
     source: "AISStream",
     rawData: item,
-    lastSeenAt: new Date(),
-    updatedAt: new Date(),
+    lastSeenAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
   };
 }
 
-function toAisVessel(row: typeof vesselsMaster.$inferSelect) {
+function toAisVessel(row: VesselRecord) {
   const syntheticImo = row.imoNumber && row.imoNumber.startsWith("MMSI-") ? "N/A" : row.imoNumber;
   return {
     MetaData: {
@@ -152,33 +148,12 @@ async function hydrateFromAisStream(limit: number) {
   const payload = await aisResponse.json();
   const rows = getRealData(payload)
     .map(normalizeLiveVessel)
-    .filter((row): row is VesselRow => row !== null)
+    .filter((row): row is VesselRecord => row !== null)
     .slice(0, limit);
 
   if (rows.length === 0) return 0;
 
-  await db
-    .insert(vesselsMaster)
-    .values(rows)
-    .onConflictDoUpdate({
-      target: vesselsMaster.imoNumber,
-      set: {
-        mmsi: sql`excluded."mmsi"`,
-        vesselName: sql`excluded."vesselName"`,
-        shipType: sql`excluded."shipType"`,
-        latitude: sql`excluded."latitude"`,
-        longitude: sql`excluded."longitude"`,
-        speed: sql`excluded."speed"`,
-        course: sql`excluded."course"`,
-        heading: sql`excluded."heading"`,
-        navigationalStatus: sql`excluded."navigationalStatus"`,
-        destination: sql`excluded."destination"`,
-        eta: sql`excluded."eta"`,
-        rawData: sql`excluded."rawData"`,
-        lastSeenAt: sql`excluded."lastSeenAt"`,
-        updatedAt: sql`now()`,
-      },
-    });
+  await upsertVessels(rows);
 
   return rows.length;
 }
@@ -192,23 +167,15 @@ export default async (req: Request) => {
     const url = new URL(req.url);
     const limit = Math.min(Math.max(Number(url.searchParams.get("quantity") || "500"), 1), 500);
 
-    let rows = await db
-      .select()
-      .from(vesselsMaster)
-      .orderBy(desc(vesselsMaster.lastSeenAt))
-      .limit(limit);
+    let rows = sortByLastSeen(await readVessels()).slice(0, limit);
 
     if (rows.length === 0 || url.searchParams.get("force") === "1") {
       await hydrateFromAisStream(limit);
-      rows = await db
-        .select()
-        .from(vesselsMaster)
-        .orderBy(desc(vesselsMaster.lastSeenAt))
-        .limit(limit);
+      rows = sortByLastSeen(await readVessels()).slice(0, limit);
     }
 
     return Response.json(
-      { vessels: rows.map(toAisVessel), source: "database", count: rows.length },
+      { vessels: rows.map(toAisVessel), source: "blobs", count: rows.length },
       {
         headers: {
           "x-ais-persisted-count": String(rows.length),
