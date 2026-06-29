@@ -188,31 +188,36 @@ export default async (req: Request) => {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
 
-  const url = new URL(req.url);
-  const limit = Math.min(Math.max(Number(url.searchParams.get("quantity") || "1000"), 1), 45000);
+  try {
+    const url = new URL(req.url);
+    const limit = Math.min(Math.max(Number(url.searchParams.get("quantity") || "500"), 1), 500);
 
-  let rows = await db
-    .select()
-    .from(vesselsMaster)
-    .orderBy(desc(vesselsMaster.lastSeenAt))
-    .limit(limit);
-
-  if (rows.length === 0 || url.searchParams.get("force") === "1") {
-    await hydrateFromAisStream(limit);
-    rows = await db
+    let rows = await db
       .select()
       .from(vesselsMaster)
       .orderBy(desc(vesselsMaster.lastSeenAt))
       .limit(limit);
-  }
 
-  return Response.json(
-    { vessels: rows.map(toAisVessel), source: "database", count: rows.length },
-    {
-      headers: {
-        "x-ais-persisted-count": String(rows.length),
-        "x-ais-target-count": String(limit),
+    if (rows.length === 0 || url.searchParams.get("force") === "1") {
+      await hydrateFromAisStream(limit);
+      rows = await db
+        .select()
+        .from(vesselsMaster)
+        .orderBy(desc(vesselsMaster.lastSeenAt))
+        .limit(limit);
+    }
+
+    return Response.json(
+      { vessels: rows.map(toAisVessel), source: "database", count: rows.length },
+      {
+        headers: {
+          "x-ais-persisted-count": String(rows.length),
+          "x-ais-target-count": String(limit),
+        },
       },
-    },
-  );
+    );
+  } catch (err) {
+    console.error("[get-vessels] Falling back to an empty vessel list.", err);
+    return new Response(JSON.stringify({ vessels: [] }), { status: 200 });
+  }
 };
