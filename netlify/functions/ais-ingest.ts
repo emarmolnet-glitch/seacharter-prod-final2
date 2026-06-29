@@ -87,6 +87,7 @@ function normalizeVessel(item: unknown): VesselRecord | null {
 }
 
 export default async (req: Request) => {
+  console.log("LOG: La función ais-ingest ha comenzado.");
   if (req.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
