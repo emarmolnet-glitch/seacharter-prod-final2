@@ -174,6 +174,8 @@ export default async (req: Request) => {
       rows = sortByLastSeen(await readVessels()).slice(0, limit);
     }
 
+    console.log("[get-vessels] Blob rows before response parsing:", JSON.stringify(rows, null, 2));
+
     return Response.json(
       { vessels: rows.map(toAisVessel), source: "blobs", count: rows.length },
       {
