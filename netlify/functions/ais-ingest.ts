@@ -57,15 +57,20 @@ function normalizeVessel(item: unknown): VesselRow | null {
   const dimensions = pickObject(shipProfile.Dimension);
   const merged = { ...vessel, ...message, ...position, ...metadata, ...shipProfile, ...dimensions };
 
-  const imoNumber = toText(readNested(merged, ["imoNumber", "imo", "IMO", "IMONumber", "ImoNumber"]));
+  const rawImoNumber = toText(readNested(merged, ["imoNumber", "imo", "IMO", "IMONumber", "ImoNumber"]));
+  const mmsi = toText(readNested(merged, ["mmsi", "MMSI"]));
   const latitude = toNumber(readNested(merged, ["latitude", "Latitude", "lat", "Lat"]));
   const longitude = toNumber(readNested(merged, ["longitude", "Longitude", "lon", "Lon", "lng", "Lng"]));
+
+  const imoNumber = rawImoNumber && rawImoNumber !== "0" && rawImoNumber.toUpperCase() !== "N/A"
+    ? rawImoNumber
+    : (mmsi ? `MMSI-${mmsi}` : null);
 
   if (!imoNumber || latitude === null || longitude === null) return null;
 
   return {
     imoNumber,
-    mmsi: toText(readNested(merged, ["mmsi", "MMSI"])),
+    mmsi,
     vesselName: toText(readNested(merged, ["vesselName", "ShipName", "shipName", "Name"])),
     shipType: toText(readNested(merged, ["shipType", "ShipType", "type", "Type"])),
     latitude,

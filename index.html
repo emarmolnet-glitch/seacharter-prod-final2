@@ -8663,9 +8663,10 @@
             }
             const activeShipType = v.shipType || shipType;
 
-            // Hard filter: only dry cargo vessels (70-79) are commercial targets
-            if (activeShipType !== undefined && (activeShipType < 70 || activeShipType > 79)) {
-                return; // Exclude non-cargo vessels (tugs, passenger, yachts, tankers etc.)
+            // Hard filter: only exclude clearly non-commercial AIS numeric classes.
+            const numericShipType = Number(activeShipType);
+            if (Number.isFinite(numericShipType) && (numericShipType < 70 || numericShipType > 89)) {
+                return; // Exclude non-cargo/non-tanker vessels (tugs, passenger, yachts etc.)
             }
 
             // 2. EXTRACT DIMENSIONS (only available in ShipStaticData)
@@ -8767,11 +8768,11 @@
                     polValue = localStorage.getItem('calculator_pol') || '';
                 }
                 const polParam = polValue ? `&pol=${encodeURIComponent(polValue)}` : '';
-                let fallbackEndpoint = `/.netlify/functions/get-vessels?mode=global&force=1&quantity=${targetDWT}${polParam}`;
+                let fallbackEndpoint = `/.netlify/functions/get-vessels?mode=global&force=1&quantity=45000&targetDWT=${encodeURIComponent(targetDWT)}${polParam}`;
                 const radarMap = window.mapaAIS || window.mapAIS || window.map;
                 if (window.MapLoader && typeof window.MapLoader.getViewportQueryUrl === 'function' && radarMap) {
                     const viewportUrl = window.MapLoader.getViewportQueryUrl(radarMap, 'global');
-                    fallbackEndpoint = `${viewportUrl}&force=1&quantity=${encodeURIComponent(targetDWT)}${polParam}`;
+                    fallbackEndpoint = `${viewportUrl}&force=1&quantity=45000&targetDWT=${encodeURIComponent(targetDWT)}${polParam}`;
                 }
                 const response = await fetch(fallbackEndpoint);
 
@@ -11258,9 +11259,14 @@
             btn.disabled = true;
 
             try {
-                const response = await fetch('/assets/WPI.csv');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                const wpiPaths = ['/assets/WPI.csv', '/assets/wpi.csv', '/WPI.csv', '/wpi.csv'];
+                let response = null;
+                for (const path of wpiPaths) {
+                    response = await fetch(path, { cache: 'force-cache' });
+                    if (response.ok) break;
+                }
+                if (!response || !response.ok) {
+                    throw new Error(`HTTP error! status: ${response ? response.status : 'no-response'}`);
                 }
                 const text = await response.text();
                 const lines = text.split('\n');
