@@ -1,1 +1,0 @@
-ALTER TABLE "audited_vessels" ADD COLUMN "mmsi" text;

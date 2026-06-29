@@ -1,11 +1,7 @@
 import type { Config } from "@netlify/functions";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
-import { db } from "../../db/index.js";
-import { vesselsMaster } from "../../db/schema.js";
+import { readVessels, sortByLastSeen, upsertVessels, type VesselRecord } from "./vessel-store.js";
 
-type VesselInsert = typeof vesselsMaster.$inferInsert;
-
-function toApiVessel(row: typeof vesselsMaster.$inferSelect) {
+function toApiVessel(row: VesselRecord) {
   return {
     imo: row.imoNumber,
     imoNumber: row.imoNumber,
@@ -37,12 +33,12 @@ export default async (req: Request) => {
 
     if (!imoNumber || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       return Response.json(
-        { success: false, error: "imoNumber, latitude and longitude are required for database insertion" },
+        { success: false, error: "imoNumber, latitude and longitude are required for vessel storage" },
         { status: 400 },
       );
     }
 
-    const row: VesselInsert = {
+    const row: VesselRecord = {
       imoNumber,
       mmsi: vessel.mmsi ? String(vessel.mmsi) : null,
       vesselName: vessel.vesselName || vessel.vessel_name || vessel.name ? String(vessel.vesselName || vessel.vessel_name || vessel.name) : null,
@@ -57,33 +53,13 @@ export default async (req: Request) => {
       eta: vessel.eta ? String(vessel.eta) : null,
       source: "manual",
       rawData: vessel,
-      lastSeenAt: new Date(),
-      updatedAt: new Date(),
+      lastSeenAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
     };
 
-    const [saved] = await db
-      .insert(vesselsMaster)
-      .values(row)
-      .onConflictDoUpdate({
-        target: vesselsMaster.imoNumber,
-        set: {
-          mmsi: sql`excluded."mmsi"`,
-          vesselName: sql`excluded."vesselName"`,
-          shipType: sql`excluded."shipType"`,
-          latitude: sql`excluded."latitude"`,
-          longitude: sql`excluded."longitude"`,
-          speed: sql`excluded."speed"`,
-          course: sql`excluded."course"`,
-          heading: sql`excluded."heading"`,
-          navigationalStatus: sql`excluded."navigationalStatus"`,
-          destination: sql`excluded."destination"`,
-          eta: sql`excluded."eta"`,
-          rawData: sql`excluded."rawData"`,
-          lastSeenAt: sql`excluded."lastSeenAt"`,
-          updatedAt: sql`now()`,
-        },
-      })
-      .returning();
+    await upsertVessels([row]);
+    const saved = (await readVessels()).find((vesselRow) => vesselRow.imoNumber === row.imoNumber) || row;
 
     return Response.json({ success: true, data: toApiVessel(saved) }, { status: 201 });
   }
@@ -98,27 +74,18 @@ export default async (req: Request) => {
   const imo = url.searchParams.get("imo") || url.searchParams.get("imoNumber");
   const search = url.searchParams.get("q") || url.searchParams.get("search");
 
-  const filters = [
-    mmsi ? eq(vesselsMaster.mmsi, mmsi) : undefined,
-    imo ? eq(vesselsMaster.imoNumber, imo) : undefined,
-    search
-      ? or(
-          ilike(vesselsMaster.vesselName, `%${search}%`),
-          ilike(vesselsMaster.imoNumber, `%${search}%`),
-          ilike(vesselsMaster.mmsi, `%${search}%`),
-        )
-      : undefined,
-  ].filter(Boolean);
+  const normalizedSearch = search?.toLowerCase();
+  const rows = sortByLastSeen(await readVessels())
+    .filter((row) => !mmsi || row.mmsi === mmsi)
+    .filter((row) => !imo || row.imoNumber === imo)
+    .filter((row) => {
+      if (!normalizedSearch) return true;
+      return [row.vesselName, row.imoNumber, row.mmsi]
+        .some((value) => value?.toLowerCase().includes(normalizedSearch));
+    })
+    .slice(0, limit);
 
-  const query = db
-    .select()
-    .from(vesselsMaster)
-    .where(filters.length > 0 ? and(...filters) : undefined)
-    .orderBy(desc(vesselsMaster.lastSeenAt))
-    .limit(limit);
-
-  const rows = await query;
-  return Response.json({ success: true, data: rows.map(toApiVessel), source: "database" });
+  return Response.json({ success: true, data: rows.map(toApiVessel), source: "blobs" });
 };
 
 export const config: Config = {

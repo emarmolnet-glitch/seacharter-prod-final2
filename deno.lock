@@ -15,8 +15,6 @@
         "npm:@netlify/functions@^2.6.0",
         "npm:@turf/distance@^7.3.0",
         "npm:cheerio@^1.2.0",
-        "npm:drizzle-kit@^1.0.0-beta.22",
-        "npm:drizzle-orm@^1.0.0-beta.22",
         "npm:geojson-path-finder@^2.1.0",
         "npm:searoute-ts@2",
         "npm:ws@^8.18.0"
