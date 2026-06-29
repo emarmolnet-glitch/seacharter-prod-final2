@@ -1,0 +1,24 @@
+{
+  "name": "seacharter-core-pro",
+  "version": "1.0.0",
+  "description": "Voyage Estimator with custom maritime routing and preferred ocean weights",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "@netlify/blobs": "^10.7.9",
+    "@netlify/functions": "^2.6.0",
+    "@turf/distance": "^7.3.0",
+    "cheerio": "^1.2.0",
+    "drizzle-orm": "^1.0.0-beta.22",
+    "geojson-path-finder": "^2.1.0",
+    "searoute-ts": "^2.0.0",
+    "ws": "^8.18.0"
+  },
+  "browser": {
+    "crypto": false,
+    "node:crypto": false,
+    "hash.js": false
+  }
+}
