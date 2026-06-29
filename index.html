@@ -11192,6 +11192,59 @@
             return result.map(s => s.replace(/^"|"$/g, '').trim());
         }
 
+        function populatePortsFromWPIText(text) {
+            const lines = text.split(/\r?\n/);
+            let added = 0;
+            PORT_DB = {}; // Vaciamos la DB estática pequeña para meter la mundial
+            const headers = lines[0] ? parseCSVLine(lines[0]).map(header => header.split(',')[0].trim().toUpperCase()) : [];
+            const headerIndex = (name, fallback) => {
+                const index = headers.indexOf(name);
+                return index >= 0 ? index : fallback;
+            };
+            const indexes = {
+                name: headerIndex('PORT_NAME', 2),
+                country: headerIndex('COUNTRY', 3),
+                lat: headerIndex('LATITUDE', 4),
+                lon: headerIndex('LONGITUDE', 5),
+                harborSize: headerIndex('HARBORSIZE', 14),
+                harborType: headerIndex('HARBORTYPE', 15),
+                chanDepth: headerIndex('CHAN_DEPTH', 22),
+                anchDepth: headerIndex('ANCH_DEPTH', 23),
+                cargoDepth: headerIndex('CARGODEPTH', 24),
+                oilDepth: headerIndex('OIL_DEPTH', 25),
+                maxVessel: headerIndex('MAX_VESSEL', 27)
+            };
+
+            for(let i = 1; i < lines.length; i++) {
+                if(!lines[i].trim()) continue;
+                const data = parseCSVLine(lines[i]);
+                if(data.length > Math.max(indexes.name, indexes.country, indexes.lat, indexes.lon) && data[indexes.name]) {
+                    const portName = `${data[indexes.name]} (${data[indexes.country] || 'INT'})`;
+                    const lat = parseFloat(data[indexes.lat]);
+                    const lon = parseFloat(data[indexes.lon]);
+                    if(!isNaN(lat) && !isNaN(lon)) {
+                        PORT_DB[portName] = {
+                            lat: lat,
+                            lon: lon,
+                            chanDepth: data[indexes.chanDepth] || '',
+                            anchDepth: data[indexes.anchDepth] || '',
+                            cargoDepth: data[indexes.cargoDepth] || '',
+                            oilDepth: data[indexes.oilDepth] || '',
+                            maxVessel: data[indexes.maxVessel] || '',
+                            harborSize: data[indexes.harborSize] || '',
+                            harborType: data[indexes.harborType] || '',
+                            countryCode: data[indexes.country] || ''
+                        };
+                        added++;
+                    }
+                }
+            }
+
+            refreshPortDatalist();
+            runEngine();
+            return added;
+        }
+
         async function handleWPILoad(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -11203,39 +11256,7 @@
 
             try {
                 const text = await file.text();
-                const lines = text.split('\n');
-                
-                let added = 0;
-                PORT_DB = {}; // Vaciamos la DB estática pequeña para meter la mundial
-
-                for(let i = 1; i < lines.length; i++) {
-                    if(!lines[i].trim()) continue;
-                    const data = parseCSVLine(lines[i]);
-                    // Formato WPI: 2=Name, 3=Country, 4=Lat, 5=Lon
-                    if(data.length > 20 && data[2]) {
-                        const portName = `${data[2]} (${data[3] || 'INT'})`;
-                        const lat = parseFloat(data[4]);
-                        const lon = parseFloat(data[5]);
-                        if(!isNaN(lat) && !isNaN(lon)) {
-                            PORT_DB[portName] = {
-                                lat: lat,
-                                lon: lon,
-                                chanDepth: data[22] || '',
-                                anchDepth: data[23] || '',
-                                cargoDepth: data[24] || '',
-                                oilDepth: data[25] || '',
-                                maxVessel: data[27] || '',
-                                harborSize: data[14] || '',
-                                harborType: data[15] || '',
-                                countryCode: data[3] || ''
-                            };
-                            added++;
-                        }
-                    }
-                }
-                
-                refreshPortDatalist();
-                runEngine();
+                const added = populatePortsFromWPIText(text);
                 showToast(`✅ Base de datos Mundial WPI cargada: ${added.toLocaleString()} puertos.`);
                 btn.innerHTML = `<i class="fa-solid fa-check"></i> WPI Activo`;
                 btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');
@@ -11258,44 +11279,17 @@
             btn.disabled = true;
 
             try {
-                const response = await fetch('/assets/WPI.csv');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                const candidatePaths = ['/wpi.csv', '/WPI.csv', '/assets/wpi.csv', '/assets/WPI.csv'];
+                let response = null;
+                for (const path of candidatePaths) {
+                    response = await fetch(path, { cache: 'no-store' });
+                    if (response.ok) break;
+                }
+                if (!response || !response.ok) {
+                    throw new Error(`WPI.csv no disponible en rutas conocidas`);
                 }
                 const text = await response.text();
-                const lines = text.split('\n');
-                
-                let added = 0;
-                PORT_DB = {}; // Vaciamos la DB estática pequeña para meter la mundial
-
-                for(let i = 1; i < lines.length; i++) {
-                    if(!lines[i].trim()) continue;
-                    const data = parseCSVLine(lines[i]);
-                    // Formato WPI: 2=Name, 3=Country, 4=Lat, 5=Lon
-                    if(data.length > 20 && data[2]) {
-                        const portName = `${data[2]} (${data[3] || 'INT'})`;
-                        const lat = parseFloat(data[4]);
-                        const lon = parseFloat(data[5]);
-                        if(!isNaN(lat) && !isNaN(lon)) {
-                            PORT_DB[portName] = {
-                                lat: lat,
-                                lon: lon,
-                                chanDepth: data[22] || '',
-                                anchDepth: data[23] || '',
-                                cargoDepth: data[24] || '',
-                                oilDepth: data[25] || '',
-                                maxVessel: data[27] || '',
-                                harborSize: data[14] || '',
-                                harborType: data[15] || '',
-                                countryCode: data[3] || ''
-                            };
-                            added++;
-                        }
-                    }
-                }
-                
-                refreshPortDatalist();
-                runEngine();
+                const added = populatePortsFromWPIText(text);
                 showToast(`✅ Base de datos Mundial WPI cargada automáticamente: ${added.toLocaleString()} puertos.`);
                 btn.innerHTML = `<i class="fa-solid fa-check"></i> WPI Activo`;
                 btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');

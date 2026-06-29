@@ -1009,7 +1009,8 @@
             }
 
             const savedQty = localStorage.getItem('calculator_cargo_qty');
-            const quantity = savedQty ? parseFloat(savedQty) : 45000;
+            const requestedQuantity = savedQty ? parseFloat(savedQty) : 1000;
+            const quantity = Math.min(1000, Math.max(1, Number.isFinite(requestedQuantity) ? requestedQuantity : 1000));
             const limite = Number(window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
             if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
                 console.warn(`[Radar Global] Límite alcanzado antes de fetch AIS. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
@@ -1026,7 +1027,9 @@
                     return;
                 }
                 const data = await response.json();
-                const vessels = Array.isArray(data) ? data : [data];
+                const vessels = Array.isArray(data)
+                    ? data
+                    : (Array.isArray(data && data.vessels) ? data.vessels : []);
                 if (vessels.length === 0) {
                     window.aisFallbackNextAllowedAt = Date.now() + AIS_FALLBACK_EMPTY_RETRY_MS;
                     console.warn("AIS_FALLBACK: 0 buques recibidos. Pausa obligatoria de 60 segundos.");
