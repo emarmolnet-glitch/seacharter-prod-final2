@@ -6,8 +6,8 @@ type VesselMessage = Record<string, unknown>;
 const AIS_STREAM_URL = 'wss://stream.aisstream.io/v0/stream';
 const DEFAULT_TIMEOUT_MS = 8500;
 const MAX_TIMEOUT_MS = 12000;
-const DEFAULT_QUANTITY = 400;
-const MAX_QUANTITY = 1000;
+const DEFAULT_QUANTITY = 1000;
+const MAX_QUANTITY = 45000;
 
 let vesselCache: VesselMessage[] = [];
 let cacheUpdatedAt = 0;
@@ -116,8 +116,8 @@ function normalizeVesselMessage(message: VesselMessage) {
     mmsi,
     ShipName: shipName,
     vesselName: shipName,
-    IMO: imo,
-    imo,
+    IMO: imo || (mmsi ? 'N/A' : undefined),
+    imo: imo || (mmsi ? 'N/A' : undefined),
     ShipType: shipType,
     shipType,
     latitude,
@@ -130,7 +130,7 @@ function normalizeVesselMessage(message: VesselMessage) {
       ...metadata,
       MMSI: firstDefined(metadata.MMSI, mmsi),
       ShipName: firstDefined(metadata.ShipName, shipName),
-      IMO: firstDefined(metadata.IMO, imo),
+      IMO: firstDefined(metadata.IMO, imo, mmsi ? 'N/A' : undefined),
       ShipType: firstDefined(metadata.ShipType, shipType),
       latitude: firstDefined(metadata.latitude, latitude),
       longitude: firstDefined(metadata.longitude, longitude),

@@ -17,7 +17,16 @@ return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 // 2. PROCESSING ENGINE (THE MASTER LOGIC)
 async function executeMatchMotor(RadarList) { 
 const radarList = RadarList || [];
-const BASE_PORT = { lat: 41.38, lon: 2.17 }; // Barcelona 
+const routePol = (typeof window !== 'undefined' && typeof window.findPortData === 'function')
+? window.findPortData(
+(typeof document !== 'undefined' && document.getElementById('port-pol') && document.getElementById('port-pol').value) ||
+(typeof document !== 'undefined' && document.getElementById('match-load-port') && document.getElementById('match-load-port').value) ||
+''
+)
+: null;
+const BASE_PORT = routePol && Number.isFinite(Number(routePol.lat)) && Number.isFinite(Number(routePol.lon))
+? { lat: Number(routePol.lat), lon: Number(routePol.lon) }
+: { lat: 41.38, lon: 2.17 }; // Barcelona fallback
 const MAX_RANGE = 300; 
 
 return Promise.all(radarList.map(async (ship) => {
