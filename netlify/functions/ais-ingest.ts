@@ -3,10 +3,10 @@ import { upsertVessels, type VesselRecord } from "./vessel-store.js";
 
 const AISSTREAM_ENDPOINT = "https://api.aisstream.io/v1/stream";
 const BOUNDING_BOX = {
-  minLat: -60.0,
-  maxLat: 60.0,
-  minLon: -180.0,
-  maxLon: 180.0,
+  minLat: 35.0,
+  maxLat: 37.0,
+  minLon: -6.0,
+  maxLon: -2.0,
 };
 const BULK_CARRIER_SHIP_TYPES = Array.from({ length: 10 }, (_, index) => 70 + index);
 
@@ -108,7 +108,7 @@ export default async (req: Request) => {
       body: JSON.stringify({
         APIKey: apiKey,
         BoundingBoxes: [[[BOUNDING_BOX.minLat, BOUNDING_BOX.minLon], [BOUNDING_BOX.maxLat, BOUNDING_BOX.maxLon]]],
-        FiltersShipType: BULK_CARRIER_SHIP_TYPES,
+        // FiltersShipType: BULK_CARRIER_SHIP_TYPES,
       }),
       signal: controller.signal
     });
