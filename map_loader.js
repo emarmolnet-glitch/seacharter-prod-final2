@@ -58,8 +58,8 @@
             }
         },
         icons: {
-            load: '/assets/icons/maritime/Ancla_Load.svg',
-            discharge: '/assets/icons/maritime/Ancla_Discharge.svg'
+            load: '/Ancla Load.svg',
+            discharge: '/Ancla Discharge.svg'
         }
     });
 
@@ -712,26 +712,34 @@
     function startAisProxyPolling(options) {
         const config = Object.assign({}, options || {});
 
-        clearInterval(aisProxyPollingState.timer);
+        clearTimeout(aisProxyPollingState.timer);
         aisProxyPollingState.endpoint = config.endpoint || aisProxyPollingState.endpoint;
         aisProxyPollingState.map = config.map || getDefaultAisMap();
         aisProxyPollingState.intervalMs = Math.max(300000, Number(config.intervalMs || aisProxyPollingState.intervalMs) || 300000);
-        pollAisProxyOnce(config).catch((err) => {
-            if (config.onError) config.onError(err);
-        });
-        aisProxyPollingState.timer = setInterval(() => {
+        const scheduleNextPoll = () => {
+            aisProxyPollingState.timer = setTimeout(runPoll, aisProxyPollingState.intervalMs);
+        };
+        const runPoll = () => {
             const liveConfig = Object.assign({}, config, {
                 map: aisProxyPollingState.map || getDefaultAisMap()
             });
-            pollAisProxyOnce(liveConfig).catch((err) => {
-                if (config.onError) config.onError(err);
-            });
-        }, aisProxyPollingState.intervalMs);
+            pollAisProxyOnce(liveConfig)
+                .catch((err) => {
+                    if (config.onError) config.onError(err);
+                })
+                .finally(() => {
+                    if (aisProxyPollingState.timer !== null) {
+                        scheduleNextPoll();
+                    }
+                });
+        };
+        aisProxyPollingState.timer = 0;
+        runPoll();
         return { started: true, endpoint: aisProxyPollingState.endpoint, intervalMs: aisProxyPollingState.intervalMs };
     }
 
     function stopAisProxyPolling() {
-        clearInterval(aisProxyPollingState.timer);
+        clearTimeout(aisProxyPollingState.timer);
         aisProxyPollingState.timer = null;
         return { stopped: true };
     }
@@ -749,7 +757,7 @@
             throw new Error(payload && payload.error ? payload.error : `HTTP ${response.status}`);
         }
         hydrationCache.clear();
-        clearInterval(aisProxyPollingState.timer);
+        clearTimeout(aisProxyPollingState.timer);
         aisProxyPollingState.timer = null;
         return payload;
     }

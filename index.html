@@ -8044,8 +8044,8 @@
         const ROUTE_LADEN_LINE_COLOR = SEA_MAP_STYLE_CONFIG?.colors?.routeLine || '#2a7b9b';
         const ROUTE_BALLAST_LINE_COLOR = '#8ba6b5';
         const MARITIME_ICON_PATHS = SEA_MAP_STYLE_CONFIG?.icons || {
-            load: '/assets/icons/maritime/Ancla_Load.svg',
-            discharge: '/assets/icons/maritime/Ancla_Discharge.svg'
+            load: '/Ancla Load.svg',
+            discharge: '/Ancla Discharge.svg'
         };
         const ROUTE_MARKER_ICON_CONFIG = Object.freeze({
             // Legacy selector contract retained for static tests: pol: { className: 'route-port-marker' / pod: { className: 'route-port-marker' / iconSize: [30, 30], iconAnchor: [15, 15]
@@ -11259,7 +11259,7 @@
             btn.disabled = true;
 
             try {
-                const wpiPaths = ['/assets/WPI.csv', '/assets/wpi.csv', '/WPI.csv', '/wpi.csv'];
+                const wpiPaths = ['/WPI.csv'];
                 let response = null;
                 for (const path of wpiPaths) {
                     response = await fetch(path, { cache: 'force-cache' });
@@ -22368,7 +22368,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         };
 
         window.stopAisRadarPolling = function() {
-            clearInterval(window.aisRadarPollingInterval);
+            clearTimeout(window.aisRadarPollingInterval);
             window.aisRadarPollingInterval = null;
             if (window.MapLoader && typeof window.MapLoader.stopAisProxyPolling === 'function') {
                 window.MapLoader.stopAisProxyPolling();
@@ -22402,9 +22402,21 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return { started: false, reason: 'route-inputs-missing' };
             }
             window.aisRadarUserActivated = true;
-            clearInterval(window.aisRadarPollingInterval);
-            window.AISContinuousScan();
-            window.aisRadarPollingInterval = setInterval(window.continuousScanAIS, window.AIS_RADAR_SYNC_INTERVAL_MS);
+            clearTimeout(window.aisRadarPollingInterval);
+            const scheduleNextAisRadarPoll = () => {
+                window.aisRadarPollingInterval = setTimeout(runAisRadarPoll, window.AIS_RADAR_SYNC_INTERVAL_MS);
+            };
+            const runAisRadarPoll = () => {
+                Promise.resolve(window.continuousScanAIS())
+                    .catch((err) => console.warn("[Radar Global] Error durante el polling AIS:", err))
+                    .finally(() => {
+                        if (window.aisRadarPollingInterval !== null) {
+                            scheduleNextAisRadarPoll();
+                        }
+                    });
+            };
+            window.aisRadarPollingInterval = 0;
+            runAisRadarPoll();
             return { started: true, intervalMs: window.AIS_RADAR_SYNC_INTERVAL_MS };
         };
 
