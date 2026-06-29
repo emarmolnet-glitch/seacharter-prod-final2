@@ -11192,130 +11192,141 @@
             return result.map(s => s.replace(/^"|"$/g, '').trim());
         }
 
+        function applyWPITextToPortDatabase(text) {
+            const lines = text.split(/\r?\n/);
+            let added = 0;
+            const nextPortDb = {};
+
+            for(let i = 1; i < lines.length; i++) {
+                if(!lines[i].trim()) continue;
+                const data = parseCSVLine(lines[i]);
+                // Formato WPI: 2=Name, 3=Country, 4=Lat, 5=Lon
+                if(data.length > 20 && data[2]) {
+                    const portName = `${data[2]} (${data[3] || 'INT'})`;
+                    const lat = parseFloat(data[4]);
+                    const lon = parseFloat(data[5]);
+                    if(!isNaN(lat) && !isNaN(lon)) {
+                        nextPortDb[portName] = {
+                            lat: lat,
+                            lon: lon,
+                            chanDepth: data[22] || '',
+                            anchDepth: data[23] || '',
+                            cargoDepth: data[24] || '',
+                            oilDepth: data[25] || '',
+                            maxVessel: data[27] || '',
+                            harborSize: data[14] || '',
+                            harborType: data[15] || '',
+                            countryCode: data[3] || ''
+                        };
+                        added++;
+                    }
+                }
+            }
+
+            if (added === 0) {
+                throw new Error('WPI.csv no contiene puertos utilizables');
+            }
+
+            PORT_DB = nextPortDb;
+            refreshPortDatalist();
+            runEngine();
+            return added;
+        }
+
         async function handleWPILoad(event) {
             const file = event.target.files[0];
             if (!file) return;
 
             const btn = document.getElementById('btn-wpi');
-            const origHtml = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cargando WPI...';
-            btn.disabled = true;
+            const origHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cargando WPI...';
+                btn.disabled = true;
+            }
 
             try {
                 const text = await file.text();
-                const lines = text.split('\n');
-                
-                let added = 0;
-                PORT_DB = {}; // Vaciamos la DB estática pequeña para meter la mundial
-
-                for(let i = 1; i < lines.length; i++) {
-                    if(!lines[i].trim()) continue;
-                    const data = parseCSVLine(lines[i]);
-                    // Formato WPI: 2=Name, 3=Country, 4=Lat, 5=Lon
-                    if(data.length > 20 && data[2]) {
-                        const portName = `${data[2]} (${data[3] || 'INT'})`;
-                        const lat = parseFloat(data[4]);
-                        const lon = parseFloat(data[5]);
-                        if(!isNaN(lat) && !isNaN(lon)) {
-                            PORT_DB[portName] = {
-                                lat: lat,
-                                lon: lon,
-                                chanDepth: data[22] || '',
-                                anchDepth: data[23] || '',
-                                cargoDepth: data[24] || '',
-                                oilDepth: data[25] || '',
-                                maxVessel: data[27] || '',
-                                harborSize: data[14] || '',
-                                harborType: data[15] || '',
-                                countryCode: data[3] || ''
-                            };
-                            added++;
-                        }
-                    }
-                }
-                
-                refreshPortDatalist();
-                runEngine();
+                const added = applyWPITextToPortDatabase(text);
                 showToast(`✅ Base de datos Mundial WPI cargada: ${added.toLocaleString()} puertos.`);
-                btn.innerHTML = `<i class="fa-solid fa-check"></i> WPI Activo`;
-                btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');
-                btn.classList.remove('bg-emerald-900/50', 'text-emerald-300', 'border-emerald-700/50');
+                if (btn) {
+                    btn.innerHTML = `<i class="fa-solid fa-check"></i> WPI Activo`;
+                    btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');
+                    btn.classList.remove('bg-emerald-900/50', 'text-emerald-300', 'border-emerald-700/50');
+                }
             } catch (error) {
                 console.error(error);
                 showToast("❌ Error al leer el archivo WPI.csv");
-                btn.innerHTML = origHtml;
+                if (btn) btn.innerHTML = origHtml;
             } finally {
-                btn.disabled = false;
+                if (btn) btn.disabled = false;
                 event.target.value = ""; // Resetear input
             }
         }
 
+        let wpiAutoLoadPromise = null;
+
         async function autoLoadWPI() {
+            if (wpiAutoLoadPromise) return wpiAutoLoadPromise;
+
             const btn = document.getElementById('btn-wpi');
-            if (!btn) return;
-            const origHtml = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cargando WPI...';
-            btn.disabled = true;
+            const origHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cargando WPI...';
+                btn.disabled = true;
+            }
 
-            try {
-                const wpiPaths = ['/wpi.csv', '/WPI.csv', '/assets/WPI.csv', '/assets/wpi.csv'];
-                let response = null;
-                let lastStatus = '';
+            wpiAutoLoadPromise = (async () => {
+                try {
+                    const wpiPaths = ['wpi.csv', './wpi.csv', '/wpi.csv', 'WPI.csv', './WPI.csv', '/WPI.csv', '/assets/WPI.csv', '/assets/wpi.csv'];
+                    let response = null;
+                    let lastStatus = '';
 
-                for (const path of wpiPaths) {
-                    response = await fetch(path, { cache: 'force-cache' });
-                    if (response.ok) break;
-                    lastStatus = `${path}: ${response.status}`;
-                }
-
-                if (!response || !response.ok) {
-                    throw new Error(`No se encontró WPI.csv automáticamente (${lastStatus || 'sin respuesta'})`);
-                }
-                const text = await response.text();
-                const lines = text.split('\n');
-                
-                let added = 0;
-                PORT_DB = {}; // Vaciamos la DB estática pequeña para meter la mundial
-
-                for(let i = 1; i < lines.length; i++) {
-                    if(!lines[i].trim()) continue;
-                    const data = parseCSVLine(lines[i]);
-                    // Formato WPI: 2=Name, 3=Country, 4=Lat, 5=Lon
-                    if(data.length > 20 && data[2]) {
-                        const portName = `${data[2]} (${data[3] || 'INT'})`;
-                        const lat = parseFloat(data[4]);
-                        const lon = parseFloat(data[5]);
-                        if(!isNaN(lat) && !isNaN(lon)) {
-                            PORT_DB[portName] = {
-                                lat: lat,
-                                lon: lon,
-                                chanDepth: data[22] || '',
-                                anchDepth: data[23] || '',
-                                cargoDepth: data[24] || '',
-                                oilDepth: data[25] || '',
-                                maxVessel: data[27] || '',
-                                harborSize: data[14] || '',
-                                harborType: data[15] || '',
-                                countryCode: data[3] || ''
-                            };
-                            added++;
-                        }
+                    for (const path of wpiPaths) {
+                        response = await fetch(path, { cache: 'force-cache' });
+                        if (response.ok) break;
+                        lastStatus = `${path}: ${response.status}`;
                     }
+
+                    if (!response || !response.ok) {
+                        throw new Error(`No se encontró WPI.csv automáticamente (${lastStatus || 'sin respuesta'})`);
+                    }
+                    const text = await response.text();
+                    const added = applyWPITextToPortDatabase(text);
+                    showToast(`✅ Base de datos Mundial WPI cargada automáticamente: ${added.toLocaleString()} puertos.`);
+                    if (btn) {
+                        btn.innerHTML = `<i class="fa-solid fa-check"></i> WPI Activo`;
+                        btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');
+                        btn.classList.remove('bg-emerald-900/50', 'text-emerald-300', 'border-emerald-700/50');
+                    }
+                    return added;
+                } catch (error) {
+                    console.error("No se pudo cargar WPI.csv automáticamente:", error);
+                    if (btn) btn.innerHTML = origHtml;
+                    wpiAutoLoadPromise = null;
+                    throw error;
+                } finally {
+                    if (btn) btn.disabled = false;
                 }
-                
-                refreshPortDatalist();
-                runEngine();
-                showToast(`✅ Base de datos Mundial WPI cargada automáticamente: ${added.toLocaleString()} puertos.`);
-                btn.innerHTML = `<i class="fa-solid fa-check"></i> WPI Activo`;
-                btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');
-                btn.classList.remove('bg-emerald-900/50', 'text-emerald-300', 'border-emerald-700/50');
-            } catch (error) {
-                console.error("No se pudo cargar WPI.csv automáticamente:", error);
-                btn.innerHTML = origHtml;
-            } finally {
-                btn.disabled = false;
+            })();
+
+            return wpiAutoLoadPromise;
+        }
+
+        function scheduleAutomaticWPIStartupLoad() {
+            const runAutoLoad = () => {
+                if (typeof autoLoadWPI === 'function') {
+                    autoLoadWPI().catch(() => {});
+                }
+            };
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', runAutoLoad, { once: true });
+            } else {
+                runAutoLoad();
             }
         }
+
+        scheduleAutomaticWPIStartupLoad();
 
         function refreshPortDatalist() {
             const dataList = document.getElementById('ports-list');
