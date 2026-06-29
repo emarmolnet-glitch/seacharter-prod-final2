@@ -1,7 +1,7 @@
 import type { Config } from "@netlify/functions";
 import { upsertVessels, type VesselRecord } from "./vessel-store.js";
 
-const AISSTREAM_ENDPOINT = "https://api.aisstream.io/v0/vessels";
+const AISSTREAM_ENDPOINT = "https://api.aisstream.io/v1/stream";
 const BOUNDING_BOX = {
   minLat: -60.0,
   maxLat: 60.0,
@@ -96,40 +96,47 @@ export default async (req: Request) => {
     return Response.json({ error: "AISSTREAM_API_KEY is not configured" }, { status: 500 });
   }
 
-  const aisResponse = await fetch(AISSTREAM_ENDPOINT, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      APIKey: apiKey,
-      BoundingBox: [[BOUNDING_BOX.minLat, BOUNDING_BOX.minLon], [BOUNDING_BOX.maxLat, BOUNDING_BOX.maxLon]],
-      boundingBox: BOUNDING_BOX,
-      FiltersShipType: BULK_CARRIER_SHIP_TYPES,
-    }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-  if (!aisResponse.ok) {
-    const body = await aisResponse.text();
-    return Response.json(
-      { error: "AISStream request failed", status: aisResponse.status, details: body.slice(0, 500) },
-      { status: 502 },
-    );
+  try {
+    const aisResponse = await fetch(AISSTREAM_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        APIKey: apiKey,
+        BoundingBoxes: [[[BOUNDING_BOX.minLat, BOUNDING_BOX.minLon], [BOUNDING_BOX.maxLat, BOUNDING_BOX.maxLon]]],
+        FiltersShipType: BULK_CARRIER_SHIP_TYPES,
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!aisResponse.ok) {
+      const body = await aisResponse.text();
+      return Response.json({ error: "AISStream request failed", status: aisResponse.status, details: body.slice(0, 500) }, { status: 502 });
+    }
+
+    const payload = await aisResponse.json();
+    const realData = getRealData(payload);
+    console.log("[AISStream] vessels received:", realData.length);
+    const rows = realData.map(normalizeVessel).filter((row): row is VesselRecord => row !== null);
+
+    if (rows.length === 0) {
+      return Response.json({ inserted: 0, updated: 0, skipped: realData.length });
+    }
+
+    await upsertVessels(rows);
+    return Response.json({ insertedOrUpdated: rows.length, boundingBox: BOUNDING_BOX });
+
+  } catch (error) {
+    clearTimeout(timeoutId);
+    console.error("Critical connection error:", error);
+    return Response.json({ error: "Network error", details: error instanceof Error ? error.message : "Unknown" }, { status: 500 });
   }
-
-  const payload = await aisResponse.json();
-  const realData = getRealData(payload);
-  console.log("[AISStream] vessels received:", realData.length);
-  const rows = realData.map(normalizeVessel).filter((row): row is VesselRecord => row !== null);
-
-  if (rows.length === 0) {
-    return Response.json({ inserted: 0, updated: 0, skipped: realData.length });
-  }
-
-  await upsertVessels(rows);
-
-  return Response.json({ insertedOrUpdated: rows.length, boundingBox: BOUNDING_BOX });
 };
 
 export const config: Config = {
