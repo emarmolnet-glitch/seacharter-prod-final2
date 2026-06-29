@@ -33,7 +33,7 @@ let radarWsActive = false;
 let radarFallbackTimer = null;
 const AIS_FALLBACK_RETRY_INTERVAL = 60000;
 const AIS_FALLBACK_COOLDOWN_INTERVAL = 300000;
-const AIS_PROXY_ENDPOINT = "/.netlify/functions/get-vessels?mode=global&quantity=1000";
+const AIS_PROXY_ENDPOINT = "/.netlify/functions/get-vessels?mode=global&quantity=45000";
 let radarFallbackProcessing = false;
 
 // --- 2. AUTO START --- 
@@ -125,16 +125,13 @@ function getRadarAisApiKey() {
 function procesarMensajeDeRadar(message) {
     if (!message) return;
     const metadata = message.MetaData || {};
-    const nestedMessage = message.Message || {};
-    const positionReport = message.PositionReport || nestedMessage.PositionReport || {};
-    const staticData = message.ShipStaticData || nestedMessage.ShipStaticData || {};
 
-    if (message.MessageType === "PositionReport" || message.latitude !== undefined || metadata.latitude !== undefined || positionReport.Latitude !== undefined) {
-        const mmsi = metadata.MMSI || metadata.mmsi || message.MMSI || message.mmsi || positionReport.UserID || staticData.UserID;
+    if (message.MessageType === "PositionReport" || message.latitude !== undefined || metadata.latitude !== undefined) {
+        const mmsi = metadata.MMSI || metadata.mmsi || message.MMSI || message.mmsi;
         if (!mmsi) return;
 
         // Resolve ShipType: could be string from API response or number from raw AIS
-        let shipTypeRaw = metadata.ShipType || metadata.shipType || message.ShipType || message.shipType || staticData.Type || message.vesselClass || message.type;
+        let shipTypeRaw = metadata.ShipType || metadata.shipType || message.ShipType || message.shipType || message.vesselClass || message.type;
         let shipType = typeof shipTypeRaw === 'number' ? shipTypeRaw : parseInt(shipTypeRaw);
         if (isNaN(shipType)) {
             // If it's already mapped to string "Cargo", "Bulk Carrier" etc, map it back to 70 for array checking
@@ -150,9 +147,9 @@ function procesarMensajeDeRadar(message) {
             let latVal = null;
             let lonVal = null;
 
-            if (positionReport && positionReport.Latitude !== undefined) {
-                latVal = positionReport.Latitude;
-                lonVal = positionReport.Longitude;
+            if (message.PositionReport) {
+                latVal = message.PositionReport.Latitude;
+                lonVal = message.PositionReport.Longitude;
             } else {
                 latVal = parseFloat(metadata.latitude || metadata.AIS_Live_Lat || message.latitude || message.AIS_Live_Lat);
                 lonVal = parseFloat(metadata.longitude || metadata.AIS_Live_Lon || message.longitude || message.AIS_Live_Lon);
@@ -161,14 +158,13 @@ function procesarMensajeDeRadar(message) {
             if (isNaN(latVal) || isNaN(lonVal)) return;
 
             vesselStore[mmsi] = {
-                ...(vesselStore[mmsi] || {}),
                 mmsi: mmsi,
-                name: metadata.ShipName || metadata.shipName || message.ShipName || message.vesselName || message.name || staticData.Name || (vesselStore[mmsi] && vesselStore[mmsi].name) || "Unknown",
-                IMO: metadata.IMO || metadata.imo || message.IMO || message.imo || staticData.ImoNumber || (vesselStore[mmsi] && vesselStore[mmsi].IMO) || "N/A",
+                name: metadata.ShipName || metadata.shipName || message.ShipName || message.vesselName || message.name || "Unknown",
+                IMO: metadata.IMO || metadata.imo || message.IMO || message.imo || "N/A",
                 lat: latVal,
                 lon: lonVal,
-                speed: message.speed || metadata.speed || positionReport.Sog || 0,
-                NavigationalStatus: message.NavigationalStatus || metadata.NavigationalStatus || positionReport.NavigationalStatus,
+                speed: message.speed || metadata.speed || (message.PositionReport && message.PositionReport.Sog) || 0,
+                NavigationalStatus: message.NavigationalStatus || metadata.NavigationalStatus || (message.PositionReport && message.PositionReport.NavigationalStatus),
                 score: "94%"
             };
             updateRadarView();
