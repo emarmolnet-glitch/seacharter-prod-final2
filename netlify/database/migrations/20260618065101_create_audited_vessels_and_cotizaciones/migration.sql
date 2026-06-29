@@ -1,0 +1,1 @@
+-- No-op: schema is already fully defined by previous migrations.

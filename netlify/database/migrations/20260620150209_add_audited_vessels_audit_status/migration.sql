@@ -1,0 +1,1 @@
+ALTER TABLE "audited_vessels" ADD COLUMN "audit_status" text;
