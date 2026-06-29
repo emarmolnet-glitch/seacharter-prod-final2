@@ -9154,7 +9154,7 @@
                 }
 
                 try {
-                    const response = await fetch('/.netlify/functions/generate-contract-tanker', {
+                    const response = await fetch('/api/generate-contract-tanker', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(construirPayloadContratoIA())
@@ -9278,8 +9278,8 @@
                     try {
                         const cpStandard = State.charterPartyStandard || valueFrom('charter-party-standard') || (operacionGlobal.carga.categoria === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
                         const endpoint = cpStandard === 'ASBATANKVOY'
-                            ? '/.netlify/functions/generate-contract-tanker'
-                            : '/.netlify/functions/generate-contract';
+                            ? '/api/generate-contract-tanker'
+                            : '/api/generate-contract';
 
                         const response = await fetch(endpoint, {
                             method: 'POST',
