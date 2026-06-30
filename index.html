@@ -3810,7 +3810,7 @@
             </div>
             <div class="flex items-center bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 flex-1 lg:flex-none max-w-xs" title="Opcional si estás en Netlify">
                 <i class="fa-solid fa-key text-slate-500 mr-2 text-xs"></i>
-                <input type="password" id="gemini-api-key" placeholder="API Key (Opcional en Netlify)..." class="bg-transparent border-none outline-none text-xs text-white w-full lg:w-40" autocomplete="current-password" oninput="saveApiKey()">
+                <input type="password" id="gemini-api-key" placeholder="API Key (Opcional en Netlify)..." class="bg-transparent border-none outline-none text-xs text-white w-full lg:w-40" autocomplete="off" spellcheck="false" autocapitalize="none" oninput="saveApiKey()">
             </div>
         </div>
     </header>
@@ -5912,8 +5912,8 @@
                     </div>
                 </div>
                 <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                    <input type="password" id="aisstream-api-key" placeholder="API Key (Opcional si usas Netlify Proxy)" autocomplete="current-password" class="bg-slate-950 border border-slate-800 text-slate-200 rounded-lg px-3 py-2 text-xs w-full sm:w-56 focus:outline-none focus:border-blue-500">
-                    <button id="btn-refresh-ais" style="color: #FFFFFF !important;" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-lg text-xs transition flex items-center gap-2 shadow-lg">
+                    <input type="password" id="aisstream-api-key" placeholder="API Key (Opcional si usas Netlify Proxy)" autocomplete="off" spellcheck="false" autocapitalize="none" class="bg-slate-950 border border-slate-800 text-slate-200 rounded-lg px-3 py-2 text-xs w-full sm:w-56 focus:outline-none focus:border-blue-500">
+                    <button type="button" id="btn-refresh-ais" style="color: #FFFFFF !important;" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-lg text-xs transition flex items-center gap-2 shadow-lg">
                         <i id="ais-refresh-icon" class="fa-solid fa-rotate" style="color: #FFFFFF !important;"></i>
                         Consultar Disponibilidad Real-Time
                     </button>
@@ -10306,8 +10306,10 @@
 
                 const quantity = parseFloat(document.getElementById('match-quantity').value) || 45000;
                 const cargoType = document.getElementById('match-cargo-type').value || "Grain";
-                const laycanStart = document.getElementById('match-laycan-start').value || "2026-06-20";
-                const laycanEnd = document.getElementById('match-laycan-end').value || "2026-06-28";
+                const todayIso = new Date().toISOString().slice(0, 10);
+                const fallbackLaycanEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+                const laycanStart = document.getElementById('match-laycan-start').value || todayIso;
+                const laycanEnd = document.getElementById('match-laycan-end').value || fallbackLaycanEnd;
                 const maxDraft = parseFloat(document.getElementById('match-max-draft').value) || 12.5;
                 const maxLoa = parseFloat(document.getElementById('match-max-loa').value) || 200;
                 const gearedRequired = document.getElementById('match-geared-required').checked;
@@ -24032,6 +24034,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     longitude: lon,
                     speed: speed,
                     statusLabel: statusLabel,
+                    shipType: shipTypeVal,
+                    ShipType: shipTypeVal,
                     vesselClass: classification.vClass,
                     dwt: classification.dwt,
                     NavigationalStatus: statusVal,
@@ -24186,7 +24190,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 nearbyVessels.sort((a, b) => a.distanceToPol - b.distanceToPol);
 
                 // Layer 3: Commercial compatibility for pricing and highlighted candidates.
-                const laycanFinStr = document.getElementById('match-laycan-end')?.value || "2026-06-28";
+                const laycanFinStr = document.getElementById('match-laycan-end')?.value
+                    || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
                 // Apply a 24-hour end-of-day buffer to the laycan end date so it matches the
                 // backend matching engine's relational join. Without this, a laycan end parsed at
                 // midnight (00:00:00) would wrongly exclude compatible vessels arriving later the same day.

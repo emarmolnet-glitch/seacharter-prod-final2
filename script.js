@@ -17,6 +17,13 @@ return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 // 2. PROCESSING ENGINE (THE MASTER LOGIC)
 async function executeMatchMotor(RadarList) { 
 const radarList = RadarList || [];
+const readNumber = (...values) => {
+for (const value of values) {
+const numberValue = Number(value);
+if (Number.isFinite(numberValue)) return numberValue;
+}
+return null;
+};
 const routePol = (typeof window !== 'undefined' && typeof window.findPortData === 'function')
 ? window.findPortData(
 (typeof document !== 'undefined' && document.getElementById('port-pol') && document.getElementById('port-pol').value) ||
@@ -33,8 +40,10 @@ return Promise.all(radarList.map(async (ship) => {
 if (!ship) return null;
 
 // Normalize coordinates to prevent undefined property access
-const shipLat = ship.lat !== undefined ? ship.lat : (ship.latitude !== undefined ? ship.latitude : null);
-const shipLon = ship.lon !== undefined ? ship.lon : (ship.longitude !== undefined ? ship.longitude : null);
+const meta = ship.MetaData || {};
+const position = ship.PositionReport || (ship.Message && ship.Message.PositionReport) || {};
+const shipLat = readNumber(ship.lat, ship.latitude, ship.AIS_Live_Lat, meta.latitude, meta.AIS_Live_Lat, position.Latitude);
+const shipLon = readNumber(ship.lon, ship.longitude, ship.lng, ship.AIS_Live_Lon, meta.longitude, meta.AIS_Live_Lon, position.Longitude);
 if (shipLat === null || shipLon === null) return null;
 
 const distance = calculateDistanceNM(BASE_PORT.lat, BASE_PORT.lon, shipLat, shipLon);

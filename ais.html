@@ -91,8 +91,8 @@
             <div class="kpi-item"><span class="kpi-label">COMPETITION STATUS</span><span id="competition-status" class="kpi-value" style="color: #28a745;">--</span></div>
         </div>
         <div style="margin-top:20px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-            <input type="password" id="aisstream-api-key" placeholder="API Key (Opcional si usas Netlify Proxy)" autocomplete="current-password" style="padding:10px; border:1px solid #cbd5e1; border-radius:4px; min-width:220px;">
-            <button id="btn-refresh-ais" style="padding:10px 20px; background:#007bff; color:#FFFFFF !important; border:none; border-radius:4px; cursor:pointer;">Check Real-Time Availability</button>
+            <input type="password" id="aisstream-api-key" placeholder="API Key (Opcional si usas Netlify Proxy)" autocomplete="off" spellcheck="false" autocapitalize="none" style="padding:10px; border:1px solid #cbd5e1; border-radius:4px; min-width:220px;">
+            <button type="button" id="btn-refresh-ais" style="padding:10px 20px; background:#007bff; color:#FFFFFF !important; border:none; border-radius:4px; cursor:pointer;">Check Real-Time Availability</button>
         </div>
     </div>
 
@@ -400,12 +400,12 @@
         window.aisLiveVesselsData = [];
         const OPERATIONAL_ZONES = {
             MEDITERRANEAN: [
-                [-10.0, 30.0],
-                [36.0, 46.0]
+                [30.0, -10.0],
+                [46.0, 36.0]
             ],
             CARIBBEAN_HONDURAS: [
-                [-90.0, 8.0],
-                [-60.0, 25.0]
+                [8.0, -90.0],
+                [25.0, -60.0]
             ]
         };
         function getAisStreamApiKey() {
@@ -454,8 +454,8 @@
                     : null;
                 if (currentBounds) {
                     box = [
-                        [currentBounds.lonMin, currentBounds.latMin],
-                        [currentBounds.lonMax, currentBounds.latMax]
+                        [currentBounds.latMin, currentBounds.lonMin],
+                        [currentBounds.latMax, currentBounds.lonMax]
                     ];
                 }
             }
@@ -466,7 +466,7 @@
         }
 
         function isInsideAisMedBox(latitude, longitude) {
-            const [[lonMin, latMin], [lonMax, latMax]] = getActiveBoundingBox();
+            const [[latMin, lonMin], [latMax, lonMax]] = getActiveBoundingBox();
             return latitude >= latMin && latitude <= latMax && longitude >= lonMin && longitude <= lonMax;
         }
 
