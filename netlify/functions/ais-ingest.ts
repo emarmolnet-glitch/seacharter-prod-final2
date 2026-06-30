@@ -87,20 +87,22 @@ function normalizeVessel(item: unknown): VesselRecord | null {
 }
 
 export default async (req: Request) => {
-  console.log("LOG: La función ais-ingest ha comenzado.");
-  if (req.method !== "POST") {
-    return Response.json({ error: "Method not allowed" }, { status: 405 });
-  }
-
-  const apiKey = process.env.AISSTREAM_API_KEY;
-  if (!apiKey) {
-    return Response.json({ error: "AISSTREAM_API_KEY is not configured" }, { status: 500 });
-  }
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
-
+  // Pegamos el try/catch aquí para proteger toda la ejecución
   try {
+    console.log("LOG: La función ais-ingest ha comenzado.");
+    
+    if (req.method !== "POST") {
+      return Response.json({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    const apiKey = process.env.AISSTREAM_API_KEY;
+    if (!apiKey) {
+      return Response.json({ error: "AISSTREAM_API_KEY is not configured" }, { status: 500 });
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
     const aisResponse = await fetch(AISSTREAM_ENDPOINT, {
       method: "POST",
       headers: {
@@ -109,7 +111,6 @@ export default async (req: Request) => {
       body: JSON.stringify({
         APIKey: apiKey,
         BoundingBoxes: [[[BOUNDING_BOX.minLat, BOUNDING_BOX.minLon], [BOUNDING_BOX.maxLat, BOUNDING_BOX.maxLon]]],
-        // FiltersShipType: BULK_CARRIER_SHIP_TYPES,
       }),
       signal: controller.signal
     });
@@ -134,12 +135,8 @@ export default async (req: Request) => {
     return Response.json({ insertedOrUpdated: rows.length, boundingBox: BOUNDING_BOX });
 
   } catch (error) {
-    clearTimeout(timeoutId);
-    console.error("Critical connection error:", error);
-    return Response.json({ error: "Network error", details: error instanceof Error ? error.message : "Unknown" }, { status: 500 });
+    // ESTO ES LO QUE BUSCAMOS: Si hay un error, lo imprimirá en los logs de Netlify
+    console.error("LOG: ERROR FATAL DETECTADO:", error);
+    return Response.json({ error: String(error) }, { status: 500 });
   }
-};
-
-export const config: Config = {
-  path: "/api/ais-ingest",
 };
