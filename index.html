@@ -7628,12 +7628,92 @@
             return foundKey ? PORT_INTELLIGENCE_DB[foundKey] : null;
         }
 
+        function clampSmartPortValue(value, min, max) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) return min;
+            return Math.min(max, Math.max(min, numeric));
+        }
+
+        function resolvePortRecordForSmartCalculations(portName) {
+            const normalized = normalizePortIntelligenceKey(portName);
+            if (!normalized || typeof PORT_DB === 'undefined') return null;
+            if (PORT_DB[portName]) return { name: portName, ...PORT_DB[portName] };
+
+            const normalizedWithoutCountry = normalized.replace(/\s*\([^)]*\)\s*$/, '').trim();
+            const foundKey = Object.keys(PORT_DB).find((key) => {
+                const normalizedKey = normalizePortIntelligenceKey(key);
+                const keyWithoutCountry = normalizedKey.replace(/\s*\([^)]*\)\s*$/, '').trim();
+                return normalizedKey === normalized
+                    || keyWithoutCountry === normalizedWithoutCountry
+                    || normalized.includes(keyWithoutCountry)
+                    || keyWithoutCountry.includes(normalizedWithoutCountry);
+            });
+
+            return foundKey ? { name: foundKey, ...PORT_DB[foundKey] } : null;
+        }
+
+        function getSmartPortCountry(portName, record) {
+            const fromHelper = typeof getCountryFromPort === 'function' ? getCountryFromPort(portName) : '';
+            const raw = fromHelper || record?.country || record?.Country || record?.COUNTRY || '';
+            return String(raw || '').trim().toUpperCase();
+        }
+
+        function getSmartPortRegion(portName, record) {
+            const text = `${portName || ''} ${record?.region || ''} ${record?.Region || ''} ${record?.country || ''}`.toUpperCase();
+            const country = getSmartPortCountry(portName, record);
+            if (/(DZ|ALGERIA|ARGELIA|TUNISIA|TUNEZ|TUNISIE|MOROCCO|MARRUECOS|LIBYA|LIBIA|EGYPT|EGIPTO)/.test(text) || ['ALGERIA', 'ARGELIA', 'DZ', 'TUNISIA', 'TUNEZ', 'MOROCCO', 'LIBYA', 'EGYPT'].includes(country)) return 'north-africa';
+            if (/(ITALY|ITALIA|GREECE|GRECIA|TURKEY|TURQUIA|MALTA|CYPRUS|CHIPRE|ADRIATIC|MEDITERRANEAN|MEDITERRANEO)/.test(text)) return 'mediterranean';
+            if (/(SPAIN|ESPAÑA|ESPANA|PORTUGAL|FRANCE|FRANCIA|ATLANTIC|ATLANTICO|BISCAY)/.test(text)) return 'atlantic-europe';
+            if (/(NETHERLANDS|HOLANDA|BELGIUM|BELGICA|GERMANY|ALEMANIA|UNITED KINGDOM|UK|IRELAND|NORTH SEA|BALTIC|NORWAY|SWEDEN|DENMARK|POLAND)/.test(text)) return 'north-europe';
+            if (/(UNITED STATES|USA|US|CANADA|MEXICO|BRAZIL|BRASIL|ARGENTINA|CHILE|COLOMBIA|PERU|AMERICA)/.test(text)) return 'americas';
+            if (/(CHINA|JAPAN|KOREA|INDIA|SINGAPORE|MALAYSIA|INDONESIA|VIETNAM|THAILAND|ASIA)/.test(text)) return 'asia';
+            if (/(UAE|EMIRATES|OMAN|QATAR|SAUDI|ARABIA|KUWAIT|IRAQ|IRAN|RED SEA|PERSIAN GULF|ARABIAN GULF)/.test(text)) return 'middle-east';
+            if (/(SOUTH AFRICA|AFRICA|NIGERIA|GHANA|ANGOLA|MOZAMBIQUE|KENYA)/.test(text)) return 'africa';
+            return 'standard';
+        }
+
+        function estimatePortSmartFactors(portName, role) {
+            const intel = findPortIntelligence(portName);
+            const record = resolvePortRecordForSmartCalculations(portName);
+            const region = getSmartPortRegion(portName, record);
+            const dwt = Math.max(0, parseFloat(document.getElementById('vessel-dwt')?.value || State.dwt || 0) || 0);
+            const cargo = Math.max(0, parseFloat(document.getElementById('cargo-qty')?.value || State.cargoQty || 0) || 0);
+            const distance = Math.max(0, parseFloat(document.getElementById('dist-laden')?.value || State.distLaden || 0) || 0);
+            const sizeFactor = dwt >= 80000 || cargo >= 60000 ? 1.35 : (dwt >= 35000 || cargo >= 25000 ? 1.18 : (dwt > 0 || cargo > 0 ? 1.0 : 0.92));
+            const routeFactor = distance >= 3500 ? 0.18 : (distance >= 1500 ? 0.10 : 0);
+            const roleFactor = role === 'load' ? 1.05 : 1.0;
+
+            const regional = {
+                'north-africa': { weather: 0.45, delta: 0.75, anchorage: 1.25, tugCost: 1150, tugUnits: 2 },
+                'mediterranean': { weather: 0.38, delta: 0.42, anchorage: 0.70, tugCost: 1050, tugUnits: 1 },
+                'atlantic-europe': { weather: 0.55, delta: 0.30, anchorage: 0.45, tugCost: 1050, tugUnits: 1 },
+                'north-europe': { weather: 0.70, delta: 0.45, anchorage: 0.65, tugCost: 1350, tugUnits: 2 },
+                'americas': { weather: 0.65, delta: 0.55, anchorage: 0.85, tugCost: 1400, tugUnits: 2 },
+                'asia': { weather: 0.80, delta: 0.70, anchorage: 1.10, tugCost: 1500, tugUnits: 2 },
+                'middle-east': { weather: 0.35, delta: 0.65, anchorage: 0.95, tugCost: 1450, tugUnits: 2 },
+                'africa': { weather: 0.75, delta: 0.85, anchorage: 1.25, tugCost: 1350, tugUnits: 2 },
+                'standard': { weather: 0.45, delta: 0.40, anchorage: 0.55, tugCost: 1100, tugUnits: 1 }
+            }[region] || { weather: 0.45, delta: 0.40, anchorage: 0.55, tugCost: 1100, tugUnits: 1 };
+
+            return {
+                source: intel ? 'db' : 'algorithm',
+                matched: Boolean(intel),
+                region,
+                clima_dias: intel ? parseFloat(intel.clima_dias) || 0 : clampSmartPortValue((regional.weather * roleFactor * sizeFactor) + routeFactor, 0.15, 1.75),
+                delta_historico_dias: intel ? parseFloat(intel.delta_historico_dias) || 0 : clampSmartPortValue(regional.delta * roleFactor * sizeFactor, 0.10, 2.25),
+                fondeo_dias: intel ? parseFloat(intel.fondeo_dias) || 0 : clampSmartPortValue(regional.anchorage * roleFactor * sizeFactor, 0.15, 3.25),
+                remolcadores_ud: intel ? parseFloat(intel.remolcadores_ud) || 0 : Math.max(regional.tugUnits, dwt > 50000 ? 3 : (dwt >= 10000 ? 2 : 1)),
+                coste_remolcador_ud: intel ? parseFloat(intel.coste_remolcador_ud) || 0 : Math.round((regional.tugCost * (dwt > 50000 ? 1.18 : 1) * (role === 'load' ? 1.03 : 1)) / 50) * 50
+            };
+        }
+
         function applyPortIntelligenceToSmartCalculations() {
             const pol = document.getElementById('port-pol')?.value || State.pol || '';
             const pod = document.getElementById('port-pod')?.value || State.pod || '';
-            const polIntel = findPortIntelligence(pol);
-            const podIntel = findPortIntelligence(pod);
-            const records = [polIntel, podIntel].filter(Boolean);
+            const records = [
+                pol ? estimatePortSmartFactors(pol, 'load') : null,
+                pod ? estimatePortSmartFactors(pod, 'discharge') : null
+            ].filter(Boolean);
 
             if (records.length === 0) {
                 State.portIntelligence = null;
@@ -7664,8 +7744,11 @@
             State.portIntelligence = {
                 pol,
                 pod,
-                polMatched: Boolean(polIntel),
-                podMatched: Boolean(podIntel),
+                polMatched: Boolean(records[0]?.matched),
+                podMatched: Boolean(records[1]?.matched),
+                polRegion: records[0]?.region || '',
+                podRegion: records[1]?.region || '',
+                algorithmic: records.some((record) => record.source === 'algorithm'),
                 ...suggestion
             };
             State.portIntelligenceTugUnits = suggestion.remolcadores_ud || null;
@@ -12542,7 +12625,12 @@
             const resolvePort = async (name) => {
                 if (!name) return null;
                 if (shouldGeocode) return getCoordinates(name);
-                return PORT_DB[name] ? { name, lat: PORT_DB[name].lat, lon: PORT_DB[name].lon } : null;
+                const portData = typeof findPortData === 'function'
+                    ? findPortData(name)
+                    : (PORT_DB[name] || null);
+                return portData && Number.isFinite(Number(portData.lat)) && Number.isFinite(Number(portData.lon))
+                    ? { name, lat: Number(portData.lat), lon: Number(portData.lon) }
+                    : null;
             };
 
             const [cBal, cPol, cPod] = await Promise.all([
@@ -13018,6 +13106,7 @@
             if (typeof window.updateAisDetectedVesselsPol === 'function') {
                 window.updateAisDetectedVesselsPol();
             }
+            return result;
         }
 
         async function geocodeAllPorts() {
@@ -16063,9 +16152,16 @@
                 const payload = { contents: [{ parts: [{ text: prompt }] }] };
                 const data = await executeGeminiRequest(payload);
                 let html = data.candidates[0].content.parts[0].text;
+                const cleanHtml = html.replace(/```html|```/g, '').trim();
+                markMasterReportTrigger('portInfoGenerated', {
+                    inputId,
+                    portName,
+                    generatedAt: new Date().toISOString(),
+                    html: cleanHtml
+                });
 
                 document.getElementById('ai-modal-loader').classList.add('hidden');
-                document.getElementById('ai-modal-content').innerHTML = html.replace(/```html|```/g, '').trim();
+                document.getElementById('ai-modal-content').innerHTML = cleanHtml;
                 document.getElementById('ai-modal-content').classList.remove('hidden');
             } catch(e) {
                 document.getElementById('ai-modal-content').innerHTML = `<div class="text-red-400">Error: ${e.message}</div>`;
@@ -16711,6 +16807,11 @@
                         </p>
                     </div>
                 `;
+                markMasterReportTrigger('viabilityAIGenerated', {
+                    generatedAt: new Date().toISOString(),
+                    status: 'not_compatible_excess_weight',
+                    html: document.getElementById('ai-modal-content').innerHTML
+                });
                 document.getElementById('ai-modal-content').classList.remove('hidden');
                 return;
             }
@@ -16788,9 +16889,15 @@
                 const payload = { contents: [{ parts: [{ text: prompt }] }] };
                 const dataResponse = await executeGeminiRequest(payload);
                 let html = dataResponse.candidates[0].content.parts[0].text;
+                const cleanHtml = html.replace(/```html|```/g, '');
+                markMasterReportTrigger('viabilityAIGenerated', {
+                    generatedAt: new Date().toISOString(),
+                    status: 'generated',
+                    html: cleanHtml
+                });
                 
                 document.getElementById('ai-modal-loader').classList.add('hidden');
-                document.getElementById('ai-modal-content').innerHTML = html.replace(/```html|```/g, '');
+                document.getElementById('ai-modal-content').innerHTML = cleanHtml;
                 setupRiderCopyOption();
                 document.getElementById('ai-modal-content').classList.remove('hidden');
             } catch(e) {
@@ -20092,6 +20199,38 @@ Example:
             `;
         }
 
+        function buildStrictMasterIntelligenceHTML() {
+            const portReports = Object.values(masterReportWorkflowState.portInfoReports || {});
+            const viabilityReport = masterReportWorkflowState.viabilityAIReport;
+            if (!portReports.length && !viabilityReport) {
+                return `
+                    <section class="master-section">
+                        ${buildMasterAuditSectionTitle('VIII', 'Anexo Estricto IA / Strict AI Evidence', '#7c2d12', '#fdba74')}
+                        <p>No constan consultas de Port Info IA ni Análisis de Viabilidad IA en esta sesión. El informe estricto mantiene el dossier Standard y deja trazabilidad de ausencia de evidencias IA adicionales.</p>
+                    </section>
+                `;
+            }
+
+            const portBlocks = portReports.map((report) => `
+                <div class="master-strict-evidence">
+                    <h4>${escapeMasterReportHtml(report.inputId === 'port-pol' ? 'Puerto de Carga / POL' : report.inputId === 'port-pod' ? 'Puerto de Descarga / POD' : 'Puerto Consultado')} - ${escapeMasterReportHtml(report.portName || 'N/A')}</h4>
+                    <div>${report.html || 'Sin contenido disponible.'}</div>
+                </div>
+            `).join('');
+
+            return `
+                <section class="master-section">
+                    ${buildMasterAuditSectionTitle('VIII', 'Anexo Estricto IA / Strict AI Evidence', '#7c2d12', '#fdba74')}
+                    <p class="master-verdict">Este anexo incorpora las informaciones recopiladas mediante acciones IA en Port Info y el Análisis de Viabilidad IA de la calculadora.</p>
+                    ${portBlocks ? `<h4>Información IA de Puertos</h4>${portBlocks}` : '<p>No se registraron consultas Port Info IA para POL/POD.</p>'}
+                    ${viabilityReport ? `
+                        <h4>Análisis de Viabilidad IA</h4>
+                        <div class="master-strict-evidence">${viabilityReport.html || 'Sin contenido disponible.'}</div>
+                    ` : '<p>No se registró Análisis de Viabilidad IA.</p>'}
+                </section>
+            `;
+        }
+
         function buildMasterAuditHeaderHTML(title, subtitle, jurisdictionLabel = '') {
             const currentDate = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const cpStandard = State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
@@ -20142,7 +20281,11 @@ Example:
             legalAddendumLoaded: false,
             legalAddendum: null,
             legalReportGenerated: false,
-            legalReport: null
+            legalReport: null,
+            portInfoReports: {},
+            viabilityAIGenerated: false,
+            viabilityAIReport: null,
+            selectedReportMode: 'standard'
         };
         window.masterReportWorkflowState = masterReportWorkflowState;
 
@@ -20160,7 +20303,31 @@ Example:
                 masterReportWorkflowState.legalReportGenerated = true;
                 masterReportWorkflowState.legalReport = details;
             }
+            if (type === 'portInfoGenerated') {
+                masterReportWorkflowState.portInfoReports = masterReportWorkflowState.portInfoReports || {};
+                masterReportWorkflowState.portInfoReports[details.inputId || details.portName || `port-${Date.now()}`] = details;
+            }
+            if (type === 'viabilityAIGenerated') {
+                masterReportWorkflowState.viabilityAIGenerated = true;
+                masterReportWorkflowState.viabilityAIReport = details;
+            }
             return masterReportWorkflowState;
+        }
+
+        function chooseMasterReportMode() {
+            const hasStrictData = Boolean(
+                masterReportWorkflowState.viabilityAIGenerated
+                || Object.keys(masterReportWorkflowState.portInfoReports || {}).length
+            );
+            const message = hasStrictData
+                ? 'Elige el tipo de Informe Master:\n\n1 = Standard: informe actual.\n2 = Estricto: Standard + Port Info IA (POL/POD) + Análisis de Viabilidad IA consultados.'
+                : 'Elige el tipo de Informe Master:\n\n1 = Standard: informe actual.\n2 = Estricto: Standard + evidencias IA recopiladas. No hay consultas Port Info/Viabilidad IA registradas todavía.';
+            const choice = window.prompt(message, hasStrictData ? '2' : '1');
+            if (choice === null) return null;
+            const normalized = String(choice).trim().toLowerCase();
+            return normalized === '2' || normalized === 'estricto' || normalized === 'strict'
+                ? 'strict'
+                : 'standard';
         }
 
         function hasValidMasterCalculatorData() {
@@ -20261,8 +20428,27 @@ Example:
                     calculadora_activada: masterReportWorkflowState.calculatorTriggered,
                     origen_calculo: masterReportWorkflowState.calculatorTriggerType,
                     addendum_cargado: masterReportWorkflowState.legalAddendum,
-                    informe_legal_comercial_generado: masterReportWorkflowState.legalReport
+                    informe_legal_comercial_generado: masterReportWorkflowState.legalReport,
+                    modo_informe: masterReportWorkflowState.selectedReportMode
                 },
+                modo_informe: masterReportWorkflowState.selectedReportMode,
+                informe_estricto: masterReportWorkflowState.selectedReportMode === 'strict',
+                inteligencia_ia_recopilada: {
+                    port_info: Object.values(masterReportWorkflowState.portInfoReports || {}).map((item) => ({
+                        puerto: item.portName,
+                        campo: item.inputId,
+                        fecha: item.generatedAt,
+                        informe_html: item.html
+                    })),
+                    analisis_viabilidad_ia: masterReportWorkflowState.viabilityAIReport
+                        ? {
+                            fecha: masterReportWorkflowState.viabilityAIReport.generatedAt,
+                            estado: masterReportWorkflowState.viabilityAIReport.status,
+                            informe_html: masterReportWorkflowState.viabilityAIReport.html
+                        }
+                        : null
+                },
+                reporte_ejecutivo: buildMasterExecutiveReportData(data),
                 viabilidad: {
                     flete_compra: data.financial.freightBuy,
                     flete_venta: data.financial.freightSell,
@@ -20313,6 +20499,82 @@ Example:
                     validacion_estrategica: data.marketComparison.verdict
                 }
             };
+        }
+
+        function sanitizeMasterExecutiveReportHTML(html) {
+            return String(html || '')
+                .replace(/\s+id="[^"]*"/g, '')
+                .replace(/\s+class="hidden([^"]*)"/g, ' class="$1"')
+                .replace(/\s+class="([^"]*)\bhidden\b([^"]*)"/g, ' class="$1$2"')
+                .replace(/\s+onclick="[^"]*"/g, '')
+                .replace(/<button\b[\s\S]*?<\/button>/gi, '');
+        }
+
+        function buildMasterExecutiveReportData(data = gatherMasterAuditData()) {
+            const cpStandard = State.charterPartyStandard || data.legal?.policyType || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
+            const ref = cpStandard === 'ASBATANKVOY'
+                ? document.getElementById('asb-ref')?.value
+                : document.getElementById('gc-ref')?.value;
+            const reference = ref ? `EST-${ref}` : 'SeaCharter Core PRO - Informe Master';
+            const issueDate = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            let html = '';
+
+            try {
+                renderExecutiveReportPrintView({
+                    referencia_unica: reference,
+                    fecha_emision: issueDate
+                });
+                html = sanitizeMasterExecutiveReportHTML(document.getElementById('executive-report-print-view')?.innerHTML || '');
+            } catch (error) {
+                console.warn('No se pudo clonar el reporte ejecutivo para el Informe Master:', error);
+            }
+
+            return {
+                referencia_unica: reference,
+                fecha_emision: issueDate,
+                informe_html: html,
+                resumen: {
+                    buque: data.operational?.vessel,
+                    dwt: data.operational?.dwt,
+                    carga: data.operational?.cargo,
+                    tipo_carga: data.operational?.cargoType,
+                    puerto_carga: data.operational?.pol,
+                    puerto_descarga: data.operational?.pod,
+                    distancia_nm: data.operational?.distanceNm,
+                    duracion_dias: data.operational?.totalDays,
+                    flete_compra: data.financial?.freightBuy,
+                    flete_venta: data.financial?.freightSell,
+                    break_even: data.financial?.breakEven,
+                    beneficio_neto_fletador: data.financial?.netProfitCharterer,
+                    beneficio_neto_armador: data.financial?.netProfitOwner
+                }
+            };
+        }
+
+        function buildMasterExecutiveReportHTML(data) {
+            const executiveReport = buildMasterExecutiveReportData(data);
+            if (executiveReport.informe_html) {
+                return `
+                    <section class="master-section master-executive-report-section">
+                        ${buildMasterAuditSectionTitle('VII', 'Reporte Ejecutivo Integrado / Integrated Executive Report', '#0f766e', '#99f6e4')}
+                        <div class="master-executive-report-copy">${executiveReport.informe_html}</div>
+                    </section>
+                `;
+            }
+
+            return `
+                <section class="master-section">
+                    ${buildMasterAuditSectionTitle('VII', 'Reporte Ejecutivo Integrado / Integrated Executive Report', '#0f766e', '#99f6e4')}
+                    <table class="master-detail-table">
+                        <tbody>
+                            <tr><th>Buque</th><td>${escapeMasterReportHtml(data.operational.vessel)} - ${escapeMasterReportHtml(data.operational.vesselClass)}</td><th>DWT</th><td>${formatMasterNumber(data.operational.dwt)}</td></tr>
+                            <tr><th>Ruta</th><td>${escapeMasterReportHtml(data.operational.pol)} / ${escapeMasterReportHtml(data.operational.pod)}</td><th>Distancia</th><td>${formatMasterNumber(data.operational.distanceNm)} NM</td></tr>
+                            <tr><th>Duración</th><td>${formatMasterNumber(data.operational.totalDays, 2)} días</td><th>Break-even</th><td>${formatMasterMoney(data.financial.breakEven, 'USD', 2)} / TM</td></tr>
+                            <tr><th>Beneficio fletador</th><td>${formatMasterMoney(data.financial.netProfitCharterer, 'USD', 0)}</td><th>Beneficio armador</th><td>${formatMasterMoney(data.financial.netProfitOwner, 'USD', 0)}</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+            `;
         }
 
         function buildMasterReportHTML(data) {
@@ -20418,6 +20680,10 @@ Example:
                         </div>
                     </section>
 
+                    ${buildMasterExecutiveReportHTML(data)}
+
+                    ${masterReportWorkflowState.selectedReportMode === 'strict' ? buildStrictMasterIntelligenceHTML() : ''}
+
                     <footer class="master-audit-footer">
                         <strong>Nota legal:</strong> Este documento es confidencial y para uso exclusivo del destinatario. Los importes son estimaciones ejecutivas basadas en el estado actual de SeaCharter Core PRO y deben validarse contra documentación contractual, portuaria y comercial final.
                     </footer>
@@ -20467,6 +20733,13 @@ Example:
                 .master-two-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
                 .master-two-columns > div { border: 1px solid #e2e8f0; padding: 12px; background: #fff; border-radius: 6px; }
                 .master-two-columns p { margin: 0 0 8px; font-size: 8.5pt; line-height: 1.4; color: #475569; }
+                .master-strict-evidence { border: 1px solid #fed7aa; background: #fff7ed; border-radius: 6px; padding: 10px 12px; margin: 8px 0 12px; color: #334155; font-size: 8.5pt; line-height: 1.4; }
+                .master-strict-evidence h4 { margin: 0 0 6px; color: #7c2d12; font-size: 8.5pt; font-weight: 800; text-transform: uppercase; }
+                .master-strict-evidence ul { margin: 6px 0 0 16px; padding: 0; }
+                .master-executive-report-copy { color: #334155; }
+                .master-executive-report-copy .page-break { break-before: page; page-break-before: always; }
+                .master-executive-report-copy table { max-width: 100%; }
+                .master-executive-report-copy [style*="position: fixed"] { position: static !important; }
                 .master-audit-footer { margin-top: 30px; border-top: 1px solid #cbd5e1; padding-top: 10px; font-size: 7.2pt; color: #64748b; line-height: 1.3; text-align: justify; break-inside: avoid; page-break-inside: avoid; }
                 @media print { .master-report-preview-toolbar { display: none; } .master-report-preview-backdrop { position: static; padding: 0; background: #fff; } .master-report-shell { box-shadow: none; width: auto; min-height: auto; padding: 0; } }
             `;
@@ -20480,10 +20753,16 @@ Example:
             const wrapper = document.createElement('div');
             wrapper.id = 'master-report-preview-backdrop';
             wrapper.className = 'master-report-preview-backdrop';
+            const executiveAppendix = buildMasterExecutiveReportHTML(gatherMasterAuditData());
+            const strictAppendix = masterReportWorkflowState.selectedReportMode === 'strict'
+                ? buildStrictMasterIntelligenceHTML()
+                : '';
             const reportContent = typeof data === 'string'
                 ? `<div id="informe-master-container" class="master-report-shell">
                     ${buildMasterAuditHeaderHTML('SeaCharter Core PRO', 'Informe Master Estratégico / Master Strategic Dossier')}
                     <div class="report-master master-ai-dossier">${data}</div>
+                    ${executiveAppendix}
+                    ${strictAppendix}
                     <footer class="master-audit-footer">
                         <strong>Nota legal:</strong> Este documento es confidencial y para uso exclusivo del destinatario. Los importes son estimaciones ejecutivas basadas en el estado actual de SeaCharter Core PRO y deben validarse contra documentación contractual, portuaria y comercial final.
                     </footer>
@@ -20526,10 +20805,13 @@ Example:
         async function generarInformeMasterOnClick() {
             const btn = document.getElementById('btn-master-executive-report') || document.getElementById('btn-generar-informe');
             if (!validarInformeMaster()) return false;
+            const reportMode = chooseMasterReportMode();
+            if (!reportMode) return false;
+            masterReportWorkflowState.selectedReportMode = reportMode;
 
             const contenidoOriginal = btn?.innerHTML;
             if (btn) {
-                btn.innerHTML = '<span>Analizando Dossier...</span>';
+                btn.innerHTML = `<span>Analizando Dossier ${reportMode === 'strict' ? 'Estricto' : 'Standard'}...</span>`;
                 btn.classList.add('btn-thinking');
                 btn.style.pointerEvents = 'none';
                 btn.disabled = true;
@@ -25151,12 +25433,65 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (adjustedDaysEl) adjustedDaysEl.innerText = adjustedDays.toFixed(2) + ' d';
         }
 
+        function setSmartAdjustmentAlert(message, tone = 'info') {
+            const alertEl = document.getElementById('smart-adjustment-alert');
+            if (!alertEl) return;
+            alertEl.classList.remove('hidden', 'border-amber-500', 'border-emerald-500', 'border-red-500');
+            const borderClass = tone === 'success' ? 'border-emerald-500' : (tone === 'error' ? 'border-red-500' : 'border-amber-500');
+            alertEl.classList.add(borderClass);
+            alertEl.innerText = message;
+        }
+
         async function recalculateAdjustedAndSave() {
-            if (typeof runEngine === 'function') {
-                runEngine();
+            const btn = document.getElementById('btn-recalculate-adjusted');
+            const originalHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
             }
-            calculateAdjustedEtaAndDays();
-            await saveEditedVesselParams();
+
+            try {
+                const pol = (document.getElementById('port-pol')?.value || '').trim();
+                const pod = (document.getElementById('port-pod')?.value || '').trim();
+                if (!pol || !pod) {
+                    setSmartAdjustmentAlert('Define Puerto de Carga (POL) y Puerto de Descarga (POD) antes de recalcular ajustes.', 'error');
+                    return;
+                }
+
+                if (typeof autoCalculateDistances === 'function') {
+                    const routeResult = await autoCalculateDistances();
+                    if (!routeResult || !routeResult.routes?.laden) {
+                        setSmartAdjustmentAlert('No se pudo calcular la distancia marítima entre POL y POD. Revisa que ambos puertos existan en la base o usa geocodificación.', 'error');
+                        return;
+                    }
+                }
+
+                const usedPortIntelligence = typeof applyPortIntelligenceToSmartCalculations === 'function'
+                    ? applyPortIntelligenceToSmartCalculations()
+                    : false;
+
+                if (typeof runEngine === 'function') {
+                    runEngine();
+                }
+                calculateAdjustedEtaAndDays();
+                await saveEditedVesselParams();
+
+                const distLaden = parseFloat(document.getElementById('dist-laden')?.value) || 0;
+                const adjustedDays = document.getElementById('res-adjusted-days')?.innerText || '0.00 d';
+                const adjustedEta = document.getElementById('res-adjusted-eta')?.innerText || 'N/A';
+                const sourceText = usedPortIntelligence
+                    ? 'Se aplicaron ajustes algorítmicos por puerto de carga y descarga.'
+                    : 'No había inteligencia portuaria específica; se recalculó con distancia de ruta y valores actuales.';
+                setSmartAdjustmentAlert(`${sourceText} Ruta POL/POD: ${Math.round(distLaden).toLocaleString('en-US')} NM. ETA final: ${adjustedEta}. Duración ajustada: ${adjustedDays}.`, 'success');
+            } catch (error) {
+                console.error('Error recalculando ajustes inteligentes:', error);
+                setSmartAdjustmentAlert('Error al recalcular ajustes inteligentes. Revisa los puertos, distancias y parámetros del viaje.', 'error');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            }
         }
 
         function appendCoreProDataBridgeReceiptLog(vessel, persistence) {
