@@ -544,8 +544,8 @@
             },
             aisStreamBoundingBoxes: [
                 [
-                    [normalized.lonMin, normalized.latMin],
-                    [normalized.lonMax, normalized.latMax]
+                    [normalized.latMin, normalized.lonMin],
+                    [normalized.latMax, normalized.lonMax]
                 ]
             ]
         };
@@ -628,8 +628,8 @@
             "APIKey": apiKey,
             "BoundingBoxes": [
                 [
-                    [aisStreamState.currentBounds.lonMin, aisStreamState.currentBounds.latMin],
-                    [aisStreamState.currentBounds.lonMax, aisStreamState.currentBounds.latMax]
+                    [aisStreamState.currentBounds.latMin, aisStreamState.currentBounds.lonMin],
+                    [aisStreamState.currentBounds.latMax, aisStreamState.currentBounds.lonMax]
                 ]
             ],
             "VesselTypes": [],

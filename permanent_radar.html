@@ -62,8 +62,8 @@ try {
         console.log("Conexión abierta. Enviando suscripción universal...");
         console.log("[AISStream] API key validada antes de suscripción:", { present: true, maskedLiteral: false });
         const OPERATIONAL_ZONES = {
-            MEDITERRANEAN: [[-10.0, 30.0], [36.0, 46.0]],
-            CARIBBEAN_HONDURAS: [[-90.0, 8.0], [-60.0, 25.0]]
+            MEDITERRANEAN: [[30.0, -10.0], [46.0, 36.0]],
+            CARIBBEAN_HONDURAS: [[8.0, -90.0], [25.0, -60.0]]
         };
         const subscription = {
             "APIKey": apiKey, 
