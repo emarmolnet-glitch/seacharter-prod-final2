@@ -113,6 +113,5 @@ export default async (req: Request) => {
 };
 
 export const config: Config = {
-  path: "/api/ais-ingest",
   schedule: "@eachMinute"
 };
