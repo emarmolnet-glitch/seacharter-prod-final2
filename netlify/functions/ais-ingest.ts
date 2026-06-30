@@ -3,10 +3,10 @@ import { upsertVessels, type VesselRecord } from "./vessel-store.js";
 
 const AISSTREAM_ENDPOINT = "https://api.aisstream.io/v1/stream";
 const BOUNDING_BOX = {
-  minLat: 35.0,
-  maxLat: 37.0,
-  minLon: -6.0,
-  maxLon: -2.0,
+  minLat: -90.0,
+  maxLat: 90.0,
+  minLon: -180.0,
+  maxLon: 180.0,
 };
 
 function pickObject(value: unknown): Record<string, unknown> {
