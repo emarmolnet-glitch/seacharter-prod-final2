@@ -1,6 +1,6 @@
 import { upsertVessels, type VesselRecord } from "./vessel-store.js";
 
-const AISSTREAM_ENDPOINT = "https://api.aisstream.io/v1/stream";
+const AISSTREAM_ENDPOINT = "wss://stream.aisstream.io/v0/stream";
 const BOUNDING_BOX = {
   minLat: -90.0,
   maxLat: 90.0,
