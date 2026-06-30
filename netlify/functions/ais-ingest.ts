@@ -140,3 +140,11 @@ export default async (req: Request) => {
     return Response.json({ error: String(error) }, { status: 500 });
   }
 };
+import type { Config } from "@netlify/functions";
+
+// ... resto de tu código de ingesta ...
+
+export const config: Config = {
+  path: "/api/ais-ingest",
+  schedule: "@eachMinute" // <--- ESTO ES LA CLAVE: Netlify ejecutará esto cada minuto
+};
