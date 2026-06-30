@@ -8,7 +8,6 @@ const BOUNDING_BOX = {
   minLon: -6.0,
   maxLon: -2.0,
 };
-const BULK_CARRIER_SHIP_TYPES = Array.from({ length: 10 }, (_, index) => 70 + index);
 
 function pickObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -49,24 +48,18 @@ function normalizeVessel(item: unknown): VesselRecord | null {
   const message = pickObject(vessel.Message);
   const position = pickObject(message.PositionReport ?? vessel.PositionReport);
   const metadata = pickObject(vessel.MetaData ?? message.MetaData);
-  const shipProfileKey = "Ship" + "Profile".replace("Profile", "Sta" + "tic" + "Data");
-  const shipProfile = pickObject(message[shipProfileKey] ?? vessel[shipProfileKey]);
-  const dimensions = pickObject(shipProfile.Dimension);
-  const merged = { ...vessel, ...message, ...position, ...metadata, ...shipProfile, ...dimensions };
+  const shipProfile = pickObject(message.ShipStaticData ?? vessel.ShipStaticData);
+  const merged = { ...vessel, ...message, ...position, ...metadata, ...shipProfile };
 
   const rawImoNumber = toText(readNested(merged, ["imoNumber", "imo", "IMO", "IMONumber", "ImoNumber"]));
   const mmsi = toText(readNested(merged, ["mmsi", "MMSI"]));
   const latitude = toNumber(readNested(merged, ["latitude", "Latitude", "lat", "Lat"]));
   const longitude = toNumber(readNested(merged, ["longitude", "Longitude", "lon", "Lon", "lng", "Lng"]));
 
-  const imoNumber = rawImoNumber && rawImoNumber !== "0" && rawImoNumber.toUpperCase() !== "N/A"
-    ? rawImoNumber
-    : (mmsi ? `MMSI-${mmsi}` : null);
-
-  if (!imoNumber || latitude === null || longitude === null) return null;
+  if (!mmsi || latitude === null || longitude === null) return null;
 
   return {
-    imoNumber,
+    imoNumber: rawImoNumber ?? `MMSI-${mmsi}`,
     mmsi,
     vesselName: toText(readNested(merged, ["vesselName", "ShipName", "shipName", "Name"])),
     shipType: toText(readNested(merged, ["shipType", "ShipType", "type", "Type"])),
@@ -87,64 +80,39 @@ function normalizeVessel(item: unknown): VesselRecord | null {
 }
 
 export default async (req: Request) => {
-  // Pegamos el try/catch aquí para proteger toda la ejecución
   try {
     console.log("LOG: La función ais-ingest ha comenzado.");
     
-    if (req.method !== "POST") {
-      return Response.json({ error: "Method not allowed" }, { status: 405 });
-    }
-
     const apiKey = process.env.AISSTREAM_API_KEY;
-    if (!apiKey) {
-      return Response.json({ error: "AISSTREAM_API_KEY is not configured" }, { status: 500 });
-    }
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    if (!apiKey) throw new Error("AISSTREAM_API_KEY no configurada");
 
     const aisResponse = await fetch(AISSTREAM_ENDPOINT, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         APIKey: apiKey,
         BoundingBoxes: [[[BOUNDING_BOX.minLat, BOUNDING_BOX.minLon], [BOUNDING_BOX.maxLat, BOUNDING_BOX.maxLon]]],
       }),
-      signal: controller.signal
     });
 
-    clearTimeout(timeoutId);
-
-    if (!aisResponse.ok) {
-      const body = await aisResponse.text();
-      return Response.json({ error: "AISStream request failed", status: aisResponse.status, details: body.slice(0, 500) }, { status: 502 });
-    }
+    if (!aisResponse.ok) throw new Error(`AISStream falló: ${aisResponse.status}`);
 
     const payload = await aisResponse.json();
-    const realData = getRealData(payload);
-    console.log("[AISStream] vessels received:", realData.length);
-    const rows = realData.map(normalizeVessel).filter((row): row is VesselRecord => row !== null);
+    const rows = getRealData(payload).map(normalizeVessel).filter((r): r is VesselRecord => r !== null);
 
-    if (rows.length === 0) {
-      return Response.json({ inserted: 0, updated: 0, skipped: realData.length });
+    if (rows.length > 0) {
+      await upsertVessels(rows);
+      console.log(`[AISStream] Insertados: ${rows.length} buques.`);
     }
 
-    await upsertVessels(rows);
-    return Response.json({ insertedOrUpdated: rows.length, boundingBox: BOUNDING_BOX });
-
+    return new Response("OK", { status: 200 });
   } catch (error) {
-    // ESTO ES LO QUE BUSCAMOS: Si hay un error, lo imprimirá en los logs de Netlify
     console.error("LOG: ERROR FATAL DETECTADO:", error);
-    return Response.json({ error: String(error) }, { status: 500 });
+    return new Response("Error", { status: 500 });
   }
 };
-import type { Config } from "@netlify/functions";
-
-// ... resto de tu código de ingesta ...
 
 export const config: Config = {
   path: "/api/ais-ingest",
-  schedule: "@eachMinute" // <--- ESTO ES LA CLAVE: Netlify ejecutará esto cada minuto
+  schedule: "@eachMinute"
 };
