@@ -177,3 +177,13 @@ ipcMain.on('enviar-a-auditoria', (event, vesselsList) => {
         console.error("[IPC MAIN] Error: dataBridgeWindow no está disponible.");
     }
 });
+// Automatización del radar: dispara la ingesta cada 60 segundos
+setInterval(async () => {
+  try {
+    const response = await fetch('/.netlify/functions/ais-ingest');
+    const result = await response.text();
+    console.log("Radar actualizado automáticamente:", new Date().toLocaleTimeString(), result);
+  } catch (error) {
+    console.error("Error en la actualización automática del radar:", error);
+  }
+}, 60000); // 60000 milisegundos = 1 minuto
