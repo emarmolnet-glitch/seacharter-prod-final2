@@ -1,4 +1,3 @@
-import type { Config } from "@netlify/functions";
 import { upsertVessels, type VesselRecord } from "./vessel-store.js";
 
 const AISSTREAM_ENDPOINT = "https://api.aisstream.io/v1/stream";
@@ -110,8 +109,4 @@ export default async (req: Request) => {
     console.error("LOG: ERROR FATAL DETECTADO:", error);
     return new Response("Error", { status: 500 });
   }
-};
-
-export const config: Config = {
-  schedule: "@eachMinute"
 };
