@@ -5204,12 +5204,13 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-type" class="text-action-required flex items-center min-h-[24px]">Tipo de Carga</label>
-                                <select id="cargo-type" class="input-gc action-required-field text-action-required" onchange="autoAdjustSF(); autoPopulateRouteLimits(); syncCalculatorAndMatching('calculator');">
+                                <select id="cargo-type" class="input-gc action-required-field text-action-required" onchange="autoAdjustSF(); autoPopulateRouteLimits(); actualizarCamposTipoCarga(); syncCalculatorAndMatching('calculator');">
                                     <option value="Granel Sólido (Dry Bulk)">Granel Sólido (Dry Bulk - Cement, Grain, Coal)</option>
                                     <option value="Granel Líquido (Liquid Bulk)">Granel Líquido (Liquid Bulk - Benzene, Chemicals, Oil)</option>
+                                    <option value="Hierro/Acero">Hierro/Acero</option>
                                     <option value="Big Bags (in Big Bag)">Big Bags (in Big Bag)</option>
                                     <option value="Paletizada (palletized)">Paletizada (palletized)</option>
-                                    <option value="Medidas Especiales (special measures)">Medidas Especiales (special measures)</option>
+                                    <option value="Proyecto">Proyecto / Medidas Especiales</option>
                                 </select>
                             </div>
                             <div class="input-group">
@@ -5298,6 +5299,14 @@
                             <div class="input-group">
                                 <label id="label-grab-capacity" class="text-amber-400">Grab Capacity (cbm)</label>
                                 <input type="number" id="grab-capacity-cbm" class="input-gc font-bold text-amber-300" value="0" step="0.1" oninput="runEngine()">
+                            </div>
+                            <div id="contenedor-peso-pieza" class="input-group hidden">
+                                <label id="label-peso-pieza" class="text-amber-400">Peso por pieza (MT)</label>
+                                <input type="number" id="peso-pieza-mt" class="input-gc font-bold text-amber-300" value="0" step="0.1" oninput="recalcularDiasPuerto()">
+                            </div>
+                            <div id="contenedor-ciclos-hora" class="input-group hidden" style="display: none;">
+                                <label id="label-ciclos-hora" class="text-amber-400">Ciclos/Hora Grúa</label>
+                                <input type="number" id="ciclos-hora-grua" class="input-gc font-bold text-amber-300" value="0" step="0.1" oninput="recalcularDiasPuerto()">
                             </div>
                         </div>
                         <p id="vessel-specs-inference-note" class="hidden mt-3 text-[10px] font-semibold text-[#1d4ed8] bg-white border border-blue-200 rounded-lg px-3 py-2 shadow-sm"></p>
@@ -5402,6 +5411,18 @@
                             <div class="input-group">
                                 <label id="label-cargo-surcharge">Recargo Carga/Especial ($)</label>
                                 <input type="number" id="cargo-surcharge" class="input-gc text-red-300 font-bold" value="0" oninput="runEngine()">
+                            </div>
+                            <div id="contenedor-trincaje" class="input-group hidden">
+                                <label id="label-trincaje" class="text-red-300">Coste Trincaje ($)</label>
+                                <input type="number" id="input-trincaje" class="input-gc text-red-300 font-bold" value="0" oninput="runEngine()">
+                            </div>
+                            <div id="contenedor-maniobra-especial" class="input-group hidden">
+                                <label id="label-maniobra-especial" class="text-red-300">Coste por Maniobra Especial ($)</label>
+                                <input type="number" id="coste-maniobra-especial" class="input-gc text-red-300 font-bold" value="0" oninput="runEngine()">
+                            </div>
+                            <div id="contenedor-dias-preparacion" class="input-group hidden">
+                                <label id="label-dias-preparacion" class="text-red-300">Días de preparación</label>
+                                <input type="number" id="dias-preparacion" class="input-gc text-red-300 font-bold" value="0" step="0.1" oninput="runEngine()">
                             </div>
                         </div>
 
@@ -15965,11 +15986,17 @@
             const pPort = parseFloat(document.getElementById('price-port').value) || 0;
             
             const opex = parseFloat(document.getElementById('opex-daily').value) || 0;
+            const tipoCargaOperativa = normalizarTipoCarga();
+            const costeTrincaje = costeTrincajeCondicional();
+            const costeManiobraEspecial = tipoCargaOperativa === 'proyecto' ? (parseFloat(document.getElementById('coste-maniobra-especial')?.value) || 0) : 0;
+            const diasPreparacionProyecto = tipoCargaOperativa === 'proyecto' ? Math.max(0, parseFloat(document.getElementById('dias-preparacion')?.value) || 0) : 0;
             const basePortExpenses = (parseFloat(document.getElementById('pda-pol').value) || 0) + 
                          (parseFloat(document.getElementById('pda-pod').value) || 0) + 
                          (parseFloat(document.getElementById('stevedoring-costs').value) || 0) +
                          (parseFloat(document.getElementById('pda-misc').value) || 0) +
-                         (parseFloat(document.getElementById('cargo-surcharge').value) || 0);
+                         (parseFloat(document.getElementById('cargo-surcharge').value) || 0) +
+                         costeTrincaje +
+                         costeManiobraEspecial;
 
             const marginOwner = parseFloat(document.getElementById('margin-owner').value) || 0;
             const marginChart = parseFloat(document.getElementById('margin-charterer').value) || 0;
@@ -16043,7 +16070,7 @@
             const dPortLoad = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba);
             const dPortDisch = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga);
             const dPort = isZeroCalculation ? 0 : (dPortLoad + dPortDisch);
-            const dPortTotal = isZeroCalculation ? 0 : (dPort + genconTurnTimeDays);
+            const dPortTotal = isZeroCalculation ? 0 : (dPort + genconTurnTimeDays + diasPreparacionProyecto);
             const baseOperationalDays = isZeroCalculation ? 0 : (dBal + dLaden + marginDays + dPortTotal);
             const smartExtraDays = isZeroCalculation ? 0 : (smartWeatherDays + smartDeltaDays + smartAnchorageDays);
 
@@ -26575,6 +26602,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return FACTORES_ESTIBA[metodo] || FACTORES_ESTIBA.cinta_transportadora;
         }
 
+        function normalizarTipoCarga(value = document.getElementById('cargo-type')?.value) {
+            const normalized = String(value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase();
+            if (normalized.includes('proyecto') || normalized.includes('especial')) return 'proyecto';
+            if (normalized.includes('hierro') || normalized.includes('acero')) return 'acero';
+            if (normalized.includes('granel')) return 'granel';
+            return 'general';
+        }
+
         function readRitmoNominalPuerto(side = 'pol') {
             const id = side === 'pod' ? 'ritmo_nominal_pod' : 'ritmo_nominal_pol';
             const fallbackId = side === 'pod' ? 'rate-disch' : 'rate-load';
@@ -26588,11 +26626,72 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return nominal * getFactorEstibaPuerto(metodo);
         }
 
+        function calcularRitmoEfectivo(side = 'pol') {
+            const tipoCarga = normalizarTipoCarga();
+            const cargo = Math.max(0, parseFloat(document.getElementById('cargo-qty')?.value) || 0);
+            const horasTrabajo = 24;
+            if (tipoCarga === 'acero') {
+                const pesoPieza = Math.max(0, parseFloat(document.getElementById('peso-pieza-mt')?.value) || 0);
+                const ciclosHora = Math.max(0, parseFloat(document.getElementById('ciclos-hora-grua')?.value) || 0);
+                if (pesoPieza <= 0 || ciclosHora <= 0) return 0;
+                const dias = (cargo / pesoPieza) / (ciclosHora * horasTrabajo);
+                return dias > 0 ? cargo / dias : 0;
+            }
+            const metodo = side === 'pod' ? getMetodoDescargaActual() : getMetodoEstibaActual();
+            return getRitmoRealPuerto(metodo, readRitmoNominalPuerto(side));
+        }
+
         function calcularDiasPuertoPorEstiba(toneladasCarga, ritmoReal = getRitmoRealPuerto(), metodo = getMetodoEstibaActual()) {
             const toneladas = Math.max(0, parseFloat(toneladasCarga) || 0);
             const ritmo = Math.max(0, parseFloat(ritmoReal) || 0);
             if (toneladas <= 0 || ritmo <= 0) return 0;
+            if (normalizarTipoCarga() === 'acero') return toneladas / ritmo;
             return (toneladas / ritmo) / FACTOR_EFICIENCIA_PUERTO;
+        }
+
+        function costeTrincajeCondicional() {
+            const tipoCarga = normalizarTipoCarga();
+            if (tipoCarga !== 'acero' && tipoCarga !== 'proyecto') return 0;
+            return Math.max(0, parseFloat(document.getElementById('input-trincaje')?.value) || 0) * 1;
+        }
+
+        function actualizarAdvertenciaSwl() {
+            const alert = document.getElementById('crane-validation-alert');
+            if (!alert) return;
+            const tipoCarga = normalizarTipoCarga();
+            const pesoPieza = Math.max(0, parseFloat(document.getElementById('peso-pieza-mt')?.value) || 0);
+            const ciclosHora = Math.max(0, parseFloat(document.getElementById('ciclos-hora-grua')?.value) || 0);
+            const craneSwl = Math.max(0, parseFloat(document.getElementById('crane-swl-mt')?.value) || 0);
+            const missingSteelInputs = tipoCarga === 'acero' && (pesoPieza <= 0 || ciclosHora <= 0);
+            const highRisk = tipoCarga === 'acero' && pesoPieza > 0 && craneSwl > 0 && pesoPieza > craneSwl;
+            if (!highRisk && !missingSteelInputs) return;
+            alert.classList.remove('hidden', 'border-emerald-300', 'bg-emerald-50', 'text-emerald-800');
+            alert.classList.add('border-red-300', 'bg-red-50', 'text-red-800');
+            alert.textContent = missingSteelInputs
+                ? 'RIESGO ALTO: define Peso por pieza y Ciclos/hora para calcular Hierro/Acero.'
+                : `RIESGO ALTO: Excede SWL. Peso por pieza ${pesoPieza.toFixed(2)} MT > Crane SWL ${craneSwl.toFixed(2)} MT.`;
+        }
+
+        function actualizarCamposTipoCarga() {
+            const tipoCarga = normalizarTipoCarga();
+            const isAcero = tipoCarga === 'acero';
+            const isProyecto = tipoCarga === 'proyecto';
+            const toggle = (id, show) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.classList.toggle('hidden', !show);
+                el.style.display = show ? '' : 'none';
+            };
+            toggle('contenedor-peso-pieza', isAcero);
+            toggle('contenedor-ciclos-hora', isAcero);
+            toggle('contenedor-trincaje', isAcero || isProyecto);
+            toggle('contenedor-maniobra-especial', isProyecto);
+            toggle('contenedor-dias-preparacion', isProyecto);
+            const specialInput = document.getElementById('coste-maniobra-especial');
+            const prepInput = document.getElementById('dias-preparacion');
+            if (specialInput) specialInput.readOnly = !isProyecto;
+            if (prepInput) prepInput.readOnly = !isProyecto;
+            actualizarAdvertenciaSwl();
         }
 
         function actualizarAlertaMetodoCarga(metodo = getMetodoEstibaActual()) {
@@ -26610,8 +26709,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function recalcularDiasPuerto() {
             const metodoPol = getMetodoEstibaActual();
             const metodoPod = getMetodoDescargaActual();
-            const ritmoRealPol = getRitmoRealPuerto(metodoPol, readRitmoNominalPuerto('pol'));
-            const ritmoRealPod = getRitmoRealPuerto(metodoPod, readRitmoNominalPuerto('pod'));
+            const ritmoRealPol = calcularRitmoEfectivo('pol');
+            const ritmoRealPod = calcularRitmoEfectivo('pod');
             const inputCarga = document.getElementById('rate-load');
             const inputDescarga = document.getElementById('rate-disch');
 
@@ -26625,6 +26724,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
             actualizarAlertaMetodoCarga(metodoPol);
             actualizarAlertaMetodoDescarga(metodoPod);
+            actualizarCamposTipoCarga();
 
             if (typeof runEngine === 'function') {
                 runEngine();
@@ -26635,7 +26735,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.FACTORES_ESTIBA = FACTORES_ESTIBA;
             window.FACTOR_EFICIENCIA_PUERTO = FACTOR_EFICIENCIA_PUERTO;
             window.readRitmoNominalPuerto = readRitmoNominalPuerto;
+            window.normalizarTipoCarga = normalizarTipoCarga;
+            window.calcularRitmoEfectivo = calcularRitmoEfectivo;
             window.calcularDiasPuertoPorEstiba = calcularDiasPuertoPorEstiba;
+            window.costeTrincajeCondicional = costeTrincajeCondicional;
+            window.actualizarCamposTipoCarga = actualizarCamposTipoCarga;
+            window.actualizarAdvertenciaSwl = actualizarAdvertenciaSwl;
             window.recalcularDiasPuerto = recalcularDiasPuerto;
         }
 
@@ -26669,11 +26774,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const pPort = parseFloat(document.getElementById('price-port')?.value) || 0;
             
             const opex = parseFloat(document.getElementById('opex-daily')?.value) || 0;
+            const tipoCargaOperativa = normalizarTipoCarga();
+            const costeTrincaje = costeTrincajeCondicional();
+            const costeManiobraEspecial = tipoCargaOperativa === 'proyecto' ? (parseFloat(document.getElementById('coste-maniobra-especial')?.value) || 0) : 0;
+            const diasPreparacionProyecto = tipoCargaOperativa === 'proyecto' ? Math.max(0, parseFloat(document.getElementById('dias-preparacion')?.value) || 0) : 0;
             const pdas = (parseFloat(document.getElementById('pda-pol')?.value) || 0) + 
                          (parseFloat(document.getElementById('pda-pod')?.value) || 0) + 
                          (parseFloat(document.getElementById('stevedoring-costs')?.value) || 0) +
                          (parseFloat(document.getElementById('pda-misc')?.value) || 0) +
-                         (parseFloat(document.getElementById('cargo-surcharge')?.value) || 0);
+                         (parseFloat(document.getElementById('cargo-surcharge')?.value) || 0) +
+                         costeTrincaje +
+                         costeManiobraEspecial;
 
             const marginOwner = parseFloat(document.getElementById('margin-owner')?.value) || 0;
             const marginChart = parseFloat(document.getElementById('margin-charterer')?.value) || 0;
@@ -26710,7 +26821,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const dPortLoad = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba);
             const dPortDisch = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga);
             const dPort = isZeroCalculation ? 0 : (dPortLoad + dPortDisch);
-            const dPortTotal = isZeroCalculation ? 0 : (dPort + genconTurnTimeDays);
+            const dPortTotal = isZeroCalculation ? 0 : (dPort + genconTurnTimeDays + diasPreparacionProyecto);
 
             const T_sea = isZeroCalculation ? 0 : (dBal + dLaden + marginDays);
             const T_port = isZeroCalculation ? 0 : dPortTotal;
@@ -27392,7 +27503,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 el.value = '0';
             });
 
-            ['metodo_carga', 'metodo_descarga_pod', 'ritmo_nominal_pol', 'ritmo_nominal_pod'].forEach((id) => {
+            ['cargo-type', 'metodo_carga', 'metodo_descarga_pod', 'ritmo_nominal_pol', 'ritmo_nominal_pod', 'peso-pieza-mt', 'ciclos-hora-grua', 'crane-swl-mt', 'input-trincaje', 'coste-maniobra-especial', 'dias-preparacion'].forEach((id) => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.addEventListener('input', function() {
@@ -27402,6 +27513,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     recalcularDiasPuerto();
                 });
             });
+            actualizarCamposTipoCarga();
             recalcularDiasPuerto();
 
             const etaRadarInput = document.getElementById('eta-radar');
