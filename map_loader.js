@@ -896,8 +896,9 @@
                         const dbVessel = resData.data[0];
                         const hydratedImo = dbVessel.imo || "N/A";
                         const hydratedDest = dbVessel.destination || "N/A";
+                        const hydratedLastPort = dbVessel.lastPortOfCall || dbVessel.last_port_of_call || dbVessel.ultimo_puerto || "N/A";
 
-                        const updatedContent = `<div class="seacharter-map-popup"><strong>${name}</strong><span>IMO: ${hydratedImo}</span><span>MMSI: ${mmsi}</span><span>Destino: ${hydratedDest}</span><span>Ubicación: ${statusLabel}</span><small>Estimated Position / Terrestrial Coverage Gap</small></div>`;
+                        const updatedContent = `<div class="seacharter-map-popup"><strong>${name}</strong><span>IMO: ${hydratedImo}</span><span>MMSI: ${mmsi}</span><span>Destino: ${hydratedDest}</span><span>Último puerto: ${hydratedLastPort}</span><span>Ubicación: ${statusLabel}</span><small>Estimated Position / Terrestrial Coverage Gap</small></div>`;
                         marker.setPopupContent(updatedContent);
                         marker._isHydrated = true;
                     } else {
@@ -921,7 +922,8 @@
             // Live position - render normal popup
             const imo = options.imo || "N/A";
             const destination = options.destination || "N/A";
-            const normalContent = `<div class="seacharter-map-popup"><strong>${name}</strong><span>IMO: ${imo}</span><span>MMSI: ${mmsi}</span><span>Destino: ${destination}</span><span>Ubicación: ${statusLabel}</span></div>`;
+            const lastPortOfCall = options.lastPortOfCall || options.last_port_of_call || options.ultimo_puerto || "N/A";
+            const normalContent = `<div class="seacharter-map-popup"><strong>${name}</strong><span>IMO: ${imo}</span><span>MMSI: ${mmsi}</span><span>Destino: ${destination}</span><span>Último puerto: ${lastPortOfCall}</span><span>Ubicación: ${statusLabel}</span></div>`;
             marker.bindPopup(normalContent);
         }
     }

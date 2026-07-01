@@ -35,6 +35,10 @@ function toText(value: unknown): string | null {
   return text === "" ? null : text;
 }
 
+function readPortText(source: Record<string, unknown>, keys: string[]): string | null {
+  return toText(readNested(source, keys));
+}
+
 function getRealData(payload: unknown): unknown[] {
   if (Array.isArray(payload)) return payload;
   const objectPayload = pickObject(payload);
@@ -68,7 +72,8 @@ function normalizeVessel(item: unknown): VesselRecord | null {
     course: toNumber(readNested(merged, ["course", "Cog", "COG", "Course"])),
     heading: toNumber(readNested(merged, ["heading", "TrueHeading", "Heading"])),
     navigationalStatus: toText(readNested(merged, ["navigationalStatus", "NavigationalStatus", "Status"])),
-    destination: toText(readNested(merged, ["destination", "Destination"])),
+    destination: readPortText(merged, ["destination", "Destination", "PortOfDestination", "DestinationPort", "destino"]),
+    lastPortOfCall: readPortText(merged, ["lastPortOfCall", "last_port_of_call", "ultimo_puerto", "ultimoPuerto", "LastPort", "LastPortOfCall", "PreviousPort", "DeparturePort", "PortOfDeparture"]),
     eta: toText(readNested(merged, ["eta", "ETA", "Eta"])),
     source: "AISStream",
     rawData: item,

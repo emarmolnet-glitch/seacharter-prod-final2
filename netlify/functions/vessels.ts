@@ -16,6 +16,11 @@ function toApiVessel(row: VesselRecord) {
     heading: row.heading,
     navigationalStatus: row.navigationalStatus,
     destination: row.destination,
+    Destination: row.destination,
+    destino_actual: row.destination,
+    lastPortOfCall: row.lastPortOfCall,
+    last_port_of_call: row.lastPortOfCall,
+    ultimo_puerto: row.lastPortOfCall,
     eta: row.eta,
     source: row.source,
     lastSeenAt: row.lastSeenAt,
@@ -50,6 +55,9 @@ export default async (req: Request) => {
       heading: Number.isFinite(Number(vessel.heading)) ? Number(vessel.heading) : null,
       navigationalStatus: vessel.navigationalStatus || vessel.status ? String(vessel.navigationalStatus || vessel.status) : null,
       destination: vessel.destination ? String(vessel.destination) : null,
+      lastPortOfCall: vessel.lastPortOfCall || vessel.last_port_of_call || vessel.ultimo_puerto || vessel.lastPort
+        ? String(vessel.lastPortOfCall || vessel.last_port_of_call || vessel.ultimo_puerto || vessel.lastPort)
+        : null,
       eta: vessel.eta ? String(vessel.eta) : null,
       source: "manual",
       rawData: vessel,
