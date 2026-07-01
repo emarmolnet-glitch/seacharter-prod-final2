@@ -92,7 +92,7 @@ function getVesselKey(message: VesselMessage) {
   ).trim();
 }
 
-function normalizeVesselMessage(message: VesselMessage) {
+function normalizeVesselMessage(message: VesselMessage): VesselMessage {
   const metadata = asRecord(message.MetaData);
   const nestedMessage = asRecord(message.Message);
   const positionReport = asRecord(message.PositionReport || nestedMessage.PositionReport);
@@ -120,6 +120,28 @@ function normalizeVesselMessage(message: VesselMessage) {
   const shipType = firstDefined(message.ShipType, message.shipType, metadata.ShipType, metadata.shipType, staticData.Type);
   const speed = normalizeNumber(firstDefined(message.speed, metadata.speed, positionReport.Sog, positionReport.SOG));
   const navigationalStatus = firstDefined(message.NavigationalStatus, metadata.NavigationalStatus, positionReport.NavigationalStatus);
+  const destination = firstDefined(message.destination, message.Destination, message.destino_actual, metadata.Destination, metadata.destination, staticData.Destination, staticData.PortOfDestination);
+  const lastPortOfCall = firstDefined(
+    message.lastPortOfCall,
+    message.last_port_of_call,
+    message.ultimo_puerto,
+    message.ultimoPuerto,
+    message.LastPort,
+    message.LastPortOfCall,
+    message.PreviousPort,
+    message.DeparturePort,
+    metadata.lastPortOfCall,
+    metadata.last_port_of_call,
+    metadata.ultimo_puerto,
+    metadata.LastPort,
+    metadata.LastPortOfCall,
+    metadata.PreviousPort,
+    metadata.DeparturePort,
+    staticData.LastPort,
+    staticData.LastPortOfCall,
+    staticData.PreviousPort,
+    staticData.DeparturePort,
+  );
 
   return {
     ...message,
@@ -137,6 +159,12 @@ function normalizeVesselMessage(message: VesselMessage) {
     AIS_Live_Lon: longitude,
     speed,
     NavigationalStatus: navigationalStatus,
+    destination,
+    Destination: destination,
+    destino_actual: destination,
+    lastPortOfCall,
+    last_port_of_call: lastPortOfCall,
+    ultimo_puerto: lastPortOfCall,
     MetaData: {
       ...metadata,
       MMSI: firstDefined(metadata.MMSI, mmsi),
@@ -147,6 +175,9 @@ function normalizeVesselMessage(message: VesselMessage) {
       longitude: firstDefined(metadata.longitude, longitude),
       speed: firstDefined(metadata.speed, speed),
       NavigationalStatus: firstDefined(metadata.NavigationalStatus, navigationalStatus),
+      Destination: firstDefined(metadata.Destination, destination),
+      lastPortOfCall: firstDefined(metadata.lastPortOfCall, lastPortOfCall),
+      ultimo_puerto: firstDefined(metadata.ultimo_puerto, lastPortOfCall),
     },
   };
 }
@@ -175,6 +206,7 @@ function toVesselRecord(message: VesselMessage): VesselRecord | null {
     heading: normalizeNumber(firstDefined(normalized.heading, normalized.TrueHeading, metadata.heading)) ?? null,
     navigationalStatus: String(firstDefined(normalized.NavigationalStatus, metadata.NavigationalStatus, "") || "").trim() || null,
     destination: String(firstDefined(normalized.destination, normalized.Destination, metadata.Destination, "") || "").trim() || null,
+    lastPortOfCall: String(firstDefined(normalized.lastPortOfCall, normalized.last_port_of_call, normalized.ultimo_puerto, metadata.lastPortOfCall, metadata.ultimo_puerto, "") || "").trim() || null,
     eta: String(firstDefined(normalized.eta, normalized.ETA, metadata.ETA, "") || "").trim() || null,
     source: "AISStream",
     rawData: normalized,
@@ -203,6 +235,11 @@ function fromVesselRecord(row: VesselRecord): VesselMessage {
     heading: row.heading,
     NavigationalStatus: row.navigationalStatus,
     destination: row.destination,
+    Destination: row.destination,
+    destino_actual: row.destination,
+    lastPortOfCall: row.lastPortOfCall,
+    last_port_of_call: row.lastPortOfCall,
+    ultimo_puerto: row.lastPortOfCall,
     eta: row.eta,
     source: row.source,
     lastSeenAt: row.lastSeenAt,
@@ -216,6 +253,9 @@ function fromVesselRecord(row: VesselRecord): VesselMessage {
       longitude: row.longitude,
       speed: row.speed,
       NavigationalStatus: row.navigationalStatus,
+      Destination: row.destination,
+      lastPortOfCall: row.lastPortOfCall,
+      ultimo_puerto: row.lastPortOfCall,
     },
   });
 }

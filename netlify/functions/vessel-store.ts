@@ -12,6 +12,7 @@ export type VesselRecord = {
   heading: number | null;
   navigationalStatus: string | null;
   destination: string | null;
+  lastPortOfCall: string | null;
   eta: string | null;
   source: string;
   rawData: unknown;

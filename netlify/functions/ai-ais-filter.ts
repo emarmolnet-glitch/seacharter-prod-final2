@@ -49,8 +49,9 @@ function normalizeVessel(value: unknown) {
   const loa = numberValue(source.loa, source.LOA, meta.loa, meta.LOA);
   const speed = numberValue(source.speed, meta.speed, position.Sog, 12) || 12;
   const destination = textValue(source.destination, source.Destination, meta.Destination) || "N/A";
+  const lastPortOfCall = textValue(source.lastPortOfCall, source.last_port_of_call, source.ultimo_puerto, source.LastPort, source.LastPortOfCall, source.PreviousPort, source.DeparturePort, meta.lastPortOfCall, meta.ultimo_puerto, meta.LastPort, meta.LastPortOfCall, meta.PreviousPort, meta.DeparturePort) || "N/A";
 
-  return { source, vesselName, mmsi, imo, shipType, dwt, draft, loa, speed, destination, latitude, longitude };
+  return { source, vesselName, mmsi, imo, shipType, dwt, draft, loa, speed, destination, lastPortOfCall, latitude, longitude };
 }
 
 function parseLaycanEnd(value: unknown) {
@@ -114,6 +115,10 @@ export default async (req: Request) => {
             vesselClass: vessel.shipType,
             specialtyType: vessel.shipType,
             destination: vessel.destination,
+            Destination: vessel.destination,
+            lastPortOfCall: vessel.lastPortOfCall,
+            last_port_of_call: vessel.lastPortOfCall,
+            ultimo_puerto: vessel.lastPortOfCall,
           },
           ais: {
             mmsi: vessel.mmsi,
@@ -123,6 +128,10 @@ export default async (req: Request) => {
             currentDistanceToLoadPort: Math.round(distance),
             plannedDestination: vessel.destination,
             destination: vessel.destination,
+            Destination: vessel.destination,
+            lastPortOfCall: vessel.lastPortOfCall,
+            last_port_of_call: vessel.lastPortOfCall,
+            ultimo_puerto: vessel.lastPortOfCall,
             eta_puerto_carga: etaDate.toISOString(),
             dwt: vessel.dwt,
             draft: vessel.draft,
@@ -151,6 +160,7 @@ export default async (req: Request) => {
           aiStatus: overall > 50 ? "MATCH" : "REVIEW",
           eta_puerto_carga: etaDate.toISOString(),
           destino_actual: vessel.destination,
+          ultimo_puerto: vessel.lastPortOfCall,
           timestamp: Date.now(),
         };
       })

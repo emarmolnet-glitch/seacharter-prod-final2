@@ -491,6 +491,8 @@
             const speed = Number(report.Sog);
             const name = (meta.ShipName || `MMSI ${mmsi}`).toString().trim();
             const shipType = meta.ShipType ?? meta.shipType ?? meta.ShipTypeCode ?? report.ShipType ?? 'Cargo';
+            const destination = meta.Destination || meta.destination || message.Destination || message.destination || '';
+            const lastPortOfCall = meta.lastPortOfCall || meta.last_port_of_call || meta.ultimo_puerto || meta.LastPort || meta.LastPortOfCall || message.lastPortOfCall || message.last_port_of_call || message.ultimo_puerto || '';
             return {
                 MessageType: 'PositionReport',
                 PositionReport: report,
@@ -503,6 +505,9 @@
                     longitude,
                     speed: Number.isFinite(speed) ? speed : 0,
                     NavigationalStatus: report.NavigationalStatus,
+                    Destination: destination,
+                    lastPortOfCall,
+                    ultimo_puerto: lastPortOfCall,
                     time_utc: meta.time_utc || new Date().toISOString()
                 },
                 MMSI: mmsi,
@@ -511,6 +516,11 @@
                 shipType,
                 latitude,
                 longitude,
+                destination,
+                Destination: destination,
+                lastPortOfCall,
+                last_port_of_call: lastPortOfCall,
+                ultimo_puerto: lastPortOfCall,
                 speed: Number.isFinite(speed) ? speed : 0,
                 updatedAt: Date.now()
             };
@@ -558,7 +568,9 @@
         function buildLiveAisPopup(vessel) {
             const meta = vessel.MetaData || {};
             const speed = Number(meta.speed || vessel.speed || 0);
-            return `<div class="seacharter-map-popup"><strong>${meta.ShipName || vessel.vesselName || 'Unknown vessel'}</strong><span>MMSI: ${meta.MMSI || vessel.MMSI || 'N/A'}</span><span>Speed: ${Number.isFinite(speed) ? speed.toFixed(1) : '0.0'} kn</span><span>Position: ${meta.latitude.toFixed(4)}, ${meta.longitude.toFixed(4)}</span><span>Source: AISStream live</span></div>`;
+            const destination = vessel.destination || vessel.Destination || meta.Destination || 'N/A';
+            const lastPortOfCall = vessel.lastPortOfCall || vessel.last_port_of_call || vessel.ultimo_puerto || meta.lastPortOfCall || meta.ultimo_puerto || 'N/A';
+            return `<div class="seacharter-map-popup"><strong>${meta.ShipName || vessel.vesselName || 'Unknown vessel'}</strong><span>MMSI: ${meta.MMSI || vessel.MMSI || 'N/A'}</span><span>Destino: ${destination}</span><span>Último puerto: ${lastPortOfCall}</span><span>Speed: ${Number.isFinite(speed) ? speed.toFixed(1) : '0.0'} kn</span><span>Position: ${meta.latitude.toFixed(4)}, ${meta.longitude.toFixed(4)}</span><span>Source: AISStream live</span></div>`;
         }
 
         function scheduleLiveAisRender() {
