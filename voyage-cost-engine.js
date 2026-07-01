@@ -22,7 +22,8 @@
         camion_tolva: 0.75,
         cuchara_grab: 0.6,
         big_bags: 0.4,
-        paletizado: 0.2
+        paletizado: 0.2,
+        hierro_acero_piezas: 0.35
     };
     const FACTOR_EFICIENCIA_PUERTO = 0.85;
 

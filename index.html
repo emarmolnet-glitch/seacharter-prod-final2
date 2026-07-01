@@ -5231,6 +5231,7 @@
                                     <option value="cuchara_grab">Cuchara (Grab)</option>
                                     <option value="big_bags">Big Bags</option>
                                     <option value="paletizado">Paletizado</option>
+                                    <option value="hierro_acero_piezas">Hierro/Acero/Piezas</option>
                                 </select>
                             </div>
                             <div class="input-group">
@@ -5252,6 +5253,7 @@
                                     <option value="cuchara_grab">Cuchara (Grab)</option>
                                     <option value="big_bags">Big Bags</option>
                                     <option value="paletizado">Paletizado</option>
+                                    <option value="hierro_acero_piezas">Hierro/Acero/Piezas</option>
                                 </select>
                             </div>
                             <div class="input-group">
@@ -5571,6 +5573,32 @@
                         </div>
                         
                         <div class="space-y-4">
+                            <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div class="inline-flex rounded-md border border-slate-300 bg-white p-1 text-xs font-black uppercase">
+                                        <button id="btn-mode-spot" type="button" onclick="setOperacionModo('SPOT')" class="px-3 py-1.5 rounded bg-[#1E3A8A] text-white transition">SPOT</button>
+                                        <button id="btn-mode-coa" type="button" onclick="setOperacionModo('COA')" class="px-3 py-1.5 rounded text-slate-600 transition">COA</button>
+                                    </div>
+                                    <button id="btn-export-coa" type="button" onclick="generarReporteCOA()" class="hidden bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold px-3 py-2 rounded-md transition shadow">
+                                        <i class="fa-solid fa-file-excel mr-1"></i> Generar Reporte COA
+                                    </button>
+                                </div>
+                                <div id="coa-fields" class="hidden grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div class="input-group">
+                                        <label class="text-slate-600">Número de Embarques</label>
+                                        <input type="number" id="coa-num-embarques" class="input-gc bg-white text-slate-900 font-bold border-slate-300" value="3" min="1" step="1" oninput="runEngine()">
+                                    </div>
+                                    <div class="input-group">
+                                        <label class="text-slate-600">Total TM Contrato</label>
+                                        <input type="number" id="coa-total-tm" class="input-gc bg-white text-slate-900 font-bold border-slate-300" value="0" min="0" step="1" oninput="runEngine()">
+                                    </div>
+                                </div>
+                                <div id="coa-kpis" class="hidden grid grid-cols-1 md:grid-cols-3 gap-2 text-xs mono">
+                                    <div class="rounded border border-slate-200 bg-white p-2"><span class="block text-slate-500 uppercase font-bold">Break-Even Promedio</span><strong id="res-coa-breakeven" class="text-emerald-700">$0.00/TM</strong></div>
+                                    <div class="rounded border border-slate-200 bg-white p-2"><span class="block text-slate-500 uppercase font-bold">Ahorro vs Spot</span><strong id="res-coa-ahorro" class="text-blue-700">$0</strong></div>
+                                    <div class="rounded border border-slate-200 bg-white p-2"><span class="block text-slate-500 uppercase font-bold">PDA Diluido</span><strong id="res-coa-pda" class="text-slate-900">$0</strong></div>
+                                </div>
+                            </div>
                             <!-- Break Even -->
                             <div class="bg-white p-2 rounded border border-slate-300 flex justify-between items-center">
                                 <span id="label-breakeven-freight" class="text-xs font-bold text-[#212529] uppercase">Flete Break-Even (Armador)</span>
@@ -15990,13 +16018,22 @@
             const costeTrincaje = costeTrincajeCondicional();
             const costeManiobraEspecial = tipoCargaOperativa === 'proyecto' ? (parseFloat(document.getElementById('coste-maniobra-especial')?.value) || 0) : 0;
             const diasPreparacionProyecto = tipoCargaOperativa === 'proyecto' ? Math.max(0, parseFloat(document.getElementById('dias-preparacion')?.value) || 0) : 0;
-            const basePortExpenses = (parseFloat(document.getElementById('pda-pol').value) || 0) + 
+            const pdaRecurrente = (parseFloat(document.getElementById('pda-pol').value) || 0) + 
                          (parseFloat(document.getElementById('pda-pod').value) || 0) + 
                          (parseFloat(document.getElementById('stevedoring-costs').value) || 0) +
                          (parseFloat(document.getElementById('pda-misc').value) || 0) +
-                         (parseFloat(document.getElementById('cargo-surcharge').value) || 0) +
-                         costeTrincaje +
-                         costeManiobraEspecial;
+                         (parseFloat(document.getElementById('cargo-surcharge').value) || 0);
+            const basePortExpenses = pdaRecurrente + costeTrincaje + costeManiobraEspecial;
+            const operacionModo = getOperacionModo();
+            const coaNumEmbarques = Math.max(1, parseInt(document.getElementById('coa-num-embarques')?.value, 10) || 1);
+            const coaTotalTmInput = parseFloat(document.getElementById('coa-total-tm')?.value) || 0;
+            const coaTotalTmContrato = operacionModo === 'COA'
+                ? Math.max(coaTotalTmInput, cargo * coaNumEmbarques, cargo)
+                : 0;
+            const pdaDiluidoPorViaje = operacionModo === 'COA' ? (pdaRecurrente * COA_PDA_DILUTION_FACTOR) : pdaRecurrente;
+            const portExpensesForMode = operacionModo === 'COA'
+                ? (pdaDiluidoPorViaje + costeTrincaje + costeManiobraEspecial)
+                : basePortExpenses;
 
             const marginOwner = parseFloat(document.getElementById('margin-owner').value) || 0;
             const marginChart = parseFloat(document.getElementById('margin-charterer').value) || 0;
@@ -16080,8 +16117,8 @@
             const T_port = isZeroCalculation ? 0 : dPortTotal;
             const totalDays = isZeroCalculation ? 0 : (T_sea + T_port);
             const smartOperationalDays = isZeroCalculation ? 0 : (totalDays + smartWeatherDays + smartDeltaDays + smartAnchorageDays);
-            const pdas = isZeroCalculation ? 0 : basePortExpenses;
-            const smartPortExpenses = isZeroCalculation ? 0 : (basePortExpenses + tugTotalCost);
+            const pdas = isZeroCalculation ? 0 : portExpensesForMode;
+            const smartPortExpenses = isZeroCalculation ? 0 : (portExpensesForMode + tugTotalCost);
 
             // EVALUACIÓN SECA AUTOMÁTICA
             const idxLoad = document.getElementById('port-pol')?.value || "";
@@ -16121,7 +16158,7 @@
             const fixedCosts = isZeroCalculation ? 0 : (totalBunkers + etsCost);
             const costTotalWithoutEts = isZeroCalculation ? 0 : (totalBunkers + totalOpex + pdas);
             const costTotal = isZeroCalculation ? 0 : (costTotalWithoutEts + etsCost);
-            const basicPortExpenses = isZeroCalculation ? 0 : basePortExpenses;
+            const basicPortExpenses = isZeroCalculation ? 0 : portExpensesForMode;
             const basicOperationalDays = isZeroCalculation ? 0 : baseOperationalDays;
             const basicBunkers = isZeroCalculation ? 0 : (((dBal + dLaden + marginDays) * cSea * pSea) + (dPortTotal * cPort * pPort) + extraEcaCost);
             const basicFixedCosts = isZeroCalculation ? 0 : (basicBunkers + etsCost);
@@ -16272,6 +16309,28 @@
             const tceOwner = isZeroCalculation ? 0 : (netProfitOwner / (totalDays || 1));
 
             document.getElementById('res-breakeven').innerText = `$${breakEven.toFixed(2)}`;
+            const coaCostesDiluidoContrato = operacionModo === 'COA' && !isZeroCalculation
+                ? (pdaDiluidoPorViaje * coaNumEmbarques)
+                : 0;
+            const coaBunkersContrato = operacionModo === 'COA' && !isZeroCalculation
+                ? (totalBunkers * coaNumEmbarques)
+                : 0;
+            const coaTrincajeContrato = operacionModo === 'COA' && !isZeroCalculation
+                ? (costeTrincaje * coaNumEmbarques)
+                : 0;
+            const coaBreakEvenPromedio = operacionModo === 'COA' && coaTotalTmContrato > 0
+                ? ((coaCostesDiluidoContrato + coaBunkersContrato + coaTrincajeContrato) / coaTotalTmContrato)
+                : 0;
+            const spotEquivalentBreakEven = cargo > 0 ? ((pdaRecurrente + totalBunkers + costeTrincaje) / cargo) : 0;
+            const coaAhorroVsSpot = operacionModo === 'COA' && coaTotalTmContrato > 0
+                ? Math.max(0, (spotEquivalentBreakEven - coaBreakEvenPromedio) * coaTotalTmContrato)
+                : 0;
+            const coaKpiBreakEven = document.getElementById('res-coa-breakeven');
+            const coaKpiAhorro = document.getElementById('res-coa-ahorro');
+            const coaKpiPda = document.getElementById('res-coa-pda');
+            if (coaKpiBreakEven) coaKpiBreakEven.innerText = `$${coaBreakEvenPromedio.toFixed(2)}/TM`;
+            if (coaKpiAhorro) coaKpiAhorro.innerText = `$${Math.round(coaAhorroVsSpot).toLocaleString('en-US')}`;
+            if (coaKpiPda) coaKpiPda.innerText = `$${Math.round(pdaDiluidoPorViaje).toLocaleString('en-US')}/viaje`;
             const smartAlertEl = document.getElementById('smart-adjustment-alert');
             if (smartAlertEl) {
                 if (missingSmartFields.length > 0 && !isZeroCalculation) {
@@ -16490,6 +16549,27 @@
             State.breakEven = breakEven;
             State.baseBreakEven = basicBreakEven;
             State.baseOperationalDays = baseOperationalDays;
+            State.operacionModo = operacionModo;
+            State.coa = {
+                enabled: operacionModo === 'COA',
+                shipments: coaNumEmbarques,
+                totalTmContrato: coaTotalTmContrato,
+                pdaBasePorViaje: pdaRecurrente,
+                pdaDiluidoPorViaje,
+                dilutionFactor: COA_PDA_DILUTION_FACTOR,
+                costeTrincajePorViaje: costeTrincaje,
+                bunkersPorViaje: totalBunkers,
+                opexPorViaje: totalOpex,
+                costeVariablePorViaje: totalBunkers + totalOpex + costeTrincaje,
+                breakEvenPromedio: coaBreakEvenPromedio,
+                spotEquivalentBreakEven,
+                ahorroVsSpot: coaAhorroVsSpot,
+                vlsfoBase: pSea,
+                bunkerSensitivityBreakEven: coaTotalTmContrato > 0
+                    ? ((coaCostesDiluidoContrato + (coaBunkersContrato * 1.10) + coaTrincajeContrato) / coaTotalTmContrato)
+                    : 0,
+                marginAccumulated: netProfitOwner * coaNumEmbarques
+            };
 
             // Guardar inputs adicionales para restaurar el estado completo de forma precisa
             State.spdBallast = spdBal;
@@ -26586,9 +26666,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             camion_tolva: 0.75,
             cuchara_grab: 0.6,
             big_bags: 0.4,
-            paletizado: 0.2
+            paletizado: 0.2,
+            hierro_acero_piezas: 0.35
         };
         const FACTOR_EFICIENCIA_PUERTO = 0.85;
+        const COA_PDA_DILUTION_FACTOR = 0.85;
 
         function getMetodoEstibaActual() {
             return document.getElementById('metodo_carga')?.value || 'cinta_transportadora';
@@ -26600,6 +26682,38 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function getFactorEstibaPuerto(metodo = getMetodoEstibaActual()) {
             return FACTORES_ESTIBA[metodo] || FACTORES_ESTIBA.cinta_transportadora;
+        }
+
+        function getOperacionModo() {
+            return document.getElementById('btn-mode-coa')?.dataset.active === 'true' ? 'COA' : 'SPOT';
+        }
+
+        function setOperacionModo(mode = 'SPOT') {
+            const normalizedMode = mode === 'COA' ? 'COA' : 'SPOT';
+            const isCoa = normalizedMode === 'COA';
+            const spotBtn = document.getElementById('btn-mode-spot');
+            const coaBtn = document.getElementById('btn-mode-coa');
+            const coaFields = document.getElementById('coa-fields');
+            const coaKpis = document.getElementById('coa-kpis');
+            const exportBtn = document.getElementById('btn-export-coa');
+            if (spotBtn) {
+                spotBtn.dataset.active = String(!isCoa);
+                spotBtn.className = `px-3 py-1.5 rounded transition ${isCoa ? 'text-slate-600' : 'bg-[#1E3A8A] text-white'}`;
+            }
+            if (coaBtn) {
+                coaBtn.dataset.active = String(isCoa);
+                coaBtn.className = `px-3 py-1.5 rounded transition ${isCoa ? 'bg-[#1E3A8A] text-white' : 'text-slate-600'}`;
+            }
+            [coaFields, coaKpis, exportBtn].forEach((el) => {
+                if (el) el.classList.toggle('hidden', !isCoa);
+            });
+            const totalTmInput = document.getElementById('coa-total-tm');
+            const cargo = Math.max(0, parseFloat(document.getElementById('cargo-qty')?.value) || 0);
+            const embarques = Math.max(1, parseInt(document.getElementById('coa-num-embarques')?.value, 10) || 1);
+            if (isCoa && totalTmInput && (parseFloat(totalTmInput.value) || 0) <= 0 && cargo > 0) {
+                totalTmInput.value = String(Math.round(cargo * embarques));
+            }
+            if (typeof runEngine === 'function') runEngine();
         }
 
         function normalizarTipoCarga(value = document.getElementById('cargo-type')?.value) {
@@ -26630,14 +26744,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const tipoCarga = normalizarTipoCarga();
             const cargo = Math.max(0, parseFloat(document.getElementById('cargo-qty')?.value) || 0);
             const horasTrabajo = 24;
-            if (tipoCarga === 'acero') {
+            const metodo = side === 'pod' ? getMetodoDescargaActual() : getMetodoEstibaActual();
+            if (tipoCarga === 'acero' && metodo === 'hierro_acero_piezas') {
                 const pesoPieza = Math.max(0, parseFloat(document.getElementById('peso-pieza-mt')?.value) || 0);
                 const ciclosHora = Math.max(0, parseFloat(document.getElementById('ciclos-hora-grua')?.value) || 0);
-                if (pesoPieza <= 0 || ciclosHora <= 0) return 0;
+                if (cargo <= 0 || pesoPieza <= 0 || ciclosHora <= 0) {
+                    return getRitmoRealPuerto(metodo, readRitmoNominalPuerto(side));
+                }
                 const dias = (cargo / pesoPieza) / (ciclosHora * horasTrabajo);
                 return dias > 0 ? cargo / dias : 0;
             }
-            const metodo = side === 'pod' ? getMetodoDescargaActual() : getMetodoEstibaActual();
             return getRitmoRealPuerto(metodo, readRitmoNominalPuerto(side));
         }
 
@@ -26664,9 +26780,19 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const craneSwl = Math.max(0, parseFloat(document.getElementById('crane-swl-mt')?.value) || 0);
             const missingSteelInputs = tipoCarga === 'acero' && (pesoPieza <= 0 || ciclosHora <= 0);
             const highRisk = tipoCarga === 'acero' && pesoPieza > 0 && craneSwl > 0 && pesoPieza > craneSwl;
-            if (!highRisk && !missingSteelInputs) return;
+            ['peso-pieza-mt', 'crane-swl-mt'].forEach((id) => {
+                const input = document.getElementById(id);
+                if (input) input.classList.toggle('border-red-500', highRisk);
+            });
+            alert.classList.toggle('border-red-500', highRisk);
+            if (!highRisk && !missingSteelInputs) {
+                alert.classList.add('hidden');
+                alert.classList.remove('border-red-300', 'border-red-500', 'bg-red-50', 'text-red-800');
+                alert.textContent = '';
+                return;
+            }
             alert.classList.remove('hidden', 'border-emerald-300', 'bg-emerald-50', 'text-emerald-800');
-            alert.classList.add('border-red-300', 'bg-red-50', 'text-red-800');
+            alert.classList.add('border-red-300', 'border-red-500', 'bg-red-50', 'text-red-800');
             alert.textContent = missingSteelInputs
                 ? 'RIESGO ALTO: define Peso por pieza y Ciclos/hora para calcular Hierro/Acero.'
                 : `RIESGO ALTO: Excede SWL. Peso por pieza ${pesoPieza.toFixed(2)} MT > Crane SWL ${craneSwl.toFixed(2)} MT.`;
@@ -26742,6 +26868,64 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.actualizarCamposTipoCarga = actualizarCamposTipoCarga;
             window.actualizarAdvertenciaSwl = actualizarAdvertenciaSwl;
             window.recalcularDiasPuerto = recalcularDiasPuerto;
+            window.setOperacionModo = setOperacionModo;
+        }
+
+        function generarReporteCOA() {
+            if (typeof XLSX === 'undefined') {
+                alert('SheetJS no está disponible para generar el Excel.');
+                return;
+            }
+            if (typeof runEngine === 'function') runEngine();
+            const coa = State.coa || {};
+            if (!coa.enabled) {
+                alert('Activa el modo COA para generar el reporte.');
+                return;
+            }
+            const shipments = Math.max(1, coa.shipments || 1);
+            const totalTm = Math.max(0, coa.totalTmContrato || 0);
+            const tmPorViaje = shipments > 0 ? (totalTm / shipments) : 0;
+            const freightSell = parseFloat(document.getElementById('freight-sell')?.value) || 0;
+            const rows = Array.from({ length: shipments }, (_, index) => {
+                const viaje = index + 1;
+                const costeVariable = coa.costeVariablePorViaje || 0;
+                const gastosDiluidos = coa.pdaDiluidoPorViaje || 0;
+                const costeTotalViaje = costeVariable + gastosDiluidos;
+                const breakEvenViaje = tmPorViaje > 0 ? (costeTotalViaje / tmPorViaje) : 0;
+                const breakEvenBunker10 = tmPorViaje > 0
+                    ? (((coa.bunkersPorViaje || 0) * 1.10 + (coa.opexPorViaje || 0) + (coa.costeTrincajePorViaje || 0) + gastosDiluidos) / tmPorViaje)
+                    : 0;
+                const margenViaje = (freightSell * tmPorViaje) - costeTotalViaje;
+                return {
+                    Viaje: viaje,
+                    'TM Viaje': Math.round(tmPorViaje),
+                    'Coste Variable': Math.round(costeVariable),
+                    'Gastos diluidos': Math.round(gastosDiluidos),
+                    'Flete Break-Even': Number(breakEvenViaje.toFixed(2)),
+                    'Margen Acumulado': Math.round(margenViaje * viaje),
+                    'Sensibilidad VLSFO +10%': Number(breakEvenBunker10.toFixed(2))
+                };
+            });
+            const resumen = [
+                { KPI: 'Modo operativo', Valor: 'COA' },
+                { KPI: 'Número de Embarques', Valor: shipments },
+                { KPI: 'Total TM Contrato', Valor: Math.round(totalTm) },
+                { KPI: 'Factor Dilución PDA', Valor: COA_PDA_DILUTION_FACTOR },
+                { KPI: 'PDA Base por Viaje', Valor: Math.round(coa.pdaBasePorViaje || 0) },
+                { KPI: 'PDA Diluido por Viaje', Valor: Math.round(coa.pdaDiluidoPorViaje || 0) },
+                { KPI: 'Ahorro vs modo Spot', Valor: Math.round(coa.ahorroVsSpot || 0) },
+                { KPI: 'Break-Even promedio ponderado', Valor: Number((coa.breakEvenPromedio || 0).toFixed(2)) },
+                { KPI: 'Break-Even con VLSFO +10%', Valor: Number((coa.bunkerSensitivityBreakEven || 0).toFixed(2)) }
+            ];
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(resumen), 'Resumen');
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Desglose');
+            const stamp = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(workbook, `SeaCharter_COA_${stamp}.xlsx`);
+        }
+
+        if (typeof window !== 'undefined') {
+            window.generarReporteCOA = generarReporteCOA;
         }
 
         function calcularViaje(datosDelBuqueAislados) {
@@ -27503,7 +27687,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 el.value = '0';
             });
 
-            ['cargo-type', 'metodo_carga', 'metodo_descarga_pod', 'ritmo_nominal_pol', 'ritmo_nominal_pod', 'peso-pieza-mt', 'ciclos-hora-grua', 'crane-swl-mt', 'input-trincaje', 'coste-maniobra-especial', 'dias-preparacion'].forEach((id) => {
+            ['cargo-type', 'metodo_carga', 'metodo_descarga_pod', 'ritmo_nominal_pol', 'ritmo_nominal_pod', 'peso-pieza-mt', 'ciclos-hora-grua', 'crane-swl-mt', 'input-trincaje', 'coste-maniobra-especial', 'dias-preparacion', 'coa-num-embarques', 'coa-total-tm'].forEach((id) => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.addEventListener('input', function() {
@@ -27513,6 +27697,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     recalcularDiasPuerto();
                 });
             });
+            setOperacionModo('SPOT');
             actualizarCamposTipoCarga();
             recalcularDiasPuerto();
 
