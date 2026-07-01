@@ -7501,6 +7501,10 @@
                                     <span id="ais-detected-vessels-pol-box" class="text-xs font-bold text-emerald-400 mt-1 truncate">-</span>
                                 </div>
                                 <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 flex flex-col justify-center min-w-[150px]">
+                                    <span class="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Puerto de Descarga (POD)</span>
+                                    <span id="ais-detected-vessels-pod-box" class="text-xs font-bold text-emerald-400 mt-1 truncate">-</span>
+                                </div>
+                                <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 flex flex-col justify-center min-w-[150px]">
                                     <span class="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Día de Carga (Laycan)</span>
                                     <span id="ais-loading-day-laycan-box" class="text-xs font-bold text-emerald-400 mt-1 truncate">-</span>
                                 </div>
@@ -10258,11 +10262,15 @@
                     polValue = localStorage.getItem('calculator_pol') || '';
                 }
                 const polParam = polValue ? `&pol=${encodeURIComponent(polValue)}` : '';
-                let fallbackEndpoint = `/.netlify/functions/get-vessels?mode=global&force=1&quantity=45000&targetDWT=${encodeURIComponent(targetDWT)}${polParam}`;
-                const radarMap = window.mapaAIS || window.mapAIS || window.map;
-                if (window.MapLoader && typeof window.MapLoader.getViewportQueryUrl === 'function' && radarMap) {
-                    const viewportUrl = window.MapLoader.getViewportQueryUrl(radarMap, 'global');
-                    fallbackEndpoint = `${viewportUrl}&force=1&quantity=45000&targetDWT=${encodeURIComponent(targetDWT)}${polParam}`;
+                let fallbackEndpoint = typeof window.getRouteAisSweepEndpoint === 'function'
+                    ? window.getRouteAisSweepEndpoint(45000)
+                    : '';
+                if (fallbackEndpoint) {
+                    const separator = fallbackEndpoint.includes('?') ? '&' : '?';
+                    fallbackEndpoint = `${fallbackEndpoint}${separator}targetDWT=${encodeURIComponent(targetDWT)}${polParam}`;
+                } else {
+                    console.warn("[Radar Fallback] No se pudieron determinar cajas POL/POD para el barrido AIS.");
+                    return;
                 }
                 const response = await fetch(fallbackEndpoint);
 
@@ -23956,7 +23964,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             try {
-                const response = await fetch('/.netlify/functions/get-vessels?mode=global&quantity=45000&force=1', {
+                const endpoint = typeof window.getRouteAisSweepEndpoint === 'function'
+                    ? window.getRouteAisSweepEndpoint(45000)
+                    : '';
+                if (!endpoint) {
+                    alert("No se pudieron determinar las coordenadas del POL y POD para limitar el barrido AIS.");
+                    return window.listaBarcos;
+                }
+                const response = await fetch(endpoint, {
                     headers: { "Accept": "application/json" }
                 });
                 const vessels = typeof window.parseAisVesselsResponse === 'function'
@@ -24543,15 +24558,67 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 };
             }
 
+            function getRoutePortData(portName) {
+                const name = String(portName || '').trim();
+                if (!name) return null;
+                if (typeof findPortData === 'function') {
+                    const found = findPortData(name);
+                    if (found && Number.isFinite(Number(found.lat)) && Number.isFinite(Number(found.lon))) {
+                        return { name, lat: Number(found.lat), lon: Number(found.lon) };
+                    }
+                }
+                if (typeof PORT_DB !== 'undefined' && PORT_DB[name]) {
+                    const port = PORT_DB[name];
+                    if (Number.isFinite(Number(port.lat)) && Number.isFinite(Number(port.lon))) {
+                        return { name, lat: Number(port.lat), lon: Number(port.lon) };
+                    }
+                }
+                return null;
+            }
+
+            function getRouteAisScanRadiusNm() {
+                const inputValue = Number(document.getElementById('filter-max-distance')?.value);
+                const storedValue = typeof localStorage !== 'undefined' ? Number(localStorage.getItem('ais_filter_max_distance')) : NaN;
+                const radius = Number.isFinite(inputValue) && inputValue > 0 ? inputValue : storedValue;
+                return Math.max(50, Math.min(500, Number.isFinite(radius) && radius > 0 ? radius : 300));
+            }
+
+            function createAisBoxAroundPort(port, radiusNm) {
+                if (!port || !Number.isFinite(port.lat) || !Number.isFinite(port.lon)) return null;
+                const latDelta = radiusNm / 60;
+                const lonDelta = radiusNm / (60 * Math.max(0.25, Math.cos((port.lat * Math.PI) / 180)));
+                return [
+                    [Math.max(-90, port.lat - latDelta), Math.max(-180, port.lon - lonDelta)],
+                    [Math.min(90, port.lat + latDelta), Math.min(180, port.lon + lonDelta)]
+                ];
+            }
+
+            function getActiveRouteAisBoxes() {
+                const polName = (document.getElementById('port-pol')?.value || window.State?.pol || '').trim();
+                const podName = (document.getElementById('port-pod')?.value || window.State?.pod || '').trim();
+                const radiusNm = getRouteAisScanRadiusNm();
+                return [getRoutePortData(polName), getRoutePortData(podName)]
+                    .map(port => createAisBoxAroundPort(port, radiusNm))
+                    .filter(Boolean);
+            }
+
+            window.getRouteAisSweepEndpoint = function(quantity = 45000) {
+                const boxes = getActiveRouteAisBoxes();
+                if (!boxes.length) {
+                    return '';
+                }
+                return `/.netlify/functions/get-vessels?quantity=${encodeURIComponent(quantity)}&force=1&boxes=${encodeURIComponent(JSON.stringify(boxes))}`;
+            };
+
             function getActiveBoundingBox() {
-                return GLOBAL_AIS_SWEEP_ZONES.map(zone => zone.box);
+                return getActiveRouteAisBoxes();
             }
 
             function getOperationalZonePayload() {
                 const port = getActiveLoadingPort();
                 const box = getActiveBoundingBox(port);
                 return {
-                    key: GLOBAL_AIS_SWEEP_ZONES.map(zone => zone.id).join('|'),
+                    key: box.map(bounds => bounds.flat().map(value => Number(value).toFixed(3)).join(',')).join('|'),
                     box,
                     port
                 };
@@ -24719,8 +24786,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
                 window.AIS_PROXY_POLLING_ACTIVE = true;
                 if (window.MapLoader && typeof window.MapLoader.startAisProxyPolling === 'function') {
+                    const endpoint = typeof window.getRouteAisSweepEndpoint === 'function'
+                        ? window.getRouteAisSweepEndpoint(45000)
+                        : '';
+                    if (!endpoint) {
+                        return { started: false, reason: 'route-port-coordinates-missing' };
+                    }
                     return window.MapLoader.startAisProxyPolling({
-                        endpoint: '/.netlify/functions/get-vessels?mode=global&force=1',
+                        endpoint,
                         intervalMs: 300000,
                         map: activeMap
                     });
@@ -24754,8 +24827,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 clearDirectAisStore();
                 window.AIS_PROXY_POLLING_ACTIVE = true;
                 if (window.MapLoader && typeof window.MapLoader.startAisProxyPolling === 'function') {
+                    const endpoint = typeof window.getRouteAisSweepEndpoint === 'function'
+                        ? window.getRouteAisSweepEndpoint(45000)
+                        : '';
+                    if (!endpoint) {
+                        return [];
+                    }
                     window.MapLoader.startAisProxyPolling({
-                        endpoint: '/.netlify/functions/get-vessels?mode=global&force=1',
+                        endpoint,
                         intervalMs: 300000,
                         map: window.mapaAIS || window.mapAIS || window.map
                     });
@@ -26077,13 +26156,22 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.setAisRadarStatus('inactive');
         }
 
-        // Update the POL display box in Real Time Detected Vessels section
-        window.updateAisDetectedVesselsPol = function() {
+        // Update the route display boxes in Real Time Detected Vessels section
+        window.updateAisDetectedVesselsRoute = function() {
             const polInput = document.getElementById('port-pol');
+            const podInput = document.getElementById('port-pod');
             const polBox = document.getElementById('ais-detected-vessels-pol-box');
+            const podBox = document.getElementById('ais-detected-vessels-pod-box');
             if (polBox && polInput) {
                 polBox.innerText = polInput.value.trim() || '-';
             }
+            if (podBox && podInput) {
+                podBox.innerText = podInput.value.trim() || '-';
+            }
+        };
+
+        window.updateAisDetectedVesselsPol = function() {
+            window.updateAisDetectedVesselsRoute();
         };
 
         // Update the loading day laycan and arrival deadline boxes in Real Time Detected Vessels section
@@ -26225,21 +26313,22 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         };
 
         // Initialize display on startup and sync listeners
-        window.updateAisDetectedVesselsPol();
+        window.updateAisDetectedVesselsRoute();
         if (typeof window.updateAisLaycanAndDeadlineBoxes === 'function') {
             window.updateAisLaycanAndDeadlineBoxes();
         }
-        const polInputEl = document.getElementById('port-pol');
-        if (polInputEl) {
-            polInputEl.addEventListener('input', () => {
+        ['port-pol', 'port-pod'].forEach((portInputId) => {
+            const portInputEl = document.getElementById(portInputId);
+            if (!portInputEl) return;
+            portInputEl.addEventListener('input', () => {
                 window.isFirstLoad = true;
-                window.updateAisDetectedVesselsPol();
+                window.updateAisDetectedVesselsRoute();
             });
-            polInputEl.addEventListener('change', () => {
+            portInputEl.addEventListener('change', () => {
                 window.isFirstLoad = true;
-                window.updateAisDetectedVesselsPol();
+                window.updateAisDetectedVesselsRoute();
             });
-        }
+        });
 
         // Listeners for laycan/deadline inputs and contract standard dropdown
         const dateInputIds = [

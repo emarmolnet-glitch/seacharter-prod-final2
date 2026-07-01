@@ -155,7 +155,7 @@
         timer: null,
         inFlight: false,
         intervalMs: 300000,
-        endpoint: '/.netlify/functions/get-vessels?mode=global&force=1',
+        endpoint: '/.netlify/functions/get-vessels?force=1',
         map: null,
         waitingForMapIdle: false
     };
@@ -678,18 +678,20 @@
             }
             const endpoint = config.endpoint || aisProxyPollingState.endpoint;
             const isGlobalEndpoint = /(?:[?&]mode=global)(?:&|$)/.test(endpoint);
+            const hasExplicitBoxes = /(?:[?&]boxes=)(?:[^&]+)/.test(endpoint);
             const mapInstance = aisProxyPollingState.map || config.map || getDefaultAisMap();
-            const bounds = isGlobalEndpoint ? null : await getStableProxyBounds(mapInstance);
-            const proxyPayload = isGlobalEndpoint ? null : getProxyBoundsPayload(bounds);
-            if (!isGlobalEndpoint && !proxyPayload) {
+            const shouldUseViewportBounds = !isGlobalEndpoint && !hasExplicitBoxes;
+            const bounds = shouldUseViewportBounds ? await getStableProxyBounds(mapInstance) : null;
+            const proxyPayload = shouldUseViewportBounds ? getProxyBoundsPayload(bounds) : null;
+            if (shouldUseViewportBounds && !proxyPayload) {
                 return { success: false, skipped: true, reason: 'map-bounds-not-ready' };
             }
-            const finalRequestUrl = isGlobalEndpoint ? endpoint : buildFinalProxyRequestUrl(endpoint, proxyPayload);
+            const finalRequestUrl = shouldUseViewportBounds ? buildFinalProxyRequestUrl(endpoint, proxyPayload) : endpoint;
             console.log('[AIS Proxy] get-vessels payload before fetch:', {
                 endpoint,
                 requestUrl: finalRequestUrl,
                 bounds: proxyPayload,
-                mode: isGlobalEndpoint ? 'global' : 'bounded'
+                mode: hasExplicitBoxes ? 'route-pol-pod' : (isGlobalEndpoint ? 'global' : 'bounded')
             });
             const response = await fetch(finalRequestUrl);
             const payload = await response.json().catch(() => []);

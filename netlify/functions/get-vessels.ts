@@ -36,6 +36,37 @@ function numberParam(url: URL, names: string[], fallback: number) {
   return fallback;
 }
 
+function parseRequestedBoxes(url: URL) {
+  const rawBoxes = url.searchParams.get("boxes");
+  if (!rawBoxes) return null;
+
+  try {
+    const parsed = JSON.parse(rawBoxes) as unknown;
+    if (!Array.isArray(parsed)) return null;
+
+    const boxes = parsed
+      .map((box) => {
+        if (!Array.isArray(box) || !Array.isArray(box[0]) || !Array.isArray(box[1])) return null;
+        const minLat = Number(box[0][0]);
+        const minLon = Number(box[0][1]);
+        const maxLat = Number(box[1][0]);
+        const maxLon = Number(box[1][1]);
+        if (![minLat, minLon, maxLat, maxLon].every(Number.isFinite)) return null;
+        if (Math.min(minLat, maxLat) < -90 || Math.max(minLat, maxLat) > 90) return null;
+        if (Math.min(minLon, maxLon) < -180 || Math.max(minLon, maxLon) > 180) return null;
+        return [
+          [Math.min(minLat, maxLat), Math.min(minLon, maxLon)],
+          [Math.max(minLat, maxLat), Math.max(minLon, maxLon)],
+        ];
+      })
+      .filter((box): box is number[][] => Array.isArray(box));
+
+    return boxes.length > 0 ? boxes.slice(0, 4) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function getRequestedBounds(url: URL) {
   if (url.searchParams.get("mode") === "global") {
     return [
@@ -60,6 +91,10 @@ function getRequestedBounds(url: URL) {
     [30.0, -12.0],
     [47.5, 42.0],
   ];
+}
+
+function getRequestedBoundingBoxes(url: URL) {
+  return parseRequestedBoxes(url) || [getRequestedBounds(url)];
 }
 
 function getApiKey() {
@@ -300,7 +335,7 @@ function mergeDefinedVesselFields(current: VesselMessage | undefined, incoming: 
 function collectVessels(url: URL, apiKey: string) {
   const quantity = Math.min(MAX_QUANTITY, Math.max(1, numberParam(url, ["quantity", "limit"], DEFAULT_QUANTITY)));
   const timeoutMs = Math.min(MAX_TIMEOUT_MS, Math.max(2500, numberParam(url, ["timeoutMs"], DEFAULT_TIMEOUT_MS)));
-  const bounds = getRequestedBounds(url);
+  const bounds = getRequestedBoundingBoxes(url);
 
   return new Promise<VesselMessage[]>((resolve, reject) => {
     const vesselsByKey = new Map<string, VesselMessage>();
@@ -330,7 +365,7 @@ function collectVessels(url: URL, apiKey: string) {
     ws.on("open", () => {
       ws.send(JSON.stringify({
         APIKey: apiKey,
-        BoundingBoxes: [bounds],
+        BoundingBoxes: bounds,
         VesselTypes: [],
         FilterMessageTypes: ["PositionReport", "ShipStaticData"],
       }));
