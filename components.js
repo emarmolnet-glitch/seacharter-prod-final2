@@ -14,6 +14,30 @@ function renderizarAtributosFormulario(attrs = {}) {
         .join(" ");
 }
 
+function escaparHtmlFormulario(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function renderizarTooltipFormulario(tooltip) {
+    if (!tooltip) return '';
+    const text = escaparHtmlFormulario(tooltip);
+    return `
+        <span class="field-tooltip-trigger" tabindex="0" role="button" aria-label="${text}">
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
+                <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.7"></circle>
+                <path d="M10 8.8v5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+                <circle cx="10" cy="6" r="1" fill="currentColor"></circle>
+            </svg>
+            <span class="field-tooltip-content">${text}</span>
+        </span>
+    `;
+}
+
 // Función para inyectar bloques comunes
 function renderizarBloqueFormulario(id, label, placeholder, options = {}) {
     const {
@@ -22,6 +46,7 @@ function renderizarBloqueFormulario(id, label, placeholder, options = {}) {
         className = UI.input,
         wrapperClass = "",
         labelClass = UI.label,
+        tooltip,
         attrs = {}
     } = options;
     const inputAttrs = renderizarAtributosFormulario({
@@ -32,10 +57,11 @@ function renderizarBloqueFormulario(id, label, placeholder, options = {}) {
         value,
         ...attrs
     });
+    const labelClasses = tooltip ? `${labelClass} inline-flex items-center gap-1` : labelClass;
 
     return `
         <div class="${wrapperClass}">
-            <label class="${labelClass}" for="${id}">${label}</label>
+            <label class="${labelClasses}" for="${id}">${label}${renderizarTooltipFormulario(tooltip)}</label>
             <input ${inputAttrs}>
         </div>
     `;
