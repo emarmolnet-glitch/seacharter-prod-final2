@@ -3678,6 +3678,1066 @@
         #view-auditor #loadingState .border-t-blue-600 {
             border-top-color: var(--accent) !important;
         }
+
+        #seacharter-fcl-module {
+            --fcl-navy: #082f49;
+            --fcl-harbor: #0f766e;
+            --fcl-steel: #475569;
+            --fcl-foam: #f8fafc;
+            --fcl-line: #cbd5e1;
+            --fcl-amber: #b7791f;
+            --fcl-white: #ffffff;
+            --sc-radius: 0.375rem;
+            --sc-focus: 0 0 0 2px rgba(59, 130, 246, 0.2);
+            color: #102a43;
+            font-family: "Inter", "Segoe UI", sans-serif;
+        }
+
+        #seacharter-fcl-module * {
+            box-sizing: border-box;
+        }
+
+        #seacharter-fcl-module .fcl-shell {
+            display: grid;
+            gap: 16px;
+            width: 100%;
+            max-width: none;
+            margin: 0 auto;
+            padding: 0 40px 32px;
+        }
+
+        #seacharter-fcl-module .module-header,
+        #seacharter-fcl-module .fcl-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: center;
+            padding: 1rem;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            color: #1e293b;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        #seacharter-fcl-module .fcl-kicker,
+        #seacharter-fcl-module .fcl-card-label {
+            display: block;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        #seacharter-fcl-module .fcl-kicker,
+        #seacharter-fcl-module .module-breadcrumbs {
+            color: #475569;
+            margin-bottom: 5px;
+        }
+
+        #seacharter-fcl-module h2,
+        #seacharter-fcl-module h3,
+        #seacharter-fcl-module p {
+            margin: 0;
+        }
+
+        #seacharter-fcl-module h2 {
+            color: #1e3a8a;
+            font-size: 1.125rem;
+            font-weight: 700;
+            letter-spacing: 0;
+        }
+
+        #seacharter-fcl-module .fcl-header p,
+        #seacharter-fcl-module .module-header p {
+            color: #475569;
+            font-size: 0.75rem;
+            margin-top: 4px;
+            max-width: 680px;
+        }
+
+        #seacharter-fcl-module .fcl-header-badge {
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            border-radius: 0.5rem;
+            padding: 9px 12px;
+            min-width: 155px;
+            text-align: right;
+        }
+
+        #seacharter-fcl-module .fcl-header-badge strong {
+            color: #1e3a8a;
+            font-size: 0.75rem;
+        }
+
+        #seacharter-fcl-module .fcl-workspace {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+            gap: 16px;
+            width: 100%;
+            padding: 24px;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.08);
+        }
+
+        #seacharter-fcl-module .fcl-workspace > .fcl-expiry-alert,
+        #seacharter-fcl-module .fcl-workspace > .fcl-smart-defaults,
+        #seacharter-fcl-module .fcl-workspace > .fcl-stepper {
+            grid-column: 1 / -1;
+        }
+
+        #seacharter-fcl-module .fcl-workspace > .summary-panel {
+            grid-column: 2;
+            grid-row: 3 / span 4;
+        }
+
+        #seacharter-fcl-module .fcl-workspace > .fcl-wizard-step,
+        #seacharter-fcl-module .fcl-workspace > .fcl-quote-actions { grid-column: 1; }
+
+        #seacharter-fcl-module .fcl-workspace > .fcl-smart-defaults {
+            order: -2;
+        }
+
+        #seacharter-fcl-module .fcl-workspace > .fcl-stepper {
+            order: -1;
+        }
+
+        #seacharter-fcl-module .fcl-workspace > .summary-panel { order: 2; }
+
+        #seacharter-fcl-module .fcl-mode-panel {
+            display: grid;
+            grid-template-columns: minmax(240px, 340px) 1fr;
+            gap: 16px;
+            align-items: end;
+            padding: 16px;
+            background: #ffffff;
+            border: 1px solid var(--fcl-line);
+            border-radius: var(--sc-radius);
+            box-shadow: 0 14px 32px -30px rgba(15, 23, 42, 0.7);
+        }
+
+        #seacharter-fcl-module .fcl-mode-copy {
+            color: #475569;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        #seacharter-fcl-module .fcl-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 18px;
+            align-items: stretch;
+        }
+
+        #seacharter-fcl-module .fcl-config-card { order: 1; }
+        #seacharter-fcl-module .fcl-costs-card { order: 2; }
+        #seacharter-fcl-module .fcl-expenses-card { order: 3; }
+        #seacharter-fcl-module .fcl-equipment-card { order: 4; }
+        #seacharter-fcl-module .fcl-demurrage-card { order: 5; }
+        #seacharter-fcl-module .fcl-summary-card { order: 6; }
+
+        #seacharter-fcl-module .fcl-grid.fcl-grid-2 {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        #seacharter-fcl-module .fcl-smart-defaults {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            padding: 10px 12px;
+            border: 1px solid #b6e4dc;
+            border-radius: 8px;
+            background: #ecfdf5;
+            color: #0f4c5c;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        #seacharter-fcl-module .fcl-smart-defaults i {
+            color: #0f766e;
+        }
+
+        #seacharter-fcl-module .fcl-stepper {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        #seacharter-fcl-module .fcl-step-tab {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 52px;
+            padding: 10px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #ffffff;
+            color: #334155;
+            cursor: pointer;
+            text-align: left;
+            transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+        }
+
+        #seacharter-fcl-module .fcl-step-tab:hover {
+            border-color: #0f766e;
+            transform: translateY(-1px);
+        }
+
+        #seacharter-fcl-module .fcl-step-tab.is-active {
+            border-color: #0f766e;
+            background: #e6fffb;
+        }
+
+        #seacharter-fcl-module .fcl-step-number {
+            width: 30px;
+            height: 30px;
+            display: grid;
+            place-items: center;
+            border-radius: 999px;
+            background: #0f766e;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 900;
+            flex: 0 0 auto;
+        }
+
+        #seacharter-fcl-module .fcl-step-title {
+            display: block;
+            color: #082f49;
+            font-size: 13px;
+            font-weight: 900;
+        }
+
+        #seacharter-fcl-module .fcl-step-hint {
+            display: block;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 700;
+            margin-top: 1px;
+        }
+
+        #seacharter-fcl-module .fcl-wizard-step {
+            display: grid;
+            gap: 18px;
+        }
+
+        #seacharter-fcl-module .fcl-wizard-step:not(.is-active) {
+            display: none;
+        }
+
+        #seacharter-fcl-module .fcl-step-actions {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+        }
+
+        #seacharter-fcl-module .fcl-wizard-button,
+        #seacharter-fcl-module .sc-button {
+            min-height: 40px;
+            padding: 0 14px;
+            border: 1px solid #0f766e;
+            border-radius: var(--sc-radius);
+            background: #0f766e;
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 900;
+            cursor: pointer;
+        }
+
+        #seacharter-fcl-module .fcl-wizard-button.secondary,
+        #seacharter-fcl-module .sc-button.secondary {
+            background: #ffffff;
+            color: #0f766e;
+        }
+
+        #seacharter-fcl-module .fcl-wizard-button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        #seacharter-fcl-module .fcl-card,
+        #seacharter-fcl-module .sc-card {
+            background: var(--fcl-white);
+            border: 1px solid var(--fcl-line);
+            border-radius: 8px;
+            padding: 18px;
+            box-shadow: 0 14px 32px -28px rgba(15, 23, 42, 0.7);
+        }
+
+        #seacharter-fcl-module .fcl-overview-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 18px;
+            width: 100%;
+            align-items: start;
+        }
+
+        #seacharter-fcl-module .fcl-quick-card .fcl-card-heading {
+            margin-bottom: 18px;
+        }
+
+        #seacharter-fcl-module .fcl-quote-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 2px;
+        }
+
+        #seacharter-fcl-module .fcl-advanced-costs {
+            display: none;
+        }
+
+        #seacharter-fcl-module .fcl-advanced-costs.is-open {
+            display: grid;
+        }
+
+        #seacharter-fcl-module .fcl-advanced-toggle {
+            justify-self: start;
+        }
+
+        #seacharter-fcl-module .fcl-proactive-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #0f766e;
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        #seacharter-fcl-module .fcl-card.is-hidden,
+        #seacharter-fcl-module .fcl-fieldset.is-hidden {
+            display: none;
+        }
+
+        #seacharter-fcl-module .fcl-expiry-alert {
+            display: none;
+            padding: 14px 16px;
+            border: 1px solid #7f1d1d;
+            border-left: 6px solid #450a0a;
+            border-radius: 8px;
+            background: #8a1111;
+            color: #ffffff;
+            font-weight: 900;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            box-shadow: 0 18px 34px -26px rgba(69, 10, 10, 0.84);
+        }
+
+        #seacharter-fcl-module .fcl-expiry-alert.is-visible {
+            display: block;
+        }
+
+        #seacharter-fcl-module .fcl-card-heading,
+        #seacharter-fcl-module .sc-card-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            padding-bottom: 12px;
+            margin-bottom: 14px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        #seacharter-fcl-module .fcl-card h3 {
+            color: var(--fcl-navy);
+            font-size: 15px;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        #seacharter-fcl-module .fcl-card-label {
+            color: var(--fcl-harbor);
+        }
+
+        #seacharter-fcl-module .fcl-fieldset {
+            display: grid;
+            gap: 13px;
+        }
+
+        #seacharter-fcl-module .fcl-accordion {
+            border: 1px solid #dbe3ea;
+            border-radius: 8px;
+            background: #ffffff;
+            overflow: hidden;
+        }
+
+        #seacharter-fcl-module .fcl-accordion-toggle {
+            width: 100%;
+            min-height: 54px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border: 0;
+            background: #f8fafc;
+            color: #082f49;
+            cursor: pointer;
+            text-align: left;
+        }
+
+        #seacharter-fcl-module .fcl-accordion-toggle strong {
+            display: block;
+            font-size: 13px;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        #seacharter-fcl-module .fcl-accordion-toggle span {
+            display: block;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        #seacharter-fcl-module .fcl-accordion-toggle i {
+            color: #0f766e;
+            transition: transform 160ms ease;
+        }
+
+        #seacharter-fcl-module .fcl-accordion.is-open .fcl-accordion-toggle i {
+            transform: rotate(180deg);
+        }
+
+        #seacharter-fcl-module .fcl-accordion-panel {
+            display: none;
+            padding: 14px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        #seacharter-fcl-module .fcl-accordion.is-open .fcl-accordion-panel {
+            display: grid;
+        }
+
+        #seacharter-fcl-module .fcl-market-action {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            padding-top: 4px;
+        }
+
+        #seacharter-fcl-module .fcl-market-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 38px;
+            border: 0;
+            border-radius: var(--sc-radius);
+            padding: 0 14px;
+            background: #0f766e;
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 900;
+            cursor: pointer;
+            transition: background 160ms ease, transform 160ms ease, opacity 160ms ease;
+        }
+
+        #seacharter-fcl-module .fcl-market-button:hover {
+            background: #0b5f59;
+            transform: translateY(-1px);
+        }
+
+        #seacharter-fcl-module .fcl-market-button:disabled {
+            cursor: wait;
+            opacity: 0.72;
+            transform: none;
+        }
+
+        #seacharter-fcl-module .fcl-market-status {
+            color: #475569;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        #seacharter-fcl-module .summary-panel {
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 14px;
+            align-items: stretch;
+            justify-self: center;
+            position: sticky;
+            top: 16px;
+            z-index: 40;
+            align-self: start;
+            padding: 18px;
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            background: #0f172a;
+            color: #ffffff;
+            box-shadow: 0 16px 32px -24px rgba(15, 23, 42, 0.8);
+        }
+
+        #seacharter-fcl-module .summary-panel .fcl-kicker {
+            color: #94a3b8;
+        }
+
+        #seacharter-fcl-module .summary-panel p {
+            color: #cbd5e1;
+            font-size: 12px;
+            margin-top: 3px;
+        }
+
+        #seacharter-fcl-module .summary-panel .fcl-total-value {
+            color: #ffffff;
+            font-size: clamp(1.75rem, 2.4vw, 2.35rem);
+            line-height: 1;
+            white-space: nowrap;
+            text-align: left;
+        }
+
+        #seacharter-fcl-module .summary-panel .sc-button {
+            border-color: rgba(255, 255, 255, 0.32);
+            background: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+        }
+
+        body.marketdata-loading,
+        body.marketdata-loading * {
+            cursor: wait !important;
+        }
+
+        #seacharter-fcl-module .fcl-field {
+            display: grid;
+            gap: 6px;
+        }
+
+        #seacharter-fcl-module .fcl-search-field {
+            position: relative;
+        }
+
+        #seacharter-fcl-module .fcl-search-field input {
+            padding-left: 36px;
+        }
+
+        #seacharter-fcl-module .fcl-search-field::before {
+            content: "";
+            position: absolute;
+            left: 11px;
+            bottom: 12px;
+            width: 15px;
+            height: 15px;
+            border: 2px solid #0f766e;
+            border-radius: 999px;
+            opacity: 0.78;
+        }
+
+        #seacharter-fcl-module .fcl-search-field::after {
+            content: "";
+            position: absolute;
+            left: 24px;
+            bottom: 10px;
+            width: 8px;
+            height: 2px;
+            background: #0f766e;
+            transform: rotate(45deg);
+            border-radius: 999px;
+        }
+
+        #seacharter-fcl-module .fcl-field-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            align-items: end;
+        }
+
+        #seacharter-fcl-module .fcl-floating-control {
+            min-height: 40px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: #f8fafc;
+            color: #334155;
+            font-size: 11px;
+            font-weight: 900;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        #seacharter-fcl-module .fcl-equipment-stack {
+            display: grid;
+            gap: 10px;
+        }
+
+        #seacharter-fcl-module .fcl-equipment-row {
+            display: grid;
+            grid-template-columns: minmax(110px, 1fr) minmax(76px, 0.55fr) minmax(110px, 0.9fr) 36px;
+            gap: 8px;
+            align-items: end;
+            padding: 10px;
+            border: 1px solid #dbe3ea;
+            border-radius: 8px;
+            background: #f8fafc;
+        }
+
+        #seacharter-fcl-module:not(.show-advanced) .fcl-equipment-rate-field,
+        #seacharter-fcl-module:not(.show-advanced) .fcl-row-remove,
+        #seacharter-fcl-module:not(.show-advanced) #fcl-add-equipment,
+        #seacharter-fcl-module:not(.show-advanced) .fcl-secondary-field,
+        #seacharter-fcl-module:not(.show-advanced) .fcl-technical-field {
+            display: none;
+        }
+
+        #seacharter-fcl-module:not(.show-advanced) .fcl-equipment-row {
+            grid-template-columns: minmax(160px, 1fr) minmax(110px, 0.45fr);
+            padding: 0;
+            border: 0;
+            background: transparent;
+        }
+
+        #seacharter-fcl-module .fcl-row-remove,
+        #seacharter-fcl-module .fcl-add-equipment {
+            border: 1px solid #0f766e;
+            background: #ffffff;
+            color: #0f766e;
+            border-radius: 6px;
+            font-weight: 900;
+            cursor: pointer;
+            transition: transform 140ms ease, background-color 140ms ease;
+        }
+
+        #seacharter-fcl-module .fcl-row-remove {
+            width: 36px;
+            min-height: 40px;
+        }
+
+        #seacharter-fcl-module .fcl-row-remove:disabled {
+            border-color: #cbd5e1;
+            color: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        #seacharter-fcl-module .fcl-add-equipment {
+            min-height: 40px;
+            padding: 0 12px;
+            justify-self: start;
+        }
+
+        #seacharter-fcl-module .fcl-row-remove:not(:disabled):hover,
+        #seacharter-fcl-module .fcl-add-equipment:hover {
+            transform: translateY(-1px);
+            background: #ecfdf5;
+        }
+
+        #seacharter-fcl-module .fcl-risk-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(160px, 1fr));
+            gap: 10px;
+        }
+
+        #seacharter-fcl-module .fcl-toggle {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #f8fafc;
+            color: #334155;
+            font-size: 12px;
+            font-weight: 900;
+            text-transform: none;
+        }
+
+        #seacharter-fcl-module .fcl-toggle input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #seacharter-fcl-module .fcl-toggle-slider {
+            position: relative;
+            flex: 0 0 auto;
+            width: 44px;
+            height: 24px;
+            border-radius: 999px;
+            background: #cbd5e1;
+            transition: background-color 160ms ease;
+        }
+
+        #seacharter-fcl-module .fcl-toggle-slider::after {
+            content: "";
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            background: #ffffff;
+            box-shadow: 0 2px 5px rgba(15, 23, 42, 0.24);
+            transition: transform 160ms ease;
+        }
+
+        #seacharter-fcl-module .fcl-toggle input:checked + .fcl-toggle-slider {
+            background: #0f766e;
+        }
+
+        #seacharter-fcl-module .fcl-toggle input:checked + .fcl-toggle-slider::after {
+            transform: translateX(20px);
+        }
+
+        #seacharter-fcl-module .fcl-floating-control input {
+            width: 16px;
+            min-height: 16px;
+            padding: 0;
+        }
+
+        #seacharter-fcl-module .fcl-floating-status {
+            display: none;
+            color: #b7791f;
+            font-size: 11px;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        #seacharter-fcl-module .is-floating .fcl-floating-status {
+            display: inline-block;
+        }
+
+        #seacharter-fcl-module label {
+            color: #334155;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            font-family: "Inter", "Segoe UI", sans-serif;
+        }
+
+        #seacharter-fcl-module input,
+        #seacharter-fcl-module select {
+            width: 100%;
+            min-height: 40px;
+            border: 1px solid #cbd5e1;
+            border-radius: var(--sc-radius);
+            background: #ffffff;
+            color: #0f172a;
+            font: 700 14px "Inter", "Segoe UI", sans-serif;
+            padding: 9px 10px;
+            outline: none;
+            transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease, color 150ms ease;
+        }
+
+        #seacharter-fcl-module input:focus,
+        #seacharter-fcl-module select:focus {
+            border-color: #3b82f6;
+            box-shadow: var(--sc-focus);
+        }
+
+        #seacharter-fcl-module input:disabled {
+            background: #1e293b;
+            border-color: #334155;
+            color: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        #seacharter-fcl-module output.fcl-mini-output,
+        #seacharter-fcl-module input.fcl-calculated {
+            display: block;
+            width: 100%;
+            min-height: 40px;
+            border: 1px solid #cbd5e1;
+            border-radius: var(--sc-radius);
+            background: #f1f5f9;
+            color: #082f49;
+            font: 900 14px "JetBrains Mono", "Consolas", monospace;
+            padding: 9px 10px;
+        }
+
+        #seacharter-fcl-module .fcl-demurrage-output {
+            color: #be123c !important;
+        }
+
+        #seacharter-fcl-module .fcl-disabled-note {
+            display: none;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        #seacharter-fcl-module .fcl-field.is-disabled .fcl-disabled-note {
+            display: block;
+        }
+
+        #seacharter-fcl-module .fcl-total-banner {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 16px;
+            align-items: center;
+            position: fixed;
+            left: 50%;
+            bottom: 0;
+            z-index: 1200;
+            width: 100%;
+            padding: 14px 40px;
+            border-radius: 0;
+            background: #1E3A8A;
+            color: #ffffff;
+            border-top: 1px solid rgba(255, 255, 255, 0.18);
+            box-shadow: 0 -16px 36px -28px rgba(8, 47, 73, 0.84);
+            transform: translateX(-50%);
+        }
+
+        #seacharter-fcl-module .fcl-total-banner p {
+            color: #bae6fd;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        #seacharter-fcl-module .fcl-total-value {
+            font-family: "JetBrains Mono", "Consolas", monospace;
+            font-size: clamp(1.8rem, 4vw, 3.1rem);
+            font-weight: 900;
+            letter-spacing: 0;
+            text-align: right;
+            color: #fef3c7;
+        }
+
+        #seacharter-fcl-module .summary-panel .fcl-total-value {
+            color: #ffffff;
+            font-size: clamp(1.75rem, 2.4vw, 2.35rem);
+            line-height: 1;
+        }
+
+        #seacharter-fcl-module .fcl-audit-card {
+            grid-column: 1 / -1;
+        }
+
+        #seacharter-fcl-module .fcl-audit-controls {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            align-items: end;
+        }
+
+        #seacharter-fcl-module .fcl-file-drop {
+            min-height: 108px;
+            border: 1px dashed rgba(0, 78, 100, 0.36);
+            border-radius: 8px;
+            background: #f8fbfc;
+            display: grid;
+            place-items: center;
+            text-align: center;
+            padding: 14px;
+            color: #47626c;
+        }
+
+        #seacharter-fcl-module .fcl-file-drop strong {
+            display: block;
+            color: #073642;
+            font-size: 0.9rem;
+        }
+
+        #seacharter-fcl-module .fcl-file-drop small {
+            display: block;
+            margin-top: 4px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0;
+        }
+
+        #seacharter-fcl-module .fcl-audit-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-top: 12px;
+        }
+
+        #seacharter-fcl-module .fcl-audit-status {
+            color: #47626c;
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+
+        #seacharter-fcl-module .fcl-sales-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 3000;
+            display: none;
+            place-items: center;
+            padding: 20px;
+            background: rgba(2, 16, 24, 0.58);
+        }
+
+        #seacharter-fcl-module .fcl-sales-modal.is-open {
+            display: grid;
+        }
+
+        #seacharter-fcl-module .fcl-sales-dialog {
+            width: min(460px, 100%);
+            border-radius: 8px;
+            background: #ffffff;
+            border: 1px solid rgba(0, 78, 100, 0.16);
+            box-shadow: 0 24px 72px rgba(2, 16, 24, 0.28);
+            padding: 20px;
+        }
+
+        #seacharter-fcl-module .fcl-sales-dialog h4 {
+            color: #073642;
+            font-weight: 900;
+            font-size: 1.05rem;
+            margin: 0 0 8px;
+        }
+
+        #seacharter-fcl-module .fcl-sales-total {
+            margin: 14px 0;
+            padding: 14px;
+            border-radius: 8px;
+            background: #eef6f7;
+            color: #073642;
+            font-family: "JetBrains Mono", "Consolas", monospace;
+            font-size: 1.35rem;
+            font-weight: 900;
+        }
+
+        #seacharter-fcl-module .fcl-audit-table-wrap {
+            margin-top: 14px;
+            overflow-x: auto;
+            border: 1px solid rgba(0, 78, 100, 0.12);
+            border-radius: 8px;
+        }
+
+        #seacharter-fcl-module .fcl-audit-table {
+            width: 100%;
+            min-width: 820px;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+        }
+
+        #seacharter-fcl-module .fcl-audit-table th,
+        #seacharter-fcl-module .fcl-audit-table td {
+            padding: 10px;
+            border-bottom: 1px solid #e5edf0;
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        #seacharter-fcl-module .fcl-audit-table th {
+            background: #eef6f7;
+            color: #073642;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0;
+        }
+
+        #seacharter-fcl-module .fcl-audit-table input,
+        #seacharter-fcl-module .fcl-audit-table select {
+            min-height: 34px;
+            padding: 6px 8px;
+            font-size: 0.78rem;
+        }
+
+        #seacharter-fcl-module .fcl-audit-table tr.is-incoterm-excluded {
+            background: #f3f6f7;
+            color: #7c8a91;
+        }
+
+        #seacharter-fcl-module .fcl-audit-table tr.is-incoterm-excluded input,
+        #seacharter-fcl-module .fcl-audit-table tr.is-incoterm-excluded select {
+            color: #7c8a91;
+            background: #edf2f4;
+            border-color: #d7e0e4;
+        }
+
+        #seacharter-fcl-module .fcl-incoterm-state {
+            display: block;
+            width: max-content;
+            max-width: 100%;
+            padding: 3px 7px;
+            border: 1px solid rgba(0, 78, 100, 0.2);
+            border-radius: 4px;
+            color: #073642;
+            background: #ffffff;
+            font-size: 0.68rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0;
+        }
+
+        #seacharter-fcl-module .fcl-audit-table small {
+            display: block;
+            margin-top: 4px;
+            max-width: 180px;
+            color: #64747b;
+            line-height: 1.3;
+        }
+
+        @media (max-width: 1280px) {
+            #seacharter-fcl-module .fcl-grid,
+            #seacharter-fcl-module .fcl-grid.fcl-grid-2,
+            #seacharter-fcl-module .fcl-overview-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 980px) {
+            #seacharter-fcl-module .fcl-mode-panel,
+            #seacharter-fcl-module .fcl-grid,
+            #seacharter-fcl-module .fcl-stepper,
+            #seacharter-fcl-module .fcl-audit-controls,
+            #seacharter-fcl-module .fcl-overview-grid,
+            #seacharter-fcl-module .fcl-workspace {
+                grid-template-columns: 1fr;
+            }
+
+            #seacharter-fcl-module .fcl-header,
+            #seacharter-fcl-module .module-header,
+            #seacharter-fcl-module .fcl-total-banner,
+            #seacharter-fcl-module .summary-panel {
+                grid-template-columns: 1fr;
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            #seacharter-fcl-module .fcl-header-badge,
+            #seacharter-fcl-module .fcl-total-value {
+                text-align: left;
+            }
+
+            #seacharter-fcl-module .fcl-workspace > .summary-panel {
+                grid-column: 1;
+                grid-row: auto;
+                position: sticky;
+                bottom: 0;
+                top: auto;
+            }
+
+            #seacharter-fcl-module .fcl-equipment-row,
+            #seacharter-fcl-module .fcl-risk-grid {
+                grid-template-columns: 1fr;
+            }
+
+            #seacharter-fcl-module .fcl-row-remove {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 720px) {
+            #seacharter-fcl-module .fcl-shell {
+                padding: 0 16px 32px;
+            }
+
+            #seacharter-fcl-module .fcl-total-banner {
+                padding: 12px 16px;
+            }
+
+            #seacharter-fcl-module .fcl-workspace {
+                padding: 16px;
+            }
+        }
     </style>
 </head>
 <body class="theme-light h-screen flex flex-col overflow-hidden">
@@ -3701,9 +4761,10 @@
                 <button onclick="switchTab('gencon')" id="tab-btn-gencon" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">3. Editor GENCON</button>
                 <button onclick="switchTab('asbatankvoy')" id="tab-btn-asbatankvoy" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">4. Editor ASBATANKVOY</button>
                 <button onclick="switchTab('cbam')" id="tab-btn-cbam" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">5. CBAM</button>
-                <button onclick="switchTab('auditor')" id="tab-btn-auditor" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">6. Auditoría IA</button>
-                <button onclick="switchTab('ais')" id="tab-btn-ais" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">7. Inteligencia AIS</button>
-                <button onclick="switchTab('matching')" id="tab-btn-matching" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">8. Motor de Coincidencia</button>
+                <button onclick="switchTab('fcl')" id="tab-btn-fcl" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">6. FCL</button>
+                <button onclick="switchTab('auditor')" id="tab-btn-auditor" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">7. Auditoría IA</button>
+                <button onclick="switchTab('ais')" id="tab-btn-ais" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">8. Inteligencia AIS</button>
+                <button onclick="switchTab('matching')" id="tab-btn-matching" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">9. Motor de Coincidencia</button>
             </div>
         </div>
 
@@ -4657,6 +5718,345 @@
                         <span class="text-xs text-slate-500">tCO2/TM</span>
                     </div>
                 </section>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- MÓDULO 6: CONTENEDORES FCL/LCL AVANZADO    -->
+        <!-- ========================================== -->
+        <div id="view-fcl" class="view-section absolute inset-0 overflow-y-auto py-6 px-0 scroll-smooth bg-[#F8FAFC]">
+            <div id="seacharter-fcl-module">
+                <div class="fcl-shell">
+                    <header class="module-header">
+                        <div>
+                            <span class="fcl-kicker module-breadcrumbs">Definir Ruta -> Calcular Costes -> Resumen FCL</span>
+                            <h2><i class="fa-solid fa-boxes-stacked mr-2"></i>Módulo de Contenedores FCL</h2>
+                            <p>Costes marítimos, gastos locales y demoras alineados con el flujo operativo de SeaCharter Core PRO.</p>
+                        </div>
+                        <div class="fcl-header-badge">
+                            <span class="fcl-kicker">Data Bridge</span>
+                            <strong>Standby Sync</strong>
+                        </div>
+                    </header>
+
+                    <div class="fcl-workspace">
+                        <div id="fcl-expiry-alert" class="fcl-expiry-alert" role="alert">
+                            COTIZACIÓN EXPIRADA - Tarifas no garantizadas
+                        </div>
+
+                        <div class="fcl-smart-defaults" id="fcl-smart-defaults" aria-live="polite">
+                            <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                            Valores inteligentes aplicados desde operaciones frecuentes: CIF, 20DV, 14 días libres.
+                        </div>
+
+                        <nav class="fcl-stepper" aria-label="Pasos de cotización">
+                            <button class="fcl-step-tab is-active" type="button" data-fcl-step-target="1" aria-current="step">
+                                <span class="fcl-step-number">1</span>
+                                <span><span class="fcl-step-title">Ruta</span><span class="fcl-step-hint">Origen y destino</span></span>
+                            </button>
+                            <button class="fcl-step-tab" type="button" data-fcl-step-target="2">
+                                <span class="fcl-step-number">2</span>
+                                <span><span class="fcl-step-title">Equipo</span><span class="fcl-step-hint">Tipo de contenedor y cantidad</span></span>
+                            </button>
+                            <button class="fcl-step-tab" type="button" data-fcl-step-target="3">
+                                <span class="fcl-step-number">3</span>
+                                <span><span class="fcl-step-title">Total</span><span class="fcl-step-hint">Resumen final</span></span>
+                            </button>
+                        </nav>
+
+                    <section class="fcl-wizard-step is-active" data-fcl-step="1" aria-label="Paso 1 Ruta y Carga">
+                    <div class="fcl-overview-grid">
+                        <article class="fcl-card sc-card fcl-config-card">
+                            <div class="fcl-card-heading sc-card-header">
+                                <div><span class="fcl-card-label">01</span><h3>Configuración</h3></div>
+                                <i class="fa-solid fa-route" aria-hidden="true"></i>
+                            </div>
+                            <div class="fcl-fieldset">
+                                <div class="fcl-field fcl-search-field fcl-secondary-field"><label for="fcl-place-receipt">Place of Receipt</label><input id="fcl-place-receipt" data-fcl-input type="text" list="fcl-port-suggestions" value="Zaragoza ICD"></div>
+                                <div class="fcl-field fcl-search-field"><label for="fcl-pol">Origen</label><input id="fcl-pol" data-fcl-input type="text" value="Valencia" readonly aria-readonly="true"></div>
+                                <div class="fcl-field fcl-search-field"><label for="fcl-pod">Destino</label><input id="fcl-pod" data-fcl-input type="text" value="Jebel Ali" readonly aria-readonly="true"></div>
+                                <div class="fcl-field fcl-search-field fcl-secondary-field"><label for="fcl-place-delivery">Place of Delivery</label><input id="fcl-place-delivery" data-fcl-input type="text" list="fcl-port-suggestions" value="Dubai Logistics City"></div>
+                                <datalist id="fcl-port-suggestions">
+                                    <option value="Valencia"></option>
+                                    <option value="Barcelona"></option>
+                                    <option value="Algeciras"></option>
+                                    <option value="Rotterdam"></option>
+                                    <option value="Jebel Ali"></option>
+                                    <option value="Singapore"></option>
+                                    <option value="Shanghai"></option>
+                                    <option value="Zaragoza ICD"></option>
+                                    <option value="Dubai Logistics City"></option>
+                                </datalist>
+                                <datalist id="fcl-route-suggestions">
+                                    <option value="Valencia -> Jebel Ali"></option>
+                                    <option value="Barcelona -> Singapore"></option>
+                                    <option value="Algeciras -> Shanghai"></option>
+                                    <option value="Rotterdam -> Jebel Ali"></option>
+                                </datalist>
+                                <div class="fcl-field fcl-secondary-field"><label for="fcl-valid-from">Valid From</label><input id="fcl-valid-from" data-fcl-input type="date"></div>
+                                <div class="fcl-field fcl-secondary-field"><label for="fcl-valid-to">Valid To</label><input id="fcl-valid-to" data-fcl-input type="date"></div>
+                            </div>
+                        </article>
+
+                        <article class="fcl-card sc-card fcl-equipment-card">
+                            <div class="fcl-card-heading sc-card-header">
+                                <div><span class="fcl-card-label">02</span><h3>Carga y Equipo</h3></div>
+                                <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
+                            </div>
+                            <div class="fcl-fieldset">
+                                <div class="fcl-field fcl-secondary-field">
+                                    <label for="fcl-cargo-mode">Modalidad</label>
+                                    <select id="fcl-cargo-mode" data-fcl-input>
+                                        <option value="FCL">FCL</option>
+                                        <option value="LCL">LCL</option>
+                                    </select>
+                                </div>
+                                <div class="fcl-field fcl-secondary-field">
+                                    <label for="fcl-incoterm">Incoterm</label>
+                                    <select id="fcl-incoterm" data-fcl-input>
+                                        <option value="EXW">EXW</option>
+                                        <option value="FCA">FCA</option>
+                                        <option value="FAS">FAS</option>
+                                        <option value="FOB">FOB</option>
+                                        <option value="CFR">CFR</option>
+                                        <option value="CIF">CIF</option>
+                                        <option value="CPT">CPT</option>
+                                        <option value="CIP">CIP</option>
+                                        <option value="DAP">DAP</option>
+                                        <option value="DPU">DPU</option>
+                                        <option value="DDP">DDP</option>
+                                    </select>
+                                </div>
+                                <div id="fcl-panel" class="fcl-fieldset">
+                                    <div id="fcl-equipment-rows" class="fcl-equipment-stack" aria-live="polite"></div>
+                                    <button id="fcl-add-equipment" class="fcl-add-equipment sc-button secondary" type="button">+ Añadir otro equipo</button>
+                                </div>
+                                <div id="lcl-panel" class="fcl-fieldset is-hidden">
+                                    <div class="fcl-field"><label for="lcl-weight-tons">Peso (Toneladas)</label><input id="lcl-weight-tons" data-fcl-input type="number" min="0" step="0.01" value="2.50"></div>
+                                    <div class="fcl-field"><label for="lcl-volume-cbm">Volumen (CBM)</label><input id="lcl-volume-cbm" data-fcl-input type="number" min="0" step="0.01" value="4.00"></div>
+                                    <div class="fcl-field"><label for="lcl-revenue-tons">Factor de Cobro W/M</label><input id="lcl-revenue-tons" class="fcl-calculated" type="text" value="4.00 Revenue Tons" disabled></div>
+                                </div>
+                                <div class="fcl-field fcl-secondary-field"><label for="cargo-total-weight">Total Weight (kg)</label><input id="cargo-total-weight" data-fcl-input type="number" min="0" step="1" value="24500" required></div>
+                                <div class="fcl-field fcl-secondary-field"><label for="cargo-total-volume">Total Volume (m³)</label><input id="cargo-total-volume" data-fcl-input type="number" min="0" step="0.01" value="58.20" required></div>
+                                <div class="fcl-risk-grid fcl-secondary-field" aria-label="Toggles de riesgo">
+                                    <label class="fcl-toggle" for="fcl-imo-toggle"><span>¿Mercancía Peligrosa (IMO)?</span><input id="fcl-imo-toggle" data-fcl-input type="checkbox"><span class="fcl-toggle-slider" aria-hidden="true"></span></label>
+                                    <label class="fcl-toggle" for="fcl-reefer-toggle"><span>¿Mercancía Refrigerada?</span><input id="fcl-reefer-toggle" data-fcl-input type="checkbox"><span class="fcl-toggle-slider" aria-hidden="true"></span></label>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+                    <div class="fcl-step-actions">
+                        <button class="fcl-wizard-button sc-button secondary" type="button" data-fcl-prev disabled>Anterior</button>
+                        <button class="fcl-wizard-button sc-button" type="button" data-fcl-next>Siguiente: detalles técnicos</button>
+                    </div>
+                    </section>
+
+                    <div class="fcl-quote-actions">
+                        <button id="fcl-cost-details-toggle" class="sc-button secondary" type="button" aria-expanded="false">
+                            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                                Ajustes Avanzados de Costes
+                        </button>
+                        <span id="fcl-proactive-status" class="fcl-proactive-status" aria-live="polite">
+                            <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                            Patrón Valencia -> Jebel Ali aplicado
+                        </span>
+                    </div>
+
+                    <section id="fcl-cost-details" class="fcl-wizard-step fcl-cost-details" data-fcl-step="2" aria-label="Detalles de costes">
+                    <div class="fcl-overview-grid">
+                        <article class="fcl-card sc-card fcl-costs-card">
+                            <div class="fcl-card-heading sc-card-header">
+                                <div><span class="fcl-card-label">04</span><h3>Costes</h3></div>
+                                <i class="fa-solid fa-water" aria-hidden="true"></i>
+                            </div>
+                            <div class="fcl-fieldset">
+                                <div class="fcl-field"><label for="fcl-bas">Flete Básico</label><input id="fcl-bas" data-fcl-input type="number" min="0" step="0.01" value="1800"></div>
+                                <div class="fcl-field fcl-technical-field" data-surcharge>
+                                    <label for="fcl-baf">BAF</label>
+                                    <div class="fcl-field-row"><input id="fcl-baf" data-fcl-input type="number" min="0" step="0.01" value="120"><label class="fcl-floating-control"><input id="fcl-baf-floating" data-fcl-input type="checkbox">Floating</label></div>
+                                    <span class="fcl-floating-status">Variable/Floating</span>
+                                </div>
+                                <div class="fcl-field fcl-technical-field" data-surcharge>
+                                    <label for="fcl-emissions">Emisiones</label>
+                                    <div class="fcl-field-row"><input id="fcl-emissions" data-fcl-input type="number" min="0" step="0.01" value="45"><label class="fcl-floating-control"><input id="fcl-emissions-floating" data-fcl-input type="checkbox">Floating</label></div>
+                                    <span class="fcl-floating-status">Variable/Floating</span>
+                                </div>
+                                <div class="fcl-field fcl-technical-field" data-surcharge>
+                                    <label for="fcl-congestion">Congestión</label>
+                                    <div class="fcl-field-row"><input id="fcl-congestion" data-fcl-input type="number" min="0" step="0.01" value="0"><label class="fcl-floating-control"><input id="fcl-congestion-floating" data-fcl-input type="checkbox">Floating</label></div>
+                                    <span class="fcl-floating-status">Variable/Floating</span>
+                                </div>
+                                <div id="fcl-imo-surcharge-row" class="fcl-field fcl-technical-field is-hidden" data-surcharge>
+                                    <label for="fcl-imo-surcharge">Recargo IMO automático</label>
+                                    <div class="fcl-field-row"><input id="fcl-imo-surcharge" data-fcl-input type="number" min="0" step="0.01" value="175"><label class="fcl-floating-control"><input id="fcl-imo-floating" data-fcl-input type="checkbox">Flotante</label></div>
+                                    <span class="fcl-floating-status">Variable/Floating</span>
+                                </div>
+                            </div>
+                        </article>
+                        <article class="fcl-card sc-card fcl-expenses-card">
+                            <div class="fcl-card-heading sc-card-header">
+                                <div><span class="fcl-card-label">05</span><h3>Gastos</h3></div>
+                                <i class="fa-solid fa-receipt" aria-hidden="true"></i>
+                            </div>
+                            <button id="fcl-advanced-toggle" class="sc-button secondary fcl-advanced-toggle" type="button" aria-expanded="false">
+                                <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                                Ajustes Avanzados de Costes
+                            </button>
+                            <div id="fcl-advanced-costs" class="fcl-fieldset fcl-advanced-costs">
+                                <div class="fcl-accordion is-open" data-fcl-accordion>
+                                    <button class="fcl-accordion-toggle" type="button" aria-expanded="true">
+                                        <span><strong>Gastos Locales</strong><span>THC, aduanas y cargos destino solo si se expanden</span></span>
+                                        <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                                    </button>
+                                    <div class="fcl-accordion-panel fcl-fieldset">
+                                        <div class="fcl-field" data-origin-cost>
+                                            <label for="fcl-origin-thc">THC Origen</label>
+                                            <input id="fcl-origin-thc" data-fcl-input data-origin-controlled type="number" min="0" step="0.01" value="185">
+                                            <span class="fcl-disabled-note">Bloqueado por Incoterm: el origen no aplica al comprador.</span>
+                                        </div>
+                                        <div class="fcl-field" data-origin-cost>
+                                            <label for="fcl-origin-customs">Aduanas Origen</label>
+                                            <input id="fcl-origin-customs" data-fcl-input data-origin-controlled type="number" min="0" step="0.01" value="65">
+                                            <span class="fcl-disabled-note">Bloqueado por Incoterm: gasto de origen excluido.</span>
+                                        </div>
+                                        <div class="fcl-field"><label for="fcl-destination-thc">THC Destino</label><input id="fcl-destination-thc" data-fcl-input type="number" min="0" step="0.01" value="210"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+                        <article class="fcl-card sc-card fcl-demurrage-card">
+                            <div class="fcl-card-heading sc-card-header">
+                                <div><span class="fcl-card-label">03</span><h3>Demoras</h3></div>
+                                <i class="fa-solid fa-clock" aria-hidden="true"></i>
+                            </div>
+                            <div class="fcl-accordion" data-fcl-accordion>
+                                <button class="fcl-accordion-toggle" type="button" aria-expanded="false">
+                                    <span><strong>Demoras</strong><span>Tramos de penalización disponibles bajo demanda</span></span>
+                                    <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                                </button>
+                                <div class="fcl-accordion-panel fcl-fieldset">
+                                    <div class="fcl-field"><label for="dem-free-days">Días Libres Concedidos</label><input id="dem-free-days" data-fcl-input type="number" min="0" step="1" value="14"></div>
+                                    <div class="fcl-field"><label for="dem-used-days">Días Reales Utilizados</label><input id="dem-used-days" data-fcl-input type="number" min="0" step="1" value="10"></div>
+                                    <div class="fcl-field"><label for="dem-tier1-rate">Tarifa Tramo 1 ($/día)</label><input id="dem-tier1-rate" data-fcl-input type="number" min="0" step="0.01" value="50"></div>
+                                    <div class="fcl-field"><label for="dem-tier1-limit">Límite Días Tramo 1</label><input id="dem-tier1-limit" data-fcl-input type="number" min="0" step="1" value="7"></div>
+                                    <div class="fcl-field"><label for="dem-tier2-rate">Tarifa Tramo 2 ($/día)</label><input id="dem-tier2-rate" data-fcl-input type="number" min="0" step="0.01" value="100"></div>
+                                    <div class="fcl-field"><label for="demurrage-cost">Penalización Calculada</label><input id="demurrage-cost" class="fcl-calculated fcl-demurrage-output" type="text" value="0.00" disabled></div>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+                    <div class="fcl-step-actions">
+                        <button class="fcl-wizard-button sc-button secondary" type="button" data-fcl-prev>Anterior</button>
+                        <button class="fcl-wizard-button sc-button" type="button" data-fcl-next>Siguiente: resumen</button>
+                    </div>
+                    </section>
+
+                    <section id="fcl-breakdown-panel" class="fcl-wizard-step fcl-breakdown-panel" data-fcl-step="3" aria-label="Desglose de la cotización">
+                    <div class="fcl-overview-grid">
+                        <article class="fcl-card sc-card fcl-summary-card">
+                            <div class="fcl-card-heading sc-card-header">
+                                <div><span class="fcl-card-label">06</span><h3>Total Dinámico</h3></div>
+                                <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
+                            </div>
+                            <div class="fcl-fieldset">
+                                <div class="fcl-field"><label>Subtotal Flete</label><output id="freight-subtotal" class="fcl-mini-output">0.00</output></div>
+                                <div class="fcl-field"><label>Recargos</label><output id="surcharge-subtotal" class="fcl-mini-output">0.00</output></div>
+                                <div class="fcl-field"><label>Gastos Locales</label><output id="local-subtotal" class="fcl-mini-output">0.00</output></div>
+                                <div class="fcl-market-action">
+                                    <button id="marketdata-update-button" class="fcl-market-button sc-button" type="button">
+                                        <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
+                                        Actualizar Índices de Mercado
+                                    </button>
+                                    <span id="marketdata-update-status" class="fcl-market-status" aria-live="polite"></span>
+                                </div>
+                                <p class="fcl-mode-copy">El gran total se consolida en EUR. Los conceptos en USD se mantienen auditables en el tooltip y el desglose.</p>
+                            </div>
+                        </article>
+                        <article class="fcl-card sc-card fcl-audit-card">
+                            <div class="fcl-card-heading sc-card-header">
+                                <div><span class="fcl-card-label">07</span><h3>Auditoría IA de Oferta Naviera</h3></div>
+                                <i class="fa-solid fa-file-shield" aria-hidden="true"></i>
+                            </div>
+                            <div class="fcl-fieldset">
+                                <div class="fcl-audit-controls">
+                                    <div class="fcl-field"><label for="carrier-offer-name">Naviera</label><input id="carrier-offer-name" data-fcl-input type="text" value="" placeholder="Cargue una oferta para identificar naviera..." readonly aria-readonly="true" disabled></div>
+                                    <div class="fcl-field"><label for="carrier-maritime-route">Ruta marítima</label><input id="carrier-maritime-route" data-fcl-input type="text" value="Valencia -> Jebel Ali" readonly aria-readonly="true"></div>
+                                    <div class="fcl-field"><label for="carrier-audit-incoterm">Incoterm</label><select id="carrier-audit-incoterm" data-fcl-input><option value="">Seleccionar</option><option value="EXW">EXW</option><option value="FCA">FCA</option><option value="FAS">FAS</option><option value="FOB">FOB</option><option value="CFR">CFR</option><option value="CIF">CIF</option><option value="CPT">CPT</option><option value="CIP">CIP</option><option value="DAP">DAP</option><option value="DPU">DPU</option><option value="DDP">DDP</option></select></div>
+                                    <div class="fcl-field"><label for="carrier-offer-reference">Referencia oferta</label><input id="carrier-offer-reference" data-fcl-input type="text" value="Quote Sheet"></div>
+                                    <div class="fcl-field"><label for="carrier-markup-percentage">Markup Ocean Freight (%)</label><input id="carrier-markup-percentage" data-fcl-input type="number" min="0" step="0.01" value="8"></div>
+                                    <div class="fcl-field"><label for="carrier-markup-fixed">Markup FOB/Local fijo</label><input id="carrier-markup-fixed" data-fcl-input type="number" min="0" step="0.01" value="75"></div>
+                                </div>
+                                <label class="fcl-file-drop" for="carrier-offer-file">
+                                    <span>
+                                        <strong>Cargar oferta PDF o Excel</strong>
+                                        <small id="carrier-offer-file-name">PDF, XLSX, XLS o CSV</small>
+                                    </span>
+                                    <input id="carrier-offer-file" type="file" accept=".pdf,.xlsx,.xls,.csv,.txt" hidden>
+                                </label>
+                                <div class="fcl-audit-actions">
+                                    <button id="carrier-offer-parse" class="sc-button" type="button" disabled>
+                                        <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                                        Extraer costes con IA
+                                    </button>
+                                    <button id="carrier-offer-save" class="sc-button secondary" type="button" disabled>
+                                        <i class="fa-solid fa-database" aria-hidden="true"></i>
+                                        Guardar en Base de Datos
+                                    </button>
+                                    <button id="carrier-offer-apply-sale" class="sc-button" type="button" disabled>
+                                        <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
+                                        Aplicar Venta y Generar PDF
+                                    </button>
+                                    <span id="carrier-offer-status" class="fcl-audit-status" aria-live="polite">Sin documento cargado.</span>
+                                </div>
+                                <div class="fcl-audit-table-wrap">
+                                    <table class="fcl-audit-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Concepto</th>
+                                                <th>Coste Naviera</th>
+                                                <th>Moneda</th>
+                                                <th>Contenedor</th>
+                                                <th>Nivel de carga</th>
+                                                <th>Tipo margen</th>
+                                                <th>Incoterm</th>
+                                                <th>Precio Venta Propuesto</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="carrier-offer-lines">
+                                            <tr><td colspan="8">Carga una oferta para comparar coste de naviera contra precio de venta propuesto.</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+                    <div id="carrier-sales-modal" class="fcl-sales-modal" role="dialog" aria-modal="true" aria-labelledby="carrier-sales-modal-title" aria-hidden="true">
+                        <div class="fcl-sales-dialog">
+                            <h4 id="carrier-sales-modal-title">Confirmar venta aplicada</h4>
+                            <p>Se generará una oferta PDF para cliente sin mostrar costes de naviera.</p>
+                            <div id="carrier-sales-modal-total" class="fcl-sales-total">€0.00</div>
+                            <div class="fcl-audit-actions">
+                                <button id="carrier-sales-confirm" class="sc-button" type="button">Confirmar y descargar</button>
+                                <button id="carrier-sales-cancel" class="sc-button secondary" type="button">Cancelar</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="fcl-step-actions">
+                        <button class="fcl-wizard-button sc-button secondary" type="button" data-fcl-prev>Anterior</button>
+                        <button class="fcl-wizard-button sc-button" type="button" data-fcl-step-target="1">Nueva revisión</button>
+                    </div>
+                    </section>
+
+                        <section class="summary-panel" aria-live="polite">
+                            <div>
+                                <span class="fcl-kicker">Quick Quote</span>
+                                <p>Total convertido a EUR con costes técnicos ocultos hasta abrir ajustes.</p>
+                            </div>
+                            <output id="fcl-quote-total" class="fcl-total-value" title="Total en USD: $0.00 | Total en EUR: €0.00">€0.00</output>
+                            <button id="fcl-breakdown-toggle" class="sc-button" type="button" aria-expanded="false">Ver Desglose</button>
+                        </section>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -11793,7 +13193,7 @@
             }
         };
 
-        const MODULE_NAVIGATION = ['map', 'estimator', 'gencon', 'asbatankvoy', 'cbam', 'auditor', 'ais', 'matching'];
+        const MODULE_NAVIGATION = ['map', 'estimator', 'gencon', 'asbatankvoy', 'cbam', 'fcl', 'auditor', 'ais', 'matching'];
 
         function updateNavigationContext(tabId) {
             MODULE_NAVIGATION.forEach(moduleId => {
@@ -11844,6 +13244,10 @@
             if (tabId === 'cbam') {
                 syncCBAMModuleFromCalculator();
                 updateCBAMModuleView();
+            }
+
+            if (tabId === 'fcl' && typeof updateFCLQuote === 'function') {
+                updateFCLQuote();
             }
 
             if(tabId === 'map') {
@@ -12358,28 +13762,6 @@
         /**
          * Tabla de Reglas de Enrutamiento (routing_rules).
          * Mapea combinaciones de regiones de origen y destino a una lista ordenada de chokepoints que se deben cruzar.
-         * 
-         * DISEÑO DE BASE DE DATOS RECOMENDADO (SQL / @netlify/database):
-         * Si prefiere persistir esto de forma dinámica en una base de datos Postgres de Netlify, puede usar Drizzle ORM:
-         * 
-         * ```typescript
-         * // db/schema.ts
-         * import { pgTable, uuid, varchar, doublePrecision } from "drizzle-orm/pg-core";
-         * 
-         * export const chokepoints = pgTable("chokepoints", {
-         *   id: varchar("id", { length: 50 }).primaryKey(),
-         *   name: varchar("name", { length: 100 }).notNull(),
-         *   latitude: doublePrecision("latitude").notNull(),
-         *   longitude: doublePrecision("longitude").notNull(),
-         * });
-         * 
-         * export const routingRules = pgTable("routing_rules", {
-         *   id: uuid("id").defaultRandom().primaryKey(),
-         *   originRegion: varchar("origin_region", { length: 50 }).notNull(),
-         *   destinationRegion: varchar("destination_region", { length: 50 }).notNull(),
-         *   chokepointsOrder: varchar("chokepoints_order", { length: 255 }).notNull(), // "GIBRALTAR,ENGLISH_CHANNEL"
-         * });
-         * ```
          */
         const routing_rules = {
             "Med_to_NE_Europe": [CHOKEPOINTS.GIBRALTAR_EAST, CHOKEPOINTS.GIBRALTAR_WEST, CHOKEPOINTS.ENGLISH_CHANNEL],
@@ -25687,6 +27069,1027 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         // Refrescar el aviso CBAM una vez que el módulo está disponible.
         window.syncCBAMModuleFromCalculator?.();
         refreshCBAMCalculations();
+    </script>
+    <script>
+        // SeaCharter Containers Advanced - SC JS vanilla.
+        // Punto de integracion Data Bridge: hidratar estos campos con tarifas maestras antes de llamar a window.updateContainerQuote().
+        (function initSeaCharterAdvancedContainers() {
+            const rootId = 'seacharter-fcl-module';
+            const originExcludedIncoterms = new Set(['FOB', 'CFR', 'CIF']);
+            const auditIncoterms = ['EXW', 'FCA', 'FAS', 'FOB', 'CFR', 'CIF', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP'];
+            const auditResponsibilityMatrix = {
+                EXW: { origin: true, freight: true, insurance: false, destination: false },
+                FCA: { origin: true, freight: true, insurance: false, destination: false },
+                FAS: { origin: true, freight: true, insurance: false, destination: false },
+                FOB: { origin: false, freight: true, insurance: false, destination: false },
+                CFR: { origin: false, freight: true, insurance: false, destination: false },
+                CIF: { origin: false, freight: true, insurance: true, destination: false },
+                CPT: { origin: false, freight: true, insurance: false, destination: false },
+                CIP: { origin: false, freight: true, insurance: true, destination: false },
+                DAP: { origin: false, freight: true, insurance: false, destination: true },
+                DPU: { origin: false, freight: true, insurance: false, destination: true },
+                DDP: { origin: false, freight: true, insurance: false, destination: true }
+            };
+            const ids = {
+                mode: 'fcl-cargo-mode',
+                incoterm: 'fcl-incoterm',
+                validFrom: 'fcl-valid-from',
+                validTo: 'fcl-valid-to',
+                expiry: 'fcl-expiry-alert',
+                fclPanel: 'fcl-panel',
+                lclPanel: 'lcl-panel',
+                equipmentRows: 'fcl-equipment-rows',
+                addEquipment: 'fcl-add-equipment',
+                bas: 'fcl-bas',
+                baf: 'fcl-baf',
+                emissions: 'fcl-emissions',
+                congestion: 'fcl-congestion',
+                imoToggle: 'fcl-imo-toggle',
+                reeferToggle: 'fcl-reefer-toggle',
+                imoSurchargeRow: 'fcl-imo-surcharge-row',
+                imoSurcharge: 'fcl-imo-surcharge',
+                originThc: 'fcl-origin-thc',
+                originCustoms: 'fcl-origin-customs',
+                destinationThc: 'fcl-destination-thc',
+                auditIncoterm: 'carrier-audit-incoterm',
+                auditRoute: 'carrier-maritime-route',
+                lclWeight: 'lcl-weight-tons',
+                lclVolume: 'lcl-volume-cbm',
+                lclRevenue: 'lcl-revenue-tons',
+                freeDays: 'dem-free-days',
+                usedDays: 'dem-used-days',
+                tier1Rate: 'dem-tier1-rate',
+                tier1Limit: 'dem-tier1-limit',
+                tier2Rate: 'dem-tier2-rate',
+                demurrageCost: 'demurrage-cost',
+                freightSubtotal: 'freight-subtotal',
+                surchargeSubtotal: 'surcharge-subtotal',
+                localSubtotal: 'local-subtotal',
+                total: 'fcl-quote-total',
+                costDetails: 'fcl-cost-details',
+                costDetailsToggle: 'fcl-cost-details-toggle',
+                advancedToggle: 'fcl-advanced-toggle',
+                advancedCosts: 'fcl-advanced-costs',
+                breakdownToggle: 'fcl-breakdown-toggle',
+                breakdownPanel: 'fcl-breakdown-panel',
+                proactiveStatus: 'fcl-proactive-status'
+            };
+            const routePatterns = [
+                { origin: 'valencia', destination: 'jebel ali', bas: 1800, baf: 120, emissions: 45, congestion: 0, originThc: 185, originCustoms: 65, destinationThc: 210 },
+                { origin: 'barcelona', destination: 'singapore', bas: 2125, baf: 145, emissions: 52, congestion: 35, originThc: 195, originCustoms: 70, destinationThc: 235 },
+                { origin: 'algeciras', destination: 'shanghai', bas: 1685, baf: 132, emissions: 48, congestion: 20, originThc: 178, originCustoms: 62, destinationThc: 205 },
+                { origin: 'rotterdam', destination: 'jebel ali', bas: 1940, baf: 118, emissions: 58, congestion: 0, originThc: 215, originCustoms: 80, destinationThc: 210 }
+            ];
+
+            function el(id) { return document.getElementById(id); }
+            function scoped(selector) { return Array.from(document.querySelectorAll(`#${rootId} ${selector}`)); }
+            function money(id) {
+                const value = Number.parseFloat(el(id)?.value);
+                return Number.isFinite(value) && value > 0 ? value : 0;
+            }
+            function whole(id, fallback) {
+                const value = Number.parseInt(el(id)?.value, 10);
+                return Number.isFinite(value) && value >= 0 ? value : fallback;
+            }
+            function format(value) {
+                return value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+            function formatCurrency(value, currency) {
+                const symbol = currency === 'EUR' ? '€' : '$';
+                return `${symbol}${format(value)}`;
+            }
+            function safePdfText(value) {
+                return String(value || '').replace(/\s+/g, ' ').trim();
+            }
+            function usdToEurRate() {
+                const marketRate = Number.parseFloat(window.SeaCharterMarketReferenceData?.eurUsdRate || window.SeaCharterMarketReferenceData?.EurUsdRate);
+                return Number.isFinite(marketRate) && marketRate > 0 ? 1 / marketRate : 0.92;
+            }
+            function todayIso() {
+                return new Date().toISOString().slice(0, 10);
+            }
+            function plusDaysIso(days) {
+                const date = new Date();
+                date.setDate(date.getDate() + days);
+                return date.toISOString().slice(0, 10);
+            }
+            function applyDefaults() {
+                if (el(ids.validFrom) && !el(ids.validFrom).value) el(ids.validFrom).value = todayIso();
+                if (el(ids.validTo) && !el(ids.validTo).value) el(ids.validTo).value = plusDaysIso(30);
+            }
+            function applySmartValues() {
+                const incoterm = el(ids.incoterm);
+                const freeDays = el(ids.freeDays);
+                if (incoterm) incoterm.value = 'CIF';
+                if (freeDays) freeDays.value = '14';
+                const firstType = el(ids.equipmentRows)?.querySelector('[data-equipment-type]');
+                if (firstType) firstType.value = '20DV';
+            }
+            function normalizeRoute(value) {
+                return String(value || '').trim().toLowerCase();
+            }
+            function setMoney(id, value) {
+                const field = el(id);
+                if (field) field.value = String(value);
+            }
+            function getCurrentRouteState() {
+                const route = typeof getCurrentRoutePortNames === 'function'
+                    ? getCurrentRoutePortNames()
+                    : {
+                        polName: document.getElementById('port-pol')?.value || State?.pol || '',
+                        podName: document.getElementById('port-pod')?.value || State?.pod || ''
+                    };
+                return {
+                    origin: String(route.polName || '').trim(),
+                    destination: String(route.podName || '').trim()
+                };
+            }
+            function setFieldValue(id, value) {
+                const field = el(id);
+                if (!field || field.value === value) return false;
+                field.value = value;
+                return true;
+            }
+            function syncFCLRouteFromCurrentRoute() {
+                const route = getCurrentRouteState();
+                if (!route.origin && !route.destination) return false;
+                const changed = [
+                    setFieldValue('fcl-pol', route.origin),
+                    setFieldValue('fcl-pod', route.destination),
+                    setFieldValue(ids.auditRoute, route.origin || route.destination ? `${route.origin || 'Origen'} -> ${route.destination || 'Destino'}` : '')
+                ].some(Boolean);
+                if (changed) applyRoutePattern();
+                return changed;
+            }
+            function applyRoutePattern() {
+                const origin = normalizeRoute(el('fcl-pol')?.value);
+                const destination = normalizeRoute(el('fcl-pod')?.value);
+                if (!origin || !destination) return;
+                const pattern = routePatterns.find((item) => origin.includes(item.origin) && destination.includes(item.destination));
+                const applied = pattern || { origin: 'patrón base', destination: 'ruta no parametrizada', bas: 1750, baf: 110, emissions: 42, congestion: 0, originThc: 180, originCustoms: 60, destinationThc: 205 };
+                setMoney(ids.bas, applied.bas);
+                setMoney(ids.baf, applied.baf);
+                setMoney(ids.emissions, applied.emissions);
+                setMoney(ids.congestion, applied.congestion);
+                setMoney(ids.originThc, applied.originThc);
+                setMoney(ids.originCustoms, applied.originCustoms);
+                setMoney(ids.destinationThc, applied.destinationThc);
+                const firstRate = el(ids.equipmentRows)?.querySelector('[data-equipment-rate]');
+                if (firstRate) firstRate.value = String(applied.bas);
+                if (el(ids.proactiveStatus)) {
+                    const label = pattern
+                        ? `Patrón ${el('fcl-pol')?.value || 'Origen'} -> ${el('fcl-pod')?.value || 'Destino'} aplicado`
+                        : 'Patrón base aplicado en segundo plano';
+                    el(ids.proactiveStatus).innerHTML = `<i class="fa-solid fa-circle-check" aria-hidden="true"></i>${label}`;
+                }
+            }
+            function equipmentTemplate(index) {
+                return `
+                    <div class="fcl-equipment-row" data-equipment-row>
+                        <div class="fcl-field">
+                            <label>Tipo</label>
+                            <select data-fcl-input data-equipment-type>
+                                <option value="20DV" ${index === 0 ? 'selected' : ''}>20DV</option>
+                                <option value="40DV">40DV</option>
+                                <option value="40HC">40HC</option>
+                                <option value="45HC">45HC</option>
+                                <option value="20RF">20RF</option>
+                                <option value="40HREF">40HREF</option>
+                            </select>
+                        </div>
+                        <div class="fcl-field">
+                            <label>Cantidad</label>
+                            <input data-fcl-input data-equipment-qty type="number" min="1" step="1" value="1">
+                        </div>
+                        <div class="fcl-field fcl-equipment-rate-field">
+                            <label>Flete Básico</label>
+                            <input data-fcl-input data-equipment-rate type="number" min="0" step="0.01" value="${index === 0 ? '1800' : '0'}">
+                        </div>
+                        <button class="fcl-row-remove sc-button secondary" type="button" aria-label="Eliminar equipo">x</button>
+                    </div>`;
+            }
+            function bindDynamicInputs(scope) {
+                scope.querySelectorAll('[data-fcl-input]').forEach((field) => {
+                    field.addEventListener('input', updateContainerQuote);
+                    field.addEventListener('change', updateContainerQuote);
+                });
+            }
+            function addEquipmentRow() {
+                const host = el(ids.equipmentRows);
+                if (!host) return;
+                const index = host.querySelectorAll('[data-equipment-row]').length;
+                host.insertAdjacentHTML('beforeend', equipmentTemplate(index));
+                const row = host.lastElementChild;
+                bindDynamicInputs(row);
+                row.querySelector('.fcl-row-remove')?.addEventListener('click', () => {
+                    if (host.querySelectorAll('[data-equipment-row]').length <= 1) return;
+                    row.remove();
+                    updateRemoveButtons();
+                    updateContainerQuote();
+                });
+                updateRemoveButtons();
+                updateContainerQuote();
+            }
+            function updateRemoveButtons() {
+                const rows = scoped('[data-equipment-row]');
+                rows.forEach((row) => {
+                    const button = row.querySelector('.fcl-row-remove');
+                    if (button) button.disabled = rows.length <= 1;
+                });
+            }
+            function readEquipmentRows() {
+                return scoped('[data-equipment-row]').map((row) => {
+                    const type = row.querySelector('[data-equipment-type]')?.value || '20DV';
+                    const qtyValue = Number.parseInt(row.querySelector('[data-equipment-qty]')?.value, 10);
+                    const rateValue = Number.parseFloat(row.querySelector('[data-equipment-rate]')?.value);
+                    const quantity = Number.isFinite(qtyValue) && qtyValue > 0 ? qtyValue : 0;
+                    const basicFreight = Number.isFinite(rateValue) && rateValue > 0 ? rateValue : 0;
+                    return { type, quantity, basicFreight, total: quantity * basicFreight };
+                });
+            }
+            function updateExpiry() {
+                const validTo = el(ids.validTo)?.value;
+                const expired = validTo ? todayIso() > validTo : false;
+                el(ids.expiry)?.classList.toggle('is-visible', expired);
+            }
+            function updateMode() {
+                const isLcl = el(ids.mode)?.value === 'LCL';
+                el(ids.fclPanel)?.classList.toggle('is-hidden', isLcl);
+                el(ids.lclPanel)?.classList.toggle('is-hidden', !isLcl);
+            }
+            function updateIncoterm() {
+                const incoterm = el(ids.incoterm)?.value || 'EXW';
+                const disabled = auditResponsibilityMatrix[incoterm]?.origin === false || originExcludedIncoterms.has(incoterm);
+                document.querySelectorAll(`#${rootId} [data-origin-controlled]`).forEach((field) => {
+                    if (disabled) field.value = '0';
+                    field.disabled = disabled;
+                    field.closest('[data-origin-cost]')?.classList.toggle('is-disabled', disabled);
+                });
+                const auditSelect = el(ids.auditIncoterm);
+                if (auditSelect && !auditSelect.value) auditSelect.value = incoterm;
+            }
+            function updateFloatingVisuals() {
+                document.querySelectorAll(`#${rootId} [data-surcharge]`).forEach((row) => {
+                    row.classList.toggle('is-floating', Boolean(row.querySelector('input[type="checkbox"]')?.checked));
+                });
+            }
+            function updateRiskSurcharges() {
+                const imoEnabled = Boolean(el(ids.imoToggle)?.checked);
+                el(ids.imoSurchargeRow)?.classList.toggle('is-hidden', !imoEnabled);
+            }
+            function demurrageTotal() {
+                const extraDays = Math.max(0, whole(ids.usedDays, 0) - whole(ids.freeDays, 0));
+                const tier1Limit = whole(ids.tier1Limit, 0);
+                const tier1Days = Math.min(extraDays, tier1Limit);
+                const tier2Days = Math.max(0, extraDays - tier1Limit);
+                return (tier1Days * money(ids.tier1Rate)) + (tier2Days * money(ids.tier2Rate));
+            }
+            function auditEl(id) {
+                return document.getElementById(id);
+            }
+            function setAuditStatus(message) {
+                const status = auditEl('carrier-offer-status');
+                if (status) status.textContent = message;
+            }
+            function cleanDetectedText(value) {
+                return String(value || '').replace(/\s+/g, ' ').trim();
+            }
+            function auditMetadataReady() {
+                return Boolean(cleanDetectedText(auditEl('carrier-offer-name')?.value) && cleanDetectedText(auditEl('carrier-offer-reference')?.value));
+            }
+            function updateAuditActionState() {
+                const lines = window.SeaCharterCarrierOfferAudit?.lines || [];
+                const ready = auditMetadataReady();
+                auditEl('carrier-offer-save')?.toggleAttribute('disabled', !ready || lines.length === 0);
+                auditEl('carrier-offer-apply-sale')?.toggleAttribute('disabled', !ready || lines.length === 0);
+            }
+            function resetCarrierIdentity() {
+                const carrier = auditEl('carrier-offer-name');
+                if (carrier) {
+                    carrier.value = '';
+                    carrier.placeholder = 'Cargue una oferta para identificar naviera...';
+                    carrier.disabled = true;
+                    carrier.readOnly = true;
+                }
+                if (auditEl('carrier-offer-reference')) auditEl('carrier-offer-reference').value = '';
+                window.SeaCharterCarrierOfferAudit = Object.freeze({ lines: [] });
+                updateAuditActionState();
+            }
+            function applyDetectedOfferIdentity(payload) {
+                const carrierName = cleanDetectedText(payload.detectedCarrierName || payload.carrierName);
+                const quoteReference = cleanDetectedText(payload.detectedQuoteReference || payload.quoteReference);
+                const carrier = auditEl('carrier-offer-name');
+                if (carrier) {
+                    carrier.value = carrierName;
+                    carrier.disabled = !carrierName;
+                    carrier.readOnly = true;
+                }
+                if (auditEl('carrier-offer-reference')) auditEl('carrier-offer-reference').value = quoteReference;
+                updateAuditActionState();
+                return Boolean(carrierName && quoteReference);
+            }
+            function readAuditMoney(id, fallback) {
+                const value = Number.parseFloat(auditEl(id)?.value);
+                return Number.isFinite(value) && value >= 0 ? value : fallback;
+            }
+            function currentAuditIncoterm() {
+                const value = String(auditEl('carrier-audit-incoterm')?.value || el(ids.incoterm)?.value || '').toUpperCase();
+                return auditIncoterms.includes(value) ? value : '';
+            }
+            function syncAuditRouteField() {
+                syncFCLRouteFromCurrentRoute();
+            }
+            function auditExclusionReason(category, incoterm) {
+                if (!incoterm) return '';
+                const matrix = auditResponsibilityMatrix[incoterm];
+                if (!matrix) return '';
+                if ((category === 'Origin' || category === 'FOB/Local') && !matrix.origin) return `Excluido por Incoterm ${incoterm}: origen no repercute al comprador.`;
+                if (category === 'Destination' && !matrix.destination) return `Excluido por Incoterm ${incoterm}: destino no esta incluido.`;
+                if (category === 'Insurance' && !matrix.insurance) return `Excluido por Incoterm ${incoterm}: seguro no esta incluido.`;
+                return '';
+            }
+            function classifyAuditLine(concept, explicitCategory) {
+                if (['Ocean Freight', 'FOB/Local', 'Origin', 'Destination', 'Insurance', 'Other'].includes(explicitCategory)) return explicitCategory;
+                const normalized = String(concept || '').toLowerCase();
+                if (normalized.includes('ocean') || normalized.includes('freight') || normalized === 'ofr') return 'Ocean Freight';
+                if (normalized.includes('insurance') || normalized.includes('seguro')) return 'Insurance';
+                if (normalized.includes('destination') || normalized.includes('destino') || normalized.includes('delivery') || normalized.includes('import')) return 'Destination';
+                if (normalized.includes('origin') || normalized.includes('origen') || normalized.includes('export') || normalized.includes('fob') || normalized.includes('custom')) return 'Origin';
+                if (normalized.includes('local') || normalized.includes('thc')) return 'FOB/Local';
+                return 'Other';
+            }
+            function normalizeAuditContainerType(value) {
+                const normalized = String(value || '').trim().toUpperCase().replace(/['"\s_-]/g, '');
+                if (['20', '20ST', '20STD', '20STANDARD', '20DV'].includes(normalized)) return '20ST';
+                if (['40', '40ST', '40STD', '40STANDARD', '40DV'].includes(normalized)) return '40ST';
+                if (['40HC', '40HQ', '40HIGHCUBE'].includes(normalized)) return '40HC';
+                if (['REEFER', 'RF', '40RF', '40REEFER', '20RF'].includes(normalized)) return 'REEFER';
+                if (['FLATRACK', '20FLATRACK', 'FR', '20FR'].includes(normalized)) return 'FLAT_RACK';
+                if (['OPENTOP', '20OPENTOP', 'OT', '20OT'].includes(normalized)) return 'OPEN_TOP';
+                return normalized;
+            }
+            function extractAuditContainerType(concept) {
+                const normalized = String(concept || '').toUpperCase().replace(/['"\s_-]/g, '');
+                if (normalized.includes('40HC') || normalized.includes('40HQ') || normalized.includes('40HIGHCUBE')) return '40HC';
+                if (normalized.includes('40STD') || normalized.includes('40DV') || normalized.includes('40STANDARD')) return '40ST';
+                if (normalized.includes('20STD') || normalized.includes('20DV') || normalized.includes('20STANDARD')) return '20ST';
+                if (normalized.includes('REEFER') || normalized.includes('40RF') || normalized.includes('20RF')) return 'REEFER';
+                if (normalized.includes('FLATRACK')) return 'FLAT_RACK';
+                if (normalized.includes('OPENTOP')) return 'OPEN_TOP';
+                return '';
+            }
+            function formatAuditContainerType(containerType) {
+                return ({
+                    '20ST': "20'STD",
+                    '40ST': "40'STD",
+                    '40HC': "40'HC",
+                    'REEFER': 'Reefer',
+                    'FLAT_RACK': 'Flat Rack',
+                    'OPEN_TOP': 'Open Top'
+                })[containerType] || containerType;
+            }
+            function selectedEquipmentPayload() {
+                const quote = window.SeaCharterContainerQuote || {};
+                return (quote.equipment || readEquipmentRows()).map((item) => ({
+                    containerType: normalizeAuditContainerType(item.containerType || item.type),
+                    quantity: Number.parseInt(item.quantity, 10) || 0
+                })).filter((item) => item.containerType && item.quantity > 0);
+            }
+            function applyAuditMargins(lines) {
+                const percentage = readAuditMoney('carrier-markup-percentage', 8);
+                const fixedFee = readAuditMoney('carrier-markup-fixed', 75);
+                const incoterm = currentAuditIncoterm();
+                return (lines || []).map((line) => {
+                    const amount = Number.parseFloat(line.amount);
+                    const cleanAmount = Number.isFinite(amount) ? amount : 0;
+                    const category = classifyAuditLine(line.concept, line.category);
+                    const margin = category === 'Ocean Freight' ? cleanAmount * percentage / 100 : category === 'FOB/Local' ? fixedFee : 0;
+                    const exclusionReason = auditExclusionReason(category, incoterm);
+                    return {
+                        ...line,
+                        amount: cleanAmount,
+                        currency: String(line.currency || 'USD').toUpperCase().slice(0, 3),
+                        chargeLevel: line.chargeLevel || 'PerContainer',
+                        containerType: normalizeAuditContainerType(line.containerType) || extractAuditContainerType(line.concept),
+                        category,
+                        isExcludedByIncoterm: Boolean(exclusionReason),
+                        exclusionReason,
+                        marginApplied: Math.round(margin * 100) / 100,
+                        proposedSellAmount: Math.round((cleanAmount + margin) * 100) / 100
+                    };
+                });
+            }
+            function renderAuditLines(lines) {
+                const tbody = auditEl('carrier-offer-lines');
+                if (!tbody) return;
+                const normalized = applyAuditMargins(lines);
+                window.SeaCharterCarrierOfferAudit = Object.freeze({ lines: normalized });
+                updateAuditActionState();
+                if (!normalized.length) {
+                    tbody.innerHTML = '<tr><td colspan="8">No se han detectado costes auditables en el documento.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = normalized.map((line, index) => `
+                    <tr data-audit-line="${index}" class="${line.isExcludedByIncoterm ? 'is-incoterm-excluded' : ''}">
+                        <td><input data-audit-field="concept" value="${String(line.concept || '').replace(/"/g, '&quot;')}"></td>
+                        <td><input data-audit-field="amount" type="number" min="0" step="0.01" value="${line.amount}"></td>
+                        <td><input data-audit-field="currency" maxlength="3" value="${line.currency}"></td>
+                        <td><input data-audit-field="containerType" value="${line.containerType || ''}" placeholder="20ST, 40HC"></td>
+                        <td>
+                            <select data-audit-field="chargeLevel">
+                                ${['PerEquipment', 'PerBillOfLading', 'PerTon', 'PerContainer'].map((level) => `<option value="${level}" ${line.chargeLevel === level ? 'selected' : ''}>${level}</option>`).join('')}
+                            </select>
+                        </td>
+                        <td>
+                            <select data-audit-field="category">
+                                ${['Ocean Freight', 'Origin', 'Destination', 'Insurance', 'FOB/Local', 'Other'].map((category) => `<option value="${category}" ${line.category === category ? 'selected' : ''}>${category}</option>`).join('')}
+                            </select>
+                        </td>
+                        <td><span class="fcl-incoterm-state">${line.isExcludedByIncoterm ? 'Excluido' : 'Incluido'}</span><small>${line.exclusionReason || currentAuditIncoterm() || 'Sin Incoterm'}</small></td>
+                        <td><strong>${line.isExcludedByIncoterm ? '0.00' : formatCurrency(line.proposedSellAmount, line.currency === 'EUR' ? 'EUR' : 'USD')}</strong></td>
+                    </tr>
+                `).join('');
+                tbody.querySelectorAll('[data-audit-field]').forEach((field) => {
+                    field.addEventListener('input', syncAuditTableFromDom);
+                    field.addEventListener('change', syncAuditTableFromDom);
+                });
+            }
+            function syncAuditTableFromDom() {
+                const lines = Array.from(document.querySelectorAll('#carrier-offer-lines [data-audit-line]')).map((row) => ({
+                    concept: row.querySelector('[data-audit-field="concept"]')?.value || '',
+                    amount: Number.parseFloat(row.querySelector('[data-audit-field="amount"]')?.value || '0'),
+                    currency: row.querySelector('[data-audit-field="currency"]')?.value || 'USD',
+                    chargeLevel: row.querySelector('[data-audit-field="chargeLevel"]')?.value || 'PerContainer',
+                    containerType: row.querySelector('[data-audit-field="containerType"]')?.value || '',
+                    category: row.querySelector('[data-audit-field="category"]')?.value || 'Other'
+                }));
+                renderAuditLines(lines);
+            }
+            async function readCarrierOfferFile(file) {
+                const extension = file.name.split('.').pop()?.toLowerCase();
+                if (extension === 'xlsx' || extension === 'xls' || extension === 'csv') {
+                    const buffer = await file.arrayBuffer();
+                    const workbook = XLSX.read(buffer, { type: 'array' });
+                    return workbook.SheetNames.map((name) => XLSX.utils.sheet_to_csv(workbook.Sheets[name])).join('\n\n');
+                }
+                if (extension === 'pdf') {
+                    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+                    const pages = [];
+                    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+                        const page = await pdf.getPage(pageNumber);
+                        const content = await page.getTextContent();
+                        pages.push(content.items.map((item) => item.str || '').join(' '));
+                    }
+                    return pages.join('\n\n');
+                }
+                return file.text();
+            }
+            async function parseCarrierOffer() {
+                const file = auditEl('carrier-offer-file')?.files?.[0];
+                if (!file) {
+                    setAuditStatus('Selecciona primero una oferta PDF o Excel.');
+                    return;
+                }
+                resetCarrierIdentity();
+                setAuditStatus('Extrayendo texto y consultando SmartDocumentParser...');
+                auditEl('carrier-offer-parse')?.setAttribute('disabled', 'disabled');
+                try {
+                    const documentText = await readCarrierOfferFile(file);
+                    const quote = window.SeaCharterContainerQuote || {};
+                    const response = await fetch('/api/audit-carrier-offer', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'extract',
+                            carrierName: '',
+                            quoteReference: '',
+                            mode: quote.mode || 'FCL',
+                            portOfLoading: quote.route?.pol || auditEl('fcl-pol')?.value || '',
+                            portOfDischarge: quote.route?.pod || auditEl('fcl-pod')?.value || '',
+                            sourceFileName: file.name,
+                            documentText,
+                            selectedEquipment: selectedEquipmentPayload(),
+                            incoterm: currentAuditIncoterm(),
+                            markupPercentage: readAuditMoney('carrier-markup-percentage', 8),
+                            markupFixedFee: readAuditMoney('carrier-markup-fixed', 75)
+                        })
+                    });
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok || payload.success === false) throw new Error(payload.error || 'No se pudo extraer la oferta.');
+                    if (payload.detectedIncoterm) {
+                        if (auditEl('carrier-audit-incoterm')) auditEl('carrier-audit-incoterm').value = payload.detectedIncoterm;
+                        if (el(ids.incoterm)) el(ids.incoterm).value = payload.detectedIncoterm;
+                    }
+                    renderAuditLines(payload.lines || []);
+                    const identityReady = applyDetectedOfferIdentity(payload);
+                    setAuditStatus(identityReady
+                        ? `${(payload.lines || []).length} costes normalizados desde ${file.name}${payload.detectedIncoterm ? ` con Incoterm ${payload.detectedIncoterm}` : ''}. Naviera y referencia detectadas.`
+                        : 'Oferta procesada, pero faltan naviera o referencia. Extraer costes permanece bloqueado.');
+                } catch (error) {
+                    setAuditStatus(error.message || 'Error al auditar el documento.');
+                } finally {
+                    auditEl('carrier-offer-parse')?.removeAttribute('disabled');
+                    updateAuditActionState();
+                }
+            }
+            async function saveCarrierOfferAudit() {
+                const audit = window.SeaCharterCarrierOfferAudit;
+                const lines = audit?.lines || [];
+                if (!lines.length) {
+                    setAuditStatus('No hay costes para guardar.');
+                    return;
+                }
+                setAuditStatus('Guardando historial de tarifas en almacenamiento persistente...');
+                auditEl('carrier-offer-save')?.setAttribute('disabled', 'disabled');
+                try {
+                    const quote = window.SeaCharterContainerQuote || {};
+                    const file = auditEl('carrier-offer-file')?.files?.[0];
+                    const response = await fetch('/api/audit-carrier-offer', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'save',
+                            carrierName: auditEl('carrier-offer-name')?.value || '',
+                            quoteReference: auditEl('carrier-offer-reference')?.value || '',
+                            mode: quote.mode || 'FCL',
+                            portOfLoading: quote.route?.pol || auditEl('fcl-pol')?.value || '',
+                            portOfDischarge: quote.route?.pod || auditEl('fcl-pod')?.value || '',
+                            sourceFileName: file?.name || 'oferta naviera',
+                            selectedEquipment: selectedEquipmentPayload(),
+                            incoterm: currentAuditIncoterm(),
+                            markupPercentage: readAuditMoney('carrier-markup-percentage', 8),
+                            markupFixedFee: readAuditMoney('carrier-markup-fixed', 75),
+                            lines
+                        })
+                    });
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok || payload.success === false) throw new Error(payload.error || 'No se pudo guardar la auditoría.');
+                    setAuditStatus(`Guardado en historial con ID ${payload.auditId}.`);
+                } catch (error) {
+                    setAuditStatus(error.message || 'Error al guardar en base de datos.');
+                    auditEl('carrier-offer-save')?.removeAttribute('disabled');
+                }
+            }
+            function salesQuoteTotal(lines) {
+                return Math.round(printableSalesQuoteLines(lines).reduce((sum, line) => sum + line.proposedSellAmount, 0) * 100) / 100;
+            }
+            function printableSalesQuoteLines(lines) {
+                const normalized = applyAuditMargins(lines).filter((line) => !line.isExcludedByIncoterm);
+                const equipment = selectedEquipmentPayload();
+                const selectedTypes = new Set(equipment.map((item) => item.containerType));
+                const printable = [];
+                equipment.forEach((item) => {
+                    normalized
+                        .filter((line) => ['PerEquipment', 'PerContainer'].includes(line.chargeLevel) && line.containerType === item.containerType)
+                        .forEach((line) => printable.push({
+                            ...line,
+                            concept: `${line.concept} - ${formatAuditContainerType(item.containerType)} x${item.quantity}`,
+                            proposedSellAmount: Math.round(((Number.parseFloat(line.proposedSellAmount) || 0) * item.quantity) * 100) / 100
+                        }));
+                });
+                normalized
+                    .filter((line) => line.chargeLevel === 'PerBillOfLading')
+                    .forEach((line) => printable.push(line));
+                if (!equipment.length) {
+                    normalized
+                        .filter((line) => ['PerEquipment', 'PerContainer', 'PerBillOfLading'].includes(line.chargeLevel))
+                        .forEach((line) => printable.push(line));
+                }
+                return groupPrintableSalesLines(printable.filter((line) => line.chargeLevel === 'PerBillOfLading' || !selectedTypes.size || selectedTypes.has(line.containerType)));
+            }
+            function groupPrintableSalesLines(lines) {
+                const grouped = new Map();
+                lines.forEach((line) => {
+                    const key = [
+                        String(line.concept || '').trim().toUpperCase().replace(/\s+/g, ' '),
+                        line.chargeLevel,
+                        line.currency
+                    ].join('|');
+                    const existing = grouped.get(key);
+                    const amount = Number.parseFloat(line.proposedSellAmount) || 0;
+                    if (existing) {
+                        existing.proposedSellAmount = Math.round((existing.proposedSellAmount + amount) * 100) / 100;
+                    } else {
+                        grouped.set(key, { ...line, proposedSellAmount: Math.round(amount * 100) / 100 });
+                    }
+                });
+                return [...grouped.values()].sort((a, b) => {
+                    if (a.chargeLevel === 'PerBillOfLading' && b.chargeLevel !== 'PerBillOfLading') return 1;
+                    if (a.chargeLevel !== 'PerBillOfLading' && b.chargeLevel === 'PerBillOfLading') return -1;
+                    return String(a.concept || '').localeCompare(String(b.concept || ''));
+                });
+            }
+            function currentSalesQuotePayload() {
+                const quote = window.SeaCharterContainerQuote || {};
+                const rawLines = window.SeaCharterCarrierOfferAudit?.lines || [];
+                const lines = printableSalesQuoteLines(rawLines);
+                const quoteId = String(auditEl('carrier-offer-reference')?.value || `RDM-FCL-${Date.now()}`).trim() || `RDM-FCL-${Date.now()}`;
+                return {
+                    quoteId,
+                    customerName: 'SeaCharter Core PRO',
+                    maritimeRoute: auditEl('carrier-maritime-route')?.value || '',
+                    incoterm: currentAuditIncoterm(),
+                    carrierName: auditEl('carrier-offer-name')?.value || 'Naviera',
+                    portOfLoading: quote.route?.pol || auditEl('fcl-pol')?.value || '',
+                    portOfDischarge: quote.route?.pod || auditEl('fcl-pod')?.value || '',
+                    mode: quote.mode || 'FCL',
+                    currency: 'EUR',
+                    selectedEquipment: selectedEquipmentPayload(),
+                    totalSellAmount: salesQuoteTotal(rawLines),
+                    lines
+                };
+            }
+            function openSalesConfirmModal() {
+                const payload = currentSalesQuotePayload();
+                if (!payload.lines.length) {
+                    setAuditStatus('No hay precios de venta para aplicar.');
+                    return;
+                }
+                const modal = auditEl('carrier-sales-modal');
+                const total = auditEl('carrier-sales-modal-total');
+                if (total) total.textContent = formatCurrency(payload.totalSellAmount, 'EUR');
+                modal?.classList.add('is-open');
+                modal?.setAttribute('aria-hidden', 'false');
+            }
+            function closeSalesConfirmModal() {
+                const modal = auditEl('carrier-sales-modal');
+                modal?.classList.remove('is-open');
+                modal?.setAttribute('aria-hidden', 'true');
+            }
+            function buildSalesQuotePdf(payload) {
+                const jsPdfCtor = window.jspdf?.jsPDF || window.jsPDF;
+                if (!jsPdfCtor) throw new Error('jsPDF no está disponible.');
+                const doc = new jsPdfCtor({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+                const issuedAt = new Date().toLocaleDateString('es-ES');
+                const disclaimer = 'Quotation subject to carrier space, equipment availability, final booking confirmation, applicable local charges, taxes, duties, customs inspections, congestion, force majeure events and any carrier or terminal surcharges valid at time of shipment. Rates are confidential and issued without prejudice to Rodahmar Shipping standard terms and conditions.';
+
+                doc.setFillColor(7, 54, 66);
+                doc.rect(0, 0, 210, 30, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(18);
+                doc.text('RODAHMAR SHIPPING', 14, 14);
+                doc.setFontSize(9);
+                doc.text('Professional Logistics Quotation', 14, 22);
+                doc.setFont('helvetica', 'normal');
+                doc.text(`Quote ID: ${safePdfText(payload.quoteId)}`, 145, 14);
+                doc.text(`Fecha: ${issuedAt}`, 145, 22);
+
+                doc.setTextColor(7, 54, 66);
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(12);
+                doc.text('Datos de ruta', 14, 42);
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(10);
+                doc.text(`Ruta marítima: ${safePdfText(payload.maritimeRoute || `${payload.portOfLoading} -> ${payload.portOfDischarge}`)}`, 14, 50);
+                doc.text(`Naviera base: ${safePdfText(payload.carrierName)}`, 14, 57);
+                doc.text(`Ruta: ${safePdfText(payload.portOfLoading)} -> ${safePdfText(payload.portOfDischarge)}`, 14, 64);
+                doc.text(`Modo / Incoterm: ${safePdfText(payload.mode)} / ${safePdfText(payload.incoterm || 'No seleccionado')}`, 14, 71);
+
+                const rows = payload.lines.map((line) => [
+                    safePdfText(line.concept),
+                    safePdfText(line.chargeLevel),
+                    safePdfText(line.currency),
+                    formatCurrency(Number(line.proposedSellAmount) || 0, line.currency === 'EUR' ? 'EUR' : 'USD')
+                ]);
+                doc.autoTable({
+                    startY: 82,
+                    head: [['Concepto', 'Nivel', 'Moneda', 'Precio venta']],
+                    body: rows,
+                    styles: { font: 'helvetica', fontSize: 9, cellPadding: 3 },
+                    headStyles: { fillColor: [0, 78, 100], textColor: [255, 255, 255] },
+                    columnStyles: { 3: { halign: 'right' } },
+                    margin: { left: 14, right: 14 }
+                });
+
+                const tableEnd = doc.lastAutoTable?.finalY || 100;
+                doc.setFillColor(238, 246, 247);
+                doc.rect(120, tableEnd + 8, 76, 18, 'F');
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(12);
+                doc.text('TOTAL VENTA', 124, tableEnd + 15);
+                doc.text(formatCurrency(payload.totalSellAmount, 'EUR'), 192, tableEnd + 15, { align: 'right' });
+
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(10);
+                doc.text('Disclaimer legal', 14, tableEnd + 40);
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(8);
+                doc.text(doc.splitTextToSize(disclaimer, 180), 14, tableEnd + 47);
+
+                return doc;
+            }
+            async function applySaleAndGeneratePdf() {
+                const payload = currentSalesQuotePayload();
+                if (!payload.lines.length) {
+                    closeSalesConfirmModal();
+                    setAuditStatus('No hay costes de venta para generar PDF.');
+                    return;
+                }
+                auditEl('carrier-sales-confirm')?.setAttribute('disabled', 'disabled');
+                auditEl('carrier-offer-apply-sale')?.setAttribute('disabled', 'disabled');
+                setAuditStatus('Generando PDF de venta y guardando historial...');
+                try {
+                    const doc = buildSalesQuotePdf(payload);
+                    const pdfBlob = doc.output('blob');
+                    const safeQuoteId = payload.quoteId.replace(/[^a-zA-Z0-9._-]/g, '_');
+                    const fileName = `${safeQuoteId}_sales_quote.pdf`;
+                    const response = await fetch(`/api/sales-quote-pdf?quoteId=${encodeURIComponent(safeQuoteId)}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/pdf',
+                            'x-sales-quote-metadata': JSON.stringify({
+                                fileName,
+                                customerName: payload.customerName,
+                                carrierName: payload.carrierName,
+                                totalSellAmount: payload.totalSellAmount,
+                                currency: payload.currency
+                            })
+                        },
+                        body: pdfBlob
+                    });
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok || result.success === false) throw new Error(result.error || 'No se pudo guardar el PDF.');
+                    doc.save(fileName);
+                    setAuditStatus(`PDF generado, descargado y guardado en historial QuoteID ${payload.quoteId}.`);
+                    closeSalesConfirmModal();
+                } catch (error) {
+                    setAuditStatus(error.message || 'Error al generar PDF de venta.');
+                } finally {
+                    auditEl('carrier-sales-confirm')?.removeAttribute('disabled');
+                    auditEl('carrier-offer-apply-sale')?.toggleAttribute('disabled', !(window.SeaCharterCarrierOfferAudit?.lines || []).length);
+                }
+            }
+            function updateContainerQuote() {
+                syncFCLRouteFromCurrentRoute();
+                updateMode();
+                updateIncoterm();
+                updateExpiry();
+                updateRiskSurcharges();
+                updateFloatingVisuals();
+
+                const mode = el(ids.mode)?.value || 'FCL';
+                const equipment = readEquipmentRows();
+                const quantity = equipment.reduce((sum, row) => sum + row.quantity, 0);
+                const lclFactor = Math.max(money(ids.lclWeight), money(ids.lclVolume));
+                const unitMultiplier = mode === 'FCL' ? quantity : Math.max(1, lclFactor);
+                const fclFreight = equipment.reduce((sum, row) => sum + row.total, 0);
+                const freight = mode === 'FCL' ? fclFreight : money(ids.bas) * lclFactor;
+                const imoSurcharge = el(ids.imoToggle)?.checked ? money(ids.imoSurcharge) : 0;
+                const surcharges = (money(ids.baf) + money(ids.emissions) + money(ids.congestion) + imoSurcharge) * unitMultiplier;
+                const locals = mode === 'FCL'
+                    ? ((money(ids.originThc) + money(ids.destinationThc)) * quantity) + money(ids.originCustoms)
+                    : money(ids.originThc) + money(ids.originCustoms) + money(ids.destinationThc);
+                const demurrage = demurrageTotal();
+                const total = freight + surcharges + locals + demurrage;
+                const totalEur = total * usdToEurRate();
+                const totalTooltip = `Total en USD: ${formatCurrency(total, 'USD')} | Total en EUR: ${formatCurrency(totalEur, 'EUR')}`;
+
+                if (el(ids.lclRevenue)) el(ids.lclRevenue).value = `${lclFactor.toFixed(2)} Revenue Tons`;
+                if (el(ids.demurrageCost)) el(ids.demurrageCost).value = format(demurrage);
+                if (el(ids.freightSubtotal)) el(ids.freightSubtotal).textContent = format(freight);
+                if (el(ids.surchargeSubtotal)) el(ids.surchargeSubtotal).textContent = format(surcharges);
+                if (el(ids.localSubtotal)) el(ids.localSubtotal).textContent = format(locals);
+                if (el(ids.total)) {
+                    el(ids.total).textContent = formatCurrency(totalEur, 'EUR');
+                    el(ids.total).setAttribute('title', totalTooltip);
+                    el(ids.total).setAttribute('aria-label', totalTooltip);
+                }
+
+                window.SeaCharterContainerQuote = Object.freeze({
+                    mode,
+                    incoterm: el(ids.incoterm)?.value || 'EXW',
+                    route: {
+                        receipt: el('fcl-place-receipt')?.value || '',
+                        pol: el('fcl-pol')?.value || '',
+                        pod: el('fcl-pod')?.value || '',
+                        delivery: el('fcl-place-delivery')?.value || ''
+                    },
+                    validFrom: el(ids.validFrom)?.value || '',
+                    validTo: el(ids.validTo)?.value || '',
+                    equipment,
+                    risk: {
+                        imo: Boolean(el(ids.imoToggle)?.checked),
+                        reefer: Boolean(el(ids.reeferToggle)?.checked)
+                    },
+                    lclChargeFactor: lclFactor,
+                    freight,
+                    surcharges,
+                    locals,
+                    demurrage,
+                    total,
+                    baseCurrency: 'EUR',
+                    totalBase: totalEur,
+                    currencyBreakdown: {
+                        USD: total,
+                        EUR: totalEur
+                    }
+                });
+            }
+            function setWizardStep(nextStep) {
+                const root = el(rootId);
+                if (!root) return;
+                const step = Math.min(3, Math.max(1, Number.parseInt(nextStep, 10) || 1));
+                if (step === 2) {
+                    el(ids.costDetails)?.classList.add('is-open');
+                }
+                if (step === 3) {
+                    el(ids.breakdownPanel)?.classList.add('is-open');
+                }
+                root.querySelectorAll('[data-fcl-step]').forEach((panel) => {
+                    panel.classList.toggle('is-active', panel.dataset.fclStep === String(step));
+                });
+                root.querySelectorAll('[data-fcl-step-target]').forEach((button) => {
+                    const isActive = button.dataset.fclStepTarget === String(step);
+                    button.classList.toggle('is-active', isActive);
+                    if (button.classList.contains('fcl-step-tab')) {
+                        if (isActive) button.setAttribute('aria-current', 'step');
+                        else button.removeAttribute('aria-current');
+                    }
+                });
+            }
+            function bindWizard(root) {
+                root.querySelectorAll('[data-fcl-step-target]').forEach((button) => {
+                    button.addEventListener('click', () => setWizardStep(button.dataset.fclStepTarget));
+                });
+                root.querySelectorAll('[data-fcl-next]').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const active = root.querySelector('[data-fcl-step].is-active');
+                        setWizardStep((Number.parseInt(active?.dataset.fclStep || '1', 10) || 1) + 1);
+                    });
+                });
+                root.querySelectorAll('[data-fcl-prev]').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const active = root.querySelector('[data-fcl-step].is-active');
+                        setWizardStep((Number.parseInt(active?.dataset.fclStep || '1', 10) || 1) - 1);
+                    });
+                });
+            }
+            function bindAccordions(root) {
+                root.querySelectorAll('[data-fcl-accordion]').forEach((accordion) => {
+                    const toggle = accordion.querySelector('.fcl-accordion-toggle');
+                    toggle?.addEventListener('click', () => {
+                        const open = !accordion.classList.contains('is-open');
+                        accordion.classList.toggle('is-open', open);
+                        toggle.setAttribute('aria-expanded', String(open));
+                    });
+                });
+            }
+            function bindProgressiveDisclosure() {
+                const root = el(rootId);
+                const costDetails = el(ids.costDetails);
+                const advancedCosts = el(ids.advancedCosts);
+                const breakdown = el(ids.breakdownPanel);
+                el(ids.costDetailsToggle)?.addEventListener('click', () => {
+                    const open = !root?.classList.contains('show-advanced');
+                    costDetails?.classList.toggle('is-open', open);
+                    advancedCosts?.classList.toggle('is-open', open);
+                    root?.classList.toggle('show-advanced', open);
+                    if (open) setWizardStep(2);
+                    el(ids.costDetailsToggle).setAttribute('aria-expanded', String(open));
+                    el(ids.costDetailsToggle).innerHTML = open
+                        ? '<i class="fa-solid fa-minus" aria-hidden="true"></i> Ocultar Ajustes Avanzados de Costes'
+                        : '<i class="fa-solid fa-sliders" aria-hidden="true"></i> Ajustes Avanzados de Costes';
+                });
+                el(ids.advancedToggle)?.addEventListener('click', () => {
+                    const open = !advancedCosts?.classList.contains('is-open');
+                    advancedCosts?.classList.toggle('is-open', open);
+                    root?.classList.toggle('show-advanced', open);
+                    el(ids.advancedToggle).setAttribute('aria-expanded', String(open));
+                });
+                el(ids.breakdownToggle)?.addEventListener('click', () => {
+                    const open = !breakdown?.classList.contains('is-open');
+                    breakdown?.classList.toggle('is-open', open);
+                    if (open) setWizardStep(3);
+                    el(ids.breakdownToggle).setAttribute('aria-expanded', String(open));
+                    el(ids.breakdownToggle).textContent = open ? 'Ocultar Desglose' : 'Ver Desglose';
+                });
+            }
+            function bind() {
+                const root = el(rootId);
+                if (!root) return;
+                applyDefaults();
+                if (el(ids.equipmentRows) && !el(ids.equipmentRows).querySelector('[data-equipment-row]')) addEquipmentRow();
+                applySmartValues();
+                bindDynamicInputs(root);
+                bindWizard(root);
+                bindAccordions(root);
+                bindProgressiveDisclosure();
+                ['fcl-pol', 'fcl-pod'].forEach((routeFieldId) => {
+                    el(routeFieldId)?.addEventListener('input', () => {
+                        applyRoutePattern();
+                        syncAuditRouteField();
+                        updateContainerQuote();
+                    });
+                    el(routeFieldId)?.addEventListener('change', () => {
+                        applyRoutePattern();
+                        syncAuditRouteField();
+                        updateContainerQuote();
+                    });
+                });
+                el(ids.addEquipment)?.addEventListener('click', addEquipmentRow);
+                auditEl('carrier-offer-file')?.addEventListener('change', () => {
+                    const file = auditEl('carrier-offer-file')?.files?.[0];
+                    if (auditEl('carrier-offer-file-name')) {
+                        auditEl('carrier-offer-file-name').textContent = file ? file.name : 'PDF, XLSX, XLS o CSV';
+                    }
+                    resetCarrierIdentity();
+                    auditEl('carrier-offer-parse')?.toggleAttribute('disabled', !file);
+                    setAuditStatus(file ? 'Documento listo para extracción IA.' : 'Sin documento cargado.');
+                });
+                auditEl('carrier-offer-parse')?.addEventListener('click', parseCarrierOffer);
+                auditEl('carrier-offer-save')?.addEventListener('click', saveCarrierOfferAudit);
+                auditEl('carrier-offer-apply-sale')?.addEventListener('click', openSalesConfirmModal);
+                auditEl('carrier-sales-confirm')?.addEventListener('click', applySaleAndGeneratePdf);
+                auditEl('carrier-sales-cancel')?.addEventListener('click', closeSalesConfirmModal);
+                auditEl('carrier-sales-modal')?.addEventListener('click', (event) => {
+                    if (event.target === auditEl('carrier-sales-modal')) closeSalesConfirmModal();
+                });
+                ['carrier-markup-percentage', 'carrier-markup-fixed'].forEach((fieldId) => {
+                    auditEl(fieldId)?.addEventListener('input', () => {
+                        const lines = window.SeaCharterCarrierOfferAudit?.lines || [];
+                        if (lines.length) renderAuditLines(lines);
+                    });
+                });
+                auditEl('carrier-audit-incoterm')?.addEventListener('change', () => {
+                    if (el(ids.incoterm) && auditEl('carrier-audit-incoterm')?.value) el(ids.incoterm).value = auditEl('carrier-audit-incoterm').value;
+                    const lines = window.SeaCharterCarrierOfferAudit?.lines || [];
+                    if (lines.length) renderAuditLines(lines);
+                    updateContainerQuote();
+                });
+                ['port-pol', 'port-pod', 'map-port-pol', 'map-port-pod'].forEach((routeFieldId) => {
+                    document.getElementById(routeFieldId)?.addEventListener('input', updateContainerQuote);
+                    document.getElementById(routeFieldId)?.addEventListener('change', updateContainerQuote);
+                });
+                syncFCLRouteFromCurrentRoute();
+                setWizardStep(1);
+                resetCarrierIdentity();
+                updateContainerQuote();
+            }
+            window.updateFCLQuote = updateContainerQuote;
+            window.updateContainerQuote = updateContainerQuote;
+            window.calcularTotal = updateContainerQuote;
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+            else bind();
+        }());
+    </script>
+    <script>
+        (function initMarketDataUpdateButton() {
+            function setLoading(isLoading) {
+                document.body.classList.toggle('marketdata-loading', isLoading);
+                const button = document.getElementById('marketdata-update-button');
+                if (button) {
+                    button.disabled = isLoading;
+                    button.innerHTML = isLoading
+                        ? '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Actualizando...'
+                        : '<i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Actualizar Índices de Mercado';
+                }
+            }
+
+            function setStatus(message) {
+                const status = document.getElementById('marketdata-update-status');
+                if (status) status.textContent = message;
+            }
+
+            async function actualizarIndicesMercado() {
+                setLoading(true);
+                setStatus('Consultando índices...');
+
+                try {
+                    const response = await fetch('/api/marketdata/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok || payload.success === false) {
+                        throw new Error(payload.error || 'No se pudieron actualizar los índices.');
+                    }
+
+                    window.SeaCharterMarketReferenceData = Object.freeze(payload.data);
+                    if (typeof window.calcularTotal === 'function') {
+                        window.calcularTotal();
+                    }
+
+                    setStatus(`Índices actualizados: ${payload.data?.updatedAtUtc || new Date().toISOString()}`);
+                } catch (error) {
+                    console.error('[MarketData] Error actualizando indices', error);
+                    setStatus('Error al actualizar índices.');
+                } finally {
+                    setLoading(false);
+                }
+            }
+
+            function bind() {
+                document
+                    .getElementById('marketdata-update-button')
+                    ?.addEventListener('click', actualizarIndicesMercado);
+            }
+
+            window.actualizarIndicesMercado = actualizarIndicesMercado;
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+            else bind();
+        }());
     </script>
 </body>
 </html>

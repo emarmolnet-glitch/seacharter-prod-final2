@@ -12,6 +12,7 @@
     "@turf/distance": "^7.3.0",
     "cheerio": "^1.2.0",
     "geojson-path-finder": "^2.1.0",
+    "openai": "^6.45.0",
     "searoute-ts": "^2.0.0",
     "ws": "^8.18.0"
   },
