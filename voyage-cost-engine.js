@@ -16,6 +16,16 @@
         return String(value || '').trim();
     }
 
+    const RITMO_BASE_PUERTO = 5000;
+    const FACTORES_ESTIBA = {
+        cinta_transportadora: 1.0,
+        camion_tolva: 0.75,
+        cuchara_grab: 0.6,
+        big_bags: 0.4,
+        paletizado: 0.2
+    };
+    const FACTOR_EFICIENCIA_PUERTO = 0.85;
+
     function normalizeText(value) {
         return toText(value)
             .normalize('NFD')
@@ -102,11 +112,14 @@
         let tugsPorManiobra = 0;
         let tarifaBaseUd = 0;
 
-        if (value > 0 && value < 40000) {
-            tugsPorManiobra = 2;
+        if (value > 0 && value < 20000) {
+            tugsPorManiobra = 1;
             tarifaBaseUd = 1200;
-        } else if (value >= 40000) {
+        } else if (value >= 20000 && value < 65000) {
             tugsPorManiobra = 2;
+            tarifaBaseUd = value >= 40000 ? 1500 : 1200;
+        } else if (value >= 65000) {
+            tugsPorManiobra = 3;
             tarifaBaseUd = 1500;
         }
 
@@ -129,6 +142,21 @@
 
     function calculateTurnTimeDays(policyType) {
         return normalizeText(policyType) === 'GENCON' ? 1.0 : 0;
+    }
+
+    function getStowageMethodFactor(method) {
+        return FACTORES_ESTIBA[method] || FACTORES_ESTIBA.cinta_transportadora;
+    }
+
+    function getRealPortRate(method) {
+        return RITMO_BASE_PUERTO * getStowageMethodFactor(method);
+    }
+
+    function calculatePortDaysByStowage(cargoTons, method, realRate) {
+        const cargo = toNumber(cargoTons);
+        const rate = toNumber(realRate) || getRealPortRate(method);
+        if (cargo <= 0 || rate <= 0) return 0;
+        return (cargo / rate) / FACTOR_EFICIENCIA_PUERTO;
     }
 
     function shouldAutoEstimateStevedoring(policyType) {
@@ -323,14 +351,25 @@
             return element.dataset.autoEstimated === 'true' ? 0 : toNumber(element.value);
         }
 
+        readTugUnitCost() {
+            const element = this.el('t-remolcadores');
+            if (!element || element.dataset.autoEstimated === 'true') return 0;
+            return toNumber(element.dataset.tarifaBase) || toNumber(element.value);
+        }
+
         readState() {
             const seaDays = toNumber((this.el('res-days-ballast')?.textContent || '').replace(/[^\d.-]/g, '')) +
                 toNumber((this.el('res-days-laden')?.textContent || '').replace(/[^\d.-]/g, '')) +
                 this.readNumber('days-margin');
             const cargoTons = this.readNumber('cargo-qty');
-            const loadRate = this.readNumber('rate-load') || 1;
-            const dischargeRate = this.readNumber('rate-disch') || 1;
-            const portDays = cargoTons > 0 ? (cargoTons / loadRate) + (cargoTons / dischargeRate) : 0;
+            const metodoEstiba = toText(this.el('metodo_carga')?.value) || 'cinta_transportadora';
+            const metodoDescarga = toText(this.el('metodo_descarga_pod')?.value) || metodoEstiba;
+            const nominalPol = this.readNumber('ritmo_nominal_pol') || this.readNumber('rate-load');
+            const nominalPod = this.readNumber('ritmo_nominal_pod') || this.readNumber('rate-disch');
+            const realPolRate = this.readNumber('rate-load') || (root.getRitmoRealPuerto ? root.getRitmoRealPuerto(metodoEstiba, nominalPol) : (nominalPol * getStowageMethodFactor(metodoEstiba)));
+            const realPodRate = this.readNumber('rate-disch') || (root.getRitmoRealPuerto ? root.getRitmoRealPuerto(metodoDescarga, nominalPod) : (nominalPod * getStowageMethodFactor(metodoDescarga)));
+            const calculatePortDays = root.calcularDiasPuertoPorEstiba || ((tons, rate, method) => calculatePortDaysByStowage(tons, method, rate));
+            const portDays = calculatePortDays(cargoTons, realPolRate, metodoEstiba) + calculatePortDays(cargoTons, realPodRate, metodoDescarga);
             return {
                 dias_navegacion: seaDays,
                 dias_puerto: portDays,
@@ -349,7 +388,7 @@
                 pda_pod: this.readNumber('pda-pod'),
                 estiba_terminal: this.readNumber('stevedoring-costs'),
                 comisiones_porcentaje: this.readNumber('comm-pct'),
-                coste_remolcadores_ud: this.readPossiblyEstimatedNumber('t-remolcadores'),
+                coste_remolcadores_ud: this.readTugUnitCost(),
                 tonelaje_neto: this.readPossiblyEstimatedNumber('vessel-net-tonnage'),
                 max_summer_draft: this.readNumber('vessel-draft'),
                 calado_actual: this.readPossiblyEstimatedNumber('current-draft'),
@@ -387,23 +426,37 @@
 
         renderTugs(tugs) {
             const input = this.el('t-remolcadores');
-            if (!input) return;
+            const container = this.el('contenedor_coste_remolcadores');
+            if (!input && !container) return;
             const isInferred = Boolean(tugs.inferred);
-            if (isInferred) {
-                this.isWriting = true;
-                input.value = toNumber(tugs.tarifa_base_ud).toFixed(0);
-                input.dataset.autoEstimated = 'true';
+            const tarifaBase = toNumber(tugs.tarifa_efectiva_ud || tugs.tarifa_base_ud);
+            const totalTugs = toNumber(tugs.total_usos_remolcador);
+            const costeTotal = toNumber(tugs.coste_total_tugs);
+            this.isWriting = true;
+            if (input) {
+                input.value = costeTotal.toFixed(0);
+                input.dataset.tarifaBase = tarifaBase.toFixed(0);
+                input.dataset.totalTugs = String(totalTugs);
+                input.dataset.tugsPorManiobra = String(toNumber(tugs.tugs_por_maniobra));
                 input.dispatchEvent(new Event('change', { bubbles: true }));
-                this.isWriting = false;
-            } else if (input.dataset.autoEstimated === 'true') {
-                delete input.dataset.autoEstimated;
             }
-            input.classList.toggle('text-blue-700', isInferred);
-            input.classList.toggle('border-sky-400', isInferred);
-            input.classList.toggle('bg-white', isInferred);
-            input.title = isInferred
-                ? `Tarifa inferida por DWT: ${tugs.tugs_por_maniobra} remolcador(es) x 4 maniobras`
-                : '';
+            if (input) {
+                if (isInferred) {
+                    input.dataset.autoEstimated = 'true';
+                } else if (input.dataset.autoEstimated === 'true') {
+                    delete input.dataset.autoEstimated;
+                }
+            }
+            if (container) {
+                container.innerHTML = `
+                    <span class="base text-sm">$${tarifaBase.toLocaleString('en-US')} (Base)</span> x
+                    <span class="multiplicador text-sm">${totalTugs.toLocaleString('en-US')} (Total Tugs)</span> =
+                    <span class="total font-bold text-blue-700">$${costeTotal.toLocaleString('en-US')}</span>
+                `;
+                container.title = `Tarifa por remolcador: ${toNumber(tugs.tugs_por_maniobra)} remolcador(es) por maniobra x 4 maniobras`;
+                container.classList.toggle('border-sky-400', isInferred);
+            }
+            this.isWriting = false;
         }
 
         syncSelectedCanal(canalValue) {
@@ -578,6 +631,12 @@
         calculateTotals,
         calculateWarRiskPremium,
         calculateTurnTimeDays,
+        RITMO_BASE_PUERTO,
+        FACTORES_ESTIBA,
+        FACTOR_EFICIENCIA_PUERTO,
+        getStowageMethodFactor,
+        getRealPortRate,
+        calculatePortDaysByStowage,
         shouldAutoEstimateStevedoring,
         estimateStevedoringTerminal,
         calculateVoyageCostState,

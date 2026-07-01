@@ -80,6 +80,10 @@
         .input-gc { width: 100%; background-color: #1e293b; border: 1px solid #334155; border-radius: 0.375rem; padding: 0.4rem 0.75rem; color: #f8fafc; font-size: 0.85rem; outline: none; transition: all 0.2s; }
         .input-gc:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         .input-gc:disabled { background-color: #0f172a; color: #64748b; cursor: not-allowed; }
+        .input-gc.bg-gray-100 { background-color: #f3f4f6; color: #0f172a; border-color: #cbd5e1; cursor: not-allowed; }
+        #contenedor_coste_remolcadores span.base { color: #6b7280; }
+        #contenedor_coste_remolcadores span.multiplicador { color: #111827; }
+        #contenedor_coste_remolcadores span.total { font-weight: 700; color: #1d4ed8; }
         .field-tooltip-trigger {
             position: relative;
             display: inline-flex;
@@ -5167,7 +5171,7 @@
                             NOTICE: THIS VESSEL IS NOT COMPATIBLE DUE TO EXCESS WEIGHT.
                         </div>
                         
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
                             <div class="input-group">
                                 <label class="flex items-center min-h-[28px]">
                                     <span id="label-vessel-name-real">Nombre del Buque</span>
@@ -5193,7 +5197,7 @@
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <div class="input-group">
                                 <label id="label-cargo-qty" class="text-action-required flex items-center min-h-[24px]">Carga a Transportar (TM)</label>
                                 <input type="number" id="cargo-qty" class="input-gc action-required-field text-action-required font-bold" value="0" oninput="autoScaleVesselAndCosts(); syncCalculatorAndMatching('calculator');">
@@ -5209,12 +5213,53 @@
                                 </select>
                             </div>
                             <div class="input-group">
-                                <label id="label-rate-load" class="text-action-required">Ritmo Carga (t/d)</label>
-                                <input type="number" id="rate-load" class="input-gc action-required-field text-action-required font-bold" value="1000" oninput="runEngine()">
+                                <label id="label-charter-party-standard" class="text-yellow-400 flex items-center min-h-[24px]">Póliza Estándar</label>
+                                <select id="charter-party-standard" class="input-gc font-bold text-yellow-300" onchange="updateCharterPartyStandard()">
+                                    <option value="GENCON">GENCON</option>
+                                    <option value="ASBATANKVOY">ASBATANKVOY</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 mb-4">
+                            <div id="contenedor_metodo_carga" class="input-group">
+                                <label id="label-metodo-carga" class="text-action-required">Método Carga POL</label>
+                                <select id="metodo_carga" class="input-gc action-required-field text-action-required">
+                                    <option value="cinta_transportadora">Cinta Transportadora</option>
+                                    <option value="camion_tolva">Camión Tolva</option>
+                                    <option value="cuchara_grab">Cuchara (Grab)</option>
+                                    <option value="big_bags">Big Bags</option>
+                                    <option value="paletizado">Paletizado</option>
+                                </select>
                             </div>
                             <div class="input-group">
-                                <label id="label-rate-disch" class="text-action-required">Ritmo Descarga</label>
-                                <input type="number" id="rate-disch" class="input-gc action-required-field text-action-required font-bold" value="1500" oninput="runEngine()">
+                                <label id="label-ritmo-nominal-pol" class="text-action-required">Ritmo Nominal POL (TM/d)</label>
+                                <input type="number" id="ritmo_nominal_pol" class="input-gc action-required-field text-action-required font-bold" value="5000" oninput="recalcularDiasPuerto()">
+                            </div>
+                            <div class="input-group">
+                                <label id="label-rate-load" class="text-action-required">Ritmo Real POL (TM/d)</label>
+                                <input type="number" id="rate-load" class="input-gc bg-gray-100 action-required-field text-action-required font-bold" value="5000" readonly>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 mb-4">
+                            <div id="contenedor_metodo_descarga" class="input-group">
+                                <label id="label-metodo-descarga" class="text-action-required">Método Descarga POD</label>
+                                <select id="metodo_descarga_pod" class="input-gc action-required-field text-action-required">
+                                    <option value="cinta_transportadora">Cinta Transportadora</option>
+                                    <option value="camion_tolva">Camión Tolva</option>
+                                    <option value="cuchara_grab">Cuchara (Grab)</option>
+                                    <option value="big_bags">Big Bags</option>
+                                    <option value="paletizado">Paletizado</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label id="label-ritmo-nominal-pod" class="text-action-required">Ritmo Nominal POD (TM/d)</label>
+                                <input type="number" id="ritmo_nominal_pod" class="input-gc action-required-field text-action-required font-bold" value="5000" oninput="recalcularDiasPuerto()">
+                            </div>
+                            <div class="input-group">
+                                <label id="label-rate-disch" class="text-action-required">Ritmo Real POD (TM/d)</label>
+                                <input type="number" id="rate-disch" class="input-gc bg-gray-100 action-required-field text-action-required font-bold" value="5000" readonly>
                             </div>
                         </div>
 
@@ -5232,13 +5277,6 @@
                                     <option value="Acero">Acero</option>
                                     <option value="Aluminio">Aluminio</option>
                                     <option value="Fertilizantes">Fertilizantes</option>
-                                </select>
-                            </div>
-                            <div class="input-group">
-                                <label id="label-charter-party-standard" class="text-yellow-400 flex items-center min-h-[24px]">Póliza Estándar</label>
-                                <select id="charter-party-standard" class="input-gc font-bold text-yellow-300" onchange="updateCharterPartyStandard()">
-                                    <option value="GENCON">GENCON</option>
-                                    <option value="ASBATANKVOY">ASBATANKVOY</option>
                                 </select>
                             </div>
                             <div class="input-group">
@@ -5409,8 +5447,13 @@
                                 <input type="number" step="any" id="t-fondeo" class="input-gc text-pink-300 font-bold w-full" value="0" oninput="calculateAdjustedEtaAndDays(); runEngine()">
                             </div>
                             <div class="input-group">
-                                <label class="text-purple-400 font-bold block mb-1 text-xs">Coste Remolcadores / Tug Cost ($/ud)</label>
-                                <input type="number" step="any" id="t-remolcadores" class="input-gc text-purple-300 font-bold w-full" value="0" oninput="calculateAdjustedEtaAndDays(); runEngine()">
+                                <label class="text-purple-400 font-bold block mb-1 text-xs">Coste Remolcadores / Tug Cost</label>
+                                <div id="contenedor_coste_remolcadores" class="input-gc w-full min-h-[42px] flex items-center gap-1 flex-wrap" aria-live="polite">
+                                    <span class="base text-sm">$0 (Base)</span> x
+                                    <span class="multiplicador text-sm">0 (Total Tugs)</span> =
+                                    <span class="total font-bold text-blue-700">$0</span>
+                                </div>
+                                <input type="hidden" id="t-remolcadores" value="0">
                             </div>
                         </div>
 
@@ -8727,6 +8770,10 @@
             "Especificación Carga": { en: "Cargo Specification", fr: "Spécification de Cargaison" },
             "Póliza Estándar": { en: "Standard Charter Party", fr: "Charte-partie standard" },
             "Stowage Factor": { en: "Stowage Factor", fr: "Facteur d'arrimage" },
+            "Método Carga": { en: "Loading Method", fr: "Méthode de chargement" },
+            "Ritmo Real POL (TM/d)": { en: "Real POL Rate (MT/d)", fr: "Cadence réelle POL (TM/j)" },
+            "Ritmo Real POD (TM/d)": { en: "Real POD Rate (MT/d)", fr: "Cadence réelle POD (TM/j)" },
+            "Ritmo Nominal (TM/d)": { en: "Nominal Rate (MT/d)", fr: "Cadence nominale (TM/j)" },
             "Ritmo Carga (t/d)": { en: "Loading Rate (t/d)", fr: "Cadence de chargement (t/j)" },
             "Ritmo Descarga": { en: "Unloading Rate", fr: "Cadence de déchargement" },
             "Precio VLSFO ($/t)": { en: "VLSFO Price ($/t)", fr: "Prix du VLSFO ($/t)" },
@@ -15457,8 +15504,12 @@
             const portName = document.getElementById(type === 'pol' ? 'port-pol' : 'port-pod').value;
             const dwt = parseFloat(document.getElementById('vessel-dwt').value) || 0;
             const cargo = parseFloat(document.getElementById('cargo-qty').value) || 0;
-            const rateLoad = parseFloat(document.getElementById('rate-load').value) || 1000;
-            const rateDisch = parseFloat(document.getElementById('rate-disch').value) || 1500;
+            const metodoEstiba = getMetodoEstibaActual();
+            const metodoDescarga = getMetodoDescargaActual();
+            const ritmoRealPol = getRitmoRealPuerto(metodoEstiba, readRitmoNominalPuerto('pol'));
+            const ritmoRealPod = getRitmoRealPuerto(metodoDescarga, readRitmoNominalPuerto('pod'));
+            const rateLoad = parseFloat(document.getElementById('rate-load').value) || ritmoRealPol;
+            const rateDisch = parseFloat(document.getElementById('rate-disch').value) || ritmoRealPod;
             const marginDays = parseFloat(document.getElementById('days-margin').value) || 0;
             if (!portName || dwt <= 0) return;
 
@@ -15886,8 +15937,12 @@
             const typeOfFreightApplied = (cargo > 0 && cargo < 5000) ? "Lumpsum" : "PMT";
             const multiplier = typeOfFreightApplied === "Lumpsum" ? 5000 : cargo;
 
-            const rateLoad = parseFloat(document.getElementById('rate-load').value) || 1000;
-            const rateDisch = parseFloat(document.getElementById('rate-disch').value) || 1500;
+            const metodoEstiba = getMetodoEstibaActual();
+            const metodoDescarga = getMetodoDescargaActual();
+            const ritmoRealPol = getRitmoRealPuerto(metodoEstiba, readRitmoNominalPuerto('pol'));
+            const ritmoRealPod = getRitmoRealPuerto(metodoDescarga, readRitmoNominalPuerto('pod'));
+            const rateLoad = parseFloat(document.getElementById('rate-load').value) || ritmoRealPol;
+            const rateDisch = parseFloat(document.getElementById('rate-disch').value) || ritmoRealPod;
             const marginDays = parseFloat(document.getElementById('days-margin').value) || 0;
             const cpStandard = document.getElementById('charter-party-standard') ? document.getElementById('charter-party-standard').value : (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
             const genconTurnTimeDays = (!isZeroCalculation && cpStandard === 'GENCON') ? 1.0 : 0;
@@ -15932,27 +15987,44 @@
             const anchorageInput = getSmartInputState('t-fondeo');
             const tugInput = getSmartInputState('t-remolcadores');
             const tugElement = document.getElementById('t-remolcadores');
-            const tugManualForInference = tugElement?.dataset.autoEstimated === 'true' ? 0 : tugInput.value;
+            const tugManualForInference = tugElement?.dataset.autoEstimated === 'true'
+                ? 0
+                : (parseFloat(tugElement?.dataset.tarifaBase) || tugInput.value);
             const tugInference = window.SeaCharterVoyageCostEngine?.inferTugCostByDwt
                 ? window.SeaCharterVoyageCostEngine.inferTugCostByDwt(dwtVal, tugManualForInference)
                 : {
-                    tugs_por_maniobra: dwtVal > 0 ? 2 : 0,
+                    tugs_por_maniobra: dwtVal >= 65000 ? 3 : (dwtVal >= 20000 ? 2 : (dwtVal > 0 ? 1 : 0)),
                     tarifa_base_ud: dwtVal >= 40000 ? 1500 : (dwtVal > 0 ? 1200 : 0),
                     tarifa_efectiva_ud: tugManualForInference > 0 ? tugManualForInference : (dwtVal >= 40000 ? 1500 : (dwtVal > 0 ? 1200 : 0)),
-                    total_usos_remolcador: (dwtVal > 0 ? 2 : 0) * 4,
+                    total_usos_remolcador: (dwtVal >= 65000 ? 3 : (dwtVal >= 20000 ? 2 : (dwtVal > 0 ? 1 : 0))) * 4,
                     coste_total_tugs: 0,
                     inferred: tugManualForInference <= 0 && dwtVal > 0
                 };
             if (!window.SeaCharterVoyageCostEngine?.inferTugCostByDwt) {
                 tugInference.coste_total_tugs = tugInference.tarifa_efectiva_ud * tugInference.total_usos_remolcador;
             }
+            if (tugElement) {
+                tugElement.value = Math.round(tugInference.coste_total_tugs);
+                tugElement.dataset.tarifaBase = String(Math.round(tugInference.tarifa_efectiva_ud || tugInference.tarifa_base_ud || 0));
+                tugElement.dataset.totalTugs = String(tugInference.total_usos_remolcador || 0);
+                tugElement.dataset.tugsPorManiobra = String(tugInference.tugs_por_maniobra || 0);
+            }
             if (tugInference.inferred) {
                 if (tugElement) {
-                    tugElement.value = Math.round(tugInference.tarifa_base_ud);
                     tugElement.dataset.autoEstimated = 'true';
-                    tugElement.classList.add('text-blue-700', 'border-sky-400', 'bg-white');
                     tugElement.title = `Tarifa inferida por DWT: ${tugInference.tugs_por_maniobra} remolcador(es) x 4 maniobras`;
                 }
+            }
+            const tugContainer = document.getElementById('contenedor_coste_remolcadores');
+            if (tugContainer) {
+                const tarifaBase = Math.max(0, tugInference.tarifa_efectiva_ud || tugInference.tarifa_base_ud || 0);
+                const totalTugs = Math.max(0, tugInference.total_usos_remolcador || 0);
+                const costeTotal = Math.max(0, tugInference.coste_total_tugs || 0);
+                tugContainer.innerHTML = `
+                    <span class="base text-sm">$${tarifaBase.toLocaleString('en-US')} (Base)</span> x
+                    <span class="multiplicador text-sm">${totalTugs.toLocaleString('en-US')} (Total Tugs)</span> =
+                    <span class="total font-bold text-blue-700">$${costeTotal.toLocaleString('en-US')}</span>
+                `;
             }
             const smartDeltaDays = Math.max(0, deltaInput.value);
             const smartWeatherDays = Math.max(0, weatherInput.value);
@@ -15968,8 +16040,8 @@
 
             const dBal = isZeroCalculation ? 0 : (distBal / (spdBal > 0 ? (spdBal * 24) : 24));
             const dLaden = isZeroCalculation ? 0 : (distLaden / (spdLaden > 0 ? (spdLaden * 24) : 24));
-            const dPortLoad = isZeroCalculation ? 0 : (cargo / (rateLoad || 1));
-            const dPortDisch = isZeroCalculation ? 0 : (cargo / (rateDisch || 1));
+            const dPortLoad = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba);
+            const dPortDisch = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga);
             const dPort = isZeroCalculation ? 0 : (dPortLoad + dPortDisch);
             const dPortTotal = isZeroCalculation ? 0 : (dPort + genconTurnTimeDays);
             const baseOperationalDays = isZeroCalculation ? 0 : (dBal + dLaden + marginDays + dPortTotal);
@@ -17779,9 +17851,10 @@
             const navigationDays = dBal + dLaden;
 
             const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
-            const rateLoad = parseFloat(document.getElementById('rate-load')?.value) || 1000;
-            const rateDisch = parseFloat(document.getElementById('rate-disch')?.value) || 1500;
-            const dPort = (cargoQty && rateLoad ? (cargoQty / rateLoad) : 0) + (cargoQty && rateDisch ? (cargoQty / rateDisch) : 0);
+            const metodoEstiba = getMetodoEstibaActual();
+            const metodoDescarga = getMetodoDescargaActual();
+            const dPort = calcularDiasPuertoPorEstiba(cargoQty, parseFloat(document.getElementById('rate-load')?.value) || getRitmoRealPuerto(metodoEstiba, readRitmoNominalPuerto('pol')), metodoEstiba) +
+                calcularDiasPuertoPorEstiba(cargoQty, parseFloat(document.getElementById('rate-disch')?.value) || getRitmoRealPuerto(metodoDescarga, readRitmoNominalPuerto('pod')), metodoDescarga);
 
             // 2. Perform local algorithmic calculation (Low, Medium, High delay estimates)
             const highRiskCountries = ['UA', 'RU', 'IL', 'YE', 'SY', 'LY', 'SO', 'TW'];
@@ -18183,7 +18256,10 @@
             const marginDaysValue = parseFloat(document.getElementById('days-margin').value) || 0;
 
             const T_sea = dBal + dLaden + marginDaysValue;
-            const T_port = (cargo / rateLoad) + (cargo / rateDisch);
+            const metodoEstiba = getMetodoEstibaActual();
+            const metodoDescarga = getMetodoDescargaActual();
+            const T_port = calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba) +
+                calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga);
 
             const totalConsumption = (T_sea * cSea) + (T_port * cPort);
             // La fórmula del BAF (Bunker Adjustment Factor): Consumo Total / Toneladas Carga. Multiplicado por $10 para dar un ratio limpio al fletador.
@@ -26478,6 +26554,91 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
         });
 
+        const FACTORES_ESTIBA = {
+            cinta_transportadora: 1.0,
+            camion_tolva: 0.75,
+            cuchara_grab: 0.6,
+            big_bags: 0.4,
+            paletizado: 0.2
+        };
+        const FACTOR_EFICIENCIA_PUERTO = 0.85;
+
+        function getMetodoEstibaActual() {
+            return document.getElementById('metodo_carga')?.value || 'cinta_transportadora';
+        }
+
+        function getMetodoDescargaActual() {
+            return document.getElementById('metodo_descarga_pod')?.value || getMetodoEstibaActual();
+        }
+
+        function getFactorEstibaPuerto(metodo = getMetodoEstibaActual()) {
+            return FACTORES_ESTIBA[metodo] || FACTORES_ESTIBA.cinta_transportadora;
+        }
+
+        function readRitmoNominalPuerto(side = 'pol') {
+            const id = side === 'pod' ? 'ritmo_nominal_pod' : 'ritmo_nominal_pol';
+            const fallbackId = side === 'pod' ? 'rate-disch' : 'rate-load';
+            const nominal = parseFloat(document.getElementById(id)?.value);
+            if (Number.isFinite(nominal) && nominal > 0) return nominal;
+            return parseFloat(document.getElementById(fallbackId)?.value) || 0;
+        }
+
+        function getRitmoRealPuerto(metodo = getMetodoEstibaActual(), ritmoNominal = readRitmoNominalPuerto('pol')) {
+            const nominal = Math.max(0, parseFloat(ritmoNominal) || 0);
+            return nominal * getFactorEstibaPuerto(metodo);
+        }
+
+        function calcularDiasPuertoPorEstiba(toneladasCarga, ritmoReal = getRitmoRealPuerto(), metodo = getMetodoEstibaActual()) {
+            const toneladas = Math.max(0, parseFloat(toneladasCarga) || 0);
+            const ritmo = Math.max(0, parseFloat(ritmoReal) || 0);
+            if (toneladas <= 0 || ritmo <= 0) return 0;
+            return (toneladas / ritmo) / FACTOR_EFICIENCIA_PUERTO;
+        }
+
+        function actualizarAlertaMetodoCarga(metodo = getMetodoEstibaActual()) {
+            const contenedor = document.getElementById('contenedor_metodo_carga');
+            if (!contenedor) return;
+            contenedor.classList.toggle('border-red-500', metodo === 'paletizado');
+        }
+
+        function actualizarAlertaMetodoDescarga(metodo = getMetodoDescargaActual()) {
+            const contenedor = document.getElementById('contenedor_metodo_descarga');
+            if (!contenedor) return;
+            contenedor.classList.toggle('border-red-500', metodo === 'paletizado');
+        }
+
+        function recalcularDiasPuerto() {
+            const metodoPol = getMetodoEstibaActual();
+            const metodoPod = getMetodoDescargaActual();
+            const ritmoRealPol = getRitmoRealPuerto(metodoPol, readRitmoNominalPuerto('pol'));
+            const ritmoRealPod = getRitmoRealPuerto(metodoPod, readRitmoNominalPuerto('pod'));
+            const inputCarga = document.getElementById('rate-load');
+            const inputDescarga = document.getElementById('rate-disch');
+
+            if (inputCarga) {
+                inputCarga.value = ritmoRealPol.toFixed(0);
+                inputCarga.dataset.autoMetodoCarga = metodoPol;
+            }
+            if (inputDescarga) {
+                inputDescarga.value = ritmoRealPod.toFixed(0);
+                inputDescarga.dataset.autoMetodoDescarga = metodoPod;
+            }
+            actualizarAlertaMetodoCarga(metodoPol);
+            actualizarAlertaMetodoDescarga(metodoPod);
+
+            if (typeof runEngine === 'function') {
+                runEngine();
+            }
+        }
+
+        if (typeof window !== 'undefined') {
+            window.FACTORES_ESTIBA = FACTORES_ESTIBA;
+            window.FACTOR_EFICIENCIA_PUERTO = FACTOR_EFICIENCIA_PUERTO;
+            window.readRitmoNominalPuerto = readRitmoNominalPuerto;
+            window.calcularDiasPuertoPorEstiba = calcularDiasPuertoPorEstiba;
+            window.recalcularDiasPuerto = recalcularDiasPuerto;
+        }
+
         function calcularViaje(datosDelBuqueAislados) {
             // Replicate voyage financial formulas using solely local variables & isolated inputs
             const vessel = datosDelBuqueAislados || {};
@@ -26492,8 +26653,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const typeOfFreightApplied = (cargo > 0 && cargo < 5000) ? "Lumpsum" : "PMT";
             const multiplier = typeOfFreightApplied === "Lumpsum" ? 5000 : cargo;
 
-            const rateLoad = parseFloat(document.getElementById('rate-load')?.value) || 1000;
-            const rateDisch = parseFloat(document.getElementById('rate-disch')?.value) || 1500;
+            const metodoEstiba = getMetodoEstibaActual();
+            const metodoDescarga = getMetodoDescargaActual();
+            const ritmoRealPol = getRitmoRealPuerto(metodoEstiba, readRitmoNominalPuerto('pol'));
+            const ritmoRealPod = getRitmoRealPuerto(metodoDescarga, readRitmoNominalPuerto('pod'));
+            const rateLoad = parseFloat(document.getElementById('rate-load')?.value) || ritmoRealPol;
+            const rateDisch = parseFloat(document.getElementById('rate-disch')?.value) || ritmoRealPod;
             const marginDays = parseFloat(document.getElementById('days-margin')?.value) || 0;
             const cpStandard = document.getElementById('charter-party-standard') ? document.getElementById('charter-party-standard').value : (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
             const genconTurnTimeDays = (!isZeroCalculation && cpStandard === 'GENCON') ? 1.0 : 0;
@@ -26522,13 +26687,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const tugElement = document.getElementById('t-remolcadores');
             const manualTugUnitCost = tugElement?.dataset.autoEstimated === 'true'
                 ? 0
-                : Math.max(0, parseFloat(tugElement?.value) || 0);
+                : Math.max(0, parseFloat(tugElement?.dataset.tarifaBase) || parseFloat(tugElement?.value) || 0);
             const tugInference = window.SeaCharterVoyageCostEngine?.inferTugCostByDwt
                 ? window.SeaCharterVoyageCostEngine.inferTugCostByDwt(dwtVal, manualTugUnitCost)
                 : {
-                    tugs_por_maniobra: dwtVal > 0 ? 2 : 0,
+                    tugs_por_maniobra: dwtVal >= 65000 ? 3 : (dwtVal >= 20000 ? 2 : (dwtVal > 0 ? 1 : 0)),
                     tarifa_efectiva_ud: manualTugUnitCost || (dwtVal >= 40000 ? 1500 : (dwtVal > 0 ? 1200 : 0)),
-                    total_usos_remolcador: (dwtVal > 0 ? 2 : 0) * 4,
+                    total_usos_remolcador: (dwtVal >= 65000 ? 3 : (dwtVal >= 20000 ? 2 : (dwtVal > 0 ? 1 : 0))) * 4,
                     coste_total_tugs: 0,
                     inferred: manualTugUnitCost <= 0 && dwtVal > 0
                 };
@@ -26542,8 +26707,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const dBal = isZeroCalculation ? 0 : (distBal / (spdBal > 0 ? (spdBal * 24) : 24));
             const dLaden = isZeroCalculation ? 0 : (distLaden / (spdLaden > 0 ? (spdLaden * 24) : 24));
-            const dPortLoad = isZeroCalculation ? 0 : (cargo / (rateLoad || 1));
-            const dPortDisch = isZeroCalculation ? 0 : (cargo / (rateDisch || 1));
+            const dPortLoad = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba);
+            const dPortDisch = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga);
             const dPort = isZeroCalculation ? 0 : (dPortLoad + dPortDisch);
             const dPortTotal = isZeroCalculation ? 0 : (dPort + genconTurnTimeDays);
 
@@ -26994,7 +27159,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const deltaVal = parseFloat(document.getElementById('delta-historico')?.value) || 0;
             const fondeoVal = parseFloat(document.getElementById('t-fondeo')?.value) || 0;
-            const remolcadoresVal = parseFloat(document.getElementById('t-remolcadores')?.value) || 0;
+            const remolcadoresEl = document.getElementById('t-remolcadores');
+            const remolcadoresVal = parseFloat(remolcadoresEl?.dataset.tarifaBase) || parseFloat(remolcadoresEl?.value) || 0;
 
             const existing = await getVesselFromIndexedDB(activeImo);
             const vesselData = {
@@ -27226,6 +27392,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 el.value = '0';
             });
 
+            ['metodo_carga', 'metodo_descarga_pod', 'ritmo_nominal_pol', 'ritmo_nominal_pod'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('input', function() {
+                    recalcularDiasPuerto();
+                });
+                el.addEventListener('change', function() {
+                    recalcularDiasPuerto();
+                });
+            });
+            recalcularDiasPuerto();
+
             const etaRadarInput = document.getElementById('eta-radar');
             if (etaRadarInput && !etaRadarInput.value) {
                 etaRadarInput.value = new Date().toISOString().split('T')[0];
@@ -27242,7 +27420,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     scheduleReactiveEngine();
                 });
             });
-            ['port-ballast', 'port-pol', 'port-pod', 'gc-laycan-date', 'gc-laycan-time', 'gc-cancel-date', 'asb-laycan-date', 'asb-laycan-time', 'asb-cancel-date', 'vessel-dwt', 'cargo-qty', 'eta-radar', 'delta-historico', 'factor-clima', 't-fondeo', 't-remolcadores', 'dist-ballast', 'dist-laden'].forEach((id) => {
+            ['port-ballast', 'port-pol', 'port-pod', 'gc-laycan-date', 'gc-laycan-time', 'gc-cancel-date', 'asb-laycan-date', 'asb-laycan-time', 'asb-cancel-date', 'vessel-dwt', 'cargo-qty', 'metodo_carga', 'metodo_descarga_pod', 'ritmo_nominal_pol', 'ritmo_nominal_pod', 'eta-radar', 'delta-historico', 'factor-clima', 't-fondeo', 't-remolcadores', 'dist-ballast', 'dist-laden'].forEach((id) => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.addEventListener('input', () => {
