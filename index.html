@@ -51,6 +51,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="/components.js"></script>
+    <script src="/voyage-cost-engine.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -5181,7 +5182,24 @@
                                 <label id="label-cargo-sf">Stowage Factor</label>
                                 <input type="number" id="cargo-sf" class="input-gc text-indigo-300" value="1.20" step="0.01" oninput="runEngine()">
                             </div>
+                            <div class="input-group">
+                                <label id="label-vessel-net-tonnage" class="text-blue-400">SCNT / PCUMS</label>
+                                <input type="number" id="vessel-net-tonnage" class="input-gc font-bold text-blue-300" value="0" step="1" oninput="runEngine()">
+                            </div>
+                            <div class="input-group">
+                                <label id="label-current-draft" class="text-blue-400">Calado Actual (m)</label>
+                                <input type="number" id="current-draft" class="input-gc font-bold text-blue-300" value="0" step="0.01" oninput="runEngine()">
+                            </div>
+                            <div class="input-group">
+                                <label id="label-crane-swl" class="text-amber-400">Crane SWL (MT)</label>
+                                <input type="number" id="crane-swl-mt" class="input-gc font-bold text-amber-300" value="0" step="0.1" oninput="runEngine()">
+                            </div>
+                            <div class="input-group">
+                                <label id="label-grab-capacity" class="text-amber-400">Grab Capacity (cbm)</label>
+                                <input type="number" id="grab-capacity-cbm" class="input-gc font-bold text-amber-300" value="0" step="0.1" oninput="runEngine()">
+                            </div>
                         </div>
+                        <p id="vessel-specs-inference-note" class="hidden mt-3 text-[10px] font-semibold text-[#1d4ed8] bg-white border border-blue-200 rounded-lg px-3 py-2 shadow-sm"></p>
                     </div>
 
                     <!-- 3. Bunkers y Gastos -->
@@ -5241,6 +5259,10 @@
                             <div class="input-group relative">
                                 <label id="label-opex-daily" class="text-orange-400">OPEX Fijo Diario ($)</label>
                                 <input type="number" id="opex-daily" class="input-gc font-bold text-orange-300" value="2800" oninput="runEngine()">
+                                <div id="opex-auto-estimated-badge" class="hidden mt-1 inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-1 text-[10px] font-semibold text-[#1d4ed8] shadow-sm">
+                                    <i class="fa-solid fa-wand-magic-sparkles text-blue-500"></i>
+                                    <span>Autocalculado por IA</span>
+                                </div>
                                 <div id="opex-category-box" class="text-[10px] mt-1 text-slate-400 leading-tight bg-slate-950/80 border border-slate-800 rounded p-1.5 hidden transition-all duration-300"></div>
                             </div>
                             <div class="input-group">
@@ -5261,9 +5283,20 @@
                                 <label id="label-stevedoring" title="Solo usar si la póliza NO es FIOS">Estiba/Terminal ($)</label>
                                 <input type="number" id="stevedoring-costs" class="input-gc text-purple-300 font-bold" value="0" oninput="runEngine()">
                             </div>
+                            <div id="crane-validation-alert" class="md:col-span-4 hidden rounded-lg border px-3 py-2 text-xs font-bold" role="status" aria-live="polite"></div>
+                            <div id="voyage-cost-data-alert" class="md:col-span-4 hidden rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800" role="status" aria-live="polite">Faltan datos operativos</div>
                             <div class="input-group">
                                 <label id="label-pda-misc">Extras/Canal ($)</label>
                                 <input type="number" id="pda-misc" class="input-gc" value="0" oninput="runEngine()">
+                            </div>
+                            <div class="input-group">
+                                <label id="label-selected-canal" class="text-sky-400">Canal Seleccionado</label>
+                                <select id="selected-canal" class="input-gc font-bold text-sky-300" onchange="runEngine()">
+                                    <option value="Auto">Auto</option>
+                                    <option value="Ninguno">Ninguno</option>
+                                    <option value="Suez">Suez</option>
+                                    <option value="Panamá">Panamá</option>
+                                </select>
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-surcharge">Recargo Carga/Especial ($)</label>
@@ -15364,7 +15397,6 @@
             const rateLoad = parseFloat(document.getElementById('rate-load').value) || 1000;
             const rateDisch = parseFloat(document.getElementById('rate-disch').value) || 1500;
             const marginDays = parseFloat(document.getElementById('days-margin').value) || 0;
-            
             if (!portName || dwt <= 0) return;
 
             // Pre-cálculos navales ajustados al buque real (Ej: Acqua Stella 10k DWT = ~6.3k GT)
@@ -15794,6 +15826,8 @@
             const rateLoad = parseFloat(document.getElementById('rate-load').value) || 1000;
             const rateDisch = parseFloat(document.getElementById('rate-disch').value) || 1500;
             const marginDays = parseFloat(document.getElementById('days-margin').value) || 0;
+            const cpStandard = document.getElementById('charter-party-standard') ? document.getElementById('charter-party-standard').value : (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
+            const genconTurnTimeDays = (!isZeroCalculation && cpStandard === 'GENCON') ? 1.0 : 0;
 
             const cSea = parseFloat(document.getElementById('cons-sea').value) || 0;
             const netConsVal = (cSea * 1.05).toFixed(2);
@@ -15834,34 +15868,54 @@
             const weatherInput = getSmartInputState('factor-clima');
             const anchorageInput = getSmartInputState('t-fondeo');
             const tugInput = getSmartInputState('t-remolcadores');
+            const tugElement = document.getElementById('t-remolcadores');
+            const tugManualForInference = tugElement?.dataset.autoEstimated === 'true' ? 0 : tugInput.value;
+            const tugInference = window.SeaCharterVoyageCostEngine?.inferTugCostByDwt
+                ? window.SeaCharterVoyageCostEngine.inferTugCostByDwt(dwtVal, tugManualForInference)
+                : {
+                    tugs_por_maniobra: dwtVal > 0 ? 2 : 0,
+                    tarifa_base_ud: dwtVal >= 40000 ? 1500 : (dwtVal > 0 ? 1200 : 0),
+                    tarifa_efectiva_ud: tugManualForInference > 0 ? tugManualForInference : (dwtVal >= 40000 ? 1500 : (dwtVal > 0 ? 1200 : 0)),
+                    total_usos_remolcador: (dwtVal > 0 ? 2 : 0) * 4,
+                    coste_total_tugs: 0,
+                    inferred: tugManualForInference <= 0 && dwtVal > 0
+                };
+            if (!window.SeaCharterVoyageCostEngine?.inferTugCostByDwt) {
+                tugInference.coste_total_tugs = tugInference.tarifa_efectiva_ud * tugInference.total_usos_remolcador;
+            }
+            if (tugInference.inferred) {
+                if (tugElement) {
+                    tugElement.value = Math.round(tugInference.tarifa_base_ud);
+                    tugElement.dataset.autoEstimated = 'true';
+                    tugElement.classList.add('text-blue-700', 'border-sky-400', 'bg-white');
+                    tugElement.title = `Tarifa inferida por DWT: ${tugInference.tugs_por_maniobra} remolcador(es) x 4 maniobras`;
+                }
+            }
             const smartDeltaDays = Math.max(0, deltaInput.value);
             const smartWeatherDays = Math.max(0, weatherInput.value);
             const smartAnchorageDays = Math.max(0, anchorageInput.value);
-            const smartTugUnitCost = Math.max(0, tugInput.value);
+            const smartTugUnitCost = Math.max(0, tugInference.tarifa_efectiva_ud);
             const missingSmartFields = [
                 deltaInput.isEmpty ? 'Delta Histórico' : '',
                 weatherInput.isEmpty ? 'Factor Clima' : '',
-                anchorageInput.isEmpty ? 'T. Espera Fondeo' : '',
-                tugInput.isEmpty ? 'Coste Remolcadores' : ''
+                anchorageInput.isEmpty ? 'T. Espera Fondeo' : ''
             ].filter(Boolean);
-            const intelligenceTugUnits = parseFloat(State.portIntelligenceTugUnits);
-            const tugUnits = Number.isFinite(intelligenceTugUnits) && intelligenceTugUnits > 0
-                ? intelligenceTugUnits
-                : (dwtVal > 50000 ? 3 : (dwtVal >= 10000 ? 2 : (dwtVal > 0 ? 1 : 0)));
-            const tugTotalCost = smartTugUnitCost * tugUnits;
+            const tugUnits = tugInference.total_usos_remolcador;
+            const tugTotalCost = tugInference.coste_total_tugs;
 
             const dBal = isZeroCalculation ? 0 : (distBal / (spdBal > 0 ? (spdBal * 24) : 24));
             const dLaden = isZeroCalculation ? 0 : (distLaden / (spdLaden > 0 ? (spdLaden * 24) : 24));
             const dPortLoad = isZeroCalculation ? 0 : (cargo / (rateLoad || 1));
             const dPortDisch = isZeroCalculation ? 0 : (cargo / (rateDisch || 1));
             const dPort = isZeroCalculation ? 0 : (dPortLoad + dPortDisch);
-            const baseOperationalDays = isZeroCalculation ? 0 : (dBal + dLaden + marginDays + dPort);
+            const dPortTotal = isZeroCalculation ? 0 : (dPort + genconTurnTimeDays);
+            const baseOperationalDays = isZeroCalculation ? 0 : (dBal + dLaden + marginDays + dPortTotal);
             const smartExtraDays = isZeroCalculation ? 0 : (smartWeatherDays + smartDeltaDays + smartAnchorageDays);
 
             // T_sea (Total underway time spent: ballast + laden + weather margin days)
             const T_sea = isZeroCalculation ? 0 : (dBal + dLaden + marginDays);
             // T_port (Total port time spent: load + discharge)
-            const T_port = isZeroCalculation ? 0 : dPort;
+            const T_port = isZeroCalculation ? 0 : dPortTotal;
             const totalDays = isZeroCalculation ? 0 : (T_sea + T_port);
             const smartOperationalDays = isZeroCalculation ? 0 : (totalDays + smartWeatherDays + smartDeltaDays + smartAnchorageDays);
             const pdas = isZeroCalculation ? 0 : basePortExpenses;
@@ -15907,16 +15961,17 @@
             const costTotal = isZeroCalculation ? 0 : (costTotalWithoutEts + etsCost);
             const basicPortExpenses = isZeroCalculation ? 0 : basePortExpenses;
             const basicOperationalDays = isZeroCalculation ? 0 : baseOperationalDays;
-            const basicBunkers = isZeroCalculation ? 0 : (((dBal + dLaden + marginDays) * cSea * pSea) + (dPort * cPort * pPort) + extraEcaCost);
+            const basicBunkers = isZeroCalculation ? 0 : (((dBal + dLaden + marginDays) * cSea * pSea) + (dPortTotal * cPort * pPort) + extraEcaCost);
             const basicFixedCosts = isZeroCalculation ? 0 : (basicBunkers + etsCost);
             const basicBreakEvenNumerator = isZeroCalculation ? 0 : (basicFixedCosts + basicPortExpenses + (basicOperationalDays * opex));
             const smartDelayDays = isZeroCalculation ? 0 : (smartDeltaDays + smartWeatherDays + smartAnchorageDays);
             const extraOpexCost = isZeroCalculation ? 0 : (smartDelayDays * opex);
             const anchorageBunkerCost = isZeroCalculation ? 0 : (smartAnchorageDays * cPort * pPort);
-            const totalSmartCostIncrement = isZeroCalculation ? 0 : (extraOpexCost + anchorageBunkerCost + tugTotalCost);
+            const delaySmartCostIncrement = isZeroCalculation ? 0 : (extraOpexCost + anchorageBunkerCost);
+            const totalSmartCostIncrement = isZeroCalculation ? 0 : (tugTotalCost + (missingSmartFields.length === 0 ? delaySmartCostIncrement : 0));
             const smartCostsComplete = !isZeroCalculation && missingSmartFields.length === 0;
-            const adjustedCostTotal = smartCostsComplete ? (costTotal + totalSmartCostIncrement) : costTotal;
-            const smartBreakEvenNumerator = isZeroCalculation ? 0 : (costTotal + totalSmartCostIncrement);
+            const adjustedCostTotal = isZeroCalculation ? 0 : (costTotal + totalSmartCostIncrement);
+            const smartBreakEvenNumerator = adjustedCostTotal;
 
             document.getElementById('dist-total').value = Math.round(distBal + distLaden);
             document.getElementById('res-days-total').innerText = totalDays.toFixed(2);
@@ -15928,7 +15983,10 @@
                 document.getElementById('res-days-laden').innerText = `${dLaden.toFixed(2)} d`;
             }
             if (document.getElementById('res-days-port')) {
-                document.getElementById('res-days-port').innerText = `${dPort.toFixed(2)} d`;
+                document.getElementById('res-days-port').innerText = `${dPortTotal.toFixed(2)} d`;
+                document.getElementById('res-days-port').title = genconTurnTimeDays > 0
+                    ? `Incluye ${genconTurnTimeDays.toFixed(2)} d de Turn Time GENCON (12h POL + 12h POD)`
+                    : '';
             }
             if (document.getElementById('res-days-margin')) {
                 document.getElementById('res-days-margin').innerText = `${marginDays.toFixed(2)} d`;
@@ -15950,11 +16008,9 @@
             updateSecaIndicator('seca-pod-indicator', idxDisch, isPodSeca);
 
             document.getElementById('res-cost-opex').innerText = `$${Math.round(totalOpex).toLocaleString()}`;
-            document.getElementById('res-cost-pda').innerText = `$${Math.round(smartCostsComplete ? smartPortExpenses : pdas).toLocaleString()}`;
+            document.getElementById('res-cost-pda').innerText = `$${Math.round(smartPortExpenses).toLocaleString()}`;
             document.getElementById('res-cost-ets').innerText = `$${Math.round(etsCost).toLocaleString()}`;
             document.getElementById('res-cost-total').innerText = `$${Math.round(adjustedCostTotal).toLocaleString()}`;
-
-            const cpStandard = document.getElementById('charter-party-standard') ? document.getElementById('charter-party-standard').value : (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
 
             // Toggle delay hours container in main left panel
             const asbDelayContainer = document.getElementById('asb-delay-hours-container');
@@ -16008,8 +16064,10 @@
             }
 
             const commissionFactor = 1 - (commPct / 100);
-            const basicBreakEven = isZeroCalculation ? 0 : (basicBreakEvenNumerator / (multiplier || 1));
-            const breakEven = (isZeroCalculation || missingSmartFields.length > 0) ? basicBreakEven : (smartBreakEvenNumerator / (multiplier || 1));
+            const basicBreakEvenOperativo = isZeroCalculation ? 0 : (basicBreakEvenNumerator / (multiplier || 1));
+            const breakEvenOperativo = isZeroCalculation ? 0 : (smartBreakEvenNumerator / (multiplier || 1));
+            const basicBreakEven = (isZeroCalculation || commissionFactor <= 0) ? 0 : (basicBreakEvenOperativo / commissionFactor);
+            const breakEven = (isZeroCalculation || commissionFactor <= 0) ? 0 : (breakEvenOperativo / commissionFactor);
             const breakEvenWithoutEts = (isZeroCalculation || commissionFactor <= 0) ? 0 : ((costTotalWithoutEts / commissionFactor) / (multiplier || 1));
             const riskLogFactor = Math.max(1.0, 1 + (Math.log10(80000 / (cargo || 1)) * 0.035));
 
@@ -16204,11 +16262,11 @@
             State.costBreakdown = {
                 bunkers: totalBunkers,
                 opex: totalOpex,
-                pda: smartCostsComplete ? smartPortExpenses : pdas,
+                pda: smartPortExpenses,
                 basePda: pdas,
                 total: adjustedCostTotal,
                 baseTotal: costTotal,
-                smartIncrement: smartCostsComplete ? totalSmartCostIncrement : 0
+                smartIncrement: totalSmartCostIncrement
             };
             State.smartAdjustments = {
                 baseOperationalDays,
@@ -16219,17 +16277,22 @@
                 tugUnitCost: smartTugUnitCost,
                 tugUnits,
                 tugTotalCost,
+                tugsPerManeuver: tugInference.tugs_por_maniobra,
+                tugInferred: tugInference.inferred,
                 basePortExpenses,
                 totalPortExpenses: smartPortExpenses,
                 gpt: basePortExpenses + tugTotalCost,
                 dot: smartOperationalDays,
                 opexDaily: opex,
+                turnTimeDays: genconTurnTimeDays,
                 fixedCosts,
                 baseVoyageCosts: costTotal,
                 extraOpexCost,
                 anchorageBunkerCost,
                 totalCostIncrement: totalSmartCostIncrement,
                 basicBreakEven,
+                basicBreakEvenOperativo,
+                breakEvenOperativo,
                 smartBreakEven: breakEven,
                 block4Complete: missingSmartFields.length === 0,
                 missingSmartFields,
@@ -26369,6 +26432,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const rateLoad = parseFloat(document.getElementById('rate-load')?.value) || 1000;
             const rateDisch = parseFloat(document.getElementById('rate-disch')?.value) || 1500;
             const marginDays = parseFloat(document.getElementById('days-margin')?.value) || 0;
+            const cpStandard = document.getElementById('charter-party-standard') ? document.getElementById('charter-party-standard').value : (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
+            const genconTurnTimeDays = (!isZeroCalculation && cpStandard === 'GENCON') ? 1.0 : 0;
 
             const cSea = parseFloat(document.getElementById('cons-sea')?.value) || 0;
             const pSea = parseFloat(document.getElementById('price-sea')?.value) || 0;
@@ -26391,22 +26456,36 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const smartDeltaDays = Math.max(0, parseFloat(document.getElementById('delta-historico')?.value) || 0);
             const smartWeatherDays = Math.max(0, parseFloat(document.getElementById('factor-clima')?.value) || 0);
             const smartAnchorageDays = Math.max(0, parseFloat(document.getElementById('t-fondeo')?.value) || 0);
-            const smartTugUnitCost = Math.max(0, parseFloat(document.getElementById('t-remolcadores')?.value) || 0);
+            const tugElement = document.getElementById('t-remolcadores');
+            const manualTugUnitCost = tugElement?.dataset.autoEstimated === 'true'
+                ? 0
+                : Math.max(0, parseFloat(tugElement?.value) || 0);
+            const tugInference = window.SeaCharterVoyageCostEngine?.inferTugCostByDwt
+                ? window.SeaCharterVoyageCostEngine.inferTugCostByDwt(dwtVal, manualTugUnitCost)
+                : {
+                    tugs_por_maniobra: dwtVal > 0 ? 2 : 0,
+                    tarifa_efectiva_ud: manualTugUnitCost || (dwtVal >= 40000 ? 1500 : (dwtVal > 0 ? 1200 : 0)),
+                    total_usos_remolcador: (dwtVal > 0 ? 2 : 0) * 4,
+                    coste_total_tugs: 0,
+                    inferred: manualTugUnitCost <= 0 && dwtVal > 0
+                };
+            if (!window.SeaCharterVoyageCostEngine?.inferTugCostByDwt) {
+                tugInference.coste_total_tugs = tugInference.tarifa_efectiva_ud * tugInference.total_usos_remolcador;
+            }
+            const smartTugUnitCost = Math.max(0, tugInference.tarifa_efectiva_ud);
             const smartDelayDays = isZeroCalculation ? 0 : (smartDeltaDays + smartWeatherDays + smartAnchorageDays);
-            const intelligenceTugUnits = parseFloat(State.portIntelligenceTugUnits);
-            const tugUnits = Number.isFinite(intelligenceTugUnits) && intelligenceTugUnits > 0
-                ? intelligenceTugUnits
-                : (dwtVal > 50000 ? 3 : (dwtVal >= 10000 ? 2 : (dwtVal > 0 ? 1 : 0)));
-            const tugTotalCost = isZeroCalculation ? 0 : (smartTugUnitCost * tugUnits);
+            const tugUnits = tugInference.total_usos_remolcador;
+            const tugTotalCost = isZeroCalculation ? 0 : tugInference.coste_total_tugs;
 
             const dBal = isZeroCalculation ? 0 : (distBal / (spdBal > 0 ? (spdBal * 24) : 24));
             const dLaden = isZeroCalculation ? 0 : (distLaden / (spdLaden > 0 ? (spdLaden * 24) : 24));
             const dPortLoad = isZeroCalculation ? 0 : (cargo / (rateLoad || 1));
             const dPortDisch = isZeroCalculation ? 0 : (cargo / (rateDisch || 1));
             const dPort = isZeroCalculation ? 0 : (dPortLoad + dPortDisch);
+            const dPortTotal = isZeroCalculation ? 0 : (dPort + genconTurnTimeDays);
 
             const T_sea = isZeroCalculation ? 0 : (dBal + dLaden + marginDays);
-            const T_port = isZeroCalculation ? 0 : dPort;
+            const T_port = isZeroCalculation ? 0 : dPortTotal;
             const baseOperationalDays = isZeroCalculation ? 0 : (T_sea + T_port);
             const totalDays = isZeroCalculation ? 0 : (baseOperationalDays + smartDelayDays);
 
@@ -26436,8 +26515,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const costTotalWithoutEts = isZeroCalculation ? 0 : (totalBunkers + totalOpex + pdas + tugTotalCost);
             const costTotal = isZeroCalculation ? 0 : (costTotalWithoutEts + etsCost);
-
-            const cpStandard = document.getElementById('charter-party-standard') ? document.getElementById('charter-party-standard').value : (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
 
             let delayCost = 0;
             let delayHours = 0;
@@ -26512,6 +26589,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 netProfitCharterer: netProfitCharterer,
                 tceOwner: tceOwner,
                 totalDays: totalDays,
+                turnTimeDays: genconTurnTimeDays,
                 totalBunkers: totalBunkers,
                 totalOpex: totalOpex,
                 costTotal: costTotal,
@@ -26527,6 +26605,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     tugUnitCost: smartTugUnitCost,
                     tugUnits,
                     tugTotalCost,
+                    tugsPerManeuver: tugInference.tugs_por_maniobra,
+                    tugInferred: tugInference.inferred,
                     baseVoyageCosts: baseCostTotal,
                     adjustedVoyageCosts: costTotal,
                     breakEvenIncrease: breakEven - basicBreakEven
