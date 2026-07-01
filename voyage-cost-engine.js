@@ -16,6 +16,16 @@
         return String(value || '').trim();
     }
 
+    const RITMO_BASE_PUERTO = 5000;
+    const FACTORES_ESTIBA = {
+        cinta_transportadora: 1.0,
+        camion_tolva: 0.75,
+        cuchara_grab: 0.6,
+        big_bags: 0.4,
+        paletizado: 0.2
+    };
+    const FACTOR_EFICIENCIA_PUERTO = 0.85;
+
     function normalizeText(value) {
         return toText(value)
             .normalize('NFD')
@@ -26,6 +36,14 @@
     function includesAny(value, keywords) {
         const normalized = normalizeText(value);
         return keywords.some((keyword) => normalized.includes(normalizeText(keyword)));
+    }
+
+    function normalizeCargoType(value) {
+        const normalized = normalizeText(value);
+        if (normalized.includes('PROYECTO') || normalized.includes('ESPECIAL')) return 'proyecto';
+        if (normalized.includes('HIERRO') || normalized.includes('ACERO')) return 'acero';
+        if (normalized.includes('GRANEL')) return 'granel';
+        return 'general';
     }
 
     function detectEffectiveCanal(state) {
@@ -102,11 +120,14 @@
         let tugsPorManiobra = 0;
         let tarifaBaseUd = 0;
 
-        if (value > 0 && value < 40000) {
-            tugsPorManiobra = 2;
+        if (value > 0 && value < 20000) {
+            tugsPorManiobra = 1;
             tarifaBaseUd = 1200;
-        } else if (value >= 40000) {
+        } else if (value >= 20000 && value < 65000) {
             tugsPorManiobra = 2;
+            tarifaBaseUd = value >= 40000 ? 1500 : 1200;
+        } else if (value >= 65000) {
+            tugsPorManiobra = 3;
             tarifaBaseUd = 1500;
         }
 
@@ -129,6 +150,22 @@
 
     function calculateTurnTimeDays(policyType) {
         return normalizeText(policyType) === 'GENCON' ? 1.0 : 0;
+    }
+
+    function getStowageMethodFactor(method) {
+        return FACTORES_ESTIBA[method] || FACTORES_ESTIBA.cinta_transportadora;
+    }
+
+    function getRealPortRate(method) {
+        return RITMO_BASE_PUERTO * getStowageMethodFactor(method);
+    }
+
+    function calculatePortDaysByStowage(cargoTons, method, realRate, cargoType) {
+        const cargo = toNumber(cargoTons);
+        const rate = toNumber(realRate) || getRealPortRate(method);
+        if (cargo <= 0 || rate <= 0) return 0;
+        if (normalizeCargoType(cargoType) === 'acero') return cargo / rate;
+        return (cargo / rate) / FACTOR_EFICIENCIA_PUERTO;
     }
 
     function shouldAutoEstimateStevedoring(policyType) {
@@ -253,27 +290,40 @@
         const grabCapacity = toNumber(state.grab_capacity_cbm);
         const craneSwl = toNumber(state.crane_swl_mt);
         const densidadCarga = factorEstiba > 0 ? 1 / factorEstiba : 0;
+        const pesoPieza = toNumber(state.peso_pieza_mt);
+        const ciclosHora = toNumber(state.ciclos_hora_grua);
+        const requiresPieceInputs = normalizeCargoType(state.tipo_carga) === 'acero';
         const pesoCargaCiclo = grabCapacity * densidadCarga;
         const taraCuchara = grabCapacity * 0.4;
         const pesoTotalIzado = pesoCargaCiclo + taraCuchara;
+        const pieceOverload = pesoPieza > 0 && craneSwl > 0 && pesoPieza > craneSwl;
 
         return {
             densidad_carga: densidadCarga,
             peso_carga_ciclo: pesoCargaCiclo,
             tara_cuchara: taraCuchara,
             peso_total_izado: pesoTotalIzado,
-            overload: craneSwl > 0 && pesoTotalIzado > craneSwl
+            peso_pieza_mt: pesoPieza,
+            ciclos_hora_grua: ciclosHora,
+            missing_piece_inputs: requiresPieceInputs && (pesoPieza <= 0 || ciclosHora <= 0),
+            piece_overload: pieceOverload,
+            overload: pieceOverload || (craneSwl > 0 && pesoTotalIzado > craneSwl)
         };
     }
 
     function calculateTotals(state, extrasCanal, tugCost) {
         const costeBunkers = calculateBunkers(state);
         const costeOpexTotal = calculateOpex(state);
+        const cargoKind = normalizeCargoType(state.tipo_carga);
+        const costeTrincaje = (cargoKind === 'acero' || cargoKind === 'proyecto') ? toNumber(state.coste_trincaje) : 0;
+        const costeManiobraEspecial = cargoKind === 'proyecto' ? toNumber(state.coste_maniobra_especial) : 0;
         const costeTotalViaje = costeBunkers +
             costeOpexTotal +
             toNumber(state.pda_pol) +
             toNumber(state.pda_pod) +
             toNumber(state.estiba_terminal) +
+            costeTrincaje +
+            costeManiobraEspecial +
             toNumber(extrasCanal) +
             toNumber(tugCost);
         const breakEvenOperativo = toNumber(state.toneladas_carga) > 0 ? costeTotalViaje / toNumber(state.toneladas_carga) : 0;
@@ -284,6 +334,7 @@
             coste_bunkers: costeBunkers,
             coste_opex_total: costeOpexTotal,
             coste_estiba_terminal: toNumber(state.estiba_terminal),
+            coste_trincaje: costeTrincaje,
             coste_total_viaje: costeTotalViaje,
             break_even_operativo: breakEvenOperativo,
             break_even: breakEven
@@ -294,7 +345,10 @@
         const fallbackResult = applyTechnicalFallbacks(state);
         const effectiveState = fallbackResult.state;
         effectiveState.turn_time_days = calculateTurnTimeDays(effectiveState.charter_party_standard);
-        effectiveState.dias_puerto_total = toNumber(effectiveState.dias_puerto) + effectiveState.turn_time_days;
+        const cargoKind = normalizeCargoType(effectiveState.tipo_carga);
+        effectiveState.dias_puerto_total = toNumber(effectiveState.dias_puerto) +
+            effectiveState.turn_time_days +
+            (cargoKind === 'proyecto' ? toNumber(effectiveState.dias_preparacion) : 0);
         const canal = calculateCanalToll(effectiveState);
         const cranes = validateCranes(effectiveState);
         const tugs = inferTugCostByDwt(effectiveState.capacidad_dwt, state.coste_remolcadores_ud);
@@ -323,14 +377,26 @@
             return element.dataset.autoEstimated === 'true' ? 0 : toNumber(element.value);
         }
 
+        readTugUnitCost() {
+            const element = this.el('t-remolcadores');
+            if (!element || element.dataset.autoEstimated === 'true') return 0;
+            return toNumber(element.dataset.tarifaBase) || toNumber(element.value);
+        }
+
         readState() {
             const seaDays = toNumber((this.el('res-days-ballast')?.textContent || '').replace(/[^\d.-]/g, '')) +
                 toNumber((this.el('res-days-laden')?.textContent || '').replace(/[^\d.-]/g, '')) +
                 this.readNumber('days-margin');
             const cargoTons = this.readNumber('cargo-qty');
-            const loadRate = this.readNumber('rate-load') || 1;
-            const dischargeRate = this.readNumber('rate-disch') || 1;
-            const portDays = cargoTons > 0 ? (cargoTons / loadRate) + (cargoTons / dischargeRate) : 0;
+            const metodoEstiba = toText(this.el('metodo_carga')?.value) || 'cinta_transportadora';
+            const metodoDescarga = toText(this.el('metodo_descarga_pod')?.value) || metodoEstiba;
+            const nominalPol = this.readNumber('ritmo_nominal_pol') || this.readNumber('rate-load');
+            const nominalPod = this.readNumber('ritmo_nominal_pod') || this.readNumber('rate-disch');
+            const tipoCarga = toText(this.el('cargo-type')?.value);
+            const realPolRate = this.readNumber('rate-load') || (root.getRitmoRealPuerto ? root.getRitmoRealPuerto(metodoEstiba, nominalPol) : (nominalPol * getStowageMethodFactor(metodoEstiba)));
+            const realPodRate = this.readNumber('rate-disch') || (root.getRitmoRealPuerto ? root.getRitmoRealPuerto(metodoDescarga, nominalPod) : (nominalPod * getStowageMethodFactor(metodoDescarga)));
+            const calculatePortDays = root.calcularDiasPuertoPorEstiba || ((tons, rate, method) => calculatePortDaysByStowage(tons, method, rate));
+            const portDays = calculatePortDays(cargoTons, realPolRate, metodoEstiba) + calculatePortDays(cargoTons, realPodRate, metodoDescarga);
             return {
                 dias_navegacion: seaDays,
                 dias_puerto: portDays,
@@ -338,6 +404,7 @@
                 pod_name: toText(this.el('port-pod')?.value),
                 nombre_buque: toText(this.el('nombre-buque-calculadora')?.value || this.el('vessel-name')?.value),
                 toneladas_carga: cargoTons,
+                tipo_carga: tipoCarga,
                 factor_estiba: this.readNumber('cargo-sf'),
                 capacidad_dwt: this.readNumber('vessel-dwt'),
                 consumo_mar_td: this.readNumber('cons-sea'),
@@ -348,12 +415,17 @@
                 pda_pol: this.readNumber('pda-pol'),
                 pda_pod: this.readNumber('pda-pod'),
                 estiba_terminal: this.readNumber('stevedoring-costs'),
+                coste_trincaje: this.readNumber('input-trincaje'),
+                coste_maniobra_especial: this.readNumber('coste-maniobra-especial'),
+                dias_preparacion: this.readNumber('dias-preparacion'),
                 comisiones_porcentaje: this.readNumber('comm-pct'),
-                coste_remolcadores_ud: this.readPossiblyEstimatedNumber('t-remolcadores'),
+                coste_remolcadores_ud: this.readTugUnitCost(),
                 tonelaje_neto: this.readPossiblyEstimatedNumber('vessel-net-tonnage'),
                 max_summer_draft: this.readNumber('vessel-draft'),
                 calado_actual: this.readPossiblyEstimatedNumber('current-draft'),
                 crane_swl_mt: this.readPossiblyEstimatedNumber('crane-swl-mt'),
+                peso_pieza_mt: this.readNumber('peso-pieza-mt'),
+                ciclos_hora_grua: this.readNumber('ciclos-hora-grua'),
                 grab_capacity_cbm: this.readPossiblyEstimatedNumber('grab-capacity-cbm'),
                 canal_seleccionado: toText(this.el('selected-canal')?.value) || 'Auto',
                 charter_party_standard: toText(this.el('charter-party-standard')?.value) || 'GENCON'
@@ -387,23 +459,37 @@
 
         renderTugs(tugs) {
             const input = this.el('t-remolcadores');
-            if (!input) return;
+            const container = this.el('contenedor_coste_remolcadores');
+            if (!input && !container) return;
             const isInferred = Boolean(tugs.inferred);
-            if (isInferred) {
-                this.isWriting = true;
-                input.value = toNumber(tugs.tarifa_base_ud).toFixed(0);
-                input.dataset.autoEstimated = 'true';
+            const tarifaBase = toNumber(tugs.tarifa_efectiva_ud || tugs.tarifa_base_ud);
+            const totalTugs = toNumber(tugs.total_usos_remolcador);
+            const costeTotal = toNumber(tugs.coste_total_tugs);
+            this.isWriting = true;
+            if (input) {
+                input.value = costeTotal.toFixed(0);
+                input.dataset.tarifaBase = tarifaBase.toFixed(0);
+                input.dataset.totalTugs = String(totalTugs);
+                input.dataset.tugsPorManiobra = String(toNumber(tugs.tugs_por_maniobra));
                 input.dispatchEvent(new Event('change', { bubbles: true }));
-                this.isWriting = false;
-            } else if (input.dataset.autoEstimated === 'true') {
-                delete input.dataset.autoEstimated;
             }
-            input.classList.toggle('text-blue-700', isInferred);
-            input.classList.toggle('border-sky-400', isInferred);
-            input.classList.toggle('bg-white', isInferred);
-            input.title = isInferred
-                ? `Tarifa inferida por DWT: ${tugs.tugs_por_maniobra} remolcador(es) x 4 maniobras`
-                : '';
+            if (input) {
+                if (isInferred) {
+                    input.dataset.autoEstimated = 'true';
+                } else if (input.dataset.autoEstimated === 'true') {
+                    delete input.dataset.autoEstimated;
+                }
+            }
+            if (container) {
+                container.innerHTML = `
+                    <span class="base text-sm">$${tarifaBase.toLocaleString('en-US')} (Base)</span> x
+                    <span class="multiplicador text-sm">${totalTugs.toLocaleString('en-US')} (Total Tugs)</span> =
+                    <span class="total font-bold text-blue-700">$${costeTotal.toLocaleString('en-US')}</span>
+                `;
+                container.title = `Tarifa por remolcador: ${toNumber(tugs.tugs_por_maniobra)} remolcador(es) por maniobra x 4 maniobras`;
+                container.classList.toggle('border-sky-400', isInferred);
+            }
+            this.isWriting = false;
         }
 
         syncSelectedCanal(canalValue) {
@@ -472,7 +558,14 @@
             const alert = this.el('crane-validation-alert');
             if (!alert) return;
             alert.classList.remove('hidden', 'border-red-300', 'bg-red-50', 'text-red-800', 'border-emerald-300', 'bg-emerald-50', 'text-emerald-800');
-            if (cranes.overload) {
+            if (cranes.missing_piece_inputs) {
+                alert.classList.add('border-red-300', 'bg-red-50', 'text-red-800');
+                alert.textContent = 'RIESGO ALTO: define Peso por pieza y Ciclos/hora para calcular Hierro/Acero.';
+            } else if (cranes.piece_overload) {
+                const swl = toNumber(root.document?.getElementById('crane-swl-mt')?.value);
+                alert.classList.add('border-red-300', 'bg-red-50', 'text-red-800');
+                alert.textContent = `RIESGO ALTO: Excede SWL. Peso por pieza ${cranes.peso_pieza_mt.toFixed(2)} MT > Crane SWL ${swl.toFixed(2)} MT.`;
+            } else if (cranes.overload) {
                 alert.classList.add('border-red-300', 'bg-red-50', 'text-red-800');
                 alert.textContent = `ALERTA CRITICA: sobrecarga de grua. Izado estimado ${cranes.peso_total_izado.toFixed(2)} MT por ciclo.`;
             } else {
@@ -578,6 +671,13 @@
         calculateTotals,
         calculateWarRiskPremium,
         calculateTurnTimeDays,
+        normalizeCargoType,
+        RITMO_BASE_PUERTO,
+        FACTORES_ESTIBA,
+        FACTOR_EFICIENCIA_PUERTO,
+        getStowageMethodFactor,
+        getRealPortRate,
+        calculatePortDaysByStowage,
         shouldAutoEstimateStevedoring,
         estimateStevedoringTerminal,
         calculateVoyageCostState,
