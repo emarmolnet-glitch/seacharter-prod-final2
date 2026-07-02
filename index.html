@@ -5266,7 +5266,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <div class="input-group">
                                 <label id="label-cargo-qty" class="text-action-required flex items-center min-h-[24px]">Carga a Transportar (TM)</label>
-                                <input type="number" id="cargo-qty" class="input-gc action-required-field text-action-required font-bold" value="0" oninput="autoScaleVesselAndCosts(); syncCalculatorAndMatching('calculator');" onblur="detectVesselSegmentFromInputs()">
+                                <input type="number" id="cargo-qty" class="input-gc action-required-field text-action-required font-bold" value="0" oninput="autoScaleVesselAndCosts(); syncCalculatorAndMatching('calculator'); actualizarModuloCamionTolva();" onblur="detectVesselSegmentFromInputs()">
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-type" class="text-action-required flex items-center min-h-[24px]">Tipo de Carga</label>
@@ -5291,7 +5291,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 mb-4">
                             <div id="contenedor_metodo_carga" class="input-group">
                                 <label id="label-metodo-carga" class="text-action-required">Método Carga POL</label>
-                                <select id="metodo_carga" class="input-gc action-required-field text-action-required" onchange="recalcularDiasPuerto()">
+                                <select id="metodo_carga" class="input-gc action-required-field text-action-required" onchange="recalcularDiasPuerto(); actualizarModuloCamionTolva()">
                                     <option value="cinta_transportadora">Cinta Transportadora</option>
                                     <option value="camion_tolva">Camión Tolva</option>
                                     <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
@@ -5309,6 +5309,37 @@
                                 <label id="label-rate-load" class="text-action-required">Ritmo Real POL (TM/d)</label>
                                 <input type="number" id="rate-load" class="input-gc action-required-field text-action-required font-bold" value="2500" oninput="marcarRitmoManual('pol')">
                                 <p id="rate-load-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
+                            </div>
+                        </div>
+
+                        <div id="modulo-camion-tolva-pol" class="hidden mt-2 mb-4 border border-slate-200 bg-white rounded p-3 shadow-sm" aria-hidden="true">
+                            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
+                                <div>
+                                    <h4 class="text-[11px] font-black uppercase text-[#1E3A8A] tracking-wide">Asistente Camión Tolva POL</h4>
+                                    <p class="text-[10px] text-slate-500">Cadencia vinculada automáticamente al Ritmo Real POL.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                                <div class="input-group">
+                                    <label for="camion-tolva-capacidad-mt">Capacidad camión (MT)</label>
+                                    <input type="number" id="camion-tolva-capacidad-mt" class="input-gc font-bold" value="27" min="0" step="0.1" oninput="actualizarModuloCamionTolva()">
+                                </div>
+                                <div class="input-group">
+                                    <label for="camion-tolva-slots">Slots simultáneos</label>
+                                    <input type="number" id="camion-tolva-slots" class="input-gc font-bold" value="1" min="1" step="1" oninput="actualizarModuloCamionTolva()">
+                                </div>
+                                <div class="input-group">
+                                    <label for="camion-tolva-tiempo-ciclo-min">Tiempo ciclo total (min)</label>
+                                    <input type="number" id="camion-tolva-tiempo-ciclo-min" class="input-gc font-bold" value="" min="0" step="1" placeholder="Carga + Pres. + Limp." oninput="actualizarModuloCamionTolva()">
+                                </div>
+                                <div class="input-group">
+                                    <label>Camiones totales</label>
+                                    <output id="camion-tolva-camiones-totales" class="input-gc bg-gray-100 font-bold block">0.0</output>
+                                </div>
+                                <div class="input-group">
+                                    <label>Ritmo sugerido (TM/día)</label>
+                                    <output id="camion-tolva-ritmo-sugerido" class="input-gc bg-gray-100 font-bold block">0</output>
+                                </div>
                             </div>
                         </div>
 
@@ -5680,10 +5711,17 @@
                                 <div class="grid grid-cols-1 gap-1">
                                     <div class="flex justify-between"><span>Consumo Navegación</span><strong id="res-fuel-nav">0.00 t · $0</strong></div>
                                     <div class="flex justify-between"><span>Consumo Puerto</span><strong id="res-fuel-port">0.00 t · $0</strong></div>
-                                    <div class="flex justify-between"><span>Consumo Fondeo</span><strong id="res-fuel-anchorage">0.00 t · $0</strong></div>
-                                    <div class="flex justify-between"><span>Consumo Auxiliar (Fondeo)</span><strong id="bunker-fondeo-display">0.00 t · $0</strong></div>
+                                    <div class="flex justify-between gap-2">
+                                        <span class="inline-flex items-center gap-1">Consumo Fondeo <button type="button" class="text-slate-400 hover:text-sky-500" onclick="configureAnchorageFuelRate('main')" title="Configurar consumo diario de fondeo"><i class="fa-solid fa-gear"></i></button></span>
+                                        <strong id="res-fuel-anchorage" contenteditable="true" oninput="handleFuelBreakdownManualOverride('res-fuel-anchorage')" title="Editar para activar override manual">0.00 t · $0</strong>
+                                    </div>
+                                    <div class="flex justify-between gap-2">
+                                        <span class="inline-flex items-center gap-1">Consumo Auxiliar (Fondeo) <button type="button" class="text-slate-400 hover:text-sky-500" onclick="configureAnchorageFuelRate('aux')" title="Configurar consumo auxiliar diario"><i class="fa-solid fa-gear"></i></button></span>
+                                        <strong id="bunker-fondeo-display" contenteditable="true" oninput="handleFuelBreakdownManualOverride('bunker-fondeo-display')" title="Editar para activar override manual">0.00 t · $0</strong>
+                                    </div>
                                 </div>
                             </div>
+                            <input type="hidden" id="cons-anchorage-aux" value="2.0">
                             <div class="flex justify-between"><span id="label-opex-cost-basis" class="font-bold">OPEX Total:</span> <span id="res-cost-opex" class="font-bold text-[#334155]">$0</span></div>
                             <div class="flex justify-between"><span id="label-pda-cost-basis" class="font-bold">PDAs/Puertos:</span> <span id="res-cost-pda" class="font-bold text-[#334155]">$0</span></div>
                             <div class="flex justify-between"><span id="label-ets-cost-basis" class="font-bold">ETS Estimado:</span> <span id="res-cost-ets" class="font-bold text-[#1E3A8A]">$0</span></div>
@@ -17088,6 +17126,58 @@
             window.validateCoreTradingSafety = validateCoreTradingSafety;
         }
 
+        function parseFuelBreakdownText(text = '') {
+            const normalized = String(text || '').replace(/,/g, '');
+            const numbers = normalized.match(/-?\d+(?:\.\d+)?/g) || [];
+            return {
+                tons: Math.max(0, parseFloat(numbers[0]) || 0),
+                cost: Math.max(0, parseFloat(numbers[1]) || 0)
+            };
+        }
+
+        function getManualFuelBreakdown(id, fallbackPrice) {
+            const el = document.getElementById(id);
+            if (!el || el.dataset.manualOverride !== 'true') return null;
+            const parsed = parseFuelBreakdownText(el.innerText);
+            const cost = parsed.cost > 0 ? parsed.cost : (parsed.tons * fallbackPrice);
+            return { tons: parsed.tons, cost };
+        }
+
+        function handleFuelBreakdownManualOverride(id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.dataset.manualOverride = 'true';
+            el.classList.add('text-amber-600');
+            clearTimeout(el._manualOverrideTimer);
+            el._manualOverrideTimer = setTimeout(() => {
+                if (typeof runEngine === 'function') runEngine();
+            }, 200);
+        }
+
+        function configureAnchorageFuelRate(kind) {
+            const targetId = kind === 'aux' ? 'cons-anchorage-aux' : 'cons-anchorage';
+            const target = document.getElementById(targetId);
+            if (!target) return;
+            const label = kind === 'aux' ? 'Consumo auxiliar diario fondeo (MT/d)' : 'Consumo diario fondeo (MT/d)';
+            const current = parseFloat(target.value) || 0;
+            const next = window.prompt(label, current.toFixed(2));
+            if (next === null) return;
+            const parsed = Math.max(0, parseFloat(String(next).replace(',', '.')) || 0);
+            target.value = parsed.toString();
+            const displayId = kind === 'aux' ? 'bunker-fondeo-display' : 'res-fuel-anchorage';
+            const display = document.getElementById(displayId);
+            if (display) {
+                display.dataset.manualOverride = 'false';
+                display.classList.remove('text-amber-600');
+            }
+            runEngine();
+        }
+
+        if (typeof window !== 'undefined') {
+            window.handleFuelBreakdownManualOverride = handleFuelBreakdownManualOverride;
+            window.configureAnchorageFuelRate = configureAnchorageFuelRate;
+        }
+
         // --- MOTOR PRINCIPAL ---
         function runEngine() {
             ensureDetectedSpeedsBeforeCalculation();
@@ -17188,6 +17278,7 @@
             const pSea = parseFloat(document.getElementById('price-sea').value) || 0;
             const cPort = parseFloat(document.getElementById('cons-port').value) || 0;
             const cAnchorage = parseFloat(document.getElementById('cons-anchorage')?.value) || cPort;
+            const cAnchorageAux = parseFloat(document.getElementById('cons-anchorage-aux')?.value) || 2.0;
             const pPort = parseFloat(document.getElementById('price-port').value) || 0;
             
             const opex = parseFloat(document.getElementById('opex-daily').value) || 0;
@@ -17294,6 +17385,7 @@
             const T_sea = isZeroCalculation ? 0 : (dBal + dLaden + marginDays);
             // T_port (base port operations plus Smart Adjustments that extend port stay)
             const T_port = isZeroCalculation ? 0 : adjustedPortDays;
+            const T_portFuel = isZeroCalculation ? 0 : (dPortTotal + smartDeltaDays);
             const totalDays = isZeroCalculation ? 0 : (T_sea + T_port);
             const smartOperationalDays = totalDays;
             const pdas = isZeroCalculation ? 0 : portExpensesForMode;
@@ -17315,8 +17407,18 @@
             const routeConsumptionCost = isZeroCalculation ? 0 : (T_sea * cSea * pSea);
 
             // Port Consumption Cost: T_port * C_port * P_port (Low-sulfur fuel MGO/LSMGO in port)
-            const portConsumptionCost = isZeroCalculation ? 0 : (T_port * cPort * pPort);
-            const anchorageConsumptionCost = 0;
+            const portConsumptionCost = isZeroCalculation ? 0 : (T_portFuel * cPort * pPort);
+            const formulaAnchorageFuelTons = isZeroCalculation ? 0 : (smartAnchorageDays * cAnchorage);
+            const formulaAnchorageFuelCost = formulaAnchorageFuelTons * pPort;
+            const formulaAnchorageAuxTons = isZeroCalculation ? 0 : (smartAnchorageDays * cAnchorageAux);
+            const formulaAnchorageAuxCost = formulaAnchorageAuxTons * pPort;
+            const manualAnchorageFuel = isZeroCalculation ? null : getManualFuelBreakdown('res-fuel-anchorage', pPort);
+            const manualAnchorageAuxFuel = isZeroCalculation ? null : getManualFuelBreakdown('bunker-fondeo-display', pPort);
+            const anchorageFuelTons = manualAnchorageFuel ? manualAnchorageFuel.tons : formulaAnchorageFuelTons;
+            const anchorageFuelCost = manualAnchorageFuel ? manualAnchorageFuel.cost : formulaAnchorageFuelCost;
+            const anchorageAuxFuelTons = manualAnchorageAuxFuel ? manualAnchorageAuxFuel.tons : formulaAnchorageAuxTons;
+            const anchorageAuxFuelCost = manualAnchorageAuxFuel ? manualAnchorageAuxFuel.cost : formulaAnchorageAuxCost;
+            const anchorageConsumptionCost = anchorageFuelCost + anchorageAuxFuelCost;
 
             // Extra ECA Cost (Price Delta: Low-sulfur price - Standard price)
             // Applied only to underway transit days spent inside ECA zones (assumes 1.0 day of transit per SECA port)
@@ -17329,7 +17431,7 @@
 
             // EMISSIONS CALCULATION (CO₂):
             // Formula: Emissions_tCO₂ = Total_Fuel_Consumption * 3.11
-            const totalConsumption = isZeroCalculation ? 0 : ((T_sea * cSea) + (T_port * cPort));
+            const totalConsumption = isZeroCalculation ? 0 : ((T_sea * cSea) + (T_portFuel * cPort) + anchorageFuelTons + anchorageAuxFuelTons);
             const emissionsCO2 = isZeroCalculation ? 0 : (totalConsumption * 3.11);
 
             // ETS COST CALCULATION:
@@ -17392,16 +17494,17 @@
 
             document.getElementById('res-cost-bunker').innerText = `$${Math.round(totalBunkers).toLocaleString()}`;
             const navFuelTons = isZeroCalculation ? 0 : (T_sea * cSea);
-            const portFuelTons = isZeroCalculation ? 0 : (T_port * cPort);
-            const anchorageFuelTons = 0;
+            const portFuelTons = isZeroCalculation ? 0 : (T_portFuel * cPort);
             const setFuelBreakdown = (id, tons, cost) => {
                 const el = document.getElementById(id);
-                if (el) el.innerText = `${tons.toFixed(2)} t · $${Math.round(cost).toLocaleString('en-US')}`;
+                if (el && el.dataset.manualOverride !== 'true') {
+                    el.innerText = `${tons.toFixed(2)} t · $${Math.round(cost).toLocaleString('en-US')}`;
+                }
             };
             setFuelBreakdown('res-fuel-nav', navFuelTons, routeConsumptionCost + extraEcaCost);
             setFuelBreakdown('res-fuel-port', portFuelTons, portConsumptionCost);
-            setFuelBreakdown('res-fuel-anchorage', anchorageFuelTons, anchorageConsumptionCost);
-            setFuelBreakdown('bunker-fondeo-display', anchorageFuelTons, anchorageConsumptionCost);
+            setFuelBreakdown('res-fuel-anchorage', anchorageFuelTons, anchorageFuelCost);
+            setFuelBreakdown('bunker-fondeo-display', anchorageAuxFuelTons, anchorageAuxFuelCost);
             if (isPolSeca || isPodSeca) {
                 document.getElementById('res-cost-bunker').classList.remove('text-red-400');
                 document.getElementById('res-cost-bunker').classList.add('text-amber-400');
@@ -17781,7 +17884,7 @@
                 basicEtsCost,
                 baseVoyageCosts: costTotal,
                 extraOpexCost,
-                anchorageBunkerCost,
+                anchorageBunkerCost: anchorageConsumptionCost,
                 totalCostIncrement: totalSmartCostIncrement,
                 basicBreakEven,
                 basicBreakEvenOperativo,
@@ -17881,11 +17984,13 @@
             State.priceSea = pSea;
             State.consPort = cPort;
             State.consAnchorage = cAnchorage;
+            State.consAnchorageAux = cAnchorageAux;
             State.pricePort = pPort;
             State.fuelBreakdown = {
                 navigation: { tons: navFuelTons, cost: routeConsumptionCost + extraEcaCost, days: T_sea },
-                port: { tons: portFuelTons, cost: portConsumptionCost, days: T_port },
-                anchorage: { tons: anchorageFuelTons, cost: anchorageConsumptionCost, days: smartAnchorageDays },
+                port: { tons: portFuelTons, cost: portConsumptionCost, days: T_portFuel },
+                anchorage: { tons: anchorageFuelTons, cost: anchorageFuelCost, days: smartAnchorageDays },
+                anchorageAuxiliary: { tons: anchorageAuxFuelTons, cost: anchorageAuxFuelCost, days: smartAnchorageDays },
                 totalTons: totalConsumption,
                 totalCost: totalBunkers
             };
@@ -28474,6 +28579,52 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (typeof runEngine === 'function') runEngine();
         }
 
+        function calcularCadenciaCamionTolvaPol() {
+            const cargaTotal = Math.max(0, parseFloat(document.getElementById('cargo-qty')?.value) || 0);
+            const capacidadCamion = Math.max(0, parseFloat(document.getElementById('camion-tolva-capacidad-mt')?.value) || 0);
+            const slotsSimultaneos = Math.max(1, Math.floor(parseFloat(document.getElementById('camion-tolva-slots')?.value) || 1));
+            const tiempoCiclo = Math.max(0, parseFloat(document.getElementById('camion-tolva-tiempo-ciclo-min')?.value) || 0);
+            const camionesTotales = capacidadCamion > 0 ? (cargaTotal / capacidadCamion) : 0;
+            const ritmoSugerido = tiempoCiclo > 0 ? (capacidadCamion * slotsSimultaneos * (1440 / tiempoCiclo)) : 0;
+            return { camionesTotales, ritmoSugerido };
+        }
+
+        function actualizarModuloCamionTolva() {
+            const modulo = document.getElementById('modulo-camion-tolva-pol');
+            if (!modulo) return;
+            const isCamionTolva = getMetodoEstibaActual() === 'camion_tolva';
+            modulo.classList.toggle('hidden', !isCamionTolva);
+            modulo.setAttribute('aria-hidden', String(!isCamionTolva));
+            ['camion-tolva-capacidad-mt', 'camion-tolva-slots', 'camion-tolva-tiempo-ciclo-min'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.disabled = !isCamionTolva;
+            });
+
+            const { camionesTotales, ritmoSugerido } = calcularCadenciaCamionTolvaPol();
+            const totalEl = document.getElementById('camion-tolva-camiones-totales');
+            const ritmoEl = document.getElementById('camion-tolva-ritmo-sugerido');
+            if (totalEl) totalEl.textContent = camionesTotales.toLocaleString('en-US', {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1
+            });
+            if (ritmoEl) ritmoEl.textContent = Math.round(ritmoSugerido).toLocaleString('en-US');
+            aplicarRitmoCamionTolvaPol({ rerun: isCamionTolva });
+        }
+
+        function aplicarRitmoCamionTolvaPol(options = {}) {
+            const { rerun = true } = options;
+            if (getMetodoEstibaActual() !== 'camion_tolva') return;
+            const { ritmoSugerido } = calcularCadenciaCamionTolvaPol();
+            const inputCarga = document.getElementById('rate-load');
+            if (!inputCarga || ritmoSugerido <= 0) return;
+            const nextValue = String(Math.round(ritmoSugerido));
+            const changed = inputCarga.value !== nextValue;
+            inputCarga.value = nextValue;
+            inputCarga.dataset.autoMetodoCarga = 'camion_tolva';
+            setRitmoManualIndicator('pol', false);
+            if (rerun && changed && typeof runEngine === 'function') runEngine();
+        }
+
         function getOperacionModo() {
             return document.getElementById('btn-mode-coa')?.dataset.active === 'true' ? 'COA' : 'SPOT';
         }
@@ -28753,6 +28904,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             actualizarCampoGruasPuerto('pol');
             actualizarCampoGruasPuerto('pod');
             actualizarCamposTipoCarga();
+            actualizarModuloCamionTolva();
 
             if (typeof runEngine === 'function') {
                 runEngine();
@@ -28767,6 +28919,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.getRitmoBasePuerto = getRitmoBasePuerto;
             window.readNumeroGruasPuerto = readNumeroGruasPuerto;
             window.marcarRitmoManual = marcarRitmoManual;
+            window.actualizarModuloCamionTolva = actualizarModuloCamionTolva;
+            window.aplicarRitmoCamionTolvaPol = aplicarRitmoCamionTolvaPol;
             window.readRitmoNominalPuerto = readRitmoNominalPuerto;
             window.normalizarTipoCarga = normalizarTipoCarga;
             window.calcularRitmoEfectivo = calcularRitmoEfectivo;
@@ -29290,6 +29444,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const pSea = parseFloat(document.getElementById('price-sea')?.value) || 0;
             const cPort = parseFloat(document.getElementById('cons-port')?.value) || 0;
             const cAnchorage = parseFloat(document.getElementById('cons-anchorage')?.value) || cPort;
+            const cAnchorageAux = parseFloat(document.getElementById('cons-anchorage-aux')?.value) || 2.0;
             const pPort = parseFloat(document.getElementById('price-port')?.value) || 0;
             
             const opex = parseFloat(document.getElementById('opex-daily')?.value) || 0;
@@ -29345,6 +29500,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const T_sea = isZeroCalculation ? 0 : (dBal + dLaden + marginDays);
             const T_port = isZeroCalculation ? 0 : adjustedPortDays;
+            const T_portFuel = isZeroCalculation ? 0 : (dPortTotal + smartDeltaDays);
             const baseOperationalDays = isZeroCalculation ? 0 : (dBal + dLaden + dPortTotal);
             const totalDays = isZeroCalculation ? 0 : (T_sea + T_port);
 
@@ -29357,8 +29513,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const isPodSeca = isSecaZone(podData);
 
             const routeConsumptionCost = isZeroCalculation ? 0 : (T_sea * cSea * pSea);
-            const portConsumptionCost = isZeroCalculation ? 0 : (T_port * cPort * pPort);
-            const anchorageConsumptionCost = 0;
+            const portConsumptionCost = isZeroCalculation ? 0 : (T_portFuel * cPort * pPort);
+            const formulaAnchorageFuelTons = isZeroCalculation ? 0 : (smartAnchorageDays * cAnchorage);
+            const formulaAnchorageFuelCost = formulaAnchorageFuelTons * pPort;
+            const formulaAnchorageAuxTons = isZeroCalculation ? 0 : (smartAnchorageDays * cAnchorageAux);
+            const formulaAnchorageAuxCost = formulaAnchorageAuxTons * pPort;
+            const manualAnchorageFuel = isZeroCalculation ? null : getManualFuelBreakdown('res-fuel-anchorage', pPort);
+            const manualAnchorageAuxFuel = isZeroCalculation ? null : getManualFuelBreakdown('bunker-fondeo-display', pPort);
+            const anchorageFuelTons = manualAnchorageFuel ? manualAnchorageFuel.tons : formulaAnchorageFuelTons;
+            const anchorageFuelCost = manualAnchorageFuel ? manualAnchorageFuel.cost : formulaAnchorageFuelCost;
+            const anchorageAuxFuelTons = manualAnchorageAuxFuel ? manualAnchorageAuxFuel.tons : formulaAnchorageAuxTons;
+            const anchorageAuxFuelCost = manualAnchorageAuxFuel ? manualAnchorageAuxFuel.cost : formulaAnchorageAuxCost;
+            const anchorageConsumptionCost = anchorageFuelCost + anchorageAuxFuelCost;
 
             const T_eca_sea = isZeroCalculation ? 0 : ((isPolSeca ? 1.0 : 0.0) + (isPodSeca ? 1.0 : 0.0));
             const extraEcaCost = isZeroCalculation ? 0 : (T_eca_sea * cSea * (pPort - pSea));
@@ -29366,7 +29532,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const totalBunkers = isZeroCalculation ? 0 : (routeConsumptionCost + portConsumptionCost + anchorageConsumptionCost + extraEcaCost);
             const totalOpex = isZeroCalculation ? 0 : (totalDays * opex);
 
-            const totalConsumption = isZeroCalculation ? 0 : ((T_sea * cSea) + (T_port * cPort));
+            const totalConsumption = isZeroCalculation ? 0 : ((T_sea * cSea) + (T_portFuel * cPort) + anchorageFuelTons + anchorageAuxFuelTons);
             const emissionsCO2 = isZeroCalculation ? 0 : (totalConsumption * 3.11);
 
             const euPrice = parseFloat(document.getElementById('eu-carbon-price')?.value) || 80;
@@ -29398,10 +29564,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 delayCost = (delayDailyRate / 24) * delayHours;
             }
 
-            const basePortConsumptionCost = isZeroCalculation ? 0 : (T_port * cPort * pPort);
+            const basePortConsumptionCost = isZeroCalculation ? 0 : (T_portFuel * cPort * pPort);
             const baseBunkers = isZeroCalculation ? 0 : (routeConsumptionCost + basePortConsumptionCost + extraEcaCost);
             const baseOpex = isZeroCalculation ? 0 : (baseOperationalDays * opex);
-            const baseEtsCost = isZeroCalculation ? 0 : ((((dBal + dLaden) * cSea) + (T_port * cPort)) * 3.11 * euPrice);
+            const baseEtsCost = isZeroCalculation ? 0 : ((((dBal + dLaden) * cSea) + (T_portFuel * cPort)) * 3.11 * euPrice);
             const baseCostTotalWithoutEts = isZeroCalculation ? 0 : (baseBunkers + baseOpex + pdas);
             const baseCostTotal = isZeroCalculation ? 0 : (baseCostTotalWithoutEts + baseEtsCost);
 
@@ -29451,8 +29617,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 totalBunkers: totalBunkers,
                 fuelBreakdown: {
                     navigation: { tons: T_sea * cSea, cost: routeConsumptionCost + extraEcaCost, days: T_sea },
-                    port: { tons: T_port * cPort, cost: portConsumptionCost, days: T_port },
-                    anchorage: { tons: 0, cost: anchorageConsumptionCost, days: smartAnchorageDays },
+                    port: { tons: T_portFuel * cPort, cost: portConsumptionCost, days: T_portFuel },
+                    anchorage: { tons: anchorageFuelTons, cost: anchorageFuelCost, days: smartAnchorageDays },
+                    anchorageAuxiliary: { tons: anchorageAuxFuelTons, cost: anchorageAuxFuelCost, days: smartAnchorageDays },
                     totalTons: totalConsumption,
                     totalCost: totalBunkers
                 },

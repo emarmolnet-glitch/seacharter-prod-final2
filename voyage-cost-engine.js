@@ -257,9 +257,16 @@
     }
 
     function calculateBunkers(state) {
-        const diasPuertoTotal = toNumber(state.dias_puerto_total || state.dias_puerto);
+        const diasFondeo = toNumber(state.t_espera_fondeo);
+        const diasPuertoTotal = Math.max(0, toNumber(state.dias_puerto_total || state.dias_puerto) - diasFondeo);
+        const consumoFondeo = toNumber(state.consumo_fondeo_td || state.consumo_anchorage_td);
+        const consumoAuxiliarFondeo = toNumber(state.consumo_auxiliar_fondeo_td);
+        const costeFondeo = diasFondeo * consumoFondeo * toNumber(state.precio_mgo);
+        const costeAuxiliarFondeo = diasFondeo * consumoAuxiliarFondeo * toNumber(state.precio_mgo);
         return (toNumber(state.dias_navegacion) * toNumber(state.consumo_mar_td) * toNumber(state.precio_vlsfo)) +
-            (diasPuertoTotal * toNumber(state.consumo_puerto_td) * toNumber(state.precio_mgo));
+            (diasPuertoTotal * toNumber(state.consumo_puerto_td) * toNumber(state.precio_mgo)) +
+            costeFondeo +
+            costeAuxiliarFondeo;
     }
 
     function calculateOpex(state) {
@@ -435,6 +442,8 @@
                 consumo_mar_td: this.readNumber('cons-sea'),
                 precio_vlsfo: this.readNumber('price-sea'),
                 consumo_puerto_td: this.readNumber('cons-port'),
+                consumo_fondeo_td: this.readNumber('cons-anchorage'),
+                consumo_auxiliar_fondeo_td: this.readNumber('cons-anchorage-aux') || 2.0,
                 precio_mgo: this.readNumber('price-port'),
                 opex_fijo_diario: this.readPossiblyEstimatedNumber('opex-daily'),
                 pda_pol: this.readNumber('pda-pol'),
