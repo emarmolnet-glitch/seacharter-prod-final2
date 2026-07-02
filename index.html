@@ -10140,8 +10140,8 @@
         const ROUTE_LADEN_LINE_COLOR = SEA_MAP_STYLE_CONFIG?.colors?.routeLine || '#2a7b9b';
         const ROUTE_BALLAST_LINE_COLOR = '#8ba6b5';
         const MARITIME_ICON_PATHS = SEA_MAP_STYLE_CONFIG?.icons || {
-            load: '/public/Ancla Load.svg',
-            discharge: '/public/Ancla Discharge.svg'
+            load: '/Ancla Load.svg',
+            discharge: '/Ancla Discharge.svg'
         };
         const ROUTE_MARKER_ICON_CONFIG = Object.freeze({
             // Legacy selector contract retained for static tests: pol: { className: 'route-port-marker' / pod: { className: 'route-port-marker' / iconSize: [30, 30], iconAnchor: [15, 15]
@@ -16068,8 +16068,8 @@
             const cargo = parseFloat(document.getElementById('cargo-qty').value) || 0;
             const metodoEstiba = getMetodoEstibaActual();
             const metodoDescarga = getMetodoDescargaActual();
-            const ritmoRealPol = getRitmoRealPuerto(metodoEstiba, readRitmoNominalPuerto('pol'));
-            const ritmoRealPod = getRitmoRealPuerto(metodoDescarga, readRitmoNominalPuerto('pod'));
+            const ritmoRealPol = calcularRitmoEfectivo('pol');
+            const ritmoRealPod = calcularRitmoEfectivo('pod');
             const rateLoad = parseFloat(document.getElementById('rate-load').value) || ritmoRealPol;
             const rateDisch = parseFloat(document.getElementById('rate-disch').value) || ritmoRealPod;
             const marginDays = Math.max(0, parseFloat(document.getElementById('factor-clima')?.value) || 0);
@@ -17162,8 +17162,8 @@
 
             const metodoEstiba = getMetodoEstibaActual();
             const metodoDescarga = getMetodoDescargaActual();
-            const ritmoRealPol = getRitmoRealPuerto(metodoEstiba, readRitmoNominalPuerto('pol'));
-            const ritmoRealPod = getRitmoRealPuerto(metodoDescarga, readRitmoNominalPuerto('pod'));
+            const ritmoRealPol = calcularRitmoEfectivo('pol');
+            const ritmoRealPod = calcularRitmoEfectivo('pod');
             const rateLoad = parseFloat(document.getElementById('rate-load').value) || ritmoRealPol;
             const rateDisch = parseFloat(document.getElementById('rate-disch').value) || ritmoRealPod;
             const marginDays = Math.max(0, parseFloat(document.getElementById('factor-clima')?.value) || 0);
@@ -17285,16 +17285,17 @@
             const dPortDisch = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga, readNumeroGruasPuerto('pod'));
             const dPort = isZeroCalculation ? 0 : (dPortLoad + dPortDisch);
             const dPortTotal = isZeroCalculation ? 0 : (dPort + genconTurnTimeDays + diasPreparacionProyecto);
+            const adjustedPortDays = isZeroCalculation ? 0 : (dPortTotal + smartAnchorageDays + smartDeltaDays);
             const seaPortDays = isZeroCalculation ? 0 : (dBal + dLaden + dPortTotal);
             const baseOperationalDays = seaPortDays;
             const smartExtraDays = isZeroCalculation ? 0 : (smartDeltaDays + smartAnchorageDays);
 
             // T_sea (Total underway time spent: ballast + laden + weather margin days)
             const T_sea = isZeroCalculation ? 0 : (dBal + dLaden + marginDays);
-            // T_port (Total port time spent: load + discharge)
-            const T_port = isZeroCalculation ? 0 : dPortTotal;
+            // T_port (base port operations plus Smart Adjustments that extend port stay)
+            const T_port = isZeroCalculation ? 0 : adjustedPortDays;
             const totalDays = isZeroCalculation ? 0 : (T_sea + T_port);
-            const smartOperationalDays = isZeroCalculation ? 0 : (totalDays + smartDeltaDays + smartAnchorageDays);
+            const smartOperationalDays = totalDays;
             const pdas = isZeroCalculation ? 0 : portExpensesForMode;
             const smartPortExpenses = isZeroCalculation ? 0 : (portExpensesForMode + tugTotalCost);
 
@@ -17315,7 +17316,7 @@
 
             // Port Consumption Cost: T_port * C_port * P_port (Low-sulfur fuel MGO/LSMGO in port)
             const portConsumptionCost = isZeroCalculation ? 0 : (T_port * cPort * pPort);
-            const anchorageConsumptionCost = isZeroCalculation ? 0 : (smartAnchorageDays * cAnchorage * pPort);
+            const anchorageConsumptionCost = 0;
 
             // Extra ECA Cost (Price Delta: Low-sulfur price - Standard price)
             // Applied only to underway transit days spent inside ECA zones (assumes 1.0 day of transit per SECA port)
@@ -17328,7 +17329,7 @@
 
             // EMISSIONS CALCULATION (CO₂):
             // Formula: Emissions_tCO₂ = Total_Fuel_Consumption * 3.11
-            const totalConsumption = isZeroCalculation ? 0 : ((T_sea * cSea) + (T_port * cPort) + (smartAnchorageDays * cAnchorage));
+            const totalConsumption = isZeroCalculation ? 0 : ((T_sea * cSea) + (T_port * cPort));
             const emissionsCO2 = isZeroCalculation ? 0 : (totalConsumption * 3.11);
 
             // ETS COST CALCULATION:
@@ -17350,8 +17351,8 @@
             const basicFixedCosts = isZeroCalculation ? 0 : (basicBunkers + basicEtsCost);
             const basicBreakEvenNumerator = isZeroCalculation ? 0 : (basicBunkers + basicPortExpenses + (basicOperationalDays * opex) + basicEtsCost);
             const smartDelayDays = isZeroCalculation ? 0 : (smartDeltaDays + smartAnchorageDays);
-            const extraOpexCost = isZeroCalculation ? 0 : (smartDelayDays * opex);
-            const anchorageBunkerCost = anchorageConsumptionCost;
+            const extraOpexCost = 0;
+            const anchorageBunkerCost = 0;
             const delaySmartCostIncrement = isZeroCalculation ? 0 : (extraOpexCost + anchorageBunkerCost);
             const totalSmartCostIncrement = isZeroCalculation ? 0 : (tugTotalCost + (missingSmartFields.length === 0 ? delaySmartCostIncrement : 0));
             const smartCostsComplete = !isZeroCalculation && missingSmartFields.length === 0;
@@ -17360,7 +17361,7 @@
 
             document.getElementById('dist-total').value = Math.round(distBal + distLaden);
             document.getElementById('res-days-total').innerText = totalDays.toFixed(2);
-            document.getElementById('res-days-total').title = `Días Mar + Puerto + Margen Clima = ${(dBal + dLaden).toFixed(2)} + ${dPortTotal.toFixed(2)} + ${marginDays.toFixed(2)} = ${totalDays.toFixed(2)} d`;
+            document.getElementById('res-days-total').title = `Días Mar + Puerto ajustado + Margen Clima = ${(dBal + dLaden).toFixed(2)} + ${adjustedPortDays.toFixed(2)} + ${marginDays.toFixed(2)} = ${totalDays.toFixed(2)} d`;
             
             if (document.getElementById('res-days-ballast')) {
                 document.getElementById('res-days-ballast').innerText = `${dBal.toFixed(2)} d`;
@@ -17369,10 +17370,8 @@
                 document.getElementById('res-days-laden').innerText = `${dLaden.toFixed(2)} d`;
             }
             if (document.getElementById('res-days-port')) {
-                document.getElementById('res-days-port').innerText = `${dPortTotal.toFixed(2)} d`;
-                document.getElementById('res-days-port').title = genconTurnTimeDays > 0
-                    ? `Incluye ${genconTurnTimeDays.toFixed(2)} d de Turn Time GENCON (12h POL + 12h POD)`
-                    : '';
+                document.getElementById('res-days-port').innerText = `${adjustedPortDays.toFixed(2)} d`;
+                document.getElementById('res-days-port').title = `Base carga/descarga ${dPortTotal.toFixed(2)} d + fondeo ${smartAnchorageDays.toFixed(2)} d + delta histórico ${smartDeltaDays.toFixed(2)} d`;
             }
             if (document.getElementById('res-days-margin')) {
                 const marginEl = document.getElementById('res-days-margin');
@@ -17394,7 +17393,7 @@
             document.getElementById('res-cost-bunker').innerText = `$${Math.round(totalBunkers).toLocaleString()}`;
             const navFuelTons = isZeroCalculation ? 0 : (T_sea * cSea);
             const portFuelTons = isZeroCalculation ? 0 : (T_port * cPort);
-            const anchorageFuelTons = isZeroCalculation ? 0 : (smartAnchorageDays * cAnchorage);
+            const anchorageFuelTons = 0;
             const setFuelBreakdown = (id, tons, cost) => {
                 const el = document.getElementById(id);
                 if (el) el.innerText = `${tons.toFixed(2)} t · $${Math.round(cost).toLocaleString('en-US')}`;
@@ -19295,8 +19294,8 @@
             const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
             const metodoEstiba = getMetodoEstibaActual();
             const metodoDescarga = getMetodoDescargaActual();
-            const dPort = calcularDiasPuertoPorEstiba(cargoQty, parseFloat(document.getElementById('rate-load')?.value) || getRitmoRealPuerto(metodoEstiba, readRitmoNominalPuerto('pol')), metodoEstiba, readNumeroGruasPuerto('pol')) +
-                calcularDiasPuertoPorEstiba(cargoQty, parseFloat(document.getElementById('rate-disch')?.value) || getRitmoRealPuerto(metodoDescarga, readRitmoNominalPuerto('pod')), metodoDescarga, readNumeroGruasPuerto('pod'));
+            const dPort = calcularDiasPuertoPorEstiba(cargoQty, parseFloat(document.getElementById('rate-load')?.value) || calcularRitmoEfectivo('pol'), metodoEstiba, readNumeroGruasPuerto('pol')) +
+                calcularDiasPuertoPorEstiba(cargoQty, parseFloat(document.getElementById('rate-disch')?.value) || calcularRitmoEfectivo('pod'), metodoDescarga, readNumeroGruasPuerto('pod'));
 
             // 2. Perform local algorithmic calculation (Low, Medium, High delay estimates)
             const highRiskCountries = ['UA', 'RU', 'IL', 'YE', 'SY', 'LY', 'SO', 'TW'];
@@ -21152,8 +21151,6 @@
                 savedVessels.push(json);
                 localStorage.setItem('saveVessel', JSON.stringify(savedVessels, null, 2));
                 console.log(`Vessel "${vesselName || imo}" successfully added to the 'saveVessel' library.`);
-            } else {
-                console.log(`Vessel "${vesselName || imo}" already exists in the library. Skipping to avoid duplicates.`);
             }
         }
 
@@ -25520,9 +25517,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (status) status.innerText = 'Desconocido';
         };
         
-        // --- MOTOR DE ACUMULACIÓN GLOBAL DE BUQUES ---
+        // --- MOTOR DE ACUMULACIÓN DUAL DE BUQUES ---
         window.AIS_DUAL_SWEEP_LIMIT = 1000;
-        window.AIS_GLOBAL_SWEEP_LIMIT = window.AIS_DUAL_SWEEP_LIMIT;
         window.buquesAlmacenados = window.buquesAlmacenados instanceof Map ? window.buquesAlmacenados : new Map();
         window.buquesEncontrados = {};
 
@@ -25570,7 +25566,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const localTotal = window.buquesAlmacenados instanceof Map ? window.buquesAlmacenados.size : 0;
             const persistedTotal = Number(window.aisPersistedVesselCount);
             const total = Number.isFinite(persistedTotal) && persistedTotal > localTotal ? persistedTotal : localTotal;
-            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT || window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
+            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
             const porcentaje = Math.min(100, Math.round((total / limite) * 100));
             const progressEl = document.getElementById('ais-storage-progress');
             if (progressEl) {
@@ -25608,7 +25604,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         };
 
         window.procesarMensajeAIS = function(nuevoBarco) {
-            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT || window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
+            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
             if (!(window.buquesAlmacenados instanceof Map)) {
                 window.buquesAlmacenados = new Map();
             }
@@ -25794,7 +25790,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
             if (Number.isFinite(targetCount) && targetCount > 0) {
                 window.AIS_DUAL_SWEEP_LIMIT = targetCount;
-                window.AIS_GLOBAL_SWEEP_LIMIT = targetCount;
             }
 
             const vessels = Array.isArray(payload)
@@ -25810,8 +25805,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         };
 
         window.listaBarcos = Array.isArray(window.listaBarcos) ? window.listaBarcos : [];
-        window.AIS_DUAL_SWEEP_LIMIT = Number(window.AIS_DUAL_SWEEP_LIMIT || window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
-        window.AIS_GLOBAL_SWEEP_LIMIT = window.AIS_DUAL_SWEEP_LIMIT;
+        window.AIS_DUAL_SWEEP_LIMIT = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
         window.isDualSweepRunning = false;
 
         window.normalizarBuqueParaCoincidencia = function(v) {
@@ -25856,7 +25850,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (typeof window.completeAisProspectionRadius === 'function') {
                     window.completeAisProspectionRadius(normalizedRole, 0);
                 }
-                console.log(`Búsqueda ${normalizedRole} completada`);
+                if (normalizedRole === 'POL') console.log('Búsqueda POL completada');
+                if (normalizedRole === 'POD') console.log('Búsqueda POD completada');
                 return [];
             }
 
@@ -25869,7 +25864,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (typeof window.completeAisProspectionRadius === 'function') {
                 window.completeAisProspectionRadius(normalizedRole, vessels.length);
             }
-            console.log(`Búsqueda ${normalizedRole} completada`);
+            if (normalizedRole === 'POL') console.log('Búsqueda POL completada');
+            if (normalizedRole === 'POD') console.log('Búsqueda POD completada');
             if (!vessels.length) {
                 return [];
             }
@@ -25917,7 +25913,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     window.RadarPOD()
                 ]);
                 const vessels = [...polVessels, ...podVessels];
-                const limite = Number(window.AIS_DUAL_SWEEP_LIMIT || window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
+                const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
 
                 for (let i = 0; i < vessels.length; i += 1) {
                     if (window.buquesAlmacenados.size >= limite) {
@@ -26034,7 +26030,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         };
 
         window.startAisRadarPolling = function() {
-            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT || window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
+            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
             if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
                 window.detenerRadar();
                 return { started: false, reason: 'global-sweep-limit-reached' };
@@ -26700,7 +26696,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             function flushDirectAisToStore() {
                 directAisState.renderTimer = null;
-                const vessels = Array.from(directAisState.vessels.values()).slice(0, Number(window.AIS_GLOBAL_SWEEP_LIMIT) || 1000);
+                const vessels = Array.from(directAisState.vessels.values()).slice(0, Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000);
                 if (vessels.length === 0 && hasProxyFedAisStore()) {
                     return;
                 }
@@ -26779,7 +26775,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     }
                     return { started: false, reason: 'route-inputs-missing' };
                 }
-                const limite = Number(window.AIS_DUAL_SWEEP_LIMIT || window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
+                const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
                 if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
                     window.detenerRadar();
                     return { started: false, reason: 'global-sweep-limit-reached' };
@@ -26822,7 +26818,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     }
                     return window.GlobalStore ? window.GlobalStore.getRawVessels() : [];
                 }
-                const limite = Number(window.AIS_DUAL_SWEEP_LIMIT || window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
+                const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
                 if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
                     window.detenerRadar();
                     return window.GlobalStore ? window.GlobalStore.getRawVessels() : [];
@@ -27191,7 +27187,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (window.isLiveTrackingEnabled === false) {
                     return window.GlobalStore ? window.GlobalStore.getRawVessels() : [];
                 }
-                const limite = Number(window.AIS_DUAL_SWEEP_LIMIT || window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
+                const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
                 if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
                     window.detenerRadar();
                     return window.GlobalStore ? window.GlobalStore.getRawVessels() : [];
@@ -27873,7 +27869,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             let nearbyCount = 0;
             const currentClass = State.class || document.getElementById('vessel-badge')?.innerText?.trim() || "";
             
-            const isGlobalMode = false;
             const descEl = document.getElementById('pol-scan-radius-text') || document.getElementById('ais-nearby-vessels-description');
             if (descEl) {
                 descEl.innerHTML = 'Búsqueda dual AIS: <b>POL 300 MN</b> priorizado por ETA y <b>POD 100 MN</b> para carga de retorno';
@@ -28621,24 +28616,26 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const cargo = Math.max(0, parseFloat(document.getElementById('cargo-qty')?.value) || 0);
             const horasTrabajo = 24;
             const metodo = side === 'pod' ? getMetodoDescargaActual() : getMetodoEstibaActual();
+            const ritmoUnitario = getRitmoRealPuerto(metodo, readRitmoNominalPuerto(side));
+            const numeroGruas = readNumeroGruasPuerto(side);
             if (tipoCarga === 'acero' && metodo === 'hierro_acero_piezas') {
                 const pesoPieza = Math.max(0, parseFloat(document.getElementById('peso-pieza-mt')?.value) || 0);
                 const ciclosHora = Math.max(0, parseFloat(document.getElementById('ciclos-hora-grua')?.value) || 0);
                 if (cargo <= 0 || pesoPieza <= 0 || ciclosHora <= 0) {
-                    return getRitmoRealPuerto(metodo, readRitmoNominalPuerto(side));
+                    return metodoPuertoUsaGruas(metodo) ? ritmoUnitario * numeroGruas : ritmoUnitario;
                 }
                 const dias = (cargo / pesoPieza) / (ciclosHora * horasTrabajo);
-                return dias > 0 ? cargo / dias : 0;
+                const ritmoAceroUnitario = dias > 0 ? cargo / dias : 0;
+                return metodoPuertoUsaGruas(metodo) ? ritmoAceroUnitario * numeroGruas : ritmoAceroUnitario;
             }
-            return getRitmoRealPuerto(metodo, readRitmoNominalPuerto(side));
+            return metodoPuertoUsaGruas(metodo) ? ritmoUnitario * numeroGruas : ritmoUnitario;
         }
 
         function calcularDiasPuertoPorEstiba(toneladasCarga, ritmoReal = getRitmoRealPuerto(), metodo = getMetodoEstibaActual(), numeroGruas = 1) {
             const toneladas = Math.max(0, parseFloat(toneladasCarga) || 0);
             const ritmo = Math.max(0, parseFloat(ritmoReal) || 0);
-            const gruas = metodoPuertoUsaGruas(metodo) ? Math.max(1, Math.floor(parseFloat(numeroGruas) || 4)) : 1;
             if (toneladas <= 0 || ritmo <= 0) return 0;
-            return Math.ceil(toneladas / (ritmo * gruas));
+            return Math.ceil(toneladas / ritmo);
         }
 
         function costeTrincajeCondicional() {
@@ -28738,13 +28735,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (inputCarga) {
                 const metodoAnterior = inputCarga.dataset.autoMetodoCarga;
                 if (metodoAnterior !== metodoPol) setRitmoManualIndicator('pol', false);
-                if (inputCarga.dataset.manualOverride !== 'true') inputCarga.value = ritmoRealPol.toFixed(0);
+                if (metodoPuertoUsaGruas(metodoPol) && inputCarga.dataset.manualOverride !== 'true') {
+                    inputCarga.value = ritmoRealPol.toFixed(0);
+                }
                 inputCarga.dataset.autoMetodoCarga = metodoPol;
             }
             if (inputDescarga) {
                 const metodoAnterior = inputDescarga.dataset.autoMetodoDescarga;
                 if (metodoAnterior !== metodoPod) setRitmoManualIndicator('pod', false);
-                if (inputDescarga.dataset.manualOverride !== 'true') inputDescarga.value = ritmoRealPod.toFixed(0);
+                if (metodoPuertoUsaGruas(metodoPod) && inputDescarga.dataset.manualOverride !== 'true') {
+                    inputDescarga.value = ritmoRealPod.toFixed(0);
+                }
                 inputDescarga.dataset.autoMetodoDescarga = metodoPod;
             }
             actualizarAlertaMetodoCarga(metodoPol);
@@ -29277,8 +29278,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const metodoEstiba = getMetodoEstibaActual();
             const metodoDescarga = getMetodoDescargaActual();
-            const ritmoRealPol = getRitmoRealPuerto(metodoEstiba, readRitmoNominalPuerto('pol'));
-            const ritmoRealPod = getRitmoRealPuerto(metodoDescarga, readRitmoNominalPuerto('pod'));
+            const ritmoRealPol = calcularRitmoEfectivo('pol');
+            const ritmoRealPod = calcularRitmoEfectivo('pod');
             const rateLoad = parseFloat(document.getElementById('rate-load')?.value) || ritmoRealPol;
             const rateDisch = parseFloat(document.getElementById('rate-disch')?.value) || ritmoRealPod;
             const marginDays = Math.max(0, parseFloat(document.getElementById('factor-clima')?.value) || 0);
@@ -29340,11 +29341,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const dPortDisch = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga, readNumeroGruasPuerto('pod'));
             const dPort = isZeroCalculation ? 0 : (dPortLoad + dPortDisch);
             const dPortTotal = isZeroCalculation ? 0 : (dPort + genconTurnTimeDays + diasPreparacionProyecto);
+            const adjustedPortDays = isZeroCalculation ? 0 : (dPortTotal + smartAnchorageDays + smartDeltaDays);
 
             const T_sea = isZeroCalculation ? 0 : (dBal + dLaden + marginDays);
-            const T_port = isZeroCalculation ? 0 : dPortTotal;
+            const T_port = isZeroCalculation ? 0 : adjustedPortDays;
             const baseOperationalDays = isZeroCalculation ? 0 : (dBal + dLaden + dPortTotal);
-            const totalDays = isZeroCalculation ? 0 : (T_sea + T_port + smartDelayDays);
+            const totalDays = isZeroCalculation ? 0 : (T_sea + T_port);
 
             const idxLoad = document.getElementById('port-pol')?.value || "";
             const idxDisch = document.getElementById('port-pod')?.value || "";
@@ -29356,7 +29358,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const routeConsumptionCost = isZeroCalculation ? 0 : (T_sea * cSea * pSea);
             const portConsumptionCost = isZeroCalculation ? 0 : (T_port * cPort * pPort);
-            const anchorageConsumptionCost = isZeroCalculation ? 0 : (smartAnchorageDays * cAnchorage * pPort);
+            const anchorageConsumptionCost = 0;
 
             const T_eca_sea = isZeroCalculation ? 0 : ((isPolSeca ? 1.0 : 0.0) + (isPodSeca ? 1.0 : 0.0));
             const extraEcaCost = isZeroCalculation ? 0 : (T_eca_sea * cSea * (pPort - pSea));
@@ -29364,7 +29366,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const totalBunkers = isZeroCalculation ? 0 : (routeConsumptionCost + portConsumptionCost + anchorageConsumptionCost + extraEcaCost);
             const totalOpex = isZeroCalculation ? 0 : (totalDays * opex);
 
-            const totalConsumption = isZeroCalculation ? 0 : ((T_sea * cSea) + (T_port * cPort) + (smartAnchorageDays * cAnchorage));
+            const totalConsumption = isZeroCalculation ? 0 : ((T_sea * cSea) + (T_port * cPort));
             const emissionsCO2 = isZeroCalculation ? 0 : (totalConsumption * 3.11);
 
             const euPrice = parseFloat(document.getElementById('eu-carbon-price')?.value) || 80;
@@ -29450,7 +29452,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 fuelBreakdown: {
                     navigation: { tons: T_sea * cSea, cost: routeConsumptionCost + extraEcaCost, days: T_sea },
                     port: { tons: T_port * cPort, cost: portConsumptionCost, days: T_port },
-                    anchorage: { tons: smartAnchorageDays * cAnchorage, cost: anchorageConsumptionCost, days: smartAnchorageDays },
+                    anchorage: { tons: 0, cost: anchorageConsumptionCost, days: smartAnchorageDays },
                     totalTons: totalConsumption,
                     totalCost: totalBunkers
                 },

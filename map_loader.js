@@ -58,8 +58,8 @@
             }
         },
         icons: {
-            load: '/public/Ancla Load.svg',
-            discharge: '/public/Ancla Discharge.svg'
+            load: '/Ancla Load.svg',
+            discharge: '/Ancla Discharge.svg'
         }
     });
 
@@ -940,7 +940,7 @@
         const normalizedPol = polName ? String(polName).toUpperCase().trim() : "";
         const normalizedPod = podName ? String(podName).toUpperCase().trim() : "";
         const radarZone = String(vessel.aisRadarZone || (vessel.MetaData && vessel.MetaData.aisRadarZone) || "").toUpperCase();
-        const radarColor = vessel.aisRadarColor || (radarZone === "POL" ? "#16a34a" : (radarZone === "POD" ? "#6d28d9" : ""));
+        const radarColor = vessel.aisRadarColor || (radarZone === "POL" ? "#16a34a" : (radarZone === "POD" ? "#2563eb" : ""));
         const isKeyPort = !!(
             (normalizedPol && destination.includes(normalizedPol)) ||
             (normalizedPod && destination.includes(normalizedPod))
@@ -955,7 +955,7 @@
             iconColor = "#16a34a";
         } else if (radarZone === "POD") {
             iconClass = "fa-ship";
-            iconColor = "#6d28d9";
+            iconColor = "#2563eb";
         } else if (isKeyPort) {
             iconClass = "fa-flag";
             iconColor = "#ef4444";
