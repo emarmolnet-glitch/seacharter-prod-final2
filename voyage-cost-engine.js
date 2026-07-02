@@ -387,7 +387,7 @@
         readState() {
             const seaDays = toNumber((this.el('res-days-ballast')?.textContent || '').replace(/[^\d.-]/g, '')) +
                 toNumber((this.el('res-days-laden')?.textContent || '').replace(/[^\d.-]/g, '')) +
-                this.readNumber('days-margin');
+                this.readNumber('factor-clima');
             const cargoTons = this.readNumber('cargo-qty');
             const metodoEstiba = toText(this.el('metodo_carga')?.value) || 'cinta_transportadora';
             const metodoDescarga = toText(this.el('metodo_descarga_pod')?.value) || metodoEstiba;
