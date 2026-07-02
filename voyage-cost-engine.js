@@ -16,16 +16,24 @@
         return String(value || '').trim();
     }
 
-    const RITMO_BASE_PUERTO = 5000;
+    const RITMOS_BASE_PUERTO = {
+        cinta_transportadora: 2500,
+        camion_tolva: 1500,
+        cuchara_grab: 1200,
+        grua_portuaria_30mt: 1200,
+        big_bags: 1100,
+        paletizado: 1000,
+        hierro_acero_piezas: 1000
+    };
     const FACTORES_ESTIBA = {
         cinta_transportadora: 1.0,
-        camion_tolva: 0.75,
-        cuchara_grab: 0.6,
-        big_bags: 0.4,
-        paletizado: 0.2,
-        hierro_acero_piezas: 0.35
+        camion_tolva: 1.0,
+        cuchara_grab: 1.0,
+        grua_portuaria_30mt: 1.0,
+        big_bags: 1.0,
+        paletizado: 1.0,
+        hierro_acero_piezas: 1.0
     };
-    const FACTOR_EFICIENCIA_PUERTO = 0.85;
 
     function normalizeText(value) {
         return toText(value)
@@ -158,15 +166,15 @@
     }
 
     function getRealPortRate(method) {
-        return RITMO_BASE_PUERTO * getStowageMethodFactor(method);
+        return RITMOS_BASE_PUERTO[method] || RITMOS_BASE_PUERTO.cinta_transportadora;
     }
 
-    function calculatePortDaysByStowage(cargoTons, method, realRate, cargoType) {
+    function calculatePortDaysByStowage(cargoTons, method, realRate, cargoType, craneCount = 1) {
         const cargo = toNumber(cargoTons);
         const rate = toNumber(realRate) || getRealPortRate(method);
+        const cranes = Math.max(1, Math.floor(toNumber(craneCount) || 1));
         if (cargo <= 0 || rate <= 0) return 0;
-        if (normalizeCargoType(cargoType) === 'acero') return cargo / rate;
-        return (cargo / rate) / FACTOR_EFICIENCIA_PUERTO;
+        return Math.ceil(cargo / (rate * cranes));
     }
 
     function shouldAutoEstimateStevedoring(policyType) {
@@ -391,13 +399,15 @@
             const cargoTons = this.readNumber('cargo-qty');
             const metodoEstiba = toText(this.el('metodo_carga')?.value) || 'cinta_transportadora';
             const metodoDescarga = toText(this.el('metodo_descarga_pod')?.value) || metodoEstiba;
-            const nominalPol = this.readNumber('ritmo_nominal_pol') || this.readNumber('rate-load');
-            const nominalPod = this.readNumber('ritmo_nominal_pod') || this.readNumber('rate-disch');
+            const cranesPol = Math.max(1, Math.floor(this.readNumber('ritmo_nominal_pol') || 1));
+            const cranesPod = Math.max(1, Math.floor(this.readNumber('ritmo_nominal_pod') || 1));
+            const nominalPol = root.getRitmoBasePuerto ? root.getRitmoBasePuerto(metodoEstiba) : getRealPortRate(metodoEstiba);
+            const nominalPod = root.getRitmoBasePuerto ? root.getRitmoBasePuerto(metodoDescarga) : getRealPortRate(metodoDescarga);
             const tipoCarga = toText(this.el('cargo-type')?.value);
             const realPolRate = this.readNumber('rate-load') || (root.getRitmoRealPuerto ? root.getRitmoRealPuerto(metodoEstiba, nominalPol) : (nominalPol * getStowageMethodFactor(metodoEstiba)));
             const realPodRate = this.readNumber('rate-disch') || (root.getRitmoRealPuerto ? root.getRitmoRealPuerto(metodoDescarga, nominalPod) : (nominalPod * getStowageMethodFactor(metodoDescarga)));
-            const calculatePortDays = root.calcularDiasPuertoPorEstiba || ((tons, rate, method) => calculatePortDaysByStowage(tons, method, rate));
-            const portDays = calculatePortDays(cargoTons, realPolRate, metodoEstiba) + calculatePortDays(cargoTons, realPodRate, metodoDescarga);
+            const calculatePortDays = root.calcularDiasPuertoPorEstiba || ((tons, rate, method, craneCount) => calculatePortDaysByStowage(tons, method, rate, tipoCarga, craneCount));
+            const portDays = calculatePortDays(cargoTons, realPolRate, metodoEstiba, cranesPol) + calculatePortDays(cargoTons, realPodRate, metodoDescarga, cranesPod);
             return {
                 dias_navegacion: seaDays,
                 dias_puerto: portDays,
@@ -427,6 +437,8 @@
                 crane_swl_mt: this.readPossiblyEstimatedNumber('crane-swl-mt'),
                 peso_pieza_mt: this.readNumber('peso-pieza-mt'),
                 ciclos_hora_grua: this.readNumber('ciclos-hora-grua'),
+                gruas_operativas_pol: cranesPol,
+                gruas_operativas_pod: cranesPod,
                 grab_capacity_cbm: this.readPossiblyEstimatedNumber('grab-capacity-cbm'),
                 canal_seleccionado: toText(this.el('selected-canal')?.value) || 'Auto',
                 charter_party_standard: toText(this.el('charter-party-standard')?.value) || 'GENCON'
@@ -673,9 +685,8 @@
         calculateWarRiskPremium,
         calculateTurnTimeDays,
         normalizeCargoType,
-        RITMO_BASE_PUERTO,
+        RITMOS_BASE_PUERTO,
         FACTORES_ESTIBA,
-        FACTOR_EFICIENCIA_PUERTO,
         getStowageMethodFactor,
         getRealPortRate,
         calculatePortDaysByStowage,

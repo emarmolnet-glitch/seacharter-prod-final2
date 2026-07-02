@@ -5262,19 +5262,21 @@
                                 <select id="metodo_carga" class="input-gc action-required-field text-action-required" onchange="recalcularDiasPuerto()">
                                     <option value="cinta_transportadora">Cinta Transportadora</option>
                                     <option value="camion_tolva">Camión Tolva</option>
-                                    <option value="cuchara_grab">Cuchara (Grab)</option>
-                                    <option value="big_bags">Big Bags</option>
-                                    <option value="paletizado">Paletizado</option>
+                                    <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
+                                    <option value="grua_portuaria_30mt">Grúa Portuaria 30MT</option>
+                                    <option value="big_bags">Big Bags (con Grúa)</option>
+                                    <option value="paletizado">Paletizado / Piezas (con Grúa)</option>
                                     <option value="hierro_acero_piezas">Hierro/Acero/Piezas</option>
                                 </select>
                             </div>
                             <div class="input-group">
-                                <label id="label-ritmo-nominal-pol" class="text-action-required">Ritmo Nominal POL (TM/d)</label>
-                                <input type="number" id="ritmo_nominal_pol" class="input-gc action-required-field text-action-required font-bold" value="5000" oninput="recalcularDiasPuerto()">
+                                <label id="label-ritmo-nominal-pol" class="text-action-required">Nº Grúas POL</label>
+                                <input type="number" id="ritmo_nominal_pol" class="input-gc action-required-field text-action-required font-bold" value="1" min="1" step="1" oninput="recalcularDiasPuerto()">
                             </div>
                             <div class="input-group">
                                 <label id="label-rate-load" class="text-action-required">Ritmo Real POL (TM/d)</label>
-                                <input type="number" id="rate-load" class="input-gc bg-gray-100 action-required-field text-action-required font-bold" value="5000" readonly>
+                                <input type="number" id="rate-load" class="input-gc action-required-field text-action-required font-bold" value="2500" oninput="marcarRitmoManual('pol')">
+                                <p id="rate-load-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
                             </div>
                         </div>
 
@@ -5284,19 +5286,21 @@
                                 <select id="metodo_descarga_pod" class="input-gc action-required-field text-action-required" onchange="recalcularDiasPuerto()">
                                     <option value="cinta_transportadora">Cinta Transportadora</option>
                                     <option value="camion_tolva">Camión Tolva</option>
-                                    <option value="cuchara_grab">Cuchara (Grab)</option>
-                                    <option value="big_bags">Big Bags</option>
-                                    <option value="paletizado">Paletizado</option>
+                                    <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
+                                    <option value="grua_portuaria_30mt">Grúa Portuaria 30MT</option>
+                                    <option value="big_bags">Big Bags (con Grúa)</option>
+                                    <option value="paletizado">Paletizado / Piezas (con Grúa)</option>
                                     <option value="hierro_acero_piezas">Hierro/Acero/Piezas</option>
                                 </select>
                             </div>
                             <div class="input-group">
-                                <label id="label-ritmo-nominal-pod" class="text-action-required">Ritmo Nominal POD (TM/d)</label>
-                                <input type="number" id="ritmo_nominal_pod" class="input-gc action-required-field text-action-required font-bold" value="5000" oninput="recalcularDiasPuerto()">
+                                <label id="label-ritmo-nominal-pod" class="text-action-required">Nº Grúas POD</label>
+                                <input type="number" id="ritmo_nominal_pod" class="input-gc action-required-field text-action-required font-bold" value="1" min="1" step="1" oninput="recalcularDiasPuerto()">
                             </div>
                             <div class="input-group">
                                 <label id="label-rate-disch" class="text-action-required">Ritmo Real POD (TM/d)</label>
-                                <input type="number" id="rate-disch" class="input-gc bg-gray-100 action-required-field text-action-required font-bold" value="5000" readonly>
+                                <input type="number" id="rate-disch" class="input-gc action-required-field text-action-required font-bold" value="2500" oninput="marcarRitmoManual('pod')">
+                                <p id="rate-disch-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
                             </div>
                         </div>
 
@@ -5736,9 +5740,9 @@
                                     <div>
                                         <div class="text-[10px] text-slate-500 uppercase font-black flex items-center gap-1">
                                             Benchmark Mercado
-                                            <span class="field-tooltip-trigger" tabindex="0" role="button" aria-label="Referencia automática calculada con ruta, carga, búnker, distancia y tensión AIS/mercado disponible.">
+                                            <span id="market-benchmark-tooltip" class="field-tooltip-trigger" tabindex="0" role="button" aria-label="Cálculo basado en: 0 contratos recientes. Peso temporal: 70% (últimos 90 días)">
                                                 <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.7"></circle><path d="M10 8.8v5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path><circle cx="10" cy="6" r="1" fill="currentColor"></circle></svg>
-                                                <span class="field-tooltip-content">Referencia automática calculada con ruta, carga, búnker, distancia y tensión AIS/mercado disponible.</span>
+                                                <span id="market-benchmark-tooltip-content" class="field-tooltip-content">Cálculo basado en: 0 contratos recientes. Peso temporal: 70% (últimos 90 días)</span>
                                             </span>
                                         </div>
                                         <div id="res-market-benchmark-source" class="text-[10px] text-slate-500 mt-0.5">Pendiente de datos de ruta.</div>
@@ -5746,6 +5750,19 @@
                                     <div class="text-right">
                                         <div id="res-market-benchmark-rate" class="text-base font-black mono text-slate-900">$0.00/TM</div>
                                         <div id="res-market-benchmark-alert" class="mt-1 inline-flex rounded px-2 py-1 text-[10px] font-black uppercase bg-slate-200 text-slate-600">Sin referencia</div>
+                                    </div>
+                                </div>
+                                <div class="mt-3 border-t border-slate-200 pt-2">
+                                    <label for="market-calibration-factor" class="text-[10px] text-slate-500 uppercase font-black flex items-center gap-1">
+                                        Factor de Calibración de Mercado
+                                        <span class="field-tooltip-trigger" tabindex="0" role="button" aria-label="Multiplicador final aplicado solo al Benchmark Mercado. Usa 1.00 sin ajuste, 0.98 o 0.95 para una referencia más agresiva.">
+                                            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.7"></circle><path d="M10 8.8v5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path><circle cx="10" cy="6" r="1" fill="currentColor"></circle></svg>
+                                            <span class="field-tooltip-content">Multiplicador final aplicado solo al Benchmark Mercado. Usa 1.00 sin ajuste, 0.98 o 0.95 para una referencia más agresiva.</span>
+                                        </span>
+                                    </label>
+                                    <div class="mt-1 flex items-center rounded border border-slate-300 bg-white px-2">
+                                        <input type="number" id="market-calibration-factor" class="w-full bg-transparent py-1 text-right text-xs font-bold text-slate-900 outline-none" value="1.00" min="0.50" max="1.50" step="0.01" oninput="runEngine()">
+                                        <span class="ml-1 text-[10px] font-bold text-slate-400">x</span>
                                     </div>
                                 </div>
                                 <div id="market-adjustment-card" class="hidden mt-3 rounded border border-orange-300 bg-orange-50 p-2">
@@ -9873,6 +9890,11 @@
             }
             setText('res-market-benchmark-rate', '$0.00/TM');
             setText('res-market-benchmark-source', 'Pendiente de datos de ruta.');
+            const benchmarkTooltipText = 'Cálculo basado en: 0 contratos recientes. Peso temporal: 70% (últimos 90 días)';
+            const benchmarkTooltip = document.getElementById('market-benchmark-tooltip');
+            const benchmarkTooltipContent = document.getElementById('market-benchmark-tooltip-content');
+            if (benchmarkTooltip) benchmarkTooltip.setAttribute('aria-label', benchmarkTooltipText);
+            if (benchmarkTooltipContent) benchmarkTooltipContent.innerText = benchmarkTooltipText;
             const adjustmentCard = document.getElementById('market-adjustment-card');
             const adjustmentDetail = document.getElementById('res-market-adjustment-detail');
             const adjustmentButton = document.getElementById('btn-apply-market-adjustment');
@@ -15488,29 +15510,29 @@
                 const packingEl = document.getElementById('gc-add-packing');
                 if (packingEl) packingEl.value = 'standard';
                 if (surchargeEl) surchargeEl.value = 0;
-                if (marginOwnerEl) marginOwnerEl.value = 32;
-                if (marginChartererEl) marginChartererEl.value = 12;
+                if (marginOwnerEl) marginOwnerEl.value = DEFAULT_OWNER_MARGIN_PERCENT;
+                if (marginChartererEl) marginChartererEl.value = DEFAULT_CHARTERER_MARGIN_PERCENT;
             } else if (type === 'Granel Líquido (Liquid Bulk)') {
                 sf = 1.30;
                 const packingEl = document.getElementById('gc-add-packing');
                 if (packingEl) packingEl.value = 'standard';
                 if (surchargeEl) surchargeEl.value = 0;
-                if (marginOwnerEl) marginOwnerEl.value = 50;
-                if (marginChartererEl) marginChartererEl.value = 20;
+                if (marginOwnerEl) marginOwnerEl.value = DEFAULT_OWNER_MARGIN_PERCENT;
+                if (marginChartererEl) marginChartererEl.value = DEFAULT_CHARTERER_MARGIN_PERCENT;
             } else if (type === 'Big Bags (in Big Bag)') {
                 sf = 1.65;
                 const packingEl = document.getElementById('gc-add-packing');
                 if (packingEl) packingEl.value = 'bigbag';
                 if (surchargeEl) surchargeEl.value = 0;
-                if (marginOwnerEl) marginOwnerEl.value = 32;
-                if (marginChartererEl) marginChartererEl.value = 12;
+                if (marginOwnerEl) marginOwnerEl.value = DEFAULT_OWNER_MARGIN_PERCENT;
+                if (marginChartererEl) marginChartererEl.value = DEFAULT_CHARTERER_MARGIN_PERCENT;
             } else if (type === 'Paletizada (palletized)') {
                 sf = 2.10;
                 const packingEl = document.getElementById('gc-add-packing');
                 if (packingEl) packingEl.value = 'pallet';
                 if (surchargeEl) surchargeEl.value = 0;
-                if (marginOwnerEl) marginOwnerEl.value = 32;
-                if (marginChartererEl) marginChartererEl.value = 12;
+                if (marginOwnerEl) marginOwnerEl.value = DEFAULT_OWNER_MARGIN_PERCENT;
+                if (marginChartererEl) marginChartererEl.value = DEFAULT_CHARTERER_MARGIN_PERCENT;
             } else if (type === 'Medidas Especiales (special measures)') {
                 sf = 2.50;
                 const packingEl = document.getElementById('gc-add-packing');
@@ -15518,8 +15540,8 @@
                 if (surchargeEl && (parseFloat(surchargeEl.value) === 0 || !surchargeEl.value)) {
                     surchargeEl.value = 15000; // Default flat surcharge of $15,000
                 }
-                if (marginOwnerEl) marginOwnerEl.value = 32;
-                if (marginChartererEl) marginChartererEl.value = 12;
+                if (marginOwnerEl) marginOwnerEl.value = DEFAULT_OWNER_MARGIN_PERCENT;
+                if (marginChartererEl) marginChartererEl.value = DEFAULT_CHARTERER_MARGIN_PERCENT;
             }
             
             document.getElementById('cargo-sf').value = sf.toFixed(2);
@@ -16688,7 +16710,61 @@
             State.coreValidation = { blocked, messages, warnings };
         }
 
-        function getRouteMarketBenchmark({
+        const MARKET_BENCHMARK_RECENCY_DAYS = 90;
+        const MARKET_BENCHMARK_RECENT_WEIGHT = 0.70;
+        const MARKET_BENCHMARK_OLDER_WEIGHT = 0.30;
+
+        function readMarketCalibrationFactor() {
+            const raw = Number(document.getElementById('market-calibration-factor')?.value);
+            return Number.isFinite(raw) && raw > 0 ? raw : 1;
+        }
+
+        function getClosedMarketContracts() {
+            const sources = [
+                State?.closedMarketContracts,
+                State?.marketContracts,
+                State?.fixtureHistory,
+                window.SeaCharterClosedMarketContracts,
+                window.SeaCharterMarketContracts
+            ];
+            for (const source of sources) {
+                if (Array.isArray(source)) return source;
+            }
+            try {
+                const stored = JSON.parse(localStorage.getItem('seacharter_closed_market_contracts') || '[]');
+                return Array.isArray(stored) ? stored : [];
+            } catch (error) {
+                return [];
+            }
+        }
+
+        function readMarketContractRate(contract = {}) {
+            const values = [
+                contract.rate,
+                contract.freightRate,
+                contract.freightSell,
+                contract.marketRate,
+                contract.pricePerTon,
+                contract.usdPerTon,
+                contract.calculation_data?.freightSell,
+                contract.calculation_data?.ventaSugerida,
+                contract.calculationData?.freightSell,
+                contract.calculationData?.ventaSugerida
+            ];
+            for (const value of values) {
+                const rate = Number(value);
+                if (Number.isFinite(rate) && rate > 0) return rate;
+            }
+            return 0;
+        }
+
+        function readMarketContractDate(contract = {}) {
+            const rawDate = contract.closedAt || contract.fixtureDate || contract.issue_date || contract.issueDate || contract.date || contract.fecha || contract.calculation_data?.issueDate || contract.calculationData?.issueDate;
+            const timestamp = rawDate ? Date.parse(rawDate) : NaN;
+            return Number.isFinite(timestamp) ? timestamp : 0;
+        }
+
+        function calculateMarketBenchmark({
             breakEven = 0,
             totalMiles = 0,
             cargo = 0,
@@ -16702,7 +16778,14 @@
             const cargoTons = Math.max(0, Number(cargo) || 0);
             const baseBreakEven = Math.max(0, Number(breakEven) || 0);
             if (!routeMiles || !cargoTons || !baseBreakEven) {
-                return { rate: 0, source: 'Pendiente de datos de ruta.' };
+                return {
+                    rate: 0,
+                    source: 'Pendiente de datos de ruta.',
+                    recentContracts: 0,
+                    olderContracts: 0,
+                    temporalWeightLabel: '70% (últimos 90 días)',
+                    calibrationFactor: readMarketCalibrationFactor()
+                };
             }
 
             const bunker = Math.max(1, Number(bunkerPrice) || 650);
@@ -16715,11 +16798,52 @@
             const aisStatus = document.getElementById('ais-market-status')?.innerText || document.getElementById('match-market-status')?.innerText || '';
             const aisIndex = /tenso|poca oferta/i.test(aisStatus) ? 1.08 : (/saturado|alta oferta/i.test(aisStatus) ? 0.95 : 1);
             const routeKey = `${pol || 'POL'} -> ${pod || 'POD'}`;
-            const marketRate = baseBreakEven * 1.075 * distanceBand * cargoScale * bunkerIndex * etsIndex * cargoIndex * aisIndex;
+            const modelRate = baseBreakEven * distanceBand * cargoScale * bunkerIndex * etsIndex * cargoIndex * aisIndex;
+            const cutoff = Date.now() - (MARKET_BENCHMARK_RECENCY_DAYS * 24 * 60 * 60 * 1000);
+            const contracts = getClosedMarketContracts()
+                .map((contract) => ({
+                    rate: readMarketContractRate(contract),
+                    timestamp: readMarketContractDate(contract)
+                }))
+                .filter((contract) => contract.rate > 0);
+            const average = (items) => items.length
+                ? items.reduce((sum, item) => sum + item.rate, 0) / items.length
+                : 0;
+            const recentContracts = contracts.filter((contract) => contract.timestamp >= cutoff);
+            const olderContracts = contracts.filter((contract) => !contract.timestamp || contract.timestamp < cutoff);
+            const recentAverage = average(recentContracts);
+            const olderAverage = average(olderContracts);
+            let temporalRate = modelRate;
+            if (recentAverage > 0 && olderAverage > 0) {
+                temporalRate = (recentAverage * MARKET_BENCHMARK_RECENT_WEIGHT) + (olderAverage * MARKET_BENCHMARK_OLDER_WEIGHT);
+            } else if (recentAverage > 0) {
+                temporalRate = recentAverage;
+            } else if (olderAverage > 0) {
+                temporalRate = olderAverage;
+            }
+            const calibrationFactor = readMarketCalibrationFactor();
+            const marketRate = temporalRate * calibrationFactor;
+            const sourceParts = [
+                `Mercado real ${routeKey}`,
+                `${recentContracts.length} contratos recientes`,
+                `${olderContracts.length} anteriores`,
+                `${Math.round(routeMiles).toLocaleString('en-US')} NM`,
+                `calibración ${calibrationFactor.toFixed(2)}x`
+            ];
             return {
                 rate: Math.max(0, marketRate),
-                source: `Mercado estimado ${routeKey}: ${Math.round(routeMiles).toLocaleString('en-US')} NM · búnker $${Math.round(bunker).toLocaleString('en-US')}/t`
+                rawRate: Math.max(0, temporalRate),
+                modelRate: Math.max(0, modelRate),
+                recentContracts: recentContracts.length,
+                olderContracts: olderContracts.length,
+                temporalWeightLabel: '70% (últimos 90 días)',
+                calibrationFactor,
+                source: `${sourceParts.join(' · ')} · búnker $${Math.round(bunker).toLocaleString('en-US')}/t`
             };
+        }
+
+        function getRouteMarketBenchmark(options = {}) {
+            return calculateMarketBenchmark(options);
         }
 
         function updateMarketBenchmarkComparison(vsf = 0, benchmark = {}) {
@@ -16730,6 +16854,11 @@
             const adjustmentDetail = document.getElementById('res-market-adjustment-detail');
             const adjustmentButton = document.getElementById('btn-apply-market-adjustment');
             const rate = Number(benchmark.rate) || 0;
+            const tooltipText = `Cálculo basado en: ${Number(benchmark.recentContracts) || 0} contratos recientes. Peso temporal: ${benchmark.temporalWeightLabel || '70% (últimos 90 días)'}`;
+            const tooltipTrigger = document.getElementById('market-benchmark-tooltip');
+            const tooltipContent = document.getElementById('market-benchmark-tooltip-content');
+            if (tooltipTrigger) tooltipTrigger.setAttribute('aria-label', tooltipText);
+            if (tooltipContent) tooltipContent.innerText = tooltipText;
             const resetAdjustment = (message = 'Esperando comparación de mercado.') => {
                 if (adjustmentCard) adjustmentCard.classList.add('hidden');
                 if (adjustmentDetail) adjustmentDetail.innerText = message;
@@ -17129,8 +17258,8 @@
 
             const dBal = isZeroCalculation ? 0 : (distBal / (spdBal > 0 ? (spdBal * 24) : 24));
             const dLaden = isZeroCalculation ? 0 : (distLaden / (spdLaden > 0 ? (spdLaden * 24) : 24));
-            const dPortLoad = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba);
-            const dPortDisch = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga);
+            const dPortLoad = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba, readNumeroGruasPuerto('pol'));
+            const dPortDisch = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga, readNumeroGruasPuerto('pod'));
             const dPort = isZeroCalculation ? 0 : (dPortLoad + dPortDisch);
             const dPortTotal = isZeroCalculation ? 0 : (dPort + genconTurnTimeDays + diasPreparacionProyecto);
             const seaPortDays = isZeroCalculation ? 0 : (dBal + dLaden + dPortTotal);
@@ -17438,6 +17567,7 @@
             State.breakEven = breakEven;
             State.marginOwner = marginOwner;
             State.marginCharterer = marginChart;
+            State.marketCalibrationFactor = readMarketCalibrationFactor();
             const marketBenchmark = getRouteMarketBenchmark({
                 breakEven: breakEvenParaVentaSugerida,
                 totalMiles: distBal + distLaden,
@@ -17656,6 +17786,7 @@
             State.etsCostPMT = etsCostPMT;
             State.applyEtsSurcharge = applySurcharge;
             State.euCarbonPrice = euPrice;
+            State.marketCalibrationFactor = readMarketCalibrationFactor();
             State.sugOwnerBase = sugOwnerBase;
             State.sugChartBase = sugChartBase;
             State.precioObjetivoArmador = precioObjetivoArmador;
@@ -19141,8 +19272,8 @@
             const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
             const metodoEstiba = getMetodoEstibaActual();
             const metodoDescarga = getMetodoDescargaActual();
-            const dPort = calcularDiasPuertoPorEstiba(cargoQty, parseFloat(document.getElementById('rate-load')?.value) || getRitmoRealPuerto(metodoEstiba, readRitmoNominalPuerto('pol')), metodoEstiba) +
-                calcularDiasPuertoPorEstiba(cargoQty, parseFloat(document.getElementById('rate-disch')?.value) || getRitmoRealPuerto(metodoDescarga, readRitmoNominalPuerto('pod')), metodoDescarga);
+            const dPort = calcularDiasPuertoPorEstiba(cargoQty, parseFloat(document.getElementById('rate-load')?.value) || getRitmoRealPuerto(metodoEstiba, readRitmoNominalPuerto('pol')), metodoEstiba, readNumeroGruasPuerto('pol')) +
+                calcularDiasPuertoPorEstiba(cargoQty, parseFloat(document.getElementById('rate-disch')?.value) || getRitmoRealPuerto(metodoDescarga, readRitmoNominalPuerto('pod')), metodoDescarga, readNumeroGruasPuerto('pod'));
 
             // 2. Perform local algorithmic calculation (Low, Medium, High delay estimates)
             const highRiskCountries = ['UA', 'RU', 'IL', 'YE', 'SY', 'LY', 'SO', 'TW'];
@@ -19545,8 +19676,8 @@
             const T_sea = dBal + dLaden + marginDaysValue;
             const metodoEstiba = getMetodoEstibaActual();
             const metodoDescarga = getMetodoDescargaActual();
-            const T_port = calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba) +
-                calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga);
+            const T_port = calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba, readNumeroGruasPuerto('pol')) +
+                calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga, readNumeroGruasPuerto('pod'));
 
             const totalConsumption = (T_sea * cSea) + (T_port * cPort);
             // La fórmula del BAF (Bunker Adjustment Factor): Consumo Total / Toneladas Carga. Multiplicado por $10 para dar un ratio limpio al fletador.
@@ -23944,6 +24075,7 @@ Example:
                     setVal('apply-ets-surcharge', State.applyEtsSurcharge !== undefined ? State.applyEtsSurcharge : 'NO');
                     setVal('ets-route-type', State.etsRouteFactor !== undefined ? State.etsRouteFactor : 1);
                     setVal('eu-carbon-price', State.euCarbonPrice !== undefined ? State.euCarbonPrice : 80);
+                    setVal('market-calibration-factor', State.marketCalibrationFactor !== undefined ? State.marketCalibrationFactor : 1);
 
                     // Actualizar el distintivo de clase de buque si existe el elemento
                     if (document.getElementById('vessel-badge')) {
@@ -24835,6 +24967,7 @@ ADDITIONAL NOTES:
                         setVal('apply-ets-surcharge', State.applyEtsSurcharge !== undefined ? State.applyEtsSurcharge : 'NO');
                         setVal('ets-route-type', State.etsRouteFactor !== undefined ? State.etsRouteFactor : 1);
                         setVal('eu-carbon-price', State.euCarbonPrice !== undefined ? State.euCarbonPrice : 80);
+                        setVal('market-calibration-factor', State.marketCalibrationFactor !== undefined ? State.marketCalibrationFactor : 1);
 
                         if (document.getElementById('vessel-badge')) {
                             document.getElementById('vessel-badge').innerText = State.class || "Coaster";
@@ -27936,15 +28069,24 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
         });
 
+        const RITMOS_BASE_PUERTO = {
+            cinta_transportadora: 2500,
+            camion_tolva: 1500,
+            cuchara_grab: 1200,
+            grua_portuaria_30mt: 1200,
+            big_bags: 1100,
+            paletizado: 1000,
+            hierro_acero_piezas: 1000
+        };
         const FACTORES_ESTIBA = {
             cinta_transportadora: 1.0,
-            camion_tolva: 0.75,
-            cuchara_grab: 0.6,
-            big_bags: 0.4,
-            paletizado: 0.2,
-            hierro_acero_piezas: 0.35
+            camion_tolva: 1.0,
+            cuchara_grab: 1.0,
+            grua_portuaria_30mt: 1.0,
+            big_bags: 1.0,
+            paletizado: 1.0,
+            hierro_acero_piezas: 1.0
         };
-        const FACTOR_EFICIENCIA_PUERTO = 0.85;
         const COA_PDA_DILUTION_FACTOR = 0.85;
 
         function getMetodoEstibaActual() {
@@ -27957,6 +28099,33 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function getFactorEstibaPuerto(metodo = getMetodoEstibaActual()) {
             return FACTORES_ESTIBA[metodo] || FACTORES_ESTIBA.cinta_transportadora;
+        }
+
+        function getRitmoBasePuerto(metodo = getMetodoEstibaActual()) {
+            return RITMOS_BASE_PUERTO[metodo] || RITMOS_BASE_PUERTO.cinta_transportadora;
+        }
+
+        function readNumeroGruasPuerto(side = 'pol') {
+            const id = side === 'pod' ? 'ritmo_nominal_pod' : 'ritmo_nominal_pol';
+            return Math.max(1, Math.floor(parseFloat(document.getElementById(id)?.value) || 1));
+        }
+
+        function setRitmoManualIndicator(side = 'pol', isManual = false) {
+            const inputId = side === 'pod' ? 'rate-disch' : 'rate-load';
+            const badgeId = side === 'pod' ? 'rate-disch-override' : 'rate-load-override';
+            const input = document.getElementById(inputId);
+            const badge = document.getElementById(badgeId);
+            if (input) {
+                input.dataset.manualOverride = isManual ? 'true' : 'false';
+                input.classList.toggle('border-amber-400', isManual);
+                input.classList.toggle('text-amber-300', isManual);
+            }
+            if (badge) badge.classList.toggle('hidden', !isManual);
+        }
+
+        function marcarRitmoManual(side = 'pol') {
+            setRitmoManualIndicator(side, true);
+            if (typeof runEngine === 'function') runEngine();
         }
 
         function getOperacionModo() {
@@ -28088,16 +28257,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function readRitmoNominalPuerto(side = 'pol') {
-            const id = side === 'pod' ? 'ritmo_nominal_pod' : 'ritmo_nominal_pol';
-            const fallbackId = side === 'pod' ? 'rate-disch' : 'rate-load';
-            const nominal = parseFloat(document.getElementById(id)?.value);
-            if (Number.isFinite(nominal) && nominal > 0) return nominal;
-            return parseFloat(document.getElementById(fallbackId)?.value) || 0;
+            const metodo = side === 'pod' ? getMetodoDescargaActual() : getMetodoEstibaActual();
+            return getRitmoBasePuerto(metodo);
         }
 
         function getRitmoRealPuerto(metodo = getMetodoEstibaActual(), ritmoNominal = readRitmoNominalPuerto('pol')) {
-            const nominal = Math.max(0, parseFloat(ritmoNominal) || 0);
-            return nominal * getFactorEstibaPuerto(metodo);
+            return Math.max(0, parseFloat(ritmoNominal) || getRitmoBasePuerto(metodo));
         }
 
         function calcularRitmoEfectivo(side = 'pol') {
@@ -28117,12 +28282,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return getRitmoRealPuerto(metodo, readRitmoNominalPuerto(side));
         }
 
-        function calcularDiasPuertoPorEstiba(toneladasCarga, ritmoReal = getRitmoRealPuerto(), metodo = getMetodoEstibaActual()) {
+        function calcularDiasPuertoPorEstiba(toneladasCarga, ritmoReal = getRitmoRealPuerto(), metodo = getMetodoEstibaActual(), numeroGruas = 1) {
             const toneladas = Math.max(0, parseFloat(toneladasCarga) || 0);
             const ritmo = Math.max(0, parseFloat(ritmoReal) || 0);
+            const gruas = Math.max(1, Math.floor(parseFloat(numeroGruas) || 1));
             if (toneladas <= 0 || ritmo <= 0) return 0;
-            if (normalizarTipoCarga() === 'acero') return toneladas / ritmo;
-            return (toneladas / ritmo) / FACTOR_EFICIENCIA_PUERTO;
+            return Math.ceil(toneladas / (ritmo * gruas));
         }
 
         function costeTrincajeCondicional() {
@@ -28201,11 +28366,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const inputDescarga = document.getElementById('rate-disch');
 
             if (inputCarga) {
-                inputCarga.value = ritmoRealPol.toFixed(0);
+                const metodoAnterior = inputCarga.dataset.autoMetodoCarga;
+                if (metodoAnterior !== metodoPol) setRitmoManualIndicator('pol', false);
+                if (inputCarga.dataset.manualOverride !== 'true') inputCarga.value = ritmoRealPol.toFixed(0);
                 inputCarga.dataset.autoMetodoCarga = metodoPol;
             }
             if (inputDescarga) {
-                inputDescarga.value = ritmoRealPod.toFixed(0);
+                const metodoAnterior = inputDescarga.dataset.autoMetodoDescarga;
+                if (metodoAnterior !== metodoPod) setRitmoManualIndicator('pod', false);
+                if (inputDescarga.dataset.manualOverride !== 'true') inputDescarga.value = ritmoRealPod.toFixed(0);
                 inputDescarga.dataset.autoMetodoDescarga = metodoPod;
             }
             actualizarAlertaMetodoCarga(metodoPol);
@@ -28218,8 +28387,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         if (typeof window !== 'undefined') {
+            window.RITMOS_BASE_PUERTO = RITMOS_BASE_PUERTO;
             window.FACTORES_ESTIBA = FACTORES_ESTIBA;
-            window.FACTOR_EFICIENCIA_PUERTO = FACTOR_EFICIENCIA_PUERTO;
+            window.getRitmoBasePuerto = getRitmoBasePuerto;
+            window.readNumeroGruasPuerto = readNumeroGruasPuerto;
+            window.marcarRitmoManual = marcarRitmoManual;
             window.readRitmoNominalPuerto = readRitmoNominalPuerto;
             window.normalizarTipoCarga = normalizarTipoCarga;
             window.calcularRitmoEfectivo = calcularRitmoEfectivo;
@@ -28790,8 +28962,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const dBal = isZeroCalculation ? 0 : (distBal / (spdBal > 0 ? (spdBal * 24) : 24));
             const dLaden = isZeroCalculation ? 0 : (distLaden / (spdLaden > 0 ? (spdLaden * 24) : 24));
-            const dPortLoad = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba);
-            const dPortDisch = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga);
+            const dPortLoad = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba, readNumeroGruasPuerto('pol'));
+            const dPortDisch = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga, readNumeroGruasPuerto('pod'));
             const dPort = isZeroCalculation ? 0 : (dPortLoad + dPortDisch);
             const dPortTotal = isZeroCalculation ? 0 : (dPort + genconTurnTimeDays + diasPreparacionProyecto);
 
@@ -29413,11 +29585,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             'cargo-type': 'Clasificación operativa de la mercancía. Activa factores de estiba, trincaje y riesgos.',
             'charter-party-standard': 'Formulario contractual base. Ajusta laytime, demoras y supuestos de póliza.',
             'metodo_carga': 'Sistema físico usado en POL. Aplica el factor de productividad sobre el ritmo nominal.',
-            'ritmo_nominal_pol': 'Capacidad teórica diaria declarada por terminal o estibador antes de ajustes.',
-            'rate-load': 'Velocidad operativa (TM/día). Determina los días de Laytime.',
+            'ritmo_nominal_pol': 'Número de grúas operativas que multiplican el ritmo base del método de carga.',
+            'rate-load': 'Ritmo base operativo (TM/día). Se autocompleta por método y puede sobrescribirse manualmente.',
             'metodo_descarga_pod': 'Sistema físico usado en POD. Aplica el factor de productividad de descarga.',
-            'ritmo_nominal_pod': 'Capacidad teórica diaria de descarga antes de pérdidas operativas.',
-            'rate-disch': 'Velocidad operativa (TM/día). Determina los días de Laytime.',
+            'ritmo_nominal_pod': 'Número de grúas operativas que multiplican el ritmo base del método de descarga.',
+            'rate-disch': 'Ritmo base operativo (TM/día). Se autocompleta por método y puede sobrescribirse manualmente.',
             'cargo-sf': 'Factor de estiba. Volumen que ocupa 1 TM de mercancía.',
             'vessel-net-tonnage': 'Arqueo neto volumétrico. Multiplicador oficial para peajes de Suez y Panamá.',
             'crane-swl-mt': 'Carga de Trabajo Segura (Safe Working Load) de las grúas del buque.',
@@ -29518,7 +29690,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             initVoyageEstimatorTooltips();
             resetTotalEstimation({ silent: true });
 
-            ['rate-load', 'rate-disch', 'ritmoCarga', 'ritmoDescarga'].forEach((id) => {
+            ['ritmoCarga', 'ritmoDescarga'].forEach((id) => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.value = '0';
@@ -29535,6 +29707,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 });
             });
             setOperacionModo('SPOT');
+            recalcularDiasPuerto();
             actualizarCamposTipoCarga();
             setCalculatorWaitingState();
 
