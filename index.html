@@ -5219,22 +5219,22 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-vessel-dwt" class="text-blue-400 flex items-center min-h-[28px]">Capacidad DWT (TM)</label>
-                                <input type="number" id="vessel-dwt" class="input-gc font-bold text-blue-300" value="0" oninput="handleDWTChange(true)">
+                                <input type="number" id="vessel-dwt" class="input-gc font-bold text-blue-300" value="0" oninput="handleDWTChange(true)" onblur="detectVesselSegmentFromInputs()">
                             </div>
                             <div class="input-group">
                                 <label id="label-spd-ballast" class="flex items-center min-h-[28px]">Velocidad Lastre (Knts)</label>
-                                <input type="number" id="spd-ballast" class="input-gc" value="11.5" step="0.1" oninput="runEngine()">
+                                <input type="number" id="spd-ballast" class="input-gc" value="11.5" step="0.1" oninput="markSpeedManualOverride(this); runEngine()">
                             </div>
                             <div class="input-group">
                                 <label id="label-spd-laden" class="flex items-center min-h-[28px]">Velocidad Carga (Knts)</label>
-                                <input type="number" id="spd-laden" class="input-gc" value="10.5" step="0.1" oninput="runEngine()">
+                                <input type="number" id="spd-laden" class="input-gc" value="10.5" step="0.1" oninput="markSpeedManualOverride(this); runEngine()">
                             </div>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <div class="input-group">
                                 <label id="label-cargo-qty" class="text-action-required flex items-center min-h-[24px]">Carga a Transportar (TM)</label>
-                                <input type="number" id="cargo-qty" class="input-gc action-required-field text-action-required font-bold" value="0" oninput="autoScaleVesselAndCosts(); syncCalculatorAndMatching('calculator');">
+                                <input type="number" id="cargo-qty" class="input-gc action-required-field text-action-required font-bold" value="0" oninput="autoScaleVesselAndCosts(); syncCalculatorAndMatching('calculator');" onblur="detectVesselSegmentFromInputs()">
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-type" class="text-action-required flex items-center min-h-[24px]">Tipo de Carga</label>
@@ -5615,7 +5615,7 @@
                         <h2 id="summary-header-title" class="text-sm font-bold text-slate-300 uppercase mb-3 border-b border-slate-800 pb-2"><i class="fa-solid fa-chart-pie mr-2"></i> Resumen de Operación</h2>
 
                         <div class="flex justify-between items-center mb-1 text-sm mono">
-                            <span id="label-days-mar-port" class="text-[#334155] font-bold">Días Mar + Puerto:</span>
+                            <span id="label-days-mar-port" class="text-[#334155] font-bold">Días Mar + Puerto + Margen Clima:</span>
                             <span id="res-days-total" class="font-bold text-[#1E3A8A] text-base">0.00</span>
                         </div>
 
@@ -5627,13 +5627,13 @@
                             <div class="flex justify-between items-center"><span id="label-days-margin"><i class="fa-solid fa-circle-notch text-[#1E3A8A] mr-1.5 text-[8px]"></i> Margen Clima (Margin):</span> <span id="res-days-margin" class="text-[#1E3A8A] font-bold">0.00 d</span></div>
                         </div>
 
-                        <div class="flex justify-between items-center mb-4 text-xs">
+                        <div id="weather-margin-summary-row" class="flex justify-between items-center mb-4 text-xs">
                             <span id="label-weather-margin-input" class="text-[#334155] font-bold uppercase">Margen Clima/Días extras:</span>
                             <div class="flex items-center gap-1">
-                                <button id="btn-weather-margin-ia" onclick="autoCalculateWeatherMargin()" class="badge-ai text-[10px] text-sky-400 hover:text-sky-300 transition" title="Analizar Riesgo de Demoras con IA">
+                                <button id="btn-weather-margin-ia" onclick="autoCalculateWeatherMargin()" class="badge-ai text-[10px] text-sky-400 hover:text-sky-300 transition" title="Aplicar análisis IA al Factor Clima de la sección 4">
                                     <i class="fa-solid fa-wand-magic-sparkles mr-0.5"></i> IA
                                 </button>
-                                <input type="number" id="days-margin" class="input-gc w-20 text-right py-1 h-6 text-xs" value="1.0" step="0.5" oninput="runEngine()">
+                                <input type="number" id="days-margin" class="input-gc w-20 text-right py-1 h-6 text-xs bg-slate-100 text-slate-500 cursor-not-allowed" value="0.00" step="0.5" readonly aria-readonly="true" title="Derivado del Factor Clima en la sección 4">
                             </div>
                         </div>
 
@@ -5645,6 +5645,7 @@
                                     <div class="flex justify-between"><span>Consumo Navegación</span><strong id="res-fuel-nav">0.00 t · $0</strong></div>
                                     <div class="flex justify-between"><span>Consumo Puerto</span><strong id="res-fuel-port">0.00 t · $0</strong></div>
                                     <div class="flex justify-between"><span>Consumo Fondeo</span><strong id="res-fuel-anchorage">0.00 t · $0</strong></div>
+                                    <div class="flex justify-between"><span>Consumo Auxiliar (Fondeo)</span><strong id="bunker-fondeo-display">0.00 t · $0</strong></div>
                                 </div>
                             </div>
                             <div class="flex justify-between"><span id="label-opex-cost-basis" class="font-bold">OPEX Total:</span> <span id="res-cost-opex" class="font-bold text-[#334155]">$0</span></div>
@@ -5803,9 +5804,10 @@
                                 <div class="w-1/3">
                                     <label id="label-owner-margin" class="text-[10px] text-slate-400 font-bold uppercase block mb-1">Margen Armador</label>
                                     <div class="flex items-center bg-slate-900 border border-slate-700 rounded px-2">
-                                        <input type="number" id="margin-owner" class="w-full bg-transparent text-white text-sm outline-none py-1 text-right" value="32" oninput="runEngine()">
+                                        <input type="number" id="margin-owner" class="w-full bg-transparent text-white text-sm outline-none py-1 text-right" value="15" oninput="runEngine()">
                                         <span class="text-slate-500 text-xs mx-1">%</span>
                                         <button onclick="autoCalculateSeasonalMargin()" class="text-amber-400 hover:text-amber-300 py-1 pl-2 border-l border-slate-700" title="Ajuste por Temporada (Alta/Baja)"><i class="fa-solid fa-calendar-day"></i></button>
+                                        <button type="button" onclick="applyAiMarginProposal()" class="text-cyan-300 hover:text-cyan-200 py-1 pl-2 border-l border-slate-700" title="PROPUESTA IA"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
                                     </div>
                                 </div>
                                 <div class="w-2/3 bg-slate-900 border border-slate-700 p-2 rounded text-right">
@@ -5819,7 +5821,7 @@
                                 <div class="w-1/3">
                                     <label id="label-charterer-margin" class="text-[10px] text-slate-400 font-bold uppercase block mb-1">Margen Fletador</label>
                                     <div class="flex items-center bg-slate-900 border border-slate-700 rounded px-2">
-                                        <input type="number" id="margin-charterer" class="w-full bg-transparent text-white text-sm outline-none py-1 text-right" value="12" oninput="runEngine()">
+                                        <input type="number" id="margin-charterer" class="w-full bg-transparent text-white text-sm outline-none py-1 text-right" value="10" oninput="runEngine()">
                                         <span class="text-slate-500 text-xs ml-1">%</span>
                                     </div>
                                 </div>
@@ -5828,6 +5830,7 @@
                                     <div id="res-sug-charterer" class="text-lg font-bold text-emerald-400 mono">$0.00</div>
                                 </div>
                             </div>
+                            <div id="ai-margin-proposal-note" class="hidden rounded-md border border-cyan-700/50 bg-cyan-950/40 px-3 py-2 text-[11px] font-semibold text-cyan-100 leading-relaxed"></div>
 
                             <!-- Cálculo Lumpsum (Carga < 5000 MT) -->
                             <div id="lumpsum-box" class="hidden bg-white p-3 rounded border border-slate-200 space-y-2 mt-2">
@@ -5978,11 +5981,11 @@
                     </div>
 
                     <!-- Acciones Finales -->
-                    <div id="core-kill-switch-alert" class="hidden rounded-xl border-2 border-red-500 bg-red-50 p-4 text-red-900 shadow-lg" role="alert" aria-live="assertive">
+                    <div id="core-kill-switch-alert" class="hidden rounded-xl border-2 border-red-500 bg-red-50 p-4 text-red-900 shadow-lg" role="alert" aria-live="polite">
                         <div class="flex items-start gap-3">
                             <i class="fa-solid fa-triangle-exclamation mt-0.5 text-red-600"></i>
                             <div>
-                                <h3 class="text-xs font-black uppercase tracking-wide">Kill-switch activo: corrige los campos marcados en rojo</h3>
+                                <h3 id="core-kill-switch-title" class="text-xs font-black uppercase tracking-wide">Kill-switch activo: corrige los campos marcados en rojo</h3>
                                 <ul id="core-kill-switch-list" class="mt-2 list-disc pl-4 text-xs font-bold space-y-1"></ul>
                             </div>
                         </div>
@@ -9767,6 +9770,13 @@
         }
 
         // --- ESTADO Y VARIABLES GLOBALES ---
+        const DEFAULT_OWNER_MARGIN = 0.15;
+        const DEFAULT_CHARTERER_MARGIN = 0.10;
+        const DEFAULT_OWNER_MARGIN_PERCENT = DEFAULT_OWNER_MARGIN * 100;
+        const DEFAULT_CHARTERER_MARGIN_PERCENT = DEFAULT_CHARTERER_MARGIN * 100;
+        window.DEFAULT_OWNER_MARGIN = DEFAULT_OWNER_MARGIN;
+        window.DEFAULT_CHARTERER_MARGIN = DEFAULT_CHARTERER_MARGIN;
+
         const State = {
             vessel: "", dwt: 0, class: "", opex: 0, vesselDwtFixed: false,
             userHasEditedSpecialty: false,
@@ -9787,8 +9797,8 @@
             consPort: 0, pricePort: 0,
             pdaPol: 0, pdaPod: 0,
             stevedoringCosts: 0, pdaMisc: 0,
-            cargoSurcharge: 0, marginOwner: 0,
-            marginCharterer: 0, commPct: 0,
+            cargoSurcharge: 0, marginOwner: DEFAULT_OWNER_MARGIN_PERCENT,
+            marginCharterer: DEFAULT_CHARTERER_MARGIN_PERCENT, commPct: 0,
             laycanDate: "", laycanTime: "", cancellingDate: "",
             totalMiles: 0,
             smartAdjustments: {
@@ -9909,6 +9919,8 @@
                 cargoType: 'Granel Sólido (Dry Bulk)',
                 cargoTypeManual: '',
                 charterPartyStandard: 'GENCON',
+                marginOwner: DEFAULT_OWNER_MARGIN_PERCENT,
+                marginCharterer: DEFAULT_CHARTERER_MARGIN_PERCENT,
                 spdBallast: 0,
                 spdLaden: 0,
                 smartAdjustments: {}
@@ -9921,11 +9933,13 @@
                 'price-port', 'opex-daily', 'pda-pol', 'pda-pod', 'stevedoring-costs', 'pda-misc',
                 'cargo-surcharge', 'input-trincaje', 'coste-maniobra-especial', 'dias-preparacion',
                 'delta-historico', 'factor-clima', 't-fondeo', 't-remolcadores', 'days-margin',
-                'margin-owner', 'margin-charterer', 'freight-rate', 'freight-sell', 'comm-pct',
+                'freight-rate', 'freight-sell', 'comm-pct',
                 'demurrage-rate', 'coa-num-embarques', 'coa-total-tm', 'target-margin',
                 'eu-carbon-price'
             ];
             zeroIds.forEach((id) => setInputValue(id, 0));
+            setInputValue('margin-owner', DEFAULT_OWNER_MARGIN_PERCENT);
+            setInputValue('margin-charterer', DEFAULT_CHARTERER_MARGIN_PERCENT);
             [
                 'port-ballast', 'port-pol', 'port-pod', 'map-port-ballast', 'map-port-pol',
                 'map-port-pod', 'eta-radar', 'gc-laycan-date', 'gc-laycan-time', 'gc-cancel-date',
@@ -15737,6 +15751,121 @@
             opexBox.classList.remove('hidden');
         }
 
+        const VESSEL_SEGMENT_SPEEDS = [
+            { segment: "Coaster", minDwt: 0, maxDwt: 4999, speedBallast: 10.0, speedLaden: 9.0 },
+            { segment: "Mini-Bulker", minDwt: 5000, maxDwt: 14999, speedBallast: 10.8, speedLaden: 9.8 },
+            { segment: "Handysize", minDwt: 15000, maxDwt: 39999, speedBallast: 11.5, speedLaden: 10.5 },
+            { segment: "Supramax", minDwt: 40000, maxDwt: 59999, speedBallast: 12.0, speedLaden: 11.0 },
+            { segment: "Ultramax", minDwt: 60000, maxDwt: 64999, speedBallast: 12.2, speedLaden: 11.2 },
+            { segment: "Panamax", minDwt: 65000, maxDwt: 84999, speedBallast: 12.5, speedLaden: 11.5 },
+            { segment: "Capesize", minDwt: 85000, maxDwt: Infinity, speedBallast: 13.0, speedLaden: 12.0 }
+        ];
+
+        function detectVesselSegment(dwt) {
+            const numericDwt = Math.max(0, parseFloat(dwt) || 0);
+            return VESSEL_SEGMENT_SPEEDS.find((row) => numericDwt >= row.minDwt && numericDwt <= row.maxDwt) || VESSEL_SEGMENT_SPEEDS[0];
+        }
+
+        function getEffectiveDwtForSegmentDetection() {
+            const vesselDwt = parseFloat(document.getElementById('vessel-dwt')?.value) || 0;
+            const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
+            return vesselDwt > 0 ? vesselDwt : cargoQty;
+        }
+
+        function markSpeedManualOverride(input) {
+            if (!input) return;
+            input.dataset.manualOverride = 'true';
+            input.dataset.autoInferred = 'false';
+            input.classList.remove('text-slate-400', 'border-sky-400');
+            input.title = '';
+        }
+
+        function markKnownVesselSpeed(inputOrId) {
+            const input = typeof inputOrId === 'string' ? document.getElementById(inputOrId) : inputOrId;
+            if (!input) return;
+            input.dataset.manualOverride = 'true';
+            input.dataset.autoInferred = 'false';
+            input.classList.remove('text-slate-400', 'border-sky-400');
+            input.title = 'Velocidad procedente de la ficha tecnica del buque. Editable manualmente.';
+        }
+
+        function applyDetectedSpeedValues(params = {}) {
+            const speedBallast = Math.max(0, parseFloat(params.speedBallast) || 0);
+            const speedLaden = Math.max(0, parseFloat(params.speedLaden) || 0);
+            const segment = params.segment || 'Segmento detectado';
+            const source = params.source || 'SeaCharter Core PRO';
+            const shouldForce = params.force === true;
+
+            [
+                { id: 'spd-ballast', value: speedBallast },
+                { id: 'spd-laden', value: speedLaden }
+            ].forEach(({ id, value }) => {
+                const input = document.getElementById(id);
+                if (!input || value <= 0) return;
+                const currentValue = parseFloat(input.value) || 0;
+                const alreadyInferred = input.dataset.autoInferred === 'true';
+                const untouchedDefault = input.dataset.manualOverride !== 'true' && !input.dataset.autoInferred;
+                const canInfer = shouldForce || currentValue <= 0 || alreadyInferred || untouchedDefault;
+                if (!canInfer) return;
+                input.value = value.toFixed(1);
+                input.dataset.autoInferred = 'true';
+                input.dataset.manualOverride = 'false';
+                input.dataset.vesselSegment = segment;
+                input.classList.add('text-slate-400', 'border-sky-400');
+                input.title = `Valor inferido por ${source} para segmento ${segment}. Editable manualmente.`;
+            });
+
+            if (typeof State !== 'undefined') {
+                State.detectedVesselSegment = segment;
+                State.speedInferenceSource = source;
+            }
+        }
+
+        function ensureDetectedSpeedsBeforeCalculation() {
+            const dwt = getEffectiveDwtForSegmentDetection();
+            if (dwt <= 0) return;
+            const fallback = detectVesselSegment(dwt);
+            applyDetectedSpeedValues({
+                segment: fallback.segment,
+                speedBallast: fallback.speedBallast,
+                speedLaden: fallback.speedLaden,
+                source: 'SeaCharter Core PRO fleet average',
+                force: false
+            });
+        }
+
+        async function detectVesselSegmentFromInputs() {
+            const dwt = getEffectiveDwtForSegmentDetection();
+            if (dwt <= 0) return null;
+
+            const fallback = detectVesselSegment(dwt);
+            applyDetectedSpeedValues({
+                segment: fallback.segment,
+                speedBallast: fallback.speedBallast,
+                speedLaden: fallback.speedLaden,
+                source: 'SeaCharter Core PRO fleet average',
+                force: false
+            });
+
+            try {
+                const response = await fetch(`/api/vessel-speed-parameters?dwt=${encodeURIComponent(dwt)}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                applyDetectedSpeedValues({
+                    segment: data.segment || fallback.segment,
+                    speedBallast: data.speedBallast || fallback.speedBallast,
+                    speedLaden: data.speedLaden || fallback.speedLaden,
+                    source: data.source || 'SeaCharter Core PRO historical database',
+                    force: false
+                });
+            } catch (error) {
+                console.warn('Using local vessel speed fallback', error);
+            }
+
+            runEngine();
+            return fallback.segment;
+        }
+
         function handleDWTChange(isManual = false) {
             if (isManual) {
                 State.vesselDwtFixed = true;
@@ -15750,12 +15879,8 @@
             document.getElementById('cons-sea').value = cSea.toFixed(1);
             document.getElementById('cons-port').value = cPort.toFixed(1);
 
-            let vClass = "Coaster";
-            if(dwt > 5000 && dwt <= 15000) vClass = "Mini-Bulker";
-            else if(dwt > 15000 && dwt <= 40000) vClass = "Handysize";
-            else if(dwt > 40000 && dwt <= 65000) vClass = "Supramax";
-            else if(dwt > 65000 && dwt <= 85000) vClass = "Panamax";
-            else if(dwt > 85000) vClass = "Capesize";
+            const detectedSegment = detectVesselSegment(dwt);
+            let vClass = detectedSegment.segment;
 
             document.getElementById('vessel-badge').innerText = vClass;
             State.class = vClass;
@@ -15902,7 +16027,11 @@
             const ritmoRealPod = getRitmoRealPuerto(metodoDescarga, readRitmoNominalPuerto('pod'));
             const rateLoad = parseFloat(document.getElementById('rate-load').value) || ritmoRealPol;
             const rateDisch = parseFloat(document.getElementById('rate-disch').value) || ritmoRealPod;
-            const marginDays = parseFloat(document.getElementById('days-margin').value) || 0;
+            const marginDays = Math.max(0, parseFloat(document.getElementById('factor-clima')?.value) || 0);
+            const marginInput = document.getElementById('days-margin');
+            if (marginInput) {
+                marginInput.value = marginDays.toFixed(2);
+            }
             if (!portName || dwt <= 0) return;
 
             // Pre-cálculos navales ajustados al buque real (Ej: Acqua Stella 10k DWT = ~6.3k GT)
@@ -16050,9 +16179,11 @@
                     }
                     if (normalized.spd_ballast) {
                         document.getElementById('spd-ballast').value = parseFloat(normalized.spd_ballast).toFixed(1);
+                        markKnownVesselSpeed('spd-ballast');
                     }
                     if (normalized.spd_laden) {
                         document.getElementById('spd-laden').value = parseFloat(normalized.spd_laden).toFixed(1);
+                        markKnownVesselSpeed('spd-laden');
                     }
                     if (normalized.cons_sea) {
                         document.getElementById('cons-sea').value = parseFloat(normalized.cons_sea).toFixed(1);
@@ -16515,19 +16646,46 @@
             input.classList.toggle('bg-red-50', active);
         }
 
-        function setCoreReportBlocked(blocked, messages = []) {
+        function setCoreFuelWarningMark(id, active) {
+            const input = document.getElementById(id);
+            if (!input) return;
+            input.classList.toggle('border-amber-400', active);
+            input.classList.toggle('ring-2', active);
+            input.classList.toggle('ring-amber-300', active);
+            input.classList.toggle('bg-amber-50', active);
+        }
+
+        function setCoreReportBlocked(blocked, messages = [], warnings = []) {
             const alert = document.getElementById('core-kill-switch-alert');
             const list = document.getElementById('core-kill-switch-list');
+            const title = document.getElementById('core-kill-switch-title');
+            const icon = alert?.querySelector('i');
             const reportBtn = document.getElementById('btn-executive-report');
-            if (alert) alert.classList.toggle('hidden', !blocked);
-            if (list) list.innerHTML = messages.map((message) => `<li>${String(message).replace(/[<>&]/g, '')}</li>`).join('');
+            const visibleMessages = blocked ? messages : warnings;
+            if (alert) {
+                alert.className = blocked
+                    ? 'rounded-xl border-2 border-red-500 bg-red-50 p-4 text-red-900 shadow-lg'
+                    : 'rounded-xl border-2 border-amber-400 bg-amber-50 p-4 text-amber-900 shadow-lg';
+                alert.classList.toggle('hidden', !(blocked || warnings.length > 0));
+            }
+            if (icon) {
+                icon.className = blocked
+                    ? 'fa-solid fa-triangle-exclamation mt-0.5 text-red-600'
+                    : 'fa-solid fa-circle-info mt-0.5 text-amber-600';
+            }
+            if (title) {
+                title.innerText = blocked
+                    ? 'Kill-switch activo: corrige los campos marcados en rojo'
+                    : 'ADVERTENCIA DE COSTE: ALTO PESO DE COMBUSTIBLE';
+            }
+            if (list) list.innerHTML = visibleMessages.map((message) => `<li>${String(message).replace(/[<>&]/g, '')}</li>`).join('');
             if (reportBtn) {
                 reportBtn.disabled = blocked;
                 reportBtn.classList.toggle('opacity-50', blocked);
                 reportBtn.classList.toggle('cursor-not-allowed', blocked);
                 reportBtn.title = blocked ? 'Bloqueado por validación activa. Corrige los campos en rojo.' : 'Reporte Ejecutivo';
             }
-            State.coreValidation = { blocked, messages };
+            State.coreValidation = { blocked, messages, warnings };
         }
 
         function getRouteMarketBenchmark({
@@ -16651,8 +16809,68 @@
             runEngine();
         }
 
+        function applyAiMarginProposal() {
+            const ownerInput = document.getElementById('margin-owner');
+            const chartererInput = document.getElementById('margin-charterer');
+            const freightSellInput = document.getElementById('freight-sell');
+            const note = document.getElementById('ai-margin-proposal-note');
+            const benchmark = State?.marketBenchmark;
+            const breakEven = Number(State?.breakEvenVentaSugerida || State?.breakEvenArmador || State?.breakEven || 0);
+            const marketRate = Number(benchmark?.rate || 0);
+            const pol = document.getElementById('port-pol')?.value || 'POL';
+            const pod = document.getElementById('port-pod')?.value || 'POD';
+
+            if (!ownerInput || !chartererInput || !(breakEven > 0) || !(marketRate > 0)) {
+                const message = 'Propuesta de IA no disponible: calcula primero la ruta para obtener Break-Even y Benchmark Mercado.';
+                if (note) {
+                    note.classList.remove('hidden');
+                    note.innerText = message;
+                }
+                if (typeof showToast === 'function') showToast(message);
+                return;
+            }
+
+            const marketCap = marketRate * 0.995;
+            const totalMarginPct = Math.max(0, Math.min(90, (1 - (breakEven / marketCap)) * 100));
+            const ownerMarginPct = Math.max(0, Math.min(45, totalMarginPct * 0.55));
+            const ownerSale = calcularPrecioObjetivo(breakEven, ownerMarginPct);
+            const chartererMarginPct = marketCap > ownerSale
+                ? Math.max(0, Math.min(45, (1 - (ownerSale / marketCap)) * 100))
+                : 0;
+            const proposedSale = calcularPrecioObjetivo(ownerSale, chartererMarginPct);
+
+            ownerInput.value = ownerMarginPct.toFixed(2);
+            chartererInput.value = chartererMarginPct.toFixed(2);
+            if (freightSellInput) {
+                freightSellInput.value = proposedSale.toFixed(2);
+                freightSellInput.dataset.marginSynced = 'true';
+            }
+            State.marginOwner = ownerMarginPct;
+            State.marginCharterer = chartererMarginPct;
+            State.freightSell = proposedSale;
+            State.aiMarginProposal = {
+                marketRate,
+                breakEven,
+                ownerMarginPct,
+                chartererMarginPct,
+                proposedSale,
+                route: `${pol}-${pod}`,
+                appliedAt: new Date().toISOString()
+            };
+
+            const explanation = `Propuesta de IA: margen armador ${ownerMarginPct.toFixed(2)}% y margen fletador ${chartererMarginPct.toFixed(2)}% para maximizar beneficio sin superar el benchmark ${pol}-${pod} ($${marketRate.toFixed(2)}/TM).`;
+            if (note) {
+                note.classList.remove('hidden');
+                note.innerText = explanation;
+            }
+            if (typeof showToast === 'function') showToast(explanation);
+            runEngine();
+        }
+        window.applyAiMarginProposal = applyAiMarginProposal;
+
         function validateCoreTradingSafety(metrics = {}) {
             const messages = [];
+            const warnings = [];
             const markIds = [
                 'cons-sea', 'cons-port', 'cons-anchorage', 'price-sea', 'price-port',
                 'margin-owner', 'margin-charterer', 'port-pol', 'port-pod',
@@ -16660,23 +16878,24 @@
                 'rate-load', 'rate-disch', 'cargo-qty', 'opex-daily'
             ];
             markIds.forEach((id) => setCoreValidationMark(id, false));
+            ['cons-sea', 'cons-port', 'cons-anchorage', 'price-sea', 'price-port', 'margin-owner', 'margin-charterer'].forEach((id) => setCoreFuelWarningMark(id, false));
 
             const fuelShare = metrics.adjustedCostTotal > 0 ? (metrics.totalBunkers / metrics.adjustedCostTotal) : 0;
             if (fuelShare > 0.25) {
-                messages.push(`Consumo de combustible supera el 25% del total de gastos (${(fuelShare * 100).toFixed(1)}%).`);
-                ['cons-sea', 'cons-port', 'cons-anchorage', 'price-sea', 'price-port'].forEach((id) => setCoreValidationMark(id, true));
+                warnings.push(`Consumo de combustible supera el 25% del total de gastos (${(fuelShare * 100).toFixed(1)}%). Puedes continuar y generar el informe.`);
+                ['cons-sea', 'cons-port', 'cons-anchorage', 'price-sea', 'price-port'].forEach((id) => setCoreFuelWarningMark(id, true));
             }
             if (metrics.smartOperationalDays < 0 || metrics.totalDays < 0) {
                 messages.push('Duración estimada del viaje negativa. Revisa distancias, velocidades y días de ajuste.');
                 ['dist-ballast', 'dist-laden', 'spd-ballast', 'spd-laden'].forEach((id) => setCoreValidationMark(id, true));
             }
             if (!(metrics.marginOwner > 0)) {
-                messages.push('Margen Armador no definido o igual a 0%.');
-                setCoreValidationMark('margin-owner', true);
+                warnings.push('Margen Armador no definido o igual a 0%. Se mantiene como aviso informativo; revisa el precio de venta antes de cerrar la operación.');
+                setCoreFuelWarningMark('margin-owner', true);
             }
             if (!(metrics.marginChart > 0)) {
-                messages.push('Margen Fletador no definido o igual a 0%.');
-                setCoreValidationMark('margin-charterer', true);
+                warnings.push('Margen Fletador no definido o igual a 0%. Se mantiene como aviso informativo; revisa el precio de venta antes de cerrar la operación.');
+                setCoreFuelWarningMark('margin-charterer', true);
             }
             if ((metrics.pol || metrics.pod) && (!metrics.polData || !metrics.podData)) {
                 messages.push('Datos de puertos incompatibles con la ruta seleccionada.');
@@ -16703,7 +16922,7 @@
                 if (!(metrics.pPort > 0)) setCoreValidationMark('price-port', true);
             }
 
-            setCoreReportBlocked(messages.length > 0, messages);
+            setCoreReportBlocked(messages.length > 0, messages, warnings);
             return messages;
         }
 
@@ -16719,6 +16938,7 @@
 
         // --- MOTOR PRINCIPAL ---
         function runEngine() {
+            ensureDetectedSpeedsBeforeCalculation();
             // Lógica corregida para el cálculo de Lumpsum
             const calcularLumpsum = (cargaReal, tasaFleteMT) => {
                 const tasa = parseFloat(tasaFleteMT);
@@ -16794,7 +17014,9 @@
             const ritmoRealPod = getRitmoRealPuerto(metodoDescarga, readRitmoNominalPuerto('pod'));
             const rateLoad = parseFloat(document.getElementById('rate-load').value) || ritmoRealPol;
             const rateDisch = parseFloat(document.getElementById('rate-disch').value) || ritmoRealPod;
-            const marginDays = parseFloat(document.getElementById('days-margin').value) || 0;
+            const marginDays = Math.max(0, parseFloat(document.getElementById('factor-clima')?.value) || 0);
+            const marginInput = document.getElementById('days-margin');
+            if (marginInput) marginInput.value = marginDays.toFixed(2);
             const cpStandard = document.getElementById('charter-party-standard') ? document.getElementById('charter-party-standard').value : (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
             const genconTurnTimeDays = (!isZeroCalculation && cpStandard === 'GENCON') ? 1.0 : 0;
 
@@ -16842,7 +17064,7 @@
             const marginChart = parseFloat(document.getElementById('margin-charterer').value) || 0;
             const margenObjetivo = Math.min(95, Math.max(0, parseFloat(document.getElementById('target-margin')?.value) || 15));
             const freightBuy = parseFloat(document.getElementById('freight-rate').value) || 0;
-            const freightSell = parseFloat(document.getElementById('freight-sell').value) || 0;
+            let freightSell = parseFloat(document.getElementById('freight-sell').value) || 0;
             const commPct = parseFloat(document.getElementById('comm-pct').value) || 0;
             const dwtVal = parseFloat(document.getElementById('vessel-dwt').value) || 0;
             const getSmartInputState = (id) => {
@@ -16895,12 +17117,11 @@
                 `;
             }
             const smartDeltaDays = Math.max(0, deltaInput.value);
-            const smartWeatherDays = Math.max(0, weatherInput.value);
+            const smartWeatherDays = marginDays;
             const smartAnchorageDays = Math.max(0, anchorageInput.value);
             const smartTugUnitCost = Math.max(0, tugInference.tarifa_efectiva_ud);
             const missingSmartFields = [
                 deltaInput.isEmpty ? 'Delta Histórico' : '',
-                weatherInput.isEmpty ? 'Factor Clima' : '',
                 anchorageInput.isEmpty ? 'T. Espera Fondeo' : ''
             ].filter(Boolean);
             const tugUnits = tugInference.total_usos_remolcador;
@@ -16912,15 +17133,16 @@
             const dPortDisch = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga);
             const dPort = isZeroCalculation ? 0 : (dPortLoad + dPortDisch);
             const dPortTotal = isZeroCalculation ? 0 : (dPort + genconTurnTimeDays + diasPreparacionProyecto);
-            const baseOperationalDays = isZeroCalculation ? 0 : (dBal + dLaden + marginDays + dPortTotal);
-            const smartExtraDays = isZeroCalculation ? 0 : (smartWeatherDays + smartDeltaDays + smartAnchorageDays);
+            const seaPortDays = isZeroCalculation ? 0 : (dBal + dLaden + dPortTotal);
+            const baseOperationalDays = seaPortDays;
+            const smartExtraDays = isZeroCalculation ? 0 : (smartDeltaDays + smartAnchorageDays);
 
             // T_sea (Total underway time spent: ballast + laden + weather margin days)
             const T_sea = isZeroCalculation ? 0 : (dBal + dLaden + marginDays);
             // T_port (Total port time spent: load + discharge)
             const T_port = isZeroCalculation ? 0 : dPortTotal;
             const totalDays = isZeroCalculation ? 0 : (T_sea + T_port);
-            const smartOperationalDays = isZeroCalculation ? 0 : (totalDays + smartWeatherDays + smartDeltaDays + smartAnchorageDays);
+            const smartOperationalDays = isZeroCalculation ? 0 : (totalDays + smartDeltaDays + smartAnchorageDays);
             const pdas = isZeroCalculation ? 0 : portExpensesForMode;
             const smartPortExpenses = isZeroCalculation ? 0 : (portExpensesForMode + tugTotalCost);
 
@@ -16970,12 +17192,12 @@
             const costTotal = isZeroCalculation ? 0 : (costTotalWithoutEts + etsCost);
             const basicPortExpenses = isZeroCalculation ? 0 : portExpensesForMode;
             const basicOperationalDays = isZeroCalculation ? 0 : baseOperationalDays;
-            const basicBunkers = isZeroCalculation ? 0 : (((dBal + dLaden + marginDays) * cSea * pSea) + (dPortTotal * cPort * pPort) + extraEcaCost);
-            const basicConsumption = isZeroCalculation ? 0 : (((dBal + dLaden + marginDays) * cSea) + (dPortTotal * cPort));
+            const basicBunkers = isZeroCalculation ? 0 : (((dBal + dLaden) * cSea * pSea) + (dPortTotal * cPort * pPort) + extraEcaCost);
+            const basicConsumption = isZeroCalculation ? 0 : (((dBal + dLaden) * cSea) + (dPortTotal * cPort));
             const basicEtsCost = isZeroCalculation ? 0 : (basicConsumption * 3.11 * euPrice * etsRouteFactor);
             const basicFixedCosts = isZeroCalculation ? 0 : (basicBunkers + basicEtsCost);
             const basicBreakEvenNumerator = isZeroCalculation ? 0 : (basicBunkers + basicPortExpenses + (basicOperationalDays * opex) + basicEtsCost);
-            const smartDelayDays = isZeroCalculation ? 0 : (smartDeltaDays + smartWeatherDays + smartAnchorageDays);
+            const smartDelayDays = isZeroCalculation ? 0 : (smartDeltaDays + smartAnchorageDays);
             const extraOpexCost = isZeroCalculation ? 0 : (smartDelayDays * opex);
             const anchorageBunkerCost = anchorageConsumptionCost;
             const delaySmartCostIncrement = isZeroCalculation ? 0 : (extraOpexCost + anchorageBunkerCost);
@@ -16986,6 +17208,7 @@
 
             document.getElementById('dist-total').value = Math.round(distBal + distLaden);
             document.getElementById('res-days-total').innerText = totalDays.toFixed(2);
+            document.getElementById('res-days-total').title = `Días Mar + Puerto + Margen Clima = ${(dBal + dLaden).toFixed(2)} + ${dPortTotal.toFixed(2)} + ${marginDays.toFixed(2)} = ${totalDays.toFixed(2)} d`;
             
             if (document.getElementById('res-days-ballast')) {
                 document.getElementById('res-days-ballast').innerText = `${dBal.toFixed(2)} d`;
@@ -17000,7 +17223,20 @@
                     : '';
             }
             if (document.getElementById('res-days-margin')) {
-                document.getElementById('res-days-margin').innerText = `${marginDays.toFixed(2)} d`;
+                const marginEl = document.getElementById('res-days-margin');
+                marginEl.innerText = `${marginDays.toFixed(2)} d`;
+                marginEl.classList.toggle('text-slate-400', marginDays <= 0);
+                marginEl.classList.toggle('text-[#1E3A8A]', marginDays > 0);
+            }
+            const marginRow = document.getElementById('weather-margin-summary-row');
+            const marginLabel = document.getElementById('label-weather-margin-input');
+            if (marginInput) {
+                marginInput.classList.toggle('text-slate-400', marginDays <= 0);
+                marginInput.classList.toggle('text-[#1E3A8A]', marginDays > 0);
+            }
+            if (marginLabel) {
+                marginLabel.classList.toggle('text-slate-400', marginDays <= 0);
+                marginLabel.classList.toggle('text-[#334155]', marginDays > 0);
             }
 
             document.getElementById('res-cost-bunker').innerText = `$${Math.round(totalBunkers).toLocaleString()}`;
@@ -17014,6 +17250,7 @@
             setFuelBreakdown('res-fuel-nav', navFuelTons, routeConsumptionCost + extraEcaCost);
             setFuelBreakdown('res-fuel-port', portFuelTons, portConsumptionCost);
             setFuelBreakdown('res-fuel-anchorage', anchorageFuelTons, anchorageConsumptionCost);
+            setFuelBreakdown('bunker-fondeo-display', anchorageFuelTons, anchorageConsumptionCost);
             if (isPolSeca || isPodSeca) {
                 document.getElementById('res-cost-bunker').classList.remove('text-red-400');
                 document.getElementById('res-cost-bunker').classList.add('text-amber-400');
@@ -17169,6 +17406,13 @@
                 ? calcularPrecioObjetivo(coaBreakEvenPromedio, marginOwner)
                 : calcularPrecioObjetivo(breakEvenArmadorDisplay, marginOwner);
             const precioObjetivoFletador = calcularPrecioObjetivo(precioObjetivoArmador, marginChart);
+            const freightSellInput = document.getElementById('freight-sell');
+            const marginInputIsActive = ['margin-owner', 'margin-charterer'].includes(document.activeElement?.id || '');
+            if (freightSellInput && (marginInputIsActive || freightSellInput.dataset.marginSynced === 'true')) {
+                freightSell = precioObjetivoFletador;
+                freightSellInput.value = precioObjetivoFletador.toFixed(2);
+                freightSellInput.dataset.marginSynced = 'true';
+            }
             const ventaSugerida = precioObjetivoFletador;
             const precioVentaContrato = freightSell > 0 ? freightSell : precioObjetivoFletador;
             const margenTotalContrato = operacionModo === 'COA' && coaTotalTmContrato > 0
@@ -17204,6 +17448,7 @@
                 routeFactor: etsRouteFactor,
                 cargoType: document.getElementById('cargo-type')?.value || ''
             });
+            State.marketBenchmark = marketBenchmark;
             updateMarketBenchmarkComparison(precioObjetivoFletador, marketBenchmark);
             const smartAlertEl = document.getElementById('smart-adjustment-alert');
             if (smartAlertEl) {
@@ -17478,6 +17723,7 @@
             State.spdBallast = spdBal;
             State.spdLaden = spdLaden;
             State.daysMargin = marginDays;
+            State.weatherMarginDays = marginDays;
             State.consSea = cSea;
             State.priceSea = pSea;
             State.consPort = cPort;
@@ -18851,10 +19097,15 @@
         }
 
         function selectAndApplyDelayOption(days, labelEn, labelEs) {
-            document.getElementById('days-margin').value = parseFloat(days).toFixed(2);
+            const weatherDays = Math.max(0, parseFloat(days) || 0);
+            const climateInput = document.getElementById('factor-clima');
+            if (climateInput) {
+                climateInput.value = weatherDays.toFixed(2);
+                climateInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
             const currentLang = document.getElementById('language-selector')?.value || 'es';
             const appliedLabel = currentLang === 'es' ? labelEs : labelEn;
-            showToast(`🌤️ Margen de clima de ${parseFloat(days).toFixed(2)} días (Nivel: ${appliedLabel}) aplicado con éxito.`);
+            showToast(`🌤️ Factor Clima de ${weatherDays.toFixed(2)} días (Nivel: ${appliedLabel}) aplicado con éxito.`);
             runEngine();
             closeAIModal();
         }
@@ -19289,7 +19540,7 @@
             const dLaden = (parseFloat(document.getElementById('dist-laden').value) || 0) / ((parseFloat(document.getElementById('spd-laden').value) || 11) * 24);
             const rateLoad = parseFloat(document.getElementById('rate-load').value) || 1000;
             const rateDisch = parseFloat(document.getElementById('rate-disch').value) || 1500;
-            const marginDaysValue = parseFloat(document.getElementById('days-margin').value) || 0;
+            const marginDaysValue = Math.max(0, parseFloat(document.getElementById('factor-clima')?.value) || 0);
 
             const T_sea = dBal + dLaden + marginDaysValue;
             const metodoEstiba = getMetodoEstibaActual();
@@ -20301,9 +20552,11 @@
             }
             if (vessel.spd_ballast) {
                 document.getElementById('spd-ballast').value = parseFloat(vessel.spd_ballast).toFixed(1);
+                markKnownVesselSpeed('spd-ballast');
             }
             if (vessel.spd_laden) {
                 document.getElementById('spd-laden').value = parseFloat(vessel.spd_laden).toFixed(1);
+                markKnownVesselSpeed('spd-laden');
             }
             if (vessel.cons_sea) {
                 document.getElementById('cons-sea').value = parseFloat(vessel.cons_sea).toFixed(1);
@@ -20555,6 +20808,8 @@
 
                 document.getElementById('spd-ballast').value = isNaN(finalSpdBallast) ? "12.5" : finalSpdBallast.toFixed(1);
                 document.getElementById('spd-laden').value = isNaN(finalSpdLaden) ? "11.5" : finalSpdLaden.toFixed(1);
+                markKnownVesselSpeed('spd-ballast');
+                markKnownVesselSpeed('spd-laden');
                 
                 document.getElementById('cons-sea').value = isNaN(finalConsSea) ? "12.0" : finalConsSea.toFixed(1);
                 document.getElementById('cons-port').value = isNaN(finalConsPort) ? "1.5" : finalConsPort.toFixed(1);
@@ -20999,7 +21254,7 @@
             const distLaden = parseFloat(document.getElementById('dist-laden')?.value) || 0;
             const rateLoad = parseFloat(document.getElementById('rate-load')?.value) || 1000;
             const rateDisch = parseFloat(document.getElementById('rate-disch')?.value) || 1500;
-            const marginDays = parseFloat(document.getElementById('days-margin')?.value) || 0;
+            const marginDays = Math.max(0, parseFloat(document.getElementById('factor-clima')?.value) || 0);
 
             const priceSea = parseFloat(document.getElementById('price-sea')?.value) || 600;
             const pricePort = parseFloat(document.getElementById('price-port')?.value) || 750;
@@ -21243,9 +21498,11 @@ Example:
                 }
                 if (data.spd_ballast) {
                     document.getElementById('spd-ballast').value = parseFloat(data.spd_ballast).toFixed(1);
+                    markKnownVesselSpeed('spd-ballast');
                 }
                 if (data.spd_laden) {
                     document.getElementById('spd-laden').value = parseFloat(data.spd_laden).toFixed(1);
+                    markKnownVesselSpeed('spd-laden');
                 }
                 if (data.cons_sea) {
                     document.getElementById('cons-sea').value = parseFloat(data.cons_sea).toFixed(1);
@@ -21431,6 +21688,10 @@ Example:
             const getTxt = (id) => { const el = document.getElementById(id); return el ? el.innerText : ''; };
             const ref = cpStandard === 'ASBATANKVOY' ? getVal('asb-ref') : getVal('gc-ref');
             const estId = ref ? `EST-${ref}` : `RDM-EST-${Math.floor(Math.random() * 9000 + 1000)}`;
+            const calculatedFondeoCost = Number(State.smartAdjustments?.anchorageBunkerCost ?? State.fuelBreakdown?.anchorage?.cost ?? 0);
+            const bunkerFondeoTons = Number(State.fuelBreakdown?.anchorage?.tons || 0);
+            const bunkerMarCost = Math.max(0, State.costBunkers - calculatedFondeoCost);
+            const bunkerFondeoDisplay = `${bunkerFondeoTons.toFixed(2)} t · $${Math.round(calculatedFondeoCost).toLocaleString('en-US')}`;
 
             // Estimación de calado y análisis de restricciones de puerto
             const dwt = parseFloat(State.dwt) || 0;
@@ -21548,6 +21809,14 @@ Example:
                                     <span class="text-slate-400">${r.bunkers}</span>
                                     <span class="font-bold text-white">${getTxt('res-cost-bunker')}</span>
                                 </li>
+                                <li class="flex justify-between pl-3 text-[11px]">
+                                    <span class="text-slate-400">${currentLang === 'es' ? 'BUNKERS MAR:' : (currentLang === 'en' ? 'SEA BUNKERS:' : 'SOUTES MER :')}</span>
+                                    <span class="font-bold text-white">$${Math.round(bunkerMarCost).toLocaleString('en-US')}</span>
+                                </li>
+                                <li class="flex justify-between pl-3 text-[11px]">
+                                    <span class="text-slate-400">${currentLang === 'es' ? 'CONSUMO AUXILIAR (FONDEO):' : (currentLang === 'en' ? 'AUXILIARY CONSUMPTION (ANCHORAGE):' : 'CONSOMMATION AUXILIAIRE (MOUILLAGE) :')}</span>
+                                    <span id="executive-bunker-fondeo-cost" class="font-bold text-amber-300">$${Math.round(calculatedFondeoCost).toLocaleString('en-US')}</span>
+                                </li>
                                 <li class="flex justify-between">
                                     <span class="text-slate-400">${r.opex}</span>
                                     <span class="font-bold text-white">${getTxt('res-cost-opex')}</span>
@@ -21658,8 +21927,9 @@ Example:
                                         <li><strong>${currentLang === 'es' ? 'Consumo Neto (incluye 5% de margen por mal tiempo)' : (currentLang === 'en' ? 'Net Consumption (includes 5% margin for bad weather)' : 'Consommation nette (comprend 5% de marge pour mauvais temps)')}:</strong> ${(parseFloat(document.getElementById('cons-sea')?.value || 0) * 1.05).toFixed(2)} T/D</li>
                                         <li><strong>Consumo Navegación:</strong> ${(State.fuelBreakdown?.navigation?.tons || 0).toFixed(2)} t · $${Math.round(State.fuelBreakdown?.navigation?.cost || 0).toLocaleString()}</li>
                                         <li><strong>Consumo Puerto:</strong> ${(State.fuelBreakdown?.port?.tons || 0).toFixed(2)} t · $${Math.round(State.fuelBreakdown?.port?.cost || 0).toLocaleString()}</li>
-                                        <li><strong>Consumo Fondeo:</strong> ${(State.fuelBreakdown?.anchorage?.tons || 0).toFixed(2)} t · $${Math.round(State.fuelBreakdown?.anchorage?.cost || 0).toLocaleString()}</li>
+                                        <li><strong>Consumo Fondeo:</strong> ${bunkerFondeoDisplay}</li>
                                         <li><strong>${currentLang === 'es' ? 'Total Combustible Estimado' : 'Total Fuel Cost'}:</strong> $${Math.round(State.costBunkers).toLocaleString()}</li>
+                                        <li><strong>${currentLang === 'es' ? 'Control Bunkers' : 'Bunker Check'}:</strong> $${Math.round(bunkerMarCost).toLocaleString()} + $${Math.round(calculatedFondeoCost).toLocaleString()} = $${Math.round(State.costBunkers).toLocaleString()}</li>
                                     </ul>
                                     <p class="font-sans"><strong>${currentLang === 'es' ? 'Origen de los Datos' : 'Data Origins & Sources'}:</strong></p>
                                     <p class="italic text-slate-500 font-sans font-medium">
@@ -21870,6 +22140,9 @@ Example:
 
             // Use values directly from State (populated by runEngine() immediately before) to avoid parsing bugs with locale formatting
             const costBunkers = State.costBunkers || 0;
+            const calculatedFondeoCost = Number(State.smartAdjustments?.anchorageBunkerCost ?? State.fuelBreakdown?.anchorage?.cost ?? 0);
+            const bunkerMarCost = Math.max(0, costBunkers - calculatedFondeoCost);
+            const bunkerFondeoTons = Number(State.fuelBreakdown?.anchorage?.tons || 0);
             const costOpex = State.costOpex || 0;
             const costPda = State.costPda || 0;
             const costTotal = State.costTotal || 0;
@@ -22150,6 +22423,14 @@ Example:
                                     <td style="text-align: right; padding-top: 4px; font-family: monospace;">$${Math.round(costBunkers).toLocaleString('en-US')}</td>
                                 </tr>
                                 <tr>
+                                    <td style="padding: 2px 0; color: #475569;">BUNKERS MAR / Sea Bunkers:</td>
+                                    <td style="text-align: right; font-family: monospace;">$${Math.round(bunkerMarCost).toLocaleString('en-US')}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 2px 0; color: #b45309; font-weight: 700;">CONSUMO AUXILIAR (FONDEO) / Auxiliary Anchorage:</td>
+                                    <td style="text-align: right; font-family: monospace; color: #b45309; font-weight: 700;">$${Math.round(calculatedFondeoCost).toLocaleString('en-US')}</td>
+                                </tr>
+                                <tr>
                                     <td style="padding: 2px 0; color: #475569;">Combustible Navegación / Sea Fuel:</td>
                                     <td style="text-align: right; font-family: monospace;">${(State.fuelBreakdown?.navigation?.tons || 0).toFixed(2)} t · $${Math.round(State.fuelBreakdown?.navigation?.cost || 0).toLocaleString('en-US')}</td>
                                 </tr>
@@ -22159,7 +22440,11 @@ Example:
                                 </tr>
                                 <tr>
                                     <td style="padding: 2px 0; color: #475569;">Combustible Fondeo / Anchorage Fuel:</td>
-                                    <td style="text-align: right; font-family: monospace;">${(State.fuelBreakdown?.anchorage?.tons || 0).toFixed(2)} t · $${Math.round(State.fuelBreakdown?.anchorage?.cost || 0).toLocaleString('en-US')}</td>
+                                    <td style="text-align: right; font-family: monospace;">${bunkerFondeoTons.toFixed(2)} t · $${Math.round(calculatedFondeoCost).toLocaleString('en-US')}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 2px 0; color: #0f172a; font-weight: 700;">Control Bunkers:</td>
+                                    <td style="text-align: right; font-family: monospace; font-weight: 700;">$${Math.round(bunkerMarCost).toLocaleString('en-US')} + $${Math.round(calculatedFondeoCost).toLocaleString('en-US')} = $${Math.round(costBunkers).toLocaleString('en-US')}</td>
                                 </tr>
                             </table>
                             <p style="font-size: 6.8pt; color: #64748b; margin: 4px 0 0 0; text-align: justify; font-style: italic;">
@@ -23636,7 +23921,8 @@ Example:
                     setVal('charter-party-standard', State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON'));
                     setVal('rate-load', State.loadRate !== undefined ? State.loadRate : 1000);
                     setVal('rate-disch', State.dischRate !== undefined ? State.dischRate : 1500);
-                    setVal('days-margin', State.daysMargin !== undefined ? State.daysMargin : 0);
+                    setVal('factor-clima', State.weatherMarginDays !== undefined ? State.weatherMarginDays : (State.daysMargin !== undefined ? State.daysMargin : 0));
+                    setVal('days-margin', State.weatherMarginDays !== undefined ? State.weatherMarginDays : (State.daysMargin !== undefined ? State.daysMargin : 0));
                     setVal('cons-sea', State.consSea !== undefined ? State.consSea : 0);
                     setVal('price-sea', State.priceSea !== undefined ? State.priceSea : 0);
                     setVal('cons-port', State.consPort !== undefined ? State.consPort : 0);
@@ -23647,8 +23933,8 @@ Example:
                     setVal('stevedoring-costs', State.stevedoringCosts !== undefined ? State.stevedoringCosts : 0);
                     setVal('pda-misc', State.pdaMisc !== undefined ? State.pdaMisc : 0);
                     setVal('cargo-surcharge', State.cargoSurcharge !== undefined ? State.cargoSurcharge : 0);
-                    setVal('margin-owner', State.marginOwner !== undefined ? State.marginOwner : 0);
-                    setVal('margin-charterer', State.marginCharterer !== undefined ? State.marginCharterer : 0);
+                    setVal('margin-owner', State.marginOwner !== undefined ? State.marginOwner : DEFAULT_OWNER_MARGIN_PERCENT);
+                    setVal('margin-charterer', State.marginCharterer !== undefined ? State.marginCharterer : DEFAULT_CHARTERER_MARGIN_PERCENT);
                     setVal('freight-rate', State.freightRate !== undefined ? State.freightRate : 0);
                     setVal('freight-sell', State.freightSell !== undefined ? State.freightSell : 0);
                     setVal('comm-pct', State.commPct !== undefined ? State.commPct : 0);
@@ -24526,7 +24812,8 @@ ADDITIONAL NOTES:
                         setVal('charter-party-standard', State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON'));
                         setVal('rate-load', State.loadRate !== undefined ? State.loadRate : 1000);
                         setVal('rate-disch', State.dischRate !== undefined ? State.dischRate : 1500);
-                        setVal('days-margin', State.daysMargin !== undefined ? State.daysMargin : 0);
+                        setVal('factor-clima', State.weatherMarginDays !== undefined ? State.weatherMarginDays : (State.daysMargin !== undefined ? State.daysMargin : 0));
+                        setVal('days-margin', State.weatherMarginDays !== undefined ? State.weatherMarginDays : (State.daysMargin !== undefined ? State.daysMargin : 0));
                         setVal('cons-sea', State.consSea !== undefined ? State.consSea : 0);
                         setVal('price-sea', State.priceSea !== undefined ? State.priceSea : 0);
                         setVal('cons-port', State.consPort !== undefined ? State.consPort : 0);
@@ -24537,8 +24824,8 @@ ADDITIONAL NOTES:
                         setVal('stevedoring-costs', State.stevedoringCosts !== undefined ? State.stevedoringCosts : 0);
                         setVal('pda-misc', State.pdaMisc !== undefined ? State.pdaMisc : 0);
                         setVal('cargo-surcharge', State.cargoSurcharge !== undefined ? State.cargoSurcharge : 0);
-                        setVal('margin-owner', State.marginOwner !== undefined ? State.marginOwner : 0);
-                        setVal('margin-charterer', State.marginCharterer !== undefined ? State.marginCharterer : 0);
+                        setVal('margin-owner', State.marginOwner !== undefined ? State.marginOwner : DEFAULT_OWNER_MARGIN_PERCENT);
+                        setVal('margin-charterer', State.marginCharterer !== undefined ? State.marginCharterer : DEFAULT_CHARTERER_MARGIN_PERCENT);
                         setVal('freight-rate', State.freightRate !== undefined ? State.freightRate : 0);
                         setVal('freight-sell', State.freightSell !== undefined ? State.freightSell : 0);
                         setVal('comm-pct', State.commPct !== undefined ? State.commPct : 0);
@@ -28448,7 +28735,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const ritmoRealPod = getRitmoRealPuerto(metodoDescarga, readRitmoNominalPuerto('pod'));
             const rateLoad = parseFloat(document.getElementById('rate-load')?.value) || ritmoRealPol;
             const rateDisch = parseFloat(document.getElementById('rate-disch')?.value) || ritmoRealPod;
-            const marginDays = parseFloat(document.getElementById('days-margin')?.value) || 0;
+            const marginDays = Math.max(0, parseFloat(document.getElementById('factor-clima')?.value) || 0);
             const cpStandard = document.getElementById('charter-party-standard') ? document.getElementById('charter-party-standard').value : (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
             const genconTurnTimeDays = (!isZeroCalculation && cpStandard === 'GENCON') ? 1.0 : 0;
 
@@ -28497,7 +28784,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 tugInference.coste_total_tugs = tugInference.tarifa_efectiva_ud * tugInference.total_usos_remolcador;
             }
             const smartTugUnitCost = Math.max(0, tugInference.tarifa_efectiva_ud);
-            const smartDelayDays = isZeroCalculation ? 0 : (smartDeltaDays + smartWeatherDays + smartAnchorageDays);
+            const smartDelayDays = isZeroCalculation ? 0 : (smartDeltaDays + smartAnchorageDays);
             const tugUnits = tugInference.total_usos_remolcador;
             const tugTotalCost = isZeroCalculation ? 0 : tugInference.coste_total_tugs;
 
@@ -28510,8 +28797,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const T_sea = isZeroCalculation ? 0 : (dBal + dLaden + marginDays);
             const T_port = isZeroCalculation ? 0 : dPortTotal;
-            const baseOperationalDays = isZeroCalculation ? 0 : (T_sea + T_port);
-            const totalDays = isZeroCalculation ? 0 : (baseOperationalDays + smartDelayDays);
+            const baseOperationalDays = isZeroCalculation ? 0 : (dBal + dLaden + dPortTotal);
+            const totalDays = isZeroCalculation ? 0 : (T_sea + T_port + smartDelayDays);
 
             const idxLoad = document.getElementById('port-pol')?.value || "";
             const idxDisch = document.getElementById('port-pod')?.value || "";
@@ -28566,7 +28853,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const basePortConsumptionCost = isZeroCalculation ? 0 : (T_port * cPort * pPort);
             const baseBunkers = isZeroCalculation ? 0 : (routeConsumptionCost + basePortConsumptionCost + extraEcaCost);
             const baseOpex = isZeroCalculation ? 0 : (baseOperationalDays * opex);
-            const baseEtsCost = isZeroCalculation ? 0 : (((T_sea * cSea) + (T_port * cPort)) * 3.11 * euPrice);
+            const baseEtsCost = isZeroCalculation ? 0 : ((((dBal + dLaden) * cSea) + (T_port * cPort)) * 3.11 * euPrice);
             const baseCostTotalWithoutEts = isZeroCalculation ? 0 : (baseBunkers + baseOpex + pdas);
             const baseCostTotal = isZeroCalculation ? 0 : (baseCostTotalWithoutEts + baseEtsCost);
 
@@ -28989,6 +29276,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const deltaVal = parseFloat(document.getElementById('delta-historico')?.value) || 0;
             const climaVal = parseFloat(document.getElementById('factor-clima')?.value) || 0;
             const fondeoVal = parseFloat(document.getElementById('t-fondeo')?.value) || 0;
+            const summaryClimateInput = document.getElementById('days-margin');
+            if (summaryClimateInput) {
+                summaryClimateInput.value = Math.max(0, climaVal).toFixed(2);
+                summaryClimateInput.classList.toggle('text-slate-400', climaVal <= 0);
+                summaryClimateInput.classList.toggle('text-[#1E3A8A]', climaVal > 0);
+            }
+            const summaryClimateValue = document.getElementById('res-days-margin');
+            if (summaryClimateValue) {
+                summaryClimateValue.innerText = `${Math.max(0, climaVal).toFixed(2)} d`;
+                summaryClimateValue.classList.toggle('text-slate-400', climaVal <= 0);
+                summaryClimateValue.classList.toggle('text-[#1E3A8A]', climaVal > 0);
+            }
 
             const baseDays = typeof State !== 'undefined' && Number.isFinite(State.baseOperationalDays)
                 ? State.baseOperationalDays
@@ -29274,6 +29573,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     el.dataset.historicalAutofill = 'false';
                 });
             });
+            const freightSellManualInput = document.getElementById('freight-sell');
+            if (freightSellManualInput) {
+                freightSellManualInput.addEventListener('input', () => {
+                    freightSellManualInput.dataset.marginSynced = 'false';
+                });
+            }
             ['port-pol', 'port-pod'].forEach((id) => {
                 const el = document.getElementById(id);
                 if (!el) return;
