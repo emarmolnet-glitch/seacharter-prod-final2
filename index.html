@@ -2719,6 +2719,44 @@
             background-color: #dbeafe !important;
         }
 
+        .ais-prospection-radius {
+            filter: drop-shadow(0 0 8px rgba(15, 23, 42, 0.22));
+            transition: stroke-opacity 180ms ease, fill-opacity 180ms ease;
+        }
+
+        .ais-prospection-radius.is-scanning {
+            animation: aisRadiusPulse 1.6s ease-in-out infinite;
+        }
+
+        .ais-prospection-result-label {
+            background: rgba(15, 23, 42, 0.88);
+            color: #f8fafc;
+            border: 1px solid currentColor;
+            border-radius: 6px;
+            padding: 4px 7px;
+            font-size: 10px;
+            font-weight: 900;
+            line-height: 1;
+            letter-spacing: 0;
+            text-transform: uppercase;
+            white-space: nowrap;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.28);
+        }
+
+        .ais-prospection-result-label.is-scanning {
+            animation: aisLabelPulse 1.2s ease-in-out infinite;
+        }
+
+        @keyframes aisRadiusPulse {
+            0%, 100% { stroke-width: 2; stroke-opacity: 0.82; }
+            50% { stroke-width: 5; stroke-opacity: 1; }
+        }
+
+        @keyframes aisLabelPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.04); }
+        }
+
         #view-ais table thead tr {
             border-bottom: 2px solid #E2E8F0 !important;
         }
@@ -2822,9 +2860,7 @@
 
         /* 2. Overrides for Operation Mode toggle buttons inside index.html */
         #index-btn-mode-local.bg-blue-600,
-        #index-btn-mode-global.bg-blue-600,
-        #btn-modo-regional.bg-blue-600,
-        #btn-modo-oceanico.bg-blue-600 {
+        #btn-modo-regional.bg-blue-600 {
             background-color: #1E3A8A !important; /* Corporate deep blue for active button */
             color: #FFFFFF !important; /* Crisp, pure white text */
             border: none !important;
@@ -2832,18 +2868,14 @@
         }
 
         #index-btn-mode-local:not(.bg-blue-600),
-        #index-btn-mode-global:not(.bg-blue-600),
-        #btn-modo-regional:not(.bg-blue-600),
-        #btn-modo-oceanico:not(.bg-blue-600) {
+        #btn-modo-regional:not(.bg-blue-600) {
             background-color: transparent !important;
             color: #475569 !important; /* Muted corporate slate-600 text for inactive state */
             border: none !important;
         }
 
         #index-btn-mode-local:not(.bg-blue-600):hover,
-        #index-btn-mode-global:not(.bg-blue-600):hover,
-        #btn-modo-regional:not(.bg-blue-600):hover,
-        #btn-modo-oceanico:not(.bg-blue-600):hover {
+        #btn-modo-regional:not(.bg-blue-600):hover {
             color: #1E3A8A !important; /* Corporate blue hover */
             background-color: rgba(30, 58, 138, 0.08) !important;
         }
@@ -7680,16 +7712,14 @@
                         <div class="flex-grow">
                             <strong class="text-indigo-900 text-[10px] font-bold uppercase tracking-wider block">Modo de Operación / Operation Mode</strong>
                             <p id="index-operation-mode-desc" class="text-slate-600 text-xs mt-0.5 leading-relaxed">
-                                Búsqueda Global Inteligente: barrido AIS global incremental con límite de seguridad de 1,000 buques.
+                                Búsqueda dual AIS obligatoria: POL 300 MN y POD 100 MN.
                             </p>
                         </div>
                         <div class="flex bg-slate-100 p-1 rounded-lg border border-slate-200 self-start sm:self-center">
                             <button type="button" id="btn-modo-regional" class="px-3 py-1.5 text-[11px] font-bold rounded-md text-slate-400 hover:text-slate-200 transition-all cursor-pointer">
                                 Regional / Cuenca
                             </button>
-                            <button type="button" id="btn-modo-oceanico" class="px-3 py-1.5 text-[11px] font-bold rounded-md bg-blue-600 text-white transition-all cursor-pointer">
-                                Global
-                            </button>
+                            <button type="button" id="btn-modo-oceanico" class="px-3 py-1.5 text-[11px] font-bold rounded-md bg-blue-600 text-white transition-all cursor-pointer">Dual</button>
                         </div>
                     </div>
                 </div>
@@ -7716,7 +7746,7 @@
                         <div class="space-y-4">
                             <div class="bg-slate-950 border border-slate-800 rounded-lg p-4 flex items-center justify-between">
                                 <div>
-                                    <p class="text-[10px] text-slate-400 font-bold uppercase">Buques en Área (Global)</p>
+                                    <p class="text-[10px] text-slate-400 font-bold uppercase">Buques en Área POL</p>
                                     <h4 id="ais-density-count" class="text-3xl font-black text-blue-500 mt-1 mono">--</h4>
                                     <span id="buques-count" class="hidden">--</span>
                                     <span id="ais-storage-progress" class="block text-[10px] text-slate-500 font-bold mono mt-1">0% / 1000</span>
@@ -7860,6 +7890,9 @@
                                 </button>
                                 <button id="btn-freeze-radar" onclick="window.toggleLiveTracking()" style="background-color: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 4px; transition: background-color 0.2s;">
                                     <i class="fa-solid fa-circle text-[8px] animate-pulse mr-1 text-emerald-300"></i>Radar: LIVE
+                                </button>
+                                <button id="btn-clear-ais-map" onclick="window.clearAisMapSearch()" style="background-color: #0f172a; color: white; border: 1px solid rgba(255,255,255,0.18); padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 4px; transition: background-color 0.2s;">
+                                    <i class="fa-solid fa-broom"></i> Limpiar Mapa
                                 </button>
                             </div>
                         </div>
@@ -25325,6 +25358,177 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.mapaAIS = null;
         let aisMarkers = [];
         let aisClusterGroup = null;
+        window.aisProspectionVisualState = window.aisProspectionVisualState || {
+            active: false,
+            zones: {
+                POL: { radiusNm: 300, color: '#16a34a', port: null, status: 'idle', count: null },
+                POD: { radiusNm: 100, color: '#2563eb', port: null, status: 'idle', count: null }
+            }
+        };
+        window.aisProspectionLayers = window.aisProspectionLayers || { group: null, circles: {}, labels: {} };
+
+        function getAisProspectionMap() {
+            return window.mapaAIS || window.mapAIS || window.aisMap || window.map || aisMap || null;
+        }
+
+        function getAisRoutePortForVisual(role) {
+            if (typeof getAisOperationalPort === 'function') {
+                const port = getAisOperationalPort(role);
+                if (port && Number.isFinite(Number(port.lat)) && Number.isFinite(Number(port.lon))) {
+                    return { lat: Number(port.lat), lon: Number(port.lon), name: port.name || role };
+                }
+            }
+            const inputId = role === 'POD' ? 'port-pod' : 'port-pol';
+            const fallbackInputId = role === 'POD' ? 'map-port-pod' : 'map-port-pol';
+            const portName = (document.getElementById(inputId)?.value || document.getElementById(fallbackInputId)?.value || '').trim();
+            const port = portName && typeof findPortData === 'function'
+                ? findPortData(portName)
+                : (portName && typeof PORT_DB !== 'undefined' ? PORT_DB[portName] : null);
+            return port && Number.isFinite(Number(port.lat)) && Number.isFinite(Number(port.lon))
+                ? { lat: Number(port.lat), lon: Number(port.lon), name: portName || role }
+                : null;
+        }
+
+        function ensureAisProspectionLayerGroup(mapInstance) {
+            if (!mapInstance || typeof L === 'undefined' || !L.layerGroup) return null;
+            const layers = window.aisProspectionLayers;
+            if (!layers.group || (typeof mapInstance.hasLayer === 'function' && !mapInstance.hasLayer(layers.group))) {
+                layers.group = L.layerGroup().addTo(mapInstance);
+                layers.circles = {};
+                layers.labels = {};
+            }
+            return layers.group;
+        }
+
+        window.renderAisProspectionRadii = function(options = {}) {
+            const mapInstance = getAisProspectionMap();
+            if (!mapInstance || typeof L === 'undefined' || !L.circle || !L.divIcon || !L.marker) return false;
+            const state = window.aisProspectionVisualState;
+            const group = ensureAisProspectionLayerGroup(mapInstance);
+            if (!group) return false;
+
+            ['POL', 'POD'].forEach((role) => {
+                const zone = state.zones[role];
+                const port = zone.port || getAisRoutePortForVisual(role);
+                if (!port) return;
+                zone.port = port;
+                const isScanning = zone.status === 'scanning';
+                const labelText = isScanning
+                    ? `${role} ${zone.radiusNm} MN · RADAR ACTIVO`
+                    : `${role} ${zone.radiusNm} MN · ${Number.isFinite(zone.count) ? zone.count : 0} resultados`;
+
+                if (!window.aisProspectionLayers.circles[role]) {
+                    window.aisProspectionLayers.circles[role] = L.circle([port.lat, port.lon], {
+                        color: zone.color,
+                        fillColor: zone.color,
+                        fillOpacity: role === 'POL' ? 0.13 : 0.10,
+                        radius: zone.radiusNm * 1852,
+                        weight: 2,
+                        dashArray: role === 'POL' ? '8, 8' : '5, 8',
+                        className: `ais-prospection-radius ${isScanning ? 'is-scanning' : ''}`
+                    }).addTo(group);
+                } else {
+                    window.aisProspectionLayers.circles[role]
+                        .setLatLng([port.lat, port.lon])
+                        .setRadius(zone.radiusNm * 1852)
+                        .setStyle({ color: zone.color, fillColor: zone.color, className: `ais-prospection-radius ${isScanning ? 'is-scanning' : ''}` });
+                }
+                const circleElement = window.aisProspectionLayers.circles[role].getElement && window.aisProspectionLayers.circles[role].getElement();
+                if (circleElement) {
+                    circleElement.setAttribute('class', `leaflet-interactive ais-prospection-radius ${isScanning ? 'is-scanning' : ''}`.trim());
+                }
+                window.aisProspectionLayers.circles[role].bindTooltip(`${role}: ${zone.radiusNm} MN`, { sticky: true });
+
+                const labelHtml = `<div class="ais-prospection-result-label ${isScanning ? 'is-scanning' : ''}" style="color:${zone.color}">${labelText}</div>`;
+                const labelIcon = L.divIcon({ className: '', html: labelHtml, iconSize: [150, 24], iconAnchor: [75, 12] });
+                if (!window.aisProspectionLayers.labels[role]) {
+                    window.aisProspectionLayers.labels[role] = L.marker([port.lat, port.lon], {
+                        icon: labelIcon,
+                        interactive: false,
+                        keyboard: false
+                    }).addTo(group);
+                } else {
+                    window.aisProspectionLayers.labels[role].setLatLng([port.lat, port.lon]).setIcon(labelIcon);
+                }
+            });
+
+            if (options.fit !== false && typeof fitAisMapToProspectionRadii === 'function') {
+                fitAisMapToProspectionRadii(mapInstance, state.zones.POL.port, state.zones.POD.port);
+            }
+            return true;
+        };
+
+        window.activateAisProspectionRadius = function(role) {
+            const normalizedRole = String(role || '').toUpperCase();
+            const state = window.aisProspectionVisualState;
+            if (!state.zones[normalizedRole]) return;
+            state.active = true;
+            state.zones[normalizedRole].port = getAisRoutePortForVisual(normalizedRole);
+            state.zones[normalizedRole].status = 'scanning';
+            state.zones[normalizedRole].count = null;
+            window.renderAisProspectionRadii({ fit: true });
+        };
+
+        window.completeAisProspectionRadius = function(role, count) {
+            const normalizedRole = String(role || '').toUpperCase();
+            const state = window.aisProspectionVisualState;
+            if (!state.zones[normalizedRole]) return;
+            state.active = true;
+            state.zones[normalizedRole].status = 'complete';
+            state.zones[normalizedRole].count = Number(count) || 0;
+            window.renderAisProspectionRadii({ fit: false });
+        };
+
+        window.clearAisProspectionRadii = function() {
+            const mapInstance = getAisProspectionMap();
+            const layers = window.aisProspectionLayers;
+            if (layers.group && mapInstance && typeof mapInstance.removeLayer === 'function') {
+                try { mapInstance.removeLayer(layers.group); } catch (_) {}
+            }
+            ['aisSearchRadiusCircle', 'aisPolHighlightCircle', 'aisPodHighlightCircle'].forEach((layerKey) => {
+                if (window[layerKey] && mapInstance && typeof mapInstance.removeLayer === 'function') {
+                    try { mapInstance.removeLayer(window[layerKey]); } catch (_) {}
+                }
+            });
+            window.aisProspectionLayers = { group: null, circles: {}, labels: {} };
+            window.aisSearchRadiusCircle = null;
+            window.aisPolHighlightCircle = null;
+            window.aisPodHighlightCircle = null;
+            window.aisProspectionVisualState.active = false;
+            Object.values(window.aisProspectionVisualState.zones).forEach((zone) => {
+                zone.status = 'idle';
+                zone.count = null;
+            });
+        };
+
+        window.clearAisMapSearch = function() {
+            window.aisRadarUserActivated = false;
+            if (typeof window.stopAisRadarPolling === 'function') window.stopAisRadarPolling();
+            if (typeof window.stopDirectAisLiveRadar === 'function') window.stopDirectAisLiveRadar();
+            if (window.MapLoader && typeof window.MapLoader.stopAisProxyPolling === 'function') window.MapLoader.stopAisProxyPolling();
+            window.clearAisProspectionRadii();
+            window.buquesAlmacenados = new Map();
+            window.listaBarcos = [];
+            if (window.GlobalStore) {
+                window.GlobalStore.rawVessels = [];
+                window.GlobalStore.vessels = [];
+                window.GlobalStore.polPrimaryVessels = [];
+            }
+            if (aisClusterGroup && typeof aisClusterGroup.clearLayers === 'function') aisClusterGroup.clearLayers();
+            if (window.aisProjectedTrackLayer && typeof window.aisProjectedTrackLayer.clearLayers === 'function') window.aisProjectedTrackLayer.clearLayers();
+            aisMarkers = [];
+            const tbody = document.getElementById('ais-vessels-tbody');
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-500">Mapa limpio. Ejecuta una búsqueda POL/POD para iniciar un nuevo barrido.</td></tr>`;
+            }
+            ['ais-density-count', 'buques-count'].forEach((id) => { const el = document.getElementById(id); if (el) el.innerText = '--'; });
+            const supply = document.getElementById('ais-supply-coefficient');
+            if (supply) supply.innerText = '--';
+            const coef = document.getElementById('coeficiente-oferta');
+            if (coef) coef.innerText = '--';
+            const status = document.getElementById('ais-competition-status');
+            if (status) status.innerText = 'Desconocido';
+        };
         
         // --- MOTOR DE ACUMULACIÓN GLOBAL DE BUQUES ---
         window.AIS_GLOBAL_SWEEP_LIMIT = 1000;
@@ -25393,7 +25597,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (buquesCountEl) {
                 buquesCountEl.innerText = total;
             }
-            console.log(`[Radar Global] buquesAlmacenados.size=${localTotal}/${limite}; persistidos=${total}/${limite} (${porcentaje}%)`);
         };
 
         window.reiniciarMemoriaBarridoAIS = function() {
@@ -25434,7 +25637,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return false;
             }
             if (window.buquesAlmacenados.has(idBuque)) {
-                console.log(`[Radar Global] Duplicado ignorado: ${idBuque}. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
                 return false;
             }
 
@@ -25664,9 +25866,59 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             };
         };
 
-        window.iniciarBarridoGlobal = async function() {
+        async function runAisZoneSearch(role, radiusNm, color) {
+            const normalizedRole = String(role || '').toUpperCase();
+            if (typeof window.activateAisProspectionRadius === 'function') {
+                window.activateAisProspectionRadius(normalizedRole);
+            }
+            const endpoint = typeof window.getRouteAisSweepEndpoint === 'function'
+                ? window.getRouteAisSweepEndpoint(45000, normalizedRole)
+                : '';
+            if (!endpoint) {
+                console.warn(`0 buques detectados en ${normalizedRole}`);
+                if (typeof window.completeAisProspectionRadius === 'function') {
+                    window.completeAisProspectionRadius(normalizedRole, 0);
+                }
+                return [];
+            }
+
+            console.log(`search${normalizedRole}(${radiusNm}nm)`);
+            const response = await fetch(endpoint, {
+                headers: { "Accept": "application/json" }
+            });
+            const vessels = typeof window.parseAisVesselsResponse === 'function'
+                ? await window.parseAisVesselsResponse(response, `search${normalizedRole}(${radiusNm}nm)`)
+                : [];
+            if (typeof window.completeAisProspectionRadius === 'function') {
+                window.completeAisProspectionRadius(normalizedRole, vessels.length);
+            }
+            if (!vessels.length) {
+                console.warn(`0 buques detectados en ${normalizedRole}`);
+                return [];
+            }
+            return vessels.map(vessel => ({
+                ...vessel,
+                aisRadarZone: normalizedRole,
+                aisRadarColor: color,
+                MetaData: {
+                    ...(vessel.MetaData || {}),
+                    aisRadarZone: normalizedRole,
+                    aisRadarColor: color
+                }
+            }));
+        }
+
+        window.RadarPOL = function() {
+            return runAisZoneSearch('POL', 300, '#16a34a');
+        };
+
+        window.RadarPOD = function() {
+            return runAisZoneSearch('POD', 100, '#2563eb');
+        };
+
+        window.ejecutarRadarDualAIS = async function() {
             if (window.isGlobalSweepRunning) {
-                console.warn("[Radar Global] Barrido ya en curso; se omite una ejecución solapada.");
+                console.warn("[Radar Dual] Barrido ya en curso; se omite una ejecución solapada.");
                 return window.listaBarcos;
             }
 
@@ -25675,30 +25927,25 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (typeof window.reiniciarMemoriaBarridoAIS === 'function') {
                 window.reiniciarMemoriaBarridoAIS();
             }
-            console.log("[Radar Global] Iniciando barrido AIS global.");
             if (typeof window.setAisRadarStatus === 'function') {
                 window.setAisRadarStatus('updating');
             }
 
             try {
-                const endpoint = typeof window.getRouteAisSweepEndpoint === 'function'
-                    ? window.getRouteAisSweepEndpoint(45000)
-                    : '';
-                if (!endpoint) {
+                if (typeof window.RadarPOL !== 'function' || typeof window.RadarPOD !== 'function') {
                     alert("No se pudieron determinar las coordenadas del POL y POD para limitar el barrido AIS.");
                     return window.listaBarcos;
                 }
-                const response = await fetch(endpoint, {
-                    headers: { "Accept": "application/json" }
-                });
-                const vessels = typeof window.parseAisVesselsResponse === 'function'
-                    ? await window.parseAisVesselsResponse(response, 'Radar Global')
-                    : [];
+                const [polVessels, podVessels] = await Promise.all([
+                    window.RadarPOL(),
+                    window.RadarPOD()
+                ]);
+                const vessels = [...polVessels, ...podVessels];
                 const limite = Number(window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
 
                 for (let i = 0; i < vessels.length; i += 1) {
                     if (window.buquesAlmacenados.size >= limite) {
-                        console.warn(`[Radar Global] Límite de seguridad alcanzado: ${limite} barcos. Inserción detenida.`);
+                        console.warn(`[Radar Dual] Límite de seguridad alcanzado: ${limite} barcos. Inserción detenida.`);
                         if (typeof window.detenerRadar === 'function') {
                             window.detenerRadar();
                         }
@@ -25718,13 +25965,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (window.GlobalStore && typeof window.GlobalStore.setRawVessels === 'function') {
                     window.GlobalStore.setRawVessels(window.listaBarcos);
                 }
-                console.log(`[Radar Global] Barrido completado. buquesAlmacenados.size=${window.buquesAlmacenados.size}.`);
+                console.log(`[Radar Dual] Barrido completado. buquesAlmacenados.size=${window.buquesAlmacenados.size}.`);
                 if (typeof window.freezeAisRadarStatus === 'function') {
                     window.freezeAisRadarStatus(Math.min(window.listaBarcos.length, limite));
                 }
                 return window.listaBarcos;
             } catch (err) {
-                console.warn("[Radar Global] Error durante el barrido AIS global:", err);
+                console.warn("[Radar Dual] Error durante el barrido AIS dual POL/POD:", err);
                 return window.listaBarcos;
             } finally {
                 window.isGlobalSweepRunning = false;
@@ -25810,14 +26057,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         };
         window.detenerRadar = function() {
             window.aisRadarUserActivated = false;
-            console.warn(`[Radar Global] detenerRadar() ejecutado. buquesAlmacenados.size=${window.buquesAlmacenados instanceof Map ? window.buquesAlmacenados.size : 0}`);
+            console.warn(`[Radar Dual] detenerRadar() ejecutado. buquesAlmacenados.size=${window.buquesAlmacenados instanceof Map ? window.buquesAlmacenados.size : 0}`);
             return window.stopAisRadarPolling();
         };
 
         window.startAisRadarPolling = function() {
             const limite = Number(window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
             if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
-                console.warn(`[Radar Global] Límite alcanzado antes de iniciar polling. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
+                console.warn(`[Radar Dual] Límite alcanzado antes de iniciar polling. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
                 window.detenerRadar();
                 return { started: false, reason: 'global-sweep-limit-reached' };
             }
@@ -25833,7 +26080,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             };
             const runAisRadarPoll = () => {
                 Promise.resolve(window.continuousScanAIS())
-                    .catch((err) => console.warn("[Radar Global] Error durante el polling AIS:", err))
+                    .catch((err) => console.warn("[Radar Dual] Error durante el polling AIS:", err))
                     .finally(() => {
                         if (window.aisRadarPollingInterval !== null) {
                             scheduleNextAisRadarPoll();
@@ -25999,6 +26246,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 aisMapAnimationFrameId = null;
                 if (!aisMap) return;
                 aisMap.invalidateSize();
+                if (window.aisProspectionVisualState && window.aisProspectionVisualState.active && typeof window.renderAisProspectionRadii === 'function') {
+                    window.renderAisProspectionRadii({ fit: false });
+                }
                 if (window.GlobalStore && window.GlobalStore.getRawVessels && window.GlobalStore.getRawVessels().length > 0 && typeof window.reapplyCentralFiltersAndRedraw === 'function') {
                     window.reapplyCentralFiltersAndRedraw();
                 }
@@ -26020,6 +26270,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.mapaAIS = null;
             aisClusterGroup = null;
             aisMarkers = [];
+            window.aisProspectionLayers = { group: null, circles: {}, labels: {} };
         }
 
         function updateAisMarkers(vessels) {
@@ -26053,6 +26304,25 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const newMarkers = [];
             const survivingIds = new Set();
             const routePorts = getCurrentRoutePortNames();
+            if (window.aisProjectedTrackLayer && aisMap.hasLayer(window.aisProjectedTrackLayer)) {
+                window.aisProjectedTrackLayer.clearLayers();
+            } else if (typeof L !== 'undefined' && L.layerGroup) {
+                window.aisProjectedTrackLayer = L.layerGroup().addTo(aisMap);
+            }
+
+            const projectedTrackHours = 24;
+            const buildProjectedTrack = (v) => {
+                const lat = Number(v.latitude);
+                const lon = Number(v.longitude);
+                const speed = Number(v.speed);
+                const course = Number(v.course ?? v.COG ?? v.heading ?? v.TrueHeading);
+                if (![lat, lon, speed, course].every(Number.isFinite) || speed <= 0) return null;
+                const distanceNm = Math.min(300, speed * projectedTrackHours);
+                const bearing = course * Math.PI / 180;
+                const latDelta = (Math.cos(bearing) * distanceNm) / 60;
+                const lonDelta = (Math.sin(bearing) * distanceNm) / (60 * Math.max(0.25, Math.cos(lat * Math.PI / 180)));
+                return [[lat - latDelta, lon - lonDelta], [lat, lon]];
+            };
 
             vessels.forEach(v => {
                 if (v.latitude && v.longitude) {
@@ -26103,6 +26373,19 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         aisClusterGroup.addLayer(marker);
                         newMarkers.push(marker);
                         if (idStr) survivingIds.add(idStr);
+                    }
+
+                    if (window.aisProjectedTrackLayer && typeof L !== 'undefined' && L.polyline) {
+                        const track = buildProjectedTrack(v);
+                        if (track) {
+                            L.polyline(track, {
+                                color: isCompatible ? '#34d399' : '#38bdf8',
+                                weight: isCompatible ? 2.5 : 1.5,
+                                opacity: isCompatible ? 0.55 : 0.28,
+                                dashArray: '6, 8',
+                                interactive: false
+                            }).addTo(window.aisProjectedTrackLayer);
+                        }
                     }
                 }
             });
@@ -26222,24 +26505,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             window.isAisSweepFetching = false;
 
-            const GLOBAL_AIS_SWEEP_ZONES = [
-                { id: 'west-med-atlantic-approach', box: [[30.0, -12.0], [46.5, 8.0]] },
-                { id: 'central-east-med-black-sea', box: [[29.0, 8.0], [47.5, 42.0]] },
-                { id: 'north-sea-baltic', box: [[48.0, -8.0], [66.0, 31.0]] },
-                { id: 'west-africa-east-atlantic', box: [[-8.0, -25.0], [30.0, 12.0]] },
-                { id: 'caribbean-gulf', box: [[8.0, -98.0], [31.0, -58.0]] },
-                { id: 'us-east-canada-atlantic', box: [[24.0, -82.0], [50.0, -50.0]] },
-                { id: 'south-america-atlantic', box: [[-56.0, -72.0], [12.0, -25.0]] },
-                { id: 'south-america-pacific', box: [[-56.0, -86.0], [10.0, -70.0]] },
-                { id: 'us-west-pacific', box: [[20.0, -160.0], [56.0, -116.0]] },
-                { id: 'middle-east-red-sea', box: [[5.0, 32.0], [31.0, 78.0]] },
-                { id: 'east-africa-indian-ocean', box: [[-36.0, 28.0], [12.0, 75.0]] },
-                { id: 'india-bay-bengal', box: [[0.0, 68.0], [26.0, 98.0]] },
-                { id: 'southeast-asia', box: [[-12.0, 95.0], [25.0, 125.0]] },
-                { id: 'east-asia', box: [[18.0, 118.0], [46.0, 150.0]] },
-                { id: 'oceania', box: [[-48.0, 110.0], [0.0, 178.0]] }
-            ];
-
             const directAisState = {
                 ws: null,
                 reconnectTimer: null,
@@ -26293,11 +26558,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return null;
             }
 
-            function getRouteAisScanRadiusNm() {
-                const inputValue = Number(document.getElementById('filter-max-distance')?.value);
-                const storedValue = typeof localStorage !== 'undefined' ? Number(localStorage.getItem('ais_filter_max_distance')) : NaN;
-                const radius = Number.isFinite(inputValue) && inputValue > 0 ? inputValue : storedValue;
-                return Math.max(50, Math.min(500, Number.isFinite(radius) && radius > 0 ? radius : 300));
+            const AIS_PROSPECTION_RADII_NM = Object.freeze({
+                POL: 300,
+                POD: 100
+            });
+            window.AIS_PROSPECTION_RADII_NM = AIS_PROSPECTION_RADII_NM;
+
+            function getRouteAisScanRadiusNm(portRole = 'POL') {
+                const role = String(portRole || 'POL').toUpperCase();
+                return role === 'POD' ? AIS_PROSPECTION_RADII_NM.POD : AIS_PROSPECTION_RADII_NM.POL;
             }
 
             function createAisBoxAroundPort(port, radiusNm) {
@@ -26313,18 +26582,68 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             function getActiveRouteAisBoxes() {
                 const polName = (document.getElementById('port-pol')?.value || window.State?.pol || '').trim();
                 const podName = (document.getElementById('port-pod')?.value || window.State?.pod || '').trim();
-                const radiusNm = getRouteAisScanRadiusNm();
-                return [getRoutePortData(polName), getRoutePortData(podName)]
-                    .map(port => createAisBoxAroundPort(port, radiusNm))
+                return [
+                    { port: getRoutePortData(polName), role: 'POL' },
+                    { port: getRoutePortData(podName), role: 'POD' }
+                ]
+                    .map(({ port, role }) => createAisBoxAroundPort(port, getRouteAisScanRadiusNm(role)))
                     .filter(Boolean);
             }
 
-            window.getRouteAisSweepEndpoint = function(quantity = 45000) {
-                const boxes = getActiveRouteAisBoxes();
+            function getActiveRouteAisBox(role = 'POL') {
+                const normalizedRole = String(role || 'POL').toUpperCase();
+                const port = getAisOperationalPort(normalizedRole);
+                const box = createAisBoxAroundPort(port, getRouteAisScanRadiusNm(normalizedRole));
+                return box ? [box] : [];
+            }
+
+            function getAisOperationalPort(role = 'POL') {
+                const normalizedRole = String(role || 'POL').toUpperCase();
+                const inputId = normalizedRole === 'POD' ? 'port-pod' : 'port-pol';
+                const stateKey = normalizedRole === 'POD' ? 'pod' : 'pol';
+                const portName = (document.getElementById(inputId)?.value || window.State?.[stateKey] || '').trim();
+                return getRoutePortData(portName);
+            }
+
+            function calculateAisDistanceNm(lat1, lon1, lat2, lon2) {
+                const R = 6371;
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLon = (lon2 - lon1) * Math.PI / 180;
+                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                return R * c * 0.539957;
+            }
+
+            function assignAisProspectionZone(vessel, polPort = getAisOperationalPort('POL'), podPort = getAisOperationalPort('POD')) {
+                const coords = (window.MapLoader && typeof window.MapLoader.normalizeCoordinates === 'function')
+                    ? window.MapLoader.normalizeCoordinates(vessel)
+                    : [parseFloat((vessel.MetaData && v.MetaData.latitude) || vessel.latitude || 0), parseFloat((vessel.MetaData && v.MetaData.longitude) || vessel.longitude || 0)];
+                if (!coords) return null;
+                const [lat, lon] = coords;
+                if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+                const polDistance = polPort ? calculateAisDistanceNm(polPort.lat, polPort.lon, lat, lon) : Infinity;
+                if (polDistance <= AIS_PROSPECTION_RADII_NM.POL) {
+                    return { zone: 'POL', color: '#16a34a', distanceToPol: polDistance };
+                }
+
+                const podDistance = podPort ? calculateAisDistanceNm(podPort.lat, podPort.lon, lat, lon) : Infinity;
+                if (podDistance <= AIS_PROSPECTION_RADII_NM.POD) {
+                    return { zone: 'POD', color: '#2563eb', distanceToPod: podDistance };
+                }
+
+                return null;
+            }
+
+            window.getRouteAisSweepEndpoint = function(quantity = 45000, role = '') {
+                const boxes = role ? getActiveRouteAisBox(role) : getActiveRouteAisBoxes();
                 if (!boxes.length) {
                     return '';
                 }
-                return `/.netlify/functions/get-vessels?quantity=${encodeURIComponent(quantity)}&force=1&boxes=${encodeURIComponent(JSON.stringify(boxes))}`;
+                const zone = String(role || 'DUAL').toUpperCase();
+                return `/.netlify/functions/get-vessels?quantity=${encodeURIComponent(quantity)}&force=1&zone=${encodeURIComponent(zone)}&boxes=${encodeURIComponent(JSON.stringify(boxes))}`;
             };
 
             function getActiveBoundingBox() {
@@ -26491,7 +26810,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
                 const limite = Number(window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
                 if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
-                    console.warn(`[Radar Global] Límite alcanzado antes de consultar proxy. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
+                    console.warn(`[Radar Dual] Límite alcanzado antes de consultar proxy. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
                     window.detenerRadar();
                     return { started: false, reason: 'global-sweep-limit-reached' };
                 }
@@ -26536,7 +26855,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
                 const limite = Number(window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
                 if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
-                    console.warn(`[Radar Global] Límite alcanzado antes de iniciar radar directo. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
+                    console.warn(`[Radar Dual] Límite alcanzado antes de iniciar radar directo. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
                     window.detenerRadar();
                     return window.GlobalStore ? window.GlobalStore.getRawVessels() : [];
                 }
@@ -26728,6 +27047,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     return true;
                 });
 
+                const polPort = getAisOperationalPort('POL');
+                const podPort = getAisOperationalPort('POD');
                 const normalizedVessels = filteredVessels.map(v => {
                     const name = v.vesselName || v.ShipName || (v.MetaData && v.MetaData.ShipName) || "Desconocido";
                     const mmsi = v.mmsi || v.MMSI || (v.MetaData && v.MetaData.MMSI) || "N/A";
@@ -26741,6 +27062,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const rawDwtVal = v.DWT || v.dwt || (v.MetaData && (v.MetaData.DWT || v.MetaData.dwt));
                     const rawDwt = (rawDwtVal !== undefined && rawDwtVal !== null && rawDwtVal !== "N/A" && rawDwtVal !== "Unknown" && rawDwtVal !== "unknown") ? parseFloat(rawDwtVal) : "N/A";
                     const statusVal = v.NavigationalStatus !== undefined ? v.NavigationalStatus : (v.MetaData && v.MetaData.NavigationalStatus) !== undefined ? v.MetaData.NavigationalStatus : undefined;
+                    const course = parseFloat(v.course ?? v.COG ?? (v.MetaData && (v.MetaData.course ?? v.MetaData.COG)) ?? NaN);
+                    const heading = parseFloat(v.heading ?? v.TrueHeading ?? (v.MetaData && (v.MetaData.heading ?? v.MetaData.TrueHeading)) ?? NaN);
                     const statusLabel = statusVal === 5 ? "En Puerto" : 
                                         (statusVal === 1 ? "Fondeado" : 
                                         (statusVal === 0 || statusVal === 8 ? "Navegando" : 
@@ -26749,6 +27072,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     
                     const shipTypeVal = v.ShipType || v.shipType || (v.MetaData && (v.MetaData.ShipType || v.MetaData.shipType));
                     const classification = classifyBulkCarrierRealTime(rawDwt, name, mmsi, imo, shipTypeVal);
+                    const zoneMatch = assignAisProspectionZone({ ...v, latitude: lat, longitude: lon }, polPort, podPort);
 
                     return {
                         vesselName: name,
@@ -26761,37 +27085,62 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         statusLabel: statusLabel,
                         shipType: shipTypeVal,
                         ShipType: shipTypeVal,
+                        course: Number.isFinite(course) ? course : undefined,
+                        heading: Number.isFinite(heading) ? heading : undefined,
                         vesselClass: classification.vClass,
                         dwt: classification.dwt,
+                        aisRadarZone: zoneMatch ? zoneMatch.zone : 'ROUTE',
+                        aisRadarColor: zoneMatch ? zoneMatch.color : '#3b82f6',
+                        distanceToPol: zoneMatch && Number.isFinite(zoneMatch.distanceToPol) ? zoneMatch.distanceToPol : undefined,
+                        distanceToPod: zoneMatch && Number.isFinite(zoneMatch.distanceToPod) ? zoneMatch.distanceToPod : undefined,
                         NavigationalStatus: statusVal,
                         timestamp: v.timestamp || v.lastSeen || v.created_at || v.createdAt || Date.now()
                     };
                 });
+                const polPrimaryVessels = normalizedVessels
+                    .filter(v => v.aisRadarZone === 'POL')
+                    .sort((a, b) => {
+                        const aSpeed = Number(a.speed) > 0 ? Number(a.speed) : 12;
+                        const bSpeed = Number(b.speed) > 0 ? Number(b.speed) : 12;
+                        const aEta = Number.isFinite(a.distanceToPol) ? a.distanceToPol / aSpeed : Infinity;
+                        const bEta = Number.isFinite(b.distanceToPol) ? b.distanceToPol / bSpeed : Infinity;
+                        return aEta - bEta;
+                    });
+                const podVisibleVessels = normalizedVessels.filter(v => v.aisRadarZone === 'POD');
+
+                if (window.aisProspectionVisualState && window.aisProspectionVisualState.active) {
+                    if (typeof window.completeAisProspectionRadius === 'function') {
+                        window.completeAisProspectionRadius('POL', polPrimaryVessels.length);
+                        window.completeAisProspectionRadius('POD', podVisibleVessels.length);
+                    }
+                }
 
                 if (window.GlobalStore) {
                     window.GlobalStore.setVessels(normalizedVessels);
+                    window.GlobalStore.polPrimaryVessels = polPrimaryVessels;
                 }
+                window.lastVesselsInArea = polPrimaryVessels;
 
                 const buquesCountEl = document.getElementById('buques-count');
-                if (buquesCountEl) buquesCountEl.innerText = normalizedVessels.length;
+                if (buquesCountEl) buquesCountEl.innerText = polPrimaryVessels.length;
                 const coefOfertaEl = document.getElementById('coeficiente-oferta');
-                if (coefOfertaEl) coefOfertaEl.innerText = (normalizedVessels.length / 5).toFixed(2);
+                if (coefOfertaEl) coefOfertaEl.innerText = (polPrimaryVessels.length / 5).toFixed(2);
                 const estadoCompEl = document.getElementById('estado-competencia');
-                if (estadoCompEl) estadoCompEl.innerText = normalizedVessels.length > 3 ? "Alta" : "Baja";
+                if (estadoCompEl) estadoCompEl.innerText = polPrimaryVessels.length > 3 ? "Alta" : "Baja";
 
                 const aisDensityCount = document.getElementById('ais-density-count');
-                if (aisDensityCount) aisDensityCount.innerText = normalizedVessels.length;
+                if (aisDensityCount) aisDensityCount.innerText = polPrimaryVessels.length;
                 const aisSupplyCoefficient = document.getElementById('ais-supply-coefficient');
                 if (aisSupplyCoefficient) {
                     const baseline = 15;
-                    let coefficient = 1.00 + (baseline - normalizedVessels.length) * 0.02;
+                    let coefficient = 1.00 + (baseline - polPrimaryVessels.length) * 0.02;
                     coefficient = Math.max(0.70, Math.min(1.30, coefficient));
                     aisSupplyCoefficient.innerText = coefficient.toFixed(2);
                 }
                 const aisCompetitionStatus = document.getElementById('ais-competition-status');
                 if (aisCompetitionStatus) {
-                    aisCompetitionStatus.innerText = normalizedVessels.length > 5 ? "Alta" : "Baja";
-                    if (normalizedVessels.length > 5) {
+                    aisCompetitionStatus.innerText = polPrimaryVessels.length > 5 ? "Alta" : "Baja";
+                    if (polPrimaryVessels.length > 5) {
                         aisCompetitionStatus.className = "px-2.5 py-1 text-xs font-bold rounded-full bg-red-500/10 text-red-400 inline-block mt-2";
                     } else {
                         aisCompetitionStatus.className = "px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-500/10 text-emerald-400 inline-block mt-2";
@@ -26876,7 +27225,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
                 const limite = Number(window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
                 if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
-                    console.warn(`[Radar Global] Límite alcanzado antes de fetch AIS. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
+                    console.warn(`[Radar Dual] Límite alcanzado antes de fetch AIS. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
                     window.detenerRadar();
                     return window.GlobalStore ? window.GlobalStore.getRawVessels() : [];
                 }
@@ -26906,19 +27255,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             // Bulk Sweep Function (runs only on click)
             window.executeSweepAIS = async function() {
-                console.log("Starting global AIS sweep...");
                 window.aisRadarUserActivated = true;
                 const icon = document.getElementById('ais-refresh-icon');
                 if (icon) {
                     icon.classList.add('fa-spin');
                 }
                 try {
-                    if (typeof window.iniciarBarridoGlobal === 'function') {
-                        await window.iniciarBarridoGlobal();
+                    if (typeof window.ejecutarRadarDualAIS === 'function') {
+                        await window.ejecutarRadarDualAIS();
                     } else {
                         await window.fetchAisData(false);
                     }
-                    console.log("Global AIS sweep completed.");
+                    console.log("Radar dual POL/POD completed.");
 
                     // Static anchors for automated testing compatibility:
                     if (false) {
@@ -26948,10 +27296,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             // This function is exclusive to your Market Intelligence (AIS) map
             window.executeAISScan = async function() {
                 try {
-                    if (typeof window.iniciarBarridoGlobal === 'function') {
-                        await window.iniciarBarridoGlobal();
+                    if (typeof window.ejecutarRadarDualAIS === 'function') {
+                        await window.ejecutarRadarDualAIS();
                     }
-                    console.log("Global AIS sweep requested from AIS map view.");
+                    console.log("Radar dual POL/POD requested from AIS map view.");
 
                     // Static anchors for automated testing compatibility:
                     if (false) {
@@ -26993,8 +27341,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
             try {
                 window.aisRadarUserActivated = true;
-                if (typeof window.iniciarBarridoGlobal === 'function') {
-                    await window.iniciarBarridoGlobal();
+                if (typeof window.ejecutarRadarDualAIS === 'function') {
+                    await window.ejecutarRadarDualAIS();
                 } else {
                     await window.fetchAisData(false);
                 }
@@ -27031,6 +27379,25 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             refreshAisBtnSpanish.addEventListener('click', window.ejecutarBarridoAIS);
         }
 
+        function fitAisMapToProspectionRadii(mapInstance, polData, podData) {
+            if (!mapInstance || typeof L === 'undefined' || !L.latLngBounds) return;
+            const bounds = L.latLngBounds([]);
+            const addRadiusBounds = (port, radiusNm) => {
+                if (!port || !Number.isFinite(Number(port.lat)) || !Number.isFinite(Number(port.lon))) return;
+                const lat = Number(port.lat);
+                const lon = Number(port.lon);
+                const latDelta = radiusNm / 60;
+                const lonDelta = radiusNm / (60 * Math.max(0.25, Math.cos(lat * Math.PI / 180)));
+                bounds.extend([lat - latDelta, lon - lonDelta]);
+                bounds.extend([lat + latDelta, lon + lonDelta]);
+            };
+            addRadiusBounds(polData, (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 300);
+            addRadiusBounds(podData, (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POD) || 100);
+            if (bounds.isValid()) {
+                mapInstance.fitBounds(bounds, { padding: [32, 32], maxZoom: 8 });
+            }
+        }
+
         function performAisSearch() {
             const query = (document.getElementById('ais-vessel-search')?.value || '').toLowerCase().trim();
             if (!query) {
@@ -27046,11 +27413,20 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             let polData = null;
+            let podData = null;
             if (pol) {
                 if (typeof findPortData === 'function') {
                     polData = findPortData(pol);
                 } else if (typeof PORT_DB !== 'undefined' && PORT_DB[pol]) {
                     polData = PORT_DB[pol];
+                }
+            }
+            const pod = document.getElementById('port-pod')?.value.trim() || '';
+            if (pod) {
+                if (typeof findPortData === 'function') {
+                    podData = findPortData(pod);
+                } else if (typeof PORT_DB !== 'undefined' && PORT_DB[pod]) {
+                    podData = PORT_DB[pod];
                 }
             }
             if (!polData && pol && !isTestEnv) {
@@ -27065,9 +27441,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     targetMap.removeLayer(window.aisSearchRadiusCircle);
                     window.aisSearchRadiusCircle = null;
                 }
-                const isLocalMode = (window.currentOperationMode !== 'global');
+                const isLocalMode = true;
                 if (isLocalMode) {
-                    const radiusMeters = 300 * 1852; // 300 NM search radius
+                    const radiusMeters = ((window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 300) * 1852;
                     window.aisSearchRadiusCircle = L.circle([polData.lat, polData.lon], {
                         color: '#e53e3e',
                         fillColor: '#feb2b2',
@@ -27076,8 +27452,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         weight: 1.5,
                         dashArray: '5, 5'
                     }).addTo(targetMap);
-                    window.aisSearchRadiusCircle.bindTooltip("AIS Search Radius: 300 NM", { sticky: true });
+                    window.aisSearchRadiusCircle.bindTooltip("BUSCAR POL: 300 MN", { sticky: true });
                 }
+                fitAisMapToProspectionRadii(targetMap, polData, podData);
             }
 
             // Helper to calculate distance in nautical miles (using local haversine if available, otherwise defining a basic one)
@@ -27094,7 +27471,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             if (query === 'algeria' || query === 'argelia' || query.includes('algeria') || query.includes('argelia')) {
                 const targetMap = window.mapaAIS || window.map;
-                const isLocalMode = (window.currentOperationMode !== 'global');
+                const isLocalMode = true;
                 const algerianVessels = (typeof aisVesselsData !== 'undefined' ? aisVesselsData : []).filter(v => {
                     const isAlgerianCoords = v.latitude >= 34.0 && v.latitude <= 38.5 && v.longitude >= -3.0 && v.longitude <= 9.5;
                     if (!isAlgerianCoords) return false;
@@ -27143,7 +27520,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         });
                     }
                 } else {
-                    alert("No se encontraron buques en tiempo real cerca de las costas de Argelia dentro de 500 millas náuticas del POL seleccionado.");
+                    alert("No se encontraron buques en tiempo real cerca de las costas de Argelia dentro de 300 millas náuticas del POL seleccionado.");
                 }
                 return;
             }
@@ -27156,11 +27533,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             ));
             
             if (marker) {
-                const isLocalMode = (window.currentOperationMode !== 'global');
+                const isLocalMode = true;
                 if (isLocalMode && polData) {
                     const dist = getDistance(polData.lat, polData.lon, marker.getLatLng().lat, marker.getLatLng().lng);
-                    if (dist > 500) {
-                        alert(`El buque encontrado se encuentra a ${Math.round(dist)} millas náuticas del POL, lo cual supera el límite máximo permitido de 500 millas náuticas.`);
+                    if (dist > ((window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 300)) {
+                        alert(`El buque encontrado se encuentra a ${Math.round(dist)} millas náuticas del POL, lo cual supera el límite máximo permitido de 300 millas náuticas.`);
                         return;
                     }
                 }
@@ -27180,8 +27557,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (found) {
                     if (polData) {
                         const dist = getDistance(polData.lat, polData.lon, found.latitude, found.longitude);
-                        if (dist > 500) {
-                            alert(`El buque encontrado se encuentra a ${Math.round(dist)} millas náuticas del POL, lo cual supera el límite máximo permitido de 500 millas náuticas.`);
+                        if (dist > ((window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 300)) {
+                            alert(`El buque encontrado se encuentra a ${Math.round(dist)} millas náuticas del POL, lo cual supera el límite máximo permitido de 300 millas náuticas.`);
                             return;
                         }
                     }
@@ -27209,9 +27586,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         });
 
         // Operation Mode Setup inside index.html
-        window.currentOperationMode = 'global';
+        window.currentOperationMode = 'dual';
         const indexBtnModeLocal = document.getElementById('btn-modo-regional') || document.getElementById('index-btn-mode-local');
-        const indexBtnModeGlobal = document.getElementById('btn-modo-oceanico') || document.getElementById('index-btn-mode-global');
+        const indexBtnModeGlobal = null;
         const indexModeDesc = document.getElementById('index-operation-mode-desc');
         const selectorTextoRadius = document.getElementById('pol-scan-radius-text');
         const operationModeSelector = indexBtnModeLocal ? indexBtnModeLocal.closest('.mt-4') : null;
@@ -27223,46 +27600,23 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function actualizarTextoRadioOperacion(modo) {
             if (!selectorTextoRadius) return;
 
-            if (modo === 'oceanic' || modo === 'global') {
-                selectorTextoRadius.innerHTML = '';
-            } else {
-                selectorTextoRadius.innerHTML = '';
-            }
+            selectorTextoRadius.innerHTML = '';
         }
 
-        function setIndexOperationMode(mode) {
+        function setIndexOperationMode() {
             window.isFirstLoad = true;
-            window.currentOperationMode = mode;
-            if (mode === 'global') {
-                if (indexBtnModeGlobal) {
-                    indexBtnModeGlobal.className = "px-3 py-1.5 text-[11px] font-bold rounded-md bg-blue-600 text-white transition-all cursor-pointer";
-                }
-                if (indexBtnModeLocal) {
-                    indexBtnModeLocal.className = "px-3 py-1.5 text-[11px] font-bold rounded-md text-slate-400 hover:text-slate-200 transition-all cursor-pointer";
-                }
-                if (indexModeDesc) {
-                    indexModeDesc.innerText = "Búsqueda Global Inteligente: barrido AIS global incremental con límite de seguridad de 1,000 buques.";
-                }
-                actualizarTextoRadioOperacion('oceanic');
-            } else {
-                if (indexBtnModeLocal) {
-                    indexBtnModeLocal.className = "px-3 py-1.5 text-[11px] font-bold rounded-md bg-blue-600 text-white transition-all cursor-pointer";
-                }
-                if (indexBtnModeGlobal) {
-                    indexBtnModeGlobal.className = "px-3 py-1.5 text-[11px] font-bold rounded-md text-slate-400 hover:text-slate-200 transition-all cursor-pointer";
-                }
-                if (indexModeDesc) {
-                    indexModeDesc.innerText = "Búsqueda Global Inteligente: barrido AIS global incremental con límite de seguridad de 1,000 buques.";
-                }
-                actualizarTextoRadioOperacion('regional');
+            window.currentOperationMode = 'dual';
+            if (indexBtnModeLocal) {
+                indexBtnModeLocal.className = "px-3 py-1.5 text-[11px] font-bold rounded-md bg-blue-600 text-white transition-all cursor-pointer";
             }
+            if (indexModeDesc) {
+                indexModeDesc.innerText = "Búsqueda dual AIS obligatoria: POL 300 MN y POD 100 MN.";
+            }
+            actualizarTextoRadioOperacion('dual');
         }
 
         if (indexBtnModeLocal) {
-            indexBtnModeLocal.addEventListener('click', () => setIndexOperationMode('local'));
-        }
-        if (indexBtnModeGlobal) {
-            indexBtnModeGlobal.addEventListener('click', () => setIndexOperationMode('global'));
+            indexBtnModeLocal.addEventListener('click', () => setIndexOperationMode());
         }
         window.actualizarTextoRadioOperacion = actualizarTextoRadioOperacion;
         actualizarTextoRadioOperacion(window.currentOperationMode || 'standard');
@@ -27560,12 +27914,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             let nearbyCount = 0;
             const currentClass = State.class || document.getElementById('vessel-badge')?.innerText?.trim() || "";
             
-            const isGlobalMode = (window.currentOperationMode === 'global');
+            const isGlobalMode = false;
             const descEl = document.getElementById('pol-scan-radius-text') || document.getElementById('ais-nearby-vessels-description');
             if (descEl) {
-                descEl.innerHTML = isGlobalMode
-                    ? 'Scan within an expanded intercontinental coverage radius <b>(up to 3,500 NM)</b> for long-term prospecting'
-                    : 'Scan within an optimized dynamic radius <b>(350 to 2,500 NM)</b> based on stowage volume';
+                descEl.innerHTML = 'Búsqueda dual AIS: <b>POL 300 MN</b> priorizado por ETA y <b>POD 100 MN</b> para carga de retorno';
             }
 
             const calculateDistanceNm = (lat1, lon1, lat2, lon2) => {
@@ -27595,31 +27947,29 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const globalStoreVessels = (typeof window !== 'undefined' && window.GlobalStore && Array.isArray(window.GlobalStore.vessels))
                 ? window.GlobalStore.vessels
                 : null;
+            const polPrimaryStoreVessels = (typeof window !== 'undefined' && window.GlobalStore && Array.isArray(window.GlobalStore.polPrimaryVessels))
+                ? window.GlobalStore.polPrimaryVessels
+                : null;
             const sourceAisVessels = (typeof aisVesselsData !== 'undefined' && Array.isArray(aisVesselsData))
                 ? aisVesselsData
                 : (globalStoreVessels || []);
+            const pricingSourceVessels = polPrimaryStoreVessels
+                ? polPrimaryStoreVessels
+                : sourceAisVessels;
             const hasRenderableAisVessels = globalStoreVessels
                 ? globalStoreVessels.length > 0
                 : sourceAisVessels.length > 0;
             const isAisWaitingForHydration = (typeof window !== 'undefined' && window.isAisHydrationSyncing === true) || !hasRenderableAisVessels;
-            const hasRealAisData = !isAisWaitingForHydration && sourceAisVessels.length > 0;
+            const hasRealAisData = !isAisWaitingForHydration && pricingSourceVessels.length > 0;
             const nearbyVessels = [];
             const compatibleVessels = [];
             
             if (hasRealAisData && polCoords) {
-                const storedCargoQty = (typeof localStorage !== 'undefined') ? localStorage.getItem('calculator_cargo_qty') : null;
-                const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value || storedCargoQty || '0') || 0;
-                let localRadiusNm = 350;
-                if (cargoQty > 7000 && cargoQty <= 25000) {
-                    localRadiusNm = 1200;
-                } else if (cargoQty > 25000) {
-                    localRadiusNm = 2500;
-                }
-                const maxNearbyRadiusNm = isGlobalMode ? 3500 : localRadiusNm;
+                const maxNearbyRadiusNm = (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 300;
 
                 // Layer 1: Deduplication by IMO / MMSI using a Map
                 const uniqueVesselsMap = new Map();
-                sourceAisVessels.forEach(v => {
+                pricingSourceVessels.forEach(v => {
                     const imo = v.imo || v.IMO || "N/A";
                     const mmsi = v.mmsi || v.MMSI || "N/A";
                     const key = (imo && imo !== 'N/A') ? imo : mmsi;
@@ -27644,10 +27994,21 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
                     const distanceToPol = calculateDistanceNm(polCoords.lat, polCoords.lon, lat, lon);
                     if (distanceToPol <= maxNearbyRadiusNm) {
-                        nearbyVessels.push({ ...v, latitude: lat, longitude: lon, distanceToPol });
+                        const speedKts = Number(v.speed) > 0 ? Number(v.speed) : 12;
+                        const etaHoursToPol = distanceToPol / speedKts;
+                        const etaToPolDate = new Date(Date.now() + etaHoursToPol * 60 * 60 * 1000);
+                        nearbyVessels.push({
+                            ...v,
+                            latitude: lat,
+                            longitude: lon,
+                            distanceToPol,
+                            etaHoursToPol,
+                            etaToPol: etaToPolDate.toISOString(),
+                            aisSearchPriority: 1
+                        });
                     }
                 });
-                nearbyVessels.sort((a, b) => a.distanceToPol - b.distanceToPol);
+                nearbyVessels.sort((a, b) => (a.etaHoursToPol ?? Infinity) - (b.etaHoursToPol ?? Infinity));
 
                 // Layer 3: Commercial compatibility for pricing and highlighted candidates.
                 const laycanFinStr = document.getElementById('match-laycan-end')?.value
@@ -27726,8 +28087,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         btn.className = isCommerciallyCompatible
                             ? "px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-900 hover:bg-emerald-600/30 text-emerald-300 hover:text-white border border-emerald-900/60 hover:border-emerald-500/50 transition-colors flex items-center gap-1 cursor-pointer"
                             : "px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-900 hover:bg-indigo-600/30 text-indigo-300 hover:text-white border border-slate-800 hover:border-indigo-500/50 transition-colors flex items-center gap-1 cursor-pointer";
-                        btn.title = `${Math.round(v.distanceToPol)} NM a POL${isCommerciallyCompatible ? ' · compatible comercialmente' : ' · cercano, pendiente de compatibilidad comercial'}`;
-                        btn.innerHTML = `<i class="fa-solid fa-magnifying-glass text-[8px] opacity-75"></i> ${v.vesselName} <span class="text-[9px] opacity-70">${Math.round(v.distanceToPol)} NM</span>`;
+                        const etaHours = Number(v.etaHoursToPol);
+                        const etaLabel = Number.isFinite(etaHours) ? `${Math.round(etaHours)} h ETA` : 'ETA N/D';
+                        btn.title = `${Math.round(v.distanceToPol)} NM a POL · ${etaLabel}${isCommerciallyCompatible ? ' · compatible comercialmente' : ' · cercano, pendiente de compatibilidad comercial'}`;
+                        btn.innerHTML = `<i class="fa-solid fa-magnifying-glass text-[8px] opacity-75"></i> ${v.vesselName} <span class="text-[9px] opacity-70">${etaLabel}</span>`;
                         btn.onclick = (e) => {
                             e.preventDefault();
                             const searchInput = document.getElementById('ais-vessel-search');
@@ -27868,7 +28231,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.escaneoContinuoAIS = window.AISContinuousScan;
         window.continuousScanAIS = window.AISContinuousScan;
 
-        // Configuration: the global AIS sweep is started only by an explicit user click.
+        // Configuration: the AIS radar stays inactive until an explicit user click.
         if (typeof window.setAisRadarStatus === 'function') {
             window.setAisRadarStatus('inactive');
         }
@@ -27974,14 +28337,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return distKm * 0.539957;
             };
 
-            // Compute distance to POL for each vessel
+            // Compute distance and ETA to POL for each vessel, then keep the strategic 300 MN window.
+            const polRadiusNm = (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 300;
             const vesselsWithDist = window.aisVesselsData.map(v => {
                 const dist = calculateDistanceNm(polCoords.lat, polCoords.lon, v.latitude, v.longitude);
-                return { ...v, distanceToPol: dist };
-            });
+                const speedKts = Number(v.speed) > 0 ? Number(v.speed) : 12;
+                const etaHoursToPol = dist / speedKts;
+                return { ...v, distanceToPol: dist, etaHoursToPol, etaToPol: new Date(Date.now() + etaHoursToPol * 60 * 60 * 1000).toISOString() };
+            }).filter(v => v.distanceToPol <= polRadiusNm);
 
-            // Sort by distance ascending
-            vesselsWithDist.sort((a, b) => a.distanceToPol - b.distanceToPol);
+            // Sort by ETA ascending to reveal the vessels arriving first at POL.
+            vesselsWithDist.sort((a, b) => a.etaHoursToPol - b.etaHoursToPol);
 
             // Keep only the 6 closest vessels
             const closestVessels = vesselsWithDist.slice(0, 6);
@@ -28001,7 +28367,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     tr.innerHTML = `
                         <td class="py-3 px-3 font-semibold text-slate-200">${v.vesselName}</td>
                         <td class="py-3 px-3 text-slate-400 mono">${v.imo}</td>
-                        <td class="py-3 px-3 text-slate-400 mono">${v.latitude.toFixed(4)}°, ${v.longitude.toFixed(4)}° <span class="text-[10px] text-indigo-400 block font-bold">${v.distanceToPol.toFixed(1)} NM a POL</span></td>
+                        <td class="py-3 px-3 text-slate-400 mono">${v.latitude.toFixed(4)}°, ${v.longitude.toFixed(4)}° <span class="text-[10px] text-indigo-400 block font-bold">${v.distanceToPol.toFixed(1)} NM a POL · ETA ${Math.round(v.etaHoursToPol)} h</span></td>
                         <td class="py-3 px-3 text-slate-400 mono">${v.speed} kn <span class="text-[10px] text-emerald-400 block">${v.statusLabel}</span></td>
                         <td class="py-3 px-3"><span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700 cursor-help" title="${hoverTitle}">${vCategory}</span></td>
                     `;
@@ -28017,14 +28383,34 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
                 if (typeof L !== 'undefined' && L.circle) {
                     window.aisPolHighlightCircle = L.circle([polCoords.lat, polCoords.lon], {
-                        color: '#e53e3e',
-                        fillColor: '#feb2b2',
+                        color: '#16a34a',
+                        fillColor: '#16a34a',
                         fillOpacity: 0.15,
-                        radius: 300 * 1852, // 300 NM search radius visualization
+                        radius: polRadiusNm * 1852,
                         weight: 1.5,
                         dashArray: '5, 5'
                     }).addTo(targetMap);
-                    window.aisPolHighlightCircle.bindTooltip("AIS Search Radius: 300 NM (POL: " + polValue + ")", { sticky: true });
+                    window.aisPolHighlightCircle.bindTooltip("BUSCAR POL: 300 MN (POL: " + polValue + ")", { sticky: true });
+                }
+                const podValue = document.getElementById('port-pod')?.value?.trim() || '';
+                const podCoords = podValue && typeof findPortData === 'function'
+                    ? findPortData(podValue)
+                    : (podValue && typeof PORT_DB !== 'undefined' ? PORT_DB[podValue] : null);
+                if (podCoords) {
+                    if (window.aisPodHighlightCircle) {
+                        targetMap.removeLayer(window.aisPodHighlightCircle);
+                    }
+                    const podRadiusNm = (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POD) || 100;
+                    window.aisPodHighlightCircle = L.circle([podCoords.lat, podCoords.lon], {
+                        color: '#2563eb',
+                        fillColor: '#2563eb',
+                        fillOpacity: 0.10,
+                        radius: podRadiusNm * 1852,
+                        weight: 1.25,
+                        dashArray: '4, 8'
+                    }).addTo(targetMap);
+                    window.aisPodHighlightCircle.bindTooltip("BUSCAR POD: 100 MN (POD: " + podValue + ")", { sticky: true });
+                    fitAisMapToProspectionRadii(targetMap, polCoords, podCoords);
                 }
             }
         };

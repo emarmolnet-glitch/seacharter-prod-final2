@@ -53,6 +53,16 @@
         .seacharter-map-popup small { color: #8a5a00; font-weight: 700; }
         .seacharter-map-popup button { background: #004e64; color: #fff; padding: 6px 8px; border-radius: 4px; margin-top: 6px; cursor: pointer; border: 0; font-size: 11px; font-weight: 700; width: 100%; }
         .popup-danger { color: #b42318; font-weight: 700; }
+        .ais-radar-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 4px; }
+        .ais-radar-tab { border: 1px solid #cbd5e1; background: #f8fafc; color: #334155; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 0.78rem; font-weight: 800; }
+        .ais-radar-tab.active-pol { background: #16a34a; border-color: #15803d; color: #fff; }
+        .ais-radar-tab.active-pod { background: #2563eb; border-color: #1d4ed8; color: #fff; }
+        .ais-radar-label { position: absolute; left: 10px; bottom: 10px; z-index: 1000; background: rgba(255,255,255,0.94); border: 1px solid #cbd5e1; color: #0f172a; padding: 6px 10px; border-radius: 4px; font-size: 11px; font-weight: 900; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12); }
+        .ais-prospection-radius.is-scanning { animation: aisRadiusPulse 1.6s ease-in-out infinite; }
+        .ais-prospection-result-label { background: rgba(15, 23, 42, 0.88); border: 1px solid currentColor; border-radius: 6px; padding: 4px 7px; font-size: 10px; font-weight: 900; line-height: 1; text-transform: uppercase; white-space: nowrap; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.28); }
+        .ais-prospection-result-label.is-scanning { animation: aisLabelPulse 1.2s ease-in-out infinite; }
+        @keyframes aisRadiusPulse { 0%, 100% { stroke-width: 2; stroke-opacity: 0.82; } 50% { stroke-width: 5; stroke-opacity: 1; } }
+        @keyframes aisLabelPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
     </style>
 </head>
 <body>
@@ -94,6 +104,10 @@
             <input type="password" id="aisstream-api-key" placeholder="API Key (Opcional si usas Netlify Proxy)" autocomplete="off" spellcheck="false" autocapitalize="none" style="padding:10px; border:1px solid #cbd5e1; border-radius:4px; min-width:220px;">
             <button type="button" id="btn-refresh-ais" style="padding:10px 20px; background:#007bff; color:#FFFFFF !important; border:none; border-radius:4px; cursor:pointer;">Check Real-Time Availability</button>
         </div>
+        <div class="ais-radar-tabs" aria-label="AIS LIVE dual search">
+            <button type="button" id="btn-search-pol" class="ais-radar-tab active-pol">BUSCAR POL (300MN)</button>
+            <button type="button" id="btn-search-pod" class="ais-radar-tab active-pod">BUSCAR POD (100MN)</button>
+        </div>
     </div>
 
     <div class="panel-ui"> 
@@ -128,6 +142,7 @@
         </div>
         <div style="position: relative;">
             <div id="map-ais" style="height: 450px; min-height: 450px; border-radius: 4px; border: 1px solid #e0e0e0; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12); background: #dbeafe;"></div>
+            <div class="ais-radar-label">RADAR: POL(VERDE) 300MN | POD(AZUL) 100MN</div>
             <!-- Floating button on map -->
             <div style="position: absolute; top: 10px; right: 10px; z-index: 1000; display: flex; align-items: center; gap: 8px;">
                 <span id="radar-frozen-timestamp" style="display: none; font-size: 11px; font-weight: bold; color: #dc3545; background-color: rgba(255,255,255,0.9); border: 1px solid #fecaca; padding: 4px 8px; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);"></span>
@@ -147,21 +162,16 @@
             Apply multi-criteria geofencing to focus on "business-ready" vessels meeting cargo requirements and port regulations.
         </p>
 
-        <!-- Global vs Local Operation Mode Toggle -->
+        <!-- Dual Operation Mode Status -->
         <div style="background: #ebf8ff; border: 1px solid #bee3f8; padding: 12px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
             <div style="max-width: 65%;">
                 <strong style="color: #2b6cb0; font-size: 0.9rem; display: block; margin-bottom: 2px;">Operation Mode</strong>
                 <span id="operation-mode-desc" style="font-size: 0.75rem; color: #4a5568; line-height: 1.3; display: block;">
-                    Global Intelligent Search: incremental AIS sweep capped at 1,000 stored vessels.
+                    Mandatory dual AIS search: POL 300 NM and POD 100 NM.
                 </span>
             </div>
             <div style="display: flex; background: #e2e8f0; padding: 3px; border-radius: 6px; border: 1px solid #cbd5e0;">
-                <button type="button" id="btn-mode-local" style="background: transparent; color: #4a5568; border: none; padding: 6px 14px; font-size: 0.8rem; font-weight: bold; border-radius: 4px; cursor: pointer; transition: all 0.2s;">
-                    Regional / Cuenca
-                </button>
-                <button type="button" id="btn-mode-global" style="background: #3182ce; color: white; border: none; padding: 6px 14px; font-size: 0.8rem; font-weight: bold; border-radius: 4px; cursor: pointer; transition: all 0.2s;">
-                    Global
-                </button>
+                <button type="button" id="btn-mode-dual" style="background: #3182ce; color: white; border: none; padding: 6px 14px; font-size: 0.8rem; font-weight: bold; border-radius: 4px; cursor: default; transition: all 0.2s;">Dual POL/POD</button>
             </div>
         </div>
         
@@ -298,6 +308,73 @@
         });
         AISmap.addLayer(aisClusterGroup);
         window.AIS_DIRECT_FRONTEND_MODE = true;
+        const AIS_RADAR_POL_RADIUS_NM = 300;
+        const AIS_RADAR_POD_RADIUS_NM = 100;
+        const AIS_RADAR_COLORS = {
+            POL: '#16a34a',
+            POD: '#2563eb'
+        };
+        window.aisRadarZoneState = Object.assign({ pol: true, pod: true }, window.aisRadarZoneState || {});
+        window.aisProspectionLayers = { group: L.layerGroup().addTo(AISmap), circles: {}, labels: {} };
+
+        function renderAisProspectionRadius(role, status, count) {
+            const normalizedRole = String(role || '').toUpperCase();
+            const isPol = normalizedRole === 'POL';
+            const radiusNm = isPol ? AIS_RADAR_POL_RADIUS_NM : AIS_RADAR_POD_RADIUS_NM;
+            const color = isPol ? AIS_RADAR_COLORS.POL : AIS_RADAR_COLORS.POD;
+            const portName = document.getElementById(isPol ? 'port-pol' : 'port-pod')?.value
+                || localStorage.getItem(isPol ? 'calculator_pol' : 'calculator_pod')
+                || '';
+            const port = getAisRoutePort(portName);
+            if (!port) return;
+            const isScanning = status === 'scanning';
+            const labelText = isScanning
+                ? `${normalizedRole} ${radiusNm} MN · RADAR ACTIVO`
+                : `${normalizedRole} ${radiusNm} MN · ${Number(count) || 0} resultados`;
+
+            if (!window.aisProspectionLayers.circles[normalizedRole]) {
+                window.aisProspectionLayers.circles[normalizedRole] = L.circle([port.lat, port.lon], {
+                    color,
+                    fillColor: color,
+                    fillOpacity: isPol ? 0.13 : 0.10,
+                    radius: radiusNm * 1852,
+                    weight: 2,
+                    dashArray: isPol ? '8, 8' : '5, 8',
+                    className: `ais-prospection-radius ${isScanning ? 'is-scanning' : ''}`
+                }).addTo(window.aisProspectionLayers.group);
+            } else {
+                window.aisProspectionLayers.circles[normalizedRole]
+                    .setLatLng([port.lat, port.lon])
+                    .setRadius(radiusNm * 1852)
+                    .setStyle({ color, fillColor: color, className: `ais-prospection-radius ${isScanning ? 'is-scanning' : ''}` });
+            }
+            const circleElement = window.aisProspectionLayers.circles[normalizedRole].getElement && window.aisProspectionLayers.circles[normalizedRole].getElement();
+            if (circleElement) {
+                circleElement.setAttribute('class', `leaflet-interactive ais-prospection-radius ${isScanning ? 'is-scanning' : ''}`.trim());
+            }
+
+            const icon = L.divIcon({
+                className: '',
+                html: `<div class="ais-prospection-result-label ${isScanning ? 'is-scanning' : ''}" style="color:${color}">${labelText}</div>`,
+                iconSize: [150, 24],
+                iconAnchor: [75, 12]
+            });
+            if (!window.aisProspectionLayers.labels[normalizedRole]) {
+                window.aisProspectionLayers.labels[normalizedRole] = L.marker([port.lat, port.lon], {
+                    icon,
+                    interactive: false,
+                    keyboard: false
+                }).addTo(window.aisProspectionLayers.group);
+            } else {
+                window.aisProspectionLayers.labels[normalizedRole].setLatLng([port.lat, port.lon]).setIcon(icon);
+            }
+        }
+
+        window.clearAisProspectionRadii = function() {
+            window.aisProspectionLayers.group.clearLayers();
+            window.aisProspectionLayers.circles = {};
+            window.aisProspectionLayers.labels = {};
+        };
 
         // --- MOTOR DE ACUMULACIÓN GLOBAL DE BUQUES ---
         window.AIS_GLOBAL_SWEEP_LIMIT = 1000;
@@ -327,7 +404,7 @@
 
         window.detenerRadar = function() {
             window.AIS_PROXY_POLLING_ACTIVE = false;
-            console.warn(`[Radar Global] detenerRadar() ejecutado. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
+            console.warn(`[Radar Dual] detenerRadar() ejecutado. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
         };
 
         window.actualizarContadorBuquesAlmacenados = function() {
@@ -338,7 +415,6 @@
             if (progressEl) progressEl.innerText = `${porcentaje}% / ${limite}`;
             const countEl = document.getElementById('vessels-count');
             if (countEl) countEl.innerText = total;
-            console.log(`[Radar Global] buquesAlmacenados.size=${total}/${limite} (${porcentaje}%)`);
         };
 
         window.procesarMensajeAIS = function(nuevoBarco) {
@@ -350,7 +426,6 @@
             const idBuque = window.obtenerIdUnicoBuque(nuevoBarco);
             if (!idBuque || idBuque === "N/A" || idBuque === "0") return false;
             if (window.buquesAlmacenados.has(idBuque)) {
-                console.log(`[Radar Global] Duplicado ignorado: ${idBuque}. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
                 return false;
             }
             window.buquesAlmacenados.set(idBuque, nuevoBarco);
@@ -536,6 +611,17 @@
         }
 
         function makeLiveAisIcon(vessel) {
+            const pol = typeof window.updateGeofencePOLDisplay === 'function' ? window.updateGeofencePOLDisplay() : null;
+            const pod = typeof getAisPODDisplay === 'function' ? getAisPODDisplay() : null;
+            const zoneMatch = typeof assignAisRadarZone === 'function' ? assignAisRadarZone(vessel, pol, pod) : null;
+            if (zoneMatch) {
+                vessel.aisRadarZone = zoneMatch.zone;
+                vessel.aisRadarColor = zoneMatch.color;
+                if (vessel.MetaData) {
+                    vessel.MetaData.aisRadarZone = zoneMatch.zone;
+                    vessel.MetaData.aisRadarColor = zoneMatch.color;
+                }
+            }
             const routePorts = (typeof getSelectedAisRoutePorts === 'function')
                 ? getSelectedAisRoutePorts()
                 : {
@@ -557,9 +643,10 @@
             }
             const speed = Number(vessel.speed || (vessel.MetaData && vessel.MetaData.speed) || 0);
             const movingClass = speed >= 1 ? ' moving' : '';
+            const color = vessel.aisRadarColor || '#0f766e';
             return L.divIcon({
                 className: 'ais-live-vessel-marker',
-                html: `<span class="ais-live-vessel-dot${movingClass}"></span>`,
+                html: `<span class="ais-live-vessel-dot${movingClass}" style="background:${color}; box-shadow:0 0 0 2px ${color}33, 0 4px 10px rgba(15, 23, 42, 0.25);"></span>`,
                 iconSize: [12, 12],
                 iconAnchor: [6, 6]
             });
@@ -664,7 +751,7 @@
             if (typeof window.isAisRouteReady === 'function' && !window.isAisRouteReady()) return;
             const limite = Number(window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
             if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
-                console.warn(`[Radar Global] Límite alcanzado antes de consultar proxy. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
+                console.warn(`[Radar Dual] Límite alcanzado antes de consultar proxy. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
                 window.detenerRadar();
                 return;
             }
@@ -982,8 +1069,7 @@
         window.executeAISSweep = async function() {
             if (window.isLiveTrackingEnabled === false) return;
             window.aisRadarUserActivated = true;
-            const isGlobalMode = (window.currentOperationMode || 'global') === 'global';
-            if (!isGlobalMode && typeof AISmap !== 'undefined' && AISmap && typeof AISmap.getZoom === 'function' && AISmap.getZoom() < 5) {
+            if (typeof AISmap !== 'undefined' && AISmap && typeof AISmap.getZoom === 'function' && AISmap.getZoom() < 5) {
                 console.warn("AIS_DEBUG: Zoom menor a 5. Barrido AIS local pausado para evitar consultas amplias.");
                 return;
             }
@@ -1031,7 +1117,7 @@
             const quantity = savedQty ? parseFloat(savedQty) : 45000;
             const limite = Number(window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
             if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
-                console.warn(`[Radar Global] Límite alcanzado antes de fetch AIS. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
+                console.warn(`[Radar Dual] Límite alcanzado antes de fetch AIS. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
                 window.detenerRadar();
                 return;
             }
@@ -1089,10 +1175,7 @@
         }
 
         function getRouteAisScanRadiusNm() {
-            const inputValue = Number(document.getElementById('filter-max-distance')?.value);
-            const storedValue = typeof localStorage !== 'undefined' ? Number(localStorage.getItem('ais_filter_max_distance')) : NaN;
-            const radius = Number.isFinite(inputValue) && inputValue > 0 ? inputValue : storedValue;
-            return Math.max(50, Math.min(500, Number.isFinite(radius) && radius > 0 ? radius : 300));
+            return AIS_RADAR_POL_RADIUS_NM;
         }
 
         function createAisBoxAroundPort(port, radiusNm) {
@@ -1105,15 +1188,54 @@
             ];
         }
 
-        window.getRouteAisSweepEndpoint = function(quantity = 45000) {
+        window.getRouteAisSweepEndpoint = function(quantity = 45000, role = '') {
             const polName = document.getElementById('port-pol')?.value || localStorage.getItem('calculator_pol') || '';
             const podName = document.getElementById('port-pod')?.value || localStorage.getItem('calculator_pod') || '';
-            const radiusNm = getRouteAisScanRadiusNm();
-            const boxes = [getAisRoutePort(polName), getAisRoutePort(podName)]
-                .map(port => createAisBoxAroundPort(port, radiusNm))
-                .filter(Boolean);
+            const polPort = getAisRoutePort(polName);
+            const podPort = getAisRoutePort(podName);
+            const boxes = [];
+            const normalizedRole = String(role || '').toUpperCase();
+            if ((!normalizedRole || normalizedRole === 'POL') && window.aisRadarZoneState.pol && polPort) boxes.push(createAisBoxAroundPort(polPort, AIS_RADAR_POL_RADIUS_NM));
+            if ((!normalizedRole || normalizedRole === 'POD') && window.aisRadarZoneState.pod && podPort) boxes.push(createAisBoxAroundPort(podPort, AIS_RADAR_POD_RADIUS_NM));
             if (!boxes.length) return '';
-            return `/.netlify/functions/get-vessels?quantity=${encodeURIComponent(quantity)}&force=1&boxes=${encodeURIComponent(JSON.stringify(boxes))}`;
+            const zone = normalizedRole || 'DUAL';
+            return `/.netlify/functions/get-vessels?quantity=${encodeURIComponent(quantity)}&force=1&zone=${encodeURIComponent(zone)}&boxes=${encodeURIComponent(JSON.stringify(boxes))}`;
+        };
+
+        window.RadarPOL = async function(quantity = 45000) {
+            renderAisProspectionRadius('POL', 'scanning', 0);
+            const endpoint = window.getRouteAisSweepEndpoint(quantity, 'POL');
+            if (!endpoint) {
+                console.warn('0 buques detectados en POL');
+                renderAisProspectionRadius('POL', 'complete', 0);
+                return [];
+            }
+            console.log('searchPOL(300nm)');
+            const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
+            const vessels = typeof window.parseAisVesselsResponse === 'function'
+                ? await window.parseAisVesselsResponse(response, 'searchPOL(300nm)')
+                : await response.json();
+            renderAisProspectionRadius('POL', 'complete', vessels.length);
+            if (!vessels.length) console.warn('0 buques detectados en POL');
+            return vessels;
+        };
+
+        window.RadarPOD = async function(quantity = 45000) {
+            renderAisProspectionRadius('POD', 'scanning', 0);
+            const endpoint = window.getRouteAisSweepEndpoint(quantity, 'POD');
+            if (!endpoint) {
+                console.warn('0 buques detectados en POD');
+                renderAisProspectionRadius('POD', 'complete', 0);
+                return [];
+            }
+            console.log('searchPOD(100nm)');
+            const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
+            const vessels = typeof window.parseAisVesselsResponse === 'function'
+                ? await window.parseAisVesselsResponse(response, 'searchPOD(100nm)')
+                : await response.json();
+            renderAisProspectionRadius('POD', 'complete', vessels.length);
+            if (!vessels.length) console.warn('0 buques detectados en POD');
+            return vessels;
         };
 
         window.updateGeofencePOLDisplay = function() {
@@ -1140,72 +1262,86 @@
             return { name: polName, lat: polLat, lon: polLon };
         };
 
+        function getAisPODDisplay() {
+            let podName = typeof localStorage !== 'undefined' ? (localStorage.getItem('calculator_pod') || '') : '';
+            let podLat = typeof localStorage !== 'undefined' ? parseFloat(localStorage.getItem('calculator_pod_lat') || '') : NaN;
+            let podLon = typeof localStorage !== 'undefined' ? parseFloat(localStorage.getItem('calculator_pod_lon') || '') : NaN;
+            const podPort = getAisRoutePort(podName);
+            if ((!Number.isFinite(podLat) || !Number.isFinite(podLon)) && podPort) {
+                podLat = podPort.lat;
+                podLon = podPort.lon;
+            }
+            return Number.isFinite(podLat) && Number.isFinite(podLon) ? { name: podName || podPort?.name || 'POD', lat: podLat, lon: podLon } : null;
+        }
+
+        function getVesselCoords(vessel) {
+            const coords = (window.MapLoader && typeof window.MapLoader.normalizeCoordinates === 'function')
+                ? window.MapLoader.normalizeCoordinates(vessel)
+                : [parseFloat((vessel.MetaData && vessel.MetaData.latitude) || vessel.latitude || 0), parseFloat((vessel.MetaData && vessel.MetaData.longitude) || vessel.longitude || 0)];
+            return coords || null;
+        }
+
+        function assignAisRadarZone(vessel, pol, pod) {
+            const coords = getVesselCoords(vessel);
+            if (!coords) return null;
+            const [lat, lon] = coords;
+            const polDistance = pol && pol.lat !== null && pol.lon !== null ? window.getDistance(pol.lat, pol.lon, lat, lon) : Infinity;
+            const podDistance = pod ? window.getDistance(pod.lat, pod.lon, lat, lon) : Infinity;
+            if (polDistance <= AIS_RADAR_POL_RADIUS_NM) return { zone: 'POL', color: AIS_RADAR_COLORS.POL, distance: polDistance };
+            if (podDistance <= AIS_RADAR_POD_RADIUS_NM) return { zone: 'POD', color: AIS_RADAR_COLORS.POD, distance: podDistance };
+            return null;
+        }
+
         let geofenceCircle = null;
+        let podGeofenceCircle = null;
         window.drawGeofenceCircle = function() {
             if (geofenceCircle && AISmap) {
                 AISmap.removeLayer(geofenceCircle);
                 geofenceCircle = null;
             }
-            
-            const pol = window.updateGeofencePOLDisplay();
-            
-            // Rule 1: Dynamic Ballast Radius based on cargo size from localStorage and mode
-            const savedQty = typeof localStorage !== 'undefined' ? localStorage.getItem('calculator_cargo_qty') : null;
-            let maxDistance;
-            
-            if (savedQty && savedQty !== '0') {
-              const quantity = parseFloat(savedQty);
-              if (quantity <= 7000) {
-                maxDistance = (window.currentOperationMode === 'global') ? 1200 : 350;
-              } else if (quantity > 7000 && quantity <= 25000) {
-                maxDistance = (window.currentOperationMode === 'global') ? 2500 : 1200;
-              } else {
-                maxDistance = (window.currentOperationMode === 'global') ? 3500 : 2500;
-              }
-            } else {
-              maxDistance = parseFloat(document.getElementById('filter-max-distance')?.value || 300) || 300;
+            if (podGeofenceCircle && AISmap) {
+                AISmap.removeLayer(podGeofenceCircle);
+                podGeofenceCircle = null;
             }
             
+            const pol = window.updateGeofencePOLDisplay();
+            const pod = getAisPODDisplay();
+            const maxDistance = AIS_RADAR_POL_RADIUS_NM;
+            
             const distanceInput = document.getElementById('filter-max-distance');
-            if (distanceInput && savedQty) {
+            if (distanceInput) {
                 distanceInput.value = maxDistance;
             }
             
-            if (pol.lat !== null && pol.lon !== null && AISmap) {
-                const radiusMeters = maxDistance * 1852;
+            if (window.aisRadarZoneState.pol && pol.lat !== null && pol.lon !== null && AISmap) {
+                const radiusMeters = AIS_RADAR_POL_RADIUS_NM * 1852;
                 geofenceCircle = L.circle([pol.lat, pol.lon], {
-                    color: '#e53e3e',
-                    fillColor: '#feb2b2',
+                    color: AIS_RADAR_COLORS.POL,
+                    fillColor: AIS_RADAR_COLORS.POL,
                     fillOpacity: 0.15,
                     radius: radiusMeters,
-                    weight: 1.5,
+                    weight: 2,
                     dashArray: '5, 5'
                 }).addTo(AISmap);
                 
-                geofenceCircle.bindTooltip("POL Geofence: " + pol.name + " (" + maxDistance + " NM)", { sticky: true });
+                geofenceCircle.bindTooltip("POL Primary: " + pol.name + " (300 NM)", { sticky: true });
+            }
+            if (window.aisRadarZoneState.pod && pod && AISmap) {
+                podGeofenceCircle = L.circle([pod.lat, pod.lon], {
+                    color: AIS_RADAR_COLORS.POD,
+                    fillColor: AIS_RADAR_COLORS.POD,
+                    fillOpacity: 0.12,
+                    radius: AIS_RADAR_POD_RADIUS_NM * 1852,
+                    weight: 2,
+                    dashArray: '4, 6'
+                }).addTo(AISmap);
+                podGeofenceCircle.bindTooltip("POD Return: " + pod.name + " (100 NM)", { sticky: true });
             }
         };
 
         window.filterVesselsByGeofence = function(vessels) {
             const pol = window.updateGeofencePOLDisplay();
-            
-            // Dynamic Ballast Radius
-            const savedQty = typeof localStorage !== 'undefined' ? localStorage.getItem('calculator_cargo_qty') : null;
-            let maxDistance;
-            
-            if (savedQty && savedQty !== '0') {
-              const quantity = parseFloat(savedQty);
-              if (quantity <= 7000) {
-                maxDistance = (window.currentOperationMode === 'global') ? 1200 : 350;
-              } else if (quantity > 7000 && quantity <= 25000) {
-                maxDistance = (window.currentOperationMode === 'global') ? 2500 : 1200;
-              } else {
-                maxDistance = (window.currentOperationMode === 'global') ? 3500 : 2500;
-              }
-            } else {
-              maxDistance = parseFloat(document.getElementById('filter-max-distance')?.value || 300) || 300;
-            }
-
+            const pod = getAisPODDisplay();
             const strictGeofence = document.getElementById('filter-strict-geofence')?.checked ?? true;
             
             const checkedTypes = Array.from(document.querySelectorAll('#vessel-types-checkboxes input[type="checkbox"]:checked'))
@@ -1213,9 +1349,7 @@
             
             return (vessels || []).filter(v => {
                 // Use MapLoader to normalize coordinates and discard land/office points
-                const coords = (window.MapLoader && typeof window.MapLoader.normalizeCoordinates === 'function')
-                    ? window.MapLoader.normalizeCoordinates(v)
-                    : [parseFloat((v.MetaData && v.MetaData.latitude) || v.latitude || 0), parseFloat((v.MetaData && v.MetaData.longitude) || v.longitude || 0)];
+                const coords = getVesselCoords(v);
                 if (!coords) return false;
                 const [lat, lon] = coords;
 
@@ -1236,16 +1370,11 @@
                 }
                 
                 if (strictGeofence) {
-                    let insideGeofence = true;
-                    if (typeof AISmap !== 'undefined' && AISmap && typeof AISmap.getBounds === 'function') {
-                        const bounds = AISmap.getBounds();
-                        if (bounds && typeof bounds.contains === 'function') {
-                            insideGeofence = bounds.contains([lat, lon]);
-                        }
-                    } else if (pol.lat !== null && pol.lon !== null) {
-                        const dist = window.getDistance(pol.lat, pol.lon, lat, lon);
-                        insideGeofence = dist <= maxDistance;
-                    }
+                    const zoneMatch = assignAisRadarZone(v, pol, pod);
+                    const insideGeofence = !!zoneMatch && (
+                        (zoneMatch.zone === 'POL' && window.aisRadarZoneState.pol) ||
+                        (zoneMatch.zone === 'POD' && window.aisRadarZoneState.pod)
+                    );
                     
                     if (!insideGeofence) {
                         // Rule 2: Passing Route Destination Filter
@@ -1271,16 +1400,23 @@
         window.applyGeofencingFilters = function() {
             const vessels = window.rawVesselsInArea || [];
             const pol = window.updateGeofencePOLDisplay();
+            const pod = getAisPODDisplay();
             
             // Filter using our geofencing logic
             const filteredVessels = window.filterVesselsByGeofence(vessels);
-            window.lastVesselsInArea = filteredVessels; // So other calculations use geofenced vessels
+            filteredVessels.forEach(v => {
+                const zoneMatch = assignAisRadarZone(v, pol, pod);
+                v.aisRadarZone = zoneMatch ? zoneMatch.zone : 'ROUTE';
+                v.aisRadarColor = zoneMatch ? zoneMatch.color : '#3b82f6';
+            });
+            const polPrimaryVessels = filteredVessels.filter(v => v.aisRadarZone === 'POL');
+            window.lastVesselsInArea = polPrimaryVessels; // Calculations use only POL 300 NM supply.
 
             if (typeof localStorage !== 'undefined') {
                 const checkedTypes = Array.from(document.querySelectorAll('#vessel-types-checkboxes input[type="checkbox"]:checked'))
                     .map(cb => cb.value);
                 localStorage.setItem('ais_filter_vessel_types', JSON.stringify(checkedTypes));
-                localStorage.setItem('ais_filter_max_distance', document.getElementById('filter-max-distance')?.value || "300");
+                localStorage.setItem('ais_filter_max_distance', String(AIS_RADAR_POL_RADIUS_NM));
                 localStorage.setItem('ais_filter_min_dwt', document.getElementById('filter-min-dwt')?.value || "0");
                 localStorage.setItem('ais_filter_max_dwt', document.getElementById('filter-max-dwt')?.value || "200000");
                 localStorage.setItem('ais_filter_strict_geofence', document.getElementById('filter-strict-geofence')?.checked ? "true" : "false");
@@ -1289,11 +1425,11 @@
             
             // 1. Update the original dashboard KPI elements if they exist
             const vesselsCountEl = document.getElementById('vessels-count');
-            if (vesselsCountEl) vesselsCountEl.innerText = filteredVessels.length;
+            if (vesselsCountEl) vesselsCountEl.innerText = polPrimaryVessels.length;
             const supplyCoefEl = document.getElementById('supply-coefficient');
-            if (supplyCoefEl) supplyCoefEl.innerText = (filteredVessels.length / 10).toFixed(2);
+            if (supplyCoefEl) supplyCoefEl.innerText = (polPrimaryVessels.length / 10).toFixed(2);
             const compStatusEl = document.getElementById('competition-status');
-            if (compStatusEl) compStatusEl.innerText = filteredVessels.length > 5 ? "High" : "Low";
+            if (compStatusEl) compStatusEl.innerText = polPrimaryVessels.length > 5 ? "High" : "Low";
 
             // 2. STRATEGIC NEGOTIATION LOGIC
             let breakEven = NaN;
@@ -1306,11 +1442,11 @@
                 breakEven = parseFloat((inputNew ? inputNew.value : null) || (inputOld ? inputOld.value : null) || 18.32);
             }
 
-            recalculateAisRates(filteredVessels, breakEven);
+            recalculateAisRates(polPrimaryVessels, breakEven);
 
             // 3. Update original algorithm
             if (typeof window.updateAlgorithm === 'function') {
-                window.updateAlgorithm(filteredVessels);
+                window.updateAlgorithm(polPrimaryVessels);
             }
 
             // 4. Update the classification table body
@@ -1418,7 +1554,9 @@
                         ? window.MapLoader.getAisDynamicIcon({
                             destination: destination,
                             statusLabel: statusLabel,
-                            MetaData: b.MetaData
+                            MetaData: b.MetaData,
+                            aisRadarZone: b.aisRadarZone,
+                            aisRadarColor: b.aisRadarColor
                         }, routePorts.polName, routePorts.podName)
                         : null;
 
@@ -1528,7 +1666,7 @@
                 
                 const checkedTypes = Array.from(document.querySelectorAll('#vessel-types-checkboxes input[type="checkbox"]:checked'))
                     .map(cb => cb.value);
-                const maxDistance = parseFloat(document.getElementById('filter-max-distance')?.value || 300) || 300;
+                const maxDistance = AIS_RADAR_POL_RADIUS_NM;
                 const strictGeofence = document.getElementById('filter-strict-geofence')?.checked ?? true;
                 
                 let excludedThisVessel = false;
@@ -1621,7 +1759,7 @@
                     if (!m.vesselData) return false;
                     const isAlgerian = m.vesselData.latitude >= 34.0 && m.vesselData.latitude <= 38.5 && m.vesselData.longitude >= -3.0 && m.vesselData.longitude <= 9.5;
                     if (!isAlgerian) return false;
-                    const isLocalMode = (window.currentOperationMode !== 'global');
+                    const isLocalMode = true;
                     if (isLocalMode && polLat !== null && polLon !== null) {
                         const savedQty = localStorage.getItem('calculator_cargo_qty');
                         const quantity = savedQty ? parseFloat(savedQty) : 45000;
@@ -1700,7 +1838,7 @@
             ));
             
             if (marker) {
-                const isLocalMode = (window.currentOperationMode !== 'global');
+                const isLocalMode = true;
                 if (isLocalMode && polLat !== null && polLon !== null) {
                     const savedQty = localStorage.getItem('calculator_cargo_qty');
                     const quantity = savedQty ? parseFloat(savedQty) : 45000;
@@ -1737,51 +1875,51 @@
             refreshAisBtn.addEventListener('click', window.executeAISSweep);
         }
 
+        function refreshAisRadarZoneButtons() {
+            const polBtn = document.getElementById('btn-search-pol');
+            const podBtn = document.getElementById('btn-search-pod');
+            if (polBtn) polBtn.className = 'ais-radar-tab' + (window.aisRadarZoneState.pol ? ' active-pol' : '');
+            if (podBtn) podBtn.className = 'ais-radar-tab' + (window.aisRadarZoneState.pod ? ' active-pod' : '');
+        }
+
+        document.getElementById('btn-search-pol')?.addEventListener('click', () => {
+            window.aisRadarZoneState.pol = true;
+            refreshAisRadarZoneButtons();
+            window.drawGeofenceCircle();
+            window.applyGeofencingFilters();
+            window.executeAISSweep();
+        });
+
+        document.getElementById('btn-search-pod')?.addEventListener('click', () => {
+            window.aisRadarZoneState.pod = !window.aisRadarZoneState.pod;
+            refreshAisRadarZoneButtons();
+            window.drawGeofenceCircle();
+            window.applyGeofencingFilters();
+            window.executeAISSweep();
+        });
+        refreshAisRadarZoneButtons();
+
         // Operation Mode Setup
-        window.currentOperationMode = 'global';
-        const btnModeLocal = document.getElementById('btn-mode-local');
-        const btnModeGlobal = document.getElementById('btn-mode-global');
+        window.currentOperationMode = 'dual';
+        const btnModeDual = document.getElementById('btn-mode-dual');
         const modeDesc = document.getElementById('operation-mode-desc');
 
-        function setOperationMode(mode) {
+        function setOperationMode() {
             window.isFirstLoad = true;
-            window.currentOperationMode = mode;
-            if (mode === 'global') {
-                if (btnModeGlobal) {
-                    btnModeGlobal.style.background = "#3182ce";
-                    btnModeGlobal.style.color = "white";
-                }
-                if (btnModeLocal) {
-                    btnModeLocal.style.background = "transparent";
-                    btnModeLocal.style.color = "#4a5568";
-                }
-                if (modeDesc) {
-                    modeDesc.innerText = "Global Intelligent Search: incremental AIS sweep capped at 1,000 stored vessels.";
-                }
-            } else {
-                if (btnModeLocal) {
-                    btnModeLocal.style.background = "#3182ce";
-                    btnModeLocal.style.color = "white";
-                }
-                if (btnModeGlobal) {
-                    btnModeGlobal.style.background = "transparent";
-                    btnModeGlobal.style.color = "#4a5568";
-                }
-                if (modeDesc) {
-                    modeDesc.innerText = "Global Intelligent Search: incremental AIS sweep capped at 1,000 stored vessels.";
-                }
+            window.currentOperationMode = 'dual';
+            if (btnModeDual) {
+                btnModeDual.style.background = "#3182ce";
+                btnModeDual.style.color = "white";
+            }
+            if (modeDesc) {
+                modeDesc.innerText = "Mandatory dual AIS search: POL 300 NM and POD 100 NM.";
             }
             
             // Redraw geofence circle and apply filters without starting a sweep.
             window.drawGeofenceCircle();
         }
 
-        if (btnModeLocal) {
-            btnModeLocal.addEventListener('click', () => setOperationMode('local'));
-        }
-        if (btnModeGlobal) {
-            btnModeGlobal.addEventListener('click', () => setOperationMode('global'));
-        }
+        setOperationMode();
 
         // Initialize Geofence Display & Event Listeners
         window.updateGeofencePOLDisplay();

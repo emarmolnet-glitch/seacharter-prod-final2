@@ -677,10 +677,13 @@
                 window.setAisRadarStatus('updating');
             }
             const endpoint = config.endpoint || aisProxyPollingState.endpoint;
-            const isGlobalEndpoint = /(?:[?&]mode=global)(?:&|$)/.test(endpoint);
+            const endpointUrl = new URL(endpoint, window.location.origin);
+            if (endpointUrl.searchParams.get('mode') === 'global') {
+                return { success: false, skipped: true, reason: 'legacy-ais-mode-disabled' };
+            }
             const hasExplicitBoxes = /(?:[?&]boxes=)(?:[^&]+)/.test(endpoint);
             const mapInstance = aisProxyPollingState.map || config.map || getDefaultAisMap();
-            const shouldUseViewportBounds = !isGlobalEndpoint && !hasExplicitBoxes;
+            const shouldUseViewportBounds = !hasExplicitBoxes;
             const bounds = shouldUseViewportBounds ? await getStableProxyBounds(mapInstance) : null;
             const proxyPayload = shouldUseViewportBounds ? getProxyBoundsPayload(bounds) : null;
             if (shouldUseViewportBounds && !proxyPayload) {
@@ -691,7 +694,7 @@
                 endpoint,
                 requestUrl: finalRequestUrl,
                 bounds: proxyPayload,
-                mode: hasExplicitBoxes ? 'route-pol-pod' : (isGlobalEndpoint ? 'global' : 'bounded')
+                mode: hasExplicitBoxes ? 'route-pol-pod' : 'bounded'
             });
             const response = await fetch(finalRequestUrl);
             const payload = await response.json().catch(() => []);
@@ -778,7 +781,7 @@
         clearTimeout(aisStreamState.mapMoveTimer);
         aisStreamState.mapMoveTimer = null;
         aisStreamState.boundMap = null;
-        return { bound: false, reason: 'global-radar-independent-of-map' };
+        return { bound: false, reason: 'dual-radar-independent-of-map' };
     }
 
     function closeAisStreamSocket() {
@@ -936,16 +939,24 @@
         const status = String(vessel.statusLabel || vessel.status || vessel.NavigationalStatusLabel || "").toUpperCase();
         const normalizedPol = polName ? String(polName).toUpperCase().trim() : "";
         const normalizedPod = podName ? String(podName).toUpperCase().trim() : "";
+        const radarZone = String(vessel.aisRadarZone || (vessel.MetaData && vessel.MetaData.aisRadarZone) || "").toUpperCase();
+        const radarColor = vessel.aisRadarColor || (radarZone === "POL" ? "#16a34a" : (radarZone === "POD" ? "#6d28d9" : ""));
         const isKeyPort = !!(
             (normalizedPol && destination.includes(normalizedPol)) ||
             (normalizedPod && destination.includes(normalizedPod))
         );
 
         let iconClass = "fa-ship";
-        let iconColor = "#3b82f6";
+        let iconColor = radarColor || "#3b82f6";
         let imageIcon = "";
 
-        if (isKeyPort) {
+        if (radarZone === "POL") {
+            iconClass = "fa-ship";
+            iconColor = "#16a34a";
+        } else if (radarZone === "POD") {
+            iconClass = "fa-ship";
+            iconColor = "#6d28d9";
+        } else if (isKeyPort) {
             iconClass = "fa-flag";
             iconColor = "#ef4444";
         } else if (

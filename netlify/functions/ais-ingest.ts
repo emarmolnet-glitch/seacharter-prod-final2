@@ -1,13 +1,6 @@
 import { upsertVessels, type VesselRecord } from "./vessel-store.js";
 
 const AISSTREAM_ENDPOINT = "wss://stream.aisstream.io/v0/stream";
-const BOUNDING_BOX = {
-  minLat: -90.0,
-  maxLat: 90.0,
-  minLon: -180.0,
-  maxLon: 180.0,
-};
-
 function pickObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -85,17 +78,24 @@ function normalizeVessel(item: unknown): VesselRecord | null {
 
 export default async (req: Request) => {
   try {
-    console.log("LOG: La función ais-ingest ha comenzado.");
-    
     const apiKey = process.env.AISSTREAM_API_KEY;
     if (!apiKey) throw new Error("AISSTREAM_API_KEY no configurada");
+    const url = new URL(req.url);
+    const rawBoxes = url.searchParams.get("boxes");
+    if (!rawBoxes) {
+      return new Response("AIS POL/POD bounding boxes are required", { status: 400 });
+    }
+    const boundingBoxes = JSON.parse(rawBoxes);
+    if (!Array.isArray(boundingBoxes) || boundingBoxes.length === 0) {
+      return new Response("AIS POL/POD bounding boxes are required", { status: 400 });
+    }
 
     const aisResponse = await fetch(AISSTREAM_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         APIKey: apiKey,
-        BoundingBoxes: [[[BOUNDING_BOX.minLat, BOUNDING_BOX.minLon], [BOUNDING_BOX.maxLat, BOUNDING_BOX.maxLon]]],
+        BoundingBoxes: boundingBoxes,
       }),
     });
 
