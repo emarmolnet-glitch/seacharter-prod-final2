@@ -58,8 +58,8 @@
             }
         },
         icons: {
-            load: '/Ancla Load.svg',
-            discharge: '/Ancla Discharge.svg'
+            load: '/public/Ancla Load.svg',
+            discharge: '/public/Ancla Discharge.svg'
         }
     });
 
