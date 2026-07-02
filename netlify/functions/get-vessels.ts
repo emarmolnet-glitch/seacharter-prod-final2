@@ -67,34 +67,8 @@ function parseRequestedBoxes(url: URL) {
   }
 }
 
-function getRequestedBounds(url: URL) {
-  if (url.searchParams.get("mode") === "global") {
-    return [
-      [-90.0, -180.0],
-      [90.0, 180.0],
-    ];
-  }
-
-  const minLat = numberParam(url, ["minLat", "latMin"], NaN);
-  const maxLat = numberParam(url, ["maxLat", "latMax"], NaN);
-  const minLon = numberParam(url, ["minLon", "lonMin"], NaN);
-  const maxLon = numberParam(url, ["maxLon", "lonMax"], NaN);
-
-  if ([minLat, maxLat, minLon, maxLon].every(Number.isFinite)) {
-    return [
-      [Math.min(minLat, maxLat), Math.min(minLon, maxLon)],
-      [Math.max(minLat, maxLat), Math.max(minLon, maxLon)],
-    ];
-  }
-
-  return [
-    [30.0, -12.0],
-    [47.5, 42.0],
-  ];
-}
-
 function getRequestedBoundingBoxes(url: URL) {
-  return parseRequestedBoxes(url) || [getRequestedBounds(url)];
+  return parseRequestedBoxes(url);
 }
 
 function getApiKey() {
@@ -336,6 +310,9 @@ function collectVessels(url: URL, apiKey: string) {
   const quantity = Math.min(MAX_QUANTITY, Math.max(1, numberParam(url, ["quantity", "limit"], DEFAULT_QUANTITY)));
   const timeoutMs = Math.min(MAX_TIMEOUT_MS, Math.max(2500, numberParam(url, ["timeoutMs"], DEFAULT_TIMEOUT_MS)));
   const bounds = getRequestedBoundingBoxes(url);
+  if (!bounds) {
+    return Promise.reject(new Error("AIS POL/POD bounding boxes are required."));
+  }
 
   return new Promise<VesselMessage[]>((resolve, reject) => {
     const vesselsByKey = new Map<string, VesselMessage>();
@@ -394,6 +371,13 @@ export default async (req: Request) => {
     vesselCache = [];
     cacheUpdatedAt = 0;
     return vesselsResponse({ ok: true, reset: true });
+  }
+
+  if (!parseRequestedBoxes(url)) {
+    return vesselsResponse(
+      { vessels: [], error: "AIS POL/POD bounding boxes are required." },
+      { status: 400 },
+    );
   }
 
   const apiKey = getApiKey();
