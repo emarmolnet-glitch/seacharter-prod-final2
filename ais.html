@@ -96,7 +96,7 @@
     <div class="panel-ui">
         <h3>AIS MARKET INTELLIGENCE</h3>
         <div class="kpi-container">
-            <div class="kpi-item"><span class="kpi-label">VESSELS IN AREA (GLOBAL)</span><span id="vessels-count" class="kpi-value">--</span><span id="ais-storage-progress" style="display:block; font-size:0.7rem; color:#64748b; font-weight:700;">0% / 1000</span></div>
+            <div class="kpi-item"><span class="kpi-label">VESSELS IN AREA (POL 300MN)</span><span id="vessels-count" class="kpi-value">--</span><span id="ais-storage-progress" style="display:block; font-size:0.7rem; color:#64748b; font-weight:700;">0% / 1000</span></div>
             <div class="kpi-item"><span class="kpi-label">SUPPLY COEFFICIENT</span><span id="supply-coefficient" class="kpi-value">--</span></div>
             <div class="kpi-item"><span class="kpi-label">COMPETITION STATUS</span><span id="competition-status" class="kpi-value" style="color: #28a745;">--</span></div>
         </div>
@@ -376,8 +376,8 @@
             window.aisProspectionLayers.labels = {};
         };
 
-        // --- MOTOR DE ACUMULACIÓN GLOBAL DE BUQUES ---
-        window.AIS_GLOBAL_SWEEP_LIMIT = 1000;
+        // --- MOTOR DE ACUMULACIÓN DUAL DE BUQUES ---
+        window.AIS_DUAL_SWEEP_LIMIT = 1000;
         window.buquesAlmacenados = window.buquesAlmacenados instanceof Map ? window.buquesAlmacenados : new Map();
         window.buquesEncontrados = {};
 
@@ -408,7 +408,7 @@
 
         window.actualizarContadorBuquesAlmacenados = function() {
             const total = window.buquesAlmacenados.size;
-            const limite = Number(window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
+            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
             const porcentaje = Math.min(100, Math.round((total / limite) * 100));
             const progressEl = document.getElementById('ais-storage-progress');
             if (progressEl) progressEl.innerText = `${porcentaje}% / ${limite}`;
@@ -417,7 +417,7 @@
         };
 
         window.procesarMensajeAIS = function(nuevoBarco) {
-            const limite = Number(window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
+            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
             if (window.buquesAlmacenados.size >= limite) {
                 window.detenerRadar();
                 return false;
@@ -748,7 +748,7 @@
             if (!window.AIS_DIRECT_FRONTEND_MODE || !window.isLiveTrackingEnabled) return;
             if (!window.aisRadarUserActivated) return;
             if (typeof window.isAisRouteReady === 'function' && !window.isAisRouteReady()) return;
-            const limite = Number(window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
+            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
             if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
                 window.detenerRadar();
                 return;
@@ -1113,7 +1113,7 @@
 
             const savedQty = localStorage.getItem('calculator_cargo_qty');
             const quantity = savedQty ? parseFloat(savedQty) : 45000;
-            const limite = Number(window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
+            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
             if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
                 window.detenerRadar();
                 return;
@@ -1151,7 +1151,7 @@
             }
         };
 
-        // Global distance utility in Nautical Miles (NM)
+        // Distance utility in Nautical Miles (NM)
         window.getDistance = function(lat1, lon1, lat2, lon2) {
             const R = 3440.065; // Earth radius in NM
             const dLat = (lat2 - lat1) * Math.PI / 180;

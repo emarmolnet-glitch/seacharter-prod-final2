@@ -177,9 +177,8 @@
     function calculatePortDaysByStowage(cargoTons, method, realRate, cargoType, craneCount = 1) {
         const cargo = toNumber(cargoTons);
         const rate = toNumber(realRate) || getRealPortRate(method);
-        const cranes = portMethodUsesCranes(method) ? Math.max(1, Math.floor(toNumber(craneCount) || 1)) : 1;
         if (cargo <= 0 || rate <= 0) return 0;
-        return Math.ceil(cargo / (rate * cranes));
+        return Math.ceil(cargo / rate);
     }
 
     function shouldAutoEstimateStevedoring(policyType) {
@@ -362,7 +361,9 @@
         const cargoKind = normalizeCargoType(effectiveState.tipo_carga);
         effectiveState.dias_puerto_total = toNumber(effectiveState.dias_puerto) +
             effectiveState.turn_time_days +
-            (cargoKind === 'proyecto' ? toNumber(effectiveState.dias_preparacion) : 0);
+            (cargoKind === 'proyecto' ? toNumber(effectiveState.dias_preparacion) : 0) +
+            toNumber(effectiveState.t_espera_fondeo) +
+            toNumber(effectiveState.delta_historico);
         const canal = calculateCanalToll(effectiveState);
         const cranes = validateCranes(effectiveState);
         const tugs = inferTugCostByDwt(effectiveState.capacidad_dwt, state.coste_remolcadores_ud);
@@ -409,13 +410,21 @@
             const nominalPol = root.getRitmoBasePuerto ? root.getRitmoBasePuerto(metodoEstiba) : getRealPortRate(metodoEstiba);
             const nominalPod = root.getRitmoBasePuerto ? root.getRitmoBasePuerto(metodoDescarga) : getRealPortRate(metodoDescarga);
             const tipoCarga = toText(this.el('cargo-type')?.value);
-            const realPolRate = this.readNumber('rate-load') || (root.getRitmoRealPuerto ? root.getRitmoRealPuerto(metodoEstiba, nominalPol) : (nominalPol * getStowageMethodFactor(metodoEstiba)));
-            const realPodRate = this.readNumber('rate-disch') || (root.getRitmoRealPuerto ? root.getRitmoRealPuerto(metodoDescarga, nominalPod) : (nominalPod * getStowageMethodFactor(metodoDescarga)));
+            const suggestedPolRate = portMethodUsesCranes(metodoEstiba)
+                ? (root.getRitmoRealPuerto ? root.getRitmoRealPuerto(metodoEstiba, nominalPol) : (nominalPol * getStowageMethodFactor(metodoEstiba))) * cranesPol
+                : (root.getRitmoRealPuerto ? root.getRitmoRealPuerto(metodoEstiba, nominalPol) : (nominalPol * getStowageMethodFactor(metodoEstiba)));
+            const suggestedPodRate = portMethodUsesCranes(metodoDescarga)
+                ? (root.getRitmoRealPuerto ? root.getRitmoRealPuerto(metodoDescarga, nominalPod) : (nominalPod * getStowageMethodFactor(metodoDescarga))) * cranesPod
+                : (root.getRitmoRealPuerto ? root.getRitmoRealPuerto(metodoDescarga, nominalPod) : (nominalPod * getStowageMethodFactor(metodoDescarga)));
+            const realPolRate = this.readNumber('rate-load') || suggestedPolRate;
+            const realPodRate = this.readNumber('rate-disch') || suggestedPodRate;
             const calculatePortDays = root.calcularDiasPuertoPorEstiba || ((tons, rate, method, craneCount) => calculatePortDaysByStowage(tons, method, rate, tipoCarga, craneCount));
             const portDays = calculatePortDays(cargoTons, realPolRate, metodoEstiba, cranesPol) + calculatePortDays(cargoTons, realPodRate, metodoDescarga, cranesPod);
             return {
                 dias_navegacion: seaDays,
                 dias_puerto: portDays,
+                t_espera_fondeo: this.readNumber('t-fondeo'),
+                delta_historico: this.readNumber('delta-historico'),
                 pol_name: toText(this.el('port-pol')?.value),
                 pod_name: toText(this.el('port-pod')?.value),
                 nombre_buque: toText(this.el('nombre-buque-calculadora')?.value || this.el('vessel-name')?.value),
