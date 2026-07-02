@@ -404,7 +404,6 @@
 
         window.detenerRadar = function() {
             window.AIS_PROXY_POLLING_ACTIVE = false;
-            console.warn(`[Radar Dual] detenerRadar() ejecutado. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
         };
 
         window.actualizarContadorBuquesAlmacenados = function() {
@@ -751,7 +750,6 @@
             if (typeof window.isAisRouteReady === 'function' && !window.isAisRouteReady()) return;
             const limite = Number(window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
             if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
-                console.warn(`[Radar Dual] Límite alcanzado antes de consultar proxy. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
                 window.detenerRadar();
                 return;
             }
@@ -1117,7 +1115,6 @@
             const quantity = savedQty ? parseFloat(savedQty) : 45000;
             const limite = Number(window.AIS_GLOBAL_SWEEP_LIMIT) || 1000;
             if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
-                console.warn(`[Radar Dual] Límite alcanzado antes de fetch AIS. buquesAlmacenados.size=${window.buquesAlmacenados.size}`);
                 window.detenerRadar();
                 return;
             }
@@ -1133,7 +1130,6 @@
                 const response = await fetch(url);
                 if (response.status === 429) {
                     window.aisFallbackNextAllowedAt = Date.now() + AIS_FALLBACK_429_RETRY_MS;
-                    console.error("AIS_FALLBACK ERROR 429: límite de peticiones alcanzado. Pausa obligatoria de 5 minutos.");
                     return;
                 }
                 const data = await response.json();
@@ -1206,17 +1202,16 @@
             renderAisProspectionRadius('POL', 'scanning', 0);
             const endpoint = window.getRouteAisSweepEndpoint(quantity, 'POL');
             if (!endpoint) {
-                console.warn('0 buques detectados en POL');
                 renderAisProspectionRadius('POL', 'complete', 0);
+                console.log('Búsqueda POL completada');
                 return [];
             }
-            console.log('searchPOL(300nm)');
             const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
             const vessels = typeof window.parseAisVesselsResponse === 'function'
                 ? await window.parseAisVesselsResponse(response, 'searchPOL(300nm)')
                 : await response.json();
             renderAisProspectionRadius('POL', 'complete', vessels.length);
-            if (!vessels.length) console.warn('0 buques detectados en POL');
+            console.log('Búsqueda POL completada');
             return vessels;
         };
 
@@ -1224,17 +1219,16 @@
             renderAisProspectionRadius('POD', 'scanning', 0);
             const endpoint = window.getRouteAisSweepEndpoint(quantity, 'POD');
             if (!endpoint) {
-                console.warn('0 buques detectados en POD');
                 renderAisProspectionRadius('POD', 'complete', 0);
+                console.log('Búsqueda POD completada');
                 return [];
             }
-            console.log('searchPOD(100nm)');
             const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
             const vessels = typeof window.parseAisVesselsResponse === 'function'
                 ? await window.parseAisVesselsResponse(response, 'searchPOD(100nm)')
                 : await response.json();
             renderAisProspectionRadius('POD', 'complete', vessels.length);
-            if (!vessels.length) console.warn('0 buques detectados en POD');
+            console.log('Búsqueda POD completada');
             return vessels;
         };
 

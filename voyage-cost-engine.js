@@ -34,6 +34,7 @@
         paletizado: 1.0,
         hierro_acero_piezas: 1.0
     };
+    const PASSIVE_PORT_METHODS = new Set(['cinta_transportadora', 'camion_tolva']);
 
     function normalizeText(value) {
         return toText(value)
@@ -169,10 +170,14 @@
         return RITMOS_BASE_PUERTO[method] || RITMOS_BASE_PUERTO.cinta_transportadora;
     }
 
+    function portMethodUsesCranes(method) {
+        return !PASSIVE_PORT_METHODS.has(method);
+    }
+
     function calculatePortDaysByStowage(cargoTons, method, realRate, cargoType, craneCount = 1) {
         const cargo = toNumber(cargoTons);
         const rate = toNumber(realRate) || getRealPortRate(method);
-        const cranes = Math.max(1, Math.floor(toNumber(craneCount) || 1));
+        const cranes = portMethodUsesCranes(method) ? Math.max(1, Math.floor(toNumber(craneCount) || 1)) : 1;
         if (cargo <= 0 || rate <= 0) return 0;
         return Math.ceil(cargo / (rate * cranes));
     }
@@ -399,8 +404,8 @@
             const cargoTons = this.readNumber('cargo-qty');
             const metodoEstiba = toText(this.el('metodo_carga')?.value) || 'cinta_transportadora';
             const metodoDescarga = toText(this.el('metodo_descarga_pod')?.value) || metodoEstiba;
-            const cranesPol = Math.max(1, Math.floor(this.readNumber('ritmo_nominal_pol') || 1));
-            const cranesPod = Math.max(1, Math.floor(this.readNumber('ritmo_nominal_pod') || 1));
+            const cranesPol = portMethodUsesCranes(metodoEstiba) ? Math.max(1, Math.floor(this.readNumber('ritmo_nominal_pol') || 4)) : 1;
+            const cranesPod = portMethodUsesCranes(metodoDescarga) ? Math.max(1, Math.floor(this.readNumber('ritmo_nominal_pod') || 4)) : 1;
             const nominalPol = root.getRitmoBasePuerto ? root.getRitmoBasePuerto(metodoEstiba) : getRealPortRate(metodoEstiba);
             const nominalPod = root.getRitmoBasePuerto ? root.getRitmoBasePuerto(metodoDescarga) : getRealPortRate(metodoDescarga);
             const tipoCarga = toText(this.el('cargo-type')?.value);
@@ -687,8 +692,10 @@
         normalizeCargoType,
         RITMOS_BASE_PUERTO,
         FACTORES_ESTIBA,
+        PASSIVE_PORT_METHODS,
         getStowageMethodFactor,
         getRealPortRate,
+        portMethodUsesCranes,
         calculatePortDaysByStowage,
         shouldAutoEstimateStevedoring,
         estimateStevedoringTerminal,
