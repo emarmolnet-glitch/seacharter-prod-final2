@@ -704,12 +704,12 @@
             const meta = buque.MetaData || {};
             const candidates = [
                 buque.id,
-                buque.IMO,
-                buque.imo,
-                meta.IMO,
                 buque.MMSI,
                 buque.mmsi,
-                meta.MMSI
+                meta.MMSI,
+                buque.IMO,
+                buque.imo,
+                meta.IMO
             ];
             for (const candidate of candidates) {
                 const value = String(candidate || '').trim();
@@ -719,6 +719,57 @@
             }
             return '';
         };
+
+        function firstAisText() {
+            for (let i = 0; i < arguments.length; i++) {
+                const value = arguments[i];
+                if (value === undefined || value === null) continue;
+                const text = String(value).trim();
+                if (text && text !== 'N/A' && text !== '0' && text.toLowerCase() !== 'unknown') return text;
+            }
+            return '';
+        }
+
+        function normalizeAisDestination(value) {
+            const text = String(value || '').trim();
+            if (!text || text.toUpperCase() === 'NOT AVAILABLE' || text.toUpperCase() === 'N/A') {
+                return 'Destino no declarado';
+            }
+            return text;
+        }
+
+        function mergeAisVesselState(previous, next) {
+            const prev = previous || {};
+            const incoming = next || {};
+            const prevMeta = prev.MetaData || {};
+            const nextMeta = incoming.MetaData || {};
+            const imo = firstAisText(incoming.IMO, incoming.imo, nextMeta.IMO, nextMeta.imo, prev.IMO, prev.imo, prevMeta.IMO, prevMeta.imo);
+            const destination = normalizeAisDestination(firstAisText(incoming.destination, incoming.Destination, nextMeta.Destination, nextMeta.destination, prev.destination, prev.Destination, prevMeta.Destination, prevMeta.destination));
+            const eta = firstAisText(incoming.eta, incoming.ETA, incoming.eta_puerto_carga, nextMeta.ETA, nextMeta.eta, prev.eta, prev.ETA, prev.eta_puerto_carga, prevMeta.ETA, prevMeta.eta);
+
+            const mergedMeta = Object.assign({}, prevMeta, nextMeta, {
+                IMO: imo || 'N/A',
+                Destination: destination
+            });
+            if (eta) {
+                mergedMeta.ETA = eta;
+                mergedMeta.eta = eta;
+            }
+
+            const merged = Object.assign({}, prev, incoming, {
+                MetaData: mergedMeta,
+                IMO: imo || incoming.IMO || prev.IMO || 'N/A',
+                imo: imo || incoming.imo || prev.imo || '',
+                destination,
+                Destination: destination,
+                updatedAt: incoming.updatedAt || Date.now()
+            });
+            if (eta) {
+                merged.eta = eta;
+                merged.ETA = eta;
+            }
+            return merged;
+        }
 
         window.detenerRadar = function() {
             window.AIS_PROXY_POLLING_ACTIVE = false;
@@ -736,17 +787,16 @@
 
         window.procesarMensajeAIS = function(nuevoBarco) {
             const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 250;
-            if (window.buquesAlmacenados.size >= limite) {
+            const idBuque = window.obtenerIdUnicoBuque(nuevoBarco);
+            if (!idBuque || idBuque === "N/A" || idBuque === "0") return false;
+            const existente = window.buquesAlmacenados.get(idBuque) || window.buquesEncontrados[idBuque] || null;
+            if (!existente && window.buquesAlmacenados.size >= limite) {
                 window.detenerRadar();
                 return false;
             }
-            const idBuque = window.obtenerIdUnicoBuque(nuevoBarco);
-            if (!idBuque || idBuque === "N/A" || idBuque === "0") return false;
-            if (window.buquesAlmacenados.has(idBuque)) {
-                return false;
-            }
-            window.buquesAlmacenados.set(idBuque, nuevoBarco);
-            window.buquesEncontrados[idBuque] = nuevoBarco;
+            const barcoNormalizado = mergeAisVesselState(existente, nuevoBarco);
+            window.buquesAlmacenados.set(idBuque, barcoNormalizado);
+            window.buquesEncontrados[idBuque] = barcoNormalizado;
             window.actualizarContadorBuquesAlmacenados();
             if (window.buquesAlmacenados.size >= limite) {
                 window.detenerRadar();
@@ -876,27 +926,33 @@
         }
 
         function normalizeLiveAisMessage(message) {
-            if (!message || message.MessageType !== 'PositionReport' || !message.PositionReport) return null;
-            const report = message.PositionReport;
+            if (!message) return null;
+            const messageBody = message.Message || {};
+            const report = message.PositionReport || messageBody.PositionReport || {};
             const meta = message.MetaData || {};
-            const latitude = Number(report.Latitude);
-            const longitude = Number(report.Longitude);
-            const mmsi = String(report.UserID || meta.MMSI || meta.Mmsi || '').trim();
+            const shipStaticData = message.ShipStaticData || messageBody.ShipStaticData || {};
+            const mmsi = String(report.UserID || meta.MMSI || meta.Mmsi || shipStaticData.UserID || '').trim();
+            const previous = mmsi && window.buquesAlmacenados instanceof Map ? window.buquesAlmacenados.get(mmsi) : null;
+            const previousMeta = previous && previous.MetaData ? previous.MetaData : {};
+            const latitude = Number(report.Latitude ?? meta.latitude ?? previousMeta.latitude ?? previous?.latitude);
+            const longitude = Number(report.Longitude ?? meta.longitude ?? previousMeta.longitude ?? previous?.longitude);
             if (!mmsi || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
             if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
             if (!isAllowedAisCargoType(meta, report)) return null;
 
             const speed = Number(report.Sog);
-            const name = (meta.ShipName || `MMSI ${mmsi}`).toString().trim();
-            const shipType = meta.ShipType ?? meta.shipType ?? meta.ShipTypeCode ?? report.ShipType ?? 'Cargo';
-            const destination = meta.Destination || meta.destination || message.Destination || message.destination || '';
+            const name = (meta.ShipName || shipStaticData.Name || shipStaticData.ShipName || `MMSI ${mmsi}`).toString().trim();
+            const shipType = meta.ShipType ?? meta.shipType ?? meta.ShipTypeCode ?? shipStaticData.Type ?? shipStaticData.ShipType ?? report.ShipType ?? 'Cargo';
+            const imo = firstAisText(shipStaticData.ImoNumber, shipStaticData.IMONumber, shipStaticData.IMO, meta.IMO, meta.imo, message.IMO, message.imo);
+            const destination = normalizeAisDestination(firstAisText(shipStaticData.Destination, meta.Destination, meta.destination, message.Destination, message.destination));
+            const eta = firstAisText(shipStaticData.Eta, shipStaticData.ETA, meta.ETA, meta.eta, message.ETA, message.eta);
             const lastPortOfCall = meta.lastPortOfCall || meta.last_port_of_call || meta.ultimo_puerto || meta.LastPort || meta.LastPortOfCall || message.lastPortOfCall || message.last_port_of_call || message.ultimo_puerto || '';
             return {
                 MessageType: 'PositionReport',
                 PositionReport: report,
                 MetaData: {
                     MMSI: mmsi,
-                    IMO: meta.IMO || 'N/A',
+                    IMO: imo || 'N/A',
                     ShipName: name,
                     ShipType: shipType,
                     latitude,
@@ -904,11 +960,15 @@
                     speed: Number.isFinite(speed) ? speed : 0,
                     NavigationalStatus: report.NavigationalStatus,
                     Destination: destination,
+                    ETA: eta || '',
+                    eta: eta || '',
                     lastPortOfCall,
                     ultimo_puerto: lastPortOfCall,
                     time_utc: meta.time_utc || new Date().toISOString()
                 },
                 MMSI: mmsi,
+                IMO: imo || 'N/A',
+                imo: imo || '',
                 vesselName: name,
                 ShipType: shipType,
                 shipType,
@@ -916,6 +976,8 @@
                 longitude,
                 destination,
                 Destination: destination,
+                eta: eta || '',
+                ETA: eta || '',
                 lastPortOfCall,
                 last_port_of_call: lastPortOfCall,
                 ultimo_puerto: lastPortOfCall,
@@ -978,9 +1040,11 @@
         function buildLiveAisPopup(vessel) {
             const meta = vessel.MetaData || {};
             const speed = Number(meta.speed || vessel.speed || 0);
-            const destination = vessel.destination || vessel.Destination || meta.Destination || 'N/A';
+            const imo = firstAisText(vessel.IMO, vessel.imo, meta.IMO, meta.imo) || 'N/A';
+            const destination = normalizeAisDestination(firstAisText(vessel.destination, vessel.Destination, meta.Destination, meta.destination));
+            const eta = firstAisText(vessel.eta, vessel.ETA, vessel.eta_puerto_carga, meta.ETA, meta.eta) || 'N/A';
             const lastPortOfCall = vessel.lastPortOfCall || vessel.last_port_of_call || vessel.ultimo_puerto || meta.lastPortOfCall || meta.ultimo_puerto || 'N/A';
-            return `<div class="seacharter-map-popup"><strong>${meta.ShipName || vessel.vesselName || 'Unknown vessel'}</strong><span>MMSI: ${meta.MMSI || vessel.MMSI || 'N/A'}</span><span>Destino: ${destination}</span><span>Último puerto: ${lastPortOfCall}</span><span>Speed: ${Number.isFinite(speed) ? speed.toFixed(1) : '0.0'} kn</span><span>Position: ${meta.latitude.toFixed(4)}, ${meta.longitude.toFixed(4)}</span><span>Source: AISStream live</span></div>`;
+            return `<div class="seacharter-map-popup"><strong>${meta.ShipName || vessel.vesselName || 'Unknown vessel'}</strong><span>Número IMO: ${imo}</span><span>Destino: ${destination}</span><span>ETA: ${formatAisEta(eta)}</span><span>MMSI: ${meta.MMSI || vessel.MMSI || 'N/A'}</span><span>Último puerto: ${lastPortOfCall}</span><span>Speed: ${Number.isFinite(speed) ? speed.toFixed(1) : '0.0'} kn</span><span>Position: ${Number(meta.latitude).toFixed(4)}, ${Number(meta.longitude).toFixed(4)}</span><span>Source: AISStream live</span></div>`;
         }
 
         function scheduleLiveAisRender() {
@@ -1971,7 +2035,7 @@
                         const cat = classifyVessel(rawDwt, name, mmsi, imo);
                         const row = document.createElement('tr');
                         row.style.cursor = "pointer";
-                        const destination = b.Destination || (b.MetaData && b.MetaData.Destination) || "N/A";
+                        const destination = normalizeAisDestination(firstAisText(b.Destination, b.destination, b.MetaData && b.MetaData.Destination, b.MetaData && b.MetaData.destination));
                         const eta = b.eta || b.ETA || b.eta_puerto_carga || (b.MetaData && (b.MetaData.ETA || b.MetaData.eta)) || "N/A";
                         const projectedEta = b.etaProjected || (b.projection && b.projection.etaProjected) || (b.MetaData && (b.MetaData.etaProjected || (b.MetaData.projection && b.MetaData.projection.etaProjected))) || "N/A";
                         const etaDrift = b.etaDriftHours ?? (b.MetaData && b.MetaData.etaDriftHours);
@@ -2049,9 +2113,10 @@
                     }
 
                     const cat = classifyVessel(rawDwt, name, mmsi, imo);
-                    const destination = b.Destination || (b.MetaData && b.MetaData.Destination) || "N/A";
+                    const destination = normalizeAisDestination(firstAisText(b.Destination, b.destination, b.MetaData && b.MetaData.Destination, b.MetaData && b.MetaData.destination));
                     const projection = b.projection || (b.MetaData && b.MetaData.projection) || {};
                     const etaProjected = b.etaProjected || projection.etaProjected || "N/A";
+                    const eta = b.eta || b.ETA || b.eta_puerto_carga || (b.MetaData && (b.MetaData.ETA || b.MetaData.eta)) || etaProjected;
                     const isProjectionCandidate = !!(b.projectionCandidate || (b.MetaData && b.MetaData.projectionCandidate));
 
                     const id = mmsi || imo || name;
@@ -2087,7 +2152,7 @@
                                 projectionEta: etaProjected
                             });
                         } else {
-                            let popupContent = "<b>" + b.MetaData.ShipName + "</b><br>IMO: " + imo + "<br>MMSI: " + mmsi + "<br>Destino: " + destination + "<br>Class: " + cat + "<br>DWT: " + dwt + "<br>Ubicación: " + statusLabel;
+                            let popupContent = "<b>" + b.MetaData.ShipName + "</b><br>Número IMO: " + imo + "<br>Destino: " + destination + "<br>ETA: " + formatAisEta(eta) + "<br>MMSI: " + mmsi + "<br>Class: " + cat + "<br>DWT: " + dwt + "<br>Ubicación: " + statusLabel;
                             popupContent += "<br>ETA Proyectada: " + formatAisEta(etaProjected);
                             if (b.isEstimated || (b.MetaData && b.MetaData.isEstimated)) {
                                 popupContent += "<br><span style=\"color: #f59e0b; font-weight: bold;\">⚠️ Estimated Position / Terrestrial Coverage Gap</span>";
@@ -2114,7 +2179,7 @@
                                 projectionEta: etaProjected
                             });
                         } else {
-                            let popupContent = "<b>" + b.MetaData.ShipName + "</b><br>IMO: " + imo + "<br>MMSI: " + mmsi + "<br>Destino: " + destination + "<br>Class: " + cat + "<br>DWT: " + dwt + "<br>Ubicación: " + statusLabel;
+                            let popupContent = "<b>" + b.MetaData.ShipName + "</b><br>Número IMO: " + imo + "<br>Destino: " + destination + "<br>ETA: " + formatAisEta(eta) + "<br>MMSI: " + mmsi + "<br>Class: " + cat + "<br>DWT: " + dwt + "<br>Ubicación: " + statusLabel;
                             popupContent += "<br>ETA Proyectada: " + formatAisEta(etaProjected);
                             if (b.isEstimated || (b.MetaData && b.MetaData.isEstimated)) {
                                 popupContent += "<br><span style=\"color: #f59e0b; font-weight: bold;\">⚠️ Estimated Position / Terrestrial Coverage Gap</span>";
