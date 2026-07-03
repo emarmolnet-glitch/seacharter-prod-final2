@@ -20,6 +20,20 @@ type ReverseCalculatorState = {
   contractShipments: number;
   ownerMarginPercent: number;
   chartererMarginPercent: number;
+  hasScrubber: boolean;
+  laycanDiasLibres: number;
+  impactoRiesgo: number;
+  riesgoDias: number;
+  applyBunkerIndexAdjustment: boolean;
+  contractBunkerIndexBase: number;
+};
+
+type RouteCalculationData = {
+  totalDays?: number;
+  distance?: number;
+  totalCosts?: number;
+  estimatedBunker?: number;
+  estimatedBunkerCost?: number;
 };
 
 type SyncedCostData = Partial<Pick<
@@ -29,21 +43,26 @@ type SyncedCostData = Partial<Pick<
   | 'vlsfoPrice'
   | 'ifoPrice'
   | 'mgoPrice'
+  | 'bunkerCost'
   | 'portCosts'
   | 'bunkerDailyPortCost'
   | 'opexDaily'
->>;
+>> & RouteCalculationData;
+
+type CostPlusNumericValue = number | '';
 
 type CostPlusCalculatorState = {
-  dailyOpex: number;
-  targetMargin: number;
+  dailyOpex: CostPlusNumericValue;
+  targetMargin: CostPlusNumericValue;
   marginType: 'fixed' | 'percentage';
-  daysSea: number;
-  daysPort: number;
-  bunkerCost: number;
-  portCosts: number;
-  cargoVolume: number;
+  daysSea: CostPlusNumericValue;
+  daysPort: CostPlusNumericValue;
+  bunkerCost: CostPlusNumericValue;
+  portCosts: CostPlusNumericValue;
+  cargoVolume: CostPlusNumericValue;
 };
+
+type CostPlusNumericField = Exclude<keyof CostPlusCalculatorState, 'marginType'>;
 
 type ReverseTceCalculatorProps = {
   cargoVolume?: number;
@@ -63,6 +82,11 @@ type NavigationStrategy = 'eco' | 'full';
 type VesselPricingRouterProps = ReverseTceCalculatorProps & {
   vesselDwt?: number;
 };
+
+type CostPlusCalculatorProps = Pick<
+  ReverseTceCalculatorProps,
+  'cargoVolume' | 'daysSea' | 'daysPort' | 'syncedCostData'
+>;
 
 type VesselCalculationMode = 'Cost-Plus' | 'TCE Inverso';
 
@@ -106,6 +130,12 @@ const DEFAULT_VALUES: ReverseCalculatorState = {
   contractShipments: 6,
   ownerMarginPercent: 15,
   chartererMarginPercent: 10,
+  hasScrubber: false,
+  laycanDiasLibres: 0,
+  impactoRiesgo: 0,
+  riesgoDias: 0,
+  applyBunkerIndexAdjustment: true,
+  contractBunkerIndexBase: 0,
 };
 
 const COST_PLUS_DEFAULT_VALUES: CostPlusCalculatorState = {
@@ -118,6 +148,18 @@ const COST_PLUS_DEFAULT_VALUES: CostPlusCalculatorState = {
   portCosts: 18000,
   cargoVolume: 8000,
 };
+
+const COST_PLUS_INPUTS: Array<{
+  key: CostPlusNumericField;
+  label: string;
+  suffix: string;
+}> = [
+  { key: 'daysSea', label: 'Días de mar', suffix: 'días' },
+  { key: 'daysPort', label: 'Días de puerto', suffix: 'días' },
+  { key: 'bunkerCost', label: 'Coste combustible', suffix: 'USD' },
+  { key: 'portCosts', label: 'Gastos portuarios', suffix: 'USD' },
+  { key: 'cargoVolume', label: 'Toneladas carga', suffix: 'MT' },
+];
 
 const INPUTS: Array<{
   key: keyof ReverseCalculatorState;
@@ -234,6 +276,167 @@ function safeNumber(value: number | '') {
   return Number.isFinite(Number(value)) ? Number(value) : 0;
 }
 
+function roundMoney(value: number) {
+  return Number(safeNumber(value).toFixed(2));
+}
+
+function calculateCostPlusResults(values: CostPlusCalculatorState) {
+  const dailyOpex = safeNumber(values.dailyOpex);
+  const targetMargin = safeNumber(values.targetMargin);
+  const daysSea = safeNumber(values.daysSea);
+  const daysPort = safeNumber(values.daysPort);
+  const bunkerCost = safeNumber(values.bunkerCost);
+  const portCosts = safeNumber(values.portCosts);
+  const cargoVolume = safeNumber(values.cargoVolume);
+
+  const totalDays = daysSea + daysPort;
+  const totalOpex = dailyOpex * totalDays;
+  const totalCosts = totalOpex + bunkerCost + portCosts;
+  const calculatedMargin =
+    values.marginType === 'fixed' ? targetMargin : totalCosts * (targetMargin / 100);
+  const targetRevenue = totalCosts + calculatedMargin;
+  const minFreightRate = cargoVolume > 0 ? roundMoney(totalCosts / cargoVolume) : 0;
+  const demurrageRate = roundMoney(dailyOpex * 1.25);
+
+  return { totalDays, totalOpex, totalCosts, calculatedMargin, targetRevenue, minFreightRate, demurrageRate };
+}
+
+function calculateReverseTceResults(values: ReverseCalculatorState) {
+  const daysSea = safeNumber(values.daysSea);
+  const daysPort = safeNumber(values.daysPort);
+  const tceTarget = safeNumber(values.tceTarget);
+  const vlsfoPrice = safeNumber(values.vlsfoPrice);
+  const ifoPrice = safeNumber(values.ifoPrice);
+  const mgoPrice = safeNumber(values.mgoPrice);
+  const seaFuelConsumption = safeNumber(values.seaFuelConsumption);
+  const portFuelConsumption = safeNumber(values.portFuelConsumption);
+  const activeSeaFuelPrice = values.hasScrubber ? ifoPrice : vlsfoPrice;
+  const portCosts = safeNumber(values.portCosts);
+  const cargoVolume = safeNumber(values.cargoVolume);
+  const totalCo2Emissions = safeNumber(values.totalCo2Emissions);
+  const euaPrice = safeNumber(values.euaPrice);
+  const etsCoverage = safeNumber(values.etsCoverage);
+  const opexDaily = safeNumber(values.opexDaily);
+  const contractShipments = Math.max(1, Math.round(safeNumber(values.contractShipments)));
+  const ownerMarginPercent = safeNumber(values.ownerMarginPercent);
+  const chartererMarginPercent = safeNumber(values.chartererMarginPercent);
+  const totalDays = daysSea + daysPort;
+  const etsTotalCost = totalCo2Emissions * euaPrice * etsCoverage;
+  const marketBunkerIndexPrice = getAverageBunkerIndexPrice({
+    vlsfo: vlsfoPrice,
+    ifo380: ifoPrice,
+    mgo: mgoPrice,
+  });
+  const bunkerIndexBase = safeNumber(values.contractBunkerIndexBase) || marketBunkerIndexPrice;
+  const bunkerVariationPct = bunkerIndexBase > 0
+    ? ((marketBunkerIndexPrice - bunkerIndexBase) / bunkerIndexBase) * 100
+    : 0;
+  const shouldApplyBunkerAdjustment = values.applyBunkerIndexAdjustment
+    && Math.abs(bunkerVariationPct) >= BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT;
+  const sharedBunkerAdjustmentPct = shouldApplyBunkerAdjustment
+    ? bunkerVariationPct * BUNKER_INDEX_ADJUSTMENT_SHARE
+    : 0;
+  const calculateScenario = (label: 'Optimista -10%' | 'Base BunkerIndex' | 'Pesimista +10%', bunkerMultiplier: number) => {
+    const scenarioSeaFuelPrice = activeSeaFuelPrice * bunkerMultiplier;
+    const scenarioMgoPrice = mgoPrice * bunkerMultiplier;
+    const scenarioSeaFuelCost = daysSea * seaFuelConsumption * scenarioSeaFuelPrice;
+    const scenarioPortFuelCost = daysPort * portFuelConsumption * scenarioMgoPrice;
+    const scenarioBunkerCost = scenarioSeaFuelCost + scenarioPortFuelCost;
+    const scenarioVoyageCost = (tceTarget * totalDays) + scenarioBunkerCost + portCosts + etsTotalCost;
+    const scenarioContractCost = scenarioVoyageCost * contractShipments;
+    const weightedAverageVoyageCost = scenarioContractCost / contractShipments;
+    const breakEvenAverage = cargoVolume > 0 ? weightedAverageVoyageCost / cargoVolume : 0;
+    const fairFreight = breakEvenAverage * (1 + ownerMarginPercent / 100);
+    const targetPriceBeforeIndexation = fairFreight * (1 + chartererMarginPercent / 100);
+    const indexedTargetPrice = targetPriceBeforeIndexation * (1 + sharedBunkerAdjustmentPct / 100);
+
+    return {
+      label,
+      bunkerMultiplier,
+      bunkerIndexPrice: marketBunkerIndexPrice * bunkerMultiplier,
+      bunkerCost: scenarioBunkerCost,
+      voyageCost: scenarioVoyageCost,
+      contractCost: scenarioContractCost,
+      weightedAverageVoyageCost,
+      totalCost: scenarioContractCost,
+      breakEvenAverage: roundMoney(breakEvenAverage),
+      fairFreight: roundMoney(fairFreight),
+      targetPriceBeforeIndexation: roundMoney(targetPriceBeforeIndexation),
+      targetPrice: roundMoney(indexedTargetPrice),
+    };
+  };
+  const scenarios = [
+    calculateScenario('Optimista -10%', 0.9),
+    calculateScenario('Base BunkerIndex', 1),
+    calculateScenario('Pesimista +10%', 1.1),
+  ];
+  const seaFuelCost = scenarios[1].bunkerCost - (daysPort * portFuelConsumption * mgoPrice);
+  const portFuelCost = daysPort * portFuelConsumption * mgoPrice;
+  const bunkerCost = scenarios[1].bunkerCost;
+  const bunkerDailyPortCost = daysPort > 0 ? portFuelCost / daysPort : safeNumber(values.bunkerDailyPortCost);
+  const etsCostPerMt = cargoVolume > 0 ? etsTotalCost / cargoVolume : 0;
+  const targetRevenue = scenarios[1].weightedAverageVoyageCost;
+  const minFreightRate = cargoVolume > 0 ? roundMoney(targetRevenue / cargoVolume) : 0;
+  const suggestedOwnerSale = roundMoney(minFreightRate * (1 + ownerMarginPercent / 100));
+  const suggestedChartererSale = roundMoney(suggestedOwnerSale * (1 + chartererMarginPercent / 100));
+  const isSuggestedSaleBelowTceTarget = suggestedOwnerSale < minFreightRate || suggestedChartererSale < minFreightRate;
+  const negotiationSpread = suggestedChartererSale - suggestedOwnerSale;
+  const negotiationMarginPct = suggestedOwnerSale > 0 ? (negotiationSpread / suggestedOwnerSale) * 100 : 0;
+  const isNegotiationMarginCritical = suggestedOwnerSale > 0 && negotiationMarginPct < 5;
+  const demurrage = calculateRiskAdjustedDemurrage({
+    tceTarget,
+    cargoVolume,
+    charterHireDaily: opexDaily,
+    historicalRiskImpact: safeNumber(values.impactoRiesgo),
+    riskDays: safeNumber(values.riesgoDias),
+    laycanFreeDays: safeNumber(values.laycanDiasLibres),
+  });
+  const demurrageRate = demurrage.demurrageRate;
+  const tceTotal = tceTarget * totalDays;
+  const netProfitTotal = tceTotal - opexDaily * totalDays;
+  const netProfitDaily = totalDays > 0 ? netProfitTotal / totalDays : 0;
+
+  return {
+    totalDays,
+    targetRevenue,
+    minFreightRate,
+    suggestedOwnerSale,
+    suggestedChartererSale,
+    isSuggestedSaleBelowTceTarget,
+    negotiationMarginPct,
+    isNegotiationMarginCritical,
+    demurrageRate,
+    demurrageBase: demurrage.demurrageBase,
+    demurrageRiskAdjustment: demurrage.historicalRiskDailyImpact,
+    isDemurrageRiskAdjusted: demurrage.hasRiskAdjustment,
+    demurrageRiskOverrunDays: demurrage.riskOverrunDays,
+    etsTotalCost,
+    etsCostPerMt,
+    bunkerCost,
+    seaFuelCost,
+    portFuelCost,
+    activeSeaFuelPrice,
+    bunkerDailyPortCost,
+    tceTotal,
+    tceDaily: totalDays > 0 ? tceTotal / totalDays : 0,
+    netProfitTotal,
+    netProfitDaily,
+    opexDaily,
+    contractShipments,
+    ownerMarginPercent,
+    chartererMarginPercent,
+    seaFuelStrategyLabel: values.hasScrubber
+      ? 'Optimizado con IFO 380 (Scrubber Activo)'
+      : 'Combustible estándar: VLSFO',
+    marketBunkerIndexPrice,
+    bunkerIndexBase,
+    bunkerVariationPct,
+    sharedBunkerAdjustmentPct,
+    shouldApplyBunkerAdjustment,
+    scenarios,
+  };
+}
+
 function getTodayBunkerLabel() {
   return new Date().toLocaleDateString();
 }
@@ -247,12 +450,14 @@ function getAverageBunkerIndexPrice({ vlsfo, ifo380, mgo }: { vlsfo: number; ifo
 function calculateRiskAdjustedDemurrage({
   tceTarget,
   cargoVolume,
+  charterHireDaily,
   historicalRiskImpact,
   riskDays,
   laycanFreeDays,
 }: {
   tceTarget: number;
   cargoVolume: number;
+  charterHireDaily: number;
   historicalRiskImpact: number;
   riskDays: number;
   laycanFreeDays: number;
@@ -266,10 +471,15 @@ function calculateRiskAdjustedDemurrage({
     ? (cargoVolume / normalizedRiskDays) * (riskOverrunDays / Math.max(normalizedLaycanFreeDays, 1))
     : 0;
   const historicalRiskDailyImpact = hasRiskAdjustment ? historicalRiskImpact * correctionFactor : 0;
+  const projectedDemurrageRate = demurrageBase + historicalRiskDailyImpact;
+  const demurrageCap = Math.max(0, charterHireDaily) * 1.5;
+  const demurrageRate = demurrageCap > 0
+    ? Math.min(projectedDemurrageRate, demurrageCap)
+    : projectedDemurrageRate;
 
   return {
     demurrageBase,
-    demurrageRate: demurrageBase + historicalRiskDailyImpact,
+    demurrageRate,
     historicalRiskDailyImpact,
     hasRiskAdjustment,
     riskOverrunDays,
@@ -332,6 +542,12 @@ export function ReverseTceCalculator({
       cargoVolume,
       daysSea: Number((sourceDaysSea * strategy.daysSeaFactor).toFixed(2)),
       daysPort,
+      hasScrubber,
+      laycanDiasLibres,
+      impactoRiesgo,
+      riesgoDias,
+      applyBunkerIndexAdjustment,
+      contractBunkerIndexBase,
       ...syncedCostData,
       seaFuelConsumption: Number((sourceSeaConsumption * strategy.seaConsumptionFactor).toFixed(2)),
     }));
@@ -352,6 +568,31 @@ export function ReverseTceCalculator({
       syncFromSectionData();
     }
   }, [cargoVolume, daysSea, daysPort, syncedCostData, isSyncEnabled, navigationStrategy]);
+
+  useEffect(() => {
+    setValues((current) => ({
+      ...current,
+      vlsfoPrice,
+      ifoPrice,
+      mgoPrice,
+      hasScrubber,
+      laycanDiasLibres,
+      impactoRiesgo,
+      riesgoDias,
+      applyBunkerIndexAdjustment,
+      contractBunkerIndexBase,
+    }));
+  }, [
+    vlsfoPrice,
+    ifoPrice,
+    mgoPrice,
+    hasScrubber,
+    laycanDiasLibres,
+    impactoRiesgo,
+    riesgoDias,
+    applyBunkerIndexAdjustment,
+    contractBunkerIndexBase,
+  ]);
 
   const applyMarketRateFromCache = (category: string) => {
     try {
@@ -413,137 +654,7 @@ export function ReverseTceCalculator({
     setIsEtaBaseRadarUnlocked(false);
   }, [laycanDate]);
 
-  const results = useMemo(() => {
-    const daysSea = safeNumber(values.daysSea);
-    const daysPort = safeNumber(values.daysPort);
-    const tceTarget = safeNumber(values.tceTarget);
-    const activeSeaFuelPrice = hasScrubber ? safeNumber(ifoPrice) : safeNumber(vlsfoPrice);
-    const portCosts = safeNumber(values.portCosts);
-    const cargoVolume = safeNumber(values.cargoVolume);
-    const totalCo2Emissions = safeNumber(values.totalCo2Emissions);
-    const euaPrice = safeNumber(values.euaPrice);
-    const etsCoverage = safeNumber(values.etsCoverage);
-    const opexDaily = safeNumber(values.opexDaily);
-    const contractShipments = Math.max(1, Math.round(safeNumber(values.contractShipments)));
-    const ownerMarginPercent = safeNumber(values.ownerMarginPercent);
-    const chartererMarginPercent = safeNumber(values.chartererMarginPercent);
-    const totalDays = daysSea + daysPort;
-    const etsTotalCost = totalCo2Emissions * euaPrice * etsCoverage;
-    const marketBunkerIndexPrice = getAverageBunkerIndexPrice({
-      vlsfo: safeNumber(vlsfoPrice),
-      ifo380: safeNumber(ifoPrice),
-      mgo: safeNumber(mgoPrice),
-    });
-    const bunkerIndexBase = contractBunkerIndexBase || marketBunkerIndexPrice;
-    const bunkerVariationPct = bunkerIndexBase > 0
-      ? ((marketBunkerIndexPrice - bunkerIndexBase) / bunkerIndexBase) * 100
-      : 0;
-    const shouldApplyBunkerAdjustment = applyBunkerIndexAdjustment
-      && Math.abs(bunkerVariationPct) >= BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT;
-    const sharedBunkerAdjustmentPct = shouldApplyBunkerAdjustment
-      ? bunkerVariationPct * BUNKER_INDEX_ADJUSTMENT_SHARE
-      : 0;
-    const calculateScenario = (label: 'Optimista -10%' | 'Base BunkerIndex' | 'Pesimista +10%', bunkerMultiplier: number) => {
-      const scenarioSeaFuelPrice = activeSeaFuelPrice * bunkerMultiplier;
-      const scenarioMgoPrice = safeNumber(mgoPrice) * bunkerMultiplier;
-      const scenarioSeaFuelCost = daysSea * safeNumber(values.seaFuelConsumption) * scenarioSeaFuelPrice;
-      const scenarioPortFuelCost = daysPort * safeNumber(values.portFuelConsumption) * scenarioMgoPrice;
-      const scenarioBunkerCost = scenarioSeaFuelCost + scenarioPortFuelCost;
-      const scenarioVoyageCost = (tceTarget * totalDays) + scenarioBunkerCost + portCosts + etsTotalCost;
-      const scenarioContractCost = scenarioVoyageCost * contractShipments;
-      const weightedAverageVoyageCost = scenarioContractCost / contractShipments;
-      const breakEvenAverage = cargoVolume > 0 ? weightedAverageVoyageCost / cargoVolume : 0;
-      const fairFreight = breakEvenAverage * (1 + ownerMarginPercent / 100);
-      const targetPriceBeforeIndexation = fairFreight * (1 + chartererMarginPercent / 100);
-      const indexedTargetPrice = targetPriceBeforeIndexation * (1 + sharedBunkerAdjustmentPct / 100);
-
-      return {
-        label,
-        bunkerMultiplier,
-        bunkerIndexPrice: marketBunkerIndexPrice * bunkerMultiplier,
-        bunkerCost: scenarioBunkerCost,
-        voyageCost: scenarioVoyageCost,
-        contractCost: scenarioContractCost,
-        weightedAverageVoyageCost,
-        totalCost: scenarioContractCost,
-        breakEvenAverage,
-        fairFreight,
-        targetPriceBeforeIndexation,
-        targetPrice: indexedTargetPrice,
-      };
-    };
-    const scenarios = [
-      calculateScenario('Optimista -10%', 0.9),
-      calculateScenario('Base BunkerIndex', 1),
-      calculateScenario('Pesimista +10%', 1.1),
-    ];
-    const pessimisticScenario = scenarios[2];
-    const seaFuelCost = scenarios[1].bunkerCost - (daysPort * safeNumber(values.portFuelConsumption) * safeNumber(mgoPrice));
-    const portFuelCost = daysPort * safeNumber(values.portFuelConsumption) * safeNumber(mgoPrice);
-    const bunkerCost = scenarios[1].bunkerCost;
-    const bunkerDailyPortCost = daysPort > 0 ? portFuelCost / daysPort : safeNumber(values.bunkerDailyPortCost);
-    const etsCostPerMt = cargoVolume > 0 ? etsTotalCost / cargoVolume : 0;
-    const targetRevenue = scenarios[1].weightedAverageVoyageCost;
-    const minFreightRate = cargoVolume > 0 ? targetRevenue / cargoVolume : 0;
-    const suggestedOwnerSale = pessimisticScenario.fairFreight;
-    const suggestedChartererSale = pessimisticScenario.targetPrice;
-    const isSuggestedSaleBelowTceTarget = suggestedOwnerSale < minFreightRate || suggestedChartererSale < minFreightRate;
-    const negotiationSpread = suggestedChartererSale - suggestedOwnerSale;
-    const negotiationMarginPct = suggestedOwnerSale > 0 ? (negotiationSpread / suggestedOwnerSale) * 100 : 0;
-    const isNegotiationMarginCritical = suggestedOwnerSale > 0 && negotiationMarginPct < 5;
-    const demurrage = calculateRiskAdjustedDemurrage({
-      tceTarget,
-      cargoVolume,
-      historicalRiskImpact: safeNumber(impactoRiesgo),
-      riskDays: safeNumber(riesgoDias),
-      laycanFreeDays: safeNumber(laycanDiasLibres),
-    });
-    const demurrageRate = demurrage.demurrageRate;
-    const tceTotal = tceTarget * totalDays;
-    const netProfitTotal = tceTotal - opexDaily * totalDays;
-    const netProfitDaily = totalDays > 0 ? netProfitTotal / totalDays : 0;
-
-    return {
-      totalDays,
-      targetRevenue,
-      minFreightRate,
-      suggestedOwnerSale,
-      suggestedChartererSale,
-      isSuggestedSaleBelowTceTarget,
-      negotiationMarginPct,
-      isNegotiationMarginCritical,
-      demurrageRate,
-      demurrageBase: demurrage.demurrageBase,
-      demurrageRiskAdjustment: demurrage.historicalRiskDailyImpact,
-      isDemurrageRiskAdjusted: demurrage.hasRiskAdjustment,
-      demurrageRiskOverrunDays: demurrage.riskOverrunDays,
-      etsTotalCost,
-      etsCostPerMt,
-      bunkerCost,
-      seaFuelCost,
-      portFuelCost,
-      activeSeaFuelPrice,
-      bunkerDailyPortCost,
-      tceTotal,
-      tceDaily: totalDays > 0 ? tceTotal / totalDays : 0,
-      netProfitTotal,
-      netProfitDaily,
-      opexDaily,
-      contractShipments,
-      ownerMarginPercent,
-      chartererMarginPercent,
-      seaFuelStrategyLabel: hasScrubber
-        ? 'Optimizado con IFO 380 (Scrubber Activo)'
-        : 'Combustible estándar: VLSFO',
-      marketBunkerIndexPrice,
-      bunkerIndexBase,
-      bunkerVariationPct,
-      sharedBunkerAdjustmentPct,
-      shouldApplyBunkerAdjustment,
-      scenarios,
-      pessimisticScenario,
-    };
-  }, [values, vlsfoPrice, ifoPrice, mgoPrice, hasScrubber, laycanDiasLibres, impactoRiesgo, riesgoDias, applyBunkerIndexAdjustment, contractBunkerIndexBase]);
+  const results = useMemo(() => calculateReverseTceResults(values), [values]);
 
   const updateValue = (key: keyof ReverseCalculatorState, nextValue: string) => {
     if (isSyncEnabled && SYNCED_REVERSE_FIELDS.has(key)) {
@@ -997,7 +1108,7 @@ export function ReverseTceCalculator({
                         {currencyFormatter.format(results.suggestedChartererSale)} /MT
                       </p>
                       <p className="mt-1 text-xs font-bold text-slate-500">
-                        Basado en Coste Promedio Ponderado COA, escenario pesimista y márgenes {results.ownerMarginPercent}% / {results.chartererMarginPercent}%.
+                        Basado en flete mínimo calculado y márgenes {results.ownerMarginPercent}% / {results.chartererMarginPercent}%.
                       </p>
                       {results.shouldApplyBunkerAdjustment ? (
                         <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-black text-amber-800">
@@ -1211,33 +1322,68 @@ export function ReverseTceCalculator({
   );
 }
 
-export function CostPlusCalculator() {
+export function CostPlusCalculator({
+  cargoVolume,
+  daysSea,
+  daysPort,
+  syncedCostData,
+}: CostPlusCalculatorProps) {
   const [values, setValues] = useState<CostPlusCalculatorState>(COST_PLUS_DEFAULT_VALUES);
 
-  const results = useMemo(() => {
-    const dailyOpex = safeNumber(values.dailyOpex);
-    const targetMargin = safeNumber(values.targetMargin);
-    const daysSea = safeNumber(values.daysSea);
-    const daysPort = safeNumber(values.daysPort);
-    const bunkerCost = safeNumber(values.bunkerCost);
-    const portCosts = safeNumber(values.portCosts);
-    const cargoVolume = safeNumber(values.cargoVolume);
+  const results = useMemo(() => calculateCostPlusResults(values), [values]);
 
-    const totalDays = daysSea + daysPort;
-    const totalOpex = dailyOpex * totalDays;
-    const totalCosts = totalOpex + bunkerCost + portCosts;
-    const calculatedMargin =
-      values.marginType === 'fixed' ? targetMargin : totalCosts * (targetMargin / 100);
-    const targetRevenue = totalCosts + calculatedMargin;
-    const minFreightRate = cargoVolume > 0 ? targetRevenue / cargoVolume : 0;
+  const routeSyncData = useMemo(() => {
+    const routeDaysSea = safeNumber(daysSea);
+    const routeDaysPort = safeNumber(daysPort);
+    const routeTotalDays = safeNumber(syncedCostData?.totalDays);
+    const routeDistance = safeNumber(syncedCostData?.distance);
+    const routeCargoVolume = safeNumber(cargoVolume);
+    const routeBunkerCost = safeNumber(syncedCostData?.bunkerCost)
+      || safeNumber(syncedCostData?.estimatedBunkerCost);
+    const routeTotalCosts = safeNumber(syncedCostData?.totalCosts);
+    const routeDailyOpex = safeNumber(syncedCostData?.opexDaily);
+    const syncedPortCosts = safeNumber(syncedCostData?.portCosts);
+    const syncedTotalDays = routeDaysSea + routeDaysPort > 0 ? routeDaysSea + routeDaysPort : routeTotalDays;
+    const routePortCosts = syncedPortCosts > 0
+      ? syncedPortCosts
+      : Math.max(0, routeTotalCosts - routeBunkerCost - (routeDailyOpex * syncedTotalDays));
+    const hasRouteTiming = routeDaysSea > 0 || routeDaysPort > 0 || routeTotalDays > 0;
 
-    return { totalDays, totalOpex, totalCosts, calculatedMargin, targetRevenue, minFreightRate };
-  }, [values]);
+    if (!hasRouteTiming && routeDistance <= 0 && routeCargoVolume <= 0 && routeBunkerCost <= 0 && routePortCosts <= 0 && routeTotalCosts <= 0) {
+      return null;
+    }
 
-  const updateNumber = (key: keyof Omit<CostPlusCalculatorState, 'marginType'>, nextValue: string) => {
+    const nextValues: Partial<CostPlusCalculatorState> = {};
+
+    if (routeDaysSea > 0) nextValues.daysSea = routeDaysSea;
+    if (routeDaysPort > 0) nextValues.daysPort = routeDaysPort;
+    if (routeDaysSea <= 0 && routeDaysPort <= 0 && routeTotalDays > 0) {
+      nextValues.daysSea = routeTotalDays;
+      nextValues.daysPort = 0;
+    }
+    if (routeCargoVolume > 0) nextValues.cargoVolume = routeCargoVolume;
+    if (routeBunkerCost > 0) nextValues.bunkerCost = routeBunkerCost;
+    if (routePortCosts > 0) nextValues.portCosts = routePortCosts;
+    if (routeDailyOpex > 0) nextValues.dailyOpex = routeDailyOpex;
+
+    return nextValues;
+  }, [cargoVolume, daysSea, daysPort, syncedCostData]);
+
+  const updateNumber = (key: CostPlusNumericField, nextValue: string) => {
     setValues((current) => ({
       ...current,
-      [key]: Number(nextValue),
+      [key]: nextValue === '' ? '' : Number(nextValue),
+    }));
+  };
+
+  const handleSyncWithRoute = () => {
+    if (!routeSyncData) {
+      return;
+    }
+
+    setValues((current) => ({
+      ...current,
+      ...routeSyncData,
     }));
   };
 
@@ -1253,9 +1399,19 @@ export function CostPlusCalculator() {
               Calcula el flete mínimo desde OPEX, costes directos y margen comercial.
             </p>
           </div>
-          <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-800">
-            Modo Coaster: Cálculo Cost-Plus (OPEX)
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSyncWithRoute}
+              disabled={!routeSyncData}
+              className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-wide text-amber-800 shadow-sm transition hover:border-amber-500 hover:bg-amber-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
+            >
+              Sincronizar con Ruta
+            </button>
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-800">
+              Modo Coaster: Cálculo Cost-Plus (OPEX)
+            </span>
+          </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -1293,19 +1449,13 @@ export function CostPlusCalculator() {
             </div>
           </div>
 
-          {[
-            ['daysSea', 'Días de mar', 'días'],
-            ['daysPort', 'Días de puerto', 'días'],
-            ['bunkerCost', 'Coste combustible', 'USD'],
-            ['portCosts', 'Gastos portuarios', 'USD'],
-            ['cargoVolume', 'Toneladas carga', 'MT'],
-          ].map(([key, label, suffix]) => (
+          {COST_PLUS_INPUTS.map(({ key, label, suffix }) => (
             <div key={key}>
               <label htmlFor={`cost-plus-${key}`} className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-slate-500">
                 {label}
               </label>
               <div className="flex overflow-hidden rounded-lg border border-slate-300 bg-white focus-within:border-amber-600 focus-within:ring-2 focus-within:ring-amber-600/15">
-                <input id={`cost-plus-${key}`} type="number" step="any" value={values[key as keyof CostPlusCalculatorState] as number} onChange={(event) => updateNumber(key as keyof Omit<CostPlusCalculatorState, 'marginType'>, event.target.value)} className="min-w-0 flex-1 border-0 px-3 py-2.5 text-sm font-bold text-slate-900 outline-none" />
+                <input id={`cost-plus-${key}`} type="number" step="any" value={values[key]} onChange={(event) => updateNumber(key, event.target.value)} className="min-w-0 flex-1 border-0 px-3 py-2.5 text-sm font-bold text-slate-900 outline-none" />
                 <span className="flex min-w-[5.75rem] items-center justify-center border-l border-slate-200 bg-slate-50 px-2 text-[11px] font-bold uppercase text-slate-500">{suffix}</span>
               </div>
             </div>
@@ -1330,6 +1480,7 @@ export function CostPlusCalculator() {
           <div className="mt-4 space-y-1 border-t border-slate-100 pt-3 text-sm font-semibold text-gray-500">
             <p>Coste Total Riesgo: {wholeCurrencyFormatter.format(results.totalCosts)}</p>
             <p>Beneficio Neto Proyectado: {wholeCurrencyFormatter.format(results.calculatedMargin)}</p>
+            <p>Demurrage ($/d): {wholeCurrencyFormatter.format(results.demurrageRate)}</p>
           </div>
         </div>
 
@@ -1353,6 +1504,7 @@ export function VesselPricingRouter({
   cargoVolume,
   daysSea,
   daysPort,
+  syncedCostData,
 }: VesselPricingRouterProps) {
   const [localDwt, setLocalDwt] = useState(vesselDwt);
   const [hasScrubber, setHasScrubber] = useState(false);
@@ -1405,9 +1557,9 @@ export function VesselPricingRouter({
       </div>
 
       {isReverseTceMode ? (
-        <ReverseTceCalculator cargoVolume={cargoVolume} daysSea={daysSea} daysPort={daysPort} vesselCategory={vesselClass.categoryName} hasScrubber={hasScrubber} />
+        <ReverseTceCalculator cargoVolume={cargoVolume} daysSea={daysSea} daysPort={daysPort} vesselCategory={vesselClass.categoryName} hasScrubber={hasScrubber} syncedCostData={syncedCostData} />
       ) : (
-        <CostPlusCalculator />
+        <CostPlusCalculator cargoVolume={cargoVolume} daysSea={daysSea} daysPort={daysPort} syncedCostData={syncedCostData} />
       )}
     </section>
   );
