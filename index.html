@@ -17805,14 +17805,34 @@
             return calculateMarketBenchmark(options);
         }
 
-        function refreshMarketBenchmarkFromState() {
+        function calculateSuggestedPriceFromMargin(baseRate, marginPct) {
+            const base = Number(baseRate) || 0;
+            const margin = Number(marginPct) || 0;
+            const factor = 1 - (margin / 100);
+            return base > 0 && factor > 0 ? (base / factor) : 0;
+        }
+
+        function refreshMarketBenchmarkFromState(options = {}) {
             if (typeof State === 'undefined' || typeof getRouteMarketBenchmark !== 'function') return null;
+            const vesselClass = typeof getVesselClass === 'function'
+                ? getVesselClass(Number(document.getElementById('vessel-dwt')?.value || State.dwt || 0))
+                : null;
+            const isCostPlusMode = vesselClass?.type === 'Cost-Plus';
             const totalMiles = Number(State.totalMiles || 0)
                 || ((Number(State.distBallast) || 0) + (Number(State.distLaden) || 0));
             const cargo = Number(State.cargo || 0) || Number(document.getElementById('cargo-qty')?.value || 0);
-            const benchmarkBase = Number(State.breakEvenVentaSugerida || 0)
-                || Number(State.inverseTceMinFreightRate || 0)
-                || Number(State.breakEven || 0);
+            const freshInverseRate = Number(options.inverseTceMinFreightRate || 0);
+            const freshCostPlusRate = Number(options.costPlusMinFreightRate || 0);
+            const benchmarkBase = isCostPlusMode
+                ? (freshCostPlusRate || Number(State.costPlusMinFreightRate || 0) || Number(State.breakEvenVentaSugerida || 0) || Number(State.breakEven || 0))
+                : (freshInverseRate || Number(State.inverseTceMinFreightRate || 0) || Number(State.breakEvenVentaSugerida || 0) || Number(State.breakEven || 0));
+            const marginOwner = Number(document.getElementById('margin-owner')?.value || State.marginOwner || 0);
+            const marginCharterer = Number(document.getElementById('margin-charterer')?.value || State.marginCharterer || 0);
+            const suggestedOwner = calculateSuggestedPriceFromMargin(benchmarkBase, marginOwner);
+            const suggestedCharterer = calculateSuggestedPriceFromMargin(suggestedOwner || benchmarkBase, marginCharterer);
+            const benchmarkComparisonRate = Number(options.precioObjetivoFletador || 0)
+                || (isCostPlusMode ? suggestedCharterer : Number(State.precioObjetivoFletador || State.sugCharterer || 0))
+                || suggestedCharterer;
             const marketBenchmark = getRouteMarketBenchmark({
                 breakEven: benchmarkBase,
                 totalMiles,
@@ -17824,10 +17844,7 @@
                 cargoType: State.cargoType || document.getElementById('cargo-type')?.value || ''
             });
             State.marketBenchmark = marketBenchmark;
-            updateMarketBenchmarkComparison(
-                Number(State.precioObjetivoFletador || State.sugCharterer || 0),
-                marketBenchmark
-            );
+            updateMarketBenchmarkComparison(benchmarkComparisonRate, marketBenchmark);
             return marketBenchmark;
         }
 
@@ -32419,10 +32436,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 activeState.daysPort
             );
             syncInverseBunkerCostFromVoyage();
-            calculateInverseTce();
+            const inverseTceResults = calculateInverseTce();
             syncCostPlusFromRoute(false);
-            calculateCostPlusFreight();
-            if (typeof refreshMarketBenchmarkFromState === 'function') refreshMarketBenchmarkFromState();
+            const costPlusResults = calculateCostPlusFreight();
+            if (typeof refreshMarketBenchmarkFromState === 'function') {
+                refreshMarketBenchmarkFromState({
+                    inverseTceMinFreightRate: inverseTceResults?.minFreightRate,
+                    costPlusMinFreightRate: costPlusResults?.minFreightRate
+                });
+            }
 
             const button = document.getElementById('btn-force-refresh-calculations');
             if (button) {
