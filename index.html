@@ -18643,7 +18643,7 @@
                 : inverseMinimumFreight;
             const breakEvenParaVentaSugerida = operacionModo === 'COA' && coaScenarioProjection
                 ? coaScenarioProjection.securityScenario.breakEvenAverage
-                : inverseMinimumFreight;
+                : activePricingMinimumFreight;
             const fleteMinimoBaseVenta = breakEvenParaVentaSugerida;
             const precioObjetivoArmador = operacionModo === 'COA' && coaScenarioProjection
                 ? coaScenarioProjection.securityScenario.ownerPurchase
@@ -18790,7 +18790,9 @@
             }
 
             const suggestedSaleColor = suggestedBelowTarget ? '#dc2626' : '#059669';
-            const suggestedSaleNote = suggestedBelowTarget ? 'Alerta: Venta por debajo del TCE Objetivo' : 'Flete mínimo inverso sincronizado';
+            const suggestedSaleNote = suggestedBelowTarget
+                ? 'Alerta: Venta por debajo del TCE Objetivo'
+                : (vesselPricingClass?.type === 'Cost-Plus' ? 'Flete mínimo Cost-Plus sincronizado' : 'Flete mínimo inverso sincronizado');
             if (isZeroCalculation) {
                 document.getElementById('res-sug-owner').innerHTML = `
                     <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$0.00</div>
@@ -32450,6 +32452,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const inverseTceResults = calculateInverseTce();
             syncCostPlusFromRoute(false);
             const costPlusResults = calculateCostPlusFreight();
+            if (typeof runEngine === 'function') runEngine();
             if (typeof refreshMarketBenchmarkFromState === 'function') {
                 refreshMarketBenchmarkFromState({
                     inverseTceMinFreightRate: inverseTceResults?.minFreightRate,
