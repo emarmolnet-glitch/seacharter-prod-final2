@@ -18586,15 +18586,12 @@
             const inverseMinimumFreight = Number.isFinite(inverseTceResults?.minFreightRate)
                 ? inverseTceResults.minFreightRate
                 : breakEvenArmadorDisplay;
-            const costPlusResults = typeof calculateCostPlusFreight === 'function'
-                ? calculateCostPlusFreight()
-                : null;
-            const costPlusMinimumFreight = Number.isFinite(costPlusResults?.minFreightRate)
-                ? costPlusResults.minFreightRate
-                : 0;
+            if (typeof calculateCostPlusFreight === 'function') {
+                calculateCostPlusFreight();
+            }
             const breakEvenParaVentaSugerida = operacionModo === 'COA' && coaScenarioProjection
                 ? coaScenarioProjection.securityScenario.breakEvenAverage
-                : costPlusMinimumFreight;
+                : inverseMinimumFreight;
             const fleteMinimoBaseVenta = breakEvenParaVentaSugerida;
             const precioObjetivoArmador = operacionModo === 'COA' && coaScenarioProjection
                 ? coaScenarioProjection.securityScenario.ownerPurchase
