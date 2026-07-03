@@ -9,13 +9,15 @@ const AIS_STREAM_URL = "wss://stream.aisstream.io/v0/stream";
 const DEFAULT_TIMEOUT_MS = 8500;
 const MAX_TIMEOUT_MS = 12000;
 const DEFAULT_QUANTITY = 120;
-const MAX_QUANTITY = 250;
+const MAX_QUANTITY = 1000;
 const HANDYSIZE_MIN_DWT = 25000;
 const SUPRAMAX_MAX_DWT = 65000;
 const POL_VISUAL_RADIUS_NM = 300;
 const POD_VISUAL_RADIUS_NM = 100;
+const ROUTE_CORRIDOR_RADIUS_NM = 100;
 const PROJECTION_SCAN_RADIUS_NM = 1000;
 const PROJECTION_LOOKAHEAD_HOURS = 72;
+const PROJECTION_VECTOR_MINUTES = 60;
 
 let vesselCache: VesselMessage[] = [];
 let cacheUpdatedAt = 0;
@@ -144,6 +146,39 @@ function projectPoint(lat: number, lon: number, course: number, distanceNm: numb
   };
 }
 
+function routeCorridorMatch(
+  lat: number,
+  lon: number,
+  pol: { lat: number; lon: number } | null,
+  pod: { lat: number; lon: number } | null,
+  radiusNm = ROUTE_CORRIDOR_RADIUS_NM,
+) {
+  if (!pol || !pod) return null;
+  const midLatRad = ((pol.lat + pod.lat + lat) / 3) * Math.PI / 180;
+  const nmPerDegreeLat = 60;
+  const nmPerDegreeLon = 60 * Math.max(0.1, Math.cos(midLatRad));
+  const ax = pol.lon * nmPerDegreeLon;
+  const ay = pol.lat * nmPerDegreeLat;
+  const bx = pod.lon * nmPerDegreeLon;
+  const by = pod.lat * nmPerDegreeLat;
+  const px = lon * nmPerDegreeLon;
+  const py = lat * nmPerDegreeLat;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const routeLengthSquared = dx * dx + dy * dy;
+  if (routeLengthSquared <= 0) return null;
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / routeLengthSquared));
+  const nearestX = ax + t * dx;
+  const nearestY = ay + t * dy;
+  const crossTrackNm = Math.hypot(px - nearestX, py - nearestY);
+  return {
+    inside: crossTrackNm <= radiusNm,
+    crossTrackNm: Math.round(crossTrackNm),
+    alongTrackNm: Math.round(Math.sqrt(routeLengthSquared) * t),
+    corridorRadiusNm: radiusNm,
+  };
+}
+
 function estimateDwt(message: VesselMessage) {
   const metadata = asRecord(message.MetaData);
   const direct = normalizeNumber(firstDefined(message.DWT, message.dwt, message.DWT_real, message.deadweight, metadata.DWT, metadata.dwt, metadata.DWT_real, metadata.deadweight));
@@ -219,11 +254,11 @@ function buildProjection(message: VesselMessage, target?: { role: string; lat: n
   const cog = normalizeNumber(firstDefined(message.course, message.COG, message.cog, metadata.course, metadata.COG, metadata.cog));
   if (lat === undefined || lon === undefined || cog === undefined || sog <= 0.2) return null;
 
-  const points = [24, 48, 72].map((hours) => {
+  const points = [PROJECTION_VECTOR_MINUTES / 60].map((hours) => {
     const point = projectPoint(lat, lon, cog, sog * hours);
-    return { hours, lat: point.lat, lon: point.lon };
+    return { hours, minutes: Math.round(hours * 60), lat: point.lat, lon: point.lon };
   });
-  const projection: Record<string, unknown> = { cog, sog, points };
+  const projection: Record<string, unknown> = { cog, sog, points, minutes: PROJECTION_VECTOR_MINUTES };
 
   if (target) {
     const distanceToTarget = haversineNm(lat, lon, target.lat, target.lon);
@@ -275,6 +310,8 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
   const selectedPolTarget = polLat !== undefined && polLon !== undefined
     ? { role: "POL", lat: polLat, lon: polLon, radiusNm: POL_VISUAL_RADIUS_NM }
     : null;
+  const routePol = polLat !== undefined && polLon !== undefined ? { lat: polLat, lon: polLon } : null;
+  const routePod = podLat !== undefined && podLon !== undefined ? { lat: podLat, lon: podLon } : null;
 
   return vessels
     .map(normalizeVesselMessage)
@@ -299,6 +336,8 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
 
       const nearestByDistance = pointDistances.sort((a, b) => a.distanceNm - b.distanceNm)[0] || activePoints[0];
       const nearestVisual = pointMatches.sort((a, b) => a.distanceNm - b.distanceNm)[0] || null;
+      const routeCorridor = routeCorridorMatch(lat, lon, routePol, routePod);
+      const insideRouteCorridor = !!routeCorridor?.inside;
       const projection = buildProjection(vessel, selectedPolTarget || nearestVisual || nearestByDistance);
       const distanceToPol = selectedPolTarget ? haversineNm(selectedPolTarget.lat, selectedPolTarget.lon, lat, lon) : null;
       const hoursToPolCircle = Number(projection?.distanceToRadiusNm ?? Infinity) / Math.max(Number(projection?.sog ?? 0), 0.1);
@@ -313,7 +352,6 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
         hoursToPolCircle < PROJECTION_LOOKAHEAD_HOURS
       );
 
-      if (activePoints.length > 0 && pointMatches.length === 0 && !isProjectionCandidate) return null;
       if (matchingMode && !isProjectionCandidate && (!nearestVisual || nearestVisual.role !== "POL")) {
         return null;
       }
@@ -322,6 +360,16 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
       }
 
       const nearest = nearestVisual || nearestByDistance;
+      const matchZone = isProjectionCandidate
+        ? "PROJECTION"
+        : nearestVisual?.role || (insideRouteCorridor ? "ROUTE" : "GLOBAL");
+      const priorityDistance = nearestVisual
+        ? Math.round(nearestVisual.distanceNm)
+        : insideRouteCorridor
+          ? Math.round(routeCorridor?.crossTrackNm ?? 0)
+          : nearestByDistance
+            ? Math.round(nearestByDistance.distanceNm)
+            : null;
       const imo = String(firstDefined(vessel.IMO, vessel.imo, metadata.IMO, "") || "").trim();
       const lastPort = String(firstDefined(vessel.lastPortOfCall, vessel.last_port_of_call, vessel.ultimo_puerto, metadata.lastPortOfCall, metadata.ultimo_puerto, "") || "").trim() || "N/A";
       const aisEta = normalizeEta(vessel, nearest);
@@ -341,12 +389,13 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
         etaDesfase: driftHours !== null && driftHours > 6,
         projection,
         projectionCandidate: isProjectionCandidate,
-        aisMarkerStyle: isProjectionCandidate ? "ghost" : "solid",
+        aisMarkerStyle: matchZone === "GLOBAL" ? "standard" : (isProjectionCandidate ? "ghost" : "focus"),
+        aisRouteCorridor: routeCorridor || undefined,
         lastPortOfCall: lastPort,
         last_port_of_call: lastPort,
         ultimo_puerto: lastPort,
-        matchZone: isProjectionCandidate ? "PROJECTION" : nearest?.role || "ROUTE",
-        distanceNm: nearest ? Math.round(nearest.distanceNm) : null,
+        matchZone,
+        distanceNm: priorityDistance,
         MetaData: {
           ...metadata,
           IMO: imo || "N/A",
@@ -360,11 +409,12 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
           etaDesfase: driftHours !== null && driftHours > 6,
           projection,
           projectionCandidate: isProjectionCandidate,
-          aisMarkerStyle: isProjectionCandidate ? "ghost" : "solid",
+          aisMarkerStyle: matchZone === "GLOBAL" ? "standard" : (isProjectionCandidate ? "ghost" : "focus"),
+          aisRouteCorridor: routeCorridor || undefined,
           lastPortOfCall: lastPort,
           ultimo_puerto: lastPort,
-          matchZone: isProjectionCandidate ? "PROJECTION" : nearest?.role || "ROUTE",
-          distanceNm: nearest ? Math.round(nearest.distanceNm) : null,
+          matchZone,
+          distanceNm: priorityDistance,
         },
       };
       return enriched;

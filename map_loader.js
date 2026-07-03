@@ -961,7 +961,7 @@
         const normalizedPol = polName ? String(polName).toUpperCase().trim() : "";
         const normalizedPod = podName ? String(podName).toUpperCase().trim() : "";
         const radarZone = String(vessel.aisRadarZone || (vessel.MetaData && vessel.MetaData.aisRadarZone) || "").toUpperCase();
-        const radarColor = vessel.aisRadarColor || (radarZone === "POL" ? "#16a34a" : (radarZone === "POD" ? "#2563eb" : ""));
+        const radarColor = vessel.aisRadarColor || (radarZone === "POL" ? "#16a34a" : (radarZone === "POD" ? "#2563eb" : (radarZone === "ROUTE" ? "#3b82f6" : (radarZone === "GLOBAL" ? "#64748b" : ""))));
         const isProjectionCandidate = !!(vessel.projectionCandidate || vessel.aisMarkerStyle === "ghost" || (vessel.MetaData && (vessel.MetaData.projectionCandidate || vessel.MetaData.aisMarkerStyle === "ghost")));
         const isKeyPort = !!(
             (normalizedPol && destination.includes(normalizedPol)) ||
@@ -978,6 +978,12 @@
         } else if (radarZone === "POD") {
             iconClass = "fa-ship";
             iconColor = "#2563eb";
+        } else if (radarZone === "ROUTE") {
+            iconClass = "fa-ship";
+            iconColor = "#3b82f6";
+        } else if (radarZone === "GLOBAL") {
+            iconClass = "fa-ship";
+            iconColor = "#64748b";
         } else if (isKeyPort) {
             iconClass = "fa-flag";
             iconColor = "#ef4444";
