@@ -97,6 +97,12 @@ function normalizeNumber(value: unknown) {
   return Number.isFinite(numberValue) ? numberValue : undefined;
 }
 
+function normalizeDestination(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text || text.toUpperCase() === "NOT AVAILABLE" || text.toUpperCase() === "N/A") return null;
+  return text;
+}
+
 function textParam(url: URL, names: string[], fallback = "") {
   for (const name of names) {
     const value = url.searchParams.get(name);
@@ -466,7 +472,7 @@ function normalizeVesselMessage(message: VesselMessage): VesselMessage {
   const speed = normalizeNumber(firstDefined(message.speed, metadata.speed, positionReport.Sog, positionReport.SOG));
   const course = normalizeNumber(firstDefined(message.course, message.COG, message.cog, metadata.course, metadata.COG, metadata.cog, positionReport.Cog, positionReport.COG, positionReport.Course));
   const navigationalStatus = firstDefined(message.NavigationalStatus, metadata.NavigationalStatus, positionReport.NavigationalStatus);
-  const destination = firstDefined(message.destination, message.Destination, message.destino_actual, metadata.Destination, metadata.destination, staticData.Destination, staticData.PortOfDestination);
+  const destination = normalizeDestination(firstDefined(message.destination, message.Destination, message.destino_actual, metadata.Destination, metadata.destination, staticData.Destination, staticData.PortOfDestination));
   const lastPortOfCall = firstDefined(
     message.lastPortOfCall,
     message.last_port_of_call,
@@ -526,7 +532,7 @@ function normalizeVesselMessage(message: VesselMessage): VesselMessage {
       course: firstDefined(metadata.course, course),
       COG: firstDefined(metadata.COG, course),
       NavigationalStatus: firstDefined(metadata.NavigationalStatus, navigationalStatus),
-      Destination: firstDefined(metadata.Destination, destination),
+      Destination: destination,
       lastPortOfCall: firstDefined(metadata.lastPortOfCall, lastPortOfCall),
       ultimo_puerto: firstDefined(metadata.ultimo_puerto, lastPortOfCall),
     },
@@ -556,7 +562,7 @@ function toVesselRecord(message: VesselMessage): VesselRecord | null {
     course: normalizeNumber(firstDefined(normalized.course, normalized.COG, metadata.course)) ?? null,
     heading: normalizeNumber(firstDefined(normalized.heading, normalized.TrueHeading, metadata.heading)) ?? null,
     navigationalStatus: String(firstDefined(normalized.NavigationalStatus, metadata.NavigationalStatus, "") || "").trim() || null,
-    destination: String(firstDefined(normalized.destination, normalized.Destination, metadata.Destination, "") || "").trim() || null,
+    destination: normalizeDestination(firstDefined(normalized.destination, normalized.Destination, metadata.Destination, "")),
     lastPortOfCall: String(firstDefined(normalized.lastPortOfCall, normalized.last_port_of_call, normalized.ultimo_puerto, metadata.lastPortOfCall, metadata.ultimo_puerto, "") || "").trim() || null,
     eta: String(firstDefined(normalized.eta, normalized.ETA, metadata.ETA, "") || "").trim() || null,
     source: "AISStream",

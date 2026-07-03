@@ -48,19 +48,25 @@ export async function upsertVessels(rows: VesselRecord[]): Promise<VesselRecord[
   if (rows.length === 0) return readVessels();
 
   const existing = await readVessels();
-  const byImo = new Map(existing.map((row) => [row.imoNumber, row]));
+  const byKey = new Map(existing.map((row) => [row.mmsi || row.imoNumber, row]));
 
   for (const row of rows) {
-    const previous = byImo.get(row.imoNumber);
-    byImo.set(row.imoNumber, {
+    const key = row.mmsi || row.imoNumber;
+    const previous = byKey.get(key);
+    const incomingHasImo = row.imoNumber && !row.imoNumber.startsWith("MMSI-");
+    const previousHasImo = previous?.imoNumber && !previous.imoNumber.startsWith("MMSI-");
+    byKey.set(key, {
       ...previous,
       ...row,
+      imoNumber: incomingHasImo ? row.imoNumber : (previousHasImo ? previous.imoNumber : row.imoNumber),
+      destination: row.destination || previous?.destination || null,
+      eta: row.eta || previous?.eta || null,
       createdAt: previous?.createdAt || row.createdAt,
       updatedAt: new Date().toISOString(),
     });
   }
 
-  const nextRows = Array.from(byImo.values())
+  const nextRows = Array.from(byKey.values())
     .sort((a, b) => Date.parse(b.lastSeenAt) - Date.parse(a.lastSeenAt));
 
   await getVesselStore().setJSON(VESSELS_KEY, nextRows);

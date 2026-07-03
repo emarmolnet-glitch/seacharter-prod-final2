@@ -29,7 +29,9 @@ function toText(value: unknown): string | null {
 }
 
 function readPortText(source: Record<string, unknown>, keys: string[]): string | null {
-  return toText(readNested(source, keys));
+  const text = toText(readNested(source, keys));
+  if (!text || text.toUpperCase() === "NOT AVAILABLE" || text.toUpperCase() === "N/A") return null;
+  return text;
 }
 
 function getRealData(payload: unknown): unknown[] {
