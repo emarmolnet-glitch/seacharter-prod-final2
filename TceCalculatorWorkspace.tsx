@@ -17,6 +17,9 @@ type ReverseCalculatorState = {
   euaPrice: number;
   etsCoverage: number;
   opexDaily: number;
+  contractShipments: number;
+  ownerMarginPercent: number;
+  chartererMarginPercent: number;
 };
 
 type SyncedCostData = Partial<Pick<
@@ -100,6 +103,9 @@ const DEFAULT_VALUES: ReverseCalculatorState = {
   euaPrice: 75.5,
   etsCoverage: 0.5,
   opexDaily: 2800,
+  contractShipments: 6,
+  ownerMarginPercent: 15,
+  chartererMarginPercent: 10,
 };
 
 const COST_PLUS_DEFAULT_VALUES: CostPlusCalculatorState = {
@@ -131,6 +137,9 @@ const INPUTS: Array<{
   { key: 'euaPrice', label: 'Precio EUA', suffix: 'USD/t', step: '0.01' },
   { key: 'etsCoverage', label: 'Cobertura ETS', suffix: 'factor', step: '0.5' },
   { key: 'opexDaily', label: 'OPEX fijo diario', suffix: 'USD/día' },
+  { key: 'contractShipments', label: 'Número de embarques COA', suffix: 'viajes', step: '1' },
+  { key: 'ownerMarginPercent', label: 'Margen armador', suffix: '%' },
+  { key: 'chartererMarginPercent', label: 'Margen fletador', suffix: '%' },
 ];
 
 const SYNCED_REVERSE_FIELDS = new Set<keyof ReverseCalculatorState>([
@@ -150,8 +159,6 @@ const SYNCED_REVERSE_FIELDS = new Set<keyof ReverseCalculatorState>([
 
 const FEARNLEYS_MARKET_DATA_KEY = 'fearnleysMarketData';
 const BUNKER_INDEX_DATA_KEY = 'bunkerIndexData';
-const OWNER_MARGIN_PERCENT = 15;
-const CHARTERER_MARGIN_PERCENT = 10;
 const DEMURRAGE_TCE_MULTIPLIER = 1.25;
 const BUNKER_INDEX_ADJUSTMENT_SHARE = 0.5;
 const BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT = 5;
@@ -417,6 +424,9 @@ export function ReverseTceCalculator({
     const euaPrice = safeNumber(values.euaPrice);
     const etsCoverage = safeNumber(values.etsCoverage);
     const opexDaily = safeNumber(values.opexDaily);
+    const contractShipments = Math.max(1, Math.round(safeNumber(values.contractShipments)));
+    const ownerMarginPercent = safeNumber(values.ownerMarginPercent);
+    const chartererMarginPercent = safeNumber(values.chartererMarginPercent);
     const totalDays = daysSea + daysPort;
     const etsTotalCost = totalCo2Emissions * euaPrice * etsCoverage;
     const marketBunkerIndexPrice = getAverageBunkerIndexPrice({
@@ -439,10 +449,12 @@ export function ReverseTceCalculator({
       const scenarioSeaFuelCost = daysSea * safeNumber(values.seaFuelConsumption) * scenarioSeaFuelPrice;
       const scenarioPortFuelCost = daysPort * safeNumber(values.portFuelConsumption) * scenarioMgoPrice;
       const scenarioBunkerCost = scenarioSeaFuelCost + scenarioPortFuelCost;
-      const scenarioTotalCost = (tceTarget * totalDays) + scenarioBunkerCost + portCosts + etsTotalCost;
-      const breakEvenAverage = cargoVolume > 0 ? scenarioTotalCost / cargoVolume : 0;
-      const fairFreight = breakEvenAverage * (1 + OWNER_MARGIN_PERCENT / 100);
-      const targetPriceBeforeIndexation = fairFreight * (1 + CHARTERER_MARGIN_PERCENT / 100);
+      const scenarioVoyageCost = (tceTarget * totalDays) + scenarioBunkerCost + portCosts + etsTotalCost;
+      const scenarioContractCost = scenarioVoyageCost * contractShipments;
+      const weightedAverageVoyageCost = scenarioContractCost / contractShipments;
+      const breakEvenAverage = cargoVolume > 0 ? weightedAverageVoyageCost / cargoVolume : 0;
+      const fairFreight = breakEvenAverage * (1 + ownerMarginPercent / 100);
+      const targetPriceBeforeIndexation = fairFreight * (1 + chartererMarginPercent / 100);
       const indexedTargetPrice = targetPriceBeforeIndexation * (1 + sharedBunkerAdjustmentPct / 100);
 
       return {
@@ -450,7 +462,10 @@ export function ReverseTceCalculator({
         bunkerMultiplier,
         bunkerIndexPrice: marketBunkerIndexPrice * bunkerMultiplier,
         bunkerCost: scenarioBunkerCost,
-        totalCost: scenarioTotalCost,
+        voyageCost: scenarioVoyageCost,
+        contractCost: scenarioContractCost,
+        weightedAverageVoyageCost,
+        totalCost: scenarioContractCost,
         breakEvenAverage,
         fairFreight,
         targetPriceBeforeIndexation,
@@ -468,7 +483,7 @@ export function ReverseTceCalculator({
     const bunkerCost = scenarios[1].bunkerCost;
     const bunkerDailyPortCost = daysPort > 0 ? portFuelCost / daysPort : safeNumber(values.bunkerDailyPortCost);
     const etsCostPerMt = cargoVolume > 0 ? etsTotalCost / cargoVolume : 0;
-    const targetRevenue = scenarios[1].totalCost;
+    const targetRevenue = scenarios[1].weightedAverageVoyageCost;
     const minFreightRate = cargoVolume > 0 ? targetRevenue / cargoVolume : 0;
     const suggestedOwnerSale = pessimisticScenario.fairFreight;
     const suggestedChartererSale = pessimisticScenario.targetPrice;
@@ -514,6 +529,9 @@ export function ReverseTceCalculator({
       netProfitTotal,
       netProfitDaily,
       opexDaily,
+      contractShipments,
+      ownerMarginPercent,
+      chartererMarginPercent,
       seaFuelStrategyLabel: hasScrubber
         ? 'Optimizado con IFO 380 (Scrubber Activo)'
         : 'Combustible estándar: VLSFO',
@@ -678,6 +696,9 @@ export function ReverseTceCalculator({
           applyBunkerIndexAdjustment,
           variationThresholdPercent: BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT,
           sharedAdjustmentFactor: BUNKER_INDEX_ADJUSTMENT_SHARE,
+          contractShipments: results.contractShipments,
+          ownerMarginPercent: results.ownerMarginPercent,
+          chartererMarginPercent: results.chartererMarginPercent,
           bunkerVariationPct: results.bunkerVariationPct,
           sharedBunkerAdjustmentPct: results.sharedBunkerAdjustmentPct,
           scenarios: results.scenarios,
@@ -976,7 +997,7 @@ export function ReverseTceCalculator({
                         {currencyFormatter.format(results.suggestedChartererSale)} /MT
                       </p>
                       <p className="mt-1 text-xs font-bold text-slate-500">
-                        Basado en Coste Promedio Ponderado COA, escenario pesimista y márgenes {OWNER_MARGIN_PERCENT}% / {CHARTERER_MARGIN_PERCENT}%.
+                        Basado en Coste Promedio Ponderado COA, escenario pesimista y márgenes {results.ownerMarginPercent}% / {results.chartererMarginPercent}%.
                       </p>
                       {results.shouldApplyBunkerAdjustment ? (
                         <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-black text-amber-800">
@@ -1012,14 +1033,14 @@ export function ReverseTceCalculator({
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="text-[11px] font-black uppercase text-blue-900">Flete Sugerido Armador (Compra)</p>
-                              <p className="text-xs font-bold text-slate-500">Flete mínimo × (1 + {OWNER_MARGIN_PERCENT}%)</p>
+                              <p className="text-xs font-bold text-slate-500">Break-even promedio × (1 + {results.ownerMarginPercent}%)</p>
                             </div>
                             <p className="font-black text-blue-900">{currencyFormatter.format(results.suggestedOwnerSale)} /MT</p>
                           </div>
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="text-[11px] font-black uppercase text-emerald-700">Venta Sugerida Fletador</p>
-                              <p className="text-xs font-bold text-slate-500">Compra armador × (1 + {CHARTERER_MARGIN_PERCENT}%)</p>
+                              <p className="text-xs font-bold text-slate-500">Compra armador × (1 + {results.chartererMarginPercent}%)</p>
                             </div>
                             <p className="font-black text-emerald-700">{currencyFormatter.format(results.suggestedChartererSale)} /MT</p>
                           </div>
@@ -1057,7 +1078,7 @@ export function ReverseTceCalculator({
                         </div>
                         <div className="mt-1 flex items-center justify-between gap-3 font-semibold text-slate-500">
                           <span>Break-even ponderado {currencyFormatter.format(scenario.breakEvenAverage)} /MT</span>
-                          <span>Bunker {wholeCurrencyFormatter.format(scenario.bunkerCost)}</span>
+                          <span>{results.contractShipments} embarques · Bunker/viaje {wholeCurrencyFormatter.format(scenario.bunkerCost)}</span>
                         </div>
                       </div>
                     ))}
@@ -1168,6 +1189,10 @@ export function ReverseTceCalculator({
                     <dd className="mt-1 font-black text-slate-950">
                       {wholeCurrencyFormatter.format(results.targetRevenue)}
                     </dd>
+                  </div>
+                  <div>
+                    <dt className="font-bold uppercase text-teal-800">Embarques COA</dt>
+                    <dd className="mt-1 font-black text-slate-950">{results.contractShipments}</dd>
                   </div>
                 </dl>
 
