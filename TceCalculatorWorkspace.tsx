@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 type ReverseCalculatorState = {
   tceTarget: number | '';
@@ -75,6 +75,7 @@ type ReverseTceCalculatorProps = {
   impactoRiesgo?: number;
   riesgoDias?: number;
   laycanDate?: string;
+  refreshSignal?: number;
 };
 
 type NavigationStrategy = 'eco' | 'full';
@@ -88,6 +89,7 @@ type CostPlusCalculatorProps = Pick<
   'cargoVolume' | 'daysSea' | 'daysPort' | 'syncedCostData'
 > & {
   currentMode?: VesselCalculationMode;
+  refreshSignal?: number;
 };
 
 type VesselCalculationMode = 'Cost-Plus' | 'TCE Inverso';
@@ -282,28 +284,36 @@ function roundMoney(value: number) {
   return Number(safeNumber(value).toFixed(2));
 }
 
-function calculateCostPlusResults(values: CostPlusCalculatorState) {
-  const dailyOpex = safeNumber(values.dailyOpex);
-  const targetMargin = safeNumber(values.targetMargin);
-  const daysSea = safeNumber(values.daysSea);
-  const daysPort = safeNumber(values.daysPort);
-  const bunkerCost = safeNumber(values.bunkerCost);
-  const portCosts = safeNumber(values.portCosts);
-  const cargoVolume = safeNumber(values.cargoVolume);
+export function calculateCoreFreight(
+  values: ReverseCalculatorState | CostPlusCalculatorState,
+  options: { bunkerMultiplier?: number } = {},
+) {
+  if ('marginType' in values) {
+    const dailyOpex = safeNumber(values.dailyOpex);
+    const targetMargin = safeNumber(values.targetMargin);
+    const daysSea = safeNumber(values.daysSea);
+    const daysPort = safeNumber(values.daysPort);
+    const bunkerCost = safeNumber(values.bunkerCost);
+    const portCosts = safeNumber(values.portCosts);
+    const cargoVolume = safeNumber(values.cargoVolume);
+    const totalDays = daysSea + daysPort;
+    const totalOpex = dailyOpex * totalDays;
+    const totalCosts = totalOpex + bunkerCost + portCosts;
+    const calculatedMargin =
+      values.marginType === 'fixed' ? targetMargin : totalCosts * (targetMargin / 100);
+    const targetRevenue = totalCosts + calculatedMargin;
+    const minFreightRate = cargoVolume > 0 ? roundMoney(totalCosts / cargoVolume) : 0;
 
-  const totalDays = daysSea + daysPort;
-  const totalOpex = dailyOpex * totalDays;
-  const totalCosts = totalOpex + bunkerCost + portCosts;
-  const calculatedMargin =
-    values.marginType === 'fixed' ? targetMargin : totalCosts * (targetMargin / 100);
-  const targetRevenue = totalCosts + calculatedMargin;
-  const minFreightRate = cargoVolume > 0 ? roundMoney(totalCosts / cargoVolume) : 0;
-  const demurrageRate = roundMoney(dailyOpex * 1.25);
+    return {
+      totalDays,
+      totalOpex,
+      totalCosts,
+      calculatedMargin,
+      targetRevenue,
+      minFreightRate,
+    };
+  }
 
-  return { totalDays, totalOpex, totalCosts, calculatedMargin, targetRevenue, minFreightRate, demurrageRate };
-}
-
-function calculateReverseTceResults(values: ReverseCalculatorState) {
   const daysSea = safeNumber(values.daysSea);
   const daysPort = safeNumber(values.daysPort);
   const tceTarget = safeNumber(values.tceTarget);
@@ -318,12 +328,53 @@ function calculateReverseTceResults(values: ReverseCalculatorState) {
   const totalCo2Emissions = safeNumber(values.totalCo2Emissions);
   const euaPrice = safeNumber(values.euaPrice);
   const etsCoverage = safeNumber(values.etsCoverage);
+  const bunkerMultiplier = safeNumber(options.bunkerMultiplier) || 1;
+  const totalDays = daysSea + daysPort;
+  const etsTotalCost = totalCo2Emissions * euaPrice * etsCoverage;
+  const seaFuelCost = daysSea * seaFuelConsumption * activeSeaFuelPrice * bunkerMultiplier;
+  const portFuelCost = daysPort * portFuelConsumption * mgoPrice * bunkerMultiplier;
+  const bunkerCost = seaFuelCost + portFuelCost;
+  const totalCosts = (tceTarget * totalDays) + bunkerCost + portCosts + etsTotalCost;
+  const minFreightRate = cargoVolume > 0 ? roundMoney(totalCosts / cargoVolume) : 0;
+
+  return {
+    totalDays,
+    totalOpex: 0,
+    totalCosts,
+    calculatedMargin: 0,
+    targetRevenue: totalCosts,
+    minFreightRate,
+    etsTotalCost,
+    seaFuelCost,
+    portFuelCost,
+    bunkerCost,
+    activeSeaFuelPrice,
+  };
+}
+
+function calculateCostPlusResults(values: CostPlusCalculatorState) {
+  const dailyOpex = safeNumber(values.dailyOpex);
+  const coreFreight = calculateCoreFreight(values);
+  const demurrageRate = roundMoney(dailyOpex * 1.25);
+
+  return { ...coreFreight, demurrageRate };
+}
+
+function calculateReverseTceResults(values: ReverseCalculatorState) {
+  const daysSea = safeNumber(values.daysSea);
+  const daysPort = safeNumber(values.daysPort);
+  const tceTarget = safeNumber(values.tceTarget);
+  const vlsfoPrice = safeNumber(values.vlsfoPrice);
+  const ifoPrice = safeNumber(values.ifoPrice);
+  const mgoPrice = safeNumber(values.mgoPrice);
+  const cargoVolume = safeNumber(values.cargoVolume);
   const opexDaily = safeNumber(values.opexDaily);
   const contractShipments = Math.max(1, Math.round(safeNumber(values.contractShipments)));
   const ownerMarginPercent = safeNumber(values.ownerMarginPercent);
   const chartererMarginPercent = safeNumber(values.chartererMarginPercent);
-  const totalDays = daysSea + daysPort;
-  const etsTotalCost = totalCo2Emissions * euaPrice * etsCoverage;
+  const coreFreight = calculateCoreFreight(values);
+  const totalDays = coreFreight.totalDays;
+  const etsTotalCost = coreFreight.etsTotalCost ?? 0;
   const marketBunkerIndexPrice = getAverageBunkerIndexPrice({
     vlsfo: vlsfoPrice,
     ifo380: ifoPrice,
@@ -339,12 +390,9 @@ function calculateReverseTceResults(values: ReverseCalculatorState) {
     ? bunkerVariationPct * BUNKER_INDEX_ADJUSTMENT_SHARE
     : 0;
   const calculateScenario = (label: 'Optimista -10%' | 'Base BunkerIndex' | 'Pesimista +10%', bunkerMultiplier: number) => {
-    const scenarioSeaFuelPrice = activeSeaFuelPrice * bunkerMultiplier;
-    const scenarioMgoPrice = mgoPrice * bunkerMultiplier;
-    const scenarioSeaFuelCost = daysSea * seaFuelConsumption * scenarioSeaFuelPrice;
-    const scenarioPortFuelCost = daysPort * portFuelConsumption * scenarioMgoPrice;
-    const scenarioBunkerCost = scenarioSeaFuelCost + scenarioPortFuelCost;
-    const scenarioVoyageCost = (tceTarget * totalDays) + scenarioBunkerCost + portCosts + etsTotalCost;
+    const scenarioCoreFreight = calculateCoreFreight(values, { bunkerMultiplier });
+    const scenarioBunkerCost = scenarioCoreFreight.bunkerCost ?? 0;
+    const scenarioVoyageCost = scenarioCoreFreight.totalCosts;
     const scenarioContractCost = scenarioVoyageCost * contractShipments;
     const weightedAverageVoyageCost = scenarioContractCost / contractShipments;
     const breakEvenAverage = cargoVolume > 0 ? weightedAverageVoyageCost / cargoVolume : 0;
@@ -372,13 +420,13 @@ function calculateReverseTceResults(values: ReverseCalculatorState) {
     calculateScenario('Base BunkerIndex', 1),
     calculateScenario('Pesimista +10%', 1.1),
   ];
-  const seaFuelCost = scenarios[1].bunkerCost - (daysPort * portFuelConsumption * mgoPrice);
-  const portFuelCost = daysPort * portFuelConsumption * mgoPrice;
-  const bunkerCost = scenarios[1].bunkerCost;
+  const seaFuelCost = coreFreight.seaFuelCost ?? 0;
+  const portFuelCost = coreFreight.portFuelCost ?? 0;
+  const bunkerCost = coreFreight.bunkerCost ?? 0;
   const bunkerDailyPortCost = daysPort > 0 ? portFuelCost / daysPort : safeNumber(values.bunkerDailyPortCost);
   const etsCostPerMt = cargoVolume > 0 ? etsTotalCost / cargoVolume : 0;
-  const targetRevenue = scenarios[1].weightedAverageVoyageCost;
-  const minFreightRate = cargoVolume > 0 ? roundMoney(targetRevenue / cargoVolume) : 0;
+  const targetRevenue = coreFreight.targetRevenue;
+  const minFreightRate = coreFreight.minFreightRate;
   const suggestedOwnerSale = roundMoney(minFreightRate * (1 + ownerMarginPercent / 100));
   const suggestedChartererSale = roundMoney(suggestedOwnerSale * (1 + chartererMarginPercent / 100));
   const isSuggestedSaleBelowTceTarget = suggestedOwnerSale < minFreightRate || suggestedChartererSale < minFreightRate;
@@ -417,7 +465,7 @@ function calculateReverseTceResults(values: ReverseCalculatorState) {
     bunkerCost,
     seaFuelCost,
     portFuelCost,
-    activeSeaFuelPrice,
+    activeSeaFuelPrice: coreFreight.activeSeaFuelPrice ?? 0,
     bunkerDailyPortCost,
     tceTotal,
     tceDaily: totalDays > 0 ? tceTotal / totalDays : 0,
@@ -501,6 +549,17 @@ function LockIcon({ open = false }: { open?: boolean }) {
   );
 }
 
+function RefreshIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12a9 9 0 0 1-15.3 6.4" />
+      <path d="M3 12A9 9 0 0 1 18.3 5.6" />
+      <path d="M18 2v4h-4" />
+      <path d="M6 22v-4h4" />
+    </svg>
+  );
+}
+
 export function ReverseTceCalculator({
   cargoVolume,
   daysSea,
@@ -512,6 +571,7 @@ export function ReverseTceCalculator({
   impactoRiesgo = 0,
   riesgoDias = 0,
   laycanDate = '',
+  refreshSignal = 0,
 }: ReverseTceCalculatorProps) {
   const [isPurchaseDetailsOpen, setIsPurchaseDetailsOpen] = useState(false);
   const [values, setValues] = useState<ReverseCalculatorState>(DEFAULT_VALUES);
@@ -529,22 +589,18 @@ export function ReverseTceCalculator({
   const [applyBunkerIndexAdjustment, setApplyBunkerIndexAdjustment] = useState(true);
   const [contractBunkerIndexBase, setContractBunkerIndexBase] = useState(0);
   const [saveStatus, setSaveStatus] = useState('');
+  const [renderRefreshTick, setRenderRefreshTick] = useState(0);
   const etaBaseRadar = laycanDate || '';
 
-  const syncFromSectionData = () => {
+  const getSyncedValues = (current: ReverseCalculatorState) => {
     const strategy = NAVIGATION_STRATEGIES[navigationStrategy];
-    const sourceSeaConsumption = Number.isFinite(Number(syncedCostData?.seaFuelConsumption))
-      ? Number(syncedCostData?.seaFuelConsumption)
-      : DEFAULT_VALUES.seaFuelConsumption;
-    const sourceDaysSea = Number.isFinite(Number(daysSea)) ? Number(daysSea) : values.daysSea;
-    const sourceDaysPort = Number.isFinite(Number(daysPort)) ? Number(daysPort) : values.daysPort;
-    const sourceCargoVolume = Number.isFinite(Number(cargoVolume)) ? Number(cargoVolume) : values.cargoVolume;
-
-    setValues((current) => ({
+    return {
       ...current,
-      cargoVolume: sourceCargoVolume,
-      daysSea: Number((sourceDaysSea * strategy.daysSeaFactor).toFixed(2)),
-      daysPort: sourceDaysPort,
+      cargoVolume: Number.isFinite(Number(cargoVolume)) ? Number(cargoVolume) : current.cargoVolume,
+      daysSea: Number((
+        (Number.isFinite(Number(daysSea)) ? Number(daysSea) : current.daysSea) * strategy.daysSeaFactor
+      ).toFixed(2)),
+      daysPort: Number.isFinite(Number(daysPort)) ? Number(daysPort) : current.daysPort,
       hasScrubber,
       laycanDiasLibres,
       impactoRiesgo,
@@ -552,8 +608,16 @@ export function ReverseTceCalculator({
       applyBunkerIndexAdjustment,
       contractBunkerIndexBase,
       ...syncedCostData,
-      seaFuelConsumption: Number((sourceSeaConsumption * strategy.seaConsumptionFactor).toFixed(2)),
-    }));
+      seaFuelConsumption: Number((
+        (Number.isFinite(Number(syncedCostData?.seaFuelConsumption))
+          ? Number(syncedCostData?.seaFuelConsumption)
+          : current.seaFuelConsumption) * strategy.seaConsumptionFactor
+      ).toFixed(2)),
+    };
+  };
+
+  const syncFromSectionData = () => {
+    setValues((current) => getSyncedValues(current));
 
     if (Number.isFinite(Number(syncedCostData?.vlsfoPrice))) {
       setVlsfoPrice(Number(syncedCostData?.vlsfoPrice));
@@ -565,6 +629,31 @@ export function ReverseTceCalculator({
       setMgoPrice(Number(syncedCostData?.mgoPrice));
     }
   };
+
+  const forceRefresh = () => {
+    setValues((current) => {
+      const nextValues = isSyncEnabled ? getSyncedValues(current) : { ...current };
+      calculateCoreFreight(nextValues);
+      return nextValues;
+    });
+    setRenderRefreshTick((current) => current + 1);
+
+    if (Number.isFinite(Number(syncedCostData?.vlsfoPrice))) {
+      setVlsfoPrice(Number(syncedCostData?.vlsfoPrice));
+    }
+    if (Number.isFinite(Number(syncedCostData?.ifoPrice))) {
+      setIfoPrice(Number(syncedCostData?.ifoPrice));
+    }
+    if (Number.isFinite(Number(syncedCostData?.mgoPrice))) {
+      setMgoPrice(Number(syncedCostData?.mgoPrice));
+    }
+  };
+
+  useEffect(() => {
+    if (refreshSignal > 0) {
+      forceRefresh();
+    }
+  }, [refreshSignal]);
 
   useEffect(() => {
     if (isSyncEnabled) {
@@ -651,7 +740,7 @@ export function ReverseTceCalculator({
     }
   }, []);
 
-  const results = useMemo(() => calculateReverseTceResults(values), [values]);
+  const results = useMemo(() => calculateReverseTceResults(values), [values, renderRefreshTick]);
 
   const updateValue = (key: keyof ReverseCalculatorState, nextValue: string) => {
     if (isSyncEnabled && SYNCED_REVERSE_FIELDS.has(key)) {
@@ -864,6 +953,15 @@ export function ReverseTceCalculator({
                   >
                     <LockIcon open={!isSyncEnabled} />
                     {isSyncEnabled ? 'Auto sincronizado' : 'Ajuste manual'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={forceRefresh}
+                    className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-wide text-slate-700 shadow-sm transition hover:border-teal-400 hover:bg-teal-50 hover:text-teal-900"
+                    title="Reinicializar valores, recalcular flete central y repintar resultados"
+                  >
+                    <RefreshIcon />
+                    Actualizar Cálculos
                   </button>
                 </div>
                 <p className="mt-1 text-sm text-slate-500">
@@ -1101,11 +1199,20 @@ export function ReverseTceCalculator({
                       <p className="text-[11px] font-black uppercase text-slate-500">
                         Venta Sugerida Fletador (Target Price)
                       </p>
-                      <p className={`text-2xl font-black ${results.isSuggestedSaleBelowTceTarget ? 'text-red-700' : 'text-emerald-700'}`}>
-                        {currencyFormatter.format(results.suggestedChartererSale)} /MT
-                      </p>
+                      <input
+                        type="number"
+                        readOnly
+                        value={results.minFreightRate}
+                        aria-label="Venta Sugerida Fletador"
+                        className={`mt-1 w-full rounded-md border bg-white px-3 py-2 text-2xl font-black outline-none ${
+                          results.isSuggestedSaleBelowTceTarget
+                            ? 'border-red-200 text-red-700'
+                            : 'border-emerald-200 text-emerald-700'
+                        }`}
+                      />
+                      <p className="mt-1 text-xs font-bold text-slate-500">USD / MT</p>
                       <p className="mt-1 text-xs font-bold text-slate-500">
-                        Basado en flete mínimo calculado y márgenes {results.ownerMarginPercent}% / {results.chartererMarginPercent}%.
+                        Basado en el flete mínimo del motor central.
                       </p>
                       {results.shouldApplyBunkerAdjustment ? (
                         <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-black text-amber-800">
@@ -1311,10 +1418,12 @@ export function CostPlusCalculator({
   daysPort,
   syncedCostData,
   currentMode = 'Cost-Plus',
+  refreshSignal = 0,
 }: CostPlusCalculatorProps) {
   const [values, setValues] = useState<CostPlusCalculatorState>(COST_PLUS_DEFAULT_VALUES);
+  const [renderRefreshTick, setRenderRefreshTick] = useState(0);
 
-  const results = useMemo(() => calculateCostPlusResults(values), [values]);
+  const results = useMemo(() => calculateCostPlusResults(values), [values, renderRefreshTick]);
 
   const routeSyncData = useMemo(() => {
     const routeDaysSea = safeNumber(daysSea);
@@ -1353,6 +1462,17 @@ export function CostPlusCalculator({
     return nextValues;
   }, [currentMode, cargoVolume, daysSea, daysPort, syncedCostData]);
 
+  useEffect(() => {
+    if (!routeSyncData) {
+      return;
+    }
+
+    setValues((current) => ({
+      ...current,
+      ...routeSyncData,
+    }));
+  }, [routeSyncData]);
+
   const updateNumber = (key: CostPlusNumericField, nextValue: string) => {
     setValues((current) => ({
       ...current,
@@ -1370,6 +1490,24 @@ export function CostPlusCalculator({
       ...routeSyncData,
     }));
   };
+
+  const forceRefresh = () => {
+    setValues((current) => {
+      const nextValues = {
+        ...current,
+        ...(routeSyncData || {}),
+      };
+      calculateCoreFreight(nextValues);
+      return nextValues;
+    });
+    setRenderRefreshTick((current) => current + 1);
+  };
+
+  useEffect(() => {
+    if (refreshSignal > 0) {
+      forceRefresh();
+    }
+  }, [refreshSignal]);
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]">
@@ -1391,6 +1529,15 @@ export function CostPlusCalculator({
               className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-wide text-amber-800 shadow-sm transition hover:border-amber-500 hover:bg-amber-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
             >
               Sincronizar con Ruta
+            </button>
+            <button
+              type="button"
+              onClick={forceRefresh}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-wide text-slate-700 shadow-sm transition hover:border-amber-400 hover:bg-amber-50 hover:text-amber-900"
+              title="Reinicializar valores, recalcular flete central y repintar resultados"
+            >
+              <RefreshIcon />
+              Actualizar Cálculos
             </button>
             <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-800">
               Modo Coaster: Cálculo Cost-Plus (OPEX)
@@ -1492,6 +1639,8 @@ export function VesselPricingRouter({
 }: VesselPricingRouterProps) {
   const [localDwt, setLocalDwt] = useState(vesselDwt);
   const [hasScrubber, setHasScrubber] = useState(false);
+  const [calculationRefreshSignal, setCalculationRefreshSignal] = useState(0);
+  const previousModeRef = useRef<VesselCalculationMode | null>(null);
 
   useEffect(() => {
     setLocalDwt(vesselDwt);
@@ -1501,6 +1650,23 @@ export function VesselPricingRouter({
   const vesselClass = getVesselClass(activeDwt);
   const currentMode = vesselClass.type;
   const isReverseTceMode = currentMode === 'TCE Inverso';
+
+  const forceRefresh = () => {
+    setCalculationRefreshSignal((current) => current + 1);
+  };
+
+  useEffect(() => {
+    if (previousModeRef.current === null) {
+      previousModeRef.current = currentMode;
+      return;
+    }
+
+    if (previousModeRef.current !== currentMode) {
+      previousModeRef.current = currentMode;
+      forceRefresh();
+    }
+  }, [currentMode]);
+
   const activeTiming = useMemo(() => {
     const sourceDaysSea = safeNumber(daysSea);
     const sourceDaysPort = safeNumber(daysPort);
@@ -1559,6 +1725,15 @@ export function VesselPricingRouter({
           />
           <span className="relative h-6 w-11 rounded-full bg-slate-300 transition peer-checked:bg-emerald-500 after:absolute after:left-1 after:top-1 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition peer-checked:after:translate-x-5" />
         </label>
+        <button
+          type="button"
+          onClick={forceRefresh}
+          className="inline-flex items-center gap-2 rounded-lg border border-teal-300 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-wide text-teal-800 shadow-sm transition hover:border-teal-500 hover:bg-teal-50"
+          title="Reinicializar valores actuales, recalcular y repintar los paneles"
+        >
+          <RefreshIcon />
+          Actualizar Cálculos
+        </button>
       </div>
 
       <div className="mb-4 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-950 shadow-sm">
@@ -1566,9 +1741,9 @@ export function VesselPricingRouter({
       </div>
 
       {isReverseTceMode ? (
-        <ReverseTceCalculator cargoVolume={cargoVolume} daysSea={activeTiming.daysSea} daysPort={activeTiming.daysPort} vesselCategory={vesselClass.categoryName} hasScrubber={hasScrubber} syncedCostData={syncedCostData} />
+        <ReverseTceCalculator cargoVolume={cargoVolume} daysSea={activeTiming.daysSea} daysPort={activeTiming.daysPort} vesselCategory={vesselClass.categoryName} hasScrubber={hasScrubber} syncedCostData={syncedCostData} refreshSignal={calculationRefreshSignal} />
       ) : (
-        <CostPlusCalculator cargoVolume={cargoVolume} daysSea={activeTiming.daysSea} daysPort={activeTiming.daysPort} syncedCostData={syncedCostData} currentMode={currentMode} />
+        <CostPlusCalculator cargoVolume={cargoVolume} daysSea={activeTiming.daysSea} daysPort={activeTiming.daysPort} syncedCostData={syncedCostData} currentMode={currentMode} refreshSignal={calculationRefreshSignal} />
       )}
     </section>
   );
@@ -1580,10 +1755,20 @@ export default function TceCalculatorWorkspace({
   daysPort,
 }: ReverseTceCalculatorProps) {
   const [isReverseMode, setIsReverseMode] = useState(false);
+  const [calculationRefreshSignal, setCalculationRefreshSignal] = useState(0);
+
+  const forceRefresh = () => {
+    setCalculationRefreshSignal((current) => current + 1);
+  };
+
+  const selectMode = (nextIsReverseMode: boolean) => {
+    setIsReverseMode(nextIsReverseMode);
+    forceRefresh();
+  };
 
   return (
     <section className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-5">
-      <div className="mb-5 flex justify-center">
+      <div className="mb-5 flex flex-wrap items-center justify-center gap-3">
         <div
           className="grid w-full max-w-xl grid-cols-2 rounded-xl bg-slate-200/80 p-1"
           role="tablist"
@@ -1593,7 +1778,7 @@ export default function TceCalculatorWorkspace({
             type="button"
             role="tab"
             aria-selected={!isReverseMode}
-            onClick={() => setIsReverseMode(false)}
+            onClick={() => selectMode(false)}
             className={`rounded-lg px-3 py-2 text-sm font-bold transition-all duration-200 ${
               !isReverseMode
                 ? 'bg-white text-slate-950 shadow-sm'
@@ -1606,7 +1791,7 @@ export default function TceCalculatorWorkspace({
             type="button"
             role="tab"
             aria-selected={isReverseMode}
-            onClick={() => setIsReverseMode(true)}
+            onClick={() => selectMode(true)}
             className={`rounded-lg px-3 py-2 text-sm font-bold transition-all duration-200 ${
               isReverseMode
                 ? 'bg-white text-slate-950 shadow-sm'
@@ -1616,6 +1801,15 @@ export default function TceCalculatorWorkspace({
             Cálculo Inverso
           </button>
         </div>
+        <button
+          type="button"
+          onClick={forceRefresh}
+          className="inline-flex items-center gap-2 rounded-lg border border-teal-300 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-wide text-teal-800 shadow-sm transition hover:border-teal-500 hover:bg-teal-50"
+          title="Reinicializar valores actuales, recalcular y repintar los paneles"
+        >
+          <RefreshIcon />
+          Actualizar Cálculos
+        </button>
       </div>
 
       <div className="transition-opacity duration-200">
@@ -1626,7 +1820,7 @@ export default function TceCalculatorWorkspace({
             </p>
           </div>
         ) : (
-          <ReverseTceCalculator cargoVolume={cargoVolume} daysSea={daysSea} daysPort={daysPort} />
+          <ReverseTceCalculator cargoVolume={cargoVolume} daysSea={daysSea} daysPort={daysPort} refreshSignal={calculationRefreshSignal} />
         )}
       </div>
     </section>

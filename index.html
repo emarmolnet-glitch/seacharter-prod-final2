@@ -6018,7 +6018,13 @@
                                         <div class="text-[10px] font-black uppercase tracking-wide text-slate-700">Router de Pricing por DWT</div>
                                         <div id="vessel-pricing-router-status" class="mt-0.5 text-[10px] font-semibold text-slate-500">Selecciona automáticamente la calculadora según tamaño del buque.</div>
                                     </div>
-                                    <span id="vessel-pricing-router-badge" class="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-black text-blue-950 shadow-sm">Auto</span>
+                                    <div class="flex flex-wrap items-center justify-end gap-2">
+                                        <button id="btn-force-refresh-calculations" type="button" onclick="forceRefreshCalculations(true)" class="inline-flex items-center gap-1 rounded-md border border-teal-300 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-teal-800 shadow-sm transition hover:border-teal-500 hover:bg-teal-50" title="Reinicializar datos actuales y repintar ETA, Cost-Plus, TCE y Benchmark">
+                                            <i class="fa-solid fa-arrows-rotate"></i>
+                                            <span>Actualizar Cálculos</span>
+                                        </button>
+                                        <span id="vessel-pricing-router-badge" class="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-black text-blue-950 shadow-sm">Auto</span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -32378,6 +32384,36 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         const getVesselCategory = getVesselClass;
 
+        function forceRefreshCalculations(showFeedback = false) {
+            if (typeof runEngine === 'function') runEngine();
+            if (typeof calculateAdjustedEtaAndDays === 'function') calculateAdjustedEtaAndDays();
+            if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
+
+            const activeState = typeof State !== 'undefined' ? State : {};
+            syncInverseTceFromVoyage(
+                activeState.cargo || document.getElementById('cargo-qty')?.value,
+                activeState.daysSea,
+                activeState.daysPort
+            );
+            syncInverseBunkerCostFromVoyage();
+            calculateInverseTce();
+            syncCostPlusFromRoute(false);
+            calculateCostPlusFreight();
+
+            const button = document.getElementById('btn-force-refresh-calculations');
+            if (button) {
+                button.classList.add('bg-teal-50', 'border-teal-500');
+                window.setTimeout(() => button.classList.remove('bg-teal-50', 'border-teal-500'), 450);
+            }
+            if (showFeedback && typeof showToast === 'function') showToast('Cálculos actualizados');
+            return {
+                inverseTceMinFreightRate: activeState.inverseTceMinFreightRate,
+                costPlusMinFreightRate: activeState.costPlusMinFreightRate
+            };
+        }
+
+        window.forceRefreshCalculations = forceRefreshCalculations;
+
         function updateVesselPricingRouter() {
             const vesselDwt = readInverseTceNumber('vessel-dwt');
             const vesselClass = getVesselClass(vesselDwt);
@@ -32404,8 +32440,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const cache = readFearnleysMarketData();
                 if (cache) applyFearnleysMarketData(cache, currentVesselPricingCategory);
             }
-            calculateInverseTce();
-            calculateCostPlusFreight();
+            if (previousCategory !== currentVesselPricingCategory) {
+                forceRefreshCalculations(false);
+            } else {
+                calculateInverseTce();
+                calculateCostPlusFreight();
+            }
         }
 
         async function handleFetchFearnleysTce() {
