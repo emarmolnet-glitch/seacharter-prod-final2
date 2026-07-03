@@ -5585,8 +5585,14 @@
                         
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div class="input-group">
-                                <label class="text-sky-400 font-bold block mb-1 text-xs">ETA Base Radar / ETA Radar (YYYY-MM-DD)</label>
-                                <input type="date" id="eta-radar" class="input-gc text-sky-300 font-bold w-full" oninput="calculateAdjustedEtaAndDays(); runEngine()">
+                                <div class="flex items-center justify-between gap-2 mb-1">
+                                    <label class="text-sky-400 font-bold block text-xs">ETA Base Radar / ETA Radar (YYYY-MM-DD)</label>
+                                    <button type="button" id="btn-unlock-eta-radar" onclick="unlockEtaRadarManualEdit()" class="h-7 w-7 rounded-md border border-slate-300 bg-slate-100 text-slate-600 hover:bg-slate-200 transition flex items-center justify-center" title="Desbloquear edición manual de ETA Radar" aria-label="Desbloquear edición manual de ETA Radar">
+                                        <i id="eta-radar-lock-icon" class="fa-solid fa-lock text-[11px]"></i>
+                                    </button>
+                                </div>
+                                <input type="date" id="eta-radar" class="input-gc text-sky-300 font-bold w-full bg-slate-100 border-slate-300 cursor-not-allowed" readonly data-manual-unlocked="false" oninput="handleEtaRadarManualInput()">
+                                <p id="eta-radar-lock-status" class="mt-1 text-[10px] font-bold text-slate-500 uppercase tracking-wide">Bloqueado: solo radar/histórico explícito</p>
                             </div>
                             <div class="input-group">
                                 <label class="text-indigo-400 font-bold block mb-1 text-xs">Delta Histórico / Delta Historico (Días / Days)</label>
@@ -5831,6 +5837,47 @@
                                     </div>
                                     <div id="res-venta-sugerida" class="text-xl font-black text-emerald-600 mono text-right">$0.00 /TM</div>
                                 </div>
+                                <div class="border-t border-emerald-200 pt-2">
+                                    <label class="mb-2 flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-white px-3 py-2 text-[10px] font-black uppercase text-slate-700">
+                                        <span>
+                                            <span class="block">Aplicar Ajuste BunkerIndex</span>
+                                            <span class="block text-[9px] font-semibold normal-case text-slate-500">50% de la variación si el bunker medio cambia 5% o más.</span>
+                                        </span>
+                                        <input id="apply-bunkerindex-adjustment" type="checkbox" class="h-4 w-4 accent-emerald-700" checked oninput="runEngine()">
+                                    </label>
+                                    <button id="btn-coa-purchase-details" type="button" onclick="toggleCoaPurchaseDetails()" class="inline-flex w-full items-center justify-between rounded-md border border-blue-200 bg-white px-3 py-2 text-left text-[10px] font-black uppercase text-[#1E3A8A] shadow-sm transition hover:bg-blue-50" aria-expanded="false" aria-controls="coa-purchase-details">
+                                        <span><i class="fa-solid fa-receipt mr-1.5"></i> Ver detalles de compra</span>
+                                        <i id="coa-purchase-details-icon" class="fa-solid fa-chevron-down text-[9px] transition"></i>
+                                    </button>
+                                    <div id="coa-purchase-details" class="hidden mt-2 rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-sm">
+                                        <div id="coa-margin-critical-alert" class="hidden mb-3 rounded-md border border-orange-300 bg-orange-50 px-3 py-2 text-[10px] font-black uppercase text-orange-800">
+                                            <i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Margen de negociación crítico
+                                        </div>
+                                        <div class="space-y-2">
+                                            <div class="flex items-start justify-between gap-3 border-b border-slate-100 pb-2">
+                                                <div>
+                                                    <div class="text-[10px] font-black uppercase text-slate-500">Flete Mínimo Calculadora Inversa</div>
+                                                    <div id="coa-min-freight-source" class="text-[10px] font-semibold text-slate-400">Base TCE $13,000/día sincronizada</div>
+                                                </div>
+                                                <div id="coa-detail-min-freight" class="mono text-sm font-black text-slate-900">$0.00 /TM</div>
+                                            </div>
+                                            <div class="flex items-start justify-between gap-3">
+                                                <div>
+                                                    <div class="text-[10px] font-black uppercase text-[#1E3A8A]">Flete Sugerido Armador (Compra)</div>
+                                                    <div id="coa-owner-purchase-formula" class="text-[10px] font-semibold text-slate-400">Flete mínimo × (1 + margen armador)</div>
+                                                </div>
+                                                <div id="coa-detail-owner-purchase" class="mono text-sm font-black text-[#1E3A8A]">$0.00 /TM</div>
+                                            </div>
+                                            <div class="flex items-start justify-between gap-3">
+                                                <div>
+                                                    <div class="text-[10px] font-black uppercase text-emerald-700">Venta Sugerida Fletador (Target Price)</div>
+                                                    <div id="coa-charterer-target-formula" class="text-[10px] font-semibold text-slate-400">Compra armador × (1 + margen fletador)</div>
+                                                </div>
+                                                <div id="coa-detail-charterer-target" class="mono text-sm font-black text-emerald-700">$0.00 /TM</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             <div id="market-benchmark-card" class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
@@ -5960,8 +6007,14 @@
                                         <div id="inverse-ets-breakdown" class="mt-1 text-sm font-semibold text-gray-500">Sin exposición ETS</div>
                                     </div>
                                     <div class="rounded-md border border-white bg-white p-3 shadow-sm">
-                                        <div class="text-[10px] font-black uppercase text-slate-500">Demurrage recomendado</div>
+                                        <div class="flex items-center justify-between gap-2">
+                                            <div class="text-[10px] font-black uppercase text-slate-500">Demurrage recomendado</div>
+                                            <span id="inverse-demurrage-risk-icon" class="hidden inline-flex h-6 w-6 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-orange-700" title="Ajustado por riesgo histórico">
+                                                <i class="fa-solid fa-triangle-exclamation text-[11px]"></i>
+                                            </span>
+                                        </div>
                                         <div id="inverse-demurrage-rate" class="mono text-xl font-black text-slate-950">$15,250 /Día</div>
+                                        <div id="inverse-demurrage-risk-note" class="mt-1 hidden text-[10px] font-bold text-orange-700"></div>
                                     </div>
                                 </div>
                             </div>
@@ -10246,13 +10299,21 @@
         };
 
         function readRouteStateFromCalculator() {
+            const charterPartyStandard = document.getElementById('charter-party-standard')?.value || '';
+            const gcLaycanDate = document.getElementById('gc-laycan-date')?.value || '';
+            const asbLaycanDate = document.getElementById('asb-laycan-date')?.value || '';
+            const gcLaycanTime = document.getElementById('gc-laycan-time')?.value || '';
+            const asbLaycanTime = document.getElementById('asb-laycan-time')?.value || '';
+            const gcCancellingDate = document.getElementById('gc-cancel-date')?.value || '';
+            const asbCancellingDate = document.getElementById('asb-cancel-date')?.value || '';
+            const preferAsbatankvoy = charterPartyStandard === 'ASBATANKVOY';
             return {
                 portBallast: document.getElementById('port-ballast')?.value || '',
                 pol: document.getElementById('port-pol')?.value || '',
                 pod: document.getElementById('port-pod')?.value || '',
-                laycanDate: document.getElementById('gc-laycan-date')?.value || document.getElementById('asb-laycan-date')?.value || '',
-                laycanTime: document.getElementById('gc-laycan-time')?.value || document.getElementById('asb-laycan-time')?.value || '',
-                cancellingDate: document.getElementById('gc-cancel-date')?.value || document.getElementById('asb-cancel-date')?.value || '',
+                laycanDate: preferAsbatankvoy ? (asbLaycanDate || gcLaycanDate) : (gcLaycanDate || asbLaycanDate),
+                laycanTime: preferAsbatankvoy ? (asbLaycanTime || gcLaycanTime) : (gcLaycanTime || asbLaycanTime),
+                cancellingDate: preferAsbatankvoy ? (asbCancellingDate || gcCancellingDate) : (gcCancellingDate || asbCancellingDate),
                 distBallast: parseFloat(document.getElementById('dist-ballast')?.value) || 0,
                 distLaden: parseFloat(document.getElementById('dist-laden')?.value) || 0,
                 totalMiles: parseFloat(document.getElementById('dist-total')?.value) || 0
@@ -10295,6 +10356,7 @@
             if (State.cancellingDate) {
                 ['gc-cancel-date', 'asb-cancel-date', 'match-laycan-end'].forEach((id) => setInputValue(id, State.cancellingDate));
             }
+            syncEtaRadarFromLaycan(State.laycanDate);
             if (State.pol) setInputValue('match-pol', State.pol);
             if (State.pod) setInputValue('match-pod', State.pod);
             updateRouteSummary();
@@ -13431,14 +13493,10 @@
                 State.imo = vessel.imo || 'Unknown';
 
                 // Set ETA_Radar
-                const etaRadarInput = document.getElementById('eta-radar');
-                if (etaRadarInput) {
-                    if (vessel.eta && vessel.eta !== 'N/A') {
-                        etaRadarInput.value = vessel.eta;
-                    } else {
-                        etaRadarInput.value = new Date().toISOString().split('T')[0];
-                    }
-                }
+                setEtaRadarFromSystem(
+                    vessel.eta && vessel.eta !== 'N/A' ? vessel.eta : new Date().toISOString().split('T')[0],
+                    'radar'
+                );
 
                 // Load parameters from IndexedDB (Delta_Historico, T_Fondeo, T_Remolcadores)
                 if (typeof loadVesselParamsFromIndexedDB === 'function') {
@@ -15824,6 +15882,8 @@
                 if (loadNor) loadNor.value = 'WIBON';
                 if (dischNor) dischNor.value = 'WIBON';
             }
+            SeaCharterStore.set(readRouteStateFromCalculator());
+            syncGlobalStateToForms();
             runEngine();
             // Asegurar que la referencia mostrada en la calculadora (quick-ref) se actualiza al cambiar de tipo de póliza estándar
             const quickRefEl = document.getElementById('quick-ref');
@@ -16027,9 +16087,28 @@
             { segment: "Capesize", minDwt: 85000, maxDwt: Infinity, speedBallast: 13.0, speedLaden: 12.0 }
         ];
 
+        const SPEED_CONFIG = VESSEL_SEGMENT_SPEEDS.map((row) => ({
+            segment: row.segment,
+            minDwt: row.minDwt,
+            maxDwt: row.maxDwt,
+            eco: {
+                speedBallast: row.speedBallast,
+                speedLaden: row.speedLaden
+            },
+            full: {
+                speedBallast: +(row.speedBallast * 1.08).toFixed(1),
+                speedLaden: +(row.speedLaden * 1.19).toFixed(1)
+            }
+        }));
+
         function detectVesselSegment(dwt) {
             const numericDwt = Math.max(0, parseFloat(dwt) || 0);
             return VESSEL_SEGMENT_SPEEDS.find((row) => numericDwt >= row.minDwt && numericDwt <= row.maxDwt) || VESSEL_SEGMENT_SPEEDS[0];
+        }
+
+        function getSpeedConfigForDwt(dwt) {
+            const numericDwt = Math.max(0, parseFloat(dwt) || 0);
+            return SPEED_CONFIG.find((row) => numericDwt >= row.minDwt && numericDwt <= row.maxDwt) || SPEED_CONFIG[0];
         }
 
         function getEffectiveDwtForSegmentDetection() {
@@ -16040,6 +16119,9 @@
 
         function markSpeedManualOverride(input) {
             if (!input) return;
+            if (typeof setNavigationStrategyMode === 'function') {
+                setNavigationStrategyMode('manual');
+            }
             input.dataset.navigationBase = String(parseFloat(input.value) || 0);
             input.dataset.manualOverride = 'true';
             input.dataset.autoInferred = 'false';
@@ -16057,6 +16139,9 @@
         }
 
         function applyDetectedSpeedValues(params = {}) {
+            if (typeof navigationStrategyMode !== 'undefined' && navigationStrategyMode === 'auto' && params.force !== true) {
+                return;
+            }
             const speedBallast = Math.max(0, parseFloat(params.speedBallast) || 0);
             const speedLaden = Math.max(0, parseFloat(params.speedLaden) || 0);
             const segment = params.segment || 'Segmento detectado';
@@ -16154,6 +16239,11 @@
 
             document.getElementById('vessel-badge').innerText = vClass;
             State.class = vClass;
+            const seaInput = document.getElementById('cons-sea');
+            if (seaInput) seaInput.dataset.navigationBase = cSea.toFixed(1);
+            if (typeof syncNavigationStrategyEffect === 'function') {
+                syncNavigationStrategyEffect();
+            }
 
             autoCalculateDemurrage(false);
             autoClassifySpecialtyFromInputs();
@@ -16231,14 +16321,18 @@
             const dwt = parseFloat(document.getElementById('vessel-dwt').value) || 0;
             if (dwt <= 0) return;
 
+            const dynamicDemurrage = calculateDynamicDemurrageFromRisk();
             const baseDemurrage = 4500;
             const sizeFactor = dwt * 0.25;
-            const estimatedDemurrage = Math.round((baseDemurrage + sizeFactor) / 250) * 250;
+            const estimatedDemurrage = dynamicDemurrage.demurrageRate > 0
+                ? Math.round(dynamicDemurrage.demurrageRate / 250) * 250
+                : Math.round((baseDemurrage + sizeFactor) / 250) * 250;
 
             document.getElementById('demurrage-rate').value = estimatedDemurrage;
 
             if (showToastMsg) {
-                showToast(`📈 Demurrage estimado para ${dwt} DWT: $${estimatedDemurrage.toLocaleString('en-US')}/día`);
+                const suffix = dynamicDemurrage.hasRiskAdjustment ? ' ajustado por riesgo histórico' : '';
+                showToast(`📈 Demurrage estimado${suffix}: $${estimatedDemurrage.toLocaleString('en-US')}/día`);
             }
             runEngine();
         }
@@ -16881,11 +16975,117 @@
             input.dataset.historicalAutofill = 'true';
         }
 
+        function setEtaRadarLocked(locked = true) {
+            const input = document.getElementById('eta-radar');
+            const button = document.getElementById('btn-unlock-eta-radar');
+            const icon = document.getElementById('eta-radar-lock-icon');
+            const status = document.getElementById('eta-radar-lock-status');
+            if (!input) return;
+
+            input.readOnly = locked;
+            input.dataset.manualUnlocked = locked ? 'false' : 'true';
+            input.classList.toggle('bg-slate-100', locked);
+            input.classList.toggle('border-slate-300', locked);
+            input.classList.toggle('cursor-not-allowed', locked);
+            input.classList.toggle('bg-amber-50', !locked);
+            input.classList.toggle('border-amber-500', !locked);
+            input.classList.toggle('text-amber-700', !locked);
+            input.classList.toggle('ring-2', !locked);
+            input.classList.toggle('ring-amber-200', !locked);
+
+            if (button) {
+                button.classList.toggle('bg-slate-100', locked);
+                button.classList.toggle('text-slate-600', locked);
+                button.classList.toggle('bg-amber-100', !locked);
+                button.classList.toggle('text-amber-700', !locked);
+                button.title = locked ? 'Desbloquear edición manual de ETA Radar' : 'ETA Radar en edición manual';
+            }
+            if (icon) icon.className = locked ? 'fa-solid fa-lock text-[11px]' : 'fa-solid fa-pen-to-square text-[11px]';
+            if (status) {
+                status.className = locked
+                    ? 'mt-1 text-[10px] font-bold text-slate-500 uppercase tracking-wide'
+                    : 'mt-1 text-[10px] font-bold text-amber-700 uppercase tracking-wide';
+                status.innerText = locked
+                    ? 'Bloqueado: solo radar/histórico explícito'
+                    : 'Edición manual activa';
+            }
+        }
+
+        function unlockEtaRadarManualEdit() {
+            setEtaRadarLocked(false);
+            const input = document.getElementById('eta-radar');
+            if (input) input.focus();
+        }
+
+        function handleEtaRadarManualInput() {
+            const input = document.getElementById('eta-radar');
+            if (!input || input.dataset.manualUnlocked !== 'true') return;
+            calculateAdjustedEtaAndDays();
+            runEngine();
+        }
+
+        function normalizeEtaDateValue(value) {
+            const raw = String(value || '').trim();
+            if (!raw) return '';
+            const directMatch = raw.match(/^\d{4}-\d{2}-\d{2}/);
+            if (directMatch) return directMatch[0];
+            const parsed = new Date(raw);
+            return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().split('T')[0];
+        }
+
+        function setEtaRadarFromSystem(value, source = 'radar') {
+            const input = document.getElementById('eta-radar');
+            const normalizedValue = normalizeEtaDateValue(value);
+            if (!input || !normalizedValue) return false;
+            input.value = normalizedValue;
+            input.dataset.etaSource = source;
+            setEtaRadarLocked(true);
+            calculateAdjustedEtaAndDays();
+            if (typeof runEngine === 'function') runEngine();
+            return true;
+        }
+
+        function syncEtaRadarFromLaycan(laycanValue) {
+            const input = document.getElementById('eta-radar');
+            const status = document.getElementById('eta-radar-lock-status');
+            if (!input) return false;
+
+            const normalizedLaycan = normalizeEtaDateValue(laycanValue);
+            if (!normalizedLaycan) {
+                if (input.dataset.etaSource === 'laycan') {
+                    input.value = '';
+                    input.dataset.etaSource = '';
+                    setEtaRadarLocked(true);
+                    calculateAdjustedEtaAndDays();
+                    if (typeof runEngine === 'function') runEngine();
+                }
+                return false;
+            }
+
+            const changed = input.value !== normalizedLaycan || input.dataset.etaSource !== 'laycan' || input.dataset.manualUnlocked === 'true';
+            if (!changed) {
+                setEtaRadarLocked(true);
+                if (status) status.innerText = 'Bloqueado: sincronizado con Laycan';
+                return false;
+            }
+
+            const updated = setEtaRadarFromSystem(normalizedLaycan, 'laycan');
+            if (updated && status) {
+                status.innerText = 'Bloqueado: sincronizado con Laycan';
+            }
+            return updated;
+        }
+
         function resetRiskToHistorical() {
             const historical = getHistoricalRiskForRoute();
             setRiskInputValue('delta-historico', historical.avg_delta_dias);
             setRiskInputValue('factor-clima', historical.avg_clima_dias);
             setRiskInputValue('t-fondeo', historical.avg_fondeo_dias);
+            if (historical.eta_base_radar) {
+                setEtaRadarFromSystem(historical.eta_base_radar, 'historical');
+            } else {
+                setEtaRadarLocked(true);
+            }
             const source = document.getElementById('historical-risk-source');
             if (source) source.innerText = `Histórico aplicado: ${historical.source}`;
             if (typeof calculateAdjustedEtaAndDays === 'function') calculateAdjustedEtaAndDays();
@@ -16914,12 +17114,87 @@
             status.innerText = message;
         }
 
+        function getFieldSnapshotValue(field) {
+            if (!field) return '';
+            if (field.type === 'checkbox') return Boolean(field.checked);
+            if (field.type === 'radio') return field.checked ? field.value : undefined;
+            return field.value;
+        }
+
+        function collectVoyageArchivePayload() {
+            const fields = {};
+            document.querySelectorAll('input[id], select[id], textarea[id]').forEach((field) => {
+                const value = getFieldSnapshotValue(field);
+                if (value !== undefined) fields[field.id] = value;
+            });
+
+            const readText = (id) => document.getElementById(id)?.textContent?.trim() || '';
+            const etaFinalCalculada = readText('res-adjusted-eta') || fields['eta-radar'] || '';
+            return {
+                savedAt: new Date().toISOString(),
+                voyage: {
+                    vesselName: fields['vessel-name'] || fields['nombre-buque-calculadora'] || State.vessel || 'TBN',
+                    imo: State.imo || '',
+                    pol: fields['port-pol'] || fields['map-port-pol'] || State.pol || '',
+                    pod: fields['port-pod'] || fields['map-port-pod'] || State.pod || '',
+                    etaBaseRadar: fields['eta-radar'] || '',
+                    etaBaseRadarSource: document.getElementById('eta-radar')?.dataset.etaSource || 'manual',
+                    etaFinalCalculada,
+                    adjustedDays: readText('res-adjusted-days'),
+                    baseDays: readText('res-base-days')
+                },
+                inputs: fields,
+                results: {
+                    etaFinalCalculada,
+                    fleteMinimo: readText('inverse-min-freight-rate'),
+                    demurrageRecomendado: readText('inverse-demurrage-rate'),
+                    impactoRiesgo: readText('res-risk-impact'),
+                    totalCoste: readText('res-cost-total'),
+                    ventaSugerida: readText('freight-sell') || fields['freight-sell'] || ''
+                },
+                bunkerIndex: getBunkerIndexMarketSnapshot(),
+                coa: {
+                    mode: getOperacionModo(),
+                    applyBunkerIndexAdjustment: shouldApplyCoaBunkerIndexAdjustment(),
+                    variationThresholdPercent: BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT,
+                    sharedAdjustmentFactor: BUNKER_INDEX_ADJUSTMENT_SHARE,
+                    bunkerProjection: State.coaBunkerIndex || null,
+                    purchaseDetails: State.coaPurchaseDetails || null,
+                    targetPrice: State.precioObjetivoFletador || 0
+                },
+                state: {
+                    inverseTceMinFreightRate: State.inverseTceMinFreightRate || 0,
+                    inverseTceDemurrageRate: State.inverseTceDemurrageRate || 0,
+                    historicalRisk: State.historicalRisk || null
+                }
+            };
+        }
+
+        async function saveToDatabase() {
+            const payload = collectVoyageArchivePayload();
+            const response = await fetch('/api/coa-snapshot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || result.success === false) {
+                const archiveResponse = await fetch('/api/voyage-archive', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const archiveResult = await archiveResponse.json().catch(() => ({}));
+                if (!archiveResponse.ok || archiveResult.success === false) {
+                    throw new Error(result.error || archiveResult.error || 'No se pudo archivar el viaje en la base de datos');
+                }
+                return archiveResult;
+            }
+            return result;
+        }
+
         async function finalizeVoyageLearning() {
             const ports = getSelectedRiskPorts();
-            if (!ports.length) {
-                setSofLearningStatus('Define POL/POD antes de finalizar el viaje.', 'error');
-                return;
-            }
             const deltaReal = Math.max(0, parseFloat(document.getElementById('sof-delta-real')?.value) || 0);
             const climaReal = Math.max(0, parseFloat(document.getElementById('sof-clima-real')?.value) || 0);
             const fondeoReal = Math.max(0, parseFloat(document.getElementById('sof-fondeo-real')?.value) || 0);
@@ -16933,9 +17208,15 @@
             const originalHtml = btn?.innerHTML || '';
             if (btn) {
                 btn.disabled = true;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Aprendiendo';
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Guardando';
             }
             try {
+                await saveToDatabase();
+                if (!ports.length) {
+                    setSofLearningStatus('Viaje guardado correctamente', 'success');
+                    if (typeof showToast === 'function') showToast('Viaje guardado correctamente');
+                    return;
+                }
                 const response = await fetch('/api/port-risk-history', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -16948,10 +17229,11 @@
                 const learnedLabel = (data.ports || [])
                     .map((port) => `${port.portName}: n=${port.n_viajes}`)
                     .join(' · ');
-                setSofLearningStatus(`Viaje finalizado. Promedio histórico actualizado: ${learnedLabel}.`, 'success');
+                setSofLearningStatus(`Viaje guardado correctamente. Promedio histórico actualizado: ${learnedLabel}.`, 'success');
+                if (typeof showToast === 'function') showToast('Viaje guardado correctamente');
             } catch (error) {
                 console.error('Error finalizando viaje:', error);
-                setSofLearningStatus('No se pudo guardar el aprendizaje. Revisa la conexión de Netlify Blobs.', 'error');
+                setSofLearningStatus('No se pudo guardar el viaje. Revisa la conexión del archivo Netlify.', 'error');
             } finally {
                 if (btn) {
                     btn.disabled = false;
@@ -17919,6 +18201,15 @@
             const coaBreakEvenPromedio = operacionModo === 'COA' && coaTotalTmContrato > 0
                 ? ((coaCostesDiluidoContrato + coaBunkersContrato + coaOpexContrato + coaTrincajeContrato + coaEtsContrato) / coaTotalTmContrato)
                 : 0;
+            const coaScenarioProjection = operacionModo === 'COA' && coaTotalTmContrato > 0
+                ? buildCoaBunkerIndexScenarios({
+                    baseBunkerCost: coaBunkersContrato,
+                    totalCostWithoutBunker: coaCostesDiluidoContrato + coaOpexContrato + coaTrincajeContrato + coaEtsContrato,
+                    totalTm: coaTotalTmContrato,
+                    marginOwner,
+                    marginCharterer: marginChart
+                })
+                : null;
             const spotEquivalentBreakEven = cargo > 0 ? ((pdaRecurrente + tugTotalCost + totalBunkers + totalOpex + costeTrincaje + etsCost) / cargo) : 0;
             const coaAhorroVsSpot = operacionModo === 'COA' && coaTotalTmContrato > 0
                 ? Math.max(0, (spotEquivalentBreakEven - coaBreakEvenPromedio) * coaTotalTmContrato)
@@ -17930,13 +18221,16 @@
             const inverseMinimumFreight = Number.isFinite(inverseTceResults?.minFreightRate)
                 ? inverseTceResults.minFreightRate
                 : breakEvenArmadorDisplay;
-            const breakEvenParaVentaSugerida = operacionModo === 'COA' && coaTotalTmContrato > 0
-                ? coaBreakEvenPromedio
+            const breakEvenParaVentaSugerida = operacionModo === 'COA' && coaScenarioProjection
+                ? coaScenarioProjection.securityScenario.breakEvenAverage
                 : inverseMinimumFreight;
-            const precioObjetivoArmador = operacionModo === 'COA' && coaTotalTmContrato > 0
-                ? coaBreakEvenPromedio
-                : inverseMinimumFreight;
-            const precioObjetivoFletador = calcularPrecioObjetivo(precioObjetivoArmador, marginChart);
+            const fleteMinimoBaseVenta = breakEvenParaVentaSugerida;
+            const precioObjetivoArmador = operacionModo === 'COA' && coaScenarioProjection
+                ? coaScenarioProjection.securityScenario.ownerPurchase
+                : calcularPrecioObjetivo(fleteMinimoBaseVenta, marginOwner);
+            const precioObjetivoFletador = operacionModo === 'COA' && coaScenarioProjection
+                ? coaScenarioProjection.securityScenario.targetPrice
+                : calcularPrecioObjetivo(precioObjetivoArmador, marginChart);
             const sugOwner = precioObjetivoArmador;
             const sugChart = precioObjetivoFletador;
             const freightSellInput = document.getElementById('freight-sell');
@@ -17962,13 +18256,15 @@
             const targetPriceCard = document.getElementById('target-price-card');
             const suggestedOwnerCard = document.getElementById('res-sug-owner')?.parentElement;
             const suggestedChartererCard = document.getElementById('res-sug-charterer')?.parentElement;
-            const suggestedBelowTarget = precioObjetivoArmador < inverseMinimumFreight || precioObjetivoFletador < inverseMinimumFreight;
+            const suggestedBelowTarget = precioObjetivoArmador < fleteMinimoBaseVenta || precioObjetivoFletador < fleteMinimoBaseVenta;
             const coaMargenTotalEl = document.getElementById('res-coa-margen-total');
             if (ventaSugeridaEl) ventaSugeridaEl.innerText = `$${ventaSugerida.toFixed(2)} /TM`;
             if (ventaSugeridaSubtextEl) {
                 ventaSugeridaSubtextEl.innerText = suggestedBelowTarget
                     ? 'Alerta: Venta por debajo del TCE Objetivo'
-                    : `Flete mínimo inverso $${precioObjetivoArmador.toFixed(2)} + margen fletador ${marginChart.toFixed(2).replace(/\.00$/, '')}%`;
+                    : (operacionModo === 'COA' && coaScenarioProjection
+                        ? `Target protegido por BunkerIndex pesimista +10%${coaScenarioProjection.adjustmentActive ? ` y ajuste compartido ${coaScenarioProjection.sharedAdjustmentPct.toFixed(2)}%` : ''}`
+                        : `Flete mínimo $${fleteMinimoBaseVenta.toFixed(2)} + margen armador ${marginOwner.toFixed(2).replace(/\.00$/, '')}% + margen fletador ${marginChart.toFixed(2).replace(/\.00$/, '')}%`);
             }
             [targetPriceCard, suggestedOwnerCard, suggestedChartererCard].forEach((card) => {
                 if (!card) return;
@@ -17980,12 +18276,21 @@
                 coaMargenTotalEl.classList.toggle('hidden', operacionModo !== 'COA');
                 coaMargenTotalEl.innerText = `Margen Total del Contrato: $${Math.round(margenTotalContrato).toLocaleString('en-US')}`;
             }
+            updateCoaPurchaseDetails({
+                fleteMinimo: fleteMinimoBaseVenta,
+                margenArmador: marginOwner,
+                margenFletador: marginChart,
+                fleteCompraArmador: precioObjetivoArmador,
+                ventaSugeridaFletador: precioObjetivoFletador,
+                tceTarget: parseFloat(document.getElementById('inverse-tce-target')?.value) || 13000
+            });
             State.breakEvenVentaSugerida = breakEvenParaVentaSugerida;
             State.breakEvenArmador = breakEvenArmadorDisplay;
             State.breakEven = breakEven;
             State.marginOwner = marginOwner;
             State.marginCharterer = marginChart;
             State.marketCalibrationFactor = readMarketCalibrationFactor();
+            State.coaBunkerIndex = coaScenarioProjection;
             const marketBenchmark = getRouteMarketBenchmark({
                 breakEven: breakEvenParaVentaSugerida,
                 totalMiles: distBal + distLaden,
@@ -21143,10 +21448,7 @@
             State.draft = vessel.draft;
 
             // Set ETA_Radar
-            const etaRadarInput = document.getElementById('eta-radar');
-            if (etaRadarInput) {
-                etaRadarInput.value = new Date().toISOString().split('T')[0];
-            }
+            setEtaRadarFromSystem(new Date().toISOString().split('T')[0], 'historical-vessel');
 
             // Load parameters from IndexedDB
             if (typeof loadVesselParamsFromIndexedDB === 'function') {
@@ -28991,16 +29293,148 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function calcularVentaSugerida(breakEvenPromedio, margenObjetivo) {
             const bep = Math.max(0, parseFloat(breakEvenPromedio) || 0);
-            const margin = Math.min(95, Math.max(0, parseFloat(margenObjetivo) || 0));
-            const denominator = 1 - (margin / 100);
-            return denominator > 0 ? (bep / denominator) : 0;
+            const margin = parseFloat(margenObjetivo) || 0;
+            return bep * (1 + (margin / 100));
         }
 
         function calcularPrecioObjetivo(basePrice, marginPercent) {
             const base = Math.max(0, parseFloat(basePrice) || 0);
-            const margin = Math.min(95, Math.max(0, parseFloat(marginPercent) || 0));
-            const denominator = 1 - (margin / 100);
-            return denominator > 0 ? (base / denominator) : 0;
+            const margin = parseFloat(marginPercent) || 0;
+            return base * (1 + (margin / 100));
+        }
+
+        const BUNKER_INDEX_ADJUSTMENT_SHARE = 0.5;
+        const BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT = 5;
+
+        function getBunkerIndexMarketSnapshot() {
+            const vlsfo = parseFloat(document.getElementById('price-sea')?.value) || 0;
+            const ifo380 = parseFloat(document.getElementById('price-ifo')?.value) || 0;
+            const mgo = parseFloat(document.getElementById('price-port')?.value) || 0;
+            const valid = [vlsfo, ifo380, mgo].filter((value) => Number.isFinite(value) && value > 0);
+            const average = valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : 0;
+            if (!State.coaBunkerIndexBaseAverage && average > 0) {
+                State.coaBunkerIndexBaseAverage = average;
+            }
+            return {
+                date: document.getElementById('bunker-index-cache-label')?.innerText || new Date().toLocaleDateString(),
+                vlsfo,
+                ifo380,
+                mgo,
+                average,
+                contractBaseAverage: State.coaBunkerIndexBaseAverage || average
+            };
+        }
+
+        function shouldApplyCoaBunkerIndexAdjustment() {
+            const toggle = document.getElementById('apply-bunkerindex-adjustment');
+            return toggle ? toggle.checked : true;
+        }
+
+        function buildCoaBunkerIndexScenarios({
+            baseBunkerCost,
+            totalCostWithoutBunker,
+            totalTm,
+            marginOwner,
+            marginCharterer
+        }) {
+            const market = getBunkerIndexMarketSnapshot();
+            const variationPct = market.contractBaseAverage > 0
+                ? ((market.average - market.contractBaseAverage) / market.contractBaseAverage) * 100
+                : 0;
+            const adjustmentActive = shouldApplyCoaBunkerIndexAdjustment()
+                && Math.abs(variationPct) >= BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT;
+            const sharedAdjustmentPct = adjustmentActive ? variationPct * BUNKER_INDEX_ADJUSTMENT_SHARE : 0;
+            const makeScenario = (label, multiplier) => {
+                const bunkerCost = Math.max(0, baseBunkerCost) * multiplier;
+                const totalCost = Math.max(0, totalCostWithoutBunker) + bunkerCost;
+                const breakEvenAverage = totalTm > 0 ? totalCost / totalTm : 0;
+                const ownerPurchase = calcularPrecioObjetivo(breakEvenAverage, marginOwner);
+                const targetBeforeIndexation = calcularPrecioObjetivo(ownerPurchase, marginCharterer);
+                const targetPrice = targetBeforeIndexation * (1 + (sharedAdjustmentPct / 100));
+                return {
+                    label,
+                    bunkerMultiplier: multiplier,
+                    bunkerIndexPrice: market.average * multiplier,
+                    bunkerCost,
+                    totalCost,
+                    breakEvenAverage,
+                    ownerPurchase,
+                    targetBeforeIndexation,
+                    targetPrice
+                };
+            };
+            const scenarios = [
+                makeScenario('Optimista -10%', 0.9),
+                makeScenario('Base BunkerIndex', 1),
+                makeScenario('Pesimista +10%', 1.1)
+            ];
+            return {
+                market,
+                variationPct,
+                adjustmentActive,
+                sharedAdjustmentPct,
+                scenarios,
+                securityScenario: scenarios[2]
+            };
+        }
+
+        function toggleCoaPurchaseDetails(forceOpen) {
+            const panel = document.getElementById('coa-purchase-details');
+            const button = document.getElementById('btn-coa-purchase-details');
+            const icon = document.getElementById('coa-purchase-details-icon');
+            if (!panel || !button) return;
+            const nextOpen = typeof forceOpen === 'boolean'
+                ? forceOpen
+                : panel.classList.contains('hidden');
+            panel.classList.toggle('hidden', !nextOpen);
+            button.setAttribute('aria-expanded', String(nextOpen));
+            if (icon) icon.className = `fa-solid ${nextOpen ? 'fa-chevron-up' : 'fa-chevron-down'} text-[9px] transition`;
+        }
+
+        function updateCoaPurchaseDetails({
+            fleteMinimo,
+            margenArmador,
+            margenFletador,
+            fleteCompraArmador,
+            ventaSugeridaFletador,
+            tceTarget
+        }) {
+            const safeBase = Math.max(0, Number(fleteMinimo) || 0);
+            const safeOwner = Math.max(0, Number(fleteCompraArmador) || 0);
+            const safeCharterer = Math.max(0, Number(ventaSugeridaFletador) || 0);
+            const negotiationSpread = safeCharterer - safeOwner;
+            const negotiationMarginPct = safeOwner > 0 ? (negotiationSpread / safeOwner) * 100 : 0;
+            const isCritical = safeOwner > 0 && negotiationMarginPct < 5;
+            const formatRate = (value) => `$${value.toFixed(2)} /TM`;
+
+            const minEl = document.getElementById('coa-detail-min-freight');
+            const ownerEl = document.getElementById('coa-detail-owner-purchase');
+            const chartererEl = document.getElementById('coa-detail-charterer-target');
+            const sourceEl = document.getElementById('coa-min-freight-source');
+            const ownerFormulaEl = document.getElementById('coa-owner-purchase-formula');
+            const chartererFormulaEl = document.getElementById('coa-charterer-target-formula');
+            const alertEl = document.getElementById('coa-margin-critical-alert');
+            const detailsPanel = document.getElementById('coa-purchase-details');
+
+            if (minEl) minEl.innerText = formatRate(safeBase);
+            if (ownerEl) ownerEl.innerText = formatRate(safeOwner);
+            if (chartererEl) chartererEl.innerText = formatRate(safeCharterer);
+            if (sourceEl) sourceEl.innerText = `Base TCE $${Math.round(Number(tceTarget) || 0).toLocaleString('en-US')}/día desde Calculadora Inversa`;
+            if (ownerFormulaEl) ownerFormulaEl.innerText = `$${safeBase.toFixed(2)} × (1 + ${Number(margenArmador || 0).toFixed(2).replace(/\.00$/, '')}%)`;
+            if (chartererFormulaEl) chartererFormulaEl.innerText = `$${safeOwner.toFixed(2)} × (1 + ${Number(margenFletador || 0).toFixed(2).replace(/\.00$/, '')}%)`;
+            if (alertEl) alertEl.classList.toggle('hidden', !isCritical);
+            if (detailsPanel) {
+                detailsPanel.classList.toggle('border-orange-300', isCritical);
+                detailsPanel.classList.toggle('bg-orange-50', isCritical);
+            }
+
+            State.coaPurchaseDetails = {
+                fleteMinimo: safeBase,
+                fleteCompraArmador: safeOwner,
+                ventaSugeridaFletador: safeCharterer,
+                negotiationMarginPct,
+                isCritical
+            };
         }
 
         function getEtsRouteFactor() {
@@ -30578,9 +31012,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         let currentVesselPricingCategory = 'Handysize / Small Tanker';
         let costPlusMarginType = 'percentage';
         let navigationStrategy = 'eco';
+        let navigationStrategyMode = 'auto';
         const NAVIGATION_STRATEGIES = {
-            eco: { seaConsumptionFactor: 0.85, ballastSpeedFactor: 0.9, ladenSpeedFactor: 0.9 },
-            full: { seaConsumptionFactor: 1, ballastSpeedFactor: 1.08, ladenSpeedFactor: 1.08 }
+            eco: { seaConsumptionFactor: 0.85 },
+            full: { seaConsumptionFactor: 1 }
         };
         const FEARNLEYS_MARKET_DATA_KEY = 'fearnleysMarketData';
         const CURRENT_FEARNLEYS_WEEK_LABEL = 'Week actual - Fearnleys';
@@ -30678,9 +31113,25 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             ].reduce((total, id) => total + readInverseTceNumber(id), 0);
         }
 
-        function setNavigationStrategy(strategy) {
-            navigationStrategy = strategy === 'full' ? 'full' : 'eco';
-            const config = NAVIGATION_STRATEGIES[navigationStrategy];
+        function setNavigationStrategyMode(mode) {
+            navigationStrategyMode = mode === 'manual' ? 'manual' : 'auto';
+            const isAuto = navigationStrategyMode === 'auto';
+            ['spd-ballast', 'spd-laden'].forEach((id) => {
+                const input = document.getElementById(id);
+                if (!input) return;
+                input.readOnly = isAuto;
+                input.dataset.navigationMode = navigationStrategyMode;
+                input.classList.toggle('cursor-not-allowed', isAuto);
+                input.classList.toggle('border-dashed', isAuto);
+                input.classList.toggle('bg-slate-800', isAuto);
+                input.classList.toggle('text-sky-300', isAuto);
+                input.title = isAuto
+                    ? `Velocidad calculada automaticamente por estrategia ${navigationStrategy.toUpperCase()}.`
+                    : 'Velocidad editable manualmente.';
+            });
+        }
+
+        function updateNavigationStrategyButtons() {
             const ecoButton = document.getElementById('nav-strategy-eco');
             const fullButton = document.getElementById('nav-strategy-full');
             [ecoButton, fullButton].forEach((button) => {
@@ -30691,27 +31142,76 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (activeButton) {
                 activeButton.className = 'rounded-md bg-blue-600 px-2 py-1 text-[10px] font-black uppercase text-white shadow';
             }
+        }
 
-            const bindings = [
-                ['cons-sea', config.seaConsumptionFactor],
-                ['spd-ballast', config.ballastSpeedFactor],
-                ['spd-laden', config.ladenSpeedFactor]
-            ];
-            bindings.forEach(([id, factor]) => {
+        function syncNavigationStrategySpeeds() {
+            if (navigationStrategyMode !== 'auto') return;
+            const dwt = getEffectiveDwtForSegmentDetection();
+            const segmentConfig = getSpeedConfigForDwt(dwt);
+            const speedConfig = segmentConfig[navigationStrategy] || segmentConfig.eco;
+
+            [
+                ['spd-ballast', speedConfig.speedBallast],
+                ['spd-laden', speedConfig.speedLaden]
+            ].forEach(([id, value]) => {
                 const input = document.getElementById(id);
-                if (!input) return;
-                if (!input.dataset.navigationBase) {
-                    input.dataset.navigationBase = String(parseFloat(input.value) || 0);
-                }
-                const baseValue = parseFloat(input.dataset.navigationBase) || parseFloat(input.value) || 0;
-                input.value = (baseValue * factor).toFixed(id === 'cons-sea' ? 1 : 2);
+                if (!input || !Number.isFinite(value) || value <= 0) return;
+                input.value = value.toFixed(1);
+                input.dataset.autoInferred = 'true';
+                input.dataset.manualOverride = 'false';
+                input.dataset.vesselSegment = segmentConfig.segment;
                 input.dataset.navigationStrategy = navigationStrategy;
+                input.dataset.navigationBase = String(value);
             });
+
+            if (typeof State !== 'undefined') {
+                State.detectedVesselSegment = segmentConfig.segment;
+                State.speedInferenceSource = `SeaCharter Core PRO ${navigationStrategy.toUpperCase()} speed profile`;
+            }
+            setNavigationStrategyMode('auto');
+        }
+
+        function setNavigationStrategy(strategy) {
+            navigationStrategy = strategy === 'full' ? 'full' : 'eco';
+            navigationStrategyMode = 'auto';
+            const config = NAVIGATION_STRATEGIES[navigationStrategy];
+            updateNavigationStrategyButtons();
+
+            const consumptionInput = document.getElementById('cons-sea');
+            if (consumptionInput) {
+                if (!consumptionInput.dataset.navigationBase) {
+                    consumptionInput.dataset.navigationBase = String(parseFloat(consumptionInput.value) || 0);
+                }
+                const baseValue = parseFloat(consumptionInput.dataset.navigationBase) || parseFloat(consumptionInput.value) || 0;
+                consumptionInput.value = (baseValue * config.seaConsumptionFactor).toFixed(1);
+                consumptionInput.dataset.navigationStrategy = navigationStrategy;
+            }
+
+            syncNavigationStrategySpeeds();
 
             if (typeof runEngine === 'function') runEngine();
         }
 
+        function syncNavigationStrategyEffect() {
+            syncNavigationStrategySpeeds();
+            updateNavigationStrategyButtons();
+            if (typeof runEngine === 'function') runEngine();
+        }
+
+        window.setNavigationStrategyMode = setNavigationStrategyMode;
+        window.syncNavigationStrategyEffect = syncNavigationStrategyEffect;
         window.setNavigationStrategy = setNavigationStrategy;
+
+        function initializeNavigationStrategyEffect() {
+            setNavigationStrategyMode('auto');
+            syncNavigationStrategyEffect();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeNavigationStrategyEffect);
+        } else {
+            initializeNavigationStrategyEffect();
+        }
 
         function setInverseSyncFieldState(input, locked) {
             input.disabled = locked;
@@ -30804,6 +31304,37 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (bunkerDailyPortInput) bunkerDailyPortInput.value = (portConsumption * mgoPrice).toFixed(2);
         }
 
+        const DEMURRAGE_TCE_MULTIPLIER = 1.25;
+
+        function calculateDynamicDemurrageFromRisk(options = {}) {
+            const tceTarget = Number.isFinite(Number(options.tceTarget))
+                ? Number(options.tceTarget)
+                : readInverseTceNumber('inverse-tce-target');
+            const cargoVolume = Number.isFinite(Number(options.cargoVolume))
+                ? Number(options.cargoVolume)
+                : readInverseTceNumber('inverse-cargo-volume');
+            const historicalRisk = options.historicalRisk || State.historicalRisk || {};
+            const riskDays = Math.max(0, Number(historicalRisk.riskDays) || 0);
+            const laycanFreeDays = Math.max(0, Number(historicalRisk.laycanFreeDays) || readInverseTceNumber('laycan-dias-libres', 0));
+            const historicalRiskImpact = Math.max(0, Number(historicalRisk.impact) || 0);
+            const riskOverrunDays = Math.max(0, riskDays - laycanFreeDays);
+            const hasRiskAdjustment = historicalRiskImpact > 0 && riskOverrunDays > 0 && cargoVolume > 0 && riskDays > 0;
+            const correctionFactor = hasRiskAdjustment
+                ? (cargoVolume / riskDays) * (riskOverrunDays / Math.max(laycanFreeDays, 1))
+                : 0;
+            const historicalRiskDailyImpact = hasRiskAdjustment ? historicalRiskImpact * correctionFactor : 0;
+            const demurrageBase = Math.max(0, tceTarget) * DEMURRAGE_TCE_MULTIPLIER;
+            const demurrageRate = demurrageBase + historicalRiskDailyImpact;
+
+            return {
+                demurrageBase,
+                demurrageRate,
+                historicalRiskDailyImpact,
+                hasRiskAdjustment,
+                riskOverrunDays
+            };
+        }
+
         function calculateInverseTce() {
             if (isInverseTceSyncEnabled) syncInverseBunkerCostFromVoyage();
             const tceTarget = readInverseTceNumber('inverse-tce-target');
@@ -30824,17 +31355,32 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const etsCostPerMt = cargoVolume > 0 ? etsTotalCost / cargoVolume : 0;
             const targetRevenue = (tceTarget * totalDays) + bunkerCost + portCosts + etsTotalCost;
             const minFreightRate = cargoVolume > 0 ? targetRevenue / cargoVolume : 0;
-            const demurrageRate = tceTarget + bunkerDailyPortCost;
+            const dynamicDemurrage = calculateDynamicDemurrageFromRisk({ tceTarget, cargoVolume });
+            const demurrageRate = dynamicDemurrage.demurrageRate;
 
             const totalDaysEl = document.getElementById('inverse-total-days');
             const minFreightEl = document.getElementById('inverse-min-freight-rate');
             const demurrageEl = document.getElementById('inverse-demurrage-rate');
+            const demurrageIconEl = document.getElementById('inverse-demurrage-risk-icon');
+            const demurrageNoteEl = document.getElementById('inverse-demurrage-risk-note');
             const etsBreakdownEl = document.getElementById('inverse-ets-breakdown');
             const fuelStrategyEl = document.getElementById('inverse-fuel-strategy-label');
 
             if (totalDaysEl) totalDaysEl.textContent = totalDays.toFixed(1);
             if (minFreightEl) minFreightEl.textContent = `${formatInverseTceMoney(minFreightRate, { decimals: 2 })} /MT`;
             if (demurrageEl) demurrageEl.textContent = `${formatInverseTceMoney(demurrageRate)} /Día`;
+            if (demurrageIconEl) {
+                demurrageIconEl.classList.toggle('hidden', !dynamicDemurrage.hasRiskAdjustment);
+                demurrageIconEl.title = dynamicDemurrage.hasRiskAdjustment
+                    ? `Ajustado por riesgo histórico: +${formatInverseTceMoney(dynamicDemurrage.historicalRiskDailyImpact)}/día (${dynamicDemurrage.riskOverrunDays.toFixed(2)} d sobre laycan libre).`
+                    : 'Demurrage base calculado como 1.25x TCE objetivo';
+            }
+            if (demurrageNoteEl) {
+                demurrageNoteEl.classList.toggle('hidden', !dynamicDemurrage.hasRiskAdjustment);
+                demurrageNoteEl.textContent = dynamicDemurrage.hasRiskAdjustment
+                    ? `Base ${formatInverseTceMoney(dynamicDemurrage.demurrageBase)} + riesgo ${formatInverseTceMoney(dynamicDemurrage.historicalRiskDailyImpact)}/día`
+                    : '';
+            }
             if (fuelStrategyEl) {
                 fuelStrategyEl.textContent = getFuelStrategyText();
                 fuelStrategyEl.className = vesselHasScrubber()
@@ -30849,7 +31395,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             State.inverseTceMinFreightRate = minFreightRate;
             State.inverseTceTargetRevenue = targetRevenue;
             State.inverseTceBunkerCost = bunkerCost;
-            return { minFreightRate, targetRevenue, bunkerCost };
+            State.inverseTceDemurrageRate = demurrageRate;
+            State.inverseTceDemurrageRiskAdjusted = dynamicDemurrage.hasRiskAdjustment;
+            return { minFreightRate, targetRevenue, bunkerCost, demurrageRate };
         }
 
         function calculateCostPlusFreight() {
@@ -31043,6 +31591,19 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const etaRadarInput = document.getElementById('eta-radar');
             if (etaRadarInput) etaRadarInput.value = '';
+            setEtaRadarLocked(true);
+            if (etaRadarInput) {
+                const blockLockedEtaEdit = (event) => {
+                    if (etaRadarInput.dataset.manualUnlocked !== 'true') {
+                        event.preventDefault();
+                        etaRadarInput.blur();
+                    }
+                };
+                etaRadarInput.addEventListener('beforeinput', blockLockedEtaEdit);
+                etaRadarInput.addEventListener('keydown', blockLockedEtaEdit);
+                etaRadarInput.addEventListener('paste', blockLockedEtaEdit);
+                etaRadarInput.addEventListener('mousedown', blockLockedEtaEdit);
+            }
             ['map-port-ballast', 'map-port-pol', 'map-port-pod', 'map-laycan-date', 'map-cancelling-date'].forEach((id) => {
                 const el = document.getElementById(id);
                 if (!el) return;

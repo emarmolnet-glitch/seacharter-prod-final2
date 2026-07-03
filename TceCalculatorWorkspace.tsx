@@ -17,6 +17,9 @@ type ReverseCalculatorState = {
   euaPrice: number;
   etsCoverage: number;
   opexDaily: number;
+  contractShipments: number;
+  ownerMarginPercent: number;
+  chartererMarginPercent: number;
 };
 
 type SyncedCostData = Partial<Pick<
@@ -49,6 +52,10 @@ type ReverseTceCalculatorProps = {
   vesselCategory?: string;
   hasScrubber?: boolean;
   syncedCostData?: SyncedCostData;
+  laycanDiasLibres?: number;
+  impactoRiesgo?: number;
+  riesgoDias?: number;
+  laycanDate?: string;
 };
 
 type NavigationStrategy = 'eco' | 'full';
@@ -96,6 +103,9 @@ const DEFAULT_VALUES: ReverseCalculatorState = {
   euaPrice: 75.5,
   etsCoverage: 0.5,
   opexDaily: 2800,
+  contractShipments: 6,
+  ownerMarginPercent: 15,
+  chartererMarginPercent: 10,
 };
 
 const COST_PLUS_DEFAULT_VALUES: CostPlusCalculatorState = {
@@ -127,6 +137,9 @@ const INPUTS: Array<{
   { key: 'euaPrice', label: 'Precio EUA', suffix: 'USD/t', step: '0.01' },
   { key: 'etsCoverage', label: 'Cobertura ETS', suffix: 'factor', step: '0.5' },
   { key: 'opexDaily', label: 'OPEX fijo diario', suffix: 'USD/día' },
+  { key: 'contractShipments', label: 'Número de embarques COA', suffix: 'viajes', step: '1' },
+  { key: 'ownerMarginPercent', label: 'Margen armador', suffix: '%' },
+  { key: 'chartererMarginPercent', label: 'Margen fletador', suffix: '%' },
 ];
 
 const SYNCED_REVERSE_FIELDS = new Set<keyof ReverseCalculatorState>([
@@ -146,7 +159,9 @@ const SYNCED_REVERSE_FIELDS = new Set<keyof ReverseCalculatorState>([
 
 const FEARNLEYS_MARKET_DATA_KEY = 'fearnleysMarketData';
 const BUNKER_INDEX_DATA_KEY = 'bunkerIndexData';
-const CHARTERER_MARGIN_PERCENT = 10;
+const DEMURRAGE_TCE_MULTIPLIER = 1.25;
+const BUNKER_INDEX_ADJUSTMENT_SHARE = 0.5;
+const BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT = 5;
 const NAVIGATION_STRATEGIES: Record<NavigationStrategy, {
   label: string;
   seaConsumptionFactor: number;
@@ -223,6 +238,44 @@ function getTodayBunkerLabel() {
   return new Date().toLocaleDateString();
 }
 
+function getAverageBunkerIndexPrice({ vlsfo, ifo380, mgo }: { vlsfo: number; ifo380: number; mgo: number }) {
+  const validPrices = [vlsfo, ifo380, mgo].filter((price) => Number.isFinite(price) && price > 0);
+  if (!validPrices.length) return 0;
+  return validPrices.reduce((sum, price) => sum + price, 0) / validPrices.length;
+}
+
+function calculateRiskAdjustedDemurrage({
+  tceTarget,
+  cargoVolume,
+  historicalRiskImpact,
+  riskDays,
+  laycanFreeDays,
+}: {
+  tceTarget: number;
+  cargoVolume: number;
+  historicalRiskImpact: number;
+  riskDays: number;
+  laycanFreeDays: number;
+}) {
+  const demurrageBase = tceTarget * DEMURRAGE_TCE_MULTIPLIER;
+  const normalizedRiskDays = Math.max(0, riskDays);
+  const normalizedLaycanFreeDays = Math.max(0, laycanFreeDays);
+  const riskOverrunDays = Math.max(0, normalizedRiskDays - normalizedLaycanFreeDays);
+  const hasRiskAdjustment = historicalRiskImpact > 0 && riskOverrunDays > 0 && cargoVolume > 0 && normalizedRiskDays > 0;
+  const correctionFactor = hasRiskAdjustment
+    ? (cargoVolume / normalizedRiskDays) * (riskOverrunDays / Math.max(normalizedLaycanFreeDays, 1))
+    : 0;
+  const historicalRiskDailyImpact = hasRiskAdjustment ? historicalRiskImpact * correctionFactor : 0;
+
+  return {
+    demurrageBase,
+    demurrageRate: demurrageBase + historicalRiskDailyImpact,
+    historicalRiskDailyImpact,
+    hasRiskAdjustment,
+    riskOverrunDays,
+  };
+}
+
 function LockIcon({ open = false }: { open?: boolean }) {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -243,7 +296,12 @@ export function ReverseTceCalculator({
   vesselCategory = 'Handysize / Small Tanker',
   hasScrubber = false,
   syncedCostData,
+  laycanDiasLibres = 0,
+  impactoRiesgo = 0,
+  riesgoDias = 0,
+  laycanDate = '',
 }: ReverseTceCalculatorProps) {
+  const [isPurchaseDetailsOpen, setIsPurchaseDetailsOpen] = useState(false);
   const [values, setValues] = useState<ReverseCalculatorState>(DEFAULT_VALUES);
   const [vlsfoPrice, setVlsfoPrice] = useState(DEFAULT_VALUES.vlsfoPrice);
   const [ifoPrice, setIfoPrice] = useState(DEFAULT_VALUES.ifoPrice);
@@ -256,6 +314,11 @@ export function ReverseTceCalculator({
   const [isManualOverride, setIsManualOverride] = useState(false);
   const [isSyncEnabled, setIsSyncEnabled] = useState(true);
   const [navigationStrategy, setNavigationStrategy] = useState<NavigationStrategy>('eco');
+  const [applyBunkerIndexAdjustment, setApplyBunkerIndexAdjustment] = useState(true);
+  const [contractBunkerIndexBase, setContractBunkerIndexBase] = useState(0);
+  const [etaBaseRadar, setEtaBaseRadar] = useState('');
+  const [isEtaBaseRadarUnlocked, setIsEtaBaseRadarUnlocked] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('');
 
   const syncFromSectionData = () => {
     const strategy = NAVIGATION_STRATEGIES[navigationStrategy];
@@ -338,36 +401,104 @@ export function ReverseTceCalculator({
         mgoPrice: mgo,
       }));
       setBunkerDateLabel(parsed.date);
+      setContractBunkerIndexBase((current) => current || getAverageBunkerIndexPrice({ vlsfo, ifo380, mgo }));
     } catch {
       window.localStorage.removeItem(BUNKER_INDEX_DATA_KEY);
     }
   }, []);
+
+  useEffect(() => {
+    if (!laycanDate) return;
+    setEtaBaseRadar(laycanDate);
+    setIsEtaBaseRadarUnlocked(false);
+  }, [laycanDate]);
 
   const results = useMemo(() => {
     const daysSea = safeNumber(values.daysSea);
     const daysPort = safeNumber(values.daysPort);
     const tceTarget = safeNumber(values.tceTarget);
     const activeSeaFuelPrice = hasScrubber ? safeNumber(ifoPrice) : safeNumber(vlsfoPrice);
-    const seaFuelCost = daysSea * safeNumber(values.seaFuelConsumption) * activeSeaFuelPrice;
-    const portFuelCost = daysPort * safeNumber(values.portFuelConsumption) * safeNumber(mgoPrice);
-    const bunkerCost = seaFuelCost + portFuelCost;
     const portCosts = safeNumber(values.portCosts);
     const cargoVolume = safeNumber(values.cargoVolume);
-    const bunkerDailyPortCost = daysPort > 0 ? portFuelCost / daysPort : safeNumber(values.bunkerDailyPortCost);
     const totalCo2Emissions = safeNumber(values.totalCo2Emissions);
     const euaPrice = safeNumber(values.euaPrice);
     const etsCoverage = safeNumber(values.etsCoverage);
     const opexDaily = safeNumber(values.opexDaily);
-
+    const contractShipments = Math.max(1, Math.round(safeNumber(values.contractShipments)));
+    const ownerMarginPercent = safeNumber(values.ownerMarginPercent);
+    const chartererMarginPercent = safeNumber(values.chartererMarginPercent);
     const totalDays = daysSea + daysPort;
     const etsTotalCost = totalCo2Emissions * euaPrice * etsCoverage;
+    const marketBunkerIndexPrice = getAverageBunkerIndexPrice({
+      vlsfo: safeNumber(vlsfoPrice),
+      ifo380: safeNumber(ifoPrice),
+      mgo: safeNumber(mgoPrice),
+    });
+    const bunkerIndexBase = contractBunkerIndexBase || marketBunkerIndexPrice;
+    const bunkerVariationPct = bunkerIndexBase > 0
+      ? ((marketBunkerIndexPrice - bunkerIndexBase) / bunkerIndexBase) * 100
+      : 0;
+    const shouldApplyBunkerAdjustment = applyBunkerIndexAdjustment
+      && Math.abs(bunkerVariationPct) >= BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT;
+    const sharedBunkerAdjustmentPct = shouldApplyBunkerAdjustment
+      ? bunkerVariationPct * BUNKER_INDEX_ADJUSTMENT_SHARE
+      : 0;
+    const calculateScenario = (label: 'Optimista -10%' | 'Base BunkerIndex' | 'Pesimista +10%', bunkerMultiplier: number) => {
+      const scenarioSeaFuelPrice = activeSeaFuelPrice * bunkerMultiplier;
+      const scenarioMgoPrice = safeNumber(mgoPrice) * bunkerMultiplier;
+      const scenarioSeaFuelCost = daysSea * safeNumber(values.seaFuelConsumption) * scenarioSeaFuelPrice;
+      const scenarioPortFuelCost = daysPort * safeNumber(values.portFuelConsumption) * scenarioMgoPrice;
+      const scenarioBunkerCost = scenarioSeaFuelCost + scenarioPortFuelCost;
+      const scenarioVoyageCost = (tceTarget * totalDays) + scenarioBunkerCost + portCosts + etsTotalCost;
+      const scenarioContractCost = scenarioVoyageCost * contractShipments;
+      const weightedAverageVoyageCost = scenarioContractCost / contractShipments;
+      const breakEvenAverage = cargoVolume > 0 ? weightedAverageVoyageCost / cargoVolume : 0;
+      const fairFreight = breakEvenAverage * (1 + ownerMarginPercent / 100);
+      const targetPriceBeforeIndexation = fairFreight * (1 + chartererMarginPercent / 100);
+      const indexedTargetPrice = targetPriceBeforeIndexation * (1 + sharedBunkerAdjustmentPct / 100);
+
+      return {
+        label,
+        bunkerMultiplier,
+        bunkerIndexPrice: marketBunkerIndexPrice * bunkerMultiplier,
+        bunkerCost: scenarioBunkerCost,
+        voyageCost: scenarioVoyageCost,
+        contractCost: scenarioContractCost,
+        weightedAverageVoyageCost,
+        totalCost: scenarioContractCost,
+        breakEvenAverage,
+        fairFreight,
+        targetPriceBeforeIndexation,
+        targetPrice: indexedTargetPrice,
+      };
+    };
+    const scenarios = [
+      calculateScenario('Optimista -10%', 0.9),
+      calculateScenario('Base BunkerIndex', 1),
+      calculateScenario('Pesimista +10%', 1.1),
+    ];
+    const pessimisticScenario = scenarios[2];
+    const seaFuelCost = scenarios[1].bunkerCost - (daysPort * safeNumber(values.portFuelConsumption) * safeNumber(mgoPrice));
+    const portFuelCost = daysPort * safeNumber(values.portFuelConsumption) * safeNumber(mgoPrice);
+    const bunkerCost = scenarios[1].bunkerCost;
+    const bunkerDailyPortCost = daysPort > 0 ? portFuelCost / daysPort : safeNumber(values.bunkerDailyPortCost);
     const etsCostPerMt = cargoVolume > 0 ? etsTotalCost / cargoVolume : 0;
-    const targetRevenue = tceTarget * totalDays + bunkerCost + portCosts + etsTotalCost;
+    const targetRevenue = scenarios[1].weightedAverageVoyageCost;
     const minFreightRate = cargoVolume > 0 ? targetRevenue / cargoVolume : 0;
-    const suggestedOwnerSale = minFreightRate;
-    const suggestedChartererSale = minFreightRate * (1 + CHARTERER_MARGIN_PERCENT / 100);
+    const suggestedOwnerSale = pessimisticScenario.fairFreight;
+    const suggestedChartererSale = pessimisticScenario.targetPrice;
     const isSuggestedSaleBelowTceTarget = suggestedOwnerSale < minFreightRate || suggestedChartererSale < minFreightRate;
-    const demurrageRate = tceTarget + bunkerDailyPortCost;
+    const negotiationSpread = suggestedChartererSale - suggestedOwnerSale;
+    const negotiationMarginPct = suggestedOwnerSale > 0 ? (negotiationSpread / suggestedOwnerSale) * 100 : 0;
+    const isNegotiationMarginCritical = suggestedOwnerSale > 0 && negotiationMarginPct < 5;
+    const demurrage = calculateRiskAdjustedDemurrage({
+      tceTarget,
+      cargoVolume,
+      historicalRiskImpact: safeNumber(impactoRiesgo),
+      riskDays: safeNumber(riesgoDias),
+      laycanFreeDays: safeNumber(laycanDiasLibres),
+    });
+    const demurrageRate = demurrage.demurrageRate;
     const tceTotal = tceTarget * totalDays;
     const netProfitTotal = tceTotal - opexDaily * totalDays;
     const netProfitDaily = totalDays > 0 ? netProfitTotal / totalDays : 0;
@@ -379,7 +510,13 @@ export function ReverseTceCalculator({
       suggestedOwnerSale,
       suggestedChartererSale,
       isSuggestedSaleBelowTceTarget,
+      negotiationMarginPct,
+      isNegotiationMarginCritical,
       demurrageRate,
+      demurrageBase: demurrage.demurrageBase,
+      demurrageRiskAdjustment: demurrage.historicalRiskDailyImpact,
+      isDemurrageRiskAdjusted: demurrage.hasRiskAdjustment,
+      demurrageRiskOverrunDays: demurrage.riskOverrunDays,
       etsTotalCost,
       etsCostPerMt,
       bunkerCost,
@@ -392,11 +529,21 @@ export function ReverseTceCalculator({
       netProfitTotal,
       netProfitDaily,
       opexDaily,
+      contractShipments,
+      ownerMarginPercent,
+      chartererMarginPercent,
       seaFuelStrategyLabel: hasScrubber
         ? 'Optimizado con IFO 380 (Scrubber Activo)'
         : 'Combustible estándar: VLSFO',
+      marketBunkerIndexPrice,
+      bunkerIndexBase,
+      bunkerVariationPct,
+      sharedBunkerAdjustmentPct,
+      shouldApplyBunkerAdjustment,
+      scenarios,
+      pessimisticScenario,
     };
-  }, [values, vlsfoPrice, ifoPrice, mgoPrice, hasScrubber]);
+  }, [values, vlsfoPrice, ifoPrice, mgoPrice, hasScrubber, laycanDiasLibres, impactoRiesgo, riesgoDias, applyBunkerIndexAdjustment, contractBunkerIndexBase]);
 
   const updateValue = (key: keyof ReverseCalculatorState, nextValue: string) => {
     if (isSyncEnabled && SYNCED_REVERSE_FIELDS.has(key)) {
@@ -505,6 +652,7 @@ export function ReverseTceCalculator({
         mgoPrice: nextCache.mgo,
       }));
       setBunkerDateLabel(nextCache.date);
+      setContractBunkerIndexBase((current) => current || getAverageBunkerIndexPrice(nextCache));
       window.localStorage.setItem(BUNKER_INDEX_DATA_KEY, JSON.stringify(nextCache));
     } catch (error) {
       setBunkerFetchError(error instanceof Error ? error.message : 'Error inesperado al consultar Bunkerindex.');
@@ -525,6 +673,59 @@ export function ReverseTceCalculator({
       }
       return !current;
     });
+  };
+
+  const handleFinalizeVoyage = async () => {
+    setSaveStatus('Guardando snapshot COA...');
+    try {
+      const snapshotPayload = {
+        savedAt: new Date().toISOString(),
+        voyage: {
+          etaBaseRadar,
+          etaFinalCalculada: etaBaseRadar,
+        },
+        bunkerIndex: {
+          date: bunkerDateLabel || getTodayBunkerLabel(),
+          vlsfo: vlsfoPrice,
+          ifo380: ifoPrice,
+          mgo: mgoPrice,
+          average: results.marketBunkerIndexPrice,
+          contractBaseAverage: results.bunkerIndexBase,
+        },
+        coa: {
+          applyBunkerIndexAdjustment,
+          variationThresholdPercent: BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT,
+          sharedAdjustmentFactor: BUNKER_INDEX_ADJUSTMENT_SHARE,
+          contractShipments: results.contractShipments,
+          ownerMarginPercent: results.ownerMarginPercent,
+          chartererMarginPercent: results.chartererMarginPercent,
+          bunkerVariationPct: results.bunkerVariationPct,
+          sharedBunkerAdjustmentPct: results.sharedBunkerAdjustmentPct,
+          scenarios: results.scenarios,
+          targetPrice: results.suggestedChartererSale,
+        },
+      };
+      const response = await fetch('/api/coa-snapshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(snapshotPayload),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.success === false) {
+        const archiveResponse = await fetch('/api/voyage-archive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(snapshotPayload),
+        });
+        const archivePayload = await archiveResponse.json().catch(() => ({}));
+        if (!archiveResponse.ok || archivePayload?.success === false) {
+          throw new Error(payload?.error || archivePayload?.error || 'No se pudo guardar el snapshot COA.');
+        }
+      }
+      setSaveStatus('Viaje guardado correctamente');
+    } catch (error) {
+      setSaveStatus(error instanceof Error ? error.message : 'No se pudo guardar el viaje.');
+    }
   };
 
   return (
@@ -651,6 +852,22 @@ export function ReverseTceCalculator({
                     ? `Datos registrados: ${bunkerDateLabel}`
                     : 'Esperando cotización del día...')}
                 </p>
+                <label className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                  <span>
+                    <span className="block text-[11px] font-black uppercase tracking-wide text-slate-700">
+                      Aplicar Ajuste BunkerIndex
+                    </span>
+                    <span className="block text-xs font-semibold text-slate-500">
+                      Recalcula el Target Price si el promedio bunker varía {BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT}% o más, compartiendo el 50% del riesgo.
+                    </span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={applyBunkerIndexAdjustment}
+                    onChange={(event) => setApplyBunkerIndexAdjustment(event.target.checked)}
+                    className="h-5 w-5 accent-teal-700"
+                  />
+                </label>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -745,6 +962,9 @@ export function ReverseTceCalculator({
                     {currencyFormatter.format(results.minFreightRate)}
                   </p>
                   <p className="mt-1 text-xs font-bold text-slate-500">USD / MT</p>
+                  <p className="mt-2 text-xs font-bold text-orange-700">
+                    Target protegido con escenario Pesimista +10% BunkerIndex.
+                  </p>
                   <p className={`mt-2 text-xs font-bold ${hasScrubber ? 'text-emerald-700' : 'text-slate-500'}`}>
                     {results.seaFuelStrategyLabel}
                   </p>
@@ -770,28 +990,172 @@ export function ReverseTceCalculator({
                   ) : null}
                   <div className="mt-3 grid gap-3">
                     <div>
-                      <p className="text-[11px] font-black uppercase text-slate-500">Venta Sugerida Armador</p>
-                      <p className={`text-2xl font-black ${results.isSuggestedSaleBelowTceTarget ? 'text-red-700' : 'text-indigo-700'}`}>
-                        {currencyFormatter.format(results.suggestedOwnerSale)} /MT
-                      </p>
-                    </div>
-                    <div>
                       <p className="text-[11px] font-black uppercase text-slate-500">
-                        Venta Sugerida Fletador ({CHARTERER_MARGIN_PERCENT}%)
+                        Venta Sugerida Fletador (Target Price)
                       </p>
                       <p className={`text-2xl font-black ${results.isSuggestedSaleBelowTceTarget ? 'text-red-700' : 'text-emerald-700'}`}>
                         {currencyFormatter.format(results.suggestedChartererSale)} /MT
                       </p>
+                      <p className="mt-1 text-xs font-bold text-slate-500">
+                        Basado en Coste Promedio Ponderado COA, escenario pesimista y márgenes {results.ownerMarginPercent}% / {results.chartererMarginPercent}%.
+                      </p>
+                      {results.shouldApplyBunkerAdjustment ? (
+                        <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-black text-amber-800">
+                          Ajuste BunkerIndex aplicado: {results.sharedBunkerAdjustmentPct.toFixed(2)}%
+                        </p>
+                      ) : null}
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsPurchaseDetailsOpen((current) => !current)}
+                      className="inline-flex items-center justify-between rounded-md border border-blue-200 bg-white px-3 py-2 text-left text-[11px] font-black uppercase text-blue-900 shadow-sm transition hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      aria-expanded={isPurchaseDetailsOpen}
+                    >
+                      <span>Ver detalles de compra</span>
+                      <span aria-hidden="true">{isPurchaseDetailsOpen ? '▲' : '▼'}</span>
+                    </button>
+                    {isPurchaseDetailsOpen ? (
+                      <div className={`rounded-lg border p-3 ${
+                        results.isNegotiationMarginCritical
+                          ? 'border-orange-300 bg-orange-50'
+                          : 'border-slate-200 bg-slate-50'
+                      }`}>
+                        {results.isNegotiationMarginCritical ? (
+                          <p className="mb-3 rounded-md border border-orange-300 bg-orange-100 px-3 py-2 text-xs font-black uppercase text-orange-800">
+                            Margen de negociación crítico
+                          </p>
+                        ) : null}
+                        <div className="grid gap-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="text-[11px] font-black uppercase text-slate-500">Flete Mínimo Calculadora Inversa</p>
+                            <p className="font-black text-slate-950">{currencyFormatter.format(results.minFreightRate)} /MT</p>
+                          </div>
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-[11px] font-black uppercase text-blue-900">Flete Sugerido Armador (Compra)</p>
+                              <p className="text-xs font-bold text-slate-500">Break-even promedio × (1 + {results.ownerMarginPercent}%)</p>
+                            </div>
+                            <p className="font-black text-blue-900">{currencyFormatter.format(results.suggestedOwnerSale)} /MT</p>
+                          </div>
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-[11px] font-black uppercase text-emerald-700">Venta Sugerida Fletador</p>
+                              <p className="text-xs font-bold text-slate-500">Compra armador × (1 + {results.chartererMarginPercent}%)</p>
+                            </div>
+                            <p className="font-black text-emerald-700">{currencyFormatter.format(results.suggestedChartererSale)} /MT</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                    </div>
+                </div>
+
+                <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase text-slate-500">Escenarios BunkerIndex COA</p>
+                      <p className="text-xs font-semibold text-slate-500">
+                        Promedio actual: {currencyFormatter.format(results.marketBunkerIndexPrice)} /t
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-orange-100 px-2 py-1 text-[10px] font-black uppercase text-orange-800">
+                      Seguridad: Pesimista
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {results.scenarios.map((scenario) => (
+                      <div
+                        key={scenario.label}
+                        className={`rounded-md border px-3 py-2 text-xs ${
+                          scenario.label.includes('Pesimista')
+                            ? 'border-orange-300 bg-orange-50'
+                            : 'border-slate-200 bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-black uppercase text-slate-700">{scenario.label}</span>
+                          <span className="font-black text-slate-950">{currencyFormatter.format(scenario.targetPrice)} /MT</span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between gap-3 font-semibold text-slate-500">
+                          <span>Break-even ponderado {currencyFormatter.format(scenario.breakEvenAverage)} /MT</span>
+                          <span>{results.contractShipments} embarques · Bunker/viaje {wholeCurrencyFormatter.format(scenario.bunkerCost)}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
+                <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <label htmlFor="eta-base-radar-react" className="text-xs font-bold uppercase text-slate-500">
+                      ETA BASE RADAR
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsEtaBaseRadarUnlocked((current) => !current)}
+                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-black uppercase ${
+                        isEtaBaseRadarUnlocked
+                          ? 'border-orange-300 bg-orange-50 text-orange-800'
+                          : 'border-slate-200 bg-slate-50 text-slate-600'
+                      }`}
+                      aria-pressed={isEtaBaseRadarUnlocked}
+                    >
+                      <LockIcon open={isEtaBaseRadarUnlocked} />
+                      {isEtaBaseRadarUnlocked ? 'Manual' : 'Bloqueado'}
+                    </button>
+                  </div>
+                  <input
+                    id="eta-base-radar-react"
+                    type="date"
+                    value={etaBaseRadar}
+                    readOnly={!isEtaBaseRadarUnlocked}
+                    onChange={(event) => setEtaBaseRadar(event.target.value)}
+                    className={`w-full rounded-md border px-3 py-2 text-sm font-bold ${
+                      isEtaBaseRadarUnlocked
+                        ? 'border-orange-300 bg-orange-50 text-orange-900'
+                        : 'border-slate-200 bg-slate-50 text-slate-600'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleFinalizeVoyage}
+                    className="mt-3 w-full rounded-md bg-slate-900 px-3 py-2 text-xs font-black uppercase text-white shadow-sm transition hover:bg-slate-700"
+                  >
+                    Finalizar Viaje
+                  </button>
+                  {saveStatus ? (
+                    <p className={`mt-2 text-xs font-bold ${saveStatus.includes('correctamente') ? 'text-emerald-700' : 'text-slate-500'}`}>
+                      {saveStatus}
+                    </p>
+                  ) : null}
+                </div>
+
                 <div className="rounded-lg bg-white p-4 shadow-sm">
-                  <p className="text-xs font-bold uppercase text-slate-500">Demurrage recomendado</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-bold uppercase text-slate-500">Demurrage recomendado</p>
+                    {results.isDemurrageRiskAdjusted ? (
+                      <span
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-orange-700"
+                        title={`Ajustado por riesgo histórico: +${wholeCurrencyFormatter.format(results.demurrageRiskAdjustment)}/día (${results.demurrageRiskOverrunDays.toFixed(2)} d sobre laycan libre).`}
+                        aria-label="Demurrage ajustado por riesgo histórico"
+                      >
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+                          <path d="M12 9v4" />
+                          <path d="M12 17h.01" />
+                        </svg>
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="mt-1 text-3xl font-black tracking-tight text-slate-950">
                     {wholeCurrencyFormatter.format(results.demurrageRate)}
                   </p>
                   <p className="mt-1 text-xs font-bold text-slate-500">USD / Día</p>
+                  {results.isDemurrageRiskAdjusted ? (
+                    <p className="mt-2 text-xs font-bold text-orange-700">
+                      Base {wholeCurrencyFormatter.format(results.demurrageBase)} + riesgo {wholeCurrencyFormatter.format(results.demurrageRiskAdjustment)}/día
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -825,6 +1189,10 @@ export function ReverseTceCalculator({
                     <dd className="mt-1 font-black text-slate-950">
                       {wholeCurrencyFormatter.format(results.targetRevenue)}
                     </dd>
+                  </div>
+                  <div>
+                    <dt className="font-bold uppercase text-teal-800">Embarques COA</dt>
+                    <dd className="mt-1 font-black text-slate-950">{results.contractShipments}</dd>
                   </div>
                 </dl>
 
