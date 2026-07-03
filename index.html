@@ -1454,8 +1454,9 @@
 
         /* Shipowner Net Profit styling (Positive vs Negative) */
         #res-net-profit-owner {
-            font-size: 1.875rem !important; /* Drastically increased size */
-            font-weight: 900 !important; /* Extra thick bold */
+            font-size: 2.25rem !important;
+            line-height: 1 !important;
+            font-weight: 700 !important;
             font-family: 'Inter', sans-serif !important;
         }
 
@@ -5163,15 +5164,15 @@
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 bg-slate-950 p-3 rounded-lg border border-slate-800">
                             <div class="input-group">
                                 <label id="label-dist-ballast" class="text-indigo-400">Distancia Lastre (NM)</label>
-                                <input type="number" id="dist-ballast" class="input-gc font-bold text-indigo-300" value="0" oninput="runEngine()">
+                                <input type="number" id="dist-ballast" class="input-gc font-bold text-indigo-300" value="0" step="any" oninput="runEngine()">
                             </div>
                             <div class="input-group">
                                 <label id="label-dist-laden" class="text-emerald-400">Distancia Carga (NM)</label>
-                                <input type="number" id="dist-laden" class="input-gc font-bold text-emerald-300" value="0" oninput="runEngine()">
+                                <input type="number" id="dist-laden" class="input-gc font-bold text-emerald-300" value="0" step="any" oninput="runEngine()">
                             </div>
                             <div class="input-group">
                                 <label id="label-dist-total" class="text-amber-400">Total Millas (NM)</label>
-                                <input type="number" id="dist-total" class="input-gc text-amber-300" disabled>
+                                <input type="number" id="dist-total" class="input-gc text-amber-300" step="any" disabled>
                             </div>
                         </div>
 
@@ -5251,22 +5252,37 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-vessel-dwt" class="text-blue-400 flex items-center min-h-[28px]">Capacidad DWT (TM)</label>
-                                <input type="number" id="vessel-dwt" class="input-gc font-bold text-blue-300" value="0" oninput="handleDWTChange(true)" onblur="detectVesselSegmentFromInputs()">
+                                <input type="number" id="vessel-dwt" class="input-gc font-bold text-blue-300" value="0" step="any" oninput="handleDWTChange(true)" onblur="detectVesselSegmentFromInputs()">
+                            </div>
+                            <div class="input-group">
+                                <label for="vessel-has-scrubber" class="text-emerald-400 flex items-center min-h-[28px]">Scrubber</label>
+                                <label class="flex min-h-[42px] cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">
+                                    <span class="text-[10px] font-bold uppercase leading-tight text-slate-300">¿Equipado con Scrubber? (Permite IFO 380)</span>
+                                    <input type="checkbox" id="vessel-has-scrubber" class="peer sr-only" onchange="runEngine()">
+                                    <span class="relative h-6 w-11 shrink-0 rounded-full bg-slate-700 transition peer-checked:bg-emerald-500 after:absolute after:left-1 after:top-1 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition peer-checked:after:translate-x-5"></span>
+                                </label>
+                            </div>
+                            <div class="input-group">
+                                <label class="text-blue-300 flex items-center min-h-[28px]">Estrategia de Navegación</label>
+                                <div class="grid min-h-[42px] grid-cols-2 rounded-lg border border-slate-700 bg-slate-950 p-1">
+                                    <button type="button" id="nav-strategy-eco" onclick="setNavigationStrategy('eco')" class="rounded-md bg-blue-600 px-2 py-1 text-[10px] font-black uppercase text-white shadow">Eco-Speed</button>
+                                    <button type="button" id="nav-strategy-full" onclick="setNavigationStrategy('full')" class="rounded-md px-2 py-1 text-[10px] font-black uppercase text-slate-400 hover:text-white">Full-Speed</button>
+                                </div>
                             </div>
                             <div class="input-group">
                                 <label id="label-spd-ballast" class="flex items-center min-h-[28px]">Velocidad Lastre (Knts)</label>
-                                <input type="number" id="spd-ballast" class="input-gc" value="11.5" step="0.1" oninput="markSpeedManualOverride(this); runEngine()">
+                                <input type="number" id="spd-ballast" class="input-gc" value="11.5" step="any" oninput="markSpeedManualOverride(this); runEngine()">
                             </div>
                             <div class="input-group">
                                 <label id="label-spd-laden" class="flex items-center min-h-[28px]">Velocidad Carga (Knts)</label>
-                                <input type="number" id="spd-laden" class="input-gc" value="10.5" step="0.1" oninput="markSpeedManualOverride(this); runEngine()">
+                                <input type="number" id="spd-laden" class="input-gc" value="10.5" step="any" oninput="markSpeedManualOverride(this); runEngine()">
                             </div>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <div class="input-group">
                                 <label id="label-cargo-qty" class="text-action-required flex items-center min-h-[24px]">Carga a Transportar (TM)</label>
-                                <input type="number" id="cargo-qty" class="input-gc action-required-field text-action-required font-bold" value="0" oninput="autoScaleVesselAndCosts(); syncCalculatorAndMatching('calculator'); actualizarModuloCamionTolva();" onblur="detectVesselSegmentFromInputs()">
+                                <input type="number" id="cargo-qty" class="input-gc action-required-field text-action-required font-bold" value="0" step="any" oninput="autoScaleVesselAndCosts(); syncCalculatorAndMatching('calculator'); actualizarModuloCamionTolva();" onblur="detectVesselSegmentFromInputs()">
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-type" class="text-action-required flex items-center min-h-[24px]">Tipo de Carga</label>
@@ -5307,7 +5323,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-rate-load" class="text-action-required">Ritmo Real POL (TM/d)</label>
-                                <input type="number" id="rate-load" class="input-gc action-required-field text-action-required font-bold" value="2500" oninput="marcarRitmoManual('pol')">
+                                <input type="number" id="rate-load" class="input-gc action-required-field text-action-required font-bold" value="2500" step="any" oninput="marcarRitmoManual('pol')">
                                 <p id="rate-load-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
                             </div>
                         </div>
@@ -5362,7 +5378,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-rate-disch" class="text-action-required">Ritmo Real POD (TM/d)</label>
-                                <input type="number" id="rate-disch" class="input-gc action-required-field text-action-required font-bold" value="2500" oninput="marcarRitmoManual('pod')">
+                                <input type="number" id="rate-disch" class="input-gc action-required-field text-action-required font-bold" value="2500" step="any" oninput="marcarRitmoManual('pod')">
                                 <p id="rate-disch-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
                             </div>
                         </div>
@@ -5421,37 +5437,49 @@
                         
                         <!-- Bunkers Matrix -->
                         <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 mb-4">
-                            <div class="flex justify-between items-center mb-3">
-                                <h3 id="fuel-prices-title" class="text-xs font-bold text-slate-400 uppercase">Precios y Consumos de Combustible</h3>
-                                <button id="btn-consult-bunker" onclick="autoFillBunkers()" class="badge-ai text-[10px] text-sky-400 hover:text-sky-300 transition" title="Consultar BunkerIndex (IA)"><i class="fa-solid fa-robot mr-1"></i> Consultar BunkerIndex (IA)</button>
+                            <div class="flex flex-wrap justify-between items-start gap-3 mb-3">
+                                <div>
+                                    <h3 id="fuel-prices-title" class="text-xs font-bold text-slate-400 uppercase">BUNKER / COMBUSTIBLE</h3>
+                                </div>
+                                <button id="btn-consult-bunker" onclick="autoFillBunkers()" class="badge-ai text-[10px] text-sky-400 hover:text-sky-300 transition" title="Consultar BunkerIndex (IA)"><i class="fa-solid fa-robot mr-1"></i> ✨ Consultar Bunkerindex IA</button>
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                <div class="input-group">
+                                    <label class="flex justify-between items-center w-full">
+                                        <span id="label-price-vlsfo" class="text-emerald-400 font-bold">PRECIO VLSFO (MAR)</span>
+                                        <a href="https://www.bunkerindex.com/" target="_blank" class="text-indigo-400 hover:text-indigo-300" title="Ver en Bunker Index"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                                    </label>
+                                    <input type="number" id="price-sea" class="input-gc text-emerald-300 font-bold" value="610" step="any" oninput="runEngine()">
+                                </div>
+                                <div class="input-group">
+                                    <label class="flex justify-between items-center w-full">
+                                        <span id="label-price-ifo" class="text-emerald-400 font-bold">PRECIO IFO 380 (SCRUBBER)</span>
+                                        <a href="https://www.bunkerindex.com/" target="_blank" class="text-indigo-400 hover:text-indigo-300" title="Ver en Bunker Index"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                                    </label>
+                                    <input type="number" id="price-ifo" class="input-gc text-emerald-300 font-bold" value="0" step="any" oninput="runEngine()">
+                                </div>
+                                <div class="input-group">
+                                    <label class="flex justify-between items-center w-full">
+                                        <span id="label-price-mgo" class="text-emerald-400 font-bold">PRECIO MGO (PUERTO)</span>
+                                        <a href="https://www.bunkerindex.com/" target="_blank" class="text-indigo-400 hover:text-indigo-300" title="Ver en Bunker Index"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                                    </label>
+                                    <input type="number" id="price-port" class="input-gc text-emerald-300 font-bold" value="830" step="any" oninput="runEngine()">
+                                </div>
+                            </div>
+                            <p id="bunker-index-cache-label" class="-mt-2 mb-4 text-xs italic text-slate-500">Esperando cotización del día...</p>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div class="input-group">
                                     <label id="label-cons-sea">Consumo Mar (t/d)</label>
-                                    <input type="number" id="cons-sea" class="input-gc text-red-300 font-bold" value="5.5" step="0.1" oninput="runEngine()">
+                                    <input type="number" id="cons-sea" class="input-gc text-red-300 font-bold" value="5.5" step="any" oninput="runEngine()">
                                     <span id="net-cons-indicator" class="text-[10px] text-slate-400 font-mono block mt-1">Consumo Neto (incluye 5% de margen por mal tiempo): 5.78 T/D</span>
                                 </div>
                                 <div class="input-group">
-                                    <label class="flex justify-between items-center w-full">
-                                        <span id="label-price-vlsfo" class="text-emerald-400 font-bold">Precio VLSFO ($/t)</span>
-                                        <a href="https://www.bunkerindex.com/" target="_blank" class="text-indigo-400 hover:text-indigo-300" title="Ver en Bunker Index"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
-                                    </label>
-                                    <input type="number" id="price-sea" class="input-gc text-emerald-300 font-bold" value="610" oninput="runEngine()">
-                                </div>
-                                <div class="input-group">
                                     <label id="label-cons-port">Consumo Puerto (t/d)</label>
-                                    <input type="number" id="cons-port" class="input-gc text-red-300 font-bold" value="0.5" step="0.1" oninput="runEngine()">
+                                    <input type="number" id="cons-port" class="input-gc text-red-300 font-bold" value="0.5" step="any" oninput="runEngine()">
                                 </div>
                                 <div class="input-group">
                                     <label id="label-cons-anchorage">Consumo Fondeo (t/d)</label>
-                                    <input type="number" id="cons-anchorage" class="input-gc text-red-300 font-bold" value="0.8" step="0.1" oninput="runEngine()">
-                                </div>
-                                <div class="input-group">
-                                    <label class="flex justify-between items-center w-full">
-                                        <span id="label-price-mgo" class="text-emerald-400 font-bold">Precio MGO ($/t)</span>
-                                        <a href="https://www.bunkerindex.com/" target="_blank" class="text-indigo-400 hover:text-indigo-300" title="Ver en Bunker Index"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
-                                    </label>
-                                    <input type="number" id="price-port" class="input-gc text-emerald-300 font-bold" value="830" oninput="runEngine()">
+                                    <input type="number" id="cons-anchorage" class="input-gc text-red-300 font-bold" value="0.8" step="any" oninput="runEngine()">
                                 </div>
                             </div>
 
@@ -5475,7 +5503,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div class="input-group relative">
                                 <label id="label-opex-daily" class="text-orange-400">OPEX Fijo Diario ($)</label>
-                                <input type="number" id="opex-daily" class="input-gc font-bold text-orange-300" value="2800" oninput="runEngine()">
+                                <input type="number" id="opex-daily" class="input-gc font-bold text-orange-300" value="2800" step="any" oninput="runEngine()">
                                 <div id="opex-auto-estimated-badge" class="hidden mt-1 inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-1 text-[10px] font-semibold text-[#1d4ed8] shadow-sm">
                                     <i class="fa-solid fa-wand-magic-sparkles text-blue-500"></i>
                                     <span>Autocalculado por IA</span>
@@ -5485,26 +5513,26 @@
                             <div class="input-group">
                                 <label id="label-pda-pol" class="text-emerald-400 font-bold">Gastos PDA POL ($)</label>
                                 <div class="flex gap-1">
-                                    <input type="number" id="pda-pol" class="input-gc text-emerald-300 font-bold" value="8675" oninput="runEngine()">
+                                    <input type="number" id="pda-pol" class="input-gc text-emerald-300 font-bold" value="8675" step="any" oninput="runEngine()">
                                     <button id="btn-estimate-pda-pol" onclick="autoFillPDA('pol')" class="bg-slate-800 text-slate-400 px-2 rounded hover:text-white" title="Estimar algorítmicamente (GT/LOA/Manga)"><i class="fa-solid fa-rotate-right"></i></button>
                                 </div>
                             </div>
                             <div class="input-group">
                                 <label id="label-pda-pod" class="text-emerald-400 font-bold">Gastos PDA POD ($)</label>
                                 <div class="flex gap-1">
-                                    <input type="number" id="pda-pod" class="input-gc text-emerald-300 font-bold" value="10675" oninput="runEngine()">
+                                    <input type="number" id="pda-pod" class="input-gc text-emerald-300 font-bold" value="10675" step="any" oninput="runEngine()">
                                     <button id="btn-estimate-pda-pod" onclick="autoFillPDA('pod')" class="bg-slate-800 text-slate-400 px-2 rounded hover:text-white" title="Estimar algorítmicamente (GT/LOA/Manga)"><i class="fa-solid fa-rotate-right"></i></button>
                                 </div>
                             </div>
                             <div class="input-group">
                                 <label id="label-stevedoring" title="Solo usar si la póliza NO es FIOS">Estiba/Terminal ($)</label>
-                                <input type="number" id="stevedoring-costs" class="input-gc text-purple-300 font-bold" value="0" oninput="runEngine()">
+                                <input type="number" id="stevedoring-costs" class="input-gc text-purple-300 font-bold" value="0" step="any" oninput="runEngine()">
                             </div>
                             <div id="crane-validation-alert" class="md:col-span-4 hidden rounded-lg border px-3 py-2 text-xs font-bold" role="status" aria-live="polite"></div>
                             <div id="voyage-cost-data-alert" class="md:col-span-4 hidden rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800" role="status" aria-live="polite">Faltan datos operativos</div>
                             <div class="input-group">
                                 <label id="label-pda-misc">Extras/Canal ($)</label>
-                                <input type="number" id="pda-misc" class="input-gc" value="0" oninput="runEngine()">
+                                <input type="number" id="pda-misc" class="input-gc" value="0" step="any" oninput="runEngine()">
                             </div>
                             <div class="input-group">
                                 <label id="label-selected-canal" class="text-sky-400">Canal Seleccionado</label>
@@ -5517,19 +5545,19 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-surcharge">Recargo Carga/Especial ($)</label>
-                                <input type="number" id="cargo-surcharge" class="input-gc text-red-300 font-bold" value="0" oninput="runEngine()">
+                                <input type="number" id="cargo-surcharge" class="input-gc text-red-300 font-bold" value="0" step="any" oninput="runEngine()">
                             </div>
                             <div id="contenedor-trincaje" class="input-group hidden">
                                 <label id="label-trincaje" class="text-red-300">Coste Trincaje ($)</label>
-                                <input type="number" id="input-trincaje" class="input-gc text-red-300 font-bold" value="0" oninput="runEngine()">
+                                <input type="number" id="input-trincaje" class="input-gc text-red-300 font-bold" value="0" step="any" oninput="runEngine()">
                             </div>
                             <div id="contenedor-maniobra-especial" class="input-group hidden">
                                 <label id="label-maniobra-especial" class="text-red-300">Coste por Maniobra Especial ($)</label>
-                                <input type="number" id="coste-maniobra-especial" class="input-gc text-red-300 font-bold" value="0" oninput="runEngine()">
+                                <input type="number" id="coste-maniobra-especial" class="input-gc text-red-300 font-bold" value="0" step="any" oninput="runEngine()">
                             </div>
                             <div id="contenedor-dias-preparacion" class="input-group hidden">
                                 <label id="label-dias-preparacion" class="text-red-300">Días de preparación</label>
-                                <input type="number" id="dias-preparacion" class="input-gc text-red-300 font-bold" value="0" step="0.1" oninput="runEngine()">
+                                <input type="number" id="dias-preparacion" class="input-gc text-red-300 font-bold" value="0" step="any" oninput="runEngine()">
                             </div>
                         </div>
 
@@ -5848,6 +5876,155 @@
                                 </div>
                             </div>
 
+                            <!-- Router de Pricing por tamaño de buque -->
+                            <div id="vessel-pricing-router-card" class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs shadow-sm">
+                                <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                        <div class="text-[10px] font-black uppercase tracking-wide text-slate-700">Router de Pricing por DWT</div>
+                                        <div id="vessel-pricing-router-status" class="mt-0.5 text-[10px] font-semibold text-slate-500">Selecciona automáticamente la calculadora según tamaño del buque.</div>
+                                    </div>
+                                    <span id="vessel-pricing-router-badge" class="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-black text-blue-950 shadow-sm">Auto</span>
+                                </div>
+                            </div>
+
+                            <!-- Calculadora Inversa TCE -->
+                            <div id="inverse-tce-card" class="rounded-lg border border-indigo-200 bg-indigo-50/70 p-3 text-xs shadow-sm">
+                                <div class="mb-3 flex items-start justify-between gap-3">
+                                    <div>
+                                        <div class="text-[10px] font-black uppercase tracking-wide text-indigo-800">Calculadora Inversa de TCE</div>
+                                        <div class="mt-0.5 text-[10px] font-semibold text-slate-500">Break-even inverso desde rendimiento objetivo.</div>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <button id="inverse-sync-toggle" type="button" onclick="toggleInverseTceSync()" class="inline-flex items-center gap-1 rounded bg-white px-2 py-1 text-[10px] font-black uppercase text-indigo-700 shadow-sm" title="Desbloquear costes para ajuste manual"><i class="fa-solid fa-lock"></i><span>Auto</span></button>
+                                        <span id="inverse-tce-status" class="rounded bg-white px-2 py-1 text-[10px] font-black uppercase text-indigo-700 shadow-sm">Live</span>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    <div>
+                                        <label for="inverse-tce-target" class="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-600">TCE objetivo</label>
+                                        <div class="overflow-hidden rounded-md border border-slate-300 bg-white focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
+                                            <div class="flex items-center">
+                                                <input type="number" id="inverse-tce-target" class="min-w-0 flex-1 bg-transparent px-3 py-2 text-right text-sm font-black text-slate-900 outline-none" value="" min="0" step="any" oninput="handleManualTceOverride()">
+                                                <span class="border-l border-slate-200 bg-slate-50 px-2 py-2 text-[10px] font-bold uppercase text-slate-500">USD/día</span>
+                                            </div>
+                                        </div>
+                                        <div id="inverse-tce-manual-override" class="mt-2 hidden items-center justify-end gap-2">
+                                            <span class="rounded-full border border-orange-200 bg-orange-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-orange-800">⚠️ Índice Manual</span>
+                                            <button type="button" onclick="restoreFearnleysMarketIndex()" class="text-[10px] font-black uppercase tracking-wide text-indigo-700 underline-offset-2 hover:text-indigo-900 hover:underline">Restaurar Índice de Mercado</button>
+                                        </div>
+                                        <div class="mt-2 flex justify-end">
+                                            <button id="btn-fetch-fearnleys-tce" type="button" onclick="handleFetchFearnleysTce()" class="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-indigo-700 to-violet-700 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-white shadow-sm transition hover:from-indigo-600 hover:to-violet-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-70">
+                                                ✨ Consultar Fearnleys IA
+                                            </button>
+                                        </div>
+                                        <p id="inverse-tce-index-week" class="mt-1 text-right text-xs italic text-gray-500">Esperando datos del índice...</p>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label for="inverse-days-sea" class="mb-1 flex items-center gap-1 text-[10px] font-black uppercase text-slate-500">Días mar <i class="fa-solid fa-lock text-[9px]" data-inverse-sync-lock="true"></i></label>
+                                            <input type="number" id="inverse-days-sea" data-inverse-sync-field="true" class="input-gc bg-slate-50 text-slate-500 border-slate-300 border-dashed font-bold text-right cursor-not-allowed" value="8" min="0" step="any" disabled title="Autocompletado desde distancia y velocidad del formulario principal">
+                                        </div>
+                                        <div>
+                                            <label for="inverse-days-port" class="mb-1 flex items-center gap-1 text-[10px] font-black uppercase text-slate-500">Días puerto <i class="fa-solid fa-lock text-[9px]" data-inverse-sync-lock="true"></i></label>
+                                            <input type="number" id="inverse-days-port" data-inverse-sync-field="true" class="input-gc bg-slate-50 text-slate-500 border-slate-300 border-dashed font-bold text-right cursor-not-allowed" value="13.5" min="0" step="any" disabled title="Autocompletado desde ritmos de carga y descarga del formulario principal">
+                                        </div>
+                                        <div>
+                                            <label for="inverse-bunker-cost" class="mb-1 flex items-center gap-1 text-[10px] font-black uppercase text-slate-500">Bunker <i class="fa-solid fa-lock text-[9px]" data-inverse-sync-lock="true"></i></label>
+                                            <input type="number" id="inverse-bunker-cost" data-inverse-sync-field="true" class="input-gc bg-slate-50 text-slate-500 border-slate-300 border-dashed font-bold text-right cursor-not-allowed" value="104625" min="0" step="any" disabled title="Autocalculado desde consumos, días y estrategia de combustible">
+                                        </div>
+                                        <div>
+                                            <label for="inverse-port-costs" class="mb-1 flex items-center gap-1 text-[10px] font-black uppercase text-slate-500">Puertos <i class="fa-solid fa-lock text-[9px]" data-inverse-sync-lock="true"></i></label>
+                                            <input type="number" id="inverse-port-costs" data-inverse-sync-field="true" class="input-gc bg-slate-50 text-slate-500 border-slate-300 border-dashed font-bold text-right cursor-not-allowed" value="60000" min="0" step="any" disabled oninput="calculateInverseTce()" title="Sincronizado desde PDAs, estiba, canal y recargos de la Sección 3">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                                    <div>
+                                        <label for="inverse-cargo-volume" class="mb-1 flex items-center gap-1 text-[10px] font-black uppercase text-slate-500">Volumen carga <i class="fa-solid fa-lock text-[9px]" data-inverse-sync-lock="true"></i></label>
+                                        <input type="number" id="inverse-cargo-volume" data-inverse-sync-field="true" class="input-gc bg-slate-50 text-slate-500 border-slate-300 border-dashed font-bold text-right cursor-not-allowed" value="30000" min="1" step="any" disabled title="Autocompletado desde Carga a Transportar">
+                                    </div>
+                                    <div>
+                                        <label for="inverse-bunker-daily-port" class="mb-1 flex items-center gap-1 text-[10px] font-black uppercase text-slate-500">Bunker puerto/día <i class="fa-solid fa-lock text-[9px]" data-inverse-sync-lock="true"></i></label>
+                                        <input type="number" id="inverse-bunker-daily-port" data-inverse-sync-field="true" class="input-gc bg-slate-50 text-slate-500 border-slate-300 border-dashed font-bold text-right cursor-not-allowed" value="2250" min="0" step="any" disabled oninput="calculateInverseTce()" title="Sincronizado desde consumo de puerto y MGO">
+                                    </div>
+                                    <div class="rounded-md border border-indigo-200 bg-white p-2">
+                                        <div class="text-[10px] font-black uppercase text-slate-500">Días totales</div>
+                                        <div id="inverse-total-days" class="mono text-sm font-black text-slate-950">21.5</div>
+                                    </div>
+                                </div>
+                                <div class="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                                    <div class="rounded-md border border-white bg-white p-3 shadow-sm">
+                                        <div class="text-[10px] font-black uppercase text-slate-500">Flete mínimo</div>
+                                        <div id="inverse-min-freight-rate" class="mono text-xl font-black text-slate-950">$14.80 /MT</div>
+                                        <div id="inverse-fuel-strategy-label" class="mt-1 text-[10px] font-bold text-slate-500">Combustible estándar: VLSFO</div>
+                                        <div id="inverse-ets-breakdown" class="mt-1 text-sm font-semibold text-gray-500">Sin exposición ETS</div>
+                                    </div>
+                                    <div class="rounded-md border border-white bg-white p-3 shadow-sm">
+                                        <div class="text-[10px] font-black uppercase text-slate-500">Demurrage recomendado</div>
+                                        <div id="inverse-demurrage-rate" class="mono text-xl font-black text-slate-950">$15,250 /Día</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Calculadora Cost-Plus Coaster -->
+                            <div id="cost-plus-card" class="hidden rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-xs shadow-sm">
+                                <div class="mb-3 flex items-start justify-between gap-3">
+                                    <div>
+                                        <div class="text-[10px] font-black uppercase tracking-wide text-amber-800">Cost-Plus Coaster</div>
+                                        <div class="mt-0.5 text-[10px] font-semibold text-slate-500">Cálculo desde OPEX, bunker, puertos y margen comercial.</div>
+                                    </div>
+                                    <span class="rounded bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-700 shadow-sm">Modo Coaster: Cálculo Cost-Plus (OPEX)</span>
+                                </div>
+                                <div class="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1.25fr)_minmax(14rem,0.75fr)]">
+                                    <div>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label for="cost-plus-daily-opex" class="mb-1 block text-[10px] font-black uppercase text-slate-500">OPEX diario</label>
+                                                <input type="number" id="cost-plus-daily-opex" class="input-gc bg-white text-slate-900 border-slate-300 font-bold text-right" value="4500" min="0" step="any" oninput="calculateCostPlusFreight()">
+                                            </div>
+                                            <div>
+                                                <label for="cost-plus-target-margin" class="mb-1 block text-[10px] font-black uppercase text-slate-500">Margen objetivo</label>
+                                                <div class="flex overflow-hidden rounded-md border border-slate-300 bg-white focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20">
+                                                    <input type="number" id="cost-plus-target-margin" class="min-w-0 flex-1 bg-transparent px-2 py-1.5 text-right text-xs font-black text-slate-900 outline-none" value="15" min="0" step="any" oninput="calculateCostPlusFreight()">
+                                                    <div class="flex border-l border-slate-200 bg-slate-100 p-0.5">
+                                                        <button id="cost-plus-margin-fixed" type="button" onclick="setCostPlusMarginType('fixed')" class="h-7 w-8 rounded text-xs font-black text-slate-500 hover:text-slate-800">$</button>
+                                                        <button id="cost-plus-margin-percentage" type="button" onclick="setCostPlusMarginType('percentage')" class="h-7 w-8 rounded bg-white text-xs font-black text-slate-950 shadow-sm">%</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label for="cost-plus-days-sea" class="mb-1 block text-[10px] font-black uppercase text-slate-500">Días mar</label>
+                                                <input type="number" id="cost-plus-days-sea" class="input-gc bg-white text-slate-900 border-slate-300 font-bold text-right" value="4" min="0" step="any" oninput="calculateCostPlusFreight()">
+                                            </div>
+                                            <div>
+                                                <label for="cost-plus-days-port" class="mb-1 block text-[10px] font-black uppercase text-slate-500">Días puerto</label>
+                                                <input type="number" id="cost-plus-days-port" class="input-gc bg-white text-slate-900 border-slate-300 font-bold text-right" value="6" min="0" step="any" oninput="calculateCostPlusFreight()">
+                                            </div>
+                                            <div>
+                                                <label for="cost-plus-bunker-cost" class="mb-1 block text-[10px] font-black uppercase text-slate-500">Combustible total</label>
+                                                <input type="number" id="cost-plus-bunker-cost" class="input-gc bg-white text-slate-900 border-slate-300 font-bold text-right" value="25000" min="0" step="any" oninput="calculateCostPlusFreight()">
+                                            </div>
+                                            <div>
+                                                <label for="cost-plus-port-costs" class="mb-1 block text-[10px] font-black uppercase text-slate-500">Gastos puerto</label>
+                                                <input type="number" id="cost-plus-port-costs" class="input-gc bg-white text-slate-900 border-slate-300 font-bold text-right" value="18000" min="0" step="any" oninput="calculateCostPlusFreight()">
+                                            </div>
+                                            <div class="md:col-span-2">
+                                                <label for="cost-plus-cargo-volume" class="mb-1 block text-[10px] font-black uppercase text-slate-500">Toneladas carga</label>
+                                                <input type="number" id="cost-plus-cargo-volume" class="input-gc bg-white text-slate-900 border-slate-300 font-bold text-right" value="8000" min="1" step="any" oninput="calculateCostPlusFreight()">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="rounded-md border border-white bg-white p-3 shadow-sm">
+                                        <div class="text-[10px] font-black uppercase text-slate-500">Flete mínimo Cost-Plus</div>
+                                        <div id="cost-plus-min-freight-rate" class="mono mt-1 text-2xl font-black text-slate-950">$12.65 /MT</div>
+                                        <div class="mt-3 space-y-1 border-t border-slate-100 pt-2 text-sm font-semibold text-gray-500">
+                                            <div>Coste Total Riesgo: <span id="cost-plus-total-costs">$88,000</span></div>
+                                            <div>Beneficio Neto Proyectado: <span id="cost-plus-calculated-margin">$13,200</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Costes y Recargos ETS / CO₂ -->
                             <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60 space-y-2 mt-2">
                                 <div class="flex justify-between items-center border-b border-slate-700 pb-1.5 mb-1.5">
@@ -5875,7 +6052,7 @@
                                     <div>
                                         <label id="label-co2-price" class="text-[10px] text-slate-400 font-bold uppercase block mb-1">Precio Carbono UE</label>
                                         <div class="flex items-center bg-slate-950 border border-slate-700 rounded px-1.5">
-                                            <input type="number" id="eu-carbon-price" class="w-full bg-transparent text-white text-xs outline-none py-1 text-right font-mono" value="80" step="1" oninput="runEngine()">
+                                            <input type="number" id="eu-carbon-price" class="w-full bg-transparent text-white text-xs outline-none py-1 text-right font-mono" value="80" step="any" oninput="runEngine()">
                                             <span class="text-slate-500 text-[10px] ml-1">USD/t</span>
                                         </div>
                                     </div>
@@ -5891,7 +6068,7 @@
                                 <div class="w-1/3">
                                     <label id="label-owner-margin" class="text-[10px] text-slate-400 font-bold uppercase block mb-1">Margen Armador</label>
                                     <div class="flex items-center bg-slate-900 border border-slate-700 rounded px-2">
-                                        <input type="number" id="margin-owner" class="w-full bg-transparent text-white text-sm outline-none py-1 text-right" value="15" oninput="runEngine()">
+                                        <input type="number" id="margin-owner" class="w-full bg-transparent text-white text-sm outline-none py-1 text-right" value="15" step="any" oninput="runEngine()">
                                         <span class="text-slate-500 text-xs mx-1">%</span>
                                         <button onclick="autoCalculateSeasonalMargin()" class="text-amber-400 hover:text-amber-300 py-1 pl-2 border-l border-slate-700" title="Ajuste por Temporada (Alta/Baja)"><i class="fa-solid fa-calendar-day"></i></button>
                                         <button type="button" onclick="applyAiMarginProposal()" class="text-cyan-300 hover:text-cyan-200 py-1 pl-2 border-l border-slate-700" title="PROPUESTA IA"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
@@ -5908,7 +6085,7 @@
                                 <div class="w-1/3">
                                     <label id="label-charterer-margin" class="text-[10px] text-slate-400 font-bold uppercase block mb-1">Margen Fletador</label>
                                     <div class="flex items-center bg-slate-900 border border-slate-700 rounded px-2">
-                                        <input type="number" id="margin-charterer" class="w-full bg-transparent text-white text-sm outline-none py-1 text-right" value="10" oninput="runEngine()">
+                                        <input type="number" id="margin-charterer" class="w-full bg-transparent text-white text-sm outline-none py-1 text-right" value="10" step="any" oninput="runEngine()">
                                         <span class="text-slate-500 text-xs ml-1">%</span>
                                     </div>
                                 </div>
@@ -5957,7 +6134,7 @@
                             <div class="col-span-2 md:col-span-2">
                                 <label id="label-buying-freight" class="text-[10px] font-bold text-indigo-400 uppercase block mb-1">Flete Compra Armador ($)</label>
                                 <div class="flex">
-                                    <input type="number" id="freight-rate" class="input-gc bg-slate-950 border-indigo-500/50 text-white font-bold text-lg h-9 rounded-r-none" value="32.50" step="0.25" oninput="runEngine()">
+                                    <input type="number" id="freight-rate" class="input-gc bg-slate-950 border-indigo-500/50 text-white font-bold text-lg h-9 rounded-r-none" value="32.50" step="any" oninput="runEngine()">
                                     <button id="btn-calc-owner-freight" onclick="useAlgorithmicFreight('owner')" class="bg-indigo-600/30 border-y border-indigo-500/50 hover:bg-indigo-500/50 px-2 text-indigo-300" title="Calculadora Básica (Break-Even + Margen)"><i class="fa-solid fa-calculator"></i></button>
                                     <button id="btn-spot-owner-freight" onclick="predictSpotMarketLocal()" class="bg-blue-600/30 border border-blue-500/50 hover:bg-blue-500/50 px-2 rounded-r-md text-blue-300" title="Estimación Algorítmica Spot Real (PMT)"><i class="fa-solid fa-chart-line"></i></button>
                                 </div>
@@ -5966,7 +6143,7 @@
                             <div class="col-span-2 md:col-span-2">
                                 <label id="label-selling-freight" class="text-[10px] font-bold text-emerald-400 uppercase block mb-1">Flete Venta Fletador ($)</label>
                                 <div class="flex">
-                                    <input type="number" id="freight-sell" class="input-gc bg-slate-950 border-emerald-500/50 text-white font-bold text-lg h-9 rounded-r-none" value="35.00" step="0.25" oninput="runEngine()">
+                                    <input type="number" id="freight-sell" class="input-gc bg-slate-950 border-emerald-500/50 text-white font-bold text-lg h-9 rounded-r-none" value="35.00" step="any" oninput="runEngine()">
                                     <button id="btn-calc-charter-freight" onclick="useAlgorithmicFreight('charterer')" class="bg-emerald-600/30 border-y border-emerald-500/50 hover:bg-emerald-500/50 px-2 text-emerald-300" title="Calculadora Básica (Break-Even + Margen)"><i class="fa-solid fa-calculator"></i></button>
                                     <button id="btn-spot-charter-freight" onclick="predictSpotMarketLocal()" class="bg-teal-600/30 border border-teal-500/50 hover:bg-teal-500/50 px-2 rounded-r-md text-teal-300" title="Estimación Algorítmica Spot Real (PMT)"><i class="fa-solid fa-chart-line"></i></button>
                                 </div>
@@ -5975,19 +6152,19 @@
                             <!-- Lumpsum Opcional -->
                             <div class="col-span-1 md:col-span-2">
                                 <label id="label-lumpsum-override" class="text-[10px] font-bold text-slate-400 uppercase block mb-1">Lumpsum (Opcional)</label>
-                                <input type="number" id="lumpsum-override" class="input-gc h-9 text-sm text-slate-300 font-bold bg-slate-950/40 border border-slate-700 rounded px-2" placeholder="None" oninput="runEngine()">
+                                <input type="number" id="lumpsum-override" class="input-gc h-9 text-sm text-slate-300 font-bold bg-slate-950/40 border border-slate-700 rounded px-2" placeholder="None" step="any" oninput="runEngine()">
                             </div>
                             
                             <!-- Comisiones -->
                             <div class="col-span-1 md:col-span-2">
                                 <label id="label-brokerage-comm" class="text-[10px] font-bold text-slate-400 uppercase block mb-1">Comisiones (%)</label>
-                                <input type="number" id="comm-pct" class="input-gc h-9 text-sm" value="2.5" step="0.25" oninput="runEngine()">
+                                <input type="number" id="comm-pct" class="input-gc h-9 text-sm" value="2.5" step="any" oninput="runEngine()">
                             </div>
                             <!-- Demurrage -->
                             <div class="col-span-1 md:col-span-2">
                                 <label id="label-demurrage-rate" class="text-[10px] font-bold text-red-400 uppercase block mb-1">Demurrage ($/d)</label>
                                 <div class="flex">
-                                    <input type="number" id="demurrage-rate" class="input-gc text-red-300 font-bold h-9 text-sm rounded-r-none" value="10000" oninput="runEngine()">
+                                    <input type="number" id="demurrage-rate" class="input-gc text-red-300 font-bold h-9 text-sm rounded-r-none" value="10000" step="any" oninput="runEngine()">
                                     <button id="btn-estimate-demurrage" onclick="autoCalculateDemurrage(true)" class="bg-red-900/30 border border-red-500/50 hover:bg-red-500/30 px-2 rounded-r-md text-red-400 transition" title="Estimar Algorítmicamente (Mercado 2026)"><i class="fa-solid fa-rotate-right"></i></button>
                                 </div>
                                 <!-- ASBATANKVOY Delay Hours input (only relevant for Liquid Bulk / ASBATANKVOY) -->
@@ -6016,10 +6193,14 @@
                         </div>
 
                         <div class="grid grid-cols-2 gap-4 border-t border-slate-700 pt-3 text-center">
-                            <div>
-                                <div id="label-owner-profit-header" class="text-[11px] text-slate-400 font-bold uppercase mb-1">Beneficio Armador (TCE)</div>
-                                <div class="text-xl font-black text-indigo-400 mono" id="res-net-profit-owner">$0</div>
-                                <div class="text-[10px] text-slate-500 mt-1" id="res-tce-label">TCE: $0 / día</div>
+                            <div class="rounded-xl border border-slate-700 bg-slate-950/35 p-3">
+                                <div class="mb-2 flex items-center justify-center gap-1.5">
+                                    <div id="label-owner-profit-header" class="text-[11px] text-slate-400 font-bold uppercase">Beneficio Armador</div>
+                                    <span id="owner-profit-tooltip" class="cursor-help text-[11px] text-slate-500" title="El Beneficio Neto es el resultado de restar el OPEX Fijo ($0/día) al TCE Obtenido.">ℹ️</span>
+                                </div>
+                                <div class="text-4xl font-bold text-indigo-400 mono leading-none" id="res-net-profit-owner">$0</div>
+                                <div class="mt-2 text-[10px] text-slate-400" id="res-net-profit-owner-daily">Beneficio Neto Diario: $0 / día</div>
+                                <div class="mt-3 border-t border-slate-800 pt-2 text-[10px] text-slate-500" id="res-tce-label">TCE Obtenido: $0 / día (Total: $0)</div>
                             </div>
                             <div>
                                 <div id="label-charter-profit-header" class="text-[11px] text-slate-400 font-bold uppercase mb-1">Arbitraje Comercial (Fletador)</div>
@@ -10974,17 +11155,19 @@
                 console.warn("[Radar] No se pudo guardar el puerto de carga para el barrido automático:", err);
             }
 
-            if (typeof initAutomaticRadar === 'function') {
-                initAutomaticRadar();
-            } else if (typeof iniciarRadarAutomatico === 'function') {
-                iniciarRadarAutomatico();
+            if (typeof window.setAisRadarStatus === 'function') {
+                window.setAisRadarStatus('inactive');
             }
         }
         window.activateRadarForLoadingPort = activateRadarForLoadingPort;
 
         // --- INICIALIZACIÓN ---
         document.addEventListener('DOMContentLoaded', () => {
-            initAutomaticRadar();
+            if (typeof window.detenerRadar === 'function') {
+                window.detenerRadar();
+            } else if (typeof window.setAisRadarStatus === 'function') {
+                window.setAisRadarStatus('inactive');
+            }
             const savedKey = localStorage.getItem('rodahmar_gemini_api_key');
             if (savedKey) {
                 document.getElementById('gemini-api-key').value = savedKey;
@@ -15857,6 +16040,7 @@
 
         function markSpeedManualOverride(input) {
             if (!input) return;
+            input.dataset.navigationBase = String(parseFloat(input.value) || 0);
             input.dataset.manualOverride = 'true';
             input.dataset.autoInferred = 'false';
             input.classList.remove('text-slate-400', 'border-sky-400');
@@ -15954,6 +16138,9 @@
                 State.vesselDwtFixed = true;
             }
             const dwt = parseFloat(document.getElementById('vessel-dwt').value) || 0;
+            if (typeof updateVesselPricingRouter === 'function') {
+                updateVesselPricingRouter();
+            }
             if (dwt <= 0) return;
 
             const cSea = Math.max(3.0, dwt * 0.0006);
@@ -15978,6 +16165,9 @@
             document.getElementById('opex-daily').value = totalOpexDaily;
 
             runEngine();
+            if (typeof updateVesselPricingRouter === 'function') {
+                updateVesselPricingRouter();
+            }
         }
         function autoClassifySpecialtyFromInputs() {
             if (State.userHasEditedSpecialty) return;
@@ -16338,48 +16528,122 @@
             }
         }
 
+        const BUNKER_INDEX_DATA_KEY = 'bunkerIndexData';
+        let isFetchingBunker = false;
+        let bunkerDateLabel = '';
+
+        function getTodayBunkerLabel() {
+            return new Date().toLocaleDateString();
+        }
+
+        function updateBunkerIndexCacheLabel(dateLabel = bunkerDateLabel) {
+            const label = document.getElementById('bunker-index-cache-label');
+            if (!label) return;
+            label.textContent = dateLabel
+                ? `Datos registrados: ${dateLabel}`
+                : 'Esperando cotización del día...';
+            label.classList.remove('text-red-400');
+            label.classList.add('text-slate-500');
+        }
+
+        function updateBunkerIndexErrorLabel(message) {
+            const label = document.getElementById('bunker-index-cache-label');
+            if (!label) return;
+            label.textContent = message || 'Error al consultar Bunkerindex.';
+            label.classList.remove('text-slate-500');
+            label.classList.add('text-red-400');
+        }
+
+        function applyBunkerIndexData(cache) {
+            const vlsfoPrice = Number(cache?.vlsfo);
+            const ifoPrice = Number(cache?.ifo380);
+            const mgoPrice = Number(cache?.mgo);
+            if (Number.isFinite(vlsfoPrice)) {
+                const vlsfoInput = document.getElementById('price-sea');
+                if (vlsfoInput) vlsfoInput.value = vlsfoPrice.toFixed(2);
+            }
+            if (Number.isFinite(ifoPrice)) {
+                const ifoInput = document.getElementById('price-ifo');
+                if (ifoInput) ifoInput.value = ifoPrice.toFixed(2);
+            }
+            if (Number.isFinite(mgoPrice)) {
+                const mgoInput = document.getElementById('price-port');
+                if (mgoInput) mgoInput.value = mgoPrice.toFixed(2);
+            }
+            bunkerDateLabel = cache?.date || '';
+            updateBunkerIndexCacheLabel(bunkerDateLabel);
+            runEngine();
+        }
+
+        function hydrateBunkerIndexData() {
+            if (typeof localStorage === 'undefined') return;
+            try {
+                const rawCache = localStorage.getItem(BUNKER_INDEX_DATA_KEY);
+                if (!rawCache) {
+                    updateBunkerIndexCacheLabel('');
+                    return;
+                }
+                const cache = JSON.parse(rawCache);
+                if (cache?.date === getTodayBunkerLabel()) {
+                    applyBunkerIndexData(cache);
+                    return;
+                }
+                updateBunkerIndexCacheLabel('');
+            } catch (error) {
+                localStorage.removeItem(BUNKER_INDEX_DATA_KEY);
+                updateBunkerIndexCacheLabel('');
+            }
+        }
+
         async function autoFillBunkers() {
-            const btn = document.querySelector('button[onclick="autoFillBunkers()"]');
-            const originalText = btn.innerHTML;
+            if (isFetchingBunker) return;
 
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Buscando...';
-            btn.disabled = true;
+            const btn = document.getElementById('btn-consult-bunker');
+            const originalText = btn ? btn.innerHTML : '';
+            isFetchingBunker = true;
 
-            showToast("Actualizando datos del motor SeaCharter Core PRO...", true);
+            if (btn) {
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Consultando...';
+                btn.disabled = true;
+            }
+
+            showToast("Actualizando VLSFO y MGO del día...", true);
 
             try {
-                const prompt = `Busca en el sitio web bunkerindex.com los precios marítimos promedio globales (Global Average) más recientes de combustible VLSFO y MGO.
-                Devuelve SOLO un objeto JSON válido con las claves "vlsfo" y "mgo" y sus valores numéricos.
-                Ejemplo: {"vlsfo": 615, "mgo": 840}`;
-                const payload = {
-                    contents: [{ parts: [{ text: prompt }] }],
-                    tools: [{ google_search: {} }]
-                };
-                
-                const dataResponse = await executeGeminiRequest(payload);
-                const responseText = dataResponse.candidates[0].content.parts[0].text;
-                
-                // Extraer JSON manualmente
-                const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    const data = JSON.parse(jsonMatch[0]);
-                    if (data.vlsfo && data.mgo) {
-                        document.getElementById('price-sea').value = Math.round(data.vlsfo);
-                        document.getElementById('price-port').value = Math.round(data.mgo);
-                        showToast("✅ Precios de combustible obtenidos en vivo.");
-                    }
-                } else {
-                    throw new Error("Formato JSON no encontrado en la respuesta.");
+                const response = await fetch('/api/get-bunker-prices');
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(payload?.error || 'No se pudo obtener la cotización Bunkerindex.');
                 }
+
+                const today = getTodayBunkerLabel();
+                const nextCache = {
+                    vlsfo: Number(payload.vlsfo),
+                    ifo380: Number(payload.ifo380),
+                    mgo: Number(payload.mgo),
+                    date: today
+                };
+
+                if (!Number.isFinite(nextCache.vlsfo) || !Number.isFinite(nextCache.ifo380) || !Number.isFinite(nextCache.mgo)) {
+                    throw new Error('La respuesta de Bunkerindex no contiene precios válidos.');
+                }
+
+                if (typeof localStorage !== 'undefined') {
+                    localStorage.setItem(BUNKER_INDEX_DATA_KEY, JSON.stringify(nextCache));
+                }
+                applyBunkerIndexData(nextCache);
+                showToast("✅ Cotización Bunkerindex registrada para VLSFO, IFO 380 y MGO.");
             } catch (error) {
-                console.error("Error fetching bunkers:", error);
-                document.getElementById('price-sea').value = 610;
-                document.getElementById('price-port').value = 830;
-                showToast("La IA no pudo recuperar los precios en vivo. Usando valores por defecto.");
-            } finally {
+                const message = error instanceof Error ? error.message : 'Error inesperado al consultar Bunkerindex.';
+                updateBunkerIndexErrorLabel(message);
+                showToast(`❌ ${message}`);
+            }
+
+            isFetchingBunker = false;
+            if (btn) {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
-                runEngine();
             }
         }
 
@@ -17275,7 +17539,10 @@
                     netConsIndicator.innerText = `Consumo Neto (incluye 5% de margen por mal tiempo): ${netConsVal} T/D`;
                 }
             }
-            const pSea = parseFloat(document.getElementById('price-sea').value) || 0;
+            const vlsfoPrice = parseFloat(document.getElementById('price-sea').value) || 0;
+            const ifoPrice = parseFloat(document.getElementById('price-ifo')?.value) || 0;
+            const hasScrubber = vesselHasScrubber();
+            const pSea = hasScrubber ? ifoPrice : vlsfoPrice;
             const cPort = parseFloat(document.getElementById('cons-port').value) || 0;
             const cAnchorage = parseFloat(document.getElementById('cons-anchorage')?.value) || cPort;
             const cAnchorageAux = parseFloat(document.getElementById('cons-anchorage-aux')?.value) || 2.0;
@@ -17286,11 +17553,12 @@
             const costeTrincaje = costeTrincajeCondicional();
             const costeManiobraEspecial = tipoCargaOperativa === 'proyecto' ? (parseFloat(document.getElementById('coste-maniobra-especial')?.value) || 0) : 0;
             const diasPreparacionProyecto = tipoCargaOperativa === 'proyecto' ? Math.max(0, parseFloat(document.getElementById('dias-preparacion')?.value) || 0) : 0;
+            const canalCost = parseFloat(document.getElementById('pda-misc').value) || 0;
+            const voyageExtras = parseFloat(document.getElementById('cargo-surcharge').value) || 0;
             const pdaRecurrente = (parseFloat(document.getElementById('pda-pol').value) || 0) + 
                          (parseFloat(document.getElementById('pda-pod').value) || 0) + 
                          (parseFloat(document.getElementById('stevedoring-costs').value) || 0) +
-                         (parseFloat(document.getElementById('pda-misc').value) || 0) +
-                         (parseFloat(document.getElementById('cargo-surcharge').value) || 0);
+                         canalCost;
             const basePortExpenses = pdaRecurrente + costeTrincaje + costeManiobraEspecial;
             const operacionModo = getOperacionModo();
             const coaNumEmbarques = Math.max(1, parseInt(document.getElementById('coa-num-embarques')?.value, 10) || 1);
@@ -17403,7 +17671,7 @@
             const isPolSeca = isSecaZone(polData);
             const isPodSeca = isSecaZone(podData);
 
-            // Route Consumption Cost: T_sea * C_sea * P_sea (Standard fuel VLSFO underway)
+            // Route Consumption Cost: T_sea * C_sea * P_sea (VLSFO or IFO 380 when scrubber is active)
             const routeConsumptionCost = isZeroCalculation ? 0 : (T_sea * cSea * pSea);
 
             // Port Consumption Cost: T_port * C_port * P_port (Low-sulfur fuel MGO/LSMGO in port)
@@ -17420,7 +17688,7 @@
             const anchorageAuxFuelCost = manualAnchorageAuxFuel ? manualAnchorageAuxFuel.cost : formulaAnchorageAuxCost;
             const anchorageConsumptionCost = anchorageFuelCost + anchorageAuxFuelCost;
 
-            // Extra ECA Cost (Price Delta: Low-sulfur price - Standard price)
+            // Extra ECA Cost (Price Delta: Low-sulfur price - active sea fuel)
             // Applied only to underway transit days spent inside ECA zones (assumes 1.0 day of transit per SECA port)
             const T_eca_sea = isZeroCalculation ? 0 : ((isPolSeca ? 1.0 : 0.0) + (isPodSeca ? 1.0 : 0.0));
             const extraEcaCost = isZeroCalculation ? 0 : (T_eca_sea * cSea * (pPort - pSea));
@@ -17493,6 +17761,13 @@
             }
 
             document.getElementById('res-cost-bunker').innerText = `$${Math.round(totalBunkers).toLocaleString()}`;
+            const inverseFuelStrategyEl = document.getElementById('inverse-fuel-strategy-label');
+            if (inverseFuelStrategyEl) {
+                inverseFuelStrategyEl.textContent = getFuelStrategyText();
+                inverseFuelStrategyEl.className = hasScrubber
+                    ? 'mt-1 text-[10px] font-bold text-emerald-700'
+                    : 'mt-1 text-[10px] font-bold text-slate-500';
+            }
             const navFuelTons = isZeroCalculation ? 0 : (T_sea * cSea);
             const portFuelTons = isZeroCalculation ? 0 : (T_portFuel * cPort);
             const setFuelBreakdown = (id, tons, cost) => {
@@ -17600,25 +17875,20 @@
             const etsTotalCostEl = document.getElementById('res-ets-total-cost');
             if (etsTotalCostEl) etsTotalCostEl.innerText = `$${etsCost.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
-            const sugOwner = sugOwnerBase;
-            const sugChart = sugChartBase;
-
             const grossRevOwner = multiplier * freightBuy;
-            const costCommissionsOwner = grossRevOwner * (commPct / 100);
-            let netProfitOwner = isZeroCalculation ? 0 : (grossRevOwner - adjustedCostTotal - costCommissionsOwner);
-            if (!isZeroCalculation && applySurcharge === 'YES') {
-                netProfitOwner += etsCost; // Compensated by separate surcharge
-            }
-
+            const voyageRevenues = isZeroCalculation ? 0 : (grossRevOwner + voyageExtras);
+            const voyageExpenses = isZeroCalculation ? 0 : (totalBunkers + portExpensesForMode);
+            const tceTotal = isZeroCalculation ? 0 : (voyageRevenues - voyageExpenses);
+            const netProfitOwner = isZeroCalculation ? 0 : (tceTotal - totalOpex);
             const grossRevCharterer = multiplier * freightSell;
             let netProfitCharterer = isZeroCalculation ? 0 : (grossRevCharterer - grossRevOwner);
 
             if (cpStandard === 'ASBATANKVOY') {
-                netProfitOwner += delayCost;
                 netProfitCharterer -= delayCost;
             }
 
-            const tceOwner = isZeroCalculation ? 0 : (netProfitOwner / (totalDays || 1));
+            const tceOwner = isZeroCalculation ? 0 : (tceTotal / (totalDays || 1));
+            const netProfitOwnerDaily = isZeroCalculation ? 0 : (netProfitOwner / (totalDays || 1));
             const historicalRisk = updateHistoricalRiskEngine({
                 riskDays: smartDelayDays,
                 tce: tceOwner,
@@ -17653,13 +17923,22 @@
             const coaAhorroVsSpot = operacionModo === 'COA' && coaTotalTmContrato > 0
                 ? Math.max(0, (spotEquivalentBreakEven - coaBreakEvenPromedio) * coaTotalTmContrato)
                 : 0;
+            syncInverseTceFromVoyage(cargo, T_sea, T_port);
+            const inverseTceResults = typeof calculateInverseTce === 'function'
+                ? calculateInverseTce()
+                : null;
+            const inverseMinimumFreight = Number.isFinite(inverseTceResults?.minFreightRate)
+                ? inverseTceResults.minFreightRate
+                : breakEvenArmadorDisplay;
             const breakEvenParaVentaSugerida = operacionModo === 'COA' && coaTotalTmContrato > 0
                 ? coaBreakEvenPromedio
-                : breakEvenArmadorDisplay;
+                : inverseMinimumFreight;
             const precioObjetivoArmador = operacionModo === 'COA' && coaTotalTmContrato > 0
-                ? calcularPrecioObjetivo(coaBreakEvenPromedio, marginOwner)
-                : calcularPrecioObjetivo(breakEvenArmadorDisplay, marginOwner);
+                ? coaBreakEvenPromedio
+                : inverseMinimumFreight;
             const precioObjetivoFletador = calcularPrecioObjetivo(precioObjetivoArmador, marginChart);
+            const sugOwner = precioObjetivoArmador;
+            const sugChart = precioObjetivoFletador;
             const freightSellInput = document.getElementById('freight-sell');
             const marginInputIsActive = ['margin-owner', 'margin-charterer'].includes(document.activeElement?.id || '');
             if (freightSellInput && (marginInputIsActive || freightSellInput.dataset.marginSynced === 'true')) {
@@ -17680,9 +17959,23 @@
             if (coaKpiPda) coaKpiPda.innerText = `$${Math.round(pdaDiluidoPorViaje).toLocaleString('en-US')}/viaje`;
             const ventaSugeridaEl = document.getElementById('res-venta-sugerida');
             const ventaSugeridaSubtextEl = document.getElementById('res-venta-sugerida-subtext');
+            const targetPriceCard = document.getElementById('target-price-card');
+            const suggestedOwnerCard = document.getElementById('res-sug-owner')?.parentElement;
+            const suggestedChartererCard = document.getElementById('res-sug-charterer')?.parentElement;
+            const suggestedBelowTarget = precioObjetivoArmador < inverseMinimumFreight || precioObjetivoFletador < inverseMinimumFreight;
             const coaMargenTotalEl = document.getElementById('res-coa-margen-total');
             if (ventaSugeridaEl) ventaSugeridaEl.innerText = `$${ventaSugerida.toFixed(2)} /TM`;
-            if (ventaSugeridaSubtextEl) ventaSugeridaSubtextEl.innerText = `Compra armador $${precioObjetivoArmador.toFixed(2)} + margen fletador ${marginChart.toFixed(2).replace(/\.00$/, '')}%`;
+            if (ventaSugeridaSubtextEl) {
+                ventaSugeridaSubtextEl.innerText = suggestedBelowTarget
+                    ? 'Alerta: Venta por debajo del TCE Objetivo'
+                    : `Flete mínimo inverso $${precioObjetivoArmador.toFixed(2)} + margen fletador ${marginChart.toFixed(2).replace(/\.00$/, '')}%`;
+            }
+            [targetPriceCard, suggestedOwnerCard, suggestedChartererCard].forEach((card) => {
+                if (!card) return;
+                card.classList.toggle('border-red-500', suggestedBelowTarget);
+                card.classList.toggle('bg-red-950', suggestedBelowTarget);
+                card.classList.toggle('bg-red-50', suggestedBelowTarget && card === targetPriceCard);
+            });
             if (coaMargenTotalEl) {
                 coaMargenTotalEl.classList.toggle('hidden', operacionModo !== 'COA');
                 coaMargenTotalEl.innerText = `Margen Total del Contrato: $${Math.round(margenTotalContrato).toLocaleString('en-US')}`;
@@ -17760,31 +18053,33 @@
                 calculateAndDisplayAisFreight();
             }
 
+            const suggestedSaleColor = suggestedBelowTarget ? '#dc2626' : '#059669';
+            const suggestedSaleNote = suggestedBelowTarget ? 'Alerta: Venta por debajo del TCE Objetivo' : 'Flete mínimo inverso sincronizado';
             if (isZeroCalculation) {
                 document.getElementById('res-sug-owner').innerHTML = `
-                    <div style="font-size: 18px; font-weight: bold; color: #059669; font-family: monospace;">$0.00</div>
+                    <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$0.00</div>
                     <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">Total Freight (All-in)</div>
                 `;
                 document.getElementById('res-sug-charterer').innerHTML = `
-                    <div style="font-size: 18px; font-weight: bold; color: #059669; font-family: monospace;">$0.00</div>
+                    <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$0.00</div>
                     <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">Total Freight (All-in)</div>
                 `;
             } else if (applySurcharge === 'YES') {
                 document.getElementById('res-sug-owner').innerHTML = `
-                    <div style="font-size: 18px; font-weight: bold; color: #059669; font-family: monospace;">$${sugOwner.toFixed(2)}</div>
-                    <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">Margen sobre BEP mostrado</div>
+                    <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$${sugOwner.toFixed(2)}</div>
+                    <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">${suggestedSaleNote}</div>
                 `;
                 document.getElementById('res-sug-charterer').innerHTML = `
-                    <div style="font-size: 18px; font-weight: bold; color: #059669; font-family: monospace;">$${sugChart.toFixed(2)}</div>
+                    <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$${sugChart.toFixed(2)}</div>
                     <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">VSA + margen fletador</div>
                 `;
             } else {
                 document.getElementById('res-sug-owner').innerHTML = `
-                    <div style="font-size: 18px; font-weight: bold; color: #059669; font-family: monospace;">$${sugOwner.toFixed(2)}</div>
-                    <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">Total Freight (All-in)</div>
+                    <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$${sugOwner.toFixed(2)}</div>
+                    <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">${suggestedSaleNote}</div>
                 `;
                 document.getElementById('res-sug-charterer').innerHTML = `
-                    <div style="font-size: 18px; font-weight: bold; color: #059669; font-family: monospace;">$${sugChart.toFixed(2)}</div>
+                    <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$${sugChart.toFixed(2)}</div>
                     <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">Total Freight (All-in)</div>
                 `;
             }
@@ -17828,14 +18123,19 @@
             }
 
             document.getElementById('res-net-profit-owner').innerText = `$${netProfitOwner.toLocaleString('en-US', {maximumFractionDigits:0})}`;
-            document.getElementById('res-net-profit-owner').className = netProfitOwner >= 0 ? "text-xl font-black text-indigo-400 mono" : "text-xl font-black text-red-500 mono";
-            document.getElementById('res-tce-label').innerText = `TCE: $${tceOwner.toLocaleString('en-US', {maximumFractionDigits:0})} / día`;
+            document.getElementById('res-net-profit-owner').className = netProfitOwner >= 0 ? "text-4xl font-bold text-emerald-400 mono leading-none" : "text-4xl font-bold text-red-500 mono leading-none";
+            const netProfitOwnerDailyEl = document.getElementById('res-net-profit-owner-daily');
+            if (netProfitOwnerDailyEl) netProfitOwnerDailyEl.innerText = `Beneficio Neto Diario: $${netProfitOwnerDaily.toLocaleString('en-US', {maximumFractionDigits:0})} / día`;
+            document.getElementById('res-tce-label').innerText = `TCE Obtenido: $${tceOwner.toLocaleString('en-US', {maximumFractionDigits:0})} / día (Total: $${tceTotal.toLocaleString('en-US', {maximumFractionDigits:0})})`;
+            const ownerProfitTooltip = document.getElementById('owner-profit-tooltip');
+            if (ownerProfitTooltip) ownerProfitTooltip.title = `El Beneficio Neto es el TCE Obtenido menos el OPEX fijo de $${opex.toLocaleString('en-US', {maximumFractionDigits:0})}/día.`;
 
             document.getElementById('res-net-profit-charterer').innerText = `$${netProfitCharterer.toLocaleString('en-US', {maximumFractionDigits:0})}`;
             document.getElementById('res-net-profit-charterer').className = netProfitCharterer >= 0 ? "text-xl font-black text-emerald-400 mono" : "text-xl font-black text-red-500 mono";
 
             State.vessel = document.getElementById('vessel-name').value;
             State.dwt = document.getElementById('vessel-dwt').value;
+            State.hasScrubber = hasScrubber;
             State.draft = parseFloat(document.getElementById('vessel-draft')?.value) || 0;
             State.loa = parseFloat(document.getElementById('vessel-loa')?.value) || 0;
             State.pol = document.getElementById('port-pol').value;
@@ -17902,6 +18202,9 @@
             };
             
             State.netProfitOwner = netProfitOwner;
+            State.netProfitOwnerDaily = netProfitOwnerDaily;
+            State.tceOwner = tceOwner;
+            State.tceOwnerTotal = tceTotal;
             State.netProfitCharterer = netProfitCharterer;
             State.sugOwner = sugOwner;
             State.sugCharterer = sugChart;
@@ -17948,6 +18251,10 @@
             State.baseBreakEven = basicBreakEven;
             State.baseOperationalDays = baseOperationalDays;
             State.operacionModo = operacionModo;
+            syncInverseTceFromVoyage(cargo, T_sea, T_port);
+            if (typeof calculateInverseTce === 'function') {
+                calculateInverseTce();
+            }
             State.coa = {
                 enabled: operacionModo === 'COA',
                 shipments: coaNumEmbarques,
@@ -22563,7 +22870,9 @@ Example:
             document.getElementById('print-owner-commission').innerText = `$${Math.round(ownerComm).toLocaleString('en-US')} (${commPct}%)`;
             document.getElementById('print-net-owner').innerText = `$${Math.round(State.netProfitOwner).toLocaleString('en-US')}`;
             
-            const tce = State.totalDays > 0 ? (State.netProfitOwner / State.totalDays) : 0;
+            const tce = Number.isFinite(Number(State.tceOwner))
+                ? Number(State.tceOwner)
+                : (State.totalDays > 0 ? (State.netProfitOwner / State.totalDays) : 0);
             document.getElementById('print-tce-owner').innerText = `$${Math.round(tce).toLocaleString('en-US')} / ${currentLang === 'es' ? 'día' : (currentLang === 'en' ? 'day' : 'jour')}`;
 
             // Generate content for V. Detailed Break-even & Port Analysis
@@ -26009,6 +26318,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             try {
+                if (typeof window.validateAisApiKeyStatus === 'function') {
+                    await window.validateAisApiKeyStatus();
+                }
                 if (typeof window.RadarPOL !== 'function' || typeof window.RadarPOD !== 'function') {
                     alert("No se pudieron determinar las coordenadas del POL y POD para limitar el barrido AIS.");
                     return window.listaBarcos;
@@ -26046,6 +26358,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
                 return window.listaBarcos;
             } catch (err) {
+                if (typeof window.showAisDisconnectedState === 'function') {
+                    window.showAisDisconnectedState();
+                }
                 return window.listaBarcos;
             } finally {
                 window.isDualSweepRunning = false;
@@ -26096,6 +26411,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return;
             }
 
+            if (status === 'disconnected') {
+                apply('border-rose-700 bg-rose-950 text-rose-200', 'bg-rose-400', 'Sin conexión AIS. Compruebe API Key o estado del servidor');
+                return;
+            }
+
             apply('border-slate-700 bg-slate-900 text-slate-300', 'bg-slate-300', 'Radar en espera: Introduzca puertos y laycan');
         };
 
@@ -26128,6 +26448,44 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (typeof window.setAisRadarStatus === 'function') {
                 window.setAisRadarStatus('inactive');
             }
+        };
+
+        window.showAisDisconnectedState = function() {
+            window.aisRadarUserActivated = false;
+            window.AIS_PROXY_POLLING_ACTIVE = false;
+            if (typeof window.stopAisRadarPolling === 'function') {
+                window.stopAisRadarPolling();
+            }
+            if (typeof window.stopDirectAisLiveRadar === 'function') {
+                window.stopDirectAisLiveRadar();
+            }
+            if (window.MapLoader && typeof window.MapLoader.stopAisProxyPolling === 'function') {
+                window.MapLoader.stopAisProxyPolling();
+            }
+            if (typeof window.setAisRadarStatus === 'function') {
+                window.setAisRadarStatus('disconnected');
+            }
+            const tbody = document.getElementById('ais-vessels-tbody');
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="py-8 text-center text-rose-300 font-bold">
+                            Sin conexión AIS. Compruebe API Key o estado del servidor
+                        </td>
+                    </tr>
+                `;
+            }
+        };
+
+        window.validateAisApiKeyStatus = async function() {
+            const response = await fetch('/.netlify/functions/get-vessels?action=validate-key', {
+                headers: { "Accept": "application/json" }
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || payload.valid === false) {
+                throw new Error(payload.error || 'AIS API key inválida o expirada.');
+            }
+            return true;
         };
         window.detenerRadar = function() {
             window.aisRadarUserActivated = false;
@@ -26901,6 +27259,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     return window.MapLoader.startAisProxyPolling({
                         endpoint,
                         intervalMs: 300000,
+                        retryDelaysMs: [5000, 10000, 30000],
+                        userActivated: true,
                         map: activeMap
                     });
                 }
@@ -26941,6 +27301,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     window.MapLoader.startAisProxyPolling({
                         endpoint,
                         intervalMs: 300000,
+                        retryDelaysMs: [5000, 10000, 30000],
+                        userActivated: true,
                         map: window.mapaAIS || window.mapAIS || window.map
                     });
                 }
@@ -26963,10 +27325,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     } catch (_) {}
                     window.stopDirectAisLiveRadar();
                     directAisState.lastBoundsKey = '';
-                    if (key || window.AISSTREAM_API_KEY) {
-                        window.startAisClientEngine(window.mapaAIS || window.mapAIS || window.map);
-                    } else {
-                        window.startAisClientEngine(window.mapaAIS || window.mapAIS || window.map);
+                    if (typeof window.setAisRadarStatus === 'function') {
+                        window.setAisRadarStatus('inactive');
                     }
                 });
             }
@@ -29452,11 +29812,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const costeTrincaje = costeTrincajeCondicional();
             const costeManiobraEspecial = tipoCargaOperativa === 'proyecto' ? (parseFloat(document.getElementById('coste-maniobra-especial')?.value) || 0) : 0;
             const diasPreparacionProyecto = tipoCargaOperativa === 'proyecto' ? Math.max(0, parseFloat(document.getElementById('dias-preparacion')?.value) || 0) : 0;
+            const voyageExtras = parseFloat(document.getElementById('cargo-surcharge')?.value) || 0;
             const pdas = (parseFloat(document.getElementById('pda-pol')?.value) || 0) + 
                          (parseFloat(document.getElementById('pda-pod')?.value) || 0) + 
                          (parseFloat(document.getElementById('stevedoring-costs')?.value) || 0) +
                          (parseFloat(document.getElementById('pda-misc')?.value) || 0) +
-                         (parseFloat(document.getElementById('cargo-surcharge')?.value) || 0) +
                          costeTrincaje +
                          costeManiobraEspecial;
 
@@ -29589,21 +29949,19 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const sugChart = sugChartBase;
 
             const grossRevOwner = multiplier * freightBuy;
-            const costCommissionsOwner = grossRevOwner * (commPct / 100);
-            let netProfitOwner = isZeroCalculation ? 0 : (grossRevOwner - costTotal - costCommissionsOwner);
-            if (!isZeroCalculation && applySurcharge === 'YES') {
-                netProfitOwner += etsCost;
-            }
-
+            const voyageRevenues = isZeroCalculation ? 0 : (grossRevOwner + voyageExtras);
+            const voyageExpenses = isZeroCalculation ? 0 : (totalBunkers + pdas);
+            const tceTotal = isZeroCalculation ? 0 : (voyageRevenues - voyageExpenses);
+            const netProfitOwner = isZeroCalculation ? 0 : (tceTotal - totalOpex);
             const grossRevCharterer = multiplier * freightSell;
             let netProfitCharterer = isZeroCalculation ? 0 : (grossRevCharterer - grossRevOwner);
 
             if (cpStandard === 'ASBATANKVOY') {
-                netProfitOwner += delayCost;
                 netProfitCharterer -= delayCost;
             }
 
-            const tceOwner = isZeroCalculation ? 0 : (netProfitOwner / (totalDays || 1));
+            const tceOwner = isZeroCalculation ? 0 : (tceTotal / (totalDays || 1));
+            const netProfitOwnerDaily = isZeroCalculation ? 0 : (netProfitOwner / (totalDays || 1));
 
             return {
                 breakEven: breakEven,
@@ -29612,6 +29970,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 netProfitOwner: netProfitOwner,
                 netProfitCharterer: netProfitCharterer,
                 tceOwner: tceOwner,
+                tceTotal: tceTotal,
+                netProfitOwnerDaily: netProfitOwnerDaily,
                 totalDays: totalDays,
                 turnTimeDays: genconTurnTimeDays,
                 totalBunkers: totalBunkers,
@@ -30212,6 +30572,422 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         window.initVoyageEstimatorTooltips = initVoyageEstimatorTooltips;
 
+        let isFetchingFearnleysTce = false;
+        let isManualFearnleysOverride = false;
+        let isInverseTceSyncEnabled = true;
+        let currentVesselPricingCategory = 'Handysize / Small Tanker';
+        let costPlusMarginType = 'percentage';
+        let navigationStrategy = 'eco';
+        const NAVIGATION_STRATEGIES = {
+            eco: { seaConsumptionFactor: 0.85, ballastSpeedFactor: 0.9, ladenSpeedFactor: 0.9 },
+            full: { seaConsumptionFactor: 1, ballastSpeedFactor: 1.08, ladenSpeedFactor: 1.08 }
+        };
+        const FEARNLEYS_MARKET_DATA_KEY = 'fearnleysMarketData';
+        const CURRENT_FEARNLEYS_WEEK_LABEL = 'Week actual - Fearnleys';
+        const FEARNLEYS_MARKET_RATES = {
+            'Handysize / Small Tanker': 13000,
+            'Supramax / MR': 17125,
+            'Ultramax': 18625,
+            'Panamax / Kamsarmax / LR1': 18500,
+            'Baby Cape / Aframax / LR2': 25000,
+            'Capesize / Suezmax': 35000,
+            'VLOC / VLCC': 45000
+        };
+
+        function readInverseTceNumber(id, fallback = 0) {
+            const value = parseFloat(document.getElementById(id)?.value);
+            return Number.isFinite(value) ? value : fallback;
+        }
+
+        function formatInverseTceMoney(value, options = {}) {
+            const { decimals = 0 } = options;
+            return value.toLocaleString('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            });
+        }
+
+        function updateFearnleysWeekLabel(weekLabel = '') {
+            const weekEl = document.getElementById('inverse-tce-index-week');
+            if (!weekEl) return;
+            weekEl.textContent = weekLabel
+                ? `Datos: ${weekLabel}`
+                : 'Esperando datos del índice...';
+        }
+
+        function readFearnleysMarketData() {
+            if (typeof localStorage === 'undefined') return null;
+            try {
+                const rawCache = localStorage.getItem(FEARNLEYS_MARKET_DATA_KEY);
+                if (!rawCache) return null;
+                const cache = JSON.parse(rawCache);
+                if (!cache?.weekLabel || !cache?.rates || typeof cache.rates !== 'object') return null;
+                return cache;
+            } catch (error) {
+                localStorage.removeItem(FEARNLEYS_MARKET_DATA_KEY);
+                return null;
+            }
+        }
+
+        function applyFearnleysMarketData(cache, vesselCategory = currentVesselPricingCategory) {
+            const tceInput = document.getElementById('inverse-tce-target');
+            const marketRate = cache?.rates?.[vesselCategory];
+            if (tceInput && Number.isFinite(marketRate)) {
+                tceInput.value = String(marketRate);
+            }
+            updateFearnleysWeekLabel(cache?.weekLabel || '');
+            calculateInverseTce();
+        }
+
+        function hydrateFearnleysMarketData() {
+            const cache = readFearnleysMarketData();
+            if (cache && !isManualFearnleysOverride) applyFearnleysMarketData(cache);
+        }
+
+        function updateManualFearnleysOverrideUi() {
+            const overrideEl = document.getElementById('inverse-tce-manual-override');
+            if (!overrideEl) return;
+            overrideEl.classList.toggle('hidden', !isManualFearnleysOverride);
+            overrideEl.classList.toggle('flex', isManualFearnleysOverride);
+        }
+
+        function handleManualTceOverride() {
+            isManualFearnleysOverride = true;
+            updateManualFearnleysOverrideUi();
+            calculateInverseTce();
+        }
+
+        function restoreFearnleysMarketIndex() {
+            isManualFearnleysOverride = false;
+            updateManualFearnleysOverrideUi();
+            const cache = readFearnleysMarketData();
+            if (cache) applyFearnleysMarketData(cache);
+        }
+
+        function getSyncedInversePortCosts() {
+            return [
+                'pda-pol',
+                'pda-pod',
+                'stevedoring-costs',
+                'pda-misc',
+                'cargo-surcharge',
+                'input-trincaje',
+                'coste-maniobra-especial'
+            ].reduce((total, id) => total + readInverseTceNumber(id), 0);
+        }
+
+        function setNavigationStrategy(strategy) {
+            navigationStrategy = strategy === 'full' ? 'full' : 'eco';
+            const config = NAVIGATION_STRATEGIES[navigationStrategy];
+            const ecoButton = document.getElementById('nav-strategy-eco');
+            const fullButton = document.getElementById('nav-strategy-full');
+            [ecoButton, fullButton].forEach((button) => {
+                if (!button) return;
+                button.className = 'rounded-md px-2 py-1 text-[10px] font-black uppercase text-slate-400 hover:text-white';
+            });
+            const activeButton = navigationStrategy === 'eco' ? ecoButton : fullButton;
+            if (activeButton) {
+                activeButton.className = 'rounded-md bg-blue-600 px-2 py-1 text-[10px] font-black uppercase text-white shadow';
+            }
+
+            const bindings = [
+                ['cons-sea', config.seaConsumptionFactor],
+                ['spd-ballast', config.ballastSpeedFactor],
+                ['spd-laden', config.ladenSpeedFactor]
+            ];
+            bindings.forEach(([id, factor]) => {
+                const input = document.getElementById(id);
+                if (!input) return;
+                if (!input.dataset.navigationBase) {
+                    input.dataset.navigationBase = String(parseFloat(input.value) || 0);
+                }
+                const baseValue = parseFloat(input.dataset.navigationBase) || parseFloat(input.value) || 0;
+                input.value = (baseValue * factor).toFixed(id === 'cons-sea' ? 1 : 2);
+                input.dataset.navigationStrategy = navigationStrategy;
+            });
+
+            if (typeof runEngine === 'function') runEngine();
+        }
+
+        window.setNavigationStrategy = setNavigationStrategy;
+
+        function setInverseSyncFieldState(input, locked) {
+            input.disabled = locked;
+            input.classList.toggle('bg-slate-50', locked);
+            input.classList.toggle('text-slate-500', locked);
+            input.classList.toggle('border-dashed', locked);
+            input.classList.toggle('cursor-not-allowed', locked);
+            input.classList.toggle('bg-white', !locked);
+            input.classList.toggle('text-slate-900', !locked);
+        }
+
+        function updateInverseTceSyncUi() {
+            document.querySelectorAll('[data-inverse-sync-field="true"]').forEach((input) => {
+                setInverseSyncFieldState(input, isInverseTceSyncEnabled);
+            });
+            document.querySelectorAll('[data-inverse-sync-lock="true"]').forEach((icon) => {
+                icon.classList.toggle('fa-lock', isInverseTceSyncEnabled);
+                icon.classList.toggle('fa-lock-open', !isInverseTceSyncEnabled);
+                icon.classList.toggle('text-orange-700', !isInverseTceSyncEnabled);
+            });
+
+            const toggle = document.getElementById('inverse-sync-toggle');
+            if (!toggle) return;
+            toggle.title = isInverseTceSyncEnabled
+                ? 'Desbloquear costes para ajuste manual'
+                : 'Releer datos de la Sección 3 y bloquear de nuevo';
+            toggle.className = isInverseTceSyncEnabled
+                ? 'inline-flex items-center gap-1 rounded bg-white px-2 py-1 text-[10px] font-black uppercase text-indigo-700 shadow-sm'
+                : 'inline-flex items-center gap-1 rounded border border-orange-200 bg-orange-50 px-2 py-1 text-[10px] font-black uppercase text-orange-800 shadow-sm';
+            toggle.innerHTML = isInverseTceSyncEnabled
+                ? '<i class="fa-solid fa-lock"></i><span>Auto</span>'
+                : '<i class="fa-solid fa-lock-open"></i><span>Manual</span>';
+        }
+
+        function toggleInverseTceSync() {
+            isInverseTceSyncEnabled = !isInverseTceSyncEnabled;
+            updateInverseTceSyncUi();
+            if (isInverseTceSyncEnabled) {
+                if (typeof runEngine === 'function') runEngine();
+            }
+            calculateInverseTce();
+        }
+
+        function syncInverseTceFromVoyage(cargoVolume, daysSea, daysPort) {
+            if (!isInverseTceSyncEnabled) return;
+            const bindings = [
+                ['inverse-cargo-volume', cargoVolume, 0],
+                ['inverse-days-sea', daysSea, 1],
+                ['inverse-days-port', daysPort, 1],
+                ['inverse-port-costs', getSyncedInversePortCosts(), 0]
+            ];
+            bindings.forEach(([id, value, decimals]) => {
+                const input = document.getElementById(id);
+                const numericValue = Number(value);
+                if (!input || !Number.isFinite(numericValue)) return;
+                input.value = decimals > 0 ? numericValue.toFixed(decimals) : String(Math.round(numericValue));
+            });
+            syncInverseBunkerCostFromVoyage();
+        }
+
+        function vesselHasScrubber() {
+            return Boolean(document.getElementById('vessel-has-scrubber')?.checked);
+        }
+
+        function getEffectiveSeaFuelPrice() {
+            const vlsfoPrice = readInverseTceNumber('price-sea');
+            const ifoPrice = readInverseTceNumber('price-ifo');
+            return vesselHasScrubber() ? ifoPrice : vlsfoPrice;
+        }
+
+        function getFuelStrategyText() {
+            return vesselHasScrubber()
+                ? 'Optimizado con IFO 380 (Scrubber Activo)'
+                : 'Combustible estándar: VLSFO';
+        }
+
+        function syncInverseBunkerCostFromVoyage() {
+            if (!isInverseTceSyncEnabled) return;
+            const daysSea = readInverseTceNumber('inverse-days-sea');
+            const daysPort = readInverseTceNumber('inverse-days-port');
+            const seaConsumption = readInverseTceNumber('cons-sea');
+            const portConsumption = readInverseTceNumber('cons-port');
+            const mgoPrice = readInverseTceNumber('price-port');
+            const seaBunkerCost = seaConsumption * daysSea * getEffectiveSeaFuelPrice();
+            const portBunkerCost = portConsumption * daysPort * mgoPrice;
+            const totalBunkerCost = seaBunkerCost + portBunkerCost;
+            const bunkerInput = document.getElementById('inverse-bunker-cost');
+            if (bunkerInput) bunkerInput.value = Number.isFinite(totalBunkerCost) ? totalBunkerCost.toFixed(2) : '0';
+            const bunkerDailyPortInput = document.getElementById('inverse-bunker-daily-port');
+            if (bunkerDailyPortInput) bunkerDailyPortInput.value = (portConsumption * mgoPrice).toFixed(2);
+        }
+
+        function calculateInverseTce() {
+            if (isInverseTceSyncEnabled) syncInverseBunkerCostFromVoyage();
+            const tceTarget = readInverseTceNumber('inverse-tce-target');
+            const daysSea = readInverseTceNumber('inverse-days-sea');
+            const daysPort = readInverseTceNumber('inverse-days-port');
+            const bunkerCost = readInverseTceNumber('inverse-bunker-cost');
+            const portCosts = readInverseTceNumber('inverse-port-costs');
+            const cargoVolume = readInverseTceNumber('inverse-cargo-volume');
+            const bunkerDailyPortCost = readInverseTceNumber('inverse-bunker-daily-port');
+            const totalCo2Emissions = Number.isFinite(State.emissionsCO2) ? State.emissionsCO2 : 0;
+            const euaPrice = readInverseTceNumber('eu-carbon-price', 0);
+            const etsCoverage = typeof getEtsRouteFactor === 'function'
+                ? getEtsRouteFactor()
+                : readInverseTceNumber('ets-route-type', 0);
+
+            const totalDays = daysSea + daysPort;
+            const etsTotalCost = totalCo2Emissions * euaPrice * etsCoverage;
+            const etsCostPerMt = cargoVolume > 0 ? etsTotalCost / cargoVolume : 0;
+            const targetRevenue = (tceTarget * totalDays) + bunkerCost + portCosts + etsTotalCost;
+            const minFreightRate = cargoVolume > 0 ? targetRevenue / cargoVolume : 0;
+            const demurrageRate = tceTarget + bunkerDailyPortCost;
+
+            const totalDaysEl = document.getElementById('inverse-total-days');
+            const minFreightEl = document.getElementById('inverse-min-freight-rate');
+            const demurrageEl = document.getElementById('inverse-demurrage-rate');
+            const etsBreakdownEl = document.getElementById('inverse-ets-breakdown');
+            const fuelStrategyEl = document.getElementById('inverse-fuel-strategy-label');
+
+            if (totalDaysEl) totalDaysEl.textContent = totalDays.toFixed(1);
+            if (minFreightEl) minFreightEl.textContent = `${formatInverseTceMoney(minFreightRate, { decimals: 2 })} /MT`;
+            if (demurrageEl) demurrageEl.textContent = `${formatInverseTceMoney(demurrageRate)} /Día`;
+            if (fuelStrategyEl) {
+                fuelStrategyEl.textContent = getFuelStrategyText();
+                fuelStrategyEl.className = vesselHasScrubber()
+                    ? 'mt-1 text-[10px] font-bold text-emerald-700'
+                    : 'mt-1 text-[10px] font-bold text-slate-500';
+            }
+            if (etsBreakdownEl) {
+                etsBreakdownEl.textContent = etsTotalCost > 0
+                    ? `Incluye recargo ETS: +${formatInverseTceMoney(etsCostPerMt, { decimals: 2 })} /MT`
+                    : 'Sin exposición ETS';
+            }
+            State.inverseTceMinFreightRate = minFreightRate;
+            State.inverseTceTargetRevenue = targetRevenue;
+            State.inverseTceBunkerCost = bunkerCost;
+            return { minFreightRate, targetRevenue, bunkerCost };
+        }
+
+        function calculateCostPlusFreight() {
+            const dailyOpex = readInverseTceNumber('cost-plus-daily-opex');
+            const targetMargin = readInverseTceNumber('cost-plus-target-margin');
+            const daysSea = readInverseTceNumber('cost-plus-days-sea');
+            const daysPort = readInverseTceNumber('cost-plus-days-port');
+            const bunkerCost = readInverseTceNumber('cost-plus-bunker-cost');
+            const portCosts = readInverseTceNumber('cost-plus-port-costs');
+            const cargoVolume = readInverseTceNumber('cost-plus-cargo-volume');
+
+            const totalDays = daysSea + daysPort;
+            const totalOpex = dailyOpex * totalDays;
+            const totalCosts = totalOpex + bunkerCost + portCosts;
+            const calculatedMargin = costPlusMarginType === 'fixed'
+                ? targetMargin
+                : totalCosts * (targetMargin / 100);
+            const targetRevenue = totalCosts + calculatedMargin;
+            const minFreightRate = cargoVolume > 0 ? targetRevenue / cargoVolume : 0;
+
+            const minFreightEl = document.getElementById('cost-plus-min-freight-rate');
+            const totalCostsEl = document.getElementById('cost-plus-total-costs');
+            const marginEl = document.getElementById('cost-plus-calculated-margin');
+
+            if (minFreightEl) minFreightEl.textContent = `${formatInverseTceMoney(minFreightRate, { decimals: 2 })} /MT`;
+            if (totalCostsEl) totalCostsEl.textContent = formatInverseTceMoney(totalCosts);
+            if (marginEl) marginEl.textContent = formatInverseTceMoney(calculatedMargin);
+        }
+
+        function setCostPlusMarginType(type) {
+            costPlusMarginType = type === 'fixed' ? 'fixed' : 'percentage';
+
+            const fixedButton = document.getElementById('cost-plus-margin-fixed');
+            const percentageButton = document.getElementById('cost-plus-margin-percentage');
+            const activeClasses = ['bg-white', 'text-slate-950', 'shadow-sm'];
+            const inactiveClasses = ['text-slate-500'];
+
+            [fixedButton, percentageButton].forEach((button) => {
+                if (!button) return;
+                button.classList.remove(...activeClasses, ...inactiveClasses);
+                button.classList.add('hover:text-slate-800');
+            });
+
+            const activeButton = costPlusMarginType === 'fixed' ? fixedButton : percentageButton;
+            const inactiveButton = costPlusMarginType === 'fixed' ? percentageButton : fixedButton;
+            if (activeButton) activeButton.classList.add(...activeClasses);
+            if (inactiveButton) inactiveButton.classList.add(...inactiveClasses);
+
+            calculateCostPlusFreight();
+        }
+
+        const VESSEL_PRICING_CLASSES = [
+            { categoryName: 'Coaster', minDwt: 1000, maxDwt: 4999, type: 'Cost-Plus' },
+            { categoryName: 'Mini-Bulker', minDwt: 5000, maxDwt: 14999, type: 'Cost-Plus' },
+            { categoryName: 'Handysize / Small Tanker', minDwt: 15000, maxDwt: 34999, type: 'TCE Inverso' },
+            { categoryName: 'Supramax / MR', minDwt: 35000, maxDwt: 59999, type: 'TCE Inverso' },
+            { categoryName: 'Ultramax', minDwt: 60000, maxDwt: 64999, type: 'TCE Inverso' },
+            { categoryName: 'Panamax / Kamsarmax / LR1', minDwt: 65000, maxDwt: 84999, type: 'TCE Inverso' },
+            { categoryName: 'Baby Cape / Aframax / LR2', minDwt: 85000, maxDwt: 119999, type: 'TCE Inverso' },
+            { categoryName: 'Capesize / Suezmax', minDwt: 120000, maxDwt: 199999, type: 'TCE Inverso' },
+            { categoryName: 'VLOC / VLCC', minDwt: 200000, maxDwt: Infinity, type: 'TCE Inverso' }
+        ];
+
+        function getVesselClass(dwt) {
+            const normalizedDwt = Number.isFinite(Number(dwt)) ? Number(dwt) : 0;
+            const vesselClass = VESSEL_PRICING_CLASSES.find(item => normalizedDwt >= item.minDwt && normalizedDwt <= item.maxDwt);
+            if (vesselClass) return { categoryName: vesselClass.categoryName, type: vesselClass.type };
+            return normalizedDwt < 15000
+                ? { categoryName: 'Coaster', type: 'Cost-Plus' }
+                : { categoryName: 'Handysize / Small Tanker', type: 'TCE Inverso' };
+        }
+
+        const getVesselCategory = getVesselClass;
+
+        function updateVesselPricingRouter() {
+            const vesselDwt = readInverseTceNumber('vessel-dwt');
+            const vesselClass = getVesselClass(vesselDwt);
+            const useReverseTceCalculator = vesselClass.type === 'TCE Inverso';
+            const inverseCard = document.getElementById('inverse-tce-card');
+            const costPlusCard = document.getElementById('cost-plus-card');
+            const status = document.getElementById('vessel-pricing-router-status');
+            const badge = document.getElementById('vessel-pricing-router-badge');
+            const previousCategory = currentVesselPricingCategory;
+            currentVesselPricingCategory = vesselClass.categoryName;
+
+            if (inverseCard) inverseCard.classList.toggle('hidden', !useReverseTceCalculator);
+            if (costPlusCard) costPlusCard.classList.toggle('hidden', useReverseTceCalculator);
+
+            if (status) {
+                status.textContent = `Clase detectada: ${vesselClass.categoryName} (${vesselDwt.toLocaleString('en-US')} DWT).`;
+            }
+            if (badge) {
+                badge.textContent = `✅ Clase detectada: ${vesselClass.categoryName} | Modo: ${vesselClass.type}`;
+                badge.className = 'rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-black text-blue-950 shadow-sm';
+            }
+
+            if (previousCategory !== currentVesselPricingCategory && !isManualFearnleysOverride) {
+                const cache = readFearnleysMarketData();
+                if (cache) applyFearnleysMarketData(cache, currentVesselPricingCategory);
+            }
+            calculateInverseTce();
+            calculateCostPlusFreight();
+        }
+
+        async function handleFetchFearnleysTce() {
+            if (isFetchingFearnleysTce) return;
+
+            const button = document.getElementById('btn-fetch-fearnleys-tce');
+            const status = document.getElementById('inverse-tce-status');
+            isFetchingFearnleysTce = true;
+            if (button) {
+                button.disabled = true;
+                button.textContent = 'Consultando reporte...';
+            }
+            if (status) status.textContent = 'IA';
+
+            await new Promise((resolve) => window.setTimeout(resolve, 1500));
+
+            const nextCache = {
+                weekLabel: CURRENT_FEARNLEYS_WEEK_LABEL,
+                timestamp: Date.now(),
+                rates: FEARNLEYS_MARKET_RATES
+            };
+            if (typeof localStorage !== 'undefined') {
+                localStorage.setItem(FEARNLEYS_MARKET_DATA_KEY, JSON.stringify(nextCache));
+            }
+            isManualFearnleysOverride = false;
+            updateManualFearnleysOverrideUi();
+            applyFearnleysMarketData(nextCache, currentVesselPricingCategory);
+
+            isFetchingFearnleysTce = false;
+            if (button) {
+                button.disabled = false;
+                button.textContent = '✨ Consultar Fearnleys IA';
+            }
+            if (status) status.textContent = 'Live';
+        }
+
         // Initialize BroadcastChannel listener for seacharter_sync
         const syncChannel = new BroadcastChannel('seacharter_sync');
         syncChannel.onmessage = async (event) => {
@@ -30231,6 +31007,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         // Initialize defaults on load
         document.addEventListener('DOMContentLoaded', () => {
             initVoyageEstimatorTooltips();
+            hydrateBunkerIndexData();
+            hydrateFearnleysMarketData();
+            updateManualFearnleysOverrideUi();
+            calculateInverseTce();
+            calculateCostPlusFreight();
+            updateVesselPricingRouter();
             resetTotalEstimation({ silent: true });
 
             ['ritmoCarga', 'ritmoDescarga'].forEach((id) => {
@@ -30249,6 +31031,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     recalcularDiasPuerto();
                 });
             });
+            const vesselDwtInput = document.getElementById('vessel-dwt');
+            if (vesselDwtInput) {
+                vesselDwtInput.addEventListener('input', updateVesselPricingRouter);
+                vesselDwtInput.addEventListener('change', updateVesselPricingRouter);
+            }
             setOperacionModo('SPOT');
             recalcularDiasPuerto();
             actualizarCamposTipoCarga();

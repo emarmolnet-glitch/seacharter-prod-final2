@@ -263,7 +263,8 @@
         const consumoAuxiliarFondeo = toNumber(state.consumo_auxiliar_fondeo_td);
         const costeFondeo = diasFondeo * consumoFondeo * toNumber(state.precio_mgo);
         const costeAuxiliarFondeo = diasFondeo * consumoAuxiliarFondeo * toNumber(state.precio_mgo);
-        return (toNumber(state.dias_navegacion) * toNumber(state.consumo_mar_td) * toNumber(state.precio_vlsfo)) +
+        const precioMar = state.has_scrubber ? toNumber(state.precio_ifo380) : toNumber(state.precio_vlsfo);
+        return (toNumber(state.dias_navegacion) * toNumber(state.consumo_mar_td) * precioMar) +
             (diasPuertoTotal * toNumber(state.consumo_puerto_td) * toNumber(state.precio_mgo)) +
             costeFondeo +
             costeAuxiliarFondeo;
@@ -439,8 +440,10 @@
                 tipo_carga: tipoCarga,
                 factor_estiba: this.readNumber('cargo-sf'),
                 capacidad_dwt: this.readNumber('vessel-dwt'),
+                has_scrubber: Boolean(this.el('vessel-has-scrubber')?.checked),
                 consumo_mar_td: this.readNumber('cons-sea'),
                 precio_vlsfo: this.readNumber('price-sea'),
+                precio_ifo380: this.readNumber('price-ifo'),
                 consumo_puerto_td: this.readNumber('cons-port'),
                 consumo_fondeo_td: this.readNumber('cons-anchorage'),
                 consumo_auxiliar_fondeo_td: this.readNumber('cons-anchorage-aux') || 2.0,
