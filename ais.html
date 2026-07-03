@@ -321,9 +321,16 @@
             a.layer.zoomToBounds();
         });
         AISmap.addLayer(aisClusterGroup);
+        if (typeof AISmap.createPane === 'function' && !AISmap.getPane('aisProjectionPane')) {
+            AISmap.createPane('aisProjectionPane');
+            AISmap.getPane('aisProjectionPane').style.zIndex = 680;
+            AISmap.getPane('aisProjectionPane').style.pointerEvents = 'auto';
+        }
         window.AIS_DIRECT_FRONTEND_MODE = true;
         const AIS_RADAR_POL_RADIUS_NM = 300;
         const AIS_RADAR_POD_RADIUS_NM = 100;
+        const AIS_ROUTE_CORRIDOR_RADIUS_NM = 100;
+        const AIS_PROJECTION_MINUTES = 60;
         const AIS_RADAR_COLORS = {
             POL: '#16a34a',
             POD: '#2563eb'
@@ -349,6 +356,76 @@
             const phi2 = Math.asin(Math.sin(phi1) * Math.cos(delta) + Math.cos(phi1) * Math.sin(delta) * Math.cos(theta));
             const lambda2 = lambda1 + Math.atan2(Math.sin(theta) * Math.sin(delta) * Math.cos(phi1), Math.cos(delta) - Math.sin(phi1) * Math.sin(phi2));
             return { lat: phi2 * 180 / Math.PI, lon: (((lambda2 * 180 / Math.PI) + 540) % 360) - 180 };
+        }
+
+        function normalizeAisLongitude(lon) {
+            return (((Number(lon) + 540) % 360) - 180);
+        }
+
+        function interpolateAisGreatCirclePoint(start, end, fraction) {
+            const lat1 = start.lat * Math.PI / 180;
+            const lon1 = start.lon * Math.PI / 180;
+            const lat2 = end.lat * Math.PI / 180;
+            const lon2 = end.lon * Math.PI / 180;
+            const sinLatDelta = Math.sin((lat2 - lat1) / 2);
+            const sinLonDelta = Math.sin((lon2 - lon1) / 2);
+            const a = sinLatDelta * sinLatDelta + Math.cos(lat1) * Math.cos(lat2) * sinLonDelta * sinLonDelta;
+            const delta = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0, 1 - a)));
+
+            if (delta < 1e-9) return { lat: start.lat, lon: start.lon };
+
+            const sinDelta = Math.sin(delta);
+            const scaleA = Math.sin((1 - fraction) * delta) / sinDelta;
+            const scaleB = Math.sin(fraction * delta) / sinDelta;
+            const x = scaleA * Math.cos(lat1) * Math.cos(lon1) + scaleB * Math.cos(lat2) * Math.cos(lon2);
+            const y = scaleA * Math.cos(lat1) * Math.sin(lon1) + scaleB * Math.cos(lat2) * Math.sin(lon2);
+            const z = scaleA * Math.sin(lat1) + scaleB * Math.sin(lat2);
+            const lat = Math.atan2(z, Math.sqrt(x * x + y * y)) * 180 / Math.PI;
+            const lon = Math.atan2(y, x) * 180 / Math.PI;
+
+            return { lat, lon: normalizeAisLongitude(lon) };
+        }
+
+        function isAisPointLikelyOnLand(lat, lon) {
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return true;
+            const landBoxes = [
+                [-34, 30, -16, 34], [43, 72, -10, 40], [17, 36, 36, 58],
+                [8, 50, 68, 135], [-8, 20, 98, 122], [-39, -14, 116, 146],
+                [-52, 8, -76, -38], [20, 68, -160, -60], [60, 82, -58, -20],
+                [-90, -62, -180, 180]
+            ];
+
+            return landBoxes.some(box => lat >= box[0] && lat <= box[1] && lon >= box[2] && lon <= box[3]);
+        }
+
+        function buildAisGreatCirclePath(start, projectedPoints) {
+            const rawPoints = [start].concat(projectedPoints || []);
+            const path = [];
+            let landBlocked = false;
+
+            for (let segmentIndex = 0; segmentIndex < rawPoints.length - 1; segmentIndex += 1) {
+                const segmentStart = rawPoints[segmentIndex];
+                const segmentEnd = rawPoints[segmentIndex + 1];
+                const segmentDistanceNm = window.getDistance(segmentStart.lat, segmentStart.lon, segmentEnd.lat, segmentEnd.lon) || 0;
+                const steps = Math.max(8, Math.min(64, Math.ceil(segmentDistanceNm / 20)));
+
+                for (let step = segmentIndex === 0 ? 0 : 1; step <= steps; step += 1) {
+                    const point = interpolateAisGreatCirclePoint(segmentStart, segmentEnd, step / steps);
+                    if (step > 0 && isAisPointLikelyOnLand(point.lat, point.lon)) {
+                        landBlocked = true;
+                        break;
+                    }
+                    path.push([point.lat, point.lon]);
+                }
+
+                if (landBlocked) break;
+            }
+
+            if (path.length < 2) {
+                return { points: [[start.lat, start.lon]], landBlocked: true };
+            }
+
+            return { points: path, landBlocked };
         }
 
         function bearingAisDegrees(lat1, lon1, lat2, lon2) {
@@ -383,10 +460,43 @@
             return destination && speed > 0.5 ? 'Laden' : 'Ballast';
         }
 
-        function enrichAisProjection(vessel, pol) {
+        function getAisProjectionTargets(pol, pod) {
+            return [
+                pol && Number.isFinite(pol.lat) && Number.isFinite(pol.lon)
+                    ? { role: 'POL', name: pol.name || 'POL', lat: pol.lat, lon: pol.lon, radiusNm: AIS_RADAR_POL_RADIUS_NM }
+                    : null,
+                pod && Number.isFinite(pod.lat) && Number.isFinite(pod.lon)
+                    ? { role: 'POD', name: pod.name || 'POD', lat: pod.lat, lon: pod.lon, radiusNm: AIS_RADAR_POD_RADIUS_NM }
+                    : null
+            ].filter(Boolean);
+        }
+
+        function getAisProjectionTargetMatch(lat, lon, cog, target) {
+            const distanceToTarget = window.getDistance(target.lat, target.lon, lat, lon);
+            const bearingToTarget = bearingAisDegrees(lat, lon, target.lat, target.lon);
+            const courseDelta = diffAisDegrees(cog, bearingToTarget);
+            const crossTrackNm = Math.abs(Math.sin(courseDelta * Math.PI / 180) * distanceToTarget);
+            const alongTrackNm = Math.cos(courseDelta * Math.PI / 180) * distanceToTarget;
+            const projectedIntersection = alongTrackNm > 0 && crossTrackNm <= target.radiusNm;
+            const distanceToRadiusNm = projectedIntersection
+                ? Math.max(0, alongTrackNm - Math.sqrt(Math.max(0, target.radiusNm ** 2 - crossTrackNm ** 2)))
+                : null;
+            return {
+                targetRole: target.role,
+                targetName: target.name,
+                targetDistanceNm: Math.round(distanceToTarget),
+                courseDelta: Math.round(courseDelta),
+                crossTrackNm: Math.round(crossTrackNm),
+                alongTrackNm,
+                projectedIntersection,
+                distanceToRadiusNm: distanceToRadiusNm !== null ? Math.round(distanceToRadiusNm) : null
+            };
+        }
+
+        function enrichAisProjection(vessel, pol, pod) {
             const meta = vessel.MetaData || {};
             const coords = getVesselCoords(vessel);
-            if (!coords || !pol || pol.lat === null || pol.lon === null) return vessel;
+            if (!coords) return vessel;
             const lat = readAisNumber(coords[0], meta.latitude, vessel.latitude);
             const lon = readAisNumber(coords[1], meta.longitude, vessel.longitude);
             const sog = Math.max(0, readAisNumber(vessel.speed, vessel.SOG, meta.speed, meta.SOG) || 0);
@@ -396,21 +506,20 @@
             meta.loadState = vessel.loadState;
             meta.estado_carga = vessel.loadState;
             if (lat === null || lon === null || cog === null || sog <= 0.2) return vessel;
-            const points = [24, 48, 72].map(hours => {
+            const points = [AIS_PROJECTION_MINUTES / 60].map(hours => {
                 const projected = projectAisPoint(lat, lon, cog, sog * hours);
-                return { hours, lat: projected.lat, lon: projected.lon };
+                return { hours, minutes: Math.round(hours * 60), lat: projected.lat, lon: projected.lon };
             });
-            const distanceToPol = window.getDistance(pol.lat, pol.lon, lat, lon);
-            const bearingToPol = bearingAisDegrees(lat, lon, pol.lat, pol.lon);
-            const courseDelta = diffAisDegrees(cog, bearingToPol);
-            const crossTrackNm = Math.abs(Math.sin(courseDelta * Math.PI / 180) * distanceToPol);
-            const alongTrackNm = Math.cos(courseDelta * Math.PI / 180) * distanceToPol;
-            const projectedIntersection = alongTrackNm > 0 && crossTrackNm <= AIS_RADAR_POL_RADIUS_NM;
-            const distanceToRadiusNm = projectedIntersection
-                ? Math.max(0, alongTrackNm - Math.sqrt(Math.max(0, AIS_RADAR_POL_RADIUS_NM ** 2 - crossTrackNm ** 2)))
-                : null;
-            const etaProjected = distanceToRadiusNm !== null
-                ? new Date(Date.now() + (distanceToRadiusNm / sog) * 60 * 60 * 1000).toISOString()
+            const targetMatches = getAisProjectionTargets(pol, pod)
+                .map(target => getAisProjectionTargetMatch(lat, lon, cog, target))
+                .sort((a, b) => {
+                    const aDistance = a.distanceToRadiusNm !== null ? a.distanceToRadiusNm : a.targetDistanceNm;
+                    const bDistance = b.distanceToRadiusNm !== null ? b.distanceToRadiusNm : b.targetDistanceNm;
+                    return aDistance - bDistance;
+                });
+            const targetMatch = targetMatches.find(match => match.projectedIntersection) || targetMatches[0] || null;
+            const etaProjected = targetMatch && targetMatch.distanceToRadiusNm !== null
+                ? new Date(Date.now() + (targetMatch.distanceToRadiusNm / sog) * 60 * 60 * 1000).toISOString()
                 : 'N/A';
             const aisEta = vessel.eta || vessel.ETA || meta.ETA || meta.eta || 'N/A';
             const driftHours = etaProjected !== 'N/A' && aisEta !== 'N/A' && !Number.isNaN(Date.parse(aisEta))
@@ -420,12 +529,15 @@
                 cog,
                 sog,
                 points,
-                targetRole: 'POL',
-                targetDistanceNm: Math.round(distanceToPol),
-                courseDelta: Math.round(courseDelta),
-                crossTrackNm: Math.round(crossTrackNm),
-                projectedIntersection,
-                distanceToRadiusNm: distanceToRadiusNm !== null ? Math.round(distanceToRadiusNm) : null,
+                minutes: AIS_PROJECTION_MINUTES,
+                targetRole: targetMatch ? targetMatch.targetRole : 'N/A',
+                targetName: targetMatch ? targetMatch.targetName : 'N/A',
+                targetDistanceNm: targetMatch ? targetMatch.targetDistanceNm : null,
+                courseDelta: targetMatch ? targetMatch.courseDelta : null,
+                crossTrackNm: targetMatch ? targetMatch.crossTrackNm : null,
+                projectedIntersection: !!(targetMatch && targetMatch.projectedIntersection),
+                distanceToRadiusNm: targetMatch ? targetMatch.distanceToRadiusNm : null,
+                targetMatches,
                 etaProjected
             });
             vessel.etaProjected = etaProjected;
@@ -445,6 +557,18 @@
             aisProjectionLayers = [];
         }
 
+        function formatAisProjectionTooltip(projection, lineIntersectsZone) {
+            const distanceToZone = Number(projection.distanceToRadiusNm);
+            const sog = Math.max(Number(projection.sog) || 0, 0.1);
+            const minutesToZone = Number.isFinite(distanceToZone)
+                ? Math.max(0, Math.round((distanceToZone / sog) * 60))
+                : null;
+            const targetRole = projection.targetRole || 'zona';
+            const status = lineIntersectsZone ? 'Interseccion en 60 min' : 'Sin interseccion en 60 min';
+            const etaText = minutesToZone !== null ? minutesToZone + ' minutos' : 'N/A';
+            return `Tiempo estimado a zona: ${etaText}<br>${targetRole}: ${status}`;
+        }
+
         function drawAisProjection(vessel) {
             const meta = vessel.MetaData || {};
             const projection = vessel.projection || meta.projection;
@@ -452,17 +576,57 @@
             const lat = readAisNumber(meta.latitude, vessel.latitude);
             const lon = readAisNumber(meta.longitude, vessel.longitude);
             if (lat === null || lon === null) return;
-            const points = [[lat, lon]].concat(projection.points.map(point => [point.lat, point.lon]));
-            const color = vessel.loadState === 'Ballast' || vessel.estado_carga === 'Ballast' ? '#16a34a' : '#2563eb';
-            const line = L.polyline(points, { color, weight: 2, opacity: 0.78, dashArray: '8, 10', interactive: false }).addTo(AISmap);
+            const greatCirclePath = buildAisGreatCirclePath(
+                { lat, lon },
+                projection.points.map(point => ({ lat: point.lat, lon: point.lon }))
+            );
+            const points = greatCirclePath.points;
+            if (points.length < 2) return;
+            const distanceToRadiusNm = Number(projection.distanceToRadiusNm);
+            const sog = Number(projection.sog) || 0;
+            const lineIntersectsZone = projection.projectedIntersection === true
+                && Number.isFinite(distanceToRadiusNm)
+                && distanceToRadiusNm <= sog * (AIS_PROJECTION_MINUTES / 60);
+            const color = lineIntersectsZone
+                ? '#f97316'
+                : (vessel.loadState === 'Ballast' || vessel.estado_carga === 'Ballast' ? '#16a34a' : '#2563eb');
+            const line = L.polyline(points, {
+                color,
+                weight: lineIntersectsZone ? 4 : 2,
+                opacity: lineIntersectsZone ? 0.95 : 0.78,
+                dashArray: lineIntersectsZone ? '2, 6' : '8, 10',
+                interactive: true,
+                pane: 'aisProjectionPane',
+                bubblingMouseEvents: false
+            }).addTo(AISmap);
+            line.bindTooltip(formatAisProjectionTooltip(projection, lineIntersectsZone), {
+                sticky: true,
+                direction: 'top',
+                opacity: 0.96
+            });
+            if (greatCirclePath.landBlocked) {
+                line.setStyle({ dashArray: '1, 8', opacity: 0.9 });
+                line.bindTooltip(formatAisProjectionTooltip(projection, lineIntersectsZone) + '<br>Validacion: tramo truncado antes de tierra', {
+                    sticky: true,
+                    direction: 'top',
+                    opacity: 0.96
+                });
+            }
             aisProjectionLayers.push(line);
-            projection.points.forEach(point => {
-                const label = L.marker([point.lat, point.lon], {
+            projection.points.forEach((point, index) => {
+                const isLastProjectedPoint = index === projection.points.length - 1;
+                const labelPoint = greatCirclePath.landBlocked && isLastProjectedPoint
+                    ? points[points.length - 1]
+                    : [point.lat, point.lon];
+                const labelText = greatCirclePath.landBlocked && isLastProjectedPoint
+                    ? 'agua'
+                    : `${point.minutes || AIS_PROJECTION_MINUTES}min`;
+                const label = L.marker(labelPoint, {
                     interactive: false,
                     keyboard: false,
                     icon: L.divIcon({
                         className: '',
-                        html: `<div class="ais-prospection-result-label" style="color:${color}">${point.hours}h</div>`,
+                        html: `<div class="ais-prospection-result-label" style="color:${color}">${labelText}</div>`,
                         iconSize: [42, 20],
                         iconAnchor: [21, 10]
                     })
@@ -531,7 +695,7 @@
         };
 
         // --- MOTOR DE ACUMULACIÓN DUAL DE BUQUES ---
-        window.AIS_DUAL_SWEEP_LIMIT = 250;
+        window.AIS_DUAL_SWEEP_LIMIT = 1000;
         window.buquesAlmacenados = window.buquesAlmacenados instanceof Map ? window.buquesAlmacenados : new Map();
         window.buquesEncontrados = {};
 
@@ -699,9 +863,16 @@
         }
 
         function isAllowedAisCargoType(meta, report) {
-            // The live AIS density map must count what AISstream sees first.
-            // Business filters run later in the geofencing panel.
-            return true;
+            const typeText = [
+                meta && meta.ShipType,
+                meta && meta.shipType,
+                meta && meta.ShipTypeCode,
+                report && report.ShipType
+            ].filter(Boolean).join(' ').toLowerCase();
+            if (/tanker|fishing|tug|pilot|passenger|pleasure|sailing|yacht|dredg|military|law enforcement|sar|search and rescue|high speed|hsc/.test(typeText)) {
+                return false;
+            }
+            return !typeText || /bulk|bulker|cargo|general cargo|handysize|handymax|supramax|panamax|kamsarmax|capesize/.test(typeText);
         }
 
         function normalizeLiveAisMessage(message) {
@@ -713,7 +884,6 @@
             const mmsi = String(report.UserID || meta.MMSI || meta.Mmsi || '').trim();
             if (!mmsi || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
             if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
-            if (!isInsideAisMedBox(latitude, longitude)) return null;
             if (!isAllowedAisCargoType(meta, report)) return null;
 
             const speed = Number(report.Sog);
@@ -854,7 +1024,8 @@
                 tbody.innerHTML = vessels.slice(0, 80).map(v => {
                     const meta = v.MetaData || {};
                     const pol = typeof window.updateGeofencePOLDisplay === 'function' ? window.updateGeofencePOLDisplay() : null;
-                    enrichAisProjection(v, pol);
+                    const pod = typeof getAisPODDisplay === 'function' ? getAisPODDisplay() : null;
+                    enrichAisProjection(v, pol, pod);
                     const eta = v.eta || v.ETA || meta.ETA || 'N/A';
                     const projectedEta = v.etaProjected || (v.projection && v.projection.etaProjected) || meta.etaProjected || 'N/A';
                     const etaDrift = v.etaDriftHours ?? meta.etaDriftHours;
@@ -862,7 +1033,8 @@
                     const loadState = v.loadState || v.estado_carga || meta.loadState || meta.estado_carga || 'N/A';
                     const loadClass = String(loadState).toLowerCase() === 'ballast' ? 'ballast' : 'laden';
                     const projection = v.projection || meta.projection || {};
-                    const projectionLabel = projection.projectedIntersection ? `POL ${projection.distanceToRadiusNm ?? 'N/A'} MN` : 'Sin cruce POL';
+                    const projectionTarget = projection.targetRole || 'zona';
+                    const projectionLabel = projection.projectedIntersection ? `${projectionTarget} ${projection.distanceToRadiusNm ?? 'N/A'} MN` : 'Sin cruce de zona';
                     const projectionMeta = projection.sog ? `${Number(projection.sog).toFixed(1)} kn / COG ${Math.round(Number(projection.cog) || 0)}°` : 'COG/SOG N/A';
                     const lastPort = v.lastPortOfCall || v.last_port_of_call || v.ultimo_puerto || meta.lastPortOfCall || meta.ultimo_puerto || 'N/A';
                     return `<tr><td>${meta.ShipName || 'N/A'}</td><td>${meta.IMO || 'N/A'}</td><td>${formatAisEta(eta)}</td><td class="${etaDesfase ? 'ais-eta-drift' : ''}">${formatAisEta(projectedEta)}${etaDesfase ? `<span class="ais-projection-meta">Desfase +${Number(etaDrift).toFixed(1)}h</span>` : ''}</td><td><span class="ais-load-pill ${loadClass}">${loadState}</span></td><td>${projectionLabel}<span class="ais-projection-meta">${projectionMeta}</span></td><td>${lastPort}</td></tr>`;
@@ -1406,27 +1578,34 @@
             ];
         }
 
+        function getGlobalAisSweepBoxes() {
+            return [
+                [[-90, -180], [0, 0]],
+                [[-90, 0], [0, 180]],
+                [[0, -180], [90, 0]],
+                [[0, 0], [90, 180]]
+            ];
+        }
+
         window.getRouteAisSweepEndpoint = function(quantity = 120, role = '', selective = true) {
             const polName = document.getElementById('port-pol')?.value || localStorage.getItem('calculator_pol') || '';
             const podName = document.getElementById('port-pod')?.value || localStorage.getItem('calculator_pod') || '';
             const polPort = getAisRoutePort(polName);
             const podPort = getAisRoutePort(podName);
-            const boxes = [];
             const normalizedRole = String(role || '').toUpperCase();
-            const polScanRadius = window.aisProjectionMatchingMode ? 1000 : AIS_RADAR_POL_RADIUS_NM;
-            if ((!normalizedRole || normalizedRole === 'POL') && window.aisRadarZoneState.pol && polPort) boxes.push(createAisBoxAroundPort(polPort, polScanRadius));
-            if ((!normalizedRole || normalizedRole === 'POD') && window.aisRadarZoneState.pod && podPort) boxes.push(createAisBoxAroundPort(podPort, AIS_RADAR_POD_RADIUS_NM));
+            const boxes = getGlobalAisSweepBoxes();
             if (!boxes.length) return '';
             const zone = normalizedRole || 'DUAL';
             const params = new URLSearchParams({
-                quantity: String(Math.min(Number(quantity) || 120, 250)),
+                quantity: String(Math.min(Number(quantity) || 120, 1000)),
                 force: '1',
                 zone,
                 boxes: JSON.stringify(boxes),
                 vesselClass: 'Handysize,Supramax',
                 loadState: 'any',
                 selective: selective ? '1' : '0',
-                matchingMode: window.aisProjectionMatchingMode ? '1' : '0'
+                matchingMode: window.aisProjectionMatchingMode ? '1' : '0',
+                scope: 'global'
             });
             if (polPort) {
                 params.set('polLat', String(polPort.lat));
@@ -1529,6 +1708,92 @@
             return null;
         }
 
+        function getAisVesselClassText(vessel, fallbackClass = '') {
+            const meta = vessel && vessel.MetaData ? vessel.MetaData : {};
+            return [
+                meta.ShipType,
+                meta.shipType,
+                meta.vesselClass,
+                meta.VesselClass,
+                meta.type,
+                vessel && vessel.ShipType,
+                vessel && vessel.shipType,
+                vessel && vessel.vesselClass,
+                vessel && vessel.VesselClass,
+                vessel && vessel.type,
+                fallbackClass
+            ].filter(Boolean).join(' ').toLowerCase();
+        }
+
+        function isBulkCarrierLike(vessel, fallbackClass = '') {
+            const classText = getAisVesselClassText(vessel, fallbackClass);
+            if (/bulk|bulker|handysize|handymax|supramax|panamax|kamsarmax|capesize|general cargo|cargo/.test(classText)) {
+                return true;
+            }
+            if (/tanker|fishing|tug|pilot|passenger|pleasure|sailing|yacht|dredg|military|law enforcement|sar|search and rescue|high speed|hsc/.test(classText)) {
+                return false;
+            }
+            return /bulk|bulker/i.test(fallbackClass);
+        }
+
+        function getAisRouteCorridorMatch(lat, lon, pol, pod, radiusNm = AIS_ROUTE_CORRIDOR_RADIUS_NM) {
+            if (!pol || !pod) return null;
+            if (!Number.isFinite(pol.lat) || !Number.isFinite(pol.lon) || !Number.isFinite(pod.lat) || !Number.isFinite(pod.lon)) return null;
+            const midLatRad = (((pol.lat + pod.lat + lat) / 3) * Math.PI) / 180;
+            const nmPerDegreeLat = 60;
+            const nmPerDegreeLon = 60 * Math.max(0.1, Math.cos(midLatRad));
+            const ax = pol.lon * nmPerDegreeLon;
+            const ay = pol.lat * nmPerDegreeLat;
+            const bx = pod.lon * nmPerDegreeLon;
+            const by = pod.lat * nmPerDegreeLat;
+            const px = lon * nmPerDegreeLon;
+            const py = lat * nmPerDegreeLat;
+            const dx = bx - ax;
+            const dy = by - ay;
+            const routeLengthSquared = dx * dx + dy * dy;
+            if (routeLengthSquared <= 0) return null;
+            const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / routeLengthSquared));
+            const nearestX = ax + t * dx;
+            const nearestY = ay + t * dy;
+            const crossTrackNm = Math.hypot(px - nearestX, py - nearestY);
+            const alongTrackNm = Math.sqrt(routeLengthSquared) * t;
+            return {
+                inside: crossTrackNm <= radiusNm,
+                crossTrackNm,
+                alongTrackNm,
+                corridorRadiusNm: radiusNm
+            };
+        }
+
+        function applyAisHybridPriority(vessel, lat, lon, pol, pod) {
+            const zoneMatch = assignAisRadarZone(vessel, pol, pod);
+            const routeCorridor = getAisRouteCorridorMatch(lat, lon, pol, pod);
+            if (zoneMatch && (
+                (zoneMatch.zone === 'POL' && window.aisRadarZoneState.pol) ||
+                (zoneMatch.zone === 'POD' && window.aisRadarZoneState.pod)
+            )) {
+                vessel.aisRadarZone = zoneMatch.zone;
+                vessel.aisRadarColor = zoneMatch.color;
+                vessel.aisMarkerStyle = 'focus';
+            } else if (routeCorridor && routeCorridor.inside) {
+                vessel.aisRadarZone = 'ROUTE';
+                vessel.aisRadarColor = '#3b82f6';
+                vessel.aisMarkerStyle = 'focus';
+                vessel.aisRouteCorridor = routeCorridor;
+            } else {
+                vessel.aisRadarZone = 'GLOBAL';
+                vessel.aisRadarColor = '#64748b';
+                vessel.aisMarkerStyle = 'standard';
+            }
+            if (vessel.MetaData) {
+                vessel.MetaData.aisRadarZone = vessel.aisRadarZone;
+                vessel.MetaData.aisRadarColor = vessel.aisRadarColor;
+                vessel.MetaData.aisMarkerStyle = vessel.aisMarkerStyle;
+                if (vessel.aisRouteCorridor) vessel.MetaData.aisRouteCorridor = vessel.aisRouteCorridor;
+            }
+            return vessel;
+        }
+
         let geofenceCircle = null;
         let podGeofenceCircle = null;
         window.drawGeofenceCircle = function() {
@@ -1579,13 +1844,12 @@
         window.filterVesselsByGeofence = function(vessels) {
             const pol = window.updateGeofencePOLDisplay();
             const pod = getAisPODDisplay();
-            const strictGeofence = document.getElementById('filter-strict-geofence')?.checked ?? true;
             
             const checkedTypes = Array.from(document.querySelectorAll('#vessel-types-checkboxes input[type="checkbox"]:checked'))
                 .map(cb => cb.value);
             
             return (vessels || []).filter(v => {
-                enrichAisProjection(v, pol);
+                enrichAisProjection(v, pol, pod);
                 const isProjectionCandidate = !!(v.projectionCandidate || (v.MetaData && v.MetaData.projectionCandidate));
                 if (window.aisProjectionMatchingMode) {
                     const projection = v.projection || (v.MetaData && v.MetaData.projection);
@@ -1610,33 +1874,14 @@
                 let rawDwt = (v.MetaData && (v.MetaData.DWT || parseFloat(v.MetaData.dwt))) || parseFloat(v.dwt) || 0;
                 
                 const cat = classifyVessel(rawDwt, name, mmsi, imo);
-                if (checkedTypes.length > 0 && !checkedTypes.includes(cat)) {
+                if (!isBulkCarrierLike(v, cat)) {
+                    return false;
+                }
+                if (checkedTypes.length > 0 && !checkedTypes.includes(cat) && !/bulk|bulker|cargo/i.test(cat)) {
                     return false;
                 }
                 
-                if (strictGeofence) {
-                    const zoneMatch = assignAisRadarZone(v, pol, pod);
-                    const insideGeofence = !!zoneMatch && (
-                        (zoneMatch.zone === 'POL' && window.aisRadarZoneState.pol) ||
-                        (zoneMatch.zone === 'POD' && window.aisRadarZoneState.pod)
-                    );
-                    
-                    if (!insideGeofence && !isProjectionCandidate) {
-                        // Rule 2: Passing Route Destination Filter
-                        const destination = v.Destination || v.destination || (v.MetaData && (v.MetaData.Destination || v.MetaData.destination)) || "";
-                        const rawDest = destination.toLowerCase().trim();
-                        const routePorts = [
-                            "barcelona", "valencia", "piraeus", "genoa", "genova", "marseille", 
-                            "algiers", "algeria", "arzew", "skikda", "bejaia", "bejaja", "mostaganem", "oran", 
-                            "tunis", "alexandria", "limassol", "gibraltar", "algeciras", "malta", "suez"
-                        ];
-                        const isConvergent = routePorts.some(port => rawDest.includes(port));
-                        
-                        if (!isConvergent) {
-                            return false;
-                        }
-                    }
-                }
+                applyAisHybridPriority(v, lat, lon, pol, pod);
                 
                 return true;
             });
@@ -1650,10 +1895,9 @@
             // Filter using our geofencing logic
             const filteredVessels = window.filterVesselsByGeofence(vessels);
             filteredVessels.forEach(v => {
-                enrichAisProjection(v, pol);
-                const zoneMatch = assignAisRadarZone(v, pol, pod);
-                v.aisRadarZone = zoneMatch ? zoneMatch.zone : 'ROUTE';
-                v.aisRadarColor = zoneMatch ? zoneMatch.color : '#3b82f6';
+                enrichAisProjection(v, pol, pod);
+                const coords = getVesselCoords(v);
+                if (coords) applyAisHybridPriority(v, coords[0], coords[1], pol, pod);
             });
             const polPrimaryVessels = filteredVessels.filter(v => v.aisRadarZone === 'POL');
             window.lastVesselsInArea = polPrimaryVessels; // Calculations use only POL 300 NM supply.
@@ -1738,9 +1982,10 @@
                         const projectedEtaLabel = formatAisEta(projectedEta);
                         const loadClass = String(loadState).toLowerCase() === 'ballast' ? 'ballast' : 'laden';
                         const projection = b.projection || (b.MetaData && b.MetaData.projection) || {};
+                        const projectionTarget = projection.targetRole || 'zona';
                         const projectionLabel = projection.projectedIntersection
-                            ? `POL ${projection.distanceToRadiusNm ?? 'N/A'} MN`
-                            : 'Sin cruce POL';
+                            ? `${projectionTarget} ${projection.distanceToRadiusNm ?? 'N/A'} MN`
+                            : 'Sin cruce de zona';
                         const projectionMeta = projection.sog ? `${Number(projection.sog).toFixed(1)} kn / COG ${Math.round(Number(projection.cog) || 0)}°` : 'COG/SOG N/A';
                         row.onclick = () => {
                             const input = document.getElementById('nombre-buque-calculadora') || document.getElementById('vessel-name') || document.getElementById('name-of-ship-calculator');
@@ -1908,7 +2153,7 @@
             // Count exclusions!
             let totalUnfiltered = 0;
             let excludedType = 0;
-            let excludedProximity = 0;
+            let focusCount = 0;
             
             (vessels || []).forEach(v => {
                 // Use MapLoader to normalize coordinates and discard land/office points
@@ -1935,22 +2180,23 @@
                 
                 const checkedTypes = Array.from(document.querySelectorAll('#vessel-types-checkboxes input[type="checkbox"]:checked'))
                     .map(cb => cb.value);
-                const maxDistance = AIS_RADAR_POL_RADIUS_NM;
-                const strictGeofence = document.getElementById('filter-strict-geofence')?.checked ?? true;
-                
                 let excludedThisVessel = false;
                 
-                if (checkedTypes.length > 0 && !checkedTypes.includes(cat)) {
+                if (!isBulkCarrierLike(v, cat) || (checkedTypes.length > 0 && !checkedTypes.includes(cat) && !/bulk|bulker|cargo/i.test(cat))) {
                     excludedType++;
                     excludedThisVessel = true;
                 }
                 
-                if (!excludedThisVessel && strictGeofence && pol.lat !== null && pol.lon !== null) {
-                    const dist = window.getDistance(pol.lat, pol.lon, lat, lon);
-                    if (dist > maxDistance) {
-                        excludedProximity++;
-                        excludedThisVessel = true;
-                    }
+                if (!excludedThisVessel) {
+                    const zoneMatch = assignAisRadarZone(v, pol, pod);
+                    const insideGeofence = !!zoneMatch && (
+                        (zoneMatch.zone === 'POL' && window.aisRadarZoneState.pol) ||
+                        (zoneMatch.zone === 'POD' && window.aisRadarZoneState.pod)
+                    );
+                    const routeCorridor = getAisRouteCorridorMatch(lat, lon, pol, pod);
+                    const insideRouteCorridor = !!routeCorridor && routeCorridor.inside;
+                    const isProjectionCandidate = !!(v.projectionCandidate || (v.MetaData && v.MetaData.projectionCandidate));
+                    if (insideGeofence || insideRouteCorridor || isProjectionCandidate) focusCount++;
                 }
             });
             
@@ -1961,10 +2207,9 @@
                     summaryTextEl.innerText = "No scan loaded. Click 'Check Real-Time Availability' to load.";
                 } else {
                     const activeCount = filteredVessels.length;
-                    let text = "Showing " + activeCount + " of " + totalUnfiltered + " active vessels. ";
+                    let text = "Showing " + activeCount + " global bulk carriers. " + focusCount + " highlighted in POL/POD or route corridor. ";
                     const exclusions = [];
                     if (excludedType > 0) exclusions.push(excludedType + " type mismatch");
-                    if (excludedProximity > 0) exclusions.push(excludedProximity + " out-of-radius");
                     
                     if (exclusions.length > 0) {
                         text += "Filtered out: " + exclusions.join(', ') + ".";
