@@ -17805,6 +17805,32 @@
             return calculateMarketBenchmark(options);
         }
 
+        function refreshMarketBenchmarkFromState() {
+            if (typeof State === 'undefined' || typeof getRouteMarketBenchmark !== 'function') return null;
+            const totalMiles = Number(State.totalMiles || 0)
+                || ((Number(State.distBallast) || 0) + (Number(State.distLaden) || 0));
+            const cargo = Number(State.cargo || 0) || Number(document.getElementById('cargo-qty')?.value || 0);
+            const benchmarkBase = Number(State.breakEvenVentaSugerida || 0)
+                || Number(State.inverseTceMinFreightRate || 0)
+                || Number(State.breakEven || 0);
+            const marketBenchmark = getRouteMarketBenchmark({
+                breakEven: benchmarkBase,
+                totalMiles,
+                cargo,
+                bunkerPrice: Number(State.priceSea || 0) || Number(document.getElementById('price-sea')?.value || 0),
+                pol: State.pol || document.getElementById('port-pol')?.value || '',
+                pod: State.pod || document.getElementById('port-pod')?.value || '',
+                routeFactor: Number(State.etsRouteFactor || 0) || (typeof getEtsRouteFactor === 'function' ? getEtsRouteFactor() : 0),
+                cargoType: State.cargoType || document.getElementById('cargo-type')?.value || ''
+            });
+            State.marketBenchmark = marketBenchmark;
+            updateMarketBenchmarkComparison(
+                Number(State.precioObjetivoFletador || State.sugCharterer || 0),
+                marketBenchmark
+            );
+            return marketBenchmark;
+        }
+
         function updateMarketBenchmarkComparison(vsf = 0, benchmark = {}) {
             const rateEl = document.getElementById('res-market-benchmark-rate');
             const sourceEl = document.getElementById('res-market-benchmark-source');
@@ -32396,6 +32422,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             calculateInverseTce();
             syncCostPlusFromRoute(false);
             calculateCostPlusFreight();
+            if (typeof refreshMarketBenchmarkFromState === 'function') refreshMarketBenchmarkFromState();
 
             const button = document.getElementById('btn-force-refresh-calculations');
             if (button) {
