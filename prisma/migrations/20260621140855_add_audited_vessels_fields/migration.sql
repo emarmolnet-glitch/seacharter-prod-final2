@@ -1,1 +1,0 @@
--- Archivo restaurado para engañar a Netlify y saltar el error
