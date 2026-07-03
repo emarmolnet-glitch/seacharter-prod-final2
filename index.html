@@ -3369,6 +3369,36 @@
             stroke: currentColor !important;
         }
 
+        header .advanced-preference-item {
+            border-top: 1px solid #e2e8f0 !important;
+            margin-top: 0.35rem !important;
+            padding-top: 0.35rem !important;
+        }
+
+        header .advanced-preference-toggle {
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.65rem !important;
+            min-height: 40px !important;
+            padding: 0.55rem 1rem !important;
+            color: #0f172a !important;
+            font-size: 0.76rem !important;
+            font-weight: 700 !important;
+            cursor: pointer !important;
+        }
+
+        header .advanced-preference-toggle:hover {
+            background: #f8fafc !important;
+            color: #003366 !important;
+        }
+
+        header .advanced-preference-toggle input {
+            width: 1rem !important;
+            height: 1rem !important;
+            accent-color: #003366 !important;
+            flex: 0 0 auto !important;
+        }
+
         header .header-utility-btn {
             width: 2.35rem !important;
             height: 40px !important;
@@ -4881,17 +4911,7 @@
         </div>
 
         <div class="module-tabs-wrapper">
-            <div class="module-tabs flex bg-slate-950 p-1 rounded-xl border border-slate-800 max-w-full" aria-label="Navegación de módulos">
-                <button onclick="switchTab('map')" id="tab-btn-map" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all bg-blue-600 text-white shadow whitespace-nowrap">1. Mapa</button>
-                <button onclick="switchTab('estimator')" id="tab-btn-estimator" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">2. Calculadora</button>
-                <button onclick="switchTab('gencon')" id="tab-btn-gencon" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">3. Editor GENCON</button>
-                <button onclick="switchTab('asbatankvoy')" id="tab-btn-asbatankvoy" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">4. Editor ASBATANKVOY</button>
-                <button onclick="switchTab('cbam')" id="tab-btn-cbam" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">5. CBAM</button>
-                <button onclick="switchTab('fcl')" id="tab-btn-fcl" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">6. FCL</button>
-                <button onclick="switchTab('auditor')" id="tab-btn-auditor" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">7. Auditoría IA</button>
-                <button onclick="switchTab('ais')" id="tab-btn-ais" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">8. Inteligencia AIS</button>
-                <button onclick="switchTab('matching')" id="tab-btn-matching" class="tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap">9. Motor de Coincidencia</button>
-            </div>
+            <div id="primary-module-tabs" class="module-tabs flex bg-slate-950 p-1 rounded-xl border border-slate-800 max-w-full" aria-label="Navegación de módulos principales"></div>
         </div>
 
         <div class="header-actions-right">
@@ -4912,6 +4932,21 @@
                 <span class="master-report-label-full">Generar Informe Master</span>
                 <span class="master-report-label-tablet hidden">Informe Master</span>
             </button>
+            <div class="tools-dropdown-container">
+                <button
+                    type="button"
+                    id="advanced-modules-btn"
+                    class="tools-dropdown-trigger"
+                    onclick="toggleAdvancedModulesMenu(event)"
+                    aria-controls="advanced-modules-menu"
+                    aria-expanded="false"
+                    title="Herramientas Avanzadas"
+                    aria-label="Herramientas Avanzadas"
+                >
+                    <i class="fa-solid fa-gear text-base" aria-hidden="true"></i>
+                </button>
+                <ul id="advanced-modules-menu" class="tools-dropdown-menu" aria-label="Herramientas Avanzadas"></ul>
+            </div>
             <!-- Session Actions Container -->
             <div class="flex items-center gap-2" id="session-actions">
                 <div class="tools-dropdown-container">
@@ -11277,6 +11312,11 @@
 
         // --- INICIALIZACIÓN ---
         document.addEventListener('DOMContentLoaded', () => {
+            if (typeof renderNavbarModules === 'function') {
+                renderNavbarModules();
+                updateNavigationContext('map');
+                loadAccountUserPreferences();
+            }
             if (typeof window.detenerRadar === 'function') {
                 window.detenerRadar();
             } else if (typeof window.setAisRadarStatus === 'function') {
@@ -14126,21 +14166,199 @@
             }
         };
 
-        const MODULE_NAVIGATION = ['map', 'estimator', 'gencon', 'asbatankvoy', 'cbam', 'fcl', 'auditor', 'ais', 'matching'];
+        const USER_PREFERENCES_STORAGE_KEY = 'seacharter_user_preferences';
+        const DEFAULT_USER_PREFERENCES = Object.freeze({
+            showContainerModules: false,
+        });
+        const PRIMARY_MODULES = [
+            { id: 'map', label: 'Mapa' },
+            { id: 'estimator', label: 'Calculadora' },
+            { id: 'gencon', label: 'Editor GENCON' },
+            { id: 'auditor', label: 'Auditoría IA' },
+        ];
+        const OPTIONAL_MODULES = [
+            { id: 'fcl', label: 'FCL', preferenceKey: 'showContainerModules' },
+            { id: 'asbatankvoy', label: 'Editor ASBATANKVOY' },
+            { id: 'cbam', label: 'CBAM' },
+            { id: 'ais', label: 'Inteligencia AIS' },
+            { id: 'matching', label: 'Motor de Coincidencia' },
+        ];
+        const MODULE_NAVIGATION = [...PRIMARY_MODULES, ...OPTIONAL_MODULES].map(module => module.id);
+        let userPreferences = loadUserPreferences();
+
+        function loadUserPreferences() {
+            if (typeof localStorage === 'undefined') return { ...DEFAULT_USER_PREFERENCES };
+            try {
+                const storedPreferences = JSON.parse(localStorage.getItem(USER_PREFERENCES_STORAGE_KEY) || '{}');
+                return {
+                    ...DEFAULT_USER_PREFERENCES,
+                    ...(storedPreferences && typeof storedPreferences === 'object' ? storedPreferences : {}),
+                };
+            } catch (error) {
+                localStorage.removeItem(USER_PREFERENCES_STORAGE_KEY);
+                return { ...DEFAULT_USER_PREFERENCES };
+            }
+        }
+
+        function saveUserPreferences(nextPreferences) {
+            userPreferences = {
+                ...DEFAULT_USER_PREFERENCES,
+                ...nextPreferences,
+            };
+            window.userPreferences = userPreferences;
+            if (typeof localStorage !== 'undefined') {
+                localStorage.setItem(USER_PREFERENCES_STORAGE_KEY, JSON.stringify(userPreferences));
+            }
+            persistUserPreferences(userPreferences);
+        }
+
+        async function loadAccountUserPreferences() {
+            try {
+                const response = await fetch('/api/user-preferences');
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok || payload.success === false || !payload.preferences) return;
+                userPreferences = {
+                    ...DEFAULT_USER_PREFERENCES,
+                    ...payload.preferences,
+                };
+                window.userPreferences = userPreferences;
+                if (typeof localStorage !== 'undefined') {
+                    localStorage.setItem(USER_PREFERENCES_STORAGE_KEY, JSON.stringify(userPreferences));
+                }
+                renderNavbarModules();
+                updateNavigationContext(document.querySelector('.view-section.active-block, .view-section.active-flex')?.id?.replace('view-', '') || 'map');
+            } catch (error) {
+                console.warn('[UserPreferences] No se pudieron cargar las preferencias de cuenta.', error);
+            }
+        }
+
+        async function persistUserPreferences(preferences) {
+            try {
+                const response = await fetch('/api/user-preferences', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ preferences }),
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok || payload.success === false || !payload.preferences) return;
+                userPreferences = {
+                    ...DEFAULT_USER_PREFERENCES,
+                    ...payload.preferences,
+                };
+                window.userPreferences = userPreferences;
+                if (typeof localStorage !== 'undefined') {
+                    localStorage.setItem(USER_PREFERENCES_STORAGE_KEY, JSON.stringify(userPreferences));
+                }
+            } catch (error) {
+                console.warn('[UserPreferences] No se pudieron guardar las preferencias de cuenta.', error);
+            }
+        }
+
+        function createModuleButton(moduleConfig, variant = 'primary') {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.id = variant === 'primary' ? `tab-btn-${moduleConfig.id}` : `advanced-tab-btn-${moduleConfig.id}`;
+            button.dataset.moduleId = moduleConfig.id;
+            button.className = variant === 'primary'
+                ? 'tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap'
+                : 'tools-dropdown-action';
+            button.textContent = moduleConfig.label;
+            button.setAttribute('aria-label', moduleConfig.label);
+            button.addEventListener('click', () => {
+                switchTab(moduleConfig.id);
+                if (variant !== 'primary') closeAdvancedModulesMenu();
+            });
+            return button;
+        }
+
+        function getPrimaryNavigationModules() {
+            const promotedOptionalModules = OPTIONAL_MODULES.filter(moduleConfig => (
+                moduleConfig.preferenceKey === 'showContainerModules' && userPreferences.showContainerModules
+            ));
+            return [...PRIMARY_MODULES, ...promotedOptionalModules];
+        }
+
+        function renderPrimaryNavigation() {
+            const tabs = document.getElementById('primary-module-tabs');
+            if (!tabs) return;
+            tabs.innerHTML = '';
+            getPrimaryNavigationModules().forEach(moduleConfig => {
+                tabs.appendChild(createModuleButton(moduleConfig, 'primary'));
+            });
+        }
+
+        function renderAdvancedModulesMenu() {
+            const menu = document.getElementById('advanced-modules-menu');
+            if (!menu) return;
+            menu.innerHTML = '';
+
+            OPTIONAL_MODULES.forEach(moduleConfig => {
+                const item = document.createElement('li');
+                item.className = 'tools-dropdown-item';
+                item.appendChild(createModuleButton(moduleConfig, 'advanced'));
+                menu.appendChild(item);
+            });
+
+            const preferenceItem = document.createElement('li');
+            preferenceItem.className = 'tools-dropdown-item advanced-preference-item';
+            preferenceItem.innerHTML = `
+                <label class="advanced-preference-toggle" for="show-container-modules-toggle">
+                    <input type="checkbox" id="show-container-modules-toggle" ${userPreferences.showContainerModules ? 'checked' : ''}>
+                    <span>Mostrar FCL en barra superior</span>
+                </label>
+            `;
+            menu.appendChild(preferenceItem);
+
+            const preferenceToggle = document.getElementById('show-container-modules-toggle');
+            if (preferenceToggle) {
+                preferenceToggle.addEventListener('click', event => event.stopPropagation());
+                preferenceToggle.addEventListener('change', event => {
+                    saveUserPreferences({
+                        ...userPreferences,
+                        showContainerModules: Boolean(event.target.checked),
+                    });
+                    renderNavbarModules();
+                    updateNavigationContext(document.querySelector('.view-section.active-block, .view-section.active-flex')?.id?.replace('view-', '') || 'map');
+                });
+            }
+        }
+
+        function renderNavbarModules() {
+            renderPrimaryNavigation();
+            renderAdvancedModulesMenu();
+        }
+
+        function closeAdvancedModulesMenu() {
+            const menu = document.getElementById('advanced-modules-menu');
+            const button = document.getElementById('advanced-modules-btn');
+            if (menu) menu.classList.remove('is-open');
+            if (button) button.setAttribute('aria-expanded', 'false');
+        }
+
+        function toggleAdvancedModulesMenu(event) {
+            if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+            closeMobileSessionMenu();
+            const menu = document.getElementById('advanced-modules-menu');
+            const button = document.getElementById('advanced-modules-btn');
+            if (!menu) return;
+            const isOpen = menu.classList.toggle('is-open');
+            if (button) button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        }
+
+        window.userPreferences = userPreferences;
 
         function updateNavigationContext(tabId) {
             MODULE_NAVIGATION.forEach(moduleId => {
-                const button = document.getElementById(`tab-btn-${moduleId}`);
-                if (!button) return;
+                document.querySelectorAll(`[data-module-id="${moduleId}"]`).forEach(button => {
+                    button.classList.remove('bg-blue-600', 'text-white', 'shadow');
+                    button.classList.add('text-[#002060]');
+                    button.setAttribute('aria-current', moduleId === tabId ? 'page' : 'false');
 
-                button.classList.remove('bg-blue-600', 'text-white', 'shadow');
-                button.classList.add('text-[#002060]');
-                button.setAttribute('aria-current', moduleId === tabId ? 'page' : 'false');
-
-                if (moduleId === tabId) {
-                    button.classList.remove('text-[#002060]');
-                    button.classList.add('bg-blue-600', 'text-white', 'shadow');
-                }
+                    if (moduleId === tabId && button.classList.contains('tab-btn')) {
+                        button.classList.remove('text-[#002060]');
+                        button.classList.add('bg-blue-600', 'text-white', 'shadow');
+                    }
+                });
             });
         }
 
@@ -14166,6 +14384,7 @@
                 sessionActions.classList.add('flex');
             }
             closeMobileSessionMenu();
+            closeAdvancedModulesMenu();
 
             if (tabId === 'matching') {
                 syncCalculatorAndMatching('calculator');
@@ -14254,6 +14473,14 @@
             if (!menu || !button || !menu.classList.contains('is-open')) return;
             if (menu.contains(event.target) || button.contains(event.target)) return;
             closeMobileSessionMenu();
+        });
+
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('advanced-modules-menu');
+            const button = document.getElementById('advanced-modules-btn');
+            if (!menu || !button || !menu.classList.contains('is-open')) return;
+            if (menu.contains(event.target) || button.contains(event.target)) return;
+            closeAdvancedModulesMenu();
         });
 
         function switchGenconView(viewId) {
