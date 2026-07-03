@@ -6,3 +6,10 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// Modelo temporal para que Prisma pueda generar el cliente correctamente
+model AppConfig {
+  id    Int     @id @default(autoincrement())
+  key   String  @unique
+  value String
+}
