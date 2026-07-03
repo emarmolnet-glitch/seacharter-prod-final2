@@ -17805,6 +17805,49 @@
             return calculateMarketBenchmark(options);
         }
 
+        function calculateSuggestedPriceFromMargin(baseRate, marginPct) {
+            const base = Number(baseRate) || 0;
+            const margin = Number(marginPct) || 0;
+            const factor = 1 - (margin / 100);
+            return base > 0 && factor > 0 ? (base / factor) : 0;
+        }
+
+        function refreshMarketBenchmarkFromState(options = {}) {
+            if (typeof State === 'undefined' || typeof getRouteMarketBenchmark !== 'function') return null;
+            const vesselClass = typeof getVesselClass === 'function'
+                ? getVesselClass(Number(document.getElementById('vessel-dwt')?.value || State.dwt || 0))
+                : null;
+            const isCostPlusMode = vesselClass?.type === 'Cost-Plus';
+            const totalMiles = Number(State.totalMiles || 0)
+                || ((Number(State.distBallast) || 0) + (Number(State.distLaden) || 0));
+            const cargo = Number(State.cargo || 0) || Number(document.getElementById('cargo-qty')?.value || 0);
+            const freshInverseRate = Number(options.inverseTceMinFreightRate || 0);
+            const freshCostPlusRate = Number(options.costPlusMinFreightRate || 0);
+            const benchmarkBase = isCostPlusMode
+                ? (freshCostPlusRate || Number(State.costPlusMinFreightRate || 0) || Number(State.breakEvenVentaSugerida || 0) || Number(State.breakEven || 0))
+                : (freshInverseRate || Number(State.inverseTceMinFreightRate || 0) || Number(State.breakEvenVentaSugerida || 0) || Number(State.breakEven || 0));
+            const marginOwner = Number(document.getElementById('margin-owner')?.value || State.marginOwner || 0);
+            const marginCharterer = Number(document.getElementById('margin-charterer')?.value || State.marginCharterer || 0);
+            const suggestedOwner = calculateSuggestedPriceFromMargin(benchmarkBase, marginOwner);
+            const suggestedCharterer = calculateSuggestedPriceFromMargin(suggestedOwner || benchmarkBase, marginCharterer);
+            const benchmarkComparisonRate = Number(options.precioObjetivoFletador || 0)
+                || (isCostPlusMode ? suggestedCharterer : Number(State.precioObjetivoFletador || State.sugCharterer || 0))
+                || suggestedCharterer;
+            const marketBenchmark = getRouteMarketBenchmark({
+                breakEven: benchmarkBase,
+                totalMiles,
+                cargo,
+                bunkerPrice: Number(State.priceSea || 0) || Number(document.getElementById('price-sea')?.value || 0),
+                pol: State.pol || document.getElementById('port-pol')?.value || '',
+                pod: State.pod || document.getElementById('port-pod')?.value || '',
+                routeFactor: Number(State.etsRouteFactor || 0) || (typeof getEtsRouteFactor === 'function' ? getEtsRouteFactor() : 0),
+                cargoType: State.cargoType || document.getElementById('cargo-type')?.value || ''
+            });
+            State.marketBenchmark = marketBenchmark;
+            updateMarketBenchmarkComparison(benchmarkComparisonRate, marketBenchmark);
+            return marketBenchmark;
+        }
+
         function updateMarketBenchmarkComparison(vsf = 0, benchmark = {}) {
             const rateEl = document.getElementById('res-market-benchmark-rate');
             const sourceEl = document.getElementById('res-market-benchmark-source');
@@ -18589,12 +18632,18 @@
             const costPlusResults = typeof calculateCostPlusFreight === 'function'
                 ? calculateCostPlusFreight()
                 : null;
+            const vesselPricingClass = typeof getVesselClass === 'function'
+                ? getVesselClass(dwtVal)
+                : null;
             const costPlusMinimumFreight = Number.isFinite(costPlusResults?.minFreightRate)
                 ? costPlusResults.minFreightRate
-                : 0;
+                : Number(State.costPlusMinFreightRate || 0);
+            const activePricingMinimumFreight = vesselPricingClass?.type === 'Cost-Plus' && costPlusMinimumFreight > 0
+                ? costPlusMinimumFreight
+                : inverseMinimumFreight;
             const breakEvenParaVentaSugerida = operacionModo === 'COA' && coaScenarioProjection
                 ? coaScenarioProjection.securityScenario.breakEvenAverage
-                : costPlusMinimumFreight;
+                : activePricingMinimumFreight;
             const fleteMinimoBaseVenta = breakEvenParaVentaSugerida;
             const precioObjetivoArmador = operacionModo === 'COA' && coaScenarioProjection
                 ? coaScenarioProjection.securityScenario.ownerPurchase
@@ -18672,7 +18721,9 @@
             State.marketCalibrationFactor = readMarketCalibrationFactor();
             State.coaBunkerIndex = coaScenarioProjection;
             const marketBenchmark = getRouteMarketBenchmark({
-                breakEven: breakEvenParaVentaSugerida,
+                breakEven: operacionModo === 'COA' && coaScenarioProjection
+                    ? breakEvenParaVentaSugerida
+                    : activePricingMinimumFreight,
                 totalMiles: distBal + distLaden,
                 cargo: operacionModo === 'COA' && coaTotalTmContrato > 0 ? coaTotalTmContrato : cargo,
                 bunkerPrice: pSea,
@@ -18739,7 +18790,9 @@
             }
 
             const suggestedSaleColor = suggestedBelowTarget ? '#dc2626' : '#059669';
-            const suggestedSaleNote = suggestedBelowTarget ? 'Alerta: Venta por debajo del TCE Objetivo' : 'Flete mínimo inverso sincronizado';
+            const suggestedSaleNote = suggestedBelowTarget
+                ? 'Alerta: Venta por debajo del TCE Objetivo'
+                : (vesselPricingClass?.type === 'Cost-Plus' ? 'Flete mínimo Cost-Plus sincronizado' : 'Flete mínimo inverso sincronizado');
             if (isZeroCalculation) {
                 document.getElementById('res-sug-owner').innerHTML = `
                     <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$0.00</div>
@@ -32396,9 +32449,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 activeState.daysPort
             );
             syncInverseBunkerCostFromVoyage();
-            calculateInverseTce();
+            const inverseTceResults = calculateInverseTce();
             syncCostPlusFromRoute(false);
-            calculateCostPlusFreight();
+            const costPlusResults = calculateCostPlusFreight();
+            if (typeof runEngine === 'function') runEngine();
+            if (typeof refreshMarketBenchmarkFromState === 'function') {
+                refreshMarketBenchmarkFromState({
+                    inverseTceMinFreightRate: inverseTceResults?.minFreightRate,
+                    costPlusMinFreightRate: costPlusResults?.minFreightRate
+                });
+            }
 
             const button = document.getElementById('btn-force-refresh-calculations');
             if (button) {
