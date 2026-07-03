@@ -6109,12 +6109,15 @@
 
                             <!-- Calculadora Cost-Plus Coaster -->
                             <div id="cost-plus-card" class="hidden rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-xs shadow-sm">
-                                <div class="mb-3 flex items-start justify-between gap-3">
+                                <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
                                     <div>
                                         <div class="text-[10px] font-black uppercase tracking-wide text-amber-800">Cost-Plus Coaster</div>
                                         <div class="mt-0.5 text-[10px] font-semibold text-slate-500">Cálculo desde OPEX, bunker, puertos y margen comercial.</div>
                                     </div>
-                                    <span class="rounded bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-700 shadow-sm">Modo Coaster: Cálculo Cost-Plus (OPEX)</span>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <button id="btn-sync-cost-plus-route" type="button" onclick="syncCostPlusFromRoute(true)" class="rounded border border-amber-300 bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-800 shadow-sm transition hover:border-amber-500 hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400" disabled>Sincronizar con Ruta</button>
+                                        <span class="rounded bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-700 shadow-sm">Modo Coaster: Cálculo Cost-Plus (OPEX)</span>
+                                    </div>
                                 </div>
                                 <div class="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1.25fr)_minmax(14rem,0.75fr)]">
                                     <div>
@@ -6161,6 +6164,7 @@
                                         <div class="mt-3 space-y-1 border-t border-slate-100 pt-2 text-sm font-semibold text-gray-500">
                                             <div>Coste Total Riesgo: <span id="cost-plus-total-costs">$88,000</span></div>
                                             <div>Beneficio Neto Proyectado: <span id="cost-plus-calculated-margin">$13,200</span></div>
+                                            <div>Demurrage ($/d): <span id="cost-plus-demurrage-rate">$5,625</span></div>
                                         </div>
                                     </div>
                                 </div>
@@ -16667,6 +16671,30 @@
             runEngine();
         }
 
+        function updateCargoRateArbitrageAlert(ownerProfit) {
+            const hasOwnerLoss = Number(ownerProfit) < 0;
+            [
+                { inputId: 'rate-load', labelId: 'label-rate-load' },
+                { inputId: 'rate-disch', labelId: 'label-rate-disch' }
+            ].forEach(({ inputId, labelId }) => {
+                const input = document.getElementById(inputId);
+                const label = document.getElementById(labelId);
+                if (input) {
+                    input.classList.toggle('border-red-500', hasOwnerLoss);
+                    input.classList.toggle('ring-2', hasOwnerLoss);
+                    input.classList.toggle('ring-red-500', hasOwnerLoss);
+                    input.classList.toggle('bg-red-950/30', hasOwnerLoss);
+                    input.title = hasOwnerLoss
+                        ? 'Beneficio Armador negativo: ajusta el ritmo de carga/descarga para intentar revertir la pérdida.'
+                        : '';
+                }
+                if (label) {
+                    label.classList.toggle('text-red-400', hasOwnerLoss);
+                    label.classList.toggle('text-action-required', !hasOwnerLoss);
+                }
+            });
+        }
+
         function getPortMultiplier(portName) {
             if (!portName) return 1.2;
             const p = portName.toLowerCase();
@@ -17868,14 +17896,12 @@
             const chartererInput = document.getElementById('margin-charterer');
             const freightSellInput = document.getElementById('freight-sell');
             const note = document.getElementById('ai-margin-proposal-note');
-            const benchmark = State?.marketBenchmark;
-            const breakEven = Number(State?.breakEvenVentaSugerida || State?.breakEvenArmador || State?.breakEven || 0);
-            const marketRate = Number(benchmark?.rate || 0);
+            const costPlusBase = Number(State?.costPlusMinFreightRate || calculateCostPlusFreight()?.minFreightRate || 0);
             const pol = document.getElementById('port-pol')?.value || 'POL';
             const pod = document.getElementById('port-pod')?.value || 'POD';
 
-            if (!ownerInput || !chartererInput || !(breakEven > 0) || !(marketRate > 0)) {
-                const message = 'Propuesta de IA no disponible: calcula primero la ruta para obtener Break-Even y Benchmark Mercado.';
+            if (!ownerInput || !chartererInput || !(costPlusBase > 0)) {
+                const message = 'Propuesta de IA no disponible: calcula primero el Flete Mínimo Cost-Plus.';
                 if (note) {
                     note.classList.remove('hidden');
                     note.innerText = message;
@@ -17884,17 +17910,11 @@
                 return;
             }
 
-            const marketCap = marketRate * 0.995;
-            const totalMarginPct = Math.max(0, Math.min(90, (1 - (breakEven / marketCap)) * 100));
-            const ownerMarginPct = Math.max(0, Math.min(45, totalMarginPct * 0.55));
-            const ownerSale = calcularPrecioObjetivo(breakEven, ownerMarginPct);
-            const chartererMarginPct = marketCap > ownerSale
-                ? Math.max(0, Math.min(45, (1 - (ownerSale / marketCap)) * 100))
-                : 0;
+            const ownerMarginPct = Math.max(0, parseFloat(ownerInput.value) || 0);
+            const chartererMarginPct = Math.max(0, parseFloat(chartererInput.value) || 0);
+            const ownerSale = calcularPrecioObjetivo(costPlusBase, ownerMarginPct);
             const proposedSale = calcularPrecioObjetivo(ownerSale, chartererMarginPct);
 
-            ownerInput.value = ownerMarginPct.toFixed(2);
-            chartererInput.value = chartererMarginPct.toFixed(2);
             if (freightSellInput) {
                 freightSellInput.value = proposedSale.toFixed(2);
                 freightSellInput.dataset.marginSynced = 'true';
@@ -17903,8 +17923,7 @@
             State.marginCharterer = chartererMarginPct;
             State.freightSell = proposedSale;
             State.aiMarginProposal = {
-                marketRate,
-                breakEven,
+                costPlusBase,
                 ownerMarginPct,
                 chartererMarginPct,
                 proposedSale,
@@ -17912,7 +17931,7 @@
                 appliedAt: new Date().toISOString()
             };
 
-            const explanation = `Propuesta de IA: margen armador ${ownerMarginPct.toFixed(2)}% y margen fletador ${chartererMarginPct.toFixed(2)}% para maximizar beneficio sin superar el benchmark ${pol}-${pod} ($${marketRate.toFixed(2)}/TM).`;
+            const explanation = `Propuesta de IA: venta calculada desde Flete Mínimo Cost-Plus $${costPlusBase.toFixed(2)}/TM con margen armador ${ownerMarginPct.toFixed(2)}% y margen fletador ${chartererMarginPct.toFixed(2)}% para la ruta ${pol}-${pod}.`;
             if (note) {
                 note.classList.remove('hidden');
                 note.innerText = explanation;
@@ -18425,7 +18444,7 @@
 
             if (cpStandard === 'ASBATANKVOY' && !isZeroCalculation) {
                 const dwt = parseFloat(document.getElementById('vessel-dwt').value) || 0;
-                delayHours = parseFloat(document.getElementById('asb-delay-hours')?.value) || 0;
+                delayHours = Math.max(0, safeCalculationNumber(document.getElementById('asb-delay-hours')?.value));
                 
                 // Determine vessel daily rate based on DWT
                 if (dwt <= 15000) {
@@ -18484,7 +18503,7 @@
             const etsTotalCostEl = document.getElementById('res-ets-total-cost');
             if (etsTotalCostEl) etsTotalCostEl.innerText = `$${etsCost.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
-            const grossRevOwner = multiplier * freightBuy;
+            const grossRevOwner = cargo * freightBuy;
             const voyageRevenues = isZeroCalculation ? 0 : (grossRevOwner + voyageExtras);
             const voyageExpenses = isZeroCalculation ? 0 : (totalBunkers + portExpensesForMode);
             const tceTotal = isZeroCalculation ? 0 : (voyageRevenues - voyageExpenses);
@@ -18552,9 +18571,15 @@
             const inverseMinimumFreight = Number.isFinite(inverseTceResults?.minFreightRate)
                 ? inverseTceResults.minFreightRate
                 : breakEvenArmadorDisplay;
+            const costPlusResults = typeof calculateCostPlusFreight === 'function'
+                ? calculateCostPlusFreight()
+                : null;
+            const costPlusMinimumFreight = Number.isFinite(costPlusResults?.minFreightRate)
+                ? costPlusResults.minFreightRate
+                : 0;
             const breakEvenParaVentaSugerida = operacionModo === 'COA' && coaScenarioProjection
                 ? coaScenarioProjection.securityScenario.breakEvenAverage
-                : inverseMinimumFreight;
+                : costPlusMinimumFreight;
             const fleteMinimoBaseVenta = breakEvenParaVentaSugerida;
             const precioObjetivoArmador = operacionModo === 'COA' && coaScenarioProjection
                 ? coaScenarioProjection.securityScenario.ownerPurchase
@@ -18769,6 +18794,7 @@
 
             document.getElementById('res-net-profit-owner').innerText = `$${netProfitOwner.toLocaleString('en-US', {maximumFractionDigits:0})}`;
             document.getElementById('res-net-profit-owner').className = netProfitOwner >= 0 ? "text-4xl font-bold text-emerald-400 mono leading-none" : "text-4xl font-bold text-red-500 mono leading-none";
+            updateCargoRateArbitrageAlert(netProfitOwner);
             const netProfitOwnerDailyEl = document.getElementById('res-net-profit-owner-daily');
             if (netProfitOwnerDailyEl) netProfitOwnerDailyEl.innerText = `Beneficio Neto Diario: $${netProfitOwnerDaily.toLocaleString('en-US', {maximumFractionDigits:0})} / día`;
             document.getElementById('res-tce-label').innerText = `TCE Obtenido: $${tceOwner.toLocaleString('en-US', {maximumFractionDigits:0})} / día (Total: $${tceTotal.toLocaleString('en-US', {maximumFractionDigits:0})})`;
@@ -18778,7 +18804,10 @@
             const ownerVoyageCostsEl = document.getElementById('res-owner-voyage-costs');
             const ownerOpexCapexEl = document.getElementById('res-owner-opex-capex');
             const ownerFinalNetEl = document.getElementById('res-owner-final-net');
-            if (ownerGrossRevenueEl) ownerGrossRevenueEl.innerText = `$${voyageRevenues.toLocaleString('en-US', {maximumFractionDigits:0})}`;
+            if (ownerGrossRevenueEl) {
+                ownerGrossRevenueEl.innerText = `$${grossRevOwner.toLocaleString('en-US', {maximumFractionDigits:0})}`;
+                ownerGrossRevenueEl.title = `Ingreso Bruto = ${freightBuy.toFixed(2)} USD/MT × ${cargo.toLocaleString('en-US')} TM`;
+            }
             if (ownerVoyageCostsEl) ownerVoyageCostsEl.innerText = `$${(totalBunkers + portExpensesForMode).toLocaleString('en-US', {maximumFractionDigits:0})}`;
             if (ownerOpexCapexEl) {
                 ownerOpexCapexEl.innerText = `$${ownerOperatingCapitalCosts.toLocaleString('en-US', {maximumFractionDigits:0})}`;
@@ -18822,10 +18851,16 @@
             State.freightSell = freightSell;
             State.demurrage = document.getElementById('demurrage-rate').value;
             State.totalDays = totalDays;
+            State.daysSea = T_sea;
+            State.daysPort = T_port;
+            State.totalBunkers = totalBunkers;
+            State.portExpenses = smartPortExpenses;
+            State.opex = opex;
             State.typeOfFreightApplied = typeOfFreightApplied;
             State.delayHours = delayHours;
             State.delayDailyRate = delayDailyRate;
             State.delayCost = delayCost;
+            setCostPlusRouteSyncState(totalDays > 0 || cargo > 0 || totalBunkers > 0 || smartPortExpenses > 0);
             State.costBreakdown = {
                 bunkers: totalBunkers,
                 opex: totalOpex,
@@ -19520,10 +19555,14 @@
         function syncDelayHours(source) {
             const mainEl = document.getElementById('asb-delay-hours-main');
             const formEl = document.getElementById('asb-delay-hours');
+            const sourceEl = source === 'main' ? mainEl : formEl;
+            const normalizedHours = Math.max(0, safeCalculationNumber(sourceEl?.value));
             if (source === 'main' && formEl && mainEl) {
-                formEl.value = mainEl.value;
+                mainEl.value = String(normalizedHours);
+                formEl.value = String(normalizedHours);
             } else if (source === 'form' && mainEl && formEl) {
-                mainEl.value = formEl.value;
+                mainEl.value = String(normalizedHours);
+                formEl.value = String(normalizedHours);
             }
             runEngine();
             syncAsbatankvoy();
@@ -19654,7 +19693,7 @@
 
             u('.lbl-add-vessel-daily-rate', dailyRateStr);
 
-            const delayHours = parseFloat(getVal('asb-delay-hours')) || 0;
+            const delayHours = Math.max(0, safeCalculationNumber(getVal('asb-delay-hours')));
             const delayCost = (delayDailyRate / 24) * delayHours;
             const delayHoursRow = document.getElementById('asb-addendum-delay-hours-row');
             const delayCostRow = document.getElementById('asb-addendum-delay-cost-row');
@@ -31147,7 +31186,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const sugOwner = sugOwnerBase;
             const sugChart = sugChartBase;
 
-            const grossRevOwner = multiplier * freightBuy;
+            const grossRevOwner = cargo * freightBuy;
             const voyageRevenues = isZeroCalculation ? 0 : (grossRevOwner + voyageExtras);
             const voyageExpenses = isZeroCalculation ? 0 : (totalBunkers + pdas);
             const tceTotal = isZeroCalculation ? 0 : (voyageRevenues - voyageExpenses);
@@ -31802,6 +31841,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return Number.isFinite(value) ? value : fallback;
         }
 
+        function safeCalculationNumber(value, fallback = 0) {
+            const numericValue = Number(value);
+            return Number.isFinite(numericValue) ? numericValue : fallback;
+        }
+
+        function roundCalculationMoney(value) {
+            return Number(safeCalculationNumber(value).toFixed(2));
+        }
+
         function formatInverseTceMoney(value, options = {}) {
             const { decimals = 0 } = options;
             return value.toLocaleString('en-US', {
@@ -32040,6 +32088,58 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             syncInverseBunkerCostFromVoyage();
         }
 
+        function setCostPlusRouteSyncState(enabled) {
+            const button = document.getElementById('btn-sync-cost-plus-route');
+            if (!button) return;
+            button.disabled = !enabled;
+            button.title = enabled
+                ? 'Sincronizar con los datos calculados de la ruta actual'
+                : 'Calcula primero una ruta con días, carga o costes válidos';
+        }
+
+        function syncCostPlusFromRoute(showFeedback = false) {
+            const routeTotalDays = Math.max(0, safeCalculationNumber(State.totalDays));
+            const routeSeaDays = Math.max(0, safeCalculationNumber(State.daysSea));
+            const routePortDays = Math.max(0, safeCalculationNumber(State.daysPort));
+            const routeDistance = Math.max(0, safeCalculationNumber(State.distance || State.distanceNm || State.smartAdjustments?.distanceNm));
+            const routeCargo = Math.max(0, safeCalculationNumber(State.cargo || document.getElementById('cargo-qty')?.value));
+            const routeBunkerCost = Math.max(0, safeCalculationNumber(State.totalBunkers || State.inverseTceBunkerCost));
+            const routeOpex = Math.max(0, safeCalculationNumber(State.opex || document.getElementById('opex-daily')?.value));
+            const routeSyncedDays = (routeSeaDays + routePortDays) > 0 ? routeSeaDays + routePortDays : routeTotalDays;
+            const routeTotalCosts = Math.max(0, safeCalculationNumber(State.totalCosts || State.costTotal || State.smartAdjustments?.totalCosts));
+            const routeDirectPortCosts = Math.max(0, safeCalculationNumber(State.portExpenses || State.pdas || State.smartAdjustments?.gpt || getSyncedInversePortCosts()));
+            const routePortCosts = routeDirectPortCosts > 0
+                ? routeDirectPortCosts
+                : Math.max(0, routeTotalCosts - routeBunkerCost - (routeOpex * routeSyncedDays));
+            const hasRouteData = routeTotalDays > 0 || routeSeaDays > 0 || routePortDays > 0 || routeDistance > 0 || routeCargo > 0 || routeBunkerCost > 0 || routePortCosts > 0 || routeTotalCosts > 0;
+
+            setCostPlusRouteSyncState(hasRouteData);
+            if (!hasRouteData) {
+                if (showFeedback && typeof showToast === 'function') showToast('Calcula una ruta antes de sincronizar Cost-Plus');
+                return false;
+            }
+
+            const updates = [
+                ['cost-plus-days-sea', routeSeaDays > 0 ? routeSeaDays : routeTotalDays, 2],
+                ['cost-plus-days-port', routePortDays, 2],
+                ['cost-plus-cargo-volume', routeCargo, 0],
+                ['cost-plus-bunker-cost', routeBunkerCost, 2],
+                ['cost-plus-port-costs', routePortCosts, 2],
+                ['cost-plus-daily-opex', routeOpex, 2]
+            ];
+
+            updates.forEach(([id, value, decimals]) => {
+                const input = document.getElementById(id);
+                const numericValue = safeCalculationNumber(value);
+                if (!input || numericValue <= 0) return;
+                input.value = decimals > 0 ? numericValue.toFixed(decimals) : String(Math.round(numericValue));
+            });
+
+            calculateCostPlusFreight();
+            if (showFeedback && typeof showToast === 'function') showToast('Cost-Plus sincronizado con la ruta');
+            return true;
+        }
+
         function vesselHasScrubber() {
             return Boolean(document.getElementById('vessel-has-scrubber')?.checked);
         }
@@ -32081,6 +32181,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const cargoVolume = Number.isFinite(Number(options.cargoVolume))
                 ? Number(options.cargoVolume)
                 : readInverseTceNumber('inverse-cargo-volume');
+            const charterHireDaily = Number.isFinite(Number(options.charterHireDaily))
+                ? Math.max(0, Number(options.charterHireDaily))
+                : Math.max(0, readInverseTceNumber('inverse-opex-daily', 0) || Number(document.getElementById('opex-daily')?.value) || 0);
             const historicalRisk = options.historicalRisk || State.historicalRisk || {};
             const riskDays = Math.max(0, Number(historicalRisk.riskDays) || 0);
             const laycanFreeDays = Math.max(0, Number(historicalRisk.laycanFreeDays) || readInverseTceNumber('laycan-dias-libres', 0));
@@ -32092,7 +32195,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 : 0;
             const historicalRiskDailyImpact = hasRiskAdjustment ? historicalRiskImpact * correctionFactor : 0;
             const demurrageBase = Math.max(0, tceTarget) * DEMURRAGE_TCE_MULTIPLIER;
-            const demurrageRate = demurrageBase + historicalRiskDailyImpact;
+            const projectedDemurrageRate = demurrageBase + historicalRiskDailyImpact;
+            const demurrageCap = charterHireDaily * 1.5;
+            const demurrageRate = demurrageCap > 0
+                ? Math.min(projectedDemurrageRate, demurrageCap)
+                : projectedDemurrageRate;
 
             return {
                 demurrageBase,
@@ -32169,13 +32276,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function calculateCostPlusFreight() {
-            const dailyOpex = readInverseTceNumber('cost-plus-daily-opex');
-            const targetMargin = readInverseTceNumber('cost-plus-target-margin');
-            const daysSea = readInverseTceNumber('cost-plus-days-sea');
-            const daysPort = readInverseTceNumber('cost-plus-days-port');
-            const bunkerCost = readInverseTceNumber('cost-plus-bunker-cost');
-            const portCosts = readInverseTceNumber('cost-plus-port-costs');
-            const cargoVolume = readInverseTceNumber('cost-plus-cargo-volume');
+            const dailyOpex = Math.max(0, readInverseTceNumber('cost-plus-daily-opex'));
+            const targetMargin = Math.max(0, readInverseTceNumber('cost-plus-target-margin'));
+            const daysSea = Math.max(0, readInverseTceNumber('cost-plus-days-sea'));
+            const daysPort = Math.max(0, readInverseTceNumber('cost-plus-days-port'));
+            const bunkerCost = Math.max(0, readInverseTceNumber('cost-plus-bunker-cost'));
+            const portCosts = Math.max(0, readInverseTceNumber('cost-plus-port-costs'));
+            const cargoVolume = Math.max(0, readInverseTceNumber('cost-plus-cargo-volume'));
 
             const totalDays = daysSea + daysPort;
             const totalOpex = dailyOpex * totalDays;
@@ -32184,15 +32291,23 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 ? targetMargin
                 : totalCosts * (targetMargin / 100);
             const targetRevenue = totalCosts + calculatedMargin;
-            const minFreightRate = cargoVolume > 0 ? targetRevenue / cargoVolume : 0;
+            const minFreightRate = cargoVolume > 0 ? roundCalculationMoney(totalCosts / cargoVolume) : 0;
+            const demurrageRate = roundCalculationMoney(dailyOpex * 1.25);
 
             const minFreightEl = document.getElementById('cost-plus-min-freight-rate');
             const totalCostsEl = document.getElementById('cost-plus-total-costs');
             const marginEl = document.getElementById('cost-plus-calculated-margin');
+            const demurrageEl = document.getElementById('cost-plus-demurrage-rate');
 
             if (minFreightEl) minFreightEl.textContent = `${formatInverseTceMoney(minFreightRate, { decimals: 2 })} /MT`;
             if (totalCostsEl) totalCostsEl.textContent = formatInverseTceMoney(totalCosts);
             if (marginEl) marginEl.textContent = formatInverseTceMoney(calculatedMargin);
+            if (demurrageEl) demurrageEl.textContent = formatInverseTceMoney(demurrageRate);
+            State.costPlusMinFreightRate = minFreightRate;
+            State.costPlusTotalCosts = totalCosts;
+            State.costPlusTargetRevenue = targetRevenue;
+            State.costPlusDemurrageRate = demurrageRate;
+            return { minFreightRate, totalCosts, calculatedMargin, targetRevenue, demurrageRate };
         }
 
         function setCostPlusMarginType(type) {
