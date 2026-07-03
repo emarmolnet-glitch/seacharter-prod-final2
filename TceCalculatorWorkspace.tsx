@@ -86,7 +86,9 @@ type VesselPricingRouterProps = ReverseTceCalculatorProps & {
 type CostPlusCalculatorProps = Pick<
   ReverseTceCalculatorProps,
   'cargoVolume' | 'daysSea' | 'daysPort' | 'syncedCostData'
->;
+> & {
+  currentMode?: VesselCalculationMode;
+};
 
 type VesselCalculationMode = 'Cost-Plus' | 'TCE Inverso';
 
@@ -272,7 +274,7 @@ const wholeCurrencyFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 });
 
-function safeNumber(value: number | '') {
+function safeNumber(value: unknown) {
   return Number.isFinite(Number(value)) ? Number(value) : 0;
 }
 
@@ -500,9 +502,9 @@ function LockIcon({ open = false }: { open?: boolean }) {
 }
 
 export function ReverseTceCalculator({
-  cargoVolume = DEFAULT_VALUES.cargoVolume,
-  daysSea = DEFAULT_VALUES.daysSea,
-  daysPort = DEFAULT_VALUES.daysPort,
+  cargoVolume,
+  daysSea,
+  daysPort,
   vesselCategory = 'Handysize / Small Tanker',
   hasScrubber = false,
   syncedCostData,
@@ -526,22 +528,23 @@ export function ReverseTceCalculator({
   const [navigationStrategy, setNavigationStrategy] = useState<NavigationStrategy>('eco');
   const [applyBunkerIndexAdjustment, setApplyBunkerIndexAdjustment] = useState(true);
   const [contractBunkerIndexBase, setContractBunkerIndexBase] = useState(0);
-  const [etaBaseRadar, setEtaBaseRadar] = useState('');
-  const [isEtaBaseRadarUnlocked, setIsEtaBaseRadarUnlocked] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
+  const etaBaseRadar = laycanDate || '';
 
   const syncFromSectionData = () => {
     const strategy = NAVIGATION_STRATEGIES[navigationStrategy];
     const sourceSeaConsumption = Number.isFinite(Number(syncedCostData?.seaFuelConsumption))
       ? Number(syncedCostData?.seaFuelConsumption)
       : DEFAULT_VALUES.seaFuelConsumption;
-    const sourceDaysSea = Number.isFinite(Number(daysSea)) ? Number(daysSea) : DEFAULT_VALUES.daysSea;
+    const sourceDaysSea = Number.isFinite(Number(daysSea)) ? Number(daysSea) : values.daysSea;
+    const sourceDaysPort = Number.isFinite(Number(daysPort)) ? Number(daysPort) : values.daysPort;
+    const sourceCargoVolume = Number.isFinite(Number(cargoVolume)) ? Number(cargoVolume) : values.cargoVolume;
 
     setValues((current) => ({
       ...current,
-      cargoVolume,
+      cargoVolume: sourceCargoVolume,
       daysSea: Number((sourceDaysSea * strategy.daysSeaFactor).toFixed(2)),
-      daysPort,
+      daysPort: sourceDaysPort,
       hasScrubber,
       laycanDiasLibres,
       impactoRiesgo,
@@ -647,12 +650,6 @@ export function ReverseTceCalculator({
       window.localStorage.removeItem(BUNKER_INDEX_DATA_KEY);
     }
   }, []);
-
-  useEffect(() => {
-    if (!laycanDate) return;
-    setEtaBaseRadar(laycanDate);
-    setIsEtaBaseRadarUnlocked(false);
-  }, [laycanDate]);
 
   const results = useMemo(() => calculateReverseTceResults(values), [values]);
 
@@ -1201,31 +1198,17 @@ export function ReverseTceCalculator({
                     <label htmlFor="eta-base-radar-react" className="text-xs font-bold uppercase text-slate-500">
                       ETA BASE RADAR
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => setIsEtaBaseRadarUnlocked((current) => !current)}
-                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-black uppercase ${
-                        isEtaBaseRadarUnlocked
-                          ? 'border-orange-300 bg-orange-50 text-orange-800'
-                          : 'border-slate-200 bg-slate-50 text-slate-600'
-                      }`}
-                      aria-pressed={isEtaBaseRadarUnlocked}
-                    >
-                      <LockIcon open={isEtaBaseRadarUnlocked} />
-                      {isEtaBaseRadarUnlocked ? 'Manual' : 'Bloqueado'}
-                    </button>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-black uppercase text-slate-600">
+                      <LockIcon />
+                      Derivado
+                    </span>
                   </div>
                   <input
                     id="eta-base-radar-react"
                     type="date"
                     value={etaBaseRadar}
-                    readOnly={!isEtaBaseRadarUnlocked}
-                    onChange={(event) => setEtaBaseRadar(event.target.value)}
-                    className={`w-full rounded-md border px-3 py-2 text-sm font-bold ${
-                      isEtaBaseRadarUnlocked
-                        ? 'border-orange-300 bg-orange-50 text-orange-900'
-                        : 'border-slate-200 bg-slate-50 text-slate-600'
-                    }`}
+                    readOnly
+                    className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-600"
                   />
                   <button
                     type="button"
@@ -1327,6 +1310,7 @@ export function CostPlusCalculator({
   daysSea,
   daysPort,
   syncedCostData,
+  currentMode = 'Cost-Plus',
 }: CostPlusCalculatorProps) {
   const [values, setValues] = useState<CostPlusCalculatorState>(COST_PLUS_DEFAULT_VALUES);
 
@@ -1367,7 +1351,7 @@ export function CostPlusCalculator({
     if (routeDailyOpex > 0) nextValues.dailyOpex = routeDailyOpex;
 
     return nextValues;
-  }, [cargoVolume, daysSea, daysPort, syncedCostData]);
+  }, [currentMode, cargoVolume, daysSea, daysPort, syncedCostData]);
 
   const updateNumber = (key: CostPlusNumericField, nextValue: string) => {
     setValues((current) => ({
@@ -1515,7 +1499,32 @@ export function VesselPricingRouter({
 
   const activeDwt = safeNumber(localDwt);
   const vesselClass = getVesselClass(activeDwt);
-  const isReverseTceMode = vesselClass.type === 'TCE Inverso';
+  const currentMode = vesselClass.type;
+  const isReverseTceMode = currentMode === 'TCE Inverso';
+  const activeTiming = useMemo(() => {
+    const sourceDaysSea = safeNumber(daysSea);
+    const sourceDaysPort = safeNumber(daysPort);
+    const syncedTotalDays = safeNumber(syncedCostData?.totalDays);
+
+    if (sourceDaysSea > 0 || sourceDaysPort > 0) {
+      return {
+        daysSea: sourceDaysSea,
+        daysPort: sourceDaysPort,
+      };
+    }
+
+    if (syncedTotalDays > 0) {
+      return {
+        daysSea: syncedTotalDays,
+        daysPort: 0,
+      };
+    }
+
+    return {
+      daysSea: undefined,
+      daysPort: undefined,
+    };
+  }, [currentMode, daysSea, daysPort, syncedCostData]);
 
   return (
     <section className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-5">
@@ -1557,9 +1566,9 @@ export function VesselPricingRouter({
       </div>
 
       {isReverseTceMode ? (
-        <ReverseTceCalculator cargoVolume={cargoVolume} daysSea={daysSea} daysPort={daysPort} vesselCategory={vesselClass.categoryName} hasScrubber={hasScrubber} syncedCostData={syncedCostData} />
+        <ReverseTceCalculator cargoVolume={cargoVolume} daysSea={activeTiming.daysSea} daysPort={activeTiming.daysPort} vesselCategory={vesselClass.categoryName} hasScrubber={hasScrubber} syncedCostData={syncedCostData} />
       ) : (
-        <CostPlusCalculator cargoVolume={cargoVolume} daysSea={daysSea} daysPort={daysPort} syncedCostData={syncedCostData} />
+        <CostPlusCalculator cargoVolume={cargoVolume} daysSea={activeTiming.daysSea} daysPort={activeTiming.daysPort} syncedCostData={syncedCostData} currentMode={currentMode} />
       )}
     </section>
   );
