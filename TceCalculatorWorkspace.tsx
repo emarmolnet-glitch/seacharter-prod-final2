@@ -1,0 +1,1105 @@
+import React, { useEffect, useMemo, useState } from 'react';
+
+type ReverseCalculatorState = {
+  tceTarget: number | '';
+  daysSea: number;
+  daysPort: number;
+  seaFuelConsumption: number;
+  portFuelConsumption: number;
+  vlsfoPrice: number;
+  ifoPrice: number;
+  mgoPrice: number;
+  bunkerCost: number;
+  portCosts: number;
+  cargoVolume: number;
+  bunkerDailyPortCost: number;
+  totalCo2Emissions: number;
+  euaPrice: number;
+  etsCoverage: number;
+  opexDaily: number;
+};
+
+type SyncedCostData = Partial<Pick<
+  ReverseCalculatorState,
+  | 'seaFuelConsumption'
+  | 'portFuelConsumption'
+  | 'vlsfoPrice'
+  | 'ifoPrice'
+  | 'mgoPrice'
+  | 'portCosts'
+  | 'bunkerDailyPortCost'
+  | 'opexDaily'
+>>;
+
+type CostPlusCalculatorState = {
+  dailyOpex: number;
+  targetMargin: number;
+  marginType: 'fixed' | 'percentage';
+  daysSea: number;
+  daysPort: number;
+  bunkerCost: number;
+  portCosts: number;
+  cargoVolume: number;
+};
+
+type ReverseTceCalculatorProps = {
+  cargoVolume?: number;
+  daysSea?: number;
+  daysPort?: number;
+  vesselCategory?: string;
+  hasScrubber?: boolean;
+  syncedCostData?: SyncedCostData;
+};
+
+type NavigationStrategy = 'eco' | 'full';
+
+type VesselPricingRouterProps = ReverseTceCalculatorProps & {
+  vesselDwt?: number;
+};
+
+type VesselCalculationMode = 'Cost-Plus' | 'TCE Inverso';
+
+type VesselCategory = {
+  categoryName: string;
+  minDwt: number;
+  maxDwt: number;
+  type: VesselCalculationMode;
+};
+
+type FearnleysCache = {
+  weekLabel: string;
+  timestamp: number;
+  rates: Record<string, number>;
+};
+
+type BunkerIndexCache = {
+  vlsfo: number;
+  ifo380: number;
+  mgo: number;
+  date: string;
+};
+
+const DEFAULT_VALUES: ReverseCalculatorState = {
+  tceTarget: '',
+  daysSea: 8,
+  daysPort: 13.5,
+  seaFuelConsumption: 5.5,
+  portFuelConsumption: 0.5,
+  vlsfoPrice: 610,
+  ifoPrice: 0,
+  mgoPrice: 830,
+  bunkerCost: 104625,
+  portCosts: 60000,
+  cargoVolume: 30000,
+  bunkerDailyPortCost: 2250,
+  totalCo2Emissions: 809.7,
+  euaPrice: 75.5,
+  etsCoverage: 0.5,
+  opexDaily: 2800,
+};
+
+const COST_PLUS_DEFAULT_VALUES: CostPlusCalculatorState = {
+  dailyOpex: 4500,
+  targetMargin: 15,
+  marginType: 'percentage',
+  daysSea: 4,
+  daysPort: 6,
+  bunkerCost: 25000,
+  portCosts: 18000,
+  cargoVolume: 8000,
+};
+
+const INPUTS: Array<{
+  key: keyof ReverseCalculatorState;
+  label: string;
+  suffix: string;
+  step?: string;
+}> = [
+  { key: 'tceTarget', label: 'TCE objetivo', suffix: 'USD/día' },
+  { key: 'daysSea', label: 'Días de mar', suffix: 'días', step: '0.1' },
+  { key: 'daysPort', label: 'Días de puerto', suffix: 'días', step: '0.1' },
+  { key: 'seaFuelConsumption', label: 'Consumo mar', suffix: 't/d', step: 'any' },
+  { key: 'portFuelConsumption', label: 'Consumo puerto', suffix: 't/d', step: 'any' },
+  { key: 'portCosts', label: 'Costes portuarios', suffix: 'USD' },
+  { key: 'cargoVolume', label: 'Volumen de carga', suffix: 'MT' },
+  { key: 'bunkerDailyPortCost', label: 'Bunker diario en puerto', suffix: 'USD/día' },
+  { key: 'totalCo2Emissions', label: 'Emisiones CO2 ETS', suffix: 'tCO2', step: '0.1' },
+  { key: 'euaPrice', label: 'Precio EUA', suffix: 'USD/t', step: '0.01' },
+  { key: 'etsCoverage', label: 'Cobertura ETS', suffix: 'factor', step: '0.5' },
+  { key: 'opexDaily', label: 'OPEX fijo diario', suffix: 'USD/día' },
+];
+
+const SYNCED_REVERSE_FIELDS = new Set<keyof ReverseCalculatorState>([
+  'cargoVolume',
+  'daysSea',
+  'daysPort',
+  'seaFuelConsumption',
+  'portFuelConsumption',
+  'vlsfoPrice',
+  'ifoPrice',
+  'mgoPrice',
+  'bunkerCost',
+  'portCosts',
+  'bunkerDailyPortCost',
+  'opexDaily',
+]);
+
+const FEARNLEYS_MARKET_DATA_KEY = 'fearnleysMarketData';
+const BUNKER_INDEX_DATA_KEY = 'bunkerIndexData';
+const CHARTERER_MARGIN_PERCENT = 10;
+const NAVIGATION_STRATEGIES: Record<NavigationStrategy, {
+  label: string;
+  seaConsumptionFactor: number;
+  daysSeaFactor: number;
+}> = {
+  eco: {
+    label: 'Eco-Speed',
+    seaConsumptionFactor: 0.85,
+    daysSeaFactor: 1.12,
+  },
+  full: {
+    label: 'Full-Speed',
+    seaConsumptionFactor: 1,
+    daysSeaFactor: 0.92,
+  },
+};
+const CURRENT_FEARNLEYS_WEEK_LABEL = 'Week actual - Fearnleys';
+const FEARNLEYS_MARKET_RATES: Record<string, number> = {
+  'Handysize / Small Tanker': 13000,
+  'Supramax / MR': 17125,
+  Ultramax: 18625,
+  'Panamax / Kamsarmax / LR1': 18500,
+  'Baby Cape / Aframax / LR2': 25000,
+  'Capesize / Suezmax': 35000,
+  'VLOC / VLCC': 45000,
+};
+
+export const VESSEL_CATEGORIES: VesselCategory[] = [
+  { categoryName: 'Coaster', minDwt: 1000, maxDwt: 4999, type: 'Cost-Plus' },
+  { categoryName: 'Mini-Bulker', minDwt: 5000, maxDwt: 14999, type: 'Cost-Plus' },
+  { categoryName: 'Handysize / Small Tanker', minDwt: 15000, maxDwt: 34999, type: 'TCE Inverso' },
+  { categoryName: 'Supramax / MR', minDwt: 35000, maxDwt: 59999, type: 'TCE Inverso' },
+  { categoryName: 'Ultramax', minDwt: 60000, maxDwt: 64999, type: 'TCE Inverso' },
+  { categoryName: 'Panamax / Kamsarmax / LR1', minDwt: 65000, maxDwt: 84999, type: 'TCE Inverso' },
+  { categoryName: 'Baby Cape / Aframax / LR2', minDwt: 85000, maxDwt: 119999, type: 'TCE Inverso' },
+  { categoryName: 'Capesize / Suezmax', minDwt: 120000, maxDwt: 199999, type: 'TCE Inverso' },
+  { categoryName: 'VLOC / VLCC', minDwt: 200000, maxDwt: Number.POSITIVE_INFINITY, type: 'TCE Inverso' },
+];
+
+export function getVesselClass(dwt: number): Pick<VesselCategory, 'categoryName' | 'type'> {
+  const normalizedDwt = safeNumber(dwt);
+  const category = VESSEL_CATEGORIES.find(
+    (item) => normalizedDwt >= item.minDwt && normalizedDwt <= item.maxDwt,
+  );
+
+  if (category) {
+    return { categoryName: category.categoryName, type: category.type };
+  }
+
+  return normalizedDwt < 15000
+    ? { categoryName: 'Coaster', type: 'Cost-Plus' }
+    : { categoryName: 'Handysize / Small Tanker', type: 'TCE Inverso' };
+}
+
+export const getVesselCategory = getVesselClass;
+
+const currencyFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 2,
+});
+
+const wholeCurrencyFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0,
+});
+
+function safeNumber(value: number | '') {
+  return Number.isFinite(Number(value)) ? Number(value) : 0;
+}
+
+function getTodayBunkerLabel() {
+  return new Date().toLocaleDateString();
+}
+
+function LockIcon({ open = false }: { open?: boolean }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      {open ? (
+        <path d="M7 10V7a5 5 0 0 1 9.4-2.4" />
+      ) : (
+        <path d="M7 10V7a5 5 0 0 1 10 0v3" />
+      )}
+      <rect width="14" height="10" x="5" y="10" rx="2" />
+    </svg>
+  );
+}
+
+export function ReverseTceCalculator({
+  cargoVolume = DEFAULT_VALUES.cargoVolume,
+  daysSea = DEFAULT_VALUES.daysSea,
+  daysPort = DEFAULT_VALUES.daysPort,
+  vesselCategory = 'Handysize / Small Tanker',
+  hasScrubber = false,
+  syncedCostData,
+}: ReverseTceCalculatorProps) {
+  const [values, setValues] = useState<ReverseCalculatorState>(DEFAULT_VALUES);
+  const [vlsfoPrice, setVlsfoPrice] = useState(DEFAULT_VALUES.vlsfoPrice);
+  const [ifoPrice, setIfoPrice] = useState(DEFAULT_VALUES.ifoPrice);
+  const [mgoPrice, setMgoPrice] = useState(DEFAULT_VALUES.mgoPrice);
+  const [isFetchingFearnleys, setIsFetchingFearnleys] = useState(false);
+  const [isFetchingBunker, setIsFetchingBunker] = useState(false);
+  const [indexWeekLabel, setIndexWeekLabel] = useState('');
+  const [bunkerDateLabel, setBunkerDateLabel] = useState('');
+  const [bunkerFetchError, setBunkerFetchError] = useState('');
+  const [isManualOverride, setIsManualOverride] = useState(false);
+  const [isSyncEnabled, setIsSyncEnabled] = useState(true);
+  const [navigationStrategy, setNavigationStrategy] = useState<NavigationStrategy>('eco');
+
+  const syncFromSectionData = () => {
+    const strategy = NAVIGATION_STRATEGIES[navigationStrategy];
+    const sourceSeaConsumption = Number.isFinite(Number(syncedCostData?.seaFuelConsumption))
+      ? Number(syncedCostData?.seaFuelConsumption)
+      : DEFAULT_VALUES.seaFuelConsumption;
+    const sourceDaysSea = Number.isFinite(Number(daysSea)) ? Number(daysSea) : DEFAULT_VALUES.daysSea;
+
+    setValues((current) => ({
+      ...current,
+      cargoVolume,
+      daysSea: Number((sourceDaysSea * strategy.daysSeaFactor).toFixed(2)),
+      daysPort,
+      ...syncedCostData,
+      seaFuelConsumption: Number((sourceSeaConsumption * strategy.seaConsumptionFactor).toFixed(2)),
+    }));
+
+    if (Number.isFinite(Number(syncedCostData?.vlsfoPrice))) {
+      setVlsfoPrice(Number(syncedCostData?.vlsfoPrice));
+    }
+    if (Number.isFinite(Number(syncedCostData?.ifoPrice))) {
+      setIfoPrice(Number(syncedCostData?.ifoPrice));
+    }
+    if (Number.isFinite(Number(syncedCostData?.mgoPrice))) {
+      setMgoPrice(Number(syncedCostData?.mgoPrice));
+    }
+  };
+
+  useEffect(() => {
+    if (isSyncEnabled) {
+      syncFromSectionData();
+    }
+  }, [cargoVolume, daysSea, daysPort, syncedCostData, isSyncEnabled, navigationStrategy]);
+
+  const applyMarketRateFromCache = (category: string) => {
+    try {
+      const cached = window.localStorage.getItem(FEARNLEYS_MARKET_DATA_KEY);
+      if (!cached) return false;
+
+      const parsed = JSON.parse(cached) as Partial<FearnleysCache>;
+      const marketRate = parsed.rates?.[category];
+
+      if (Number.isFinite(marketRate) && parsed.weekLabel) {
+        setValues((current) => ({
+          ...current,
+          tceTarget: Number(marketRate),
+        }));
+        setIndexWeekLabel(parsed.weekLabel);
+        return true;
+      }
+    } catch {
+      window.localStorage.removeItem(FEARNLEYS_MARKET_DATA_KEY);
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    if (!isManualOverride) {
+      applyMarketRateFromCache(vesselCategory);
+    }
+  }, [vesselCategory, isManualOverride]);
+
+  useEffect(() => {
+    try {
+      const cached = window.localStorage.getItem(BUNKER_INDEX_DATA_KEY);
+      if (!cached) return;
+      const parsed = JSON.parse(cached) as Partial<BunkerIndexCache>;
+      if (parsed.date !== getTodayBunkerLabel()) return;
+      const vlsfo = Number(parsed.vlsfo);
+      const ifo380 = Number(parsed.ifo380);
+      const mgo = Number(parsed.mgo);
+      if (!Number.isFinite(vlsfo) || !Number.isFinite(ifo380) || !Number.isFinite(mgo)) return;
+      setVlsfoPrice(vlsfo);
+      setIfoPrice(ifo380);
+      setMgoPrice(mgo);
+      setValues((current) => ({
+        ...current,
+        vlsfoPrice: vlsfo,
+        ifoPrice: ifo380,
+        mgoPrice: mgo,
+      }));
+      setBunkerDateLabel(parsed.date);
+    } catch {
+      window.localStorage.removeItem(BUNKER_INDEX_DATA_KEY);
+    }
+  }, []);
+
+  const results = useMemo(() => {
+    const daysSea = safeNumber(values.daysSea);
+    const daysPort = safeNumber(values.daysPort);
+    const tceTarget = safeNumber(values.tceTarget);
+    const activeSeaFuelPrice = hasScrubber ? safeNumber(ifoPrice) : safeNumber(vlsfoPrice);
+    const seaFuelCost = daysSea * safeNumber(values.seaFuelConsumption) * activeSeaFuelPrice;
+    const portFuelCost = daysPort * safeNumber(values.portFuelConsumption) * safeNumber(mgoPrice);
+    const bunkerCost = seaFuelCost + portFuelCost;
+    const portCosts = safeNumber(values.portCosts);
+    const cargoVolume = safeNumber(values.cargoVolume);
+    const bunkerDailyPortCost = daysPort > 0 ? portFuelCost / daysPort : safeNumber(values.bunkerDailyPortCost);
+    const totalCo2Emissions = safeNumber(values.totalCo2Emissions);
+    const euaPrice = safeNumber(values.euaPrice);
+    const etsCoverage = safeNumber(values.etsCoverage);
+    const opexDaily = safeNumber(values.opexDaily);
+
+    const totalDays = daysSea + daysPort;
+    const etsTotalCost = totalCo2Emissions * euaPrice * etsCoverage;
+    const etsCostPerMt = cargoVolume > 0 ? etsTotalCost / cargoVolume : 0;
+    const targetRevenue = tceTarget * totalDays + bunkerCost + portCosts + etsTotalCost;
+    const minFreightRate = cargoVolume > 0 ? targetRevenue / cargoVolume : 0;
+    const suggestedOwnerSale = minFreightRate;
+    const suggestedChartererSale = minFreightRate * (1 + CHARTERER_MARGIN_PERCENT / 100);
+    const isSuggestedSaleBelowTceTarget = suggestedOwnerSale < minFreightRate || suggestedChartererSale < minFreightRate;
+    const demurrageRate = tceTarget + bunkerDailyPortCost;
+    const tceTotal = tceTarget * totalDays;
+    const netProfitTotal = tceTotal - opexDaily * totalDays;
+    const netProfitDaily = totalDays > 0 ? netProfitTotal / totalDays : 0;
+
+    return {
+      totalDays,
+      targetRevenue,
+      minFreightRate,
+      suggestedOwnerSale,
+      suggestedChartererSale,
+      isSuggestedSaleBelowTceTarget,
+      demurrageRate,
+      etsTotalCost,
+      etsCostPerMt,
+      bunkerCost,
+      seaFuelCost,
+      portFuelCost,
+      activeSeaFuelPrice,
+      bunkerDailyPortCost,
+      tceTotal,
+      tceDaily: totalDays > 0 ? tceTotal / totalDays : 0,
+      netProfitTotal,
+      netProfitDaily,
+      opexDaily,
+      seaFuelStrategyLabel: hasScrubber
+        ? 'Optimizado con IFO 380 (Scrubber Activo)'
+        : 'Combustible estándar: VLSFO',
+    };
+  }, [values, vlsfoPrice, ifoPrice, mgoPrice, hasScrubber]);
+
+  const updateValue = (key: keyof ReverseCalculatorState, nextValue: string) => {
+    if (isSyncEnabled && SYNCED_REVERSE_FIELDS.has(key)) {
+      return;
+    }
+
+    if (key === 'tceTarget') {
+      setIsManualOverride(true);
+    }
+
+    const parsedValue = key === 'tceTarget' && nextValue === '' ? '' : Number(nextValue);
+
+    setValues((current) => ({
+      ...current,
+      [key]: parsedValue,
+    }));
+  };
+
+  const updateBunkerPrice = (key: 'vlsfoPrice' | 'ifoPrice' | 'mgoPrice', nextValue: string) => {
+    if (isSyncEnabled) {
+      return;
+    }
+
+    const parsedValue = Number(nextValue);
+    const normalizedValue = Number.isFinite(parsedValue) ? parsedValue : 0;
+
+    if (key === 'vlsfoPrice') {
+      setVlsfoPrice(normalizedValue);
+      setValues((current) => ({ ...current, vlsfoPrice: normalizedValue }));
+      return;
+    }
+
+    if (key === 'ifoPrice') {
+      setIfoPrice(normalizedValue);
+      setValues((current) => ({ ...current, ifoPrice: normalizedValue }));
+      return;
+    }
+
+    setMgoPrice(normalizedValue);
+    setValues((current) => ({ ...current, mgoPrice: normalizedValue }));
+  };
+
+  const handleFetchFearnleys = async () => {
+    if (isFetchingFearnleys) {
+      return;
+    }
+
+    setIsFetchingFearnleys(true);
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 1500);
+    });
+
+    const nextCache: FearnleysCache = {
+      weekLabel: CURRENT_FEARNLEYS_WEEK_LABEL,
+      timestamp: Date.now(),
+      rates: FEARNLEYS_MARKET_RATES,
+    };
+
+    const marketRate = nextCache.rates[vesselCategory];
+    window.localStorage.setItem(FEARNLEYS_MARKET_DATA_KEY, JSON.stringify(nextCache));
+    setIsManualOverride(false);
+    if (Number.isFinite(marketRate)) {
+      setValues((current) => ({
+        ...current,
+        tceTarget: marketRate,
+      }));
+    }
+    setIndexWeekLabel(nextCache.weekLabel);
+    setIsFetchingFearnleys(false);
+  };
+
+  const handleFetchBunker = async () => {
+    if (isFetchingBunker) {
+      return;
+    }
+
+    setIsFetchingBunker(true);
+    setBunkerFetchError('');
+
+    try {
+      const response = await fetch('/api/get-bunker-prices');
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload?.error || 'No se pudo obtener la cotización Bunkerindex.');
+      }
+
+      const nextCache: BunkerIndexCache = {
+        vlsfo: Number(payload.vlsfo),
+        ifo380: Number(payload.ifo380),
+        mgo: Number(payload.mgo),
+        date: getTodayBunkerLabel(),
+      };
+
+      if (!Number.isFinite(nextCache.vlsfo) || !Number.isFinite(nextCache.ifo380) || !Number.isFinite(nextCache.mgo)) {
+        throw new Error('La respuesta de Bunkerindex no contiene precios válidos.');
+      }
+
+      setVlsfoPrice(nextCache.vlsfo);
+      setIfoPrice(nextCache.ifo380);
+      setMgoPrice(nextCache.mgo);
+      setValues((current) => ({
+        ...current,
+        vlsfoPrice: nextCache.vlsfo,
+        ifoPrice: nextCache.ifo380,
+        mgoPrice: nextCache.mgo,
+      }));
+      setBunkerDateLabel(nextCache.date);
+      window.localStorage.setItem(BUNKER_INDEX_DATA_KEY, JSON.stringify(nextCache));
+    } catch (error) {
+      setBunkerFetchError(error instanceof Error ? error.message : 'Error inesperado al consultar Bunkerindex.');
+    } finally {
+      setIsFetchingBunker(false);
+    }
+  };
+
+  const handleRestoreMarketIndex = () => {
+    setIsManualOverride(false);
+    applyMarketRateFromCache(vesselCategory);
+  };
+
+  const handleToggleSync = () => {
+    setIsSyncEnabled((current) => {
+      if (!current) {
+        syncFromSectionData();
+      }
+      return !current;
+    });
+  };
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+              <div className="mb-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-black uppercase tracking-wide text-slate-900">
+                      Calculadora Inversa de TCE
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Define el rendimiento objetivo y calcula el flete mínimo de negociación.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleToggleSync}
+                    className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-[11px] font-black uppercase tracking-wide shadow-sm transition ${
+                      isSyncEnabled
+                        ? 'border-teal-200 bg-teal-50 text-teal-800 hover:bg-white'
+                        : 'border-orange-200 bg-orange-50 text-orange-800 hover:bg-white'
+                    }`}
+                    title={isSyncEnabled
+                      ? 'Desbloquear costes para ajuste manual'
+                      : 'Releer datos de la Sección 3 y bloquear de nuevo'}
+                    aria-pressed={!isSyncEnabled}
+                  >
+                    <LockIcon open={!isSyncEnabled} />
+                    {isSyncEnabled ? 'Auto sincronizado' : 'Ajuste manual'}
+                  </button>
+                </div>
+                <p className="mt-1 text-sm text-slate-500">
+                  {isSyncEnabled
+                    ? 'Costes y consumos se leen desde la Sección 3.'
+                    : 'Los costes de la calculadora están desbloqueados para override manual.'}
+                </p>
+              </div>
+
+              <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="mb-4 rounded-lg border border-blue-100 bg-white p-3">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-[11px] font-black uppercase tracking-wide text-slate-600">
+                      Estrategia de Navegación
+                    </h3>
+                    {!isSyncEnabled ? (
+                      <span className="text-[10px] font-black uppercase tracking-wide text-orange-700">
+                        Manual: sin inyección automática
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="grid grid-cols-2 rounded-lg bg-slate-100 p-1">
+                    {(['eco', 'full'] as const).map((strategyKey) => (
+                      <button
+                        key={strategyKey}
+                        type="button"
+                        onClick={() => setNavigationStrategy(strategyKey)}
+                        aria-pressed={navigationStrategy === strategyKey}
+                        className={`rounded-md px-3 py-2 text-xs font-black transition ${
+                          navigationStrategy === strategyKey
+                            ? 'bg-white text-blue-900 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        {NAVIGATION_STRATEGIES[strategyKey].label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs font-semibold text-slate-500">
+                    {navigationStrategy === 'eco'
+                      ? 'Reduce consumo diario de mar y aumenta días de navegación.'
+                      : 'Aplica consumo estándar y reduce días de navegación.'}
+                  </p>
+                </div>
+                <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-[11px] font-black uppercase tracking-wide text-slate-600">
+                      BUNKER / COMBUSTIBLE
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleFetchBunker}
+                    disabled={isFetchingBunker}
+                    className="inline-flex items-center justify-center rounded-md bg-slate-900 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {isFetchingBunker ? 'Consultando...' : '✨ Consultar Bunkerindex IA'}
+                  </button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {[
+                    ['vlsfoPrice', 'PRECIO VLSFO (MAR)', 'USD/t', vlsfoPrice],
+                    ['ifoPrice', 'PRECIO IFO 380 (SCRUBBER)', 'USD/t', ifoPrice],
+                    ['mgoPrice', 'PRECIO MGO (PUERTO)', 'USD/t', mgoPrice],
+                  ].map(([key, label, suffix, priceValue]) => (
+                    <div key={key}>
+                      <label htmlFor={`reverse-${key}`} className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-slate-500">
+                        {label}
+                      </label>
+                      <div className="flex overflow-hidden rounded-lg border border-slate-300 bg-white focus-within:border-teal-600 focus-within:ring-2 focus-within:ring-teal-600/15">
+                        <input
+                          id={`reverse-${key}`}
+                          type="number"
+                          step="any"
+                          value={priceValue}
+                          disabled={isSyncEnabled}
+                          onChange={(event) => updateBunkerPrice(key as 'vlsfoPrice' | 'ifoPrice' | 'mgoPrice', event.target.value)}
+                          className={`min-w-0 flex-1 border-0 px-3 py-2.5 text-sm font-bold outline-none ${
+                            isSyncEnabled
+                              ? 'cursor-not-allowed bg-slate-50 text-slate-500'
+                              : 'text-slate-900'
+                          }`}
+                        />
+                        <span className="flex min-w-[5.75rem] items-center justify-center gap-1 border-l border-slate-200 bg-white px-2 text-[11px] font-bold uppercase text-slate-500">
+                          {isSyncEnabled ? <LockIcon /> : null}
+                          <span>{suffix}</span>
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className={`mt-2 text-xs italic ${bunkerFetchError ? 'text-red-500' : 'text-gray-500'}`}>
+                  {bunkerFetchError || (bunkerDateLabel
+                    ? `Datos registrados: ${bunkerDateLabel}`
+                    : 'Esperando cotización del día...')}
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {INPUTS.map((input) => {
+                  const isTceTarget = input.key === 'tceTarget';
+                  const isAutofilled = isSyncEnabled && SYNCED_REVERSE_FIELDS.has(input.key);
+
+                  return (
+                    <div key={input.key} className="block">
+                      <label
+                        htmlFor={`reverse-${input.key}`}
+                        className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-slate-500"
+                      >
+                        {input.label}
+                      </label>
+                      <div className={isTceTarget ? 'space-y-2' : undefined}>
+                        <div className="flex overflow-hidden rounded-lg border border-slate-300 bg-white focus-within:border-teal-600 focus-within:ring-2 focus-within:ring-teal-600/15">
+                          <input
+                            id={`reverse-${input.key}`}
+                            type="number"
+                            step="any"
+                            value={values[input.key]}
+                            onChange={(event) => updateValue(input.key, event.target.value)}
+                            disabled={isAutofilled}
+                            title={isAutofilled ? 'Sincronizado desde la Sección 3' : undefined}
+                            className={`min-w-0 flex-1 border-0 px-3 py-2.5 text-sm font-bold outline-none ${
+                              isAutofilled
+                                ? 'cursor-not-allowed bg-slate-50 text-slate-500 ring-1 ring-inset ring-dashed ring-slate-300'
+                                : 'text-slate-900'
+                            }`}
+                          />
+                          <span className="flex min-w-[5.75rem] items-center justify-center gap-1 border-l border-slate-200 bg-slate-50 px-2 text-[11px] font-bold uppercase text-slate-500">
+                            {isAutofilled ? <LockIcon /> : null}
+                            <span>{input.suffix}</span>
+                          </span>
+                        </div>
+
+                        {isTceTarget ? (
+                          <div className="space-y-1.5">
+                            {isManualOverride ? (
+                              <div className="flex flex-wrap items-center justify-end gap-2">
+                                <span className="rounded-full border border-orange-200 bg-orange-100 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-orange-800">
+                                  ⚠️ Índice Manual
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={handleRestoreMarketIndex}
+                                  className="text-[11px] font-black uppercase tracking-wide text-indigo-700 underline-offset-2 hover:text-indigo-900 hover:underline"
+                                >
+                                  Restaurar Índice de Mercado
+                                </button>
+                              </div>
+                            ) : null}
+                            <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={handleFetchFearnleys}
+                              disabled={isFetchingFearnleys}
+                              className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white shadow-sm transition-all duration-200 hover:from-indigo-500 hover:to-violet-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                              {isFetchingFearnleys
+                                ? 'Consultando reporte...'
+                                : '✨ Consultar Fearnleys IA'}
+                            </button>
+                            </div>
+                            <p className="text-right text-xs italic text-gray-500">
+                              {indexWeekLabel
+                                ? `Datos: ${indexWeekLabel}`
+                                : 'Esperando datos del índice...'}
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <aside className="rounded-xl border border-teal-200 bg-teal-50 p-4 shadow-sm sm:p-5">
+              <div className="mb-5 border-b border-teal-200 pb-4">
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-teal-700">
+                  Resultados de Negociación
+                </p>
+                <h3 className="mt-1 text-lg font-black text-slate-950">Punto mínimo comercial</h3>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-lg bg-white p-4 shadow-sm">
+                  <p className="text-xs font-bold uppercase text-slate-500">Flete mínimo</p>
+                  <p className="mt-1 text-3xl font-black tracking-tight text-slate-950">
+                    {currencyFormatter.format(results.minFreightRate)}
+                  </p>
+                  <p className="mt-1 text-xs font-bold text-slate-500">USD / MT</p>
+                  <p className={`mt-2 text-xs font-bold ${hasScrubber ? 'text-emerald-700' : 'text-slate-500'}`}>
+                    {results.seaFuelStrategyLabel}
+                  </p>
+                  {results.etsTotalCost > 0 ? (
+                    <p className="mt-2 text-sm font-semibold text-gray-500">
+                      Incluye recargo ETS: +{currencyFormatter.format(results.etsCostPerMt)} /MT
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-sm font-semibold text-gray-500">Sin exposición ETS</p>
+                  )}
+                </div>
+
+                <div className={`rounded-lg border p-4 shadow-sm ${
+                  results.isSuggestedSaleBelowTceTarget
+                    ? 'border-red-300 bg-red-50'
+                    : 'border-slate-200 bg-white'
+                }`}>
+                  <p className="text-xs font-bold uppercase text-slate-500">Motor de ventas sincronizado</p>
+                  {results.isSuggestedSaleBelowTceTarget ? (
+                    <p className="mt-2 rounded-md bg-red-100 px-2 py-1 text-xs font-black text-red-700">
+                      Alerta: Venta por debajo del TCE Objetivo
+                    </p>
+                  ) : null}
+                  <div className="mt-3 grid gap-3">
+                    <div>
+                      <p className="text-[11px] font-black uppercase text-slate-500">Venta Sugerida Armador</p>
+                      <p className={`text-2xl font-black ${results.isSuggestedSaleBelowTceTarget ? 'text-red-700' : 'text-indigo-700'}`}>
+                        {currencyFormatter.format(results.suggestedOwnerSale)} /MT
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-black uppercase text-slate-500">
+                        Venta Sugerida Fletador ({CHARTERER_MARGIN_PERCENT}%)
+                      </p>
+                      <p className={`text-2xl font-black ${results.isSuggestedSaleBelowTceTarget ? 'text-red-700' : 'text-emerald-700'}`}>
+                        {currencyFormatter.format(results.suggestedChartererSale)} /MT
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-white p-4 shadow-sm">
+                  <p className="text-xs font-bold uppercase text-slate-500">Demurrage recomendado</p>
+                  <p className="mt-1 text-3xl font-black tracking-tight text-slate-950">
+                    {wholeCurrencyFormatter.format(results.demurrageRate)}
+                  </p>
+                  <p className="mt-1 text-xs font-bold text-slate-500">USD / Día</p>
+                </div>
+
+                <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <p className="text-xs font-bold uppercase text-slate-500">Beneficio Armador</p>
+                    <span
+                      className="cursor-help text-xs font-black text-slate-400"
+                      title={`El Beneficio Neto es el TCE Obtenido menos el OPEX fijo de ${wholeCurrencyFormatter.format(results.opexDaily)}/día.`}
+                    >
+                      i
+                    </span>
+                  </div>
+                  <p className={`text-4xl font-bold tracking-tight ${results.netProfitDaily >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {wholeCurrencyFormatter.format(results.netProfitDaily)}
+                  </p>
+                  <p className="mt-2 text-xs font-semibold text-slate-500">
+                    Beneficio Neto Diario: {wholeCurrencyFormatter.format(results.netProfitDaily)} / día
+                  </p>
+                  <p className="mt-3 border-t border-slate-200 pt-3 text-xs font-semibold text-slate-500">
+                    TCE de Mercado: {wholeCurrencyFormatter.format(results.tceDaily)} / día (Total: {wholeCurrencyFormatter.format(results.tceTotal)})
+                  </p>
+                </div>
+
+                <dl className="grid grid-cols-2 gap-3 rounded-lg border border-teal-200 bg-teal-100/60 p-3 text-xs">
+                  <div>
+                    <dt className="font-bold uppercase text-teal-800">Días totales</dt>
+                    <dd className="mt-1 font-black text-slate-950">{results.totalDays.toFixed(1)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-bold uppercase text-teal-800">Revenue target</dt>
+                    <dd className="mt-1 font-black text-slate-950">
+                      {wholeCurrencyFormatter.format(results.targetRevenue)}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="rounded-lg border border-teal-200 bg-white p-3 text-xs text-slate-600">
+                  <p className="font-black uppercase text-teal-800">Desglose bunker</p>
+                  <div className="mt-2 space-y-1 font-semibold">
+                    <p>Coste Combustible Mar: {wholeCurrencyFormatter.format(results.seaFuelCost)}</p>
+                    <p>Precio mar aplicado: {currencyFormatter.format(results.activeSeaFuelPrice)} /t</p>
+                    <p>Coste Combustible Puerto: {wholeCurrencyFormatter.format(results.portFuelCost)}</p>
+                    <p>Total bunker: {wholeCurrencyFormatter.format(results.bunkerCost)}</p>
+                  </div>
+                </div>
+              </div>
+            </aside>
+    </div>
+  );
+}
+
+export function CostPlusCalculator() {
+  const [values, setValues] = useState<CostPlusCalculatorState>(COST_PLUS_DEFAULT_VALUES);
+
+  const results = useMemo(() => {
+    const dailyOpex = safeNumber(values.dailyOpex);
+    const targetMargin = safeNumber(values.targetMargin);
+    const daysSea = safeNumber(values.daysSea);
+    const daysPort = safeNumber(values.daysPort);
+    const bunkerCost = safeNumber(values.bunkerCost);
+    const portCosts = safeNumber(values.portCosts);
+    const cargoVolume = safeNumber(values.cargoVolume);
+
+    const totalDays = daysSea + daysPort;
+    const totalOpex = dailyOpex * totalDays;
+    const totalCosts = totalOpex + bunkerCost + portCosts;
+    const calculatedMargin =
+      values.marginType === 'fixed' ? targetMargin : totalCosts * (targetMargin / 100);
+    const targetRevenue = totalCosts + calculatedMargin;
+    const minFreightRate = cargoVolume > 0 ? targetRevenue / cargoVolume : 0;
+
+    return { totalDays, totalOpex, totalCosts, calculatedMargin, targetRevenue, minFreightRate };
+  }, [values]);
+
+  const updateNumber = (key: keyof Omit<CostPlusCalculatorState, 'marginType'>, nextValue: string) => {
+    setValues((current) => ({
+      ...current,
+      [key]: Number(nextValue),
+    }));
+  };
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-black uppercase tracking-wide text-slate-900">
+              Cost-Plus Coaster
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Calcula el flete mínimo desde OPEX, costes directos y margen comercial.
+            </p>
+          </div>
+          <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-800">
+            Modo Coaster: Cálculo Cost-Plus (OPEX)
+          </span>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="cost-plus-daily-opex" className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-slate-500">
+              OPEX diario
+            </label>
+            <div className="flex overflow-hidden rounded-lg border border-slate-300 bg-white focus-within:border-amber-600 focus-within:ring-2 focus-within:ring-amber-600/15">
+              <input id="cost-plus-daily-opex" type="number" step="any" value={values.dailyOpex} onChange={(event) => updateNumber('dailyOpex', event.target.value)} className="min-w-0 flex-1 border-0 px-3 py-2.5 text-sm font-bold text-slate-900 outline-none" />
+              <span className="flex min-w-[5.75rem] items-center justify-center border-l border-slate-200 bg-slate-50 px-2 text-[11px] font-bold uppercase text-slate-500">USD/día</span>
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="cost-plus-target-margin" className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-slate-500">
+              Margen objetivo
+            </label>
+            <div className="flex overflow-hidden rounded-lg border border-slate-300 bg-white focus-within:border-amber-600 focus-within:ring-2 focus-within:ring-amber-600/15">
+              <input id="cost-plus-target-margin" type="number" step="any" value={values.targetMargin} onChange={(event) => updateNumber('targetMargin', event.target.value)} className="min-w-0 flex-1 border-0 px-3 py-2.5 text-sm font-bold text-slate-900 outline-none" />
+              <div className="flex border-l border-slate-200 bg-slate-100 p-1">
+                {(['fixed', 'percentage'] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    aria-pressed={values.marginType === type}
+                    onClick={() => setValues((current) => ({ ...current, marginType: type }))}
+                    className={`h-8 w-9 rounded-md text-sm font-black transition ${
+                      values.marginType === type ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    {type === 'fixed' ? '$' : '%'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {[
+            ['daysSea', 'Días de mar', 'días'],
+            ['daysPort', 'Días de puerto', 'días'],
+            ['bunkerCost', 'Coste combustible', 'USD'],
+            ['portCosts', 'Gastos portuarios', 'USD'],
+            ['cargoVolume', 'Toneladas carga', 'MT'],
+          ].map(([key, label, suffix]) => (
+            <div key={key}>
+              <label htmlFor={`cost-plus-${key}`} className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-slate-500">
+                {label}
+              </label>
+              <div className="flex overflow-hidden rounded-lg border border-slate-300 bg-white focus-within:border-amber-600 focus-within:ring-2 focus-within:ring-amber-600/15">
+                <input id={`cost-plus-${key}`} type="number" step="any" value={values[key as keyof CostPlusCalculatorState] as number} onChange={(event) => updateNumber(key as keyof Omit<CostPlusCalculatorState, 'marginType'>, event.target.value)} className="min-w-0 flex-1 border-0 px-3 py-2.5 text-sm font-bold text-slate-900 outline-none" />
+                <span className="flex min-w-[5.75rem] items-center justify-center border-l border-slate-200 bg-slate-50 px-2 text-[11px] font-bold uppercase text-slate-500">{suffix}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <aside className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm sm:p-5">
+        <div className="mb-5 border-b border-amber-200 pb-4">
+          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700">
+            Resultado Cost-Plus
+          </p>
+          <h3 className="mt-1 text-lg font-black text-slate-950">Flete mínimo operativo</h3>
+        </div>
+
+        <div className="rounded-lg bg-white p-4 shadow-sm">
+          <p className="text-xs font-bold uppercase text-slate-500">Flete mínimo</p>
+          <p className="mt-1 text-4xl font-black tracking-tight text-slate-950">
+            {currencyFormatter.format(results.minFreightRate)}
+          </p>
+          <p className="mt-1 text-xs font-bold text-slate-500">USD / MT</p>
+          <div className="mt-4 space-y-1 border-t border-slate-100 pt-3 text-sm font-semibold text-gray-500">
+            <p>Coste Total Riesgo: {wholeCurrencyFormatter.format(results.totalCosts)}</p>
+            <p>Beneficio Neto Proyectado: {wholeCurrencyFormatter.format(results.calculatedMargin)}</p>
+          </div>
+        </div>
+
+        <dl className="mt-3 grid grid-cols-2 gap-3 rounded-lg border border-amber-200 bg-amber-100/60 p-3 text-xs">
+          <div>
+            <dt className="font-bold uppercase text-amber-800">Días totales</dt>
+            <dd className="mt-1 font-black text-slate-950">{results.totalDays.toFixed(1)}</dd>
+          </div>
+          <div>
+            <dt className="font-bold uppercase text-amber-800">OPEX total</dt>
+            <dd className="mt-1 font-black text-slate-950">{wholeCurrencyFormatter.format(results.totalOpex)}</dd>
+          </div>
+        </dl>
+      </aside>
+    </div>
+  );
+}
+
+export function VesselPricingRouter({
+  vesselDwt = 12000,
+  cargoVolume,
+  daysSea,
+  daysPort,
+}: VesselPricingRouterProps) {
+  const [localDwt, setLocalDwt] = useState(vesselDwt);
+  const [hasScrubber, setHasScrubber] = useState(false);
+
+  useEffect(() => {
+    setLocalDwt(vesselDwt);
+  }, [vesselDwt]);
+
+  const activeDwt = safeNumber(localDwt);
+  const vesselClass = getVesselClass(activeDwt);
+  const isReverseTceMode = vesselClass.type === 'TCE Inverso';
+
+  return (
+    <section className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-5">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+            Router de pricing por DWT
+          </p>
+          <h1 className="mt-1 text-xl font-black text-slate-950">SeaCharter Core PRO</h1>
+        </div>
+        <label className="block min-w-[13rem]">
+          <span className="mb-1 block text-[11px] font-black uppercase tracking-wide text-slate-500">
+            DWT buque
+          </span>
+          <input
+            type="number"
+            step="any"
+            value={localDwt}
+            onChange={(event) => setLocalDwt(Number(event.target.value))}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-right text-sm font-black text-slate-900 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+          />
+        </label>
+        <label className="flex min-w-[16rem] cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-300 bg-white px-3 py-2 shadow-sm">
+          <span className="text-[11px] font-black uppercase tracking-wide text-slate-600">
+            ¿Equipado con Scrubber? (Permite IFO 380)
+          </span>
+          <input
+            type="checkbox"
+            checked={hasScrubber}
+            onChange={(event) => setHasScrubber(event.target.checked)}
+            className="peer sr-only"
+          />
+          <span className="relative h-6 w-11 rounded-full bg-slate-300 transition peer-checked:bg-emerald-500 after:absolute after:left-1 after:top-1 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition peer-checked:after:translate-x-5" />
+        </label>
+      </div>
+
+      <div className="mb-4 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-950 shadow-sm">
+        ✅ Clase detectada: {vesselClass.categoryName} | Modo: {vesselClass.type}
+      </div>
+
+      {isReverseTceMode ? (
+        <ReverseTceCalculator cargoVolume={cargoVolume} daysSea={daysSea} daysPort={daysPort} vesselCategory={vesselClass.categoryName} hasScrubber={hasScrubber} />
+      ) : (
+        <CostPlusCalculator />
+      )}
+    </section>
+  );
+}
+
+export default function TceCalculatorWorkspace({
+  cargoVolume,
+  daysSea,
+  daysPort,
+}: ReverseTceCalculatorProps) {
+  const [isReverseMode, setIsReverseMode] = useState(false);
+
+  return (
+    <section className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-5">
+      <div className="mb-5 flex justify-center">
+        <div
+          className="grid w-full max-w-xl grid-cols-2 rounded-xl bg-slate-200/80 p-1"
+          role="tablist"
+          aria-label="Modo de cálculo TCE"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!isReverseMode}
+            onClick={() => setIsReverseMode(false)}
+            className={`rounded-lg px-3 py-2 text-sm font-bold transition-all duration-200 ${
+              !isReverseMode
+                ? 'bg-white text-slate-950 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Cálculo Estándar
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={isReverseMode}
+            onClick={() => setIsReverseMode(true)}
+            className={`rounded-lg px-3 py-2 text-sm font-bold transition-all duration-200 ${
+              isReverseMode
+                ? 'bg-white text-slate-950 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Cálculo Inverso
+          </button>
+        </div>
+      </div>
+
+      <div className="transition-opacity duration-200">
+        {!isReverseMode ? (
+          <div className="flex min-h-[22rem] items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white/70 p-6 text-center">
+            <p className="max-w-2xl font-mono text-sm text-slate-500">
+              /* Aquí se montará el componente actual de SeaCharter de cálculo de viaje estándar */
+            </p>
+          </div>
+        ) : (
+          <ReverseTceCalculator cargoVolume={cargoVolume} daysSea={daysSea} daysPort={daysPort} />
+        )}
+      </div>
+    </section>
+  );
+}

@@ -3,12 +3,19 @@ import WebSocket from "ws";
 import { readVessels, upsertVessels, type VesselRecord } from "./vessel-store.js";
 
 type VesselMessage = Record<string, unknown>;
+declare const process: { env: Record<string, string | undefined> };
 
 const AIS_STREAM_URL = "wss://stream.aisstream.io/v0/stream";
 const DEFAULT_TIMEOUT_MS = 8500;
 const MAX_TIMEOUT_MS = 12000;
-const DEFAULT_QUANTITY = 1000;
-const MAX_QUANTITY = 45000;
+const DEFAULT_QUANTITY = 120;
+const MAX_QUANTITY = 250;
+const HANDYSIZE_MIN_DWT = 25000;
+const SUPRAMAX_MAX_DWT = 65000;
+const POL_VISUAL_RADIUS_NM = 300;
+const POD_VISUAL_RADIUS_NM = 100;
+const PROJECTION_SCAN_RADIUS_NM = 1000;
+const PROJECTION_LOOKAHEAD_HOURS = 72;
 
 let vesselCache: VesselMessage[] = [];
 let cacheUpdatedAt = 0;
@@ -88,6 +95,285 @@ function normalizeNumber(value: unknown) {
   return Number.isFinite(numberValue) ? numberValue : undefined;
 }
 
+function textParam(url: URL, names: string[], fallback = "") {
+  for (const name of names) {
+    const value = url.searchParams.get(name);
+    if (value && value.trim()) return value.trim();
+  }
+  return fallback;
+}
+
+function haversineNm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const radiusNm = 3440.065;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return radiusNm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+function bearingDegrees(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const phi1 = lat1 * Math.PI / 180;
+  const phi2 = lat2 * Math.PI / 180;
+  const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+  const y = Math.sin(deltaLambda) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLambda);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+function angularDifferenceDegrees(a: number, b: number) {
+  return Math.abs(((a - b + 540) % 360) - 180);
+}
+
+function projectPoint(lat: number, lon: number, course: number, distanceNm: number) {
+  const radiusNm = 3440.065;
+  const delta = distanceNm / radiusNm;
+  const theta = course * Math.PI / 180;
+  const phi1 = lat * Math.PI / 180;
+  const lambda1 = lon * Math.PI / 180;
+  const phi2 = Math.asin(
+    Math.sin(phi1) * Math.cos(delta) + Math.cos(phi1) * Math.sin(delta) * Math.cos(theta),
+  );
+  const lambda2 = lambda1 + Math.atan2(
+    Math.sin(theta) * Math.sin(delta) * Math.cos(phi1),
+    Math.cos(delta) - Math.sin(phi1) * Math.sin(phi2),
+  );
+  return {
+    lat: phi2 * 180 / Math.PI,
+    lon: ((((lambda2 * 180 / Math.PI) + 540) % 360) - 180),
+  };
+}
+
+function estimateDwt(message: VesselMessage) {
+  const metadata = asRecord(message.MetaData);
+  const direct = normalizeNumber(firstDefined(message.DWT, message.dwt, message.DWT_real, message.deadweight, metadata.DWT, metadata.dwt, metadata.DWT_real, metadata.deadweight));
+  if (direct && direct > 0) return direct;
+
+  const seed = String(firstDefined(message.IMO, message.imo, metadata.IMO, message.MMSI, message.mmsi, metadata.MMSI, message.ShipName, metadata.ShipName, "") || "");
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = seed.charCodeAt(index) + ((hash << 5) - hash);
+  }
+  return HANDYSIZE_MIN_DWT + (Math.abs(hash) % (SUPRAMAX_MAX_DWT - HANDYSIZE_MIN_DWT + 1));
+}
+
+function vesselClassLabel(dwt: number, shipType: unknown) {
+  const type = String(shipType || "").toLowerCase();
+  if (type.includes("supramax") || dwt >= 50000) return "Supramax";
+  return "Handysize";
+}
+
+function normalizeLoadState(message: VesselMessage, requestedState: string) {
+  const metadata = asRecord(message.MetaData);
+  const raw = String(firstDefined(
+    message.loadState,
+    message.estado_carga,
+    message.cargoStatus,
+    metadata.loadState,
+    metadata.estado_carga,
+    metadata.cargoStatus,
+    "",
+  ) || "").toLowerCase();
+
+  if (raw.includes("laden") || raw.includes("carg")) return "Laden";
+  if (raw.includes("ballast") || raw.includes("vacio") || raw.includes("vacío")) return "Ballast";
+
+  const speed = normalizeNumber(firstDefined(message.speed, metadata.speed)) ?? 0;
+  const destination = String(firstDefined(message.destination, message.Destination, metadata.Destination, "") || "").trim();
+  if (requestedState === "Laden" || requestedState === "Ballast") return requestedState;
+  return destination && speed > 0.5 ? "Laden" : "Ballast";
+}
+
+function estimateProjectedLoadState(message: VesselMessage, requestedState: string) {
+  const metadata = asRecord(message.MetaData);
+  const draft = normalizeNumber(firstDefined(message.draft, message.Draft, metadata.draft, metadata.Draft));
+  const designDraft = normalizeNumber(firstDefined(message.designDraft, message.maxDraft, metadata.designDraft, metadata.maxDraft));
+  if (draft !== undefined && designDraft !== undefined && designDraft > 0) {
+    return draft / designDraft >= 0.62 ? "Laden" : "Ballast";
+  }
+  if (draft !== undefined) {
+    return draft >= 8.5 ? "Laden" : "Ballast";
+  }
+  return normalizeLoadState(message, requestedState);
+}
+
+function normalizeEta(message: VesselMessage, reference?: { lat: number; lon: number }) {
+  const metadata = asRecord(message.MetaData);
+  const explicit = String(firstDefined(message.eta, message.ETA, message.Eta, metadata.eta, metadata.ETA, metadata.Eta, "") || "").trim();
+  if (explicit) return explicit;
+
+  if (!reference) return "N/A";
+  const lat = normalizeNumber(firstDefined(message.latitude, message.AIS_Live_Lat, metadata.latitude));
+  const lon = normalizeNumber(firstDefined(message.longitude, message.AIS_Live_Lon, metadata.longitude));
+  if (lat === undefined || lon === undefined) return "N/A";
+  const speed = Math.max(8, normalizeNumber(firstDefined(message.speed, metadata.speed)) ?? 11);
+  const eta = new Date(Date.now() + (haversineNm(reference.lat, reference.lon, lat, lon) / speed) * 60 * 60 * 1000);
+  return eta.toISOString();
+}
+
+function buildProjection(message: VesselMessage, target?: { role: string; lat: number; lon: number; radiusNm: number }) {
+  const metadata = asRecord(message.MetaData);
+  const lat = normalizeNumber(firstDefined(message.latitude, message.AIS_Live_Lat, metadata.latitude));
+  const lon = normalizeNumber(firstDefined(message.longitude, message.AIS_Live_Lon, metadata.longitude));
+  const sog = Math.max(0, normalizeNumber(firstDefined(message.speed, message.SOG, metadata.speed, metadata.SOG)) ?? 0);
+  const cog = normalizeNumber(firstDefined(message.course, message.COG, message.cog, metadata.course, metadata.COG, metadata.cog));
+  if (lat === undefined || lon === undefined || cog === undefined || sog <= 0.2) return null;
+
+  const points = [24, 48, 72].map((hours) => {
+    const point = projectPoint(lat, lon, cog, sog * hours);
+    return { hours, lat: point.lat, lon: point.lon };
+  });
+  const projection: Record<string, unknown> = { cog, sog, points };
+
+  if (target) {
+    const distanceToTarget = haversineNm(lat, lon, target.lat, target.lon);
+    const bearingToTarget = bearingDegrees(lat, lon, target.lat, target.lon);
+    const courseDelta = angularDifferenceDegrees(cog, bearingToTarget);
+    const crossTrackNm = Math.sin(courseDelta * Math.PI / 180) * distanceToTarget;
+    const alongTrackNm = Math.cos(courseDelta * Math.PI / 180) * distanceToTarget;
+    const reachesSearchRadius = alongTrackNm > 0 && Math.abs(crossTrackNm) <= target.radiusNm;
+    const distanceToRadiusNm = reachesSearchRadius
+      ? Math.max(0, alongTrackNm - Math.sqrt(Math.max(0, target.radiusNm ** 2 - crossTrackNm ** 2)))
+      : null;
+    const etaProjected = distanceToRadiusNm !== null
+      ? new Date(Date.now() + (distanceToRadiusNm / sog) * 60 * 60 * 1000).toISOString()
+      : null;
+    Object.assign(projection, {
+      targetRole: target.role,
+      targetDistanceNm: Math.round(distanceToTarget),
+      courseDelta: Math.round(courseDelta),
+      crossTrackNm: Math.round(Math.abs(crossTrackNm)),
+      projectedIntersection: reachesSearchRadius,
+      distanceToRadiusNm: distanceToRadiusNm !== null ? Math.round(distanceToRadiusNm) : null,
+      etaProjected,
+    });
+  }
+
+  return projection;
+}
+
+function etaDriftHours(aisEta: string, projectedEta: unknown) {
+  if (!aisEta || aisEta === "N/A" || typeof projectedEta !== "string") return null;
+  const aisMs = Date.parse(aisEta);
+  const projectedMs = Date.parse(projectedEta);
+  if (!Number.isFinite(aisMs) || !Number.isFinite(projectedMs)) return null;
+  return Math.round(Math.abs(aisMs - projectedMs) / 36_000) / 100;
+}
+
+function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
+  const requestedState = textParam(url, ["loadState", "estado", "cargoState"], "any");
+  const polLat = normalizeNumber(url.searchParams.get("polLat"));
+  const polLon = normalizeNumber(url.searchParams.get("polLon"));
+  const podLat = normalizeNumber(url.searchParams.get("podLat"));
+  const podLon = normalizeNumber(url.searchParams.get("podLon"));
+  const zone = textParam(url, ["zone"], "DUAL").toUpperCase();
+  const matchingMode = ["1", "true", "yes"].includes(textParam(url, ["matchingMode", "projectionMatching"], "0").toLowerCase());
+  const activePoints = [
+    zone !== "POD" && polLat !== undefined && polLon !== undefined ? { role: "POL", lat: polLat, lon: polLon, radiusNm: POL_VISUAL_RADIUS_NM } : null,
+    zone !== "POL" && podLat !== undefined && podLon !== undefined ? { role: "POD", lat: podLat, lon: podLon, radiusNm: POD_VISUAL_RADIUS_NM } : null,
+  ].filter((point): point is { role: string; lat: number; lon: number; radiusNm: number } => Boolean(point));
+  const selectedPolTarget = polLat !== undefined && polLon !== undefined
+    ? { role: "POL", lat: polLat, lon: polLon, radiusNm: POL_VISUAL_RADIUS_NM }
+    : null;
+
+  return vessels
+    .map(normalizeVesselMessage)
+    .map((vessel) => {
+      const metadata = asRecord(vessel.MetaData);
+      const lat = normalizeNumber(firstDefined(vessel.latitude, vessel.AIS_Live_Lat, metadata.latitude));
+      const lon = normalizeNumber(firstDefined(vessel.longitude, vessel.AIS_Live_Lon, metadata.longitude));
+      if (lat === undefined || lon === undefined) return null;
+
+      const dwt = estimateDwt(vessel);
+      const classification = vesselClassLabel(dwt, firstDefined(vessel.shipType, vessel.ShipType, metadata.ShipType));
+      if (dwt < HANDYSIZE_MIN_DWT || dwt > SUPRAMAX_MAX_DWT) return null;
+
+      const loadState = estimateProjectedLoadState(vessel, requestedState);
+      if ((requestedState === "Laden" || requestedState === "Ballast") && loadState !== requestedState) return null;
+
+      const pointDistances = activePoints.map((point) => ({
+        ...point,
+        distanceNm: haversineNm(point.lat, point.lon, lat, lon),
+      }));
+      const pointMatches = pointDistances.filter((point) => point.distanceNm <= point.radiusNm);
+
+      const nearestByDistance = pointDistances.sort((a, b) => a.distanceNm - b.distanceNm)[0] || activePoints[0];
+      const nearestVisual = pointMatches.sort((a, b) => a.distanceNm - b.distanceNm)[0] || null;
+      const projection = buildProjection(vessel, selectedPolTarget || nearestVisual || nearestByDistance);
+      const distanceToPol = selectedPolTarget ? haversineNm(selectedPolTarget.lat, selectedPolTarget.lon, lat, lon) : null;
+      const hoursToPolCircle = Number(projection?.distanceToRadiusNm ?? Infinity) / Math.max(Number(projection?.sog ?? 0), 0.1);
+      const isProjectionCandidate = !!(
+        matchingMode &&
+        selectedPolTarget &&
+        distanceToPol !== null &&
+        distanceToPol > POL_VISUAL_RADIUS_NM &&
+        distanceToPol <= PROJECTION_SCAN_RADIUS_NM &&
+        projection &&
+        projection.projectedIntersection === true &&
+        hoursToPolCircle < PROJECTION_LOOKAHEAD_HOURS
+      );
+
+      if (activePoints.length > 0 && pointMatches.length === 0 && !isProjectionCandidate) return null;
+      if (matchingMode && !isProjectionCandidate && (!nearestVisual || nearestVisual.role !== "POL")) {
+        return null;
+      }
+      if (matchingMode && !isProjectionCandidate && (!projection || projection.projectedIntersection !== true || Number(projection.crossTrackNm ?? Infinity) > 50)) {
+        return null;
+      }
+
+      const nearest = nearestVisual || nearestByDistance;
+      const imo = String(firstDefined(vessel.IMO, vessel.imo, metadata.IMO, "") || "").trim();
+      const lastPort = String(firstDefined(vessel.lastPortOfCall, vessel.last_port_of_call, vessel.ultimo_puerto, metadata.lastPortOfCall, metadata.ultimo_puerto, "") || "").trim() || "N/A";
+      const aisEta = normalizeEta(vessel, nearest);
+      const driftHours = etaDriftHours(aisEta, projection?.etaProjected);
+      const enriched: VesselMessage & { distanceNm: number | null } = {
+        ...vessel,
+        IMO: imo || "N/A",
+        imo: imo || "N/A",
+        dwt,
+        DWT: dwt,
+        vesselClass: classification,
+        loadState,
+        estado_carga: loadState,
+        eta: aisEta,
+        etaProjected: projection?.etaProjected || "N/A",
+        etaDriftHours: driftHours,
+        etaDesfase: driftHours !== null && driftHours > 6,
+        projection,
+        projectionCandidate: isProjectionCandidate,
+        aisMarkerStyle: isProjectionCandidate ? "ghost" : "solid",
+        lastPortOfCall: lastPort,
+        last_port_of_call: lastPort,
+        ultimo_puerto: lastPort,
+        matchZone: isProjectionCandidate ? "PROJECTION" : nearest?.role || "ROUTE",
+        distanceNm: nearest ? Math.round(nearest.distanceNm) : null,
+        MetaData: {
+          ...metadata,
+          IMO: imo || "N/A",
+          DWT: dwt,
+          vesselClass: classification,
+          loadState,
+          estado_carga: loadState,
+          ETA: aisEta,
+          etaProjected: projection?.etaProjected || "N/A",
+          etaDriftHours: driftHours,
+          etaDesfase: driftHours !== null && driftHours > 6,
+          projection,
+          projectionCandidate: isProjectionCandidate,
+          aisMarkerStyle: isProjectionCandidate ? "ghost" : "solid",
+          lastPortOfCall: lastPort,
+          ultimo_puerto: lastPort,
+          matchZone: isProjectionCandidate ? "PROJECTION" : nearest?.role || "ROUTE",
+          distanceNm: nearest ? Math.round(nearest.distanceNm) : null,
+        },
+      };
+      return enriched;
+    })
+    .filter((vessel): vessel is VesselMessage & { distanceNm: number | null } => vessel !== null)
+    .sort((a, b) => Number(a.distanceNm ?? 9999) - Number(b.distanceNm ?? 9999))
+    .slice(0, numberParam(url, ["quantity", "limit"], DEFAULT_QUANTITY));
+}
+
 function getVesselKey(message: VesselMessage) {
   const metadata = asRecord(message.MetaData);
   return String(
@@ -128,6 +414,7 @@ function normalizeVesselMessage(message: VesselMessage): VesselMessage {
   const imo = firstDefined(message.IMO, message.imo, metadata.IMO, metadata.imo, staticData.ImoNumber);
   const shipType = firstDefined(message.ShipType, message.shipType, metadata.ShipType, metadata.shipType, staticData.Type);
   const speed = normalizeNumber(firstDefined(message.speed, metadata.speed, positionReport.Sog, positionReport.SOG));
+  const course = normalizeNumber(firstDefined(message.course, message.COG, message.cog, metadata.course, metadata.COG, metadata.cog, positionReport.Cog, positionReport.COG, positionReport.Course));
   const navigationalStatus = firstDefined(message.NavigationalStatus, metadata.NavigationalStatus, positionReport.NavigationalStatus);
   const destination = firstDefined(message.destination, message.Destination, message.destino_actual, metadata.Destination, metadata.destination, staticData.Destination, staticData.PortOfDestination);
   const lastPortOfCall = firstDefined(
@@ -167,6 +454,9 @@ function normalizeVesselMessage(message: VesselMessage): VesselMessage {
     AIS_Live_Lat: latitude,
     AIS_Live_Lon: longitude,
     speed,
+    course,
+    COG: course,
+    cog: course,
     NavigationalStatus: navigationalStatus,
     destination,
     Destination: destination,
@@ -183,6 +473,8 @@ function normalizeVesselMessage(message: VesselMessage): VesselMessage {
       latitude: firstDefined(metadata.latitude, latitude),
       longitude: firstDefined(metadata.longitude, longitude),
       speed: firstDefined(metadata.speed, speed),
+      course: firstDefined(metadata.course, course),
+      COG: firstDefined(metadata.COG, course),
       NavigationalStatus: firstDefined(metadata.NavigationalStatus, navigationalStatus),
       Destination: firstDefined(metadata.Destination, destination),
       lastPortOfCall: firstDefined(metadata.lastPortOfCall, lastPortOfCall),
@@ -348,7 +640,7 @@ function collectVessels(url: URL, apiKey: string) {
       }));
     });
 
-    ws.on("message", (data) => {
+    ws.on("message", (data: { toString: () => string }) => {
       try {
         const message = normalizeVesselMessage(JSON.parse(data.toString()) as VesselMessage);
         const key = getVesselKey(message);
@@ -366,11 +658,23 @@ function collectVessels(url: URL, apiKey: string) {
 export default async (req: Request) => {
   const url = new URL(req.url);
   const requestedQuantity = Math.min(MAX_QUANTITY, Math.max(1, numberParam(url, ["quantity", "limit"], DEFAULT_QUANTITY)));
+  const apiKey = getApiKey();
 
   if (url.searchParams.get("action") === "reset-cache") {
     vesselCache = [];
     cacheUpdatedAt = 0;
     return vesselsResponse({ ok: true, reset: true });
+  }
+
+  if (url.searchParams.get("action") === "validate-key") {
+    if (!apiKey) {
+      return vesselsResponse(
+        { ok: false, valid: false, error: "AIS stream API key is not configured on the server." },
+        { status: 401 },
+      );
+    }
+
+    return vesselsResponse({ ok: true, valid: true });
   }
 
   if (!parseRequestedBoxes(url)) {
@@ -380,7 +684,6 @@ export default async (req: Request) => {
     );
   }
 
-  const apiKey = getApiKey();
   if (!apiKey) {
     const storedVessels = await readStoredVesselMessages(requestedQuantity);
     if (storedVessels.length > 0) {
@@ -388,8 +691,10 @@ export default async (req: Request) => {
       cacheUpdatedAt = Date.now();
     }
 
+    const filtered = filterSelectiveVessels(url, vesselCache);
     return vesselsResponse({
-      vessels: vesselCache,
+      vessels: filtered,
+      message: `Data recolectada: ${filtered.length} buques filtrados con éxito`,
       warning: "AIS stream API key is not configured on the server.",
       updatedAt: cacheUpdatedAt,
       source: vesselCache.length ? "stored-cache" : "empty-fallback",
@@ -407,11 +712,17 @@ export default async (req: Request) => {
       if (vesselCache.length > 0) cacheUpdatedAt = Date.now();
     }
 
+    const filtered = filterSelectiveVessels(url, vessels.length ? vessels : vesselCache);
     return vesselsResponse(
-      { vessels: vessels.length ? vessels : vesselCache, updatedAt: cacheUpdatedAt, source: vessels.length ? "aisstream-live" : "stored-cache" },
+      {
+        vessels: filtered,
+        updatedAt: cacheUpdatedAt,
+        source: vessels.length ? "aisstream-live" : "stored-cache",
+        message: `Data recolectada: ${filtered.length} buques filtrados con éxito`,
+      },
       {
         headers: {
-          "x-ais-persisted-count": String(vesselCache.length),
+          "x-ais-persisted-count": String(filtered.length),
           "x-ais-target-count": String(requestedQuantity),
         },
       },
@@ -423,8 +734,10 @@ export default async (req: Request) => {
       if (vesselCache.length > 0) cacheUpdatedAt = Date.now();
     }
 
+    const filtered = filterSelectiveVessels(url, vesselCache);
     return vesselsResponse({
-      vessels: vesselCache,
+      vessels: filtered,
+      message: `Data recolectada: ${filtered.length} buques filtrados con éxito`,
       warning: message,
       updatedAt: cacheUpdatedAt,
       source: vesselCache.length ? "stored-cache" : "empty-fallback",

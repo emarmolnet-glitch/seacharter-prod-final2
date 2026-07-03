@@ -155,6 +155,9 @@
         timer: null,
         inFlight: false,
         intervalMs: 300000,
+        retryIndex: 0,
+        retryDelaysMs: [5000, 10000, 30000],
+        userActivated: false,
         endpoint: '/.netlify/functions/get-vessels?force=1',
         map: null,
         waitingForMapIdle: false
@@ -721,20 +724,36 @@
         aisProxyPollingState.endpoint = config.endpoint || aisProxyPollingState.endpoint;
         aisProxyPollingState.map = config.map || getDefaultAisMap();
         aisProxyPollingState.intervalMs = Math.max(300000, Number(config.intervalMs || aisProxyPollingState.intervalMs) || 300000);
-        const scheduleNextPoll = () => {
-            aisProxyPollingState.timer = setTimeout(runPoll, aisProxyPollingState.intervalMs);
+        aisProxyPollingState.retryDelaysMs = Array.isArray(config.retryDelaysMs) && config.retryDelaysMs.length
+            ? config.retryDelaysMs
+            : aisProxyPollingState.retryDelaysMs;
+        aisProxyPollingState.retryIndex = 0;
+        aisProxyPollingState.userActivated = config.userActivated === true;
+        const scheduleNextPoll = (delayMs) => {
+            if (!aisProxyPollingState.userActivated) return;
+            aisProxyPollingState.timer = setTimeout(runPoll, delayMs);
         };
         const runPoll = () => {
+            if (!aisProxyPollingState.userActivated) {
+                aisProxyPollingState.timer = null;
+                return;
+            }
             const liveConfig = Object.assign({}, config, {
                 map: aisProxyPollingState.map || getDefaultAisMap()
             });
             pollAisProxyOnce(liveConfig)
+                .then(() => {
+                    aisProxyPollingState.retryIndex = 0;
+                })
                 .catch((err) => {
                     if (config.onError) config.onError(err);
+                    const delays = aisProxyPollingState.retryDelaysMs;
+                    aisProxyPollingState.retryIndex = Math.min(aisProxyPollingState.retryIndex + 1, delays.length - 1);
                 })
                 .finally(() => {
                     if (aisProxyPollingState.timer !== null) {
-                        scheduleNextPoll();
+                        const retryDelay = aisProxyPollingState.retryDelaysMs[aisProxyPollingState.retryIndex] || aisProxyPollingState.intervalMs;
+                        scheduleNextPoll(aisProxyPollingState.retryIndex > 0 ? retryDelay : aisProxyPollingState.intervalMs);
                     }
                 });
         };
@@ -746,6 +765,8 @@
     function stopAisProxyPolling() {
         clearTimeout(aisProxyPollingState.timer);
         aisProxyPollingState.timer = null;
+        aisProxyPollingState.userActivated = false;
+        aisProxyPollingState.retryIndex = 0;
         return { stopped: true };
     }
 
@@ -941,6 +962,7 @@
         const normalizedPod = podName ? String(podName).toUpperCase().trim() : "";
         const radarZone = String(vessel.aisRadarZone || (vessel.MetaData && vessel.MetaData.aisRadarZone) || "").toUpperCase();
         const radarColor = vessel.aisRadarColor || (radarZone === "POL" ? "#16a34a" : (radarZone === "POD" ? "#2563eb" : ""));
+        const isProjectionCandidate = !!(vessel.projectionCandidate || vessel.aisMarkerStyle === "ghost" || (vessel.MetaData && (vessel.MetaData.projectionCandidate || vessel.MetaData.aisMarkerStyle === "ghost")));
         const isKeyPort = !!(
             (normalizedPol && destination.includes(normalizedPol)) ||
             (normalizedPod && destination.includes(normalizedPod))
@@ -973,8 +995,8 @@
         const iconConfig = {
             className: "custom-ais-icon",
             html: imageIcon
-                ? `<div class="seacharter-ais-icon" data-icon-class="${iconClass}" style="--marker-color: ${iconColor}; color: ${iconColor};"><img src="${imageIcon}" alt="" width="24" height="24"></div>`
-                : `<div class="seacharter-ais-icon" style="--marker-color: ${iconColor};"><i class="fa-solid fas ${iconClass}"></i></div>`,
+                ? `<div class="seacharter-ais-icon${isProjectionCandidate ? ' ghost-ship' : ''}" data-icon-class="${iconClass}" style="--marker-color: ${iconColor}; color: ${iconColor};"><img src="${imageIcon}" alt="" width="24" height="24"></div>`
+                : `<div class="seacharter-ais-icon${isProjectionCandidate ? ' ghost-ship' : ''}" style="--marker-color: ${iconColor};"><i class="fa-solid fas ${iconClass}"></i></div>`,
             iconSize: [24, 24],
             iconAnchor: [12, 12]
         };

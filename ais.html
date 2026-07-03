@@ -48,6 +48,8 @@
         .custom-ais-icon:hover, .ais-live-vessel-marker:hover { transform: translateY(-2px) scale(1.12); filter: drop-shadow(0 8px 14px rgba(0, 78, 100, 0.22)); }
         .seacharter-ais-icon { width: 24px; height: 24px; display: grid; place-items: center; color: var(--marker-color, #004e64); font-size: 18px; line-height: 1; text-shadow: 0 1px 0 #fff, 0 4px 10px rgba(0, 78, 100, 0.22); }
         .seacharter-ais-icon img { width: 24px; height: 24px; display: block; }
+        .seacharter-ais-icon.ghost-ship { border: 2px dashed currentColor; border-radius: 999px; background: rgba(255,255,255,0.72); opacity: 0.78; text-shadow: none; }
+        .seacharter-ais-icon.ghost-ship i, .seacharter-ais-icon.ghost-ship img { opacity: 0.62; }
         .seacharter-map-popup { min-width: 190px; color: #12313f; font-size: 12px; line-height: 1.35; display: grid; gap: 4px; }
         .seacharter-map-popup strong { color: #004e64; font-size: 13px; letter-spacing: 0; }
         .seacharter-map-popup small { color: #8a5a00; font-weight: 700; }
@@ -61,6 +63,13 @@
         .ais-prospection-radius.is-scanning { animation: aisRadiusPulse 1.6s ease-in-out infinite; }
         .ais-prospection-result-label { background: rgba(15, 23, 42, 0.88); border: 1px solid currentColor; border-radius: 6px; padding: 4px 7px; font-size: 10px; font-weight: 900; line-height: 1; text-transform: uppercase; white-space: nowrap; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.28); }
         .ais-prospection-result-label.is-scanning { animation: aisLabelPulse 1.2s ease-in-out infinite; }
+        .ais-projection-toggle { border: 1px solid #cbd5e1; background: #f8fafc; color: #334155; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 0.78rem; font-weight: 800; }
+        .ais-projection-toggle.active { background: #0f766e; border-color: #0f766e; color: #fff; }
+        .ais-load-pill { display: inline-block; min-width: 58px; padding: 3px 7px; border-radius: 4px; color: #fff; font-size: 0.72rem; font-weight: 900; text-align: center; }
+        .ais-load-pill.ballast { background: #16a34a; }
+        .ais-load-pill.laden { background: #2563eb; }
+        .ais-eta-drift { color: #b42318; font-weight: 900; }
+        .ais-projection-meta { display: block; color: #475569; font-size: 0.72rem; font-weight: 700; margin-top: 3px; }
         @keyframes aisRadiusPulse { 0%, 100% { stroke-width: 2; stroke-opacity: 0.82; } 50% { stroke-width: 5; stroke-opacity: 1; } }
         @keyframes aisLabelPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
     </style>
@@ -102,11 +111,12 @@
         </div>
         <div style="margin-top:20px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
             <input type="password" id="aisstream-api-key" placeholder="API Key (Opcional si usas Netlify Proxy)" autocomplete="off" spellcheck="false" autocapitalize="none" style="padding:10px; border:1px solid #cbd5e1; border-radius:4px; min-width:220px;">
-            <button type="button" id="btn-refresh-ais" style="padding:10px 20px; background:#007bff; color:#FFFFFF !important; border:none; border-radius:4px; cursor:pointer;">Check Real-Time Availability</button>
+            <button type="button" id="btn-refresh-ais" style="padding:10px 20px; background:#007bff; color:#FFFFFF !important; border:none; border-radius:4px; cursor:pointer;">REFRESCAR / BUSCAR</button>
         </div>
         <div class="ais-radar-tabs" aria-label="AIS LIVE dual search">
             <button type="button" id="btn-search-pol" class="ais-radar-tab active-pol">BUSCAR POL (300MN)</button>
             <button type="button" id="btn-search-pod" class="ais-radar-tab active-pod">BUSCAR POD (100MN)</button>
+            <button type="button" id="btn-projection-matching" class="ais-projection-toggle" aria-pressed="false">MODO MATCHING: OFF</button>
         </div>
     </div>
 
@@ -150,7 +160,7 @@
                     Centrar en zona de carga
                 </button>
                 <button id="btn-freeze-radar" onclick="window.toggleLiveTracking()" style="background-color: #28a745; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 4px; transition: background-color 0.2s;">
-                    Radar: LIVE
+                    Radar: STATIC
                 </button>
             </div>
         </div>
@@ -249,9 +259,12 @@
             <thead>
                 <tr>
                     <th>NAME</th>
-                    <th>CATEGORY</th>
-                    <th>DWT (Est.)</th>
-                    <th>POSITION</th>
+                    <th>IMO</th>
+                    <th>ETA ACTUALIZADA</th>
+                    <th>ETA PROYECTADA</th>
+                    <th>ESTADO</th>
+                    <th>PROYECCIÓN</th>
+                    <th>ÚLTIMO PUERTO</th>
                 </tr>
             </thead>
             <tbody id="ais-vessels-tbody"></tbody>
@@ -296,6 +309,7 @@
             maxZoom: 20
         }, { className: 'nautical-map-base' })).addTo(AISmap);
         let aisMapMarkers = [];
+        let aisProjectionLayers = [];
 
         // Marker cluster group configuration
         const aisClusterGroup = L.markerClusterGroup({
@@ -314,8 +328,148 @@
             POL: '#16a34a',
             POD: '#2563eb'
         };
+        window.aisProjectionMatchingMode = window.aisProjectionMatchingMode || false;
         window.aisRadarZoneState = Object.assign({ pol: true, pod: true }, window.aisRadarZoneState || {});
         window.aisProspectionLayers = { group: L.layerGroup().addTo(AISmap), circles: {}, labels: {} };
+
+        function readAisNumber() {
+            for (let i = 0; i < arguments.length; i += 1) {
+                const value = Number(arguments[i]);
+                if (Number.isFinite(value)) return value;
+            }
+            return null;
+        }
+
+        function projectAisPoint(lat, lon, courseDeg, distanceNm) {
+            const radiusNm = 3440.065;
+            const delta = distanceNm / radiusNm;
+            const theta = courseDeg * Math.PI / 180;
+            const phi1 = lat * Math.PI / 180;
+            const lambda1 = lon * Math.PI / 180;
+            const phi2 = Math.asin(Math.sin(phi1) * Math.cos(delta) + Math.cos(phi1) * Math.sin(delta) * Math.cos(theta));
+            const lambda2 = lambda1 + Math.atan2(Math.sin(theta) * Math.sin(delta) * Math.cos(phi1), Math.cos(delta) - Math.sin(phi1) * Math.sin(phi2));
+            return { lat: phi2 * 180 / Math.PI, lon: (((lambda2 * 180 / Math.PI) + 540) % 360) - 180 };
+        }
+
+        function bearingAisDegrees(lat1, lon1, lat2, lon2) {
+            const phi1 = lat1 * Math.PI / 180;
+            const phi2 = lat2 * Math.PI / 180;
+            const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+            const y = Math.sin(deltaLambda) * Math.cos(phi2);
+            const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLambda);
+            return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+        }
+
+        function diffAisDegrees(a, b) {
+            return Math.abs(((a - b + 540) % 360) - 180);
+        }
+
+        function formatAisEta(value) {
+            if (!value || value === 'N/A' || Number.isNaN(Date.parse(value))) return value || 'N/A';
+            return new Date(value).toLocaleString();
+        }
+
+        function estimateAisLoadState(vessel) {
+            const meta = vessel.MetaData || {};
+            const explicit = String(vessel.loadState || vessel.estado_carga || meta.loadState || meta.estado_carga || '').toLowerCase();
+            if (explicit.includes('laden') || explicit.includes('carg')) return 'Laden';
+            if (explicit.includes('ballast') || explicit.includes('vacio') || explicit.includes('vacío')) return 'Ballast';
+            const draft = readAisNumber(vessel.draft, vessel.Draft, meta.draft, meta.Draft);
+            const designDraft = readAisNumber(vessel.designDraft, vessel.maxDraft, meta.designDraft, meta.maxDraft);
+            if (draft !== null && designDraft && designDraft > 0) return draft / designDraft >= 0.62 ? 'Laden' : 'Ballast';
+            if (draft !== null) return draft >= 8.5 ? 'Laden' : 'Ballast';
+            const speed = readAisNumber(vessel.speed, vessel.SOG, meta.speed, meta.SOG) || 0;
+            const destination = String(vessel.destination || vessel.Destination || meta.Destination || '').trim();
+            return destination && speed > 0.5 ? 'Laden' : 'Ballast';
+        }
+
+        function enrichAisProjection(vessel, pol) {
+            const meta = vessel.MetaData || {};
+            const coords = getVesselCoords(vessel);
+            if (!coords || !pol || pol.lat === null || pol.lon === null) return vessel;
+            const lat = readAisNumber(coords[0], meta.latitude, vessel.latitude);
+            const lon = readAisNumber(coords[1], meta.longitude, vessel.longitude);
+            const sog = Math.max(0, readAisNumber(vessel.speed, vessel.SOG, meta.speed, meta.SOG) || 0);
+            const cog = readAisNumber(vessel.course, vessel.COG, vessel.cog, meta.course, meta.COG, meta.cog, vessel.heading, meta.heading);
+            vessel.loadState = estimateAisLoadState(vessel);
+            vessel.estado_carga = vessel.loadState;
+            meta.loadState = vessel.loadState;
+            meta.estado_carga = vessel.loadState;
+            if (lat === null || lon === null || cog === null || sog <= 0.2) return vessel;
+            const points = [24, 48, 72].map(hours => {
+                const projected = projectAisPoint(lat, lon, cog, sog * hours);
+                return { hours, lat: projected.lat, lon: projected.lon };
+            });
+            const distanceToPol = window.getDistance(pol.lat, pol.lon, lat, lon);
+            const bearingToPol = bearingAisDegrees(lat, lon, pol.lat, pol.lon);
+            const courseDelta = diffAisDegrees(cog, bearingToPol);
+            const crossTrackNm = Math.abs(Math.sin(courseDelta * Math.PI / 180) * distanceToPol);
+            const alongTrackNm = Math.cos(courseDelta * Math.PI / 180) * distanceToPol;
+            const projectedIntersection = alongTrackNm > 0 && crossTrackNm <= AIS_RADAR_POL_RADIUS_NM;
+            const distanceToRadiusNm = projectedIntersection
+                ? Math.max(0, alongTrackNm - Math.sqrt(Math.max(0, AIS_RADAR_POL_RADIUS_NM ** 2 - crossTrackNm ** 2)))
+                : null;
+            const etaProjected = distanceToRadiusNm !== null
+                ? new Date(Date.now() + (distanceToRadiusNm / sog) * 60 * 60 * 1000).toISOString()
+                : 'N/A';
+            const aisEta = vessel.eta || vessel.ETA || meta.ETA || meta.eta || 'N/A';
+            const driftHours = etaProjected !== 'N/A' && aisEta !== 'N/A' && !Number.isNaN(Date.parse(aisEta))
+                ? Math.abs(Date.parse(etaProjected) - Date.parse(aisEta)) / 3600000
+                : null;
+            vessel.projection = Object.assign({}, vessel.projection || {}, {
+                cog,
+                sog,
+                points,
+                targetRole: 'POL',
+                targetDistanceNm: Math.round(distanceToPol),
+                courseDelta: Math.round(courseDelta),
+                crossTrackNm: Math.round(crossTrackNm),
+                projectedIntersection,
+                distanceToRadiusNm: distanceToRadiusNm !== null ? Math.round(distanceToRadiusNm) : null,
+                etaProjected
+            });
+            vessel.etaProjected = etaProjected;
+            vessel.etaDriftHours = driftHours !== null ? Math.round(driftHours * 100) / 100 : null;
+            vessel.etaDesfase = vessel.etaDriftHours !== null && vessel.etaDriftHours > 6;
+            meta.projection = vessel.projection;
+            meta.etaProjected = vessel.etaProjected;
+            meta.etaDriftHours = vessel.etaDriftHours;
+            meta.etaDesfase = vessel.etaDesfase;
+            return vessel;
+        }
+
+        function clearAisProjectionLayers() {
+            aisProjectionLayers.forEach(layer => {
+                try { AISmap.removeLayer(layer); } catch (_) {}
+            });
+            aisProjectionLayers = [];
+        }
+
+        function drawAisProjection(vessel) {
+            const meta = vessel.MetaData || {};
+            const projection = vessel.projection || meta.projection;
+            if (!projection || !Array.isArray(projection.points) || projection.points.length === 0) return;
+            const lat = readAisNumber(meta.latitude, vessel.latitude);
+            const lon = readAisNumber(meta.longitude, vessel.longitude);
+            if (lat === null || lon === null) return;
+            const points = [[lat, lon]].concat(projection.points.map(point => [point.lat, point.lon]));
+            const color = vessel.loadState === 'Ballast' || vessel.estado_carga === 'Ballast' ? '#16a34a' : '#2563eb';
+            const line = L.polyline(points, { color, weight: 2, opacity: 0.78, dashArray: '8, 10', interactive: false }).addTo(AISmap);
+            aisProjectionLayers.push(line);
+            projection.points.forEach(point => {
+                const label = L.marker([point.lat, point.lon], {
+                    interactive: false,
+                    keyboard: false,
+                    icon: L.divIcon({
+                        className: '',
+                        html: `<div class="ais-prospection-result-label" style="color:${color}">${point.hours}h</div>`,
+                        iconSize: [42, 20],
+                        iconAnchor: [21, 10]
+                    })
+                }).addTo(AISmap);
+                aisProjectionLayers.push(label);
+            });
+        }
 
         function renderAisProspectionRadius(role, status, count) {
             const normalizedRole = String(role || '').toUpperCase();
@@ -377,7 +531,7 @@
         };
 
         // --- MOTOR DE ACUMULACIÓN DUAL DE BUQUES ---
-        window.AIS_DUAL_SWEEP_LIMIT = 1000;
+        window.AIS_DUAL_SWEEP_LIMIT = 250;
         window.buquesAlmacenados = window.buquesAlmacenados instanceof Map ? window.buquesAlmacenados : new Map();
         window.buquesEncontrados = {};
 
@@ -408,7 +562,7 @@
 
         window.actualizarContadorBuquesAlmacenados = function() {
             const total = window.buquesAlmacenados.size;
-            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
+            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 250;
             const porcentaje = Math.min(100, Math.round((total / limite) * 100));
             const progressEl = document.getElementById('ais-storage-progress');
             if (progressEl) progressEl.innerText = `${porcentaje}% / ${limite}`;
@@ -417,7 +571,7 @@
         };
 
         window.procesarMensajeAIS = function(nuevoBarco) {
-            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
+            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 250;
             if (window.buquesAlmacenados.size >= limite) {
                 window.detenerRadar();
                 return false;
@@ -699,8 +853,19 @@
             if (tbody) {
                 tbody.innerHTML = vessels.slice(0, 80).map(v => {
                     const meta = v.MetaData || {};
-                    const cat = classifyVessel(0, meta.ShipName, meta.MMSI, meta.IMO);
-                    return `<tr><td>${meta.ShipName || 'N/A'}</td><td>${cat}</td><td>Live AIS</td><td>${meta.latitude.toFixed(2)}, ${meta.longitude.toFixed(2)}</td></tr>`;
+                    const pol = typeof window.updateGeofencePOLDisplay === 'function' ? window.updateGeofencePOLDisplay() : null;
+                    enrichAisProjection(v, pol);
+                    const eta = v.eta || v.ETA || meta.ETA || 'N/A';
+                    const projectedEta = v.etaProjected || (v.projection && v.projection.etaProjected) || meta.etaProjected || 'N/A';
+                    const etaDrift = v.etaDriftHours ?? meta.etaDriftHours;
+                    const etaDesfase = v.etaDesfase || (Number.isFinite(Number(etaDrift)) && Number(etaDrift) > 6);
+                    const loadState = v.loadState || v.estado_carga || meta.loadState || meta.estado_carga || 'N/A';
+                    const loadClass = String(loadState).toLowerCase() === 'ballast' ? 'ballast' : 'laden';
+                    const projection = v.projection || meta.projection || {};
+                    const projectionLabel = projection.projectedIntersection ? `POL ${projection.distanceToRadiusNm ?? 'N/A'} MN` : 'Sin cruce POL';
+                    const projectionMeta = projection.sog ? `${Number(projection.sog).toFixed(1)} kn / COG ${Math.round(Number(projection.cog) || 0)}°` : 'COG/SOG N/A';
+                    const lastPort = v.lastPortOfCall || v.last_port_of_call || v.ultimo_puerto || meta.lastPortOfCall || meta.ultimo_puerto || 'N/A';
+                    return `<tr><td>${meta.ShipName || 'N/A'}</td><td>${meta.IMO || 'N/A'}</td><td>${formatAisEta(eta)}</td><td class="${etaDesfase ? 'ais-eta-drift' : ''}">${formatAisEta(projectedEta)}${etaDesfase ? `<span class="ais-projection-meta">Desfase +${Number(etaDrift).toFixed(1)}h</span>` : ''}</td><td><span class="ais-load-pill ${loadClass}">${loadState}</span></td><td>${projectionLabel}<span class="ais-projection-meta">${projectionMeta}</span></td><td>${lastPort}</td></tr>`;
                 }).join('');
             }
 
@@ -790,6 +955,8 @@
             const result = window.MapLoader.startAisProxyPolling({
                 endpoint,
                 intervalMs: 300000,
+                retryDelaysMs: [5000, 10000, 30000],
+                userActivated: true,
                 map: AISmap,
                 onError: err => console.warn('[AIS Polling] Proxy polling error.', err)
             });
@@ -820,7 +987,7 @@
                 }
                 aisLiveState.lastBoundsKey = '';
                 clearTimeout(aisLiveState.reconnectTimer);
-                connectLiveAisForCurrentBounds();
+                stopLiveAisVisualLoop();
             });
         }
         bindAisStreamApiKeyInput();
@@ -832,16 +999,16 @@
                 clearTimeout(aisLiveState.reconnectTimer);
                 aisLiveState.reconnectTimer = setTimeout(() => {
                     aisLiveState.lastBoundsKey = '';
-                    connectLiveAisForCurrentBounds();
+                    stopLiveAisVisualLoop();
                 }, 1200);
             };
             aisPolInput.addEventListener('input', scheduleAisZoneRefresh);
             aisPolInput.addEventListener('change', scheduleAisZoneRefresh);
         }
 
-        setTimeout(connectLiveAisForCurrentBounds, 800);
+        stopLiveAisVisualLoop();
 
-        window.isLiveTrackingEnabled = true;
+        window.isLiveTrackingEnabled = false;
         window.toggleLiveTracking = function() {
             window.isLiveTrackingEnabled = !window.isLiveTrackingEnabled;
             const btn = document.getElementById('btn-freeze-radar');
@@ -1064,8 +1231,40 @@
         const AIS_FALLBACK_EMPTY_RETRY_MS = 60000;
         const AIS_FALLBACK_429_RETRY_MS = 300000;
 
+        window.showAisDisconnectedState = function() {
+            window.aisRadarUserActivated = false;
+            window.AIS_PROXY_POLLING_ACTIVE = false;
+            if (window.MapLoader && typeof window.MapLoader.stopAisProxyPolling === 'function') {
+                window.MapLoader.stopAisProxyPolling();
+            }
+            stopLiveAisVisualLoop();
+            const tbody = document.getElementById('ais-vessels-tbody') || document.querySelector('tbody');
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" style="padding:24px; text-align:center; color:#b42318; font-weight:700;">
+                            Sin conexión AIS. Compruebe API Key o estado del servidor
+                        </td>
+                    </tr>
+                `;
+            }
+            const summaryTextEl = document.getElementById('geofence-summary-text');
+            if (summaryTextEl) summaryTextEl.innerText = 'Sin conexión AIS. Compruebe API Key o estado del servidor';
+        };
+
+        window.validateAisApiKeyStatus = async function() {
+            const response = await fetch('/.netlify/functions/get-vessels?action=validate-key', {
+                headers: { Accept: 'application/json' }
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || payload.valid === false) {
+                throw new Error(payload.error || 'AIS API key inválida o expirada.');
+            }
+            return true;
+        };
+
         window.executeAISSweep = async function() {
-            if (window.isLiveTrackingEnabled === false) return;
+            window.isLiveTrackingEnabled = false;
             window.aisRadarUserActivated = true;
             if (typeof AISmap !== 'undefined' && AISmap && typeof AISmap.getZoom === 'function' && AISmap.getZoom() < 5) {
                 console.warn("AIS_DEBUG: Zoom menor a 5. Barrido AIS local pausado para evitar consultas amplias.");
@@ -1078,6 +1277,12 @@
                 return;
             }
             if (window.AIS_DIRECT_FRONTEND_MODE) {
+                try {
+                    await window.validateAisApiKeyStatus();
+                } catch (err) {
+                    window.showAisDisconnectedState();
+                    return;
+                }
                 connectLiveAisForCurrentBounds();
                 return;
             }
@@ -1113,41 +1318,58 @@
 
             const savedQty = localStorage.getItem('calculator_cargo_qty');
             const quantity = savedQty ? parseFloat(savedQty) : 45000;
-            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
-            if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
-                window.detenerRadar();
-                return;
-            }
             let url = typeof window.getRouteAisSweepEndpoint === 'function'
-                ? window.getRouteAisSweepEndpoint(quantity)
+                ? window.getRouteAisSweepEndpoint(quantity, '', true)
                 : '';
             if (!url) {
                 console.warn("AIS_FALLBACK: No se pudieron determinar cajas POL/POD para el barrido AIS.");
                 return;
             }
             window.isAisSweepFetching = true;
+            const refreshBtn = document.getElementById('btn-refresh-ais');
+            const summaryTextEl = document.getElementById('geofence-summary-text');
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.innerText = 'BUSCANDO...';
+            }
+            if (summaryTextEl) summaryTextEl.innerText = 'Recolectando data AIS filtrada en servidor...';
             try {
-                const response = await fetch(url);
+                await window.validateAisApiKeyStatus();
+                const response = await fetch(url, { headers: { Accept: 'application/json' } });
                 if (response.status === 429) {
                     window.aisFallbackNextAllowedAt = Date.now() + AIS_FALLBACK_429_RETRY_MS;
                     return;
                 }
                 const data = await response.json();
-                const vessels = Array.isArray(data) ? data : [data];
+                const vessels = Array.isArray(data) ? data : (Array.isArray(data.vessels) ? data.vessels : []);
                 if (vessels.length === 0) {
                     window.aisFallbackNextAllowedAt = Date.now() + AIS_FALLBACK_EMPTY_RETRY_MS;
-                    console.warn("AIS_FALLBACK: 0 buques recibidos. Pausa obligatoria de 60 segundos.");
-                    return;
+                    console.warn("AIS_FALLBACK: 0 buques filtrados. Pausa obligatoria de 60 segundos.");
                 }
+                if (typeof aisClusterGroup !== 'undefined') aisClusterGroup.clearLayers();
+                if (Array.isArray(aisMapMarkers)) aisMapMarkers = [];
+                window.buquesAlmacenados.clear();
+                window.buquesEncontrados = {};
                 vessels.forEach(v => {
                     if (typeof window.procesarMensajeAIS === 'function') {
                         window.procesarMensajeAIS(v);
                     }
                 });
-                
+                window.rawVesselsInArea = vessels;
                 window.applyGeofencingFilters();
+                const message = data.message || `Data recolectada: ${vessels.length} buques filtrados con éxito`;
+                if (summaryTextEl) summaryTextEl.innerText = message;
+                console.log(message);
+            } catch (err) {
+                console.error("AIS_FALLBACK: Error durante barrido AIS:", err);
+                window.showAisDisconnectedState();
+                window.aisFallbackNextAllowedAt = Date.now() + AIS_FALLBACK_EMPTY_RETRY_MS;
             } finally {
                 window.isAisSweepFetching = false;
+                if (refreshBtn) {
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerText = 'REFRESCAR / BUSCAR';
+                }
             }
         };
 
@@ -1184,18 +1406,39 @@
             ];
         }
 
-        window.getRouteAisSweepEndpoint = function(quantity = 45000, role = '') {
+        window.getRouteAisSweepEndpoint = function(quantity = 120, role = '', selective = true) {
             const polName = document.getElementById('port-pol')?.value || localStorage.getItem('calculator_pol') || '';
             const podName = document.getElementById('port-pod')?.value || localStorage.getItem('calculator_pod') || '';
             const polPort = getAisRoutePort(polName);
             const podPort = getAisRoutePort(podName);
             const boxes = [];
             const normalizedRole = String(role || '').toUpperCase();
-            if ((!normalizedRole || normalizedRole === 'POL') && window.aisRadarZoneState.pol && polPort) boxes.push(createAisBoxAroundPort(polPort, AIS_RADAR_POL_RADIUS_NM));
+            const polScanRadius = window.aisProjectionMatchingMode ? 1000 : AIS_RADAR_POL_RADIUS_NM;
+            if ((!normalizedRole || normalizedRole === 'POL') && window.aisRadarZoneState.pol && polPort) boxes.push(createAisBoxAroundPort(polPort, polScanRadius));
             if ((!normalizedRole || normalizedRole === 'POD') && window.aisRadarZoneState.pod && podPort) boxes.push(createAisBoxAroundPort(podPort, AIS_RADAR_POD_RADIUS_NM));
             if (!boxes.length) return '';
             const zone = normalizedRole || 'DUAL';
-            return `/.netlify/functions/get-vessels?quantity=${encodeURIComponent(quantity)}&force=1&zone=${encodeURIComponent(zone)}&boxes=${encodeURIComponent(JSON.stringify(boxes))}`;
+            const params = new URLSearchParams({
+                quantity: String(Math.min(Number(quantity) || 120, 250)),
+                force: '1',
+                zone,
+                boxes: JSON.stringify(boxes),
+                vesselClass: 'Handysize,Supramax',
+                loadState: 'any',
+                selective: selective ? '1' : '0',
+                matchingMode: window.aisProjectionMatchingMode ? '1' : '0'
+            });
+            if (polPort) {
+                params.set('polLat', String(polPort.lat));
+                params.set('polLon', String(polPort.lon));
+                params.set('polName', polPort.name || polName);
+            }
+            if (podPort) {
+                params.set('podLat', String(podPort.lat));
+                params.set('podLon', String(podPort.lon));
+                params.set('podName', podPort.name || podName);
+            }
+            return `/.netlify/functions/get-vessels?${params.toString()}`;
         };
 
         window.RadarPOL = async function(quantity = 45000) {
@@ -1342,6 +1585,14 @@
                 .map(cb => cb.value);
             
             return (vessels || []).filter(v => {
+                enrichAisProjection(v, pol);
+                const isProjectionCandidate = !!(v.projectionCandidate || (v.MetaData && v.MetaData.projectionCandidate));
+                if (window.aisProjectionMatchingMode) {
+                    const projection = v.projection || (v.MetaData && v.MetaData.projection);
+                    if (!isProjectionCandidate && (!projection || projection.projectedIntersection !== true || Number(projection.crossTrackNm || Infinity) > 50)) {
+                        return false;
+                    }
+                }
                 // Use MapLoader to normalize coordinates and discard land/office points
                 const coords = getVesselCoords(v);
                 if (!coords) return false;
@@ -1370,7 +1621,7 @@
                         (zoneMatch.zone === 'POD' && window.aisRadarZoneState.pod)
                     );
                     
-                    if (!insideGeofence) {
+                    if (!insideGeofence && !isProjectionCandidate) {
                         // Rule 2: Passing Route Destination Filter
                         const destination = v.Destination || v.destination || (v.MetaData && (v.MetaData.Destination || v.MetaData.destination)) || "";
                         const rawDest = destination.toLowerCase().trim();
@@ -1399,6 +1650,7 @@
             // Filter using our geofencing logic
             const filteredVessels = window.filterVesselsByGeofence(vessels);
             filteredVessels.forEach(v => {
+                enrichAisProjection(v, pol);
                 const zoneMatch = assignAisRadarZone(v, pol, pod);
                 v.aisRadarZone = zoneMatch ? zoneMatch.zone : 'ROUTE';
                 v.aisRadarColor = zoneMatch ? zoneMatch.color : '#3b82f6';
@@ -1473,11 +1725,23 @@
                         }
 
                         const cat = classifyVessel(rawDwt, name, mmsi, imo);
-                        const hoverTitle = tooltipMap[cat] || '';
-                        
                         const row = document.createElement('tr');
                         row.style.cursor = "pointer";
                         const destination = b.Destination || (b.MetaData && b.MetaData.Destination) || "N/A";
+                        const eta = b.eta || b.ETA || b.eta_puerto_carga || (b.MetaData && (b.MetaData.ETA || b.MetaData.eta)) || "N/A";
+                        const projectedEta = b.etaProjected || (b.projection && b.projection.etaProjected) || (b.MetaData && (b.MetaData.etaProjected || (b.MetaData.projection && b.MetaData.projection.etaProjected))) || "N/A";
+                        const etaDrift = b.etaDriftHours ?? (b.MetaData && b.MetaData.etaDriftHours);
+                        const etaDesfase = b.etaDesfase || (Number.isFinite(Number(etaDrift)) && Number(etaDrift) > 6);
+                        const loadState = b.loadState || b.estado_carga || (b.MetaData && (b.MetaData.loadState || b.MetaData.estado_carga)) || "N/A";
+                        const lastPort = b.lastPortOfCall || b.last_port_of_call || b.ultimo_puerto || (b.MetaData && (b.MetaData.lastPortOfCall || b.MetaData.ultimo_puerto)) || "N/A";
+                        const etaLabel = eta && eta !== "N/A" && !Number.isNaN(Date.parse(eta)) ? new Date(eta).toLocaleString() : eta;
+                        const projectedEtaLabel = formatAisEta(projectedEta);
+                        const loadClass = String(loadState).toLowerCase() === 'ballast' ? 'ballast' : 'laden';
+                        const projection = b.projection || (b.MetaData && b.MetaData.projection) || {};
+                        const projectionLabel = projection.projectedIntersection
+                            ? `POL ${projection.distanceToRadiusNm ?? 'N/A'} MN`
+                            : 'Sin cruce POL';
+                        const projectionMeta = projection.sog ? `${Number(projection.sog).toFixed(1)} kn / COG ${Math.round(Number(projection.cog) || 0)}°` : 'COG/SOG N/A';
                         row.onclick = () => {
                             const input = document.getElementById('nombre-buque-calculadora') || document.getElementById('vessel-name') || document.getElementById('name-of-ship-calculator');
                             if (input) input.value = b.MetaData.ShipName;
@@ -1485,13 +1749,14 @@
                             if (destInput && destination !== 'N/A') destInput.value = destination;
                             AISmap.setView([b.MetaData.latitude, b.MetaData.longitude], 10);
                         };
-                        row.innerHTML = "<td>" + (b.MetaData.ShipName || 'N/A') + "</td><td><span class=\"cursor-help\" title=\"" + hoverTitle + "\">" + cat + " (" + statusLabel + ")</span></td><td>" + dwt + "</td><td>" + b.MetaData.latitude.toFixed(2) + ", " + b.MetaData.longitude.toFixed(2) + "</td>";
+                        row.innerHTML = "<td>" + (b.MetaData.ShipName || 'N/A') + "</td><td>" + (imo || 'N/A') + "</td><td>" + etaLabel + "</td><td class=\"" + (etaDesfase ? "ais-eta-drift" : "") + "\">" + projectedEtaLabel + (etaDesfase ? "<span class=\"ais-projection-meta\">Desfase +" + Number(etaDrift).toFixed(1) + "h</span>" : "") + "</td><td><span class=\"ais-load-pill " + loadClass + "\">" + loadState + "</span></td><td>" + projectionLabel + "<span class=\"ais-projection-meta\">" + projectionMeta + "</span></td><td>" + lastPort + "</td>";
                         tablaBody.appendChild(row);
                     }
                 });
             }
 
             // 5. Draw vessels on Leaflet map silently without clearLayers() to avoid flicker
+            clearAisProjectionLayers();
             const currentMarkersMap = new Map();
             if (typeof aisMapMarkers !== 'undefined') {
                 aisMapMarkers.forEach(m => {
@@ -1540,6 +1805,9 @@
 
                     const cat = classifyVessel(rawDwt, name, mmsi, imo);
                     const destination = b.Destination || (b.MetaData && b.MetaData.Destination) || "N/A";
+                    const projection = b.projection || (b.MetaData && b.MetaData.projection) || {};
+                    const etaProjected = b.etaProjected || projection.etaProjected || "N/A";
+                    const isProjectionCandidate = !!(b.projectionCandidate || (b.MetaData && b.MetaData.projectionCandidate));
 
                     const id = mmsi || imo || name;
                     const idStr = id ? id.toString() : null;
@@ -1550,7 +1818,9 @@
                             statusLabel: statusLabel,
                             MetaData: b.MetaData,
                             aisRadarZone: b.aisRadarZone,
-                            aisRadarColor: b.aisRadarColor
+                            aisRadarColor: b.aisRadarColor,
+                            projectionCandidate: isProjectionCandidate,
+                            aisMarkerStyle: isProjectionCandidate ? 'ghost' : 'solid'
                         }, routePorts.polName, routePorts.podName)
                         : null;
 
@@ -1568,10 +1838,12 @@
                                 imo: imo,
                                 destination: destination,
                                 dwt: dwt,
-                                vesselClass: cat
+                                vesselClass: cat,
+                                projectionEta: etaProjected
                             });
                         } else {
                             let popupContent = "<b>" + b.MetaData.ShipName + "</b><br>IMO: " + imo + "<br>MMSI: " + mmsi + "<br>Destino: " + destination + "<br>Class: " + cat + "<br>DWT: " + dwt + "<br>Ubicación: " + statusLabel;
+                            popupContent += "<br>ETA Proyectada: " + formatAisEta(etaProjected);
                             if (b.isEstimated || (b.MetaData && b.MetaData.isEstimated)) {
                                 popupContent += "<br><span style=\"color: #f59e0b; font-weight: bold;\">⚠️ Estimated Position / Terrestrial Coverage Gap</span>";
                             }
@@ -1593,10 +1865,12 @@
                                 imo: imo,
                                 destination: destination,
                                 dwt: dwt,
-                                vesselClass: cat
+                                vesselClass: cat,
+                                projectionEta: etaProjected
                             });
                         } else {
                             let popupContent = "<b>" + b.MetaData.ShipName + "</b><br>IMO: " + imo + "<br>MMSI: " + mmsi + "<br>Destino: " + destination + "<br>Class: " + cat + "<br>DWT: " + dwt + "<br>Ubicación: " + statusLabel;
+                            popupContent += "<br>ETA Proyectada: " + formatAisEta(etaProjected);
                             if (b.isEstimated || (b.MetaData && b.MetaData.isEstimated)) {
                                 popupContent += "<br><span style=\"color: #f59e0b; font-weight: bold;\">⚠️ Estimated Position / Terrestrial Coverage Gap</span>";
                             }
@@ -1610,6 +1884,7 @@
                         newMarkers.push(marker);
                         if (idStr) survivingIds.add(idStr);
                     }
+                    drawAisProjection(b);
                 }
             });
 
@@ -1872,8 +2147,14 @@
         function refreshAisRadarZoneButtons() {
             const polBtn = document.getElementById('btn-search-pol');
             const podBtn = document.getElementById('btn-search-pod');
+            const matchingBtn = document.getElementById('btn-projection-matching');
             if (polBtn) polBtn.className = 'ais-radar-tab' + (window.aisRadarZoneState.pol ? ' active-pol' : '');
             if (podBtn) podBtn.className = 'ais-radar-tab' + (window.aisRadarZoneState.pod ? ' active-pod' : '');
+            if (matchingBtn) {
+                matchingBtn.className = 'ais-projection-toggle' + (window.aisProjectionMatchingMode ? ' active' : '');
+                matchingBtn.innerText = window.aisProjectionMatchingMode ? 'MODO MATCHING: ON' : 'MODO MATCHING: OFF';
+                matchingBtn.setAttribute('aria-pressed', window.aisProjectionMatchingMode ? 'true' : 'false');
+            }
         }
 
         document.getElementById('btn-search-pol')?.addEventListener('click', () => {
@@ -1888,6 +2169,13 @@
             window.aisRadarZoneState.pod = !window.aisRadarZoneState.pod;
             refreshAisRadarZoneButtons();
             window.drawGeofenceCircle();
+            window.applyGeofencingFilters();
+            window.executeAISSweep();
+        });
+
+        document.getElementById('btn-projection-matching')?.addEventListener('click', () => {
+            window.aisProjectionMatchingMode = !window.aisProjectionMatchingMode;
+            refreshAisRadarZoneButtons();
             window.applyGeofencingFilters();
             window.executeAISSweep();
         });
@@ -1984,12 +2272,7 @@
             AISmap.on('moveend', function() {
                 clearTimeout(temporizadorAis);
                 temporizadorAis = setTimeout(() => {
-                    console.log("AIS_DEBUG: Mapa estabilizado. Solicitando telemetría de forma segura...");
-                    if (window.AIS_DIRECT_FRONTEND_MODE) {
-                        connectLiveAisForCurrentBounds();
-                    } else {
-                        window.executeAISSweep();
-                    }
+                    console.log("AIS_DEBUG: Mapa estabilizado. Barrido AIS en espera de BUSCAR.");
                 }, 1200);
             });
         }
