@@ -1,1 +1,2 @@
-ALTER TABLE "cotizaciones" ADD COLUMN "charter_party_standard" text;
+ALTER TABLE IF EXISTS "cotizaciones"
+  ADD COLUMN IF NOT EXISTS "charter_party_standard" TEXT;
