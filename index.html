@@ -5783,8 +5783,8 @@
                             <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
                                 <div class="flex flex-wrap items-center justify-between gap-3">
                                     <div class="inline-flex rounded-md border border-slate-300 bg-white p-1 text-xs font-black uppercase">
-                                        <button id="btn-mode-spot" type="button" onclick="setOperacionModo('SPOT')" class="px-3 py-1.5 rounded bg-[#1E3A8A] text-white transition">SPOT</button>
-                                        <button id="btn-mode-coa" type="button" onclick="setOperacionModo('COA')" class="px-3 py-1.5 rounded text-slate-600 transition">COA</button>
+                                        <button id="btn-mode-spot" type="button" onclick="setOperacionModo('SPOT', { refreshReport: true })" class="px-3 py-1.5 rounded bg-[#1E3A8A] text-white transition">SPOT</button>
+                                        <button id="btn-mode-coa" type="button" onclick="setOperacionModo('COA', { refreshReport: true })" class="px-3 py-1.5 rounded text-slate-600 transition">COA</button>
                                     </div>
                                     <button id="btn-export-coa" type="button" onclick="generarReporteCOA()" class="hidden bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold px-3 py-2 rounded-md transition shadow">
                                         <i class="fa-solid fa-file-excel mr-1"></i> Generar Excel COA
@@ -23324,8 +23324,41 @@ Example:
             const isPodUnsuitable = podLimit !== null && vesselDraft > podLimit;
             const polAlternatives = isPolUnsuitable ? findAlternativePorts(State.pol, polPort, vesselDraft, State.cargoType) : [];
             const podAlternatives = isPodUnsuitable ? findAlternativePorts(State.pod, podPort, vesselDraft, State.cargoType) : [];
+            const classAnalysis = typeof buildExecutiveShipClassAnalysis === 'function' ? buildExecutiveShipClassAnalysis() : null;
+            const shipClass = classAnalysis?.shipClass || { label: State.class || 'Buque estándar', focus: 'Balance operativo y comercial.' };
+            const tceMetrics = typeof buildExecutiveTceMetrics === 'function' ? buildExecutiveTceMetrics() : {
+                tceBase: 0,
+                tceAdjusted: tce,
+                tceMarket: 0
+            };
+            const modeLabel = typeof getOperacionModo === 'function' ? getOperacionModo() : 'SPOT';
+            const printClassWarnings = classAnalysis?.warnings?.length
+                ? `<div style="border: 1px solid #dc2626; background: #fef2f2; color: #991b1b; border-radius: 4px; padding: 7px 9px; margin-bottom: 10px; font-size: 7.5pt;">
+                    <strong style="display: block; font-size: 8pt; margin-bottom: 3px;">ADVERTENCIA DE CLASE DE BUQUE</strong>
+                    <ul style="margin: 0; padding-left: 14px;">${classAnalysis.warnings.map((warning) => `<li>${String(warning).replace(/[<>&]/g, '')}</li>`).join('')}</ul>
+                </div>`
+                : '';
 
             let detailedHTML = `
+                ${printClassWarnings}
+                <div style="border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px 10px; background-color: #f8fafc; margin-bottom: 15px;">
+                    <h4 style="font-size: 8.5pt; font-weight: 700; color: #0e7490; margin: 0 0 6px 0; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px;">
+                        TCE Avanzado / Advanced TCE (${modeLabel})
+                    </h4>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 7.5pt;">
+                        <tr>
+                            <td style="padding: 4px 6px; border: 1px solid #e2e8f0; font-weight: 700;">TCE Base</td>
+                            <td style="padding: 4px 6px; border: 1px solid #e2e8f0; text-align: right; font-family: monospace;">$${Math.round(tceMetrics.tceBase || 0).toLocaleString('en-US')}/day</td>
+                            <td style="padding: 4px 6px; border: 1px solid #e2e8f0; font-weight: 700;">TCE Ajustado (Post-Risk)</td>
+                            <td style="padding: 4px 6px; border: 1px solid #e2e8f0; text-align: right; font-family: monospace; color: #15803d;">$${Math.round(tceMetrics.tceAdjusted || 0).toLocaleString('en-US')}/day</td>
+                            <td style="padding: 4px 6px; border: 1px solid #e2e8f0; font-weight: 700;">TCE de Mercado</td>
+                            <td style="padding: 4px 6px; border: 1px solid #e2e8f0; text-align: right; font-family: monospace; color: #0369a1;">$${Math.round(tceMetrics.tceMarket || 0).toLocaleString('en-US')}/day</td>
+                        </tr>
+                    </table>
+                    <p style="font-size: 6.8pt; color: #64748b; margin: 5px 0 0 0;">
+                        ${modeLabel === 'COA' ? 'Modo COA: break-even promedio, ahorro frente a spot y protección BunkerIndex.' : 'Modo SPOT: TCE del viaje individual, riesgo inmediato de demurrage y viabilidad del tramo.'} ${shipClass.focus}
+                    </p>
+                </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                     <!-- 1. Desglose del Punto de Equilibrio -->
                     <div style="border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px 10px; background-color: #f8fafc;">
@@ -23520,11 +23553,11 @@ Example:
                             <table style="width: 100%; border-collapse: collapse; margin-bottom: 4px;">
                                 <tr>
                                     <td style="font-weight: 600; padding: 1px 0; color: #475569;">Valor Estimado / Vessel Value:</td>
-                                    <td style="text-align: right; font-family: monospace;">$${(dwt * 450).toLocaleString('en-US')}</td>
+                                    <td style="text-align: right; font-family: monospace;">$${Math.round(classAnalysis?.vesselValue || (dwt * 450)).toLocaleString('en-US')}</td>
                                 </tr>
                                 <tr>
                                     <td style="font-weight: 600; padding: 1px 0; color: #475569;">Depreciación CAPEX:</td>
-                                    <td style="text-align: right; font-family: monospace;">$${Math.round(((dwt * 450) * 0.10) / 365).toLocaleString('en-US')}/day</td>
+                                    <td style="text-align: right; font-family: monospace;">$${Math.round(classAnalysis?.capexDaily || (((dwt * 450) * 0.10) / 365)).toLocaleString('en-US')}/day</td>
                                 </tr>
                                 <tr>
                                     <td style="font-weight: 600; padding: 1px 0; color: #475569;">Tripulación / Crew:</td>
@@ -23532,14 +23565,14 @@ Example:
                                 </tr>
                                 <tr>
                                     <td style="font-weight: 600; padding: 1px 0; color: #475569;">Seguros & Mantenimiento / Ins. & Maint.:</td>
-                                    <td style="text-align: right; font-family: monospace;">$${Math.round(insFinal + maintFinal).toLocaleString('en-US')}/day</td>
+                                    <td style="text-align: right; font-family: monospace;">$${Math.round((classAnalysis?.insuranceDaily || insBase) * insModifier + maintFinal).toLocaleString('en-US')}/day</td>
                                 </tr>                                <tr style="border-top: 1px dashed #cbd5e1; font-weight: 700;">
                                     <td style="padding-top: 4px; color: #e28743;">OPEX Fijo Total / Total OPEX:</td>
                                     <td style="text-align: right; padding-top: 4px; color: #e28743; font-family: monospace;">$${Math.round(parseFloat(getVal('opex-daily')) || 0).toLocaleString('en-US')}/day</td>
                                 </tr>
                             </table>
                             <p style="font-size: 6.8pt; color: #64748b; margin: 4px 0 0 0; text-align: justify; font-style: italic;">
-                                Clase: <strong>${State.class || 'Coaster'}</strong>. Calado fully-loaded estimado mediante algoritmos paramétricos: <strong>${vesselDraft.toFixed(2)} m</strong>. / Class: ${State.class || 'Coaster'}. Est. fully-loaded draft: ${vesselDraft.toFixed(2)} m.
+                                Clase detectada: <strong>${shipClass.label}</strong>. CAPEX: ${classAnalysis?.capexFormula || 'DWT x valor estándar x 10% / 365'}. Seguro: ${classAnalysis?.insuranceFormula || 'DWT x tarifa estándar/día'}. Calado fully-loaded estimado: <strong>${vesselDraft.toFixed(2)} m</strong>.
                             </p>
                         </div>
                     </div>
@@ -29789,7 +29822,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return detected;
         }
 
-        function setOperacionModo(mode = 'SPOT') {
+        function setOperacionModo(mode = 'SPOT', options = {}) {
+            const { refreshReport = false } = options;
             const normalizedMode = mode === 'COA' ? 'COA' : 'SPOT';
             const isCoa = normalizedMode === 'COA';
             const spotBtn = document.getElementById('btn-mode-spot');
@@ -29819,6 +29853,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 totalTmInput.value = String(Math.round(cargo * embarques));
             }
             if (typeof runEngine === 'function') runEngine();
+            if (refreshReport && !document.getElementById('ai-modal')?.classList.contains('hidden') && typeof generateExecutiveReport === 'function') {
+                generateExecutiveReport();
+            }
         }
 
         function normalizarTipoCarga(value = document.getElementById('cargo-type')?.value) {
@@ -30058,6 +30095,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function buildExecutiveShipClassAnalysis() {
             const shipClass = detectExecutiveShipClass();
             const dwt = Number(State.dwt || document.getElementById('vessel-dwt')?.value || 0);
+            const cargo = Number(State.cargo || document.getElementById('cargo-qty')?.value || 0);
             const draftInput = Number(State.draft || document.getElementById('vessel-draft')?.value || 0);
             const vesselDraft = draftInput > 0 ? draftInput : (dwt > 0 ? Math.pow(dwt, 0.3) * 0.5 : 0);
             const loadRate = Number(State.loadRate || document.getElementById('rate-load')?.value || 0);
@@ -30067,6 +30105,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const polLimit = polPort && typeof getPortDepthLimit === 'function' ? getPortDepthLimit(polPort, State.cargoType) : null;
             const podLimit = podPort && typeof getPortDepthLimit === 'function' ? getPortDepthLimit(podPort, State.cargoType) : null;
             const warnings = [];
+            if (dwt > 0 && cargo > 0 && cargo > dwt) warnings.push(`Carga ${Math.round(cargo).toLocaleString('en-US')} TM supera el DWT disponible ${Math.round(dwt).toLocaleString('en-US')} TM para ${shipClass.label}.`);
             if (polLimit !== null && vesselDraft > polLimit) warnings.push(`POL ${State.pol}: calado estimado ${vesselDraft.toFixed(2)} m supera límite ${polLimit.toFixed(1)} m.`);
             if (podLimit !== null && vesselDraft > podLimit) warnings.push(`POD ${State.pod}: calado estimado ${vesselDraft.toFixed(2)} m supera límite ${podLimit.toFixed(1)} m.`);
             if (loadRate > 0 && loadRate < shipClass.minLoadRate) warnings.push(`Ritmo de carga ${Math.round(loadRate).toLocaleString('en-US')} TM/d por debajo del mínimo coherente para ${shipClass.label}.`);
@@ -30099,8 +30138,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function renderExecutiveModeSelector(activeMode) {
             return `
                 <div class="no-print inline-flex rounded-lg border border-slate-700 bg-slate-950/70 p-1 text-[11px] font-black uppercase">
-                    <button type="button" onclick="setOperacionModo('SPOT'); generateExecutiveReport();" class="px-3 py-1.5 rounded ${activeMode === 'SPOT' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}">SPOT</button>
-                    <button type="button" onclick="setOperacionModo('COA'); generateExecutiveReport();" class="px-3 py-1.5 rounded ${activeMode === 'COA' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}">COA</button>
+                    <button type="button" onclick="setOperacionModo('SPOT', { refreshReport: true })" class="px-3 py-1.5 rounded ${activeMode === 'SPOT' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}">SPOT</button>
+                    <button type="button" onclick="setOperacionModo('COA', { refreshReport: true })" class="px-3 py-1.5 rounded ${activeMode === 'COA' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}">COA</button>
                 </div>
             `;
         }
