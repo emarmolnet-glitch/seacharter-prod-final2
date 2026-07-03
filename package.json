@@ -4,9 +4,9 @@
   "description": "Voyage Estimator with custom maritime routing and preferred ocean weights",
   "main": "main.js",
   "scripts": {
-  "start": "electron .",
-  "build": "vite build" 
-},
+    "start": "electron .",
+    "build": "vite build"
+  },
   "dependencies": {
     "@netlify/blobs": "^10.7.9",
     "@netlify/functions": "^2.6.0",
@@ -26,6 +26,6 @@
     "hash.js": false
   },
   "devDependencies": {
-  "typescript": "^6.0.3",
-  "vite": "^5.0.0" 
+    "typescript": "^6.0.3"
+  }
 }
