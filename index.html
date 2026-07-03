@@ -10219,7 +10219,7 @@
             stevedoringCosts: 0, pdaMisc: 0,
             cargoSurcharge: 0, marginOwner: DEFAULT_OWNER_MARGIN_PERCENT,
             marginCharterer: DEFAULT_CHARTERER_MARGIN_PERCENT, commPct: 0,
-            laycanDate: "", laycanTime: "", cancellingDate: "",
+            laycanDate: "", laycanTime: "", cancellingDate: "", cancellingTime: "",
             totalMiles: 0,
             smartAdjustments: {
                 basicBreakEven: 0,
@@ -10368,7 +10368,8 @@
             [
                 'port-ballast', 'port-pol', 'port-pod', 'map-port-ballast', 'map-port-pol',
                 'map-port-pod', 'eta-radar', 'gc-laycan-date', 'gc-laycan-time', 'gc-cancel-date',
-                'asb-laycan-date', 'asb-laycan-time', 'asb-cancel-date', 'nombre-buque-calculadora',
+                'gc-cancel-time', 'asb-laycan-date', 'asb-laycan-time', 'asb-cancel-date',
+                'asb-cancel-time', 'nombre-buque-calculadora',
                 'vessel-name', 'vessel-flag'
             ].forEach((id) => setInputValue(id, ''));
             setInputValue('cargo-type', 'Granel Sólido (Dry Bulk)');
@@ -10404,6 +10405,8 @@
             const asbLaycanTime = document.getElementById('asb-laycan-time')?.value || '';
             const gcCancellingDate = document.getElementById('gc-cancel-date')?.value || '';
             const asbCancellingDate = document.getElementById('asb-cancel-date')?.value || '';
+            const gcCancellingTime = document.getElementById('gc-cancel-time')?.value || '';
+            const asbCancellingTime = document.getElementById('asb-cancel-time')?.value || '';
             const preferAsbatankvoy = charterPartyStandard === 'ASBATANKVOY';
             return {
                 portBallast: document.getElementById('port-ballast')?.value || '',
@@ -10412,6 +10415,7 @@
                 laycanDate: preferAsbatankvoy ? (asbLaycanDate || gcLaycanDate) : (gcLaycanDate || asbLaycanDate),
                 laycanTime: preferAsbatankvoy ? (asbLaycanTime || gcLaycanTime) : (gcLaycanTime || asbLaycanTime),
                 cancellingDate: preferAsbatankvoy ? (asbCancellingDate || gcCancellingDate) : (gcCancellingDate || asbCancellingDate),
+                cancellingTime: preferAsbatankvoy ? (asbCancellingTime || gcCancellingTime) : (gcCancellingTime || asbCancellingTime),
                 distBallast: parseFloat(document.getElementById('dist-ballast')?.value) || 0,
                 distLaden: parseFloat(document.getElementById('dist-laden')?.value) || 0,
                 totalMiles: parseFloat(document.getElementById('dist-total')?.value) || 0
@@ -10421,9 +10425,10 @@
         function updateRouteSummary() {
             const totalMiles = State.totalMiles || State.distBallast + State.distLaden || 0;
             const laycanStart = [State.laycanDate, State.laycanTime].filter(Boolean).join(' ');
+            const cancelling = [State.cancellingDate, State.cancellingTime].filter(Boolean).join(' ');
             const laycan = State.laycanDate && State.cancellingDate
-                ? `${laycanStart} / ${State.cancellingDate}`
-                : (laycanStart || State.cancellingDate || 'TBA');
+                ? `${laycanStart} / ${cancelling}`
+                : (laycanStart || cancelling || 'TBA');
             const pairs = {
                 'sync-pol-label': State.pol || 'TBA',
                 'sync-pod-label': State.pod || 'TBA',
@@ -10445,19 +10450,19 @@
             setInputValue('port-ballast', State.portBallast);
             setInputValue('port-pol', State.pol);
             setInputValue('port-pod', State.pod);
-            if (State.laycanDate) {
-                ['gc-laycan-date', 'asb-laycan-date', 'match-laycan-start'].forEach((id) => setInputValue(id, State.laycanDate));
-            }
-            if (State.laycanTime) {
-                ['gc-laycan-time', 'asb-laycan-time'].forEach((id) => setInputValue(id, State.laycanTime));
-            }
-            if (State.cancellingDate) {
-                ['gc-cancel-date', 'asb-cancel-date', 'match-laycan-end'].forEach((id) => setInputValue(id, State.cancellingDate));
-            }
+            ['gc-laycan-date', 'asb-laycan-date', 'match-laycan-start'].forEach((id) => setInputValue(id, State.laycanDate));
+            ['gc-laycan-time', 'asb-laycan-time'].forEach((id) => setInputValue(id, State.laycanTime));
+            ['gc-cancel-date', 'asb-cancel-date', 'match-laycan-end'].forEach((id) => setInputValue(id, State.cancellingDate));
+            ['gc-cancel-time', 'asb-cancel-time'].forEach((id) => setInputValue(id, State.cancellingTime));
             syncEtaRadarFromLaycan(State.laycanDate);
             if (State.pol) setInputValue('match-pol', State.pol);
             if (State.pod) setInputValue('match-pod', State.pod);
             updateRouteSummary();
+            if (typeof syncGencon === 'function') syncGencon();
+            if (typeof syncAsbatankvoy === 'function') syncAsbatankvoy();
+            if (typeof window.updateAisLaycanAndDeadlineBoxes === 'function') {
+                window.updateAisLaycanAndDeadlineBoxes();
+            }
             if (typeof window.updateAisDetectedVesselsPol === 'function') {
                 window.updateAisDetectedVesselsPol();
             }
@@ -17432,6 +17437,10 @@
                     imo: State.imo || '',
                     pol: fields['port-pol'] || fields['map-port-pol'] || State.pol || '',
                     pod: fields['port-pod'] || fields['map-port-pod'] || State.pod || '',
+                    laycanDate: fields['gc-laycan-date'] || fields['asb-laycan-date'] || fields['map-laycan-date'] || State.laycanDate || '',
+                    laycanTime: fields['gc-laycan-time'] || fields['asb-laycan-time'] || State.laycanTime || '',
+                    cancellingDate: fields['gc-cancel-date'] || fields['asb-cancel-date'] || fields['map-cancelling-date'] || State.cancellingDate || '',
+                    cancellingTime: fields['gc-cancel-time'] || fields['asb-cancel-time'] || State.cancellingTime || '',
                     etaBaseRadar: fields['eta-radar'] || '',
                     etaBaseRadarSource: document.getElementById('eta-radar')?.dataset.etaSource || 'manual',
                     etaFinalCalculada,
@@ -18909,6 +18918,7 @@
             State.laycanDate = document.getElementById('gc-laycan-date')?.value || document.getElementById('asb-laycan-date')?.value || State.laycanDate || '';
             State.laycanTime = document.getElementById('gc-laycan-time')?.value || document.getElementById('asb-laycan-time')?.value || State.laycanTime || '';
             State.cancellingDate = document.getElementById('gc-cancel-date')?.value || document.getElementById('asb-cancel-date')?.value || State.cancellingDate || '';
+            State.cancellingTime = document.getElementById('gc-cancel-time')?.value || document.getElementById('asb-cancel-time')?.value || State.cancellingTime || '';
             State.opex = opex;
             State.capexDaily = capexDaily;
             State.costBunkers = totalBunkers;
@@ -19052,7 +19062,8 @@
                     totalMiles: State.totalMiles,
                     laycanDate: State.laycanDate,
                     laycanTime: State.laycanTime,
-                    cancellingDate: State.cancellingDate
+                    cancellingDate: State.cancellingDate,
+                    cancellingTime: State.cancellingTime
                 });
             }
             if (typeof syncGlobalStateToForms === 'function') syncGlobalStateToForms();
@@ -32374,7 +32385,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     scheduleReactiveEngine();
                 });
             });
-            ['port-ballast', 'port-pol', 'port-pod', 'gc-laycan-date', 'gc-laycan-time', 'gc-cancel-date', 'asb-laycan-date', 'asb-laycan-time', 'asb-cancel-date', 'vessel-dwt', 'cargo-qty', 'metodo_carga', 'metodo_descarga_pod', 'ritmo_nominal_pol', 'ritmo_nominal_pod', 'eta-radar', 'delta-historico', 'factor-clima', 't-fondeo', 't-remolcadores', 'dist-ballast', 'dist-laden'].forEach((id) => {
+            ['port-ballast', 'port-pol', 'port-pod', 'gc-laycan-date', 'gc-laycan-time', 'gc-cancel-date', 'gc-cancel-time', 'asb-laycan-date', 'asb-laycan-time', 'asb-cancel-date', 'asb-cancel-time', 'vessel-dwt', 'cargo-qty', 'metodo_carga', 'metodo_descarga_pod', 'ritmo_nominal_pol', 'ritmo_nominal_pod', 'eta-radar', 'delta-historico', 'factor-clima', 't-fondeo', 't-remolcadores', 'dist-ballast', 'dist-laden'].forEach((id) => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.addEventListener('input', () => {

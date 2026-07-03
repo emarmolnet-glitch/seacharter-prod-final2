@@ -7,6 +7,10 @@ type VoyageArchivePayload = {
     imo?: unknown;
     pol?: unknown;
     pod?: unknown;
+    laycanDate?: unknown;
+    laycanTime?: unknown;
+    cancellingDate?: unknown;
+    cancellingTime?: unknown;
     etaBaseRadar?: unknown;
     etaFinalCalculada?: unknown;
   };
@@ -19,6 +23,10 @@ type VoyageArchiveRecord = {
   imo: string | null;
   pol: string | null;
   pod: string | null;
+  laycanDate: string | null;
+  laycanTime: string | null;
+  cancellingDate: string | null;
+  cancellingTime: string | null;
   etaBaseRadar: string | null;
   etaFinalCalculated: string | null;
   payload: VoyageArchivePayload;
@@ -50,6 +58,10 @@ function buildRecord(payload: VoyageArchivePayload): VoyageArchiveRecord {
     imo: cleanString(voyage.imo) || null,
     pol: cleanString(voyage.pol) || null,
     pod: cleanString(voyage.pod) || null,
+    laycanDate: cleanString(voyage.laycanDate) || null,
+    laycanTime: cleanString(voyage.laycanTime) || null,
+    cancellingDate: cleanString(voyage.cancellingDate) || null,
+    cancellingTime: cleanString(voyage.cancellingTime) || null,
     etaBaseRadar: cleanString(voyage.etaBaseRadar) || null,
     etaFinalCalculated: cleanString(voyage.etaFinalCalculada) || null,
     payload,

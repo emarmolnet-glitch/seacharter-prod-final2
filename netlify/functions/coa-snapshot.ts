@@ -7,6 +7,10 @@ type CoaSnapshotPayload = {
     imo?: unknown;
     pol?: unknown;
     pod?: unknown;
+    laycanDate?: unknown;
+    laycanTime?: unknown;
+    cancellingDate?: unknown;
+    cancellingTime?: unknown;
     etaBaseRadar?: unknown;
   };
   bunkerIndex?: {
@@ -58,6 +62,10 @@ export default async (req: Request) => {
       imo: cleanString(voyage.imo) || null,
       pol: cleanString(voyage.pol) || null,
       pod: cleanString(voyage.pod) || null,
+      laycanDate: cleanString(voyage.laycanDate) || null,
+      laycanTime: cleanString(voyage.laycanTime) || null,
+      cancellingDate: cleanString(voyage.cancellingDate) || null,
+      cancellingTime: cleanString(voyage.cancellingTime) || null,
       etaBaseRadar: cleanString(voyage.etaBaseRadar) || null,
       bunkerIndexDate: cleanString(payload.bunkerIndex?.date) || null,
       targetPrice: cleanNumber(payload.coa?.targetPrice),
