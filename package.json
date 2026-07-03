@@ -7,7 +7,7 @@
     "start": "electron ."
   },
   "dependencies": {
-    "@netfily/blobs": "^10.7.9",
+    "@netlify/blobs": "^10.7.9",
     "@netlify/functions": "^2.6.0",
     "@turf/distance": "^7.3.0",
     "cheerio": "^1.2.0",
