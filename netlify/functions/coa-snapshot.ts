@@ -17,22 +17,13 @@ type CoaSnapshotPayload = {
   };
 };
 
-type CoaSnapshotRecord = {
-  id: string;
-  voyageRef: string;
-  vesselName: string | null;
-  imo: string | null;
-  pol: string | null;
-  pod: string | null;
-  etaBaseRadar: string | null;
-  bunkerIndexDate: string | null;
-  targetPrice: string | null;
-  payload: CoaSnapshotPayload;
-  createdAt: string;
-};
-
 function cleanString(value: unknown) {
   return String(value || "").trim();
+}
+
+function cleanNumber(value: unknown) {
+  const next = Number(value);
+  return Number.isFinite(next) ? Number(next.toFixed(4)) : null;
 }
 
 function buildVoyageRef(payload: CoaSnapshotPayload) {
@@ -40,28 +31,6 @@ function buildVoyageRef(payload: CoaSnapshotPayload) {
   const route = [voyage.pol, voyage.pod].map(cleanString).filter(Boolean).join("-");
   const vessel = cleanString(voyage.vesselName) || "TBN";
   return `${vessel}${route ? ` ${route}` : ""} ${new Date().toISOString()}`.slice(0, 240);
-}
-
-function buildRecord(payload: CoaSnapshotPayload): CoaSnapshotRecord {
-  const voyage = payload.voyage || {};
-  const createdAt = new Date().toISOString();
-  const randomPart = globalThis.crypto?.randomUUID
-    ? globalThis.crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
-
-  return {
-    id: `coa-${createdAt}-${randomPart}`,
-    voyageRef: buildVoyageRef(payload),
-    vesselName: cleanString(voyage.vesselName) || null,
-    imo: cleanString(voyage.imo) || null,
-    pol: cleanString(voyage.pol) || null,
-    pod: cleanString(voyage.pod) || null,
-    etaBaseRadar: cleanString(voyage.etaBaseRadar) || null,
-    bunkerIndexDate: cleanString(payload.bunkerIndex?.date) || null,
-    targetPrice: cleanString(payload.coa?.targetPrice) || null,
-    payload,
-    createdAt,
-  };
 }
 
 export default async (req: Request) => {
@@ -75,16 +44,35 @@ export default async (req: Request) => {
       return Response.json({ success: false, error: "A COA snapshot payload is required" }, { status: 400 });
     }
 
-    const saved = buildRecord(payload);
+    const createdAt = new Date();
+    const voyage = payload.voyage || {};
+    const id = globalThis.crypto?.randomUUID
+      ? `coa-${globalThis.crypto.randomUUID()}`
+      : `coa-${createdAt.toISOString()}-${Math.random().toString(36).slice(2)}`;
+    const voyageRef = buildVoyageRef(payload);
+
+    const snapshot = {
+      id,
+      voyageRef,
+      vesselName: cleanString(voyage.vesselName) || null,
+      imo: cleanString(voyage.imo) || null,
+      pol: cleanString(voyage.pol) || null,
+      pod: cleanString(voyage.pod) || null,
+      etaBaseRadar: cleanString(voyage.etaBaseRadar) || null,
+      bunkerIndexDate: cleanString(payload.bunkerIndex?.date) || null,
+      targetPrice: cleanNumber(payload.coa?.targetPrice),
+      payload,
+      createdAt: createdAt.toISOString(),
+    };
     const store = getStore("coa-snapshots");
-    await store.setJSON(`${saved.createdAt.slice(0, 10)}/${saved.id}.json`, saved);
+    await store.setJSON(`${createdAt.toISOString().slice(0, 10)}/${id}.json`, snapshot);
 
     return Response.json({
       success: true,
       snapshot: {
-        id: saved.id,
-        voyageRef: saved.voyageRef,
-        createdAt: saved.createdAt,
+        id,
+        voyageRef,
+        createdAt: createdAt.toISOString(),
       },
     }, { status: 201 });
   } catch (error) {
