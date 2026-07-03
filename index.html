@@ -18207,9 +18207,12 @@
             const anchorageInput = getSmartInputState('t-fondeo');
             const tugInput = getSmartInputState('t-remolcadores');
             const tugElement = document.getElementById('t-remolcadores');
+            const tugManualTotalCost = tugElement?.dataset.autoEstimated === 'false'
+                ? Math.max(0, tugInput.value)
+                : 0;
             const tugManualForInference = tugElement?.dataset.autoEstimated === 'true'
                 ? 0
-                : (parseFloat(tugElement?.dataset.tarifaBase) || tugInput.value);
+                : (parseFloat(tugElement?.dataset.tarifaBase) || 0);
             const tugInference = window.SeaCharterVoyageCostEngine?.inferTugCostByDwt
                 ? window.SeaCharterVoyageCostEngine.inferTugCostByDwt(dwtVal, tugManualForInference)
                 : {
@@ -18222,6 +18225,12 @@
                 };
             if (!window.SeaCharterVoyageCostEngine?.inferTugCostByDwt) {
                 tugInference.coste_total_tugs = tugInference.tarifa_efectiva_ud * tugInference.total_usos_remolcador;
+            }
+            if (tugManualTotalCost > 0) {
+                const inferredUnits = Math.max(1, Number(tugInference.total_usos_remolcador) || 1);
+                tugInference.coste_total_tugs = tugManualTotalCost;
+                tugInference.tarifa_efectiva_ud = tugManualTotalCost / inferredUnits;
+                tugInference.inferred = false;
             }
             if (tugElement) {
                 tugElement.value = Math.round(tugInference.coste_total_tugs);
@@ -18344,12 +18353,12 @@
             const basicFixedCosts = isZeroCalculation ? 0 : (basicBunkers + basicEtsCost);
             const basicBreakEvenNumerator = isZeroCalculation ? 0 : (basicBunkers + basicPortExpenses + (basicOperationalDays * (opex + capexDaily)) + basicEtsCost);
             const smartDelayDays = isZeroCalculation ? 0 : (smartDeltaDays + smartAnchorageDays);
-            const extraOpexCost = 0;
-            const anchorageBunkerCost = 0;
+            const extraOpexCost = isZeroCalculation ? 0 : ((smartWeatherDays + smartDelayDays) * opex);
+            const anchorageBunkerCost = isZeroCalculation ? 0 : anchorageConsumptionCost;
             const delaySmartCostIncrement = isZeroCalculation ? 0 : (extraOpexCost + anchorageBunkerCost);
-            const totalSmartCostIncrement = isZeroCalculation ? 0 : (tugTotalCost + (missingSmartFields.length === 0 ? delaySmartCostIncrement : 0));
+            const adjustedCostTotal = isZeroCalculation ? 0 : (costTotal + tugTotalCost);
+            const totalSmartCostIncrement = isZeroCalculation ? 0 : Math.max(0, adjustedCostTotal - basicBreakEvenNumerator);
             const smartCostsComplete = !isZeroCalculation && missingSmartFields.length === 0;
-            const adjustedCostTotal = isZeroCalculation ? 0 : (costTotal + totalSmartCostIncrement);
             const smartBreakEvenNumerator = adjustedCostTotal;
 
             document.getElementById('dist-total').value = Math.round(distBal + distLaden);
@@ -31063,9 +31072,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const smartWeatherDays = Math.max(0, parseFloat(document.getElementById('factor-clima')?.value) || 0);
             const smartAnchorageDays = Math.max(0, parseFloat(document.getElementById('t-fondeo')?.value) || 0);
             const tugElement = document.getElementById('t-remolcadores');
+            const manualTugTotalCost = tugElement?.dataset.autoEstimated === 'false'
+                ? Math.max(0, parseFloat(tugElement?.value) || 0)
+                : 0;
             const manualTugUnitCost = tugElement?.dataset.autoEstimated === 'true'
                 ? 0
-                : Math.max(0, parseFloat(tugElement?.dataset.tarifaBase) || parseFloat(tugElement?.value) || 0);
+                : Math.max(0, parseFloat(tugElement?.dataset.tarifaBase) || 0);
             const tugInference = window.SeaCharterVoyageCostEngine?.inferTugCostByDwt
                 ? window.SeaCharterVoyageCostEngine.inferTugCostByDwt(dwtVal, manualTugUnitCost)
                 : {
@@ -31077,6 +31089,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 };
             if (!window.SeaCharterVoyageCostEngine?.inferTugCostByDwt) {
                 tugInference.coste_total_tugs = tugInference.tarifa_efectiva_ud * tugInference.total_usos_remolcador;
+            }
+            if (manualTugTotalCost > 0) {
+                const inferredUnits = Math.max(1, Number(tugInference.total_usos_remolcador) || 1);
+                tugInference.coste_total_tugs = manualTugTotalCost;
+                tugInference.tarifa_efectiva_ud = manualTugTotalCost / inferredUnits;
+                tugInference.inferred = false;
             }
             const smartTugUnitCost = Math.max(0, tugInference.tarifa_efectiva_ud);
             const smartDelayDays = isZeroCalculation ? 0 : (smartDeltaDays + smartAnchorageDays);
@@ -31246,6 +31264,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     tugTotalCost,
                     tugsPerManeuver: tugInference.tugs_por_maniobra,
                     tugInferred: tugInference.inferred,
+                    extraOpexCost: (smartWeatherDays + smartDelayDays) * opex,
+                    anchorageBunkerCost: anchorageConsumptionCost,
+                    totalCostIncrement: Math.max(0, costTotal - baseCostTotal),
                     baseVoyageCosts: baseCostTotal,
                     adjustedVoyageCosts: costTotal,
                     breakEvenIncrease: breakEven - basicBreakEven
@@ -31526,6 +31547,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     deltaInput.value = vessel.delta_historico !== undefined ? vessel.delta_historico : 0;
                     fondeoInput.value = vessel.t_fondeo !== undefined ? vessel.t_fondeo : 0;
                     remolcadoresInput.value = vessel.t_remolcadores !== undefined ? vessel.t_remolcadores : 0;
+                    remolcadoresInput.dataset.autoEstimated = (parseFloat(remolcadoresInput.value) || 0) > 0 ? 'false' : 'true';
+                    remolcadoresInput.dataset.tarifaBase = '';
                     
                     // Automatically sync DWT and Flag from validated vessel
                     if (vessel.dwt !== undefined && vessel.dwt !== null) {
@@ -31571,7 +31594,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const deltaVal = parseFloat(document.getElementById('delta-historico')?.value) || 0;
             const fondeoVal = parseFloat(document.getElementById('t-fondeo')?.value) || 0;
             const remolcadoresEl = document.getElementById('t-remolcadores');
-            const remolcadoresVal = parseFloat(remolcadoresEl?.dataset.tarifaBase) || parseFloat(remolcadoresEl?.value) || 0;
+            const remolcadoresVal = parseFloat(remolcadoresEl?.value) || 0;
 
             const existing = await getVesselFromIndexedDB(activeImo);
             const vesselData = {
@@ -32500,7 +32523,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     scheduleReactiveEngine();
                 });
             });
-            ['port-ballast', 'port-pol', 'port-pod', 'gc-laycan-date', 'gc-laycan-time', 'gc-cancel-date', 'gc-cancel-time', 'asb-laycan-date', 'asb-laycan-time', 'asb-cancel-date', 'asb-cancel-time', 'vessel-dwt', 'cargo-qty', 'metodo_carga', 'metodo_descarga_pod', 'ritmo_nominal_pol', 'ritmo_nominal_pod', 'eta-radar', 'delta-historico', 'factor-clima', 't-fondeo', 't-remolcadores', 'dist-ballast', 'dist-laden'].forEach((id) => {
+            ['port-ballast', 'port-pol', 'port-pod', 'gc-laycan-date', 'gc-laycan-time', 'gc-cancel-date', 'gc-cancel-time', 'asb-laycan-date', 'asb-laycan-time', 'asb-cancel-date', 'asb-cancel-time', 'vessel-dwt', 'cargo-qty', 'metodo_carga', 'metodo_descarga_pod', 'ritmo_nominal_pol', 'ritmo_nominal_pod', 'eta-radar', 'delta-historico', 'factor-clima', 't-fondeo', 't-remolcadores', 'laycan-dias-libres', 'dist-ballast', 'dist-laden'].forEach((id) => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.addEventListener('input', () => {
@@ -32521,6 +32544,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     el.dataset.historicalAutofill = 'false';
                 });
             });
+            const tugCostInput = document.getElementById('t-remolcadores');
+            if (tugCostInput) {
+                tugCostInput.addEventListener('input', () => {
+                    tugCostInput.dataset.autoEstimated = 'false';
+                    tugCostInput.dataset.tarifaBase = '';
+                });
+            }
             const freightSellManualInput = document.getElementById('freight-sell');
             if (freightSellManualInput) {
                 freightSellManualInput.addEventListener('input', () => {
