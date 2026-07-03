@@ -1,1 +1,2 @@
-ALTER TABLE "audited_vessels" ADD COLUMN "delta_historico" text;
+ALTER TABLE IF EXISTS "audited_vessels"
+  ADD COLUMN IF NOT EXISTS "delta_historico" TEXT;
