@@ -58,7 +58,7 @@ function normalizeVessel(item: unknown): VesselRecord | null {
 
   const rawImoNumber = toText(readNested(merged, ["imoNumber", "imo", "IMO", "IMONumber", "ImoNumber"]));
   const mmsi = toText(readNested(merged, ["mmsi", "MMSI"]));
-  const shipType = toText(readNested(merged, ["shipType", "ShipType", "type", "Type"]));
+  const shipType = toText(readNested(merged, ["shipType", "ShipType", "type", "Type", "Tipo", "tipo", "cargoType", "tipo_carga", "vesselType", "categoryLabel"]));
   const latitude = toNumber(readNested(merged, ["latitude", "Latitude", "lat", "Lat"]));
   const longitude = toNumber(readNested(merged, ["longitude", "Longitude", "lon", "Lon", "lng", "Lng"]));
 

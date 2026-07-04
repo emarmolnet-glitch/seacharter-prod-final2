@@ -262,7 +262,29 @@ function getShipTypeValue(message: VesselMessage) {
   const metadata = asRecord(message.MetaData);
   const nestedMessage = asRecord(message.Message);
   const staticData = asRecord(message.ShipStaticData || nestedMessage.ShipStaticData);
-  return firstDefined(message.ShipType, message.shipType, message.type, message.Type, metadata.ShipType, metadata.shipType, staticData.Type);
+  return firstDefined(
+    message.ShipType,
+    message.shipType,
+    message.type,
+    message.Type,
+    message.Tipo,
+    message.tipo,
+    message.cargoType,
+    message.tipo_carga,
+    message.vesselType,
+    message.categoryLabel,
+    message.radarCategory,
+    metadata.ShipType,
+    metadata.shipType,
+    metadata.type,
+    metadata.Tipo,
+    metadata.tipo,
+    metadata.cargoType,
+    metadata.tipo_carga,
+    metadata.vesselType,
+    metadata.categoryLabel,
+    staticData.Type,
+  );
 }
 
 function buildProjection(message: VesselMessage, target?: { role: string; lat: number; lon: number; radiusNm: number }) {
@@ -753,14 +775,14 @@ function collectVessels(url: URL, apiKey: string) {
         BoundingBoxes: bounds,
         FilterMessageTypes: ["PositionReport", "ShipStaticData"],
       };
-      if (selective) subscription.VesselTypes = [70, 71, 72, 73, 74, 75, 76, 77, 78, 79];
       ws.send(JSON.stringify(subscription));
     });
 
     ws.on("message", (data: { toString: () => string }) => {
       try {
         const message = normalizeVesselMessage(JSON.parse(data.toString()) as VesselMessage);
-        if (selective && !isCargoShipType(getShipTypeValue(message))) return;
+        const shipType = getShipTypeValue(message);
+        if (selective && shipType !== undefined && shipType !== null && shipType !== "" && !isCargoShipType(shipType)) return;
         const key = getVesselKey(message);
         if (!key) return;
         vesselsByKey.set(key, mergeDefinedVesselFields(vesselsByKey.get(key), message));

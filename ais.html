@@ -886,12 +886,20 @@
             ].filter(Boolean).join(' ');
         }
 
+        function getRadarAllowedTypes(taxonomyKey) {
+            const taxonomy = RADAR_TAXONOMIES[taxonomyKey] || {};
+            return taxonomyMap[taxonomyKey] || taxonomy.aliases || [taxonomyKey];
+        }
+
         function matchesRadarTaxonomy(vessel, taxonomyKey) {
             const taxonomy = RADAR_TAXONOMIES[taxonomyKey] || RADAR_TAXONOMIES.cargo;
             const semanticTerms = taxonomyMap[taxonomyKey] || taxonomy.aliases;
-            if (Array.isArray(semanticTerms) && semanticTerms.length) {
+            const shouldUseSemanticFallback = !Array.isArray(taxonomy.codes) && !Number.isFinite(taxonomy.min) && !Number.isFinite(taxonomy.max);
+            if ((Array.isArray(semanticTerms) && semanticTerms.length) || shouldUseSemanticFallback) {
+                const allowedTypes = semanticTerms || getRadarAllowedTypes(taxonomyKey);
                 const text = normalizeTaxonomyMatchValue(getRadarTaxonomyText(vessel));
-                return semanticTerms
+                if (!text) return false;
+                return allowedTypes
                     .map(normalizeTaxonomyMatchValue)
                     .some(term => term && text.includes(term));
             }
@@ -973,8 +981,9 @@
             if (taxonomySelect) {
                 taxonomySelect.disabled = !state.frozenAt;
             }
-            if (countEl) countEl.innerText = String(state.frozenSnapshot.length || window.buquesAlmacenados.size || 0);
-            if (matchBtn) matchBtn.disabled = !state.frozenAt || state.frozenSnapshot.length === 0;
+            const frozenCount = state.frozenSnapshot?.length || 0;
+            if (countEl) countEl.innerText = String(frozenCount || window.buquesAlmacenados.size || 0);
+            if (matchBtn) matchBtn.disabled = !state.frozenAt || frozenCount === 0;
             if (exportBtn) exportBtn.disabled = !state.report || !Array.isArray(state.report.vessels) || state.report.vessels.length === 0;
             if (captureBtn) {
                 captureBtn.disabled = isCapturing;
@@ -1048,9 +1057,10 @@
             const taxonomyKey = select ? select.value : window.radarWorkflowState.selectedTaxonomy;
             window.radarWorkflowState.selectedTaxonomy = taxonomyKey;
             const taxonomy = RADAR_TAXONOMIES[taxonomyKey] || RADAR_TAXONOMIES.cargo;
-            const vessels = window.radarWorkflowState.frozenSnapshot
+            const frozenVessels = window.radarWorkflowState.frozenSnapshot;
+            const vessels = frozenVessels?.length > 0 ? frozenVessels
                 .filter(v => matchesRadarTaxonomy(v, taxonomyKey))
-                .map(toRadarReportRow);
+                .map(toRadarReportRow) : [];
             window.radarWorkflowState.report = {
                 generatedAt: new Date().toISOString(),
                 frozenAt: window.radarWorkflowState.frozenAt,
@@ -3567,8 +3577,19 @@
         });
         document.getElementById('radar-taxonomy-select')?.addEventListener('change', (event) => {
             window.radarWorkflowState.selectedTaxonomy = event.target.value || 'cargo';
-            if (window.radarWorkflowState.frozenSnapshot.length > 0) {
+            const selectedCategory = window.radarWorkflowState.selectedTaxonomy;
+            const allowedTypes = getRadarAllowedTypes(selectedCategory);
+            const frozenVessels = window.radarWorkflowState.frozenSnapshot;
+            const buquesFiltrados = frozenVessels?.filter(vessel => {
+                const shipType = vessel?.ShipType || vessel?.shipType || vessel?.MetaData?.ShipType || vessel?.MetaData?.shipType;
+                return (shipType && allowedTypes.includes(shipType)) || matchesRadarTaxonomy(vessel, selectedCategory);
+            }) || [];
+            if (frozenVessels?.length > 0) {
                 setRadarWorkflowPhase('taxonomy');
+            }
+            if (window.radarWorkflowState.report) {
+                window.radarWorkflowState.report.vessels = buquesFiltrados.map(toRadarReportRow);
+                renderRadarReport(window.radarWorkflowState.report);
             }
             updateRadarWorkflowUi();
         });
@@ -3577,7 +3598,7 @@
         document.getElementById('btn-clear-radar-report')?.addEventListener('click', () => {
             window.radarWorkflowState.report = null;
             renderRadarReport(null);
-            setRadarWorkflowPhase(window.radarWorkflowState.frozenSnapshot.length ? 'taxonomy' : 'capture');
+            setRadarWorkflowPhase(window.radarWorkflowState.frozenSnapshot?.length ? 'taxonomy' : 'capture');
             const statusEl = document.getElementById('radar-export-status');
             if (statusEl) statusEl.innerText = '';
             updateRadarWorkflowUi();
