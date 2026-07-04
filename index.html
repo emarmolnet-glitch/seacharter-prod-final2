@@ -29221,8 +29221,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     }
 
                     if (!isIntelMatch && vesselTypes && vesselTypes.length > 0 && !selectedFleetType.includes(':')) {
-                        const cat = classifyVesselCategory(rawDwt, name, mmsi, imo, shipTypeVal) || "Bulk Carrier";
-                        const normalizedFilterTypes = vesselTypes.map(t => classifyVesselCategory(rawDwt, name, mmsi, imo, t));
+                        const cat = normalizeRadarCategory(readRadarCategorySource(v), classifyVesselCategory(rawDwt, name, mmsi, imo, shipTypeVal));
+                        const normalizedFilterTypes = vesselTypes.map(t => normalizeRadarCategory(t, classifyVesselCategory(rawDwt, name, mmsi, imo, t)));
                         if (!vesselTypes.includes(cat) && !normalizedFilterTypes.includes(cat)) {
                             return false;
                         }
@@ -29263,6 +29263,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         ? getFleetIntelTechnicalRecord(imo)
                         : null;
                     const cargoType = enrichedVessel.cargoType || enrichedVessel.tipo_carga || (enrichedVessel.MetaData && (enrichedVessel.MetaData.cargoType || enrichedVessel.MetaData.tipo_carga)) || '';
+                    const radarCategory = normalizeRadarCategory(readRadarCategorySource(enrichedVessel), classifyVesselCategory(rawDwt, name, mmsi, imo, shipTypeVal));
 
                     return {
                         ...enrichedVessel,
@@ -29280,6 +29281,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         heading: Number.isFinite(heading) ? heading : undefined,
                         vesselClass: classification.vClass,
                         dwt: classification.dwt,
+                        radarCategory,
                         cargoType,
                         tipo_carga: cargoType,
                         cargoTaxonomyLabel: enrichedVessel.cargoTaxonomyLabel,
@@ -29368,7 +29370,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                                 window.selectShip(v.vesselName, v.mmsi, v.latitude, v.longitude, v.imo, v.destination);
                             };
                             const hoverTitle = tooltipMap[v.vesselClass] || '';
-                            const vCategory = classifyVesselCategory(v.dwt, v.vesselName, v.mmsi, v.imo, v.shipType || v.ShipType) || "Bulk Carrier";
+                            const vCategory = v.radarCategory || normalizeRadarCategory(readRadarCategorySource(v), classifyVesselCategory(v.dwt, v.vesselName, v.mmsi, v.imo, v.shipType || v.ShipType));
                             tr.innerHTML = `
                                 <td class="py-3 px-3 font-semibold text-slate-200">${v.vesselName}</td>
                                 <td class="py-3 px-3 text-slate-400 mono">${v.imo}</td>
@@ -29819,6 +29821,59 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             "Handymax/Supramax Bulk Carrier with Cranes": "Average DWT: 35,000 – 60,000 DWT. | Operation: Massive ocean-going vessels that rely on their own cranes for operation. | Main Use: Huge mixed cargoes of raw materials, steel profiles, or scrap metal."
         };
 
+        const categoryMap = {
+            'ciment carrier': 'Cement Carrier',
+            'cement carrier': 'Cement Carrier',
+            'bulk carrier': 'Bulk Carrier',
+            'bulker': 'Bulk Carrier',
+            'general cargo ship': 'General Cargo Ship',
+            'general cargo vessel': 'General Cargo Ship',
+            'general cargo': 'General Cargo Ship',
+            'multipurpose vessel': 'MPV',
+            'multi purpose vessel': 'MPV',
+            'multi-purpose vessel': 'MPV',
+            'mpp': 'MPV',
+            'tanker': 'Tanker'
+        };
+
+        function normalizeRadarCategory(value, fallback = 'Other') {
+            const key = String(value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]+/gi, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
+            if (!key || ['n a', 'na', 'null', 'none', 'unknown', 'sin dato'].includes(key)) return fallback;
+            return categoryMap[key] || fallback;
+        }
+
+        function readRadarCategorySource(vessel) {
+            const meta = vessel && vessel.MetaData ? vessel.MetaData : {};
+            return vessel && (
+                vessel.Tipo ||
+                vessel.tipo ||
+                vessel.tipo_carga ||
+                vessel.cargoType ||
+                vessel.categoryLabel ||
+                vessel.categoryValue ||
+                vessel.vesselClass ||
+                vessel.shipType ||
+                vessel.ShipType ||
+                vessel.type ||
+                meta.Tipo ||
+                meta.tipo ||
+                meta.tipo_carga ||
+                meta.cargoType ||
+                meta.categoryLabel ||
+                meta.categoryValue ||
+                meta.vesselClass ||
+                meta.shipType ||
+                meta.ShipType ||
+                meta.type
+            );
+        }
+
         function classifyBulkCarrierRealTime(dwt, name, mmsi, imo, shipType) {
             // Check shipType first for Sailing Vessel, Fishing, Pleasure Craft
             const st = (shipType || '').toString().toLowerCase();
@@ -29883,6 +29938,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function classifyVesselCategory(dwt, name, mmsi, imo, shipType) {
             const st = (shipType || '').toString().toLowerCase();
+            const mappedCategory = normalizeRadarCategory(shipType, '');
+            if (mappedCategory) return mappedCategory;
+
             if (st === 'sailing vessel' || st === '36' || st === '37' || (name && name.toLowerCase().includes('sailing'))) {
                 return "Sailing Vessel";
             }
@@ -29940,9 +29998,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return "MPV";
             }
             if (vc.includes("General Cargo") || vc.includes("Coaster")) {
-                return "General Cargo";
+                return "General Cargo Ship";
             }
-            return "Bulk Carrier";
+            return normalizeRadarCategory(shipType, "Other");
         }
 
         function displayAisData(vessels) {
@@ -30067,7 +30125,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         window.selectShip(v.vesselName, v.mmsi, v.latitude, v.longitude, v.imo, v.destination);
                     };
                     const hoverTitle = tooltipMap[v.vesselClass] || '';
-                    const vCategory = classifyVesselCategory(v.dwt, v.vesselName, v.mmsi, v.imo, v.shipType || v.ShipType) || "Bulk Carrier";
+                    const vCategory = normalizeRadarCategory(readRadarCategorySource(v), classifyVesselCategory(v.dwt, v.vesselName, v.mmsi, v.imo, v.shipType || v.ShipType));
                     tr.innerHTML = `
                         <td class="py-3 px-3 font-semibold text-slate-200">${v.vesselName}</td>
                         <td class="py-3 px-3 text-slate-400 mono">${v.imo}</td>
@@ -30121,8 +30179,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const isVesselCompatible = (aisClass, currentClass) => {
                 if (!currentClass) return true;
-                const normAis = (aisClass || '').toLowerCase().trim();
-                const normCurrent = (currentClass || '').toLowerCase().trim();
+                const normAis = normalizeRadarCategory(aisClass).toLowerCase().trim();
+                const normCurrent = normalizeRadarCategory(currentClass, currentClass).toLowerCase().trim();
                 if (normAis === normCurrent) return true;
                 if (normCurrent.includes('handy') && normAis.includes('handy')) return true;
                 if (normCurrent.includes('mini') && normAis.includes('mini')) return true;
@@ -30225,7 +30283,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 nearbyVessels.forEach(v => {
                     const statusLbl = (v.statusLabel || "").toLowerCase();
                     const isAvailableStatus = !statusLbl.includes("moored") && !statusLbl.includes("puerto");
-                    if (isAvailableStatus && isVesselCompatible(v.vesselClass, currentClass)) {
+                    const radarCategory = normalizeRadarCategory(readRadarCategorySource(v));
+                    v.radarCategory = radarCategory;
+                    if (isAvailableStatus && isVesselCompatible(radarCategory, currentClass)) {
                         const dist = v.distanceToPol;
                         const speedKts = v.speed || 12;
                         const hoursToPol = dist / speedKts;
@@ -30566,7 +30626,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         window.selectShip(v.vesselName, v.mmsi, v.latitude, v.longitude, v.imo, v.destination);
                     };
                     const hoverTitle = (typeof tooltipMap !== 'undefined' && tooltipMap[v.vesselClass]) || '';
-                    const vCategory = classifyVesselCategory(v.dwt, v.vesselName, v.mmsi, v.imo, v.shipType || v.ShipType) || "Bulk Carrier";
+                    const vCategory = normalizeRadarCategory(readRadarCategorySource(v), classifyVesselCategory(v.dwt, v.vesselName, v.mmsi, v.imo, v.shipType || v.ShipType));
                     tr.innerHTML = `
                         <td class="py-3 px-3 font-semibold text-slate-200">${v.vesselName}</td>
                         <td class="py-3 px-3 text-slate-400 mono">${v.imo}</td>
