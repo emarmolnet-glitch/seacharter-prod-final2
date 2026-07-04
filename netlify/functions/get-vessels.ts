@@ -303,6 +303,13 @@ function etaDriftHours(aisEta: string, projectedEta: unknown) {
 
 function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
   const requestedState = textParam(url, ["loadState", "estado", "cargoState"], "any");
+  const vesselSearch = textParam(url, ["q", "search", "vesselName"], "");
+  const normalizedVesselSearch = vesselSearch
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+  const isGlobalNameSearch = normalizedVesselSearch.length > 0;
   const polLat = normalizeNumber(url.searchParams.get("polLat"));
   const polLon = normalizeNumber(url.searchParams.get("polLon"));
   const podLat = normalizeNumber(url.searchParams.get("podLat"));
@@ -326,13 +333,33 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
       const lat = normalizeNumber(firstDefined(vessel.latitude, vessel.AIS_Live_Lat, metadata.latitude));
       const lon = normalizeNumber(firstDefined(vessel.longitude, vessel.AIS_Live_Lon, metadata.longitude));
       if (lat === undefined || lon === undefined) return null;
+      if (normalizedVesselSearch) {
+        const identityText = [
+          vessel.vesselName,
+          vessel.ShipName,
+          vessel.name,
+          vessel.IMO,
+          vessel.imo,
+          vessel.MMSI,
+          vessel.mmsi,
+          metadata.ShipName,
+          metadata.VesselName,
+          metadata.IMO,
+          metadata.MMSI,
+        ].filter(Boolean).join(" ")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "");
+        if (!identityText.includes(normalizedVesselSearch)) return null;
+      }
 
       const dwt = estimateDwt(vessel);
       const classification = vesselClassLabel(dwt, firstDefined(vessel.shipType, vessel.ShipType, metadata.ShipType));
-      if (dwt < HANDYSIZE_MIN_DWT || dwt > SUPRAMAX_MAX_DWT) return null;
+      if (!isGlobalNameSearch && (dwt < HANDYSIZE_MIN_DWT || dwt > SUPRAMAX_MAX_DWT)) return null;
 
       const loadState = estimateProjectedLoadState(vessel, requestedState);
-      if ((requestedState === "Laden" || requestedState === "Ballast") && loadState !== requestedState) return null;
+      if (!isGlobalNameSearch && (requestedState === "Laden" || requestedState === "Ballast") && loadState !== requestedState) return null;
 
       const pointDistances = activePoints.map((point) => ({
         ...point,
@@ -358,17 +385,19 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
         hoursToPolCircle < PROJECTION_LOOKAHEAD_HOURS
       );
 
-      if (matchingMode && !isProjectionCandidate && (!nearestVisual || nearestVisual.role !== "POL")) {
+      if (!isGlobalNameSearch && matchingMode && !isProjectionCandidate && (!nearestVisual || nearestVisual.role !== "POL")) {
         return null;
       }
-      if (matchingMode && !isProjectionCandidate && (!projection || projection.projectedIntersection !== true || Number(projection.crossTrackNm ?? Infinity) > 50)) {
+      if (!isGlobalNameSearch && matchingMode && !isProjectionCandidate && (!projection || projection.projectedIntersection !== true || Number(projection.crossTrackNm ?? Infinity) > 50)) {
         return null;
       }
 
       const nearest = nearestVisual || nearestByDistance;
       const matchZone = isProjectionCandidate
         ? "PROJECTION"
-        : nearestVisual?.role || (insideRouteCorridor ? "ROUTE" : "GLOBAL");
+        : isGlobalNameSearch
+          ? "GLOBAL"
+          : nearestVisual?.role || (insideRouteCorridor ? "ROUTE" : "GLOBAL");
       const priorityDistance = nearestVisual
         ? Math.round(nearestVisual.distanceNm)
         : insideRouteCorridor
@@ -734,10 +763,30 @@ export default async (req: Request) => {
   }
 
   if (!parseRequestedBoxes(url)) {
-    return vesselsResponse(
-      { vessels: [], error: "AIS POL/POD bounding boxes are required." },
-      { status: 400 },
-    );
+    const vesselSearch = textParam(url, ["q", "search", "vesselName"], "");
+    if (vesselSearch) {
+      if (vesselCache.length === 0) {
+        vesselCache = await readStoredVesselMessages(requestedQuantity);
+        if (vesselCache.length > 0) cacheUpdatedAt = Date.now();
+      }
+      const filtered = filterSelectiveVessels(url, vesselCache);
+      return vesselsResponse({
+        vessels: filtered,
+        updatedAt: cacheUpdatedAt,
+        source: vesselCache.length ? "global-cache-search" : "empty-fallback",
+      });
+    }
+    if (vesselCache.length === 0) {
+      vesselCache = await readStoredVesselMessages(requestedQuantity);
+      if (vesselCache.length > 0) cacheUpdatedAt = Date.now();
+    }
+    const filtered = filterSelectiveVessels(url, vesselCache);
+    return vesselsResponse({
+      vessels: filtered,
+      updatedAt: cacheUpdatedAt,
+      source: vesselCache.length ? "global-cache" : "empty-fallback",
+      message: `Data recolectada: ${filtered.length} buques filtrados sin geofencing obligatorio`,
+    });
   }
 
   if (!apiKey) {
