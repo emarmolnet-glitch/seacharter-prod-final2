@@ -2865,6 +2865,28 @@
             opacity: 0.82;
         }
 
+        #view-ais .ais-toolbar-actions {
+            column-gap: 16px;
+            row-gap: 10px;
+        }
+
+        #view-ais #aisstream-api-key {
+            flex: 0 0 auto;
+        }
+
+        #view-ais #btn-refresh-ais {
+            flex: 0 0 auto;
+            justify-content: center;
+            min-width: 236px;
+            white-space: nowrap;
+        }
+
+        #view-ais #ais-refresh-label {
+            display: inline-block;
+            min-width: 184px;
+            text-align: center;
+        }
+
         .ais-availability-spinner {
             width: 14px;
             height: 14px;
@@ -8219,8 +8241,8 @@
                         </div>
                     </div>
                 </div>
-                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                    <input type="password" id="aisstream-api-key" placeholder="API Key (Opcional si usas Netlify Proxy)" autocomplete="off" spellcheck="false" autocapitalize="none" class="bg-slate-950 border border-slate-800 text-slate-200 rounded-lg px-3 py-2 text-xs w-full sm:w-56 focus:outline-none focus:border-blue-500">
+                <div class="ais-toolbar-actions flex flex-col sm:flex-row items-stretch sm:items-center">
+                    <input type="password" id="aisstream-api-key" placeholder="API Key (Opcional si usas Netlify Proxy)" autocomplete="off" spellcheck="false" autocapitalize="none" class="bg-slate-950 border border-slate-800 text-slate-200 rounded-lg px-3 py-2 text-xs w-full sm:w-64 focus:outline-none focus:border-blue-500">
                     <button type="button" id="btn-refresh-ais" style="color: #FFFFFF !important;" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-lg text-xs transition flex items-center gap-2 shadow-lg">
                         <i id="ais-refresh-icon" class="fa-solid fa-rotate" style="color: #FFFFFF !important;"></i>
                         <span id="ais-refresh-label">Consultar Disponibilidad Real-Time</span>
@@ -30075,7 +30097,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (icon) icon.classList.toggle('fa-spin', state.active);
                 if (label) {
                     label.textContent = state.active
-                        ? `Barrido AIS ${formatAisAvailabilitySeconds(remaining)}`
+                        ? 'Consultando Real-Time'
                         : 'Consultar Disponibilidad Real-Time';
                 }
                 if (monitor) {
