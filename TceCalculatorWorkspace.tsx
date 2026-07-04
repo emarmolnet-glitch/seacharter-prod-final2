@@ -633,6 +633,13 @@ function normalizeFleetImo(value: unknown) {
   return digits.length >= 7 ? digits.slice(-7) : '';
 }
 
+function normalizeFleetText(value: unknown) {
+  return String(value ?? '')
+    .replace(/-/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function getFleetIdentityKey(record: Partial<FleetRegistryRecord>) {
   const imo = record.imo === 'SIN-IMO' ? '' : normalizeFleetImo(record.imo);
   if (imo) return imo;
@@ -644,7 +651,7 @@ function getFleetNameKey(record: Partial<FleetRegistryRecord>) {
 }
 
 function normalizeFleetVesselName(value: unknown) {
-  return String(value || '')
+  return normalizeFleetText(value)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/gi, ' ')
@@ -654,12 +661,12 @@ function normalizeFleetVesselName(value: unknown) {
 }
 
 function cleanFleetValue(value: unknown) {
-  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  const text = normalizeFleetText(value);
   return text || 'N/A';
 }
 
 function hasFleetValue(value: unknown) {
-  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  const text = normalizeFleetText(value);
   return !!text && !['N/A', 'NA', 'NULL', 'NONE', '-', '--'].includes(text.toUpperCase());
 }
 
@@ -837,53 +844,88 @@ function parseCsvText(text: string, delimiter = ',') {
   let row: string[] = [];
   let inQuotes = false;
 
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    const nextChar = text[index + 1];
+  try {
+    const source = String(text ?? '');
 
-    if (char === '"') {
-      if (inQuotes && nextChar === '"') {
-        current += '"';
-        index += 1;
-      } else {
-        inQuotes = !inQuotes;
+    for (let index = 0; index < source.length; index += 1) {
+      const char = source[index];
+      const nextChar = source[index + 1];
+
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          current += '"';
+          index += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
       }
-      continue;
+
+      if (char === delimiter && !inQuotes) {
+        row.push(normalizeFleetText(current));
+        current = '';
+        continue;
+      }
+
+      if ((char === '\n' || char === '\r') && !inQuotes) {
+        if (char === '\r' && nextChar === '\n') index += 1;
+        row.push(normalizeFleetText(current));
+        if (row.some((cell) => cell.length > 0)) rows.push(row);
+        row = [];
+        current = '';
+        continue;
+      }
+
+      current += char;
     }
 
-    if (char === delimiter && !inQuotes) {
-      row.push(current.trim());
-      current = '';
-      continue;
-    }
-
-    if ((char === '\n' || char === '\r') && !inQuotes) {
-      if (char === '\r' && nextChar === '\n') index += 1;
-      row.push(current.trim());
-      if (row.some((cell) => cell.length > 0)) rows.push(row);
-      row = [];
-      current = '';
-      continue;
-    }
-
-    current += char;
+    row.push(normalizeFleetText(current));
+    if (row.some((cell) => cell.length > 0)) rows.push(row);
+  } catch (error) {
+    console.warn('CSV ignorado por formato no válido:', error);
   }
-
-  row.push(current.trim());
-  if (row.some((cell) => cell.length > 0)) rows.push(row);
   return rows;
 }
 
-function parseFleetRowsFromCsv(text: string): Partial<FleetRegistryRecord>[] {
+async function processVesselData(rawData: Array<Record<string, unknown>>) {
+  const processedData = rawData
+    .filter((row) => row && row.Vessel)
+    .map((row) => {
+      try {
+        const rawVesselName = typeof row.Vessel === 'string' ? row.Vessel : '';
+        const cleanedName = rawVesselName.replace(/-/g, ' ').trim();
+
+        return {
+          ...row,
+          Vessel: cleanedName,
+          IMO: row.IMO || 'N/A',
+        };
+      } catch (err) {
+        console.error('Error procesando fila:', row, err);
+        return null;
+      }
+    })
+    .filter((row): row is Record<string, unknown> => row !== null);
+
+  return processedData;
+}
+
+async function parseFleetRowsFromCsv(text: string): Promise<Partial<FleetRegistryRecord>[]> {
   const rows = parseCsvText(text, ';');
   if (rows.length < 2) return [];
 
-  const normalizeHeader = (value: string) => value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
+  const normalizeHeader = (value: unknown) => {
+    try {
+      return normalizeFleetText(value)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+    } catch (error) {
+      console.warn('Cabecera CSV ignorada por formato no válido:', value, error);
+      return '';
+    }
+  };
   const headers = rows[0].map(normalizeHeader);
   const aliases: Record<string, string[]> = {
     vessel: ['vessel'],
@@ -912,30 +954,51 @@ function parseFleetRowsFromCsv(text: string): Partial<FleetRegistryRecord>[] {
     throw new Error(`Faltan columnas obligatorias: ${missingColumns.map((column) => displayNames[column] || column).join(', ')}`);
   }
 
-  return rows.slice(1).flatMap((cells) => {
-    const rawVessel = indexes.vessel >= 0 ? cells[indexes.vessel] : undefined;
-    const vesselName = rawVessel?.toString().replace('-', ' ').trim();
-    if (!vesselName) {
-      console.warn('Fila ignorada por falta de nombre:', cells);
+  const rawData = rows.slice(1).map((cells, rowIndex) => ({
+    Vessel: indexes.vessel >= 0 ? cells?.[indexes.vessel] : undefined,
+    IMO: indexes.imo >= 0 ? cells?.[indexes.imo] : undefined,
+    Built: cells?.[indexes.anio],
+    GT: cells?.[indexes.gt],
+    DWT: cells?.[indexes.dwt],
+    Size: cells?.[indexes.dimensiones],
+    Type: indexes.tipo >= 0 ? cells?.[indexes.tipo] : '',
+    __cells: cells,
+    __rowNumber: rowIndex + 2,
+  }));
+
+  const processedRows = await processVesselData(rawData);
+
+  return processedRows.flatMap((row) => {
+    try {
+      const cells = Array.isArray(row.__cells) ? row.__cells : [];
+      const rowNumber = typeof row.__rowNumber === 'number' ? row.__rowNumber : '?';
+      const vesselName = normalizeFleetText(row.Vessel);
+      if (!vesselName) {
+        console.warn(`Fila CSV ${rowNumber} ignorada por falta de nombre:`, cells);
+        return [];
+      }
+      const vessel = cleanFleetValue(vesselName);
+      const year = cleanFleetValue(row.Built);
+      const imo = normalizeFleetImo(row.IMO);
+      const type = row.Type;
+      return [{
+        imo: imo || 'N/A',
+        vessel,
+        nombre: vessel,
+        name: vessel,
+        anio: year,
+        gt: cleanFleetValue(row.GT),
+        dwt: cleanFleetValue(row.DWT),
+        dimensiones: cleanFleetValue(row.Size),
+        tipo: cleanFleetValue(type),
+        type: cleanFleetValue(type),
+        shipType: cleanFleetValue(type),
+        vesselType: cleanFleetValue(type),
+      }];
+    } catch (error) {
+      console.warn('Fila CSV ignorada por datos no válidos:', row, error);
       return [];
     }
-    const vessel = cleanFleetValue(vesselName);
-    const year = cleanFleetValue(cells[indexes.anio]);
-    const imo = indexes.imo >= 0 ? normalizeFleetImo(cells[indexes.imo]) : '';
-    return [{
-      imo: imo || 'SIN-IMO',
-      vessel,
-      nombre: vessel,
-      name: vessel,
-      anio: year,
-      gt: cells[indexes.gt],
-      dwt: cells[indexes.dwt],
-      dimensiones: cells[indexes.dimensiones],
-      tipo: indexes.tipo >= 0 ? cells[indexes.tipo] : '',
-      type: indexes.tipo >= 0 ? cells[indexes.tipo] : '',
-      shipType: indexes.tipo >= 0 ? cells[indexes.tipo] : '',
-      vesselType: indexes.tipo >= 0 ? cells[indexes.tipo] : '',
-    }];
   }).filter((record) => {
     const hasIdentity = normalizeFleetImo(record.imo) || normalizeFleetVesselName(record.vessel);
     return hasIdentity && hasFleetImportData(record);
@@ -951,7 +1014,7 @@ function parseFleetRowsFromHtml(html: string): Partial<FleetRegistryRecord>[] {
 
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const recordsByImo = new Map<string, Partial<FleetRegistryRecord>>();
-  const cleanCell = (value: unknown) => String(value || '').replace(/\s+/g, ' ').trim();
+  const cleanCell = (value: unknown) => normalizeFleetText(value);
   const readCell = (
     cells: Array<{ text: string; header: string }>,
     labels: string[],
@@ -966,32 +1029,41 @@ function parseFleetRowsFromHtml(html: string): Partial<FleetRegistryRecord>[] {
     const headers = Array.from(table.querySelectorAll('tr:first-child th, tr:first-child td')).map((cell) => cleanCell(cell.textContent).toLowerCase());
 
     table.querySelectorAll('tr').forEach((row) => {
-      const cells = Array.from(row.querySelectorAll('td')).map((cell, index) => ({
-        text: cleanCell(cell.textContent),
-        header: cleanCell([
-          cell.getAttribute('data-title'),
-          cell.getAttribute('data-label'),
-          cell.getAttribute('headers'),
-          headers[index],
-        ].filter(Boolean).join(' ')).toLowerCase(),
-      }));
-      if (!cells.length) return;
+      try {
+        const cells = Array.from(row.querySelectorAll('td')).map((cell, index) => ({
+          text: cleanCell(cell.textContent),
+          header: cleanCell([
+            cell.getAttribute('data-title'),
+            cell.getAttribute('data-label'),
+            cell.getAttribute('headers'),
+            headers[index],
+          ].filter(Boolean).join(' ')).toLowerCase(),
+        }));
+        if (!cells.length) return;
 
-      const link = row.querySelector<HTMLAnchorElement>('a[href]');
-      const imo = normalizeFleetImo(`${link?.href || ''} ${row.textContent || ''} ${row.innerHTML || ''}`);
-      if (!imo) return;
+        const link = row.querySelector<HTMLAnchorElement>('a[href]');
+        const imo = normalizeFleetImo(`${link?.href || ''} ${row.textContent || ''} ${row.innerHTML || ''}`);
+        const nombre = cleanCell(link?.textContent || cells[0]?.text);
+        const identityKey = imo || normalizeFleetVesselName(nombre);
+        if (!identityKey || !nombre) {
+          console.warn('Fila HTML ignorada por falta de identidad AIS:', cells);
+          return;
+        }
 
-      const nombre = cleanCell(link?.textContent || cells[0]?.text);
-      recordsByImo.set(imo, {
-        nombre,
-        name: nombre,
-        imo,
-        anio: readCell(cells, ['built', 'year', 'año', 'ano'], 1),
-        gt: readCell(cells, ['gross tonnage', 'gt'], 2),
-        dwt: readCell(cells, ['deadweight', 'dwt'], 3),
-        dimensiones: readCell(cells, ['loa x beam', 'loa', 'beam', 'dimensions', 'dimensiones'], 4),
-        tipo: readCell(cells, ['type', 'vessel type', 'ship type', 'class'], 5),
-      });
+        recordsByImo.set(identityKey, {
+          nombre,
+          vessel: nombre,
+          name: nombre,
+          imo: imo || 'SIN-IMO',
+          anio: readCell(cells, ['built', 'year', 'año', 'ano'], 1),
+          gt: readCell(cells, ['gross tonnage', 'gt'], 2),
+          dwt: readCell(cells, ['deadweight', 'dwt'], 3),
+          dimensiones: readCell(cells, ['loa x beam', 'loa', 'beam', 'dimensions', 'dimensiones'], 4),
+          tipo: readCell(cells, ['type', 'vessel type', 'ship type', 'class'], 5),
+        });
+      } catch (error) {
+        console.warn('Fila HTML ignorada por datos no válidos:', row.textContent, error);
+      }
     });
   });
 
@@ -1084,11 +1156,15 @@ function FleetIntelligenceLibraryPanel() {
 
       records.forEach((record: Partial<FleetRegistryRecord>, index: number) => {
         setProgress({ current: index + 1, total: records.length || 1 });
-        const imo = normalizeFleetImo(record.imo);
-        if (!imo) return;
         const nombre = cleanFleetValue(record.nombre || record.name);
+        const imo = normalizeFleetImo(record.imo);
+        const identityKey = imo || normalizeFleetVesselName(nombre);
+        if (!identityKey) {
+          console.warn('Registro AIS ignorado por falta de identidad:', record);
+          return;
+        }
         const nextRecord: FleetRegistryRecord = {
-          imo,
+          imo: imo || 'SIN-IMO',
           vessel: nombre,
           nombre,
           name: nombre,
@@ -1105,7 +1181,7 @@ function FleetIntelligenceLibraryPanel() {
           dwt: cleanFleetValue(record.dwt),
           dimensiones: cleanFleetValue(record.dimensiones),
         };
-        const existing = store[imo];
+        const existing = store[identityKey];
         if (existing) {
           const changed = ['nombre', 'tipo', 'categoryValue', 'categoryLabel', 'scrapedType', 'anio', 'gt', 'dwt', 'dimensiones'].some((field) => {
             const previousValue = existing[field as keyof FleetRegistryRecord];
@@ -1114,11 +1190,11 @@ function FleetIntelligenceLibraryPanel() {
           });
           if (changed) {
             updatedCount += 1;
-            store[imo] = { ...existing, ...nextRecord, updatedAt: new Date().toISOString() };
+            store[identityKey] = { ...existing, ...nextRecord, updatedAt: new Date().toISOString() };
           }
         } else {
           newCount += 1;
-          store[imo] = { ...nextRecord, capturedAt: new Date().toISOString() };
+          store[identityKey] = { ...nextRecord, capturedAt: new Date().toISOString() };
         }
       });
 
@@ -1139,7 +1215,7 @@ function FleetIntelligenceLibraryPanel() {
 
     try {
       const text = await file.text();
-      const records = parseFleetRowsFromCsv(text);
+      const records = await parseFleetRowsFromCsv(text);
       const totalRows = countFleetCsvDataRows(text);
       if (!records.length) {
         setStatus('No se detectaron buques válidos en el CSV.');
@@ -1163,7 +1239,7 @@ function FleetIntelligenceLibraryPanel() {
           return;
         }
         const technicalRecord: FleetRegistryRecord = {
-          imo: record.imo === 'SIN-IMO' ? 'SIN-IMO' : (normalizeFleetImo(record.imo) || 'SIN-IMO'),
+          imo: record.imo === 'SIN-IMO' ? 'SIN-IMO' : (normalizeFleetImo(record.imo) || 'N/A'),
           vessel: nombre,
           nombre,
           name: nombre,
