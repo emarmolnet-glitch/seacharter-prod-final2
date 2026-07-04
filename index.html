@@ -27032,7 +27032,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 ? classifyBulkCarrierRealTime(dwt, name, mmsi, imo, shipTypeVal)
                 : { vClass: v.vesselClass || v.vessel_type || meta.vesselClass || "General Cargo Vessel", dwt };
 
-            return {
+            const normalizedVessel = {
                 ...v,
                 vesselName: name,
                 ShipName: v.ShipName || name,
@@ -27052,6 +27052,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 statusLabel: v.statusLabel || (speed >= 1 ? "Navegando" : "En Puerto"),
                 timestamp: v.timestamp || v.lastSeen || v.created_at || v.createdAt || Date.now()
             };
+            return typeof hydrateRadarVesselCargoType === 'function'
+                ? hydrateRadarVesselCargoType(normalizedVessel)
+                : normalizedVessel;
         };
 
         window.actualizarVistaRadar = function() {
@@ -27730,6 +27733,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                             <p>Destino: ${v.destination || 'N/A'}</p>
                             <p>Ubicación: ${v.statusLabel || 'Moored / En Puerto'}</p>
                             <p>Clase: ${v.vesselClass}</p>
+                            <p>Tipo mercancía: ${v.cargoType || v.tipo_carga || 'N/A'}</p>
                             ${v.fleetIntelTechnical ? `<div class="mt-2 pt-2 border-t border-slate-200"><p>Nombre: ${v.fleetIntelTechnical.nombre || v.fleetIntelTechnical.name || 'N/A'}</p><p>Año: ${v.fleetIntelTechnical.anio || 'N/A'}</p><p>GT: ${v.fleetIntelTechnical.gt || 'N/A'}</p><p>DWT: ${v.fleetIntelTechnical.dwt || 'N/A'}</p><p>Dimensiones: ${v.fleetIntelTechnical.dimensiones || 'N/A'}</p></div>` : ''}
                         </div>
                     `;
@@ -28544,20 +28548,30 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
                 function matchesCargoTaxonomy(vesselData, taxonomyValue) {
                     const record = find(vesselData);
-                    if (!record) return false;
                     if (!taxonomyValue || String(taxonomyValue).startsWith('category:')) return true;
                     const taxonomyKey = String(taxonomyValue).replace(/^type:/, '');
                     const taxonomyTerms = FLEET_INTEL_TAXONOMY[taxonomyKey] || [taxonomyKey];
                     const text = normalizeFleetTaxonomyText([
-                        record.tipo_carga,
-                        record.cargoType,
-                        record.tipo,
-                        record.type,
-                        record.shipType,
-                        record.vesselType,
-                        record.categoryLabel,
-                        record.categoryValue,
-                        record.scrapedType
+                        record && record.tipo_carga,
+                        record && record.cargoType,
+                        record && record.tipo,
+                        record && record.type,
+                        record && record.shipType,
+                        record && record.vesselType,
+                        record && record.categoryLabel,
+                        record && record.categoryValue,
+                        record && record.scrapedType,
+                        vesselData && vesselData.tipo_carga,
+                        vesselData && vesselData.cargoType,
+                        vesselData && vesselData.cargoTaxonomyLabel,
+                        vesselData && vesselData.cargoTaxonomyValue,
+                        vesselData && vesselData.shipType,
+                        vesselData && vesselData.ShipType,
+                        vesselData && vesselData.type,
+                        vesselData && vesselData.vesselType,
+                        vesselData && vesselData.vesselClass,
+                        vesselData && vesselData.MetaData && vesselData.MetaData.tipo_carga,
+                        vesselData && vesselData.MetaData && vesselData.MetaData.cargoType
                     ].filter(Boolean).join(' '));
                     return taxonomyTerms.some(term => text.includes(normalizeFleetTaxonomyText(term)));
                 }
@@ -28618,6 +28632,27 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return text || 'N/A';
             }
 
+            function readCalculatorCargoTypeForRadar() {
+                const manual = document.getElementById('cargo-type-manual')?.value || (typeof State !== 'undefined' ? State.cargoTypeManual : '');
+                const selected = document.getElementById('cargo-type')?.value || (typeof State !== 'undefined' ? State.cargoType : '');
+                const cargoType = cleanFleetIntelValue(manual || selected || localStorage.getItem('calculator_cargo_type') || '');
+                if (cargoType !== 'N/A') {
+                    localStorage.setItem('calculator_cargo_type', cargoType);
+                }
+                return cargoType;
+            }
+
+            function getCalculatorVesselNameForRadar() {
+                const selected = window.objetoCalculadoraPrincipal && window.objetoCalculadoraPrincipal.vessel;
+                return cleanFleetIntelValue(
+                    selected ||
+                    document.getElementById('nombre-buque-calculadora')?.value ||
+                    document.getElementById('name-of-ship-calculator')?.value ||
+                    document.getElementById('vessel-name')?.value ||
+                    ''
+                );
+            }
+
             function getAisVesselIdentity(vessel) {
                 const meta = vessel && vessel.MetaData ? vessel.MetaData : {};
                 return {
@@ -28651,6 +28686,79 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     : null;
             }
 
+            function getFleetCargoTypeFromRecord(record) {
+                if (!record) return '';
+                return cleanFleetIntelValue(record.tipo_carga || record.cargoType || record.cargoTaxonomyLabel || record.categoryLabel || record.tipo || record.type);
+            }
+
+            function buildCalculatorCargoRecordForVessel(vessel) {
+                const identity = getAisVesselIdentity(vessel);
+                const vesselName = cleanFleetIntelValue(identity.name);
+                if (vesselName === 'N/A') return null;
+                const calculatorName = getCalculatorVesselNameForRadar();
+                if (calculatorName === 'N/A' || normalizeFleetIntelVesselName(calculatorName) !== normalizeFleetIntelVesselName(vesselName)) {
+                    return null;
+                }
+                const cargoType = readCalculatorCargoTypeForRadar();
+                if (cargoType === 'N/A') return null;
+                const inferred = inferFleetCargoTaxonomy(cargoType);
+                return {
+                    imo: identity.imo || 'SIN-IMO',
+                    vessel: vesselName,
+                    nombre: vesselName,
+                    name: vesselName,
+                    tipo_carga: cargoType,
+                    cargoType,
+                    cargoTaxonomyLabel: inferred ? inferred.tipo_carga : cargoType,
+                    cargoTaxonomyValue: inferred ? inferred.value : '',
+                    category: inferred ? inferred.value : '',
+                    categoryValue: inferred ? inferred.value : '',
+                    categoryLabel: inferred ? inferred.label : cargoType,
+                    source: 'calculator',
+                    updatedAt: new Date().toISOString()
+                };
+            }
+
+            function syncCalculatorCargoRecordForVessel(vessel) {
+                const calculatorRecord = buildCalculatorCargoRecordForVessel(vessel);
+                if (!calculatorRecord) return null;
+                const store = getFleetIntelStore();
+                const key = getFleetIntelIdentityKey(calculatorRecord);
+                if (!key) return calculatorRecord;
+                store[key] = store[key] ? mergeFleetIntelRecord(store[key], calculatorRecord) : calculatorRecord;
+                setFleetIntelStore(store);
+                return store[key] || calculatorRecord;
+            }
+
+            function hydrateRadarVesselCargoType(vessel) {
+                if (!vessel || typeof vessel !== 'object') return vessel;
+                const record = findFleetIntelRecord(vessel) || syncCalculatorCargoRecordForVessel(vessel);
+                const cargoType = getFleetCargoTypeFromRecord(record);
+                if (cargoType && cargoType !== 'N/A') {
+                    const inferred = inferFleetCargoTaxonomy(cargoType);
+                    vessel.tipo_carga = cargoType;
+                    vessel.cargoType = cargoType;
+                    vessel.cargoTaxonomyLabel = inferred ? inferred.tipo_carga : cargoType;
+                    vessel.cargoTaxonomyValue = inferred ? inferred.value : (record && record.categoryValue) || '';
+                    vessel.fleetIntelRecord = record || vessel.fleetIntelRecord || null;
+                    if (vessel.MetaData) {
+                        vessel.MetaData.tipo_carga = cargoType;
+                        vessel.MetaData.cargoType = cargoType;
+                        vessel.MetaData.cargoTaxonomyLabel = vessel.cargoTaxonomyLabel;
+                        vessel.MetaData.cargoTaxonomyValue = vessel.cargoTaxonomyValue;
+                    }
+                }
+                return vessel;
+            }
+
+            function hydrateRadarCargoStore() {
+                if (!window.GlobalStore || !Array.isArray(window.GlobalStore.vessels)) return;
+                window.GlobalStore.vessels = window.GlobalStore.vessels.map(hydrateRadarVesselCargoType);
+                if (Array.isArray(window.GlobalStore.rawVessels)) {
+                    window.GlobalStore.rawVessels = window.GlobalStore.rawVessels.map(hydrateRadarVesselCargoType);
+                }
+            }
+
             function buildFleetIntelRecordHtml(record) {
                 if (!record) return '';
                 return `<span>Nombre: ${cleanFleetIntelValue(record.nombre || record.name || record.vessel)}</span><span>Año: ${cleanFleetIntelValue(record.anio)}</span><span>GT: ${cleanFleetIntelValue(record.gt)}</span><span>DWT: ${cleanFleetIntelValue(record.dwt)}</span><span>Dimensiones: ${cleanFleetIntelValue(record.dimensiones)}</span>`;
@@ -28662,6 +28770,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 find: findFleetIntelRecord,
                 matchesTarget: (vessel) => window.FleetManager.isTarget(vessel),
                 processAisVessel(vessel) {
+                    hydrateRadarVesselCargoType(vessel);
                     const registry = window.FleetManager.getRegistry();
                     const record = Array.isArray(registry) && registry.length > 0
                         ? (window.FleetManager.getVesselData(vessel) || findFleetIntelRecord(vessel))
@@ -28968,6 +29077,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.importarFleetIntelCsv = importarFleetIntelCsv;
             window.getFleetIntelTechnicalRecord = getFleetIntelTechnicalRecord;
             window.buildFleetIntelTechnicalHtml = buildFleetIntelTechnicalHtml;
+            window.hydrateRadarVesselCargoType = hydrateRadarVesselCargoType;
+            window.hydrateRadarCargoStore = hydrateRadarCargoStore;
+            window.readCalculatorCargoTypeForRadar = readCalculatorCargoTypeForRadar;
             document.getElementById('btn-fleet-intel-capture')?.addEventListener('click', capturarDatosBuque);
             document.getElementById('btn-fleet-intel-csv')?.addEventListener('click', () => {
                 document.getElementById('fleet-intel-csv-input')?.click();
@@ -28987,6 +29099,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 localStorage.setItem('ais_filter_vessel_types', JSON.stringify([event.target.value || '']));
                 localStorage.setItem('ais_filters_updated', Date.now().toString());
                 if (typeof window.reapplyCentralFiltersAndRedraw === 'function') window.reapplyCentralFiltersAndRedraw();
+            });
+
+            ['cargo-type', 'cargo-type-manual', 'nombre-buque-calculadora', 'name-of-ship-calculator', 'vessel-name'].forEach((id) => {
+                document.getElementById(id)?.addEventListener('change', () => {
+                    const cargoType = readCalculatorCargoTypeForRadar();
+                    if (cargoType !== 'N/A' && typeof applyFleetCargoTaxonomy === 'function') {
+                        applyFleetCargoTaxonomy(cargoType, { silent: true });
+                    }
+                    hydrateRadarCargoStore();
+                    if (typeof window.reapplyCentralFiltersAndRedraw === 'function') window.reapplyCentralFiltersAndRedraw();
+                });
             });
 
             window.getCentralFilters = function() {
@@ -29066,7 +29189,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     }
                 }
 
-                const filteredVessels = AIS_RAW_FLEET_DIAGNOSTIC_MODE ? rawVessels : rawVessels.filter(v => {
+                const hydratedRawVessels = rawVessels.map(v => typeof hydrateRadarVesselCargoType === 'function' ? hydrateRadarVesselCargoType(v) : v);
+                const filteredVessels = AIS_RAW_FLEET_DIAGNOSTIC_MODE ? hydratedRawVessels : hydratedRawVessels.filter(v => {
                     const coords = (window.MapLoader && typeof window.MapLoader.normalizeCoordinates === 'function')
                         ? window.MapLoader.normalizeCoordinates(v)
                         : [parseFloat((v.MetaData && v.MetaData.latitude) || v.latitude || 0), parseFloat((v.MetaData && v.MetaData.longitude) || v.longitude || 0)];
@@ -29133,12 +29257,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const shipTypeVal = v.ShipType || v.shipType || (v.MetaData && (v.MetaData.ShipType || v.MetaData.shipType));
                     const classification = classifyBulkCarrierRealTime(rawDwt, name, mmsi, imo, shipTypeVal);
                     const zoneMatch = assignAisProspectionZone({ ...v, latitude: lat, longitude: lon }, polPort, podPort);
-                    const fleetIntelMatch = markFleetIntelVessel(v);
+                    const enrichedVessel = typeof hydrateRadarVesselCargoType === 'function' ? hydrateRadarVesselCargoType(v) : v;
+                    const fleetIntelMatch = markFleetIntelVessel(enrichedVessel);
                     const fleetIntelTechnical = fleetIntelMatch && typeof getFleetIntelTechnicalRecord === 'function'
                         ? getFleetIntelTechnicalRecord(imo)
                         : null;
+                    const cargoType = enrichedVessel.cargoType || enrichedVessel.tipo_carga || (enrichedVessel.MetaData && (enrichedVessel.MetaData.cargoType || enrichedVessel.MetaData.tipo_carga)) || '';
 
                     return {
+                        ...enrichedVessel,
                         vesselName: name,
                         mmsi: mmsi,
                         imo: imo,
@@ -29153,6 +29280,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         heading: Number.isFinite(heading) ? heading : undefined,
                         vesselClass: classification.vClass,
                         dwt: classification.dwt,
+                        cargoType,
+                        tipo_carga: cargoType,
+                        cargoTaxonomyLabel: enrichedVessel.cargoTaxonomyLabel,
+                        cargoTaxonomyValue: enrichedVessel.cargoTaxonomyValue,
                         fleetIntelTechnical,
                         aisRadarZone: zoneMatch ? zoneMatch.zone : 'ROUTE',
                         aisRadarColor: zoneMatch ? zoneMatch.color : '#3b82f6',
