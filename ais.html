@@ -1505,14 +1505,26 @@
             let records = [];
             try {
                 if (/^https?:\/\//i.test(rawText)) {
-                    const response = await fetch('/api/scrape-vessel', {
+                    const response = await fetch('/api/scrape', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ url: rawText })
                     });
-                    const payload = await response.json().catch(() => ({}));
-                    if (!response.ok) throw new Error(payload.error || 'No se pudo leer VesselFinder.');
-                    records = Array.isArray(payload.records) ? payload.records : [];
+                    const contentType = response.headers.get('Content-Type') || '';
+                    const responseBody = await response.text();
+                    if (!response.ok) {
+                        let errorMessage = 'No se pudo leer VesselFinder.';
+                        if (contentType.includes('application/json')) {
+                            try {
+                                const payload = JSON.parse(responseBody);
+                                errorMessage = payload.error || errorMessage;
+                            } catch (parseError) {
+                                errorMessage = responseBody || errorMessage;
+                            }
+                        }
+                        throw new Error(errorMessage);
+                    }
+                    records = parseFleetIntelRows(responseBody);
                 } else {
                     records = parseFleetIntelRows(rawText);
                 }

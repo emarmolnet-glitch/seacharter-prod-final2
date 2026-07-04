@@ -644,6 +644,58 @@ function getFleetRegistryStore(): Record<string, FleetRegistryRecord> {
   }
 }
 
+function parseFleetRowsFromHtml(html: string): Partial<FleetRegistryRecord>[] {
+  if (typeof window === 'undefined') return [];
+
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const recordsByImo = new Map<string, Partial<FleetRegistryRecord>>();
+  const cleanCell = (value: unknown) => String(value || '').replace(/\s+/g, ' ').trim();
+  const readCell = (
+    cells: Array<{ text: string; header: string }>,
+    labels: string[],
+    fallbackIndex: number,
+  ) => {
+    const wanted = labels.map((label) => label.toLowerCase());
+    const matched = cells.find((cell) => wanted.some((label) => cell.header.includes(label)));
+    return cleanCell(matched ? matched.text : cells[fallbackIndex]?.text);
+  };
+
+  doc.querySelectorAll('table').forEach((table) => {
+    const headers = Array.from(table.querySelectorAll('tr:first-child th, tr:first-child td')).map((cell) => cleanCell(cell.textContent).toLowerCase());
+
+    table.querySelectorAll('tr').forEach((row) => {
+      const cells = Array.from(row.querySelectorAll('td')).map((cell, index) => ({
+        text: cleanCell(cell.textContent),
+        header: cleanCell([
+          cell.getAttribute('data-title'),
+          cell.getAttribute('data-label'),
+          cell.getAttribute('headers'),
+          headers[index],
+        ].filter(Boolean).join(' ')).toLowerCase(),
+      }));
+      if (!cells.length) return;
+
+      const link = row.querySelector<HTMLAnchorElement>('a[href]');
+      const imo = normalizeFleetImo(`${link?.href || ''} ${row.textContent || ''} ${row.innerHTML || ''}`);
+      if (!imo) return;
+
+      const nombre = cleanCell(link?.textContent || cells[0]?.text);
+      recordsByImo.set(imo, {
+        nombre,
+        name: nombre,
+        imo,
+        anio: readCell(cells, ['built', 'year', 'año', 'ano'], 1),
+        gt: readCell(cells, ['gross tonnage', 'gt'], 2),
+        dwt: readCell(cells, ['deadweight', 'dwt'], 3),
+        dimensiones: readCell(cells, ['loa x beam', 'loa', 'beam', 'dimensions', 'dimensiones'], 4),
+        tipo: readCell(cells, ['type', 'vessel type', 'ship type', 'class'], 5),
+      });
+    });
+  });
+
+  return Array.from(recordsByImo.values());
+}
+
 function FleetIntelligenceLibraryPanel() {
   const defaultCategory = FLEET_CATEGORY_GROUPS[0].options[0];
   const [selectedCategory, setSelectedCategory] = useState<string>(defaultCategory[0]);
@@ -685,18 +737,36 @@ function FleetIntelligenceLibraryPanel() {
 
     setIsCapturing(true);
     setProgress({ current: 0, total: 1 });
-    setStatus(`Buscando buques para ${selectedLabel}...`);
+    setStatus(`Cargando buques para ${selectedLabel}...`);
 
     try {
-      const response = await fetch('/api/scrape-vessel', {
+      const response = await fetch('/.netlify/functions/scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'No se pudo leer VesselFinder.');
+      const contentType = response.headers.get('Content-Type') || '';
+      const responseBody = await response.text();
+      if (!response.ok) {
+        let errorMessage = 'No se pudo leer VesselFinder.';
+        if (contentType.includes('application/json')) {
+          try {
+            const errorPayload = JSON.parse(responseBody);
+            errorMessage = errorPayload.error || errorMessage;
+          } catch {
+            errorMessage = responseBody || errorMessage;
+          }
+        }
+        throw new Error(errorMessage);
+      }
 
-      const records = Array.isArray(payload.records) ? payload.records : [];
+      let html = responseBody;
+      if (contentType.includes('application/json')) {
+        const data = JSON.parse(responseBody);
+        html = data.html || '';
+      }
+
+      const records = parseFleetRowsFromHtml(html);
       const store = getFleetRegistryStore();
       let newCount = 0;
       let updatedCount = 0;
@@ -725,8 +795,15 @@ function FleetIntelligenceLibraryPanel() {
         };
         const existing = store[imo];
         if (existing) {
-          updatedCount += 1;
-          store[imo] = { ...existing, ...nextRecord, updatedAt: new Date().toISOString() };
+          const changed = ['nombre', 'tipo', 'categoryValue', 'categoryLabel', 'scrapedType', 'anio', 'gt', 'dwt', 'dimensiones'].some((field) => {
+            const previousValue = existing[field as keyof FleetRegistryRecord];
+            const nextValue = nextRecord[field as keyof FleetRegistryRecord];
+            return cleanFleetValue(previousValue) !== cleanFleetValue(nextValue);
+          });
+          if (changed) {
+            updatedCount += 1;
+            store[imo] = { ...existing, ...nextRecord, updatedAt: new Date().toISOString() };
+          }
         } else {
           newCount += 1;
           store[imo] = { ...nextRecord, capturedAt: new Date().toISOString() };
@@ -754,7 +831,7 @@ function FleetIntelligenceLibraryPanel() {
           <h2 className="mt-1 text-base font-black text-slate-950">Biblioteca AIS local</h2>
         </div>
         <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-800">
-          {registryCount} buques
+          LISTA BLANCA: {registryCount} BUQUES
         </span>
       </div>
       <div className="grid gap-3 lg:grid-cols-[minmax(12rem,0.45fr)_minmax(16rem,1fr)_auto]">
@@ -776,7 +853,7 @@ function FleetIntelligenceLibraryPanel() {
         </label>
         <button type="button" onClick={captureFleetRegistry} disabled={isCapturing} className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-amber-500 bg-amber-400 px-4 text-xs font-black uppercase tracking-wide text-slate-950 shadow-sm transition hover:bg-amber-300 disabled:cursor-wait disabled:opacity-65">
           <RefreshIcon />
-          {isCapturing ? 'Buscando...' : 'Capturar'}
+          {isCapturing ? 'Cargando' : 'Capturar'}
         </button>
       </div>
       {isCapturing && (
