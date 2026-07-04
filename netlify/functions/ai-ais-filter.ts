@@ -30,6 +30,47 @@ function haversineNm(lat1: number, lon1: number, lat2: number, lon2: number) {
   return radiusNm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
+function normalizeTaxonomyText(value: unknown) {
+  return textValue(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+const taxonomyTerms: Record<string, string[]> = {
+  "category:cargo": ["cargo", "bulk", "bulker", "general cargo", "container", "cement", "multipurpose", "mpp", "heavy lift", "coaster"],
+  "type:bulk": ["bulk carrier", "bulk", "bulker", "handysize", "handymax", "supramax", "ultramax", "panamax", "capesize"],
+  "type:general": ["general cargo", "coaster"],
+  "type:container": ["container", "feeder"],
+  "type:cement": ["cement"],
+  "type:mpv": ["multipurpose", "mpp"],
+  "type:heavy_lift": ["heavy lift"],
+  "category:tanker": ["tanker", "crude", "lng", "lpg", "chemical", "product tanker", "oil"],
+  "type:crude_tanker": ["crude", "oil tanker"],
+  "type:lng_tanker": ["lng"],
+  "type:chemical_tanker": ["chemical"],
+  "type:product_tanker": ["product tanker"],
+  "type:lpg_tanker": ["lpg"],
+};
+
+function vesselMatchesTaxonomy(vessel: NonNullable<ReturnType<typeof normalizeVessel>>, taxonomyValue: string) {
+  if (!taxonomyValue || taxonomyValue === "All") return true;
+  const terms = taxonomyTerms[taxonomyValue] || taxonomyTerms[taxonomyValue.replace(/^type:/, "")] || [taxonomyValue.replace(/^type:/, "")];
+  const haystack = normalizeTaxonomyText([
+    vessel.shipType,
+    vessel.source.Tipo,
+    vessel.source.type,
+    vessel.source.vesselType,
+    vessel.source.cargoType,
+    vessel.source.tipo_carga,
+    vessel.source.radarCategory,
+    vessel.source.vesselClass,
+  ].filter(Boolean).join(" "));
+  return terms.some((term) => haystack.includes(normalizeTaxonomyText(term)));
+}
+
 function normalizeVessel(value: unknown) {
   const source = pickObject(value);
   const meta = pickObject(source.MetaData);
@@ -69,6 +110,9 @@ export default async (req: Request) => {
     const body = pickObject(await req.json());
     const cargo = pickObject(body.cargo);
     const params = pickObject(body.params);
+    const vesselClassContext = pickObject(body.vesselClassContext);
+    const vesselClassProfile = pickObject(vesselClassContext.profile);
+    const vesselClassValue = textValue(vesselClassContext.value) || "category:cargo";
     const vessels = Array.isArray(body.radarSnapshot) ? body.radarSnapshot : [];
     const loadingPortLat = numberValue(cargo.loadingPortLat);
     const loadingPortLon = numberValue(cargo.loadingPortLon);
@@ -77,9 +121,11 @@ export default async (req: Request) => {
     const maxDraft = numberValue(cargo.maxDraft) || Number.POSITIVE_INFINITY;
     const maxLoa = numberValue(cargo.maxLoa) || Number.POSITIVE_INFINITY;
     const freightRate = numberValue(cargo.freightRate);
-    const fuelPrice = numberValue(params.fuelPrice, 650) || 650;
+    const bunkerMultiplier = numberValue(vesselClassProfile.bunkerMultiplier, 1) || 1;
+    const riskCoefficient = numberValue(vesselClassProfile.riskCoefficient, 1) || 1;
+    const fuelPrice = (numberValue(params.fuelPrice, 650) || 650) * bunkerMultiplier;
     const dailyOpex = numberValue(params.dailyOpex, 6500) || 6500;
-    const portExpenses = numberValue(params.portExpenses, 40000) || 40000;
+    const portExpenses = (numberValue(params.portExpenses, 40000) || 40000) * riskCoefficient;
 
     if (!Number.isFinite(loadingPortLat) || !Number.isFinite(loadingPortLon)) {
       return Response.json({ success: false, error: "Invalid loading port coordinates", data: [] }, { status: 400, headers: jsonHeaders });
@@ -88,6 +134,7 @@ export default async (req: Request) => {
     const matches = vessels
       .map(normalizeVessel)
       .filter((vessel): vessel is NonNullable<ReturnType<typeof normalizeVessel>> => Boolean(vessel))
+      .filter((vessel) => vesselMatchesTaxonomy(vessel, vesselClassValue))
       .map((vessel) => {
         const distance = haversineNm(loadingPortLat, loadingPortLon, vessel.latitude, vessel.longitude);
         const hoursToLoadPort = distance / Math.max(vessel.speed, 1);
@@ -98,7 +145,7 @@ export default async (req: Request) => {
         const dateOk = etaDate <= laycanEnd;
         const technical = (capacityOk ? 30 : 10) + (draftOk ? 20 : 0) + (loaOk ? 15 : 0) + (dateOk ? 20 : 8);
         const economic = Math.max(0, 100 - distance / 35);
-        const risk = Math.max(0, 100 - Math.max(0, hoursToLoadPort / 24 - 7) * 8);
+        const risk = Math.max(0, 100 - Math.max(0, hoursToLoadPort / 24 - 7) * 8 * riskCoefficient);
         const overall = Math.round(Math.min(100, technical * 0.55 + economic * 0.30 + risk * 0.15));
         const ballastFuelCost = distance * (fuelPrice / 100);
         const suggestedFreightRate = freightRate > 0 ? freightRate : Math.max(0, (ballastFuelCost + portExpenses + dailyOpex) / Math.max(quantity, 1));
