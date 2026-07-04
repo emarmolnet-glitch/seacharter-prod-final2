@@ -1,5 +1,5 @@
 import type { Config } from "@netlify/functions";
-import { readVessels, sortByLastSeen, upsertVessels, type VesselRecord } from "./vessel-store.js";
+import { isCargoShipType, readVessels, sortByLastSeen, upsertVessels, type VesselRecord } from "./vessel-store.js";
 
 function toApiVessel(row: VesselRecord) {
   return {
@@ -9,6 +9,8 @@ function toApiVessel(row: VesselRecord) {
     name: row.vesselName,
     vesselName: row.vesselName,
     shipType: row.shipType,
+    draught: row.draught,
+    draft: row.draught,
     latitude: row.latitude,
     longitude: row.longitude,
     speed: row.speed,
@@ -35,6 +37,7 @@ export default async (req: Request) => {
     const imoNumber = String(vessel.imoNumber || vessel.imo || "").trim();
     const latitude = Number(vessel.latitude ?? vessel.lat ?? 0);
     const longitude = Number(vessel.longitude ?? vessel.lon ?? vessel.lng ?? 0);
+    const shipType = vessel.shipType || vessel.ship_type ? String(vessel.shipType || vessel.ship_type) : null;
 
     if (!imoNumber || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       return Response.json(
@@ -42,12 +45,19 @@ export default async (req: Request) => {
         { status: 400 },
       );
     }
+    if (!isCargoShipType(shipType)) {
+      return Response.json(
+        { success: false, error: "Only AIS ShipType codes 70-79 are accepted for radar vessel storage" },
+        { status: 422 },
+      );
+    }
 
     const row: VesselRecord = {
       imoNumber,
       mmsi: vessel.mmsi ? String(vessel.mmsi) : null,
       vesselName: vessel.vesselName || vessel.vessel_name || vessel.name ? String(vessel.vesselName || vessel.vessel_name || vessel.name) : null,
-      shipType: vessel.shipType || vessel.ship_type ? String(vessel.shipType || vessel.ship_type) : null,
+      shipType,
+      draught: Number.isFinite(Number(vessel.draught ?? vessel.draft)) ? Number(vessel.draught ?? vessel.draft) : null,
       latitude,
       longitude,
       speed: Number.isFinite(Number(vessel.speed)) ? Number(vessel.speed) : null,

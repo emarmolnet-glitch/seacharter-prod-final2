@@ -1,6 +1,6 @@
 import type { Config } from "@netlify/functions";
 import WebSocket from "ws";
-import { readVessels, upsertVessels, type VesselRecord } from "./vessel-store.js";
+import { isCargoShipType, readVessels, upsertVessels, type VesselRecord } from "./vessel-store.js";
 
 type VesselMessage = Record<string, unknown>;
 declare const process: { env: Record<string, string | undefined> };
@@ -95,6 +95,12 @@ function firstDefined(...values: unknown[]) {
 function normalizeNumber(value: unknown) {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : undefined;
+}
+
+function normalizeDraughtMeters(value: unknown) {
+  const draught = normalizeNumber(value);
+  if (draught === undefined) return undefined;
+  return draught > 25 ? Math.round((draught / 10) * 100) / 100 : draught;
 }
 
 function normalizeDestination(value: unknown) {
@@ -252,6 +258,13 @@ function normalizeEta(message: VesselMessage, reference?: { lat: number; lon: nu
   return eta.toISOString();
 }
 
+function getShipTypeValue(message: VesselMessage) {
+  const metadata = asRecord(message.MetaData);
+  const nestedMessage = asRecord(message.Message);
+  const staticData = asRecord(message.ShipStaticData || nestedMessage.ShipStaticData);
+  return firstDefined(message.ShipType, message.shipType, message.type, message.Type, metadata.ShipType, metadata.shipType, staticData.Type);
+}
+
 function buildProjection(message: VesselMessage, target?: { role: string; lat: number; lon: number; radiusNm: number }) {
   const metadata = asRecord(message.MetaData);
   const lat = normalizeNumber(firstDefined(message.latitude, message.AIS_Live_Lat, metadata.latitude));
@@ -302,6 +315,7 @@ function etaDriftHours(aisEta: string, projectedEta: unknown) {
 }
 
 function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
+  const selective = !["0", "false", "no"].includes(textParam(url, ["selective"], "1").toLowerCase());
   const requestedState = textParam(url, ["loadState", "estado", "cargoState"], "any");
   const vesselSearch = textParam(url, ["q", "search", "vesselName"], "");
   const normalizedVesselSearch = vesselSearch
@@ -328,6 +342,7 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
 
   return vessels
     .map(normalizeVesselMessage)
+    .filter((vessel) => !selective || isCargoShipType(getShipTypeValue(vessel)))
     .map((vessel) => {
       const metadata = asRecord(vessel.MetaData);
       const lat = normalizeNumber(firstDefined(vessel.latitude, vessel.AIS_Live_Lat, metadata.latitude));
@@ -356,10 +371,10 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
 
       const dwt = estimateDwt(vessel);
       const classification = vesselClassLabel(dwt, firstDefined(vessel.shipType, vessel.ShipType, metadata.ShipType));
-      if (!isGlobalNameSearch && (dwt < HANDYSIZE_MIN_DWT || dwt > SUPRAMAX_MAX_DWT)) return null;
+      if (selective && !isGlobalNameSearch && (dwt < HANDYSIZE_MIN_DWT || dwt > SUPRAMAX_MAX_DWT)) return null;
 
       const loadState = estimateProjectedLoadState(vessel, requestedState);
-      if (!isGlobalNameSearch && (requestedState === "Laden" || requestedState === "Ballast") && loadState !== requestedState) return null;
+      if (selective && !isGlobalNameSearch && (requestedState === "Laden" || requestedState === "Ballast") && loadState !== requestedState) return null;
 
       const pointDistances = activePoints.map((point) => ({
         ...point,
@@ -385,10 +400,10 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
         hoursToPolCircle < PROJECTION_LOOKAHEAD_HOURS
       );
 
-      if (!isGlobalNameSearch && matchingMode && !isProjectionCandidate && (!nearestVisual || nearestVisual.role !== "POL")) {
+      if (selective && !isGlobalNameSearch && matchingMode && !isProjectionCandidate && (!nearestVisual || nearestVisual.role !== "POL")) {
         return null;
       }
-      if (!isGlobalNameSearch && matchingMode && !isProjectionCandidate && (!projection || projection.projectedIntersection !== true || Number(projection.crossTrackNm ?? Infinity) > 50)) {
+      if (selective && !isGlobalNameSearch && matchingMode && !isProjectionCandidate && (!projection || projection.projectedIntersection !== true || Number(projection.crossTrackNm ?? Infinity) > 50)) {
         return null;
       }
 
@@ -498,6 +513,7 @@ function normalizeVesselMessage(message: VesselMessage): VesselMessage {
   const shipName = firstDefined(message.ShipName, message.vesselName, message.name, metadata.ShipName, metadata.shipName, staticData.Name);
   const imo = firstDefined(message.IMO, message.imo, metadata.IMO, metadata.imo, staticData.ImoNumber);
   const shipType = firstDefined(message.ShipType, message.shipType, metadata.ShipType, metadata.shipType, staticData.Type);
+  const draught = normalizeDraughtMeters(firstDefined(message.draught, message.Draught, message.draft, message.Draft, metadata.draught, metadata.Draught, metadata.draft, metadata.Draft, staticData.MaximumStaticDraught));
   const speed = normalizeNumber(firstDefined(message.speed, metadata.speed, positionReport.Sog, positionReport.SOG));
   const course = normalizeNumber(firstDefined(message.course, message.COG, message.cog, metadata.course, metadata.COG, metadata.cog, positionReport.Cog, positionReport.COG, positionReport.Course));
   const navigationalStatus = firstDefined(message.NavigationalStatus, metadata.NavigationalStatus, positionReport.NavigationalStatus);
@@ -534,6 +550,10 @@ function normalizeVesselMessage(message: VesselMessage): VesselMessage {
     imo: imo || (mmsi ? "N/A" : undefined),
     ShipType: shipType,
     shipType,
+    draught,
+    draft: draught,
+    Draught: draught,
+    Draft: draught,
     latitude,
     longitude,
     AIS_Live_Lat: latitude,
@@ -555,6 +575,8 @@ function normalizeVesselMessage(message: VesselMessage): VesselMessage {
       ShipName: firstDefined(metadata.ShipName, shipName),
       IMO: firstDefined(metadata.IMO, imo, mmsi ? "N/A" : undefined),
       ShipType: firstDefined(metadata.ShipType, shipType),
+      Draught: firstDefined(metadata.Draught, draught),
+      Draft: firstDefined(metadata.Draft, draught),
       latitude: firstDefined(metadata.latitude, latitude),
       longitude: firstDefined(metadata.longitude, longitude),
       speed: firstDefined(metadata.speed, speed),
@@ -576,6 +598,7 @@ function toVesselRecord(message: VesselMessage): VesselRecord | null {
   const longitude = normalizeNumber(firstDefined(normalized.longitude, normalized.AIS_Live_Lon, metadata.longitude));
 
   if (!mmsi || latitude === undefined || longitude === undefined) return null;
+  if (!isCargoShipType(getShipTypeValue(normalized))) return null;
 
   const now = new Date().toISOString();
   const imo = String(firstDefined(normalized.imo, normalized.IMO, metadata.IMO, "") || "").trim();
@@ -585,6 +608,7 @@ function toVesselRecord(message: VesselMessage): VesselRecord | null {
     mmsi,
     vesselName: String(firstDefined(normalized.vesselName, normalized.ShipName, metadata.ShipName, "") || "").trim() || null,
     shipType: String(firstDefined(normalized.shipType, normalized.ShipType, metadata.ShipType, "") || "").trim() || null,
+    draught: normalizeDraughtMeters(firstDefined(normalized.draught, normalized.Draught, normalized.draft, normalized.Draft, metadata.Draught, metadata.Draft)) ?? null,
     latitude,
     longitude,
     speed: normalizeNumber(firstDefined(normalized.speed, metadata.speed)) ?? null,
@@ -612,6 +636,10 @@ function fromVesselRecord(row: VesselRecord): VesselMessage {
     vesselName: row.vesselName,
     ShipType: row.shipType,
     shipType: row.shipType,
+    Draught: row.draught,
+    Draft: row.draught,
+    draught: row.draught,
+    draft: row.draught,
     latitude: row.latitude,
     longitude: row.longitude,
     AIS_Live_Lat: row.latitude,
@@ -635,6 +663,8 @@ function fromVesselRecord(row: VesselRecord): VesselMessage {
       IMO: row.imoNumber.startsWith("MMSI-") ? "N/A" : row.imoNumber,
       ShipName: row.vesselName,
       ShipType: row.shipType,
+      Draught: row.draught,
+      Draft: row.draught,
       latitude: row.latitude,
       longitude: row.longitude,
       speed: row.speed,
@@ -686,6 +716,7 @@ function mergeDefinedVesselFields(current: VesselMessage | undefined, incoming: 
 function collectVessels(url: URL, apiKey: string) {
   const quantity = Math.min(MAX_QUANTITY, Math.max(1, numberParam(url, ["quantity", "limit"], DEFAULT_QUANTITY)));
   const timeoutMs = Math.min(MAX_TIMEOUT_MS, Math.max(2500, numberParam(url, ["timeoutMs"], DEFAULT_TIMEOUT_MS)));
+  const selective = !["0", "false", "no"].includes(textParam(url, ["selective"], "1").toLowerCase());
   const bounds = getRequestedBoundingBoxes(url);
   if (!bounds) {
     return Promise.reject(new Error("AIS POL/POD bounding boxes are required."));
@@ -717,17 +748,19 @@ function collectVessels(url: URL, apiKey: string) {
     timer = setTimeout(() => finish(), timeoutMs);
 
     ws.on("open", () => {
-      ws.send(JSON.stringify({
+      const subscription: Record<string, unknown> = {
         APIKey: apiKey,
         BoundingBoxes: bounds,
-        VesselTypes: [],
         FilterMessageTypes: ["PositionReport", "ShipStaticData"],
-      }));
+      };
+      if (selective) subscription.VesselTypes = [70, 71, 72, 73, 74, 75, 76, 77, 78, 79];
+      ws.send(JSON.stringify(subscription));
     });
 
     ws.on("message", (data: { toString: () => string }) => {
       try {
         const message = normalizeVesselMessage(JSON.parse(data.toString()) as VesselMessage);
+        if (selective && !isCargoShipType(getShipTypeValue(message))) return;
         const key = getVesselKey(message);
         if (!key) return;
         vesselsByKey.set(key, mergeDefinedVesselFields(vesselsByKey.get(key), message));
