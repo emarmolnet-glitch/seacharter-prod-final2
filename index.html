@@ -28430,8 +28430,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             function getFleetIntelIdentityKey(record) {
                 const imo = record && record.imo !== 'SIN-IMO' ? normalizeFleetIntelImo(record.imo) : '';
-                const name = normalizeFleetIntelVesselName(record && (record.vessel || record.nombre || record.name || record.ShipName));
+                const name = getFleetIntelNameKey(record);
                 return imo || name;
+            }
+
+            function getFleetIntelNameKey(record) {
+                return normalizeFleetIntelVesselName(record && (record.vessel || record.nombre || record.name || record.vesselName || record.ShipName));
             }
 
             function mergeFleetIntelRecord(existing, incoming) {
@@ -28460,7 +28464,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
                 function indexRecord(record) {
                     const imo = record && record.imo !== 'SIN-IMO' ? normalizeFleetIntelImo(record.imo) : '';
-                    const name = normalizeFleetIntelVesselName(record && (record.vessel || record.nombre || record.name || record.ShipName));
+                    const name = getFleetIntelNameKey(record);
                     if (imo) registryIndex.set(imo, record);
                     if (name) registryIndex.set(name, record);
                 }
@@ -28509,9 +28513,22 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 function find(identity) {
                     const index = getIndex();
                     const source = identity && identity.MetaData ? getAisVesselIdentity(identity) : identity;
-                    const imo = normalizeFleetIntelImo(source && source.imo);
+                    const meta = source && source.MetaData ? source.MetaData : {};
+                    const imo = normalizeFleetIntelImo(source && (source.imo || source.IMO || meta.imo || meta.IMO));
                     if (imo && index.has(imo)) return index.get(imo) || null;
-                    const name = normalizeFleetIntelVesselName(source && (source.name || source.vessel || source.nombre));
+                    const name = normalizeFleetIntelVesselName(source && (
+                        source.name ||
+                        source.vessel ||
+                        source.nombre ||
+                        source.vesselName ||
+                        source.vessel_name ||
+                        source.ShipName ||
+                        source.shipName ||
+                        source.VesselName ||
+                        meta.ShipName ||
+                        meta.shipName ||
+                        meta.VesselName
+                    ));
                     return name ? index.get(name) || null : null;
                 }
 
@@ -28549,7 +28566,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     loadRegistry();
                     return registry.reduce((store, record) => {
                         const imo = record && record.imo !== 'SIN-IMO' ? normalizeFleetIntelImo(record.imo) : '';
-                        const name = normalizeFleetIntelVesselName(record && (record.vessel || record.nombre || record.name || record.ShipName));
+                        const name = getFleetIntelNameKey(record);
                         const key = imo || name;
                         if (key) store[key] = record;
                         return store;
@@ -28729,7 +28746,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
                 return lines.slice(1).map(line => {
                     const cells = splitFleetIntelCsvLine(line, delimiter);
-                    const nombre = cleanFleetIntelValue(cells[columnIndex.vessel]);
+                    const rawVessel = columnIndex.vessel >= 0 ? cells[columnIndex.vessel] : undefined;
+                    const vesselName = rawVessel?.toString().replace('-', ' ').trim();
+                    if (!vesselName) {
+                        console.warn('Fila ignorada por falta de nombre:', cells);
+                        return null;
+                    }
+                    const nombre = cleanFleetIntelValue(vesselName);
                     const vesselKey = normalizeFleetIntelVesselName(nombre);
                     if (!vesselKey) return null;
                     const rawType = columnIndex.tipo >= 0 ? cells[columnIndex.tipo] : '';
@@ -30000,12 +30023,29 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (hasRealAisData && polCoords) {
                 const maxNearbyRadiusNm = (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 300;
 
-                // Layer 1: Deduplication by IMO / MMSI using a Map
+                const normalizeAisRadarTextKey = (value) => String(value || '')
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .replace(/[^a-z0-9]+/gi, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .toUpperCase();
+                const normalizeAisRadarNumericKey = (value) => {
+                    const text = String(value || '').trim();
+                    if (!text || ['N/A', 'NA', 'NULL', 'NONE', 'NAN', '-', '--'].includes(text.toUpperCase())) return '';
+                    const digits = text.replace(/\D/g, '');
+                    return digits || '';
+                };
+
+                // Layer 1: Deduplication by valid IMO / MMSI / vessel name using a Map
                 const uniqueVesselsMap = new Map();
                 pricingSourceVessels.forEach(v => {
-                    const imo = v.imo || v.IMO || "N/A";
-                    const mmsi = v.mmsi || v.MMSI || "N/A";
-                    const key = (imo && imo !== 'N/A') ? imo : mmsi;
+                    const meta = v.MetaData || {};
+                    const imo = normalizeAisRadarNumericKey(v.imo || v.IMO || meta.imo || meta.IMO);
+                    const mmsi = normalizeAisRadarNumericKey(v.mmsi || v.MMSI || meta.mmsi || meta.MMSI);
+                    const vesselKey = normalizeAisRadarTextKey(v.Vessel || v.vessel || v.vesselName || v.name || v.ShipName || meta.Vessel || meta.VesselName || meta.ShipName);
+                    const key = imo || mmsi || vesselKey;
+                    if (!key) return;
                     if (!uniqueVesselsMap.has(key)) {
                         uniqueVesselsMap.set(key, v);
                     } else {
