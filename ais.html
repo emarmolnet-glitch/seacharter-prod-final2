@@ -1109,10 +1109,10 @@
             }
             const storedVessels = Array.from(window.buquesAlmacenados.values());
             const visibleLiveVessels = vessels.filter((v) => {
-                return markFleetIntelVessel(v);
+                return markFleetIntelVessel(v) && matchesSelectedFleetTaxonomy(v);
             });
             const visibleStoredVessels = storedVessels.filter((v) => {
-                return markFleetIntelVessel(v);
+                return markFleetIntelVessel(v) && matchesSelectedFleetTaxonomy(v);
             });
             window.aisLiveVesselsData = visibleLiveVessels;
             window.rawVesselsInArea = visibleStoredVessels;
@@ -1357,6 +1357,52 @@
             tug: ['tug', 'support'],
             fishing: ['fishing']
         };
+        const FLEET_CARGO_TAXONOMY_KEY = 'fleet_intel_cargo_taxonomy';
+        const FLEET_CARGO_TAXONOMY = [
+            { value: 'type:cement', label: 'Cement Carrier', tipo_carga: 'Cement Carrier', keywords: ['cement', 'cemento', 'clinker'] },
+            { value: 'type:bulk', label: 'Dry Bulk', tipo_carga: 'Dry Bulk', keywords: ['dry bulk', 'granel solido', 'granel sólido', 'grain', 'coal', 'petcoke', 'mineral'] },
+            { value: 'type:general', label: 'General Cargo', tipo_carga: 'General Cargo', keywords: ['general cargo', 'carga general', 'break bulk', 'breakbulk'] },
+            { value: 'type:heavy_lift', label: 'Heavy Lift', tipo_carga: 'Heavy Lift', keywords: ['project', 'proyecto', 'heavy lift', 'carga pesada'] },
+            { value: 'type:chemical_tanker', label: 'Chemical Tanker', tipo_carga: 'Chemical Tanker', keywords: ['chemical', 'quimico', 'químico', 'benzene'] },
+            { value: 'type:product_tanker', label: 'Product Tanker', tipo_carga: 'Product Tanker', keywords: ['oil', 'diesel', 'gasoline', 'fuel', 'petroleo', 'petróleo'] }
+        ];
+
+        function normalizeFleetTaxonomyText(value) {
+            return String(value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, ' ')
+                .trim();
+        }
+
+        function inferFleetCargoTaxonomy(value) {
+            const text = normalizeFleetTaxonomyText(value);
+            if (!text) return null;
+            return FLEET_CARGO_TAXONOMY.find(item =>
+                item.keywords.some(keyword => text.includes(normalizeFleetTaxonomyText(keyword)))
+            ) || null;
+        }
+
+        function applyFleetCargoTaxonomy(value, options = {}) {
+            const inferred = inferFleetCargoTaxonomy(value);
+            const select = document.getElementById('fleet-intel-vessel-type');
+            if (inferred) {
+                localStorage.setItem(FLEET_CARGO_TAXONOMY_KEY, JSON.stringify(inferred));
+                localStorage.setItem(FLEET_INTEL_FILTER_KEY, inferred.value);
+                localStorage.setItem('ais_filter_vessel_types', JSON.stringify([inferred.value]));
+                if (select) select.value = inferred.value;
+            } else {
+                localStorage.removeItem(FLEET_CARGO_TAXONOMY_KEY);
+            }
+            if (!options.silent && typeof window.applyGeofencingFilters === 'function') {
+                window.applyGeofencingFilters();
+            }
+            return inferred;
+        }
+
+        window.inferFleetCargoTaxonomy = inferFleetCargoTaxonomy;
+        window.applyFleetCargoTaxonomy = applyFleetCargoTaxonomy;
 
         function normalizeFleetIntelImo(value) {
             const digits = String(value || '').replace(/\D/g, '');
@@ -1443,6 +1489,26 @@
                 return find(vesselData);
             }
 
+            function matchesCargoTaxonomy(vesselData, taxonomyValue) {
+                const record = find(vesselData);
+                if (!record) return false;
+                if (!taxonomyValue || String(taxonomyValue).startsWith('category:')) return true;
+                const taxonomyKey = String(taxonomyValue).replace(/^type:/, '');
+                const taxonomyTerms = FLEET_INTEL_TAXONOMY[taxonomyKey] || [taxonomyKey];
+                const text = normalizeFleetTaxonomyText([
+                    record.tipo_carga,
+                    record.cargoType,
+                    record.tipo,
+                    record.type,
+                    record.shipType,
+                    record.vesselType,
+                    record.categoryLabel,
+                    record.categoryValue,
+                    record.scrapedType
+                ].filter(Boolean).join(' '));
+                return taxonomyTerms.some(term => text.includes(normalizeFleetTaxonomyText(term)));
+            }
+
             function getStore() {
                 loadRegistry();
                 return registry.reduce((store, record) => {
@@ -1464,6 +1530,7 @@
                 find,
                 isTarget,
                 matchesTarget,
+                matchesCargoTaxonomy,
                 getVesselData,
                 getStore
             };
@@ -1548,13 +1615,17 @@
                     ? (window.FleetManager.getVesselData(vessel) || findFleetIntelRecord(vessel))
                     : null;
                 const matched = !!record;
+                const selectedTaxonomy = getSelectedFleetIntelCategory();
+                const cargoPriority = matched && window.FleetManager.matchesCargoTaxonomy(vessel, selectedTaxonomy.value);
                 if (vessel) {
                     vessel.isTarget = matched;
                     vessel.fleetIntelMatch = matched;
+                    vessel.fleetIntelCargoPriority = cargoPriority;
                     vessel.fleetIntelRecord = record || null;
                     if (vessel.MetaData) {
                         vessel.MetaData.isTarget = matched;
                         vessel.MetaData.fleetIntelMatch = matched;
+                        vessel.MetaData.fleetIntelCargoPriority = cargoPriority;
                     }
                 }
                 return vessel;
@@ -1589,10 +1660,14 @@
             const nombre = cleanFleetIntelValue(record.nombre || record.name);
             const selectedCategory = getSelectedFleetIntelCategory();
             const tipo = cleanFleetIntelValue(selectedCategory.label);
+            const inferredCargoType = inferFleetCargoTaxonomy(record && (record.tipo_carga || record.cargoType || record.tipo || record.type || selectedCategory.label));
+            const tipoCarga = cleanFleetIntelValue((record && (record.tipo_carga || record.cargoType)) || (inferredCargoType && inferredCargoType.tipo_carga) || selectedCategory.label);
             return {
                 imo,
                 nombre,
                 name: nombre,
+                tipo_carga: tipoCarga,
+                cargoType: tipoCarga,
                 tipo,
                 type: tipo,
                 shipType: tipo,
@@ -1771,6 +1846,8 @@
 
         function getFleetIntelTypeText(record) {
             return [
+                record && record.tipo_carga,
+                record && record.cargoType,
                 record && record.tipo,
                 record && record.type,
                 record && record.shipType,
@@ -1791,6 +1868,14 @@
             if (!window.FleetMatchmaker || typeof window.FleetMatchmaker.processAisVessel !== 'function') return true;
             const processed = window.FleetMatchmaker.processAisVessel(vessel);
             return !!(processed && processed.isTarget);
+        }
+
+        function matchesSelectedFleetTaxonomy(vessel) {
+            const selected = getSelectedFleetIntelCategory();
+            if (!selected.value || selected.value.startsWith('category:')) return true;
+            return !!(window.FleetManager &&
+                typeof window.FleetManager.matchesCargoTaxonomy === 'function' &&
+                window.FleetManager.matchesCargoTaxonomy(vessel, selected.value));
         }
 
         refreshFleetIntelState();
@@ -2443,6 +2528,9 @@
                 if (!isIntelMatch) {
                     return false;
                 }
+                if (!matchesSelectedFleetTaxonomy(v)) {
+                    return false;
+                }
                 
                 applyAisHybridPriority(v, lat, lon, pol, pod);
                 
@@ -2746,6 +2834,10 @@
                 
                 const isIntelMatch = markFleetIntelVessel(v);
                 if (!isIntelMatch) {
+                    excludedType++;
+                    excludedThisVessel = true;
+                }
+                if (!excludedThisVessel && !matchesSelectedFleetTaxonomy(v)) {
                     excludedType++;
                     excludedThisVessel = true;
                 }
