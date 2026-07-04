@@ -973,6 +973,29 @@
 
     function getAisDynamicIcon(ship, polName, podName) {
         const vessel = ship || {};
+        const fleetRegistry = typeof window !== "undefined" && window.FleetManager && typeof window.FleetManager.getRegistry === "function"
+            ? window.FleetManager.getRegistry()
+            : [];
+        if (!Array.isArray(fleetRegistry) || fleetRegistry.length === 0) {
+            vessel.isTarget = false;
+            vessel.fleetIntelMatch = false;
+            vessel.fleetIntelRecord = null;
+        }
+        if (
+            !vessel.isTarget &&
+            Array.isArray(fleetRegistry) &&
+            fleetRegistry.length > 0 &&
+            typeof window !== "undefined" &&
+            window.FleetManager &&
+            typeof window.FleetManager.isTarget === "function"
+        ) {
+            const matched = window.FleetManager.isTarget(vessel);
+            vessel.isTarget = matched;
+            vessel.fleetIntelMatch = matched;
+            if (matched && typeof window.FleetManager.getVesselData === "function") {
+                vessel.fleetIntelRecord = window.FleetManager.getVesselData(vessel);
+            }
+        }
         const destination = String(vessel.destination || vessel.Destination || (vessel.MetaData && vessel.MetaData.Destination) || "").toUpperCase();
         const status = String(vessel.statusLabel || vessel.status || vessel.NavigationalStatusLabel || "").toUpperCase();
         const normalizedPol = polName ? String(polName).toUpperCase().trim() : "";
