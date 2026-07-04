@@ -890,23 +890,6 @@
         }
     }
 
-    function normalizeFleetRegistryImo(value) {
-        const digits = String(value || "").replace(/\D/g, "");
-        return digits.length >= 7 ? digits.slice(-7) : "";
-    }
-
-    function getFleetRegistryRecord(imo) {
-        const normalizedImo = normalizeFleetRegistryImo(imo);
-        if (!normalizedImo || typeof localStorage === "undefined") return null;
-        try {
-            const current = JSON.parse(localStorage.getItem("fleet_registry") || "{}") || {};
-            const legacy = JSON.parse(localStorage.getItem("fleet_intel_vessels") || "{}") || {};
-            return current[normalizedImo] || legacy[normalizedImo] || null;
-        } catch (_) {
-            return null;
-        }
-    }
-
     function escapePopupText(value) {
         return String(value || "N/A")
             .replace(/&/g, "&amp;")
@@ -916,11 +899,11 @@
             .replace(/'/g, "&#39;");
     }
 
-    function buildFleetRegistryPopupHtml(imo) {
-        const record = getFleetRegistryRecord(imo);
-        if (!record) return "";
-        const category = record.categoryLabel || record.tipo || record.type || record.vesselType;
-        return `<span>Nombre: ${escapePopupText(record.nombre || record.name)}</span><span>IMO: ${escapePopupText(record.imo || imo)}</span><span>Categoría: ${escapePopupText(category)}</span><span>Año: ${escapePopupText(record.anio)}</span><span>GT: ${escapePopupText(record.gt)}</span><span>DWT: ${escapePopupText(record.dwt)}</span><span>Dimensiones: ${escapePopupText(record.dimensiones)}</span>`;
+    function buildTargetPopupHtml(vessel) {
+        if (typeof window === "undefined" || !window.FleetMatchmaker || typeof window.FleetMatchmaker.buildTechnicalHtml !== "function") {
+            return "";
+        }
+        return window.FleetMatchmaker.buildTechnicalHtml(vessel);
     }
 
     function setupAisMarkerPopup(marker, options) {
@@ -957,7 +940,8 @@
                         const hydratedDest = dbVessel.destination || "N/A";
                         const hydratedLastPort = dbVessel.lastPortOfCall || dbVessel.last_port_of_call || dbVessel.ultimo_puerto || "N/A";
 
-                        const updatedContent = `<div class="seacharter-map-popup"><strong>${name}</strong><span>IMO: ${hydratedImo}</span><span>MMSI: ${mmsi}</span><span>Destino: ${hydratedDest}</span><span>Último puerto: ${hydratedLastPort}</span><span>Ubicación: ${statusLabel}</span>${buildFleetRegistryPopupHtml(hydratedImo)}<small>Estimated Position / Terrestrial Coverage Gap</small></div>`;
+                        const hydratedVessel = Object.assign({}, options, dbVessel, { imo: hydratedImo, IMO: hydratedImo, destination: hydratedDest });
+                        const updatedContent = `<div class="seacharter-map-popup"><strong>${name}</strong><span>IMO: ${hydratedImo}</span><span>MMSI: ${mmsi}</span><span>Destino: ${hydratedDest}</span><span>Último puerto: ${hydratedLastPort}</span><span>Ubicación: ${statusLabel}</span>${buildTargetPopupHtml(hydratedVessel)}<small>Estimated Position / Terrestrial Coverage Gap</small></div>`;
                         marker.setPopupContent(updatedContent);
                         marker._isHydrated = true;
                     } else {
@@ -982,21 +966,13 @@
             const imo = options.imo || "N/A";
             const destination = options.destination || "N/A";
             const lastPortOfCall = options.lastPortOfCall || options.last_port_of_call || options.ultimo_puerto || "N/A";
-            const normalContent = `<div class="seacharter-map-popup"><strong>${name}</strong><span>IMO: ${imo}</span><span>MMSI: ${mmsi}</span><span>Destino: ${destination}</span><span>Último puerto: ${lastPortOfCall}</span><span>Ubicación: ${statusLabel}</span>${buildFleetRegistryPopupHtml(imo)}</div>`;
+            const normalContent = `<div class="seacharter-map-popup"><strong>${name}</strong><span>IMO: ${imo}</span><span>MMSI: ${mmsi}</span><span>Destino: ${destination}</span><span>Último puerto: ${lastPortOfCall}</span><span>Ubicación: ${statusLabel}</span>${buildTargetPopupHtml(options)}</div>`;
             marker.bindPopup(normalContent);
         }
     }
 
     function getAisDynamicIcon(ship, polName, podName) {
         const vessel = ship || {};
-        const vesselImo = String(vessel.imo || vessel.IMO || (vessel.MetaData && (vessel.MetaData.IMO || vessel.MetaData.imo)) || "").replace(/\D/g, "");
-        const fleetRegistryRecord = getFleetRegistryRecord(vesselImo);
-        const isFleetIntelMatch = !!(
-            fleetRegistryRecord ||
-            vessel.fleetIntelMatch ||
-            (vessel.MetaData && vessel.MetaData.fleetIntelMatch) ||
-            (vesselImo && typeof window !== "undefined" && window.FleetIntelWhiteList instanceof Set && window.FleetIntelWhiteList.has(normalizeFleetRegistryImo(vesselImo)))
-        );
         const destination = String(vessel.destination || vessel.Destination || (vessel.MetaData && vessel.MetaData.Destination) || "").toUpperCase();
         const status = String(vessel.statusLabel || vessel.status || vessel.NavigationalStatusLabel || "").toUpperCase();
         const normalizedPol = polName ? String(polName).toUpperCase().trim() : "";
@@ -1013,7 +989,7 @@
         let iconColor = radarColor || "#3b82f6";
         let imageIcon = "";
 
-        if (isFleetIntelMatch) {
+        if (vessel.isTarget) {
             iconClass = "fa-star";
             iconColor = "#f59e0b";
         } else if (radarZone === "POL") {
@@ -1046,7 +1022,7 @@
             className: "custom-ais-icon",
             html: imageIcon
                 ? `<div class="seacharter-ais-icon${isProjectionCandidate ? ' ghost-ship' : ''}" data-icon-class="${iconClass}" style="--marker-color: ${iconColor}; color: ${iconColor};"><img src="${imageIcon}" alt="" width="24" height="24"></div>`
-                : `<div class="seacharter-ais-icon${isProjectionCandidate ? ' ghost-ship' : ''}${isFleetIntelMatch ? ' fleet-intel-match' : ''}" style="--marker-color: ${iconColor};"><i class="fa-solid fas ${iconClass}"></i></div>`,
+                : `<div class="seacharter-ais-icon${isProjectionCandidate ? ' ghost-ship' : ''}${vessel.isTarget ? ' fleet-intel-match' : ''}" style="--marker-color: ${iconColor};"><i class="fa-solid fas ${iconClass}"></i></div>`,
             iconSize: [24, 24],
             iconAnchor: [12, 12]
         };
