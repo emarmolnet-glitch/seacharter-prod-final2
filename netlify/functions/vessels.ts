@@ -9,8 +9,14 @@ function toApiVessel(row: VesselRecord) {
     name: row.vesselName,
     vesselName: row.vesselName,
     shipType: row.shipType,
+    cargoClass: row.cargoClass,
+    vesselClass: row.vesselClass,
+    dwt: row.dwt,
     draught: row.draught,
     draft: row.draught,
+    designDraft: row.designDraft,
+    loadState: row.loadState,
+    estado_carga: row.loadState,
     latitude: row.latitude,
     longitude: row.longitude,
     speed: row.speed,
@@ -23,8 +29,14 @@ function toApiVessel(row: VesselRecord) {
     lastPortOfCall: row.lastPortOfCall,
     last_port_of_call: row.lastPortOfCall,
     ultimo_puerto: row.lastPortOfCall,
+    predictedDestination: row.predictedDestination,
+    predictedDestinationConfidence: row.predictedDestinationConfidence,
     eta: row.eta,
     source: row.source,
+    classificationSignals: row.classificationSignals,
+    missingData: row.missingData,
+    classificationComplete: row.classificationComplete,
+    radarSweepCount: row.radarSweepCount,
     lastSeenAt: row.lastSeenAt,
     updatedAt: row.updatedAt,
   };
@@ -103,7 +115,7 @@ export default async (req: Request) => {
     })
     .slice(0, limit);
 
-  return Response.json({ success: true, data: rows.map(toApiVessel), source: "blobs" });
+  return Response.json({ success: true, data: rows.map(toApiVessel), source: "database" });
 };
 
 export const config: Config = {

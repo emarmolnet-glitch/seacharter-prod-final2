@@ -6,6 +6,11 @@ export type VesselRecord = {
   vesselName: string | null;
   shipType: string | null;
   draught: number | null;
+  designDraft?: number | null;
+  dwt?: number | null;
+  cargoClass?: string | null;
+  vesselClass?: string | null;
+  loadState?: string | null;
   latitude: number;
   longitude: number;
   speed: number | null;
@@ -14,16 +19,23 @@ export type VesselRecord = {
   navigationalStatus: string | null;
   destination: string | null;
   lastPortOfCall: string | null;
+  predictedDestination?: string | null;
+  predictedDestinationConfidence?: number | null;
   eta: string | null;
   source: string;
   rawData: unknown;
+  classificationSignals?: unknown;
+  missingData?: string[];
+  classificationComplete?: boolean;
+  radarSweepCount?: number;
+  firstSeenAt?: string;
   lastSeenAt: string;
   updatedAt: string;
   createdAt: string;
 };
 
 const STORE_NAME = "ais-vessels";
-const VESSELS_KEY = "vessels-master";
+const VESSEL_INDEX_KEY = "vessels-index.json";
 const CARGO_LOG_KEY = "cargo-vessels-log.csv";
 const CARGO_LOG_HEADER = "MMSI,IMO,Nombre,ShipType,Draught,Latitud,Longitud,ETA";
 
@@ -36,6 +48,23 @@ function isVesselRecord(value: unknown): value is VesselRecord {
   return typeof vessel.imoNumber === "string"
     && Number.isFinite(vessel.latitude)
     && Number.isFinite(vessel.longitude);
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function firstDefined(...values: unknown[]) {
+  return values.find((value) => value !== undefined && value !== null && value !== "");
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
 }
 
 function parseShipTypeCode(value: unknown): number | null {
@@ -104,6 +133,107 @@ export function isCargoShipType(value: unknown): boolean {
     && !excludedTerms.some((term) => text.includes(term));
 }
 
+function estimateDwt(row: VesselRecord): number | null {
+  const raw = asRecord(row.rawData);
+  const metadata = asRecord(raw.MetaData);
+  const direct = toNumber(firstDefined(row.dwt, raw.DWT, raw.dwt, raw.deadweight, metadata.DWT, metadata.dwt, metadata.deadweight));
+  if (direct && direct > 0) return Math.round(direct);
+
+  if (!isCargoShipType(row.shipType)) return null;
+
+  const seed = String(firstDefined(row.imoNumber, row.mmsi, row.vesselName, "") || "");
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = seed.charCodeAt(index) + ((hash << 5) - hash);
+  }
+  return 25000 + (Math.abs(hash) % 40001);
+}
+
+function classifyCargo(row: VesselRecord, dwt: number | null) {
+  const text = normalizeShipTypeText(row.shipType);
+  if (text.includes("container")) return "Container";
+  if (text.includes("reefer")) return "Reefer";
+  if (text.includes("ro ro")) return "Ro-Ro Cargo";
+  if (text.includes("cement")) return "Cement Carrier";
+  if (text.includes("heavy lift")) return "Heavy Lift";
+  if (text.includes("multipurpose") || text.includes("multi purpose") || text.includes("mpp")) return "Multipurpose";
+  if (text.includes("bulk") || text.includes("bulker")) return dwt && dwt >= 50000 ? "Supramax Bulk Carrier" : "Handysize Bulk Carrier";
+  return "General Cargo";
+}
+
+function classifyVessel(row: VesselRecord, dwt: number | null) {
+  const text = normalizeShipTypeText(row.shipType);
+  if (text.includes("supramax")) return "Supramax";
+  if (text.includes("handysize")) return "Handysize";
+  if (!dwt) return null;
+  if (dwt >= 50000 && dwt <= 65000) return "Supramax";
+  if (dwt >= 25000 && dwt < 50000) return "Handysize";
+  if (dwt < 25000) return "Small Cargo";
+  return "Large Cargo";
+}
+
+function inferLoadState(row: VesselRecord) {
+  const raw = asRecord(row.rawData);
+  const metadata = asRecord(raw.MetaData);
+  const explicit = String(firstDefined(row.loadState, raw.loadState, raw.estado_carga, raw.cargoStatus, metadata.loadState, metadata.estado_carga, "") || "").toLowerCase();
+  if (explicit.includes("laden") || explicit.includes("carg")) return "Laden";
+  if (explicit.includes("ballast") || explicit.includes("vacio") || explicit.includes("vacío")) return "Ballast";
+
+  const designDraft = toNumber(firstDefined(row.designDraft, raw.designDraft, raw.maxDraft, metadata.designDraft, metadata.maxDraft));
+  if (row.draught !== null && designDraft && designDraft > 0) return row.draught / designDraft >= 0.62 ? "Laden" : "Ballast";
+  if (row.draught !== null) return row.draught >= 8.5 ? "Laden" : "Ballast";
+  return row.destination && (row.speed ?? 0) > 0.5 ? "Laden" : null;
+}
+
+function missingClassificationData(row: VesselRecord) {
+  const missing: string[] = [];
+  if (!row.mmsi) missing.push("mmsi");
+  if (!row.imoNumber || row.imoNumber.startsWith("MMSI-")) missing.push("imoNumber");
+  if (!row.vesselName) missing.push("vesselName");
+  if (!row.shipType) missing.push("shipType");
+  if (row.draught === null) missing.push("draught");
+  if (!row.destination) missing.push("destination");
+  if (!row.lastPortOfCall) missing.push("lastPortOfCall");
+  if (!row.eta) missing.push("eta");
+  if (row.speed === null) missing.push("speed");
+  if (row.course === null) missing.push("course");
+  return missing;
+}
+
+function enrichVesselRecord(row: VesselRecord): VesselRecord {
+  const dwt = row.dwt ?? estimateDwt(row);
+  const cargoClass = row.cargoClass ?? classifyCargo(row, dwt);
+  const vesselClass = row.vesselClass ?? classifyVessel(row, dwt);
+  const loadState = row.loadState ?? inferLoadState({ ...row, dwt, cargoClass, vesselClass });
+  const missingData = missingClassificationData({ ...row, dwt, cargoClass, vesselClass, loadState });
+  return {
+    ...row,
+    dwt,
+    cargoClass,
+    vesselClass,
+    loadState,
+    missingData,
+    classificationComplete: missingData.length === 0 && Boolean(cargoClass && vesselClass),
+    classificationSignals: {
+      shipType: row.shipType,
+      dwt,
+      draught: row.draught,
+      designDraft: row.designDraft ?? null,
+      loadState,
+      destination: row.destination,
+      lastPortOfCall: row.lastPortOfCall,
+      speed: row.speed,
+      course: row.course,
+    },
+  };
+}
+
+function toIso(value: unknown): string {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string" && value) return value;
+  return new Date().toISOString();
+}
+
 function csvCell(value: unknown): string {
   if (value === undefined || value === null) return "";
   const text = String(value);
@@ -129,46 +259,112 @@ function cargoLogLine(row: VesselRecord): string {
   ].map(csvCell).join(",");
 }
 
+function vesselStorageKey(row: VesselRecord) {
+  if (row.mmsi) return `mmsi:${row.mmsi}`;
+  return `imo:${row.imoNumber}`;
+}
+
+function mergeVesselRecord(existing: VesselRecord | undefined, incoming: VesselRecord): VesselRecord {
+  const now = new Date().toISOString();
+  if (!existing) {
+    return {
+      ...incoming,
+      radarSweepCount: incoming.radarSweepCount ?? 1,
+      firstSeenAt: incoming.firstSeenAt || incoming.createdAt || now,
+      lastSeenAt: incoming.lastSeenAt || now,
+      createdAt: incoming.createdAt || now,
+      updatedAt: now,
+    };
+  }
+
+  return {
+    ...existing,
+    imoNumber: incoming.imoNumber && !incoming.imoNumber.startsWith("MMSI-") ? incoming.imoNumber : existing.imoNumber,
+    mmsi: incoming.mmsi ?? existing.mmsi,
+    vesselName: incoming.vesselName ?? existing.vesselName,
+    shipType: incoming.shipType ?? existing.shipType,
+    cargoClass: incoming.cargoClass ?? existing.cargoClass,
+    vesselClass: incoming.vesselClass ?? existing.vesselClass,
+    dwt: incoming.dwt ?? existing.dwt,
+    draught: incoming.draught ?? existing.draught,
+    designDraft: incoming.designDraft ?? existing.designDraft,
+    loadState: incoming.loadState ?? existing.loadState,
+    latitude: incoming.latitude,
+    longitude: incoming.longitude,
+    speed: incoming.speed ?? existing.speed,
+    course: incoming.course ?? existing.course,
+    heading: incoming.heading ?? existing.heading,
+    navigationalStatus: incoming.navigationalStatus ?? existing.navigationalStatus,
+    destination: incoming.destination ?? existing.destination,
+    predictedDestination: incoming.predictedDestination ?? existing.predictedDestination,
+    predictedDestinationConfidence: incoming.predictedDestinationConfidence ?? existing.predictedDestinationConfidence,
+    lastPortOfCall: incoming.lastPortOfCall ?? existing.lastPortOfCall,
+    eta: incoming.eta ?? existing.eta,
+    source: incoming.source,
+    rawData: incoming.rawData,
+    classificationSignals: incoming.classificationSignals,
+    missingData: incoming.missingData,
+    classificationComplete: incoming.classificationComplete ?? existing.classificationComplete ?? false,
+    radarSweepCount: (existing.radarSweepCount ?? 0) + 1,
+    firstSeenAt: existing.firstSeenAt || existing.createdAt || incoming.firstSeenAt || incoming.createdAt || now,
+    lastSeenAt: incoming.lastSeenAt || now,
+    createdAt: existing.createdAt || incoming.createdAt || now,
+    updatedAt: now,
+  };
+}
+
+async function readVesselIndex(): Promise<VesselRecord[]> {
+  const stored = await getVesselStore().get(VESSEL_INDEX_KEY, { type: "json" });
+  const rows = Array.isArray(stored) ? stored : [];
+  return rows.filter(isVesselRecord).map((row) => ({
+    ...row,
+    missingData: Array.isArray(row.missingData) ? row.missingData : [],
+    firstSeenAt: toIso(row.firstSeenAt || row.createdAt),
+    lastSeenAt: toIso(row.lastSeenAt),
+    updatedAt: toIso(row.updatedAt),
+    createdAt: toIso(row.createdAt),
+  }));
+}
+
+async function writeVesselIndex(rows: VesselRecord[]): Promise<void> {
+  await getVesselStore().setJSON(VESSEL_INDEX_KEY, rows.slice(0, 45000), {
+    metadata: {
+      contentType: "application/json; charset=utf-8",
+      purpose: "classified-radar-vessel-index",
+    },
+  });
+}
+
 export async function readVessels(): Promise<VesselRecord[]> {
-  const store = getVesselStore();
-  const stored = await store.get(VESSELS_KEY, { type: "json" });
-
-  if (!Array.isArray(stored)) return [];
-
-  return stored.filter(isVesselRecord);
+  return sortByLastSeen(await readVesselIndex()).slice(0, 45000);
 }
 
 export async function upsertVessels(rows: VesselRecord[]): Promise<VesselRecord[]> {
-  const cargoRows = rows.filter((row) => isCargoShipType(row.shipType));
+  const cargoRows = rows.filter((row) => isCargoShipType(row.shipType)).map(enrichVesselRecord);
   if (cargoRows.length === 0) return readVessels();
 
-  const existing = await readVessels();
-  const byKey = new Map(existing.map((row) => [row.mmsi || row.imoNumber, row]));
+  const currentRows = await readVesselIndex();
+  const rowsByKey = new Map<string, VesselRecord>();
 
-  for (const row of cargoRows) {
-    const key = row.mmsi || row.imoNumber;
-    const previous = byKey.get(key);
-    const incomingHasImo = row.imoNumber && !row.imoNumber.startsWith("MMSI-");
-    const previousHasImo = previous?.imoNumber && !previous.imoNumber.startsWith("MMSI-");
-    byKey.set(key, {
-      ...previous,
-      ...row,
-      imoNumber: incomingHasImo ? row.imoNumber : (previousHasImo ? previous.imoNumber : row.imoNumber),
-      destination: row.destination || previous?.destination || null,
-      eta: row.eta || previous?.eta || null,
-      draught: row.draught ?? previous?.draught ?? null,
-      createdAt: previous?.createdAt || row.createdAt,
-      updatedAt: new Date().toISOString(),
-    });
+  for (const row of currentRows) {
+    rowsByKey.set(vesselStorageKey(row), row);
   }
 
-  const nextRows = Array.from(byKey.values())
-    .sort((a, b) => Date.parse(b.lastSeenAt) - Date.parse(a.lastSeenAt));
+  for (const row of cargoRows) {
+    const primaryKey = vesselStorageKey(row);
+    const existingByPrimary = rowsByKey.get(primaryKey);
+    const existingByImo = row.mmsi ? rowsByKey.get(`imo:${row.imoNumber}`) : undefined;
+    const merged = mergeVesselRecord(existingByPrimary || existingByImo, row);
+    rowsByKey.set(vesselStorageKey(merged), merged);
+    if (existingByImo && vesselStorageKey(existingByImo) !== vesselStorageKey(merged)) {
+      rowsByKey.delete(vesselStorageKey(existingByImo));
+    }
+  }
 
-  await getVesselStore().setJSON(VESSELS_KEY, nextRows);
+  await writeVesselIndex(sortByLastSeen(Array.from(rowsByKey.values())));
   await appendCargoVesselCsvLog(cargoRows);
 
-  return nextRows;
+  return readVessels();
 }
 
 export async function appendCargoVesselCsvLog(rows: VesselRecord[]): Promise<void> {
