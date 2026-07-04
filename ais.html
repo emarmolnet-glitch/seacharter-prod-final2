@@ -265,7 +265,7 @@
                 </div>
                 
                 <label style="display: block; font-size: 0.8rem; color: #4a5568; margin-top: 10px; cursor: pointer;">
-                    <input type="checkbox" id="filter-strict-geofence" checked> Exclude vessels outside radius
+                    <input type="checkbox" id="filter-strict-geofence"> Prioritize local port zones
                 </label>
             </div>
         </div>
@@ -910,13 +910,7 @@
         }
 
         function getActiveBoundingBox(currentPort = getActiveLoadingPort()) {
-            const country = String(currentPort.country || '').toUpperCase();
-            const region = String(currentPort.region || '').toUpperCase();
-            const name = String(currentPort.name || '').toUpperCase();
-            if (country === 'HONDURAS' || country === 'HN' || region === 'CARIBBEAN' || region === 'CARIBE' || /HONDURAS|CARIBBEAN|CARIBE/.test(name)) {
-                return OPERATIONAL_ZONES.CARIBBEAN_HONDURAS;
-            }
-            return OPERATIONAL_ZONES.MEDITERRANEAN;
+            return [[-90, -180], [90, 180]];
         }
 
         function syncAisMapToOperationalZone(zonePayload) {
@@ -924,18 +918,7 @@
         }
 
         function getAisBoundsPayload() {
-            let box = getActiveBoundingBox();
-            if (typeof AISmap !== 'undefined' && AISmap && typeof AISmap.getBounds === 'function') {
-                const currentBounds = window.MapLoader && typeof window.MapLoader.readLeafletBounds === 'function'
-                    ? window.MapLoader.readLeafletBounds(AISmap.getBounds())
-                    : null;
-                if (currentBounds) {
-                    box = [
-                        [currentBounds.latMin, currentBounds.lonMin],
-                        [currentBounds.latMax, currentBounds.lonMax]
-                    ];
-                }
-            }
+            const box = getActiveBoundingBox();
             return {
                 key: box.flat().map(value => Number(value).toFixed(4)).join(','),
                 box
@@ -943,8 +926,7 @@
         }
 
         function isInsideAisMedBox(latitude, longitude) {
-            const [[latMin, lonMin], [latMax, lonMax]] = getActiveBoundingBox();
-            return latitude >= latMin && latitude <= latMax && longitude >= lonMin && longitude <= lonMax;
+            return latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
         }
 
         function isAllowedAisCargoType(meta, report) {
@@ -2610,7 +2592,7 @@
                 if (coords) applyAisHybridPriority(v, coords[0], coords[1], pol, pod);
             });
             const polPrimaryVessels = filteredVessels.filter(v => v.aisRadarZone === 'POL');
-            window.lastVesselsInArea = polPrimaryVessels; // Calculations use only POL 300 NM supply.
+            window.lastVesselsInArea = filteredVessels;
 
             if (typeof localStorage !== 'undefined') {
                 const selectedFleetType = document.getElementById('fleet-intel-vessel-type')?.value || 'category:cargo';
@@ -2619,17 +2601,17 @@
                 localStorage.setItem('ais_filter_max_distance', String(AIS_RADAR_POL_RADIUS_NM));
                 localStorage.setItem('ais_filter_min_dwt', document.getElementById('filter-min-dwt')?.value || "0");
                 localStorage.setItem('ais_filter_max_dwt', document.getElementById('filter-max-dwt')?.value || "200000");
-                localStorage.setItem('ais_filter_strict_geofence', document.getElementById('filter-strict-geofence')?.checked ? "true" : "false");
+                localStorage.setItem('ais_filter_strict_geofence', "false");
                 localStorage.setItem('ais_filters_updated', Date.now().toString());
             }
             
             // 1. Update the original dashboard KPI elements if they exist
             const vesselsCountEl = document.getElementById('vessels-count');
-            if (vesselsCountEl) vesselsCountEl.innerText = polPrimaryVessels.length;
+            if (vesselsCountEl) vesselsCountEl.innerText = filteredVessels.length;
             const supplyCoefEl = document.getElementById('supply-coefficient');
-            if (supplyCoefEl) supplyCoefEl.innerText = (polPrimaryVessels.length / 10).toFixed(2);
+            if (supplyCoefEl) supplyCoefEl.innerText = (filteredVessels.length / 10).toFixed(2);
             const compStatusEl = document.getElementById('competition-status');
-            if (compStatusEl) compStatusEl.innerText = polPrimaryVessels.length > 5 ? "High" : "Low";
+            if (compStatusEl) compStatusEl.innerText = filteredVessels.length > 5 ? "High" : "Low";
 
             // 2. STRATEGIC NEGOTIATION LOGIC
             let breakEven = NaN;
@@ -2642,11 +2624,11 @@
                 breakEven = parseFloat((inputNew ? inputNew.value : null) || (inputOld ? inputOld.value : null) || 18.32);
             }
 
-            recalculateAisRates(polPrimaryVessels, breakEven);
+            recalculateAisRates(filteredVessels, breakEven);
 
             // 3. Update original algorithm
             if (typeof window.updateAlgorithm === 'function') {
-                window.updateAlgorithm(polPrimaryVessels);
+                window.updateAlgorithm(filteredVessels);
             }
 
             // 4. Update the classification table body
@@ -3205,7 +3187,7 @@
             if (document.getElementById('filter-max-dwt')) document.getElementById('filter-max-dwt').value = "200000";
             if (document.getElementById('filter-port-max-dwt')) document.getElementById('filter-port-max-dwt').value = "0";
             if (document.getElementById('filter-max-distance')) document.getElementById('filter-max-distance').value = "300";
-            if (document.getElementById('filter-strict-geofence')) document.getElementById('filter-strict-geofence').checked = true;
+            if (document.getElementById('filter-strict-geofence')) document.getElementById('filter-strict-geofence').checked = false;
             
             const fleetSelect = document.getElementById('fleet-intel-vessel-type');
             if (fleetSelect) fleetSelect.value = 'category:cargo';
