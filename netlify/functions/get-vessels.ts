@@ -12,9 +12,10 @@ declare const process: { env: Record<string, string | undefined> };
 const AIS_STREAM_URL = "wss://stream.aisstream.io/v0/stream";
 const DEFAULT_TIMEOUT_MS = 8000;
 const MAX_TIMEOUT_MS = 8000;
-const DEFAULT_QUANTITY = 50;
-const MAX_AIS_STREAM_COLLECTION = 50;
+const DEFAULT_QUANTITY = 200;
+const MAX_AIS_STREAM_COLLECTION = 200;
 const MAX_QUANTITY = 1000;
+const STORED_LOOKUP_LIMIT = 1000;
 const HANDYSIZE_MIN_DWT = 25000;
 const SUPRAMAX_MAX_DWT = 65000;
 const POL_VISUAL_RADIUS_NM = 2000;
@@ -729,6 +730,46 @@ async function persistVesselMessages(vessels: VesselMessage[]) {
   }
 }
 
+function mergeVesselMessageLists(baseVessels: VesselMessage[], incomingVessels: VesselMessage[]) {
+  const byKey = new Map<string, VesselMessage>();
+
+  for (const vessel of baseVessels) {
+    const normalized = normalizeVesselMessage(vessel);
+    const key = getVesselKey(normalized);
+    if (!key) continue;
+    byKey.set(key, mergeDefinedVesselFields(byKey.get(key), normalized));
+  }
+
+  for (const vessel of incomingVessels) {
+    const normalized = normalizeVesselMessage(vessel);
+    const key = getVesselKey(normalized);
+    if (!key) continue;
+    byKey.set(key, mergeDefinedVesselFields(byKey.get(key), normalized));
+  }
+
+  return Array.from(byKey.values());
+}
+
+function completeIncomingVesselsFromStore(storedVessels: VesselMessage[], incomingVessels: VesselMessage[]) {
+  const storedByKey = new Map<string, VesselMessage>();
+
+  for (const vessel of storedVessels) {
+    const normalized = normalizeVesselMessage(vessel);
+    const key = getVesselKey(normalized);
+    if (!key) continue;
+    storedByKey.set(key, mergeDefinedVesselFields(storedByKey.get(key), normalized));
+  }
+
+  return incomingVessels
+    .map((vessel) => {
+      const normalized = normalizeVesselMessage(vessel);
+      const key = getVesselKey(normalized);
+      if (!key) return null;
+      return mergeDefinedVesselFields(storedByKey.get(key), normalized);
+    })
+    .filter((vessel): vessel is VesselMessage => Boolean(vessel));
+}
+
 function mergeDefinedVesselFields(current: VesselMessage | undefined, incoming: VesselMessage) {
   const merged: VesselMessage = { ...(current || {}) };
 
@@ -902,17 +943,25 @@ export default async (req: Request) => {
 
   try {
     const liveResult = await collectVessels(url, apiKey);
-    const vessels = liveResult.vessels;
-    if (vessels.length > 0) {
+    const liveVessels = liveResult.vessels;
+    const storedVessels = await readStoredVesselMessages(Math.max(requestedQuantity, STORED_LOOKUP_LIMIT));
+    const completedLiveVessels = completeIncomingVesselsFromStore(storedVessels, liveVessels);
+    const vessels = completedLiveVessels.length > 0
+      ? mergeVesselMessageLists(storedVessels, liveVessels)
+      : [];
+
+    if (completedLiveVessels.length > 0) {
       vesselCache = vessels;
       cacheUpdatedAt = Date.now();
-      await persistVesselMessages(vessels);
+      await persistVesselMessages(completedLiveVessels);
     } else if (!forceLive && vesselCache.length === 0) {
-      vesselCache = await readStoredVesselMessages(requestedQuantity);
+      vesselCache = storedVessels;
       if (vesselCache.length > 0) cacheUpdatedAt = Date.now();
     }
 
-    const responseVessels = forceLive ? vessels.map(normalizeVesselMessage) : filterSelectiveVessels(url, vessels.length ? vessels : vesselCache);
+    const responseVessels = forceLive
+      ? completedLiveVessels
+      : filterSelectiveVessels(url, vessels.length ? vessels : vesselCache);
     const source = vessels.length
       ? "aisstream-live"
       : forceLive && liveResult.completion === "timeout"
