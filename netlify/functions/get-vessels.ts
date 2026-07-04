@@ -3,12 +3,17 @@ import WebSocket from "ws";
 import { isCargoShipType, readVessels, upsertVessels, type VesselRecord } from "./vessel-store.js";
 
 type VesselMessage = Record<string, unknown>;
+type LiveCollectionResult = {
+  vessels: VesselMessage[];
+  completion: "target" | "timeout" | "closed" | "error";
+};
 declare const process: { env: Record<string, string | undefined> };
 
 const AIS_STREAM_URL = "wss://stream.aisstream.io/v0/stream";
-const DEFAULT_TIMEOUT_MS = 8500;
-const MAX_TIMEOUT_MS = 12000;
-const DEFAULT_QUANTITY = 120;
+const DEFAULT_TIMEOUT_MS = 8000;
+const MAX_TIMEOUT_MS = 8000;
+const DEFAULT_QUANTITY = 50;
+const MAX_AIS_STREAM_COLLECTION = 50;
 const MAX_QUANTITY = 1000;
 const HANDYSIZE_MIN_DWT = 25000;
 const SUPRAMAX_MAX_DWT = 65000;
@@ -21,6 +26,8 @@ const PROJECTION_VECTOR_MINUTES = 60;
 
 let vesselCache: VesselMessage[] = [];
 let cacheUpdatedAt = 0;
+
+type AisBoundingBox = [[number, number], [number, number]];
 
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
@@ -56,19 +63,19 @@ function parseRequestedBoxes(url: URL) {
     const boxes = parsed
       .map((box) => {
         if (!Array.isArray(box) || !Array.isArray(box[0]) || !Array.isArray(box[1])) return null;
-        const minLat = Number(box[0][0]);
-        const minLon = Number(box[0][1]);
-        const maxLat = Number(box[1][0]);
-        const maxLon = Number(box[1][1]);
+        const minLat = parseFloat(String(box[0][0]));
+        const minLon = parseFloat(String(box[0][1]));
+        const maxLat = parseFloat(String(box[1][0]));
+        const maxLon = parseFloat(String(box[1][1]));
         if (![minLat, minLon, maxLat, maxLon].every(Number.isFinite)) return null;
-        if (Math.min(minLat, maxLat) < -90 || Math.max(minLat, maxLat) > 90) return null;
-        if (Math.min(minLon, maxLon) < -180 || Math.max(minLon, maxLon) > 180) return null;
+        if (minLat < -90 || minLat > 90 || maxLat < -90 || maxLat > 90) return null;
+        if (minLon < -180 || minLon > 180 || maxLon < -180 || maxLon > 180) return null;
         return [
           [Math.min(minLat, maxLat), Math.min(minLon, maxLon)],
           [Math.max(minLat, maxLat), Math.max(minLon, maxLon)],
-        ];
+        ] satisfies AisBoundingBox;
       })
-      .filter((box): box is number[][] => Array.isArray(box));
+      .filter((box): box is AisBoundingBox => Array.isArray(box));
 
     return boxes.length > 0 ? boxes.slice(0, 4) : null;
   } catch (_) {
@@ -78,6 +85,10 @@ function parseRequestedBoxes(url: URL) {
 
 function getRequestedBoundingBoxes(url: URL) {
   return parseRequestedBoxes(url);
+}
+
+function isForceLiveRequest(url: URL) {
+  return ["1", "true", "yes"].includes(textParam(url, ["force", "live"], "0").toLowerCase());
 }
 
 function getApiKey() {
@@ -735,22 +746,22 @@ function mergeDefinedVesselFields(current: VesselMessage | undefined, incoming: 
   return merged;
 }
 
-function collectVessels(url: URL, apiKey: string) {
+function collectVessels(url: URL, apiKey: string): Promise<LiveCollectionResult> {
   const quantity = Math.min(MAX_QUANTITY, Math.max(1, numberParam(url, ["quantity", "limit"], DEFAULT_QUANTITY)));
+  const collectionTarget = Math.min(quantity, MAX_AIS_STREAM_COLLECTION);
   const timeoutMs = Math.min(MAX_TIMEOUT_MS, Math.max(2500, numberParam(url, ["timeoutMs"], DEFAULT_TIMEOUT_MS)));
-  const selective = !["0", "false", "no"].includes(textParam(url, ["selective"], "1").toLowerCase());
   const bounds = getRequestedBoundingBoxes(url);
   if (!bounds) {
     return Promise.reject(new Error("AIS POL/POD bounding boxes are required."));
   }
 
-  return new Promise<VesselMessage[]>((resolve, reject) => {
+  return new Promise<LiveCollectionResult>((resolve, reject) => {
     const vesselsByKey = new Map<string, VesselMessage>();
     const ws = new WebSocket(AIS_STREAM_URL);
     let settled = false;
     let timer: ReturnType<typeof setTimeout>;
 
-    const finish = (error?: Error) => {
+    const finish = (completion: LiveCollectionResult["completion"], error?: Error) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -764,34 +775,48 @@ function collectVessels(url: URL, apiKey: string) {
         return;
       }
 
-      resolve(Array.from(vesselsByKey.values()).slice(0, quantity));
+      resolve({
+        vessels: Array.from(vesselsByKey.values()).slice(0, collectionTarget),
+        completion,
+      });
     };
 
-    timer = setTimeout(() => finish(), timeoutMs);
+    timer = setTimeout(() => {
+      console.log(`AIS stream live capture timed out after ${timeoutMs}ms with ${vesselsByKey.size} vessels.`);
+      finish("timeout");
+    }, timeoutMs);
 
     ws.on("open", () => {
-      const subscription: Record<string, unknown> = {
+      const subscriptionMessage: Record<string, unknown> = {
         APIKey: apiKey,
         BoundingBoxes: bounds,
         FilterMessageTypes: ["PositionReport", "ShipStaticData"],
       };
-      ws.send(JSON.stringify(subscription));
+      const debugSubscriptionMessage = { ...subscriptionMessage, APIKey: apiKey ? "[redacted]" : "" };
+      console.log(JSON.stringify(debugSubscriptionMessage));
+      ws.send(JSON.stringify(subscriptionMessage));
     });
 
     ws.on("message", (data: { toString: () => string }) => {
       try {
         const message = normalizeVesselMessage(JSON.parse(data.toString()) as VesselMessage);
-        const shipType = getShipTypeValue(message);
-        if (selective && shipType !== undefined && shipType !== null && shipType !== "" && !isCargoShipType(shipType)) return;
         const key = getVesselKey(message);
         if (!key) return;
         vesselsByKey.set(key, mergeDefinedVesselFields(vesselsByKey.get(key), message));
-        if (vesselsByKey.size >= quantity) finish();
+        if (vesselsByKey.size >= collectionTarget) finish("target");
       } catch (_) {}
     });
 
-    ws.on("error", () => finish(new Error("AIS stream connection failed.")));
-    ws.on("close", () => finish());
+    ws.on("error", (error: Error) => {
+      console.error("AIS stream websocket error:", error.message);
+      finish("error", new Error("AIS stream connection failed."));
+    });
+
+    ws.on("close", (code: number, reason: Buffer) => {
+      const reasonText = reason?.toString() || "";
+      console.warn("AIS stream websocket closed:", JSON.stringify({ code, reason: reasonText || null, collected: vesselsByKey.size }));
+      finish("closed");
+    });
   });
 }
 
@@ -799,6 +824,7 @@ export default async (req: Request) => {
   const url = new URL(req.url);
   const requestedQuantity = Math.min(MAX_QUANTITY, Math.max(1, numberParam(url, ["quantity", "limit"], DEFAULT_QUANTITY)));
   const apiKey = getApiKey();
+  const forceLive = isForceLiveRequest(url);
 
   if (url.searchParams.get("action") === "reset-cache") {
     vesselCache = [];
@@ -845,6 +871,19 @@ export default async (req: Request) => {
   }
 
   if (!apiKey) {
+    if (forceLive) {
+      return vesselsResponse(
+        {
+          vessels: [],
+          message: "Data recolectada: 0 buques recibidos del barrido en vivo",
+          warning: "AIS stream API key is not configured on the server.",
+          updatedAt: cacheUpdatedAt,
+          source: "live-error-empty",
+        },
+        { status: 401 },
+      );
+    }
+
     const storedVessels = await readStoredVesselMessages(requestedQuantity);
     if (storedVessels.length > 0) {
       vesselCache = storedVessels;
@@ -862,33 +901,53 @@ export default async (req: Request) => {
   }
 
   try {
-    const vessels = await collectVessels(url, apiKey);
+    const liveResult = await collectVessels(url, apiKey);
+    const vessels = liveResult.vessels;
     if (vessels.length > 0) {
       vesselCache = vessels;
       cacheUpdatedAt = Date.now();
       await persistVesselMessages(vessels);
-    } else if (vesselCache.length === 0) {
+    } else if (!forceLive && vesselCache.length === 0) {
       vesselCache = await readStoredVesselMessages(requestedQuantity);
       if (vesselCache.length > 0) cacheUpdatedAt = Date.now();
     }
 
-    const filtered = filterSelectiveVessels(url, vessels.length ? vessels : vesselCache);
+    const responseVessels = forceLive ? vessels.map(normalizeVesselMessage) : filterSelectiveVessels(url, vessels.length ? vessels : vesselCache);
+    const source = vessels.length
+      ? "aisstream-live"
+      : forceLive && liveResult.completion === "timeout"
+        ? "live-timeout-empty"
+        : forceLive
+          ? "live-empty"
+          : "stored-cache";
     return vesselsResponse(
       {
-        vessels: filtered,
+        vessels: responseVessels,
         updatedAt: cacheUpdatedAt,
-        source: vessels.length ? "aisstream-live" : "stored-cache",
-        message: `Data recolectada: ${filtered.length} buques filtrados con éxito`,
+        source,
+        message: forceLive
+          ? `Data recolectada: ${responseVessels.length} buques recibidos del barrido en vivo`
+          : `Data recolectada: ${responseVessels.length} buques filtrados con éxito`,
       },
       {
         headers: {
-          "x-ais-persisted-count": String(filtered.length),
+          "x-ais-persisted-count": String(responseVessels.length),
           "x-ais-target-count": String(requestedQuantity),
         },
       },
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "AIS stream request failed.";
+    if (forceLive) {
+      return vesselsResponse({
+        vessels: [],
+        message: "Data recolectada: 0 buques recibidos del barrido en vivo",
+        warning: message,
+        updatedAt: cacheUpdatedAt,
+        source: "live-error-empty",
+      });
+    }
+
     if (vesselCache.length === 0) {
       vesselCache = await readStoredVesselMessages(requestedQuantity);
       if (vesselCache.length > 0) cacheUpdatedAt = Date.now();

@@ -466,7 +466,7 @@
     }
 
     /**
-     * Bypasses the 300 NM local restriction in the frontend and forms a viewport query URL.
+     * Bypasses the local restriction in the frontend and forms a viewport query URL.
      * 
      * @param {Object} map Leaflet map object
      * @param {string} mode Operation mode
@@ -724,7 +724,7 @@
             const parentPort = portsByRole[parentRole];
             const color = parentRole === 'POD' ? '#2563eb' : '#16a34a';
             const nodeColor = '#f97316';
-            const radiusNm = Number(radiusByRole[parentRole] || (parentRole === 'POD' ? 100 : 300));
+            const radiusNm = Number(radiusByRole[parentRole] || (parentRole === 'POD' ? 100 : 2000));
             const lat = Number(node.lat);
             const lon = Number(node.lon);
 
