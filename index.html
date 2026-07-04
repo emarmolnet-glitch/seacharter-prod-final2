@@ -2900,6 +2900,11 @@
             color: #bbf7d0;
         }
 
+        .ais-availability-monitor.done .ais-availability-spinner {
+            display: none;
+            animation: none;
+        }
+
         @keyframes aisAvailabilitySpin {
             to { transform: rotate(360deg); }
         }
@@ -3396,6 +3401,19 @@
             height: 1.25rem !important;
             stroke: #003366 !important;
             stroke-width: 1.5 !important;
+        }
+
+        @media (max-width: 640px) {
+            header #advanced-modules-btn.tools-dropdown-trigger {
+                width: 52px !important;
+                height: 52px !important;
+                min-height: 52px !important;
+                border-radius: 10px !important;
+            }
+
+            header #advanced-modules-btn.tools-dropdown-trigger i {
+                font-size: 1.35rem !important;
+            }
         }
 
         header #session-actions {
@@ -7009,24 +7027,24 @@
                             document.write(renderizarBloqueFormulario('gc-laycan-date', 'Alistamiento (Laycan)', 'dd/mm/aaaa', {
                                 type: 'date',
                                 wrapperClass: 'space-y-2',
-                                attrs: { oninput: 'syncGencon()' }
+                                attrs: { oninput: 'captureGenconDateState(); syncGencon()', onchange: 'captureGenconDateState(); syncGencon()' }
                             }));
                             document.write(renderizarBloqueFormulario('gc-cancel-date', 'Cancelación (Cancelling)', 'dd/mm/aaaa', {
                                 type: 'date',
                                 wrapperClass: 'space-y-2',
                                 labelClass: `${UI.label} text-red-500`,
-                                attrs: { oninput: 'syncGencon()' }
+                                attrs: { oninput: 'captureGenconDateState(); syncGencon()', onchange: 'captureGenconDateState(); syncGencon()' }
                             }));
                             document.write(renderizarBloqueFormulario('gc-laycan-time', 'Hora Laycan', 'hh:mm', {
                                 type: 'time',
                                 wrapperClass: 'space-y-2',
-                                attrs: { oninput: 'syncGencon()' }
+                                attrs: { oninput: 'captureGenconDateState(); syncGencon()', onchange: 'captureGenconDateState(); syncGencon()' }
                             }));
                             document.write(renderizarBloqueFormulario('gc-cancel-time', 'Hora Cancelación', 'hh:mm', {
                                 type: 'time',
                                 wrapperClass: 'space-y-2',
                                 labelClass: `${UI.label} text-red-500`,
-                                attrs: { oninput: 'syncGencon()' }
+                                attrs: { oninput: 'captureGenconDateState(); syncGencon()', onchange: 'captureGenconDateState(); syncGencon()' }
                             }));
                         </script>
                     </div>
@@ -10558,29 +10576,100 @@
         }
         window.resetTotalEstimation = resetTotalEstimation;
 
+        function normalizeDateInputValue(value) {
+            const raw = String(value ?? '').trim();
+            if (!raw) return '';
+
+            const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+
+            const slashMatch = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+            if (slashMatch) {
+                const day = slashMatch[1].padStart(2, '0');
+                const month = slashMatch[2].padStart(2, '0');
+                const year = slashMatch[3].length === 2 ? `20${slashMatch[3]}` : slashMatch[3];
+                return `${year}-${month}-${day}`;
+            }
+
+            const parsed = new Date(raw);
+            if (!Number.isNaN(parsed.getTime())) {
+                const year = parsed.getFullYear();
+                const month = String(parsed.getMonth() + 1).padStart(2, '0');
+                const day = String(parsed.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+
+            return '';
+        }
+
         const setInputValue = (id, value) => {
             const el = document.getElementById(id);
-            if (el && el.value !== String(value ?? '')) el.value = value ?? '';
+            if (!el) return;
+            const nextValue = el.type === 'date'
+                ? normalizeDateInputValue(value)
+                : String(value ?? '');
+            if (el.value !== nextValue) el.value = nextValue;
         };
+
+        const getNormalizedDateInputValue = (id) => normalizeDateInputValue(document.getElementById(id)?.value || '');
+
+        const firstNonEmpty = (...values) => {
+            for (const value of values) {
+                const normalized = String(value ?? '').trim();
+                if (normalized) return normalized;
+            }
+            return '';
+        };
+
+        function captureGenconDateState() {
+            const laycanDate = getNormalizedDateInputValue('gc-laycan-date');
+            const cancellingDate = getNormalizedDateInputValue('gc-cancel-date');
+            const laycanTime = document.getElementById('gc-laycan-time')?.value || '';
+            const cancellingTime = document.getElementById('gc-cancel-time')?.value || '';
+            const nextState = {};
+
+            if (laycanDate) nextState.laycanDate = laycanDate;
+            if (cancellingDate) nextState.cancellingDate = cancellingDate;
+            nextState.laycanTime = laycanTime;
+            nextState.cancellingTime = cancellingTime;
+
+            if (Object.keys(nextState).length > 0) {
+                SeaCharterStore.set(nextState);
+            }
+
+            setInputValue('map-laycan-date', laycanDate || State.laycanDate);
+            setInputValue('match-laycan-start', laycanDate || State.laycanDate);
+            setInputValue('map-cancelling-date', cancellingDate || State.cancellingDate);
+            setInputValue('match-laycan-end', cancellingDate || State.cancellingDate);
+        }
+        window.captureGenconDateState = captureGenconDateState;
 
         function readRouteStateFromCalculator() {
             const charterPartyStandard = document.getElementById('charter-party-standard')?.value || '';
-            const gcLaycanDate = document.getElementById('gc-laycan-date')?.value || '';
-            const asbLaycanDate = document.getElementById('asb-laycan-date')?.value || '';
+            const gcLaycanDate = getNormalizedDateInputValue('gc-laycan-date');
+            const asbLaycanDate = getNormalizedDateInputValue('asb-laycan-date');
+            const mapLaycanDate = getNormalizedDateInputValue('map-laycan-date');
             const gcLaycanTime = document.getElementById('gc-laycan-time')?.value || '';
             const asbLaycanTime = document.getElementById('asb-laycan-time')?.value || '';
-            const gcCancellingDate = document.getElementById('gc-cancel-date')?.value || '';
-            const asbCancellingDate = document.getElementById('asb-cancel-date')?.value || '';
+            const gcCancellingDate = getNormalizedDateInputValue('gc-cancel-date');
+            const asbCancellingDate = getNormalizedDateInputValue('asb-cancel-date');
+            const mapCancellingDate = getNormalizedDateInputValue('map-cancelling-date');
             const gcCancellingTime = document.getElementById('gc-cancel-time')?.value || '';
             const asbCancellingTime = document.getElementById('asb-cancel-time')?.value || '';
             const preferAsbatankvoy = charterPartyStandard === 'ASBATANKVOY';
+            const preferredLaycanDate = preferAsbatankvoy
+                ? firstNonEmpty(asbLaycanDate, gcLaycanDate)
+                : firstNonEmpty(gcLaycanDate, asbLaycanDate);
+            const preferredCancellingDate = preferAsbatankvoy
+                ? firstNonEmpty(asbCancellingDate, gcCancellingDate)
+                : firstNonEmpty(gcCancellingDate, asbCancellingDate);
             return {
-                portBallast: document.getElementById('port-ballast')?.value || '',
-                pol: document.getElementById('port-pol')?.value || '',
-                pod: document.getElementById('port-pod')?.value || '',
-                laycanDate: preferAsbatankvoy ? (asbLaycanDate || gcLaycanDate) : (gcLaycanDate || asbLaycanDate),
+                portBallast: firstNonEmpty(document.getElementById('port-ballast')?.value, document.getElementById('map-port-ballast')?.value, State.portBallast),
+                pol: firstNonEmpty(document.getElementById('port-pol')?.value, document.getElementById('map-port-pol')?.value, State.pol),
+                pod: firstNonEmpty(document.getElementById('port-pod')?.value, document.getElementById('map-port-pod')?.value, State.pod),
+                laycanDate: firstNonEmpty(preferredLaycanDate, mapLaycanDate, State.laycanDate),
                 laycanTime: preferAsbatankvoy ? (asbLaycanTime || gcLaycanTime) : (gcLaycanTime || asbLaycanTime),
-                cancellingDate: preferAsbatankvoy ? (asbCancellingDate || gcCancellingDate) : (gcCancellingDate || asbCancellingDate),
+                cancellingDate: firstNonEmpty(preferredCancellingDate, mapCancellingDate, State.cancellingDate),
                 cancellingTime: preferAsbatankvoy ? (asbCancellingTime || gcCancellingTime) : (gcCancellingTime || asbCancellingTime),
                 distBallast: parseFloat(document.getElementById('dist-ballast')?.value) || 0,
                 distLaden: parseFloat(document.getElementById('dist-laden')?.value) || 0,
@@ -10636,11 +10725,11 @@
 
         function captureRouteStateFromMapInputs() {
             SeaCharterStore.set({
-                portBallast: document.getElementById('map-port-ballast')?.value || '',
-                pol: document.getElementById('map-port-pol')?.value || '',
-                pod: document.getElementById('map-port-pod')?.value || '',
-                laycanDate: document.getElementById('map-laycan-date')?.value || '',
-                cancellingDate: document.getElementById('map-cancelling-date')?.value || ''
+                portBallast: firstNonEmpty(document.getElementById('map-port-ballast')?.value, State.portBallast),
+                pol: firstNonEmpty(document.getElementById('map-port-pol')?.value, State.pol),
+                pod: firstNonEmpty(document.getElementById('map-port-pod')?.value, State.pod),
+                laycanDate: firstNonEmpty(getNormalizedDateInputValue('map-laycan-date'), State.laycanDate),
+                cancellingDate: firstNonEmpty(getNormalizedDateInputValue('map-cancelling-date'), State.cancellingDate)
             });
             syncGlobalStateToForms();
             if (typeof autoFillNlpFromEstimator === 'function') autoFillNlpFromEstimator();
@@ -12230,11 +12319,11 @@
                 // 2. Set laycan dates and check geared required directly on matching UI
                 const matchLaycanStart = document.getElementById('match-laycan-start');
                 if (matchLaycanStart && data.laycanStart) {
-                    matchLaycanStart.value = data.laycanStart;
+                    setInputValue('match-laycan-start', data.laycanStart);
                 }
                 const matchLaycanEnd = document.getElementById('match-laycan-end');
                 if (matchLaycanEnd && data.laycanEnd) {
-                    matchLaycanEnd.value = data.laycanEnd;
+                    setInputValue('match-laycan-end', data.laycanEnd);
                 }
 
                 const matchGeared = document.getElementById('match-geared-required');
@@ -18945,11 +19034,11 @@
                 let cancellingValue = '';
                 const cpStandard = State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
                 if (cpStandard === 'ASBATANKVOY') {
-                    laycanValue = document.getElementById('asb-laycan-date')?.value || '';
-                    cancellingValue = document.getElementById('asb-cancel-date')?.value || '';
+                    laycanValue = firstNonEmpty(getNormalizedDateInputValue('asb-laycan-date'), getNormalizedDateInputValue('gc-laycan-date'), getNormalizedDateInputValue('map-laycan-date'), State.laycanDate);
+                    cancellingValue = firstNonEmpty(getNormalizedDateInputValue('asb-cancel-date'), getNormalizedDateInputValue('gc-cancel-date'), getNormalizedDateInputValue('map-cancelling-date'), State.cancellingDate);
                 } else {
-                    laycanValue = document.getElementById('gc-laycan-date')?.value || '';
-                    cancellingValue = document.getElementById('gc-cancel-date')?.value || '';
+                    laycanValue = firstNonEmpty(getNormalizedDateInputValue('gc-laycan-date'), getNormalizedDateInputValue('asb-laycan-date'), getNormalizedDateInputValue('map-laycan-date'), State.laycanDate);
+                    cancellingValue = firstNonEmpty(getNormalizedDateInputValue('gc-cancel-date'), getNormalizedDateInputValue('asb-cancel-date'), getNormalizedDateInputValue('map-cancelling-date'), State.cancellingDate);
                 }
                 localStorage.setItem('calculator_laycan', laycanValue);
                 localStorage.setItem('calculator_cancelling_date', cancellingValue);
@@ -19191,9 +19280,9 @@
             State.distBallast = distBal;
             State.distLaden = distLaden;
             State.totalMiles = distBal + distLaden;
-            State.laycanDate = document.getElementById('gc-laycan-date')?.value || document.getElementById('asb-laycan-date')?.value || State.laycanDate || '';
+            State.laycanDate = firstNonEmpty(getNormalizedDateInputValue('gc-laycan-date'), getNormalizedDateInputValue('asb-laycan-date'), getNormalizedDateInputValue('map-laycan-date'), State.laycanDate);
             State.laycanTime = document.getElementById('gc-laycan-time')?.value || document.getElementById('asb-laycan-time')?.value || State.laycanTime || '';
-            State.cancellingDate = document.getElementById('gc-cancel-date')?.value || document.getElementById('asb-cancel-date')?.value || State.cancellingDate || '';
+            State.cancellingDate = firstNonEmpty(getNormalizedDateInputValue('gc-cancel-date'), getNormalizedDateInputValue('asb-cancel-date'), getNormalizedDateInputValue('map-cancelling-date'), State.cancellingDate);
             State.cancellingTime = document.getElementById('gc-cancel-time')?.value || document.getElementById('asb-cancel-time')?.value || State.cancellingTime || '';
             State.opex = opex;
             State.capexDaily = capexDaily;
@@ -20249,16 +20338,17 @@
             const u = (cls, val) => document.querySelectorAll(cls).forEach(el => el.textContent = val);
             const getVal = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
             
-            const formatDateTime = (dId, tId) => {
-                const d = getVal(dId); const t = getVal(tId);
+            const formatDateTime = (dId, tId, fallbackDate = '', fallbackTime = '') => {
+                const d = normalizeDateInputValue(getVal(dId)) || normalizeDateInputValue(fallbackDate);
+                const t = getVal(tId) || fallbackTime || '';
                 if(!d) return "TBA";
                 const parts = d.split('-');
                 const fmtDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : d;
                 return t ? `${fmtDate} ${t} HRS` : fmtDate;
             };
             
-            const laycan = formatDateTime('gc-laycan-date', 'gc-laycan-time');
-            const cancel = formatDateTime('gc-cancel-date', 'gc-cancel-time');
+            const laycan = formatDateTime('gc-laycan-date', 'gc-laycan-time', State.laycanDate, State.laycanTime);
+            const cancel = formatDateTime('gc-cancel-date', 'gc-cancel-time', State.cancellingDate, State.cancellingTime);
 
             const loadNorVal = getVal('gc-laytime-load-nor');
             const dischNorVal = getVal('gc-laytime-disch-nor');
@@ -30022,12 +30112,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             window.completeAisAvailabilitySweepFeedback = function() {
                 const state = window.aisAvailabilitySweepUi;
+                const icon = document.getElementById('ais-refresh-icon');
                 clearInterval(state.interval);
                 state.interval = null;
                 state.active = false;
                 state.completed = true;
                 state.owner = null;
                 state.endsAt = null;
+                if (icon) {
+                    icon.classList.remove('fa-spin');
+                }
                 window.updateAisAvailabilitySweepFeedback();
             };
 
