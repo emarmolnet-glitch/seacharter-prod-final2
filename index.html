@@ -8191,7 +8191,7 @@
                         <div class="flex-grow">
                             <strong class="text-indigo-900 text-[10px] font-bold uppercase tracking-wider block">Modo de Operación / Operation Mode</strong>
                             <p id="index-operation-mode-desc" class="text-slate-600 text-xs mt-0.5 leading-relaxed">
-                                Búsqueda dual AIS obligatoria: POL 300 MN y POD 100 MN.
+                                Búsqueda dual AIS obligatoria: POL 2000 MN y POD 100 MN.
                             </p>
                         </div>
                         <div class="flex bg-slate-100 p-1 rounded-lg border border-slate-200 self-start sm:self-center">
@@ -13363,8 +13363,8 @@
                         }
 
                         const within300Badge = distanceToPol !== null && distanceToPol <= localRadarRadius ? 
-                            `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1" title="El buque está dentro del rango dinámico de ${localRadarRadius} NM para este volumen de carga" data-range="${distanceToPol <= 300 ? `Rango 300 NM (${Math.round(distanceToPol)} NM)` : ''}"><i class="fa-solid fa-location-dot"></i> Rango Cuenca (${Math.round(distanceToPol)} NM)</span>` : 
-                            (distanceToPol !== null ? `<span class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1" title="Buque fuera del radio de cuenca pero en tránsito de paso convergente hacia la zona" data-range="${distanceToPol <= 300 ? `Rango 300 NM (${Math.round(distanceToPol)} NM)` : ''}"><i class="fa-solid fa-route"></i> Ruta de Paso (${Math.round(distanceToPol)} NM)</span>` : '');
+                            `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1" title="El buque está dentro del rango dinámico de ${localRadarRadius} NM para este volumen de carga" data-range="${distanceToPol <= 2000 ? `Rango 2000 NM (${Math.round(distanceToPol)} NM)` : ''}"><i class="fa-solid fa-location-dot"></i> Rango Cuenca (${Math.round(distanceToPol)} NM)</span>` :
+                            (distanceToPol !== null ? `<span class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1" title="Buque fuera del radio de cuenca pero en tránsito de paso convergente hacia la zona" data-range="${distanceToPol <= 2000 ? `Rango 2000 NM (${Math.round(distanceToPol)} NM)` : ''}"><i class="fa-solid fa-route"></i> Ruta de Paso (${Math.round(distanceToPol)} NM)</span>` : '');
 
                         let activeAlertHtml = '';
                         if (m.activeMatchAlert) {
@@ -28176,7 +28176,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             const AIS_PROSPECTION_RADII_NM = Object.freeze({
-                POL: 300,
+                POL: 2000,
                 POD: 100
             });
             window.AIS_PROSPECTION_RADII_NM = AIS_PROSPECTION_RADII_NM;
@@ -30072,7 +30072,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 bounds.extend([lat - latDelta, lon - lonDelta]);
                 bounds.extend([lat + latDelta, lon + lonDelta]);
             };
-            addRadiusBounds(polData, (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 300);
+            addRadiusBounds(polData, (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 2000);
             addRadiusBounds(podData, (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POD) || 100);
             if (bounds.isValid()) {
                 mapInstance.fitBounds(bounds, { padding: [32, 32], maxZoom: 8 });
@@ -30124,7 +30124,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
                 const isLocalMode = true;
                 if (isLocalMode) {
-                    const radiusMeters = ((window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 300) * 1852;
+                    const polRadiusNm = (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 2000;
+                    const radiusMeters = polRadiusNm * 1852;
                     window.aisSearchRadiusCircle = L.circle([polData.lat, polData.lon], {
                         color: '#e53e3e',
                         fillColor: '#feb2b2',
@@ -30133,7 +30134,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         weight: 1.5,
                         dashArray: '5, 5'
                     }).addTo(targetMap);
-                    window.aisSearchRadiusCircle.bindTooltip("BUSCAR POL: 300 MN", { sticky: true });
+                    window.aisSearchRadiusCircle.bindTooltip(`BUSCAR POL: ${polRadiusNm} MN`, { sticky: true });
                 }
                 fitAisMapToProspectionRadii(targetMap, polData, podData);
             }
@@ -30157,7 +30158,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const isAlgerianCoords = v.latitude >= 34.0 && v.latitude <= 38.5 && v.longitude >= -3.0 && v.longitude <= 9.5;
                     if (!isAlgerianCoords) return false;
                     if (isLocalMode && polData) {
-                        return getDistance(polData.lat, polData.lon, v.latitude, v.longitude) <= 300;
+                        const polRadiusNm = (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 2000;
+                        return getDistance(polData.lat, polData.lon, v.latitude, v.longitude) <= polRadiusNm;
                     }
                     return true;
                 });
@@ -30201,7 +30203,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         });
                     }
                 } else {
-                    alert("No se encontraron buques en tiempo real cerca de las costas de Argelia dentro de 300 millas náuticas del POL seleccionado.");
+                    alert("No se encontraron buques en tiempo real cerca de las costas de Argelia dentro de 2000 millas náuticas del POL seleccionado.");
                 }
                 return;
             }
@@ -30217,8 +30219,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const isLocalMode = true;
                 if (isLocalMode && polData) {
                     const dist = getDistance(polData.lat, polData.lon, marker.getLatLng().lat, marker.getLatLng().lng);
-                    if (dist > ((window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 300)) {
-                        alert(`El buque encontrado se encuentra a ${Math.round(dist)} millas náuticas del POL, lo cual supera el límite máximo permitido de 300 millas náuticas.`);
+                    const polRadiusNm = (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 2000;
+                    if (dist > polRadiusNm) {
+                        alert(`El buque encontrado se encuentra a ${Math.round(dist)} millas náuticas del POL, lo cual supera el límite máximo permitido de ${polRadiusNm} millas náuticas.`);
                         return;
                     }
                 }
@@ -30238,8 +30241,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (found) {
                     if (polData) {
                         const dist = getDistance(polData.lat, polData.lon, found.latitude, found.longitude);
-                        if (dist > ((window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 300)) {
-                            alert(`El buque encontrado se encuentra a ${Math.round(dist)} millas náuticas del POL, lo cual supera el límite máximo permitido de 300 millas náuticas.`);
+                        const polRadiusNm = (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 2000;
+                        if (dist > polRadiusNm) {
+                            alert(`El buque encontrado se encuentra a ${Math.round(dist)} millas náuticas del POL, lo cual supera el límite máximo permitido de ${polRadiusNm} millas náuticas.`);
                             return;
                         }
                     }
@@ -30291,7 +30295,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 indexBtnModeLocal.className = "px-3 py-1.5 text-[11px] font-bold rounded-md bg-blue-600 text-white transition-all cursor-pointer";
             }
             if (indexModeDesc) {
-                indexModeDesc.innerText = "Búsqueda dual AIS obligatoria: POL 300 MN y POD 100 MN.";
+                indexModeDesc.innerText = "Búsqueda dual AIS obligatoria: POL 2000 MN y POD 100 MN.";
             }
             actualizarTextoRadioOperacion('dual');
         }
@@ -30653,7 +30657,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             
             const descEl = document.getElementById('pol-scan-radius-text') || document.getElementById('ais-nearby-vessels-description');
             if (descEl) {
-                descEl.innerHTML = 'Búsqueda dual AIS: <b>POL 300 MN</b> priorizado por ETA y <b>POD 100 MN</b> para carga de retorno';
+                descEl.innerHTML = 'Búsqueda dual AIS: <b>POL 2000 MN</b> priorizado por ETA y <b>POD 100 MN</b> para carga de retorno';
             }
 
             const calculateDistanceNm = (lat1, lon1, lat2, lon2) => {
@@ -30701,7 +30705,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const compatibleVessels = [];
             
             if (hasRealAisData && polCoords) {
-                const maxNearbyRadiusNm = (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 300;
+                const maxNearbyRadiusNm = (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 2000;
 
                 const normalizeAisRadarTextKey = (value) => String(value || '')
                     .normalize('NFD')
@@ -31091,8 +31095,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return distKm * 0.539957;
             };
 
-            // Compute distance and ETA to POL for each vessel, then keep the strategic 300 MN window.
-            const polRadiusNm = (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 300;
+            // Compute distance and ETA to POL for each vessel, then keep the strategic 2000 MN window.
+            const polRadiusNm = (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 2000;
             const vesselsWithDist = window.aisVesselsData.map(v => {
                 const dist = calculateDistanceNm(polCoords.lat, polCoords.lon, v.latitude, v.longitude);
                 const speedKts = Number(v.speed) > 0 ? Number(v.speed) : 12;
@@ -31144,7 +31148,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         weight: 1.5,
                         dashArray: '5, 5'
                     }).addTo(targetMap);
-                    window.aisPolHighlightCircle.bindTooltip("BUSCAR POL: 300 MN (POL: " + polValue + ")", { sticky: true });
+                    window.aisPolHighlightCircle.bindTooltip(`BUSCAR POL: ${polRadiusNm} MN (POL: ${polValue})`, { sticky: true });
                 }
                 const podValue = document.getElementById('port-pod')?.value?.trim() || '';
                 const podCoords = podValue && typeof findPortData === 'function'
