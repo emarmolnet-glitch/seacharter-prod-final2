@@ -639,6 +639,10 @@ function getFleetIdentityKey(record: Partial<FleetRegistryRecord>) {
   return normalizeFleetVesselName(record.vessel || record.nombre || record.name);
 }
 
+function getFleetNameKey(record: Partial<FleetRegistryRecord>) {
+  return normalizeFleetVesselName(record.vessel || record.nombre || record.name);
+}
+
 function normalizeFleetVesselName(value: unknown) {
   return String(value || '')
     .normalize('NFD')
@@ -703,7 +707,7 @@ const FleetManager = (() => {
 
   const indexRecord = (index: Map<string, FleetRegistryRecord>, record: FleetRegistryRecord) => {
     const imo = record.imo === 'SIN-IMO' ? '' : normalizeFleetImo(record.imo);
-    const name = normalizeFleetVesselName(record.vessel || record.nombre || record.name);
+    const name = getFleetNameKey(record);
     if (imo) index.set(imo, record);
     if (name) index.set(name, record);
   };
@@ -908,11 +912,17 @@ function parseFleetRowsFromCsv(text: string): Partial<FleetRegistryRecord>[] {
     throw new Error(`Faltan columnas obligatorias: ${missingColumns.map((column) => displayNames[column] || column).join(', ')}`);
   }
 
-  return rows.slice(1).map((cells) => {
-    const vessel = cleanFleetValue(cells[indexes.vessel]);
+  return rows.slice(1).flatMap((cells) => {
+    const rawVessel = indexes.vessel >= 0 ? cells[indexes.vessel] : undefined;
+    const vesselName = rawVessel?.toString().replace('-', ' ').trim();
+    if (!vesselName) {
+      console.warn('Fila ignorada por falta de nombre:', cells);
+      return [];
+    }
+    const vessel = cleanFleetValue(vesselName);
     const year = cleanFleetValue(cells[indexes.anio]);
     const imo = indexes.imo >= 0 ? normalizeFleetImo(cells[indexes.imo]) : '';
-    return {
+    return [{
       imo: imo || 'SIN-IMO',
       vessel,
       nombre: vessel,
@@ -925,7 +935,7 @@ function parseFleetRowsFromCsv(text: string): Partial<FleetRegistryRecord>[] {
       type: indexes.tipo >= 0 ? cells[indexes.tipo] : '',
       shipType: indexes.tipo >= 0 ? cells[indexes.tipo] : '',
       vesselType: indexes.tipo >= 0 ? cells[indexes.tipo] : '',
-    };
+    }];
   }).filter((record) => {
     const hasIdentity = normalizeFleetImo(record.imo) || normalizeFleetVesselName(record.vessel);
     return hasIdentity && hasFleetImportData(record);

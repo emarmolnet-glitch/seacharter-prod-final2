@@ -1434,11 +1434,15 @@
             return FLEET_INTEL_TYPE_FIELDS.some(field => hasFleetIntelValue(record[field]) && !hasFleetIntelValue(existing && existing[field]));
         }
 
-        function getFleetIntelIdentityKey(record) {
-            const imo = record && record.imo !== 'SIN-IMO' ? normalizeFleetIntelImo(record.imo) : '';
-            const name = normalizeFleetIntelVesselName(record && (record.vessel || record.nombre || record.name || record.ShipName));
-            return imo || name;
-        }
+            function getFleetIntelIdentityKey(record) {
+                const imo = record && record.imo !== 'SIN-IMO' ? normalizeFleetIntelImo(record.imo) : '';
+                const name = getFleetIntelNameKey(record);
+                return imo || name;
+            }
+
+            function getFleetIntelNameKey(record) {
+                return normalizeFleetIntelVesselName(record && (record.vessel || record.nombre || record.name || record.vesselName || record.ShipName));
+            }
 
         function mergeFleetIntelRecord(existing, incoming) {
             if (!existing) return incoming;
@@ -1466,7 +1470,7 @@
 
             function indexRecord(record) {
                 const imo = record && record.imo !== 'SIN-IMO' ? normalizeFleetIntelImo(record.imo) : '';
-                const name = normalizeFleetIntelVesselName(record && (record.vessel || record.nombre || record.name || record.ShipName));
+                const name = getFleetIntelNameKey(record);
                 if (imo) registryIndex.set(imo, record);
                 if (name) registryIndex.set(name, record);
             }
@@ -1515,9 +1519,22 @@
             function find(identity) {
                 const index = getIndex();
                 const source = identity && identity.MetaData ? getAisVesselIdentity(identity) : identity;
-                const imo = normalizeFleetIntelImo(source && source.imo);
+                const meta = source && source.MetaData ? source.MetaData : {};
+                const imo = normalizeFleetIntelImo(source && (source.imo || source.IMO || meta.imo || meta.IMO));
                 if (imo && index.has(imo)) return index.get(imo) || null;
-                const name = normalizeFleetIntelVesselName(source && (source.name || source.vessel || source.nombre));
+                const name = normalizeFleetIntelVesselName(source && (
+                    source.name ||
+                    source.vessel ||
+                    source.nombre ||
+                    source.vesselName ||
+                    source.vessel_name ||
+                    source.ShipName ||
+                    source.shipName ||
+                    source.VesselName ||
+                    meta.ShipName ||
+                    meta.shipName ||
+                    meta.VesselName
+                ));
                 return name ? index.get(name) || null : null;
             }
 
@@ -1555,7 +1572,7 @@
                 loadRegistry();
                 return registry.reduce((store, record) => {
                     const imo = record && record.imo !== 'SIN-IMO' ? normalizeFleetIntelImo(record.imo) : '';
-                    const name = normalizeFleetIntelVesselName(record && (record.vessel || record.nombre || record.name || record.ShipName));
+                    const name = getFleetIntelNameKey(record);
                     const key = imo || name;
                     if (key) store[key] = record;
                     return store;
