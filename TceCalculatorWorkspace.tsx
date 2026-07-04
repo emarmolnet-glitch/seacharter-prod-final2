@@ -101,6 +101,26 @@ type VesselCategory = {
   type: VesselCalculationMode;
 };
 
+type FleetRegistryRecord = {
+  imo: string;
+  nombre: string;
+  name: string;
+  tipo: string;
+  type: string;
+  shipType: string;
+  vesselType: string;
+  category: string;
+  categoryValue: string;
+  categoryLabel: string;
+  scrapedType: string;
+  anio: string;
+  gt: string;
+  dwt: string;
+  dimensiones: string;
+  capturedAt?: string;
+  updatedAt?: string;
+};
+
 type FearnleysCache = {
   weekLabel: string;
   timestamp: number;
@@ -208,6 +228,50 @@ const BUNKER_INDEX_DATA_KEY = 'bunkerIndexData';
 const DEMURRAGE_TCE_MULTIPLIER = 1.25;
 const BUNKER_INDEX_ADJUSTMENT_SHARE = 0.5;
 const BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT = 5;
+const FLEET_REGISTRY_KEY = 'fleet_registry';
+const FLEET_CATEGORY_GROUPS = [
+  {
+    label: 'Cargo',
+    options: [
+      ['category:cargo', 'All Cargo'],
+      ['type:bulk', 'Bulk Carrier'],
+      ['type:general', 'General Cargo'],
+      ['type:container', 'Container Ship'],
+      ['type:cement', 'Cement Carrier'],
+      ['type:mpv', 'Multipurpose / MPP'],
+      ['type:heavy_lift', 'Heavy Lift'],
+    ],
+  },
+  {
+    label: 'Tankers',
+    options: [
+      ['category:tanker', 'All Tankers'],
+      ['type:crude_tanker', 'Crude Oil Tanker'],
+      ['type:lng_tanker', 'LNG Tanker'],
+      ['type:chemical_tanker', 'Chemical Tanker'],
+      ['type:product_tanker', 'Product Tanker'],
+      ['type:lpg_tanker', 'LPG Tanker'],
+    ],
+  },
+  {
+    label: 'Passenger',
+    options: [
+      ['category:passenger', 'All Passenger'],
+      ['type:passenger', 'Passenger Ship'],
+      ['type:cruise', 'Cruise Ship'],
+      ['type:ferry', 'Ferry / RoPax'],
+    ],
+  },
+  {
+    label: 'Other',
+    options: [
+      ['category:other', 'All Other'],
+      ['type:offshore', 'Offshore'],
+      ['type:tug', 'Tug / Support'],
+      ['type:fishing', 'Fishing'],
+    ],
+  },
+] as const;
 const NAVIGATION_STRATEGIES: Record<NavigationStrategy, {
   label: string;
   seaConsumptionFactor: number;
@@ -558,6 +622,173 @@ function RefreshIcon() {
       <path d="M18 2v4h-4" />
       <path d="M6 22v-4h4" />
     </svg>
+  );
+}
+
+function normalizeFleetImo(value: unknown) {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.length >= 7 ? digits.slice(-7) : '';
+}
+
+function cleanFleetValue(value: unknown) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  return text || 'N/A';
+}
+
+function getFleetRegistryStore(): Record<string, FleetRegistryRecord> {
+  if (typeof window === 'undefined') return {};
+  try {
+    return JSON.parse(window.localStorage.getItem(FLEET_REGISTRY_KEY) || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+
+function FleetIntelligenceLibraryPanel() {
+  const defaultCategory = FLEET_CATEGORY_GROUPS[0].options[0];
+  const [selectedCategory, setSelectedCategory] = useState<string>(defaultCategory[0]);
+  const [listingUrl, setListingUrl] = useState('');
+  const [status, setStatus] = useState('Biblioteca local lista para consulta AIS.');
+  const [registryCount, setRegistryCount] = useState(0);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setRegistryCount(Object.keys(getFleetRegistryStore()).length);
+    const storedFilter = window.localStorage.getItem('fleet_intel_vessel_filter');
+    if (storedFilter) setSelectedCategory(storedFilter);
+  }, []);
+
+  const selectedLabel = useMemo(() => {
+    for (const group of FLEET_CATEGORY_GROUPS) {
+      const match = group.options.find(([value]) => value === selectedCategory);
+      if (match) return match[1];
+    }
+    return defaultCategory[1];
+  }, [selectedCategory]);
+
+  const handleCategoryChange = (nextValue: string) => {
+    setSelectedCategory(nextValue);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('fleet_intel_vessel_filter', nextValue);
+      window.dispatchEvent(new CustomEvent('fleet-intel-filter-changed', { detail: { value: nextValue } }));
+    }
+  };
+
+  const captureFleetRegistry = async () => {
+    const url = listingUrl.trim();
+    if (!url) {
+      setStatus('Introduce una URL de VesselFinder para capturar la biblioteca.');
+      return;
+    }
+
+    setIsCapturing(true);
+    setProgress({ current: 0, total: 1 });
+    setStatus(`Buscando buques para ${selectedLabel}...`);
+
+    try {
+      const response = await fetch('/api/scrape-vessel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'No se pudo leer VesselFinder.');
+
+      const records = Array.isArray(payload.records) ? payload.records : [];
+      const store = getFleetRegistryStore();
+      let newCount = 0;
+      let updatedCount = 0;
+
+      records.forEach((record: Partial<FleetRegistryRecord>, index: number) => {
+        setProgress({ current: index + 1, total: records.length || 1 });
+        const imo = normalizeFleetImo(record.imo);
+        if (!imo) return;
+        const nombre = cleanFleetValue(record.nombre || record.name);
+        const nextRecord: FleetRegistryRecord = {
+          imo,
+          nombre,
+          name: nombre,
+          tipo: cleanFleetValue(selectedLabel),
+          type: cleanFleetValue(selectedLabel),
+          shipType: cleanFleetValue(selectedLabel),
+          vesselType: cleanFleetValue(selectedLabel),
+          category: selectedCategory,
+          categoryValue: selectedCategory,
+          categoryLabel: cleanFleetValue(selectedLabel),
+          scrapedType: cleanFleetValue(record.tipo || record.type || record.shipType || record.vesselType),
+          anio: cleanFleetValue(record.anio),
+          gt: cleanFleetValue(record.gt),
+          dwt: cleanFleetValue(record.dwt),
+          dimensiones: cleanFleetValue(record.dimensiones),
+        };
+        const existing = store[imo];
+        if (existing) {
+          updatedCount += 1;
+          store[imo] = { ...existing, ...nextRecord, updatedAt: new Date().toISOString() };
+        } else {
+          newCount += 1;
+          store[imo] = { ...nextRecord, capturedAt: new Date().toISOString() };
+        }
+      });
+
+      window.localStorage.setItem(FLEET_REGISTRY_KEY, JSON.stringify(store));
+      setRegistryCount(Object.keys(store).length);
+      setStatus(`Base de datos actualizada con ${records.length} buques. Nuevos: ${newCount}. Actualizados: ${updatedCount}.`);
+    } catch (error) {
+      setStatus(`Error de captura: ${error instanceof Error ? error.message : 'servicio no disponible'}`);
+    } finally {
+      setIsCapturing(false);
+      setProgress({ current: 0, total: 0 });
+    }
+  };
+
+  const progressPercent = progress.total > 0 ? Math.min(100, Math.round((progress.current / progress.total) * 100)) : 0;
+
+  return (
+    <section className="mb-4 rounded-xl border border-amber-200 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700">Centro de Inteligencia de Flota</p>
+          <h2 className="mt-1 text-base font-black text-slate-950">Biblioteca AIS local</h2>
+        </div>
+        <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-800">
+          {registryCount} buques
+        </span>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-[minmax(12rem,0.45fr)_minmax(16rem,1fr)_auto]">
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-black uppercase tracking-wide text-slate-500">Categoría</span>
+          <select value={selectedCategory} onChange={(event) => handleCategoryChange(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-600/15">
+            {FLEET_CATEGORY_GROUPS.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.options.map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-black uppercase tracking-wide text-slate-500">URL VesselFinder</span>
+          <input type="url" value={listingUrl} onChange={(event) => setListingUrl(event.target.value)} placeholder="Pegar URL de VesselFinder..." className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-600/15" />
+        </label>
+        <button type="button" onClick={captureFleetRegistry} disabled={isCapturing} className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-amber-500 bg-amber-400 px-4 text-xs font-black uppercase tracking-wide text-slate-950 shadow-sm transition hover:bg-amber-300 disabled:cursor-wait disabled:opacity-65">
+          <RefreshIcon />
+          {isCapturing ? 'Buscando...' : 'Capturar'}
+        </button>
+      </div>
+      {isCapturing && (
+        <div className="mt-3">
+          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+            <div className="h-full bg-amber-500 transition-all" style={{ width: `${progressPercent}%` }} />
+          </div>
+          <p className="mt-1 text-[11px] font-black uppercase tracking-wide text-amber-800">Capturando... {progress.current}/{progress.total}</p>
+        </div>
+      )}
+      <p className="mt-2 text-xs font-semibold text-slate-500">{status}</p>
+    </section>
   );
 }
 
@@ -1776,6 +2007,8 @@ export default function TceCalculatorWorkspace({
 
   return (
     <section className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-5">
+      <FleetIntelligenceLibraryPanel />
+
       <div className="mb-5 flex flex-wrap items-center justify-center gap-3">
         <div
           className="grid w-full max-w-xl grid-cols-2 rounded-xl bg-slate-200/80 p-1"
