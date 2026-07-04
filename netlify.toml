@@ -1,7 +1,7 @@
 [build]
   command = "npx prisma generate --schema=./prisma/schema.prisma && npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss"
   publish = "."
-  functions = "netlifly/functions"
+  functions = "netlify/functions"
 
 [functions]
   directory = "netlify/functions"
