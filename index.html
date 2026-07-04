@@ -19,7 +19,16 @@
             };
         };
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        if (typeof window !== 'undefined' && !window.tailwind) {
+            const tailwindScript = document.createElement('script');
+            tailwindScript.src = 'https://cdn.tailwindcss.com';
+            tailwindScript.onerror = function () {
+                console.warn('Tailwind CDN no está disponible; la aplicación continúa con los estilos locales.');
+            };
+            document.head.appendChild(tailwindScript);
+        }
+    </script>
     <!-- FontAwesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <!-- Mapbox GL + Leaflet fallback CSS & JS -->
@@ -28304,7 +28313,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const FLEET_INTEL_STORAGE_KEY = 'fleet_registry';
             const FLEET_INTEL_LEGACY_STORAGE_KEY = 'fleet_intel_vessels';
             const FLEET_INTEL_FILTER_KEY = 'fleet_intel_vessel_filter';
-            let fleetIntelRegistryMemory = null;
             const FLEET_INTEL_TAXONOMY = {
                 cargo: ['cargo', 'bulk', 'bulker', 'general cargo', 'container', 'cement', 'multipurpose', 'mpp', 'heavy lift', 'coaster'],
                 tanker: ['tanker', 'crude', 'lng', 'lpg', 'chemical', 'product tanker', 'oil'],
@@ -28343,29 +28351,123 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     .toUpperCase();
             }
 
+            window.FleetManager = window.FleetManager || (() => {
+                let registry = [];
+                let registryIndex = new Map();
+                let loaded = false;
+
+                function normalizeInput(data) {
+                    if (Array.isArray(data)) return data.filter(Boolean);
+                    if (data && typeof data === 'object') return Object.values(data).filter(Boolean);
+                    return [];
+                }
+
+                function indexRecord(record) {
+                    const imo = record && record.imo !== 'SIN-IMO' ? normalizeFleetIntelImo(record.imo) : '';
+                    const name = normalizeFleetIntelVesselName(record && (record.vessel || record.nombre || record.name || record.ShipName));
+                    if (imo) registryIndex.set(imo, record);
+                    if (name) registryIndex.set(name, record);
+                }
+
+                function setRegistry(data) {
+                    registry = normalizeInput(data);
+                    registryIndex = new Map();
+                    registry.forEach(indexRecord);
+                    loaded = true;
+                    window.fleetRegistry = registry;
+                    window.FleetIntelWhiteList = new Set(Array.from(registryIndex.keys()));
+                    return registry;
+                }
+
+                function loadRegistry() {
+                    if (loaded) return registry;
+                    try {
+                        const current = JSON.parse(localStorage.getItem(FLEET_INTEL_STORAGE_KEY) || '{}') || {};
+                        setRegistry(Object.keys(current).length
+                            ? current
+                            : (JSON.parse(localStorage.getItem(FLEET_INTEL_LEGACY_STORAGE_KEY) || '{}') || {}));
+                    } catch (_) {
+                        setRegistry([]);
+                    }
+                    return registry;
+                }
+
+                function getRegistry() {
+                    loadRegistry();
+                    return registry;
+                }
+
+                function getIndex() {
+                    loadRegistry();
+                    return registryIndex;
+                }
+
+                function find(identity) {
+                    const index = getIndex();
+                    const source = identity && identity.MetaData ? getAisVesselIdentity(identity) : identity;
+                    const imo = normalizeFleetIntelImo(source && source.imo);
+                    if (imo && index.has(imo)) return index.get(imo) || null;
+                    const name = normalizeFleetIntelVesselName(source && (source.name || source.vessel || source.nombre));
+                    return name ? index.get(name) || null : null;
+                }
+
+                function isTarget(vesselData) {
+                    return !!find(vesselData);
+                }
+
+                const matchesTarget = isTarget;
+
+                function getVesselData(vesselData) {
+                    return find(vesselData);
+                }
+
+                function getStore() {
+                    loadRegistry();
+                    return registry.reduce((store, record) => {
+                        const imo = record && record.imo !== 'SIN-IMO' ? normalizeFleetIntelImo(record.imo) : '';
+                        const name = normalizeFleetIntelVesselName(record && (record.vessel || record.nombre || record.name || record.ShipName));
+                        const key = imo || name;
+                        if (key) store[key] = record;
+                        return store;
+                    }, {});
+                }
+
+                return {
+                    get registry() {
+                        return getRegistry();
+                    },
+                    setRegistry,
+                    getRegistry,
+                    getIndex,
+                    find,
+                    isTarget,
+                    matchesTarget,
+                    getVesselData,
+                    getStore
+                };
+            })();
+
             function getFleetIntelStore() {
-                if (fleetIntelRegistryMemory) return fleetIntelRegistryMemory;
+                return window.FleetManager.getStore();
+            }
+
+            function reloadFleetIntelStore() {
                 try {
                     const current = JSON.parse(localStorage.getItem(FLEET_INTEL_STORAGE_KEY) || '{}') || {};
-                    fleetIntelRegistryMemory = Object.keys(current).length
+                    window.FleetManager.setRegistry(Object.keys(current).length
                         ? current
-                        : (JSON.parse(localStorage.getItem(FLEET_INTEL_LEGACY_STORAGE_KEY) || '{}') || {});
-                    return fleetIntelRegistryMemory;
+                        : (JSON.parse(localStorage.getItem(FLEET_INTEL_LEGACY_STORAGE_KEY) || '{}') || {}));
+                    return window.FleetManager.getStore();
                 } catch (_) {
-                    fleetIntelRegistryMemory = {};
+                    window.FleetManager.setRegistry([]);
                     return {};
                 }
             }
 
-            function reloadFleetIntelStore() {
-                fleetIntelRegistryMemory = null;
-                return getFleetIntelStore();
-            }
-
             function setFleetIntelStore(store) {
-                localStorage.setItem(FLEET_INTEL_STORAGE_KEY, JSON.stringify(store || {}));
-                fleetIntelRegistryMemory = store || {};
-                window.FleetIntelWhiteList = new Set(Object.keys(store || {}));
+                window.FleetManager.setRegistry(store || {});
+                localStorage.setItem(FLEET_INTEL_STORAGE_KEY, JSON.stringify(window.FleetManager.getStore()));
+                window.FleetIntelWhiteList = new Set(Array.from(window.FleetManager.getIndex().keys()));
                 window.dispatchEvent(new CustomEvent('fleet-intel:updated'));
             }
 
@@ -28393,8 +28495,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             function findFleetIntelRecord(vessel) {
-                const store = getFleetIntelStore();
                 const identity = getAisVesselIdentity(vessel);
+                const indexedRecord = window.FleetManager.find(identity);
+                if (indexedRecord) return indexedRecord;
+                const store = getFleetIntelStore();
                 const vesselKey = normalizeFleetIntelVesselName(identity.name);
                 const record = (vesselKey && store[String(vesselKey)]) || (identity.imo ? store[String(identity.imo)] : null) || null;
                 if (!record) return null;
@@ -28412,10 +28516,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             window.FleetMatchmaker = {
                 loadRegistry: reloadFleetIntelStore,
-                getRegistry: getFleetIntelStore,
+                getRegistry: () => window.FleetManager.getRegistry(),
                 find: findFleetIntelRecord,
+                matchesTarget: (vessel) => window.FleetManager.isTarget(vessel),
                 processAisVessel(vessel) {
-                    const record = findFleetIntelRecord(vessel);
+                    const registry = window.FleetManager.getRegistry();
+                    const record = Array.isArray(registry) && registry.length > 0
+                        ? (window.FleetManager.getVesselData(vessel) || findFleetIntelRecord(vessel))
+                        : null;
                     const matched = !!record;
                     if (vessel) {
                         vessel.isTarget = matched;
@@ -28551,7 +28659,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             function getFleetIntelTechnicalRecord(imo) {
                 const normalizedImo = normalizeFleetIntelImo(imo);
                 if (!normalizedImo) return null;
-                return getFleetIntelStore()[normalizedImo] || null;
+                return window.FleetManager.find({ imo: normalizedImo });
             }
 
             function buildFleetIntelTechnicalHtml(imo) {
@@ -28579,17 +28687,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 ].filter(Boolean).join(' ').toLowerCase();
             }
 
-            function vesselMatchesFleetIntelFilter(vessel, filterValue) {
-                if (!filterValue) return true;
-                const [scope, key] = String(filterValue).split(':');
-                const terms = FLEET_INTEL_TAXONOMY[key] || [];
-                if (!terms.length) return true;
-                const text = getFleetIntelTypeText(vessel);
-                return terms.some(term => text.includes(term));
-            }
-
             function markFleetIntelVessel(vessel) {
-                if (!window.FleetMatchmaker || typeof window.FleetMatchmaker.processAisVessel !== 'function') return false;
+                if (!window.FleetManager || typeof window.FleetManager.isTarget !== 'function') return false;
+                if (!window.FleetManager.isTarget(vessel)) return false;
+                if (!window.FleetMatchmaker || typeof window.FleetMatchmaker.processAisVessel !== 'function') return true;
                 const processed = window.FleetMatchmaker.processAisVessel(vessel);
                 return !!(processed && processed.isTarget);
             }
@@ -28738,15 +28839,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     if (storedStrict !== null) strictGeofence = (storedStrict === "true");
                 }
 
-                const fleetIntelFilter = localStorage.getItem(FLEET_INTEL_FILTER_KEY) || '';
-                return { vesselTypes, minDwt, maxDwt, maxDistance, strictGeofence, fleetIntelFilter };
+                return { vesselTypes, minDwt, maxDwt, maxDistance, strictGeofence };
             };
 
             window.updateCalculatorMapFilterIndicator = function() {
                 const indicatorEl = document.getElementById('calculator-map-filter-indicator');
                 if (!indicatorEl) return;
 
-                const { vesselTypes, fleetIntelFilter } = window.getCentralFilters();
+                const { vesselTypes } = window.getCentralFilters();
                 
                 // Check if any filter is active
                 const hasTypesFilter = vesselTypes && vesselTypes.length > 0 && vesselTypes.length < 8;
@@ -28808,9 +28908,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
                     const shipTypeVal = v.ShipType || v.shipType || (v.MetaData && (v.MetaData.ShipType || v.MetaData.shipType));
                     const isIntelMatch = markFleetIntelVessel(v);
-                    if (!isIntelMatch && fleetIntelFilter && !vesselMatchesFleetIntelFilter(v, fleetIntelFilter)) {
-                        return false;
-                    }
 
                     if (!isIntelMatch && vesselTypes && vesselTypes.length > 0 && !String(vesselTypes[0] || '').includes(':')) {
                         const cat = classifyVesselCategory(rawDwt, name, mmsi, imo, shipTypeVal) || "Bulk Carrier";

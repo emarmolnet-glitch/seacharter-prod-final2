@@ -17,7 +17,16 @@
             };
         };
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        if (typeof window !== 'undefined' && !window.tailwind) {
+            const tailwindScript = document.createElement('script');
+            tailwindScript.src = 'https://cdn.tailwindcss.com';
+            tailwindScript.onerror = function () {
+                console.warn('Tailwind CDN no está disponible; Data Bridge continúa con los estilos locales.');
+            };
+            document.head.appendChild(tailwindScript);
+        }
+    </script>
     <!-- FontAwesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>

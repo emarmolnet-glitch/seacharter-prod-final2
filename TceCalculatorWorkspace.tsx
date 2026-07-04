@@ -122,6 +122,8 @@ type FleetRegistryRecord = {
   updatedAt?: string;
 };
 
+type FleetRegistryInput = FleetRegistryRecord[] | Record<string, FleetRegistryRecord> | null | undefined;
+
 type FearnleysCache = {
   weekLabel: string;
   timestamp: number;
@@ -652,21 +654,126 @@ function cleanFleetValue(value: unknown) {
   return text || 'N/A';
 }
 
+const FleetManager = (() => {
+  let registry: FleetRegistryRecord[] = [];
+  let registryIndex = new Map<string, FleetRegistryRecord>();
+  let hasLoadedRegistry = false;
+
+  const normalizeRegistryInput = (data: FleetRegistryInput) => {
+    if (Array.isArray(data)) return data.filter(Boolean);
+    if (data && typeof data === 'object') return Object.values(data).filter(Boolean);
+    return [];
+  };
+
+  const indexRecord = (index: Map<string, FleetRegistryRecord>, record: FleetRegistryRecord) => {
+    const imo = record.imo === 'SIN-IMO' ? '' : normalizeFleetImo(record.imo);
+    const name = normalizeFleetVesselName(record.vessel || record.nombre || record.name);
+    if (imo) index.set(imo, record);
+    if (name) index.set(name, record);
+  };
+
+  const publishWindowState = () => {
+    if (typeof window === 'undefined') return;
+    const scopedWindow = window as typeof window & {
+      FleetManager?: unknown;
+      fleetRegistry?: FleetRegistryRecord[];
+      FleetIntelWhiteList?: Set<string>;
+    };
+    scopedWindow.FleetManager = FleetManager;
+    scopedWindow.fleetRegistry = registry;
+    scopedWindow.FleetIntelWhiteList = new Set(Array.from(registryIndex.keys()));
+  };
+
+  const setRegistry = (data: FleetRegistryInput) => {
+    registry = normalizeRegistryInput(data);
+    registryIndex = new Map<string, FleetRegistryRecord>();
+    registry.forEach((record) => indexRecord(registryIndex, record));
+    hasLoadedRegistry = true;
+    publishWindowState();
+    return registry;
+  };
+
+  const loadRegistry = () => {
+    if (hasLoadedRegistry || typeof window === 'undefined') return registry;
+    try {
+      setRegistry(JSON.parse(window.localStorage.getItem(FLEET_REGISTRY_KEY) || '{}') || {});
+    } catch {
+      setRegistry([]);
+    }
+    return registry;
+  };
+
+  const getRegistry = () => {
+    loadRegistry();
+    if (!hasLoadedRegistry || !registry.length) return [];
+    return registry;
+  };
+
+  const getIndex = () => {
+    loadRegistry();
+    return registryIndex;
+  };
+
+  const find = (identity: { imo?: unknown; IMO?: unknown; name?: unknown; vessel?: unknown; nombre?: unknown; vesselName?: unknown; ShipName?: unknown; MetaData?: { IMO?: unknown; imo?: unknown; ShipName?: unknown; shipName?: unknown; VesselName?: unknown } }) => {
+    const index = getIndex();
+    const meta = identity.MetaData || {};
+    const imo = normalizeFleetImo(identity.imo || identity.IMO || meta.imo || meta.IMO);
+    if (imo && index.has(imo)) return index.get(imo) || null;
+    const name = normalizeFleetVesselName(identity.name || identity.vessel || identity.nombre || identity.vesselName || identity.ShipName || meta.ShipName || meta.shipName || meta.VesselName);
+    return name ? index.get(name) || null : null;
+  };
+
+  const isTarget = (vesselData: Parameters<typeof find>[0]) => {
+    return !!find(vesselData);
+  };
+
+  const matchesTarget = isTarget;
+
+  const getVesselData = (vesselData: Parameters<typeof find>[0]) => {
+    return find(vesselData);
+  };
+
+  const getStore = () => {
+    loadRegistry();
+    return registry.reduce<Record<string, FleetRegistryRecord>>((store, record) => {
+      const key = getFleetIdentityKey(record);
+      if (key) store[key] = record;
+      return store;
+    }, {});
+  };
+
+  return {
+    get registry() {
+      return getRegistry();
+    },
+    setRegistry,
+    getRegistry,
+    getIndex,
+    find,
+    isTarget,
+    matchesTarget,
+    getVesselData,
+    getStore,
+  };
+})();
+
+if (typeof window !== 'undefined') {
+  (window as typeof window & { FleetManager?: typeof FleetManager }).FleetManager = FleetManager;
+}
+
 function getFleetRegistryStore(): Record<string, FleetRegistryRecord> {
   if (typeof window === 'undefined') return {};
-  try {
-    return JSON.parse(window.localStorage.getItem(FLEET_REGISTRY_KEY) || '{}') || {};
-  } catch {
-    return {};
-  }
+  return FleetManager.getStore();
 }
 
 function notifyFleetRegistryUpdated(store: Record<string, FleetRegistryRecord>) {
   if (typeof window === 'undefined') return;
-  const serializedStore = JSON.stringify(store);
+  const registry = FleetManager.setRegistry(store);
+  const normalizedStore = FleetManager.getStore();
+  const serializedStore = JSON.stringify(normalizedStore);
   window.localStorage.setItem(FLEET_REGISTRY_KEY, serializedStore);
-  (window as typeof window & { FleetIntelWhiteList?: Set<string>; reapplyCentralFiltersAndRedraw?: () => void }).FleetIntelWhiteList = new Set(Object.keys(store));
-  window.dispatchEvent(new CustomEvent('fleet-intel:updated', { detail: { count: Object.keys(store).length } }));
+  (window as typeof window & { FleetIntelWhiteList?: Set<string>; reapplyCentralFiltersAndRedraw?: () => void }).FleetIntelWhiteList = new Set(Array.from(FleetManager.getIndex().keys()));
+  window.dispatchEvent(new CustomEvent('fleet-intel:updated', { detail: { count: registry.length } }));
   try {
     window.dispatchEvent(new StorageEvent('storage', { key: FLEET_REGISTRY_KEY, newValue: serializedStore }));
   } catch {
