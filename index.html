@@ -228,6 +228,13 @@
             display: block;
         }
 
+        .seacharter-ais-icon.neighbor-node {
+            border: 2px solid #f97316;
+            border-radius: 999px;
+            background: rgba(255, 247, 237, 0.92);
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.18), 0 8px 16px rgba(15, 23, 42, 0.22);
+        }
+
         .seacharter-map-popup {
             min-width: 190px;
             color: #12313f;
@@ -351,6 +358,45 @@
             line-height: 1.2;
             white-space: nowrap;
             box-shadow: 0 6px 16px rgba(15, 23, 42, 0.22);
+        }
+
+        .operational-region-node-marker {
+            background: transparent !important;
+            border: 0 !important;
+        }
+
+        .operational-region-node {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            max-width: 132px;
+            padding: 4px 7px 4px 5px;
+            border: 1px solid rgba(249, 115, 22, 0.9);
+            border-radius: 999px;
+            background: rgba(255, 247, 237, 0.96);
+            color: #9a3412;
+            box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.16), 0 10px 22px rgba(15, 23, 42, 0.22);
+            font-size: 10px;
+            font-weight: 900;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .operational-region-node span {
+            width: 10px;
+            height: 10px;
+            flex: 0 0 10px;
+            border-radius: 999px;
+            background: #f97316;
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 0 2px var(--node-parent-color, #16a34a);
+        }
+
+        .operational-region-node strong {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            letter-spacing: 0;
         }
 
         #view-map {
@@ -27262,6 +27308,36 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return runAisZoneSearch('POD', 100, '#2563eb');
         };
 
+        async function queryAisForFleetRecord(record) {
+            const name = getFleetRecordDisplayName(record);
+            const imo = normalizeFleetIntelImo(record && record.imo);
+            const query = imo || name;
+            if (!query || query === 'N/A') return null;
+
+            const response = await fetch(`/.netlify/functions/get-vessels?quantity=25&force=1&zone=GLOBAL&q=${encodeURIComponent(query)}`, {
+                headers: { "Accept": "application/json" }
+            });
+            const vessels = typeof window.parseAisVesselsResponse === 'function'
+                ? await window.parseAisVesselsResponse(response, `fleet-record(${query})`)
+                : [];
+            const match = vessels.find(vessel => exactFleetAisMatch(record, vessel));
+            if (!match) return null;
+            return {
+                ...match,
+                aisRadarZone: 'MY_LIST',
+                aisRadarColor: '#f59e0b',
+                fleetIntelMatch: true,
+                isTarget: true,
+                fleetIntelRecord: record,
+                MetaData: {
+                    ...(match.MetaData || {}),
+                    aisRadarZone: 'MY_LIST',
+                    aisRadarColor: '#f59e0b',
+                    fleetIntelMatch: true
+                }
+            };
+        }
+
         window.ejecutarRadarDualAIS = async function() {
             if (window.isDualSweepRunning) {
                 return window.listaBarcos;
@@ -27280,6 +27356,42 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (typeof window.validateAisApiKeyStatus === 'function') {
                     await window.validateAisApiKeyStatus();
                 }
+                const selectedCategory = typeof getFleetTypeFilterLabel === 'function' ? getFleetTypeFilterLabel() : 'All';
+                if (typeof isStrictFleetMode === 'function' && isStrictFleetMode()) {
+                    if (window.buquesAlmacenados instanceof Map) {
+                        window.buquesAlmacenados.clear();
+                    }
+                    window.buquesEncontrados = {};
+                    const fleetTargets = getFilteredFleetRegistryByCategory(selectedCategory);
+                    const strictResults = [];
+                    const batchSize = 8;
+                    for (let start = 0; start < fleetTargets.length; start += batchSize) {
+                        const batch = fleetTargets.slice(start, start + batchSize);
+                        const batchResults = await Promise.all(batch.map(async record => {
+                            try {
+                                const aisMatch = await queryAisForFleetRecord(record);
+                                return aisMatch || buildFleetNoSignalVessel(record);
+                            } catch (strictError) {
+                                console.warn('Consulta AIS específica sin señal:', getFleetRecordDisplayName(record), strictError);
+                                return buildFleetNoSignalVessel(record);
+                            }
+                        }));
+                        strictResults.push(...batchResults);
+                    }
+
+                    window.listaBarcos = strictResults;
+                    if (window.GlobalStore) {
+                        window.GlobalStore.rawVessels = strictResults;
+                        window.GlobalStore.vessels = strictResults;
+                    }
+                    if (typeof window.reapplyCentralFiltersAndRedraw === 'function') {
+                        window.reapplyCentralFiltersAndRedraw();
+                    }
+                    if (typeof window.freezeAisRadarStatus === 'function') {
+                        window.freezeAisRadarStatus(strictResults.filter(v => !v.noAisSignal).length);
+                    }
+                    return window.listaBarcos;
+                }
                 if (typeof window.RadarPOL !== 'function' || typeof window.RadarPOD !== 'function') {
                     alert("No se pudieron determinar las coordenadas del POL y POD para limitar el barrido AIS.");
                     return window.listaBarcos;
@@ -27289,6 +27401,45 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     window.RadarPOD()
                 ]);
                 const vessels = [...polVessels, ...podVessels];
+                const targetName = typeof window.getCalculatorVesselNameForRadar === 'function'
+                    ? window.getCalculatorVesselNameForRadar()
+                    : (document.getElementById('nombre-buque-calculadora')?.value || document.getElementById('ais-vessel-search')?.value || '').trim();
+                const normalizeTarget = (value) => String(value || '')
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '');
+                const targetKey = normalizeTarget(targetName);
+                const hasTargetInRegionalScan = targetKey && vessels.some(vessel => {
+                    const meta = vessel.MetaData || {};
+                    return normalizeTarget(vessel.vesselName || vessel.ShipName || vessel.name || meta.ShipName || meta.VesselName).includes(targetKey);
+                });
+                if (targetKey && !hasTargetInRegionalScan) {
+                    const logText = 'Barco no localizado en área regional. Buscando en red global...';
+                    const logEl = document.getElementById('ais-global-fallback-log') || document.getElementById('fleet-intel-status') || document.getElementById('ais-list-timestamp');
+                    if (logEl) logEl.textContent = logText;
+                    console.log(logText);
+                    try {
+                        const response = await fetch(`/.netlify/functions/get-vessels?quantity=25&force=1&zone=GLOBAL&q=${encodeURIComponent(targetName)}`);
+                        const payload = await response.json().catch(() => ({}));
+                        const globalVessels = Array.isArray(payload) ? payload : (Array.isArray(payload.vessels) ? payload.vessels : []);
+                        globalVessels.forEach(vessel => {
+                            vessels.push({
+                                ...vessel,
+                                aisRadarZone: 'GLOBAL',
+                                aisRadarColor: '#64748b',
+                                MetaData: {
+                                    ...(vessel.MetaData || {}),
+                                    aisRadarZone: 'GLOBAL',
+                                    aisRadarColor: '#64748b',
+                                    globalFallback: true
+                                }
+                            });
+                        });
+                    } catch (globalError) {
+                        console.warn('Fallback global AIS no disponible:', globalError);
+                    }
+                }
                 const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
 
                 for (let i = 0; i < vessels.length; i += 1) {
@@ -27331,6 +27482,31 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.aisRadarCountdownTimer = null;
         window.aisRadarPollingInterval = null;
         window.aisRadarUserActivated = false;
+
+        window.scheduleContextualAisRadarRefresh = function() {
+            clearTimeout(window.contextualAisRadarTimer);
+            window.contextualAisRadarTimer = setTimeout(async () => {
+                if (typeof window.isAisRouteReady === 'function' && !window.isAisRouteReady()) return;
+                window.aisRadarUserActivated = true;
+                if (typeof window.setAisRadarStatus === 'function') {
+                    window.setAisRadarStatus('updating');
+                }
+                if (typeof window.ejecutarRadarDualAIS === 'function') {
+                    await window.ejecutarRadarDualAIS();
+                }
+                if (typeof window.reapplyCentralFiltersAndRedraw === 'function') {
+                    window.reapplyCentralFiltersAndRedraw();
+                }
+            }, 700);
+        };
+
+        ['port-pol', 'port-pod'].forEach((id) => {
+            const input = document.getElementById(id);
+            if (!input || input.dataset.contextualRadarBound === 'true') return;
+            input.dataset.contextualRadarBound = 'true';
+            input.addEventListener('input', window.scheduleContextualAisRadarRefresh);
+            input.addEventListener('change', window.scheduleContextualAisRadarRefresh);
+        });
 
         window.getAisRouteReadiness = function() {
             const pol = (document.getElementById('port-pol')?.value || window.State?.pol || '').trim();
@@ -27638,6 +27814,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (window.aisProspectionVisualState && window.aisProspectionVisualState.active && typeof window.renderAisProspectionRadii === 'function') {
                     window.renderAisProspectionRadii({ fit: false });
                 }
+                if (typeof window.updateOperationalRegionLayer === 'function') {
+                    window.updateOperationalRegionLayer();
+                }
                 if (window.GlobalStore && window.GlobalStore.getRawVessels && window.GlobalStore.getRawVessels().length > 0 && typeof window.reapplyCentralFiltersAndRedraw === 'function') {
                     window.reapplyCentralFiltersAndRedraw();
                 }
@@ -27650,6 +27829,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function destroyAisMap() {
             if (!aisMap) return;
             cancelAisMapAnimationFrame();
+            if (window.MapLoader && typeof window.MapLoader.clearOperationalRegionLayer === 'function') {
+                window.MapLoader.clearOperationalRegionLayer(aisMap);
+            }
             try {
                 aisMap.remove();
             } catch (e) {
@@ -27714,7 +27896,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             };
 
             vessels.forEach(v => {
-                if (v.latitude && v.longitude) {
+                if (Number.isFinite(Number(v.latitude)) && Number.isFinite(Number(v.longitude))) {
                     const isCompatible = window.GlobalStore && window.GlobalStore.compatibleVessels && window.GlobalStore.compatibleVessels.some(cv => 
                         (cv.imo && cv.imo.toString() === v.imo?.toString()) || 
                         (cv.vesselName && cv.vesselName.toLowerCase() === v.vesselName?.toLowerCase())
@@ -27970,22 +28152,118 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 ];
             }
 
+            const AIS_CROSS_BORDER_REGIONS = [
+                {
+                    key: 'mediterraneo',
+                    label: 'Mediterráneo',
+                    aliases: ['mediterraneo', 'mediterranean', 'barcelona', 'tarragona', 'valencia', 'castellon', 'fos sur mer', 'fos-sur-mer', 'genova', 'génova', 'genoa', 'marseille', 'marsella', 'savona', 'livorno'],
+                    nodes: [
+                        { name: 'Fos-sur-Mer', lat: 43.403, lon: 4.888 },
+                        { name: 'Génova', lat: 44.405, lon: 8.946 },
+                        { name: 'Marsella', lat: 43.296, lon: 5.369 },
+                        { name: 'Savona', lat: 44.309, lon: 8.477 }
+                    ]
+                },
+                {
+                    key: 'atlantic-iberia',
+                    label: 'Atlántico ibérico',
+                    aliases: ['bilbao', 'santander', 'gijon', 'gijón', 'vigo', 'leixoes', 'leixões', 'porto', 'lisbon', 'lisboa', 'sines'],
+                    nodes: [
+                        { name: 'Leixões', lat: 41.184, lon: -8.705 },
+                        { name: 'Sines', lat: 37.956, lon: -8.869 },
+                        { name: 'Santander', lat: 43.462, lon: -3.809 }
+                    ]
+                },
+                {
+                    key: 'north-europe',
+                    label: 'Norte de Europa',
+                    aliases: ['rotterdam', 'antwerp', 'amberes', 'zeebrugge', 'hamburg', 'hamburgo', 'bremen', 'amsterdam', 'dunkerque', 'dunkirk'],
+                    nodes: [
+                        { name: 'Rotterdam', lat: 51.949, lon: 4.145 },
+                        { name: 'Amberes', lat: 51.263, lon: 4.402 },
+                        { name: 'Hamburgo', lat: 53.546, lon: 9.966 }
+                    ]
+                },
+                {
+                    key: 'black-sea',
+                    label: 'Mar Negro',
+                    aliases: ['constanta', 'constantza', 'varna', 'burgas', 'poti', 'batumi', 'samsun', 'trabzon'],
+                    nodes: [
+                        { name: 'Constanta', lat: 44.159, lon: 28.638 },
+                        { name: 'Varna', lat: 43.191, lon: 27.913 },
+                        { name: 'Poti', lat: 42.151, lon: 41.671 }
+                    ]
+                }
+            ];
+
+            function normalizeAisRegionText(value) {
+                return String(value || '')
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, ' ')
+                    .trim();
+            }
+
+            function getAisRegionalContext(port) {
+                if (!port) return null;
+                const portText = normalizeAisRegionText([
+                    port.name,
+                    port.region,
+                    port.Region,
+                    port.country,
+                    port.countryCode
+                ].filter(Boolean).join(' '));
+                if (!portText) return null;
+                return AIS_CROSS_BORDER_REGIONS.find(region =>
+                    region.aliases.some(alias => portText.includes(normalizeAisRegionText(alias)))
+                ) || null;
+            }
+
+            function getRouteAisScanTargets(role = 'POL') {
+                const normalizedRole = String(role || 'POL').toUpperCase();
+                const port = getAisOperationalPort(normalizedRole);
+                const region = getAisRegionalContext(port);
+                const targets = [];
+                if (port) {
+                    targets.push({ ...port, role: normalizedRole, source: 'PORT', region: region?.label || '' });
+                }
+                if (region) {
+                    region.nodes.forEach(node => {
+                        if (port && calculateAisDistanceNm(port.lat, port.lon, node.lat, node.lon) < 8) return;
+                        targets.push({ ...node, role: `NODE_${normalizedRole}`, source: 'NODE', region: region.label });
+                    });
+                }
+                return targets;
+            }
+
             function getActiveRouteAisBoxes() {
-                const polName = (document.getElementById('port-pol')?.value || window.State?.pol || '').trim();
-                const podName = (document.getElementById('port-pod')?.value || window.State?.pod || '').trim();
                 return [
-                    { port: getRoutePortData(polName), role: 'POL' },
-                    { port: getRoutePortData(podName), role: 'POD' }
+                    ...getRouteAisScanTargets('POL'),
+                    ...getRouteAisScanTargets('POD')
                 ]
-                    .map(({ port, role }) => createAisBoxAroundPort(port, getRouteAisScanRadiusNm(role)))
+                    .map((target) => createAisBoxAroundPort(target, getRouteAisScanRadiusNm(target.role.includes('POD') ? 'POD' : 'POL')))
                     .filter(Boolean);
             }
 
+            function updateOperationalRegionLayer() {
+                const targetMap = window.mapaAIS || window.mapAIS || window.AISmap || window.aisMap || window.map;
+                if (!window.MapLoader || typeof window.MapLoader.renderOperationalRegionLayer !== 'function') return;
+                const targets = [
+                    ...getRouteAisScanTargets('POL'),
+                    ...getRouteAisScanTargets('POD')
+                ];
+                window.MapLoader.renderOperationalRegionLayer(targetMap, targets, {
+                    radiusByRole: AIS_PROSPECTION_RADII_NM
+                });
+            }
+            window.updateOperationalRegionLayer = updateOperationalRegionLayer;
+
             function getActiveRouteAisBox(role = 'POL') {
                 const normalizedRole = String(role || 'POL').toUpperCase();
-                const port = getAisOperationalPort(normalizedRole);
-                const box = createAisBoxAroundPort(port, getRouteAisScanRadiusNm(normalizedRole));
-                return box ? [box] : [];
+                return getRouteAisScanTargets(normalizedRole)
+                    .map(target => createAisBoxAroundPort(target, getRouteAisScanRadiusNm(normalizedRole)))
+                    .filter(Boolean);
             }
 
             function getAisOperationalPort(role = 'POL') {
@@ -27993,7 +28271,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const inputId = normalizedRole === 'POD' ? 'port-pod' : 'port-pol';
                 const stateKey = normalizedRole === 'POD' ? 'pod' : 'pol';
                 const portName = (document.getElementById(inputId)?.value || window.State?.[stateKey] || '').trim();
-                return getRoutePortData(portName);
+                const port = getRoutePortData(portName);
+                return port ? { ...port, name: portName } : null;
             }
 
             function calculateAisDistanceNm(lat1, lon1, lat2, lon2) {
@@ -28020,9 +28299,25 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     return { zone: 'POL', color: '#16a34a', distanceToPol: polDistance };
                 }
 
+                const polNode = getRouteAisScanTargets('POL')
+                    .filter(target => target.source === 'NODE')
+                    .map(target => ({ ...target, distance: calculateAisDistanceNm(target.lat, target.lon, lat, lon) }))
+                    .sort((a, b) => a.distance - b.distance)[0];
+                if (polNode && polNode.distance <= AIS_PROSPECTION_RADII_NM.POL) {
+                    return { zone: 'NODE_POL', color: '#f97316', nodeName: polNode.name, nodeRegion: polNode.region, distanceToPolNode: polNode.distance };
+                }
+
                 const podDistance = podPort ? calculateAisDistanceNm(podPort.lat, podPort.lon, lat, lon) : Infinity;
                 if (podDistance <= AIS_PROSPECTION_RADII_NM.POD) {
                     return { zone: 'POD', color: '#2563eb', distanceToPod: podDistance };
+                }
+
+                const podNode = getRouteAisScanTargets('POD')
+                    .filter(target => target.source === 'NODE')
+                    .map(target => ({ ...target, distance: calculateAisDistanceNm(target.lat, target.lon, lat, lon) }))
+                    .sort((a, b) => a.distance - b.distance)[0];
+                if (podNode && podNode.distance <= AIS_PROSPECTION_RADII_NM.POD) {
+                    return { zone: 'NODE_POD', color: '#f97316', nodeName: podNode.name, nodeRegion: podNode.region, distanceToPodNode: podNode.distance };
                 }
 
                 return null;
@@ -28205,6 +28500,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     return { started: false, reason: 'global-sweep-limit-reached' };
                 }
                 const activeMap = mapInstance || window.mapaAIS || window.mapAIS || window.map;
+                if (typeof window.updateOperationalRegionLayer === 'function') {
+                    window.updateOperationalRegionLayer();
+                }
                 window.stopDirectAisLiveRadar();
                 if (window.MapLoader && typeof window.MapLoader.closeAisStreamSocket === 'function') {
                     window.MapLoader.closeAisStreamSocket();
@@ -28252,6 +28550,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 window.stopDirectAisLiveRadar();
                 clearDirectAisStore();
                 window.AIS_PROXY_POLLING_ACTIVE = true;
+                if (typeof window.updateOperationalRegionLayer === 'function') {
+                    window.updateOperationalRegionLayer();
+                }
                 if (window.MapLoader && typeof window.MapLoader.startAisProxyPolling === 'function') {
                     const endpoint = typeof window.getRouteAisSweepEndpoint === 'function'
                         ? window.getRouteAisSweepEndpoint(45000)
@@ -28688,7 +28989,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             function getFleetCargoTypeFromRecord(record) {
                 if (!record) return '';
-                return cleanFleetIntelValue(record.tipo_carga || record.cargoType || record.cargoTaxonomyLabel || record.categoryLabel || record.tipo || record.type);
+                return cleanFleetIntelValue(record.Tipo || record.tipo_carga || record.cargoType || record.cargoTaxonomyLabel || record.categoryLabel || record.tipo || record.type);
             }
 
             function buildCalculatorCargoRecordForVessel(vessel) {
@@ -28738,12 +29039,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const inferred = inferFleetCargoTaxonomy(cargoType);
                     vessel.tipo_carga = cargoType;
                     vessel.cargoType = cargoType;
+                    vessel.Tipo = cargoType;
                     vessel.cargoTaxonomyLabel = inferred ? inferred.tipo_carga : cargoType;
                     vessel.cargoTaxonomyValue = inferred ? inferred.value : (record && record.categoryValue) || '';
                     vessel.fleetIntelRecord = record || vessel.fleetIntelRecord || null;
                     if (vessel.MetaData) {
                         vessel.MetaData.tipo_carga = cargoType;
                         vessel.MetaData.cargoType = cargoType;
+                        vessel.MetaData.Tipo = cargoType;
                         vessel.MetaData.cargoTaxonomyLabel = vessel.cargoTaxonomyLabel;
                         vessel.MetaData.cargoTaxonomyValue = vessel.cargoTaxonomyValue;
                     }
@@ -28866,6 +29169,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     if (!vesselKey) return null;
                     const rawType = columnIndex.tipo >= 0 ? cells[columnIndex.tipo] : '';
                     const rawCargoType = columnIndex.tipo_carga >= 0 ? cells[columnIndex.tipo_carga] : '';
+                    const tipo = cleanFleetIntelValue(rawType || rawCargoType);
+                    if (!tipo || tipo === 'N/A') {
+                        console.error('FleetManager CSV: vessel.Tipo vacío al importar fila:', cells);
+                    }
                     return {
                         imo: columnIndex.imo >= 0 ? normalizeFleetIntelImo(cells[columnIndex.imo]) || 'SIN-IMO' : 'SIN-IMO',
                         vessel: nombre,
@@ -28873,10 +29180,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         name: nombre,
                         tipo_carga: rawCargoType,
                         cargoType: rawCargoType,
-                        tipo: rawType,
-                        type: rawType,
-                        shipType: rawType,
-                        vesselType: rawType,
+                        Tipo: tipo,
+                        tipo,
+                        type: tipo,
+                        shipType: tipo,
+                        vesselType: tipo,
                         anio: cleanFleetIntelValue(cells[columnIndex.anio]),
                         gt: cleanFleetIntelValue(cells[columnIndex.gt]),
                         dwt: cleanFleetIntelValue(cells[columnIndex.dwt]),
@@ -29173,6 +29481,142 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
             };
 
+            const ONLY_SHOW_MY_LIST = true;
+            window.ONLY_SHOW_MY_LIST = true;
+
+            function getFleetTypeFilterLabel() {
+                const select = document.getElementById('fleet-intel-vessel-type');
+                const selectedOption = select && select.options ? select.options[select.selectedIndex] : null;
+                const selectedValue = select ? String(select.value || '') : '';
+                const label = selectedOption ? String(selectedOption.textContent || '') : selectedValue;
+                if (!selectedValue || selectedValue === 'All') return 'All';
+                if (selectedValue === 'category:cargo') return 'All';
+                if (selectedValue === 'category:tanker') return 'Tanker';
+                if (selectedValue === 'category:passenger') return 'Passenger';
+                if (selectedValue === 'category:other') return 'Other';
+                return label.replace(/^All\s+/i, '').replace(/\s*\/.*$/, '').trim() || selectedValue;
+            }
+
+            function bindRadarVesselTipo(vessel) {
+                if (!vessel || typeof vessel !== 'object') return vessel;
+                const meta = vessel.MetaData || {};
+                const tipo = cleanFleetIntelValue(
+                    vessel.Tipo ||
+                    vessel.tipo ||
+                    vessel.type ||
+                    vessel.shipType ||
+                    vessel.vesselType ||
+                    vessel.cargoType ||
+                    vessel.tipo_carga ||
+                    vessel.categoryLabel ||
+                    vessel.radarCategory ||
+                    meta.Tipo ||
+                    meta.tipo ||
+                    meta.type ||
+                    meta.shipType ||
+                    meta.vesselType ||
+                    meta.cargoType ||
+                    meta.tipo_carga ||
+                    meta.categoryLabel
+                );
+                if (!tipo || tipo === 'N/A') {
+                    console.error('Radar filter: vessel.Tipo vacío antes de filtrar:', vessel);
+                    vessel.Tipo = '';
+                    if (vessel.MetaData) vessel.MetaData.Tipo = '';
+                    return vessel;
+                }
+                vessel.Tipo = tipo;
+                if (vessel.MetaData) vessel.MetaData.Tipo = tipo;
+                return vessel;
+            }
+
+            function filterVessels(vessels, category) {
+                if (!category || category === 'All') return vessels;
+
+                const normalizedCategory = category.toLowerCase().trim();
+                return vessels.filter(v => {
+                    const vesselType = v.Tipo ? v.Tipo.toLowerCase().trim() : '';
+                    return vesselType.includes(normalizedCategory);
+                });
+            }
+
+            window.filterVessels = filterVessels;
+
+            function isStrictFleetMode() {
+                return window.ONLY_SHOW_MY_LIST === true || window.fleetIntelExclusiveVisibility === true || localStorage.getItem('fleet_intel_exclusive_visibility') === '1';
+            }
+
+            function getFleetRecordDisplayName(record) {
+                return cleanFleetIntelValue(record && (record.vessel || record.nombre || record.name || record.vesselName || record.ShipName));
+            }
+
+            function getFleetRecordTipo(record) {
+                return cleanFleetIntelValue(record && (record.Tipo || record.tipo || record.type || record.shipType || record.vesselType || record.categoryLabel || record.scrapedType));
+            }
+
+            function fleetRecordMatchesCategory(record, category) {
+                if (!category || category === 'All') return true;
+                const normalizedCategory = category.toLowerCase().trim();
+                const vesselType = getFleetRecordTipo(record).toLowerCase().trim();
+                return vesselType.includes(normalizedCategory);
+            }
+
+            function getFilteredFleetRegistryByCategory(category) {
+                const registry = window.FleetManager && typeof window.FleetManager.getRegistry === 'function'
+                    ? window.FleetManager.getRegistry()
+                    : [];
+                return (Array.isArray(registry) ? registry : []).filter(record => {
+                    const matches = fleetRecordMatchesCategory(record, category);
+                    if (!matches) {
+                        console.log(`Barco ${getFleetRecordDisplayName(record)} presente en lista pero no filtrado por categoría ${category}`);
+                    }
+                    return matches;
+                });
+            }
+
+            function buildFleetNoSignalVessel(record) {
+                const name = getFleetRecordDisplayName(record);
+                const imo = normalizeFleetIntelImo(record && record.imo);
+                const tipo = getFleetRecordTipo(record);
+                return bindRadarVesselTipo({
+                    vesselName: name,
+                    ShipName: name,
+                    name,
+                    imo: imo || 'N/A',
+                    IMO: imo || 'N/A',
+                    mmsi: 'N/A',
+                    MMSI: 'N/A',
+                    latitude: null,
+                    longitude: null,
+                    speed: 0,
+                    statusLabel: 'Sin señal',
+                    Tipo: tipo,
+                    tipo,
+                    type: tipo,
+                    fleetIntelMatch: true,
+                    isTarget: true,
+                    fleetIntelRecord: record,
+                    noAisSignal: true,
+                    MetaData: {
+                        ShipName: name,
+                        IMO: imo || 'N/A',
+                        Tipo: tipo,
+                        fleetIntelMatch: true,
+                        noAisSignal: true
+                    }
+                });
+            }
+
+            function exactFleetAisMatch(record, vessel) {
+                const meta = vessel && vessel.MetaData ? vessel.MetaData : {};
+                const recordImo = normalizeFleetIntelImo(record && record.imo);
+                const vesselImo = normalizeFleetIntelImo(vessel && (vessel.imo || vessel.IMO || meta.imo || meta.IMO));
+                if (recordImo && vesselImo && recordImo === vesselImo) return true;
+                const recordName = normalizeFleetIntelVesselName(getFleetRecordDisplayName(record));
+                const vesselName = normalizeFleetIntelVesselName(vessel && (vessel.vesselName || vessel.name || vessel.ShipName || meta.ShipName || meta.VesselName));
+                return !!recordName && !!vesselName && recordName === vesselName;
+            }
+
             window.reapplyCentralFiltersAndRedraw = function() {
                 const rawVessels = (window.GlobalStore && typeof window.GlobalStore.getRawVessels === 'function')
                     ? (window.GlobalStore.getRawVessels() || [])
@@ -29189,8 +29633,26 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     }
                 }
 
-                const hydratedRawVessels = rawVessels.map(v => typeof hydrateRadarVesselCargoType === 'function' ? hydrateRadarVesselCargoType(v) : v);
-                const filteredVessels = AIS_RAW_FLEET_DIAGNOSTIC_MODE ? hydratedRawVessels : hydratedRawVessels.filter(v => {
+                const hydratedRawVessels = rawVessels
+                    .map(v => typeof hydrateRadarVesselCargoType === 'function' ? hydrateRadarVesselCargoType(v) : v)
+                    .map(bindRadarVesselTipo);
+                console.log('[AIS_DEBUG] Tipos únicos detectados:', [...new Set(hydratedRawVessels.map(v => v.Tipo))]);
+
+                const selectedCategory = getFleetTypeFilterLabel();
+                const strictFleetMode = isStrictFleetMode();
+                const typeFilteredVessels = strictFleetMode
+                    ? getFilteredFleetRegistryByCategory(selectedCategory).map(record => {
+                        const aisMatch = hydratedRawVessels.find(vessel => exactFleetAisMatch(record, vessel));
+                        return aisMatch
+                            ? bindRadarVesselTipo({ ...aisMatch, fleetIntelMatch: true, isTarget: true, fleetIntelRecord: record })
+                            : buildFleetNoSignalVessel(record);
+                    })
+                    : (AIS_RAW_FLEET_DIAGNOSTIC_MODE
+                        ? hydratedRawVessels
+                        : filterVessels(hydratedRawVessels, selectedCategory));
+
+                const filteredVessels = typeFilteredVessels.filter(v => {
+                    if (v && v.noAisSignal) return true;
                     const coords = (window.MapLoader && typeof window.MapLoader.normalizeCoordinates === 'function')
                         ? window.MapLoader.normalizeCoordinates(v)
                         : [parseFloat((v.MetaData && v.MetaData.latitude) || v.latitude || 0), parseFloat((v.MetaData && v.MetaData.longitude) || v.longitude || 0)];
@@ -29199,31 +29661,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
                     if (window.MapLoader && typeof window.MapLoader.isValidWaterPosition === 'function') {
                         if (!window.MapLoader.isValidWaterPosition(lat, lon)) {
-                            return false;
-                        }
-                    }
-
-                    const name = v.vesselName || (v.MetaData && v.MetaData.ShipName) || v.ShipName || "Unknown";
-                    const mmsi = v.mmsi || (v.MetaData && v.MetaData.MMSI) || v.MMSI || "N/A";
-                    const imo = v.imo || (v.MetaData && v.MetaData.IMO) || v.IMO || "N/A";
-                    const rawDwtVal = v.DWT || v.dwt || (v.MetaData && (v.MetaData.DWT || v.MetaData.dwt));
-                    const rawDwt = (rawDwtVal !== undefined && rawDwtVal !== null && rawDwtVal !== "N/A" && rawDwtVal !== "Unknown" && rawDwtVal !== "unknown") ? parseFloat(rawDwtVal) : "N/A";
-
-                    const shipTypeVal = v.ShipType || v.shipType || (v.MetaData && (v.MetaData.ShipType || v.MetaData.shipType));
-                    const isIntelMatch = markFleetIntelVessel(v);
-                    const selectedFleetType = vesselTypes && vesselTypes.length > 0 ? String(vesselTypes[0] || '') : '';
-
-                    if (selectedFleetType.startsWith('type:')) {
-                        return isIntelMatch &&
-                            window.FleetManager &&
-                            typeof window.FleetManager.matchesCargoTaxonomy === 'function' &&
-                            window.FleetManager.matchesCargoTaxonomy(v, selectedFleetType);
-                    }
-
-                    if (!isIntelMatch && vesselTypes && vesselTypes.length > 0 && !selectedFleetType.includes(':')) {
-                        const cat = normalizeRadarCategory(readRadarCategorySource(v), classifyVesselCategory(rawDwt, name, mmsi, imo, shipTypeVal));
-                        const normalizedFilterTypes = vesselTypes.map(t => normalizeRadarCategory(t, classifyVesselCategory(rawDwt, name, mmsi, imo, t)));
-                        if (!vesselTypes.includes(cat) && !normalizedFilterTypes.includes(cat)) {
                             return false;
                         }
                     }
@@ -29238,7 +29675,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const mmsi = v.mmsi || v.MMSI || (v.MetaData && v.MetaData.MMSI) || "N/A";
                     const imo = v.imo || v.IMO || (v.MetaData && v.MetaData.IMO) || v.mmsi || v.MMSI || "N/A";
                     const destination = v.destination || v.Destination || (v.MetaData && v.MetaData.Destination) || "N/A";
-                    const coords = (window.MapLoader && typeof window.MapLoader.normalizeCoordinates === 'function')
+                    const coords = v.noAisSignal
+                        ? [NaN, NaN]
+                        : (window.MapLoader && typeof window.MapLoader.normalizeCoordinates === 'function')
                         ? window.MapLoader.normalizeCoordinates(v)
                         : [parseFloat((v.MetaData && v.MetaData.latitude) || v.latitude || 38.0), parseFloat((v.MetaData && v.MetaData.longitude) || v.longitude || 15.0)];
                     const [lat, lon] = coords;
@@ -29271,10 +29710,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         mmsi: mmsi,
                         imo: imo,
                         destination: destination,
-                        latitude: lat,
-                        longitude: lon,
+                        latitude: Number.isFinite(lat) ? lat : null,
+                        longitude: Number.isFinite(lon) ? lon : null,
                         speed: speed,
-                        statusLabel: statusLabel,
+                        statusLabel: v.noAisSignal ? 'Sin señal' : statusLabel,
                         shipType: shipTypeVal,
                         ShipType: shipTypeVal,
                         course: Number.isFinite(course) ? course : undefined,
@@ -29289,10 +29728,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         fleetIntelTechnical,
                         aisRadarZone: zoneMatch ? zoneMatch.zone : 'ROUTE',
                         aisRadarColor: zoneMatch ? zoneMatch.color : '#3b82f6',
+                        aisNodeName: zoneMatch ? zoneMatch.nodeName : undefined,
+                        aisNodeRegion: zoneMatch ? zoneMatch.nodeRegion : undefined,
+                        distanceToPolNode: zoneMatch && Number.isFinite(zoneMatch.distanceToPolNode) ? zoneMatch.distanceToPolNode : undefined,
+                        distanceToPodNode: zoneMatch && Number.isFinite(zoneMatch.distanceToPodNode) ? zoneMatch.distanceToPodNode : undefined,
                         fleetIntelMatch,
                         distanceToPol: zoneMatch && Number.isFinite(zoneMatch.distanceToPol) ? zoneMatch.distanceToPol : undefined,
                         distanceToPod: zoneMatch && Number.isFinite(zoneMatch.distanceToPod) ? zoneMatch.distanceToPod : undefined,
                         NavigationalStatus: statusVal,
+                        noAisSignal: !!v.noAisSignal,
                         timestamp: v.timestamp || v.lastSeen || v.created_at || v.createdAt || Date.now()
                     };
                 });
@@ -29306,6 +29750,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         return aEta - bEta;
                     });
                 const podVisibleVessels = normalizedVessels.filter(v => v.aisRadarZone === 'POD');
+                const primaryVisibleVessels = strictFleetMode ? normalizedVessels : polPrimaryVessels;
 
                 if (window.aisProspectionVisualState && window.aisProspectionVisualState.active) {
                     if (typeof window.completeAisProspectionRadius === 'function') {
@@ -29315,31 +29760,39 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
 
                 if (window.GlobalStore) {
-                    window.GlobalStore.setVessels(normalizedVessels);
-                    window.GlobalStore.polPrimaryVessels = polPrimaryVessels;
+                    if (strictFleetMode) {
+                        window.GlobalStore.vessels = normalizedVessels;
+                        window.GlobalStore.rawVessels = typeFilteredVessels;
+                        window.dispatchEvent(new CustomEvent('ais:vessels-updated', {
+                            detail: { rawVessels: typeFilteredVessels, vessels: normalizedVessels }
+                        }));
+                    } else {
+                        window.GlobalStore.setVessels(normalizedVessels);
+                    }
+                    window.GlobalStore.polPrimaryVessels = primaryVisibleVessels;
                 }
-                window.lastVesselsInArea = polPrimaryVessels;
+                window.lastVesselsInArea = primaryVisibleVessels;
 
                 const buquesCountEl = document.getElementById('buques-count');
-                if (buquesCountEl) buquesCountEl.innerText = polPrimaryVessels.length;
+                if (buquesCountEl) buquesCountEl.innerText = primaryVisibleVessels.length;
                 const coefOfertaEl = document.getElementById('coeficiente-oferta');
-                if (coefOfertaEl) coefOfertaEl.innerText = (polPrimaryVessels.length / 5).toFixed(2);
+                if (coefOfertaEl) coefOfertaEl.innerText = (primaryVisibleVessels.length / 5).toFixed(2);
                 const estadoCompEl = document.getElementById('estado-competencia');
-                if (estadoCompEl) estadoCompEl.innerText = polPrimaryVessels.length > 3 ? "Alta" : "Baja";
+                if (estadoCompEl) estadoCompEl.innerText = primaryVisibleVessels.length > 3 ? "Alta" : "Baja";
 
                 const aisDensityCount = document.getElementById('ais-density-count');
-                if (aisDensityCount) aisDensityCount.innerText = polPrimaryVessels.length;
+                if (aisDensityCount) aisDensityCount.innerText = primaryVisibleVessels.length;
                 const aisSupplyCoefficient = document.getElementById('ais-supply-coefficient');
                 if (aisSupplyCoefficient) {
                     const baseline = 15;
-                    let coefficient = 1.00 + (baseline - polPrimaryVessels.length) * 0.02;
+                    let coefficient = 1.00 + (baseline - primaryVisibleVessels.length) * 0.02;
                     coefficient = Math.max(0.70, Math.min(1.30, coefficient));
                     aisSupplyCoefficient.innerText = coefficient.toFixed(2);
                 }
                 const aisCompetitionStatus = document.getElementById('ais-competition-status');
                 if (aisCompetitionStatus) {
-                    aisCompetitionStatus.innerText = polPrimaryVessels.length > 5 ? "Alta" : "Baja";
-                    if (polPrimaryVessels.length > 5) {
+                    aisCompetitionStatus.innerText = primaryVisibleVessels.length > 5 ? "Alta" : "Baja";
+                    if (primaryVisibleVessels.length > 5) {
                         aisCompetitionStatus.className = "px-2.5 py-1 text-xs font-bold rounded-full bg-red-500/10 text-red-400 inline-block mt-2";
                     } else {
                         aisCompetitionStatus.className = "px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-500/10 text-emerald-400 inline-block mt-2";
@@ -29367,14 +29820,21 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                             const tr = document.createElement('tr');
                             tr.className = "border-b border-slate-800/40 hover:bg-slate-900/30 transition-colors cursor-pointer";
                             tr.onclick = () => {
-                                window.selectShip(v.vesselName, v.mmsi, v.latitude, v.longitude, v.imo, v.destination);
+                                if (!v.noAisSignal) window.selectShip(v.vesselName, v.mmsi, v.latitude, v.longitude, v.imo, v.destination);
                             };
                             const hoverTitle = tooltipMap[v.vesselClass] || '';
                             const vCategory = v.radarCategory || normalizeRadarCategory(readRadarCategorySource(v), classifyVesselCategory(v.dwt, v.vesselName, v.mmsi, v.imo, v.shipType || v.ShipType));
+                            const nodeLabel = String(v.aisRadarZone || '').startsWith('NODE')
+                                ? `<span class="text-[10px] text-orange-400 block font-bold">Nodo vecino: ${v.aisNodeName || v.aisNodeRegion || 'regional'}</span>`
+                                : '';
+                            const hasLiveCoords = Number.isFinite(Number(v.latitude)) && Number.isFinite(Number(v.longitude));
+                            const positionLabel = hasLiveCoords
+                                ? `${Number(v.latitude).toFixed(4)}°, ${Number(v.longitude).toFixed(4)}°${nodeLabel}`
+                                : '<span class="text-amber-300 font-black">Sin señal</span>';
                             tr.innerHTML = `
                                 <td class="py-3 px-3 font-semibold text-slate-200">${v.vesselName}</td>
                                 <td class="py-3 px-3 text-slate-400 mono">${v.imo}</td>
-                                <td class="py-3 px-3 text-slate-400 mono">${v.latitude.toFixed(4)}°, ${v.longitude.toFixed(4)}°</td>
+                                <td class="py-3 px-3 text-slate-400 mono">${positionLabel}</td>
                                 <td class="py-3 px-3 text-slate-400 mono">${v.speed} kn <span class="text-[10px] text-emerald-400 block">${v.statusLabel}</span></td>
                                 <td class="py-3 px-3"><span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700 cursor-help" title="${hoverTitle}">${vCategory}</span></td>
                             `;
@@ -29383,7 +29843,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     }
                 }
 
-                updateAisMarkers(normalizedVessels);
+                updateAisMarkers(normalizedVessels.filter(v => Number.isFinite(Number(v.latitude)) && Number.isFinite(Number(v.longitude))));
 
                 window.calculatorAisMarkers = aisMarkers.slice();
 
@@ -30689,10 +31149,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             portInputEl.addEventListener('input', () => {
                 window.isFirstLoad = true;
                 window.updateAisDetectedVesselsRoute();
+                if (typeof window.updateOperationalRegionLayer === 'function') {
+                    window.updateOperationalRegionLayer();
+                }
             });
             portInputEl.addEventListener('change', () => {
                 window.isFirstLoad = true;
                 window.updateAisDetectedVesselsRoute();
+                if (typeof window.updateOperationalRegionLayer === 'function') {
+                    window.updateOperationalRegionLayer();
+                }
             });
         });
 

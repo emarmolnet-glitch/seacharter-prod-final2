@@ -106,6 +106,7 @@ type FleetRegistryRecord = {
   vessel: string;
   nombre: string;
   name: string;
+  Tipo?: string;
   tipo: string;
   type: string;
   shipType: string;
@@ -232,6 +233,7 @@ const DEMURRAGE_TCE_MULTIPLIER = 1.25;
 const BUNKER_INDEX_ADJUSTMENT_SHARE = 0.5;
 const BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT = 5;
 const FLEET_REGISTRY_KEY = 'fleet_registry';
+const ONLY_SHOW_MY_LIST = true;
 const FLEET_CATEGORY_GROUPS = [
   {
     label: 'Cargo',
@@ -665,6 +667,20 @@ function cleanFleetValue(value: unknown) {
   return text || 'N/A';
 }
 
+const fleetCategoryMap: Record<string, string> = {
+  'ciment carrier': 'Cement Carrier',
+  'cement carrier': 'Cement Carrier',
+  bulk: 'Bulk Carrier',
+  'general cargo': 'General Cargo Ship',
+};
+
+function normalizeFleetCategory(value: unknown) {
+  const normalized = normalizeFleetText(value).toLowerCase().replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  const match = Object.entries(fleetCategoryMap).find(([key]) => normalized.includes(key));
+  return match ? match[1] : cleanFleetValue(value);
+}
+
 function hasFleetValue(value: unknown) {
   const text = normalizeFleetText(value);
   return !!text && !['N/A', 'NA', 'NULL', 'NONE', '-', '--'].includes(text.toUpperCase());
@@ -813,7 +829,8 @@ const FleetManager = (() => {
 })();
 
 if (typeof window !== 'undefined') {
-  (window as typeof window & { FleetManager?: typeof FleetManager }).FleetManager = FleetManager;
+  (window as typeof window & { FleetManager?: typeof FleetManager; ONLY_SHOW_MY_LIST?: boolean }).FleetManager = FleetManager;
+  (window as typeof window & { ONLY_SHOW_MY_LIST?: boolean }).ONLY_SHOW_MY_LIST = ONLY_SHOW_MY_LIST;
 }
 
 function getFleetRegistryStore(): Record<string, FleetRegistryRecord> {
@@ -888,24 +905,41 @@ function parseCsvText(text: string, delimiter = ',') {
 }
 
 async function processVesselData(rawData: Array<Record<string, unknown>>) {
-  const processedData = rawData
-    .filter((row) => row && row.Vessel)
-    .map((row) => {
-      try {
-        const rawVesselName = typeof row.Vessel === 'string' ? row.Vessel : '';
-        const cleanedName = rawVesselName.replace(/-/g, ' ').trim();
+  const processedData: Array<Record<string, unknown>> = [];
 
-        return {
+  try {
+    for (const row of rawData) {
+      try {
+        const rowNumber = typeof row?.__rowNumber === 'number' ? row.__rowNumber : '?';
+        const vesselString = (row?.Vessel as { toString?: () => string } | undefined)?.toString?.() || '';
+        const cleanedName = vesselString.replace?.(/-/g, ' ')?.trim?.() || '';
+        const normalizedImo = normalizeFleetImo(row?.IMO);
+        const normalizedType = normalizeFleetCategory(row?.Type);
+
+        if (!cleanedName || !normalizedImo || !normalizedType) {
+          console.warn(`Fila CSV ${rowNumber} ignorada por campos vacíos:`, {
+            Vessel: cleanedName || 'VACIO',
+            IMO: normalizedImo || 'VACIO',
+            Tipo: normalizedType || 'VACIO',
+          });
+          continue;
+        }
+
+        processedData.push({
           ...row,
           Vessel: cleanedName,
-          IMO: row.IMO || 'N/A',
-        };
+          IMO: normalizedImo,
+          Tipo: normalizedType,
+          Type: normalizedType,
+        });
       } catch (err) {
-        console.error('Error procesando fila:', row, err);
-        return null;
+        console.warn('Fila CSV ignorada por error de procesamiento:', row, err);
+        continue;
       }
-    })
-    .filter((row): row is Record<string, unknown> => row !== null);
+    }
+  } catch (error) {
+    console.warn('CSV ignorado por error general de procesamiento:', error);
+  }
 
   return processedData;
 }
@@ -940,11 +974,12 @@ async function parseFleetRowsFromCsv(text: string): Promise<Partial<FleetRegistr
     Object.entries(aliases).map(([key, names]) => [key, headers.findIndex((header) => names.includes(header))]),
   ) as Record<'vessel' | 'tipo' | 'anio' | 'gt' | 'dwt' | 'dimensiones' | 'imo', number>;
   const missingColumns = Object.entries(indexes)
-    .filter(([column, index]) => column !== 'imo' && column !== 'tipo' && index < 0)
+    .filter(([column, index]) => column !== 'imo' && index < 0)
     .map(([column]) => column);
   if (missingColumns.length) {
     const displayNames: Record<string, string> = {
       vessel: 'Vessel',
+      tipo: 'Tipo',
       anio: 'Built',
       gt: 'GT',
       dwt: 'DWT',
@@ -966,6 +1001,12 @@ async function parseFleetRowsFromCsv(text: string): Promise<Partial<FleetRegistr
     __rowNumber: rowIndex + 2,
   }));
 
+  const rowMissingType = rawData.find((row) => !normalizeFleetCategory(row?.Type));
+  if (rowMissingType) {
+    const rowNumber = typeof rowMissingType.__rowNumber === 'number' ? rowMissingType.__rowNumber : '?';
+    throw new Error(`Carga detenida: la fila ${rowNumber} no contiene Tipo de mercancía/buque. Completa el campo Tipo antes de confirmar la importación.`);
+  }
+
   const processedRows = await processVesselData(rawData);
 
   return processedRows.flatMap((row) => {
@@ -980,7 +1021,10 @@ async function parseFleetRowsFromCsv(text: string): Promise<Partial<FleetRegistr
       const vessel = cleanFleetValue(vesselName);
       const year = cleanFleetValue(row.Built);
       const imo = normalizeFleetImo(row.IMO);
-      const type = row.Type;
+      const type = normalizeFleetCategory(row?.Type);
+      if (!type) {
+        console.error(`FleetManager CSV: vessel.Tipo vacío en fila ${rowNumber}`);
+      }
       return [{
         imo: imo || 'N/A',
         vessel,
@@ -990,6 +1034,7 @@ async function parseFleetRowsFromCsv(text: string): Promise<Partial<FleetRegistr
         gt: cleanFleetValue(row.GT),
         dwt: cleanFleetValue(row.DWT),
         dimensiones: cleanFleetValue(row.Size),
+        Tipo: cleanFleetValue(type),
         tipo: cleanFleetValue(type),
         type: cleanFleetValue(type),
         shipType: cleanFleetValue(type),
@@ -1078,6 +1123,8 @@ function FleetIntelligenceLibraryPanel() {
   const [registryCount, setRegistryCount] = useState(0);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [csvValidationError, setCsvValidationError] = useState('');
+  const [exclusiveVisibility, setExclusiveVisibility] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const csvInputRef = useRef<HTMLInputElement>(null);
 
@@ -1086,6 +1133,10 @@ function FleetIntelligenceLibraryPanel() {
     setRegistryCount(Object.keys(getFleetRegistryStore()).length);
     const storedFilter = window.localStorage.getItem('fleet_intel_vessel_filter');
     if (storedFilter) setSelectedCategory(storedFilter);
+    const storedExclusiveVisibility = ONLY_SHOW_MY_LIST || window.localStorage.getItem('fleet_intel_exclusive_visibility') === '1';
+    setExclusiveVisibility(storedExclusiveVisibility);
+    (window as typeof window & { fleetIntelExclusiveVisibility?: boolean; ONLY_SHOW_MY_LIST?: boolean }).fleetIntelExclusiveVisibility = storedExclusiveVisibility;
+    (window as typeof window & { ONLY_SHOW_MY_LIST?: boolean }).ONLY_SHOW_MY_LIST = ONLY_SHOW_MY_LIST;
     const syncRegistryCount = () => setRegistryCount(Object.keys(getFleetRegistryStore()).length);
     window.addEventListener('fleet-intel:updated', syncRegistryCount);
     window.addEventListener('storage', syncRegistryCount);
@@ -1108,6 +1159,17 @@ function FleetIntelligenceLibraryPanel() {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('fleet_intel_vessel_filter', nextValue);
       window.dispatchEvent(new CustomEvent('fleet-intel-filter-changed', { detail: { value: nextValue } }));
+    }
+  };
+
+  const handleExclusiveVisibilityChange = (nextValue: boolean) => {
+    setExclusiveVisibility(nextValue);
+    if (typeof window !== 'undefined') {
+      (window as typeof window & { fleetIntelExclusiveVisibility?: boolean }).fleetIntelExclusiveVisibility = nextValue;
+      window.localStorage.setItem('fleet_intel_exclusive_visibility', nextValue ? '1' : '0');
+      const redraw = (window as typeof window & { reapplyCentralFiltersAndRedraw?: () => void }).reapplyCentralFiltersAndRedraw;
+      if (typeof redraw === 'function') redraw();
+      window.dispatchEvent(new CustomEvent('fleet-intel-visibility-changed', { detail: { exclusive: nextValue } }));
     }
   };
 
@@ -1211,6 +1273,7 @@ function FleetIntelligenceLibraryPanel() {
 
   const importFleetRegistryCsv = async (file: File) => {
     setIsImporting(true);
+    setCsvValidationError('');
     setStatus(`Procesando ${file.name}...`);
 
     try {
@@ -1270,7 +1333,9 @@ function FleetIntelligenceLibraryPanel() {
       setStatus(summary);
       window.alert(summary);
     } catch (error) {
-      setStatus(`Error de importación: ${error instanceof Error ? error.message : 'CSV no válido'}`);
+      const message = error instanceof Error ? error.message : 'CSV no válido';
+      setCsvValidationError(message);
+      setStatus(`Error de importación: ${message}`);
     } finally {
       setIsImporting(false);
       if (csvInputRef.current) csvInputRef.current.value = '';
@@ -1324,10 +1389,25 @@ function FleetIntelligenceLibraryPanel() {
           <RefreshIcon />
           {isCapturing ? 'Cargando' : 'Capturar'}
         </button>
-        <button type="button" onClick={() => csvInputRef.current?.click()} disabled={isImporting || isCapturing} className="mt-5 inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-slate-900 px-4 text-xs font-black uppercase tracking-wide text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-wait disabled:opacity-65">
+        <button type="button" onClick={() => csvInputRef.current?.click()} disabled={isImporting || isCapturing || !!csvValidationError} className="mt-5 inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-slate-900 px-4 text-xs font-black uppercase tracking-wide text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-wait disabled:opacity-65">
           {isImporting ? 'Procesando CSV' : 'Subir Base de Datos (CSV)'}
         </button>
       </div>
+      <label className="mt-3 flex items-center gap-2 text-xs font-bold text-slate-700">
+        <input
+          type="checkbox"
+          checked={exclusiveVisibility}
+          onChange={(event) => handleExclusiveVisibilityChange(event.target.checked)}
+          className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+        />
+        Ocultar tráfico AIS fuera de mi lista cargada
+      </label>
+      {csvValidationError && (
+        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+          {csvValidationError}
+          <button type="button" onClick={() => setCsvValidationError('')} className="ml-3 underline">Corregir y seleccionar otro CSV</button>
+        </div>
+      )}
       {isCapturing && (
         <div className="mt-3">
           <div className="h-2 overflow-hidden rounded-full bg-slate-200">

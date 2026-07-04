@@ -162,6 +162,34 @@
         map: null,
         waitingForMapIdle: false
     };
+    const operationalRegionLayerState = {
+        layer: null,
+        key: ''
+    };
+    const searchNodes = Object.freeze({
+        mediterranean: [
+            { name: 'Barcelona', lat: 41.35, lon: 2.17, region: 'Mediterráneo' },
+            { name: 'Fos-sur-Mer', lat: 43.43, lon: 4.91, region: 'Mediterráneo' },
+            { name: 'Génova', lat: 44.40, lon: 8.93, region: 'Mediterráneo' },
+            { name: 'Marsella', lat: 43.30, lon: 5.37, region: 'Mediterráneo' },
+            { name: 'Savona', lat: 44.31, lon: 8.48, region: 'Mediterráneo' },
+            { name: 'Valencia', lat: 39.45, lon: -0.32, region: 'Mediterráneo' },
+            { name: 'Tarragona', lat: 41.10, lon: 1.24, region: 'Mediterráneo' }
+        ],
+        atlanticIberia: [
+            { name: 'Huelva', lat: 37.25, lon: -6.95, region: 'Atlántico Ibérico' },
+            { name: 'Cádiz', lat: 36.53, lon: -6.29, region: 'Atlántico Ibérico' },
+            { name: 'Algeciras', lat: 36.14, lon: -5.44, region: 'Atlántico Ibérico' },
+            { name: 'Lisboa', lat: 38.70, lon: -9.15, region: 'Atlántico Ibérico' },
+            { name: 'Sines', lat: 37.95, lon: -8.87, region: 'Atlántico Ibérico' }
+        ],
+        northEurope: [
+            { name: 'Rotterdam', lat: 51.95, lon: 4.14, region: 'Norte de Europa' },
+            { name: 'Antwerp', lat: 51.26, lon: 4.40, region: 'Norte de Europa' },
+            { name: 'Hamburg', lat: 53.54, lon: 9.99, region: 'Norte de Europa' },
+            { name: 'Amsterdam', lat: 52.38, lon: 4.90, region: 'Norte de Europa' }
+        ]
+    });
 
     function firstDefined() {
         for (let i = 0; i < arguments.length; i++) {
@@ -170,6 +198,26 @@
             }
         }
         return null;
+    }
+
+    function normalizePortSearchName(value) {
+        return String(value || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim();
+    }
+
+    function getSearchNodesForPort(portName) {
+        const normalizedPort = normalizePortSearchName(portName);
+        if (!normalizedPort) return [];
+        const allNodes = Object.values(searchNodes).flat();
+        const directNode = allNodes.find((node) => normalizePortSearchName(node.name) === normalizedPort);
+        if (!directNode) return [];
+        return allNodes
+            .filter((node) => node.region === directNode.region && normalizePortSearchName(node.name) !== normalizedPort)
+            .map((node) => Object.assign({ source: 'NODE' }, node));
     }
 
     function vesselKey(ship) {
@@ -225,11 +273,44 @@
         return ship;
     }
 
+    function shouldUseExclusiveFleetVisibility() {
+        if (typeof window === 'undefined') return false;
+        if (window.fleetIntelExclusiveVisibility === true) return true;
+        try {
+            return localStorage.getItem('fleet_intel_exclusive_visibility') === '1';
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function enrichFleetIntelMatch(ship) {
+        const vessel = ship || {};
+        if (
+            typeof window !== "undefined" &&
+            window.FleetManager &&
+            typeof window.FleetManager.isTarget === "function"
+        ) {
+            const matched = window.FleetManager.isTarget(vessel);
+            vessel.isTarget = matched;
+            vessel.fleetIntelMatch = matched;
+            if (matched && typeof window.FleetManager.getVesselData === "function") {
+                vessel.fleetIntelRecord = window.FleetManager.getVesselData(vessel);
+            }
+        }
+        return vessel;
+    }
+
+    function filterByExclusiveFleetVisibility(vessels) {
+        const list = (Array.isArray(vessels) ? vessels : []).filter(Boolean).map(enrichFleetIntelMatch);
+        if (!shouldUseExclusiveFleetVisibility()) return list;
+        return list.filter((ship) => ship && (ship.isTarget || ship.fleetIntelMatch));
+    }
+
     function emitHydrationUpdate(vessels, detail) {
         if (typeof window === 'undefined') return;
         if (isEmittingHydrationUpdate) return;
 
-        const list = (Array.isArray(vessels) ? vessels : []).filter(Boolean).map(normalizeShipFields);
+        const list = filterByExclusiveFleetVisibility(vessels).map(normalizeShipFields);
         const store = window.GlobalStore;
 
         isEmittingHydrationUpdate = true;
@@ -590,6 +671,107 @@
         return setAisStreamBounds(readLeafletBounds(bounds));
     }
 
+    function clearOperationalRegionLayer(mapInstance) {
+        const targetMap = mapInstance || getDefaultAisMap();
+        if (operationalRegionLayerState.layer && targetMap && typeof targetMap.removeLayer === 'function') {
+            try {
+                targetMap.removeLayer(operationalRegionLayerState.layer);
+            } catch (_) {}
+        }
+        operationalRegionLayerState.layer = null;
+        operationalRegionLayerState.key = '';
+        return { cleared: true };
+    }
+
+    function renderOperationalRegionLayer(mapInstance, targets, options) {
+        const targetMap = mapInstance || getDefaultAisMap();
+        const nodes = (Array.isArray(targets) ? targets : [])
+            .filter((target) => target && target.source === 'NODE' && Number.isFinite(Number(target.lat)) && Number.isFinite(Number(target.lon)));
+
+        if (!targetMap || typeof L === 'undefined' || !L || typeof L.layerGroup !== 'function') {
+            return { rendered: false, reason: 'leaflet-map-unavailable', nodeCount: nodes.length };
+        }
+
+        const key = nodes
+            .map((node) => [
+                node.role || '',
+                node.name || '',
+                Number(node.lat).toFixed(4),
+                Number(node.lon).toFixed(4)
+            ].join(':'))
+            .join('|');
+        if (operationalRegionLayerState.layer && operationalRegionLayerState.key === key) {
+            return { rendered: true, unchanged: true, nodeCount: nodes.length };
+        }
+
+        clearOperationalRegionLayer(targetMap);
+        if (!nodes.length) {
+            return { rendered: false, reason: 'no-operational-nodes', nodeCount: 0 };
+        }
+
+        const layer = L.layerGroup();
+        const portTargets = (Array.isArray(targets) ? targets : [])
+            .filter((target) => target && target.source === 'PORT' && Number.isFinite(Number(target.lat)) && Number.isFinite(Number(target.lon)));
+        const portsByRole = portTargets.reduce((acc, port) => {
+            acc[String(port.role || '').toUpperCase()] = port;
+            return acc;
+        }, {});
+        const radiusByRole = options && options.radiusByRole ? options.radiusByRole : {};
+
+        nodes.forEach((node) => {
+            const role = String(node.role || '').toUpperCase();
+            const parentRole = role.includes('POD') ? 'POD' : 'POL';
+            const parentPort = portsByRole[parentRole];
+            const color = parentRole === 'POD' ? '#2563eb' : '#16a34a';
+            const nodeColor = '#f97316';
+            const radiusNm = Number(radiusByRole[parentRole] || (parentRole === 'POD' ? 100 : 300));
+            const lat = Number(node.lat);
+            const lon = Number(node.lon);
+
+            if (parentPort && typeof L.polyline === 'function') {
+                L.polyline([[Number(parentPort.lat), Number(parentPort.lon)], [lat, lon]], {
+                    color: nodeColor,
+                    weight: 1.4,
+                    opacity: 0.72,
+                    dashArray: '6, 8',
+                    interactive: false
+                }).addTo(layer);
+            }
+
+            if (typeof L.circle === 'function') {
+                L.circle([lat, lon], {
+                    color: nodeColor,
+                    fillColor: nodeColor,
+                    fillOpacity: 0.07,
+                    radius: radiusNm * 1852,
+                    weight: 1,
+                    dashArray: '3, 7',
+                    interactive: false
+                }).addTo(layer);
+            }
+
+            if (typeof L.marker === 'function' && typeof L.divIcon === 'function') {
+                const label = `${parentRole} nodo · ${node.region || 'Región operativa'}`;
+                L.marker([lat, lon], {
+                    interactive: true,
+                    icon: L.divIcon({
+                        className: 'operational-region-node-marker',
+                        html: `<div class="operational-region-node operational-region-node-${parentRole.toLowerCase()}" style="--node-parent-color:${color};"><span></span><strong>${escapePopupText(node.name || 'Nodo')}</strong></div>`,
+                        iconSize: [120, 28],
+                        iconAnchor: [12, 14]
+                    })
+                })
+                    .bindTooltip(`${escapePopupText(node.name || 'Nodo vecino')} · ${escapePopupText(label)}`, { sticky: true })
+                    .addTo(layer);
+            }
+        });
+
+        layer.addTo(targetMap);
+        operationalRegionLayerState.layer = layer;
+        operationalRegionLayerState.key = key;
+        return { rendered: true, nodeCount: nodes.length };
+    }
+
     function obtenerBoundingBoxesActuales(mapInstance) {
         const targetMap = mapInstance || (typeof window !== 'undefined' && (window.AISmap || window.aisMap || window.mapaAIS || window.map));
         if (!targetMap || typeof targetMap.getBounds !== 'function') return null;
@@ -681,12 +863,10 @@
             }
             const endpoint = config.endpoint || aisProxyPollingState.endpoint;
             const endpointUrl = new URL(endpoint, window.location.origin);
-            if (endpointUrl.searchParams.get('mode') === 'global') {
-                return { success: false, skipped: true, reason: 'legacy-ais-mode-disabled' };
-            }
             const hasExplicitBoxes = /(?:[?&]boxes=)(?:[^&]+)/.test(endpoint);
+            const isGlobalNameSearch = endpointUrl.searchParams.get('mode') === 'global' || endpointUrl.searchParams.has('vesselName') || endpointUrl.searchParams.has('q') || endpointUrl.searchParams.has('search');
             const mapInstance = aisProxyPollingState.map || config.map || getDefaultAisMap();
-            const shouldUseViewportBounds = !hasExplicitBoxes;
+            const shouldUseViewportBounds = !hasExplicitBoxes && !isGlobalNameSearch;
             const bounds = shouldUseViewportBounds ? await getStableProxyBounds(mapInstance) : null;
             const proxyPayload = shouldUseViewportBounds ? getProxyBoundsPayload(bounds) : null;
             if (shouldUseViewportBounds && !proxyPayload) {
@@ -697,7 +877,7 @@
                 endpoint,
                 requestUrl: finalRequestUrl,
                 bounds: proxyPayload,
-                mode: hasExplicitBoxes ? 'route-pol-pod' : 'bounded'
+                mode: isGlobalNameSearch ? 'global-name' : (hasExplicitBoxes ? 'route-pol-pod' : 'bounded')
             });
             const response = await fetch(finalRequestUrl);
             const payload = await response.json().catch(() => []);
@@ -1001,7 +1181,7 @@
         const normalizedPol = polName ? String(polName).toUpperCase().trim() : "";
         const normalizedPod = podName ? String(podName).toUpperCase().trim() : "";
         const radarZone = String(vessel.aisRadarZone || (vessel.MetaData && vessel.MetaData.aisRadarZone) || "").toUpperCase();
-        const radarColor = vessel.aisRadarColor || (radarZone === "POL" ? "#16a34a" : (radarZone === "POD" ? "#2563eb" : (radarZone === "ROUTE" ? "#3b82f6" : (radarZone === "GLOBAL" ? "#64748b" : ""))));
+        const radarColor = vessel.aisRadarColor || (radarZone === "NODE_POL" || radarZone === "NODE_POD" ? "#f97316" : (radarZone === "POL" ? "#16a34a" : (radarZone === "POD" ? "#2563eb" : (radarZone === "ROUTE" ? "#3b82f6" : (radarZone === "GLOBAL" ? "#64748b" : "")))));
         const isProjectionCandidate = !!(vessel.projectionCandidate || vessel.aisMarkerStyle === "ghost" || (vessel.MetaData && (vessel.MetaData.projectionCandidate || vessel.MetaData.aisMarkerStyle === "ghost")));
         const isKeyPort = !!(
             (normalizedPol && destination.includes(normalizedPol)) ||
@@ -1015,6 +1195,9 @@
         if (vessel.isTarget) {
             iconClass = "fa-star";
             iconColor = "#f59e0b";
+        } else if (radarZone === "NODE_POL" || radarZone === "NODE_POD") {
+            iconClass = "fa-ship";
+            iconColor = "#f97316";
         } else if (radarZone === "POL") {
             iconClass = "fa-ship";
             iconColor = "#16a34a";
@@ -1041,11 +1224,12 @@
             imageIcon = MAP_STYLE_CONFIG.icons.load;
         }
 
+        const isNeighborNode = radarZone === "NODE_POL" || radarZone === "NODE_POD";
         const iconConfig = {
             className: "custom-ais-icon",
             html: imageIcon
-                ? `<div class="seacharter-ais-icon${isProjectionCandidate ? ' ghost-ship' : ''}" data-icon-class="${iconClass}" style="--marker-color: ${iconColor}; color: ${iconColor};"><img src="${imageIcon}" alt="" width="24" height="24"></div>`
-                : `<div class="seacharter-ais-icon${isProjectionCandidate ? ' ghost-ship' : ''}${vessel.isTarget ? ' fleet-intel-match' : ''}" style="--marker-color: ${iconColor};"><i class="fa-solid fas ${iconClass}"></i></div>`,
+                ? `<div class="seacharter-ais-icon${isProjectionCandidate ? ' ghost-ship' : ''}${isNeighborNode ? ' neighbor-node' : ''}" data-icon-class="${iconClass}" style="--marker-color: ${iconColor}; color: ${iconColor};"><img src="${imageIcon}" alt="" width="24" height="24"></div>`
+                : `<div class="seacharter-ais-icon${isProjectionCandidate ? ' ghost-ship' : ''}${vessel.isTarget ? ' fleet-intel-match' : ''}${isNeighborNode ? ' neighbor-node' : ''}" style="--marker-color: ${iconColor};"><i class="fa-solid fas ${iconClass}"></i></div>`,
             iconSize: [24, 24],
             iconAnchor: [12, 12]
         };
@@ -1150,6 +1334,10 @@
         stopAisProxyPolling,
         resetAisCache,
         pollAisProxyOnce,
+        renderOperationalRegionLayer,
+        clearOperationalRegionLayer,
+        searchNodes,
+        getSearchNodesForPort,
         _aisStreamState: aisStreamState,
         _aisProxyPollingState: aisProxyPollingState
     };
