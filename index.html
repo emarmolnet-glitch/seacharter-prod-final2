@@ -26808,7 +26808,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.aisProspectionVisualState = window.aisProspectionVisualState || {
             active: false,
             zones: {
-                POL: { radiusNm: 300, color: '#16a34a', port: null, status: 'idle', count: null },
+                POL: { radiusNm: 2000, color: '#16a34a', port: null, status: 'idle', count: null },
                 POD: { radiusNm: 100, color: '#2563eb', port: null, status: 'idle', count: null }
             }
         };
@@ -27345,7 +27345,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         window.RadarPOL = function() {
-            return runAisZoneSearch('POL', 300, '#16a34a');
+            return runAisZoneSearch('POL', 2000, '#16a34a');
         };
 
         window.RadarPOD = function() {
