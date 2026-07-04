@@ -827,7 +827,9 @@
                 window.detenerRadar();
                 return false;
             }
-            const barcoNormalizado = mergeAisVesselState(existente, nuevoBarco);
+            const barcoNormalizado = window.FleetMatchmaker && typeof window.FleetMatchmaker.processAisVessel === 'function'
+                ? window.FleetMatchmaker.processAisVessel(mergeAisVesselState(existente, nuevoBarco))
+                : mergeAisVesselState(existente, nuevoBarco);
             window.buquesAlmacenados.set(idBuque, barcoNormalizado);
             window.buquesEncontrados[idBuque] = barcoNormalizado;
             window.actualizarContadorBuquesAlmacenados();
@@ -1335,6 +1337,7 @@
         const FLEET_INTEL_STORAGE_KEY = 'fleet_registry';
         const FLEET_INTEL_LEGACY_STORAGE_KEY = 'fleet_intel_vessels';
         const FLEET_INTEL_FILTER_KEY = 'fleet_intel_vessel_filter';
+        let fleetIntelRegistryMemory = null;
         const FLEET_INTEL_TAXONOMY = {
             cargo: ['cargo', 'bulk', 'bulker', 'general cargo', 'container', 'cement', 'multipurpose', 'mpp', 'heavy lift', 'coaster'],
             tanker: ['tanker', 'crude', 'lng', 'lpg', 'chemical', 'product tanker', 'oil'],
@@ -1363,20 +1366,116 @@
             return digits.length >= 7 ? digits.slice(-7) : '';
         }
 
+        function normalizeFleetIntelVesselName(value) {
+            return String(value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]+/gi, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toUpperCase();
+        }
+
         function getFleetIntelStore() {
+            if (fleetIntelRegistryMemory) return fleetIntelRegistryMemory;
             try {
                 const current = JSON.parse(localStorage.getItem(FLEET_INTEL_STORAGE_KEY) || '{}') || {};
-                if (Object.keys(current).length) return current;
-                return JSON.parse(localStorage.getItem(FLEET_INTEL_LEGACY_STORAGE_KEY) || '{}') || {};
+                fleetIntelRegistryMemory = Object.keys(current).length
+                    ? current
+                    : (JSON.parse(localStorage.getItem(FLEET_INTEL_LEGACY_STORAGE_KEY) || '{}') || {});
+                return fleetIntelRegistryMemory;
             } catch (_) {
+                fleetIntelRegistryMemory = {};
                 return {};
             }
+        }
+
+        function reloadFleetIntelStore() {
+            fleetIntelRegistryMemory = null;
+            return getFleetIntelStore();
         }
 
         function cleanFleetIntelValue(value) {
             const text = String(value || '').replace(/\s+/g, ' ').trim();
             return text || 'N/A';
         }
+
+        function getAisVesselIdentity(vessel) {
+            const meta = vessel && vessel.MetaData ? vessel.MetaData : {};
+            return {
+                imo: normalizeFleetIntelImo(vessel && (vessel.IMO || vessel.imo || meta.IMO || meta.imo)),
+                name: vessel && (
+                    vessel.name ||
+                    vessel.vesselName ||
+                    vessel.vessel_name ||
+                    vessel.ShipName ||
+                    vessel.shipName ||
+                    vessel.VesselName ||
+                    meta.ShipName ||
+                    meta.shipName ||
+                    meta.VesselName
+                )
+            };
+        }
+
+        function findFleetIntelRecord(vessel) {
+            const store = getFleetIntelStore();
+            const identity = getAisVesselIdentity(vessel);
+            const vesselKey = normalizeFleetIntelVesselName(identity.name);
+            const candidates = [
+                vesselKey && store[vesselKey],
+                identity.imo && store[identity.imo]
+            ].filter(Boolean);
+            for (const candidate of candidates) {
+                const recordName = normalizeFleetIntelVesselName(candidate.vessel || candidate.nombre || candidate.name || candidate.ShipName);
+                const recordImo = normalizeFleetIntelImo(candidate.imo);
+                if ((vesselKey && recordName === vesselKey) || (identity.imo && recordImo && String(recordImo) === String(identity.imo))) {
+                    return candidate;
+                }
+                if (candidate.imo === 'SIN-IMO' && vesselKey && recordName === vesselKey) {
+                    return candidate;
+                }
+            }
+            return null;
+        }
+
+        function buildFleetIntelRecordHtml(record) {
+            if (!record) return '';
+            return `<span>Nombre: ${cleanFleetIntelValue(record.nombre || record.name || record.vessel)}</span><span>Año: ${cleanFleetIntelValue(record.anio)}</span><span>GT: ${cleanFleetIntelValue(record.gt)}</span><span>DWT: ${cleanFleetIntelValue(record.dwt)}</span><span>Dimensiones: ${cleanFleetIntelValue(record.dimensiones)}</span>`;
+        }
+
+        window.FleetMatchmaker = {
+            loadRegistry: reloadFleetIntelStore,
+            getRegistry: getFleetIntelStore,
+            find: findFleetIntelRecord,
+            processAisVessel(vessel) {
+                const record = findFleetIntelRecord(vessel);
+                const matched = !!record;
+                if (vessel) {
+                    vessel.isTarget = matched;
+                    vessel.fleetIntelMatch = matched;
+                    vessel.fleetIntelRecord = record || null;
+                    if (vessel.MetaData) {
+                        vessel.MetaData.isTarget = matched;
+                        vessel.MetaData.fleetIntelMatch = matched;
+                    }
+                }
+                return vessel;
+            },
+            renderVessel(vessel) {
+                const processed = this.processAisVessel(vessel);
+                if (typeof window.renderVessel === 'function') {
+                    window.renderVessel(processed);
+                } else if (typeof window.actualizarVistaRadar === 'function') {
+                    window.actualizarVistaRadar();
+                }
+                return processed;
+            },
+            buildTechnicalHtml(vessel) {
+                const record = (vessel && vessel.fleetIntelRecord) || findFleetIntelRecord(vessel);
+                return buildFleetIntelRecordHtml(record);
+            }
+        };
 
         function getSelectedFleetIntelCategory() {
             const select = document.getElementById('fleet-intel-vessel-type');
@@ -1485,7 +1584,7 @@
         }
 
         function refreshFleetIntelState() {
-            const store = getFleetIntelStore();
+            const store = reloadFleetIntelStore();
             window.FleetIntelWhiteList = new Set(Object.keys(store));
             const countEl = document.getElementById('fleet-intel-count');
             if (countEl) countEl.innerText = `${Object.keys(store).length} buques`;
@@ -1589,14 +1688,9 @@
         }
 
         function markFleetIntelVessel(vessel) {
-            const store = getFleetIntelStore();
-            const imo = normalizeFleetIntelImo(vessel && (vessel.IMO || vessel.imo || (vessel.MetaData && (vessel.MetaData.IMO || vessel.MetaData.imo))));
-            const matched = !!(imo && store[imo]);
-            if (vessel) {
-                vessel.fleetIntelMatch = matched;
-                if (vessel.MetaData) vessel.MetaData.fleetIntelMatch = matched;
-            }
-            return matched;
+            if (!window.FleetMatchmaker || typeof window.FleetMatchmaker.processAisVessel !== 'function') return false;
+            const processed = window.FleetMatchmaker.processAisVessel(vessel);
+            return !!(processed && processed.isTarget);
         }
 
         function vesselMatchesFleetIntelFilter(vessel) {
@@ -1605,7 +1699,9 @@
             const terms = FLEET_INTEL_TAXONOMY[key] || [];
             if (!terms.length) return true;
             const imo = normalizeFleetIntelImo(vessel && (vessel.IMO || vessel.imo || (vessel.MetaData && (vessel.MetaData.IMO || vessel.MetaData.imo))));
-            const record = imo ? getFleetIntelStore()[imo] : null;
+            const record = (window.FleetMatchmaker && typeof window.FleetMatchmaker.find === 'function')
+                ? window.FleetMatchmaker.find(vessel)
+                : (imo ? getFleetIntelStore()[imo] : null);
             if (!record) return false;
             if (record.categoryValue === value || record.category === value) return true;
             const text = getFleetIntelTypeText(record);

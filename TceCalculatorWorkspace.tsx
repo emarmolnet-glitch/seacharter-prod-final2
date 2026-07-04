@@ -103,6 +103,7 @@ type VesselCategory = {
 
 type FleetRegistryRecord = {
   imo: string;
+  vessel: string;
   nombre: string;
   name: string;
   tipo: string;
@@ -630,6 +631,22 @@ function normalizeFleetImo(value: unknown) {
   return digits.length >= 7 ? digits.slice(-7) : '';
 }
 
+function getFleetIdentityKey(record: Partial<FleetRegistryRecord>) {
+  const imo = record.imo === 'SIN-IMO' ? '' : normalizeFleetImo(record.imo);
+  if (imo) return imo;
+  return normalizeFleetVesselName(record.vessel || record.nombre || record.name);
+}
+
+function normalizeFleetVesselName(value: unknown) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
 function cleanFleetValue(value: unknown) {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
   return text || 'N/A';
@@ -642,6 +659,122 @@ function getFleetRegistryStore(): Record<string, FleetRegistryRecord> {
   } catch {
     return {};
   }
+}
+
+function notifyFleetRegistryUpdated(store: Record<string, FleetRegistryRecord>) {
+  if (typeof window === 'undefined') return;
+  const serializedStore = JSON.stringify(store);
+  window.localStorage.setItem(FLEET_REGISTRY_KEY, serializedStore);
+  (window as typeof window & { FleetIntelWhiteList?: Set<string>; reapplyCentralFiltersAndRedraw?: () => void }).FleetIntelWhiteList = new Set(Object.keys(store));
+  window.dispatchEvent(new CustomEvent('fleet-intel:updated', { detail: { count: Object.keys(store).length } }));
+  try {
+    window.dispatchEvent(new StorageEvent('storage', { key: FLEET_REGISTRY_KEY, newValue: serializedStore }));
+  } catch {
+    window.dispatchEvent(new CustomEvent('storage', { detail: { key: FLEET_REGISTRY_KEY, newValue: serializedStore } }));
+  }
+  const redraw = (window as typeof window & { reapplyCentralFiltersAndRedraw?: () => void }).reapplyCentralFiltersAndRedraw;
+  if (typeof redraw === 'function') redraw();
+}
+
+function parseCsvText(text: string, delimiter = ',') {
+  const rows: string[][] = [];
+  let current = '';
+  let row: string[] = [];
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const nextChar = text[index + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        current += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === delimiter && !inQuotes) {
+      row.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && nextChar === '\n') index += 1;
+      row.push(current.trim());
+      if (row.some((cell) => cell.length > 0)) rows.push(row);
+      row = [];
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  row.push(current.trim());
+  if (row.some((cell) => cell.length > 0)) rows.push(row);
+  return rows;
+}
+
+function parseFleetRowsFromCsv(text: string): Partial<FleetRegistryRecord>[] {
+  const rows = parseCsvText(text, ';');
+  if (rows.length < 2) return [];
+
+  const normalizeHeader = (value: string) => value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+  const headers = rows[0].map(normalizeHeader);
+  const aliases: Record<string, string[]> = {
+    vessel: ['vessel'],
+    anio: ['built'],
+    gt: ['gt'],
+    dwt: ['dwt'],
+    dimensiones: ['sizem'],
+    imo: ['imo'],
+  };
+  const indexes = Object.fromEntries(
+    Object.entries(aliases).map(([key, names]) => [key, headers.findIndex((header) => names.includes(header))]),
+  ) as Record<'vessel' | 'anio' | 'gt' | 'dwt' | 'dimensiones' | 'imo', number>;
+  const missingColumns = Object.entries(indexes)
+    .filter(([column, index]) => column !== 'imo' && index < 0)
+    .map(([column]) => column);
+  if (missingColumns.length) {
+    const displayNames: Record<string, string> = {
+      vessel: 'Vessel',
+      anio: 'Built',
+      gt: 'GT',
+      dwt: 'DWT',
+      dimensiones: 'Size (m)',
+      imo: 'IMO',
+    };
+    throw new Error(`Faltan columnas obligatorias: ${missingColumns.map((column) => displayNames[column] || column).join(', ')}`);
+  }
+
+  return rows.slice(1).map((cells) => {
+    const vessel = cleanFleetValue(cells[indexes.vessel]);
+    const year = cleanFleetValue(cells[indexes.anio]);
+    const imo = indexes.imo >= 0 ? normalizeFleetImo(cells[indexes.imo]) : '';
+    return {
+      imo: imo || 'SIN-IMO',
+      vessel,
+      nombre: vessel,
+      name: vessel,
+      anio: year,
+      gt: cells[indexes.gt],
+      dwt: cells[indexes.dwt],
+      dimensiones: cells[indexes.dimensiones],
+    };
+  }).filter((record) => normalizeFleetVesselName(record.vessel) && /^\d{4}$/.test(String(record.anio || '').trim()));
+}
+
+function countFleetCsvDataRows(text: string) {
+  return Math.max(0, parseCsvText(text, ';').length - 1);
 }
 
 function parseFleetRowsFromHtml(html: string): Partial<FleetRegistryRecord>[] {
@@ -703,13 +836,22 @@ function FleetIntelligenceLibraryPanel() {
   const [status, setStatus] = useState('Biblioteca local lista para consulta AIS.');
   const [registryCount, setRegistryCount] = useState(0);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     setRegistryCount(Object.keys(getFleetRegistryStore()).length);
     const storedFilter = window.localStorage.getItem('fleet_intel_vessel_filter');
     if (storedFilter) setSelectedCategory(storedFilter);
+    const syncRegistryCount = () => setRegistryCount(Object.keys(getFleetRegistryStore()).length);
+    window.addEventListener('fleet-intel:updated', syncRegistryCount);
+    window.addEventListener('storage', syncRegistryCount);
+    return () => {
+      window.removeEventListener('fleet-intel:updated', syncRegistryCount);
+      window.removeEventListener('storage', syncRegistryCount);
+    };
   }, []);
 
   const selectedLabel = useMemo(() => {
@@ -778,6 +920,7 @@ function FleetIntelligenceLibraryPanel() {
         const nombre = cleanFleetValue(record.nombre || record.name);
         const nextRecord: FleetRegistryRecord = {
           imo,
+          vessel: nombre,
           nombre,
           name: nombre,
           tipo: cleanFleetValue(selectedLabel),
@@ -810,7 +953,7 @@ function FleetIntelligenceLibraryPanel() {
         }
       });
 
-      window.localStorage.setItem(FLEET_REGISTRY_KEY, JSON.stringify(store));
+      notifyFleetRegistryUpdated(store);
       setRegistryCount(Object.keys(store).length);
       setStatus(`Base de datos actualizada con ${records.length} buques. Nuevos: ${newCount}. Actualizados: ${updatedCount}.`);
     } catch (error) {
@@ -819,6 +962,71 @@ function FleetIntelligenceLibraryPanel() {
       setIsCapturing(false);
       setProgress({ current: 0, total: 0 });
     }
+  };
+
+  const importFleetRegistryCsv = async (file: File) => {
+    setIsImporting(true);
+    setStatus(`Procesando ${file.name}...`);
+
+    try {
+      const text = await file.text();
+      const records = parseFleetRowsFromCsv(text);
+      const totalRows = countFleetCsvDataRows(text);
+      if (!records.length) {
+        setStatus('No se detectaron buques válidos en el CSV.');
+        return;
+      }
+
+      const store = getFleetRegistryStore();
+      let importedCount = 0;
+
+      records.forEach((record) => {
+        const nombre = cleanFleetValue(record.vessel || record.nombre || record.name);
+        const identityKey = getFleetIdentityKey({ ...record, vessel: nombre, nombre, name: nombre });
+        if (!identityKey) return;
+        const existing = store[identityKey];
+        const technicalRecord: FleetRegistryRecord = {
+          imo: record.imo === 'SIN-IMO' ? 'SIN-IMO' : (normalizeFleetImo(record.imo) || 'SIN-IMO'),
+          vessel: nombre,
+          nombre,
+          name: nombre,
+          tipo: cleanFleetValue(existing?.tipo || existing?.type || selectedLabel),
+          type: cleanFleetValue(existing?.type || existing?.tipo || selectedLabel),
+          shipType: cleanFleetValue(existing?.shipType || existing?.tipo || selectedLabel),
+          vesselType: cleanFleetValue(existing?.vesselType || existing?.tipo || selectedLabel),
+          category: existing?.category || selectedCategory,
+          categoryValue: existing?.categoryValue || selectedCategory,
+          categoryLabel: cleanFleetValue(existing?.categoryLabel || selectedLabel),
+          scrapedType: cleanFleetValue(existing?.scrapedType || existing?.tipo || selectedLabel),
+          anio: cleanFleetValue(record.anio),
+          gt: cleanFleetValue(record.gt),
+          dwt: cleanFleetValue(record.dwt),
+          dimensiones: cleanFleetValue(record.dimensiones),
+        };
+
+        importedCount += 1;
+        store[identityKey] = existing
+          ? { ...existing, ...technicalRecord, updatedAt: new Date().toISOString() }
+          : { ...technicalRecord, capturedAt: new Date().toISOString() };
+      });
+
+      notifyFleetRegistryUpdated(store);
+      setRegistryCount(Object.keys(store).length);
+      const summary = `Importación exitosa. ${importedCount} buques cargados de ${totalRows} totales`;
+      setStatus(summary);
+      window.alert(summary);
+    } catch (error) {
+      setStatus(`Error de importación: ${error instanceof Error ? error.message : 'CSV no válido'}`);
+    } finally {
+      setIsImporting(false);
+      if (csvInputRef.current) csvInputRef.current.value = '';
+    }
+  };
+
+  const handleCsvFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    void importFleetRegistryCsv(file);
   };
 
   const progressPercent = progress.total > 0 ? Math.min(100, Math.round((progress.current / progress.total) * 100)) : 0;
@@ -834,7 +1042,14 @@ function FleetIntelligenceLibraryPanel() {
           LISTA BLANCA: {registryCount} BUQUES
         </span>
       </div>
-      <div className="grid gap-3 lg:grid-cols-[minmax(12rem,0.45fr)_minmax(16rem,1fr)_auto]">
+      <input
+        ref={csvInputRef}
+        type="file"
+        accept=".csv,text/csv"
+        className="hidden"
+        onChange={handleCsvFileChange}
+      />
+      <div className="grid gap-3 lg:grid-cols-[minmax(12rem,0.45fr)_minmax(16rem,1fr)_auto_auto]">
         <label className="block">
           <span className="mb-1 block text-[11px] font-black uppercase tracking-wide text-slate-500">Categoría</span>
           <select value={selectedCategory} onChange={(event) => handleCategoryChange(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-600/15">
@@ -854,6 +1069,9 @@ function FleetIntelligenceLibraryPanel() {
         <button type="button" onClick={captureFleetRegistry} disabled={isCapturing} className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-amber-500 bg-amber-400 px-4 text-xs font-black uppercase tracking-wide text-slate-950 shadow-sm transition hover:bg-amber-300 disabled:cursor-wait disabled:opacity-65">
           <RefreshIcon />
           {isCapturing ? 'Cargando' : 'Capturar'}
+        </button>
+        <button type="button" onClick={() => csvInputRef.current?.click()} disabled={isImporting || isCapturing} className="mt-5 inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-slate-900 px-4 text-xs font-black uppercase tracking-wide text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-wait disabled:opacity-65">
+          {isImporting ? 'Procesando CSV' : 'Subir Base de Datos (CSV)'}
         </button>
       </div>
       {isCapturing && (
