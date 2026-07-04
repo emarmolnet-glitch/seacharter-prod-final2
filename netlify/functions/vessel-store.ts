@@ -50,9 +50,58 @@ function parseShipTypeCode(value: unknown): number | null {
   return null;
 }
 
+function normalizeShipTypeText(value: unknown): string {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 export function isCargoShipType(value: unknown): boolean {
   const code = parseShipTypeCode(value);
-  return code !== null && code >= 70 && code <= 79;
+  if (code !== null) return code >= 70 && code <= 79;
+
+  const text = normalizeShipTypeText(value);
+  if (!text) return false;
+
+  const cargoTerms = [
+    "bulk",
+    "bulker",
+    "cargo",
+    "container",
+    "cement",
+    "general cargo",
+    "heavy lift",
+    "multipurpose",
+    "multi purpose",
+    "mpp",
+    "ro ro cargo",
+    "reefer",
+    "freighter",
+    "carrier",
+  ];
+  const excludedTerms = [
+    "passenger",
+    "ferry",
+    "cruise",
+    "tanker",
+    "fishing",
+    "tug",
+    "pilot",
+    "yacht",
+    "lng",
+    "lpg",
+    "crude",
+    "chemical",
+    "product",
+    "oil",
+    "gas",
+  ];
+
+  return cargoTerms.some((term) => text.includes(term))
+    && !excludedTerms.some((term) => text.includes(term));
 }
 
 function csvCell(value: unknown): string {

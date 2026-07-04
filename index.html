@@ -29381,8 +29381,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
             };
 
-            const ONLY_SHOW_MY_LIST = true;
-            window.ONLY_SHOW_MY_LIST = true;
+            const ONLY_SHOW_MY_LIST = false;
+            window.ONLY_SHOW_MY_LIST = false;
 
             function getFleetTypeFilterLabel() {
                 const select = document.getElementById('fleet-intel-vessel-type');
@@ -29394,6 +29394,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (selectedValue === 'category:tanker') return 'Tanker';
                 if (selectedValue === 'category:passenger') return 'Passenger';
                 if (selectedValue === 'category:other') return 'Other';
+                if (selectedValue.startsWith('type:')) return selectedValue;
                 return label.replace(/^All\s+/i, '').replace(/\s*\/.*$/, '').trim() || selectedValue;
             }
 
@@ -29431,12 +29432,50 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             function filterVessels(vessels, category) {
-                if (!category || category === 'All') return vessels;
+                const source = Array.isArray(vessels) ? vessels : [];
+                if (!category || category === 'All') return source;
 
-                const normalizedCategory = category.toLowerCase().trim();
-                return vessels.filter(v => {
-                    const vesselType = v.Tipo ? v.Tipo.toLowerCase().trim() : '';
-                    return vesselType.includes(normalizedCategory);
+                const taxonomyKey = String(category || '').replace(/^type:/, '');
+                const taxonomyTerms = FLEET_INTEL_TAXONOMY[taxonomyKey]
+                    || window.taxonomyMap[category]
+                    || window.taxonomyMap[taxonomyKey]
+                    || [category];
+                const normalizedTerms = (Array.isArray(taxonomyTerms) ? taxonomyTerms : [taxonomyTerms])
+                    .map(term => normalizeFleetTaxonomyText(term))
+                    .filter(Boolean);
+
+                return source.filter(v => {
+                    if (!v || typeof v !== 'object') return false;
+                    const meta = v.MetaData || {};
+                    const shipTypeCode = Number(v.ShipType ?? v.shipType ?? meta.ShipType ?? meta.shipType);
+                    const text = normalizeFleetTaxonomyText([
+                        v.Tipo,
+                        v.tipo,
+                        v.type,
+                        v.shipType,
+                        v.ShipType,
+                        v.vesselType,
+                        v.cargoType,
+                        v.tipo_carga,
+                        v.categoryLabel,
+                        v.radarCategory,
+                        v.vesselClass,
+                        meta.Tipo,
+                        meta.tipo,
+                        meta.type,
+                        meta.shipType,
+                        meta.ShipType,
+                        meta.vesselType,
+                        meta.cargoType,
+                        meta.tipo_carga,
+                        meta.categoryLabel
+                    ].filter(Boolean).join(' '));
+                    if (!text && !Number.isFinite(shipTypeCode)) return false;
+                    if ((taxonomyKey === 'cargo' || category === 'All') && shipTypeCode >= 70 && shipTypeCode <= 79) return true;
+                    if (taxonomyKey === 'bulk' && shipTypeCode >= 70 && shipTypeCode <= 74) return true;
+                    if (taxonomyKey === 'general' && shipTypeCode === 70) return true;
+                    if (taxonomyKey === 'container' && shipTypeCode === 71) return true;
+                    return normalizedTerms.some(term => text.includes(term));
                 });
             }
 
@@ -29456,9 +29495,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             function fleetRecordMatchesCategory(record, category) {
                 if (!category || category === 'All') return true;
-                const normalizedCategory = category.toLowerCase().trim();
-                const vesselType = getFleetRecordTipo(record).toLowerCase().trim();
-                return vesselType.includes(normalizedCategory);
+                return filterVessels([{
+                    Tipo: getFleetRecordTipo(record),
+                    tipo_carga: record && record.tipo_carga,
+                    cargoType: record && record.cargoType,
+                    shipType: record && record.shipType,
+                    vesselType: record && record.vesselType,
+                    categoryLabel: record && record.categoryLabel,
+                    scrapedType: record && record.scrapedType
+                }], category).length > 0;
             }
 
             function getFilteredFleetRegistryByCategory(category) {

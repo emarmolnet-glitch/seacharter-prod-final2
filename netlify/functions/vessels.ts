@@ -45,9 +45,9 @@ export default async (req: Request) => {
         { status: 400 },
       );
     }
-    if (!isCargoShipType(shipType)) {
+    if (shipType && !isCargoShipType(shipType)) {
       return Response.json(
-        { success: false, error: "Only AIS ShipType codes 70-79 are accepted for radar vessel storage" },
+        { success: false, error: "Only cargo vessel ship types are accepted for radar vessel storage" },
         { status: 422 },
       );
     }
