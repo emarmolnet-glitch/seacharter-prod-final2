@@ -654,6 +654,42 @@ function cleanFleetValue(value: unknown) {
   return text || 'N/A';
 }
 
+function hasFleetValue(value: unknown) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  return !!text && !['N/A', 'NA', 'NULL', 'NONE', '-', '--'].includes(text.toUpperCase());
+}
+
+const FLEET_TYPE_FIELDS: Array<keyof FleetRegistryRecord> = ['tipo', 'type', 'shipType', 'vesselType', 'categoryLabel', 'scrapedType'];
+const FLEET_DETAIL_FIELDS: Array<keyof FleetRegistryRecord> = ['anio', 'gt', 'dwt', 'dimensiones'];
+const FLEET_FILLABLE_FIELDS: Array<keyof FleetRegistryRecord> = [
+  'vessel',
+  'nombre',
+  'name',
+  ...FLEET_TYPE_FIELDS,
+  'category',
+  'categoryValue',
+  ...FLEET_DETAIL_FIELDS,
+];
+
+function hasFleetImportData(record: Partial<FleetRegistryRecord>, existing?: FleetRegistryRecord) {
+  const hasDetails = FLEET_DETAIL_FIELDS.some((field) => hasFleetValue(record[field]));
+  if (hasDetails) return true;
+  return FLEET_TYPE_FIELDS.some((field) => hasFleetValue(record[field]) && !hasFleetValue(existing?.[field]));
+}
+
+function mergeFleetRegistryRecord(existing: FleetRegistryRecord | undefined, incoming: Partial<FleetRegistryRecord>) {
+  if (!existing) return incoming as FleetRegistryRecord;
+  let changed = false;
+  const merged: FleetRegistryRecord = { ...existing };
+  FLEET_FILLABLE_FIELDS.forEach((field) => {
+    if (!hasFleetValue(merged[field]) && hasFleetValue(incoming[field])) {
+      (merged[field] as string) = cleanFleetValue(incoming[field]);
+      changed = true;
+    }
+  });
+  return changed ? { ...merged, updatedAt: new Date().toISOString() } : existing;
+}
+
 const FleetManager = (() => {
   let registry: FleetRegistryRecord[] = [];
   let registryIndex = new Map<string, FleetRegistryRecord>();
@@ -685,7 +721,15 @@ const FleetManager = (() => {
   };
 
   const setRegistry = (data: FleetRegistryInput) => {
-    registry = normalizeRegistryInput(data);
+    const merged = new Map<string, FleetRegistryRecord>();
+    normalizeRegistryInput(data).forEach((record) => {
+      const key = getFleetIdentityKey(record);
+      if (!key) return;
+      const existing = merged.get(key);
+      if (!hasFleetImportData(record, existing)) return;
+      merged.set(key, existing ? mergeFleetRegistryRecord(existing, record) : record);
+    });
+    registry = Array.from(merged.values());
     registryIndex = new Map<string, FleetRegistryRecord>();
     registry.forEach((record) => indexRecord(registryIndex, record));
     hasLoadedRegistry = true;
@@ -839,6 +883,7 @@ function parseFleetRowsFromCsv(text: string): Partial<FleetRegistryRecord>[] {
   const headers = rows[0].map(normalizeHeader);
   const aliases: Record<string, string[]> = {
     vessel: ['vessel'],
+    tipo: ['type', 'vesseltype', 'shiptype', 'tipo', 'tipobuque'],
     anio: ['built'],
     gt: ['gt'],
     dwt: ['dwt'],
@@ -847,9 +892,9 @@ function parseFleetRowsFromCsv(text: string): Partial<FleetRegistryRecord>[] {
   };
   const indexes = Object.fromEntries(
     Object.entries(aliases).map(([key, names]) => [key, headers.findIndex((header) => names.includes(header))]),
-  ) as Record<'vessel' | 'anio' | 'gt' | 'dwt' | 'dimensiones' | 'imo', number>;
+  ) as Record<'vessel' | 'tipo' | 'anio' | 'gt' | 'dwt' | 'dimensiones' | 'imo', number>;
   const missingColumns = Object.entries(indexes)
-    .filter(([column, index]) => column !== 'imo' && index < 0)
+    .filter(([column, index]) => column !== 'imo' && column !== 'tipo' && index < 0)
     .map(([column]) => column);
   if (missingColumns.length) {
     const displayNames: Record<string, string> = {
@@ -876,8 +921,15 @@ function parseFleetRowsFromCsv(text: string): Partial<FleetRegistryRecord>[] {
       gt: cells[indexes.gt],
       dwt: cells[indexes.dwt],
       dimensiones: cells[indexes.dimensiones],
+      tipo: indexes.tipo >= 0 ? cells[indexes.tipo] : '',
+      type: indexes.tipo >= 0 ? cells[indexes.tipo] : '',
+      shipType: indexes.tipo >= 0 ? cells[indexes.tipo] : '',
+      vesselType: indexes.tipo >= 0 ? cells[indexes.tipo] : '',
     };
-  }).filter((record) => normalizeFleetVesselName(record.vessel) && /^\d{4}$/.test(String(record.anio || '').trim()));
+  }).filter((record) => {
+    const hasIdentity = normalizeFleetImo(record.imo) || normalizeFleetVesselName(record.vessel);
+    return hasIdentity && hasFleetImportData(record);
+  });
 }
 
 function countFleetCsvDataRows(text: string) {
@@ -1085,41 +1137,50 @@ function FleetIntelligenceLibraryPanel() {
       }
 
       const store = getFleetRegistryStore();
-      let importedCount = 0;
+      let mergedCount = 0;
+      let ignoredCount = totalRows - records.length;
 
       records.forEach((record) => {
         const nombre = cleanFleetValue(record.vessel || record.nombre || record.name);
         const identityKey = getFleetIdentityKey({ ...record, vessel: nombre, nombre, name: nombre });
-        if (!identityKey) return;
+        if (!identityKey) {
+          ignoredCount += 1;
+          return;
+        }
         const existing = store[identityKey];
+        if (!hasFleetImportData(record, existing)) {
+          ignoredCount += 1;
+          return;
+        }
         const technicalRecord: FleetRegistryRecord = {
           imo: record.imo === 'SIN-IMO' ? 'SIN-IMO' : (normalizeFleetImo(record.imo) || 'SIN-IMO'),
           vessel: nombre,
           nombre,
           name: nombre,
-          tipo: cleanFleetValue(existing?.tipo || existing?.type || selectedLabel),
-          type: cleanFleetValue(existing?.type || existing?.tipo || selectedLabel),
-          shipType: cleanFleetValue(existing?.shipType || existing?.tipo || selectedLabel),
-          vesselType: cleanFleetValue(existing?.vesselType || existing?.tipo || selectedLabel),
+          tipo: cleanFleetValue(record.tipo || record.type || existing?.tipo || existing?.type),
+          type: cleanFleetValue(record.type || record.tipo || existing?.type || existing?.tipo),
+          shipType: cleanFleetValue(record.shipType || record.tipo || existing?.shipType || existing?.tipo),
+          vesselType: cleanFleetValue(record.vesselType || record.tipo || existing?.vesselType || existing?.tipo),
           category: existing?.category || selectedCategory,
           categoryValue: existing?.categoryValue || selectedCategory,
           categoryLabel: cleanFleetValue(existing?.categoryLabel || selectedLabel),
-          scrapedType: cleanFleetValue(existing?.scrapedType || existing?.tipo || selectedLabel),
+          scrapedType: cleanFleetValue(record.scrapedType || record.tipo || existing?.scrapedType || existing?.tipo),
           anio: cleanFleetValue(record.anio),
           gt: cleanFleetValue(record.gt),
           dwt: cleanFleetValue(record.dwt),
           dimensiones: cleanFleetValue(record.dimensiones),
         };
 
-        importedCount += 1;
+        mergedCount += 1;
         store[identityKey] = existing
-          ? { ...existing, ...technicalRecord, updatedAt: new Date().toISOString() }
+          ? mergeFleetRegistryRecord(existing, technicalRecord)
           : { ...technicalRecord, capturedAt: new Date().toISOString() };
       });
 
       notifyFleetRegistryUpdated(store);
       setRegistryCount(Object.keys(store).length);
-      const summary = `Importación exitosa. ${importedCount} buques cargados de ${totalRows} totales`;
+      const summary = `Procesamiento terminado. Se han fusionado ${mergedCount} registros válidos y se han ignorado ${ignoredCount} filas incompletas`;
+      console.log(summary);
       setStatus(summary);
       window.alert(summary);
     } catch (error) {

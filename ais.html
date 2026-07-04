@@ -1419,6 +1419,40 @@
                 .toUpperCase();
         }
 
+        function hasFleetIntelValue(value) {
+            const text = String(value || '').replace(/\s+/g, ' ').trim();
+            return !!text && !['N/A', 'NA', 'NULL', 'NONE', '-', '--'].includes(text.toUpperCase());
+        }
+
+        const FLEET_INTEL_TYPE_FIELDS = ['tipo_carga', 'cargoType', 'tipo', 'type', 'shipType', 'vesselType', 'categoryLabel', 'scrapedType'];
+        const FLEET_INTEL_DETAIL_FIELDS = ['anio', 'gt', 'dwt', 'dimensiones'];
+        const FLEET_INTEL_FILLABLE_FIELDS = ['vessel', 'nombre', 'name', ...FLEET_INTEL_TYPE_FIELDS, 'category', 'categoryValue', ...FLEET_INTEL_DETAIL_FIELDS];
+
+        function hasFleetIntelImportData(record, existing) {
+            if (!record) return false;
+            if (FLEET_INTEL_DETAIL_FIELDS.some(field => hasFleetIntelValue(record[field]))) return true;
+            return FLEET_INTEL_TYPE_FIELDS.some(field => hasFleetIntelValue(record[field]) && !hasFleetIntelValue(existing && existing[field]));
+        }
+
+        function getFleetIntelIdentityKey(record) {
+            const imo = record && record.imo !== 'SIN-IMO' ? normalizeFleetIntelImo(record.imo) : '';
+            const name = normalizeFleetIntelVesselName(record && (record.vessel || record.nombre || record.name || record.ShipName));
+            return imo || name;
+        }
+
+        function mergeFleetIntelRecord(existing, incoming) {
+            if (!existing) return incoming;
+            let changed = false;
+            const merged = { ...existing };
+            FLEET_INTEL_FILLABLE_FIELDS.forEach(field => {
+                if (!hasFleetIntelValue(merged[field]) && hasFleetIntelValue(incoming && incoming[field])) {
+                    merged[field] = cleanFleetIntelValue(incoming[field]);
+                    changed = true;
+                }
+            });
+            return changed ? { ...merged, updatedAt: new Date().toISOString() } : existing;
+        }
+
         window.FleetManager = window.FleetManager || (() => {
             let registry = [];
             let registryIndex = new Map();
@@ -1438,7 +1472,15 @@
             }
 
             function setRegistry(data) {
-                registry = normalizeInput(data);
+                const merged = new Map();
+                normalizeInput(data).forEach(record => {
+                    const key = getFleetIntelIdentityKey(record);
+                    if (!key) return;
+                    const existing = merged.get(key);
+                    if (!hasFleetIntelImportData(record, existing)) return;
+                    merged.set(key, existing ? mergeFleetIntelRecord(existing, record) : record);
+                });
+                registry = Array.from(merged.values());
                 registryIndex = new Map();
                 registry.forEach(indexRecord);
                 loaded = true;
