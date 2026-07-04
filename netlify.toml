@@ -1,6 +1,6 @@
 [build]
   command = "npx prisma generate --schema=./prisma/schema.prisma && npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss"
-  publish = "dist"
+  publish = "."
   functions = "netlifly/functions"
 
 [functions]
