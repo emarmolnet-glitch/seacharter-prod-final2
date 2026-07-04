@@ -1,6 +1,7 @@
-import { upsertVessels, type VesselRecord } from "./vessel-store.js";
+import { isCargoShipType, upsertVessels, type VesselRecord } from "./vessel-store.js";
 
 const AISSTREAM_ENDPOINT = "wss://stream.aisstream.io/v0/stream";
+declare const process: { env: Record<string, string | undefined> };
 function pickObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -28,6 +29,12 @@ function toText(value: unknown): string | null {
   return text === "" ? null : text;
 }
 
+function normalizeDraughtMeters(value: unknown): number | null {
+  const draught = toNumber(value);
+  if (draught === null) return null;
+  return draught > 25 ? Math.round((draught / 10) * 100) / 100 : draught;
+}
+
 function readPortText(source: Record<string, unknown>, keys: string[]): string | null {
   const text = toText(readNested(source, keys));
   if (!text || text.toUpperCase() === "NOT AVAILABLE" || text.toUpperCase() === "N/A") return null;
@@ -51,16 +58,19 @@ function normalizeVessel(item: unknown): VesselRecord | null {
 
   const rawImoNumber = toText(readNested(merged, ["imoNumber", "imo", "IMO", "IMONumber", "ImoNumber"]));
   const mmsi = toText(readNested(merged, ["mmsi", "MMSI"]));
+  const shipType = toText(readNested(merged, ["shipType", "ShipType", "type", "Type"]));
   const latitude = toNumber(readNested(merged, ["latitude", "Latitude", "lat", "Lat"]));
   const longitude = toNumber(readNested(merged, ["longitude", "Longitude", "lon", "Lon", "lng", "Lng"]));
 
   if (!mmsi || latitude === null || longitude === null) return null;
+  if (!isCargoShipType(shipType)) return null;
 
   return {
     imoNumber: rawImoNumber ?? `MMSI-${mmsi}`,
     mmsi,
     vesselName: toText(readNested(merged, ["vesselName", "ShipName", "shipName", "Name"])),
-    shipType: toText(readNested(merged, ["shipType", "ShipType", "type", "Type"])),
+    shipType,
+    draught: normalizeDraughtMeters(readNested(merged, ["draught", "Draught", "draft", "Draft", "MaximumStaticDraught"])),
     latitude,
     longitude,
     speed: toNumber(readNested(merged, ["speed", "Sog", "SOG", "Speed"])),

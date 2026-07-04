@@ -2861,6 +2861,50 @@
             color: #FFFFFF !important;
         }
 
+        #view-ais #btn-refresh-ais:disabled {
+            cursor: not-allowed !important;
+            opacity: 0.82;
+        }
+
+        .ais-availability-spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.38);
+            border-top-color: #ffffff;
+            border-radius: 999px;
+            animation: aisAvailabilitySpin 0.8s linear infinite;
+            display: inline-block;
+            flex: 0 0 auto;
+        }
+
+        .ais-availability-monitor {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            border: 1px solid rgba(59, 130, 246, 0.36);
+            background: rgba(15, 23, 42, 0.92);
+            color: #dbeafe;
+            border-radius: 10px;
+            padding: 8px 10px;
+            font-size: 11px;
+            font-weight: 800;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+        }
+
+        .ais-availability-monitor.active {
+            display: flex;
+        }
+
+        .ais-availability-monitor.done {
+            border-color: rgba(16, 185, 129, 0.42);
+            color: #bbf7d0;
+        }
+
+        @keyframes aisAvailabilitySpin {
+            to { transform: rotate(360deg); }
+        }
+
         #view-ais button.bg-emerald-600 {
             background-color: #059669 !important;
             border-color: #059669 !important;
@@ -8162,8 +8206,12 @@
                     <input type="password" id="aisstream-api-key" placeholder="API Key (Opcional si usas Netlify Proxy)" autocomplete="off" spellcheck="false" autocapitalize="none" class="bg-slate-950 border border-slate-800 text-slate-200 rounded-lg px-3 py-2 text-xs w-full sm:w-56 focus:outline-none focus:border-blue-500">
                     <button type="button" id="btn-refresh-ais" style="color: #FFFFFF !important;" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-lg text-xs transition flex items-center gap-2 shadow-lg">
                         <i id="ais-refresh-icon" class="fa-solid fa-rotate" style="color: #FFFFFF !important;"></i>
-                        Consultar Disponibilidad Real-Time
+                        <span id="ais-refresh-label">Consultar Disponibilidad Real-Time</span>
                     </button>
+                    <div id="ais-availability-monitor" class="ais-availability-monitor" role="status" aria-live="polite" aria-atomic="true">
+                        <span class="ais-availability-spinner" aria-hidden="true"></span>
+                        <span id="ais-availability-status">Barrido AIS activo: 60s restantes</span>
+                    </div>
                 </div>
             </div>
 
@@ -8308,8 +8356,7 @@
                             <i class="fa-solid fa-satellite-dish text-amber-400"></i>
                             Centro de Inteligencia de Flota
                         </h3>
-                        <input type="file" id="fleet-intel-csv-input" accept=".csv,text/csv" class="hidden" />
-                        <div class="grid grid-cols-1 xl:grid-cols-[0.9fr_1.3fr_auto_auto] gap-3 items-end">
+                        <div class="grid grid-cols-1 xl:grid-cols-[0.9fr_1.3fr_auto] gap-3 items-end">
                             <div>
                                 <label for="fleet-intel-vessel-type" class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Taxonomía de buque</label>
                                 <select id="fleet-intel-vessel-type" class="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-amber-500">
@@ -8350,9 +8397,6 @@
                             </div>
                             <button type="button" id="btn-fleet-intel-capture" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-2 rounded-lg text-xs transition-colors">
                                 Capturar
-                            </button>
-                            <button type="button" id="btn-fleet-intel-csv" class="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-black px-4 py-2 rounded-lg text-xs transition-colors">
-                                Subir Base de Datos (CSV)
                             </button>
                         </div>
                         <div class="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">
@@ -28633,14 +28677,19 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const FLEET_INTEL_STORAGE_KEY = 'fleet_registry';
             const FLEET_INTEL_LEGACY_STORAGE_KEY = 'fleet_intel_vessels';
             const FLEET_INTEL_FILTER_KEY = 'fleet_intel_vessel_filter';
+            const taxonomyMap = {
+                "Bulk Carrier": ["Bulk Carrier", "Handysize", "Handymax", "Supramax", "Ultramax", "Panamax", "Capesize"],
+                "Container Ship": ["Container Ship", "Feeder"]
+            };
+            window.taxonomyMap = taxonomyMap;
             const FLEET_INTEL_TAXONOMY = {
                 cargo: ['cargo', 'bulk', 'bulker', 'general cargo', 'container', 'cement', 'multipurpose', 'mpp', 'heavy lift', 'coaster'],
                 tanker: ['tanker', 'crude', 'lng', 'lpg', 'chemical', 'product tanker', 'oil'],
                 passenger: ['passenger', 'cruise', 'ferry', 'ropax'],
                 other: ['offshore', 'tug', 'fishing', 'pilot', 'dredg', 'yacht', 'sailing'],
-                bulk: ['bulk', 'bulker'],
+                bulk: taxonomyMap["Bulk Carrier"],
                 general: ['general cargo', 'coaster'],
-                container: ['container'],
+                container: taxonomyMap["Container Ship"],
                 cement: ['cement'],
                 mpv: ['multipurpose', 'mpp'],
                 heavy_lift: ['heavy lift'],
@@ -28851,7 +28900,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const record = find(vesselData);
                     if (!taxonomyValue || String(taxonomyValue).startsWith('category:')) return true;
                     const taxonomyKey = String(taxonomyValue).replace(/^type:/, '');
-                    const taxonomyTerms = FLEET_INTEL_TAXONOMY[taxonomyKey] || [taxonomyKey];
+                    const taxonomyTerms = FLEET_INTEL_TAXONOMY[taxonomyKey] || window.taxonomyMap[taxonomyKey] || [taxonomyKey];
                     const text = normalizeFleetTaxonomyText([
                         record && record.tipo_carga,
                         record && record.cargoType,
@@ -28871,8 +28920,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         vesselData && vesselData.type,
                         vesselData && vesselData.vesselType,
                         vesselData && vesselData.vesselClass,
+                        vesselData && vesselData.VesselClass,
                         vesselData && vesselData.MetaData && vesselData.MetaData.tipo_carga,
-                        vesselData && vesselData.MetaData && vesselData.MetaData.cargoType
+                        vesselData && vesselData.MetaData && vesselData.MetaData.cargoType,
+                        vesselData && vesselData.MetaData && vesselData.MetaData.vesselClass,
+                        vesselData && vesselData.MetaData && vesselData.MetaData.VesselClass
                     ].filter(Boolean).join(' '));
                     return taxonomyTerms.some(term => text.includes(normalizeFleetTaxonomyText(term)));
                 }
@@ -29100,104 +29152,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
             };
 
-            function splitFleetIntelCsvLine(line, delimiter) {
-                const cells = [];
-                let current = '';
-                let quoted = false;
-                for (let index = 0; index < line.length; index += 1) {
-                    const char = line[index];
-                    const next = line[index + 1];
-                    if (char === '"' && quoted && next === '"') {
-                        current += '"';
-                        index += 1;
-                    } else if (char === '"') {
-                        quoted = !quoted;
-                    } else if (char === delimiter && !quoted) {
-                        cells.push(current.trim());
-                        current = '';
-                    } else {
-                        current += char;
-                    }
-                }
-                cells.push(current.trim());
-                return cells.map(cell => cell.replace(/^"|"$/g, '').trim());
-            }
-
-            function normalizeFleetIntelCsvHeader(value) {
-                return String(value || '')
-                    .normalize('NFD')
-                    .replace(/[\u0300-\u036f]/g, '')
-                    .toLowerCase()
-                    .replace(/[^a-z0-9]/g, '');
-            }
-
-            function parseFleetIntelCsv(text) {
-                const lines = String(text || '').split(/\r?\n/).filter(line => line.trim());
-                if (lines.length < 2) return [];
-                const delimiter = ';';
-                const headers = splitFleetIntelCsvLine(lines[0], delimiter).map(normalizeFleetIntelCsvHeader);
-                const aliases = {
-                    vessel: ['vessel'],
-                    tipo_carga: ['tipocarga', 'cargotype', 'cargo', 'taxonomy', 'taxonomia', 'taxonomiabuque'],
-                    imo: ['imo'],
-                    tipo: ['type', 'vesseltype', 'shiptype', 'tipo', 'tipobuque'],
-                    anio: ['built'],
-                    gt: ['gt', 'grosstonnage', 'gross'],
-                    dwt: ['dwt', 'deadweight'],
-                    dimensiones: ['sizem']
-                };
-                const columnIndex = {};
-                Object.entries(aliases).forEach(([key, names]) => {
-                    columnIndex[key] = headers.findIndex(header => names.includes(header));
-                });
-                const missing = Object.entries(columnIndex)
-                    .filter(([key, index]) => key !== 'tipo_carga' && key !== 'tipo' && key !== 'imo' && index < 0)
-                    .map(([key]) => key.toUpperCase());
-                if (missing.length) {
-                    throw new Error(`Faltan columnas obligatorias: ${missing.join(', ')}`);
-                }
-                return lines.slice(1).map(line => {
-                    const cells = splitFleetIntelCsvLine(line, delimiter);
-                    const rawVessel = columnIndex.vessel >= 0 ? cells[columnIndex.vessel] : undefined;
-                    const vesselName = rawVessel?.toString().replace('-', ' ').trim();
-                    if (!vesselName) {
-                        console.warn('Fila ignorada por falta de nombre:', cells);
-                        return null;
-                    }
-                    const nombre = cleanFleetIntelValue(vesselName);
-                    const vesselKey = normalizeFleetIntelVesselName(nombre);
-                    if (!vesselKey) return null;
-                    const rawType = columnIndex.tipo >= 0 ? cells[columnIndex.tipo] : '';
-                    const rawCargoType = columnIndex.tipo_carga >= 0 ? cells[columnIndex.tipo_carga] : '';
-                    const tipo = cleanFleetIntelValue(rawType || rawCargoType);
-                    if (!tipo || tipo === 'N/A') {
-                        console.error('FleetManager CSV: vessel.Tipo vacío al importar fila:', cells);
-                    }
-                    return {
-                        imo: columnIndex.imo >= 0 ? normalizeFleetIntelImo(cells[columnIndex.imo]) || 'SIN-IMO' : 'SIN-IMO',
-                        vessel: nombre,
-                        nombre,
-                        name: nombre,
-                        tipo_carga: rawCargoType,
-                        cargoType: rawCargoType,
-                        Tipo: tipo,
-                        tipo,
-                        type: tipo,
-                        shipType: tipo,
-                        vesselType: tipo,
-                        anio: cleanFleetIntelValue(cells[columnIndex.anio]),
-                        gt: cleanFleetIntelValue(cells[columnIndex.gt]),
-                        dwt: cleanFleetIntelValue(cells[columnIndex.dwt]),
-                        dimensiones: cleanFleetIntelValue(cells[columnIndex.dimensiones])
-                    };
-                }).filter(record => record && hasFleetIntelImportData(record));
-            }
-
-            function countFleetIntelCsvRows(text) {
-                const lines = String(text || '').split(/\r?\n/).filter(line => line.trim());
-                return Math.max(0, lines.length - 1);
-            }
-
             function getFleetIntelCellText(row, labels, fallbackIndex) {
                 const cells = Array.from(row.querySelectorAll('th, td'));
                 const normalizedLabels = labels.map(label => label.toLowerCase());
@@ -29336,69 +29290,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (typeof window.reapplyCentralFiltersAndRedraw === 'function') window.reapplyCentralFiltersAndRedraw();
             }
 
-            async function importarFleetIntelCsv(file) {
-                const status = document.getElementById('fleet-intel-status');
-                if (!file) return;
-                if (status) status.innerText = `Procesando ${file.name}...`;
-                try {
-                    const text = await file.text();
-                    const records = parseFleetIntelCsv(text);
-                    const total = countFleetIntelCsvRows(text);
-                    if (!records.length) {
-                        if (status) status.innerText = 'No se detectaron buques válidos en el CSV.';
-                        return;
-                    }
-                    const store = getFleetIntelStore();
-                    let imported = 0;
-                    let ignored = total - records.length;
-                    records.forEach(record => {
-                        const key = getFleetIntelIdentityKey(record);
-                        if (!key) {
-                            ignored += 1;
-                            return;
-                        }
-                        const existing = store[key];
-                        if (!hasFleetIntelImportData(record, existing)) {
-                            ignored += 1;
-                            return;
-                        }
-                        store[key] = existing
-                            ? mergeFleetIntelRecord(existing, record)
-                            : { ...record, capturedAt: new Date().toISOString() };
-                        imported += 1;
-                    });
-                    setFleetIntelStore(store);
-                    updateFleetIntelPanel();
-                    const summary = `Procesamiento terminado. Se han fusionado ${imported} registros válidos y se han ignorado ${ignored} filas incompletas`;
-                    console.log(summary);
-                    if (status) status.innerText = summary;
-                    alert(summary);
-                    if (typeof window.reapplyCentralFiltersAndRedraw === 'function') window.reapplyCentralFiltersAndRedraw();
-                } catch (error) {
-                    if (status) status.innerText = `Error de importación: ${error && error.message ? error.message : 'CSV no válido'}`;
-                }
-            }
-
             updateFleetIntelPanel();
             window.capturarDatosBuque = capturarDatosBuque;
             window.captureFleetIntelListing = capturarDatosBuque;
-            window.importarFleetIntelCsv = importarFleetIntelCsv;
             window.getFleetIntelTechnicalRecord = getFleetIntelTechnicalRecord;
             window.buildFleetIntelTechnicalHtml = buildFleetIntelTechnicalHtml;
             window.hydrateRadarVesselCargoType = hydrateRadarVesselCargoType;
             window.hydrateRadarCargoStore = hydrateRadarCargoStore;
             window.readCalculatorCargoTypeForRadar = readCalculatorCargoTypeForRadar;
             document.getElementById('btn-fleet-intel-capture')?.addEventListener('click', capturarDatosBuque);
-            document.getElementById('btn-fleet-intel-csv')?.addEventListener('click', () => {
-                document.getElementById('fleet-intel-csv-input')?.click();
-            });
-            document.getElementById('fleet-intel-csv-input')?.addEventListener('change', (event) => {
-                const input = event.target;
-                const file = input && input.files ? input.files[0] : null;
-                importarFleetIntelCsv(file).finally(() => {
-                    if (input) input.value = '';
-                });
-            });
             document.getElementById('fleet-intel-listing-url')?.addEventListener('keypress', (event) => {
                 if (event.key === 'Enter') capturarDatosBuque();
             });
@@ -29911,8 +29811,85 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return window.GlobalStore ? window.GlobalStore.getRawVessels() : [];
             };
 
+            window.aisAvailabilitySweepUi = Object.assign({
+                active: false,
+                startedAt: null,
+                endsAt: null,
+                interval: null,
+                owner: null
+            }, window.aisAvailabilitySweepUi || {});
+
+            function formatAisAvailabilitySeconds(seconds) {
+                return `${Math.max(0, Math.ceil(Number(seconds) || 0))}s`;
+            }
+
+            window.updateAisAvailabilitySweepFeedback = function() {
+                const state = window.aisAvailabilitySweepUi;
+                const btn = document.getElementById('btn-refresh-ais');
+                const icon = document.getElementById('ais-refresh-icon');
+                const label = document.getElementById('ais-refresh-label');
+                const monitor = document.getElementById('ais-availability-monitor');
+                const status = document.getElementById('ais-availability-status');
+                const remaining = state.active && state.endsAt
+                    ? Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000))
+                    : 0;
+
+                if (btn) btn.disabled = state.active;
+                if (icon) icon.classList.toggle('fa-spin', state.active);
+                if (label) {
+                    label.textContent = state.active
+                        ? `Barrido AIS ${formatAisAvailabilitySeconds(remaining)}`
+                        : 'Consultar Disponibilidad Real-Time';
+                }
+                if (monitor) {
+                    monitor.classList.toggle('active', state.active || state.completed);
+                    monitor.classList.toggle('done', !state.active && state.completed);
+                }
+                if (status) {
+                    status.textContent = state.active
+                        ? `Barrido AIS en tiempo real: ${formatAisAvailabilitySeconds(remaining)} restantes`
+                        : (state.completed ? 'Barrido completado. Mapa de densidad actualizado.' : 'Barrido AIS activo: 60s restantes');
+                }
+            };
+
+            window.startAisAvailabilitySweepFeedback = function(owner = 'ais') {
+                const state = window.aisAvailabilitySweepUi;
+                if (state.active) return false;
+                clearInterval(state.interval);
+                state.active = true;
+                state.completed = false;
+                state.owner = owner;
+                state.startedAt = Date.now();
+                state.endsAt = state.startedAt + 60000;
+                window.updateAisAvailabilitySweepFeedback();
+                state.interval = setInterval(() => {
+                    if (!state.active) return;
+                    if (Date.now() >= state.endsAt) {
+                        window.completeAisAvailabilitySweepFeedback();
+                        return;
+                    }
+                    window.updateAisAvailabilitySweepFeedback();
+                }, 250);
+                return true;
+            };
+
+            window.completeAisAvailabilitySweepFeedback = function() {
+                const state = window.aisAvailabilitySweepUi;
+                clearInterval(state.interval);
+                state.interval = null;
+                state.active = false;
+                state.completed = true;
+                state.owner = null;
+                state.endsAt = null;
+                window.updateAisAvailabilitySweepFeedback();
+            };
+
             // Bulk Sweep Function (runs only on click)
             window.executeSweepAIS = async function() {
+                const startedFeedback = window.startAisAvailabilitySweepFeedback('execute');
+                if (!startedFeedback && window.aisAvailabilitySweepUi.active && arguments[0] instanceof Event) {
+                    return;
+                }
                 window.aisRadarUserActivated = true;
                 const icon = document.getElementById('ais-refresh-icon');
                 if (icon) {
@@ -29941,7 +29918,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     alert("Error connecting to the AIS API. Check the console.");
                 } finally {
                     if (icon) {
-                        icon.classList.remove('fa-spin');
+                        icon.classList.toggle('fa-spin', Boolean(window.aisAvailabilitySweepUi && window.aisAvailabilitySweepUi.active));
                     }
                 }
             };
@@ -29977,11 +29954,20 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         // Spanish AIS Bulk Sweep and Dashboard Updates
         window.ejecutarBarridoAIS = async function() {
             const event = arguments[0];
+            const startedFeedback = typeof window.startAisAvailabilitySweepFeedback === 'function'
+                ? window.startAisAvailabilitySweepFeedback('spanish')
+                : false;
+            if (!startedFeedback && window.aisAvailabilitySweepUi && window.aisAvailabilitySweepUi.active && event && (event.type === 'click' || event instanceof Event)) {
+                return;
+            }
             if (typeof window.isAisSweepDataMissing === 'function' && window.isAisSweepDataMissing()) {
                 if (event && (event.type === 'click' || event instanceof Event)) {
                     if (typeof window.alertAisSweepDataMissing === 'function') {
                         window.alertAisSweepDataMissing();
                     }
+                }
+                if (startedFeedback && typeof window.completeAisAvailabilitySweepFeedback === 'function') {
+                    window.completeAisAvailabilitySweepFeedback();
                 }
                 return;
             }
@@ -30018,7 +30004,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 console.error("Error al actualizar:", err);
             } finally {
                 if (icon) {
-                    icon.classList.remove('fa-spin');
+                    icon.classList.toggle('fa-spin', Boolean(window.aisAvailabilitySweepUi && window.aisAvailabilitySweepUi.active));
                 }
             }
         };

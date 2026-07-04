@@ -71,6 +71,28 @@
         .ais-load-pill.laden { background: #2563eb; }
         .ais-eta-drift { color: #b42318; font-weight: 900; }
         .ais-projection-meta { display: block; color: #475569; font-size: 0.72rem; font-weight: 700; margin-top: 3px; }
+        .radar-workflow-grid { display: grid; grid-template-columns: minmax(220px, 0.85fr) minmax(320px, 1.4fr); gap: 18px; align-items: start; }
+        .radar-phase-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+        .radar-phase-item { border: 1px solid #d7dee8; border-radius: 6px; padding: 9px 10px; color: #475569; background: #f8fafc; font-size: 0.78rem; font-weight: 800; }
+        .radar-phase-item.active { border-color: #0f766e; color: #0f766e; background: #ecfdf5; }
+        .radar-phase-item.done { border-color: #94a3b8; color: #334155; background: #f1f5f9; }
+        .radar-capture-monitor { display: none; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px; border: 1px solid #99f6e4; border-radius: 6px; background: #f0fdfa; color: #115e59; font-weight: 900; }
+        .radar-capture-monitor.active { display: inline-flex; }
+        .radar-capture-spinner { width: 22px; height: 22px; border: 3px solid rgba(15, 118, 110, 0.22); border-top-color: #0f766e; border-radius: 999px; animation: radarCaptureSpin 0.8s linear infinite; flex: 0 0 auto; }
+        .radar-capture-label { display: grid; gap: 1px; line-height: 1.15; }
+        .radar-capture-label strong { font-size: 0.82rem; }
+        .radar-capture-label span { font-size: 0.72rem; color: #64748b; }
+        .radar-taxonomy-panel { margin-top: 12px; display:grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 10px; align-items: end; }
+        .radar-taxonomy-panel.locked { display: none; }
+        .radar-report-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+        .radar-report-actions button { border: 0; border-radius: 4px; padding: 8px 12px; font-size: 0.78rem; font-weight: 900; cursor: pointer; }
+        .radar-report-actions button:disabled { cursor: not-allowed; opacity: 0.55; }
+        .radar-primary-action { background: #0f766e; color: #fff; }
+        .radar-secondary-action { background: #e2e8f0; color: #334155; }
+        .radar-report-table-wrap { max-height: 280px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 6px; margin-top: 12px; }
+        @media (max-width: 820px) { .radar-workflow-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 620px) { .radar-taxonomy-panel { grid-template-columns: 1fr; } }
+        @keyframes radarCaptureSpin { to { transform: rotate(360deg); } }
         @keyframes aisRadiusPulse { 0%, 100% { stroke-width: 2; stroke-opacity: 0.82; } 50% { stroke-width: 5; stroke-opacity: 1; } }
         @keyframes aisLabelPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
     </style>
@@ -118,6 +140,54 @@
             <button type="button" id="btn-search-pol" class="ais-radar-tab active-pol">BUSCAR POL (300MN)</button>
             <button type="button" id="btn-search-pod" class="ais-radar-tab active-pod">BUSCAR POD (100MN)</button>
             <button type="button" id="btn-projection-matching" class="ais-projection-toggle" aria-pressed="false">MODO MATCHING: OFF</button>
+        </div>
+    </div>
+
+    <div class="panel-ui" id="radar-workflow-panel">
+        <h3>RADAR SEQUENTIAL WORKFLOW</h3>
+        <div class="radar-workflow-grid">
+            <ol class="radar-phase-list" aria-label="Radar workflow phases">
+                <li class="radar-phase-item active" data-radar-phase="capture">1. Barrido de captura</li>
+                <li class="radar-phase-item" data-radar-phase="freeze">2. Freeze state</li>
+                <li class="radar-phase-item" data-radar-phase="taxonomy">3. Taxonomía</li>
+                <li class="radar-phase-item" data-radar-phase="report">4. Informe</li>
+                <li class="radar-phase-item" data-radar-phase="export">5. Data Bridge</li>
+            </ol>
+            <div>
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px;">
+                    <div><span class="kpi-label">ESTADO</span><span id="radar-workflow-status" class="kpi-value" style="font-size:1.1rem; color:#0f766e;">Ready</span></div>
+                    <div><span class="kpi-label">TIMER</span><span id="radar-capture-timer" class="kpi-value" style="font-size:1.1rem;">60s</span></div>
+                    <div><span class="kpi-label">SNAPSHOT</span><span id="radar-snapshot-count" class="kpi-value" style="font-size:1.1rem;">0</span></div>
+                </div>
+                <div id="radar-capture-monitor" class="radar-capture-monitor" role="status" aria-live="polite" aria-atomic="true">
+                    <span class="radar-capture-spinner" aria-hidden="true"></span>
+                    <span class="radar-capture-label">
+                        <strong>Escuchando flujo AIS</strong>
+                        <span id="radar-capture-countdown">01:00</span>
+                    </span>
+                </div>
+                <div id="radar-taxonomy-panel" class="radar-taxonomy-panel locked" aria-hidden="true">
+                    <label style="font-weight:bold; font-size:0.82rem;">TAXONOMÍA DE BUQUE
+                        <select id="radar-taxonomy-select" disabled style="display:block; width:100%; margin-top:6px; border:1px solid #cbd5e1; padding:8px; border-radius:4px; background:#fff; font-weight:800;">
+                            <option value="Bulk Carrier">Bulk Carrier</option>
+                            <option value="Container Ship">Container Ship</option>
+                            <option value="cargo">Cargueros / Graneleros (70-79)</option>
+                            <option value="tanker">Tanqueros (80-89)</option>
+                            <option value="passenger">Pasaje (60-69)</option>
+                            <option value="fishing">Pesqueros (30)</option>
+                            <option value="tug">Remolcadores / soporte (31-52)</option>
+                            <option value="other">Otros / no clasificados</option>
+                        </select>
+                    </label>
+                    <button type="button" id="btn-run-match-engine" class="radar-primary-action" style="border:0; border-radius:4px; padding:9px 14px; color:#fff; cursor:pointer; font-weight:900;" disabled>Generar informe</button>
+                </div>
+                <div class="radar-report-actions">
+                    <button type="button" id="btn-export-data-bridge" class="radar-primary-action" disabled>Enviar a Data Bridge</button>
+                    <button type="button" id="btn-clear-radar-report" class="radar-secondary-action">Limpiar informe</button>
+                    <span id="radar-export-status" style="font-size:0.78rem; color:#64748b; font-weight:800;"></span>
+                </div>
+                <div id="radar-report-table" class="radar-report-table-wrap"></div>
+            </div>
         </div>
     </div>
 
@@ -732,6 +802,286 @@
         window.AIS_DUAL_SWEEP_LIMIT = 1000;
         window.buquesAlmacenados = window.buquesAlmacenados instanceof Map ? window.buquesAlmacenados : new Map();
         window.buquesEncontrados = {};
+        window.radarWorkflowState = Object.assign({
+            phase: 'capture',
+            captureSeconds: 60,
+            captureStartedAt: null,
+            captureEndsAt: null,
+            captureTimer: null,
+            captureTimeout: null,
+            frozenAt: null,
+            frozenSnapshot: [],
+            selectedTaxonomy: 'cargo',
+            report: null
+        }, window.radarWorkflowState || {});
+
+        const RADAR_TAXONOMIES = {
+            cargo: { label: 'Cargueros / Graneleros', min: 70, max: 79 },
+            'Bulk Carrier': { label: 'Bulk Carrier', aliases: ['Bulk Carrier', 'Handysize', 'Handymax', 'Supramax', 'Ultramax', 'Panamax', 'Capesize'] },
+            'Container Ship': { label: 'Container Ship', aliases: ['Container Ship', 'Feeder'] },
+            tanker: { label: 'Tanqueros', min: 80, max: 89 },
+            passenger: { label: 'Pasaje', min: 60, max: 69 },
+            fishing: { label: 'Pesqueros', codes: [30] },
+            tug: { label: 'Remolcadores / soporte', min: 31, max: 52 },
+            other: { label: 'Otros / no clasificados' }
+        };
+
+        const taxonomyMap = {
+            "Bulk Carrier": ["Bulk Carrier", "Handysize", "Handymax", "Supramax", "Ultramax", "Panamax", "Capesize"],
+            "Container Ship": ["Container Ship", "Feeder"]
+        };
+        window.taxonomyMap = taxonomyMap;
+
+        function getAisShipTypeCode(vessel) {
+            const meta = vessel && vessel.MetaData ? vessel.MetaData : {};
+            const raw = firstAisText(
+                vessel && vessel.ShipType,
+                vessel && vessel.shipType,
+                vessel && vessel.type,
+                vessel && vessel.Type,
+                meta.ShipType,
+                meta.shipType,
+                meta.ShipTypeCode
+            );
+            const match = String(raw || '').match(/\d+/);
+            return match ? Number(match[0]) : null;
+        }
+
+        function normalizeTaxonomyMatchValue(value) {
+            return String(value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]+/gi, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
+        }
+
+        function getRadarTaxonomyText(vessel) {
+            const meta = vessel && vessel.MetaData ? vessel.MetaData : {};
+            return [
+                vessel && vessel.Tipo,
+                vessel && vessel.tipo,
+                vessel && vessel.tipo_carga,
+                vessel && vessel.cargoType,
+                vessel && vessel.categoryLabel,
+                vessel && vessel.categoryValue,
+                vessel && vessel.vesselClass,
+                vessel && vessel.VesselClass,
+                vessel && vessel.shipType,
+                vessel && vessel.ShipType,
+                vessel && vessel.type,
+                vessel && vessel.Type,
+                meta.Tipo,
+                meta.tipo,
+                meta.tipo_carga,
+                meta.cargoType,
+                meta.categoryLabel,
+                meta.categoryValue,
+                meta.vesselClass,
+                meta.VesselClass,
+                meta.shipType,
+                meta.ShipType,
+                meta.type
+            ].filter(Boolean).join(' ');
+        }
+
+        function matchesRadarTaxonomy(vessel, taxonomyKey) {
+            const taxonomy = RADAR_TAXONOMIES[taxonomyKey] || RADAR_TAXONOMIES.cargo;
+            const semanticTerms = taxonomyMap[taxonomyKey] || taxonomy.aliases;
+            if (Array.isArray(semanticTerms) && semanticTerms.length) {
+                const text = normalizeTaxonomyMatchValue(getRadarTaxonomyText(vessel));
+                return semanticTerms
+                    .map(normalizeTaxonomyMatchValue)
+                    .some(term => term && text.includes(term));
+            }
+            const code = getAisShipTypeCode(vessel);
+            if (Array.isArray(taxonomy.codes)) return taxonomy.codes.includes(code);
+            if (Number.isFinite(taxonomy.min) && Number.isFinite(taxonomy.max)) return code !== null && code >= taxonomy.min && code <= taxonomy.max;
+            return code === null || !Object.keys(RADAR_TAXONOMIES).filter(key => key !== 'other').some(key => matchesRadarTaxonomy(vessel, key));
+        }
+
+        function toRadarReportRow(vessel) {
+            const meta = vessel && vessel.MetaData ? vessel.MetaData : {};
+            const coords = typeof getVesselCoords === 'function' ? getVesselCoords(vessel) : [vessel.latitude || meta.latitude, vessel.longitude || meta.longitude];
+            return {
+                mmsi: firstAisText(vessel.MMSI, vessel.mmsi, meta.MMSI) || 'N/A',
+                imo: firstAisText(vessel.IMO, vessel.imo, meta.IMO) || 'N/A',
+                nombre: firstAisText(vessel.vesselName, vessel.ShipName, vessel.name, meta.ShipName) || 'Unknown vessel',
+                calado: readAisNumber(vessel.draught, vessel.draft, vessel.Draught, vessel.Draft, meta.Draught, meta.Draft),
+                latitud: coords ? Number(coords[0]) : null,
+                longitud: coords ? Number(coords[1]) : null,
+                tipo: firstAisText(vessel.ShipType, vessel.shipType, meta.ShipType) || 'N/A',
+                shipTypeCode: getAisShipTypeCode(vessel)
+            };
+        }
+
+        function setRadarWorkflowPhase(phase) {
+            window.radarWorkflowState.phase = phase;
+            document.querySelectorAll('[data-radar-phase]').forEach(item => {
+                const itemPhase = item.getAttribute('data-radar-phase');
+                item.classList.toggle('active', itemPhase === phase);
+                const order = ['capture', 'freeze', 'taxonomy', 'report', 'export'];
+                item.classList.toggle('done', order.indexOf(itemPhase) < order.indexOf(phase));
+            });
+            const statusEl = document.getElementById('radar-workflow-status');
+            if (statusEl) statusEl.innerText = {
+                capture: 'Capturing',
+                freeze: 'Frozen',
+                taxonomy: 'Select',
+                report: 'Report',
+                export: 'Exported'
+            }[phase] || 'Ready';
+        }
+
+        function formatRadarCountdown(seconds) {
+            const safeSeconds = Math.max(0, Number(seconds) || 0);
+            const minutes = Math.floor(safeSeconds / 60);
+            const remainder = safeSeconds % 60;
+            return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
+        }
+
+        function updateRadarWorkflowUi() {
+            const state = window.radarWorkflowState;
+            const timerEl = document.getElementById('radar-capture-timer');
+            const countdownEl = document.getElementById('radar-capture-countdown');
+            const monitorEl = document.getElementById('radar-capture-monitor');
+            const taxonomyPanel = document.getElementById('radar-taxonomy-panel');
+            const taxonomySelect = document.getElementById('radar-taxonomy-select');
+            const countEl = document.getElementById('radar-snapshot-count');
+            const matchBtn = document.getElementById('btn-run-match-engine');
+            const exportBtn = document.getElementById('btn-export-data-bridge');
+            const captureBtn = document.getElementById('btn-refresh-ais');
+            const filterControls = document.querySelectorAll('#geofencing-filter-panel input, #geofencing-filter-panel select, #geofencing-filter-panel button, #btn-search-pol, #btn-search-pod, #btn-projection-matching');
+            const isCapturing = state.phase === 'capture' && !!state.captureStartedAt && !state.frozenAt;
+            const remaining = isCapturing && state.captureEndsAt
+                ? Math.max(0, Math.ceil((state.captureEndsAt - Date.now()) / 1000))
+                : (state.frozenAt ? 0 : state.captureSeconds);
+            if (timerEl) {
+                timerEl.innerText = state.frozenAt ? 'Barrido completado' : formatRadarCountdown(remaining);
+            }
+            if (countdownEl) {
+                countdownEl.innerText = isCapturing ? formatRadarCountdown(remaining) : (state.frozenAt ? 'Radar congelado' : formatRadarCountdown(state.captureSeconds));
+            }
+            if (monitorEl) {
+                monitorEl.classList.toggle('active', isCapturing);
+            }
+            if (taxonomyPanel) {
+                taxonomyPanel.classList.toggle('locked', !state.frozenAt);
+                taxonomyPanel.setAttribute('aria-hidden', state.frozenAt ? 'false' : 'true');
+            }
+            if (taxonomySelect) {
+                taxonomySelect.disabled = !state.frozenAt;
+            }
+            if (countEl) countEl.innerText = String(state.frozenSnapshot.length || window.buquesAlmacenados.size || 0);
+            if (matchBtn) matchBtn.disabled = !state.frozenAt || state.frozenSnapshot.length === 0;
+            if (exportBtn) exportBtn.disabled = !state.report || !Array.isArray(state.report.vessels) || state.report.vessels.length === 0;
+            if (captureBtn) {
+                captureBtn.disabled = isCapturing;
+                captureBtn.style.cursor = isCapturing ? 'not-allowed' : 'pointer';
+                captureBtn.innerHTML = isCapturing
+                    ? `<span class="radar-capture-spinner" style="width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:-2px;margin-right:6px;"></span>Capturando ${remaining}s`
+                    : 'REFRESCAR / BUSCAR';
+            }
+            filterControls.forEach(control => {
+                if (control.id === 'btn-refresh-ais') return;
+                control.disabled = isCapturing;
+                control.setAttribute('aria-disabled', isCapturing ? 'true' : 'false');
+            });
+        }
+
+        function cancelRadarCapture() {
+            const state = window.radarWorkflowState;
+            clearInterval(state.captureTimer);
+            clearTimeout(state.captureTimeout);
+            state.captureTimer = null;
+            state.captureTimeout = null;
+            state.captureStartedAt = null;
+            state.captureEndsAt = null;
+            state.frozenAt = null;
+            setRadarWorkflowPhase('capture');
+            updateRadarWorkflowUi();
+        }
+
+        function freezeRadarSnapshot() {
+            const state = window.radarWorkflowState;
+            clearInterval(state.captureTimer);
+            clearTimeout(state.captureTimeout);
+            state.captureTimer = null;
+            state.captureTimeout = null;
+            state.captureEndsAt = null;
+            window.isLiveTrackingEnabled = false;
+            window.AIS_PROXY_POLLING_ACTIVE = false;
+            if (window.MapLoader && typeof window.MapLoader.stopAisProxyPolling === 'function') {
+                window.MapLoader.stopAisProxyPolling();
+            }
+            state.frozenAt = new Date().toISOString();
+            state.frozenSnapshot = Array.from(window.buquesAlmacenados.values()).map(v => JSON.parse(JSON.stringify(v)));
+            window.rawVesselsInArea = state.frozenSnapshot;
+            setRadarWorkflowPhase('taxonomy');
+            const timestampEl = document.getElementById('radar-frozen-timestamp');
+            if (timestampEl) {
+                timestampEl.innerText = `Frozen at ${new Date(state.frozenAt).toLocaleTimeString()}`;
+                timestampEl.style.display = 'inline-block';
+            }
+            const btn = document.getElementById('btn-freeze-radar');
+            if (btn) {
+                btn.innerText = 'Radar: FROZEN';
+                btn.style.backgroundColor = '#dc3545';
+            }
+            updateRadarWorkflowUi();
+        }
+
+        function renderRadarReport(report) {
+            const container = document.getElementById('radar-report-table');
+            if (!container) return;
+            const rows = report && Array.isArray(report.vessels) ? report.vessels : [];
+            if (!rows.length) {
+                container.innerHTML = '<div style="padding:14px; color:#64748b; font-weight:800;">Sin coincidencias para la taxonomía seleccionada.</div>';
+                return;
+            }
+            container.innerHTML = `<table style="margin:0;"><thead><tr><th>MMSI</th><th>IMO</th><th>Nombre</th><th>Calado</th><th>Coordenadas</th><th>Tipo</th></tr></thead><tbody>${rows.map(row => `<tr><td>${row.mmsi}</td><td>${row.imo}</td><td>${row.nombre}</td><td>${row.calado ?? 'N/A'}</td><td>${Number.isFinite(row.latitud) ? row.latitud.toFixed(4) : 'N/A'}, ${Number.isFinite(row.longitud) ? row.longitud.toFixed(4) : 'N/A'}</td><td>${row.tipo}</td></tr>`).join('')}</tbody></table>`;
+        }
+
+        window.runRadarMatchEngine = function() {
+            const select = document.getElementById('radar-taxonomy-select');
+            const taxonomyKey = select ? select.value : window.radarWorkflowState.selectedTaxonomy;
+            window.radarWorkflowState.selectedTaxonomy = taxonomyKey;
+            const taxonomy = RADAR_TAXONOMIES[taxonomyKey] || RADAR_TAXONOMIES.cargo;
+            const vessels = window.radarWorkflowState.frozenSnapshot
+                .filter(v => matchesRadarTaxonomy(v, taxonomyKey))
+                .map(toRadarReportRow);
+            window.radarWorkflowState.report = {
+                generatedAt: new Date().toISOString(),
+                frozenAt: window.radarWorkflowState.frozenAt,
+                taxonomy: { key: taxonomyKey, label: taxonomy.label },
+                vessels
+            };
+            setRadarWorkflowPhase('report');
+            renderRadarReport(window.radarWorkflowState.report);
+            updateRadarWorkflowUi();
+        };
+
+        window.exportRadarReportToDataBridge = async function() {
+            const statusEl = document.getElementById('radar-export-status');
+            const report = window.radarWorkflowState.report;
+            if (!report || !Array.isArray(report.vessels)) return;
+            if (statusEl) statusEl.innerText = 'Enviando payload JSON...';
+            try {
+                const response = await fetch('/.netlify/functions/data-bridge-export', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify(report)
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok || payload.success === false) throw new Error(payload.error || 'Data Bridge export failed');
+                setRadarWorkflowPhase('export');
+                if (statusEl) statusEl.innerText = `Enviado: ${payload.acceptedCount || report.vessels.length} buques`;
+            } catch (error) {
+                if (statusEl) statusEl.innerText = error.message || 'Error al exportar';
+            }
+            updateRadarWorkflowUi();
+        };
 
         window.obtenerIdUnicoBuque = function(buque) {
             if (!buque || typeof buque !== 'object') return '';
@@ -956,7 +1306,6 @@
             const longitude = Number(report.Longitude ?? meta.longitude ?? previousMeta.longitude ?? previous?.longitude);
             if (!mmsi || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
             if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
-            if (!isAllowedAisCargoType(meta, report)) return null;
 
             const speed = Number(report.Sog);
             const name = (meta.ShipName || shipStaticData.Name || shipStaticData.ShipName || `MMSI ${mmsi}`).toString().trim();
@@ -1323,9 +1672,9 @@
             tanker: ['tanker', 'crude', 'lng', 'lpg', 'chemical', 'product tanker', 'oil'],
             passenger: ['passenger', 'cruise', 'ferry', 'ropax'],
             other: ['offshore', 'tug', 'fishing', 'pilot', 'dredg', 'yacht', 'sailing'],
-            bulk: ['bulk', 'bulker'],
+            bulk: taxonomyMap["Bulk Carrier"],
             general: ['general cargo', 'coaster'],
-            container: ['container'],
+            container: taxonomyMap["Container Ship"],
             cement: ['cement'],
             mpv: ['multipurpose', 'mpp'],
             heavy_lift: ['heavy lift'],
@@ -1536,7 +1885,7 @@
                 if (!record) return false;
                 if (!taxonomyValue || String(taxonomyValue).startsWith('category:')) return true;
                 const taxonomyKey = String(taxonomyValue).replace(/^type:/, '');
-                const taxonomyTerms = FLEET_INTEL_TAXONOMY[taxonomyKey] || [taxonomyKey];
+                const taxonomyTerms = FLEET_INTEL_TAXONOMY[taxonomyKey] || window.taxonomyMap[taxonomyKey] || [taxonomyKey];
                 const text = normalizeFleetTaxonomyText([
                     record.tipo_carga,
                     record.cargoType,
@@ -1546,7 +1895,24 @@
                     record.vesselType,
                     record.categoryLabel,
                     record.categoryValue,
-                    record.scrapedType
+                    record.scrapedType,
+                    record.vesselClass,
+                    vesselData && vesselData.tipo_carga,
+                    vesselData && vesselData.cargoType,
+                    vesselData && vesselData.cargoTaxonomyLabel,
+                    vesselData && vesselData.cargoTaxonomyValue,
+                    vesselData && vesselData.shipType,
+                    vesselData && vesselData.ShipType,
+                    vesselData && vesselData.type,
+                    vesselData && vesselData.vesselType,
+                    vesselData && vesselData.vesselClass,
+                    vesselData && vesselData.VesselClass,
+                    vesselData && vesselData.MetaData && vesselData.MetaData.tipo_carga,
+                    vesselData && vesselData.MetaData && vesselData.MetaData.cargoType,
+                    vesselData && vesselData.MetaData && vesselData.MetaData.shipType,
+                    vesselData && vesselData.MetaData && vesselData.MetaData.ShipType,
+                    vesselData && vesselData.MetaData && vesselData.MetaData.vesselClass,
+                    vesselData && vesselData.MetaData && vesselData.MetaData.VesselClass
                 ].filter(Boolean).join(' '));
                 return taxonomyTerms.some(term => text.includes(normalizeFleetTaxonomyText(term)));
             }
@@ -2131,16 +2497,40 @@
         };
 
         window.executeAISSweep = async function() {
-            window.isLiveTrackingEnabled = false;
+            const state = window.radarWorkflowState;
+            clearInterval(state.captureTimer);
+            clearTimeout(state.captureTimeout);
+            state.captureStartedAt = Date.now();
+            state.captureEndsAt = state.captureStartedAt + state.captureSeconds * 1000;
+            state.captureTimer = null;
+            state.captureTimeout = null;
+            state.frozenAt = null;
+            state.frozenSnapshot = [];
+            state.report = null;
+            window.isLiveTrackingEnabled = true;
             window.aisRadarUserActivated = true;
+            window.buquesAlmacenados.clear();
+            window.buquesEncontrados = {};
+            window.rawVesselsInArea = [];
+            renderRadarReport(null);
+            setRadarWorkflowPhase('capture');
+            updateRadarWorkflowUi();
+            state.captureTimer = setInterval(() => {
+                updateRadarWorkflowUi();
+            }, 250);
+            state.captureTimeout = setTimeout(() => {
+                freezeRadarSnapshot();
+            }, state.captureSeconds * 1000);
             if (typeof AISmap !== 'undefined' && AISmap && typeof AISmap.getZoom === 'function' && AISmap.getZoom() < 5) {
                 console.warn("AIS_DEBUG: Zoom menor a 5. Barrido AIS local pausado para evitar consultas amplias.");
+                cancelRadarCapture();
                 return;
             }
             const now = Date.now();
             if (window.aisFallbackNextAllowedAt && now < window.aisFallbackNextAllowedAt) {
                 const waitSeconds = Math.ceil((window.aisFallbackNextAllowedAt - now) / 1000);
                 console.warn(`AIS_FALLBACK: Consulta en cooldown. Reintento permitido en ${waitSeconds} segundos.`);
+                cancelRadarCapture();
                 return;
             }
             if (window.AIS_DIRECT_FRONTEND_MODE) {
@@ -2148,6 +2538,7 @@
                     await window.validateAisApiKeyStatus();
                 } catch (err) {
                     window.showAisDisconnectedState();
+                    cancelRadarCapture();
                     return;
                 }
                 connectLiveAisForCurrentBounds();
@@ -2155,6 +2546,7 @@
             }
             if (window.isAisSweepFetching) {
                 console.warn("AIS_FALLBACK: Consulta ya en curso. Se omite la petición solapada.");
+                cancelRadarCapture();
                 return;
             }
             const event = arguments[0];
@@ -2180,6 +2572,7 @@
                     }
                     alert(alertMsg);
                 }
+                cancelRadarCapture();
                 return;
             }
 
@@ -2190,6 +2583,7 @@
                 : '';
             if (!url) {
                 console.warn("AIS_FALLBACK: No se pudieron determinar cajas POL/POD para el barrido AIS.");
+                cancelRadarCapture();
                 return;
             }
             window.isAisSweepFetching = true;
@@ -2197,7 +2591,6 @@
             const summaryTextEl = document.getElementById('geofence-summary-text');
             if (refreshBtn) {
                 refreshBtn.disabled = true;
-                refreshBtn.innerText = 'BUSCANDO...';
             }
             if (summaryTextEl) summaryTextEl.innerText = 'Recolectando data AIS filtrada en servidor...';
             try {
@@ -2205,6 +2598,7 @@
                 const response = await fetch(url, { headers: { Accept: 'application/json' } });
                 if (response.status === 429) {
                     window.aisFallbackNextAllowedAt = Date.now() + AIS_FALLBACK_429_RETRY_MS;
+                    cancelRadarCapture();
                     return;
                 }
                 const data = await response.json();
@@ -2223,14 +2617,14 @@
                     }
                 });
                 window.rawVesselsInArea = vessels;
-                window.applyGeofencingFilters();
-                const message = data.message || `Data recolectada: ${vessels.length} buques filtrados con éxito`;
+                const message = data.message || `Data recolectada: ${vessels.length} buques capturados sin filtro previo`;
                 if (summaryTextEl) summaryTextEl.innerText = message;
                 console.log(message);
             } catch (err) {
                 console.error("AIS_FALLBACK: Error durante barrido AIS:", err);
                 window.showAisDisconnectedState();
                 window.aisFallbackNextAllowedAt = Date.now() + AIS_FALLBACK_EMPTY_RETRY_MS;
+                cancelRadarCapture();
             } finally {
                 window.isAisSweepFetching = false;
                 if (refreshBtn) {
@@ -2291,6 +2685,7 @@
             const boxes = getGlobalAisSweepBoxes();
             if (!boxes.length) return '';
             const zone = normalizedRole || 'DUAL';
+            const workflowCapture = window.radarWorkflowState && window.radarWorkflowState.phase === 'capture';
             const params = new URLSearchParams({
                 quantity: String(Math.min(Number(quantity) || 120, 1000)),
                 force: '1',
@@ -2298,7 +2693,7 @@
                 boxes: JSON.stringify(boxes),
                 vesselClass: 'Handysize,Supramax',
                 loadState: 'any',
-                selective: selective ? '1' : '0',
+                selective: workflowCapture ? '0' : (selective ? '1' : '0'),
                 matchingMode: window.aisProjectionMatchingMode ? '1' : '0',
                 scope: 'global'
             });
@@ -3169,6 +3564,23 @@
             window.isFirstLoad = true;
             localStorage.setItem(FLEET_INTEL_FILTER_KEY, event.target.value || 'category:cargo');
             window.applyGeofencingFilters();
+        });
+        document.getElementById('radar-taxonomy-select')?.addEventListener('change', (event) => {
+            window.radarWorkflowState.selectedTaxonomy = event.target.value || 'cargo';
+            if (window.radarWorkflowState.frozenSnapshot.length > 0) {
+                setRadarWorkflowPhase('taxonomy');
+            }
+            updateRadarWorkflowUi();
+        });
+        document.getElementById('btn-run-match-engine')?.addEventListener('click', window.runRadarMatchEngine);
+        document.getElementById('btn-export-data-bridge')?.addEventListener('click', window.exportRadarReportToDataBridge);
+        document.getElementById('btn-clear-radar-report')?.addEventListener('click', () => {
+            window.radarWorkflowState.report = null;
+            renderRadarReport(null);
+            setRadarWorkflowPhase(window.radarWorkflowState.frozenSnapshot.length ? 'taxonomy' : 'capture');
+            const statusEl = document.getElementById('radar-export-status');
+            if (statusEl) statusEl.innerText = '';
+            updateRadarWorkflowUi();
         });
         document.getElementById('btn-fleet-intel-capture')?.addEventListener('click', capturarDatosBuque);
         document.getElementById('fleet-intel-listing-url')?.addEventListener('keypress', (event) => {

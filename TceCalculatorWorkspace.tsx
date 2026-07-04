@@ -855,205 +855,6 @@ function notifyFleetRegistryUpdated(store: Record<string, FleetRegistryRecord>) 
   if (typeof redraw === 'function') redraw();
 }
 
-function parseCsvText(text: string, delimiter = ',') {
-  const rows: string[][] = [];
-  let current = '';
-  let row: string[] = [];
-  let inQuotes = false;
-
-  try {
-    const source = String(text ?? '');
-
-    for (let index = 0; index < source.length; index += 1) {
-      const char = source[index];
-      const nextChar = source[index + 1];
-
-      if (char === '"') {
-        if (inQuotes && nextChar === '"') {
-          current += '"';
-          index += 1;
-        } else {
-          inQuotes = !inQuotes;
-        }
-        continue;
-      }
-
-      if (char === delimiter && !inQuotes) {
-        row.push(normalizeFleetText(current));
-        current = '';
-        continue;
-      }
-
-      if ((char === '\n' || char === '\r') && !inQuotes) {
-        if (char === '\r' && nextChar === '\n') index += 1;
-        row.push(normalizeFleetText(current));
-        if (row.some((cell) => cell.length > 0)) rows.push(row);
-        row = [];
-        current = '';
-        continue;
-      }
-
-      current += char;
-    }
-
-    row.push(normalizeFleetText(current));
-    if (row.some((cell) => cell.length > 0)) rows.push(row);
-  } catch (error) {
-    console.warn('CSV ignorado por formato no válido:', error);
-  }
-  return rows;
-}
-
-async function processVesselData(rawData: Array<Record<string, unknown>>) {
-  const processedData: Array<Record<string, unknown>> = [];
-
-  try {
-    for (const row of rawData) {
-      try {
-        const rowNumber = typeof row?.__rowNumber === 'number' ? row.__rowNumber : '?';
-        const vesselString = (row?.Vessel as { toString?: () => string } | undefined)?.toString?.() || '';
-        const cleanedName = vesselString.replace?.(/-/g, ' ')?.trim?.() || '';
-        const normalizedImo = normalizeFleetImo(row?.IMO);
-        const normalizedType = normalizeFleetCategory(row?.Type);
-
-        if (!cleanedName || !normalizedImo || !normalizedType) {
-          console.warn(`Fila CSV ${rowNumber} ignorada por campos vacíos:`, {
-            Vessel: cleanedName || 'VACIO',
-            IMO: normalizedImo || 'VACIO',
-            Tipo: normalizedType || 'VACIO',
-          });
-          continue;
-        }
-
-        processedData.push({
-          ...row,
-          Vessel: cleanedName,
-          IMO: normalizedImo,
-          Tipo: normalizedType,
-          Type: normalizedType,
-        });
-      } catch (err) {
-        console.warn('Fila CSV ignorada por error de procesamiento:', row, err);
-        continue;
-      }
-    }
-  } catch (error) {
-    console.warn('CSV ignorado por error general de procesamiento:', error);
-  }
-
-  return processedData;
-}
-
-async function parseFleetRowsFromCsv(text: string): Promise<Partial<FleetRegistryRecord>[]> {
-  const rows = parseCsvText(text, ';');
-  if (rows.length < 2) return [];
-
-  const normalizeHeader = (value: unknown) => {
-    try {
-      return normalizeFleetText(value)
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '');
-    } catch (error) {
-      console.warn('Cabecera CSV ignorada por formato no válido:', value, error);
-      return '';
-    }
-  };
-  const headers = rows[0].map(normalizeHeader);
-  const aliases: Record<string, string[]> = {
-    vessel: ['vessel'],
-    tipo: ['type', 'vesseltype', 'shiptype', 'tipo', 'tipobuque'],
-    anio: ['built'],
-    gt: ['gt'],
-    dwt: ['dwt'],
-    dimensiones: ['sizem'],
-    imo: ['imo'],
-  };
-  const indexes = Object.fromEntries(
-    Object.entries(aliases).map(([key, names]) => [key, headers.findIndex((header) => names.includes(header))]),
-  ) as Record<'vessel' | 'tipo' | 'anio' | 'gt' | 'dwt' | 'dimensiones' | 'imo', number>;
-  const missingColumns = Object.entries(indexes)
-    .filter(([column, index]) => column !== 'imo' && index < 0)
-    .map(([column]) => column);
-  if (missingColumns.length) {
-    const displayNames: Record<string, string> = {
-      vessel: 'Vessel',
-      tipo: 'Tipo',
-      anio: 'Built',
-      gt: 'GT',
-      dwt: 'DWT',
-      dimensiones: 'Size (m)',
-      imo: 'IMO',
-    };
-    throw new Error(`Faltan columnas obligatorias: ${missingColumns.map((column) => displayNames[column] || column).join(', ')}`);
-  }
-
-  const rawData = rows.slice(1).map((cells, rowIndex) => ({
-    Vessel: indexes.vessel >= 0 ? cells?.[indexes.vessel] : undefined,
-    IMO: indexes.imo >= 0 ? cells?.[indexes.imo] : undefined,
-    Built: cells?.[indexes.anio],
-    GT: cells?.[indexes.gt],
-    DWT: cells?.[indexes.dwt],
-    Size: cells?.[indexes.dimensiones],
-    Type: indexes.tipo >= 0 ? cells?.[indexes.tipo] : '',
-    __cells: cells,
-    __rowNumber: rowIndex + 2,
-  }));
-
-  const rowMissingType = rawData.find((row) => !normalizeFleetCategory(row?.Type));
-  if (rowMissingType) {
-    const rowNumber = typeof rowMissingType.__rowNumber === 'number' ? rowMissingType.__rowNumber : '?';
-    throw new Error(`Carga detenida: la fila ${rowNumber} no contiene Tipo de mercancía/buque. Completa el campo Tipo antes de confirmar la importación.`);
-  }
-
-  const processedRows = await processVesselData(rawData);
-
-  return processedRows.flatMap((row) => {
-    try {
-      const cells = Array.isArray(row.__cells) ? row.__cells : [];
-      const rowNumber = typeof row.__rowNumber === 'number' ? row.__rowNumber : '?';
-      const vesselName = normalizeFleetText(row.Vessel);
-      if (!vesselName) {
-        console.warn(`Fila CSV ${rowNumber} ignorada por falta de nombre:`, cells);
-        return [];
-      }
-      const vessel = cleanFleetValue(vesselName);
-      const year = cleanFleetValue(row.Built);
-      const imo = normalizeFleetImo(row.IMO);
-      const type = normalizeFleetCategory(row?.Type);
-      if (!type) {
-        console.error(`FleetManager CSV: vessel.Tipo vacío en fila ${rowNumber}`);
-      }
-      return [{
-        imo: imo || 'N/A',
-        vessel,
-        nombre: vessel,
-        name: vessel,
-        anio: year,
-        gt: cleanFleetValue(row.GT),
-        dwt: cleanFleetValue(row.DWT),
-        dimensiones: cleanFleetValue(row.Size),
-        Tipo: cleanFleetValue(type),
-        tipo: cleanFleetValue(type),
-        type: cleanFleetValue(type),
-        shipType: cleanFleetValue(type),
-        vesselType: cleanFleetValue(type),
-      }];
-    } catch (error) {
-      console.warn('Fila CSV ignorada por datos no válidos:', row, error);
-      return [];
-    }
-  }).filter((record) => {
-    const hasIdentity = normalizeFleetImo(record.imo) || normalizeFleetVesselName(record.vessel);
-    return hasIdentity && hasFleetImportData(record);
-  });
-}
-
-function countFleetCsvDataRows(text: string) {
-  return Math.max(0, parseCsvText(text, ';').length - 1);
-}
-
 function parseFleetRowsFromHtml(html: string): Partial<FleetRegistryRecord>[] {
   if (typeof window === 'undefined') return [];
 
@@ -1122,11 +923,8 @@ function FleetIntelligenceLibraryPanel() {
   const [status, setStatus] = useState('Biblioteca local lista para consulta AIS.');
   const [registryCount, setRegistryCount] = useState(0);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const [csvValidationError, setCsvValidationError] = useState('');
   const [exclusiveVisibility, setExclusiveVisibility] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const csvInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1271,83 +1069,6 @@ function FleetIntelligenceLibraryPanel() {
     }
   };
 
-  const importFleetRegistryCsv = async (file: File) => {
-    setIsImporting(true);
-    setCsvValidationError('');
-    setStatus(`Procesando ${file.name}...`);
-
-    try {
-      const text = await file.text();
-      const records = await parseFleetRowsFromCsv(text);
-      const totalRows = countFleetCsvDataRows(text);
-      if (!records.length) {
-        setStatus('No se detectaron buques válidos en el CSV.');
-        return;
-      }
-
-      const store = getFleetRegistryStore();
-      let mergedCount = 0;
-      let ignoredCount = totalRows - records.length;
-
-      records.forEach((record) => {
-        const nombre = cleanFleetValue(record.vessel || record.nombre || record.name);
-        const identityKey = getFleetIdentityKey({ ...record, vessel: nombre, nombre, name: nombre });
-        if (!identityKey) {
-          ignoredCount += 1;
-          return;
-        }
-        const existing = store[identityKey];
-        if (!hasFleetImportData(record, existing)) {
-          ignoredCount += 1;
-          return;
-        }
-        const technicalRecord: FleetRegistryRecord = {
-          imo: record.imo === 'SIN-IMO' ? 'SIN-IMO' : (normalizeFleetImo(record.imo) || 'N/A'),
-          vessel: nombre,
-          nombre,
-          name: nombre,
-          tipo: cleanFleetValue(record.tipo || record.type || existing?.tipo || existing?.type),
-          type: cleanFleetValue(record.type || record.tipo || existing?.type || existing?.tipo),
-          shipType: cleanFleetValue(record.shipType || record.tipo || existing?.shipType || existing?.tipo),
-          vesselType: cleanFleetValue(record.vesselType || record.tipo || existing?.vesselType || existing?.tipo),
-          category: existing?.category || selectedCategory,
-          categoryValue: existing?.categoryValue || selectedCategory,
-          categoryLabel: cleanFleetValue(existing?.categoryLabel || selectedLabel),
-          scrapedType: cleanFleetValue(record.scrapedType || record.tipo || existing?.scrapedType || existing?.tipo),
-          anio: cleanFleetValue(record.anio),
-          gt: cleanFleetValue(record.gt),
-          dwt: cleanFleetValue(record.dwt),
-          dimensiones: cleanFleetValue(record.dimensiones),
-        };
-
-        mergedCount += 1;
-        store[identityKey] = existing
-          ? mergeFleetRegistryRecord(existing, technicalRecord)
-          : { ...technicalRecord, capturedAt: new Date().toISOString() };
-      });
-
-      notifyFleetRegistryUpdated(store);
-      setRegistryCount(Object.keys(store).length);
-      const summary = `Procesamiento terminado. Se han fusionado ${mergedCount} registros válidos y se han ignorado ${ignoredCount} filas incompletas`;
-      console.log(summary);
-      setStatus(summary);
-      window.alert(summary);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'CSV no válido';
-      setCsvValidationError(message);
-      setStatus(`Error de importación: ${message}`);
-    } finally {
-      setIsImporting(false);
-      if (csvInputRef.current) csvInputRef.current.value = '';
-    }
-  };
-
-  const handleCsvFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    void importFleetRegistryCsv(file);
-  };
-
   const progressPercent = progress.total > 0 ? Math.min(100, Math.round((progress.current / progress.total) * 100)) : 0;
 
   return (
@@ -1361,14 +1082,7 @@ function FleetIntelligenceLibraryPanel() {
           LISTA BLANCA: {registryCount} BUQUES
         </span>
       </div>
-      <input
-        ref={csvInputRef}
-        type="file"
-        accept=".csv,text/csv"
-        className="hidden"
-        onChange={handleCsvFileChange}
-      />
-      <div className="grid gap-3 lg:grid-cols-[minmax(12rem,0.45fr)_minmax(16rem,1fr)_auto_auto]">
+      <div className="grid gap-3 lg:grid-cols-[minmax(12rem,0.45fr)_minmax(16rem,1fr)_auto]">
         <label className="block">
           <span className="mb-1 block text-[11px] font-black uppercase tracking-wide text-slate-500">Categoría</span>
           <select value={selectedCategory} onChange={(event) => handleCategoryChange(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-600/15">
@@ -1389,9 +1103,6 @@ function FleetIntelligenceLibraryPanel() {
           <RefreshIcon />
           {isCapturing ? 'Cargando' : 'Capturar'}
         </button>
-        <button type="button" onClick={() => csvInputRef.current?.click()} disabled={isImporting || isCapturing || !!csvValidationError} className="mt-5 inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-slate-900 px-4 text-xs font-black uppercase tracking-wide text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-wait disabled:opacity-65">
-          {isImporting ? 'Procesando CSV' : 'Subir Base de Datos (CSV)'}
-        </button>
       </div>
       <label className="mt-3 flex items-center gap-2 text-xs font-bold text-slate-700">
         <input
@@ -1402,12 +1113,6 @@ function FleetIntelligenceLibraryPanel() {
         />
         Ocultar tráfico AIS fuera de mi lista cargada
       </label>
-      {csvValidationError && (
-        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
-          {csvValidationError}
-          <button type="button" onClick={() => setCsvValidationError('')} className="ml-3 underline">Corregir y seleccionar otro CSV</button>
-        </div>
-      )}
       {isCapturing && (
         <div className="mt-3">
           <div className="h-2 overflow-hidden rounded-full bg-slate-200">
