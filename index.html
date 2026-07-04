@@ -12791,11 +12791,19 @@
                     window.toggleLiveTracking();
                 }
 
-                const rawVessels = window.GlobalStore && typeof window.GlobalStore.getRawVessels === 'function'
-                    ? window.GlobalStore.getRawVessels()
-                    : (window.GlobalStore && typeof window.GlobalStore.getVessels === 'function'
-                        ? window.GlobalStore.getVessels()
-                        : []);
+                const contextVessels = window.vesselClassContext && Array.isArray(window.vesselClassContext.filteredVessels)
+                    ? window.vesselClassContext.filteredVessels
+                    : null;
+                const matchingVessels = window.GlobalStore && Array.isArray(window.GlobalStore.matchingVessels)
+                    ? window.GlobalStore.matchingVessels
+                    : null;
+                const rawVessels = matchingVessels
+                    || contextVessels
+                    || (window.GlobalStore && typeof window.GlobalStore.getRawVessels === 'function'
+                        ? window.GlobalStore.getRawVessels()
+                        : (window.GlobalStore && typeof window.GlobalStore.getVessels === 'function'
+                            ? window.GlobalStore.getVessels()
+                            : []));
 
                 return {
                     frozenAt: new Date().toISOString(),
@@ -12975,9 +12983,13 @@
                     }
                 }
 
+                const selectedVesselTaxonomy = document.getElementById('fleet-intel-vessel-type')?.value || 'category:cargo';
+                if (typeof setVesselClassContext === 'function') {
+                    setVesselClassContext(selectedVesselTaxonomy);
+                }
                 const radarSnapshot = captureRadarSnapshotForFleetMatching();
                 if ((!radarSnapshot.vessels || radarSnapshot.vessels.length === 0) && window.GlobalStore && typeof window.GlobalStore.getRawVessels === 'function') {
-                    const rawForMatching = window.GlobalStore.getRawVessels() || [];
+                    const rawForMatching = window.GlobalStore.matchingVessels || window.GlobalStore.getRawVessels() || [];
                     radarSnapshot.vessels = rawForMatching.map(v => (
                         typeof window.normalizeAisVesselForRadar === 'function' ? window.normalizeAisVesselForRadar(v) : v
                     )).filter(Boolean);
@@ -12999,6 +13011,7 @@
                         fuelPrice, dailyOpex, portExpenses
                     },
                     radarSnapshot: radarSnapshot.vessels,
+                    vesselClassContext: window.vesselClassContext || null,
                     frozenAt: radarSnapshot.frozenAt,
                     searchMode: window.currentOperationMode || 'local'
                 };
@@ -29303,10 +29316,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (event.key === 'Enter') capturarDatosBuque();
             });
             document.getElementById('fleet-intel-vessel-type')?.addEventListener('change', (event) => {
-                localStorage.setItem(FLEET_INTEL_FILTER_KEY, event.target.value || '');
-                localStorage.setItem('ais_filter_vessel_types', JSON.stringify([event.target.value || '']));
+                const selectedTaxonomy = event.target.value || 'category:cargo';
+                localStorage.setItem(FLEET_INTEL_FILTER_KEY, selectedTaxonomy);
+                localStorage.setItem('ais_filter_vessel_types', JSON.stringify([selectedTaxonomy]));
                 localStorage.setItem('ais_filters_updated', Date.now().toString());
+                const filteredVessels = Array.isArray(window.lastVesselsInArea) ? window.lastVesselsInArea : [];
+                setVesselClassContext(selectedTaxonomy, filteredVessels);
                 if (typeof window.reapplyCentralFiltersAndRedraw === 'function') window.reapplyCentralFiltersAndRedraw();
+                dispatchVesselClassContextRecalculation(window.vesselClassContext);
             });
 
             ['cargo-type', 'cargo-type-manual', 'nombre-buque-calculadora', 'name-of-ship-calculator', 'vessel-name'].forEach((id) => {
@@ -29397,6 +29414,88 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (selectedValue.startsWith('type:')) return selectedValue;
                 return label.replace(/^All\s+/i, '').replace(/\s*\/.*$/, '').trim() || selectedValue;
             }
+
+            const VESSEL_CLASS_CONTEXT_PROFILES = {
+                'category:cargo': { bunkerMultiplier: 1.00, seaConsumptionMultiplier: 1.00, portConsumptionMultiplier: 1.00, riskCoefficient: 1.00 },
+                'type:bulk': { bunkerMultiplier: 1.00, seaConsumptionMultiplier: 1.00, portConsumptionMultiplier: 1.00, riskCoefficient: 0.98 },
+                'type:general': { bunkerMultiplier: 1.08, seaConsumptionMultiplier: 1.04, portConsumptionMultiplier: 1.12, riskCoefficient: 1.08 },
+                'type:container': { bunkerMultiplier: 1.16, seaConsumptionMultiplier: 1.18, portConsumptionMultiplier: 1.05, riskCoefficient: 1.06 },
+                'type:cement': { bunkerMultiplier: 1.06, seaConsumptionMultiplier: 1.03, portConsumptionMultiplier: 1.10, riskCoefficient: 1.07 },
+                'type:mpv': { bunkerMultiplier: 1.10, seaConsumptionMultiplier: 1.07, portConsumptionMultiplier: 1.15, riskCoefficient: 1.10 },
+                'type:heavy_lift': { bunkerMultiplier: 1.18, seaConsumptionMultiplier: 1.10, portConsumptionMultiplier: 1.24, riskCoefficient: 1.18 },
+                'category:tanker': { bunkerMultiplier: 1.08, seaConsumptionMultiplier: 1.06, portConsumptionMultiplier: 1.08, riskCoefficient: 1.10 },
+                'type:crude_tanker': { bunkerMultiplier: 1.12, seaConsumptionMultiplier: 1.08, portConsumptionMultiplier: 1.08, riskCoefficient: 1.12 },
+                'type:lng_tanker': { bunkerMultiplier: 1.22, seaConsumptionMultiplier: 1.18, portConsumptionMultiplier: 1.12, riskCoefficient: 1.20 },
+                'type:chemical_tanker': { bunkerMultiplier: 1.14, seaConsumptionMultiplier: 1.08, portConsumptionMultiplier: 1.16, riskCoefficient: 1.18 },
+                'type:product_tanker': { bunkerMultiplier: 1.10, seaConsumptionMultiplier: 1.06, portConsumptionMultiplier: 1.10, riskCoefficient: 1.12 },
+                'type:lpg_tanker': { bunkerMultiplier: 1.16, seaConsumptionMultiplier: 1.10, portConsumptionMultiplier: 1.12, riskCoefficient: 1.16 }
+            };
+
+            function getVesselClassProfile(taxonomyValue) {
+                return VESSEL_CLASS_CONTEXT_PROFILES[taxonomyValue] || VESSEL_CLASS_CONTEXT_PROFILES['category:cargo'];
+            }
+
+            function getVesselClassContextLabel(taxonomyValue) {
+                const select = document.getElementById('fleet-intel-vessel-type');
+                const option = select ? Array.from(select.options || []).find(item => item.value === taxonomyValue) : null;
+                return option ? option.textContent.trim() : getFleetTypeFilterLabel();
+            }
+
+            function setVesselClassContext(taxonomyValue, filteredVessels = null) {
+                const value = taxonomyValue || 'category:cargo';
+                const vessels = Array.isArray(filteredVessels)
+                    ? filteredVessels
+                    : ((window.GlobalStore && Array.isArray(window.GlobalStore.polPrimaryVessels))
+                        ? window.GlobalStore.polPrimaryVessels
+                        : (Array.isArray(window.lastVesselsInArea) ? window.lastVesselsInArea : []));
+                window.vesselClassContext = {
+                    value,
+                    label: getVesselClassContextLabel(value),
+                    profile: getVesselClassProfile(value),
+                    filteredVessels: vessels,
+                    vesselCount: vessels.length,
+                    updatedAt: Date.now()
+                };
+                if (window.GlobalStore) {
+                    window.GlobalStore.vesselClassContext = window.vesselClassContext;
+                    window.GlobalStore.matchingVessels = vessels;
+                }
+                return window.vesselClassContext;
+            }
+
+            function applyVesselClassProfileToEstimatorInputs(context) {
+                const profile = context?.profile || getVesselClassProfile('category:cargo');
+                [
+                    ['cons-sea', profile.seaConsumptionMultiplier || 1],
+                    ['cons-port', profile.portConsumptionMultiplier || 1],
+                    ['cons-anchorage', profile.portConsumptionMultiplier || 1],
+                    ['cons-anchorage-aux', profile.portConsumptionMultiplier || 1]
+                ].forEach(([id, multiplier]) => {
+                    const input = document.getElementById(id);
+                    if (!input) return;
+                    if (!input.dataset.taxonomyBaseValue) {
+                        input.dataset.taxonomyBaseValue = String(parseFloat(input.value) || 0);
+                    }
+                    const baseValue = parseFloat(input.dataset.taxonomyBaseValue) || 0;
+                    const nextValue = baseValue * multiplier;
+                    input.value = Number.isFinite(nextValue) ? nextValue.toFixed(2) : input.value;
+                    input.dataset.vesselClassContext = context?.value || 'category:cargo';
+                });
+            }
+
+            function dispatchVesselClassContextRecalculation(context) {
+                applyVesselClassProfileToEstimatorInputs(context);
+                window.dispatchEvent(new CustomEvent('vessel-class-context:changed', { detail: context }));
+                if (typeof calculateAndDisplayAisFreight === 'function') calculateAndDisplayAisFreight();
+                if (typeof forceRefreshCalculations === 'function') {
+                    forceRefreshCalculations(false);
+                } else if (typeof runEngine === 'function') {
+                    runEngine();
+                }
+                if (typeof executeMatchingEngine === 'function') executeMatchingEngine();
+            }
+
+            window.setVesselClassContext = setVesselClassContext;
 
             function bindRadarVesselTipo(vessel) {
                 if (!vessel || typeof vessel !== 'object') return vessel;
@@ -29717,6 +29816,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     window.GlobalStore.polPrimaryVessels = primaryVisibleVessels;
                 }
                 window.lastVesselsInArea = primaryVisibleVessels;
+                if (typeof setVesselClassContext === 'function') {
+                    const selectedTaxonomy = document.getElementById('fleet-intel-vessel-type')?.value || localStorage.getItem(FLEET_INTEL_FILTER_KEY) || 'category:cargo';
+                    setVesselClassContext(selectedTaxonomy, primaryVisibleVessels);
+                }
 
                 const buquesCountEl = document.getElementById('buques-count');
                 if (buquesCountEl) buquesCountEl.innerText = primaryVisibleVessels.length;
@@ -30643,6 +30746,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function calculateAndDisplayAisFreight() {
             const baseBEText = document.getElementById('res-breakeven')?.innerText || "$0.00";
             const baseBE = parseFloat(baseBEText.replace('$', '')) || State.breakEven || 0;
+            const activeVesselClassContext = window.vesselClassContext || (typeof setVesselClassContext === 'function'
+                ? setVesselClassContext(document.getElementById('fleet-intel-vessel-type')?.value || 'category:cargo')
+                : null);
+            const activeVesselProfile = activeVesselClassContext?.profile || { bunkerMultiplier: 1, seaConsumptionMultiplier: 1, portConsumptionMultiplier: 1, riskCoefficient: 1 };
             
             const estimatorBeEl = document.getElementById('ais-estimator-be');
             if (estimatorBeEl) {
@@ -30693,7 +30800,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const sourceAisVessels = (typeof aisVesselsData !== 'undefined' && Array.isArray(aisVesselsData))
                 ? aisVesselsData
                 : (globalStoreVessels || []);
-            const pricingSourceVessels = polPrimaryStoreVessels
+            const contextFilteredVessels = activeVesselClassContext && Array.isArray(activeVesselClassContext.filteredVessels)
+                ? activeVesselClassContext.filteredVessels
+                : null;
+            const pricingSourceVessels = contextFilteredVessels
+                ? contextFilteredVessels
+                : polPrimaryStoreVessels
                 ? polPrimaryStoreVessels
                 : sourceAisVessels;
             const hasRenderableAisVessels = globalStoreVessels
@@ -30885,10 +30997,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const pPort = parseFloat(document.getElementById('price-port')?.value) || 600;
             const avgBunkerPrice = (pSea + pPort) / 2;
             const bunkerPriceRatio = avgBunkerPrice / 600;
-            const bunkerMultiplier = 1.0 + (bunkerPriceRatio - 1.0) * 0.15; 
+            const bunkerMultiplier = (1.0 + (bunkerPriceRatio - 1.0) * 0.15) * (activeVesselProfile.bunkerMultiplier || 1);
 
             const portRisk = (typeof getPortMultiplier === 'function') ? ((getPortMultiplier(pol) + getPortMultiplier(pod)) / 2) || 1.1 : 1.1;
-            const portMultiplier = 1.0 + (portRisk - 1.1) * 0.10;
+            const portMultiplier = (1.0 + (portRisk - 1.1) * 0.10) * (activeVesselProfile.riskCoefficient || 1);
 
             const coeffJusto = 1.05 * supplyFactor * bunkerMultiplier * portMultiplier;
             const rateJusto = Math.max(baseBE * 1.01, baseBE * coeffJusto);
