@@ -59,6 +59,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="./public/components.js"></script>
+    <script type="module" src="./public/ConnectionStatusBar.js"></script>
     <script type="module" src="./voyage-cost-engine.js"></script>
     <script type="module" src="./stress-test-engine.js"></script>
 
@@ -686,53 +687,58 @@
             pointer-events: none;
         }
 
-        .connection-status-bar[data-state="connected"] {
+        .connection-status-bar[data-state="secure"] {
             --connection-accent: var(--accent);
             --connection-muted: #0F766E;
         }
 
-        .connection-status-bar[data-state="connected"] .connection-status-icon {
+        .connection-status-bar[data-state="secure"] .connection-status-icon {
             color: var(--accent);
             border-color: color-mix(in srgb, var(--accent) 44%, #CBD5E1);
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 0 3px color-mix(in srgb, var(--accent) 11%, transparent);
             animation: connectionNodePulse 2.2s ease-in-out infinite;
         }
 
-        .connection-status-bar[data-state="connected"] .connection-pipe-flow {
+        .connection-status-bar[data-state="secure"] .connection-pipe-flow {
             animation: connectionPipeFlow 1.55s linear infinite;
         }
 
-        .connection-status-bar[data-state="syncing"] {
-            --connection-accent: #004e64;
-            --connection-muted: #004e64;
+        .connection-status-bar[data-state="unauthorized"] {
+            --connection-accent: #D97706;
+            --connection-muted: #92400E;
         }
 
-        .connection-status-bar[data-state="syncing"] .connection-status-icon {
-            color: var(--primary);
-            border-color: color-mix(in srgb, var(--primary) 38%, #CBD5E1);
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 0 3px rgba(0, 78, 100, 0.09);
+        .connection-status-bar[data-state="unauthorized"] .connection-status-icon {
+            color: #D97706;
+            border-color: rgba(217, 119, 6, 0.42);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 0 3px rgba(217, 119, 6, 0.11);
             animation: connectionNodePulse 1.05s ease-in-out infinite;
         }
 
-        .connection-status-bar[data-state="syncing"] .connection-pipe-flow {
+        .connection-status-bar[data-state="unauthorized"] .connection-pipe-flow {
             stroke-dasharray: 4 7;
-            animation: connectionPipeFlow 0.58s linear infinite;
+            animation: connectionPipeFlow 1s linear infinite;
         }
 
         .connection-status-bar[data-state="disconnected"] {
-            --connection-accent: var(--muted);
-            --connection-muted: #64748B;
+            --connection-accent: #DC2626;
+            --connection-muted: #991B1B;
         }
 
         .connection-status-bar[data-state="disconnected"] .connection-status-icon {
-            color: #64748B;
-            border-color: #CBD5E1;
+            color: #DC2626;
+            border-color: rgba(220, 38, 38, 0.36);
         }
 
         .connection-status-bar[data-state="disconnected"] .connection-pipe-flow {
-            stroke: rgba(100, 116, 139, 0.42);
+            stroke: rgba(220, 38, 38, 0.36);
             stroke-dasharray: none;
             filter: none;
+        }
+
+        .connection-status-bar.is-pulsing .connection-pipe-flow {
+            animation: connectionPipeFlow 0.36s linear infinite, connectionDataPulse 1.2s ease-out 1;
+            stroke-dasharray: 3 5;
         }
 
         @keyframes connectionPipeFlow {
@@ -742,6 +748,12 @@
         @keyframes connectionNodePulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.04); }
+        }
+
+        @keyframes connectionDataPulse {
+            0% { stroke-width: 3.2; opacity: 0.55; }
+            45% { stroke-width: 5.4; opacity: 1; }
+            100% { stroke-width: 3.2; opacity: 0.82; }
         }
 
         @media (max-width: 1180px) {
@@ -5477,23 +5489,7 @@
         </div>
 
         <div class="header-actions-right">
-            <div id="corepro-databridge-connection" class="connection-status-bar" data-state="disconnected" role="status" aria-live="polite" aria-label="Core PRO desconectado de Data Bridge">
-                <div class="connection-status-node" title="Core PRO">
-                    <span class="connection-status-icon" aria-hidden="true"><i class="fa-solid fa-server"></i></span>
-                    <span class="connection-status-label">Core PRO</span>
-                </div>
-                <div class="connection-pipeline" aria-hidden="true">
-                    <svg viewBox="0 0 100 18" preserveAspectRatio="none" focusable="false">
-                        <path class="connection-pipe-track" d="M3 9 C25 9 28 9 50 9 S75 9 97 9" />
-                        <path class="connection-pipe-flow" d="M3 9 C25 9 28 9 50 9 S75 9 97 9" />
-                    </svg>
-                </div>
-                <div class="connection-status-node" title="Data Bridge">
-                    <span class="connection-status-icon" aria-hidden="true"><i class="fa-solid fa-bridge"></i></span>
-                    <span class="connection-status-label">Data Bridge</span>
-                </div>
-                <span id="corepro-databridge-connection-label" class="connection-status-text">Offline</span>
-            </div>
+            <div id="connection-status-root"></div>
             <button
                 id="btn-master-executive-report"
                 onclick="generarInformeMasterOnClick()"
@@ -10101,15 +10097,16 @@
             <div class="mb-4 flex items-start justify-between gap-4">
                 <div>
                     <h2 id="databridge-link-title" class="text-sm font-black uppercase tracking-[0.14em] text-white">Conexión Segura Data Bridge</h2>
-                    <p class="mt-2 text-xs leading-relaxed text-slate-400">Introduce el API Secret autorizado para establecer el enlace de sincronización.</p>
+                    <p class="mt-2 text-xs leading-relaxed text-slate-400">La validación usa el secreto configurado en el entorno seguro de Netlify.</p>
                 </div>
                 <button type="button" onclick="closeDataBridgeLinkModal()" class="rounded-md p-2 text-slate-400 transition hover:bg-slate-900 hover:text-white" title="Cerrar" aria-label="Cerrar">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
             <form id="databridge-link-form" class="space-y-4">
-                <label class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400" for="databridge-api-secret">API Secret</label>
-                <input id="databridge-api-secret" name="databridge-api-secret" type="password" autocomplete="off" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20" placeholder="••••••••••••••••">
+                <p class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-xs leading-relaxed text-slate-300">
+                    Ejecuta una comprobación server-side contra Data Bridge sin exponer credenciales en el navegador.
+                </p>
                 <p id="databridge-link-error" class="hidden text-xs font-semibold text-red-300"></p>
                 <button id="databridge-link-submit" type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-4 py-2.5 text-xs font-black uppercase tracking-[0.14em] text-emerald-100 transition hover:bg-emerald-500/25 focus:outline-none focus:ring-2 focus:ring-emerald-300">
                     <i class="fa-solid fa-shield-halved"></i>
@@ -13082,29 +13079,13 @@
                 }
 
                 const payload = JSON.parse(JSON.stringify(vesselsToSend));
-                const dataBridgeToken = (() => {
-                    try {
-                        return typeof localStorage !== 'undefined'
-                            ? String(localStorage.getItem('seacharter_databridge_api_secret') || '').trim()
-                            : '';
-                    } catch (storageErr) {
-                        console.warn("No se pudo leer el token de Data Bridge desde localStorage:", storageErr);
-                        return '';
-                    }
-                })();
-
-                if (!dataBridgeToken) {
-                    throw new Error('No hay token de Data Bridge guardado. Conecta Data Bridge antes de exportar.');
-                }
-
                 console.log('Enviando datos:', payload);
 
                 const bridgeResponse = await fetch('/api/data-bridge-export', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'Authorization': `Bearer ${dataBridgeToken}`
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify({
                         source: 'core-pro-matching-selected',
@@ -34865,19 +34846,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
     <script type="module">
         let webDataBridgeVisible = false;
         let webDataBridgeFullScreen = false;
-        const DATA_BRIDGE_TOKEN_STORAGE_KEY = 'seacharter_databridge_api_secret';
         const LOCAL_DATA_BRIDGE_URL = './public/databridge.html';
         const VITE_ENV = import.meta && import.meta.env ? import.meta.env : {};
         const DATA_BRIDGE_FRONTEND_URL = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_FRONTEND_URL, LOCAL_DATA_BRIDGE_URL);
         const DATA_BRIDGE_API_URL = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_API_URL, '');
         const HAS_VALID_DATA_BRIDGE_API_URL = isValidDataBridgeApiUrl(DATA_BRIDGE_API_URL);
-        const DATA_BRIDGE_VERIFY_ENDPOINT = HAS_VALID_DATA_BRIDGE_API_URL
-            ? `${DATA_BRIDGE_API_URL.replace(/\/+$/, '')}/api/verify-connection`
-            : '/api/databridge-verify-connection';
+        const DATA_BRIDGE_VERIFY_ENDPOINT = '/api/verify-connection';
         const DATA_BRIDGE_STATUS_LABELS = {
-            connected: 'Conectado',
-            disconnected: 'Offline',
-            syncing: 'Sincronizando'
+            secure: 'Secure Connection',
+            unauthorized: 'Unauthorized',
+            disconnected: 'Disconnected'
         };
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -34949,18 +34927,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function getStoredDataBridgeToken() {
-            try {
-                return typeof localStorage !== 'undefined'
-                    ? String(localStorage.getItem(DATA_BRIDGE_TOKEN_STORAGE_KEY) || '').trim()
-                    : '';
-            } catch (error) {
-                return '';
-            }
+            return '';
         }
 
         function setStoredDataBridgeToken(token) {
-            if (typeof localStorage === 'undefined') return;
-            localStorage.setItem(DATA_BRIDGE_TOKEN_STORAGE_KEY, token);
+            return Boolean(token);
         }
 
         function updateDataBridgeConnectionIndicator() {
@@ -34972,13 +34943,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 linkBtn.setAttribute('title', isConnected ? 'Data Bridge conectado' : 'Conectar Data Bridge');
                 linkBtn.setAttribute('aria-label', isConnected ? 'Data Bridge conectado' : 'Conectar Data Bridge');
             }
-            updateConnectionStatusBar(isConnected ? 'connected' : 'disconnected');
+            updateConnectionStatusBar(isConnected ? 'secure' : 'disconnected');
         }
 
         function updateConnectionStatusBar(state = 'disconnected') {
-            const normalizedState = ['connected', 'disconnected', 'syncing'].includes(state) ? state : 'disconnected';
-            const bar = document.getElementById('corepro-databridge-connection');
-            const label = document.getElementById('corepro-databridge-connection-label');
+            const normalizedState = ['secure', 'unauthorized', 'disconnected'].includes(state) ? state : 'disconnected';
+            const bar = document.querySelector('#connection-status-root .connection-status-bar');
+            const label = document.querySelector('#connection-status-root .connection-status-text');
             if (!bar) return;
             const labelText = DATA_BRIDGE_STATUS_LABELS[normalizedState] || DATA_BRIDGE_STATUS_LABELS.disconnected;
             bar.dataset.state = normalizedState;
@@ -34993,11 +34964,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function openDataBridgeLinkModal() {
             const modal = document.getElementById('databridge-link-modal');
-            const input = document.getElementById('databridge-api-secret');
             if (!modal) return;
             updateDataBridgeLinkModalState();
             modal.classList.remove('opacity-0', 'pointer-events-none');
-            setTimeout(() => input?.focus(), 50);
         }
 
         function closeDataBridgeLinkModal() {
@@ -35011,38 +34980,26 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (!form || form.dataset.bound === 'true') return;
             form.dataset.bound = 'true';
             form.addEventListener('submit', verifyDataBridgeConnection);
-            const input = document.getElementById('databridge-api-secret');
-            input?.addEventListener('input', updateDataBridgeLinkModalState);
             updateDataBridgeLinkModalState();
         }
 
         function updateDataBridgeLinkModalState() {
             const error = document.getElementById('databridge-link-error');
             const submit = document.getElementById('databridge-link-submit');
-            const input = document.getElementById('databridge-api-secret');
-            const hasSecret = Boolean(String(input?.value || '').trim());
             if (submit) {
-                submit.disabled = !hasSecret;
-                submit.classList.toggle('opacity-60', !hasSecret);
-                submit.classList.toggle('cursor-not-allowed', !hasSecret);
+                submit.disabled = false;
+                submit.classList.remove('opacity-60', 'cursor-not-allowed');
             }
             if (!error) return;
-            if (hasSecret || HAS_VALID_DATA_BRIDGE_API_URL) {
-                error.textContent = '';
-                error.classList.add('hidden');
-            } else {
-                error.textContent = '';
-                error.classList.add('hidden');
-            }
+            error.textContent = '';
+            error.classList.add('hidden');
         }
 
         function setDataBridgeLinkPending(isPending) {
             const submit = document.getElementById('databridge-link-submit');
-            updateConnectionStatusBar(isPending ? 'syncing' : (Boolean(getStoredDataBridgeToken()) ? 'connected' : 'disconnected'));
+            updateConnectionStatusBar(isPending ? 'secure' : (Boolean(getStoredDataBridgeToken()) ? 'secure' : 'disconnected'));
             if (!submit) return;
-            const input = document.getElementById('databridge-api-secret');
-            const hasSecret = Boolean(String(input?.value || '').trim());
-            const isDisabled = isPending || !hasSecret;
+            const isDisabled = isPending;
             submit.disabled = isDisabled;
             submit.classList.toggle('opacity-60', isDisabled);
             submit.classList.toggle('cursor-not-allowed', isDisabled);
@@ -35053,23 +35010,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         async function verifyDataBridgeConnection(event) {
             event.preventDefault();
-            const input = document.getElementById('databridge-api-secret');
             const error = document.getElementById('databridge-link-error');
-            const secretInput = String(input?.value || '').trim();
-            if (!secretInput) {
-                if (error) {
-                    error.textContent = 'Introduce el API Secret para continuar.';
-                    error.classList.remove('hidden');
-                }
-                return;
-            }
             setDataBridgeLinkPending(true);
             if (error) error.classList.add('hidden');
             try {
                 const response = await fetch(DATA_BRIDGE_VERIFY_ENDPOINT, {
                     method: 'POST',
                     headers: {
-                        Authorization: `Bearer ${secretInput}`,
                         Accept: 'application/json'
                     }
                 });
@@ -35082,9 +35029,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (!response.ok) {
                     throw new Error(payload?.error || payload?.message || `Error de conexión (${response.status})`);
                 }
-                setStoredDataBridgeToken(secretInput);
                 updateDataBridgeConnectionIndicator();
-                if (input) input.value = '';
                 closeDataBridgeLinkModal();
                 if (typeof showToast === 'function') showToast('Enlace establecido correctamente');
             } catch (requestError) {
@@ -35131,9 +35076,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (launcher) launcher.classList.add('hidden');
             if (launcher) launcher.classList.remove('flex');
             updateDataBridgeButtonState(true);
-            updateConnectionStatusBar('syncing');
+            updateConnectionStatusBar('secure');
             setTimeout(() => {
-                if (webDataBridgeVisible) updateConnectionStatusBar('connected');
+                if (webDataBridgeVisible) updateConnectionStatusBar('secure');
             }, 1200);
         }
 
@@ -35151,7 +35096,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (launcher) launcher.classList.remove('hidden');
             if (launcher) launcher.classList.add('flex');
             updateDataBridgeButtonState(false);
-            updateConnectionStatusBar(Boolean(getStoredDataBridgeToken()) ? 'connected' : 'disconnected');
+            updateConnectionStatusBar(Boolean(getStoredDataBridgeToken()) ? 'secure' : 'disconnected');
         }
 
         function setWebDataBridgeFullScreen(isFullScreen) {
@@ -35201,8 +35146,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             updateDataBridgeConnectionIndicator();
             if (isVisible) {
-                updateConnectionStatusBar('syncing');
-                setTimeout(() => updateConnectionStatusBar('connected'), 900);
+                updateConnectionStatusBar('secure');
+                setTimeout(() => updateConnectionStatusBar('secure'), 900);
             }
             updatePendingFrozenReportButton();
         }
@@ -36257,7 +36202,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         syncChannel.onmessage = async (event) => {
             if (event.data && event.data.type === 'vessel_validated') {
                 const validatedVessel = event.data.vessel;
-                if (typeof updateConnectionStatusBar === 'function') updateConnectionStatusBar('syncing');
+                if (typeof updateConnectionStatusBar === 'function') updateConnectionStatusBar('secure');
                 console.log("[SYNC] Received vessel validation from Data Bridge:", validatedVessel);
                 await saveVesselToIndexedDB(validatedVessel);
                 appendCoreProDataBridgeReceiptLog(validatedVessel, event.data.persistence);
@@ -36267,7 +36212,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     loadVesselParamsFromIndexedDB(State.imo);
                 }
                 if (typeof updateConnectionStatusBar === 'function') {
-                    setTimeout(() => updateConnectionStatusBar('connected'), 900);
+                    setTimeout(() => updateConnectionStatusBar('secure'), 900);
                 }
             }
         };
