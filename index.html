@@ -8268,7 +8268,7 @@
                         <div class="space-y-4">
                             <div class="bg-slate-950 border border-slate-800 rounded-lg p-4 flex items-center justify-between">
                                 <div>
-                                    <p class="text-[10px] text-slate-400 font-bold uppercase">Buques en Área POL</p>
+                                    <p class="text-[10px] text-slate-400 font-bold uppercase">Buques detectados</p>
                                     <h4 id="ais-density-count" class="text-3xl font-black text-blue-500 mt-1 mono">--</h4>
                                     <span id="buques-count" class="hidden">--</span>
                                     <span id="ais-storage-progress" class="block text-[10px] text-slate-500 font-bold mono mt-1">0% / 1000</span>
@@ -27138,7 +27138,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             ).trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
             if (!rawType || rawType === 'n/a' || rawType === 'unknown' || rawType === 'otros' || rawType === 'cargo') return true;
             if (/fishing|tug|pleasure craft|yacht|sailing vessel|high speed craft/.test(rawType)) return false;
-            return /general cargo|bulk carrier|mpv|multipurpose|multi purpose|tanker|cargo ship|^cargo$/.test(rawType);
+            return /cement carrier|cement|clinker|general cargo|bulk carrier|mpv|multipurpose|multi purpose|tanker|cargo ship|^cargo$/.test(rawType);
         };
 
         window.obtenerNombreBuque = function(buque) {

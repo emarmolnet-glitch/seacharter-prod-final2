@@ -128,7 +128,7 @@
     <div class="panel-ui">
         <h3>AIS MARKET INTELLIGENCE</h3>
         <div class="kpi-container">
-            <div class="kpi-item"><span class="kpi-label">VESSELS IN AREA (POL 2000MN)</span><span id="vessels-count" class="kpi-value">--</span><span id="ais-storage-progress" style="display:block; font-size:0.7rem; color:#64748b; font-weight:700;">0% / 1000</span></div>
+            <div class="kpi-item"><span class="kpi-label">BUQUES DETECTADOS</span><span id="vessels-count" class="kpi-value">--</span><span id="ais-storage-progress" style="display:block; font-size:0.7rem; color:#64748b; font-weight:700;">0% / 1000</span></div>
             <div class="kpi-item"><span class="kpi-label">SUPPLY COEFFICIENT</span><span id="supply-coefficient" class="kpi-value">--</span></div>
             <div class="kpi-item"><span class="kpi-label">COMPETITION STATUS</span><span id="competition-status" class="kpi-value" style="color: #28a745;">--</span></div>
         </div>
@@ -170,6 +170,7 @@
                     <label style="font-weight:bold; font-size:0.82rem;">TAXONOMÍA DE BUQUE
                         <select id="radar-taxonomy-select" disabled style="display:block; width:100%; margin-top:6px; border:1px solid #cbd5e1; padding:8px; border-radius:4px; background:#fff; font-weight:800;">
                             <option value="Bulk Carrier">Bulk Carrier</option>
+                            <option value="Cement Carrier">Cement Carrier</option>
                             <option value="Container Ship">Container Ship</option>
                             <option value="cargo">Cargueros / Graneleros (70-79)</option>
                             <option value="tanker">Tanqueros (80-89)</option>
@@ -819,6 +820,7 @@
         const RADAR_TAXONOMIES = {
             cargo: { label: 'Cargueros / Graneleros', min: 70, max: 79 },
             'Bulk Carrier': { label: 'Bulk Carrier', aliases: ['Bulk Carrier', 'Handysize', 'Handymax', 'Supramax', 'Ultramax', 'Panamax', 'Capesize'] },
+            'Cement Carrier': { label: 'Cement Carrier', aliases: ['Cement Carrier', 'Possible Cement Carrier', 'Cement', 'Cemento', 'Clinker'] },
             'Container Ship': { label: 'Container Ship', aliases: ['Container Ship', 'Feeder'] },
             tanker: { label: 'Tanqueros', min: 80, max: 89 },
             passenger: { label: 'Pasaje', min: 60, max: 69 },
@@ -829,6 +831,7 @@
 
         const taxonomyMap = {
             "Bulk Carrier": ["Bulk Carrier", "Handysize", "Handymax", "Supramax", "Ultramax", "Panamax", "Capesize"],
+            "Cement Carrier": ["Cement Carrier", "Possible Cement Carrier", "Cement", "Cemento", "Clinker"],
             "Container Ship": ["Container Ship", "Feeder"]
         };
         window.taxonomyMap = taxonomyMap;
@@ -1221,7 +1224,7 @@
 
         window.actualizarContadorBuquesAlmacenados = function() {
             const total = window.buquesAlmacenados.size;
-            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 250;
+            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
             const porcentaje = Math.min(100, Math.round((total / limite) * 100));
             const progressEl = document.getElementById('ais-storage-progress');
             if (progressEl) progressEl.innerText = `${porcentaje}% / ${limite}`;
@@ -1230,7 +1233,7 @@
         };
 
         window.procesarMensajeAIS = function(nuevoBarco) {
-            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 250;
+            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
             const idBuque = window.obtenerIdUnicoBuque(nuevoBarco);
             if (!idBuque || idBuque === "N/A" || idBuque === "0") return false;
             const indexed = getIndexedAisVessel(nuevoBarco, idBuque);
@@ -2862,7 +2865,7 @@
             ]).filter(box => box.flat().every(Number.isFinite));
         };
 
-        window.getRouteAisSweepEndpoint = function(quantity = 120, role = '', selective = true) {
+        window.getRouteAisSweepEndpoint = function(quantity = window.AIS_DUAL_SWEEP_LIMIT || 1000, role = '', selective = true) {
             const polName = document.getElementById('port-pol')?.value || localStorage.getItem('calculator_pol') || '';
             const podName = document.getElementById('port-pod')?.value || localStorage.getItem('calculator_pod') || '';
             const polPort = getAisRoutePort(polName, 'pol');
@@ -2872,8 +2875,15 @@
             if (!boxes.length) return '';
             const zone = normalizedRole || 'DUAL';
             const workflowCapture = window.radarWorkflowState && window.radarWorkflowState.phase === 'capture';
+            const captureLimit = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
+            const requestedQuantity = workflowCapture ? captureLimit : Math.min(Number(quantity) || captureLimit, captureLimit);
+            const timeoutMs = workflowCapture
+                ? Math.min(65000, Math.max(2500, Number(window.radarWorkflowState.captureSeconds || 60) * 1000))
+                : 8000;
             const params = new URLSearchParams({
-                quantity: String(Math.min(Number(quantity) || 120, 1000)),
+                quantity: String(requestedQuantity),
+                limit: String(requestedQuantity),
+                timeoutMs: String(timeoutMs),
                 force: '1',
                 zone,
                 boxes: JSON.stringify(boxes),
