@@ -3857,6 +3857,53 @@
             stroke: currentColor !important;
         }
 
+        header #advanced-modules-menu {
+            width: min(92vw, 360px) !important;
+            overflow: visible !important;
+        }
+
+        header .advanced-nlp-menu-item {
+            border-top: 1px solid #e2e8f0 !important;
+            margin-top: 0.35rem !important;
+            padding-top: 0.35rem !important;
+        }
+
+        header .advanced-nlp-panel {
+            display: none;
+            padding: 0.75rem 1rem 0.85rem;
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        header .advanced-nlp-panel.is-open {
+            display: block;
+        }
+
+        header .advanced-nlp-panel .ai-work-card {
+            box-shadow: none !important;
+        }
+
+        header .advanced-nlp-panel textarea#nlp-cargo-input {
+            min-height: 110px;
+            background-color: #ffffff !important;
+            border: 1px solid #cbd5e1 !important;
+            color: #0f172a !important;
+            font-size: 0.8rem !important;
+            border-radius: 6px !important;
+            padding: 0.55rem 0.75rem !important;
+        }
+
+        header .advanced-nlp-panel button#btn-parse-nlp {
+            background-color: #004e64 !important;
+            color: #ffffff !important;
+            border: 1px solid #004e64 !important;
+        }
+
+        header .advanced-nlp-panel button#btn-parse-nlp:hover {
+            background-color: #003f52 !important;
+            border-color: #003f52 !important;
+        }
+
         header .advanced-preference-item {
             border-top: 1px solid #e2e8f0 !important;
             margin-top: 0.35rem !important;
@@ -9771,40 +9818,8 @@
             <!-- Main Split Dashboard -->
             <div class="grid grid-cols-1 lg:grid-cols-12 ai-work-grid">
                 
-                <!-- Left Panel: Cargo Offer & Operational Constraints (4 cols) -->
+                <!-- Left Panel: Operational Controls (4 cols) -->
                 <div class="lg:col-span-4 flex flex-col gap-6">
-                    <!-- NLP Smart Cargo Parser Card -->
-                    <div class="ai-work-card p-5">
-                        <div class="flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
-                            <i class="fa-solid fa-wand-magic-sparkles text-slate-500"></i>
-                            <h3 class="text-sm font-bold uppercase tracking-wider text-slate-800 font-sans">7. Motor NLP · Traductor de Carga IA</h3>
-                        </div>
-                        <p class="text-xs text-slate-600 mb-4 leading-relaxed font-sans">Introduce tu oferta de flete en lenguaje natural para que la IA extraiga los datos, coordine las rutas y ejecute las coincidencias automáticamente.</p>
-                        <div class="space-y-3">
-                            <textarea id="nlp-cargo-input" rows="3" class="input-gc w-full placeholder-slate-400 focus:outline-none font-sans leading-relaxed" placeholder="Ej: Fletamento de 20,000 TM de cemento desde Algeciras a Genoa con laycan inicio 2026-06-22. Se requiere buque con grúas (geared) con un flete de 35 USD/TM."></textarea>
-                            <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-600">
-                                <span class="flex items-center gap-2">
-                                    <i class="fa-solid fa-satellite-dish text-[#004e64]"></i>
-                                    Actualización en vivo / Live update
-                                </span>
-                                <input type="checkbox" id="matching-live-update-toggle" class="rounded border-slate-300 text-[#004e64] focus:ring-[#004e64]" onchange="handleMatchingLiveUpdateToggle(this.checked)">
-                            </label>
-                            <button id="btn-parse-nlp" onclick="parseCargoNLP()" class="w-full text-white font-black text-xs uppercase py-2.5 rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none tracking-wider">
-                                <i class="fa-solid fa-brain"></i> Traducir con IA / Parse with AI
-                            </button>
-                        </div>
-                        <!-- Parsed structured output container -->
-                        <div id="nlp-parsed-results" class="hidden mt-4 pt-3 border-t border-slate-100 text-[11px] space-y-1.5 font-sans text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                            <div class="text-[10px] font-black uppercase tracking-wider text-[#004e64] mb-2"><i class="fa-solid fa-circle-check text-[#25a18e] mr-1"></i> Datos Extraídos / Extracted Data:</div>
-                            <div class="flex justify-between border-b border-slate-200 pb-1.5"><span>Carga / Type:</span><span id="nlp-res-type" class="font-bold text-slate-800">-</span></div>
-                            <div class="flex justify-between border-b border-slate-200 pb-1.5"><span>Cantidad / Qty:</span><span id="nlp-res-qty" class="font-bold text-slate-800">-</span></div>
-                            <div class="flex justify-between border-b border-slate-200 pb-1.5"><span>POL (Carga):</span><span id="nlp-res-pol" class="font-bold text-slate-800 truncate max-w-[150px]">-</span></div>
-                            <div class="flex justify-between border-b border-slate-200 pb-1.5"><span>POD (Descarga):</span><span id="nlp-res-pod" class="font-bold text-slate-800 truncate max-w-[150px]">-</span></div>
-                            <div class="flex justify-between border-b border-slate-200 pb-1.5"><span>Flete / Rate:</span><span id="nlp-res-rate" class="font-bold text-slate-800">-</span></div>
-                            <div class="flex justify-between pb-0.5"><span>Grúas / Geared:</span><span id="nlp-res-geared" class="font-bold text-slate-800">-</span></div>
-                        </div>
-                    </div>
-
                     <!-- Run Match Button -->
                     <button id="btn-run-matching" onclick="executeMatchingEngine()" class="w-full bg-[#004e64] hover:bg-[#003f52] text-white font-black text-xs uppercase py-3 rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-[#004e64]">
                         <i class="fa-solid fa-play"></i>
@@ -15267,6 +15282,63 @@
                 menu.appendChild(item);
             });
 
+            const nlpItem = document.createElement('li');
+            nlpItem.className = 'tools-dropdown-item advanced-nlp-menu-item';
+            nlpItem.innerHTML = `
+                <button type="button" id="advanced-nlp-toggle" class="tools-dropdown-action" aria-controls="advanced-nlp-panel" aria-expanded="false">
+                    <span>Motor NLP · Traductor de Carga IA</span>
+                </button>
+                <div id="advanced-nlp-panel" class="advanced-nlp-panel" aria-label="Motor NLP · Traductor de Carga IA">
+                    <div class="ai-work-card p-4">
+                        <div class="flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 font-sans">Motor NLP · Traductor de Carga IA</h3>
+                        </div>
+                        <p class="text-xs text-slate-600 mb-4 leading-relaxed font-sans">Introduce tu oferta de flete en lenguaje natural para que la IA extraiga los datos, coordine las rutas y ejecute las coincidencias automáticamente.</p>
+                        <div class="space-y-3">
+                            <textarea id="nlp-cargo-input" rows="4" class="input-gc w-full placeholder-slate-400 focus:outline-none font-sans leading-relaxed" placeholder="Ej: Fletamento de 20,000 TM de cemento desde Algeciras a Genoa con laycan inicio 2026-06-22. Se requiere buque con grúas (geared) con un flete de 35 USD/TM."></textarea>
+                            <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-600">
+                                <span class="flex items-center gap-2">
+                                    <i class="fa-solid fa-satellite-dish text-[#004e64]"></i>
+                                    Actualización en vivo / Live update
+                                </span>
+                                <input type="checkbox" id="matching-live-update-toggle" class="rounded border-slate-300 text-[#004e64] focus:ring-[#004e64]" onchange="handleMatchingLiveUpdateToggle(this.checked)">
+                            </label>
+                            <button id="btn-parse-nlp" onclick="parseCargoNLP()" class="w-full text-white font-black text-xs uppercase py-2.5 rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none tracking-wider">
+                                <i class="fa-solid fa-brain"></i> Traducir con IA / Parse with AI
+                            </button>
+                        </div>
+                        <div id="nlp-parsed-results" class="hidden mt-4 pt-3 border-t border-slate-100 text-[11px] space-y-1.5 font-sans text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                            <div class="text-[10px] font-black uppercase tracking-wider text-[#004e64] mb-2"><i class="fa-solid fa-circle-check text-[#25a18e] mr-1"></i> Datos Extraídos / Extracted Data:</div>
+                            <div class="flex justify-between border-b border-slate-200 pb-1.5"><span>Carga / Type:</span><span id="nlp-res-type" class="font-bold text-slate-800">-</span></div>
+                            <div class="flex justify-between border-b border-slate-200 pb-1.5"><span>Cantidad / Qty:</span><span id="nlp-res-qty" class="font-bold text-slate-800">-</span></div>
+                            <div class="flex justify-between border-b border-slate-200 pb-1.5"><span>POL (Carga):</span><span id="nlp-res-pol" class="font-bold text-slate-800 truncate max-w-[150px]">-</span></div>
+                            <div class="flex justify-between border-b border-slate-200 pb-1.5"><span>POD (Descarga):</span><span id="nlp-res-pod" class="font-bold text-slate-800 truncate max-w-[150px]">-</span></div>
+                            <div class="flex justify-between border-b border-slate-200 pb-1.5"><span>Flete / Rate:</span><span id="nlp-res-rate" class="font-bold text-slate-800">-</span></div>
+                            <div class="flex justify-between pb-0.5"><span>Grúas / Geared:</span><span id="nlp-res-geared" class="font-bold text-slate-800">-</span></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            menu.appendChild(nlpItem);
+
+            const nlpToggle = document.getElementById('advanced-nlp-toggle');
+            const nlpPanel = document.getElementById('advanced-nlp-panel');
+            if (nlpToggle && nlpPanel) {
+                nlpToggle.addEventListener('click', event => {
+                    event.stopPropagation();
+                    switchTab('matching');
+                    menu.classList.add('is-open');
+                    const advancedButton = document.getElementById('advanced-modules-btn');
+                    if (advancedButton) advancedButton.setAttribute('aria-expanded', 'true');
+                    const isOpen = nlpPanel.classList.toggle('is-open');
+                    nlpToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                    if (isOpen) {
+                        setTimeout(() => document.getElementById('nlp-cargo-input')?.focus(), 0);
+                    }
+                });
+                nlpPanel.addEventListener('click', event => event.stopPropagation());
+            }
+
             const preferenceItem = document.createElement('li');
             preferenceItem.className = 'tools-dropdown-item advanced-preference-item';
             preferenceItem.innerHTML = `
@@ -15299,8 +15371,12 @@
         function closeAdvancedModulesMenu() {
             const menu = document.getElementById('advanced-modules-menu');
             const button = document.getElementById('advanced-modules-btn');
+            const nlpPanel = document.getElementById('advanced-nlp-panel');
+            const nlpToggle = document.getElementById('advanced-nlp-toggle');
             if (menu) menu.classList.remove('is-open');
             if (button) button.setAttribute('aria-expanded', 'false');
+            if (nlpPanel) nlpPanel.classList.remove('is-open');
+            if (nlpToggle) nlpToggle.setAttribute('aria-expanded', 'false');
         }
 
         function toggleAdvancedModulesMenu(event) {
