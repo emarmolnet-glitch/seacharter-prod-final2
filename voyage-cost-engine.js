@@ -21,9 +21,16 @@
         camion_tolva: 1500,
         cuchara_grab: 1200,
         grua_portuaria_30mt: 1200,
-        big_bags: 1100,
+        big_bags: 1200,
         paletizado: 1000,
         hierro_acero_piezas: 1000
+    };
+    const SMART_LOADING_BASE_RATE_PER_DAY = 1200;
+    const SMART_LOADING_INTERFERENCE_FACTORS = {
+        1: 1.0,
+        2: 0.90,
+        3: 0.85,
+        4: 0.80
     };
     const FACTORES_ESTIBA = {
         cinta_transportadora: 1.0,
@@ -179,6 +186,32 @@
         const rate = toNumber(realRate) || getRealPortRate(method);
         if (cargo <= 0 || rate <= 0) return 0;
         return Math.ceil(cargo / rate);
+    }
+
+    function calculateRealLoadRate(cranes = 1) {
+        const craneCount = Math.min(4, Math.max(1, Math.floor(toNumber(cranes) || 1)));
+        const interferenceFactor = SMART_LOADING_INTERFERENCE_FACTORS[craneCount] || SMART_LOADING_INTERFERENCE_FACTORS[4];
+        return SMART_LOADING_BASE_RATE_PER_DAY * craneCount * interferenceFactor;
+    }
+
+    function calculateDemurrageExposure(cargoQuantity, realRate, contractualRate, dailyDemurrageRate) {
+        const cargo = Math.max(0, toNumber(cargoQuantity));
+        const real = Math.max(0, toNumber(realRate));
+        const contractual = Math.max(0, toNumber(contractualRate));
+        const dailyRate = Math.max(0, toNumber(dailyDemurrageRate));
+        if (cargo <= 0 || real <= 0 || contractual <= real) {
+            return { active: false, realDays: 0, contractualDays: 0, exposedDays: 0, financialExposure: 0 };
+        }
+        const realDays = cargo / real;
+        const contractualDays = cargo / contractual;
+        const exposedDays = Math.max(0, realDays - contractualDays);
+        return {
+            active: exposedDays > 0,
+            realDays,
+            contractualDays,
+            exposedDays,
+            financialExposure: exposedDays * dailyRate
+        };
     }
 
     function shouldAutoEstimateStevedoring(policyType) {
@@ -442,6 +475,10 @@
 
     function calculateSensitivityScenario(baseResult, scenario) {
         const base = pickSensitivityBase(baseResult);
+        const appState = typeof root.SeaCharterStore?.getState === 'function' ? root.SeaCharterStore.getState() : {};
+        const demurrageExposure = scenario.key === 'moderate'
+            ? Math.max(0, toNumber(baseResult.demurrageExposure?.financialExposure || appState.demurrageExposure?.financialExposure))
+            : 0;
         if (scenario.key === 'base') {
             return {
                 ...base,
@@ -472,7 +509,7 @@
         const offHireDays = Math.max(0, toNumber(scenario.offHireDays));
         const portDelayOperatingCost = addedPortDelayDays * base.dailyOperatingCapitalCost;
         const lostProfit = offHireDays * base.dailyOperatingCapitalCost;
-        const totalStressImpact = bunkerDelta + portDelayOperatingCost + lostProfit;
+        const totalStressImpact = bunkerDelta + portDelayOperatingCost + lostProfit + demurrageExposure;
         const netProfitOwner = base.netProfitOwner - totalStressImpact;
 
         return {
@@ -488,6 +525,7 @@
                 bunkerDelta: roundMoney(bunkerDelta),
                 portDelayOperatingCost: roundMoney(portDelayOperatingCost),
                 lostProfit: roundMoney(lostProfit),
+                demurrageExposure: roundMoney(demurrageExposure),
                 total: roundMoney(totalStressImpact),
                 addedPortDelayDays: roundMoney(addedPortDelayDays),
                 offHireDays: roundMoney(offHireDays)
@@ -1008,11 +1046,15 @@
         normalizeCargoType,
         RITMOS_BASE_PUERTO,
         FACTORES_ESTIBA,
+        SMART_LOADING_BASE_RATE_PER_DAY,
+        SMART_LOADING_INTERFERENCE_FACTORS,
         PASSIVE_PORT_METHODS,
         getStowageMethodFactor,
         getRealPortRate,
         portMethodUsesCranes,
         calculatePortDaysByStowage,
+        calculateRealLoadRate,
+        calculateDemurrageExposure,
         shouldAutoEstimateStevedoring,
         estimateStevedoringTerminal,
         calculateVoyageCostState,
