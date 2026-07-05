@@ -16,7 +16,7 @@ function jsonResponse(body, status = 200) {
     headers: {
       ...corsHeaders,
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "public, max-age=1800",
+      "Cache-Control": "no-store, max-age=0",
     },
   });
 }
@@ -51,6 +51,8 @@ async function fetchHtml(url) {
   const response = await fetch(url, {
     headers: {
       "Accept": "text/html,application/xhtml+xml",
+      "Cache-Control": "no-cache",
+      "Pragma": "no-cache",
       "User-Agent": "SeaCharterCorePRO/1.0 bunker price proxy",
     },
   });
@@ -101,31 +103,43 @@ function scrapeHomePriceTable(html) {
   });
 }
 
-function latestPriceFromTab($, tabId) {
+function latestQuoteFromTab($, tabId) {
   const tabText = $(`#${tabId}`).text();
-  const matches = [...tabText.matchAll(/"price"\s*:\s*"([^"]+)"/g)];
+  const matches = [...tabText.matchAll(/"date"\s*:\s*"([^"]+)"\s*,\s*"price"\s*:\s*"([^"]+)"/g)];
   const latestMatch = matches.at(-1);
-  return latestMatch ? parsePrice(latestMatch[1]) : null;
+  if (!latestMatch) return null;
+
+  const price = parsePrice(latestMatch[2]);
+  return Number.isFinite(price) ? { date: latestMatch[1], price } : null;
 }
 
 function scrapeWorldIndices(html) {
   const $ = cheerio.load(html);
-
-  return validatePrices({
-    ifo380: latestPriceFromTab($, "TabA"),
-    vlsfo: latestPriceFromTab($, "TabB"),
-    mgo: latestPriceFromTab($, "TabC"),
+  const ifo380 = latestQuoteFromTab($, "TabA");
+  const vlsfo = latestQuoteFromTab($, "TabB");
+  const mgo = latestQuoteFromTab($, "TabC");
+  const prices = validatePrices({
+    ifo380: ifo380?.price,
+    vlsfo: vlsfo?.price,
+    mgo: mgo?.price,
   });
+
+  return prices
+    ? {
+        ...prices,
+        sourceDate: vlsfo?.date || ifo380?.date || mgo?.date || null,
+      }
+    : null;
 }
 
 async function scrapeBunkerPrices() {
-  const homeHtml = await fetchHtml(SOURCE_URL);
-  const homePrices = scrapeHomePriceTable(homeHtml);
-  if (homePrices) return homePrices;
-
   const indexHtml = await fetchHtml(WORLD_INDEX_URL);
   const worldPrices = scrapeWorldIndices(indexHtml);
   if (worldPrices) return worldPrices;
+
+  const homeHtml = await fetchHtml(SOURCE_URL);
+  const homePrices = scrapeHomePriceTable(homeHtml);
+  if (homePrices) return homePrices;
 
   throw new Error("No valid Global Average bunker prices were found for VLSFO, IFO 380 and MGO.");
 }

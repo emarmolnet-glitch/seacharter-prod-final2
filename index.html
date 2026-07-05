@@ -17329,10 +17329,12 @@
                 btn.disabled = true;
             }
 
-            showToast("Actualizando VLSFO y MGO del día...", true);
+            showToast("Actualizando VLSFO, IFO 380 y MGO del día...", true);
 
             try {
-                const response = await fetch('/api/get-bunker-prices');
+                const response = await fetch(`/api/get-bunker-prices?ts=${Date.now()}`, {
+                    cache: 'no-store'
+                });
                 const payload = await response.json();
 
                 if (!response.ok) {
@@ -17344,7 +17346,7 @@
                     vlsfo: Number(payload.vlsfo),
                     ifo380: Number(payload.ifo380),
                     mgo: Number(payload.mgo),
-                    date: today
+                    date: payload.sourceDate || today
                 };
 
                 if (!Number.isFinite(nextCache.vlsfo) || !Number.isFinite(nextCache.ifo380) || !Number.isFinite(nextCache.mgo)) {
