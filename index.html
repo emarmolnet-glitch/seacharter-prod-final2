@@ -6666,41 +6666,32 @@
                         <div class="mb-4 flex items-center justify-between gap-3 border-b border-slate-800 pb-2">
                             <div>
                                 <h2 class="text-sm font-bold text-amber-300 uppercase">
-                                    <i class="fa-solid fa-sliders mr-2"></i> Motor de Simulación de Estrés
+                                    <i class="fa-solid fa-triangle-exclamation mr-2"></i> Matriz de Riesgo
                                 </h2>
-                                <div class="mt-0.5 text-[10px] text-slate-500">Comparativa reactiva sobre el escenario base calculado</div>
+                                <div class="mt-0.5 text-[10px] text-slate-500">Analisis automatico de sensibilidad sobre el escenario base calculado</div>
                             </div>
-                            <span id="stress-risk-status" class="rounded-md border border-slate-600 bg-slate-950 px-2 py-1 text-[10px] font-black uppercase text-slate-300">Sin estrés</span>
-                        </div>
-                        <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
-                            <div class="rounded-lg border border-slate-800 bg-slate-950/45 p-3">
-                                <div class="mb-2 flex items-center justify-between gap-2">
-                                    <label for="stress-bunker-volatility" class="text-[10px] font-bold uppercase text-slate-400">Volatilidad Bunker</label>
-                                    <output id="stress-bunker-volatility-display" for="stress-bunker-volatility" class="mono text-xs font-black text-amber-200">0%</output>
-                                </div>
-                                <input type="range" id="stress-bunker-volatility" class="w-full accent-amber-400" value="0" min="0" max="100" step="1" oninput="calculateStressScenario()" onchange="calculateStressScenario()">
-                            </div>
-                            <div class="rounded-lg border border-slate-800 bg-slate-950/45 p-3">
-                                <div class="mb-2 flex items-center justify-between gap-2">
-                                    <label for="stress-offhire-days" class="text-[10px] font-bold uppercase text-slate-400">Off-Hire Técnico</label>
-                                    <output id="stress-offhire-days-display" for="stress-offhire-days" class="mono text-xs font-black text-amber-200">0 días</output>
-                                </div>
-                                <input type="range" id="stress-offhire-days" class="w-full accent-amber-400" value="0" min="0" max="30" step="0.5" oninput="calculateStressScenario()" onchange="calculateStressScenario()">
-                            </div>
-                            <div class="rounded-lg border border-slate-800 bg-slate-950/45 p-3">
-                                <div class="mb-2 flex items-center justify-between gap-2">
-                                    <label for="stress-port-delay-factor" class="text-[10px] font-bold uppercase text-slate-400">Factor Congestión Puerto</label>
-                                    <output id="stress-port-delay-factor-display" for="stress-port-delay-factor" class="mono text-xs font-black text-amber-200">1.0x</output>
-                                </div>
-                                <input type="range" id="stress-port-delay-factor" class="w-full accent-amber-400" value="1" min="1" max="3" step="0.1" oninput="calculateStressScenario()" onchange="calculateStressScenario()">
+                            <div class="flex items-center gap-2">
+                                <span id="auto-risk-tooltip" class="hidden cursor-help text-[11px] font-black text-amber-200" title="Margen insuficiente">Margen insuficiente</span>
+                                <span id="auto-risk-status" class="rounded-md border border-slate-600 bg-slate-950 px-2 py-1 text-[10px] font-black uppercase text-slate-300">Sin analisis</span>
                             </div>
                         </div>
-                        <div class="mt-4 grid grid-cols-2 gap-2 border-t border-slate-800 pt-3 text-[10px] text-slate-400 md:grid-cols-4">
-                            <div>Base: <strong id="stress-base-profit" class="mono text-slate-200">$0</strong></div>
-                            <div>Estresado: <strong id="stress-stressed-profit" class="mono text-slate-200">$0</strong></div>
-                            <div>Delta: <strong id="stress-profit-delta" class="mono text-slate-200">$0</strong></div>
-                            <div>Lucro cesante: <strong id="stress-lost-profit" class="mono text-slate-200">$0</strong></div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full min-w-[620px] text-[10px] text-slate-400">
+                                <thead class="text-[9px] uppercase tracking-wide text-slate-500">
+                                    <tr>
+                                        <th class="pb-2 pr-3 text-left">Escenario</th>
+                                        <th class="px-3 pb-2 text-right">Bunker</th>
+                                        <th class="px-3 pb-2 text-right">Dias</th>
+                                        <th class="px-3 pb-2 text-right">Beneficio neto</th>
+                                        <th class="pb-2 pl-3 text-right">Delta</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="risk-matrix-body">
+                                    <tr><td colspan="5" class="border-t border-slate-800 py-3 text-center text-slate-500">Ejecute una cotizacion para calcular la matriz.</td></tr>
+                                </tbody>
+                            </table>
                         </div>
+                        <div id="auto-risk-alert" class="hidden"></div>
                     </div>
 
                     <!-- PANEL DE IMPRESIÓN Y RESPALDO -->
@@ -19715,7 +19706,9 @@
             if (typeof updateCBAMModuleView === 'function') {
                 updateCBAMModuleView();
             }
-            if (typeof renderStressTestScenario === 'function') {
+            if (window.SeaCharterVoyageCostEngine?.renderAutomaticRiskMatrix) {
+                State.sensitivityAnalysis = window.SeaCharterVoyageCostEngine.renderAutomaticRiskMatrix(State);
+            } else if (typeof renderStressTestScenario === 'function') {
                 renderStressTestScenario(State);
             }
         }
@@ -25798,6 +25791,13 @@ Example:
         let loadedHistoricalQuote = null;
 
         async function saveCotizacion(uniqueReference, issueDate) {
+            const currentRisk = window.SeaCharterSensitivityAnalysis?.risk || State.sensitivityAnalysis?.risk;
+            if (currentRisk?.blocksSave) {
+                const message = currentRisk.message || 'Viaje no viable bajo escenario moderado. No se puede guardar la cotizacion.';
+                showToast(`⚠️ ${message}`);
+                alert(message);
+                return;
+            }
             const calculationData = { ...State };
             
             const payload = {

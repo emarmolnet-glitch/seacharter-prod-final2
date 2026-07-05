@@ -379,6 +379,223 @@
         return { ...totals, canal, cranes, tugs, fallbacks: fallbackResult.fallbacks, canal_efectivo: fallbackResult.canal_efectivo, state: effectiveState };
     }
 
+    const RISK_SCENARIOS = Object.freeze([
+        { key: 'base', label: 'Base', bunkerVolatility: 0, portDelayFactor: 1, offHireDays: 0 },
+        { key: 'moderate', label: 'Moderado', bunkerVolatility: 0.10, portDelayFactor: 1.2, offHireDays: 1 },
+        { key: 'critical', label: 'Critico', bunkerVolatility: 0.25, portDelayFactor: 1.5, offHireDays: 3 }
+    ]);
+
+    function roundMoney(value) {
+        return Math.round(toNumber(value) * 100) / 100;
+    }
+
+    function readCurrentFreightRevenue(baseResult = {}, documentRef = root.document) {
+        const ownerBreakdown = baseResult.ownerNetBreakdown || {};
+        const cargo = toNumber(baseResult.cargo);
+        const freightRate = toNumber(baseResult.freightRate);
+        const revenueExtras = toNumber(baseResult.cargoSurcharge);
+        const currentFreightRevenue = (cargo * freightRate) + revenueExtras;
+
+        if (currentFreightRevenue > 0) return currentFreightRevenue;
+
+        if (documentRef) {
+            const currentCargo = toNumber(documentRef.getElementById('cargo-qty')?.value);
+            const currentFreightRate = toNumber(documentRef.getElementById('freight-rate')?.value);
+            const currentRevenueExtras = toNumber(documentRef.getElementById('cargo-surcharge')?.value);
+            const currentFormRevenue = (currentCargo * currentFreightRate) + currentRevenueExtras;
+            if (currentFormRevenue > 0) return currentFormRevenue;
+        }
+
+        return Math.max(0, toNumber(ownerBreakdown.grossRevenue) || (cargo * freightRate));
+    }
+
+    function pickSensitivityBase(baseResult = {}) {
+        const fuelBreakdown = baseResult.fuelBreakdown || {};
+        const ownerBreakdown = baseResult.ownerNetBreakdown || {};
+        const daysSea = Math.max(0, toNumber(baseResult.daysSea));
+        const daysPort = Math.max(0, toNumber(baseResult.daysPort));
+        const totalDays = Math.max(0, toNumber(baseResult.totalDays) || (daysSea + daysPort));
+        const totalBunkers = Math.max(0, toNumber(baseResult.totalBunkers || fuelBreakdown.totalCost));
+        const dailyOpex = Math.max(0, toNumber(baseResult.opex || baseResult.smartAdjustments?.opexDaily));
+        const dailyCapex = Math.max(0, toNumber(baseResult.capexDaily || ownerBreakdown.capexDaily || baseResult.smartAdjustments?.capexDaily));
+        const grossFreight = readCurrentFreightRevenue(baseResult);
+        const knownVoyageCosts = Math.max(0, toNumber(ownerBreakdown.bunkerAndPortCosts));
+        const knownOperatingCosts = Math.max(0, toNumber(ownerBreakdown.operatingCapitalCosts));
+        const knownBaseCosts = knownVoyageCosts + knownOperatingCosts;
+        const calculatedNetProfit = knownBaseCosts > 0
+            ? grossFreight - knownBaseCosts
+            : toNumber(baseResult.netProfitOwner ?? baseResult.beneficioNeto);
+
+        return {
+            ...baseResult,
+            daysSea,
+            daysPort,
+            totalDays,
+            totalBunkers,
+            dailyOperatingCapitalCost: dailyOpex + dailyCapex,
+            beneficioNeto: calculatedNetProfit,
+            netProfitOwner: calculatedNetProfit,
+            fleteBruto: grossFreight,
+            fuelBreakdown
+        };
+    }
+
+    function calculateSensitivityScenario(baseResult, scenario) {
+        const base = pickSensitivityBase(baseResult);
+        if (scenario.key === 'base') {
+            return {
+                ...base,
+                key: scenario.key,
+                label: scenario.label,
+                beneficioNeto: roundMoney(base.netProfitOwner),
+                netProfitOwner: roundMoney(base.netProfitOwner),
+                deltaBeneficio: 0,
+                totalBunkers: roundMoney(base.totalBunkers),
+                totalDays: roundMoney(base.totalDays),
+                stressImpact: { bunkerDelta: 0, portDelayOperatingCost: 0, lostProfit: 0, total: 0, addedPortDelayDays: 0, offHireDays: 0 }
+            };
+        }
+
+        const volatilityFactor = 1 + Math.max(0, toNumber(scenario.bunkerVolatility));
+        const portDelayFactor = Math.max(1, toNumber(scenario.portDelayFactor, 1));
+        const fuelBreakdown = base.fuelBreakdown || {};
+        const navigationCost = Math.max(0, toNumber(fuelBreakdown.navigation?.cost));
+        const portCost = Math.max(0, toNumber(fuelBreakdown.port?.cost));
+        const anchorageCost = Math.max(0, toNumber(fuelBreakdown.anchorage?.cost)) + Math.max(0, toNumber(fuelBreakdown.anchorageAuxiliary?.cost));
+        const knownFuelCost = navigationCost + portCost + anchorageCost;
+        const totalFuelCost = knownFuelCost > 0 ? knownFuelCost : base.totalBunkers;
+        const effectivePortCost = portCost > 0 ? portCost : Math.max(0, totalFuelCost - navigationCost - anchorageCost);
+        const stressedFuelCost = ((navigationCost + anchorageCost) + (effectivePortCost * portDelayFactor)) * volatilityFactor;
+        const bunkerDelta = stressedFuelCost - totalFuelCost;
+        const stressedPortDays = base.daysPort * portDelayFactor;
+        const addedPortDelayDays = Math.max(0, stressedPortDays - base.daysPort);
+        const offHireDays = Math.max(0, toNumber(scenario.offHireDays));
+        const portDelayOperatingCost = addedPortDelayDays * base.dailyOperatingCapitalCost;
+        const lostProfit = offHireDays * base.dailyOperatingCapitalCost;
+        const totalStressImpact = bunkerDelta + portDelayOperatingCost + lostProfit;
+        const netProfitOwner = base.netProfitOwner - totalStressImpact;
+
+        return {
+            ...base,
+            key: scenario.key,
+            label: scenario.label,
+            beneficioNeto: roundMoney(netProfitOwner),
+            netProfitOwner: roundMoney(netProfitOwner),
+            deltaBeneficio: roundMoney(netProfitOwner - base.netProfitOwner),
+            totalBunkers: roundMoney(stressedFuelCost),
+            totalDays: roundMoney(base.daysSea + stressedPortDays + offHireDays),
+            stressImpact: {
+                bunkerDelta: roundMoney(bunkerDelta),
+                portDelayOperatingCost: roundMoney(portDelayOperatingCost),
+                lostProfit: roundMoney(lostProfit),
+                total: roundMoney(totalStressImpact),
+                addedPortDelayDays: roundMoney(addedPortDelayDays),
+                offHireDays: roundMoney(offHireDays)
+            }
+        };
+    }
+
+    function runSensitivityBatch(baseResult) {
+        const scenarios = RISK_SCENARIOS.map((scenario) => calculateSensitivityScenario(baseResult, scenario));
+        const [base, moderate, critical] = scenarios;
+        return {
+            base,
+            moderate,
+            critical,
+            scenarios,
+            risk: evaluateRisk(base, moderate, critical)
+        };
+    }
+
+    function evaluateRisk(baseResult, moderateResult, criticalResult) {
+        const fleteBruto = Math.max(0, toNumber(baseResult?.fleteBruto || moderateResult?.fleteBruto || criticalResult?.fleteBruto));
+        const moderateProfit = toNumber(moderateResult?.beneficioNeto ?? moderateResult?.netProfitOwner);
+        const marginRatio = fleteBruto > 0 ? moderateProfit / fleteBruto : 0;
+        if (moderateProfit <= 0) {
+            return {
+                status: 'red',
+                label: 'NO VIABLE',
+                severity: 'blocking',
+                blocksSave: true,
+                message: 'Escenario moderado en perdida. Revise flete, bunker, dias de puerto u OPEX antes de guardar la cotizacion.'
+            };
+        }
+        if (marginRatio < 0.05) {
+            return {
+                status: 'yellow',
+                label: 'MARGEN INSUFICIENTE',
+                severity: 'warning',
+                blocksSave: false,
+                message: 'Margen insuficiente: el beneficio moderado queda por debajo del 5% del flete bruto.'
+            };
+        }
+        return {
+            status: 'green',
+            label: 'VIABLE',
+            severity: 'ok',
+            blocksSave: false,
+            message: 'El escenario moderado mantiene beneficio positivo con margen suficiente.'
+        };
+    }
+
+    function renderAutomaticRiskMatrix(baseResult, documentRef = root.document) {
+        if (!documentRef || !baseResult) return null;
+        const currentFreightRevenue = readCurrentFreightRevenue(baseResult, documentRef);
+        const hydratedBaseResult = {
+            ...baseResult,
+            ownerNetBreakdown: {
+                ...(baseResult.ownerNetBreakdown || {}),
+                grossRevenue: currentFreightRevenue
+            }
+        };
+        const batch = runSensitivityBatch(hydratedBaseResult);
+        const risk = batch.risk;
+        const badge = documentRef.getElementById('auto-risk-status');
+        const alert = documentRef.getElementById('auto-risk-alert');
+        const tbody = documentRef.getElementById('risk-matrix-body');
+        const tooltip = documentRef.getElementById('auto-risk-tooltip');
+        const statusClasses = {
+            green: 'rounded-md border border-emerald-500/50 bg-emerald-950/50 px-2 py-1 text-[10px] font-black uppercase text-emerald-200',
+            yellow: 'rounded-md border border-amber-500/50 bg-amber-950/50 px-2 py-1 text-[10px] font-black uppercase text-amber-200',
+            red: 'rounded-md border border-red-500/60 bg-red-950/50 px-2 py-1 text-[10px] font-black uppercase text-red-200'
+        };
+
+        if (badge) {
+            badge.textContent = risk.label;
+            badge.className = statusClasses[risk.status] || statusClasses.red;
+            badge.title = risk.message;
+        }
+        if (tooltip) {
+            tooltip.classList.toggle('hidden', risk.status !== 'yellow');
+            tooltip.title = risk.message;
+        }
+        if (alert) {
+            alert.textContent = risk.message;
+            alert.className = risk.status === 'red'
+                ? 'mt-3 rounded-lg border border-red-500/50 bg-red-950/45 px-3 py-2 text-xs font-bold text-red-100'
+                : (risk.status === 'yellow'
+                    ? 'mt-3 rounded-lg border border-amber-500/45 bg-amber-950/35 px-3 py-2 text-xs font-bold text-amber-100'
+                    : 'hidden');
+        }
+        if (tbody) {
+            tbody.innerHTML = batch.scenarios.map((scenario) => {
+                const profitClass = scenario.beneficioNeto >= 0 ? 'text-emerald-300' : 'text-red-300';
+                const deltaClass = scenario.deltaBeneficio >= 0 ? 'text-emerald-300' : 'text-red-300';
+                return `
+                    <tr class="border-t border-slate-800">
+                        <td class="py-2 pr-3 font-black text-slate-200">${scenario.label}</td>
+                        <td class="px-3 py-2 text-right mono text-slate-300">${moneyFormatter.format(scenario.totalBunkers)}</td>
+                        <td class="px-3 py-2 text-right mono text-slate-300">${toNumber(scenario.totalDays).toFixed(1)} d</td>
+                        <td class="px-3 py-2 text-right mono ${profitClass}">${moneyFormatter.format(scenario.beneficioNeto)}</td>
+                        <td class="py-2 pl-3 text-right mono ${deltaClass}">${moneyFormatter.format(scenario.deltaBeneficio)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        root.SeaCharterSensitivityAnalysis = batch;
+        return batch;
+    }
+
     class VoyageCostDomController {
         constructor(documentRef) {
             this.document = documentRef;
@@ -725,6 +942,11 @@
         shouldAutoEstimateStevedoring,
         estimateStevedoringTerminal,
         calculateVoyageCostState,
+        RISK_SCENARIOS,
+        calculateSensitivityScenario,
+        runSensitivityBatch,
+        evaluateRisk,
+        renderAutomaticRiskMatrix,
         VoyageCostDomController
     };
 
