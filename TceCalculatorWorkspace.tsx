@@ -2111,7 +2111,7 @@ export function CostPlusCalculator({
               type="button"
               onClick={handleSyncWithRoute}
               disabled={!routeSyncData}
-              className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-wide text-amber-800 shadow-sm transition hover:border-amber-500 hover:bg-amber-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
+              className="rounded-lg border border-green-300 bg-green-100 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-green-800 shadow-sm transition hover:border-green-500 hover:bg-green-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
             >
               Sincronizar con Ruta
             </button>
@@ -2187,13 +2187,13 @@ export function CostPlusCalculator({
           <h3 className="mt-1 text-lg font-black text-slate-950">Flete mínimo operativo</h3>
         </div>
 
-        <div className="rounded-lg bg-white p-4 shadow-sm">
-          <p className="text-xs font-bold uppercase text-slate-500">Flete mínimo</p>
-          <p className="mt-1 text-4xl font-black tracking-tight text-slate-950">
+        <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 shadow-sm ring-1 ring-sky-100">
+          <p className="text-xs font-bold uppercase text-sky-700">Flete mínimo</p>
+          <p className="mt-1 text-4xl font-black tracking-tight text-sky-950">
             {currencyFormatter.format(results.minFreightRate)}
           </p>
-          <p className="mt-1 text-xs font-bold text-slate-500">USD / MT</p>
-          <div className="mt-4 space-y-1 border-t border-slate-100 pt-3 text-sm font-semibold text-gray-500">
+          <p className="mt-1 text-xs font-bold text-sky-700">USD / MT</p>
+          <div className="mt-4 space-y-1 border-t border-sky-100 pt-3 text-sm font-semibold text-sky-800">
             <p>Coste Total Riesgo: {wholeCurrencyFormatter.format(results.totalCosts)}</p>
             <p>Beneficio Neto Proyectado: {wholeCurrencyFormatter.format(results.calculatedMargin)}</p>
             <p>Demurrage ($/d): {wholeCurrencyFormatter.format(results.demurrageRate)}</p>
