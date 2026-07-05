@@ -49,7 +49,7 @@ function createWindows() {
   });
 
   // Load the data bridge simulation console
-  dataBridgeWindow.loadFile(path.join(__dirname, 'databridge.html'));
+  dataBridgeWindow.loadFile(path.join(__dirname, 'public', 'databridge.html'));
 
   // --- Prevent Orphan Processes / Intercept Close ---
   // If the user tries to close the Data Bridge window, intercept the event.

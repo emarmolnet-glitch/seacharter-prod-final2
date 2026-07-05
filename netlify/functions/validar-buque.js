@@ -59,14 +59,13 @@ function validateVessel(payload) {
 
   const errors = [];
   if (!imo) errors.push("IMO requerido con formato de 7 digitos.");
-  if (!destination) errors.push("Destino requerido.");
   if (draft !== null && (draft < 0 || draft > 30)) errors.push("Calado fuera de rango operativo.");
 
   return {
     errors,
     normalized: {
       imo,
-      destination: destination.toUpperCase(),
+      destination: destination ? destination.toUpperCase() : "N/A",
       draft,
     },
   };
@@ -108,6 +107,7 @@ export default async (req) => {
 
     return jsonResponse({
       ok: true,
+      success: true,
       vessel: enrichedVessel,
     });
   } catch (error) {
@@ -116,4 +116,8 @@ export default async (req) => {
       error: "JSON invalido o cuerpo de solicitud no procesable.",
     }, 400);
   }
+};
+
+export const config = {
+  path: "/api/validate-vessel",
 };
