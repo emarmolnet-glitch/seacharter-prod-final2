@@ -1490,7 +1490,7 @@
             const speed = Number(meta.speed || vessel.speed || 0);
             const imo = firstAisText(vessel.IMO, vessel.imo, meta.IMO, meta.imo) || 'N/A';
             const destination = normalizeAisDestination(firstAisText(vessel.destination, vessel.Destination, meta.Destination, meta.destination));
-            const eta = firstAisText(vessel.eta, vessel.ETA, vessel.eta_puerto_carga, meta.ETA, meta.eta) || 'N/A';
+            const eta = firstAisText(vessel.estimatedEta, vessel.etaEstimated, vessel.eta_calculado, vessel.eta, vessel.ETA, vessel.eta_puerto_carga, meta.estimatedEta, meta.etaEstimated, meta.eta_calculado, meta.ETA, meta.eta) || 'N/A';
             const lastPortOfCall = vessel.lastPortOfCall || vessel.last_port_of_call || vessel.ultimo_puerto || meta.lastPortOfCall || meta.ultimo_puerto || 'N/A';
             return `<div class="seacharter-map-popup"><strong>${meta.ShipName || vessel.vesselName || 'Unknown vessel'}</strong><span>Número IMO: ${imo}</span><span>Destino: ${destination}</span><span>ETA: ${formatAisEta(eta)}</span><span>MMSI: ${meta.MMSI || vessel.MMSI || 'N/A'}</span><span>Último puerto: ${lastPortOfCall}</span><span>Speed: ${Number.isFinite(speed) ? speed.toFixed(1) : '0.0'} kn</span><span>Position: ${Number(meta.latitude).toFixed(4)}, ${Number(meta.longitude).toFixed(4)}</span>${buildFleetIntelTechnicalHtml(imo)}<span>Source: AISStream live</span></div>`;
         }
@@ -3256,7 +3256,7 @@
                         const row = document.createElement('tr');
                         row.style.cursor = "pointer";
                         const destination = normalizeAisDestination(firstAisText(b.Destination, b.destination, b.MetaData && b.MetaData.Destination, b.MetaData && b.MetaData.destination));
-                        const eta = b.eta || b.ETA || b.eta_puerto_carga || (b.MetaData && (b.MetaData.ETA || b.MetaData.eta)) || "N/A";
+                        const eta = b.estimatedEta || b.etaEstimated || b.eta_calculado || b.eta || b.ETA || b.eta_puerto_carga || (b.MetaData && (b.MetaData.estimatedEta || b.MetaData.etaEstimated || b.MetaData.eta_calculado || b.MetaData.ETA || b.MetaData.eta)) || "N/A";
                         const projectedEta = b.etaProjected || (b.projection && b.projection.etaProjected) || (b.MetaData && (b.MetaData.etaProjected || (b.MetaData.projection && b.MetaData.projection.etaProjected))) || "N/A";
                         const etaDrift = b.etaDriftHours ?? (b.MetaData && b.MetaData.etaDriftHours);
                         const etaDesfase = b.etaDesfase || (Number.isFinite(Number(etaDrift)) && Number(etaDrift) > 6);
@@ -3336,7 +3336,7 @@
                     const destination = normalizeAisDestination(firstAisText(b.Destination, b.destination, b.MetaData && b.MetaData.Destination, b.MetaData && b.MetaData.destination));
                     const projection = b.projection || (b.MetaData && b.MetaData.projection) || {};
                     const etaProjected = b.etaProjected || projection.etaProjected || "N/A";
-                    const eta = b.eta || b.ETA || b.eta_puerto_carga || (b.MetaData && (b.MetaData.ETA || b.MetaData.eta)) || etaProjected;
+                    const eta = b.estimatedEta || b.etaEstimated || b.eta_calculado || b.eta || b.ETA || b.eta_puerto_carga || (b.MetaData && (b.MetaData.estimatedEta || b.MetaData.etaEstimated || b.MetaData.eta_calculado || b.MetaData.ETA || b.MetaData.eta)) || etaProjected;
                     const isProjectionCandidate = !!(b.projectionCandidate || (b.MetaData && b.MetaData.projectionCandidate));
 
                     const id = mmsi || imo || name;

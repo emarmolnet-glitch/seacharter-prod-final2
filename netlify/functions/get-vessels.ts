@@ -636,6 +636,7 @@ function toVesselRecord(message: VesselMessage): VesselRecord | null {
 
   const now = new Date().toISOString();
   const imo = String(firstDefined(normalized.imo, normalized.IMO, metadata.IMO, "") || "").trim();
+  const estimatedEta = String(firstDefined(normalized.estimatedEta, normalized.etaEstimated, normalized.eta_calculado, metadata.estimatedEta, metadata.etaEstimated, "") || "").trim() || null;
 
   return {
     imoNumber: imo && imo !== "N/A" ? imo : `MMSI-${mmsi}`,
@@ -652,6 +653,12 @@ function toVesselRecord(message: VesselMessage): VesselRecord | null {
     destination: normalizeDestination(firstDefined(normalized.destination, normalized.Destination, metadata.Destination, "")),
     lastPortOfCall: String(firstDefined(normalized.lastPortOfCall, normalized.last_port_of_call, normalized.ultimo_puerto, metadata.lastPortOfCall, metadata.ultimo_puerto, "") || "").trim() || null,
     eta: String(firstDefined(normalized.eta, normalized.ETA, metadata.ETA, "") || "").trim() || null,
+    estimatedEta,
+    estimatedEtaTarget: String(firstDefined(normalized.estimatedEtaTarget, metadata.estimatedEtaTarget, "") || "").trim() || null,
+    estimatedEtaDistanceNm: normalizeNumber(firstDefined(normalized.estimatedEtaDistanceNm, metadata.estimatedEtaDistanceNm)) ?? null,
+    estimatedEtaHours: normalizeNumber(firstDefined(normalized.estimatedEtaHours, metadata.estimatedEtaHours)) ?? null,
+    estimatedEtaSpeedKnots: normalizeNumber(firstDefined(normalized.estimatedEtaSpeedKnots, metadata.estimatedEtaSpeedKnots)) ?? null,
+    estimatedEtaConfidence: String(firstDefined(normalized.estimatedEtaConfidence, metadata.estimatedEtaConfidence, "") || "").trim() as VesselRecord["estimatedEtaConfidence"] || null,
     source: "AISStream",
     rawData: normalized,
     lastSeenAt: now,
@@ -697,6 +704,14 @@ function fromVesselRecord(row: VesselRecord): VesselMessage {
     predictedDestination: row.predictedDestination,
     predictedDestinationConfidence: row.predictedDestinationConfidence,
     eta: row.eta,
+    estimatedEta: row.estimatedEta,
+    etaEstimated: row.estimatedEta,
+    eta_calculado: row.estimatedEta,
+    estimatedEtaTarget: row.estimatedEtaTarget,
+    estimatedEtaDistanceNm: row.estimatedEtaDistanceNm,
+    estimatedEtaHours: row.estimatedEtaHours,
+    estimatedEtaSpeedKnots: row.estimatedEtaSpeedKnots,
+    estimatedEtaConfidence: row.estimatedEtaConfidence,
     source: row.source,
     lastSeenAt: row.lastSeenAt,
     rawData: row.rawData,
@@ -721,6 +736,14 @@ function fromVesselRecord(row: VesselRecord): VesselMessage {
       estado_carga: row.loadState,
       predictedDestination: row.predictedDestination,
       predictedDestinationConfidence: row.predictedDestinationConfidence,
+      estimatedEta: row.estimatedEta,
+      etaEstimated: row.estimatedEta,
+      eta_calculado: row.estimatedEta,
+      estimatedEtaTarget: row.estimatedEtaTarget,
+      estimatedEtaDistanceNm: row.estimatedEtaDistanceNm,
+      estimatedEtaHours: row.estimatedEtaHours,
+      estimatedEtaSpeedKnots: row.estimatedEtaSpeedKnots,
+      estimatedEtaConfidence: row.estimatedEtaConfidence,
       classificationSignals: row.classificationSignals,
       missingData: row.missingData,
       classificationComplete: row.classificationComplete,

@@ -22,6 +22,12 @@ export type VesselRecord = {
   predictedDestination?: string | null;
   predictedDestinationConfidence?: number | null;
   eta: string | null;
+  estimatedEta?: string | null;
+  estimatedEtaTarget?: string | null;
+  estimatedEtaDistanceNm?: number | null;
+  estimatedEtaHours?: number | null;
+  estimatedEtaSpeedKnots?: number | null;
+  estimatedEtaConfidence?: "high" | "medium" | "low" | null;
   source: string;
   rawData: unknown;
   classificationSignals?: unknown;
@@ -42,7 +48,7 @@ export type VesselRecord = {
 const STORE_NAME = "ais-vessels";
 const VESSEL_INDEX_KEY = "vessels-index.json";
 const CARGO_LOG_KEY = "cargo-vessels-log.csv";
-const CARGO_LOG_HEADER = "MMSI,IMO,Nombre,ShipType,Draught,Latitud,Longitud,ETA";
+const CARGO_LOG_HEADER = "MMSI,IMO,Nombre,ShipType,Draught,Latitud,Longitud,ETA,ETA_Estimado,ETA_Objetivo,Distancia_NM,Velocidad_Kn,Confianza_ETA";
 
 function getVesselStore() {
   return getStore({ name: STORE_NAME, consistency: "strong" });
@@ -377,6 +383,11 @@ function cargoLogLine(row: VesselRecord): string {
     row.latitude,
     row.longitude,
     normalizeIsoEta(row.eta),
+    normalizeIsoEta(row.estimatedEta ?? null),
+    row.estimatedEtaTarget ?? "",
+    row.estimatedEtaDistanceNm ?? "",
+    row.estimatedEtaSpeedKnots ?? "",
+    row.estimatedEtaConfidence ?? "",
   ].map(csvCell).join(",");
 }
 
@@ -421,6 +432,12 @@ function mergeVesselRecord(existing: VesselRecord | undefined, incoming: VesselR
     predictedDestinationConfidence: incoming.predictedDestinationConfidence ?? existing.predictedDestinationConfidence,
     lastPortOfCall: incoming.lastPortOfCall ?? existing.lastPortOfCall,
     eta: incoming.eta ?? existing.eta,
+    estimatedEta: incoming.estimatedEta ?? existing.estimatedEta,
+    estimatedEtaTarget: incoming.estimatedEtaTarget ?? existing.estimatedEtaTarget,
+    estimatedEtaDistanceNm: incoming.estimatedEtaDistanceNm ?? existing.estimatedEtaDistanceNm,
+    estimatedEtaHours: incoming.estimatedEtaHours ?? existing.estimatedEtaHours,
+    estimatedEtaSpeedKnots: incoming.estimatedEtaSpeedKnots ?? existing.estimatedEtaSpeedKnots,
+    estimatedEtaConfidence: incoming.estimatedEtaConfidence ?? existing.estimatedEtaConfidence,
     source: incoming.source,
     rawData: incoming.rawData,
     classificationSignals: incoming.classificationSignals,
