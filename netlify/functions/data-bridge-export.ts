@@ -74,10 +74,13 @@ export default async (req: Request) => {
 
   return Response.json({
     success: true,
+    status: "success",
+    action: "pending_audit",
     acceptedAt,
     acceptedCount: vessels.length,
+    vessels,
     dataBridgePayload,
-  }, { status: 202, headers: jsonHeaders });
+  }, { status: 201, headers: jsonHeaders });
 };
 
 export const config: Config = {
