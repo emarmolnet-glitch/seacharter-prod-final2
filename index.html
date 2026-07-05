@@ -12891,14 +12891,18 @@
 
                 console.log('Enviando datos:', payload);
 
-                const bridgeResponse = await fetch('https://calm-shortbread-55bcfc.netlify.app/api/receive-audit', {
+                const bridgeResponse = await fetch('/api/data-bridge-export', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
                         'Authorization': `Bearer ${dataBridgeToken}`
                     },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({
+                        source: 'core-pro-matching-selected',
+                        createdAt: new Date().toISOString(),
+                        vessels: payload
+                    })
                 });
 
                 let bridgePayload = null;
