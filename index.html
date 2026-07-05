@@ -8230,7 +8230,7 @@
                         <div class="flex-grow">
                             <strong class="text-indigo-900 text-[10px] font-bold uppercase tracking-wider block">Modo de Operación / Operation Mode</strong>
                             <p id="index-operation-mode-desc" class="text-slate-600 text-xs mt-0.5 leading-relaxed">
-                                Búsqueda dual AIS obligatoria: POL 2000 MN y POD 100 MN.
+                                Búsqueda AIS en POL 2000 MN. POD 100 MN queda como referencia visual.
                             </p>
                         </div>
                         <div class="flex bg-slate-100 p-1 rounded-lg border border-slate-200 self-start sm:self-center">
@@ -27473,7 +27473,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         };
 
         window.RadarPOD = function() {
-            return runAisZoneSearch('POD', 100, '#2563eb');
+            if (typeof window.activateAisProspectionRadius === 'function') {
+                window.activateAisProspectionRadius('POD');
+            }
+            if (typeof window.completeAisProspectionRadius === 'function') {
+                window.completeAisProspectionRadius('POD', 0);
+            }
+            console.log('POD visual activo sin búsqueda AIS de buques');
+            return Promise.resolve([]);
         };
 
         async function queryAisForFleetRecord(record) {
@@ -27564,11 +27571,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     alert("No se pudieron determinar las coordenadas del POL y POD para limitar el barrido AIS.");
                     return window.listaBarcos;
                 }
-                const [polVessels, podVessels] = await Promise.all([
+                const [polVessels] = await Promise.all([
                     window.RadarPOL(),
                     window.RadarPOD()
                 ]);
-                const vessels = [...polVessels, ...podVessels];
+                const vessels = [...polVessels];
                 const targetName = typeof window.getCalculatorVesselNameForRadar === 'function'
                     ? window.getCalculatorVesselNameForRadar()
                     : (document.getElementById('nombre-buque-calculadora')?.value || document.getElementById('ais-vessel-search')?.value || '').trim();
@@ -28454,7 +28461,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return R * c * 0.539957;
             }
 
-            function assignAisProspectionZone(vessel, polPort = getAisOperationalPort('POL'), podPort = getAisOperationalPort('POD')) {
+            function assignAisProspectionZone(vessel, polPort = getAisOperationalPort('POL')) {
                 const coords = (window.MapLoader && typeof window.MapLoader.normalizeCoordinates === 'function')
                     ? window.MapLoader.normalizeCoordinates(vessel)
                     : [parseFloat((vessel.MetaData && v.MetaData.latitude) || vessel.latitude || 0), parseFloat((vessel.MetaData && v.MetaData.longitude) || vessel.longitude || 0)];
@@ -28475,28 +28482,19 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     return { zone: 'NODE_POL', color: '#f97316', nodeName: polNode.name, nodeRegion: polNode.region, distanceToPolNode: polNode.distance };
                 }
 
-                const podDistance = podPort ? calculateAisDistanceNm(podPort.lat, podPort.lon, lat, lon) : Infinity;
-                if (podDistance <= AIS_PROSPECTION_RADII_NM.POD) {
-                    return { zone: 'POD', color: '#2563eb', distanceToPod: podDistance };
-                }
-
-                const podNode = getRouteAisScanTargets('POD')
-                    .filter(target => target.source === 'NODE')
-                    .map(target => ({ ...target, distance: calculateAisDistanceNm(target.lat, target.lon, lat, lon) }))
-                    .sort((a, b) => a.distance - b.distance)[0];
-                if (podNode && podNode.distance <= AIS_PROSPECTION_RADII_NM.POD) {
-                    return { zone: 'NODE_POD', color: '#f97316', nodeName: podNode.name, nodeRegion: podNode.region, distanceToPodNode: podNode.distance };
-                }
-
                 return null;
             }
 
             window.getRouteAisSweepEndpoint = function(quantity = 45000, role = '') {
-                const boxes = role ? getActiveRouteAisBox(role) : getActiveRouteAisBoxes();
+                const normalizedRole = String(role || 'POL').toUpperCase();
+                if (normalizedRole === 'POD') {
+                    return '';
+                }
+                const boxes = getActiveRouteAisBox('POL');
                 if (!boxes.length) {
                     return '';
                 }
-                const zone = String(role || 'DUAL').toUpperCase();
+                const zone = 'POL';
                 return `/.netlify/functions/get-vessels?quantity=${encodeURIComponent(quantity)}&force=1&zone=${encodeURIComponent(zone)}&boxes=${encodeURIComponent(JSON.stringify(boxes))}`;
             };
 
@@ -29988,13 +29986,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         const bEta = Number.isFinite(b.distanceToPol) ? b.distanceToPol / bSpeed : Infinity;
                         return aEta - bEta;
                     });
-                const podVisibleVessels = normalizedVessels.filter(v => v.aisRadarZone === 'POD');
                 const primaryVisibleVessels = strictFleetMode ? normalizedVessels : polPrimaryVessels;
 
                 if (window.aisProspectionVisualState && window.aisProspectionVisualState.active) {
                     if (typeof window.completeAisProspectionRadius === 'function') {
                         window.completeAisProspectionRadius('POL', polPrimaryVessels.length);
-                        window.completeAisProspectionRadius('POD', podVisibleVessels.length);
+                        window.completeAisProspectionRadius('POD', 0);
                     }
                 }
 
@@ -30597,7 +30594,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 indexBtnModeLocal.className = "px-3 py-1.5 text-[11px] font-bold rounded-md bg-blue-600 text-white transition-all cursor-pointer";
             }
             if (indexModeDesc) {
-                indexModeDesc.innerText = "Búsqueda dual AIS obligatoria: POL 2000 MN y POD 100 MN.";
+                indexModeDesc.innerText = "Búsqueda AIS en POL 2000 MN. POD 100 MN queda como referencia visual.";
             }
             actualizarTextoRadioOperacion('dual');
         }
@@ -30981,7 +30978,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             
             const descEl = document.getElementById('pol-scan-radius-text') || document.getElementById('ais-nearby-vessels-description');
             if (descEl) {
-                descEl.innerHTML = 'Búsqueda dual AIS: <b>POL 2000 MN</b> priorizado por ETA y <b>POD 100 MN</b> para carga de retorno';
+                descEl.innerHTML = 'Búsqueda AIS: <b>POL 2000 MN</b> priorizado por ETA. <b>POD 100 MN</b> solo referencia visual';
             }
 
             const calculateDistanceNm = (lat1, lon1, lat2, lon2) => {
@@ -31497,7 +31494,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         weight: 1.25,
                         dashArray: '4, 8'
                     }).addTo(targetMap);
-                    window.aisPodHighlightCircle.bindTooltip("BUSCAR POD: 100 MN (POD: " + podValue + ")", { sticky: true });
+                    window.aisPodHighlightCircle.bindTooltip("POD visual: 100 MN (POD: " + podValue + ")", { sticky: true });
                     fitAisMapToProspectionRadii(targetMap, polCoords, podCoords);
                 }
             }
