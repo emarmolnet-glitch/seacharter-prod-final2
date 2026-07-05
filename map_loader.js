@@ -176,6 +176,20 @@
             { name: 'Valencia', lat: 39.45, lon: -0.32, region: 'Mediterráneo' },
             { name: 'Tarragona', lat: 41.10, lon: 1.24, region: 'Mediterráneo' }
         ],
+        northAfricaMediterranean: [
+            { name: 'Orán', lat: 35.708, lon: -0.633, region: 'Mediterráneo norteafricano' },
+            { name: 'Béjaïa', lat: 36.751, lon: 5.084, region: 'Mediterráneo norteafricano' },
+            { name: 'Argel', lat: 36.772, lon: 3.060, region: 'Mediterráneo norteafricano' },
+            { name: 'Skikda', lat: 36.887, lon: 6.905, region: 'Mediterráneo norteafricano' },
+            { name: 'Rades', lat: 36.800, lon: 10.283, region: 'Mediterráneo norteafricano' },
+            { name: 'Sfax', lat: 34.739, lon: 10.760, region: 'Mediterráneo norteafricano' },
+            { name: 'Gabes', lat: 33.883, lon: 10.100, region: 'Mediterráneo norteafricano' },
+            { name: 'Tripoli', lat: 32.900, lon: 13.183, region: 'Mediterráneo norteafricano' },
+            { name: 'Misrata', lat: 32.375, lon: 15.092, region: 'Mediterráneo norteafricano' },
+            { name: 'Benghazi', lat: 32.117, lon: 20.067, region: 'Mediterráneo norteafricano' },
+            { name: 'Alexandria', lat: 31.200, lon: 29.883, region: 'Mediterráneo norteafricano' },
+            { name: 'Port Said', lat: 31.267, lon: 32.300, region: 'Mediterráneo norteafricano' }
+        ],
         atlanticIberia: [
             { name: 'Huelva', lat: 37.25, lon: -6.95, region: 'Atlántico Ibérico' },
             { name: 'Cádiz', lat: 36.53, lon: -6.29, region: 'Atlántico Ibérico' },
