@@ -1397,7 +1397,9 @@ export function ReverseTceCalculator({
     setBunkerFetchError('');
 
     try {
-      const response = await fetch('/api/get-bunker-prices');
+      const response = await fetch(`/api/get-bunker-prices?ts=${Date.now()}`, {
+        cache: 'no-store',
+      });
       const payload = await response.json();
 
       if (!response.ok) {
@@ -1408,7 +1410,7 @@ export function ReverseTceCalculator({
         vlsfo: Number(payload.vlsfo),
         ifo380: Number(payload.ifo380),
         mgo: Number(payload.mgo),
-        date: getTodayBunkerLabel(),
+        date: payload.sourceDate || getTodayBunkerLabel(),
       };
 
       if (!Number.isFinite(nextCache.vlsfo) || !Number.isFinite(nextCache.ifo380) || !Number.isFinite(nextCache.mgo)) {
