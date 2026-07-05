@@ -507,6 +507,79 @@
         };
     }
 
+    function calculateRequiredFreight(moderateNetLoss, cargoQuantity) {
+        const cargo = Math.max(0, toNumber(cargoQuantity));
+        if (cargo <= 0) return 0;
+        return Math.abs(toNumber(moderateNetLoss)) / cargo;
+    }
+
+    function analyzeStressFactor(baseCosts = {}, moderateCosts = {}) {
+        const baseBunker = toNumber(baseCosts.totalBunkers ?? baseCosts.bunkerCost);
+        const moderateBunker = toNumber(moderateCosts.totalBunkers ?? moderateCosts.bunkerCost);
+        const bunkerIncrease = Math.max(0, moderateBunker - baseBunker);
+        const stressImpact = moderateCosts.stressImpact || {};
+        const daysDelayIncrease = Math.max(0, toNumber(stressImpact.portDelayOperatingCost) + toNumber(stressImpact.lostProfit));
+
+        if (bunkerIncrease > daysDelayIncrease) {
+            return 'El riesgo principal es la volatilidad del combustible. Recomendación: Añadir cláusula BAF (Bunker Adjustment Factor) en la póliza GENCON.';
+        }
+
+        return 'El riesgo principal son los retrasos en puerto. Recomendación: Aumentar el ritmo mínimo de carga/descarga o incluir cláusulas WIBON/WIPON y SHINC para proteger el Demurrage.';
+    }
+
+    function renderSmartAdvisor(batch, baseResult = {}, documentRef = root.document) {
+        const panel = documentRef?.getElementById('smart-advisor-panel');
+        if (!panel || !batch?.moderate) return;
+
+        const moderateNetProfit = toNumber(batch.moderate.beneficioNeto ?? batch.moderate.netProfitOwner);
+        const cargoQuantity = Math.max(
+            0,
+            toNumber(baseResult.cargo || baseResult.toneladas_carga || batch.moderate.cargo || documentRef.getElementById('cargo-qty')?.value)
+        );
+
+        if (moderateNetProfit > 0) {
+            panel.classList.add('hidden');
+            panel.innerHTML = '';
+            return;
+        }
+
+        const suggestedFreight = calculateRequiredFreight(moderateNetProfit, cargoQuantity);
+        const recommendation = analyzeStressFactor(batch.base, batch.moderate);
+        const cargoLabel = cargoQuantity > 0
+            ? `${cargoQuantity.toLocaleString('en-US', { maximumFractionDigits: 2 })} MT`
+            : 'carga no informada';
+
+        panel.className = 'rounded-xl border border-amber-300 bg-amber-50 p-5 shadow-sm no-print';
+        panel.innerHTML = `
+            <div class="flex flex-col gap-4 md:flex-row md:items-start">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-white text-amber-600 shadow-sm">
+                    <i class="fa-solid fa-lightbulb text-lg" aria-hidden="true"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h2 class="text-sm font-black uppercase tracking-wide text-slate-900">Recomendaciones Activas</h2>
+                            <p class="mt-1 text-xs font-semibold text-slate-600">Smart Advisor para escenario moderado no viable.</p>
+                        </div>
+                        <span class="inline-flex w-fit items-center rounded-md border border-red-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase text-red-700">NO VIABLE</span>
+                    </div>
+                    <div class="mt-4 grid gap-3 md:grid-cols-[220px_1fr]">
+                        <div class="rounded-lg border border-amber-200 bg-white p-3">
+                            <div class="text-[10px] font-black uppercase text-slate-500">Ajuste de flete sugerido</div>
+                            <div id="smart-advisor-freight" class="mt-1 mono text-2xl font-black text-slate-950">${moneyFormatter.format(suggestedFreight)}<span class="text-sm text-slate-500">/MT</span></div>
+                            <div class="mt-1 text-[10px] font-semibold text-slate-500">Calculado sobre ${cargoLabel}</div>
+                        </div>
+                        <div class="rounded-lg border border-amber-200 bg-white p-3">
+                            <div class="text-[10px] font-black uppercase text-slate-500">Recomendación contractual</div>
+                            <p id="smart-advisor-recommendation" class="mt-1 text-xs font-bold leading-relaxed text-slate-800">${recommendation}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        panel.classList.remove('hidden');
+    }
+
     function evaluateRisk(baseResult, moderateResult, criticalResult) {
         const fleteBruto = Math.max(0, toNumber(baseResult?.fleteBruto || moderateResult?.fleteBruto || criticalResult?.fleteBruto));
         const moderateProfit = toNumber(moderateResult?.beneficioNeto ?? moderateResult?.netProfitOwner);
@@ -592,6 +665,7 @@
                 `;
             }).join('');
         }
+        renderSmartAdvisor(batch, hydratedBaseResult, documentRef);
         root.SeaCharterSensitivityAnalysis = batch;
         return batch;
     }
@@ -945,6 +1019,9 @@
         RISK_SCENARIOS,
         calculateSensitivityScenario,
         runSensitivityBatch,
+        calculateRequiredFreight,
+        analyzeStressFactor,
+        renderSmartAdvisor,
         evaluateRisk,
         renderAutomaticRiskMatrix,
         VoyageCostDomController
