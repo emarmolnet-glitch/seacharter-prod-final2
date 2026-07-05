@@ -60,6 +60,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script type="module" src="/components.js"></script>
     <script type="module" src="/voyage-cost-engine.js"></script>
+    <script type="module" src="/stress-test-engine.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -1897,6 +1898,74 @@
         #lumpsum-box #lumpsum-desc,
         #lumpsum-box #lumpsum-desc span {
             color: #475569 !important;
+        }
+
+        /* Stress simulator: align with the estimator's light corporate interface. */
+        #stress-test-panel {
+            background-color: #FFFFFF !important;
+            border: 1px solid #E2E8F0 !important;
+            color: #1E293B !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05) !important;
+        }
+
+        #stress-test-panel > div:first-child {
+            border-bottom-color: #E2E8F0 !important;
+        }
+
+        #stress-test-panel h2,
+        #stress-test-panel h2 i {
+            color: #002060 !important;
+        }
+
+        #stress-test-panel .grid.grid-cols-1 > div {
+            background-color: #EFF6FF !important;
+            border: 1px solid #BFDBFE !important;
+            color: #1E293B !important;
+            border-radius: 8px !important;
+        }
+
+        #stress-test-panel label,
+        #stress-test-panel .text-slate-500,
+        #stress-test-panel .text-slate-400 {
+            color: #475569 !important;
+        }
+
+        #stress-test-panel output,
+        #stress-test-panel .mono {
+            color: #1E3A8A !important;
+        }
+
+        #stress-test-panel input[type="range"] {
+            accent-color: #1E3A8A !important;
+        }
+
+        #stress-test-panel > .mt-4 {
+            border-top-color: #E2E8F0 !important;
+            color: #475569 !important;
+        }
+
+        #stress-risk-status {
+            background-color: #F8FAFC !important;
+            border-color: #CBD5E1 !important;
+            color: #334155 !important;
+        }
+
+        #stress-risk-status.text-emerald-200 {
+            background-color: #D1FAE5 !important;
+            border-color: #6EE7B7 !important;
+            color: #047857 !important;
+        }
+
+        #stress-risk-status.text-amber-200 {
+            background-color: #FEF3C7 !important;
+            border-color: #FCD34D !important;
+            color: #B45309 !important;
+        }
+
+        #stress-risk-status.text-red-200 {
+            background-color: #FEF2F2 !important;
+            border-color: #FCA5A5 !important;
+            color: #991B1B !important;
         }
 
         /* Route map owns the full map tab; visual separation belongs to overlays only. */
@@ -5465,6 +5534,7 @@
                                 <!-- Cards will be generated dynamically here -->
                             </div>
                         </div>
+
                     </div>
 
                     <!-- 2. Buque, Carga y Tiempos -->
@@ -6589,6 +6659,47 @@
                                 <div id="label-risk-free-profit" class="text-[10px] text-slate-500 mt-1">Beneficio Libre de Riesgo</div>
                                 <div id="owner-purchase-effectiveness" class="mt-3 rounded-md border border-slate-700 bg-slate-950/40 px-2 py-1.5 text-[10px] font-bold text-slate-400">Efectividad de Compra: -</div>
                             </div>
+                        </div>
+                    </div>
+
+                    <div id="stress-test-panel" class="bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg no-print">
+                        <div class="mb-4 flex items-center justify-between gap-3 border-b border-slate-800 pb-2">
+                            <div>
+                                <h2 class="text-sm font-bold text-amber-300 uppercase">
+                                    <i class="fa-solid fa-sliders mr-2"></i> Motor de Simulación de Estrés
+                                </h2>
+                                <div class="mt-0.5 text-[10px] text-slate-500">Comparativa reactiva sobre el escenario base calculado</div>
+                            </div>
+                            <span id="stress-risk-status" class="rounded-md border border-slate-600 bg-slate-950 px-2 py-1 text-[10px] font-black uppercase text-slate-300">Sin estrés</span>
+                        </div>
+                        <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+                            <div class="rounded-lg border border-slate-800 bg-slate-950/45 p-3">
+                                <div class="mb-2 flex items-center justify-between gap-2">
+                                    <label for="stress-bunker-volatility" class="text-[10px] font-bold uppercase text-slate-400">Volatilidad Bunker</label>
+                                    <output id="stress-bunker-volatility-display" for="stress-bunker-volatility" class="mono text-xs font-black text-amber-200">0%</output>
+                                </div>
+                                <input type="range" id="stress-bunker-volatility" class="w-full accent-amber-400" value="0" min="0" max="100" step="1" oninput="calculateStressScenario()" onchange="calculateStressScenario()">
+                            </div>
+                            <div class="rounded-lg border border-slate-800 bg-slate-950/45 p-3">
+                                <div class="mb-2 flex items-center justify-between gap-2">
+                                    <label for="stress-offhire-days" class="text-[10px] font-bold uppercase text-slate-400">Off-Hire Técnico</label>
+                                    <output id="stress-offhire-days-display" for="stress-offhire-days" class="mono text-xs font-black text-amber-200">0 días</output>
+                                </div>
+                                <input type="range" id="stress-offhire-days" class="w-full accent-amber-400" value="0" min="0" max="30" step="0.5" oninput="calculateStressScenario()" onchange="calculateStressScenario()">
+                            </div>
+                            <div class="rounded-lg border border-slate-800 bg-slate-950/45 p-3">
+                                <div class="mb-2 flex items-center justify-between gap-2">
+                                    <label for="stress-port-delay-factor" class="text-[10px] font-bold uppercase text-slate-400">Factor Congestión Puerto</label>
+                                    <output id="stress-port-delay-factor-display" for="stress-port-delay-factor" class="mono text-xs font-black text-amber-200">1.0x</output>
+                                </div>
+                                <input type="range" id="stress-port-delay-factor" class="w-full accent-amber-400" value="1" min="1" max="3" step="0.1" oninput="calculateStressScenario()" onchange="calculateStressScenario()">
+                            </div>
+                        </div>
+                        <div class="mt-4 grid grid-cols-2 gap-2 border-t border-slate-800 pt-3 text-[10px] text-slate-400 md:grid-cols-4">
+                            <div>Base: <strong id="stress-base-profit" class="mono text-slate-200">$0</strong></div>
+                            <div>Estresado: <strong id="stress-stressed-profit" class="mono text-slate-200">$0</strong></div>
+                            <div>Delta: <strong id="stress-profit-delta" class="mono text-slate-200">$0</strong></div>
+                            <div>Lucro cesante: <strong id="stress-lost-profit" class="mono text-slate-200">$0</strong></div>
                         </div>
                     </div>
 
@@ -19603,6 +19714,9 @@
             }
             if (typeof updateCBAMModuleView === 'function') {
                 updateCBAMModuleView();
+            }
+            if (typeof renderStressTestScenario === 'function') {
+                renderStressTestScenario(State);
             }
         }
 
@@ -33487,6 +33601,90 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.calcularViaje = calcularViaje;
         } else if (typeof globalThis !== 'undefined') {
             globalThis.calcularViaje = calcularViaje;
+        }
+
+        function readStressNumber(id, fallback = 0) {
+            const value = Number.parseFloat(document.getElementById(id)?.value);
+            return Number.isFinite(value) ? value : fallback;
+        }
+
+        function formatStressMoney(value) {
+            const numeric = Number(value) || 0;
+            return `$${numeric.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+        }
+
+        function updateStressSliderDisplays() {
+            const bunker = readStressNumber('stress-bunker-volatility', 0);
+            const offHire = readStressNumber('stress-offhire-days', 0);
+            const portDelay = Math.max(1, readStressNumber('stress-port-delay-factor', 1));
+            const bunkerDisplay = document.getElementById('stress-bunker-volatility-display');
+            const offHireDisplay = document.getElementById('stress-offhire-days-display');
+            const portDelayDisplay = document.getElementById('stress-port-delay-factor-display');
+
+            if (bunkerDisplay) bunkerDisplay.textContent = `${bunker.toFixed(0)}%`;
+            if (offHireDisplay) offHireDisplay.textContent = `${offHire.toFixed(offHire % 1 ? 1 : 0)} días`;
+            if (portDelayDisplay) portDelayDisplay.textContent = `${portDelay.toFixed(1)}x`;
+        }
+
+        function renderStressTestScenario(baseResult) {
+            if (!window.SeaCharterStressTestEngine?.runStressTest || !baseResult) return null;
+            updateStressSliderDisplays();
+            const stressInputs = {
+                bunkerVolatility: readStressNumber('stress-bunker-volatility', 0),
+                offHireDays: readStressNumber('stress-offhire-days', 0),
+                portDelayFactor: Math.max(1, readStressNumber('stress-port-delay-factor', 1))
+            };
+            const scenario = window.SeaCharterStressTestEngine.runStressTest(baseResult, stressInputs);
+            const riskEl = document.getElementById('stress-risk-status');
+            const baseEl = document.getElementById('stress-base-profit');
+            const stressedEl = document.getElementById('stress-stressed-profit');
+            const deltaEl = document.getElementById('stress-profit-delta');
+            const lostProfitEl = document.getElementById('stress-lost-profit');
+            const riskClasses = {
+                green: 'rounded-md border border-emerald-500/50 bg-emerald-950/50 px-2 py-1 text-[10px] font-black uppercase text-emerald-200',
+                yellow: 'rounded-md border border-amber-500/50 bg-amber-950/50 px-2 py-1 text-[10px] font-black uppercase text-amber-200',
+                red: 'rounded-md border border-red-500/60 bg-red-950/50 px-2 py-1 text-[10px] font-black uppercase text-red-200'
+            };
+            if (riskEl) {
+                riskEl.textContent = scenario.riskStatus.label;
+                riskEl.className = riskClasses[scenario.riskStatus.color] || riskClasses.red;
+                riskEl.title = scenario.riskStatus.description;
+            }
+            if (baseEl) baseEl.textContent = formatStressMoney(scenario.baseResult.netProfitOwner);
+            if (stressedEl) {
+                stressedEl.textContent = formatStressMoney(scenario.stressedResult.netProfitOwner);
+                stressedEl.className = scenario.stressedResult.netProfitOwner >= 0 ? 'mono text-emerald-300' : 'mono text-red-300';
+            }
+            if (deltaEl) {
+                deltaEl.textContent = formatStressMoney(scenario.delta.netProfitOwner);
+                deltaEl.className = scenario.delta.netProfitOwner >= 0 ? 'mono text-emerald-300' : 'mono text-red-300';
+            }
+            if (lostProfitEl) lostProfitEl.textContent = formatStressMoney(scenario.delta.lostProfit);
+            if (typeof State !== 'undefined') State.stressTestScenario = scenario;
+            return scenario;
+        }
+
+        function calculateStressScenario() {
+            updateStressSliderDisplays();
+            if (typeof State === 'undefined') return null;
+            return renderStressTestScenario(State);
+        }
+
+        function bindStressTestSliders() {
+            ['stress-bunker-volatility', 'stress-offhire-days', 'stress-port-delay-factor'].forEach((id) => {
+                const input = document.getElementById(id);
+                if (!input || input.dataset.stressBound === 'true') return;
+                input.addEventListener('input', calculateStressScenario);
+                input.addEventListener('change', calculateStressScenario);
+                input.dataset.stressBound = 'true';
+            });
+            calculateStressScenario();
+        }
+
+        if (typeof window !== 'undefined') {
+            window.renderStressTestScenario = renderStressTestScenario;
+            window.calculateStressScenario = calculateStressScenario;
+            window.addEventListener('DOMContentLoaded', bindStressTestSliders);
         }
     </script>
 
