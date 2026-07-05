@@ -88,6 +88,7 @@ function classifyCementCarrierCandidate(vessel: NonNullable<ReturnType<typeof no
     vessel.source.vesselType,
     vessel.source.cargoType,
     vessel.source.tipo_carga,
+    vessel.source.tipo_buque,
     vessel.source.cargoTaxonomyLabel,
     vessel.source.categoryLabel,
     vessel.source.categoryValue,
@@ -135,6 +136,8 @@ function vesselMatchesTaxonomy(vessel: NonNullable<ReturnType<typeof normalizeVe
     vessel.source.vesselType,
     vessel.source.cargoType,
     vessel.source.tipo_carga,
+    vessel.source.tipo_buque,
+    vessel.source.cargoClass,
     vessel.source.radarCategory,
     vessel.source.vesselClass,
   ].filter(Boolean).join(" "));
@@ -154,7 +157,22 @@ function normalizeVessel(value: unknown) {
   const mmsi = textValue(source.mmsi, source.MMSI, meta.MMSI);
   const imo = textValue(source.imo, source.IMO, meta.IMO) || (mmsi ? "PENDING" : "");
   const vesselName = textValue(source.vesselName, source.vessel_name, source.ShipName, source.name, meta.ShipName) || "Unknown vessel";
-  const shipType = textValue(source.shipType, source.ShipType, source.vesselClass, meta.ShipType, meta.shipType) || "Bulk Carrier";
+  const shipType = textValue(
+    source.radarCategory,
+    source.cargoClass,
+    source.tipo_buque,
+    source.tipo,
+    source.shipType,
+    source.ShipType,
+    source.vesselClass,
+    source.type,
+    meta.radarCategory,
+    meta.cargoClass,
+    meta.tipo_buque,
+    meta.tipo,
+    meta.ShipType,
+    meta.shipType,
+  ) || "Bulk Carrier";
   const dwt = numberValue(source.dwt, source.DWT, meta.dwt, meta.DWT);
   const draft = numberValue(source.draft, source.Draft, meta.draft, meta.Draft);
   const loa = numberValue(source.loa, source.LOA, meta.loa, meta.LOA);

@@ -210,7 +210,7 @@ export function classifyCementCarrierSignal(value: unknown) {
 
 export function isCargoShipType(value: unknown): boolean {
   const code = parseShipTypeCode(value);
-  if (code !== null) return code >= 70 && code <= 79;
+  if (code !== null) return code >= 70 && code <= 89;
 
   const text = normalizeShipTypeText(value);
   if (!text) return false;
@@ -230,22 +230,22 @@ export function isCargoShipType(value: unknown): boolean {
     "reefer",
     "freighter",
     "carrier",
+    "tanker",
+    "crude",
+    "chemical",
+    "product",
+    "oil",
+    "lng",
+    "lpg",
   ];
   const excludedTerms = [
     "passenger",
     "ferry",
     "cruise",
-    "tanker",
     "fishing",
     "tug",
     "pilot",
     "yacht",
-    "lng",
-    "lpg",
-    "crude",
-    "chemical",
-    "product",
-    "oil",
     "gas",
   ];
 
