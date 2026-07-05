@@ -670,6 +670,16 @@ function cleanFleetValue(value: unknown) {
 const fleetCategoryMap: Record<string, string> = {
   'ciment carrier': 'Cement Carrier',
   'cement carrier': 'Cement Carrier',
+  'possible cement carrier': 'Possible Cement Carrier',
+  clinker: 'Cement Carrier',
+  cemento: 'Cement Carrier',
+  cemex: 'Possible Cement Carrier',
+  holcim: 'Possible Cement Carrier',
+  lafarge: 'Possible Cement Carrier',
+  heidelberg: 'Possible Cement Carrier',
+  buzzi: 'Possible Cement Carrier',
+  votorantim: 'Possible Cement Carrier',
+  argos: 'Possible Cement Carrier',
   bulk: 'Bulk Carrier',
   'general cargo': 'General Cargo Ship',
 };
