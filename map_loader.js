@@ -860,9 +860,9 @@
             if (typeof window !== 'undefined' && typeof window.setAisRadarStatus === 'function') {
                 window.setAisRadarStatus('updating');
             }
-            const endpoint = config.endpoint || aisProxyPollingState.endpoint;
+            const endpoint = config.endpoint || aisProxyPollingState.endpoint || '/.netlify/functions/get-vessels';
             const endpointUrl = new URL(endpoint, window.location.origin);
-            const hasExplicitBoxes = /(?:[?&]boxes=)(?:[^&]+)/.test(endpoint);
+            const hasExplicitBoxes = endpointUrl.searchParams.has('boxes');
             const isGlobalNameSearch = endpointUrl.searchParams.get('mode') === 'global' || endpointUrl.searchParams.has('vesselName') || endpointUrl.searchParams.has('q') || endpointUrl.searchParams.has('search');
             const mapInstance = aisProxyPollingState.map || config.map || getDefaultAisMap();
             const shouldUseViewportBounds = !hasExplicitBoxes && !isGlobalNameSearch;
@@ -871,7 +871,7 @@
             if (shouldUseViewportBounds && !proxyPayload) {
                 return { success: false, skipped: true, reason: 'map-bounds-not-ready' };
             }
-            const finalRequestUrl = shouldUseViewportBounds ? buildFinalProxyRequestUrl(endpoint, proxyPayload) : endpoint;
+            const finalRequestUrl = shouldUseViewportBounds ? buildFinalProxyRequestUrl(endpointUrl.toString(), proxyPayload) : endpointUrl.toString();
             console.log('[AIS Proxy] get-vessels payload before fetch:', {
                 endpoint,
                 requestUrl: finalRequestUrl,
