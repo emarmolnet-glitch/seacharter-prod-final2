@@ -58,7 +58,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="./components.js"></script>
+    <script src="./public/components.js"></script>
     <script type="module" src="./voyage-cost-engine.js"></script>
     <script type="module" src="./stress-test-engine.js"></script>
 
@@ -13043,14 +13043,14 @@
         function updatePendingFrozenReportButton() {
             const btn = document.getElementById('btn-toggle-databridge');
             const icon = document.getElementById('icon-toggle-databridge');
-            const label = btn ? btn.querySelector('span') : null;
+            const label = btn ? btn.querySelector('span span:last-child') : null;
             if (!btn || !icon || !label) return;
 
             if (hasPendingFrozenReport()) {
-                btn.className = "tools-dropdown-action bg-emerald-600 text-white";
+                btn.setAttribute('class', 'tools-dropdown-action bg-emerald-600 text-white');
                 btn.setAttribute('title', 'Recibir Informe (Informe listo)');
                 btn.setAttribute('aria-label', 'Recibir Informe (Informe listo)');
-                icon.className = "header-utility-icon";
+                icon.setAttribute('class', 'header-utility-icon');
                 label.textContent = 'Recibir Informe (Informe listo)';
             } else {
                 label.textContent = 'Data Bridge';
@@ -34534,7 +34534,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             </div>
             <!-- Iframe container -->
             <div class="flex-1 w-full bg-slate-950">
-                <iframe id="web-databridge-iframe" src="./databridge.html" class="w-full h-full border-none"></iframe>
+                <iframe id="web-databridge-iframe" src="./public/databridge.html" class="w-full h-full border-none"></iframe>
             </div>
         </div>
     </div>
@@ -34544,8 +34544,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         let webDataBridgeVisible = false;
         let webDataBridgeFullScreen = false;
         const DATA_BRIDGE_TOKEN_STORAGE_KEY = 'seacharter_databridge_api_secret';
-        const DATA_BRIDGE_FRONTEND_URL = resolveViteEnvValue(import.meta.env.VITE_DATA_BRIDGE_FRONTEND_URL, './databridge.html');
-        const DATA_BRIDGE_API_URL = resolveViteEnvValue(import.meta.env.VITE_DATA_BRIDGE_API_URL, '');
+        const LOCAL_DATA_BRIDGE_URL = './public/databridge.html';
+        const VITE_ENV = import.meta && import.meta.env ? import.meta.env : {};
+        const DATA_BRIDGE_FRONTEND_URL = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_FRONTEND_URL, LOCAL_DATA_BRIDGE_URL);
+        const DATA_BRIDGE_API_URL = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_API_URL, '');
+        const HAS_VALID_DATA_BRIDGE_API_URL = isValidDataBridgeApiUrl(DATA_BRIDGE_API_URL);
+        const DATA_BRIDGE_VERIFY_ENDPOINT = HAS_VALID_DATA_BRIDGE_API_URL
+            ? `${DATA_BRIDGE_API_URL.replace(/\/+$/, '')}/api/verify-connection`
+            : '/api/databridge-verify-connection';
 
         document.addEventListener('DOMContentLoaded', () => {
             const btn = document.getElementById('btn-toggle-databridge');
@@ -34606,6 +34612,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return normalized;
         }
 
+        function isValidDataBridgeApiUrl(value) {
+            try {
+                const url = new URL(String(value || '').trim());
+                return url.protocol === 'http:' || url.protocol === 'https:';
+            } catch (error) {
+                return false;
+            }
+        }
+
         function getStoredDataBridgeToken() {
             try {
                 return typeof localStorage !== 'undefined'
@@ -34633,19 +34648,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function openDataBridgeDashboard() {
-            const targetUrl = DATA_BRIDGE_FRONTEND_URL || './databridge.html';
-            window.open(targetUrl, '_blank', 'noopener,noreferrer');
+            const targetUrl = DATA_BRIDGE_FRONTEND_URL || LOCAL_DATA_BRIDGE_URL;
+            window.open(targetUrl, '_blank');
         }
 
         function openDataBridgeLinkModal() {
             const modal = document.getElementById('databridge-link-modal');
             const input = document.getElementById('databridge-api-secret');
-            const error = document.getElementById('databridge-link-error');
             if (!modal) return;
-            if (error) {
-                error.textContent = '';
-                error.classList.add('hidden');
-            }
+            updateDataBridgeLinkModalState();
             modal.classList.remove('opacity-0', 'pointer-events-none');
             setTimeout(() => input?.focus(), 50);
         }
@@ -34661,14 +34672,40 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (!form || form.dataset.bound === 'true') return;
             form.dataset.bound = 'true';
             form.addEventListener('submit', verifyDataBridgeConnection);
+            const input = document.getElementById('databridge-api-secret');
+            input?.addEventListener('input', updateDataBridgeLinkModalState);
+            updateDataBridgeLinkModalState();
+        }
+
+        function updateDataBridgeLinkModalState() {
+            const error = document.getElementById('databridge-link-error');
+            const submit = document.getElementById('databridge-link-submit');
+            const input = document.getElementById('databridge-api-secret');
+            const hasSecret = Boolean(String(input?.value || '').trim());
+            if (submit) {
+                submit.disabled = !hasSecret;
+                submit.classList.toggle('opacity-60', !hasSecret);
+                submit.classList.toggle('cursor-not-allowed', !hasSecret);
+            }
+            if (!error) return;
+            if (hasSecret || HAS_VALID_DATA_BRIDGE_API_URL) {
+                error.textContent = '';
+                error.classList.add('hidden');
+            } else {
+                error.textContent = '';
+                error.classList.add('hidden');
+            }
         }
 
         function setDataBridgeLinkPending(isPending) {
             const submit = document.getElementById('databridge-link-submit');
             if (!submit) return;
-            submit.disabled = isPending;
-            submit.classList.toggle('opacity-60', isPending);
-            submit.classList.toggle('cursor-not-allowed', isPending);
+            const input = document.getElementById('databridge-api-secret');
+            const hasSecret = Boolean(String(input?.value || '').trim());
+            const isDisabled = isPending || !hasSecret;
+            submit.disabled = isDisabled;
+            submit.classList.toggle('opacity-60', isDisabled);
+            submit.classList.toggle('cursor-not-allowed', isDisabled);
             submit.innerHTML = isPending
                 ? '<i class="fa-solid fa-spinner fa-spin"></i><span>Verificando conexión</span>'
                 : '<i class="fa-solid fa-shield-halved"></i><span>Verificar e Iniciar Sincronización</span>';
@@ -34686,21 +34723,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
                 return;
             }
-            if (!DATA_BRIDGE_API_URL) {
-                const message = 'Configura VITE_DATA_BRIDGE_API_URL para verificar la conexión.';
-                if (error) {
-                    error.textContent = message;
-                    error.classList.remove('hidden');
-                }
-                if (typeof showToast === 'function') showToast(`⚠️ ${message}`);
-                return;
-            }
-
             setDataBridgeLinkPending(true);
             if (error) error.classList.add('hidden');
             try {
-                const endpoint = `${DATA_BRIDGE_API_URL.replace(/\/+$/, '')}/api/verify-connection`;
-                const response = await fetch(endpoint, {
+                const response = await fetch(DATA_BRIDGE_VERIFY_ENDPOINT, {
                     method: 'POST',
                     headers: {
                         Authorization: `Bearer ${secretInput}`,
@@ -34750,12 +34776,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const launcher = document.getElementById('web-databridge-launcher');
             const iframe = document.getElementById('web-databridge-iframe');
             if (!modal || !container) {
-                window.open('./databridge.html', '_blank', 'noopener');
+                window.open(LOCAL_DATA_BRIDGE_URL, '_blank', 'noopener');
                 return;
             }
 
             if (iframe && !iframe.getAttribute('src')) {
-                iframe.setAttribute('src', './databridge.html');
+                iframe.setAttribute('src', LOCAL_DATA_BRIDGE_URL);
             }
 
             webDataBridgeVisible = true;
@@ -34817,15 +34843,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (!btn || !icon) return;
 
             if (isVisible) {
-                btn.className = "tools-dropdown-action";
+                btn.setAttribute('class', 'tools-dropdown-action');
                 btn.setAttribute('title', 'Abrir Data Bridge');
                 btn.setAttribute('aria-label', 'Abrir Data Bridge');
-                icon.className = "header-utility-icon";
+                icon.setAttribute('class', 'header-utility-icon');
             } else {
-                btn.className = "tools-dropdown-action";
+                btn.setAttribute('class', 'tools-dropdown-action');
                 btn.setAttribute('title', 'Abrir Data Bridge');
                 btn.setAttribute('aria-label', 'Abrir Data Bridge');
-                icon.className = "header-utility-icon";
+                icon.setAttribute('class', 'header-utility-icon');
             }
 
             updateDataBridgeConnectionIndicator();
