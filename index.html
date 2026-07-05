@@ -6662,6 +6662,15 @@
                                 <div id="label-charter-profit-header" class="text-[11px] text-slate-400 font-bold uppercase mb-1">Arbitraje Comercial (Fletador)</div>
                                 <div class="text-xl font-black text-emerald-400 mono" id="res-net-profit-charterer">$0</div>
                                 <div id="label-risk-free-profit" class="text-[10px] text-slate-500 mt-1">Beneficio Libre de Riesgo</div>
+                                <details id="charterer-net-breakdown" class="mt-3 border-t border-slate-800 pt-2 text-left">
+                                    <summary class="cursor-pointer text-[10px] font-black uppercase text-indigo-300">Desglose Neto Fletador</summary>
+                                    <div class="mt-2 space-y-1 text-[10px] text-slate-400">
+                                        <div class="flex justify-between gap-2"><span>Ingresos Venta (Cliente)</span><strong id="res-charterer-gross-revenue" class="mono text-slate-200">$0</strong></div>
+                                        <div class="flex justify-between gap-2"><span>Coste Fletamento (Pago Armador)</span><strong id="res-charterer-freight-cost" class="mono text-red-300">$0</strong></div>
+                                        <div class="flex justify-between gap-2"><span>Comisiones (Brokerage)</span><strong id="res-charterer-commission-cost" class="mono text-red-300">$0</strong></div>
+                                        <div class="flex justify-between gap-2 border-t border-slate-800 pt-1 font-bold"><span>Beneficio Neto Fletador</span><strong id="res-charterer-final-net" class="mono text-emerald-300">$0</strong></div>
+                                    </div>
+                                </details>
                                 <div id="owner-purchase-effectiveness" class="mt-3 rounded-md border border-slate-700 bg-slate-950/40 px-2 py-1.5 text-[10px] font-bold text-slate-400">Efectividad de Compra: -</div>
                             </div>
                         </div>
@@ -19060,7 +19069,8 @@
             const tceTotal = isZeroCalculation ? 0 : (voyageRevenues - voyageExpenses);
             const netProfitOwner = isZeroCalculation ? 0 : (tceTotal - ownerOperatingCapitalCosts);
             const grossRevCharterer = multiplier * freightSell;
-            let netProfitCharterer = isZeroCalculation ? 0 : (grossRevCharterer - grossRevOwner);
+            const chartererCommissionCost = isZeroCalculation ? 0 : (grossRevCharterer * (commPct / 100));
+            let netProfitCharterer = isZeroCalculation ? 0 : (grossRevCharterer - grossRevOwner - chartererCommissionCost);
 
             if (cpStandard === 'ASBATANKVOY') {
                 netProfitCharterer -= delayCost;
@@ -19381,6 +19391,26 @@
 
             document.getElementById('res-net-profit-charterer').innerText = `$${netProfitCharterer.toLocaleString('en-US', {maximumFractionDigits:0})}`;
             document.getElementById('res-net-profit-charterer').className = netProfitCharterer >= 0 ? "text-xl font-black text-emerald-400 mono" : "text-xl font-black text-red-500 mono";
+            const chartererGrossRevenueEl = document.getElementById('res-charterer-gross-revenue');
+            const chartererFreightCostEl = document.getElementById('res-charterer-freight-cost');
+            const chartererCommissionCostEl = document.getElementById('res-charterer-commission-cost');
+            const chartererFinalNetEl = document.getElementById('res-charterer-final-net');
+            if (chartererGrossRevenueEl) {
+                chartererGrossRevenueEl.innerText = `$${grossRevCharterer.toLocaleString('en-US', {maximumFractionDigits:0})}`;
+                chartererGrossRevenueEl.title = `Total Venta = ${freightSell.toFixed(2)} USD/MT × ${multiplier.toLocaleString('en-US')} TM`;
+            }
+            if (chartererFreightCostEl) {
+                chartererFreightCostEl.innerText = `-$${grossRevOwner.toLocaleString('en-US', {maximumFractionDigits:0})}`;
+                chartererFreightCostEl.title = `Total Compra = ${freightBuy.toFixed(2)} USD/MT × ${cargo.toLocaleString('en-US')} TM`;
+            }
+            if (chartererCommissionCostEl) {
+                chartererCommissionCostEl.innerText = `-$${chartererCommissionCost.toLocaleString('en-US', {maximumFractionDigits:0})}`;
+                chartererCommissionCostEl.title = `Total Comisiones = ${commPct}% sobre ingresos de venta`;
+            }
+            if (chartererFinalNetEl) {
+                chartererFinalNetEl.innerText = `$${netProfitCharterer.toLocaleString('en-US', {maximumFractionDigits:0})}`;
+                chartererFinalNetEl.className = netProfitCharterer >= 0 ? 'mono text-emerald-300' : 'mono text-red-300';
+            }
             const effectivenessEl = document.getElementById('owner-purchase-effectiveness');
             if (effectivenessEl) {
                 const chartererArbitrage = Math.max(0, netProfitCharterer);
@@ -33619,7 +33649,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const tceTotal = isZeroCalculation ? 0 : (voyageRevenues - voyageExpenses);
             const netProfitOwner = isZeroCalculation ? 0 : (tceTotal - ownerOperatingCapitalCosts);
             const grossRevCharterer = multiplier * freightSell;
-            let netProfitCharterer = isZeroCalculation ? 0 : (grossRevCharterer - grossRevOwner);
+            const chartererCommissionCost = isZeroCalculation ? 0 : (grossRevCharterer * (commPct / 100));
+            let netProfitCharterer = isZeroCalculation ? 0 : (grossRevCharterer - grossRevOwner - chartererCommissionCost);
 
             if (cpStandard === 'ASBATANKVOY') {
                 netProfitCharterer -= delayCost;
