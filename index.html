@@ -5354,6 +5354,16 @@
                             </button>
                         </li>
                         <li class="tools-dropdown-item">
+                            <a id="btn-open-databridge-direct" href="/databridge.html" target="_blank" rel="noopener" class="tools-dropdown-action" title="Abrir Data Bridge en pestaña nueva" aria-label="Abrir Data Bridge en pestaña nueva">
+                                <svg class="header-utility-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M7 7h10v10" />
+                                    <path d="M7 17 17 7" />
+                                    <path d="M5 21h14a2 2 0 0 0 2-2V5" />
+                                </svg>
+                                <span>Data Bridge Link</span>
+                            </a>
+                        </li>
+                        <li class="tools-dropdown-item">
                             <button onclick="exitAuditSession(); closeMobileSessionMenu();" class="tools-dropdown-action" title="Salir" aria-label="Salir">
                                 <svg class="header-utility-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M10 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" />
@@ -9890,6 +9900,8 @@
         })();
 
         const STORAGE_KEY = 'sea_charter_session';
+        const AUDIT_SESSION_SCHEMA = 'seacharter.audit-session.v2';
+        const AUDIT_LOCAL_SESSION_KEY = 'seacharter.audit-session.local.v2';
 
         // ==========================================
         // --- SISTEMA DE TRADUCCIÓN MULTILINGÜE ---
@@ -27183,24 +27195,151 @@ ADDITIONAL NOTES:
             URL.revokeObjectURL(url);
         }
 
+        function buildAuditSessionPayload() {
+            const text = document.getElementById('recapInput')?.value || '';
+            return {
+                schema: AUDIT_SESSION_SCHEMA,
+                savedAt: new Date().toISOString(),
+                recapText: text,
+                calculatorState: safeSessionClone(typeof State !== 'undefined' ? State : {}),
+                fields: getSessionFieldSnapshot()
+            };
+        }
+
+        function persistLocalAuditSession(payload) {
+            if (typeof localStorage === 'undefined') {
+                throw new Error("Local storage is not available");
+            }
+
+            localStorage.setItem(AUDIT_LOCAL_SESSION_KEY, JSON.stringify(payload));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        }
+
+        function getLocalAuditSessionPayload() {
+            if (typeof localStorage === 'undefined') return null;
+            const raw = localStorage.getItem(AUDIT_LOCAL_SESSION_KEY) || localStorage.getItem(STORAGE_KEY);
+            if (!raw) return null;
+            return JSON.parse(raw);
+        }
+
+        function parseAuditSessionPayload(raw) {
+            const trimmed = String(raw || '').trim();
+            if (!trimmed) throw new Error("Empty file");
+            if (trimmed.startsWith('{')) return JSON.parse(trimmed);
+
+            const lines = trimmed.split(/\r?\n/);
+            if (lines.length < 2) throw new Error("Invalid file structure");
+            const text = lines[1].trim();
+            if (!text) throw new Error("No data found");
+
+            return JSON.parse(decodeURIComponent(atob(text).split('').map(c =>
+                '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+            ).join('')));
+        }
+
+        function isValidAuditSessionPayload(payload) {
+            return payload && typeof payload === 'object'
+                && (payload.schema === AUDIT_SESSION_SCHEMA
+                    || payload.recapText !== undefined
+                    || payload.calculatorState !== undefined
+                    || payload.fields !== undefined);
+        }
+
         function saveAuditSession() {
             try {
-                const text = document.getElementById('recapInput')?.value || '';
-                const payload = {
-                    schema: 'seacharter.audit-session.v2',
-                    savedAt: new Date().toISOString(),
-                    recapText: text,
-                    calculatorState: safeSessionClone(typeof State !== 'undefined' ? State : {}),
-                    fields: getSessionFieldSnapshot()
-                };
+                const payload = buildAuditSessionPayload();
+                persistLocalAuditSession(payload);
                 const nameVarco = document.getElementById('vessel-name')?.value || document.getElementById('nombre-buque-calculadora')?.value || 'session';
                 const safeNameVarco = String(nameVarco).replace(/[:\\/*?"<>|]/g, "_").slice(0, 80) || 'session';
                 downloadSessionPayload(payload, `auditoria_${safeNameVarco}.json`);
-                if (typeof showToast === 'function') showToast('Sesión guardada correctamente');
+                if (typeof showToast === 'function') showToast('Sesión guardada localmente y exportada en JSON');
             } catch (err) {
                 console.error("Error guardando sesión:", err);
                 if (typeof showToast === 'function') showToast('No se pudo guardar la sesión.');
                 alert("No se pudo guardar la sesión. Revisa la consola para más detalles.");
+            }
+        }
+
+        function restoreSessionFields(fields) {
+            if (!fields || typeof fields !== 'object') return;
+
+            Object.entries(fields).forEach(([id, val]) => {
+                const el = document.getElementById(id);
+                if (!el || el.type === 'file' || el.type === 'password') return;
+
+                if (el.type === 'checkbox') {
+                    el.checked = Boolean(val);
+                } else if (el.type === 'radio') {
+                    el.checked = el.value === String(val);
+                } else {
+                    el.value = val ?? '';
+                }
+
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        }
+
+        function restoreCalculatorSessionState(calculatorState) {
+            if (!calculatorState || typeof calculatorState !== 'object') return;
+            if (typeof State === 'undefined') {
+                throw new Error("Calculator state is not available");
+            }
+
+            Object.assign(State, calculatorState);
+
+            const setVal = (id, val) => {
+                const el = document.getElementById(id);
+                if (!el || val === undefined || val === null) return;
+                el.value = val;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+
+            setVal('vessel-name', State.vessel);
+            setVal('vessel-dwt', State.dwt);
+            setVal('vessel-draft', State.draft !== undefined ? State.draft : 12.5);
+            setVal('vessel-loa', State.loa !== undefined ? State.loa : 200);
+            setVal('port-ballast', State.portBallast);
+            setVal('port-pol', State.pol);
+            setVal('port-pod', State.pod);
+            setVal('dist-ballast', State.distBallast);
+            setVal('dist-laden', State.distLaden);
+            setVal('spd-ballast', State.spdBallast !== undefined ? State.spdBallast : 11);
+            setVal('spd-laden', State.spdLaden !== undefined ? State.spdLaden : 11);
+            setVal('cargo-qty', State.cargo);
+            setVal('cargo-type', State.cargoType);
+            setVal('cargo-type-manual', State.cargoTypeManual !== undefined ? State.cargoTypeManual : 'Cement');
+            setVal('charter-party-standard', State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON'));
+            setVal('rate-load', State.loadRate !== undefined ? State.loadRate : 1000);
+            setVal('rate-disch', State.dischRate !== undefined ? State.dischRate : 1500);
+            setVal('factor-clima', State.weatherMarginDays !== undefined ? State.weatherMarginDays : (State.daysMargin !== undefined ? State.daysMargin : 0));
+            setVal('days-margin', State.weatherMarginDays !== undefined ? State.weatherMarginDays : (State.daysMargin !== undefined ? State.daysMargin : 0));
+            setVal('cons-sea', State.consSea !== undefined ? State.consSea : 0);
+            setVal('price-sea', State.priceSea !== undefined ? State.priceSea : 0);
+            setVal('cons-port', State.consPort !== undefined ? State.consPort : 0);
+            setVal('price-port', State.pricePort !== undefined ? State.pricePort : 0);
+            setVal('opex-daily', State.opex);
+            setVal('pda-pol', State.pdaPol !== undefined ? State.pdaPol : 0);
+            setVal('pda-pod', State.pdaPod !== undefined ? State.pdaPod : 0);
+            setVal('stevedoring-costs', State.stevedoringCosts !== undefined ? State.stevedoringCosts : 0);
+            setVal('pda-misc', State.pdaMisc !== undefined ? State.pdaMisc : 0);
+            setVal('cargo-surcharge', State.cargoSurcharge !== undefined ? State.cargoSurcharge : 0);
+            setVal('margin-owner', State.marginOwner !== undefined ? State.marginOwner : DEFAULT_OWNER_MARGIN_PERCENT);
+            setVal('margin-charterer', State.marginCharterer !== undefined ? State.marginCharterer : DEFAULT_CHARTERER_MARGIN_PERCENT);
+            setVal('freight-rate', State.freightRate !== undefined ? State.freightRate : 0);
+            setVal('freight-sell', State.freightSell !== undefined ? State.freightSell : 0);
+            setVal('comm-pct', State.commPct !== undefined ? State.commPct : 0);
+            setVal('demurrage-rate', State.demurrage);
+            setVal('asb-delay-hours', State.delayHours !== undefined ? State.delayHours : 0);
+            setVal('asb-delay-hours-main', State.delayHours !== undefined ? State.delayHours : 0);
+            setVal('apply-ets-surcharge', State.applyEtsSurcharge !== undefined ? State.applyEtsSurcharge : 'NO');
+            setVal('ets-route-type', State.etsRouteFactor !== undefined ? State.etsRouteFactor : 1);
+            setVal('eu-carbon-price', State.euCarbonPrice !== undefined ? State.euCarbonPrice : 80);
+            setVal('market-calibration-factor', State.marketCalibrationFactor !== undefined ? State.marketCalibrationFactor : 1);
+
+            if (document.getElementById('vessel-badge')) {
+                document.getElementById('vessel-badge').innerText = State.class || "Coaster";
             }
         }
 
@@ -27221,8 +27360,47 @@ ADDITIONAL NOTES:
             showToast('Auditoría finalizada. El borrador ha sido limpiado.');
         }
 
+        function applyAuditSessionPayload(decodedData) {
+            if (!isValidAuditSessionPayload(decodedData)) {
+                throw new Error("Invalid session content");
+            }
+
+            document.getElementById('recapInput').value = decodedData.recapText || '';
+            if (decodedData.recapText) {
+                showDocPreview('paste');
+            }
+
+            restoreSessionFields(decodedData.fields);
+
+            if (decodedData.calculatorState) {
+                restoreCalculatorSessionState(decodedData.calculatorState);
+
+                geocodeAllPorts().catch((err) => {
+                    console.error("Error geocodificando al cargar sesión:", err);
+                    runEngine();
+                });
+            }
+
+            switchTab('estimator');
+        }
+
         function loadAuditSession(isManual = false) {
             if (isManual) {
+                try {
+                    const localPayload = getLocalAuditSessionPayload();
+                    if (localPayload) {
+                        applyAuditSessionPayload(localPayload);
+                        if (typeof showToast === 'function') showToast('Sesión local cargada');
+                        return;
+                    }
+                } catch (err) {
+                    console.error("Error cargando sesión local:", err);
+                    if (typeof localStorage !== 'undefined') {
+                        localStorage.removeItem(AUDIT_LOCAL_SESSION_KEY);
+                    }
+                    if (typeof showToast === 'function') showToast('La sesión local no es válida. Selecciona un archivo.');
+                }
+
                 document.getElementById('load-session-file-input').click();
             }
         }
@@ -27234,106 +27412,11 @@ ADDITIONAL NOTES:
             reader.onload = (event) => {
                 try {
                     const result = event.target.result;
-                    if (!result || !result.trim()) {
-                        throw new Error("Empty file");
-                    }
-                    const parseSessionFile = (raw) => {
-                        const trimmed = raw.trim();
-                        if (trimmed.startsWith('{')) return JSON.parse(trimmed);
-
-                        const lines = trimmed.split(/\r?\n/);
-                        if (lines.length < 2) throw new Error("Invalid file structure");
-                        const text = lines[1].trim();
-                        if (!text) throw new Error("No data found");
-
-                        return JSON.parse(decodeURIComponent(atob(text).split('').map(c =>
-                            '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-                        ).join('')));
-                    };
-
-                    const decodedData = parseSessionFile(result);
-
-                    if (decodedData.recapText === undefined && decodedData.calculatorState === undefined) {
-                        throw new Error("Invalid file content");
-                    }
-
-                    document.getElementById('recapInput').value = decodedData.recapText || '';
-                    if (decodedData.recapText) {
-                        showDocPreview('paste');
-                    }
-
-                    if (decodedData.fields && typeof decodedData.fields === 'object') {
-                        Object.entries(decodedData.fields).forEach(([id, val]) => {
-                            const el = document.getElementById(id);
-                            if (!el || el.type === 'file') return;
-                            if (el.type === 'checkbox') {
-                                el.checked = Boolean(val);
-                            } else {
-                                el.value = val;
-                            }
-                        });
-                    }
-
-                    if (decodedData.calculatorState) {
-                        Object.assign(State, decodedData.calculatorState);
-                        
-                        const setVal = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.value = val; };
-                        
-                        setVal('vessel-name', State.vessel);
-                        setVal('vessel-dwt', State.dwt);
-                        setVal('vessel-draft', State.draft !== undefined ? State.draft : 12.5);
-                        setVal('vessel-loa', State.loa !== undefined ? State.loa : 200);
-                        setVal('port-ballast', State.portBallast);
-                        setVal('port-pol', State.pol);
-                        setVal('port-pod', State.pod);
-                        setVal('dist-ballast', State.distBallast);
-                        setVal('dist-laden', State.distLaden);
-                        setVal('spd-ballast', State.spdBallast !== undefined ? State.spdBallast : 11);
-                        setVal('spd-laden', State.spdLaden !== undefined ? State.spdLaden : 11);
-                        setVal('cargo-qty', State.cargo);
-                        setVal('cargo-type', State.cargoType);
-                        setVal('cargo-type-manual', State.cargoTypeManual !== undefined ? State.cargoTypeManual : 'Cement');
-                        setVal('charter-party-standard', State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON'));
-                        setVal('rate-load', State.loadRate !== undefined ? State.loadRate : 1000);
-                        setVal('rate-disch', State.dischRate !== undefined ? State.dischRate : 1500);
-                        setVal('factor-clima', State.weatherMarginDays !== undefined ? State.weatherMarginDays : (State.daysMargin !== undefined ? State.daysMargin : 0));
-                        setVal('days-margin', State.weatherMarginDays !== undefined ? State.weatherMarginDays : (State.daysMargin !== undefined ? State.daysMargin : 0));
-                        setVal('cons-sea', State.consSea !== undefined ? State.consSea : 0);
-                        setVal('price-sea', State.priceSea !== undefined ? State.priceSea : 0);
-                        setVal('cons-port', State.consPort !== undefined ? State.consPort : 0);
-                        setVal('price-port', State.pricePort !== undefined ? State.pricePort : 0);
-                        setVal('opex-daily', State.opex);
-                        setVal('pda-pol', State.pdaPol !== undefined ? State.pdaPol : 0);
-                        setVal('pda-pod', State.pdaPod !== undefined ? State.pdaPod : 0);
-                        setVal('stevedoring-costs', State.stevedoringCosts !== undefined ? State.stevedoringCosts : 0);
-                        setVal('pda-misc', State.pdaMisc !== undefined ? State.pdaMisc : 0);
-                        setVal('cargo-surcharge', State.cargoSurcharge !== undefined ? State.cargoSurcharge : 0);
-                        setVal('margin-owner', State.marginOwner !== undefined ? State.marginOwner : DEFAULT_OWNER_MARGIN_PERCENT);
-                        setVal('margin-charterer', State.marginCharterer !== undefined ? State.marginCharterer : DEFAULT_CHARTERER_MARGIN_PERCENT);
-                        setVal('freight-rate', State.freightRate !== undefined ? State.freightRate : 0);
-                        setVal('freight-sell', State.freightSell !== undefined ? State.freightSell : 0);
-                        setVal('comm-pct', State.commPct !== undefined ? State.commPct : 0);
-                        setVal('demurrage-rate', State.demurrage);
-                        setVal('asb-delay-hours', State.delayHours !== undefined ? State.delayHours : 0);
-                        setVal('asb-delay-hours-main', State.delayHours !== undefined ? State.delayHours : 0);
-                        setVal('apply-ets-surcharge', State.applyEtsSurcharge !== undefined ? State.applyEtsSurcharge : 'NO');
-                        setVal('ets-route-type', State.etsRouteFactor !== undefined ? State.etsRouteFactor : 1);
-                        setVal('eu-carbon-price', State.euCarbonPrice !== undefined ? State.euCarbonPrice : 80);
-                        setVal('market-calibration-factor', State.marketCalibrationFactor !== undefined ? State.marketCalibrationFactor : 1);
-
-                        if (document.getElementById('vessel-badge')) {
-                            document.getElementById('vessel-badge').innerText = State.class || "Coaster";
-                        }
-                        
-                        geocodeAllPorts().catch((err) => {
-                            console.error("Error geocodificando al cargar sesión:", err);
-                            runEngine();
-                        });
-                    }
-
-                    alert('Session loaded');
-                    showToast('Session loaded');
-                    switchTab('estimator');
+                    const decodedData = parseAuditSessionPayload(result);
+                    applyAuditSessionPayload(decodedData);
+                    persistLocalAuditSession(decodedData);
+                    alert('Sesión cargada');
+                    showToast('Sesión cargada');
                 } catch (err) {
                     alert("Error: El archivo no tiene el formato esperado. Asegúrate de cargar un archivo exportado desde la propia aplicación.");
                 }
@@ -34482,7 +34565,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const modal = document.getElementById('web-databridge-modal');
             const container = document.getElementById('web-databridge-container');
             const launcher = document.getElementById('web-databridge-launcher');
-            if (!modal || !container) return;
+            const iframe = document.getElementById('web-databridge-iframe');
+            if (!modal || !container) {
+                window.open('/databridge.html', '_blank', 'noopener');
+                return;
+            }
+
+            if (iframe && !iframe.getAttribute('src')) {
+                iframe.setAttribute('src', '/databridge.html');
+            }
 
             webDataBridgeVisible = true;
             modal.classList.remove('opacity-0', 'pointer-events-none');
