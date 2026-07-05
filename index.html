@@ -3321,6 +3321,34 @@
             border-color: #22C55E !important;
         }
 
+        .theme-light #shadow-estimator-panel,
+        .theme-light #shadow-estimator-panel .bg-slate-950\/40,
+        .theme-light #shadow-estimator-modal .bg-slate-900,
+        .theme-light #shadow-estimator-modal .bg-slate-950\/40 {
+            background-color: #FFFFFF !important;
+            color: #212529 !important;
+            border-color: #CBD5E1 !important;
+        }
+
+        .theme-light #shadow-estimator-panel .text-slate-200,
+        .theme-light #shadow-estimator-panel .text-slate-400,
+        .theme-light #shadow-estimator-panel .text-slate-500,
+        .theme-light #shadow-estimator-modal .text-slate-100,
+        .theme-light #shadow-estimator-modal .text-slate-200,
+        .theme-light #shadow-estimator-modal .text-slate-300,
+        .theme-light #shadow-estimator-modal .text-slate-400,
+        .theme-light #shadow-estimator-modal .text-slate-500 {
+            color: #334155 !important;
+        }
+
+        .theme-light #btn-open-shadow-estimator,
+        .theme-light #btn-open-shadow-estimator-panel,
+        .theme-light #btn-close-shadow-estimator {
+            background-color: #FFFFFF !important;
+            color: #002060 !important;
+            border-color: #94A3B8 !important;
+        }
+
         .route-sync-card {
             background: #FFFFFF;
             color: #212529;
@@ -6647,6 +6675,10 @@
                                 </div>
                                 <div class="text-4xl font-bold text-indigo-400 mono leading-none" id="res-net-profit-owner">$0</div>
                                 <div class="mt-2 text-[10px] text-slate-400" id="res-net-profit-owner-daily">Beneficio Neto Diario: $0 / día</div>
+                                <button id="btn-open-shadow-estimator" type="button" class="mt-3 inline-flex items-center justify-center gap-2 rounded-md border border-indigo-500/40 bg-indigo-950/30 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-indigo-200 transition hover:border-indigo-400 hover:bg-indigo-900/50 focus:outline-none focus:ring-2 focus:ring-indigo-400/50">
+                                    <i class="fa-solid fa-route"></i>
+                                    Simular Viaje Siguiente (Armador)
+                                </button>
                                 <div class="mt-3 border-t border-slate-800 pt-2 text-[10px] text-slate-500" id="res-tce-label">TCE Obtenido: $0 / día (Total: $0)</div>
                                 <details id="owner-net-breakdown" class="mt-3 border-t border-slate-800 pt-2 text-left">
                                     <summary class="cursor-pointer text-[10px] font-black uppercase text-indigo-300">Desglose Neto Armador</summary>
@@ -6709,6 +6741,89 @@
                     </div>
 
                     <div id="smart-advisor-panel" class="hidden no-print"></div>
+
+                    <div id="shadow-estimator-panel" class="bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg no-print">
+                        <div class="flex flex-col gap-3 border-b border-slate-800 pb-3 md:flex-row md:items-center md:justify-between">
+                            <div>
+                                <h2 class="text-sm font-bold text-indigo-300 uppercase">
+                                    <i class="fa-solid fa-layer-group mr-2"></i> Simulador de Viaje Combinado (Shadow Estimator)
+                                </h2>
+                                <div class="mt-0.5 text-[10px] text-slate-500">Escenario especulativo aislado: no modifica la cotizacion activa.</div>
+                            </div>
+                            <button id="btn-open-shadow-estimator-panel" type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-slate-600 bg-slate-950/50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-slate-200 transition hover:border-indigo-400 hover:text-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-400/50">
+                                <i class="fa-solid fa-calculator"></i>
+                                Abrir simulador
+                            </button>
+                        </div>
+                        <div class="mt-3 grid grid-cols-1 gap-3 text-[10px] text-slate-400 md:grid-cols-3">
+                            <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                                <span class="block font-black uppercase text-slate-500">Estado</span>
+                                <strong class="mt-1 block text-slate-200">Sandbox local</strong>
+                            </div>
+                            <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                                <span class="block font-black uppercase text-slate-500">Lectura</span>
+                                <strong class="mt-1 block text-slate-200">Viaje 1 como snapshot</strong>
+                            </div>
+                            <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                                <span class="block font-black uppercase text-slate-500">Persistencia</span>
+                                <strong class="mt-1 block text-slate-200">Sin escritura global</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="shadow-estimator-modal" class="fixed inset-0 z-[10000] hidden items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm no-print" role="dialog" aria-modal="true" aria-labelledby="shadow-estimator-title">
+                        <div class="w-full max-w-3xl overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
+                            <div class="flex items-start justify-between gap-4 border-b border-slate-800 p-5">
+                                <div>
+                                    <h3 id="shadow-estimator-title" class="text-sm font-black uppercase tracking-wide text-indigo-200">Shadow Estimator Armador</h3>
+                                    <p class="mt-1 text-[11px] text-slate-500">Los inputs viven solo mientras este modal esta abierto.</p>
+                                </div>
+                                <button id="btn-close-shadow-estimator" type="button" class="rounded-md border border-slate-700 bg-slate-950/60 px-3 py-2 text-[10px] font-black uppercase text-slate-300 transition hover:border-red-400 hover:text-red-200">Cerrar</button>
+                            </div>
+                            <div class="grid grid-cols-1 gap-5 p-5 lg:grid-cols-2">
+                                <div class="space-y-3">
+                                    <div>
+                                        <label for="shadow-next-destination" class="mb-1 block text-[10px] font-black uppercase text-slate-400">Destino siguiente</label>
+                                        <input id="shadow-next-destination" type="text" class="input-gc w-full text-sm" autocomplete="off">
+                                    </div>
+                                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                        <div>
+                                            <label for="shadow-estimated-days" class="mb-1 block text-[10px] font-black uppercase text-slate-400">Dias proyectados</label>
+                                            <input id="shadow-estimated-days" type="number" min="0" step="0.1" class="input-gc w-full text-sm">
+                                        </div>
+                                        <div>
+                                            <label for="shadow-hypothetical-freight" class="mb-1 block text-[10px] font-black uppercase text-slate-400">Ingreso bruto estimado</label>
+                                            <input id="shadow-hypothetical-freight" type="number" min="0" step="1000" class="input-gc w-full text-sm">
+                                        </div>
+                                        <div>
+                                            <label for="shadow-estimated-costs" class="mb-1 block text-[10px] font-black uppercase text-slate-400">Bunker + puertos</label>
+                                            <input id="shadow-estimated-costs" type="number" min="0" step="1000" class="input-gc w-full text-sm">
+                                        </div>
+                                    </div>
+                                    <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3 text-[10px] text-slate-400">
+                                        <div class="flex justify-between gap-3"><span>Beneficio Neto Viaje 1</span><strong id="shadow-base-profit" class="mono text-slate-200">$0</strong></div>
+                                        <div class="mt-1 flex justify-between gap-3"><span>Dias Viaje 1</span><strong id="shadow-base-days" class="mono text-slate-200">0</strong></div>
+                                        <div class="mt-1 flex justify-between gap-3"><span>OPEX/CAPEX diario</span><strong id="shadow-base-daily" class="mono text-slate-200">$0</strong></div>
+                                    </div>
+                                </div>
+                                <div class="space-y-3">
+                                    <div class="rounded-lg border border-indigo-500/30 bg-indigo-950/20 p-4">
+                                        <span class="block text-[10px] font-black uppercase text-indigo-300">Beneficio Viaje 2</span>
+                                        <strong id="shadow-result-trip2" class="mono mt-1 block text-2xl text-slate-100">$0</strong>
+                                    </div>
+                                    <div class="rounded-lg border border-slate-700 bg-slate-950/40 p-4">
+                                        <span class="block text-[10px] font-black uppercase text-slate-400">Beneficio consolidado</span>
+                                        <strong id="shadow-result-consolidated" class="mono mt-1 block text-2xl text-slate-100">$0</strong>
+                                    </div>
+                                    <div class="rounded-lg border border-slate-700 bg-slate-950/40 p-4">
+                                        <span class="block text-[10px] font-black uppercase text-slate-400">TCE combinado</span>
+                                        <strong id="shadow-result-tce" class="mono mt-1 block text-2xl text-slate-100">$0 / dia</strong>
+                                    </div>
+                                    <div id="shadow-viability-alert" class="hidden rounded-lg border border-emerald-500/40 bg-emerald-950/40 p-3 text-xs font-bold text-emerald-200">Viable: El armador puede absorber la perdida inicial gracias al flete del viaje de retorno.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- PANEL DE IMPRESIÓN Y RESPALDO -->
                     <div class="bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg no-print">
@@ -19748,6 +19863,138 @@
             } else if (typeof renderStressTestScenario === 'function') {
                 renderStressTestScenario(State);
             }
+        }
+
+        function bindShadowEstimator() {
+            const modal = document.getElementById('shadow-estimator-modal');
+            const openButtons = [
+                document.getElementById('btn-open-shadow-estimator'),
+                document.getElementById('btn-open-shadow-estimator-panel')
+            ].filter(Boolean);
+            const closeButton = document.getElementById('btn-close-shadow-estimator');
+            const fields = {
+                nextDestination: document.getElementById('shadow-next-destination'),
+                estimatedDays: document.getElementById('shadow-estimated-days'),
+                hypotheticalFreight: document.getElementById('shadow-hypothetical-freight'),
+                estimatedCosts: document.getElementById('shadow-estimated-costs')
+            };
+            const outputs = {
+                baseProfit: document.getElementById('shadow-base-profit'),
+                baseDays: document.getElementById('shadow-base-days'),
+                baseDaily: document.getElementById('shadow-base-daily'),
+                trip2: document.getElementById('shadow-result-trip2'),
+                consolidated: document.getElementById('shadow-result-consolidated'),
+                tce: document.getElementById('shadow-result-tce'),
+                alert: document.getElementById('shadow-viability-alert')
+            };
+            if (!modal || !closeButton || openButtons.length === 0) return;
+
+            let snapshot = null;
+            const localDefaults = {
+                nextDestination: '',
+                estimatedDays: '',
+                hypotheticalFreight: '',
+                estimatedCosts: ''
+            };
+
+            const toNumber = (value) => {
+                if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+                return Number(String(value || '').replace(/[^0-9.-]/g, '')) || 0;
+            };
+            const money = (value) => `$${toNumber(value).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+            const setText = (el, value) => { if (el) el.innerText = value; };
+            const setResultClass = (el, value, baseClass) => {
+                if (!el) return;
+                el.className = `${baseClass} ${value >= 0 ? 'text-emerald-300' : 'text-red-300'}`;
+            };
+
+            const readSnapshot = () => {
+                const ownerBreakdown = State?.ownerNetBreakdown || {};
+                const totalDays = toNumber(State?.totalDays || (toNumber(State?.daysSea) + toNumber(State?.daysPort)));
+                const globalOpexCapexDaily = totalDays > 0
+                    ? toNumber(ownerBreakdown.operatingCapitalCosts) / totalDays
+                    : (toNumber(State?.opex) + toNumber(State?.capexDaily));
+                return Object.freeze({
+                    pod: document.getElementById('port-pod')?.value || State?.pod || '',
+                    beneficioNetoViaje1: toNumber(State?.netProfitOwner || ownerBreakdown.finalNet || document.getElementById('res-net-profit-owner')?.innerText),
+                    diasViaje1: totalDays,
+                    opexCapexDaily: globalOpexCapexDaily,
+                    ingresoBruto1: toNumber(ownerBreakdown.grossRevenue || State?.ownerNetBreakdown?.grossRevenue),
+                    costesViaje1: toNumber(ownerBreakdown.bunkerAndPortCosts || ((State?.costBunkers || 0) + (State?.portExpenses || 0)))
+                });
+            };
+
+            const renderResults = () => {
+                if (!snapshot) return;
+                const estimatedDays = toNumber(fields.estimatedDays?.value);
+                const hypotheticalFreight = toNumber(fields.hypotheticalFreight?.value);
+                const estimatedCosts = toNumber(fields.estimatedCosts?.value);
+                const beneficioViaje2 = hypotheticalFreight - estimatedCosts - (estimatedDays * snapshot.opexCapexDaily);
+                const beneficioConsolidado = snapshot.beneficioNetoViaje1 + beneficioViaje2;
+                const totalDays = snapshot.diasViaje1 + estimatedDays;
+                const tceCombinado = totalDays > 0
+                    ? (snapshot.ingresoBruto1 + hypotheticalFreight - snapshot.costesViaje1 - estimatedCosts) / totalDays
+                    : 0;
+
+                setText(outputs.trip2, money(beneficioViaje2));
+                setText(outputs.consolidated, money(beneficioConsolidado));
+                setText(outputs.tce, `${money(tceCombinado)} / dia`);
+                setResultClass(outputs.trip2, beneficioViaje2, 'mono mt-1 block text-2xl');
+                setResultClass(outputs.consolidated, beneficioConsolidado, 'mono mt-1 block text-2xl');
+                setResultClass(outputs.tce, tceCombinado, 'mono mt-1 block text-2xl');
+                if (outputs.alert) outputs.alert.classList.toggle('hidden', !(beneficioConsolidado > 0));
+            };
+
+            const clearLocalState = () => {
+                snapshot = null;
+                Object.entries(localDefaults).forEach(([key, value]) => {
+                    if (fields[key]) fields[key].value = value;
+                });
+                setText(outputs.baseProfit, '$0');
+                setText(outputs.baseDays, '0');
+                setText(outputs.baseDaily, '$0');
+                setText(outputs.trip2, '$0');
+                setText(outputs.consolidated, '$0');
+                setText(outputs.tce, '$0 / dia');
+                if (outputs.alert) outputs.alert.classList.add('hidden');
+            };
+
+            const openModal = () => {
+                snapshot = readSnapshot();
+                if (fields.nextDestination) fields.nextDestination.value = snapshot.pod || '';
+                if (fields.estimatedDays) fields.estimatedDays.value = '';
+                if (fields.hypotheticalFreight) fields.hypotheticalFreight.value = '';
+                if (fields.estimatedCosts) fields.estimatedCosts.value = '';
+                setText(outputs.baseProfit, money(snapshot.beneficioNetoViaje1));
+                setText(outputs.baseDays, snapshot.diasViaje1.toLocaleString('en-US', { maximumFractionDigits: 2 }));
+                setText(outputs.baseDaily, `${money(snapshot.opexCapexDaily)} / dia`);
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                renderResults();
+                fields.estimatedDays?.focus();
+            };
+
+            const closeModal = () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                clearLocalState();
+            };
+
+            openButtons.forEach((button) => button.addEventListener('click', openModal));
+            closeButton.addEventListener('click', closeModal);
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) closeModal();
+            });
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+            });
+            Object.values(fields).forEach((field) => field?.addEventListener('input', renderResults));
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bindShadowEstimator);
+        } else {
+            bindShadowEstimator();
         }
 
         // Deriva el país a partir de un campo de puerto con formato "Puerto, País".
