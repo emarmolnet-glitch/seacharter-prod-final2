@@ -58,7 +58,8 @@ export default async (req: Request) => {
     const imoNumber = String(vessel.imoNumber || vessel.imo || "").trim();
     const latitude = Number(vessel.latitude ?? vessel.lat ?? 0);
     const longitude = Number(vessel.longitude ?? vessel.lon ?? vessel.lng ?? 0);
-    const shipType = vessel.shipType || vessel.ship_type ? String(vessel.shipType || vessel.ship_type) : null;
+    const shipTypeValue = vessel.shipType ?? vessel.ship_type ?? vessel.ShipType ?? vessel.tipo_buque ?? vessel.tipo ?? vessel.type ?? vessel.radarCategory ?? vessel.cargoClass ?? vessel.vesselClass;
+    const shipType = shipTypeValue ? String(shipTypeValue) : null;
 
     if (!imoNumber || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       return Response.json(
@@ -78,6 +79,8 @@ export default async (req: Request) => {
       mmsi: vessel.mmsi ? String(vessel.mmsi) : null,
       vesselName: vessel.vesselName || vessel.vessel_name || vessel.name ? String(vessel.vesselName || vessel.vessel_name || vessel.name) : null,
       shipType,
+      cargoClass: vessel.cargoClass || vessel.radarCategory || vessel.tipo_carga ? String(vessel.cargoClass || vessel.radarCategory || vessel.tipo_carga) : null,
+      vesselClass: vessel.vesselClass || vessel.radarCategory || vessel.tipo_buque ? String(vessel.vesselClass || vessel.radarCategory || vessel.tipo_buque) : null,
       draught: Number.isFinite(Number(vessel.draught ?? vessel.draft)) ? Number(vessel.draught ?? vessel.draft) : null,
       latitude,
       longitude,

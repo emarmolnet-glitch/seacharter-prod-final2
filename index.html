@@ -30808,11 +30808,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             'multi purpose vessel': 'MPV',
             'multi-purpose vessel': 'MPV',
             'mpp': 'MPV',
-            'tanker': 'Tanker'
+            'tanker': 'Tanker',
+            'product tanker': 'Tanker',
+            'chemical tanker': 'Tanker',
+            'oil tanker': 'Tanker',
+            'crude oil tanker': 'Tanker'
         };
 
         function normalizeRadarCategory(value, fallback = 'Other') {
-            const key = String(value || '')
+            const raw = String(value || '').trim();
+            const key = raw
                 .normalize('NFD')
                 .replace(/[\u0300-\u036f]/g, '')
                 .replace(/[^a-z0-9]+/gi, ' ')
@@ -30820,7 +30825,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 .trim()
                 .toLowerCase();
             if (!key || ['n a', 'na', 'null', 'none', 'unknown', 'sin dato'].includes(key)) return fallback;
-            return categoryMap[key] || fallback;
+            if (categoryMap[key]) return categoryMap[key];
+            if (key.includes('possible cement')) return 'Possible Cement Carrier';
+            if (key.includes('cement')) return 'Cement Carrier';
+            if (key.includes('bulk') || key.includes('bulker') || key.includes('handysize') || key.includes('handymax') || key.includes('supramax') || key.includes('ultramax') || key.includes('panamax') || key.includes('capesize')) return 'Bulk Carrier';
+            if (key.includes('general cargo') || key.includes('coaster') || key.includes('mini bulker')) return 'General Cargo Ship';
+            if (key.includes('multipurpose') || key.includes('multi purpose') || key.includes('mpp') || key.includes('heavy lift')) return 'MPV';
+            if (key.includes('tanker') || key.includes('lng') || key.includes('lpg') || key.includes('chemical') || key.includes('crude') || key.includes('oil')) return 'Tanker';
+            return raw || fallback;
         }
 
         function readRadarCategorySource(vessel) {
@@ -30832,6 +30844,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 vessel.cargoType ||
                 vessel.categoryLabel ||
                 vessel.categoryValue ||
+                vessel.radarCategory ||
+                vessel.cargoClass ||
                 vessel.vesselClass ||
                 vessel.shipType ||
                 vessel.ShipType ||
@@ -30842,6 +30856,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 meta.cargoType ||
                 meta.categoryLabel ||
                 meta.categoryValue ||
+                meta.radarCategory ||
+                meta.cargoClass ||
                 meta.vesselClass ||
                 meta.shipType ||
                 meta.ShipType ||
