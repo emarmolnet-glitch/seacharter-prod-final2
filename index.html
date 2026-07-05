@@ -9625,7 +9625,7 @@
                     <!-- Generar Informe Split Button (SeaCharter Core PRO) -->
                     <div class="relative inline-flex w-full mt-4" id="report-split-button-container">
                         <!-- Left Action: Enviar a Data Bridge (Automático) -->
-                        <button id="btnGenerateReport" onclick="generateFrozenReport()" class="flex-grow bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase py-3 pl-4 pr-3 rounded-l-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border-r border-emerald-700/30 focus:outline-none cursor-pointer">
+                        <button id="btnGenerateReport" onclick="exportSelectedMatchingToAudit()" class="flex-grow bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase py-3 pl-4 pr-3 rounded-l-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border-r border-emerald-700/30 focus:outline-none cursor-pointer">
                             <i class="fa-solid fa-paper-plane"></i>
                             <span>Exportar Selección a Auditoría</span>
                         </button>
@@ -12850,12 +12850,19 @@
         }
         window.generateFrozenReport = generateFrozenReport;
 
-        function exportSelectedMatchingToAudit() {
+        async function exportSelectedMatchingToAudit() {
             try {
                 const auditVessels = Array.isArray(window.lastDataBridgeAuditVessels) ? window.lastDataBridgeAuditVessels : [];
-                const selectedKeys = Array.from(document.querySelectorAll('.matching-audit-select:checked'))
+                const auditSelectionInputs = Array.from(document.querySelectorAll('.matching-audit-select'));
+                const selectedKeys = auditSelectionInputs
+                    .filter(input => input.checked)
                     .map(input => input.getAttribute('data-audit-key'))
                     .filter(Boolean);
+
+                if (auditSelectionInputs.length > 0 && selectedKeys.length === 0) {
+                    showToast("Selecciona al menos un buque para exportar a auditoría.");
+                    return;
+                }
 
                 const vesselsToSend = selectedKeys.length > 0
                     ? selectedKeys.map(key => auditVessels.find(vessel => vessel.__auditKey === key)).filter(Boolean)
@@ -12867,6 +12874,43 @@
                 }
 
                 const payload = JSON.parse(JSON.stringify(vesselsToSend));
+                const dataBridgeToken = (() => {
+                    try {
+                        return typeof localStorage !== 'undefined'
+                            ? String(localStorage.getItem('seacharter_databridge_api_secret') || '').trim()
+                            : '';
+                    } catch (storageErr) {
+                        console.warn("No se pudo leer el token de Data Bridge desde localStorage:", storageErr);
+                        return '';
+                    }
+                })();
+
+                if (!dataBridgeToken) {
+                    throw new Error('No hay token de Data Bridge guardado. Conecta Data Bridge antes de exportar.');
+                }
+
+                console.log('Enviando datos:', payload);
+
+                const bridgeResponse = await fetch('https://calm-shortbread-55bcfc.netlify.app/api/receive-audit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'Authorization': `Bearer ${dataBridgeToken}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                let bridgePayload = null;
+                try {
+                    bridgePayload = await bridgeResponse.json();
+                } catch (parseErr) {
+                    bridgePayload = null;
+                }
+
+                if (!bridgeResponse.ok) {
+                    throw new Error(bridgePayload?.error || bridgePayload?.message || `Data Bridge respondió ${bridgeResponse.status}`);
+                }
 
                 try {
                     const localSyncChannel = new BroadcastChannel('seacharter_sync');
@@ -13101,7 +13145,7 @@
             if (arrow) arrow.classList.remove('rotate-180');
 
             if (option === 'send') {
-                generateFrozenReport();
+                exportSelectedMatchingToAudit();
             } else if (option === 'download') {
                 downloadFrozenReport();
             } else if (option === 'upload') {
@@ -14170,6 +14214,8 @@
                     const ais = m.ais || {};
                     const route = m.routing || {};
                     const auditStatus = m.auditStatus || m.status || m.estadoProcesos || 'PENDING_AUDIT';
+                    const vesselName = v.vesselName || v.vessel_name || ais.name || ais.nombre || "Unknown";
+                    const vesselEta = route.eta || ais.eta_puerto_carga || ais.eta || m.eta || new Date().toISOString().split('T')[0];
                     const auditKey = [
                         v.imo || ais.imo || '',
                         v.mmsi || ais.mmsi || '',
@@ -14177,13 +14223,14 @@
                     ].join('|');
                     return {
                         __auditKey: auditKey,
-                        imo: Number(v.imo) || 0,
-                        name: v.vesselName || v.vessel_name || "Unknown",
+                        imo: Number(v.imo || ais.imo) || 0,
+                        name: vesselName,
+                        nombre: vesselName,
                         type: v.vesselClass || v.specialtyType || "Bulk Carrier",
                         draft: Number(v.draft) || 0,
                         dwt: Number(v.dwt) || 0,
                         flag: v.flag || v.bandera || ais.flag || "Unknown",
-                        eta: route.eta || ais.eta_puerto_carga || new Date().toISOString().split('T')[0],
+                        eta: vesselEta,
                         ultimo_puerto: ais.lastPortOfCall || ais.ultimo_puerto || m.ultimo_puerto || "N/A",
                         destino_actual: ais.plannedDestination || ais.destination || m.destino_actual || "N/A",
                         eta_puerto_carga: ais.eta_puerto_carga || route.eta || "N/A",
