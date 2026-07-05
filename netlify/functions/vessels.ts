@@ -34,6 +34,7 @@ function toApiVessel(row: VesselRecord) {
     eta: row.eta,
     source: row.source,
     classificationSignals: row.classificationSignals,
+    cementCarrierClassification: row.cementCarrierClassification,
     missingData: row.missingData,
     classificationComplete: row.classificationComplete,
     radarSweepCount: row.radarSweepCount,

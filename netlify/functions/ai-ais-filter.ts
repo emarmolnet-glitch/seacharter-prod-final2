@@ -44,7 +44,7 @@ const taxonomyTerms: Record<string, string[]> = {
   "type:bulk": ["bulk carrier", "bulk", "bulker", "handysize", "handymax", "supramax", "ultramax", "panamax", "capesize"],
   "type:general": ["general cargo", "coaster"],
   "type:container": ["container", "feeder"],
-  "type:cement": ["cement"],
+  "type:cement": ["cement", "cemento", "ciment", "clinker", "cemex", "holcim", "lafarge", "heidelberg", "buzzi", "votorantim", "argos", "portland"],
   "type:mpv": ["multipurpose", "mpp"],
   "type:heavy_lift": ["heavy lift"],
   "category:tanker": ["tanker", "crude", "lng", "lpg", "chemical", "product tanker", "oil"],
@@ -55,8 +55,63 @@ const taxonomyTerms: Record<string, string[]> = {
   "type:lpg_tanker": ["lpg"],
 };
 
+const cementConfirmedTerms = ["cement carrier", "cement", "cemento", "ciment", "clinker carrier", "clinker"];
+const cementPossibleTerms = ["cem", "cementos", "cemex", "holcim", "lafarge", "heidelberg", "heidelbergcement", "buzzi", "votorantim", "argos", "calucem", "portland", "bulk cement", "terminal cemento", "cement terminal"];
+const cementGenericCargoTerms = ["cargo", "general cargo", "bulk", "bulker", "bulk carrier", "carrier", "freighter"];
+
+function classifyCementCarrierCandidate(vessel: NonNullable<ReturnType<typeof normalizeVessel>>) {
+  const haystack = normalizeTaxonomyText([
+    vessel.vesselName,
+    vessel.shipType,
+    vessel.destination,
+    vessel.lastPortOfCall,
+    vessel.source.Tipo,
+    vessel.source.tipo,
+    vessel.source.type,
+    vessel.source.shipType,
+    vessel.source.ShipType,
+    vessel.source.vesselType,
+    vessel.source.cargoType,
+    vessel.source.tipo_carga,
+    vessel.source.cargoTaxonomyLabel,
+    vessel.source.categoryLabel,
+    vessel.source.categoryValue,
+    vessel.source.radarCategory,
+    vessel.source.vesselClass,
+    pickObject(vessel.source.MetaData).ShipName,
+    pickObject(vessel.source.MetaData).Tipo,
+    pickObject(vessel.source.MetaData).tipo_carga,
+    pickObject(vessel.source.MetaData).cargoType,
+    pickObject(vessel.source.MetaData).vesselClass,
+    pickObject(vessel.source.fleetIntelRecord).tipo_carga,
+    pickObject(vessel.source.fleetIntelRecord).cargoType,
+    pickObject(vessel.source.fleetIntelRecord).tipo,
+    pickObject(vessel.source.fleetIntelRecord).type,
+    pickObject(vessel.source.fleetIntelRecord).shipType,
+    pickObject(vessel.source.fleetIntelRecord).vesselType,
+    pickObject(vessel.source.fleetIntelRecord).categoryLabel,
+    pickObject(vessel.source.fleetIntelRecord).scrapedType,
+  ].filter(Boolean).join(" "));
+  const confirmedReasons = cementConfirmedTerms.filter((term) => {
+    const normalized = normalizeTaxonomyText(term);
+    if (["cement", "cemento", "ciment", "clinker"].includes(normalized)) return new RegExp(`\\b${normalized}\\b`).test(haystack);
+    return haystack.includes(normalized);
+  });
+  if (confirmedReasons.length > 0) return { level: "confirmed", label: "Cement Carrier", reasons: confirmedReasons };
+  const possibleReasons = cementPossibleTerms.filter((term) => {
+    const normalized = normalizeTaxonomyText(term);
+    if (normalized === "cem") return /\bcem\b/.test(haystack) || /\bcem[a-z0-9]{2,}\b/.test(haystack);
+    return haystack.includes(normalized);
+  });
+  const genericCargo = cementGenericCargoTerms.some((term) => haystack.includes(normalizeTaxonomyText(term)));
+  if (possibleReasons.length > 0 && genericCargo) return { level: "possible", label: "Possible Cement Carrier", reasons: possibleReasons };
+  return { level: "none", label: "", reasons: [] };
+}
+
 function vesselMatchesTaxonomy(vessel: NonNullable<ReturnType<typeof normalizeVessel>>, taxonomyValue: string) {
   if (!taxonomyValue || taxonomyValue === "All") return true;
+  const cementSignal = classifyCementCarrierCandidate(vessel);
+  if (taxonomyValue === "type:cement" && cementSignal.level !== "none") return true;
   const terms = taxonomyTerms[taxonomyValue] || taxonomyTerms[taxonomyValue.replace(/^type:/, "")] || [taxonomyValue.replace(/^type:/, "")];
   const haystack = normalizeTaxonomyText([
     vessel.shipType,
@@ -136,6 +191,7 @@ export default async (req: Request) => {
       .filter((vessel): vessel is NonNullable<ReturnType<typeof normalizeVessel>> => Boolean(vessel))
       .filter((vessel) => vesselMatchesTaxonomy(vessel, vesselClassValue))
       .map((vessel) => {
+        const cementSignal = classifyCementCarrierCandidate(vessel);
         const distance = haversineNm(loadingPortLat, loadingPortLon, vessel.latitude, vessel.longitude);
         const hoursToLoadPort = distance / Math.max(vessel.speed, 1);
         const etaDate = new Date(Date.now() + hoursToLoadPort * 60 * 60 * 1000);
@@ -160,7 +216,9 @@ export default async (req: Request) => {
             draft: vessel.draft,
             loa: vessel.loa,
             vesselClass: vessel.shipType,
-            specialtyType: vessel.shipType,
+            specialtyType: cementSignal.level === "confirmed" ? "Cement Carrier" : cementSignal.level === "possible" ? "Possible Cement Carrier" : vessel.shipType,
+            cargoClass: cementSignal.level === "confirmed" ? "Cement Carrier" : cementSignal.level === "possible" ? "Possible Cement Carrier" : vessel.shipType,
+            cementCarrierClassification: cementSignal,
             destination: vessel.destination,
             Destination: vessel.destination,
             lastPortOfCall: vessel.lastPortOfCall,
@@ -183,6 +241,7 @@ export default async (req: Request) => {
             dwt: vessel.dwt,
             draft: vessel.draft,
             loa: vessel.loa,
+            cementCarrierClassification: cementSignal,
           },
           routing: {
             eta: etaDate.toISOString(),
@@ -204,7 +263,8 @@ export default async (req: Request) => {
             reasons: {},
           },
           scores: { technical, economic, risk, overall },
-          aiStatus: overall > 50 ? "MATCH" : "REVIEW",
+          aiStatus: cementSignal.level === "possible" ? "REVIEW" : overall > 50 ? "MATCH" : "REVIEW",
+          cementCarrierClassification: cementSignal,
           eta_puerto_carga: etaDate.toISOString(),
           destino_actual: vessel.destination,
           ultimo_puerto: vessel.lastPortOfCall,

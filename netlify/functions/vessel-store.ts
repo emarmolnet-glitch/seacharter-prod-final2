@@ -25,6 +25,11 @@ export type VesselRecord = {
   source: string;
   rawData: unknown;
   classificationSignals?: unknown;
+  cementCarrierClassification?: {
+    level: "confirmed" | "possible" | "none";
+    label: string;
+    reasons: string[];
+  };
   missingData?: string[];
   classificationComplete?: boolean;
   radarSweepCount?: number;
@@ -86,6 +91,115 @@ function normalizeShipTypeText(value: unknown): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+const CEMENT_CONFIRMED_TERMS = [
+  "cement carrier",
+  "cement",
+  "cemento",
+  "ciment",
+  "ciment carrier",
+  "clinker carrier",
+  "clinker",
+];
+
+const CEMENT_POSSIBLE_TERMS = [
+  "cem",
+  "cementos",
+  "cementir",
+  "cemex",
+  "holcim",
+  "lafarge",
+  "heidelberg",
+  "heidelberg materials",
+  "heidelbergcement",
+  "buzzi",
+  "votorantim",
+  "argos",
+  "calucem",
+  "fym",
+  "portland",
+  "granel cemento",
+  "bulk cement",
+  "cement terminal",
+  "terminal cemento",
+];
+
+const CEMENT_GENERIC_CARGO_TERMS = [
+  "cargo",
+  "general cargo",
+  "bulk",
+  "bulker",
+  "bulk carrier",
+  "carrier",
+  "freighter",
+];
+
+export function classifyCementCarrierSignal(value: unknown) {
+  const source = asRecord(value);
+  const raw = asRecord(source.rawData);
+  const metadata = asRecord(raw.MetaData);
+  const text = normalizeShipTypeText([
+    source.vesselName,
+    source.shipType,
+    source.cargoClass,
+    source.vesselClass,
+    source.destination,
+    source.lastPortOfCall,
+    raw.vesselName,
+    raw.ShipName,
+    raw.name,
+    raw.Tipo,
+    raw.tipo,
+    raw.tipo_carga,
+    raw.cargoType,
+    raw.cargoTaxonomyLabel,
+    raw.categoryLabel,
+    raw.categoryValue,
+    raw.shipType,
+    raw.ShipType,
+    raw.vesselType,
+    raw.vesselClass,
+    raw.destination,
+    raw.Destination,
+    raw.lastPortOfCall,
+    raw.LastPort,
+    metadata.ShipName,
+    metadata.Tipo,
+    metadata.tipo,
+    metadata.tipo_carga,
+    metadata.cargoType,
+    metadata.cargoTaxonomyLabel,
+    metadata.categoryLabel,
+    metadata.categoryValue,
+    metadata.shipType,
+    metadata.ShipType,
+    metadata.vesselType,
+    metadata.vesselClass,
+    metadata.Destination,
+    metadata.LastPort,
+  ].filter(Boolean).join(" "));
+  const reasons: string[] = [];
+  CEMENT_CONFIRMED_TERMS.forEach((term) => {
+    const normalized = normalizeShipTypeText(term);
+    if (["cement", "cemento", "ciment", "clinker"].includes(normalized)) {
+      if (new RegExp(`\\b${normalized}\\b`).test(text)) reasons.push(term);
+    } else if (text.includes(normalized)) {
+      reasons.push(term);
+    }
+  });
+  if (reasons.length > 0) return { level: "confirmed" as const, label: "Cement Carrier", reasons };
+
+  const possibleReasons = CEMENT_POSSIBLE_TERMS.filter((term) => {
+    const normalized = normalizeShipTypeText(term);
+    if (normalized === "cem") return /\bcem\b/.test(text) || /\bcem[a-z0-9]{2,}\b/.test(text);
+    return text.includes(normalized);
+  });
+  const hasGenericCargoSignal = CEMENT_GENERIC_CARGO_TERMS.some((term) => text.includes(normalizeShipTypeText(term)));
+  if (possibleReasons.length > 0 && hasGenericCargoSignal) {
+    return { level: "possible" as const, label: "Possible Cement Carrier", reasons: possibleReasons };
+  }
+  return { level: "none" as const, label: "", reasons: [] };
 }
 
 export function isCargoShipType(value: unknown): boolean {
@@ -151,6 +265,9 @@ function estimateDwt(row: VesselRecord): number | null {
 
 function classifyCargo(row: VesselRecord, dwt: number | null) {
   const text = normalizeShipTypeText(row.shipType);
+  const cementSignal = classifyCementCarrierSignal(row);
+  if (cementSignal.level === "confirmed") return "Cement Carrier";
+  if (cementSignal.level === "possible") return "Possible Cement Carrier";
   if (text.includes("container")) return "Container";
   if (text.includes("reefer")) return "Reefer";
   if (text.includes("ro ro")) return "Ro-Ro Cargo";
@@ -202,6 +319,7 @@ function missingClassificationData(row: VesselRecord) {
 
 function enrichVesselRecord(row: VesselRecord): VesselRecord {
   const dwt = row.dwt ?? estimateDwt(row);
+  const cementCarrierClassification = classifyCementCarrierSignal({ ...row, dwt });
   const cargoClass = row.cargoClass ?? classifyCargo(row, dwt);
   const vesselClass = row.vesselClass ?? classifyVessel(row, dwt);
   const loadState = row.loadState ?? inferLoadState({ ...row, dwt, cargoClass, vesselClass });
@@ -214,8 +332,11 @@ function enrichVesselRecord(row: VesselRecord): VesselRecord {
     loadState,
     missingData,
     classificationComplete: missingData.length === 0 && Boolean(cargoClass && vesselClass),
+    cementCarrierClassification,
     classificationSignals: {
       shipType: row.shipType,
+      cargoClass,
+      cementCarrierClassification,
       dwt,
       draught: row.draught,
       designDraft: row.designDraft ?? null,
@@ -303,6 +424,7 @@ function mergeVesselRecord(existing: VesselRecord | undefined, incoming: VesselR
     source: incoming.source,
     rawData: incoming.rawData,
     classificationSignals: incoming.classificationSignals,
+    cementCarrierClassification: incoming.cementCarrierClassification ?? existing.cementCarrierClassification,
     missingData: incoming.missingData,
     classificationComplete: incoming.classificationComplete ?? existing.classificationComplete ?? false,
     radarSweepCount: (existing.radarSweepCount ?? 0) + 1,
