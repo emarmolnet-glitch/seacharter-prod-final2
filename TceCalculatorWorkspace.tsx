@@ -1747,7 +1747,7 @@ export function ReverseTceCalculator({
                   <p className="mt-2 text-xs font-bold text-orange-700">
                     Target protegido con escenario Pesimista +10% BunkerIndex.
                   </p>
-                  <p className={`mt-2 text-xs font-bold ${hasScrubber ? 'text-emerald-700' : 'text-slate-500'}`}>
+                  <p className="mt-2 text-xs font-bold text-slate-500">
                     {results.seaFuelStrategyLabel}
                   </p>
                   {results.etsTotalCost > 0 ? (
@@ -2296,18 +2296,39 @@ export function VesselPricingRouter({
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-right text-sm font-black text-slate-900 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
           />
         </label>
-        <label className="flex min-w-[16rem] cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-300 bg-white px-3 py-2 shadow-sm">
-          <span className="text-[11px] font-black uppercase tracking-wide text-slate-600">
-            ¿Equipado con Scrubber? (Permite IFO 380)
-          </span>
-          <input
-            type="checkbox"
-            checked={hasScrubber}
-            onChange={(event) => setHasScrubber(event.target.checked)}
-            className="peer sr-only"
-          />
-          <span className="relative h-6 w-11 rounded-full bg-slate-300 transition peer-checked:bg-emerald-500 after:absolute after:left-1 after:top-1 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition peer-checked:after:translate-x-5" />
-        </label>
+        <div className="min-w-[16rem]">
+          <div className="mb-1 flex items-center gap-1 text-[11px] font-black uppercase tracking-wide text-slate-600">
+            <span>Scrubber</span>
+            <span tabIndex={0} className="group relative inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-slate-300 bg-white text-[10px] font-black text-slate-500 shadow-sm">
+              i
+              <span className="pointer-events-none absolute bottom-[calc(100%+0.5rem)] left-1/2 z-50 w-60 -translate-x-1/2 translate-y-1 rounded-md border border-slate-300 bg-white p-2 text-left text-[11px] font-semibold normal-case leading-snug tracking-normal text-slate-700 opacity-0 shadow-lg transition group-hover:translate-y-0 group-hover:opacity-100 group-focus:translate-y-0 group-focus:opacity-100">
+                Un scrubber limpia los gases de escape y permite usar IFO 380 en navegación. Si eliges Sí, el coste de consumo en mar se calcula con PRECIO IFO 380 (SCRUBBER); si eliges No, se calcula con VLSFO.
+              </span>
+            </span>
+          </div>
+          <div className="grid rounded-lg border border-slate-300 bg-white p-1 shadow-sm" style={{ gridTemplateColumns: '1fr 1fr' }} role="radiogroup" aria-label="Scrubber">
+            <label className={`flex cursor-pointer items-center justify-center rounded-md px-3 py-2 text-[11px] font-black uppercase tracking-wide transition ${!hasScrubber ? 'bg-slate-100 text-slate-900 ring-1 ring-slate-300' : 'text-slate-500 hover:text-slate-900'}`}>
+              <input
+                type="radio"
+                name="workspace-scrubber"
+                checked={!hasScrubber}
+                onChange={() => setHasScrubber(false)}
+                className="sr-only"
+              />
+              No
+            </label>
+            <label className={`flex cursor-pointer items-center justify-center rounded-md px-3 py-2 text-[11px] font-black uppercase tracking-wide transition ${hasScrubber ? 'bg-slate-100 text-slate-900 ring-1 ring-slate-300' : 'text-slate-500 hover:text-slate-900'}`}>
+              <input
+                type="radio"
+                name="workspace-scrubber"
+                checked={hasScrubber}
+                onChange={() => setHasScrubber(true)}
+                className="sr-only"
+              />
+              Sí
+            </label>
+          </div>
+        </div>
         <button
           type="button"
           onClick={forceRefresh}

@@ -124,9 +124,10 @@
             max-width: 15rem;
             transform: translateX(-50%) translateY(0.25rem);
             border-radius: 0.375rem;
-            background: #0f172a;
+            border: 1px solid #CBD5E1;
+            background: #FFFFFF;
             padding: 0.5rem;
-            color: #fff;
+            color: #1E293B;
             font-size: 0.75rem;
             font-weight: 500;
             line-height: 1.3;
@@ -136,7 +137,7 @@
             white-space: normal;
             opacity: 0;
             pointer-events: none;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.35);
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
             transition: opacity 0.16s ease, transform 0.16s ease;
         }
         .field-tooltip-trigger:hover .field-tooltip-content,
@@ -153,7 +154,7 @@
             transform: translateX(-50%);
             border-width: 5px;
             border-style: solid;
-            border-color: #0f172a transparent transparent transparent;
+            border-color: #FFFFFF transparent transparent transparent;
         }
 
         .cbam-form-row {
@@ -5428,12 +5429,20 @@
                                 <input type="number" id="vessel-dwt" class="input-gc font-bold text-blue-300" value="0" step="any" oninput="handleDWTChange(true)" onblur="detectVesselSegmentFromInputs()">
                             </div>
                             <div class="input-group">
-                                <label for="vessel-has-scrubber" class="text-emerald-400 flex items-center min-h-[28px]">Scrubber</label>
-                                <label class="flex min-h-[42px] cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">
-                                    <span class="text-[10px] font-bold uppercase leading-tight text-slate-300">¿Equipado con Scrubber? (Permite IFO 380)</span>
-                                    <input type="checkbox" id="vessel-has-scrubber" class="peer sr-only" onchange="runEngine()">
-                                    <span class="relative h-6 w-11 shrink-0 rounded-full bg-slate-700 transition peer-checked:bg-emerald-500 after:absolute after:left-1 after:top-1 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition peer-checked:after:translate-x-5"></span>
+                                <label for="vessel-has-scrubber-no" class="text-blue-400 flex items-center gap-1 min-h-[28px]">
+                                    Scrubber
+                                    <span class="field-tooltip-trigger" tabindex="0" role="button" aria-label="Un scrubber limpia los gases de escape y permite usar IFO 380 en navegación. Si eliges Sí, el coste de consumo en mar se calcula con PRECIO IFO 380 (SCRUBBER); si eliges No, se calcula con VLSFO.">
+                                        <i class="fa-solid fa-circle-info text-[11px]"></i>
+                                        <span class="field-tooltip-content">Un scrubber limpia los gases de escape y permite usar IFO 380 en navegación. Si eliges Sí, el coste de consumo en mar se calcula con PRECIO IFO 380 (SCRUBBER); si eliges No, se calcula con VLSFO.</span>
+                                    </span>
                                 </label>
+                                <div class="grid min-h-[42px] grid-cols-2 rounded-lg border border-slate-300 bg-white p-1 shadow-sm" role="radiogroup" aria-label="Scrubber">
+                                    <input type="radio" id="vessel-has-scrubber-no" name="vessel-has-scrubber-choice" class="peer/no sr-only" value="no" checked onchange="setVesselScrubber(false)">
+                                    <label for="vessel-has-scrubber-no" class="flex cursor-pointer items-center justify-center rounded-md px-2 py-1 text-[10px] font-black uppercase text-slate-500 transition hover:text-slate-900 peer-checked/no:bg-slate-100 peer-checked/no:text-slate-900 peer-checked/no:ring-1 peer-checked/no:ring-slate-300">No</label>
+                                    <input type="radio" id="vessel-has-scrubber-yes" name="vessel-has-scrubber-choice" class="peer/yes sr-only" value="yes" onchange="setVesselScrubber(true)">
+                                    <label for="vessel-has-scrubber-yes" class="flex cursor-pointer items-center justify-center rounded-md px-2 py-1 text-[10px] font-black uppercase text-slate-500 transition hover:text-slate-900 peer-checked/yes:bg-slate-100 peer-checked/yes:text-slate-900 peer-checked/yes:ring-1 peer-checked/yes:ring-slate-300">Sí</label>
+                                    <input type="checkbox" id="vessel-has-scrubber" class="sr-only" aria-hidden="true" tabindex="-1">
+                                </div>
                             </div>
                             <div class="input-group">
                                 <label class="text-blue-300 flex items-center min-h-[28px]">Estrategia de Navegación</label>
@@ -18730,9 +18739,7 @@
             const inverseFuelStrategyEl = document.getElementById('inverse-fuel-strategy-label');
             if (inverseFuelStrategyEl) {
                 inverseFuelStrategyEl.textContent = getFuelStrategyText();
-                inverseFuelStrategyEl.className = hasScrubber
-                    ? 'mt-1 text-[10px] font-bold text-emerald-700'
-                    : 'mt-1 text-[10px] font-bold text-slate-500';
+                inverseFuelStrategyEl.className = 'mt-1 text-[10px] font-bold text-slate-500';
             }
             const navFuelTons = isZeroCalculation ? 0 : (T_sea * cSea);
             const portFuelTons = isZeroCalculation ? 0 : (T_portFuel * cPort);
@@ -34277,6 +34284,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return Boolean(document.getElementById('vessel-has-scrubber')?.checked);
         }
 
+        function setVesselScrubber(enabled) {
+            const hiddenToggle = document.getElementById('vessel-has-scrubber');
+            const yesOption = document.getElementById('vessel-has-scrubber-yes');
+            const noOption = document.getElementById('vessel-has-scrubber-no');
+            if (hiddenToggle) hiddenToggle.checked = Boolean(enabled);
+            if (yesOption) yesOption.checked = Boolean(enabled);
+            if (noOption) noOption.checked = !enabled;
+            runEngine();
+        }
+
         function getEffectiveSeaFuelPrice() {
             const vlsfoPrice = readInverseTceNumber('price-sea');
             const ifoPrice = readInverseTceNumber('price-ifo');
@@ -34391,9 +34408,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
             if (fuelStrategyEl) {
                 fuelStrategyEl.textContent = getFuelStrategyText();
-                fuelStrategyEl.className = vesselHasScrubber()
-                    ? 'mt-1 text-[10px] font-bold text-emerald-700'
-                    : 'mt-1 text-[10px] font-bold text-slate-500';
+                fuelStrategyEl.className = 'mt-1 text-[10px] font-bold text-slate-500';
             }
             if (etsBreakdownEl) {
                 etsBreakdownEl.textContent = etsTotalCost > 0
