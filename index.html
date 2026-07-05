@@ -6342,7 +6342,7 @@
                                         <div class="mt-0.5 text-[10px] font-semibold text-slate-500">Cálculo desde OPEX, bunker, puertos y margen comercial.</div>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
-                                        <button id="btn-sync-cost-plus-route" type="button" onclick="syncCostPlusFromRoute(true)" class="rounded border border-amber-300 bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-800 shadow-sm transition hover:border-amber-500 hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400" disabled>Sincronizar con Ruta</button>
+                                        <button id="btn-sync-cost-plus-route" type="button" onclick="syncCostPlusFromRoute(true)" class="rounded border border-green-300 bg-green-100 px-2 py-1 text-[10px] font-black uppercase text-green-800 shadow-sm transition hover:border-green-500 hover:bg-green-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400" disabled>Sincronizar con Ruta</button>
                                         <span class="rounded bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-700 shadow-sm">Modo Coaster: Cálculo Cost-Plus (OPEX)</span>
                                     </div>
                                 </div>
@@ -6385,10 +6385,10 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="rounded-md border border-white bg-white p-3 shadow-sm">
-                                        <div class="text-[10px] font-black uppercase text-slate-500">Flete mínimo Cost-Plus</div>
-                                        <div id="cost-plus-min-freight-rate" class="mono mt-1 text-2xl font-black text-slate-950">$12.65 /MT</div>
-                                        <div class="mt-3 space-y-1 border-t border-slate-100 pt-2 text-sm font-semibold text-gray-500">
+                                    <div class="rounded-md border border-sky-200 bg-sky-50 p-3 shadow-sm ring-1 ring-sky-100">
+                                        <div class="text-[10px] font-black uppercase text-sky-700">Flete mínimo Cost-Plus</div>
+                                        <div id="cost-plus-min-freight-rate" class="mono mt-1 text-2xl font-black text-sky-950">$12.65 /MT</div>
+                                        <div class="mt-3 space-y-1 border-t border-sky-100 pt-2 text-sm font-semibold text-sky-800">
                                             <div>Coste Total Riesgo: <span id="cost-plus-total-costs">$88,000</span></div>
                                             <div>Beneficio Neto Proyectado: <span id="cost-plus-calculated-margin">$13,200</span></div>
                                             <div>Demurrage ($/d): <span id="cost-plus-demurrage-rate">$5,625</span></div>
@@ -34324,6 +34324,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const button = document.getElementById('btn-sync-cost-plus-route');
             if (!button) return;
             button.disabled = !enabled;
+            button.className = enabled
+                ? 'rounded border border-green-300 bg-green-100 px-2 py-1 text-[10px] font-black uppercase text-green-800 shadow-sm transition hover:border-green-500 hover:bg-green-200'
+                : 'rounded border border-slate-200 bg-slate-100 px-2 py-1 text-[10px] font-black uppercase text-slate-400 shadow-sm transition cursor-not-allowed';
             button.title = enabled
                 ? 'Sincronizar con los datos calculados de la ruta actual'
                 : 'Calcula primero una ruta con días, carga o costes válidos';
