@@ -5492,7 +5492,7 @@
                             </div>
                             <div id="contenedor-gruas-pol" class="input-group">
                                 <label id="label-ritmo-nominal-pol" class="text-action-required">Nº Grúas POL</label>
-                                <input type="number" id="ritmo_nominal_pol" class="input-gc action-required-field text-action-required font-bold" value="4" min="1" step="1" required oninput="recalcularDiasPuerto()">
+                                <input type="number" id="ritmo_nominal_pol" class="input-gc action-required-field text-action-required font-bold" value="1" min="1" step="1" required oninput="marcarGruasManual('pol')">
                             </div>
                             <div class="input-group">
                                 <label id="label-rate-load" class="text-action-required">Ritmo Real POL (TM/d)</label>
@@ -5547,7 +5547,7 @@
                             </div>
                             <div id="contenedor-gruas-pod" class="input-group">
                                 <label id="label-ritmo-nominal-pod" class="text-action-required">Nº Grúas POD</label>
-                                <input type="number" id="ritmo_nominal_pod" class="input-gc action-required-field text-action-required font-bold" value="4" min="1" step="1" required oninput="recalcularDiasPuerto()">
+                                <input type="number" id="ritmo_nominal_pod" class="input-gc action-required-field text-action-required font-bold" value="1" min="1" step="1" required oninput="marcarGruasManual('pod')">
                             </div>
                             <div class="input-group">
                                 <label id="label-rate-disch" class="text-action-required">Ritmo Real POD (TM/d)</label>
@@ -31765,6 +31765,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         };
         const COA_PDA_DILUTION_FACTOR = 0.85;
         const METODOS_PUERTO_PASIVOS = new Set(['cinta_transportadora', 'camion_tolva']);
+        const METODOS_GRUA_AUTO = new Set([
+            'cuchara_grab',
+            'grua_portuaria_30mt',
+            'big_bags',
+            'paletizado',
+            'hierro_acero_piezas'
+        ]);
+        const TM_POR_GRUA_AUTO = 10000;
 
         function metodoPuertoUsaGruas(metodo) {
             return !METODOS_PUERTO_PASIVOS.has(metodo);
@@ -31790,7 +31798,43 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const metodo = side === 'pod' ? getMetodoDescargaActual() : getMetodoEstibaActual();
             if (!metodoPuertoUsaGruas(metodo)) return 1;
             const id = side === 'pod' ? 'ritmo_nominal_pod' : 'ritmo_nominal_pol';
-            return Math.max(1, Math.floor(parseFloat(document.getElementById(id)?.value) || 4));
+            return Math.max(1, Math.floor(parseFloat(document.getElementById(id)?.value) || calcularGruasSugeridasPuerto(side)));
+        }
+
+        function calcularGruasSugeridasPuerto(side = 'pol') {
+            const metodo = side === 'pod' ? getMetodoDescargaActual() : getMetodoEstibaActual();
+            if (!metodoPuertoUsaGruas(metodo)) return 1;
+            if (!METODOS_GRUA_AUTO.has(metodo)) return 1;
+            const cargo = Math.max(0, parseFloat(document.getElementById('cargo-qty')?.value) || 0);
+            return Math.max(1, Math.ceil(cargo / TM_POR_GRUA_AUTO));
+        }
+
+        function marcarGruasManual(side = 'pol') {
+            const inputId = side === 'pod' ? 'ritmo_nominal_pod' : 'ritmo_nominal_pol';
+            const input = document.getElementById(inputId);
+            if (input) input.dataset.manualOverride = 'true';
+            if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
+        }
+
+        function aplicarGruasSugeridasPuerto(side = 'pol', options = {}) {
+            const { force = false } = options;
+            const metodo = side === 'pod' ? getMetodoDescargaActual() : getMetodoEstibaActual();
+            const inputId = side === 'pod' ? 'ritmo_nominal_pod' : 'ritmo_nominal_pol';
+            const input = document.getElementById(inputId);
+            if (!input) return 1;
+            if (!metodoPuertoUsaGruas(metodo)) {
+                input.value = '1';
+                input.dataset.manualOverride = 'false';
+                return 1;
+            }
+            const activeId = document.activeElement?.id || '';
+            const isEditingCraneInput = activeId === inputId;
+            const shouldAutoApply = force || input.dataset.manualOverride !== 'true';
+            if (shouldAutoApply && !isEditingCraneInput) {
+                input.value = String(calcularGruasSugeridasPuerto(side));
+                input.dataset.manualOverride = 'false';
+            }
+            return readNumeroGruasPuerto(side);
         }
 
         function setRitmoManualIndicator(side = 'pol', isManual = false) {
@@ -32401,13 +32445,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             input.required = usesCranes;
             input.disabled = !usesCranes;
             if (usesCranes && (parseFloat(input.value) || 0) < 1) {
-                input.value = '4';
+                input.value = String(calcularGruasSugeridasPuerto(side));
             }
         }
 
         function recalcularDiasPuerto() {
             const metodoPol = getMetodoEstibaActual();
             const metodoPod = getMetodoDescargaActual();
+            const activeId = document.activeElement?.id || '';
+            const forceAutoGruas = ['cargo-qty', 'cargo-type', 'metodo_carga', 'metodo_descarga_pod'].includes(activeId);
+            aplicarGruasSugeridasPuerto('pol', { force: forceAutoGruas });
+            aplicarGruasSugeridasPuerto('pod', { force: forceAutoGruas });
             const ritmoRealPol = calcularRitmoEfectivo('pol');
             const ritmoRealPod = calcularRitmoEfectivo('pod');
             const inputCarga = document.getElementById('rate-load');
@@ -32415,7 +32463,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             if (inputCarga) {
                 const metodoAnterior = inputCarga.dataset.autoMetodoCarga;
-                if (metodoAnterior !== metodoPol) setRitmoManualIndicator('pol', false);
+                if (metodoAnterior && metodoAnterior !== metodoPol) setRitmoManualIndicator('pol', false);
                 if (metodoPuertoUsaGruas(metodoPol) && inputCarga.dataset.manualOverride !== 'true') {
                     inputCarga.value = ritmoRealPol.toFixed(0);
                 }
@@ -32423,7 +32471,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
             if (inputDescarga) {
                 const metodoAnterior = inputDescarga.dataset.autoMetodoDescarga;
-                if (metodoAnterior !== metodoPod) setRitmoManualIndicator('pod', false);
+                if (metodoAnterior && metodoAnterior !== metodoPod) setRitmoManualIndicator('pod', false);
                 if (metodoPuertoUsaGruas(metodoPod) && inputDescarga.dataset.manualOverride !== 'true') {
                     inputDescarga.value = ritmoRealPod.toFixed(0);
                 }
@@ -32445,9 +32493,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.RITMOS_BASE_PUERTO = RITMOS_BASE_PUERTO;
             window.FACTORES_ESTIBA = FACTORES_ESTIBA;
             window.METODOS_PUERTO_PASIVOS = METODOS_PUERTO_PASIVOS;
+            window.METODOS_GRUA_AUTO = METODOS_GRUA_AUTO;
+            window.TM_POR_GRUA_AUTO = TM_POR_GRUA_AUTO;
             window.metodoPuertoUsaGruas = metodoPuertoUsaGruas;
             window.getRitmoBasePuerto = getRitmoBasePuerto;
             window.readNumeroGruasPuerto = readNumeroGruasPuerto;
+            window.calcularGruasSugeridasPuerto = calcularGruasSugeridasPuerto;
+            window.marcarGruasManual = marcarGruasManual;
+            window.aplicarGruasSugeridasPuerto = aplicarGruasSugeridasPuerto;
             window.marcarRitmoManual = marcarRitmoManual;
             window.actualizarModuloCamionTolva = actualizarModuloCamionTolva;
             window.aplicarRitmoCamionTolvaPol = aplicarRitmoCamionTolvaPol;

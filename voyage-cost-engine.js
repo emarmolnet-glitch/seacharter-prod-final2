@@ -413,8 +413,12 @@
             const cargoTons = this.readNumber('cargo-qty');
             const metodoEstiba = toText(this.el('metodo_carga')?.value) || 'cinta_transportadora';
             const metodoDescarga = toText(this.el('metodo_descarga_pod')?.value) || metodoEstiba;
-            const cranesPol = portMethodUsesCranes(metodoEstiba) ? Math.max(1, Math.floor(this.readNumber('ritmo_nominal_pol') || 4)) : 1;
-            const cranesPod = portMethodUsesCranes(metodoDescarga) ? Math.max(1, Math.floor(this.readNumber('ritmo_nominal_pod') || 4)) : 1;
+            const cranesPol = portMethodUsesCranes(metodoEstiba)
+                ? (root.readNumeroGruasPuerto ? root.readNumeroGruasPuerto('pol') : Math.max(1, Math.floor(this.readNumber('ritmo_nominal_pol') || 1)))
+                : 1;
+            const cranesPod = portMethodUsesCranes(metodoDescarga)
+                ? (root.readNumeroGruasPuerto ? root.readNumeroGruasPuerto('pod') : Math.max(1, Math.floor(this.readNumber('ritmo_nominal_pod') || 1)))
+                : 1;
             const nominalPol = root.getRitmoBasePuerto ? root.getRitmoBasePuerto(metodoEstiba) : getRealPortRate(metodoEstiba);
             const nominalPod = root.getRitmoBasePuerto ? root.getRitmoBasePuerto(metodoDescarga) : getRealPortRate(metodoDescarga);
             const tipoCarga = toText(this.el('cargo-type')?.value);
