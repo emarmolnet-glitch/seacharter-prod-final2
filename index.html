@@ -6780,11 +6780,36 @@
                                 </div>
                                 <button id="btn-close-shadow-estimator" type="button" class="rounded-md border border-slate-700 bg-slate-950/60 px-3 py-2 text-[10px] font-black uppercase text-slate-300 transition hover:border-red-400 hover:text-red-200">Cerrar</button>
                             </div>
+                            <div class="border-b border-slate-800 bg-slate-950/35 p-5">
+                                <div class="mb-2 flex items-center justify-between gap-3">
+                                    <span class="text-[10px] font-black uppercase tracking-wide text-slate-400">Auto-Simulacion Rapida por Distancia</span>
+                                    <span id="shadow-auto-source" class="text-[10px] font-bold text-slate-500">PDA base: $0</span>
+                                </div>
+                                <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                    <button type="button" class="shadow-distance-btn rounded-lg border border-cyan-500/40 bg-cyan-950/35 px-3 py-2 text-xs font-black uppercase text-cyan-100 transition hover:border-cyan-300 hover:bg-cyan-900/50" data-distance-nm="1000">Corto <span class="mono text-cyan-300">1000 MN</span></button>
+                                    <button type="button" class="shadow-distance-btn rounded-lg border border-indigo-500/40 bg-indigo-950/35 px-3 py-2 text-xs font-black uppercase text-indigo-100 transition hover:border-indigo-300 hover:bg-indigo-900/50" data-distance-nm="2000">Medio <span class="mono text-indigo-300">2000 MN</span></button>
+                                    <button type="button" class="shadow-distance-btn rounded-lg border border-amber-500/40 bg-amber-950/35 px-3 py-2 text-xs font-black uppercase text-amber-100 transition hover:border-amber-300 hover:bg-amber-900/50" data-distance-nm="3000">Largo <span class="mono text-amber-300">3000 MN</span></button>
+                                </div>
+                            </div>
                             <div class="grid grid-cols-1 gap-5 p-5 lg:grid-cols-2">
                                 <div class="space-y-3">
                                     <div>
                                         <label for="shadow-next-destination" class="mb-1 block text-[10px] font-black uppercase text-slate-400">Destino siguiente</label>
                                         <input id="shadow-next-destination" type="text" class="input-gc w-full text-sm" autocomplete="off">
+                                    </div>
+                                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                        <div>
+                                            <label for="shadow-navigation-days" class="mb-1 block text-[10px] font-black uppercase text-slate-400">Dias navegacion</label>
+                                            <input id="shadow-navigation-days" type="number" min="0" step="0.1" class="input-gc w-full text-sm" readonly>
+                                        </div>
+                                        <div>
+                                            <label for="shadow-port-days" class="mb-1 block text-[10px] font-black uppercase text-slate-400">Dias puerto</label>
+                                            <input id="shadow-port-days" type="number" min="0" step="0.1" class="input-gc w-full text-sm" readonly>
+                                        </div>
+                                        <div>
+                                            <label for="shadow-port-costs" class="mb-1 block text-[10px] font-black uppercase text-slate-400">Coste portuario total</label>
+                                            <input id="shadow-port-costs" type="number" min="0" step="100" class="input-gc w-full text-sm" readonly>
+                                        </div>
                                     </div>
                                     <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                         <div>
@@ -6800,10 +6825,14 @@
                                             <input id="shadow-estimated-costs" type="number" min="0" step="1000" class="input-gc w-full text-sm">
                                         </div>
                                     </div>
+                                    <div>
+                                        <label for="shadow-break-even-freight" class="mb-1 block text-[10px] font-black uppercase text-emerald-300">Flete Minimo Necesario (Break-Even)</label>
+                                        <input id="shadow-break-even-freight" type="number" min="0" step="1000" class="input-gc w-full text-sm font-black text-emerald-300" readonly>
+                                    </div>
                                     <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3 text-[10px] text-slate-400">
                                         <div class="flex justify-between gap-3"><span>Beneficio Neto Viaje 1</span><strong id="shadow-base-profit" class="mono text-slate-200">$0</strong></div>
                                         <div class="mt-1 flex justify-between gap-3"><span>Dias Viaje 1</span><strong id="shadow-base-days" class="mono text-slate-200">0</strong></div>
-                                        <div class="mt-1 flex justify-between gap-3"><span>OPEX/CAPEX diario</span><strong id="shadow-base-daily" class="mono text-slate-200">$0</strong></div>
+                                        <div class="mt-1 flex justify-between gap-3"><span>OPEX diario</span><strong id="shadow-base-daily" class="mono text-slate-200">$0</strong></div>
                                     </div>
                                 </div>
                                 <div class="space-y-3">
@@ -19874,9 +19903,13 @@
             const closeButton = document.getElementById('btn-close-shadow-estimator');
             const fields = {
                 nextDestination: document.getElementById('shadow-next-destination'),
+                navigationDays: document.getElementById('shadow-navigation-days'),
+                portDays: document.getElementById('shadow-port-days'),
+                portCosts: document.getElementById('shadow-port-costs'),
                 estimatedDays: document.getElementById('shadow-estimated-days'),
                 hypotheticalFreight: document.getElementById('shadow-hypothetical-freight'),
-                estimatedCosts: document.getElementById('shadow-estimated-costs')
+                estimatedCosts: document.getElementById('shadow-estimated-costs'),
+                breakEvenFreight: document.getElementById('shadow-break-even-freight')
             };
             const outputs = {
                 baseProfit: document.getElementById('shadow-base-profit'),
@@ -19885,27 +19918,47 @@
                 trip2: document.getElementById('shadow-result-trip2'),
                 consolidated: document.getElementById('shadow-result-consolidated'),
                 tce: document.getElementById('shadow-result-tce'),
-                alert: document.getElementById('shadow-viability-alert')
+                alert: document.getElementById('shadow-viability-alert'),
+                autoSource: document.getElementById('shadow-auto-source')
             };
             if (!modal || !closeButton || openButtons.length === 0) return;
 
             let snapshot = null;
             const localDefaults = {
                 nextDestination: '',
+                navigationDays: '',
+                portDays: '',
+                portCosts: '',
                 estimatedDays: '',
                 hypotheticalFreight: '',
-                estimatedCosts: ''
+                estimatedCosts: '',
+                breakEvenFreight: ''
             };
 
             const toNumber = (value) => {
                 if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
                 return Number(String(value || '').replace(/[^0-9.-]/g, '')) || 0;
             };
-            const money = (value) => `$${toNumber(value).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+            const normalizeMoneyValue = (value) => {
+                const numeric = toNumber(value);
+                if (Math.abs(numeric) < 1) return 0;
+                const rounded = Math.round(numeric);
+                return Object.is(rounded, -0) || Math.abs(rounded) < 1 ? 0 : rounded;
+            };
+            const money = (value) => {
+                const normalized = normalizeMoneyValue(value);
+                return `$${normalized.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+            };
             const setText = (el, value) => { if (el) el.innerText = value; };
             const setResultClass = (el, value, baseClass) => {
                 if (!el) return;
-                el.className = `${baseClass} ${value >= 0 ? 'text-emerald-300' : 'text-red-300'}`;
+                const normalized = normalizeMoneyValue(value);
+                const toneClass = normalized < 0
+                    ? 'text-red-300'
+                    : normalized === 0
+                        ? 'text-slate-100'
+                        : 'text-emerald-300';
+                el.className = `${baseClass} ${toneClass}`;
             };
 
             const readSnapshot = () => {
@@ -19919,9 +19972,24 @@
                     beneficioNetoViaje1: toNumber(State?.netProfitOwner || ownerBreakdown.finalNet || document.getElementById('res-net-profit-owner')?.innerText),
                     diasViaje1: totalDays,
                     opexCapexDaily: globalOpexCapexDaily,
+                    opexDaily: toNumber(document.getElementById('opex-daily')?.value || State?.opex),
+                    speed: toNumber(document.getElementById('spd-laden')?.value || State?.speedLaden || State?.spdLaden) || 12,
+                    bunkerConsumptionDaily: toNumber(document.getElementById('cons-sea')?.value || State?.consSea),
+                    bunkerPrice: toNumber(document.getElementById('price-sea')?.value || State?.priceSea),
+                    pdaPolBase: toNumber(document.getElementById('pda-pod')?.value || State?.pdaPod),
                     ingresoBruto1: toNumber(ownerBreakdown.grossRevenue || State?.ownerNetBreakdown?.grossRevenue),
                     costesViaje1: toNumber(ownerBreakdown.bunkerAndPortCosts || ((State?.costBunkers || 0) + (State?.portExpenses || 0)))
                 });
+            };
+
+            const updateBreakEven = () => {
+                if (!snapshot) return 0;
+                const estimatedDays = toNumber(fields.estimatedDays?.value);
+                const estimatedCosts = toNumber(fields.estimatedCosts?.value);
+                const voyage1Loss = Math.abs(Math.min(0, snapshot.beneficioNetoViaje1));
+                const breakEvenFreight = estimatedCosts + (estimatedDays * snapshot.opexDaily) + voyage1Loss;
+                if (fields.breakEvenFreight) fields.breakEvenFreight.value = breakEvenFreight ? breakEvenFreight.toFixed(0) : '';
+                return breakEvenFreight;
             };
 
             const renderResults = () => {
@@ -19929,7 +19997,8 @@
                 const estimatedDays = toNumber(fields.estimatedDays?.value);
                 const hypotheticalFreight = toNumber(fields.hypotheticalFreight?.value);
                 const estimatedCosts = toNumber(fields.estimatedCosts?.value);
-                const beneficioViaje2 = hypotheticalFreight - estimatedCosts - (estimatedDays * snapshot.opexCapexDaily);
+                updateBreakEven();
+                const beneficioViaje2 = hypotheticalFreight - estimatedCosts - (estimatedDays * snapshot.opexDaily);
                 const beneficioConsolidado = snapshot.beneficioNetoViaje1 + beneficioViaje2;
                 const totalDays = snapshot.diasViaje1 + estimatedDays;
                 const tceCombinado = totalDays > 0
@@ -19945,6 +20014,34 @@
                 if (outputs.alert) outputs.alert.classList.toggle('hidden', !(beneficioConsolidado > 0));
             };
 
+            const getPdaMultiplier = (distanceNm) => {
+                if (distanceNm >= 3000) return 1.5;
+                if (distanceNm >= 2000) return 1.25;
+                return 1;
+            };
+
+            const applyQuickSimulation = (distanceNm) => {
+                if (!snapshot) snapshot = readSnapshot();
+                const safeSpeed = snapshot.speed > 0 ? snapshot.speed : 12;
+                const navigationDays = distanceNm / (safeSpeed * 24);
+                const portDays = 5;
+                const projectedDays = navigationDays + portDays;
+                const pdaPol = snapshot.pdaPolBase;
+                const pdaPodEstimated = pdaPol * getPdaMultiplier(distanceNm);
+                const totalPortCosts = pdaPol + pdaPodEstimated;
+                const bunkerCosts = projectedDays * snapshot.bunkerConsumptionDaily * snapshot.bunkerPrice;
+                const estimatedCosts = bunkerCosts + totalPortCosts;
+
+                if (fields.navigationDays) fields.navigationDays.value = navigationDays.toFixed(2);
+                if (fields.portDays) fields.portDays.value = portDays.toFixed(1);
+                if (fields.portCosts) fields.portCosts.value = totalPortCosts.toFixed(0);
+                if (fields.estimatedDays) fields.estimatedDays.value = projectedDays.toFixed(2);
+                if (fields.estimatedCosts) fields.estimatedCosts.value = estimatedCosts.toFixed(0);
+                const breakEvenFreight = updateBreakEven();
+                if (fields.hypotheticalFreight) fields.hypotheticalFreight.value = breakEvenFreight ? breakEvenFreight.toFixed(0) : '';
+                renderResults();
+            };
+
             const clearLocalState = () => {
                 snapshot = null;
                 Object.entries(localDefaults).forEach(([key, value]) => {
@@ -19953,6 +20050,7 @@
                 setText(outputs.baseProfit, '$0');
                 setText(outputs.baseDays, '0');
                 setText(outputs.baseDaily, '$0');
+                setText(outputs.autoSource, 'PDA base: $0');
                 setText(outputs.trip2, '$0');
                 setText(outputs.consolidated, '$0');
                 setText(outputs.tce, '$0 / dia');
@@ -19967,7 +20065,8 @@
                 if (fields.estimatedCosts) fields.estimatedCosts.value = '';
                 setText(outputs.baseProfit, money(snapshot.beneficioNetoViaje1));
                 setText(outputs.baseDays, snapshot.diasViaje1.toLocaleString('en-US', { maximumFractionDigits: 2 }));
-                setText(outputs.baseDaily, `${money(snapshot.opexCapexDaily)} / dia`);
+                setText(outputs.baseDaily, `${money(snapshot.opexDaily)} / dia`);
+                setText(outputs.autoSource, `PDA base: ${money(snapshot.pdaPolBase)}`);
                 modal.classList.remove('hidden');
                 modal.classList.add('flex');
                 renderResults();
@@ -19989,6 +20088,9 @@
                 if (event.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
             });
             Object.values(fields).forEach((field) => field?.addEventListener('input', renderResults));
+            modal.querySelectorAll('.shadow-distance-btn').forEach((button) => {
+                button.addEventListener('click', () => applyQuickSimulation(toNumber(button.dataset.distanceNm)));
+            });
         }
 
         if (document.readyState === 'loading') {
