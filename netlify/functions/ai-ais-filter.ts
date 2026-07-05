@@ -21,6 +21,14 @@ function numberValue(...values: unknown[]) {
   return 0;
 }
 
+function nullableNumberValue(...values: unknown[]) {
+  for (const value of values) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+  }
+  return null;
+}
+
 function haversineNm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const radiusNm = 3440.065;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -28,6 +36,13 @@ function haversineNm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const a = Math.sin(dLat / 2) ** 2
     + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
   return radiusNm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+function parseDateValue(value: unknown) {
+  const text = textValue(value);
+  if (!text) return null;
+  const parsed = Date.parse(text);
+  return Number.isFinite(parsed) ? new Date(parsed) : null;
 }
 
 function normalizeTaxonomyText(value: unknown) {
@@ -143,17 +158,54 @@ function normalizeVessel(value: unknown) {
   const dwt = numberValue(source.dwt, source.DWT, meta.dwt, meta.DWT);
   const draft = numberValue(source.draft, source.Draft, meta.draft, meta.Draft);
   const loa = numberValue(source.loa, source.LOA, meta.loa, meta.LOA);
-  const speed = numberValue(source.speed, meta.speed, position.Sog, 12) || 12;
+  const speed = numberValue(source.speed_over_ground, source.speedOverGround, source.sog, source.SOG, source.speed, meta.speed_over_ground, meta.speedOverGround, meta.SOG, meta.speed, position.Sog, position.SOG, 12) || 12;
   const destination = textValue(source.destination, source.Destination, meta.Destination) || "N/A";
+  const declaredEta = textValue(source.eta, source.ETA, source.Eta, source.estimatedEta, source.etaEstimated, source.eta_calculado, meta.eta, meta.ETA, meta.Eta, meta.estimatedEta, meta.etaEstimated);
   const lastPortOfCall = textValue(source.lastPortOfCall, source.last_port_of_call, source.ultimo_puerto, source.LastPort, source.LastPortOfCall, source.PreviousPort, source.DeparturePort, meta.lastPortOfCall, meta.ultimo_puerto, meta.LastPort, meta.LastPortOfCall, meta.PreviousPort, meta.DeparturePort) || "N/A";
+  const designDraft = nullableNumberValue(source.designDraft, source.maxDraft, source.MaximumStaticDraught, meta.designDraft, meta.maxDraft, meta.MaximumStaticDraught);
 
-  return { source, vesselName, mmsi, imo, shipType, dwt, draft, loa, speed, destination, lastPortOfCall, latitude, longitude };
+  return { source, vesselName, mmsi, imo, shipType, dwt, draft, designDraft, loa, speed, destination, declaredEta, lastPortOfCall, latitude, longitude };
 }
 
 function parseLaycanEnd(value: unknown) {
   const parsed = Date.parse(textValue(value));
   if (Number.isFinite(parsed)) return new Date(parsed + 24 * 60 * 60 * 1000);
   return new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+}
+
+function parseLaycanStart(value: unknown) {
+  return parseDateValue(value) || new Date();
+}
+
+function inferLoadState(draft: number, designDraft: number | null, maxPortDraft: number) {
+  if (draft <= 0) {
+    return { state: "Unknown", ballastReady: false, score: 10, reason: "Sin calado AIS disponible" };
+  }
+
+  const ratio = designDraft && designDraft > 0 ? draft / designDraft : null;
+  const threshold = ratio !== null ? 0.62 : Math.min(8.5, Number.isFinite(maxPortDraft) ? maxPortDraft * 0.62 : 8.5);
+  const ballastReady = ratio !== null ? ratio < 0.62 : draft < threshold;
+
+  return {
+    state: ballastReady ? "Ballast" : "Laden",
+    ballastReady,
+    score: ballastReady ? 30 : 4,
+    reason: ballastReady
+      ? "Calado bajo: en lastre y candidato para cargar en POL"
+      : "Calado alto: viene cargado y no sirve de inmediato para este POL",
+  };
+}
+
+function windowScore(etaDate: Date, laycanStart: Date, laycanEnd: Date) {
+  if (etaDate >= laycanStart && etaDate <= laycanEnd) {
+    return { ok: true, score: 30, status: "inside" as const, reason: "ETA calculado dentro de la ventana de carga" };
+  }
+  if (etaDate < laycanStart) {
+    const earlyDays = (laycanStart.getTime() - etaDate.getTime()) / 86_400_000;
+    return { ok: earlyDays <= 3, score: earlyDays <= 3 ? 22 : 14, status: "early" as const, reason: `Llega ${earlyDays.toFixed(1)} días antes del laycan` };
+  }
+  const lateDays = (etaDate.getTime() - laycanEnd.getTime()) / 86_400_000;
+  return { ok: false, score: Math.max(0, 12 - lateDays * 4), status: "late" as const, reason: `Llega ${lateDays.toFixed(1)} días después del cierre de laycan` };
 }
 
 export default async (req: Request) => {
@@ -171,6 +223,7 @@ export default async (req: Request) => {
     const vessels = Array.isArray(body.radarSnapshot) ? body.radarSnapshot : [];
     const loadingPortLat = numberValue(cargo.loadingPortLat);
     const loadingPortLon = numberValue(cargo.loadingPortLon);
+    const laycanStart = parseLaycanStart(cargo.laycanStart);
     const laycanEnd = parseLaycanEnd(cargo.laycanEnd);
     const quantity = numberValue(cargo.quantity);
     const maxDraft = numberValue(cargo.maxDraft) || Number.POSITIVE_INFINITY;
@@ -193,18 +246,28 @@ export default async (req: Request) => {
       .map((vessel) => {
         const cementSignal = classifyCementCarrierCandidate(vessel);
         const distance = haversineNm(loadingPortLat, loadingPortLon, vessel.latitude, vessel.longitude);
-        const hoursToLoadPort = distance / Math.max(vessel.speed, 1);
+        const speedOverGround = Math.max(vessel.speed, 1);
+        const hoursToLoadPort = distance / speedOverGround;
+        const daysToLoadPort = hoursToLoadPort / 24;
         const etaDate = new Date(Date.now() + hoursToLoadPort * 60 * 60 * 1000);
+        const declaredEtaDate = parseDateValue(vessel.declaredEta);
+        const etaDriftHours = declaredEtaDate
+          ? Math.round(Math.abs(declaredEtaDate.getTime() - etaDate.getTime()) / 36_000) / 100
+          : null;
+        const loadState = inferLoadState(vessel.draft, vessel.designDraft, maxDraft);
+        const laycan = windowScore(etaDate, laycanStart, laycanEnd);
         const capacityOk = vessel.dwt <= 0 || quantity <= 0 || vessel.dwt >= quantity * 0.85;
         const draftOk = vessel.draft <= 0 || vessel.draft <= maxDraft;
         const loaOk = vessel.loa <= 0 || vessel.loa <= maxLoa;
-        const dateOk = etaDate <= laycanEnd;
-        const technical = (capacityOk ? 30 : 10) + (draftOk ? 20 : 0) + (loaOk ? 15 : 0) + (dateOk ? 20 : 8);
+        const dateOk = laycan.ok;
+        const etaConsistencyScore = etaDriftHours === null ? 8 : etaDriftHours <= 12 ? 10 : etaDriftHours <= 36 ? 6 : 2;
+        const technical = (capacityOk ? 20 : 6) + (draftOk ? 10 : 0) + (loaOk ? 10 : 0) + loadState.score + laycan.score + etaConsistencyScore;
         const economic = Math.max(0, 100 - distance / 35);
-        const risk = Math.max(0, 100 - Math.max(0, hoursToLoadPort / 24 - 7) * 8 * riskCoefficient);
+        const risk = Math.max(0, 100 - Math.max(0, daysToLoadPort - 7) * 8 * riskCoefficient);
         const overall = Math.round(Math.min(100, technical * 0.55 + economic * 0.30 + risk * 0.15));
         const ballastFuelCost = distance * (fuelPrice / 100);
         const suggestedFreightRate = freightRate > 0 ? freightRate : Math.max(0, (ballastFuelCost + portExpenses + dailyOpex) / Math.max(quantity, 1));
+        const idealVessel = loadState.ballastReady && capacityOk && draftOk && loaOk && dateOk;
 
         return {
           vessel: {
@@ -214,6 +277,9 @@ export default async (req: Request) => {
             mmsi: vessel.mmsi,
             dwt: vessel.dwt,
             draft: vessel.draft,
+            designDraft: vessel.designDraft,
+            loadState: loadState.state,
+            estado_carga: loadState.state,
             loa: vessel.loa,
             vesselClass: vessel.shipType,
             specialtyType: cementSignal.level === "confirmed" ? "Cement Carrier" : cementSignal.level === "possible" ? "Possible Cement Carrier" : vessel.shipType,
@@ -221,6 +287,7 @@ export default async (req: Request) => {
             cementCarrierClassification: cementSignal,
             destination: vessel.destination,
             Destination: vessel.destination,
+            eta: vessel.declaredEta || null,
             lastPortOfCall: vessel.lastPortOfCall,
             last_port_of_call: vessel.lastPortOfCall,
             ultimo_puerto: vessel.lastPortOfCall,
@@ -231,6 +298,8 @@ export default async (req: Request) => {
             latitude: vessel.latitude,
             longitude: vessel.longitude,
             currentDistanceToLoadPort: Math.round(distance),
+            daysToLoadPort: Math.round(daysToLoadPort * 10) / 10,
+            speed_over_ground: speedOverGround,
             plannedDestination: vessel.destination,
             destination: vessel.destination,
             Destination: vessel.destination,
@@ -238,14 +307,21 @@ export default async (req: Request) => {
             last_port_of_call: vessel.lastPortOfCall,
             ultimo_puerto: vessel.lastPortOfCall,
             eta_puerto_carga: etaDate.toISOString(),
+            declaredEta: vessel.declaredEta || null,
+            etaDriftHours,
             dwt: vessel.dwt,
             draft: vessel.draft,
+            designDraft: vessel.designDraft,
+            loadState: loadState.state,
+            estado_carga: loadState.state,
             loa: vessel.loa,
             cementCarrierClassification: cementSignal,
           },
           routing: {
             eta: etaDate.toISOString(),
             ballastDistanceNM: Math.round(distance),
+            daysToLoadPort: Math.round(daysToLoadPort * 10) / 10,
+            speedOverGround: speedOverGround,
           },
           financials: {
             netProfit: 0,
@@ -260,10 +336,25 @@ export default async (req: Request) => {
             cranesOk: true,
             holdOk: true,
             dateOk,
-            reasons: {},
+            ballastReady: loadState.ballastReady,
+            idealVessel,
+            laycanStatus: laycan.status,
+            laycanStart: laycanStart.toISOString(),
+            laycanEnd: laycanEnd.toISOString(),
+            etaDriftHours,
+            reasons: {
+              loadState: loadState.reason,
+              laycan: laycan.reason,
+              etaConsistency: etaDriftHours === null
+                ? "Sin ETA AIS declarado para comparar"
+                : etaDriftHours <= 12
+                  ? "ETA AIS declarado consistente con distancia y velocidad"
+                  : `ETA AIS declarado difiere ${etaDriftHours.toFixed(1)} horas del cálculo a POL`,
+            },
           },
           scores: { technical, economic, risk, overall },
-          aiStatus: cementSignal.level === "possible" ? "REVIEW" : overall > 50 ? "MATCH" : "REVIEW",
+          aiStatus: idealVessel && overall > 55 && cementSignal.level !== "possible" ? "IDEAL" : overall > 50 ? "MATCH" : "REVIEW",
+          idealVessel,
           cementCarrierClassification: cementSignal,
           eta_puerto_carga: etaDate.toISOString(),
           destino_actual: vessel.destination,
