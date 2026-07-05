@@ -27,6 +27,39 @@ function cleanNumber(value: unknown) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
+function formatDateForBridge(dateString: unknown) {
+  if (typeof dateString !== "string") return dateString;
+  const value = dateString.trim();
+  if (!value) return dateString;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return dateString;
+
+  return parsed.toISOString().slice(0, 10);
+}
+
+function isBridgeDateField(key: string) {
+  return /date|fecha|eta|etd|createdAt|created_at|generatedAt|generated_at|frozenAt|frozen_at|updatedAt|updated_at|acceptedAt|accepted_at/i.test(key);
+}
+
+function normalizeBridgeDateFields(value: unknown, key = ""): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeBridgeDateFields(item));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([field, fieldValue]) => [
+        field,
+        normalizeBridgeDateFields(fieldValue, field),
+      ]),
+    );
+  }
+
+  return isBridgeDateField(key) ? formatDateForBridge(value) : value;
+}
+
 function getDataBridgeApiUrl() {
   return String(process.env.DATA_BRIDGE_API_URL || process.env.VITE_DATA_BRIDGE_API_URL || "").trim();
 }
@@ -78,11 +111,16 @@ function normalizeVessel(value: unknown): ReportVessel | null {
 }
 
 export default async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: jsonHeaders });
+  }
+
   if (req.method !== "POST") {
     return Response.json({ success: false, error: "Method not allowed" }, { status: 405, headers: jsonHeaders });
   }
 
-  const payload = await req.json().catch(() => null);
+  const rawPayload = await req.json().catch(() => null);
+  const payload = normalizeBridgeDateFields(rawPayload);
   const report = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
   const rawVessels = Array.isArray(payload)
     ? payload
@@ -159,5 +197,5 @@ export default async (req: Request) => {
 };
 
 export const config: Config = {
-  path: "/api/data-bridge-export",
+  path: ["/api/data-bridge-export", "/.netlify/functions/data-bridge-export"],
 };

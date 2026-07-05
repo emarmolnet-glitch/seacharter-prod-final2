@@ -974,6 +974,30 @@
             persistDataBridgeAuditReceipts();
         }
 
+        function formatDateForBridge(dateString) {
+            if (typeof dateString !== 'string') return dateString;
+            const value = dateString.trim();
+            if (!value) return dateString;
+            if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+            const parsed = new Date(value);
+            if (Number.isNaN(parsed.getTime())) return dateString;
+            return parsed.toISOString().slice(0, 10);
+        }
+        window.formatDateForBridge = window.formatDateForBridge || formatDateForBridge;
+
+        function normalizeBridgeDateFields(value, key = '') {
+            if (Array.isArray(value)) {
+                return value.map((item) => normalizeBridgeDateFields(item));
+            }
+            if (value && typeof value === 'object') {
+                return Object.fromEntries(
+                    Object.entries(value).map(([field, fieldValue]) => [field, normalizeBridgeDateFields(fieldValue, field)])
+                );
+            }
+            const isDateField = /date|fecha|eta|etd|createdAt|created_at|generatedAt|generated_at|frozenAt|frozen_at|updatedAt|updated_at|acceptedAt|accepted_at/i.test(key);
+            return isDateField ? formatDateForBridge(value) : value;
+        }
+
         function setRadarWorkflowPhase(phase) {
             window.radarWorkflowState.phase = phase;
             document.querySelectorAll('[data-radar-phase]').forEach(item => {
@@ -1151,13 +1175,13 @@
             if (statusEl) statusEl.innerText = 'Enviando payload JSON...';
             try {
                 const dataBridgeToken = String(localStorage.getItem('seacharter_databridge_api_secret') || '').trim();
-                const response = await fetch('/.netlify/functions/data-bridge-export', {
+                const response = await fetch('/api/data-bridge-export', {
                     method: 'POST',
                     headers: Object.assign(
                         { 'content-type': 'application/json' },
                         dataBridgeToken ? { Authorization: `Bearer ${dataBridgeToken}` } : {}
                     ),
-                    body: JSON.stringify(report)
+                    body: JSON.stringify(normalizeBridgeDateFields(report))
                 });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok || payload.success === false) throw new Error(payload.error || 'Data Bridge export failed');
@@ -1181,13 +1205,13 @@
             if (statusEl) statusEl.innerText = 'Enviando buque a Data Bridge...';
             try {
                 const dataBridgeToken = String(localStorage.getItem('seacharter_databridge_api_secret') || '').trim();
-                const response = await fetch('/.netlify/functions/data-bridge-export', {
+                const response = await fetch('/api/data-bridge-export', {
                     method: 'POST',
                     headers: Object.assign(
                         { 'content-type': 'application/json' },
                         dataBridgeToken ? { Authorization: `Bearer ${dataBridgeToken}` } : {}
                     ),
-                    body: JSON.stringify(Object.assign({}, report, { vessels: [vessel] }))
+                    body: JSON.stringify(normalizeBridgeDateFields(Object.assign({}, report, { vessels: [vessel] })))
                 });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok || payload.success === false) throw new Error(payload.error || 'Data Bridge export failed');
