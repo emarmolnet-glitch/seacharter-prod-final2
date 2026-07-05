@@ -17,3 +17,13 @@
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
+
+[[redirects]]
+  from = "/components.js"
+  to = "/public/components.js"
+  status = 200
+
+[[redirects]]
+  from = "/databridge.html"
+  to = "/public/databridge.html"
+  status = 200
