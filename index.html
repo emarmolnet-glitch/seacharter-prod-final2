@@ -89,6 +89,22 @@
         .input-gc:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         .input-gc:disabled { background-color: #0f172a; color: #64748b; cursor: not-allowed; }
         .input-gc.bg-gray-100 { background-color: #f3f4f6; color: #0f172a; border-color: #cbd5e1; cursor: not-allowed; }
+        .required-use-highlight,
+        .input-gc.required-use-highlight {
+            background-color: #DCFCE7 !important;
+            border-color: #86EFAC !important;
+            color: #064E3B !important;
+        }
+        button.required-use-highlight {
+            background-color: #DCFCE7 !important;
+            border-color: #86EFAC !important;
+            color: #064E3B !important;
+        }
+        button.required-use-highlight:hover {
+            background-color: #BBF7D0 !important;
+            border-color: #4ADE80 !important;
+            color: #052E16 !important;
+        }
         #contenedor_coste_remolcadores span.base { color: #6b7280; }
         #contenedor_coste_remolcadores span.multiplicador { color: #111827; }
         #contenedor_coste_remolcadores span.total { font-weight: 700; color: #1d4ed8; }
@@ -5064,6 +5080,33 @@
                 padding: 16px;
             }
         }
+
+        #cargo-qty.required-use-highlight,
+        #cargo-type.required-use-highlight,
+        #metodo_carga.required-use-highlight,
+        #rate-load.required-use-highlight,
+        #metodo_descarga_pod.required-use-highlight,
+        #rate-disch.required-use-highlight,
+        #price-sea.required-use-highlight,
+        #price-ifo.required-use-highlight,
+        #price-port.required-use-highlight,
+        #pda-pol.required-use-highlight,
+        #pda-pod.required-use-highlight,
+        #btn-estimate-pda-pol.required-use-highlight,
+        #btn-estimate-pda-pod.required-use-highlight,
+        #btn-recalculate-adjusted.required-use-highlight {
+            background-color: #DCFCE7 !important;
+            border-color: #86EFAC !important;
+            color: #064E3B !important;
+        }
+
+        #btn-estimate-pda-pol.required-use-highlight:hover,
+        #btn-estimate-pda-pod.required-use-highlight:hover,
+        #btn-recalculate-adjusted.required-use-highlight:hover {
+            background-color: #BBF7D0 !important;
+            border-color: #4ADE80 !important;
+            color: #052E16 !important;
+        }
     </style>
 </head>
 <body class="theme-light h-screen flex flex-col overflow-hidden">
@@ -5495,11 +5538,11 @@
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <div class="input-group">
                                 <label id="label-cargo-qty" class="text-action-required flex items-center min-h-[24px]">Carga a Transportar (TM)</label>
-                                <input type="number" id="cargo-qty" class="input-gc action-required-field text-action-required font-bold" value="0" step="any" oninput="autoScaleVesselAndCosts(); syncCalculatorAndMatching('calculator'); actualizarModuloCamionTolva();" onblur="detectVesselSegmentFromInputs()">
+                                <input type="number" id="cargo-qty" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="0" step="any" oninput="autoScaleVesselAndCosts(); syncCalculatorAndMatching('calculator'); actualizarModuloCamionTolva();" onblur="detectVesselSegmentFromInputs()">
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-type" class="text-action-required flex items-center min-h-[24px]">Tipo de Carga</label>
-                                <select id="cargo-type" class="input-gc action-required-field text-action-required" onchange="autoAdjustSF(); autoPopulateRouteLimits(); actualizarCamposTipoCarga(); syncCalculatorAndMatching('calculator');">
+                                <select id="cargo-type" class="input-gc action-required-field required-use-highlight text-action-required" onchange="autoAdjustSF(); autoPopulateRouteLimits(); actualizarCamposTipoCarga(); syncCalculatorAndMatching('calculator');">
                                     <option value="Granel Sólido (Dry Bulk)">Granel Sólido (Dry Bulk - Cement, Grain, Coal)</option>
                                     <option value="Granel Líquido (Liquid Bulk)">Granel Líquido (Liquid Bulk - Benzene, Chemicals, Oil)</option>
                                     <option value="Hierro/Acero">Hierro/Acero</option>
@@ -5520,7 +5563,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 mb-4">
                             <div id="contenedor_metodo_carga" class="input-group">
                                 <label id="label-metodo-carga" class="text-action-required">Método Carga POL</label>
-                                <select id="metodo_carga" class="input-gc action-required-field text-action-required" onchange="recalcularDiasPuerto(); actualizarModuloCamionTolva()">
+                                <select id="metodo_carga" class="input-gc action-required-field required-use-highlight text-action-required" onchange="recalcularDiasPuerto(); actualizarModuloCamionTolva()">
                                     <option value="cinta_transportadora">Cinta Transportadora</option>
                                     <option value="camion_tolva">Camión Tolva</option>
                                     <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
@@ -5536,7 +5579,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-rate-load" class="text-action-required">Ritmo Real POL (TM/d)</label>
-                                <input type="number" id="rate-load" class="input-gc action-required-field text-action-required font-bold" value="2500" step="any" oninput="marcarRitmoManual('pol')">
+                                <input type="number" id="rate-load" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="2500" step="any" oninput="marcarRitmoManual('pol')">
                                 <p id="rate-load-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
                             </div>
                         </div>
@@ -5575,7 +5618,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 mb-4">
                             <div id="contenedor_metodo_descarga" class="input-group">
                                 <label id="label-metodo-descarga" class="text-action-required">Método Descarga POD</label>
-                                <select id="metodo_descarga_pod" class="input-gc action-required-field text-action-required" onchange="recalcularDiasPuerto()">
+                                <select id="metodo_descarga_pod" class="input-gc action-required-field required-use-highlight text-action-required" onchange="recalcularDiasPuerto()">
                                     <option value="cinta_transportadora">Cinta Transportadora</option>
                                     <option value="camion_tolva">Camión Tolva</option>
                                     <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
@@ -5591,7 +5634,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-rate-disch" class="text-action-required">Ritmo Real POD (TM/d)</label>
-                                <input type="number" id="rate-disch" class="input-gc action-required-field text-action-required font-bold" value="2500" step="any" oninput="marcarRitmoManual('pod')">
+                                <input type="number" id="rate-disch" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="2500" step="any" oninput="marcarRitmoManual('pod')">
                                 <p id="rate-disch-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
                             </div>
                         </div>
@@ -5662,21 +5705,21 @@
                                         <span id="label-price-vlsfo" class="text-emerald-400 font-bold">PRECIO VLSFO (MAR)</span>
                                         <a href="https://www.bunkerindex.com/" target="_blank" class="text-indigo-400 hover:text-indigo-300" title="Ver en Bunker Index"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
                                     </label>
-                                    <input type="number" id="price-sea" class="input-gc text-emerald-300 font-bold" value="610" step="any" oninput="runEngine()">
+                                    <input type="number" id="price-sea" class="input-gc required-use-highlight text-emerald-300 font-bold" value="610" step="any" oninput="runEngine()">
                                 </div>
                                 <div class="input-group">
                                     <label class="flex justify-between items-center w-full">
                                         <span id="label-price-ifo" class="text-emerald-400 font-bold">PRECIO IFO 380 (SCRUBBER)</span>
                                         <a href="https://www.bunkerindex.com/" target="_blank" class="text-indigo-400 hover:text-indigo-300" title="Ver en Bunker Index"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
                                     </label>
-                                    <input type="number" id="price-ifo" class="input-gc text-emerald-300 font-bold" value="0" step="any" oninput="runEngine()">
+                                    <input type="number" id="price-ifo" class="input-gc required-use-highlight text-emerald-300 font-bold" value="0" step="any" oninput="runEngine()">
                                 </div>
                                 <div class="input-group">
                                     <label class="flex justify-between items-center w-full">
                                         <span id="label-price-mgo" class="text-emerald-400 font-bold">PRECIO MGO (PUERTO)</span>
                                         <a href="https://www.bunkerindex.com/" target="_blank" class="text-indigo-400 hover:text-indigo-300" title="Ver en Bunker Index"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
                                     </label>
-                                    <input type="number" id="price-port" class="input-gc text-emerald-300 font-bold" value="830" step="any" oninput="runEngine()">
+                                    <input type="number" id="price-port" class="input-gc required-use-highlight text-emerald-300 font-bold" value="830" step="any" oninput="runEngine()">
                                 </div>
                             </div>
                             <p id="bunker-index-cache-label" class="-mt-2 mb-4 text-xs italic text-slate-500">Esperando cotización del día...</p>
@@ -5726,15 +5769,15 @@
                             <div class="input-group">
                                 <label id="label-pda-pol" class="text-emerald-400 font-bold">Gastos PDA POL ($)</label>
                                 <div class="flex gap-1">
-                                    <input type="number" id="pda-pol" class="input-gc text-emerald-300 font-bold" value="8675" step="any" oninput="runEngine()">
-                                    <button id="btn-estimate-pda-pol" onclick="autoFillPDA('pol')" class="bg-slate-800 text-slate-400 px-2 rounded hover:text-white" title="Estimar algorítmicamente (GT/LOA/Manga)"><i class="fa-solid fa-rotate-right"></i></button>
+                                    <input type="number" id="pda-pol" class="input-gc required-use-highlight text-emerald-300 font-bold" value="8675" step="any" oninput="runEngine()">
+                                    <button id="btn-estimate-pda-pol" onclick="autoFillPDA('pol')" class="required-use-highlight bg-slate-800 text-slate-400 px-2 rounded hover:text-white" title="Estimar algorítmicamente (GT/LOA/Manga)"><i class="fa-solid fa-rotate-right"></i></button>
                                 </div>
                             </div>
                             <div class="input-group">
                                 <label id="label-pda-pod" class="text-emerald-400 font-bold">Gastos PDA POD ($)</label>
                                 <div class="flex gap-1">
-                                    <input type="number" id="pda-pod" class="input-gc text-emerald-300 font-bold" value="10675" step="any" oninput="runEngine()">
-                                    <button id="btn-estimate-pda-pod" onclick="autoFillPDA('pod')" class="bg-slate-800 text-slate-400 px-2 rounded hover:text-white" title="Estimar algorítmicamente (GT/LOA/Manga)"><i class="fa-solid fa-rotate-right"></i></button>
+                                    <input type="number" id="pda-pod" class="input-gc required-use-highlight text-emerald-300 font-bold" value="10675" step="any" oninput="runEngine()">
+                                    <button id="btn-estimate-pda-pod" onclick="autoFillPDA('pod')" class="required-use-highlight bg-slate-800 text-slate-400 px-2 rounded hover:text-white" title="Estimar algorítmicamente (GT/LOA/Manga)"><i class="fa-solid fa-rotate-right"></i></button>
                                 </div>
                             </div>
                             <div class="input-group">
@@ -5911,7 +5954,7 @@
                                 </div>
                             </div>
                             <div class="mt-4 flex justify-end">
-                                <button id="btn-recalculate-adjusted" type="button" onclick="recalculateAdjustedAndSave()" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-indigo-500/30 bg-indigo-600 text-white transition hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-400" title="Recalcular ajustes" aria-label="Recalcular ajustes">
+                                <button id="btn-recalculate-adjusted" type="button" onclick="recalculateAdjustedAndSave()" class="required-use-highlight inline-flex h-9 w-9 items-center justify-center rounded-lg border border-indigo-500/30 bg-indigo-600 text-white transition hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-400" title="Recalcular ajustes" aria-label="Recalcular ajustes">
                                     <i class="fa-solid fa-rotate"></i>
                                 </button>
                             </div>
@@ -17044,27 +17087,39 @@
         }
 
         function autoFillPDA(type, showNotification = true) {
-            const portName = document.getElementById(type === 'pol' ? 'port-pol' : 'port-pod').value;
-            const dwt = parseFloat(document.getElementById('vessel-dwt').value) || 0;
-            const cargo = parseFloat(document.getElementById('cargo-qty').value) || 0;
-            const metodoEstiba = getMetodoEstibaActual();
-            const metodoDescarga = getMetodoDescargaActual();
-            const ritmoRealPol = calcularRitmoEfectivo('pol');
-            const ritmoRealPod = calcularRitmoEfectivo('pod');
-            const rateLoad = parseFloat(document.getElementById('rate-load').value) || ritmoRealPol;
-            const rateDisch = parseFloat(document.getElementById('rate-disch').value) || ritmoRealPod;
-            const marginDays = Math.max(0, parseFloat(document.getElementById('factor-clima')?.value) || 0);
+            const readNumber = (id) => {
+                const raw = document.getElementById(id)?.value;
+                if (raw === undefined || raw === null) return 0;
+                const normalized = String(raw).replace(',', '.').replace(/[^\d.-]/g, '');
+                return parseFloat(normalized) || 0;
+            };
+            const portName = document.getElementById(type === 'pol' ? 'port-pol' : 'port-pod')?.value || '';
+            const dwt = readNumber('vessel-dwt');
+            const cargo = readNumber('cargo-qty');
+            const ritmoRealPol = typeof calcularRitmoEfectivo === 'function' ? calcularRitmoEfectivo('pol') : 0;
+            const ritmoRealPod = typeof calcularRitmoEfectivo === 'function' ? calcularRitmoEfectivo('pod') : 0;
+            const rateLoad = readNumber('rate-load') || ritmoRealPol;
+            const rateDisch = readNumber('rate-disch') || ritmoRealPod;
+            const activeRate = type === 'pol' ? rateLoad : rateDisch;
+            const marginDays = Math.max(0, readNumber('factor-clima'));
             const marginInput = document.getElementById('days-margin');
             if (marginInput) {
                 marginInput.value = marginDays.toFixed(2);
             }
-            if (!portName || dwt <= 0) return;
+            if (!portName || dwt <= 0) {
+                if (showNotification) {
+                    showToast("Introduce puerto y DWT del buque antes de estimar la PDA.");
+                }
+                return;
+            }
 
             // Pre-cálculos navales ajustados al buque real (Ej: Acqua Stella 10k DWT = ~6.3k GT)
-            const gt = Math.round(dwt * 0.60); 
-            const loa = Math.round(Math.pow(dwt, 0.333) * 5.2);
+            const netTonnage = readNumber('vessel-net-tonnage');
+            const gt = Math.round(netTonnage > 0 ? Math.max(netTonnage * 1.55, dwt * 0.45) : dwt * 0.60);
+            const loaFromInput = readNumber('vessel-loa');
+            const loa = Math.round(loaFromInput > 0 ? loaFromInput : Math.pow(dwt, 0.333) * 5.2);
             const beam = Math.round(Math.pow(dwt, 0.333) * 0.82);
-            const daysInPort = (type === 'pol') ? (cargo / rateLoad) : (cargo / rateDisch);
+            const daysInPort = cargo > 0 && activeRate > 0 ? (cargo / activeRate) : 0;
             const totalDaysInPort = daysInPort + (marginDays / 2);
 
             const multiplier = getPortMultiplier(portName);
@@ -17088,12 +17143,16 @@
             }
 
             const finalPDA = Math.round(totalPDA / 50) * 50;
-            document.getElementById(`pda-${type}`).value = finalPDA;
+            const pdaInput = document.getElementById(`pda-${type}`);
+            if (!pdaInput) return;
+            pdaInput.value = finalPDA;
+            pdaInput.dispatchEvent(new Event('input', { bubbles: true }));
             
             if (showNotification) {
                 const podTag = type === 'pod' ? ' (+10% POD)' : '';
                 const extraSurcharges = `${podTag}${liquidSurchargeTag}`;
-                showToast(`⚙️ PDA ${type.toUpperCase()}: $${finalPDA.toLocaleString('en-US')}${extraSurcharges}<br><span class="text-[10px] text-emerald-300 mt-1 block font-mono">Nav/Maniobra: $${Math.round(navManiobra)} | Tasas: $${Math.round(tasasAutoridad)} | Agencia/Misc: $${Math.round(agenciaVarios)} | Muelle: $${Math.round(muelleEstadia)}</span>`);
+                const sourceTag = loaFromInput > 0 || netTonnage > 0 ? ' | Datos buque reales aplicados' : '';
+                showToast(`PDA ${type.toUpperCase()}: $${finalPDA.toLocaleString('en-US')}${extraSurcharges}<br><span class="text-[10px] text-emerald-300 mt-1 block font-mono">Nav/Maniobra: $${Math.round(navManiobra)} | Tasas: $${Math.round(tasasAutoridad)} | Agencia/Misc: $${Math.round(agenciaVarios)} | Muelle: $${Math.round(muelleEstadia)}${sourceTag}</span>`);
             }
             runEngine();
         }
