@@ -38,7 +38,7 @@
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
-    <script type="module" src="/map_loader.js"></script>
+    <script type="module" src="./map_loader.js"></script>
     <!-- Maritime Routing Library -->
     <script type="module">
         window.seaRouteReady = import('https://cdn.jsdelivr.net/npm/searoute-ts@2.0.0/+esm')
@@ -58,9 +58,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script type="module" src="/components.js"></script>
-    <script type="module" src="/voyage-cost-engine.js"></script>
-    <script type="module" src="/stress-test-engine.js"></script>
+    <script src="./components.js"></script>
+    <script type="module" src="./voyage-cost-engine.js"></script>
+    <script type="module" src="./stress-test-engine.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -34534,18 +34534,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             </div>
             <!-- Iframe container -->
             <div class="flex-1 w-full bg-slate-950">
-                <iframe id="web-databridge-iframe" src="/databridge.html" class="w-full h-full border-none"></iframe>
+                <iframe id="web-databridge-iframe" src="./databridge.html" class="w-full h-full border-none"></iframe>
             </div>
         </div>
     </div>
 
     <!-- Electron Integration & Data Bridge Controller -->
-    <script>
+    <script type="module">
         let webDataBridgeVisible = false;
         let webDataBridgeFullScreen = false;
         const DATA_BRIDGE_TOKEN_STORAGE_KEY = 'seacharter_databridge_api_secret';
-        const DATA_BRIDGE_FRONTEND_URL = resolveViteEnvValue('%VITE_DATA_BRIDGE_FRONTEND_URL%', '/databridge.html');
-        const DATA_BRIDGE_API_URL = resolveViteEnvValue('%VITE_DATA_BRIDGE_API_URL%', '');
+        const DATA_BRIDGE_FRONTEND_URL = resolveViteEnvValue(import.meta.env.VITE_DATA_BRIDGE_FRONTEND_URL, './databridge.html');
+        const DATA_BRIDGE_API_URL = resolveViteEnvValue(import.meta.env.VITE_DATA_BRIDGE_API_URL, '');
 
         document.addEventListener('DOMContentLoaded', () => {
             const btn = document.getElementById('btn-toggle-databridge');
@@ -34633,7 +34633,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function openDataBridgeDashboard() {
-            const targetUrl = DATA_BRIDGE_FRONTEND_URL || '/databridge.html';
+            const targetUrl = DATA_BRIDGE_FRONTEND_URL || './databridge.html';
             window.open(targetUrl, '_blank', 'noopener,noreferrer');
         }
 
@@ -34750,12 +34750,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const launcher = document.getElementById('web-databridge-launcher');
             const iframe = document.getElementById('web-databridge-iframe');
             if (!modal || !container) {
-                window.open('/databridge.html', '_blank', 'noopener');
+                window.open('./databridge.html', '_blank', 'noopener');
                 return;
             }
 
             if (iframe && !iframe.getAttribute('src')) {
-                iframe.setAttribute('src', '/databridge.html');
+                iframe.setAttribute('src', './databridge.html');
             }
 
             webDataBridgeVisible = true;
@@ -34831,6 +34831,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             updateDataBridgeConnectionIndicator();
             updatePendingFrozenReportButton();
         }
+
+        window.toggleDataBridge = toggleDataBridge;
+        window.openDataBridgeDashboard = openDataBridgeDashboard;
+        window.openDataBridgeLinkModal = openDataBridgeLinkModal;
+        window.closeDataBridgeLinkModal = closeDataBridgeLinkModal;
+        window.hideWebDataBridge = hideWebDataBridge;
+        window.toggleWebDataBridgeFullScreen = toggleWebDataBridgeFullScreen;
     </script>
 
     <!-- SeaCharter Calculations Engine Adjustments with IndexedDB and BroadcastChannel -->
