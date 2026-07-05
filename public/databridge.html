@@ -34,8 +34,8 @@
         
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #090d16;
-            color: #f8fafc;
+            background-color: #F8FAFC;
+            color: #334155;
         }
         .console-font {
             font-family: 'JetBrains Mono', monospace;
@@ -45,14 +45,14 @@
             width: 6px;
         }
         .logs-container::-webkit-scrollbar-track {
-            background: #020617;
+            background: #e2e8f0;
         }
         .logs-container::-webkit-scrollbar-thumb {
-            background: #1e293b;
+            background: #cbd5e1;
             border-radius: 3px;
         }
         .logs-container::-webkit-scrollbar-thumb:hover {
-            background: #334155;
+            background: #94a3b8;
         }
         /* Pulsing green light */
         .pulse-light {
@@ -93,33 +93,33 @@
         }
     </style>
 </head>
-<body class="h-screen flex flex-col overflow-hidden p-6 select-none">
+<body class="h-screen flex flex-col overflow-hidden p-6 select-none bg-slate-50 text-slate-800">
     <!-- Header -->
-    <header class="flex items-center justify-between border-b border-slate-800 pb-4 shrink-0">
+    <header class="flex items-center justify-between border-b border-slate-200 pb-4 shrink-0">
         <div class="flex items-center gap-3">
-            <div class="bg-indigo-600/20 text-indigo-400 p-2.5 rounded-xl border border-indigo-500/30">
+            <div class="bg-white text-[#1E3A8A] p-2.5 rounded-lg border border-slate-200 shadow-sm">
                 <i class="fa-solid fa-circle-nodes text-lg"></i>
             </div>
             <div>
-                <h1 class="text-sm font-bold text-white uppercase tracking-wider">SeaCharter Data Bridge</h1>
-                <p class="text-xs text-slate-400">Módulo de Integración de Fletes y Posiciones en Tiempo Real</p>
+                <h1 class="text-sm font-bold text-slate-900 uppercase tracking-wider">SeaCharter Data Bridge</h1>
+                <p class="text-xs text-slate-600">Módulo de Integración de Fletes y Posiciones en Tiempo Real</p>
             </div>
         </div>
         <div class="flex items-center gap-2">
             <!-- Status Indicator -->
-            <div class="flex items-center gap-2 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-lg">
+            <div class="flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-lg">
                 <span class="w-2.5 h-2.5 bg-emerald-500 rounded-full pulse-light"></span>
                 <span class="text-xs font-semibold text-emerald-400 console-font" id="sync-status">CONECTADO</span>
             </div>
-            <button type="button" onclick="minimizeDataBridgeWindow()" class="bg-slate-950 border border-slate-800 hover:bg-slate-900 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150" title="Minimizar Data Bridge">
+            <button type="button" onclick="minimizeDataBridgeWindow()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150" title="Minimizar Data Bridge">
                 <i class="fa-solid fa-window-minimize"></i>
                 <span>Minimizar</span>
             </button>
-            <button type="button" onclick="toggleDataBridgeFullScreen()" class="bg-slate-950 border border-slate-800 hover:bg-slate-900 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150" title="Maximizar a pantalla completa">
+            <button type="button" onclick="toggleDataBridgeFullScreen()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150" title="Maximizar a pantalla completa">
                 <i class="fa-solid fa-expand"></i>
                 <span>Pantalla completa</span>
             </button>
-            <button type="button" onclick="hideDataBridgeWindow()" class="bg-slate-950 border border-slate-800 hover:bg-slate-900 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150" title="Ocultar al segundo plano">
+            <button type="button" onclick="hideDataBridgeWindow()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150" title="Ocultar al segundo plano">
                 <i class="fa-solid fa-eye-slash"></i>
                 <span>Ocultar</span>
             </button>
@@ -128,21 +128,21 @@
 
     <!-- Stats Panel -->
     <section class="grid grid-cols-3 gap-4 my-4 shrink-0">
-        <div class="bg-slate-950 border border-slate-900 rounded-xl p-4 flex flex-col justify-between">
+        <div class="bg-white border border-slate-200 rounded-xl p-4 flex flex-col justify-between">
             <span class="text-[10px] font-bold text-slate-500 uppercase">Tarifas Sincronizadas</span>
             <div class="flex items-baseline gap-1 mt-1">
-                <span class="text-xl font-bold text-white console-font" id="rate-count">1,482</span>
+                <span class="text-xl font-bold text-slate-900 console-font" id="rate-count">1,482</span>
                 <span class="text-xs text-emerald-400 font-semibold"><i class="fa-solid fa-arrow-trend-up"></i> +12</span>
             </div>
         </div>
-        <div class="bg-slate-950 border border-slate-900 rounded-xl p-4 flex flex-col justify-between">
+        <div class="bg-white border border-slate-200 rounded-xl p-4 flex flex-col justify-between">
             <span class="text-[10px] font-bold text-slate-500 uppercase">Buques Activos AIS</span>
             <div class="flex items-baseline gap-1 mt-1">
-                <span class="text-xl font-bold text-white console-font" id="vessel-count">482</span>
+                <span class="text-xl font-bold text-slate-900 console-font" id="vessel-count">482</span>
                 <span class="text-xs text-emerald-400 font-semibold"><i class="fa-solid fa-circle-play"></i> Live</span>
             </div>
         </div>
-        <div class="bg-slate-950 border border-slate-900 rounded-xl p-4 flex flex-col justify-between">
+        <div class="bg-white border border-slate-200 rounded-xl p-4 flex flex-col justify-between">
             <span class="text-[10px] font-bold text-slate-500 uppercase">Estado de Sincronización</span>
             <div class="flex items-baseline gap-1 mt-1">
                 <span class="text-xs font-bold text-indigo-400 uppercase" id="sync-cycle">En espera (30s)</span>
@@ -153,42 +153,42 @@
     <!-- Main Split Area -->
     <div class="databridge-workspace flex-1 overflow-hidden min-h-0 my-4">
         <!-- Terminal Console Area (Left Pane) -->
-        <main class="flex-1 bg-slate-950 border border-slate-900 rounded-xl flex flex-col overflow-hidden relative shadow-inner">
+        <main class="flex-1 bg-white border border-slate-200 rounded-xl flex flex-col overflow-hidden relative shadow-sm">
             <!-- Terminal Header -->
-            <div class="bg-slate-900/50 border-b border-slate-900 px-4 py-2 flex items-center justify-between shrink-0">
+            <div class="bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center justify-between shrink-0">
                 <div class="flex items-center gap-1.5">
                     <span class="w-3 h-3 rounded-full bg-red-500/50"></span>
                     <span class="w-3 h-3 rounded-full bg-yellow-500/50"></span>
                     <span class="w-3 h-3 rounded-full bg-green-500/50"></span>
-                    <span class="text-xs text-slate-400 font-semibold console-font ml-2">data-bridge-stream.log</span>
+                    <span class="text-xs text-slate-600 font-semibold console-font ml-2">data-bridge-stream.log</span>
                 </div>
-                <button onclick="clearConsole()" class="text-slate-500 hover:text-slate-300 text-xs transition duration-150" title="Limpiar Consola">
+                <button onclick="clearConsole()" class="text-slate-500 hover:text-slate-700 text-xs transition duration-150" title="Limpiar Consola">
                     <i class="fa-solid fa-trash-can"></i>
                 </button>
             </div>
 
             <!-- Terminal Logs -->
-            <div id="logs-container" class="flex-1 overflow-y-auto p-4 console-font text-xs space-y-2.5 logs-container text-slate-300 bg-[#020617]/40 leading-relaxed">
+            <div id="logs-container" class="flex-1 overflow-y-auto p-4 console-font text-xs space-y-2.5 logs-container text-slate-700 bg-slate-100 leading-relaxed">
                 <!-- Initial logs populated by JS -->
             </div>
         </main>
 
         <!-- Audit Panel Area (Right Pane) -->
-        <section class="audit-panel bg-slate-950 border border-slate-900 rounded-xl flex flex-col overflow-hidden relative shadow-inner">
+        <section class="audit-panel bg-white border border-slate-200 rounded-xl flex flex-col overflow-hidden relative shadow-sm">
             <!-- Panel Header -->
-            <div class="bg-slate-900/50 border-b border-slate-900 px-4 py-2.5 flex items-center justify-between shrink-0">
+            <div class="bg-slate-50 border-b border-slate-200 px-4 py-2.5 flex items-center justify-between shrink-0">
                 <div class="flex items-center gap-2">
                     <i class="fa-solid fa-clipboard-check text-indigo-400 text-xs"></i>
-                    <span class="text-xs text-slate-200 font-semibold uppercase tracking-wider">Pendientes de Auditoría</span>
+                    <span class="text-xs text-slate-800 font-semibold uppercase tracking-wider">Pendientes de Auditoría</span>
                 </div>
-                <span id="audit-badge" class="bg-indigo-900/40 text-indigo-300 border border-indigo-500/30 text-[10px] px-2 py-0.5 rounded-full font-bold">0 BUQUES</span>
+                <span id="audit-badge" class="bg-white text-[#1E3A8A] border border-blue-200 text-[10px] px-2 py-0.5 rounded-full font-bold">0 BUQUES</span>
             </div>
 
             <!-- Audit List -->
-            <div id="audit-vessels-container" class="flex-1 overflow-y-auto p-4 space-y-3 logs-container bg-[#020617]/20">
+            <div id="audit-vessels-container" class="flex-1 overflow-y-auto p-4 space-y-3 logs-container bg-slate-50">
                 <div id="empty-audit-state" class="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
                     <i class="fa-solid fa-circle-info text-2xl mb-2 text-indigo-500/50"></i>
-                    <p class="font-bold text-sm text-slate-400">Bandeja de Entrada Vacía</p>
+                    <p class="font-bold text-sm text-slate-600">Bandeja de Entrada Vacía</p>
                     <p class="text-xs text-slate-500 mt-1 max-w-[280px]">Ejecute el "Motor de Coincidencias" en Core PRO para recibir buques en tiempo real para validación humana.</p>
                 </div>
                 <!-- Dynamic vessel cards will be injected here -->
@@ -197,14 +197,14 @@
     </div>
 
     <!-- Controls Footer -->
-    <footer class="flex items-center justify-between border-t border-slate-800 pt-4 mt-4 shrink-0">
+    <footer class="flex items-center justify-between border-t border-slate-200 pt-4 mt-4 shrink-0">
         <p class="text-[11px] text-slate-500">Módulo de Orquestación SeaCharter Bridge. No cerrar esta ventana para mantener el flujo constante.</p>
         <div class="flex gap-2">
-            <button onclick="pauseResumeSync()" id="btn-pause-sync" class="bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150">
+            <button onclick="pauseResumeSync()" id="btn-pause-sync" class="bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150">
                 <i id="pause-icon" class="fa-solid fa-pause"></i>
                 <span id="pause-text">Pausar</span>
             </button>
-            <button onclick="triggerManualSync()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 shadow-md shadow-indigo-600/10 transition duration-150">
+            <button onclick="triggerManualSync()" class="bg-white hover:bg-slate-50 text-[#1E3A8A] border border-blue-200 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 shadow-sm transition duration-150">
                 <i class="fa-solid fa-rotate"></i>
                 <span>Sincronizar Ahora</span>
             </button>
@@ -276,7 +276,7 @@
             const logItem = document.createElement('div');
             
             // Standard colors depending on type
-            let colorClass = 'text-slate-300';
+            let colorClass = 'text-slate-700';
             if (text.includes('[SUCCESS]')) {
                 colorClass = 'text-emerald-400';
             } else if (text.includes('[SYNC]')) {
@@ -287,7 +287,7 @@
                 colorClass = 'text-rose-500 font-semibold';
             }
 
-            logItem.className = `${colorClass} py-0.5 border-l-2 border-transparent hover:border-indigo-500 pl-2 hover:bg-slate-900/30 transition duration-100`;
+            logItem.className = `${colorClass} py-0.5 border-l-2 border-transparent hover:border-indigo-500 pl-2 hover:bg-white/70 transition duration-100`;
             logItem.textContent = text;
             logsContainer.appendChild(logItem);
 
@@ -345,7 +345,7 @@
                 
                 pauseText.textContent = 'Reanudar';
                 pauseIcon.className = 'fa-solid fa-play';
-                btnPauseSync.className = "bg-indigo-600 border border-indigo-500 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150";
+                btnPauseSync.className = "bg-white border border-blue-200 hover:bg-slate-50 text-[#1E3A8A] px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150";
             } else {
                 addLog(`[INFO] ${getTimestamp()} - Sincronización automática REANUDADA.`);
                 syncStatusEl.textContent = 'CONECTADO';
@@ -353,7 +353,7 @@
                 
                 pauseText.textContent = 'Pausar';
                 pauseIcon.className = 'fa-solid fa-pause';
-                btnPauseSync.className = "bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150";
+                btnPauseSync.className = "bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150";
             }
         }
 
@@ -494,7 +494,7 @@
                 return {
                     label: 'Procesado',
                     detail: vessel.estadoProcesos || vessel.auditStatus || vessel.status || 'Validado',
-                    className: 'text-emerald-300 bg-emerald-950/40 border-emerald-800/50'
+                    className: 'text-emerald-700 bg-white border-emerald-200'
                 };
             }
 
@@ -502,14 +502,14 @@
                 return {
                     label: 'Procesado',
                     detail: vessel.estadoProcesos || vessel.auditStatus || vessel.status || 'Descartado',
-                    className: 'text-rose-300 bg-rose-950/40 border-rose-800/50'
+                    className: 'text-rose-700 bg-white border-rose-200'
                 };
             }
 
             return {
                 label: 'Requiere acción',
                 detail: vessel.estadoProcesos || vessel.auditStatus || vessel.status || 'Pendiente',
-                className: 'text-amber-300 bg-amber-950/40 border-amber-800/50'
+                className: 'text-amber-700 bg-white border-amber-200'
             };
         }
 
@@ -538,7 +538,7 @@
                 return {
                     label: 'Requiere acción',
                     detail: 'Esperando respuesta de Data Bridge',
-                    className: 'text-amber-300 bg-amber-950/40 border-amber-800/50'
+                    className: 'text-amber-700 bg-white border-amber-200'
                 };
             }
 
@@ -548,8 +548,8 @@
                 label: 'Procesado',
                 detail: isRejected ? 'Descartado por Data Bridge' : 'Confirmado por Data Bridge',
                 className: isRejected
-                    ? 'text-rose-300 bg-rose-950/40 border-rose-800/50'
-                    : 'text-emerald-300 bg-emerald-950/40 border-emerald-800/50'
+                    ? 'text-rose-700 bg-white border-rose-200'
+                    : 'text-emerald-700 bg-white border-emerald-200'
             };
         }
 
@@ -559,7 +559,7 @@
             const coreProValue = formatCoreProValue(vessel);
 
             return `
-                <div class="audit-flow-grid border border-slate-800/80 bg-slate-950/45 rounded-lg p-2" data-audit-flow="${safeImo}">
+                <div class="audit-flow-grid border border-slate-200/80 bg-white/45 rounded-lg p-2" data-audit-flow="${safeImo}">
                     <div class="rounded-md border ${processState.className} p-2 min-w-0">
                         <div class="text-[8px] uppercase tracking-[0.12em] font-extrabold opacity-80">PENDIENTE DE AUDITORIA</div>
                         <div class="text-[10px] font-black mt-1">${escapeHtml(processState.label)}</div>
@@ -570,7 +570,7 @@
                         <div class="text-[10px] font-black mt-1">${escapeHtml(dataBridgeState.label)}</div>
                         <div class="audit-flow-detail text-[9px] font-semibold opacity-80" title="${escapeHtml(dataBridgeState.detail)}">${escapeHtml(dataBridgeState.detail)}</div>
                     </div>
-                    <div class="rounded-md border border-indigo-800/50 bg-indigo-950/35 text-indigo-200 p-2 min-w-0">
+                    <div class="rounded-md border border-blue-200 bg-white text-[#1E3A8A] p-2 min-w-0">
                         <div class="text-[8px] uppercase tracking-[0.12em] font-extrabold opacity-80">DATOS ENVIADOS POR CORE PRO</div>
                         <div class="text-[10px] font-black mt-1">Valor de entrada</div>
                         <div class="audit-flow-detail text-[9px] font-semibold opacity-80" title="${escapeHtml(coreProValue)}">${escapeHtml(coreProValue)}</div>
@@ -583,7 +583,7 @@
             const receivedEl = document.getElementById(`audit-flow-received-${safeImo}`);
             if (!receivedEl) return;
             const isDiscarded = status === 'Discarded';
-            receivedEl.className = `rounded-md border ${isDiscarded ? 'text-rose-300 bg-rose-950/40 border-rose-800/50' : 'text-emerald-300 bg-emerald-950/40 border-emerald-800/50'} p-2 min-w-0`;
+            receivedEl.className = `rounded-md border ${isDiscarded ? 'text-rose-700 bg-white border-rose-200' : 'text-emerald-700 bg-white border-emerald-200'} p-2 min-w-0`;
             receivedEl.innerHTML = `
                 <div class="text-[8px] uppercase tracking-[0.12em] font-extrabold opacity-80">DATOS RECIBIDOS POR DATA BRIDGE</div>
                 <div class="text-[10px] font-black mt-1">Procesado</div>
@@ -604,7 +604,7 @@
             const resultEl = document.getElementById(`compare-result-${safeImo}`);
             if (!resultEl) return;
 
-            let resultClass = 'border-amber-800/60 bg-amber-950/25 text-amber-200';
+            let resultClass = 'border-amber-200 bg-amber-50 text-amber-800';
             let icon = 'fa-triangle-exclamation';
             let title = 'Pendiente de respuesta';
             let detail = 'Core PRO envió información a Data Bridge, pero todavía no hay respuesta recibida desde Data Bridge hacia Core PRO.';
@@ -616,12 +616,12 @@
                     && !String(processState.detail || '').toUpperCase().includes('PENDIENTE');
 
                 if (isMismatch) {
-                    resultClass = 'border-sky-800/60 bg-sky-950/25 text-sky-200';
+                    resultClass = 'border-sky-200 bg-sky-50 text-sky-800';
                     icon = 'fa-code-compare';
                     title = 'Intercambio recibido con diferencias de estado';
                     detail = `Core PRO registra "${processState.detail}" y Data Bridge registra "${bridgeDetail}". Revise si corresponde actualizar el estado final.`;
                 } else {
-                    resultClass = 'border-emerald-800/60 bg-emerald-950/25 text-emerald-200';
+                    resultClass = 'border-emerald-200 bg-emerald-50 text-emerald-800';
                     icon = 'fa-circle-check';
                     title = 'Intercambio confirmado';
                     detail = 'La información enviada desde Core PRO ya llegó a Data Bridge y existe respuesta de Data Bridge disponible para Core PRO.';
@@ -754,73 +754,73 @@
                 const safeImo = vessel.imo || Math.floor(Math.random() * 1000000);
                 card.id = `audit-card-${safeImo}`;
                 card.dataset.safeImo = String(safeImo);
-                card.className = "bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 space-y-3 transition-all duration-300 hover:border-slate-700 hover:bg-slate-900";
+                card.className = "bg-slate-50/80 border border-slate-200 rounded-xl p-3.5 space-y-3 transition-all duration-300 hover:border-slate-300 hover:bg-slate-50";
                 
                 const escapedName = (vessel.name || "Unknown").replace(/'/g, "\\'");
                 const escapedType = String(vessel.type || "Bulk Carrier").replace(/'/g, "\\'");
                 const originalEta = vessel.eta || new Date().toISOString().split('T')[0];
 
                 const etaDelta = vessel.eta_delta || '0.0 días (En ventana)';
-                let deltaColorClass = 'text-emerald-400 bg-emerald-950/45 border-emerald-900/40';
+                let deltaColorClass = 'text-emerald-700 bg-white border-emerald-200';
                 if (etaDelta.includes('+')) {
-                    deltaColorClass = 'text-rose-400 bg-rose-950/45 border-rose-900/40';
+                    deltaColorClass = 'text-rose-700 bg-white border-rose-200';
                 }
 
                 card.innerHTML = `
                     <div class="flex items-start justify-between">
                         <div class="min-w-0 flex-1 pr-2">
-                            <h4 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 truncate">
+                            <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 truncate">
                                 <i class="fa-solid fa-ship text-indigo-400 shrink-0"></i>
                                 <span class="truncate" title="${vessel.name}">${vessel.name}</span>
                             </h4>
-                            <p class="text-[10px] text-indigo-300 font-semibold mt-0.5 truncate">${vessel.type}</p>
+                            <p class="text-[10px] text-[#1E3A8A] font-semibold mt-0.5 truncate">${vessel.type}</p>
                         </div>
-                        <span class="text-[9px] font-bold text-slate-500 bg-slate-950 px-2 py-0.5 border border-slate-900 rounded console-font shrink-0">IMO ${vessel.imo || 'N/A'}</span>
+                        <span class="text-[9px] font-bold text-slate-500 bg-white px-2 py-0.5 border border-slate-200 rounded console-font shrink-0">IMO ${vessel.imo || 'N/A'}</span>
                     </div>
 
                     ${renderAuditFlowColumns(vessel, safeImo)}
 
-                    <div class="grid grid-cols-2 gap-2 border-t border-b border-slate-800/60 py-2.5 text-[10px] text-slate-400">
+                    <div class="grid grid-cols-2 gap-2 border-t border-b border-slate-200/60 py-2.5 text-[10px] text-slate-600">
                         <div class="flex items-center gap-1 col-span-2">
                             <span class="text-slate-500 font-medium">Último Puerto:</span>
-                            <span class="font-bold text-slate-300 console-font truncate">${vessel.ultimo_puerto || 'N/A'}</span>
+                            <span class="font-bold text-slate-700 console-font truncate">${vessel.ultimo_puerto || 'N/A'}</span>
                         </div>
                         <div class="flex items-center gap-1 col-span-2">
                             <span class="text-slate-500 font-medium">Destino Actual:</span>
-                            <span class="font-bold text-slate-300 console-font truncate">${vessel.destino_actual || 'N/A'}</span>
+                            <span class="font-bold text-slate-700 console-font truncate">${vessel.destino_actual || 'N/A'}</span>
                         </div>
                         <div class="flex items-center gap-1 col-span-2">
                             <span class="text-slate-500 font-medium">ETA Calculado Radar:</span>
-                            <span class="font-bold text-slate-300 console-font">${vessel.eta_puerto_carga || originalEta}</span>
+                            <span class="font-bold text-slate-700 console-font">${vessel.eta_puerto_carga || originalEta}</span>
                         </div>
                         <div class="flex items-center gap-1 col-span-2">
                             <span class="text-slate-500 font-medium">Delta:</span>
                             <span class="font-bold ${deltaColorClass} border px-1.5 py-0.5 rounded console-font">${etaDelta}</span>
                         </div>
-                        <div class="flex items-center gap-1 mt-1 border-t border-slate-800/30 pt-1.5">
+                        <div class="flex items-center gap-1 mt-1 border-t border-slate-200/30 pt-1.5">
                             <span class="text-slate-500 font-medium">DWT:</span>
-                            <input type="number" id="input-dwt-${safeImo}" class="bg-slate-950 border border-slate-800/80 focus:border-indigo-500 focus:outline-none rounded px-1.5 py-0.5 text-slate-200 w-24 text-[10px] font-bold console-font" value="${vessel.dwt || 0}">
+                            <input type="number" id="input-dwt-${safeImo}" class="bg-white border border-slate-200/80 focus:border-indigo-500 focus:outline-none rounded px-1.5 py-0.5 text-slate-800 w-24 text-[10px] font-bold console-font" value="${vessel.dwt || 0}">
                         </div>
-                        <div class="flex items-center gap-1 mt-1 border-t border-slate-800/30 pt-1.5">
+                        <div class="flex items-center gap-1 mt-1 border-t border-slate-200/30 pt-1.5">
                             <span class="text-slate-500 font-medium">Calado:</span>
-                            <span class="font-bold text-slate-300 console-font">${vessel.draft ? vessel.draft : 'N/A'} m</span>
+                            <span class="font-bold text-slate-700 console-font">${vessel.draft ? vessel.draft : 'N/A'} m</span>
                         </div>
                         <div class="flex items-center gap-1 col-span-2">
                             <span class="text-slate-500 font-medium">Bandera:</span>
-                            <input type="text" id="input-flag-${safeImo}" class="bg-slate-950 border border-slate-800/80 focus:border-indigo-500 focus:outline-none rounded px-1.5 py-0.5 text-slate-200 w-24 text-[10px] font-bold" value="${vessel.flag || vessel.bandera || 'Panama'}">
+                            <input type="text" id="input-flag-${safeImo}" class="bg-white border border-slate-200/80 focus:border-indigo-500 focus:outline-none rounded px-1.5 py-0.5 text-slate-800 w-24 text-[10px] font-bold" value="${vessel.flag || vessel.bandera || 'Panama'}">
                         </div>
                         <div class="flex items-center gap-1 col-span-2">
                             <span class="text-slate-500 font-medium">ETA Radar:</span>
-                            <span class="font-bold text-slate-300 console-font">${originalEta}</span>
+                            <span class="font-bold text-slate-700 console-font">${originalEta}</span>
                         </div>
-                        <div class="col-span-2 flex items-center justify-between border-t border-slate-800/40 pt-2 mt-1">
+                        <div class="col-span-2 flex items-center justify-between border-t border-slate-200/40 pt-2 mt-1">
                             <div class="flex items-center gap-1">
                                 <span class="text-slate-500 font-medium">ETA Final:</span>
-                                <input type="date" id="input-eta-${safeImo}" class="bg-slate-950 border border-slate-800/80 focus:border-indigo-500 focus:outline-none rounded px-1.5 py-0.5 text-slate-200 text-[10px] font-bold console-font" value="${originalEta}" onchange="calculateDelta('${safeImo}', '${originalEta}')">
+                                <input type="date" id="input-eta-${safeImo}" class="bg-white border border-slate-200/80 focus:border-indigo-500 focus:outline-none rounded px-1.5 py-0.5 text-slate-800 text-[10px] font-bold console-font" value="${originalEta}" onchange="calculateDelta('${safeImo}', '${originalEta}')">
                             </div>
                             <div class="flex items-center gap-1 text-[9px]">
                                 <span class="text-slate-500 font-medium">Ajuste Manual Delta:</span>
-                                <span id="display-delta-${safeImo}" class="font-bold text-indigo-400 bg-indigo-950/40 border border-indigo-900/40 px-1.5 py-0.5 rounded console-font">0.00 d</span>
+                                <span id="display-delta-${safeImo}" class="font-bold text-indigo-400 bg-white border border-blue-200 px-1.5 py-0.5 rounded console-font">0.00 d</span>
                             </div>
                         </div>
                     </div>
@@ -836,7 +836,7 @@
                             <i class="fa-solid fa-xmark"></i>
                             <span>Descartar (Inválido)</span>
                         </button>
-                        <button onclick="submitAudit('${card.id}', ${vessel.imo || 0}, '${escapedName}', '${escapedType}', ${vessel.draft || 0}, '${originalEta}', 'Approved')" class="bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500 hover:text-slate-950 text-emerald-400 px-3 py-1.5 rounded-lg text-[10px] font-extrabold flex items-center gap-1 transition duration-150 shadow-md shadow-emerald-500/5">
+                        <button onclick="submitAudit('${card.id}', ${vessel.imo || 0}, '${escapedName}', '${escapedType}', ${vessel.draft || 0}, '${originalEta}', 'Approved')" class="bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-50 text-emerald-400 px-3 py-1.5 rounded-lg text-[10px] font-extrabold flex items-center gap-1 transition duration-150 shadow-sm">
                             <i class="fa-solid fa-cloud-arrow-up"></i>
                             <span>PUSH (Aprobar)</span>
                         </button>
@@ -875,7 +875,7 @@
             buttons.forEach(btn => btn.disabled = true);
 
             const originalHtml = card.innerHTML;
-            card.className = "bg-slate-950/50 border border-slate-900 rounded-xl p-3.5 space-y-3 opacity-60 pointer-events-none transition-all duration-300";
+            card.className = "bg-white/50 border border-slate-200 rounded-xl p-3.5 space-y-3 opacity-60 pointer-events-none transition-all duration-300";
 
             addLog(`[SYNC] ${getTimestamp()} - Enviando decisión de auditoría (${status === 'Approved' ? 'VÁLIDO' : 'INVÁLIDO'}) para el buque '${name}'...`);
             markDataBridgeReceived(safeImo, status);
@@ -981,7 +981,7 @@
 
             } catch (dbErr) {
                 addLog(`[ERROR] ${getTimestamp()} - Falló la persistencia local de buque '${name}': ${dbErr.message}`);
-                card.className = "bg-slate-900/80 border border-rose-500/40 rounded-xl p-3.5 space-y-3 hover:bg-slate-900 transition-all duration-300";
+                card.className = "bg-slate-50/80 border border-rose-500/40 rounded-xl p-3.5 space-y-3 hover:bg-slate-50 transition-all duration-300";
                 card.innerHTML = originalHtml;
                 addLog(`[INFO] ${getTimestamp()} - Intente auditar nuevamente el buque '${name}'.`);
             }

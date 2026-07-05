@@ -569,9 +569,11 @@
         #web-databridge-container.web-databridge-fullscreen {
             width: 100vw !important;
             max-width: none !important;
-            height: 100vh !important;
+            height: calc(100vh - 76px) !important;
             border-radius: 0 !important;
-            border: 0 !important;
+            border-left: 0 !important;
+            border-right: 0 !important;
+            border-bottom: 0 !important;
         }
 
         @media (max-width: 760px) {
@@ -34510,7 +34512,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
     </script>
 
     <!-- Web Data Bridge Simulation Modal (for non-Electron / Web / Netlify environments) -->
-    <button id="web-databridge-launcher" type="button" onclick="openWebDataBridge()" class="fixed right-5 bottom-5 z-[99] hidden items-center gap-2 rounded-lg border border-indigo-500/40 bg-slate-950 px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-indigo-100 shadow-2xl shadow-slate-950/40 transition hover:border-indigo-300 hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-400" title="Abrir Data Bridge activo" aria-label="Abrir Data Bridge activo">
+    <button id="web-databridge-launcher" type="button" onclick="openWebDataBridge()" class="fixed right-5 bottom-5 z-[99] hidden items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-[#1E3A8A] shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-400" title="Abrir Data Bridge activo" aria-label="Abrir Data Bridge activo">
         <span class="relative flex h-2.5 w-2.5">
             <span class="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 animate-ping"></span>
             <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
@@ -34518,22 +34520,22 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         <span>Data Bridge activo</span>
     </button>
 
-    <div id="web-databridge-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-300">
-        <div id="web-databridge-container" class="bg-[#090d16] border border-slate-800 rounded-2xl w-[96vw] max-w-[1380px] h-[92vh] flex flex-col shadow-2xl overflow-hidden scale-95 transition-all duration-300 relative">
+    <div id="web-databridge-modal" class="fixed inset-x-0 top-[76px] bottom-0 z-[40] flex items-center justify-center bg-slate-50/95 opacity-0 pointer-events-none transition-all duration-300">
+        <div id="web-databridge-container" class="bg-white border border-slate-200 rounded-xl w-[96vw] max-w-[1380px] h-[calc(100vh-104px)] flex flex-col shadow-sm overflow-hidden scale-95 transition-all duration-300 relative">
             <!-- Sleek Header for Web Window (Mac-style terminal controls) -->
-            <div class="bg-slate-950 border-b border-slate-900 px-4 py-3 flex items-center justify-between shrink-0 select-none">
+            <div class="bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between shrink-0 select-none">
                 <div class="flex items-center gap-2">
                     <button onclick="hideWebDataBridge()" class="w-3 h-3 rounded-full bg-red-500 hover:bg-red-600 transition flex items-center justify-center text-[7px] text-red-950 font-bold" title="Ocultar al segundo plano">×</button>
                     <button onclick="hideWebDataBridge()" class="w-3 h-3 rounded-full bg-yellow-500 hover:bg-yellow-600 transition flex items-center justify-center" title="Minimizar"></button>
                     <button id="web-databridge-fullscreen-btn" onclick="toggleWebDataBridgeFullScreen()" class="w-3 h-3 rounded-full bg-green-500 hover:bg-green-600 transition flex items-center justify-center" title="Maximizar a pantalla completa" aria-label="Maximizar a pantalla completa"></button>
-                    <span class="text-[11px] text-slate-400 font-semibold font-mono ml-2">SeaCharter Data Bridge (Simulación Web)</span>
+                    <span class="text-[11px] text-slate-600 font-semibold font-mono ml-2">SeaCharter Data Bridge (Simulación Web)</span>
                 </div>
-                <button onclick="hideWebDataBridge()" class="text-slate-500 hover:text-slate-300 text-xs transition p-1" title="Ocultar al segundo plano">
+                <button onclick="hideWebDataBridge()" class="text-slate-500 hover:text-slate-800 text-xs transition p-1" title="Ocultar al segundo plano">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
             <!-- Iframe container -->
-            <div class="flex-1 w-full bg-slate-950">
+            <div class="flex-1 w-full bg-slate-50">
                 <iframe id="web-databridge-iframe" src="./public/databridge.html" class="w-full h-full border-none"></iframe>
             </div>
         </div>
