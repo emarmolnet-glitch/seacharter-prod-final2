@@ -1,6 +1,0 @@
-CREATE TABLE IF NOT EXISTS user_preferences (
-  account_key TEXT PRIMARY KEY,
-  show_container_modules BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
