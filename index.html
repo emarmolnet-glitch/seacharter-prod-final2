@@ -1083,7 +1083,7 @@
             }
             body.print-report-mode #executive-report-print-view .screen-report-print {
                 width: 100% !important;
-                max-width: 19cm !important;
+                max-width: 100% !important;
                 margin: 0 auto !important;
                 padding: 0 !important;
                 background: #fff !important;
@@ -1096,8 +1096,35 @@
                 display: none !important;
             }
             body.print-report-mode #executive-report-print-view .screen-report-print * {
-                print-color-adjust: exact !important;
-                -webkit-print-color-adjust: exact !important;
+                background: #fff !important;
+                color: #111827 !important;
+                box-shadow: none !important;
+                text-shadow: none !important;
+                border-color: #d1d5db !important;
+                print-color-adjust: economy !important;
+                -webkit-print-color-adjust: economy !important;
+            }
+            body.print-report-mode #executive-report-print-view .screen-report-print.official-print-document,
+            body.print-report-mode #executive-report-print-view .screen-report-print .official-print-section,
+            body.print-report-mode #executive-report-print-view .screen-report-print .official-print-card,
+            body.print-report-mode #executive-report-print-view .screen-report-print table,
+            body.print-report-mode #executive-report-print-view .screen-report-print details {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+            }
+            body.print-report-mode #executive-report-print-view .screen-report-print.official-print-document {
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+            }
+            body.print-report-mode #executive-report-print-view .screen-report-print table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+            }
+            body.print-report-mode #executive-report-print-view .screen-report-print th,
+            body.print-report-mode #executive-report-print-view .screen-report-print td {
+                border: 1px solid #d1d5db !important;
+                padding: 5px 6px !important;
             }
             body.print-report-mode #executive-report-print-view .screen-report-print details {
                 break-inside: avoid !important;
@@ -21896,6 +21923,46 @@
             document.getElementById('ai-modal-content').classList.remove('hidden');
         }
 
+        function renderViabilityOfficialToolbar() {
+            return `
+                <div class="official-print-section no-print mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-700 pb-3">
+                    <div>
+                        <h4 class="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+                            <i class="fa-solid fa-scale-balanced text-emerald-400"></i> Informe de Viabilidad IA
+                        </h4>
+                        <p class="text-[11px] text-slate-400">Documento oficial con métricas de riesgo, demurrage y estrategia contractual actualizadas.</p>
+                    </div>
+                    <button type="button" onclick="printExecutiveScreenReport()" class="bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-lg flex items-center justify-center gap-1.5 transition whitespace-nowrap">
+                        <i class="fa-solid fa-print"></i> 🖨️ Imprimir Documento Oficial
+                    </button>
+                </div>
+            `;
+        }
+
+        function renderViabilityOfficialReport(aiHtml = '') {
+            const riskSections = typeof renderExecutiveRiskSections === 'function'
+                ? renderExecutiveRiskSections()
+                : '';
+            return `
+                <div class="official-print-document screen-report-print space-y-4 text-slate-300 text-sm">
+                    ${renderViabilityOfficialToolbar()}
+                    ${riskSections ? `<div class="mb-4">${riskSections}</div>` : ''}
+                    <div class="official-print-section official-print-card bg-slate-800/60 p-4 rounded-xl border border-slate-700">
+                        <h5 class="font-bold text-emerald-400 uppercase mb-3 border-b border-slate-700/50 pb-1 flex items-center gap-1.5">
+                            <i class="fa-solid fa-brain"></i> Dictamen IA de viabilidad
+                        </h5>
+                        <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed">${aiHtml}</div>
+                    </div>
+                    <div class="no-print pt-2 flex justify-end gap-2 border-t border-slate-800">
+                        <button onclick="closeAIModal()" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition">Cerrar</button>
+                        <button onclick="printExecutiveScreenReport()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-1.5 transition">
+                            <i class="fa-solid fa-print"></i> 🖨️ Imprimir Documento Oficial
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
         async function analyzeViabilityAI() {
             runEngine(); // Forzar actualización de State antes del análisis
             
@@ -21925,7 +21992,7 @@
                     warningDesc = `La capacité de Port en Lourd (TPL) du navire (${dwt.toLocaleString()} TM) est inférieure au poids total de la cargaison à transporter (${cargo.toLocaleString()} TM).`;
                 }
 
-                document.getElementById('ai-modal-content').innerHTML = `
+                document.getElementById('ai-modal-content').innerHTML = renderViabilityOfficialReport(`
                     <div class="p-6 text-center">
                         <div class="text-red-500 text-3xl mb-4">
                             <i class="fa-solid fa-triangle-exclamation animate-pulse"></i>
@@ -21937,7 +22004,7 @@
                             ${warningDesc}
                         </p>
                     </div>
-                `;
+                `);
                 markMasterReportTrigger('viabilityAIGenerated', {
                     generatedAt: new Date().toISOString(),
                     status: 'not_compatible_excess_weight',
@@ -21957,7 +22024,7 @@
                 openAIModal(modalTitle, loaderText);
                 document.getElementById('ai-modal').classList.add('light-mode');
                 document.getElementById('ai-modal-loader').classList.add('hidden');
-                document.getElementById('ai-modal-content').innerHTML = `
+                document.getElementById('ai-modal-content').innerHTML = renderViabilityOfficialReport(`
                     <div class="p-6">
                         <div class="rounded-xl border border-red-500/50 bg-red-950/40 p-5 text-red-100">
                             <div class="text-red-400 text-3xl mb-3"><i class="fa-solid fa-triangle-exclamation"></i></div>
@@ -21966,7 +22033,7 @@
                             <ul class="mt-3 list-disc pl-5 text-xs space-y-1">${classAnalysis.warnings.map((warning) => `<li>${warning}</li>`).join('')}</ul>
                         </div>
                     </div>
-                `;
+                `);
                 markMasterReportTrigger('viabilityAIGenerated', {
                     generatedAt: new Date().toISOString(),
                     status: 'ship_class_warning',
@@ -22073,14 +22140,15 @@
                 const dataResponse = await executeGeminiRequest(payload);
                 let html = dataResponse.candidates[0].content.parts[0].text;
                 const cleanHtml = html.replace(/```html|```/g, '');
+                const reportHtml = renderViabilityOfficialReport(cleanHtml);
                 markMasterReportTrigger('viabilityAIGenerated', {
                     generatedAt: new Date().toISOString(),
                     status: 'generated',
-                    html: cleanHtml
+                    html: reportHtml
                 });
                 
                 document.getElementById('ai-modal-loader').classList.add('hidden');
-                document.getElementById('ai-modal-content').innerHTML = cleanHtml;
+                document.getElementById('ai-modal-content').innerHTML = reportHtml;
                 setupRiderCopyOption();
                 document.getElementById('ai-modal-content').classList.remove('hidden');
             } catch(e) {
@@ -24022,7 +24090,7 @@ Example:
                     <div class="flex flex-wrap items-center gap-2 self-start sm:self-center">
                         ${renderExecutiveModeSelector(reportMode)}
                         <button onclick="printExecutiveScreenReport()" class="no-print bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-lg flex items-center gap-1.5 transition whitespace-nowrap">
-                            <i class="fa-solid fa-print"></i> ${r.printBtn}
+                            <i class="fa-solid fa-print"></i> 🖨️ Imprimir Documento Oficial
                         </button>
                     </div>
                 </div>
@@ -24151,6 +24219,7 @@ Example:
                     </div>
 
                     ${renderExecutiveTceTable(reportMode)}
+                    ${renderExecutiveRiskSections()}
 
                     <!-- Sección de Desglose y Restricciones -->
                     <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700">
@@ -24408,7 +24477,7 @@ Example:
                             ${r.closeBtn}
                         </button>
                         <button onclick="printExecutiveScreenReport()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-1.5 transition">
-                            <i class="fa-solid fa-print"></i> ${r.printBtnBottom}
+                            <i class="fa-solid fa-print"></i> 🖨️ Imprimir Documento Oficial
                         </button>
                     </div>
                 </div>
@@ -24639,6 +24708,30 @@ Example:
                     <ul style="margin: 0; padding-left: 14px;">${classAnalysis.warnings.map((warning) => `<li>${String(warning).replace(/[<>&]/g, '')}</li>`).join('')}</ul>
                 </div>`
                 : '';
+            const officialRisk = typeof getLatestExecutiveRiskReportData === 'function' ? getLatestExecutiveRiskReportData() : null;
+            const officialRiskPrintHTML = officialRisk ? `
+                <div style="border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px 10px; background-color: #fff; margin-bottom: 15px; page-break-inside: avoid;">
+                    <h4 style="font-size: 8.5pt; font-weight: 700; color: #92400e; margin: 0 0 6px 0; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px;">Análisis de Riesgo y Estrés</h4>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 7.5pt; margin-bottom: 8px;">
+                        <tr>
+                            <td style="border: 1px solid #e2e8f0; padding: 4px 6px; font-weight: 700;">Delta moderado</td>
+                            <td style="border: 1px solid #e2e8f0; padding: 4px 6px; text-align: right;">${formatCoaMoney(officialRisk.moderateDelta, 0)}</td>
+                            <td style="border: 1px solid #e2e8f0; padding: 4px 6px; font-weight: 700;">Beneficio moderado</td>
+                            <td style="border: 1px solid #e2e8f0; padding: 4px 6px; text-align: right;">${formatCoaMoney(officialRisk.moderateProfit, 0)}</td>
+                            <td style="border: 1px solid #e2e8f0; padding: 4px 6px; font-weight: 700;">Veredicto</td>
+                            <td style="border: 1px solid #e2e8f0; padding: 4px 6px; text-align: right; font-weight: 700;">${officialRisk.verdict}</td>
+                        </tr>
+                        <tr>
+                            <td style="border: 1px solid #e2e8f0; padding: 4px 6px; font-weight: 700;">Ajuste de flete sugerido</td>
+                            <td style="border: 1px solid #e2e8f0; padding: 4px 6px; text-align: right;" colspan="5">${officialRisk.suggestedFreight}</td>
+                        </tr>
+                    </table>
+                    <h4 style="font-size: 8.5pt; font-weight: 700; color: #991b1b; margin: 0 0 6px 0;">Riesgo de Demoras (Demurrage)</h4>
+                    <p style="font-size: 7.5pt; margin: 0 0 8px 0;">${officialRisk.demurrageExposure.active ? `Exposición: ${officialRisk.demurrageExposure.exposedDays.toFixed(2)} días; valor financiero en riesgo: ${formatCoaMoney(officialRisk.demurrageExposure.financialExposure, 0)}. Ritmo real ${Math.round(officialRisk.demurrageExposure.realRate).toLocaleString('en-US')} TM/d frente a ritmo contractual ${Math.round(officialRisk.demurrageExposure.contractualRate).toLocaleString('en-US')} TM/d.` : 'No existe discrepancia activa entre el ritmo real y el ritmo contractual.'}</p>
+                    <h4 style="font-size: 8.5pt; font-weight: 700; color: #0e7490; margin: 0 0 6px 0;">Estrategia Contractual</h4>
+                    <ul style="font-size: 7.5pt; margin: 0; padding-left: 15px;">${officialRisk.clauses.map((clause) => `<li>${clause}</li>`).join('')}</ul>
+                </div>
+            ` : '';
 
             let detailedHTML = `
                 ${printClassWarnings}
@@ -24660,6 +24753,7 @@ Example:
                         ${modeLabel === 'COA' ? 'Modo COA: break-even promedio, ahorro frente a spot y protección BunkerIndex.' : 'Modo SPOT: TCE del viaje individual, riesgo inmediato de demurrage y viabilidad del tramo.'} ${shipClass.focus}
                     </p>
                 </div>
+                ${officialRiskPrintHTML}
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                     <!-- 1. Desglose del Punto de Equilibrio -->
                     <div style="border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px 10px; background-color: #f8fafc;">
@@ -33351,13 +33445,91 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             };
         }
 
+        function getLatestExecutiveRiskReportData() {
+            const batch = State.sensitivityAnalysis || window.SeaCharterSensitivityAnalysis || {};
+            const moderate = batch.moderate || {};
+            const risk = batch.risk || {};
+            const exposure = State.demurrageExposure || (typeof updateDemurrageExposureAlert === 'function' ? updateDemurrageExposureAlert() : null) || {};
+            const advisorFreight = document.getElementById('smart-advisor-freight')?.innerText || '';
+            const advisorRecommendation = document.getElementById('smart-advisor-recommendation')?.innerText || '';
+            const suggestedFreight = advisorFreight || (
+                moderate.beneficioNeto < 0 && State.cargo > 0
+                    ? `${formatCoaMoney(Math.abs(moderate.beneficioNeto) / State.cargo)}/TM`
+                    : 'Sin ajuste requerido'
+            );
+            const recommendation = advisorRecommendation || (
+                risk.label === 'VIABLE'
+                    ? 'Mantener cláusulas operativas estándar y monitorear BAF/WIBON si cambian bunker o congestión.'
+                    : 'Revisar BAF, WIBON/WIPON y SHINC antes de fijar condiciones finales.'
+            );
+            const contractualRate = Math.max(0, parseFloat(document.getElementById('rate-load')?.value) || 0);
+            const realRate = typeof calcularRitmoEfectivo === 'function' ? calcularRitmoEfectivo('pol') : 0;
+
+            return {
+                moderateDelta: Number(moderate.deltaBeneficio) || 0,
+                moderateProfit: Number(moderate.beneficioNeto ?? moderate.netProfitOwner) || 0,
+                verdict: risk.label || document.getElementById('auto-risk-status')?.innerText || 'Sin análisis',
+                verdictStatus: risk.status || 'yellow',
+                suggestedFreight,
+                demurrageExposure: {
+                    active: Boolean(exposure.active),
+                    realRate,
+                    contractualRate,
+                    exposedDays: Number(exposure.exposedDays) || 0,
+                    financialExposure: Number(exposure.financialExposure) || 0
+                },
+                clauses: recommendation
+                    .split(/(?:\.\s+|;\s+)/)
+                    .map((item) => item.trim())
+                    .filter(Boolean)
+            };
+        }
+
+        function renderExecutiveRiskSections() {
+            const data = getLatestExecutiveRiskReportData();
+            const verdictClass = data.verdictStatus === 'green'
+                ? 'text-emerald-300 border-emerald-700/60'
+                : (data.verdictStatus === 'red' ? 'text-red-300 border-red-700/60' : 'text-amber-300 border-amber-700/60');
+            const demurrageRows = data.demurrageExposure.active
+                ? `
+                    <li class="flex justify-between"><span class="text-slate-400">Ritmo real:</span><span class="font-bold text-white">${Math.round(data.demurrageExposure.realRate).toLocaleString('en-US')} TM/d</span></li>
+                    <li class="flex justify-between"><span class="text-slate-400">Ritmo contractual:</span><span class="font-bold text-white">${Math.round(data.demurrageExposure.contractualRate).toLocaleString('en-US')} TM/d</span></li>
+                    <li class="flex justify-between"><span class="text-slate-400">Días de exposición:</span><span class="font-bold text-red-300">${data.demurrageExposure.exposedDays.toFixed(2)} d</span></li>
+                    <li class="flex justify-between"><span class="text-slate-400">Valor financiero en riesgo:</span><span class="font-bold text-red-300">${formatCoaMoney(data.demurrageExposure.financialExposure, 0)}</span></li>
+                `
+                : `<li class="text-slate-400">No existe discrepancia activa entre el ritmo real y el ritmo contractual.</li>`;
+            const clauses = data.clauses.length ? data.clauses : ['Mantener BAF, WIBON/WIPON y SHINC como cláusulas de control si el riesgo operativo aumenta.'];
+
+            return `
+                <div class="official-print-section grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="official-print-card bg-slate-800/60 p-4 rounded-xl border border-slate-700">
+                        <h5 class="font-bold text-amber-400 uppercase mb-2 border-b border-slate-700/50 pb-1 flex items-center gap-1.5"><i class="fa-solid fa-triangle-exclamation"></i> Análisis de Riesgo y Estrés</h5>
+                        <ul class="space-y-1.5">
+                            <li class="flex justify-between"><span class="text-slate-400">Delta moderado:</span><span class="font-bold text-white">${formatCoaMoney(data.moderateDelta, 0)}</span></li>
+                            <li class="flex justify-between"><span class="text-slate-400">Beneficio moderado:</span><span class="font-bold text-white">${formatCoaMoney(data.moderateProfit, 0)}</span></li>
+                            <li class="flex justify-between"><span class="text-slate-400">Veredicto:</span><span class="font-black uppercase ${verdictClass}">${data.verdict}</span></li>
+                            <li class="flex justify-between"><span class="text-slate-400">Ajuste de flete sugerido:</span><span class="font-bold text-amber-300">${data.suggestedFreight}</span></li>
+                        </ul>
+                    </div>
+                    <div class="official-print-card bg-slate-800/60 p-4 rounded-xl border border-slate-700">
+                        <h5 class="font-bold text-red-400 uppercase mb-2 border-b border-slate-700/50 pb-1 flex items-center gap-1.5"><i class="fa-solid fa-hourglass-half"></i> Riesgo de Demoras (Demurrage)</h5>
+                        <ul class="space-y-1.5">${demurrageRows}</ul>
+                    </div>
+                    <div class="official-print-card bg-slate-800/60 p-4 rounded-xl border border-slate-700">
+                        <h5 class="font-bold text-cyan-400 uppercase mb-2 border-b border-slate-700/50 pb-1 flex items-center gap-1.5"><i class="fa-solid fa-file-signature"></i> Estrategia Contractual</h5>
+                        <ul class="list-disc pl-4 space-y-1.5 text-slate-300">${clauses.map((clause) => `<li>${clause}</li>`).join('')}</ul>
+                    </div>
+                </div>
+            `;
+        }
+
         function printExecutiveScreenReport() {
             const content = document.getElementById('ai-modal-content')?.innerHTML || '';
             const printView = document.getElementById('executive-report-print-view');
             if (!printView || !content) return;
             const original = printView.innerHTML;
             const originalTitle = document.title;
-            printView.innerHTML = `<div class="screen-report-print">${content}</div>`;
+            printView.innerHTML = `<div class="screen-report-print official-print-document">${content}</div>`;
             document.title = 'SeaCharter Core PRO - Reporte Ejecutivo';
             document.body.classList.add('print-report-mode');
             setTimeout(() => {
@@ -33415,7 +33587,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     <div class="flex flex-wrap items-center gap-2 self-start sm:self-center">
                         ${renderExecutiveModeSelector('COA')}
                         <button onclick="printExecutiveScreenReport()" class="no-print bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-lg flex items-center gap-1.5 transition whitespace-nowrap">
-                            <i class="fa-solid fa-print"></i> Imprimir Reporte (PDF)
+                            <i class="fa-solid fa-print"></i> 🖨️ Imprimir Documento Oficial
                         </button>
                     </div>
                 </div>
@@ -33468,6 +33640,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     </div>
 
                     ${renderExecutiveTceTable('COA')}
+                    ${renderExecutiveRiskSections()}
 
                     <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700">
                         <h5 class="font-bold text-indigo-400 uppercase mb-3 border-b border-slate-700/50 pb-1 flex items-center gap-1.5"><i class="fa-solid fa-square-poll-horizontal"></i> ANÁLISIS DETALLADO DE CONTRATO COA</h5>
@@ -33523,7 +33696,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
                     <div class="no-print pt-2 flex justify-end gap-2 border-t border-slate-800">
                         <button onclick="closeAIModal()" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition">Cerrar</button>
-                        <button onclick="printExecutiveScreenReport()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-1.5 transition"><i class="fa-solid fa-print"></i> Imprimir Reporte</button>
+                        <button onclick="printExecutiveScreenReport()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-1.5 transition"><i class="fa-solid fa-print"></i> 🖨️ Imprimir Documento Oficial</button>
                     </div>
                 </div>
             `;
