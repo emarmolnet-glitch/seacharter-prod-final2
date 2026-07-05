@@ -816,6 +816,13 @@
             selectedTaxonomy: 'cargo',
             report: null
         }, window.radarWorkflowState || {});
+        window.dataBridgeAuditReceipts = Object.assign({}, (() => {
+            try {
+                return JSON.parse(localStorage.getItem('corepro_data_bridge_audit_receipts') || '{}') || {};
+            } catch (_) {
+                return {};
+            }
+        })(), window.dataBridgeAuditReceipts || {});
 
         const RADAR_TAXONOMIES = {
             cargo: { label: 'Cargueros / Graneleros', min: 70, max: 79 },
@@ -928,6 +935,45 @@
             };
         }
 
+        function getRadarReportVesselId(vessel) {
+            if (!vessel || typeof vessel !== 'object') return '';
+            const candidates = [vessel.id, vessel.mmsi, vessel.MMSI, vessel.imo, vessel.IMO, vessel.nombre, vessel.name, vessel.vesselName];
+            for (const candidate of candidates) {
+                const value = String(candidate || '').trim();
+                if (value && value !== 'N/A' && value !== '0' && value.toLowerCase() !== 'unknown') return value;
+            }
+            return '';
+        }
+
+        function isRadarReportVesselPendingAudit(vessel) {
+            const id = getRadarReportVesselId(vessel);
+            return Boolean(id && window.dataBridgeAuditReceipts && window.dataBridgeAuditReceipts[id]?.action === 'pending_audit');
+        }
+
+        function persistDataBridgeAuditReceipts() {
+            try {
+                localStorage.setItem('corepro_data_bridge_audit_receipts', JSON.stringify(window.dataBridgeAuditReceipts || {}));
+            } catch (_) {}
+        }
+
+        function markRadarVesselsPendingAudit(vessels, payload) {
+            const acceptedAt = payload?.acceptedAt || new Date().toISOString();
+            const action = payload?.action || 'pending_audit';
+            const receiptRows = Array.isArray(payload?.vessels) ? payload.vessels : vessels;
+            const acceptedIds = new Set(receiptRows.map(getRadarReportVesselId).filter(Boolean));
+            vessels.forEach(vessel => {
+                const id = getRadarReportVesselId(vessel);
+                if (!id || (acceptedIds.size > 0 && !acceptedIds.has(id))) return;
+                window.dataBridgeAuditReceipts[id] = {
+                    action,
+                    status: payload?.status || 'success',
+                    acceptedAt,
+                    name: vessel.nombre || vessel.name || vessel.vesselName || 'Unknown vessel'
+                };
+            });
+            persistDataBridgeAuditReceipts();
+        }
+
         function setRadarWorkflowPhase(phase) {
             window.radarWorkflowState.phase = phase;
             document.querySelectorAll('[data-radar-phase]').forEach(item => {
@@ -988,7 +1034,13 @@
             const frozenCount = state.frozenSnapshot?.length || 0;
             if (countEl) countEl.innerText = String(frozenCount || window.buquesAlmacenados.size || 0);
             if (matchBtn) matchBtn.disabled = !state.frozenAt || frozenCount === 0;
-            if (exportBtn) exportBtn.disabled = !state.report || !Array.isArray(state.report.vessels) || state.report.vessels.length === 0;
+            const reportVessels = Array.isArray(state.report?.vessels) ? state.report.vessels : [];
+            const allReportVesselsPendingAudit = reportVessels.length > 0 && reportVessels.every(isRadarReportVesselPendingAudit);
+            if (exportBtn) {
+                exportBtn.disabled = reportVessels.length === 0 || allReportVesselsPendingAudit;
+                exportBtn.innerText = allReportVesselsPendingAudit ? 'Pendiente Data Bridge' : 'Enviar a Data Bridge';
+                exportBtn.title = allReportVesselsPendingAudit ? 'Todos los buques del reporte ya están en auditoría.' : '';
+            }
             if (captureBtn) {
                 captureBtn.disabled = isCapturing;
                 captureBtn.style.cursor = isCapturing ? 'not-allowed' : 'pointer';
@@ -1063,7 +1115,13 @@
                 container.innerHTML = '<div style="padding:14px; color:#64748b; font-weight:800;">Sin coincidencias para la taxonomía seleccionada.</div>';
                 return;
             }
-            container.innerHTML = `<table style="margin:0;"><thead><tr><th>MMSI</th><th>IMO</th><th>Nombre</th><th>Calado</th><th>Coordenadas</th><th>Tipo</th></tr></thead><tbody>${rows.map(row => `<tr><td>${row.mmsi}</td><td>${row.imo}</td><td>${row.nombre}</td><td>${row.calado ?? 'N/A'}</td><td>${Number.isFinite(row.latitud) ? row.latitud.toFixed(4) : 'N/A'}, ${Number.isFinite(row.longitud) ? row.longitud.toFixed(4) : 'N/A'}</td><td>${row.tipo}</td></tr>`).join('')}</tbody></table>`;
+            container.innerHTML = `<table style="margin:0;"><thead><tr><th>MMSI</th><th>IMO</th><th>Nombre</th><th>Calado</th><th>Coordenadas</th><th>Tipo</th><th>Data Bridge</th></tr></thead><tbody>${rows.map(row => {
+                const pendingAudit = isRadarReportVesselPendingAudit(row);
+                const bridgeCell = pendingAudit
+                    ? '<span style="display:inline-flex;align-items:center;gap:5px;background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:999px;padding:3px 8px;font-weight:900;">⏳ En Auditoría</span>'
+                    : '<button type="button" class="radar-primary-action" style="padding:4px 8px;font-size:0.7rem;" onclick="window.exportSingleRadarVesselToDataBridge(this)" data-vessel-id="' + getRadarReportVesselId(row).replace(/"/g, '&quot;') + '">Exportar</button>';
+                return `<tr data-bridge-state="${pendingAudit ? 'pending_audit' : 'ready'}"><td>${row.mmsi}</td><td>${row.imo}</td><td>${row.nombre}</td><td>${row.calado ?? 'N/A'}</td><td>${Number.isFinite(row.latitud) ? row.latitud.toFixed(4) : 'N/A'}, ${Number.isFinite(row.longitud) ? row.longitud.toFixed(4) : 'N/A'}</td><td>${row.tipo}</td><td>${bridgeCell}</td></tr>`;
+            }).join('')}</tbody></table>`;
         }
 
         window.runRadarMatchEngine = function() {
@@ -1099,9 +1157,37 @@
                 });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok || payload.success === false) throw new Error(payload.error || 'Data Bridge export failed');
+                markRadarVesselsPendingAudit(report.vessels, payload);
                 setRadarWorkflowPhase('export');
                 if (statusEl) statusEl.innerText = `Enviado: ${payload.acceptedCount || report.vessels.length} buques`;
+                renderRadarReport(report);
             } catch (error) {
+                if (statusEl) statusEl.innerText = error.message || 'Error al exportar';
+            }
+            updateRadarWorkflowUi();
+        };
+
+        window.exportSingleRadarVesselToDataBridge = async function(button) {
+            const statusEl = document.getElementById('radar-export-status');
+            const report = window.radarWorkflowState.report;
+            const vesselId = String(button?.dataset?.vesselId || '').trim();
+            const vessel = Array.isArray(report?.vessels) ? report.vessels.find(row => getRadarReportVesselId(row) === vesselId) : null;
+            if (!report || !vessel || isRadarReportVesselPendingAudit(vessel)) return;
+            button.disabled = true;
+            if (statusEl) statusEl.innerText = 'Enviando buque a Data Bridge...';
+            try {
+                const response = await fetch('/.netlify/functions/data-bridge-export', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify(Object.assign({}, report, { vessels: [vessel] }))
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok || payload.success === false) throw new Error(payload.error || 'Data Bridge export failed');
+                markRadarVesselsPendingAudit([vessel], payload);
+                if (statusEl) statusEl.innerText = `En Auditoría: ${vessel.nombre || vesselId}`;
+                renderRadarReport(report);
+            } catch (error) {
+                button.disabled = false;
                 if (statusEl) statusEl.innerText = error.message || 'Error al exportar';
             }
             updateRadarWorkflowUi();
