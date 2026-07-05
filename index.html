@@ -576,6 +576,182 @@
             border-bottom: 0 !important;
         }
 
+        .connection-status-bar {
+            --connection-accent: var(--accent);
+            --connection-muted: #475569;
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.55rem;
+            min-width: 218px;
+            padding: 0.45rem 0.7rem;
+            border: 1px solid #CBD5E1;
+            border-radius: 0.75rem;
+            background: rgba(255, 255, 255, 0.82);
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+            backdrop-filter: blur(10px) saturate(1.08);
+            -webkit-backdrop-filter: blur(10px) saturate(1.08);
+            color: var(--text);
+            overflow: hidden;
+        }
+
+        .connection-status-bar::before {
+            content: "";
+            position: absolute;
+            inset: 1px;
+            border-radius: inherit;
+            background: linear-gradient(135deg, rgba(248, 250, 252, 0.82), rgba(255, 255, 255, 0.5)),
+                        radial-gradient(circle at 16% 50%, color-mix(in srgb, var(--connection-accent) 10%, transparent), transparent 34%),
+                        radial-gradient(circle at 84% 50%, color-mix(in srgb, var(--connection-accent) 9%, transparent), transparent 32%);
+            opacity: 0.95;
+            pointer-events: none;
+        }
+
+        .connection-status-node {
+            position: relative;
+            z-index: 1;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.38rem;
+            color: var(--connection-muted);
+        }
+
+        .connection-status-icon {
+            display: inline-grid;
+            place-items: center;
+            width: 1.65rem;
+            height: 1.65rem;
+            border: 1px solid #CBD5E1;
+            border-radius: 0.65rem;
+            background: #F8FAFC;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+            transition: color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+        }
+
+        .connection-status-label {
+            font-size: 0.58rem;
+            font-weight: 800;
+            line-height: 1;
+            letter-spacing: 0.11em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .connection-pipeline {
+            position: relative;
+            z-index: 1;
+            width: clamp(56px, 7vw, 92px);
+            height: 18px;
+            color: var(--connection-accent);
+        }
+
+        .connection-pipeline svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+            overflow: visible;
+        }
+
+        .connection-pipe-track,
+        .connection-pipe-flow {
+            fill: none;
+            stroke-linecap: round;
+            stroke-width: 3.2;
+        }
+
+        .connection-pipe-track {
+            stroke: rgba(100, 116, 139, 0.32);
+        }
+
+        .connection-pipe-flow {
+            stroke: currentColor;
+            stroke-dasharray: 8 10;
+            filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--connection-accent) 28%, transparent));
+        }
+
+        .connection-status-text {
+            position: absolute;
+            left: 50%;
+            bottom: 0.18rem;
+            z-index: 2;
+            transform: translateX(-50%);
+            font-size: 0.5rem;
+            font-weight: 900;
+            letter-spacing: 0.14em;
+            line-height: 1;
+            text-transform: uppercase;
+            color: color-mix(in srgb, var(--connection-accent) 82%, #0F172A);
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+            pointer-events: none;
+        }
+
+        .connection-status-bar[data-state="connected"] {
+            --connection-accent: var(--accent);
+            --connection-muted: #0F766E;
+        }
+
+        .connection-status-bar[data-state="connected"] .connection-status-icon {
+            color: var(--accent);
+            border-color: color-mix(in srgb, var(--accent) 44%, #CBD5E1);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 0 3px color-mix(in srgb, var(--accent) 11%, transparent);
+            animation: connectionNodePulse 2.2s ease-in-out infinite;
+        }
+
+        .connection-status-bar[data-state="connected"] .connection-pipe-flow {
+            animation: connectionPipeFlow 1.55s linear infinite;
+        }
+
+        .connection-status-bar[data-state="syncing"] {
+            --connection-accent: #004e64;
+            --connection-muted: #004e64;
+        }
+
+        .connection-status-bar[data-state="syncing"] .connection-status-icon {
+            color: var(--primary);
+            border-color: color-mix(in srgb, var(--primary) 38%, #CBD5E1);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 0 3px rgba(0, 78, 100, 0.09);
+            animation: connectionNodePulse 1.05s ease-in-out infinite;
+        }
+
+        .connection-status-bar[data-state="syncing"] .connection-pipe-flow {
+            stroke-dasharray: 4 7;
+            animation: connectionPipeFlow 0.58s linear infinite;
+        }
+
+        .connection-status-bar[data-state="disconnected"] {
+            --connection-accent: var(--muted);
+            --connection-muted: #64748B;
+        }
+
+        .connection-status-bar[data-state="disconnected"] .connection-status-icon {
+            color: #64748B;
+            border-color: #CBD5E1;
+        }
+
+        .connection-status-bar[data-state="disconnected"] .connection-pipe-flow {
+            stroke: rgba(100, 116, 139, 0.42);
+            stroke-dasharray: none;
+            filter: none;
+        }
+
+        @keyframes connectionPipeFlow {
+            to { stroke-dashoffset: -36; }
+        }
+
+        @keyframes connectionNodePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.04); }
+        }
+
+        @media (max-width: 1180px) {
+            .connection-status-bar {
+                order: -1;
+                flex: 1 1 100%;
+                width: 100%;
+            }
+        }
+
         @media (max-width: 760px) {
             .map-floating-panel {
                 top: 12px;
@@ -5254,6 +5430,23 @@
         </div>
 
         <div class="header-actions-right">
+            <div id="corepro-databridge-connection" class="connection-status-bar" data-state="disconnected" role="status" aria-live="polite" aria-label="Core PRO desconectado de Data Bridge">
+                <div class="connection-status-node" title="Core PRO">
+                    <span class="connection-status-icon" aria-hidden="true"><i class="fa-solid fa-server"></i></span>
+                    <span class="connection-status-label">Core PRO</span>
+                </div>
+                <div class="connection-pipeline" aria-hidden="true">
+                    <svg viewBox="0 0 100 18" preserveAspectRatio="none" focusable="false">
+                        <path class="connection-pipe-track" d="M3 9 C25 9 28 9 50 9 S75 9 97 9" />
+                        <path class="connection-pipe-flow" d="M3 9 C25 9 28 9 50 9 S75 9 97 9" />
+                    </svg>
+                </div>
+                <div class="connection-status-node" title="Data Bridge">
+                    <span class="connection-status-icon" aria-hidden="true"><i class="fa-solid fa-bridge"></i></span>
+                    <span class="connection-status-label">Data Bridge</span>
+                </div>
+                <span id="corepro-databridge-connection-label" class="connection-status-text">Offline</span>
+            </div>
             <button
                 id="btn-master-executive-report"
                 onclick="generarInformeMasterOnClick()"
@@ -34605,6 +34798,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         const DATA_BRIDGE_VERIFY_ENDPOINT = HAS_VALID_DATA_BRIDGE_API_URL
             ? `${DATA_BRIDGE_API_URL.replace(/\/+$/, '')}/api/verify-connection`
             : '/api/databridge-verify-connection';
+        const DATA_BRIDGE_STATUS_LABELS = {
+            connected: 'Conectado',
+            disconnected: 'Offline',
+            syncing: 'Sincronizando'
+        };
 
         document.addEventListener('DOMContentLoaded', () => {
             const btn = document.getElementById('btn-toggle-databridge');
@@ -34698,6 +34896,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 linkBtn.setAttribute('title', isConnected ? 'Data Bridge conectado' : 'Conectar Data Bridge');
                 linkBtn.setAttribute('aria-label', isConnected ? 'Data Bridge conectado' : 'Conectar Data Bridge');
             }
+            updateConnectionStatusBar(isConnected ? 'connected' : 'disconnected');
+        }
+
+        function updateConnectionStatusBar(state = 'disconnected') {
+            const normalizedState = ['connected', 'disconnected', 'syncing'].includes(state) ? state : 'disconnected';
+            const bar = document.getElementById('corepro-databridge-connection');
+            const label = document.getElementById('corepro-databridge-connection-label');
+            if (!bar) return;
+            const labelText = DATA_BRIDGE_STATUS_LABELS[normalizedState] || DATA_BRIDGE_STATUS_LABELS.disconnected;
+            bar.dataset.state = normalizedState;
+            bar.setAttribute('aria-label', `Core PRO ${labelText.toLowerCase()} con Data Bridge`);
+            if (label) label.textContent = labelText;
         }
 
         function openDataBridgeDashboard() {
@@ -34752,6 +34962,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function setDataBridgeLinkPending(isPending) {
             const submit = document.getElementById('databridge-link-submit');
+            updateConnectionStatusBar(isPending ? 'syncing' : (Boolean(getStoredDataBridgeToken()) ? 'connected' : 'disconnected'));
             if (!submit) return;
             const input = document.getElementById('databridge-api-secret');
             const hasSecret = Boolean(String(input?.value || '').trim());
@@ -34844,6 +35055,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (launcher) launcher.classList.add('hidden');
             if (launcher) launcher.classList.remove('flex');
             updateDataBridgeButtonState(true);
+            updateConnectionStatusBar('syncing');
+            setTimeout(() => {
+                if (webDataBridgeVisible) updateConnectionStatusBar('connected');
+            }, 1200);
         }
 
         function hideWebDataBridge() {
@@ -34860,6 +35075,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (launcher) launcher.classList.remove('hidden');
             if (launcher) launcher.classList.add('flex');
             updateDataBridgeButtonState(false);
+            updateConnectionStatusBar(Boolean(getStoredDataBridgeToken()) ? 'connected' : 'disconnected');
         }
 
         function setWebDataBridgeFullScreen(isFullScreen) {
@@ -34908,6 +35124,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             updateDataBridgeConnectionIndicator();
+            if (isVisible) {
+                updateConnectionStatusBar('syncing');
+                setTimeout(() => updateConnectionStatusBar('connected'), 900);
+            }
             updatePendingFrozenReportButton();
         }
 
@@ -34915,6 +35135,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.openDataBridgeDashboard = openDataBridgeDashboard;
         window.openDataBridgeLinkModal = openDataBridgeLinkModal;
         window.closeDataBridgeLinkModal = closeDataBridgeLinkModal;
+        window.updateConnectionStatusBar = updateConnectionStatusBar;
         window.hideWebDataBridge = hideWebDataBridge;
         window.toggleWebDataBridgeFullScreen = toggleWebDataBridgeFullScreen;
     </script>
@@ -35960,6 +36181,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         syncChannel.onmessage = async (event) => {
             if (event.data && event.data.type === 'vessel_validated') {
                 const validatedVessel = event.data.vessel;
+                if (typeof updateConnectionStatusBar === 'function') updateConnectionStatusBar('syncing');
                 console.log("[SYNC] Received vessel validation from Data Bridge:", validatedVessel);
                 await saveVesselToIndexedDB(validatedVessel);
                 appendCoreProDataBridgeReceiptLog(validatedVessel, event.data.persistence);
@@ -35967,6 +36189,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 // If the currently loaded vessel was validated, reload parameters
                 if (State.imo && String(State.imo) === String(validatedVessel.imo)) {
                     loadVesselParamsFromIndexedDB(State.imo);
+                }
+                if (typeof updateConnectionStatusBar === 'function') {
+                    setTimeout(() => updateConnectionStatusBar('connected'), 900);
                 }
             }
         };
