@@ -8518,11 +8518,12 @@
                                         <th class="py-2.5 px-3">Posición</th>
                                         <th class="py-2.5 px-3">Velocidad</th>
                                         <th class="py-2.5 px-3">Clase</th>
+                                        <th class="py-2.5 px-3">Alertas</th>
                                     </tr>
                                 </thead>
                                 <tbody id="ais-vessels-tbody" class="divide-y divide-slate-800/50 text-xs">
                                     <tr>
-                                        <td colspan="5" class="py-8 text-center text-slate-500">
+                                        <td colspan="6" class="py-8 text-center text-slate-500">
                                             <i class="fa-solid fa-satellite-dish text-xl mb-2 animate-bounce block"></i>
                                             Haz clic en "Consultar Disponibilidad Real-Time" para buscar buques a través de AISstream.io
                                         </td>
@@ -27090,7 +27091,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             aisMarkers = [];
             const tbody = document.getElementById('ais-vessels-tbody');
             if (tbody) {
-                tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-500">Mapa limpio. Ejecuta una búsqueda POL/POD para iniciar un nuevo barrido.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-500">Mapa limpio. Ejecuta una búsqueda POL/POD para iniciar un nuevo barrido.</td></tr>`;
             }
             ['ais-density-count', 'buques-count'].forEach((id) => { const el = document.getElementById(id); if (el) el.innerText = '--'; });
             const supply = document.getElementById('ais-supply-coefficient');
@@ -27779,7 +27780,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (tbody) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="5" class="py-8 text-center text-rose-300 font-bold">
+                        <td colspan="6" class="py-8 text-center text-rose-300 font-bold">
                             Sin conexión AIS. Compruebe API Key o estado del servidor
                         </td>
                     </tr>
@@ -29873,6 +29874,157 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return !!recordName && !!vesselName && recordName === vesselName;
             }
 
+            function normalizeSmartAlertText(value) {
+                return String(value || '')
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, ' ')
+                    .trim();
+            }
+
+            function escapeSmartAlertHtml(value) {
+                return String(value || '').replace(/[&<>"']/g, (char) => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;'
+                }[char]));
+            }
+
+            function parseSmartAlertDate(value) {
+                if (!value) return null;
+                const text = String(value).trim();
+                const parsed = new Date(text);
+                if (!Number.isNaN(parsed.getTime())) return parsed;
+                const match = text.match(/^(\d{1,2})[-/](\d{1,2})(?:[-/](\d{2,4}))?(?:\s+(\d{1,2}):?(\d{2})?)?/);
+                if (!match) return null;
+                const now = new Date();
+                const year = match[3]
+                    ? (match[3].length === 2 ? 2000 + Number(match[3]) : Number(match[3]))
+                    : now.getUTCFullYear();
+                const month = Number(match[1]) - 1;
+                const day = Number(match[2]);
+                const hour = Number(match[4] || 0);
+                const minute = Number(match[5] || 0);
+                const candidate = new Date(Date.UTC(year, month, day, hour, minute));
+                return Number.isNaN(candidate.getTime()) ? null : candidate;
+            }
+
+            function getSmartAlertPlannedEta() {
+                const candidates = [
+                    document.getElementById('eta-radar')?.value,
+                    document.getElementById('res-adjusted-eta')?.innerText,
+                    document.getElementById('gc-laycan-date')?.value,
+                    document.getElementById('asb-laycan-date')?.value,
+                    document.getElementById('map-laycan-date')?.value
+                ];
+                for (const candidate of candidates) {
+                    const parsed = parseSmartAlertDate(candidate);
+                    if (parsed) return parsed;
+                }
+                return null;
+            }
+
+            function bearingToDegrees(lat1, lon1, lat2, lon2) {
+                const toRad = Math.PI / 180;
+                const y = Math.sin((lon2 - lon1) * toRad) * Math.cos(lat2 * toRad);
+                const x = Math.cos(lat1 * toRad) * Math.sin(lat2 * toRad) -
+                    Math.sin(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.cos((lon2 - lon1) * toRad);
+                return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+            }
+
+            function angularDifferenceDegrees(a, b) {
+                return Math.abs(((a - b + 540) % 360) - 180);
+            }
+
+            function destinationMatchesPol(vessel, polName) {
+                const meta = vessel && vessel.MetaData ? vessel.MetaData : {};
+                const rawDestination = vessel?.destination || vessel?.Destination || vessel?.PortOfDestination || meta.Destination || meta.PortOfDestination || '';
+                const destination = normalizeSmartAlertText(rawDestination);
+                const pol = normalizeSmartAlertText(polName);
+                if (!destination || !pol || destination === 'n a' || destination === 'not available' || destination === 'unknown') return false;
+                return destination.includes(pol) || pol.includes(destination);
+            }
+
+            function estimateSmartAlertEta(vessel, polPort) {
+                const meta = vessel && vessel.MetaData ? vessel.MetaData : {};
+                const explicitEta = parseSmartAlertDate(vessel?.estimatedEta || vessel?.eta || vessel?.ETA || meta.ETA || meta.eta);
+                if (explicitEta) return explicitEta;
+                const distanceNm = Number(vessel?.distanceToPol);
+                const speedKnots = Number(vessel?.speed) > 0.5 ? Number(vessel.speed) : 11;
+                if (Number.isFinite(distanceNm) && distanceNm >= 0) {
+                    return new Date(Date.now() + (distanceNm / speedKnots) * 60 * 60 * 1000);
+                }
+                if (polPort && Number.isFinite(Number(vessel?.latitude)) && Number.isFinite(Number(vessel?.longitude))) {
+                    const distance = calculateAisDistanceNm(Number(vessel.latitude), Number(vessel.longitude), polPort.lat, polPort.lon);
+                    return new Date(Date.now() + (distance / speedKnots) * 60 * 60 * 1000);
+                }
+                return null;
+            }
+
+            function evaluateSmartVesselAlert(vessel, polPort) {
+                const polName = document.getElementById('port-pol')?.value || window.State?.pol || '';
+                if (!destinationMatchesPol(vessel, polName)) return null;
+
+                const issues = [];
+                const plannedEta = getSmartAlertPlannedEta();
+                const projectedEta = estimateSmartAlertEta(vessel, polPort);
+                if (plannedEta && projectedEta) {
+                    const delayHours = (projectedEta.getTime() - plannedEta.getTime()) / 3600000;
+                    if (delayHours >= 12) {
+                        issues.push({
+                            level: delayHours >= 24 ? 'high' : 'medium',
+                            text: `Retraso ${Math.round(delayHours)} h vs ETA previsto`
+                        });
+                    }
+                }
+
+                const lat = Number(vessel?.latitude);
+                const lon = Number(vessel?.longitude);
+                const speed = Number(vessel?.speed);
+                const course = Number(vessel?.course ?? vessel?.COG ?? vessel?.heading);
+                const distanceToPol = Number.isFinite(Number(vessel?.distanceToPol))
+                    ? Number(vessel.distanceToPol)
+                    : (polPort && Number.isFinite(lat) && Number.isFinite(lon) ? calculateAisDistanceNm(lat, lon, polPort.lat, polPort.lon) : NaN);
+                if (polPort && Number.isFinite(lat) && Number.isFinite(lon) && Number.isFinite(course) && Number.isFinite(distanceToPol) && distanceToPol > 25 && speed > 1) {
+                    const expectedBearing = bearingToDegrees(lat, lon, polPort.lat, polPort.lon);
+                    const deviation = angularDifferenceDegrees(course, expectedBearing);
+                    if (deviation >= 45) {
+                        issues.push({
+                            level: deviation >= 75 ? 'high' : 'medium',
+                            text: `Desvío rumbo ${Math.round(deviation)}°`
+                        });
+                    }
+                }
+
+                if (!issues.length) {
+                    return {
+                        level: 'ok',
+                        label: 'En ruta POL',
+                        detail: projectedEta ? `ETA estimado ${projectedEta.toISOString().slice(0, 10)}` : 'Destino coincide con POL'
+                    };
+                }
+                const highRisk = issues.some(issue => issue.level === 'high');
+                return {
+                    level: highRisk ? 'high' : 'medium',
+                    label: highRisk ? 'Alerta crítica' : 'Alerta',
+                    detail: issues.map(issue => issue.text).join(' | ')
+                };
+            }
+
+            function renderSmartVesselAlert(alert) {
+                if (!alert) return '<span class="text-[10px] text-slate-600">-</span>';
+                const style = alert.level === 'high'
+                    ? 'border-red-500/40 bg-red-500/10 text-red-300'
+                    : (alert.level === 'medium'
+                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                        : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300');
+                const icon = alert.level === 'ok' ? 'fa-circle-check' : 'fa-triangle-exclamation';
+                return `<span class="inline-flex max-w-[210px] flex-col rounded-md border px-2 py-1 ${style}" title="${escapeSmartAlertHtml(alert.detail)}"><span class="text-[10px] font-black uppercase"><i class="fa-solid ${icon} mr-1"></i>${escapeSmartAlertHtml(alert.label)}</span><span class="mt-0.5 text-[10px] leading-tight">${escapeSmartAlertHtml(alert.detail)}</span></span>`;
+            }
+
             window.reapplyCentralFiltersAndRedraw = function() {
                 const rawVessels = (window.GlobalStore && typeof window.GlobalStore.getRawVessels === 'function')
                     ? (window.GlobalStore.getRawVessels() || [])
@@ -30076,7 +30228,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     if (normalizedVessels.length === 0) {
                         tbody.innerHTML = `
                             <tr>
-                                <td colspan="5" class="py-8 text-center text-slate-500">
+                                <td colspan="6" class="py-8 text-center text-slate-500">
                                     No se detectaron buques AIS activos en la zona visible del mapa.
                                 </td>
                             </tr>
@@ -30097,12 +30249,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                             const positionLabel = hasLiveCoords
                                 ? `${Number(v.latitude).toFixed(4)}°, ${Number(v.longitude).toFixed(4)}°${nodeLabel}`
                                 : '<span class="text-amber-300 font-black">Sin señal</span>';
+                            const smartAlert = evaluateSmartVesselAlert(v, polPort);
                             tr.innerHTML = `
                                 <td class="py-3 px-3 font-semibold text-slate-200">${v.vesselName}</td>
                                 <td class="py-3 px-3 text-slate-400 mono">${v.imo}</td>
                                 <td class="py-3 px-3 text-slate-400 mono">${positionLabel}</td>
                                 <td class="py-3 px-3 text-slate-400 mono">${v.speed} kn <span class="text-[10px] text-emerald-400 block">${v.statusLabel}</span></td>
                                 <td class="py-3 px-3"><span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700 cursor-help" title="${hoverTitle}">${vCategory}</span></td>
+                                <td class="py-3 px-3">${renderSmartVesselAlert(smartAlert)}</td>
                             `;
                             tbody.appendChild(tr);
                         });
@@ -30943,7 +31097,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (aisVesselsData.length === 0) {
                     tbody.innerHTML = `
                         <tr>
-                            <td colspan="5" class="py-8 text-center text-slate-500">
+                            <td colspan="6" class="py-8 text-center text-slate-500">
                                 No se detectaron buques AIS activos en la zona visible del mapa.
                             </td>
                         </tr>
@@ -30964,12 +31118,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const badgeClass = v.cementCarrierClassification && v.cementCarrierClassification.level === 'possible'
                         ? 'bg-amber-900/40 text-amber-200 border-amber-700'
                         : 'bg-slate-800 text-slate-300 border-slate-700';
+                    const polPort = typeof getAisOperationalPort === 'function' ? getAisOperationalPort('POL') : null;
+                    const smartAlert = typeof evaluateSmartVesselAlert === 'function' ? evaluateSmartVesselAlert(v, polPort) : null;
                     tr.innerHTML = `
                         <td class="py-3 px-3 font-semibold text-slate-200">${v.vesselName}</td>
                         <td class="py-3 px-3 text-slate-400 mono">${v.imo}</td>
                         <td class="py-3 px-3 text-slate-400 mono">${v.latitude.toFixed(4)}°, ${v.longitude.toFixed(4)}°</td>
                         <td class="py-3 px-3 text-slate-400 mono">${v.speed} kn <span class="text-[10px] text-emerald-400 block">${v.statusLabel}</span></td>
                         <td class="py-3 px-3"><span class="px-2 py-0.5 text-[10px] font-bold rounded border ${badgeClass} cursor-help" title="${hoverTitle}">${vCategory}</span></td>
+                        <td class="py-3 px-3">${typeof renderSmartVesselAlert === 'function' ? renderSmartVesselAlert(smartAlert) : '<span class="text-[10px] text-slate-600">-</span>'}</td>
                     `;
                     tbody.appendChild(tr);
                 });
