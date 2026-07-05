@@ -5,22 +5,20 @@ export const handler = async (event) => {
 
   try {
     const datosBuques = JSON.parse(event.body);
-
-    // Aquí es donde "disparamos" la información hacia el Data Bridge
+    
+    // Añadimos 'await' aquí para que la función espere a que se envíen los datos
     const respuesta = await fetch('https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/receive-audit', {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json'
-        // Si tienes API_SECRET, agrégalo aquí
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(datosBuques)
     });
 
+    const resultado = await respuesta.json();
+
     return { 
       statusCode: 200, 
-      body: JSON.stringify({ message: "Buques enviados al Data Bridge con éxito" }) 
+      body: JSON.stringify({ message: "Enviado", detalle: resultado }) 
     };
   } catch (error) {
     return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
   }
-};
