@@ -1,5 +1,5 @@
 [build]
-  command = "npx prisma generate --schema=./prisma/schema.prisma"
+  command = "echo 'Despliegue estático, saltando Prisma'"
   publish = "."
   functions = "netlify/functions"
 
