@@ -8721,13 +8721,13 @@
                         </button>
                     </div>
 
-                    <textarea id="recapInput" class="input-gc w-full flex-1 resize-none transition-colors" placeholder="Pega el texto de tu Contrato, Recap, Carta de Crédito (L/C), Factura (Invoice), Packing List o cualquier documento comercial/marítimo aquí..."></textarea>
+                    <textarea id="recapInput" class="input-gc w-full flex-1 resize-none transition-colors" placeholder="Pega texto, pega una imagen/archivo desde el portapapeles o arrastra aquí PDF, Word, Excel, TXT, CSV o fotografías..."></textarea>
                     
                     <button id="analyzeBtn" onclick="analyzeDocument()" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex justify-center items-center shadow-sm">
                         <i class="fa-solid fa-magnifying-glass-chart mr-2"></i> Auditar Contrato
                     </button>
                     <button id="commercialNlpBtn" onclick="runCommercialNlpMotor()" class="mt-2 w-full bg-emerald-700 hover:bg-emerald-800 text-white font-medium py-3 px-4 rounded-lg transition-colors flex justify-center items-center shadow-sm">
-                        <i class="fa-solid fa-table-list mr-2"></i> Analizar datos con IA para extraer los datos
+                        <i class="fa-solid fa-table-list mr-2"></i> Motor Comercial Local · Exportar JSON
                     </button>
                 </div>
                 
@@ -12795,7 +12795,8 @@
                 // Event listeners para la caja de texto del auditor
                 const textarea = document.getElementById('recapInput');
                 if (textarea) {
-                    textarea.addEventListener('paste', () => {
+                    textarea.addEventListener('paste', (event) => {
+                        if (typeof handleDocumentPaste === 'function' && handleDocumentPaste(event)) return;
                         setTimeout(() => {
                             if (textarea.value.trim() !== '') {
                                 showDocPreview('paste');
@@ -12808,6 +12809,17 @@
                         } else {
                             showDocPreview('paste');
                         }
+                    });
+                    textarea.addEventListener('dragover', (event) => {
+                        event.preventDefault();
+                        textarea.classList.add('required-use-highlight');
+                    });
+                    textarea.addEventListener('dragleave', () => {
+                        textarea.classList.remove('required-use-highlight');
+                    });
+                    textarea.addEventListener('drop', (event) => {
+                        textarea.classList.remove('required-use-highlight');
+                        if (typeof handleDocumentDrop === 'function') handleDocumentDrop(event);
                     });
                 }
 
@@ -27068,6 +27080,32 @@ Example:
             State.uploadedFile = null;
         }
 
+        function getClipboardFile(event) {
+            const data = event.clipboardData;
+            if (!data) return null;
+            const files = Array.from(data.files || []);
+            if (files.length) return files[0];
+            const items = Array.from(data.items || []);
+            const fileItem = items.find((item) => item.kind === 'file');
+            return fileItem ? fileItem.getAsFile() : null;
+        }
+
+        function handleDocumentPaste(event) {
+            const file = getClipboardFile(event);
+            if (!file) return false;
+            event.preventDefault();
+            processUploadedDocument(file, 'paste');
+            return true;
+        }
+
+        function handleDocumentDrop(event) {
+            const files = Array.from(event.dataTransfer?.files || []);
+            if (!files.length) return false;
+            event.preventDefault();
+            processUploadedDocument(files[0], 'drop');
+            return true;
+        }
+
         const SYSTEM_PROMPT = `Eres el Auditor IA Universal de SeaCharter Core PRO. Tu misión principal es la auditoría legal de pólizas, pero ahora posees inteligencia operativa para otros documentos marítimos.
 
         PASO 1: DETECCIÓN AUTOMÁTICA DEL DOCUMENTO
@@ -27233,23 +27271,32 @@ REGLA CRÍTICA PARA 'laytime_excel_data' y 'detalles_sof':
         async function handleFileUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
+            await processUploadedDocument(file, 'upload');
+            event.target.value = "";
+        }
 
+        async function processUploadedDocument(file, source = 'upload') {
             const textarea = document.getElementById('recapInput');
             const uploadBtn = document.getElementById('uploadBtn');
-            const originalBtnHtml = uploadBtn.innerHTML;
+            const originalBtnHtml = uploadBtn ? uploadBtn.innerHTML : '';
             
             textarea.value = "";
             textarea.placeholder = "Extrayendo texto del archivo, por favor espera...";
-            uploadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Leyendo...';
-            uploadBtn.disabled = true;
+            State.uploadedFile = null;
+            if (uploadBtn) {
+                uploadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Leyendo...';
+                uploadBtn.disabled = true;
+            }
             document.getElementById('errorBox').classList.add('hidden');
             
             try {
                 let extractedText = "";
-                const fileExtension = file.name.split('.').pop().toLowerCase();
+                const fallbackName = file.type && file.type.startsWith('image/') ? 'imagen-pegada.png' : 'archivo-pegado';
+                const fileName = file.name || fallbackName;
+                const fileExtension = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
                 const imageExtensions = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
 
-                if (fileExtension === 'pdf') {
+                if (file.type === 'application/pdf' || fileExtension === 'pdf') {
                     extractedText = await extractTextFromPDF(file);
                     
                     const dataUrl = await new Promise((resolve, reject) => {
@@ -27261,14 +27308,14 @@ REGLA CRÍTICA PARA 'laytime_excel_data' y 'detalles_sof':
                     
                     const base64Data = dataUrl.split(',')[1];
                     State.uploadedFile = {
-                        name: file.name,
+                        name: fileName,
                         type: 'application/pdf',
                         base64: base64Data,
                         dataUrl: dataUrl
                     };
 
                     if (!extractedText || extractedText.trim().length === 0) {
-                        extractedText = `[Documento PDF escaneado / OCR para auditar: ${file.name}]\nEste archivo PDF parece estar escaneado o protegido contra copia directa de texto. Por favor, realiza la lectura visual y OCR de este documento PDF adjunto, y audítalo (Contrato, Carta de Crédito, Factura, Packing List, etc.) evaluando si contradice la póliza de fletamento o genera riesgos de retrasos, costes, clima u otros factores que comprometan el éxito del viaje.`;
+                        extractedText = `[Documento PDF escaneado / OCR para auditar: ${fileName}]\nEste archivo PDF parece estar escaneado o protegido contra copia directa de texto. Por favor, realiza la lectura visual y OCR de este documento PDF adjunto, y audítalo (Contrato, Carta de Crédito, Factura, Packing List, etc.) evaluando si contradice la póliza de fletamento o genera riesgos de retrasos, costes, clima u otros factores que comprometan el éxito del viaje.`;
                     }
                 } else if (fileExtension === 'docx') {
                     extractedText = await extractTextFromWord(file);
@@ -27276,7 +27323,7 @@ REGLA CRÍTICA PARA 'laytime_excel_data' y 'detalles_sof':
                     extractedText = await extractTextFromExcel(file);
                 } else if (fileExtension === 'txt' || fileExtension === 'md' || fileExtension === 'csv') {
                     extractedText = await extractTextFromTxt(file);
-                } else if (imageExtensions.includes(fileExtension)) {
+                } else if ((file.type && file.type.startsWith('image/')) || imageExtensions.includes(fileExtension)) {
                     // For images, read as base64 Data URL and save in State
                     const dataUrl = await new Promise((resolve, reject) => {
                         const reader = new FileReader();
@@ -27287,30 +27334,35 @@ REGLA CRÍTICA PARA 'laytime_excel_data' y 'detalles_sof':
                     
                     const base64Data = dataUrl.split(',')[1];
                     State.uploadedFile = {
-                        name: file.name,
+                        name: fileName,
                         type: file.type || `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`,
                         base64: base64Data,
                         dataUrl: dataUrl
                     };
                     
-                    extractedText = `[Fotografía de documento adjunto para auditar: ${file.name}]\nPor favor, audita la imagen adjunta de este documento (Contrato, Carta de Crédito, Factura, Packing List, etc.) y evalúa si contradice la póliza de fletamento o genera riesgos de retrasos, costes, clima u otros factores que comprometan el éxito del viaje.`;
+                    extractedText = `[Fotografía de documento adjunto para auditar: ${fileName}]\nPor favor, audita la imagen adjunta de este documento (Contrato, Carta de Crédito, Factura, Packing List, etc.) y evalúa si contradice la póliza de fletamento o genera riesgos de retrasos, costes, clima u otros factores que comprometan el éxito del viaje.`;
                 } else {
                     throw new Error("Formato no soportado. Sube PDF, Word (.docx), Excel (.xlsx, .xls), texto (.txt, .csv, .md) o fotografías (.png, .jpg, .jpeg, .webp, .gif).");
                 }
 
                 textarea.value = extractedText.trim();
-                textarea.placeholder = "Pega el texto de tu Contrato, Recap, Carta de Crédito (L/C), Factura (Invoice), Packing List o cualquier documento comercial/marítimo aquí...";
-                showDocPreview('file', file.name);
+                textarea.placeholder = "Pega texto, pega una imagen/archivo desde el portapapeles o arrastra aquí PDF, Word, Excel, TXT, CSV o fotografías...";
+                showDocPreview('file', fileName);
+                if (typeof showToast === 'function') {
+                    const action = source === 'paste' ? 'pegado' : source === 'drop' ? 'arrastrado' : 'cargado';
+                    showToast(`Archivo ${action}: ${fileName}`);
+                }
             } catch (error) {
                 console.error("Error leyendo archivo:", error);
                 document.getElementById('errorBox').innerText = "No se pudo extraer el texto. " + error.message;
                 document.getElementById('errorBox').classList.remove('hidden');
-                textarea.placeholder = "Pega el texto de tu Recap, Fixture Note o borrador de Póliza aquí...";
+                textarea.placeholder = "Pega texto, pega una imagen/archivo desde el portapapeles o arrastra aquí PDF, Word, Excel, TXT, CSV o fotografías...";
                 clearDocPreview();
             } finally {
-                uploadBtn.innerHTML = originalBtnHtml;
-                uploadBtn.disabled = false;
-                event.target.value = ""; 
+                if (uploadBtn) {
+                    uploadBtn.innerHTML = originalBtnHtml;
+                    uploadBtn.disabled = false;
+                }
             }
         }
 
@@ -27851,6 +27903,148 @@ ADDITIONAL NOTES:
                 : 'USD 0';
         }
 
+        const COMMERCIAL_NLP_NOTICE = 'ESTE DOCUMENTO ES SOLO A TÍTULO INFORMATIVO. LOS CÁLCULOS DEFINITIVOS DEBEN REALIZARSE EN LA CALCULADORA SEACHARTER';
+
+        function parseCommercialNumber(value) {
+            const raw = String(value || '').trim();
+            if (!raw) return 0;
+            const compact = raw.replace(/\s/g, '');
+            const normalized = compact.includes(',') && compact.includes('.')
+                ? compact.replace(/\./g, '').replace(',', '.')
+                : compact.replace(',', '.');
+            const numeric = Number(normalized.replace(/[^\d.-]/g, ''));
+            return Number.isFinite(numeric) ? numeric : 0;
+        }
+
+        function findCommercialText(patterns, source) {
+            for (const pattern of patterns) {
+                const match = source.match(pattern);
+                if (match && match[1]) return match[2] ? `${match[1].trim()} / ${match[2].trim()}` : match[1].trim();
+            }
+            return '';
+        }
+
+        function findCommercialNumber(patterns, source) {
+            const value = findCommercialText(patterns, source);
+            return value ? parseCommercialNumber(value) : 0;
+        }
+
+        function calculateCommercialCascade(ownerCost) {
+            const ownerInternalPrice = ownerCost * 1.15;
+            const chartererSaleFreight = ownerInternalPrice / (1 - 0.0375);
+            return { ownerInternalPrice, chartererSaleFreight };
+        }
+
+        function buildCommercialNlpLocalPayload(text) {
+            const source = String(text || '');
+            const normalized = source.replace(/\r/g, '\n');
+            const vesselName = findCommercialText([
+                /(?:buque|vessel|ship|mv|m\/v)\s*[:\-]\s*([^\n,;]+)/i,
+                /(?:nombre\s+del\s+buque|vessel\s+name)\s*[:\-]\s*([^\n,;]+)/i
+            ], normalized);
+            const dwt = findCommercialNumber([
+                /(?:dwt|deadweight)\s*[:\-]?\s*([\d.,]+)/i,
+                /([\d.,]+)\s*(?:dwt|mt\s+dwt|mts\s+dwt)\b/i
+            ], normalized);
+            const dates = findCommercialText([
+                /(?:fechas|dates|laycan)\s*[:\-]\s*([^\n;]+)/i,
+                /\b(laycan\s+[^\n;]+)/i
+            ], normalized);
+            const ports = findCommercialText([
+                /(?:puertos|ports|route)\s*[:\-]\s*([^\n;]+)/i,
+                /(?:pol\s*\/\s*pod|load\s*\/\s*disch)\s*[:\-]\s*([^\n;]+)/i,
+                /(?:from|desde)\s+([^,\n;]+)\s+(?:to|a|hasta)\s+([^,\n;]+)/i
+            ], normalized).replace(/\s{2,}/g, ' ');
+            const quantity = findCommercialNumber([
+                /(?:cantidad|quantity|cargo|qty)\s*[:\-]?\s*([\d.,]+)\s*(?:mt|mts|tons|toneladas|t)?/i,
+                /([\d.,]+)\s*(?:mt|mts|tons|toneladas)\b/i
+            ], normalized);
+
+            const costBreakdown = {
+                opex: findCommercialNumber([/(?:opex|operating\s+expense|coste\s+operativo)\s*[:\-]?\s*(?:usd|\$)?\s*([\d.,]+)/i], normalized),
+                capex: findCommercialNumber([/(?:capex|capital\s+expense|coste\s+capital)\s*[:\-]?\s*(?:usd|\$)?\s*([\d.,]+)/i], normalized),
+                bunker: findCommercialNumber([/(?:bunker|combustible|fuel)\s*[:\-]?\s*(?:usd|\$)?\s*([\d.,]+)/i], normalized),
+                portExpensesAndDemurrage: findCommercialNumber([/(?:gastos\s+portuarios|port\s+expenses|port\s+costs|demoras|demurrage)\s*[:\-]?\s*(?:usd|\$)?\s*([\d.,]+)/i], normalized)
+            };
+            const explicitOwnerCost = findCommercialNumber([
+                /(?:coste\s+armador\s+total|costo\s+armador\s+total|owner\s+total\s+cost|total\s+cost)\s*[:\-]?\s*(?:usd|\$)?\s*([\d.,]+)/i
+            ], normalized);
+            const ownerCost = explicitOwnerCost || Object.values(costBreakdown).reduce((sum, value) => sum + value, 0);
+            const cascade = calculateCommercialCascade(ownerCost);
+            const hasVessel = Boolean(vesselName || dwt || dates || ports || quantity || ownerCost);
+            const analysis = {
+                documentType: 'Motor Comercial Integrado estatico',
+                summary: hasVessel
+                    ? 'Analisis local estricto generado en navegador. Los campos ausentes no se han inferido.'
+                    : 'No se detectaron campos comerciales suficientes en el material recibido.',
+                vessels: hasVessel ? [{
+                    vesselName,
+                    dwt,
+                    dates,
+                    ports,
+                    quantity,
+                    ownerCost,
+                    ownerInternalPrice: cascade.ownerInternalPrice,
+                    chartererSaleFreight: cascade.chartererSaleFreight,
+                    costBreakdown
+                }] : []
+            };
+            const money = (value) => `USD ${Number(value || 0).toLocaleString('es-ES', { maximumFractionDigits: 2 })}`;
+            const rows = analysis.vessels.map((vessel) =>
+                `${vessel.vesselName || 'No presente'} | ${money(vessel.ownerCost)} | ${money(vessel.ownerInternalPrice)} | ${money(vessel.chartererSaleFreight)}`
+            ).join('\n');
+            const printableReport = [
+                'RODAHMAR SHIPPING SL - MOTOR COMERCIAL INTEGRADO',
+                `Documento: ${analysis.documentType}`,
+                `Fecha: ${new Date().toISOString().slice(0, 10)}`,
+                '',
+                'Datos extraidos estrictamente del material recibido:',
+                ...analysis.vessels.map((vessel) => `- Buque: ${vessel.vesselName || 'No presente'} | DWT: ${vessel.dwt || 'No presente'} | Fechas: ${vessel.dates || 'No presente'} | Puertos: ${vessel.ports || 'No presente'} | Cantidad: ${vessel.quantity || 'No presente'}`),
+                '',
+                'Panel de Decision',
+                'Buque | Coste Armador Total | Precio Int. Armador (+15%) | Flete Venta Fletador (10%)',
+                rows || 'Sin buques detectados.',
+                '',
+                COMMERCIAL_NLP_NOTICE
+            ].join('\n');
+            const manualImportPackage = {
+                source: 'Rodahmar Shipping SL commercial static browser engine',
+                preparedFor: 'SeaCharter Data Bridge manual import',
+                preparedAt: new Date().toISOString(),
+                databaseAction: 'none',
+                prismaAction: 'none',
+                migrationAction: 'none',
+                extractionPolicy: 'strict_no_inference',
+                extractedData: analysis.vessels.map((vessel) => ({
+                    vesselName: vessel.vesselName || null,
+                    dwt: vessel.dwt || null,
+                    dates: vessel.dates || null,
+                    ports: vessel.ports || null,
+                    quantity: vessel.quantity || null,
+                    ownerTotalCost: vessel.ownerCost || null,
+                    ownerInternalPricePlus15Percent: vessel.ownerInternalPrice || null,
+                    chartererSaleFreight: vessel.chartererSaleFreight || null,
+                    costBreakdown: vessel.costBreakdown
+                })),
+                formulas: {
+                    ownerTotalCost: 'opex + capex + bunker + port_expenses_and_demurrage',
+                    ownerInternalPricePlus15Percent: 'owner_total_cost * 1.15',
+                    chartererSaleFreight: 'owner_internal_price_plus_15_percent / (1 - 0.0375)'
+                }
+            };
+            return {
+                success: true,
+                mode: 'static_independent_manual_import_only',
+                analysis,
+                printableReport,
+                manualImportPackage,
+                manualImportJson: JSON.stringify(manualImportPackage, null, 2),
+                persistedCount: 0,
+                confirmation: 'Paquete JSON preparado para carga manual en SeaCharter Data Bridge. No se ha interactuado con base de datos, Prisma ni migraciones.',
+                safetyNotice: 'Modo estatico independiente: el motor solo analiza texto disponible, calcula y genera salida manual en memoria.'
+            };
+        }
+
         function renderCommercialNlpPanel(payload) {
             const panel = document.getElementById('commercial-nlp-panel');
             const summary = document.getElementById('commercial-nlp-summary');
@@ -27885,8 +28079,8 @@ ADDITIONAL NOTES:
             const btn = document.getElementById('commercialNlpBtn');
 
             document.getElementById('errorBox').classList.add('hidden');
-            if (!text && !(State.uploadedFile && State.uploadedFile.base64)) {
-                document.getElementById('errorBox').innerText = "Pega texto o sube una captura/documento para ejecutar el Motor Comercial.";
+            if (!text) {
+                document.getElementById('errorBox').innerText = "Pega texto extraído para ejecutar el Motor Comercial estático. No se envían capturas ni documentos al servidor.";
                 document.getElementById('errorBox').classList.remove('hidden');
                 return;
             }
@@ -27897,22 +28091,10 @@ ADDITIONAL NOTES:
 
             const originalBtnHtml = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Procesando local...';
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Procesando en memoria...';
 
             try {
-                const file = State.uploadedFile && State.uploadedFile.base64
-                    ? { name: State.uploadedFile.name, type: State.uploadedFile.type, base64: State.uploadedFile.base64 }
-                    : null;
-                const response = await fetch('/api/commercial-nlp', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text, file })
-                });
-                const payload = await response.json().catch(() => ({}));
-                if (!response.ok || payload.success === false) {
-                    throw new Error(payload.error || `Error HTTP ${response.status}`);
-                }
-
+                const payload = buildCommercialNlpLocalPayload(text);
                 renderCommercialNlpPanel(payload);
                 if (typeof showToast === 'function') showToast(payload.confirmation);
             } catch (error) {
