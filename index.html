@@ -34923,6 +34923,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         const VITE_ENV = import.meta && import.meta.env ? import.meta.env : {};
         const DATA_BRIDGE_FRONTEND_URL = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_FRONTEND_URL, LOCAL_DATA_BRIDGE_URL);
         const DATA_BRIDGE_API_URL = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_API_URL, '');
+        const DATA_BRIDGE_API_SECRET = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_API_SECRET, '');
         const HAS_VALID_DATA_BRIDGE_API_URL = isValidDataBridgeApiUrl(DATA_BRIDGE_API_URL);
         const DATA_BRIDGE_VERIFY_ENDPOINT = '/api/verify-connection';
         const DATA_BRIDGE_STATUS_LABELS = {
@@ -34991,7 +34992,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function getStoredDataBridgeToken() {
-            return '';
+            return DATA_BRIDGE_API_SECRET;
         }
 
         function setStoredDataBridgeToken(token) {
@@ -35078,11 +35079,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             setDataBridgeLinkPending(true);
             if (error) error.classList.add('hidden');
             try {
+                const dataBridgeToken = getStoredDataBridgeToken();
+                const headers = {
+                    Accept: 'application/json',
+                    Authorization: 'Bearer ' + dataBridgeToken
+                };
                 const response = await fetch(DATA_BRIDGE_VERIFY_ENDPOINT, {
                     method: 'POST',
-                    headers: {
-                        Accept: 'application/json'
-                    }
+                    headers
                 });
                 let payload = null;
                 try {

@@ -46,13 +46,18 @@ export function ConnectionStatusBar() {
   const config = useMemo(() => STATUS_CONFIG[status] || STATUS_CONFIG.disconnected, [status]);
 
   const verifyConnection = useCallback(async () => {
+    const token = String(import.meta.env?.VITE_DATA_BRIDGE_API_SECRET || "").trim();
+
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
       const response = await fetch(VERIFY_ENDPOINT, {
         method: "POST",
-        headers: { Accept: "application/json" },
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         signal: controller.signal,
       });
 
