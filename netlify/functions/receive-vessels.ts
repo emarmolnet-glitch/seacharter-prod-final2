@@ -82,7 +82,7 @@ function isValidHttpUrl(value: string) {
 }
 
 function getBearerToken() {
-  return String(process.env.DATA_BRIDGE_API_SECRET || process.env.VITE_DATA_BRIDGE_API_SECRET || "").trim();
+  return String(process.env.API_SECRET || process.env.VITE_API_SECRET || "").trim();
 }
 
 function extractRemoteError(payload: unknown, fallback: string) {
@@ -138,8 +138,8 @@ export default async (req: Request) => {
     const bridgeResponse = await fetch(`${apiUrl.replace(/\/+$/, "")}/api/receive-vessels`, {
       method: "POST",
       headers: {
+        "Authorization": "Bearer " + token,
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(vessels),
     });
