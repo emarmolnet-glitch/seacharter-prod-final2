@@ -59,6 +59,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="./public/components.js"></script>
+    <script src="./npl-secret-module.js"></script>
     <script type="module" src="./public/ConnectionStatusBar.js"></script>
     <script type="module" src="./voyage-cost-engine.js"></script>
     <script type="module" src="./stress-test-engine.js"></script>
@@ -8727,7 +8728,7 @@
                         <i class="fa-solid fa-magnifying-glass-chart mr-2"></i> Auditar Contrato
                     </button>
                     <button id="commercialNlpBtn" onclick="runCommercialNlpMotor()" class="mt-2 w-full bg-emerald-700 hover:bg-emerald-800 text-white font-medium py-3 px-4 rounded-lg transition-colors flex justify-center items-center shadow-sm">
-                        <i class="fa-solid fa-table-list mr-2"></i> Motor NLP · Procesar y Exportar JSON
+                        <i class="fa-solid fa-table-list mr-2"></i> Motor NPL · Captar y Exportar JSON
                     </button>
                 </div>
                 
@@ -8757,7 +8758,7 @@
                             <div>
                                 <h3 class="font-semibold text-emerald-950 flex items-center gap-2">
                                     <i class="fa-solid fa-briefcase"></i>
-                                    Panel de Decisión · Motor NLP Independiente
+                                    Panel de Decisión · Motor NPL Independiente
                                 </h3>
                                 <p id="commercial-nlp-summary" class="text-xs text-emerald-800 mt-1"></p>
                             </div>
@@ -12945,11 +12946,11 @@
                 
                 resultsDiv.classList.remove('hidden');
 
-                if (!silent) showToast("Motor NLP procesado en memoria. Use el panel de auditoría para exportar JSON manual.");
+                if (!silent) showToast("Motor NPL procesado en memoria. Use el panel de auditoría para exportar JSON manual.");
 
             } catch (err) {
-                console.error("NLP parsing failed: ", err);
-                if (!silent) showToast("No se pudo procesar el texto en el Motor NLP local.");
+                console.error("NPL parsing failed: ", err);
+                if (!silent) showToast("No se pudo procesar el texto en el Motor NPL local.");
             } finally {
                 if (!silent) {
                     btn.innerHTML = origHtml;
@@ -15314,25 +15315,25 @@
             nlpItem.className = 'tools-dropdown-item advanced-nlp-menu-item';
             nlpItem.innerHTML = `
                 <button type="button" id="advanced-nlp-toggle" class="tools-dropdown-action" aria-controls="advanced-nlp-panel" aria-expanded="false">
-                    <span>Motor NLP · Agente de Procesamiento de Datos</span>
+                    <span>Motor NPL · Arma Secreta Data Bridge</span>
                 </button>
-                <div id="advanced-nlp-panel" class="advanced-nlp-panel" aria-label="Motor NLP · Agente de Procesamiento de Datos">
+                <div id="advanced-nlp-panel" class="advanced-nlp-panel" aria-label="Motor NPL · Arma Secreta Data Bridge">
                     <div class="ai-work-card p-4">
                         <div class="flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
-                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 font-sans">Motor NLP · Agente de Procesamiento de Datos</h3>
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 font-sans">Motor NPL · Arma Secreta Data Bridge</h3>
                         </div>
-                        <p class="text-xs text-slate-600 mb-4 leading-relaxed font-sans">Introduce texto extraído de imagen o documento. Este motor procesa en memoria y no llama a APIs, bases de datos ni otros módulos.</p>
+                        <p class="text-xs text-slate-600 mb-4 leading-relaxed font-sans">Introduce texto extraído de imagen o documento. Este motor independiente capta datos, los normaliza y genera JSON para Data Bridge sin llamar a APIs, bases de datos ni otros módulos.</p>
                         <div class="space-y-3">
                             <textarea id="nlp-cargo-input" rows="4" class="input-gc w-full placeholder-slate-400 focus:outline-none font-sans leading-relaxed" placeholder="Ej: Fletamento de 20,000 TM de cemento desde Algeciras a Genoa con laycan inicio 2026-06-22. Se requiere buque con grúas (geared) con un flete de 35 USD/TM."></textarea>
                             <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-600">
                                 <span class="flex items-center gap-2">
                                     <i class="fa-solid fa-lock text-[#004e64]"></i>
-                                    Modo aislado sin escritura
+                                    Modo independiente sin escritura
                                 </span>
                                 <input type="checkbox" id="matching-live-update-toggle" class="rounded border-slate-300 text-[#004e64] focus:ring-[#004e64]" disabled>
                             </label>
                             <button id="btn-parse-nlp" onclick="parseCargoNLP()" class="w-full text-white font-black text-xs uppercase py-2.5 rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none tracking-wider">
-                                <i class="fa-solid fa-brain"></i> Procesar datos en memoria
+                                <i class="fa-solid fa-brain"></i> Convertir a JSON Data Bridge
                             </button>
                         </div>
                         <div id="nlp-parsed-results" class="hidden mt-4 pt-3 border-t border-slate-100 text-[11px] space-y-1.5 font-sans text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">
@@ -27849,122 +27850,10 @@ ADDITIONAL NOTES:
         }
 
         function buildCommercialNlpLocalPayload(text) {
-            const source = String(text || '');
-            const normalized = source.replace(/\r/g, '\n');
-            const vesselName = findCommercialText([
-                /(?:buque|vessel|ship|mv|m\/v)\s*[:\-]\s*([^\n,;]+)/i,
-                /(?:nombre\s+del\s+buque|vessel\s+name)\s*[:\-]\s*([^\n,;]+)/i
-            ], normalized);
-            const dwt = findCommercialNumber([
-                /(?:dwt|deadweight)\s*[:\-]?\s*([\d.,]+)/i,
-                /([\d.,]+)\s*(?:dwt|mt\s+dwt|mts\s+dwt)\b/i
-            ], normalized);
-            const dates = findCommercialText([
-                /(?:fechas|dates|laycan)\s*[:\-]\s*([^\n;]+)/i,
-                /\b(laycan\s+[^\n;]+)/i
-            ], normalized);
-            const ports = findCommercialText([
-                /(?:puertos|ports|route)\s*[:\-]\s*([^\n;]+)/i,
-                /(?:pol\s*\/\s*pod|load\s*\/\s*disch)\s*[:\-]\s*([^\n;]+)/i,
-                /(?:from|desde)\s+([^,\n;]+)\s+(?:to|a|hasta)\s+([^,\n;]+)/i
-            ], normalized).replace(/\s{2,}/g, ' ');
-            const quantity = findCommercialNumber([
-                /(?:cantidad|quantity|cargo|qty)\s*[:\-]?\s*([\d.,]+)\s*(?:mt|mts|tons|toneladas|t)?/i,
-                /([\d.,]+)\s*(?:mt|mts|tons|toneladas)\b/i
-            ], normalized);
-
-            const costBreakdown = {
-                opex: findCommercialNumber([/(?:opex|operating\s+expense|coste\s+operativo|costo\s+operativo)\s*[:\-]?\s*(?:usd|\$)?\s*([\d.,]+)/i], normalized),
-                capex: findCommercialNumber([/(?:capex|capital\s+expense|coste\s+capital|costo\s+capital)\s*[:\-]?\s*(?:usd|\$)?\s*([\d.,]+)/i], normalized),
-                bunker: findCommercialNumber([/(?:bunker|combustible|fuel)\s*[:\-]?\s*(?:usd|\$)?\s*([\d.,]+)/i], normalized),
-                portExpensesAndDemurrage: findCommercialNumber([/(?:gastos\s+portuarios\s*(?:\/|y)?\s*demoras|gastos\s+portuarios|port\s+expenses|port\s+costs|demoras|demurrage)\s*[:\-]?\s*(?:usd|\$)?\s*([\d.,]+)/i], normalized)
-            };
-            const explicitOwnerCost = findCommercialNumber([
-                /(?:coste\s+armador\s+total|costo\s+armador\s+total|owner\s+total\s+cost|total\s+cost)\s*[:\-]?\s*(?:usd|\$)?\s*([\d.,]+)/i
-            ], normalized);
-            const ownerCost = explicitOwnerCost || Object.values(costBreakdown).reduce((sum, value) => sum + value, 0);
-            const cascade = calculateCommercialCascade(ownerCost);
-            const hasVessel = Boolean(vesselName || dwt || dates || ports || quantity || ownerCost);
-            const analysis = {
-                documentType: 'Motor NLP independiente - Agente de Procesamiento de Datos',
-                summary: hasVessel
-                    ? 'Analisis local estricto generado en memoria. Los campos ausentes no se han inferido.'
-                    : 'No se detectaron campos comerciales suficientes en el material recibido.',
-                vessels: hasVessel ? [{
-                    vesselName,
-                    dwt,
-                    dates,
-                    ports,
-                    quantity,
-                    ownerCost,
-                    ownerInternalPrice: cascade.ownerInternalPrice,
-                    chartererSaleFreight: cascade.chartererSaleFreight,
-                    costBreakdown
-                }] : []
-            };
-            const money = (value) => `USD ${Number(value || 0).toLocaleString('es-ES', { maximumFractionDigits: 2 })}`;
-            const rows = analysis.vessels.map((vessel) =>
-                `${vessel.vesselName || 'No presente'} | ${money(vessel.ownerCost)} | ${money(vessel.ownerInternalPrice)} | ${money(vessel.chartererSaleFreight)}`
-            ).join('\n');
-            const printableReport = [
-                'RODAHMAR SHIPPING SL - MOTOR NLP INDEPENDIENTE',
-                `Documento: ${analysis.documentType}`,
-                `Fecha: ${new Date().toISOString().slice(0, 10)}`,
-                '',
-                'Datos extraidos estrictamente del material recibido:',
-                ...analysis.vessels.map((vessel) => `- Buque: ${vessel.vesselName || 'No presente'} | DWT: ${vessel.dwt || 'No presente'} | Fechas: ${vessel.dates || 'No presente'} | Puertos: ${vessel.ports || 'No presente'} | Cantidad: ${vessel.quantity || 'No presente'}`),
-                '',
-                'Panel de Decision',
-                'Buque | Coste Armador Total | Precio Int. Armador (+15%) | Flete Venta Fletador (10%)',
-                rows || 'Sin buques detectados.',
-                '',
-                COMMERCIAL_NLP_NOTICE
-            ].join('\n');
-            const manualImportPackage = {
-                source: 'Rodahmar Shipping SL Motor NLP independiente',
-                preparedFor: 'SeaCharter Data Bridge manual import',
-                preparedAt: new Date().toISOString(),
-                persistenceMode: 'manual_copy_paste_only',
-                databaseAction: 'none',
-                prismaAction: 'none',
-                migrationAction: 'none',
-                serverWritePermission: false,
-                extractionPolicy: 'strict_no_inference',
-                warning: COMMERCIAL_NLP_NOTICE,
-                extractedData: analysis.vessels.map((vessel) => ({
-                    vesselName: vessel.vesselName || null,
-                    dwt: vessel.dwt || null,
-                    dates: vessel.dates || null,
-                    ports: vessel.ports || null,
-                    quantity: vessel.quantity || null,
-                    ownerTotalCost: vessel.ownerCost || null,
-                    ownerInternalPricePlus15Percent: vessel.ownerInternalPrice || null,
-                    chartererSaleFreight: vessel.chartererSaleFreight || null,
-                    costBreakdown: vessel.costBreakdown
-                })),
-                formulas: {
-                    ownerTotalCost: 'opex + capex + bunker + port_expenses_and_demurrage',
-                    ownerInternalPricePlus15Percent: 'owner_total_cost * 1.15',
-                    chartererSaleFreight: 'owner_internal_price_plus_15_percent / (1 - 0.0375)'
-                },
-                decisionPanelColumns: {
-                    vessel: 'Buque',
-                    ownerTotalCost: 'Coste Armador',
-                    ownerInternalPricePlus15Percent: 'Precio Int. Armador (+15%)',
-                    chartererSaleFreight: 'Flete Venta Fletador (10%)'
-                }
-            };
-            return {
-                success: true,
-                mode: 'static_independent_manual_import_only',
-                analysis,
-                printableReport,
-                manualImportPackage,
-                manualImportJson: JSON.stringify(manualImportPackage, null, 2),
-                persistedCount: 0,
-                confirmation: 'Paquete JSON preparado para carga manual en SeaCharter Data Bridge. No se ha interactuado con base de datos, Prisma ni migraciones.',
-                safetyNotice: 'Modo independiente: el motor solo analiza texto disponible, calcula y genera salida manual en memoria e interfaz.'
-            };
+            if (!window.SeaCharterNplSecretModule || typeof window.SeaCharterNplSecretModule.buildDataBridgePackage !== 'function') {
+                throw new Error('Motor NPL independiente no disponible.');
+            }
+            return window.SeaCharterNplSecretModule.buildDataBridgePackage(text);
         }
 
         function renderCommercialNlpPanel(payload) {
@@ -28002,7 +27891,7 @@ ADDITIONAL NOTES:
 
             document.getElementById('errorBox').classList.add('hidden');
             if (!text) {
-                document.getElementById('errorBox').innerText = "Pega texto extraído para ejecutar el Motor NLP independiente. No se envían capturas ni documentos al servidor.";
+                document.getElementById('errorBox').innerText = "Pega texto extraído para ejecutar el Motor NPL independiente. No se envían capturas ni documentos al servidor.";
                 document.getElementById('errorBox').classList.remove('hidden');
                 return;
             }
@@ -28038,7 +27927,7 @@ ADDITIONAL NOTES:
             printWindow.document.write(`
                 <html>
                     <head>
-                        <title>Motor NLP Independiente</title>
+                        <title>Motor NPL Independiente</title>
                         <style>
                             body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
                             pre { white-space: pre-wrap; font-size: 12px; line-height: 1.5; }
