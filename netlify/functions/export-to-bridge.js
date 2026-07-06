@@ -19,7 +19,7 @@ function isValidHttpUrl(value) {
 function getBearerToken(event) {
   const authorization = String(event.headers?.authorization || event.headers?.Authorization || "").trim();
   const match = authorization.match(/^Bearer\s+(.+)$/i);
-  return (match ? match[1].trim() : "") || String(process.env.DATA_BRIDGE_API_SECRET || "").trim();
+  return (match ? match[1].trim() : "") || String(import.meta.env.VITE_DATA_BRIDGE_API_SECRET || "").trim();
 }
 
 function response(statusCode, body) {
