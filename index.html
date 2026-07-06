@@ -7547,10 +7547,10 @@
                                 </div>
                                 <label class="fcl-file-drop" for="carrier-offer-file">
                                     <span>
-                                        <strong>Cargar oferta PDF o Excel</strong>
-                                        <small id="carrier-offer-file-name">PDF, XLSX, XLS o CSV</small>
+                                        <strong>Cargar oferta, documento o imagen</strong>
+                                        <small id="carrier-offer-file-name">PDF, DOCX, XLSX, CSV, TXT o imagen</small>
                                     </span>
-                                    <input id="carrier-offer-file" type="file" accept=".pdf,.xlsx,.xls,.csv,.txt" hidden>
+                                    <input id="carrier-offer-file" type="file" accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,.png,.jpg,.jpeg,.webp,image/*" hidden>
                                 </label>
                                 <div class="fcl-audit-actions">
                                     <button id="carrier-offer-parse" class="sc-button" type="button" disabled>
@@ -37084,6 +37084,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 auditEl('carrier-offer-apply-sale')?.toggleAttribute('disabled', !ready || lines.length === 0);
             }
             function resetCarrierIdentity() {
+                window.SeaCharterCarrierOfferSourceFile = null;
                 const carrier = auditEl('carrier-offer-name');
                 if (carrier) {
                     carrier.value = '';
@@ -37260,14 +37261,30 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         const content = await page.getTextContent();
                         pages.push(content.items.map((item) => item.str || '').join(' '));
                     }
-                    return pages.join('\n\n');
+                    const text = pages.join('\n\n').trim();
+                    return text || `[PDF escaneado sin texto extraible: ${file.name}]\nAnaliza visualmente el documento adjunto para extraer naviera, referencia, Incoterm y costes.`;
+                }
+                if (extension === 'docx') {
+                    const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+                    return result.value || '';
+                }
+                if ((file.type && file.type.startsWith('image/')) || ['png', 'jpg', 'jpeg', 'webp'].includes(extension)) {
+                    return `[Imagen de oferta naviera: ${file.name}]\nAnaliza visualmente la imagen adjunta para extraer naviera, referencia, Incoterm, conceptos, importes, monedas, contenedores y niveles de carga.`;
                 }
                 return file.text();
+            }
+            function readCarrierOfferDataUrl(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => resolve(event.target.result || '');
+                    reader.onerror = () => reject(new Error('No se pudo adjuntar el archivo para análisis IA.'));
+                    reader.readAsDataURL(file);
+                });
             }
             async function parseCarrierOffer() {
                 const file = auditEl('carrier-offer-file')?.files?.[0];
                 if (!file) {
-                    setAuditStatus('Selecciona primero una oferta PDF o Excel.');
+                    setAuditStatus('Selecciona primero una oferta, documento o imagen.');
                     return;
                 }
                 resetCarrierIdentity();
@@ -37275,6 +37292,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 auditEl('carrier-offer-parse')?.setAttribute('disabled', 'disabled');
                 try {
                     const documentText = await readCarrierOfferFile(file);
+                    const sourceFileDataUrl = await readCarrierOfferDataUrl(file);
+                    window.SeaCharterCarrierOfferSourceFile = {
+                        name: file.name,
+                        type: file.type || '',
+                        dataUrl: sourceFileDataUrl
+                    };
                     const quote = window.SeaCharterContainerQuote || {};
                     const response = await fetch('/api/audit-carrier-offer', {
                         method: 'POST',
@@ -37287,6 +37310,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                             portOfLoading: quote.route?.pol || auditEl('fcl-pol')?.value || '',
                             portOfDischarge: quote.route?.pod || auditEl('fcl-pod')?.value || '',
                             sourceFileName: file.name,
+                            sourceFileType: file.type || '',
+                            sourceFileDataUrl,
                             documentText,
                             selectedEquipment: selectedEquipmentPayload(),
                             incoterm: currentAuditIncoterm(),
@@ -37312,6 +37337,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     updateAuditActionState();
                 }
             }
+            function currentCarrierOfferAttachment() {
+                return window.SeaCharterCarrierOfferSourceFile || null;
+            }
             async function saveCarrierOfferAudit() {
                 const audit = window.SeaCharterCarrierOfferAudit;
                 const lines = audit?.lines || [];
@@ -37324,6 +37352,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 try {
                     const quote = window.SeaCharterContainerQuote || {};
                     const file = auditEl('carrier-offer-file')?.files?.[0];
+                    const attachment = currentCarrierOfferAttachment();
                     const response = await fetch('/api/audit-carrier-offer', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -37335,6 +37364,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                             portOfLoading: quote.route?.pol || auditEl('fcl-pol')?.value || '',
                             portOfDischarge: quote.route?.pod || auditEl('fcl-pod')?.value || '',
                             sourceFileName: file?.name || 'oferta naviera',
+                            sourceFileType: attachment?.type || file?.type || '',
+                            sourceFileDataUrl: attachment?.dataUrl || '',
                             selectedEquipment: selectedEquipmentPayload(),
                             incoterm: currentAuditIncoterm(),
                             markupPercentage: readAuditMoney('carrier-markup-percentage', 8),
@@ -37711,7 +37742,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 auditEl('carrier-offer-file')?.addEventListener('change', () => {
                     const file = auditEl('carrier-offer-file')?.files?.[0];
                     if (auditEl('carrier-offer-file-name')) {
-                        auditEl('carrier-offer-file-name').textContent = file ? file.name : 'PDF, XLSX, XLS o CSV';
+                        auditEl('carrier-offer-file-name').textContent = file ? file.name : 'PDF, DOCX, XLSX, CSV, TXT o imagen';
                     }
                     resetCarrierIdentity();
                     auditEl('carrier-offer-parse')?.toggleAttribute('disabled', !file);

@@ -39,6 +39,9 @@ type AuditRequest = {
   portOfDischarge?: string;
   sourceFileName?: string;
   documentText?: string;
+  sourceFileBase64?: string;
+  sourceFileType?: string;
+  sourceFileDataUrl?: string;
   markupPercentage?: number;
   markupFixedFee?: number;
   selectedEquipment?: SelectedEquipment[];
@@ -232,10 +235,55 @@ function createAuditId() {
   return `carrier-audit-${Date.now()}-${randomSuffix}`;
 }
 
+function cleanFileName(value: string | undefined) {
+  return String(value || "carrier-offer")
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120) || "carrier-offer";
+}
+
+function normalizeBase64(value: string | undefined) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return raw.includes(",") ? raw.split(",").pop() || "" : raw;
+}
+
+function base64ToArrayBuffer(base64: string) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes.buffer;
+}
+
+function mimeFromPayload(payload: AuditRequest) {
+  const explicit = String(payload.sourceFileType || "").trim();
+  if (explicit) return explicit;
+  const dataUrl = String(payload.sourceFileDataUrl || "");
+  const match = dataUrl.match(/^data:([^;]+);base64,/i);
+  return match?.[1] || "application/octet-stream";
+}
+
+async function persistSourceFile(payload: AuditRequest, auditId: string) {
+  const base64 = normalizeBase64(payload.sourceFileBase64 || payload.sourceFileDataUrl);
+  if (!base64) return "";
+
+  const bytes = base64ToArrayBuffer(base64);
+  if (!bytes.byteLength) return "";
+
+  const store = getStore("carrier-rate-audit-files");
+  const key = `${auditId}/${cleanFileName(payload.sourceFileName)}`;
+  await store.set(key, bytes);
+  return key;
+}
+
 async function saveCarrierRateAudit(payload: AuditRequest, lines: ReturnType<typeof applyMargins>, markupPercentage: number, markupFixedFee: number) {
   const auditId = createAuditId();
   const createdAt = new Date().toISOString();
   const summary = currencySummary(lines);
+  const sourceFileBlobKey = await persistSourceFile(payload, auditId);
   const auditDocument = {
     id: auditId,
     carrierName: payload.carrierName || "Naviera sin identificar",
@@ -244,6 +292,7 @@ async function saveCarrierRateAudit(payload: AuditRequest, lines: ReturnType<typ
     portOfLoading: payload.portOfLoading || null,
     portOfDischarge: payload.portOfDischarge || null,
     sourceFileName: payload.sourceFileName || "oferta",
+    sourceFileBlobKey,
     markupPercentage,
     markupFixedFee,
     incoterm: normalizeIncoterm(payload.incoterm),
@@ -261,11 +310,51 @@ async function saveCarrierRateAudit(payload: AuditRequest, lines: ReturnType<typ
 
 async function extractWithLlm(payload: AuditRequest) {
   const documentText = String(payload.documentText || "").slice(0, 45000);
-  if (!documentText.trim()) {
+  const fileType = mimeFromPayload(payload);
+  const dataUrl = String(payload.sourceFileDataUrl || "").startsWith("data:")
+    ? String(payload.sourceFileDataUrl)
+    : normalizeBase64(payload.sourceFileBase64)
+      ? `data:${fileType};base64,${normalizeBase64(payload.sourceFileBase64)}`
+      : "";
+  const canUseVision = dataUrl && fileType.startsWith("image/");
+  const canUseFile = dataUrl && [
+    "application/pdf",
+    "text/plain",
+    "text/csv",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ].includes(fileType);
+
+  if (!documentText.trim() && !canUseVision && !canUseFile) {
     return { detectedCarrierName: "", detectedQuoteReference: "", detectedIncoterm: "", lines: [] } satisfies ExtractedOffer;
   }
 
   const openai = new OpenAI();
+  const userContent = canUseVision
+    ? [
+        {
+          type: "input_text" as const,
+          text: `Oferta de naviera (${payload.sourceFileName || "sin nombre"}). Extrae datos desde la imagen y desde cualquier texto OCR adjunto:\n\n${documentText}`,
+        },
+        {
+          type: "input_image" as const,
+          image_url: dataUrl,
+          detail: "high" as const,
+        },
+      ]
+    : canUseFile
+      ? [
+          {
+            type: "input_text" as const,
+            text: `Oferta de naviera (${payload.sourceFileName || "sin nombre"}). Extrae datos desde el archivo adjunto y desde cualquier texto OCR disponible:\n\n${documentText}`,
+          },
+          {
+            type: "input_file" as const,
+            file_data: dataUrl,
+            filename: cleanFileName(payload.sourceFileName),
+          },
+        ]
+    : `Oferta de naviera (${payload.sourceFileName || "sin nombre"}):\n\n${documentText}`;
+
   const response = await openai.responses.create({
     model: "gpt-5.2",
     input: [
@@ -275,7 +364,7 @@ async function extractWithLlm(payload: AuditRequest) {
       },
       {
         role: "user",
-        content: `Oferta de naviera (${payload.sourceFileName || "sin nombre"}):\n\n${documentText}`,
+        content: userContent,
       },
     ],
     text: {
@@ -312,7 +401,19 @@ async function extractWithLlm(payload: AuditRequest) {
     },
   });
 
-  const parsed = JSON.parse(response.output_text || "{\"surcharges\":[]}");
+  let parsed: {
+    carrierName?: string;
+    quoteReference?: string;
+    incoterm?: string;
+    surcharges?: ExtractedSurcharge[];
+  };
+
+  try {
+    parsed = JSON.parse(response.output_text || "{\"surcharges\":[]}");
+  } catch {
+    throw new Error("La IA no devolvió un JSON válido para la oferta. Reintenta con un documento más legible o con OCR.");
+  }
+
   const detectedIncoterm = normalizeIncoterm(parsed.incoterm);
   return {
     detectedCarrierName: String(parsed.carrierName || "").trim(),
@@ -327,33 +428,41 @@ export default async (req: Request) => {
     return Response.json({ success: false, error: "Method not allowed" }, { status: 405 });
   }
 
-  const payload = await req.json() as AuditRequest;
-  const markupPercentage = Number.isFinite(Number(payload.markupPercentage)) ? Number(payload.markupPercentage) : 8;
-  const markupFixedFee = Number.isFinite(Number(payload.markupFixedFee)) ? Number(payload.markupFixedFee) : 75;
-  const incoterm = normalizeIncoterm(payload.incoterm);
+  try {
+    const payload = await req.json() as AuditRequest;
+    const markupPercentage = Number.isFinite(Number(payload.markupPercentage)) ? Number(payload.markupPercentage) : 8;
+    const markupFixedFee = Number.isFinite(Number(payload.markupFixedFee)) ? Number(payload.markupFixedFee) : 75;
+    const incoterm = normalizeIncoterm(payload.incoterm);
 
-  if (payload.action === "save") {
-    const lines = applyMargins(normalizeLines(payload.lines, incoterm), markupPercentage, markupFixedFee);
-    if (!lines.length) {
-      return Response.json({ success: false, error: "No hay costes normalizados para guardar." }, { status: 400 });
+    if (payload.action === "save") {
+      const lines = applyMargins(normalizeLines(payload.lines, incoterm), markupPercentage, markupFixedFee);
+      if (!lines.length) {
+        return Response.json({ success: false, error: "No hay costes normalizados para guardar." }, { status: 400 });
+      }
+
+      const savedAudit = await saveCarrierRateAudit(payload, lines, markupPercentage, markupFixedFee);
+      return Response.json({ success: true, auditId: savedAudit.auditId, lines, summary: savedAudit.summary, quoteBreakdown: calculateTotalQuote(payload.selectedEquipment, lines) }, { status: 201 });
     }
 
-    const savedAudit = await saveCarrierRateAudit(payload, lines, markupPercentage, markupFixedFee);
-    return Response.json({ success: true, auditId: savedAudit.auditId, lines, summary: savedAudit.summary, quoteBreakdown: calculateTotalQuote(payload.selectedEquipment, lines) }, { status: 201 });
+    const extracted = await extractWithLlm(payload);
+    const detectedIncoterm = extracted.detectedIncoterm || incoterm;
+    const lines = applyMargins(normalizeLines(extracted.lines, detectedIncoterm), markupPercentage, markupFixedFee);
+    return Response.json({
+      success: true,
+      detectedCarrierName: extracted.detectedCarrierName,
+      detectedQuoteReference: extracted.detectedQuoteReference,
+      detectedIncoterm,
+      lines,
+      summary: currencySummary(lines),
+      quoteBreakdown: calculateTotalQuote(payload.selectedEquipment, lines)
+    });
+  } catch (error) {
+    console.error("[audit-carrier-offer] Request failed.", error);
+    return Response.json({
+      success: false,
+      error: error instanceof Error ? error.message : "No se pudo auditar la oferta con IA.",
+    }, { status: 500 });
   }
-
-  const extracted = await extractWithLlm(payload);
-  const detectedIncoterm = extracted.detectedIncoterm || incoterm;
-  const lines = applyMargins(normalizeLines(extracted.lines, detectedIncoterm), markupPercentage, markupFixedFee);
-  return Response.json({
-    success: true,
-    detectedCarrierName: extracted.detectedCarrierName,
-    detectedQuoteReference: extracted.detectedQuoteReference,
-    detectedIncoterm,
-    lines,
-    summary: currencySummary(lines),
-    quoteBreakdown: calculateTotalQuote(payload.selectedEquipment, lines)
-  });
 };
 
 export const config: Config = {
