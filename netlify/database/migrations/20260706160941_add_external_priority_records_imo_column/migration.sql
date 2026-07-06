@@ -1,0 +1,1 @@
+ALTER TABLE "external_priority_records" ADD COLUMN "imo" text DEFAULT 'N/A' NOT NULL;
