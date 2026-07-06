@@ -6,6 +6,7 @@ export const externalPriorityRecords = pgTable("external_priority_records", {
   priority: integer().notNull().default(100),
   status: text().notNull().default("pending_databridge"),
   vesselName: text("vessel_name").notNull(),
+  imo: text().notNull().default("N/A"),
   openCountry: text("open_country").notNull().default("N/A"),
   dwt: integer().notNull().default(0),
   pol: text().notNull().default("N/A"),

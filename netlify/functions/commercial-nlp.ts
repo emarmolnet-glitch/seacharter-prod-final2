@@ -14,7 +14,7 @@ const SYSTEM_INSTRUCTION = `"ROL: MOTOR COMERCIAL INTEGRADO - RODAHMAR SHIPPING 
 
 1. ANÁLISIS COMERCIAL (Modo Informativo):
 
-Al recibir texto o imagen, extrae datos de buques (Nombre, Open pais, DWT) y carga (POL/POD, Cantidad, Laycan).
+Al recibir texto o imagen, extrae datos de buques (Nombre, IMO, DWT) y carga (POL/POD, Cantidad, Laycan).
 
 Cálculo 'Cost-Plus': Suma OPEX, CAPEX, bunker de posicionamiento y gastos portuarios (considerando demoras en puertos complejos).
 
@@ -66,6 +66,7 @@ function normalizeAnalysis(raw: unknown) {
     const cascade = calculateCascade(totalCost);
     return {
       vesselName: textValue(vessel.vesselName, vessel.name, vessel.buque, "TBN"),
+      imo: textValue(vessel.imo, vessel.IMO, vessel.imoNumber, "N/A"),
       openCountry: textValue(vessel.openCountry, vessel.open, vessel.openPais, "N/A"),
       dwt: Math.round(numberValue(vessel.dwt, vessel.DWT)),
       pol: textValue(vessel.pol, vessel.POL, parsed.pol, "N/A"),
@@ -93,7 +94,7 @@ async function extractWithOpenAI(payload: AnyRecord) {
   const content: any[] = [
     {
       type: "input_text",
-      text: `Extrae buques y cargas del siguiente material. Devuelve solo JSON con documentType, summary y vessels[]. Cada vessel debe incluir vesselName, openCountry, dwt, pol, pod, cargoQuantity, laycan, totalCost y costBreakdown {opex, capex, bunkerPositioning, portExpenses, delayAllowance}. Si falta un coste, usa 0 y explica la laguna en summary.\n\nDOCUMENTO:\n${text}`,
+      text: `Extrae buques y cargas del siguiente material. Devuelve solo JSON con documentType, summary y vessels[]. Cada vessel debe incluir vesselName, imo, openCountry, dwt, pol, pod, cargoQuantity, laycan, totalCost y costBreakdown {opex, capex, bunkerPositioning, portExpenses, delayAllowance}. Si falta un coste, usa 0 y explica la laguna en summary.\n\nDOCUMENTO:\n${text}`,
     },
   ];
 
@@ -127,6 +128,7 @@ async function extractWithOpenAI(payload: AnyRecord) {
                 additionalProperties: false,
                 properties: {
                   vesselName: { type: "string" },
+                  imo: { type: "string" },
                   openCountry: { type: "string" },
                   dwt: { type: "number" },
                   pol: { type: "string" },
@@ -147,7 +149,7 @@ async function extractWithOpenAI(payload: AnyRecord) {
                     required: ["opex", "capex", "bunkerPositioning", "portExpenses", "delayAllowance"],
                   },
                 },
-                required: ["vesselName", "openCountry", "dwt", "pol", "pod", "cargoQuantity", "laycan", "totalCost", "costBreakdown"],
+                required: ["vesselName", "imo", "openCountry", "dwt", "pol", "pod", "cargoQuantity", "laycan", "totalCost", "costBreakdown"],
               },
             },
           },
@@ -167,6 +169,7 @@ async function persistVessels(vessels: ReturnType<typeof normalizeAnalysis>["ves
     priority: 100,
     status: "pending_databridge",
     vesselName: vessel.vesselName,
+    imo: vessel.imo,
     openCountry: vessel.openCountry,
     dwt: vessel.dwt,
     pol: vessel.pol,
@@ -183,14 +186,14 @@ async function persistVessels(vessels: ReturnType<typeof normalizeAnalysis>["ves
 function buildPrintableReport(analysis: ReturnType<typeof normalizeAnalysis>) {
   const money = (value: number) => `USD ${value.toLocaleString("es-ES", { maximumFractionDigits: 2 })}`;
   const rows = analysis.vessels.map((vessel) =>
-    `${vessel.vesselName} | ${money(vessel.ownerCost)} | ${money(vessel.ownerInternalPrice)} | ${money(vessel.chartererSaleFreight)}`,
+    `${vessel.vesselName} | ${vessel.imo} | ${money(vessel.ownerCost)} | ${money(vessel.ownerInternalPrice)} | ${money(vessel.chartererSaleFreight)}`,
   ).join("\n");
   return [
     "RODAHMAR SHIPPING SL - MOTOR COMERCIAL INTEGRADO",
     `Documento: ${analysis.documentType}`,
     `Fecha: ${new Date().toISOString().slice(0, 10)}`,
     "",
-    "Buque | Coste Armador | Precio Int. Armador (+15%) | Flete Venta Fletador (10%)",
+    "Buque | IMO | Coste Armador | Precio Int. Armador (+15%) | Flete Venta Fletador (10%)",
     rows || "Sin buques detectados.",
     "",
     "ESTE DOCUMENTO ES SOLO A TÍTULO INFORMATIVO. LOS CÁLCULOS DEFINITIVOS DEBEN REALIZARSE EN LA CALCULADORA SEACHARTER",

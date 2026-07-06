@@ -8770,6 +8770,7 @@
                                 <thead class="bg-slate-50 text-slate-600 uppercase text-xs">
                                     <tr>
                                         <th class="p-3 border-b border-slate-200">Buque</th>
+                                        <th class="p-3 border-b border-slate-200">IMO</th>
                                         <th class="p-3 border-b border-slate-200">Open país</th>
                                         <th class="p-3 border-b border-slate-200">DWT</th>
                                         <th class="p-3 border-b border-slate-200">POL/POD</th>
@@ -27858,6 +27859,7 @@ ADDITIONAL NOTES:
             rows.innerHTML = vessels.length ? vessels.map((vessel) => `
                 <tr class="hover:bg-slate-50">
                     <td class="p-3 border-b border-slate-100 font-semibold text-slate-800">${escapeHtml(vessel.vesselName || 'TBN')}</td>
+                    <td class="p-3 border-b border-slate-100 font-mono">${escapeHtml(vessel.imo || 'N/A')}</td>
                     <td class="p-3 border-b border-slate-100">${escapeHtml(vessel.openCountry || 'N/A')}</td>
                     <td class="p-3 border-b border-slate-100">${Number(vessel.dwt || 0).toLocaleString('es-ES')}</td>
                     <td class="p-3 border-b border-slate-100">${escapeHtml(vessel.pol || 'N/A')} / ${escapeHtml(vessel.pod || 'N/A')}</td>
@@ -27867,7 +27869,7 @@ ADDITIONAL NOTES:
                 </tr>
             `).join('') : `
                 <tr>
-                    <td colspan="7" class="p-4 text-center text-slate-500">No se detectaron buques para inyectar en la cola.</td>
+                    <td colspan="8" class="p-4 text-center text-slate-500">No se detectaron buques para inyectar en la cola.</td>
                 </tr>
             `;
             confirmation.innerText = payload?.confirmation || 'Datos inyectados correctamente en el Motor de Coincidencia. Pendientes de envío a Data Bridge como parte del paquete consolidado.';
