@@ -3668,6 +3668,8 @@
 
         header .module-tabs-wrapper {
             display: flex !important;
+            align-items: center !important;
+            gap: 0.5rem !important;
             justify-content: center !important;
             justify-self: center !important;
             width: 100% !important;
@@ -4101,6 +4103,8 @@
             header .module-tabs-wrapper {
                 order: 2 !important;
                 padding: 0 !important;
+                justify-content: flex-start !important;
+                overflow-x: auto !important;
             }
 
             header .module-tabs {
@@ -5485,11 +5489,21 @@
         </div>
 
         <div class="module-tabs-wrapper">
-            <div id="primary-module-tabs" class="module-tabs flex bg-slate-950 p-1 rounded-xl border border-slate-800 max-w-full" aria-label="Navegación de módulos principales"></div>
-        </div>
-
-        <div class="header-actions-right">
-            <div id="connection-status-root"></div>
+            <div class="tools-dropdown-container">
+                <button
+                    type="button"
+                    id="advanced-modules-btn"
+                    class="tools-dropdown-trigger"
+                    onclick="toggleAdvancedModulesMenu(event)"
+                    aria-controls="advanced-modules-menu"
+                    aria-expanded="false"
+                    title="Herramientas Avanzadas"
+                    aria-label="Herramientas Avanzadas"
+                >
+                    <i class="fa-solid fa-gear text-base" aria-hidden="true"></i>
+                </button>
+                <ul id="advanced-modules-menu" class="tools-dropdown-menu" aria-label="Herramientas Avanzadas"></ul>
+            </div>
             <button
                 id="btn-master-executive-report"
                 onclick="generarInformeMasterOnClick()"
@@ -5507,21 +5521,11 @@
                 <span class="master-report-label-full">Generar Informe Master</span>
                 <span class="master-report-label-tablet hidden">Informe Master</span>
             </button>
-            <div class="tools-dropdown-container">
-                <button
-                    type="button"
-                    id="advanced-modules-btn"
-                    class="tools-dropdown-trigger"
-                    onclick="toggleAdvancedModulesMenu(event)"
-                    aria-controls="advanced-modules-menu"
-                    aria-expanded="false"
-                    title="Herramientas Avanzadas"
-                    aria-label="Herramientas Avanzadas"
-                >
-                    <i class="fa-solid fa-gear text-base" aria-hidden="true"></i>
-                </button>
-                <ul id="advanced-modules-menu" class="tools-dropdown-menu" aria-label="Herramientas Avanzadas"></ul>
-            </div>
+            <div id="primary-module-tabs" class="module-tabs flex bg-slate-950 p-1 rounded-xl border border-slate-800 max-w-full" aria-label="Navegación de módulos principales"></div>
+        </div>
+
+        <div class="header-actions-right">
+            <div id="connection-status-root"></div>
             <!-- Session Actions Container -->
             <div class="flex items-center gap-2" id="session-actions">
                 <div class="tools-dropdown-container">
@@ -15212,13 +15216,13 @@
             { id: 'estimator', label: 'Calculadora' },
             { id: 'gencon', label: 'Editor GENCON' },
             { id: 'auditor', label: 'Auditoría IA' },
+            { id: 'ais', label: 'Inteligencia AIS' },
+            { id: 'matching', label: 'Motor de Coincidencia' },
         ];
         const OPTIONAL_MODULES = [
             { id: 'fcl', label: 'FCL', preferenceKey: 'showContainerModules' },
             { id: 'asbatankvoy', label: 'Editor ASBATANKVOY' },
             { id: 'cbam', label: 'CBAM' },
-            { id: 'ais', label: 'Inteligencia AIS' },
-            { id: 'matching', label: 'Motor de Coincidencia' },
         ];
         const MODULE_NAVIGATION = [...PRIMARY_MODULES, ...OPTIONAL_MODULES].map(module => module.id);
         let userPreferences = loadUserPreferences();
