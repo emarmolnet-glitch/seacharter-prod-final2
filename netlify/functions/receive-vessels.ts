@@ -82,7 +82,7 @@ function isValidHttpUrl(value: string) {
 }
 
 function getBearerToken() {
-  return String(process.env.DATA_BRIDGE_API_SECRET || "").trim();
+  return String(process.env.DATA_BRIDGE_API_SECRET || process.env.VITE_DATA_BRIDGE_API_SECRET || "").trim();
 }
 
 function extractRemoteError(payload: unknown, fallback: string) {
@@ -139,7 +139,7 @@ export default async (req: Request) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: "Bearer " + process.env.DATA_BRIDGE_API_SECRET,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(vessels),
     });

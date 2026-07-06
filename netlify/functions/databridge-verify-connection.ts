@@ -21,7 +21,8 @@ function isValidHttpUrl(value: string) {
 function getBearerToken(req: Request) {
   const authorization = String(req.headers.get("authorization") || "").trim();
   const match = authorization.match(/^Bearer\s+(.+)$/i);
-  return match ? match[1].trim() : "";
+  const requestToken = match ? match[1].trim() : "";
+  return requestToken || String(process.env.DATA_BRIDGE_API_SECRET || process.env.VITE_DATA_BRIDGE_API_SECRET || "").trim();
 }
 
 export default async (req: Request) => {

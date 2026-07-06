@@ -20,13 +20,20 @@ function isValidHttpUrl(value: string) {
   }
 }
 
+function getDataBridgeApiSecret(req: Request) {
+  const authorization = String(req.headers.get("authorization") || "").trim();
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  const requestToken = match ? match[1].trim() : "";
+  return requestToken || String(process.env.DATA_BRIDGE_API_SECRET || process.env.VITE_DATA_BRIDGE_API_SECRET || "").trim();
+}
+
 export default async (req: Request) => {
   if (req.method !== "GET" && req.method !== "POST") {
     return Response.json({ success: false, error: "Method not allowed" }, { status: 405, headers });
   }
 
   const apiUrl = getDataBridgeApiUrl();
-  const apiSecret = String(process.env.DATA_BRIDGE_API_SECRET || "").trim();
+  const apiSecret = getDataBridgeApiSecret(req);
 
   if (!isValidHttpUrl(apiUrl)) {
     return Response.json(
@@ -37,7 +44,7 @@ export default async (req: Request) => {
 
   if (!apiSecret) {
     return Response.json(
-      { success: false, error: "DATA_BRIDGE_API_SECRET is not configured." },
+      { success: false, error: "Data Bridge API secret is not configured." },
       { status: 500, headers },
     );
   }
