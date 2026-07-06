@@ -8727,7 +8727,7 @@
                         <i class="fa-solid fa-magnifying-glass-chart mr-2"></i> Auditar Contrato
                     </button>
                     <button id="commercialNlpBtn" onclick="runCommercialNlpMotor()" class="mt-2 w-full bg-emerald-700 hover:bg-emerald-800 text-white font-medium py-3 px-4 rounded-lg transition-colors flex justify-center items-center shadow-sm">
-                        <i class="fa-solid fa-table-list mr-2"></i> Motor Comercial Informativo
+                        <i class="fa-solid fa-table-list mr-2"></i> Analizar datos con IA para extraer los datos
                     </button>
                 </div>
                 
@@ -8770,11 +8770,7 @@
                                 <thead class="bg-slate-50 text-slate-600 uppercase text-xs">
                                     <tr>
                                         <th class="p-3 border-b border-slate-200">Buque</th>
-                                        <th class="p-3 border-b border-slate-200">IMO</th>
-                                        <th class="p-3 border-b border-slate-200">Open país</th>
-                                        <th class="p-3 border-b border-slate-200">DWT</th>
-                                        <th class="p-3 border-b border-slate-200">POL/POD</th>
-                                        <th class="p-3 border-b border-slate-200 text-right">Coste Armador</th>
+                                        <th class="p-3 border-b border-slate-200 text-right">Coste Armador Total</th>
                                         <th class="p-3 border-b border-slate-200 text-right">Precio Int. Armador (+15%)</th>
                                         <th class="p-3 border-b border-slate-200 text-right">Flete Venta Fletador (10%)</th>
                                     </tr>
@@ -8785,7 +8781,16 @@
                         <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
                             <p id="commercial-nlp-confirmation" class="text-sm font-semibold text-emerald-800"></p>
                             <p class="text-xs text-slate-600 mt-2">ESTE DOCUMENTO ES SOLO A TÍTULO INFORMATIVO. LOS CÁLCULOS DEFINITIVOS DEBEN REALIZARSE EN LA CALCULADORA SEACHARTER</p>
-                            <pre id="commercial-nlp-print-block" class="mt-3 hidden whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-700"></pre>
+                            <div class="mt-3 grid gap-3">
+                                <div>
+                                    <div class="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Informe para impresión</div>
+                                    <pre id="commercial-nlp-print-block" class="whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-700"></pre>
+                                </div>
+                                <div>
+                                    <div class="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">JSON para importación manual</div>
+                                    <pre id="commercial-nlp-json-block" class="whitespace-pre-wrap rounded-lg border border-emerald-200 bg-emerald-950 p-4 text-xs text-emerald-50 overflow-x-auto"></pre>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
@@ -15383,14 +15388,14 @@
             nlpItem.className = 'tools-dropdown-item advanced-nlp-menu-item';
             nlpItem.innerHTML = `
                 <button type="button" id="advanced-nlp-toggle" class="tools-dropdown-action" aria-controls="advanced-nlp-panel" aria-expanded="false">
-                    <span>Motor NLP · Traductor de Carga IA</span>
+                    <span>Motor NLP · Agente de Procesamiento de Datos</span>
                 </button>
-                <div id="advanced-nlp-panel" class="advanced-nlp-panel" aria-label="Motor NLP · Traductor de Carga IA">
+                <div id="advanced-nlp-panel" class="advanced-nlp-panel" aria-label="Motor NLP · Agente de Procesamiento de Datos">
                     <div class="ai-work-card p-4">
                         <div class="flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
-                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 font-sans">Motor NLP · Traductor de Carga IA</h3>
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 font-sans">Motor NLP · Agente de Procesamiento de Datos</h3>
                         </div>
-                        <p class="text-xs text-slate-600 mb-4 leading-relaxed font-sans">Introduce tu oferta de flete en lenguaje natural para que la IA extraiga los datos, coordine las rutas y ejecute las coincidencias automáticamente.</p>
+                        <p class="text-xs text-slate-600 mb-4 leading-relaxed font-sans">Introduce imagen o texto a archivo para analizar. Este motor funciona exclusivamente como agente de procesamiento de datos.</p>
                         <div class="space-y-3">
                             <textarea id="nlp-cargo-input" rows="4" class="input-gc w-full placeholder-slate-400 focus:outline-none font-sans leading-relaxed" placeholder="Ej: Fletamento de 20,000 TM de cemento desde Algeciras a Genoa con laycan inicio 2026-06-22. Se requiere buque con grúas (geared) con un flete de 35 USD/TM."></textarea>
                             <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-600">
@@ -15401,7 +15406,7 @@
                                 <input type="checkbox" id="matching-live-update-toggle" class="rounded border-slate-300 text-[#004e64] focus:ring-[#004e64]" onchange="handleMatchingLiveUpdateToggle(this.checked)">
                             </label>
                             <button id="btn-parse-nlp" onclick="parseCargoNLP()" class="w-full text-white font-black text-xs uppercase py-2.5 rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none tracking-wider">
-                                <i class="fa-solid fa-brain"></i> Traducir con IA / Parse with AI
+                                <i class="fa-solid fa-brain"></i> Analizar datos con IA para extraer los datos
                             </button>
                         </div>
                         <div id="nlp-parsed-results" class="hidden mt-4 pt-3 border-t border-slate-100 text-[11px] space-y-1.5 font-sans text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">
@@ -27852,28 +27857,26 @@ ADDITIONAL NOTES:
             const rows = document.getElementById('commercial-nlp-rows');
             const confirmation = document.getElementById('commercial-nlp-confirmation');
             const printBlock = document.getElementById('commercial-nlp-print-block');
+            const jsonBlock = document.getElementById('commercial-nlp-json-block');
             const vessels = Array.isArray(payload?.analysis?.vessels) ? payload.analysis.vessels : [];
             if (!panel || !rows) return;
 
-            summary.innerText = payload?.analysis?.summary || 'Análisis comercial informativo generado.';
+            summary.innerText = payload?.analysis?.summary || 'Análisis comercial local generado para carga manual.';
             rows.innerHTML = vessels.length ? vessels.map((vessel) => `
                 <tr class="hover:bg-slate-50">
-                    <td class="p-3 border-b border-slate-100 font-semibold text-slate-800">${escapeHtml(vessel.vesselName || 'TBN')}</td>
-                    <td class="p-3 border-b border-slate-100 font-mono">${escapeHtml(vessel.imo || 'N/A')}</td>
-                    <td class="p-3 border-b border-slate-100">${escapeHtml(vessel.openCountry || 'N/A')}</td>
-                    <td class="p-3 border-b border-slate-100">${Number(vessel.dwt || 0).toLocaleString('es-ES')}</td>
-                    <td class="p-3 border-b border-slate-100">${escapeHtml(vessel.pol || 'N/A')} / ${escapeHtml(vessel.pod || 'N/A')}</td>
+                    <td class="p-3 border-b border-slate-100 font-semibold text-slate-800">${escapeHtml(vessel.vesselName || 'No presente')}</td>
                     <td class="p-3 border-b border-slate-100 text-right font-mono">${formatCommercialNlpMoney(vessel.ownerCost)}</td>
                     <td class="p-3 border-b border-slate-100 text-right font-mono">${formatCommercialNlpMoney(vessel.ownerInternalPrice)}</td>
                     <td class="p-3 border-b border-slate-100 text-right font-mono font-bold text-emerald-800">${formatCommercialNlpMoney(vessel.chartererSaleFreight)}</td>
                 </tr>
             `).join('') : `
                 <tr>
-                    <td colspan="8" class="p-4 text-center text-slate-500">No se detectaron buques para inyectar en la cola.</td>
+                    <td colspan="4" class="p-4 text-center text-slate-500">No se detectaron buques en el material recibido.</td>
                 </tr>
             `;
-            confirmation.innerText = payload?.confirmation || 'Datos inyectados correctamente en el Motor de Coincidencia. Pendientes de envío a Data Bridge como parte del paquete consolidado.';
+            confirmation.innerText = payload?.confirmation || 'Paquete JSON preparado para carga manual en SeaCharter Data Bridge. No se ha interactuado con base de datos, Prisma ni migraciones.';
             printBlock.innerText = payload?.printableReport || '';
+            if (jsonBlock) jsonBlock.innerText = payload?.manualImportJson || JSON.stringify(payload?.manualImportPackage || {}, null, 2);
             panel.classList.remove('hidden');
         }
 
@@ -27894,7 +27897,7 @@ ADDITIONAL NOTES:
 
             const originalBtnHtml = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Orquestando...';
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Procesando local...';
 
             try {
                 const file = State.uploadedFile && State.uploadedFile.base64
