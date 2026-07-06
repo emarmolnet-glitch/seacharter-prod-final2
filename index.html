@@ -3801,6 +3801,23 @@
             header #advanced-modules-btn.tools-dropdown-trigger i {
                 font-size: 1.35rem !important;
             }
+
+            header #npl-module-btn.tools-dropdown-trigger {
+                min-width: 52px !important;
+                width: 52px !important;
+                height: 52px !important;
+                min-height: 52px !important;
+                padding: 0 !important;
+                border-radius: 10px !important;
+            }
+
+            header #npl-module-btn.tools-dropdown-trigger span {
+                display: none !important;
+            }
+
+            header #npl-module-btn.tools-dropdown-trigger i {
+                font-size: 1.25rem !important;
+            }
         }
 
         header #session-actions {
@@ -3877,15 +3894,42 @@
             overflow: visible !important;
         }
 
+        header #npl-module-menu {
+            width: min(92vw, 860px) !important;
+            overflow: visible !important;
+        }
+
+        header #npl-module-btn.tools-dropdown-trigger {
+            width: auto !important;
+            min-width: 118px !important;
+            padding: 0 0.75rem !important;
+            gap: 0.45rem !important;
+            font-size: 0.72rem !important;
+            font-weight: 800 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0 !important;
+            white-space: nowrap !important;
+        }
+
+        header #npl-module-btn.tools-dropdown-trigger i {
+            font-size: 0.95rem !important;
+        }
+
         header .advanced-nlp-menu-item {
             border-top: 1px solid #e2e8f0 !important;
             margin-top: 0.35rem !important;
             padding-top: 0.35rem !important;
         }
 
+        header #npl-module-menu .advanced-nlp-menu-item {
+            border-top: 0 !important;
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+        }
+
         header .advanced-nlp-panel {
             display: none;
-            padding: 0.75rem 1rem 0.85rem;
+            padding: 0.6rem;
             background: #f8fafc;
             border-top: 1px solid #e2e8f0;
         }
@@ -3898,8 +3942,45 @@
             box-shadow: none !important;
         }
 
+        header #npl-module-menu .npl-work-card {
+            display: grid !important;
+            grid-template-columns: minmax(250px, 0.95fr) minmax(300px, 1.05fr) !important;
+            gap: 0.75rem !important;
+            padding: 0.75rem !important;
+            align-items: start !important;
+        }
+
+        header #npl-module-menu .npl-card-heading {
+            grid-column: 1 / -1 !important;
+            padding-bottom: 0.5rem !important;
+            margin-bottom: 0 !important;
+        }
+
+        header #npl-module-menu .npl-card-heading p {
+            max-width: 760px !important;
+            margin-top: 0.35rem !important;
+            margin-bottom: 0 !important;
+            line-height: 1.35 !important;
+        }
+
+        header #npl-module-menu .npl-input-panel,
+        header #npl-module-menu .npl-results-panel {
+            min-width: 0 !important;
+        }
+
+        header #npl-module-menu .npl-input-panel {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 0.5rem !important;
+        }
+
+        header #npl-module-menu .npl-results-panel {
+            margin-top: 0 !important;
+            padding: 0.65rem !important;
+        }
+
         header .advanced-nlp-panel textarea#nlp-cargo-input {
-            min-height: 110px;
+            min-height: 86px;
             background-color: #ffffff !important;
             border: 1px solid #cbd5e1 !important;
             color: #0f172a !important;
@@ -3917,6 +3998,36 @@
         header .advanced-nlp-panel button#btn-parse-nlp:hover {
             background-color: #003f52 !important;
             border-color: #003f52 !important;
+        }
+
+        header #npl-module-menu #nlp-comparative-preview {
+            max-height: none !important;
+            min-height: 72px !important;
+            font-size: 0.62rem !important;
+            line-height: 1.25 !important;
+        }
+
+        header #npl-module-menu .npl-data-grid {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 0.35rem 0.75rem !important;
+        }
+
+        header #npl-module-menu .npl-data-row {
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 6px !important;
+            padding: 0.4rem 0.5rem !important;
+            background: #ffffff !important;
+        }
+
+        header #npl-module-menu .npl-data-row:last-child {
+            grid-column: 1 / -1 !important;
+        }
+
+        @media (max-width: 900px) {
+            header #npl-module-menu .npl-work-card {
+                grid-template-columns: 1fr !important;
+            }
         }
 
         header .advanced-preference-item {
@@ -5504,6 +5615,22 @@
                     <i class="fa-solid fa-gear text-base" aria-hidden="true"></i>
                 </button>
                 <ul id="advanced-modules-menu" class="tools-dropdown-menu" aria-label="Herramientas Avanzadas"></ul>
+            </div>
+            <div class="tools-dropdown-container">
+                <button
+                    type="button"
+                    id="npl-module-btn"
+                    class="tools-dropdown-trigger"
+                    onclick="toggleNplModuleMenu(event)"
+                    aria-controls="npl-module-menu"
+                    aria-expanded="false"
+                    title="Motor NPL"
+                    aria-label="Motor NPL"
+                >
+                    <i class="fa-solid fa-brain" aria-hidden="true"></i>
+                    <span>Motor NPL</span>
+                </button>
+                <ul id="npl-module-menu" class="tools-dropdown-menu" aria-label="Motor NPL"></ul>
             </div>
             <button
                 id="btn-master-executive-report"
@@ -8728,7 +8855,7 @@
                         <i class="fa-solid fa-magnifying-glass-chart mr-2"></i> Auditar Contrato
                     </button>
                     <button id="commercialNlpBtn" onclick="runCommercialNlpMotor()" class="mt-2 w-full bg-emerald-700 hover:bg-emerald-800 text-white font-medium py-3 px-4 rounded-lg transition-colors flex justify-center items-center shadow-sm">
-                        <i class="fa-solid fa-table-list mr-2"></i> Motor NPL · Captar y Exportar JSON
+                        <i class="fa-solid fa-table-list mr-2"></i> Motor NPL · Analizar Documento
                     </button>
                 </div>
                 
@@ -8762,9 +8889,14 @@
                                 </h3>
                                 <p id="commercial-nlp-summary" class="text-xs text-emerald-800 mt-1"></p>
                             </div>
-                            <button onclick="printCommercialNlpReport()" class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition whitespace-nowrap">
-                                <i class="fa-solid fa-print"></i> Imprimir Ticket
-                            </button>
+                            <div class="flex flex-wrap gap-2">
+                                <button onclick="printCommercialNlpReport()" class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition whitespace-nowrap">
+                                    <i class="fa-solid fa-print"></i> Imprimir Informe
+                                </button>
+                                <button id="commercial-nlp-export-json-btn" onclick="downloadCommercialNlpJson()" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition whitespace-nowrap">
+                                    <i class="fa-solid fa-file-arrow-down"></i> Exportar JSON
+                                </button>
+                            </div>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm text-left">
@@ -8784,6 +8916,10 @@
                             <p class="text-xs text-slate-600 mt-2">ESTE DOCUMENTO ES SOLO A TÍTULO INFORMATIVO. LOS CÁLCULOS DEFINITIVOS DEBEN REALIZARSE EN LA CALCULADORA SEACHARTER</p>
                             <p class="text-xs text-slate-500 mt-1">Motor sin permisos de escritura: la persistencia se realiza copiando manualmente el JSON en SeaCharter Data Bridge.</p>
                             <div class="mt-3 grid gap-3">
+                                <div>
+                                    <div class="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Informe comparativo previo a JSON</div>
+                                    <pre id="commercial-nlp-comparative-block" class="whitespace-pre-wrap rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-slate-800"></pre>
+                                </div>
                                 <div>
                                     <div class="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Informe para impresión</div>
                                     <pre id="commercial-nlp-print-block" class="whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-700"></pre>
@@ -12935,7 +13071,9 @@
 
             try {
                 const payload = buildCommercialNlpLocalPayload(text);
+                window.lastStandaloneNplPayload = payload;
                 const vessel = payload.analysis.vessels[0] || {};
+                const comparativePreview = document.getElementById('nlp-comparative-preview');
 
                 document.getElementById('nlp-res-type').innerText = vessel.vesselName || 'No presente';
                 document.getElementById('nlp-res-qty').innerText = vessel.quantity ? `${Number(vessel.quantity).toLocaleString('es-ES')} MT` : 'No presente';
@@ -12943,10 +13081,11 @@
                 document.getElementById('nlp-res-pod').innerText = vessel.dates || 'No presente';
                 document.getElementById('nlp-res-rate').innerText = formatCommercialNlpMoney(vessel.chartererSaleFreight || 0);
                 document.getElementById('nlp-res-geared').innerText = 'Carga manual Data Bridge';
+                if (comparativePreview) comparativePreview.innerText = payload.comparativeReport || 'No hay informe comparativo disponible.';
                 
                 resultsDiv.classList.remove('hidden');
 
-                if (!silent) showToast("Motor NPL procesado en memoria. Use el panel de auditoría para exportar JSON manual.");
+                if (!silent) showToast("Motor NPL: informe comparativo listo. Revise antes de exportar JSON.");
 
             } catch (err) {
                 console.error("NPL parsing failed: ", err);
@@ -12957,6 +13096,81 @@
                     btn.disabled = false;
                 }
             }
+        }
+
+        async function handleNplStandaloneFile(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+
+            const input = document.getElementById('nlp-cargo-input');
+            const preview = document.getElementById('nlp-source-preview');
+            const fileInput = event.target;
+            const originalPlaceholder = input ? input.placeholder : '';
+
+            if (input) {
+                input.value = '';
+                input.placeholder = 'Leyendo archivo local para el Motor NPL...';
+            }
+
+            try {
+                const extractedText = await extractStandaloneNplText(file);
+                if (input) {
+                    input.value = extractedText.trim();
+                    input.placeholder = originalPlaceholder;
+                }
+                if (preview) {
+                    preview.innerHTML = `<i class="fa-solid fa-circle-check mr-1.5"></i> Fuente captada en memoria: <span class="font-black">${escapeHtml(file.name || 'foto capturada')}</span>`;
+                    preview.classList.remove('hidden');
+                }
+                await parseCargoNLP({ silent: true });
+                if (typeof showToast === 'function') showToast('Motor NPL: fuente captada e informe comparativo listo.');
+            } catch (error) {
+                console.error('NPL standalone file read failed:', error);
+                if (input) input.placeholder = originalPlaceholder;
+                if (preview) {
+                    preview.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1.5"></i> ${escapeHtml(error.message)}`;
+                    preview.classList.remove('hidden');
+                }
+                if (typeof showToast === 'function') showToast('No se pudo leer el archivo en el Motor NPL.');
+            } finally {
+                fileInput.value = '';
+            }
+        }
+
+        async function extractStandaloneNplText(file) {
+            const fileName = file.name || (file.type?.startsWith('image/') ? 'foto-capturada.jpg' : 'archivo-cargado');
+            const extension = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
+            const imageExtensions = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
+
+            if (file.type === 'application/pdf' || extension === 'pdf') {
+                const text = await extractTextFromPDF(file);
+                return text || `[PDF escaneado captado por Motor NPL: ${fileName}]\nSin texto extraíble. El módulo solo recopila la fuente en memoria para informe y JSON manual; no ejecuta OCR externo ni escribe en servidor.`;
+            }
+            if (extension === 'docx') return extractTextFromWord(file);
+            if (extension === 'xlsx' || extension === 'xls') return extractTextFromExcel(file);
+            if (extension === 'txt' || extension === 'md' || extension === 'csv') return extractTextFromTxt(file);
+            if ((file.type && file.type.startsWith('image/')) || imageExtensions.includes(extension)) {
+                return `[Fotografía captada por Motor NPL: ${fileName}]\nFuente recopilada en memoria local. Añade o corrige debajo el texto visible de la foto para extraer campos comerciales estrictos antes de generar el JSON para Data Bridge.`;
+            }
+
+            throw new Error('Formato no soportado por el Motor NPL independiente.');
+        }
+
+        function downloadStandaloneNplJson() {
+            const input = document.getElementById('nlp-cargo-input');
+            const payload = window.lastStandaloneNplPayload || (input?.value?.trim() ? buildCommercialNlpLocalPayload(input.value.trim()) : null);
+            if (!payload) {
+                if (typeof showToast === 'function') showToast('Ejecuta primero el Motor NPL para obtener el informe comparativo.');
+                return;
+            }
+            downloadJsonPayload(payload.manualImportPackage, 'seacharter-npl-databridge.json');
+        }
+
+        function printStandaloneNplReport() {
+            const input = document.getElementById('nlp-cargo-input');
+            const payload = window.lastStandaloneNplPayload || (input?.value?.trim() ? buildCommercialNlpLocalPayload(input.value.trim()) : null);
+            if (!payload) return;
+            openNplPrintWindow(`${payload.comparativeReport || ''}\n\n${payload.printableReport || ''}`.trim());
         }
 
         function generateFrozenReport() {
@@ -15311,62 +15525,6 @@
                 menu.appendChild(item);
             });
 
-            const nlpItem = document.createElement('li');
-            nlpItem.className = 'tools-dropdown-item advanced-nlp-menu-item';
-            nlpItem.innerHTML = `
-                <button type="button" id="advanced-nlp-toggle" class="tools-dropdown-action" aria-controls="advanced-nlp-panel" aria-expanded="false">
-                    <span>Motor NPL · Arma Secreta Data Bridge</span>
-                </button>
-                <div id="advanced-nlp-panel" class="advanced-nlp-panel" aria-label="Motor NPL · Arma Secreta Data Bridge">
-                    <div class="ai-work-card p-4">
-                        <div class="flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
-                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 font-sans">Motor NPL · Arma Secreta Data Bridge</h3>
-                        </div>
-                        <p class="text-xs text-slate-600 mb-4 leading-relaxed font-sans">Introduce texto extraído de imagen o documento. Este motor independiente capta datos, los normaliza y genera JSON para Data Bridge sin llamar a APIs, bases de datos ni otros módulos.</p>
-                        <div class="space-y-3">
-                            <textarea id="nlp-cargo-input" rows="4" class="input-gc w-full placeholder-slate-400 focus:outline-none font-sans leading-relaxed" placeholder="Ej: Fletamento de 20,000 TM de cemento desde Algeciras a Genoa con laycan inicio 2026-06-22. Se requiere buque con grúas (geared) con un flete de 35 USD/TM."></textarea>
-                            <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-600">
-                                <span class="flex items-center gap-2">
-                                    <i class="fa-solid fa-lock text-[#004e64]"></i>
-                                    Modo independiente sin escritura
-                                </span>
-                                <input type="checkbox" id="matching-live-update-toggle" class="rounded border-slate-300 text-[#004e64] focus:ring-[#004e64]" disabled>
-                            </label>
-                            <button id="btn-parse-nlp" onclick="parseCargoNLP()" class="w-full text-white font-black text-xs uppercase py-2.5 rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none tracking-wider">
-                                <i class="fa-solid fa-brain"></i> Convertir a JSON Data Bridge
-                            </button>
-                        </div>
-                        <div id="nlp-parsed-results" class="hidden mt-4 pt-3 border-t border-slate-100 text-[11px] space-y-1.5 font-sans text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                            <div class="text-[10px] font-black uppercase tracking-wider text-[#004e64] mb-2"><i class="fa-solid fa-circle-check text-[#25a18e] mr-1"></i> Datos procesados para carga manual:</div>
-                            <div class="flex justify-between border-b border-slate-200 pb-1.5"><span>Buque:</span><span id="nlp-res-type" class="font-bold text-slate-800">-</span></div>
-                            <div class="flex justify-between border-b border-slate-200 pb-1.5"><span>Cantidad / Qty:</span><span id="nlp-res-qty" class="font-bold text-slate-800">-</span></div>
-                            <div class="flex justify-between border-b border-slate-200 pb-1.5"><span>Puertos:</span><span id="nlp-res-pol" class="font-bold text-slate-800 truncate max-w-[150px]">-</span></div>
-                            <div class="flex justify-between border-b border-slate-200 pb-1.5"><span>Fechas:</span><span id="nlp-res-pod" class="font-bold text-slate-800 truncate max-w-[150px]">-</span></div>
-                            <div class="flex justify-between border-b border-slate-200 pb-1.5"><span>Flete venta:</span><span id="nlp-res-rate" class="font-bold text-slate-800">-</span></div>
-                            <div class="flex justify-between pb-0.5"><span>Persistencia:</span><span id="nlp-res-geared" class="font-bold text-slate-800">-</span></div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            menu.appendChild(nlpItem);
-
-            const nlpToggle = document.getElementById('advanced-nlp-toggle');
-            const nlpPanel = document.getElementById('advanced-nlp-panel');
-            if (nlpToggle && nlpPanel) {
-                nlpToggle.addEventListener('click', event => {
-                    event.stopPropagation();
-                    menu.classList.add('is-open');
-                    const advancedButton = document.getElementById('advanced-modules-btn');
-                    if (advancedButton) advancedButton.setAttribute('aria-expanded', 'true');
-                    const isOpen = nlpPanel.classList.toggle('is-open');
-                    nlpToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-                    if (isOpen) {
-                        setTimeout(() => document.getElementById('nlp-cargo-input')?.focus(), 0);
-                    }
-                });
-                nlpPanel.addEventListener('click', event => event.stopPropagation());
-            }
-
             const preferenceItem = document.createElement('li');
             preferenceItem.className = 'tools-dropdown-item advanced-preference-item';
             preferenceItem.innerHTML = `
@@ -15391,14 +15549,107 @@
             }
         }
 
+        function renderNplModuleMenu() {
+            const menu = document.getElementById('npl-module-menu');
+            if (!menu) return;
+            menu.innerHTML = '';
+
+            const nlpItem = document.createElement('li');
+            nlpItem.className = 'tools-dropdown-item advanced-nlp-menu-item';
+            nlpItem.innerHTML = `
+                <button type="button" id="advanced-nlp-toggle" class="tools-dropdown-action" aria-controls="advanced-nlp-panel" aria-expanded="false">
+                    <span>Motor NPL · Arma Secreta Data Bridge</span>
+                </button>
+                <div id="advanced-nlp-panel" class="advanced-nlp-panel" aria-label="Motor NPL · Arma Secreta Data Bridge">
+                    <div class="ai-work-card npl-work-card">
+                        <div class="npl-card-heading border-b border-slate-200">
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 font-sans">Motor NPL · Arma Secreta Data Bridge</h3>
+                            <p class="text-xs text-slate-600 leading-relaxed font-sans">Capta fotos, carga archivos o introduce texto. Este motor independiente analiza primero lo detectado y despues permite imprimir o exportar JSON para Data Bridge sin llamar a APIs, bases de datos ni otros módulos.</p>
+                        </div>
+                        <div class="npl-input-panel">
+                            <input type="file" id="nlp-file-input" class="hidden" accept=".pdf,.docx,.xlsx,.xls,.txt,.csv,.md,.png,.jpg,.jpeg,.webp,.gif,image/*" onchange="handleNplStandaloneFile(event)">
+                            <input type="file" id="nlp-camera-input" class="hidden" accept="image/*" capture="environment" onchange="handleNplStandaloneFile(event)">
+                            <div class="grid grid-cols-2 gap-2">
+                                <button type="button" onclick="document.getElementById('nlp-camera-input')?.click()" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-wider text-slate-700 shadow-sm hover:bg-slate-50">
+                                    <i class="fa-solid fa-camera mr-1.5 text-[#004e64]"></i> Captar Foto
+                                </button>
+                                <button type="button" onclick="document.getElementById('nlp-file-input')?.click()" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-wider text-slate-700 shadow-sm hover:bg-slate-50">
+                                    <i class="fa-solid fa-file-arrow-up mr-1.5 text-[#004e64]"></i> Cargar Archivo
+                                </button>
+                            </div>
+                            <div id="nlp-source-preview" class="hidden rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-900"></div>
+                            <textarea id="nlp-cargo-input" rows="4" class="input-gc w-full placeholder-slate-400 focus:outline-none font-sans leading-relaxed" placeholder="Ej: Fletamento de 20,000 TM de cemento desde Algeciras a Genoa con laycan inicio 2026-06-22. Se requiere buque con grúas (geared) con un flete de 35 USD/TM."></textarea>
+                            <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-600">
+                                <span class="flex items-center gap-2">
+                                    <i class="fa-solid fa-lock text-[#004e64]"></i>
+                                    Modo independiente sin escritura
+                                </span>
+                                <input type="checkbox" id="matching-live-update-toggle" class="rounded border-slate-300 text-[#004e64] focus:ring-[#004e64]" disabled>
+                            </label>
+                            <button id="btn-parse-nlp" onclick="parseCargoNLP()" class="w-full text-white font-black text-xs uppercase py-2.5 rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none tracking-wider">
+                                <i class="fa-solid fa-brain"></i> Analizar antes de JSON
+                            </button>
+                        </div>
+                        <div id="nlp-parsed-results" class="hidden npl-results-panel text-[11px] space-y-1.5 font-sans text-slate-700 bg-slate-50 rounded-lg border border-slate-100">
+                            <div class="text-[10px] font-black uppercase tracking-wider text-[#004e64] mb-2"><i class="fa-solid fa-circle-check text-[#25a18e] mr-1"></i> Informe comparativo previo:</div>
+                            <pre id="nlp-comparative-preview" class="whitespace-pre-wrap rounded-md border border-amber-200 bg-amber-50 p-2 text-slate-800"></pre>
+                            <div class="text-[10px] font-black uppercase tracking-wider text-[#004e64] pt-1">Datos procesados para carga manual:</div>
+                            <div class="npl-data-grid">
+                                <div class="npl-data-row flex justify-between"><span>Buque:</span><span id="nlp-res-type" class="font-bold text-slate-800">-</span></div>
+                                <div class="npl-data-row flex justify-between"><span>Cantidad / Qty:</span><span id="nlp-res-qty" class="font-bold text-slate-800">-</span></div>
+                                <div class="npl-data-row flex justify-between"><span>Puertos:</span><span id="nlp-res-pol" class="font-bold text-slate-800 truncate max-w-[150px]">-</span></div>
+                                <div class="npl-data-row flex justify-between"><span>Fechas:</span><span id="nlp-res-pod" class="font-bold text-slate-800 truncate max-w-[150px]">-</span></div>
+                                <div class="npl-data-row flex justify-between"><span>Flete venta:</span><span id="nlp-res-rate" class="font-bold text-slate-800">-</span></div>
+                                <div class="npl-data-row flex justify-between"><span>Persistencia:</span><span id="nlp-res-geared" class="font-bold text-slate-800">-</span></div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 pt-2">
+                                <button type="button" onclick="printStandaloneNplReport()" class="rounded-lg bg-emerald-700 px-3 py-2 text-[11px] font-black uppercase tracking-wider text-white hover:bg-emerald-800">
+                                    <i class="fa-solid fa-print mr-1.5"></i> Imprimir
+                                </button>
+                                <button type="button" onclick="downloadStandaloneNplJson()" class="rounded-lg bg-slate-800 px-3 py-2 text-[11px] font-black uppercase tracking-wider text-white hover:bg-slate-900">
+                                    <i class="fa-solid fa-file-arrow-down mr-1.5"></i> JSON
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            menu.appendChild(nlpItem);
+
+            const nlpToggle = document.getElementById('advanced-nlp-toggle');
+            const nlpPanel = document.getElementById('advanced-nlp-panel');
+            if (nlpToggle && nlpPanel) {
+                nlpToggle.addEventListener('click', event => {
+                    event.stopPropagation();
+                    menu.classList.add('is-open');
+                    const nplButton = document.getElementById('npl-module-btn');
+                    if (nplButton) nplButton.setAttribute('aria-expanded', 'true');
+                    const isOpen = nlpPanel.classList.toggle('is-open');
+                    nlpToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                    if (isOpen) {
+                        setTimeout(() => document.getElementById('nlp-cargo-input')?.focus(), 0);
+                    }
+                });
+                nlpPanel.addEventListener('click', event => event.stopPropagation());
+            }
+        }
+
         function renderNavbarModules() {
             renderPrimaryNavigation();
             renderAdvancedModulesMenu();
+            renderNplModuleMenu();
         }
 
         function closeAdvancedModulesMenu() {
             const menu = document.getElementById('advanced-modules-menu');
             const button = document.getElementById('advanced-modules-btn');
+            if (menu) menu.classList.remove('is-open');
+            if (button) button.setAttribute('aria-expanded', 'false');
+        }
+
+        function closeNplModuleMenu() {
+            const menu = document.getElementById('npl-module-menu');
+            const button = document.getElementById('npl-module-btn');
             const nlpPanel = document.getElementById('advanced-nlp-panel');
             const nlpToggle = document.getElementById('advanced-nlp-toggle');
             if (menu) menu.classList.remove('is-open');
@@ -15410,11 +15661,28 @@
         function toggleAdvancedModulesMenu(event) {
             if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
             closeMobileSessionMenu();
+            closeNplModuleMenu();
             const menu = document.getElementById('advanced-modules-menu');
             const button = document.getElementById('advanced-modules-btn');
             if (!menu) return;
             const isOpen = menu.classList.toggle('is-open');
             if (button) button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        }
+
+        function toggleNplModuleMenu(event) {
+            if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+            closeMobileSessionMenu();
+            closeAdvancedModulesMenu();
+            const menu = document.getElementById('npl-module-menu');
+            const button = document.getElementById('npl-module-btn');
+            if (!menu) return;
+            const isOpen = menu.classList.toggle('is-open');
+            if (button) button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            const nlpPanel = document.getElementById('advanced-nlp-panel');
+            const nlpToggle = document.getElementById('advanced-nlp-toggle');
+            if (nlpPanel) nlpPanel.classList.toggle('is-open', isOpen);
+            if (nlpToggle) nlpToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            if (isOpen) setTimeout(() => document.getElementById('nlp-cargo-input')?.focus(), 0);
         }
 
         window.userPreferences = userPreferences;
@@ -15553,6 +15821,14 @@
             if (!menu || !button || !menu.classList.contains('is-open')) return;
             if (menu.contains(event.target) || button.contains(event.target)) return;
             closeAdvancedModulesMenu();
+        });
+
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('npl-module-menu');
+            const button = document.getElementById('npl-module-btn');
+            if (!menu || !button || !menu.classList.contains('is-open')) return;
+            if (menu.contains(event.target) || button.contains(event.target)) return;
+            closeNplModuleMenu();
         });
 
         function switchGenconView(viewId) {
@@ -27861,12 +28137,17 @@ ADDITIONAL NOTES:
             const summary = document.getElementById('commercial-nlp-summary');
             const rows = document.getElementById('commercial-nlp-rows');
             const confirmation = document.getElementById('commercial-nlp-confirmation');
+            const comparativeBlock = document.getElementById('commercial-nlp-comparative-block');
             const printBlock = document.getElementById('commercial-nlp-print-block');
             const jsonBlock = document.getElementById('commercial-nlp-json-block');
+            const exportBtn = document.getElementById('commercial-nlp-export-json-btn');
             const vessels = Array.isArray(payload?.analysis?.vessels) ? payload.analysis.vessels : [];
             if (!panel || !rows) return;
 
-            summary.innerText = payload?.analysis?.summary || 'Análisis comercial local generado para carga manual.';
+            window.lastCommercialNplPayload = payload;
+            summary.innerText = payload?.comparativeReport
+                ? 'Informe comparativo generado. Revise los campos detectados antes de exportar el JSON.'
+                : (payload?.analysis?.summary || 'Análisis comercial local generado para carga manual.');
             rows.innerHTML = vessels.length ? vessels.map((vessel) => `
                 <tr class="hover:bg-slate-50">
                     <td class="p-3 border-b border-slate-100 font-semibold text-slate-800">${escapeHtml(vessel.vesselName || 'No presente')}</td>
@@ -27879,9 +28160,15 @@ ADDITIONAL NOTES:
                     <td colspan="4" class="p-4 text-center text-slate-500">No se detectaron buques en el material recibido.</td>
                 </tr>
             `;
-            confirmation.innerText = payload?.confirmation || 'Paquete JSON preparado para carga manual en SeaCharter Data Bridge. No se ha interactuado con base de datos, Prisma ni migraciones.';
+            confirmation.innerText = 'Analisis completado en memoria. El JSON queda disponible solo despues de revisar el informe comparativo previo.';
+            if (comparativeBlock) comparativeBlock.innerText = payload?.comparativeReport || 'No hay informe comparativo disponible.';
             printBlock.innerText = payload?.printableReport || '';
             if (jsonBlock) jsonBlock.innerText = payload?.manualImportJson || JSON.stringify(payload?.manualImportPackage || {}, null, 2);
+            if (exportBtn) {
+                exportBtn.disabled = false;
+                exportBtn.title = 'Exportar JSON despues de revisar el informe comparativo.';
+                exportBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+            }
             panel.classList.remove('hidden');
         }
 
@@ -27907,7 +28194,7 @@ ADDITIONAL NOTES:
             try {
                 const payload = buildCommercialNlpLocalPayload(text);
                 renderCommercialNlpPanel(payload);
-                if (typeof showToast === 'function') showToast(payload.confirmation);
+                if (typeof showToast === 'function') showToast('Motor NPL: informe comparativo listo. Revise antes de exportar JSON.');
             } catch (error) {
                 console.error(error);
                 document.getElementById('errorBox').innerText = error.message;
@@ -27920,8 +28207,47 @@ ADDITIONAL NOTES:
         }
 
         function printCommercialNlpReport() {
-            const printText = document.getElementById('commercial-nlp-print-block')?.innerText || '';
+            const comparativeText = document.getElementById('commercial-nlp-comparative-block')?.innerText || '';
+            const reportText = document.getElementById('commercial-nlp-print-block')?.innerText || '';
+            const printText = `${comparativeText}\n\n${reportText}`.trim();
             if (!printText) return;
+            openNplPrintWindow(printText);
+        }
+
+        function downloadCommercialNlpJson() {
+            const payload = window.lastCommercialNplPayload;
+            const jsonText = document.getElementById('commercial-nlp-json-block')?.innerText || '';
+            if (!payload && !jsonText) {
+                if (typeof showToast === 'function') showToast('Primero analiza el archivo o texto para generar el informe comparativo.');
+                return;
+            }
+            if (payload?.manualImportPackage) {
+                downloadJsonPayload(payload.manualImportPackage, 'seacharter-npl-databridge.json');
+                return;
+            }
+            if (jsonText) {
+                try {
+                    downloadJsonPayload(JSON.parse(jsonText), 'seacharter-npl-databridge.json');
+                } catch (error) {
+                    console.error(error);
+                }
+            }
+        }
+
+        function downloadJsonPayload(payload, fileName) {
+            const blob = new Blob([JSON.stringify(payload || {}, null, 2)], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            if (typeof showToast === 'function') showToast('JSON NPL generado para carga manual en Data Bridge.');
+        }
+
+        function openNplPrintWindow(printText) {
             const printWindow = window.open('', '_blank', 'width=820,height=900');
             if (!printWindow) return;
             printWindow.document.write(`

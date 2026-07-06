@@ -2,7 +2,7 @@
     'use strict';
 
     const MODULE_NAME = 'SeaCharter NPL Secret Module';
-    const MODULE_VERSION = '1.0.0';
+    const MODULE_VERSION = '1.1.0';
     const DATA_BRIDGE_NOTICE = 'ESTE DOCUMENTO ES SOLO A TÍTULO INFORMATIVO. LOS CÁLCULOS DEFINITIVOS DEBEN REALIZARSE EN LA CALCULADORA SEACHARTER';
 
     function parseNumber(value) {
@@ -37,6 +37,79 @@
         const ownerInternalPrice = ownerCost * 1.15;
         const chartererSaleFreight = ownerInternalPrice / (1 - 0.0375);
         return { ownerInternalPrice, chartererSaleFreight };
+    }
+
+    function detectSourceProfile(text) {
+        const source = String(text || '');
+        const lower = source.toLowerCase();
+        const isPhoto = /\[(?:fotograf[ií]a|foto)\s+captada\s+por\s+motor\s+npl/i.test(source) || lower.includes('image/');
+        const isScannedPdf = /\[pdf\s+escaneado\s+captado\s+por\s+motor\s+npl/i.test(source);
+        const lineCount = source.split(/\n+/).filter((line) => line.trim()).length;
+        const wordCount = (source.match(/\b[\wÀ-ÿ.-]+\b/g) || []).length;
+        const numericCount = (source.match(/\d[\d.,]*/g) || []).length;
+
+        return {
+            sourceType: isPhoto ? 'Fotografia / imagen' : (isScannedPdf ? 'PDF escaneado sin texto OCR' : 'Texto o documento con texto extraible'),
+            lineCount,
+            wordCount,
+            numericCount,
+            requiresManualReview: isPhoto || isScannedPdf || wordCount < 12,
+            notes: isPhoto || isScannedPdf
+                ? 'La fuente no contiene OCR automatico. El usuario debe completar o corregir el texto visible antes de exportar JSON.'
+                : 'El analisis usa solo texto disponible localmente, sin inferir campos ausentes.'
+        };
+    }
+
+    function buildDetectionMatrix(analysis, sourceProfile) {
+        const vessel = analysis.vessels[0] || {};
+        const breakdown = vessel.costBreakdown || {};
+        const fields = [
+            ['Tipo de fuente', sourceProfile.sourceType, 'contexto'],
+            ['Buque', vessel.vesselName, 'dato comercial'],
+            ['DWT', vessel.dwt, 'dato tecnico'],
+            ['Fechas / Laycan', vessel.dates, 'operacion'],
+            ['Puertos / Ruta', vessel.ports, 'operacion'],
+            ['Cantidad', vessel.quantity, 'carga'],
+            ['OPEX', breakdown.opex, 'coste'],
+            ['CAPEX', breakdown.capex, 'coste'],
+            ['Bunker', breakdown.bunker, 'coste'],
+            ['Gastos portuarios / demoras', breakdown.portExpensesAndDemurrage, 'coste'],
+            ['Coste armador total', vessel.ownerCost, 'calculo/base'],
+            ['Precio interno armador +15%', vessel.ownerInternalPrice, 'calculo'],
+            ['Flete venta fletador', vessel.chartererSaleFreight, 'calculo']
+        ];
+
+        return fields.map(([field, value, category]) => {
+            const detected = typeof value === 'number' ? value > 0 : Boolean(String(value || '').trim());
+            return {
+                field,
+                category,
+                detected,
+                value: detected ? value : null,
+                status: detected ? 'Detectado' : 'No detectado',
+                action: detected ? 'Revisar contra documento original' : 'Completar manualmente antes de exportar si aplica'
+            };
+        });
+    }
+
+    function buildComparativeReport(analysis, sourceProfile, detectionMatrix) {
+        const detectedCount = detectionMatrix.filter((item) => item.detected).length;
+        const missingCount = detectionMatrix.length - detectedCount;
+        const lines = [
+            'INFORME COMPARATIVO PREVIO A JSON',
+            `Fuente analizada: ${sourceProfile.sourceType}`,
+            `Lectura local: ${sourceProfile.lineCount} linea(s), ${sourceProfile.wordCount} palabra(s), ${sourceProfile.numericCount} valor(es) numerico(s).`,
+            `Campos detectados: ${detectedCount} / ${detectionMatrix.length}`,
+            `Campos pendientes: ${missingCount}`,
+            sourceProfile.requiresManualReview ? 'Revision requerida: SI. Verificar o completar texto visible antes de exportar.' : 'Revision requerida: Verificacion comercial recomendada antes de exportar.',
+            '',
+            'Comparativa de deteccion:',
+            ...detectionMatrix.map((item) => `- ${item.field}: ${item.status}${item.detected ? ` -> ${item.value}` : ''}`),
+            '',
+            analysis.summary,
+            DATA_BRIDGE_NOTICE
+        ];
+        return lines.join('\n');
     }
 
     function extractCommercialData(text) {
@@ -98,6 +171,9 @@
 
     function buildDataBridgePackage(text) {
         const analysis = extractCommercialData(text);
+        const sourceProfile = detectSourceProfile(text);
+        const detectionMatrix = buildDetectionMatrix(analysis, sourceProfile);
+        const comparativeReport = buildComparativeReport(analysis, sourceProfile, detectionMatrix);
         const rows = analysis.vessels.map((vessel) =>
             `${vessel.vesselName || 'No presente'} | ${money(vessel.ownerCost)} | ${money(vessel.ownerInternalPrice)} | ${money(vessel.chartererSaleFreight)}`
         ).join('\n');
@@ -132,6 +208,11 @@
             serverWritePermission: false,
             extractionPolicy: 'strict_no_inference',
             warning: DATA_BRIDGE_NOTICE,
+            preExportAnalysis: {
+                sourceProfile,
+                comparativeReport,
+                detectionMatrix
+            },
             extractedData: analysis.vessels.map((vessel) => ({
                 vesselName: vessel.vesselName || null,
                 dwt: vessel.dwt || null,
@@ -160,6 +241,9 @@
             success: true,
             mode: 'standalone_secret_module_manual_data_bridge_import_only',
             analysis,
+            sourceProfile,
+            detectionMatrix,
+            comparativeReport,
             printableReport,
             manualImportPackage,
             manualImportJson: JSON.stringify(manualImportPackage, null, 2),
