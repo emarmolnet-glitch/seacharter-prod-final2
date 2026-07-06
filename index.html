@@ -13066,31 +13066,31 @@
 
             const origHtml = btn.innerHTML;
             if (!silent) {
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando en memoria...';
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando NPL...';
                 btn.disabled = true;
             }
 
             try {
-                const payload = buildCommercialNlpLocalPayload(text);
+                const payload = await buildStandaloneNplPayload(text);
                 window.lastStandaloneNplPayload = payload;
-                const vessel = payload.analysis.vessels[0] || {};
+                const vessel = getStandaloneNplDisplayData(payload);
                 const comparativePreview = document.getElementById('nlp-comparative-preview');
 
                 document.getElementById('nlp-res-type').innerText = vessel.vesselName || 'No presente';
                 document.getElementById('nlp-res-qty').innerText = vessel.quantity ? `${Number(vessel.quantity).toLocaleString('es-ES')} MT` : 'No presente';
                 document.getElementById('nlp-res-pol').innerText = vessel.ports || 'No presente';
                 document.getElementById('nlp-res-pod').innerText = vessel.dates || 'No presente';
-                document.getElementById('nlp-res-rate').innerText = formatCommercialNlpMoney(vessel.chartererSaleFreight || 0);
-                document.getElementById('nlp-res-geared').innerText = 'Carga manual Data Bridge';
-                if (comparativePreview) comparativePreview.innerText = payload.comparativeReport || 'No hay informe comparativo disponible.';
+                document.getElementById('nlp-res-rate').innerText = vessel.freight ? formatCommercialNlpMoney(vessel.freight) : formatCommercialNlpMoney(vessel.chartererSaleFreight || 0);
+                document.getElementById('nlp-res-geared').innerText = payload.sourceId ? 'Blob NPL' : 'Carga manual Data Bridge';
+                if (comparativePreview) comparativePreview.innerText = payload.comparativeReport || buildNplBackendPreview(payload) || 'No hay informe comparativo disponible.';
                 
                 resultsDiv.classList.remove('hidden');
 
-                if (!silent) showToast("Motor NPL: informe comparativo listo. Revise antes de exportar JSON.");
+                if (!silent) showToast("Motor NPL: veredicto listo. Revise antes de exportar JSON.");
 
             } catch (err) {
                 console.error("NPL parsing failed: ", err);
-                if (!silent) showToast("No se pudo procesar el texto en el Motor NPL local.");
+                if (!silent) showToast("No se pudo procesar el texto en el Motor NPL.");
             } finally {
                 if (!silent) {
                     btn.innerHTML = origHtml;
@@ -28131,6 +28131,59 @@ ADDITIONAL NOTES:
                 throw new Error('Motor NPL independiente no disponible.');
             }
             return window.SeaCharterNplSecretModule.buildDataBridgePackage(text);
+        }
+
+        async function buildStandaloneNplPayload(text) {
+            try {
+                const response = await fetch('/api/npl-analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                if (!response.ok) throw new Error(`Motor NPL backend HTTP ${response.status}`);
+                const payload = await response.json();
+                payload.manualImportPackage = payload;
+                payload.manualImportJson = JSON.stringify(payload, null, 2);
+                payload.printableReport = buildNplBackendPreview(payload);
+                return payload;
+            } catch (error) {
+                console.warn('Motor NPL backend no disponible; usando motor local.', error);
+                return buildCommercialNlpLocalPayload(text);
+            }
+        }
+
+        function getStandaloneNplDisplayData(payload) {
+            if (payload?.datosCriticos) {
+                return {
+                    vesselName: 'Oferta maritime',
+                    quantity: payload.datosCriticos.cantidadCarga || 0,
+                    ports: [payload.datosCriticos.puertoCarga, payload.datosCriticos.puertoDescarga].filter(Boolean).join(' / '),
+                    dates: payload.datosCriticos.laycan || '',
+                    freight: payload.datosCriticos.flete || 0
+                };
+            }
+            return payload?.analysis?.vessels?.[0] || {};
+        }
+
+        function buildNplBackendPreview(payload) {
+            if (!payload?.datosCriticos) return '';
+            const data = payload.datosCriticos;
+            const decision = payload.motorDecision || {};
+            return [
+                'INFORME MOTOR NPL INDEPENDIENTE',
+                `Arquitectura: ${payload.arquitectura || 'Ingesta -> Inferencia -> Veredicto'}`,
+                `Fuente Blob: ${payload.sourceId || 'No persistida'}`,
+                `Flete: ${data.flete ?? 'No detectado'} ${data.fleteUnidad || ''}`.trim(),
+                `Laycan: ${data.laycan || 'No detectado'}`,
+                `Cantidad: ${data.cantidadCarga ?? 'No detectada'} ${data.cantidadUnidad || ''}`.trim(),
+                `Puertos: ${(data.puertoCarga || 'No detectado')} / ${(data.puertoDescarga || 'No detectado')}`,
+                `Demurrage: ${data.condicionesDemurrage || 'No detectado'}`,
+                `Armador: ${decision.veredictoArmador || 'No calculado'}`,
+                `Fletador: ${decision.veredictoFletador || 'No calculado'}`,
+                `Recomendacion: ${decision.recomendacion || 'No calculada'}`,
+                `Veredicto final: ${payload.veredictoFinal || 'No calculado'}`,
+                payload?.informe?.resumen || ''
+            ].filter(Boolean).join('\n');
         }
 
         function renderCommercialNlpPanel(payload) {
