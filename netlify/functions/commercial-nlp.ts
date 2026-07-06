@@ -1,7 +1,5 @@
 import type { Config } from "@netlify/functions";
 import OpenAI from "openai";
-import { db } from "../../db/index.js";
-import { externalPriorityRecords } from "../../db/schema.js";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -10,29 +8,35 @@ const jsonHeaders = {
   "cache-control": "no-store",
 };
 
-const SYSTEM_INSTRUCTION = `"ROL: MOTOR COMERCIAL INTEGRADO - RODAHMAR SHIPPING SL"
+const SYSTEM_INSTRUCTION = `Actúa como el motor comercial de Rodahmar Shipping SL. Tu función es analizar, calcular y preparar paquetes de datos para carga manual en SeaCharter Data Bridge. Queda estrictamente prohibido intentar acceder, modificar o actualizar la base de datos o el esquema (Prisma).
 
-1. ANÁLISIS COMERCIAL (Modo Informativo):
+Modo de Operación: El componente debe procesar textos/imágenes mediante parsing, aplicar la lógica de cálculo Cost-Plus definida en esta instrucción y generar salidas en formato tabla e informe imprimible.
 
-Al recibir texto o imagen, extrae datos de buques (Nombre, IMO, DWT) y carga (POL/POD, Cantidad, Laycan).
+Integridad de Datos (Prohibición de Migraciones): El componente NO tiene permisos para interactuar con la base de datos, ejecutar migraciones de Prisma o modificar el esquema de datos del despliegue. Cualquier transferencia de datos hacia el Data Bridge debe ser mediante la generación de archivos o bloques JSON para carga manual.
 
-Cálculo 'Cost-Plus': Suma OPEX, CAPEX, bunker de posicionamiento y gastos portuarios (considerando demoras en puertos complejos).
+Configuración de Salida: El resultado siempre debe presentar un Panel de decisión tabulado, un bloque de texto para impresión con advertencia de Uso Informativo y un bloque de código JSON para importación manual.
 
-Márgenes en Cascada:
+1. ANÁLISIS DE DATOS (Estricto):
 
-Precio Interno Armador = Coste Total * 1.15.
+Extrae de la captura o texto únicamente los datos presentes (Nombre del buque, DWT, Fechas, Puertos, Cantidad). No infieras datos ausentes.
 
-Flete Venta Fletador = (Precio Interno / 0.9625) * 1.10. (Esto garantiza margen del 10% neto tras comisión 3.75% PUS).
+Cálculo 'Cost-Plus' (Informativo):
 
-2. SALIDA Y PERSISTENCIA:
+Costo Armador Total: Suma OPEX diario, CAPEX, bunker de posicionamiento y gastos portuarios (incluyendo demoras).
 
-Panel de Decisión (Pantalla): Muestra tabla: Buque | Coste Armador | Precio Int. Armador (+15%) | Flete Venta Fletador (10%).
+Precio Interno Armador: Aplica un margen del 15% sobre el costo armador.
 
-Reporte Imprimible: Genera un bloque de texto formateado (Cabecera, tabla, desglose) con la advertencia: 'ESTE DOCUMENTO ES SOLO A TÍTULO INFORMATIVO. LOS CÁLCULOS DEFINITIVOS DEBEN REALIZARSE EN LA CALCULADORA SEACHARTER'.
+Flete Venta Fletador: Aplica un margen del 10% sobre el Precio Interno, ajustando con la fórmula: Precio_Fletador = Precio_Interno / (1 - 0.0375) para garantizar el 10% neto tras comisión del 3.75% PUS.
 
-Sincronización: Clasifica los buques como 'Registros Externos Prioritarios' e inyéctalos en la cola del Motor de Coincidencia. Confirma siempre con el mensaje: "Datos inyectados correctamente en el Motor de Coincidencia. Pendientes de envío a Data Bridge como parte del paquete consolidado."
+2. SALIDA DE DATOS Y EXPORTACIÓN:
 
-REGLA DE ORO: Bajo ninguna circunstancia este motor debe realizar operaciones automáticas en la Calculadora. Su función es informar, tabular y persistir datos para que el usuario finalice el cálculo de forma manual.`;
+Panel de Decisión (Pantalla): Muestra tabla: Buque | Coste Armador Total | Precio Int. Armador (+15%) | Flete Venta Fletador (10%).
+
+Informe para Impresión: Genera un bloque de texto estructurado con cabecera profesional y la advertencia: 'ESTE DOCUMENTO ES SOLO A TÍTULO INFORMATIVO. LOS CÁLCULOS DEFINITIVOS DEBEN REALIZARSE EN LA CALCULADORA SEACHARTER'.
+
+Paquete JSON (Para Carga Manual): Genera un bloque de código JSON con los datos extraídos y calculados listo para copiar/pegar en la función de importación manual de SeaCharter Data Bridge.
+
+REGLA DE ORO (No Migraciones): Este motor NO debe realizar ninguna acción de base de datos ni interactuar con migraciones de Prisma. La transferencia de datos a tu sistema se hará única y exclusivamente mediante la carga manual del archivo/bloque JSON que proporciones.`;
 
 function textValue(...values: unknown[]) {
   const found = values.find((value) => value !== undefined && value !== null && String(value).trim() !== "");
@@ -53,7 +57,7 @@ function pickObject(value: unknown): AnyRecord {
 
 function calculateCascade(totalCost: number) {
   const ownerInternalPrice = totalCost * 1.15;
-  const chartererSaleFreight = (ownerInternalPrice / 0.9625) * 1.10;
+  const chartererSaleFreight = ownerInternalPrice / (1 - 0.0375);
   return { ownerInternalPrice, chartererSaleFreight };
 }
 
@@ -65,24 +69,21 @@ function normalizeAnalysis(raw: unknown) {
     const totalCost = numberValue(vessel.totalCost, vessel.ownerCost, vessel.costeTotal, vessel.costeArmador);
     const cascade = calculateCascade(totalCost);
     return {
-      vesselName: textValue(vessel.vesselName, vessel.name, vessel.buque, "TBN"),
-      imo: textValue(vessel.imo, vessel.IMO, vessel.imoNumber, "N/A"),
-      openCountry: textValue(vessel.openCountry, vessel.open, vessel.openPais, "N/A"),
+      vesselName: textValue(vessel.vesselName, vessel.name, vessel.buque),
       dwt: Math.round(numberValue(vessel.dwt, vessel.DWT)),
-      pol: textValue(vessel.pol, vessel.POL, parsed.pol, "N/A"),
-      pod: textValue(vessel.pod, vessel.POD, parsed.pod, "N/A"),
-      cargoQuantity: numberValue(vessel.cargoQuantity, vessel.quantity, vessel.cantidad, parsed.cargoQuantity),
-      laycan: textValue(vessel.laycan, parsed.laycan, "N/A"),
+      dates: textValue(vessel.dates, vessel.fechas, vessel.laycan, parsed.dates, parsed.fechas, parsed.laycan),
+      ports: textValue(vessel.ports, vessel.puertos, vessel.pol && vessel.pod ? `${vessel.pol} / ${vessel.pod}` : "", parsed.ports, parsed.puertos),
+      quantity: numberValue(vessel.quantity, vessel.cantidad, vessel.cargoQuantity, parsed.quantity, parsed.cantidad, parsed.cargoQuantity),
       ownerCost: totalCost,
       ownerInternalPrice: cascade.ownerInternalPrice,
       chartererSaleFreight: cascade.chartererSaleFreight,
       costBreakdown: pickObject(vessel.costBreakdown),
     };
-  }).filter((vessel) => vessel.vesselName && vessel.vesselName !== "TBN");
+  }).filter((vessel) => vessel.vesselName);
 
   return {
     documentType: textValue(parsed.documentType, parsed.tipoDocumento, "Documento comercial"),
-    summary: textValue(parsed.summary, parsed.resumen, "Análisis comercial informativo generado."),
+    summary: textValue(parsed.summary, parsed.resumen, "Análisis comercial local generado para carga manual."),
     vessels,
   };
 }
@@ -94,7 +95,7 @@ async function extractWithOpenAI(payload: AnyRecord) {
   const content: any[] = [
     {
       type: "input_text",
-      text: `Extrae buques y cargas del siguiente material. Devuelve solo JSON con documentType, summary y vessels[]. Cada vessel debe incluir vesselName, imo, openCountry, dwt, pol, pod, cargoQuantity, laycan, totalCost y costBreakdown {opex, capex, bunkerPositioning, portExpenses, delayAllowance}. Si falta un coste, usa 0 y explica la laguna en summary.\n\nDOCUMENTO:\n${text}`,
+      text: `Extrae exclusivamente los datos presentes en el siguiente material. No infieras datos ausentes. Devuelve solo JSON con documentType, summary y vessels[]. Cada vessel debe incluir vesselName, dwt, dates, ports, quantity, totalCost y costBreakdown {opex, capex, bunkerPositioning, portExpenses, delayAllowance}. Si falta un dato textual, usa cadena vacía. Si falta un coste, usa 0 y explica la laguna en summary.\n\nDOCUMENTO:\n${text}`,
     },
   ];
 
@@ -128,13 +129,10 @@ async function extractWithOpenAI(payload: AnyRecord) {
                 additionalProperties: false,
                 properties: {
                   vesselName: { type: "string" },
-                  imo: { type: "string" },
-                  openCountry: { type: "string" },
                   dwt: { type: "number" },
-                  pol: { type: "string" },
-                  pod: { type: "string" },
-                  cargoQuantity: { type: "number" },
-                  laycan: { type: "string" },
+                  dates: { type: "string" },
+                  ports: { type: "string" },
+                  quantity: { type: "number" },
                   totalCost: { type: "number" },
                   costBreakdown: {
                     type: "object",
@@ -149,7 +147,7 @@ async function extractWithOpenAI(payload: AnyRecord) {
                     required: ["opex", "capex", "bunkerPositioning", "portExpenses", "delayAllowance"],
                   },
                 },
-                required: ["vesselName", "imo", "openCountry", "dwt", "pol", "pod", "cargoQuantity", "laycan", "totalCost", "costBreakdown"],
+                required: ["vesselName", "dwt", "dates", "ports", "quantity", "totalCost", "costBreakdown"],
               },
             },
           },
@@ -162,42 +160,54 @@ async function extractWithOpenAI(payload: AnyRecord) {
   return JSON.parse(response.output_text || "{\"vessels\":[]}");
 }
 
-async function persistVessels(vessels: ReturnType<typeof normalizeAnalysis>["vessels"], rawPayload: unknown) {
-  if (!vessels.length) return [];
-  return db.insert(externalPriorityRecords).values(vessels.map((vessel) => ({
-    source: "commercial_nlp",
-    priority: 100,
-    status: "pending_databridge",
-    vesselName: vessel.vesselName,
-    imo: vessel.imo,
-    openCountry: vessel.openCountry,
-    dwt: vessel.dwt,
-    pol: vessel.pol,
-    pod: vessel.pod,
-    cargoQuantity: String(vessel.cargoQuantity),
-    laycan: vessel.laycan,
-    ownerCost: String(vessel.ownerCost),
-    ownerInternalPrice: String(vessel.ownerInternalPrice),
-    chartererSaleFreight: String(vessel.chartererSaleFreight),
-    rawPayload: { ...vessel, sourcePayload: rawPayload },
-  }))).returning();
-}
-
 function buildPrintableReport(analysis: ReturnType<typeof normalizeAnalysis>) {
   const money = (value: number) => `USD ${value.toLocaleString("es-ES", { maximumFractionDigits: 2 })}`;
   const rows = analysis.vessels.map((vessel) =>
-    `${vessel.vesselName} | ${vessel.imo} | ${money(vessel.ownerCost)} | ${money(vessel.ownerInternalPrice)} | ${money(vessel.chartererSaleFreight)}`,
+    `${vessel.vesselName} | ${money(vessel.ownerCost)} | ${money(vessel.ownerInternalPrice)} | ${money(vessel.chartererSaleFreight)}`,
   ).join("\n");
   return [
-    "RODAHMAR SHIPPING SL - MOTOR COMERCIAL INTEGRADO",
+    "RODAHMAR SHIPPING SL - MOTOR COMERCIAL LOCAL",
     `Documento: ${analysis.documentType}`,
     `Fecha: ${new Date().toISOString().slice(0, 10)}`,
     "",
-    "Buque | IMO | Coste Armador | Precio Int. Armador (+15%) | Flete Venta Fletador (10%)",
+    "Datos extraídos estrictamente del material recibido:",
+    ...analysis.vessels.map((vessel) => `- Buque: ${vessel.vesselName || "No presente"} | DWT: ${vessel.dwt || "No presente"} | Fechas: ${vessel.dates || "No presente"} | Puertos: ${vessel.ports || "No presente"} | Cantidad: ${vessel.quantity || "No presente"}`),
+    "",
+    "Panel de Decisión",
+    "Buque | Coste Armador Total | Precio Int. Armador (+15%) | Flete Venta Fletador (10%)",
     rows || "Sin buques detectados.",
     "",
     "ESTE DOCUMENTO ES SOLO A TÍTULO INFORMATIVO. LOS CÁLCULOS DEFINITIVOS DEBEN REALIZARSE EN LA CALCULADORA SEACHARTER",
   ].join("\n");
+}
+
+function buildManualImportPackage(analysis: ReturnType<typeof normalizeAnalysis>, llmResult: unknown) {
+  return {
+    source: "Rodahmar Shipping SL commercial NLP local engine",
+    preparedFor: "SeaCharter Data Bridge manual import",
+    preparedAt: new Date().toISOString(),
+    databaseAction: "none",
+    prismaAction: "none",
+    extractionPolicy: "strict_no_inference",
+    systemInstruction: "Prompt Maestro Rodahmar Shipping SL - No Migraciones",
+    extractedData: analysis.vessels.map((vessel) => ({
+      vesselName: vessel.vesselName || null,
+      dwt: vessel.dwt || null,
+      dates: vessel.dates || null,
+      ports: vessel.ports || null,
+      quantity: vessel.quantity || null,
+      ownerTotalCost: vessel.ownerCost || null,
+      ownerInternalPricePlus15Percent: vessel.ownerInternalPrice || null,
+      chartererSaleFreight: vessel.chartererSaleFreight || null,
+      costBreakdown: vessel.costBreakdown,
+    })),
+    formulas: {
+      ownerTotalCost: "daily_opex + capex + positioning_bunker + port_expenses_including_demurrage",
+      ownerInternalPricePlus15Percent: "owner_total_cost * 1.15",
+      chartererSaleFreight: "owner_internal_price_plus_15_percent / (1 - 0.0375)",
+    },
+    rawExtraction: llmResult,
+  };
 }
 
 export default async (req: Request) => {
@@ -213,17 +223,19 @@ export default async (req: Request) => {
   try {
     const llmResult = await extractWithOpenAI(payload as AnyRecord);
     const analysis = normalizeAnalysis(llmResult);
-    const inserted = await persistVessels(analysis.vessels, llmResult);
+    const manualImportPackage = buildManualImportPackage(analysis, llmResult);
 
     return Response.json({
       success: true,
       systemInstruction: SYSTEM_INSTRUCTION,
-      mode: "informativo",
+      mode: "local_manual_import_only",
       analysis,
       printableReport: buildPrintableReport(analysis),
-      persistedCount: inserted.length,
-      confirmation: "Datos inyectados correctamente en el Motor de Coincidencia. Pendientes de envío a Data Bridge como parte del paquete consolidado.",
-      safetyNotice: "Modo informativo: el motor no modifica ni ejecuta operaciones automáticas en la Calculadora SeaCharter.",
+      manualImportPackage,
+      manualImportJson: JSON.stringify(manualImportPackage, null, 2),
+      persistedCount: 0,
+      confirmation: "Paquete JSON preparado para carga manual en SeaCharter Data Bridge. No se ha interactuado con base de datos, Prisma ni migraciones.",
+      safetyNotice: "Modo local informativo: el motor solo analiza, calcula y genera salida manual. No persiste ni sincroniza datos automáticamente.",
     }, { headers: jsonHeaders });
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo ejecutar el Motor Comercial Integrado.";
