@@ -13188,15 +13188,15 @@
                 }
                 console.log('Enviando lote validado:', payloadLimpio);
 
-                const dataBridgeSecret = typeof process !== 'undefined' && process?.env?.DATA_BRIDGE_API_SECRET
-                    ? process.env.DATA_BRIDGE_API_SECRET
+                const dataBridgeSecret = typeof process !== 'undefined' && process?.env?.API_SECRET
+                    ? process.env.API_SECRET
                     : '';
 
                 const bridgeResponse = await postDataBridgeReceiveVessels({
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: 'Bearer ' + dataBridgeSecret
+                        'Authorization': 'Bearer ' + dataBridgeSecret,
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(payloadLimpio)
                 });

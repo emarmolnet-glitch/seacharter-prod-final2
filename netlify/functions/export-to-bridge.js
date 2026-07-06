@@ -19,7 +19,7 @@ function isValidHttpUrl(value) {
 function getBearerToken(event) {
   const authorization = String(event.headers?.authorization || event.headers?.Authorization || "").trim();
   const match = authorization.match(/^Bearer\s+(.+)$/i);
-  return (match ? match[1].trim() : "") || String(process.env.VITE_DATA_BRIDGE_API_SECRET || process.env.DATA_BRIDGE_API_SECRET || "").trim();
+  return (match ? match[1].trim() : "") || String(process.env.API_SECRET || process.env.VITE_API_SECRET || "").trim();
 }
 
 function response(statusCode, body) {
@@ -60,12 +60,11 @@ export const handler = async (event) => {
   }
 
   try {
-    const bridgeResponse = await fetch(`${apiUrl.replace(/\/+$/, "")}/api/receive-audit`, {
+    const bridgeResponse = await fetch(`${apiUrl.replace(/\/+$/, "")}/api/receive-vessels`, {
       method: "POST",
       headers: {
+        "Authorization": "Bearer " + token,
         "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(payload),
     });
