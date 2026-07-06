@@ -1,5 +1,5 @@
 [build]
-  command = "echo 'Despliegue estático, saltando Prisma'"
+  command = "echo 'Despliegue estático - Sin migraciones'"
   publish = "."
   functions = "netlify/functions"
 
