@@ -1168,6 +1168,43 @@
             updateRadarWorkflowUi();
         };
 
+        function mapRadarVesselForReceiveVessels(vessel) {
+            const source = vessel && typeof vessel === 'object' ? vessel : {};
+            const cleanText = (value, fallback = 'N/A') => {
+                const text = String(value || '').trim();
+                return text || fallback;
+            };
+            const cleanNumber = (value) => {
+                const numeric = Number(value);
+                return Number.isFinite(numeric) ? numeric : 0;
+            };
+            const cleanDate = (value) => cleanText(value).split('T')[0] || 'N/A';
+            const rawImo = source.imo || source.IMO || source.imo_real || source.imoNumber;
+            const imo = parseInt(String(rawImo || '').replace(/\D/g, ''), 10);
+            const validImo = Number.isInteger(imo) && imo >= 1000000 && imo <= 9999999;
+
+            return {
+                imo: validImo ? imo : 0,
+                is_audit_required: !validImo,
+                vessel_name: cleanText(source.vessel_name || source.nombre || source.name),
+                dwt: cleanNumber(source.dwt || source.dwt_ajustado),
+                has_gears: Boolean(source.has_gears || source.gruas),
+                flag: cleanText(source.flag || source.bandera).slice(0, 3) || 'N/A',
+                last_port: cleanText(source.last_port || source.ultimo_puerto),
+                vessel_type: cleanText(source.vessel_type || source.tipo || source.type),
+                year_built: cleanNumber(source.year_built || source.built || source.anio_construccion),
+                owner_manager: cleanText(source.owner_manager || source.owner || source.manager || source.armador),
+                draft_meters: cleanNumber(source.draft_meters || source.calado || source.draft),
+                eta: cleanDate(source.eta || source.ETA || source.eta_puerto_carga || source.estimatedEta || source.etaEstimated),
+                detected_at: cleanDate(source.detected_at || source.detectedAt || source.timestamp || source.generatedAt || source.generated_at)
+            };
+        }
+
+        async function postDataBridgeExport(requestOptions) {
+            return fetch('/api/receive-vessels', requestOptions);
+        }
+        window.postDataBridgeExport = postDataBridgeExport;
+
         window.exportRadarReportToDataBridge = async function() {
             const statusEl = document.getElementById('radar-export-status');
             const report = window.radarWorkflowState.report;
@@ -1175,13 +1212,13 @@
             if (statusEl) statusEl.innerText = 'Enviando payload JSON...';
             try {
                 const dataBridgeToken = String(localStorage.getItem('seacharter_databridge_api_secret') || '').trim();
-                const response = await fetch('/api/data-bridge-export', {
+                const response = await postDataBridgeExport({
                     method: 'POST',
                     headers: Object.assign(
                         { 'content-type': 'application/json' },
                         dataBridgeToken ? { Authorization: `Bearer ${dataBridgeToken}` } : {}
                     ),
-                    body: JSON.stringify(normalizeBridgeDateFields(report))
+                    body: JSON.stringify(report.vessels.map(mapRadarVesselForReceiveVessels))
                 });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok || payload.success === false) throw new Error(payload.error || 'Data Bridge export failed');
@@ -1205,13 +1242,13 @@
             if (statusEl) statusEl.innerText = 'Enviando buque a Data Bridge...';
             try {
                 const dataBridgeToken = String(localStorage.getItem('seacharter_databridge_api_secret') || '').trim();
-                const response = await fetch('/api/data-bridge-export', {
+                const response = await postDataBridgeExport({
                     method: 'POST',
                     headers: Object.assign(
                         { 'content-type': 'application/json' },
                         dataBridgeToken ? { Authorization: `Bearer ${dataBridgeToken}` } : {}
                     ),
-                    body: JSON.stringify(normalizeBridgeDateFields(Object.assign({}, report, { vessels: [vessel] })))
+                    body: JSON.stringify([mapRadarVesselForReceiveVessels(vessel)])
                 });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok || payload.success === false) throw new Error(payload.error || 'Data Bridge export failed');

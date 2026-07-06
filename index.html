@@ -9828,7 +9828,7 @@
 
                     <!-- Generar Informe Split Button (SeaCharter Core PRO) -->
                     <div class="relative inline-flex w-full mt-4" id="report-split-button-container">
-                        <!-- Left Action: Enviar a Data Bridge (Automático) -->
+                        <!-- Left Action: Enviar a Data Bridge -->
                         <button id="btnGenerateReport" onclick="exportSelectedMatchingToAudit()" class="flex-grow bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase py-3 pl-4 pr-3 rounded-l-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border-r border-emerald-700/30 focus:outline-none cursor-pointer">
                             <i class="fa-solid fa-paper-plane"></i>
                             <span>Exportar Selección a Auditoría</span>
@@ -9843,8 +9843,8 @@
                             <button onclick="triggerReportOption('send', event)" class="w-full text-left px-4 py-2.5 text-xs text-slate-100 hover:bg-slate-700/80 transition flex items-center gap-3 font-bold border-none bg-transparent cursor-pointer">
                                 <i class="fa-solid fa-paper-plane text-emerald-400 w-4 text-center"></i>
                                 <div>
-                                    <div class="font-black uppercase tracking-wider text-[10px] text-emerald-400">Enviar a Data Bridge (Automático)</div>
-                                    <div class="text-[9px] text-slate-300 font-normal normal-case mt-0.5">Envío directo y silencioso a través de la red local.</div>
+                                    <div class="font-black uppercase tracking-wider text-[10px] text-emerald-400">Enviar a Data Bridge</div>
+                                    <div class="text-[9px] text-slate-300 font-normal normal-case mt-0.5">Envía manualmente la selección preparada del motor.</div>
                                 </div>
                             </button>
                             <div class="border-t border-slate-700 my-1"></div>
@@ -11963,30 +11963,6 @@
                 vessel.tceOwner = result.tceOwner;
                 vessel.totalDays = result.totalDays;
 
-                // Paso 1: Verificación de disparo (Core PRO)
-                const resultadosMotor = [{
-                    imo: Number(vessel.IMO || vessel.imo || imo) || 0,
-                    name: vessel.name || vessel.ShipName || name || "Unknown",
-                    type: vessel.type || vessel.vesselClass || vessel.specialtyType || "Bulk Carrier",
-                    draft: Number(vessel.draft) || 0,
-                    dwt: Number(vessel.dwt || targetDWT) || 0
-                }];
-
-                // Broadcast for Local-First synchronization (Core PRO)
-                // [DESACTIVACIÓN DE STREAMING] Deshabilitadas llamadas individuales automáticas para flujo por lotes y bajo demanda
-                /*
-                try {
-                    const localSyncChannel = new BroadcastChannel('seacharter_sync');
-                    localSyncChannel.postMessage({
-                        type: 'recibir-auditoria',
-                        vessels: resultadosMotor
-                    });
-                    localSyncChannel.close();
-                    console.log("Datos de buque para auditoría difundidos vía BroadcastChannel.");
-                } catch (bcErr) {
-                    console.error("Error broadcasting vessels for audit:", bcErr);
-                }
-                */
             }
         }
         window.ejecutarCalculadoraViajeYScoring = ejecutarCalculadoraViajeYScoring;
@@ -13032,19 +13008,16 @@
                 
                 console.log("[CONGELAR_REPORTE] Capturando instantánea de " + frozenVessels.length + " buques.");
                 
-                // Transmisión Segura
-                const broadcastChannel = new BroadcastChannel('seacharter_broadcast');
-                broadcastChannel.postMessage({
-                    type: 'CONGELAR_REPORTE',
+                localStorage.setItem('core_pro_frozen_report', JSON.stringify({
+                    format: 'seacharter.matching.export.v1',
                     created_at: new Date().toISOString(),
                     vessels: frozenVessels
-                });
-                broadcastChannel.close();
+                }));
                 
                 if (typeof showToast === 'function') {
-                    showToast("✅ Informe generado e instantánea enviada a Data Bridge.");
+                    showToast("✅ Informe preparado. Usa Enviar a Data Bridge para exportarlo.");
                 } else {
-                    alert("✅ Informe generado e instantánea enviada a Data Bridge.");
+                    alert("✅ Informe preparado. Usa Enviar a Data Bridge para exportarlo.");
                 }
             } catch (err) {
                 console.error("Error al generar el informe congelado:", err);
@@ -13062,7 +13035,7 @@
             if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
             const parsed = new Date(value);
             if (Number.isNaN(parsed.getTime())) return dateString;
-            return parsed.toISOString().slice(0, 10);
+            return parsed.toISOString().split('T')[0];
         }
         window.formatDateForBridge = formatDateForBridge;
 
@@ -13079,9 +13052,115 @@
             return isDateField ? formatDateForBridge(value) : value;
         }
 
+        function getStrictVesselString(source, keys, fallback = 'N/A') {
+            for (const key of keys) {
+                const value = source?.[key];
+                if (value !== undefined && value !== null && String(value).trim()) {
+                    return String(value).trim();
+                }
+            }
+            return fallback;
+        }
+
+        function getStrictVesselNumber(source, keys, fallback = 0) {
+            for (const key of keys) {
+                const value = source?.[key];
+                if (value !== undefined && value !== null && String(value).trim() !== '') {
+                    const numeric = Number(value);
+                    if (Number.isFinite(numeric)) return numeric;
+                }
+            }
+            return fallback;
+        }
+
+        function getStrictVesselImo(source) {
+            const rawImo = source?.imo_real || source?.imo || source?.imoNumber;
+            const imo = parseInt(String(rawImo).replace(/\D/g, ''), 10);
+            return Number.isInteger(imo) && imo >= 1000000 && imo <= 9999999 ? imo : 0;
+        }
+
+        function getStrictVesselBoolean(source, keys, fallback = false) {
+            for (const key of keys) {
+                const value = source?.[key];
+                if (value !== undefined && value !== null && value !== '') {
+                    return Boolean(value);
+                }
+            }
+            return fallback;
+        }
+
+        function normalizeStrictVesselDate(value) {
+            const rawValue = String(value || '').trim();
+            if (!rawValue || rawValue === 'N/A') return 'N/A';
+            return rawValue.split('T')[0] || 'N/A';
+        }
+
+        function mapVesselsForReceiveVessels(vessels) {
+            return vessels.map((vessel) => {
+                const source = vessel && typeof vessel === 'object' ? vessel : {};
+                const imo = getStrictVesselImo(source);
+                const vesselName = getStrictVesselString(source, ['name', 'vessel_name', 'nombre']);
+                const auditRequired = imo === 0;
+
+                if (auditRequired) {
+                    console.info(
+                        'Procesando buque con datos incompletos (necesita auditoría manual):',
+                        vesselName,
+                        source
+                    );
+                }
+
+                return {
+                    imo,
+                    is_audit_required: auditRequired,
+                    vessel_name: vesselName,
+                    dwt: getStrictVesselNumber(source, ['dwt', 'dwt_ajustado']),
+                    has_gears: getStrictVesselBoolean(source, ['has_gears', 'gruas']),
+                    flag: getStrictVesselString(source, ['flag', 'bandera']).slice(0, 3) || 'N/A',
+                    last_port: getStrictVesselString(source, ['last_port', 'ultimo_puerto']),
+                    vessel_type: getStrictVesselString(source, ['vessel_type', 'type', 'tipo']),
+                    year_built: getStrictVesselNumber(source, ['year_built', 'built', 'anio_construccion']),
+                    owner_manager: getStrictVesselString(source, ['owner_manager', 'owner', 'manager', 'armador']),
+                    draft_meters: getStrictVesselNumber(source, ['draft_meters', 'draft', 'calado']),
+                    eta: normalizeStrictVesselDate(getStrictVesselString(source, ['eta', 'ETA', 'eta_puerto_carga', 'estimatedEta', 'etaEstimated'], 'N/A')),
+                    detected_at: normalizeStrictVesselDate(getStrictVesselString(source, ['detected_at', 'detectedAt', 'timestamp', 'created_at', 'createdAt', 'generatedAt', 'generated_at'], 'N/A'))
+                };
+            });
+        }
+        window.mapVesselsForReceiveVessels = mapVesselsForReceiveVessels;
+
+        async function postDataBridgeReceiveVessels(requestOptions) {
+            return fetch('/api/receive-vessels', requestOptions);
+        }
+        window.postDataBridgeReceiveVessels = postDataBridgeReceiveVessels;
+
         async function exportSelectedMatchingToAudit() {
             try {
-                const auditVessels = Array.isArray(window.lastDataBridgeAuditVessels) ? window.lastDataBridgeAuditVessels : [];
+                const frozenReport = String(localStorage.getItem('core_pro_frozen_report') || '').trim();
+                if (!frozenReport) {
+                    alert('Error: No hay datos seleccionados para exportar');
+                    return;
+                }
+
+                let frozenPayload = null;
+                try {
+                    frozenPayload = JSON.parse(frozenReport);
+                } catch (parseErr) {
+                    alert('Error: No hay datos seleccionados para exportar');
+                    return;
+                }
+
+                const frozenVessels = Array.isArray(frozenPayload)
+                    ? frozenPayload
+                    : (Array.isArray(frozenPayload?.vessels) ? frozenPayload.vessels : []);
+                if (frozenVessels.length === 0) {
+                    alert('Error: No hay datos seleccionados para exportar');
+                    return;
+                }
+
+                const auditVessels = Array.isArray(window.lastDataBridgeAuditVessels) && window.lastDataBridgeAuditVessels.length > 0
+                    ? window.lastDataBridgeAuditVessels
+                    : frozenVessels;
                 const auditSelectionInputs = Array.from(document.querySelectorAll('.matching-audit-select'));
                 const selectedKeys = auditSelectionInputs
                     .filter(input => input.checked)
@@ -13102,62 +13181,43 @@
                     return;
                 }
 
-                const payload = normalizeBridgeDateFields(JSON.parse(JSON.stringify(vesselsToSend)));
-                console.log('Enviando datos:', payload);
+                const payloadLimpio = mapVesselsForReceiveVessels(JSON.parse(JSON.stringify(vesselsToSend)));
+                if (payloadLimpio.length === 0) {
+                    showToast("No hay buques para exportar a Data Bridge.");
+                    return;
+                }
+                console.log('Enviando lote validado:', payloadLimpio);
 
-                const dataBridgeToken = String(localStorage.getItem('seacharter_databridge_api_secret') || '').trim();
-                const bridgeResponse = await fetch('/api/data-bridge-export', {
+                const dataBridgeSecret = typeof process !== 'undefined' && process?.env?.DATA_BRIDGE_API_SECRET
+                    ? process.env.DATA_BRIDGE_API_SECRET
+                    : '';
+
+                const bridgeResponse = await postDataBridgeReceiveVessels({
                     method: 'POST',
-                    headers: Object.assign({
+                    headers: {
                         'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    }, dataBridgeToken ? { Authorization: `Bearer ${dataBridgeToken}` } : {}),
-                    body: JSON.stringify(normalizeBridgeDateFields({
-                        source: 'core-pro-matching-selected',
-                        createdAt: new Date().toISOString(),
-                        vessels: payload
-                    }))
+                        Authorization: 'Bearer ' + dataBridgeSecret
+                    },
+                    body: JSON.stringify(payloadLimpio)
                 });
 
+                const bridgeResponseText = await bridgeResponse.text();
                 let bridgePayload = null;
                 try {
-                    bridgePayload = await bridgeResponse.json();
+                    bridgePayload = bridgeResponseText ? JSON.parse(bridgeResponseText) : null;
                 } catch (parseErr) {
                     bridgePayload = null;
                 }
 
-                if (!bridgeResponse.ok) {
-                    throw new Error(bridgePayload?.error || bridgePayload?.message || `Data Bridge respondió ${bridgeResponse.status}`);
+                if (bridgeResponse.status !== 200) {
+                    console.error('Error del servidor:', bridgeResponseText);
+                    throw new Error(bridgePayload?.error || bridgePayload?.message || bridgeResponseText || `Data Bridge respondió ${bridgeResponse.status}`);
                 }
 
-                try {
-                    const localSyncChannel = new BroadcastChannel('seacharter_sync');
-                    localSyncChannel.postMessage({
-                        type: 'recibir-auditoria',
-                        source: 'core-pro-matching-selected',
-                        vessels: payload
-                    });
-                    localSyncChannel.close();
-                } catch (syncErr) {
-                    console.error("Error enviando selección a Data Bridge:", syncErr);
-                }
-
-                try {
-                    const broadcastChannel = new BroadcastChannel('seacharter_broadcast');
-                    broadcastChannel.postMessage({
-                        type: 'CONGELAR_REPORTE',
-                        source: 'core-pro-matching-selected',
-                        created_at: new Date().toISOString(),
-                        vessels: payload
-                    });
-                    broadcastChannel.close();
-                } catch (reportErr) {
-                    console.error("Error enviando instantánea seleccionada:", reportErr);
-                }
-
-                showToast(`✅ ${payload.length} buque${payload.length === 1 ? '' : 's'} enviado${payload.length === 1 ? '' : 's'} a Auditoría.`);
+                console.log('[Data Bridge] Buques enviados correctamente a /api/receive-vessels:', bridgePayload);
+                showToast(`✅ ${payloadLimpio.length} buque${payloadLimpio.length === 1 ? '' : 's'} enviado${payloadLimpio.length === 1 ? '' : 's'} a Auditoría.`);
             } catch (err) {
-                console.error("Error al exportar selección a auditoría:", err);
+                console.error('Error en exportación:', err?.status || 'client', err);
                 showToast("❌ Error al exportar la selección a auditoría.");
             }
         }
@@ -13293,15 +13353,7 @@
         }
 
         function requestAutomaticFrozenReportLoad() {
-            try {
-                const broadcastChannel = new BroadcastChannel('seacharter_broadcast');
-                broadcastChannel.postMessage({
-                    type: 'CARGAR_INFORME_AUTOMATICO'
-                });
-                broadcastChannel.close();
-            } catch (err) {
-                console.error("Error solicitando carga automática de informe:", err);
-            }
+            console.warn("La carga automática de informes congelados está deshabilitada. Usa el botón Enviar a Data Bridge.");
         }
 
         function updatePendingFrozenReportButton() {
@@ -13780,7 +13832,7 @@
                         typeof window.normalizeAisVesselForRadar === 'function' ? window.normalizeAisVesselForRadar(v) : v
                     )).filter(Boolean);
                 }
-                console.log("[AIS_MATCHING] Enviando snapshot crudo a Data Bridge:", {
+                console.log("[AIS_MATCHING] Preparando snapshot crudo para el motor de coincidencias:", {
                     vesselCount: radarSnapshot.vessels.length,
                     firstVessel: radarSnapshot.vessels[0] || null,
                     firstVesselFields: radarSnapshot.vessels[0] ? Object.keys(radarSnapshot.vessels[0]) : []
@@ -14471,25 +14523,21 @@
                     };
                 });
                 window.lastDataBridgeAuditVessels = arrayDeBuquesEncontrados;
+                if (arrayDeBuquesEncontrados.length > 0) {
+                    localStorage.setItem('core_pro_frozen_report', JSON.stringify(normalizeBridgeDateFields({
+                        format: 'seacharter.matching.export.v1',
+                        source: 'core-pro-matching-selected',
+                        created_at: new Date().toISOString(),
+                        vessels: arrayDeBuquesEncontrados
+                    })));
+                } else {
+                    localStorage.removeItem('core_pro_frozen_report');
+                }
 
                 // Al terminar el algoritmo y tener el array final de buques listos:
                 console.log("[DEBUG] Core PRO: Array top 15 de buques para auditar listo (longitud: " + arrayDeBuquesEncontrados.length + "). Payload:", arrayDeBuquesEncontrados);
 
-                // Broadcast for Local-First synchronization (Core PRO) only after the matching engine returns results.
-                if (arrayDeBuquesEncontrados.length > 0) {
-                    try {
-                        const localSyncChannel = new BroadcastChannel('seacharter_sync');
-                        localSyncChannel.postMessage({
-                            type: 'recibir-auditoria',
-                            source: 'core-pro-matching-top-15',
-                            vessels: arrayDeBuquesEncontrados
-                        });
-                        localSyncChannel.close();
-                        console.log("Enviados " + arrayDeBuquesEncontrados.length + " buques top Core PRO a la bandeja de Data Bridge vía BroadcastChannel.");
-                    } catch (bcErr) {
-                        console.error("Error broadcasting vessels for audit:", bcErr);
-                    }
-                } else {
+                if (arrayDeBuquesEncontrados.length === 0) {
                     console.log("Data Bridge no recibió datos porque el Motor de Coincidencia no produjo resultados.");
                 }
                 
@@ -34920,19 +34968,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
          * Sends a toggle request to the Electron Main Process or controls the web fallback modal
          */
         function toggleDataBridge() {
-            const shouldLoadFrozenReport = hasPendingFrozenReport();
-            if (shouldLoadFrozenReport) {
-                requestAutomaticFrozenReportLoad();
-            }
-
             if (window.dataBridgeAPI) {
                 window.dataBridgeAPI.toggleVisibility();
             } else {
-                if (shouldLoadFrozenReport && webDataBridgeVisible) {
-                    updateDataBridgeButtonState(true);
-                } else {
-                    toggleWebDataBridge();
-                }
+                toggleWebDataBridge();
             }
         }
 
