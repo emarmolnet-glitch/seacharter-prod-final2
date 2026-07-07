@@ -504,20 +504,18 @@
         }
 
         function getNplTechnicalJson(result = latestNplResult) {
-            if (!result) return null;
-            if (result.data_bridge_json) return result.data_bridge_json;
-            return {
-                origen_archivo: getNplDownloadBaseName(),
-                fecha_extraccion: new Date().toISOString().slice(0, 10),
-                buques_detectados: getNplVessels(result).map(vessel => ({
-                    nombre_buque: vessel.ship || 'N/A',
-                    imo: vessel.imo ? String(vessel.imo) : 'N/A',
-                    tipo: vessel.type || 'N/A',
-                    dwt: Number.isFinite(Number(vessel.dwt)) ? Math.trunc(Number(vessel.dwt)) : null,
-                    puerto_apertura: vessel.open_port || vessel.open_date || 'N/A',
-                    fechas_apertura: vessel.opening_dates || 'N/A'
-                }))
-            };
+            if (!result) return [];
+            if (Array.isArray(result.data_bridge_json)) return result.data_bridge_json;
+            if (Array.isArray(result.data_bridge_json?.buques_detectados)) return result.data_bridge_json.buques_detectados.map(vessel => ({
+                nombre_buque: vessel.nombre_buque || 'N/A',
+                imo: vessel.imo ? String(vessel.imo) : 'N/A',
+                dwt: Number.isFinite(Number(vessel.dwt)) ? Math.trunc(Number(vessel.dwt)) : 0
+            }));
+            return getNplVessels(result).map(vessel => ({
+                nombre_buque: vessel.ship || vessel.vesselName || 'N/A',
+                imo: vessel.imo ? String(vessel.imo) : 'N/A',
+                dwt: Number.isFinite(Number(vessel.dwt)) ? Math.trunc(Number(vessel.dwt)) : 0
+            }));
         }
 
         function updateNplComparativeSummary(result) {

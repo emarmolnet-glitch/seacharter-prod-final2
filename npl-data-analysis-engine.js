@@ -63,6 +63,10 @@
             /(?:buque|vessel|ship|mv|m\/v)\s*[:\-]\s*([^\n,;]+)/i,
             /(?:nombre\s+del\s+buque|vessel\s+name)\s*[:\-]\s*([^\n,;]+)/i
         ], normalized);
+        const imo = findText([
+            /\bimo\s*(?:no\.?|number|n[uú]mero)?\s*[:\-]?\s*(\d{7})\b/i,
+            /\b(\d{7})\b/
+        ], normalized);
         const dwt = findNumber([
             /(?:dwt|deadweight)\s*[:\-]?\s*([\d.,]+)/i,
             /([\d.,]+)\s*(?:dwt|mt\s+dwt|mts\s+dwt)\b/i
@@ -101,6 +105,7 @@
                 : 'No se detectaron campos comerciales suficientes en el material recibido.',
             vessels: hasVessel ? [{
                 vesselName,
+                imo,
                 dwt,
                 dates,
                 ports,

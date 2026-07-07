@@ -37,10 +37,7 @@ type Vessel = {
 type DataBridgeVessel = {
   nombre_buque: string;
   imo: string;
-  tipo: string;
-  dwt: number | null;
-  puerto_apertura: string;
-  fechas_apertura: string;
+  dwt: number;
 };
 
 const FIELD_NAMES = [
@@ -306,19 +303,12 @@ function toDataBridgeVessel(vessel: Vessel): DataBridgeVessel {
   return {
     nombre_buque: vessel.ship || "N/A",
     imo: vessel.imo ? String(vessel.imo) : "N/A",
-    tipo: vessel.type || "N/A",
-    dwt: Number.isFinite(vessel.dwt) ? Math.trunc(Number(vessel.dwt)) : null,
-    puerto_apertura: vessel.open_port || vessel.open_date || "N/A",
-    fechas_apertura: formatDateRange(vessel.opening_dates),
+    dwt: Number.isFinite(vessel.dwt) ? Math.trunc(Number(vessel.dwt)) : 0,
   };
 }
 
-function toDataBridgePayload(nativeData: Awaited<ReturnType<typeof extractNative>>, vessels: Vessel[]) {
-  return {
-    origen_archivo: nativeData.fileName.replace(/\.[^.]+$/, "") || "N/A",
-    fecha_extraccion: new Date().toISOString().slice(0, 10),
-    buques_detectados: vessels.map(toDataBridgeVessel),
-  };
+function toDataBridgePayload(vessels: Vessel[]) {
+  return vessels.map(toDataBridgeVessel);
 }
 
 function parseRows(rows: unknown[][]) {
@@ -400,7 +390,7 @@ export default async (req: Request) => {
     const nativeData = await extractNative(body);
     const vessels = parseVessels(nativeData);
     if (!vessels.length) throw new Error("Formato de archivo no reconocido");
-    const dataBridgeJson = toDataBridgePayload(nativeData, vessels);
+    const dataBridgeJson = toDataBridgePayload(vessels);
 
     const payload = {
       file_type: nativeData.fileType,

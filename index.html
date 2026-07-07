@@ -28412,6 +28412,19 @@ ADDITIONAL NOTES:
             return window.SeaCharterNplSecretModule.buildDataBridgePackage(text);
         }
 
+        function normalizeNplPureVesselArray(payload) {
+            if (Array.isArray(payload)) return payload.map((vessel) => ({
+                nombre_buque: vessel.nombre_buque || vessel.ship || vessel.vesselName || 'N/A',
+                imo: vessel.imo ? String(vessel.imo) : 'N/A',
+                dwt: Number.isFinite(Number(vessel.dwt)) ? Math.trunc(Number(vessel.dwt)) : 0
+            }));
+            if (Array.isArray(payload?.data_bridge_json)) return normalizeNplPureVesselArray(payload.data_bridge_json);
+            if (Array.isArray(payload?.data_bridge_json?.buques_detectados)) return normalizeNplPureVesselArray(payload.data_bridge_json.buques_detectados);
+            if (Array.isArray(payload?.analysis?.vessels)) return normalizeNplPureVesselArray(payload.analysis.vessels);
+            if (payload?.datosCriticos) return [];
+            return [];
+        }
+
         async function buildStandaloneNplPayload(text) {
             try {
                 const response = await fetch('/api/npl-analyze', {
@@ -28421,8 +28434,8 @@ ADDITIONAL NOTES:
                 });
                 if (!response.ok) throw new Error(`Motor NPL backend HTTP ${response.status}`);
                 const payload = await response.json();
-                payload.manualImportPackage = payload;
-                payload.manualImportJson = JSON.stringify(payload, null, 2);
+                payload.manualImportPackage = normalizeNplPureVesselArray(payload);
+                payload.manualImportJson = JSON.stringify(payload.manualImportPackage, null, 2);
                 payload.printableReport = buildNplBackendPreview(payload);
                 return payload;
             } catch (error) {

@@ -56,56 +56,11 @@
             '',
             DATA_BRIDGE_NOTICE
         ].join('\n');
-        const manualImportPackage = {
-            source: 'Rodahmar Shipping SL Motor NPL independiente',
-            module: {
-                name: MODULE_NAME,
-                version: MODULE_VERSION,
-                independence: 'standalone_browser_memory_only',
-                role: 'secret_weapon_data_capture_to_json'
-            },
-            dataAnalysisEngine: {
-                name: analysisEngine.name,
-                version: analysisEngine.version,
-                role: 'specialized_local_data_analysis'
-            },
-            preparedFor: 'SeaCharter Data Bridge manual import',
-            preparedAt: new Date().toISOString(),
-            persistenceMode: 'manual_copy_paste_only',
-            databaseAction: 'none',
-            prismaAction: 'none',
-            migrationAction: 'none',
-            serverWritePermission: false,
-            extractionPolicy: 'strict_no_inference',
-            warning: DATA_BRIDGE_NOTICE,
-            preExportAnalysis: {
-                sourceProfile,
-                comparativeReport,
-                detectionMatrix
-            },
-            extractedData: analysis.vessels.map((vessel) => ({
-                vesselName: vessel.vesselName || null,
-                dwt: vessel.dwt || null,
-                dates: vessel.dates || null,
-                ports: vessel.ports || null,
-                quantity: vessel.quantity || null,
-                ownerTotalCost: vessel.ownerCost || null,
-                ownerInternalPricePlus15Percent: vessel.ownerInternalPrice || null,
-                chartererSaleFreight: vessel.chartererSaleFreight || null,
-                costBreakdown: vessel.costBreakdown
-            })),
-            formulas: {
-                ownerTotalCost: 'opex + capex + bunker + port_expenses_and_demurrage',
-                ownerInternalPricePlus15Percent: 'owner_total_cost * 1.15',
-                chartererSaleFreight: 'owner_internal_price_plus_15_percent / (1 - 0.0375)'
-            },
-            decisionPanelColumns: {
-                vessel: 'Buque',
-                ownerTotalCost: 'Coste Armador',
-                ownerInternalPricePlus15Percent: 'Precio Int. Armador (+15%)',
-                chartererSaleFreight: 'Flete Venta Fletador (10%)'
-            }
-        };
+        const manualImportPackage = analysis.vessels.map((vessel) => ({
+            nombre_buque: vessel.vesselName || 'N/A',
+            imo: vessel.imo ? String(vessel.imo) : 'N/A',
+            dwt: Number.isFinite(Number(vessel.dwt)) ? Math.trunc(Number(vessel.dwt)) : 0
+        }));
 
         return {
             success: true,
