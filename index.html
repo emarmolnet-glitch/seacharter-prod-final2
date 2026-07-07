@@ -586,17 +586,19 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 0.55rem;
-            min-width: 218px;
-            padding: 0.45rem 0.7rem;
+            gap: 0.35rem;
+            width: min(100%, 168px);
+            min-width: 0;
+            padding: 0.36rem 0.48rem 0.46rem;
             border: 1px solid #CBD5E1;
-            border-radius: 0.75rem;
+            border-radius: 0.6rem;
             background: rgba(255, 255, 255, 0.82);
             box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
             backdrop-filter: blur(10px) saturate(1.08);
             -webkit-backdrop-filter: blur(10px) saturate(1.08);
             color: var(--text);
             overflow: hidden;
+            flex: 0 1 168px;
         }
 
         .connection-status-bar::before {
@@ -616,27 +618,30 @@
             z-index: 1;
             display: inline-flex;
             align-items: center;
-            gap: 0.38rem;
+            gap: 0.24rem;
+            min-width: 0;
             color: var(--connection-muted);
         }
 
         .connection-status-icon {
             display: inline-grid;
             place-items: center;
-            width: 1.65rem;
-            height: 1.65rem;
+            width: 1.38rem;
+            height: 1.38rem;
             border: 1px solid #CBD5E1;
-            border-radius: 0.65rem;
+            border-radius: 0.48rem;
             background: #F8FAFC;
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
             transition: color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+            flex: 0 0 auto;
+            font-size: 0.76rem;
         }
 
         .connection-status-label {
-            font-size: 0.58rem;
+            font-size: 0.5rem;
             font-weight: 800;
             line-height: 1;
-            letter-spacing: 0.11em;
+            letter-spacing: 0.06em;
             text-transform: uppercase;
             white-space: nowrap;
         }
@@ -644,9 +649,10 @@
         .connection-pipeline {
             position: relative;
             z-index: 1;
-            width: clamp(56px, 7vw, 92px);
-            height: 18px;
+            width: clamp(34px, 4vw, 50px);
+            height: 14px;
             color: var(--connection-accent);
+            flex: 0 1 50px;
         }
 
         .connection-pipeline svg {
@@ -676,12 +682,12 @@
         .connection-status-text {
             position: absolute;
             left: 50%;
-            bottom: 0.18rem;
+            bottom: 0.14rem;
             z-index: 2;
             transform: translateX(-50%);
-            font-size: 0.5rem;
+            font-size: 0.43rem;
             font-weight: 900;
-            letter-spacing: 0.14em;
+            letter-spacing: 0.08em;
             line-height: 1;
             text-transform: uppercase;
             color: color-mix(in srgb, var(--connection-accent) 82%, #0F172A);
@@ -760,9 +766,32 @@
 
         @media (max-width: 1180px) {
             .connection-status-bar {
-                order: -1;
-                flex: 1 1 100%;
-                width: 100%;
+                flex: 0 1 148px;
+                width: 148px;
+            }
+        }
+
+        @media (max-width: 767px) {
+            #connection-status-root {
+                min-width: 0;
+                flex: 0 1 auto;
+            }
+
+            .connection-status-bar {
+                width: 106px;
+                flex-basis: 106px;
+                gap: 0.28rem;
+                padding: 0.34rem 0.4rem;
+            }
+
+            .connection-status-label,
+            .connection-status-text {
+                display: none;
+            }
+
+            .connection-pipeline {
+                width: 32px;
+                flex-basis: 32px;
             }
         }
 
@@ -3896,8 +3925,12 @@
         }
 
         header #npl-module-menu {
-            width: min(92vw, 860px) !important;
-            overflow: visible !important;
+            width: min(calc(100vw - 2rem), 820px) !important;
+            max-height: calc(100vh - 5.75rem) !important;
+            right: 50% !important;
+            transform: translateX(42%) !important;
+            overflow: hidden auto !important;
+            overscroll-behavior: contain !important;
         }
 
         header #npl-module-btn.tools-dropdown-trigger {
@@ -3933,6 +3966,7 @@
             padding: 0.6rem;
             background: #f8fafc;
             border-top: 1px solid #e2e8f0;
+            max-width: 100%;
         }
 
         header .advanced-nlp-panel.is-open {
@@ -3945,10 +3979,12 @@
 
         header #npl-module-menu .npl-work-card {
             display: grid !important;
-            grid-template-columns: minmax(250px, 0.95fr) minmax(300px, 1.05fr) !important;
+            grid-template-columns: minmax(230px, 0.9fr) minmax(0, 1.1fr) !important;
             gap: 0.75rem !important;
             padding: 0.75rem !important;
             align-items: start !important;
+            max-width: 100% !important;
+            overflow: hidden !important;
         }
 
         header #npl-module-menu .npl-card-heading {
@@ -3967,6 +4003,7 @@
         header #npl-module-menu .npl-input-panel,
         header #npl-module-menu .npl-results-panel {
             min-width: 0 !important;
+            max-width: 100% !important;
         }
 
         header #npl-module-menu .npl-input-panel {
@@ -3978,6 +4015,7 @@
         header #npl-module-menu .npl-results-panel {
             margin-top: 0 !important;
             padding: 0.65rem !important;
+            overflow: hidden !important;
         }
 
         header .advanced-nlp-panel textarea#nlp-cargo-input {
@@ -4006,6 +4044,10 @@
             min-height: 72px !important;
             font-size: 0.62rem !important;
             line-height: 1.25 !important;
+            max-width: 100% !important;
+            overflow: auto !important;
+            overflow-wrap: anywhere !important;
+            white-space: pre-wrap !important;
         }
 
         header #npl-module-menu .npl-data-grid {
@@ -4019,6 +4061,17 @@
             border-radius: 6px !important;
             padding: 0.4rem 0.5rem !important;
             background: #ffffff !important;
+            min-width: 0 !important;
+            gap: 0.5rem !important;
+        }
+
+        header #npl-module-menu .npl-data-row span {
+            min-width: 0 !important;
+        }
+
+        header #npl-module-menu .npl-data-row span:last-child {
+            text-align: right !important;
+            overflow-wrap: anywhere !important;
         }
 
         header #npl-module-menu .npl-data-row:last-child {
@@ -4026,6 +4079,11 @@
         }
 
         @media (max-width: 900px) {
+            header #npl-module-menu {
+                right: 0 !important;
+                transform: none !important;
+            }
+
             header #npl-module-menu .npl-work-card {
                 grid-template-columns: 1fr !important;
             }
