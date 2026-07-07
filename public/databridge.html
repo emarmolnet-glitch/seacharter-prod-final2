@@ -240,10 +240,10 @@
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
                 <h2 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Motor NPL Independiente</h2>
-                <p class="text-[11px] text-slate-500 mt-1">Procesamiento stateless de documentos logísticos sin escritura en base de datos.</p>
+                <p class="text-[11px] text-slate-500 mt-1">Extracción nativa de documentos logísticos con envío a auditoría de Data Bridge.</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                <input id="npl-file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.csv,.json" onchange="handleNplFileSelected()" class="block w-64 text-xs text-slate-600 file:mr-3 file:rounded-lg file:border file:border-slate-200 file:bg-slate-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-100">
+                <input id="npl-file-input" type="file" accept=".pdf,.xlsx,.xls,.docx,.txt,.csv" onchange="handleNplFileSelected()" class="block w-64 text-xs text-slate-600 file:mr-3 file:rounded-lg file:border file:border-slate-200 file:bg-slate-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-100">
                 <button type="button" id="btn-process-npl" onclick="processNplDocument()" class="npl-action-button bg-[#1E3A8A] hover:bg-blue-900 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 shadow-sm transition duration-150">
                     <i class="fa-solid fa-file-import"></i>
                     <span>Procesar Documento</span>
@@ -426,16 +426,9 @@
             updateNplComparativeSummary(null);
             revokeNplPreviewUrl();
 
-            if (file && file.type.startsWith('image/')) {
-                latestNplPreviewUrl = URL.createObjectURL(file);
-                nplImagePreview.src = latestNplPreviewUrl;
-                nplImagePreviewWrap.classList.remove('hidden');
-                nplStatus.textContent = 'Imagen lista. Recorte o enfoque la zona de datos si puede; si no, la función cortará capturas anchas en izquierda/derecha.';
-            } else {
-                nplImagePreview.removeAttribute('src');
-                nplImagePreviewWrap.classList.add('hidden');
-                nplStatus.textContent = file ? `Archivo listo: ${file.name}` : 'Motor listo para procesar documentos.';
-            }
+            nplImagePreview.removeAttribute('src');
+            nplImagePreviewWrap.classList.add('hidden');
+            nplStatus.textContent = file ? `Archivo listo para extracción nativa: ${file.name}` : 'Motor listo para procesar documentos nativos.';
         }
 
         function showNplPasteToast() {
@@ -447,19 +440,6 @@
             }, 2200);
         }
 
-        function setNplFileFromClipboard(imageBlob) {
-            const extension = (imageBlob.type.split('/')[1] || 'png').replace(/[^a-z0-9.+-]/gi, '') || 'png';
-            const pastedFile = new File([imageBlob], `imagen-pegada-npl-${Date.now()}.${extension}`, {
-                type: imageBlob.type || 'image/png'
-            });
-            const dataTransfer = new DataTransfer();
-            dataTransfer.items.add(pastedFile);
-            nplFileInput.files = dataTransfer.files;
-            handleNplFileSelected();
-            showNplPasteToast();
-            addLog(`[INFO] ${getTimestamp()} - Motor NPL: imagen pegada desde portapapeles.`);
-        }
-
         function handleNplClipboardPaste(event) {
             if (event.defaultPrevented) return;
             if (motorNplPanel && motorNplPanel.style.display === 'none') return;
@@ -467,7 +447,8 @@
             const imageFile = clipboardFiles.find((file) => file.type && file.type.startsWith('image/'));
             if (imageFile) {
                 event.preventDefault();
-                setNplFileFromClipboard(imageFile);
+                nplStatus.textContent = 'Formato de archivo no reconocido. Use PDF, Excel o Word nativo.';
+                addLog(`[WARN] ${getTimestamp()} - Motor NPL: imagen rechazada; la extracción OCR está desactivada.`);
                 return;
             }
 
@@ -479,7 +460,8 @@
             if (!imageBlob) return;
 
             event.preventDefault();
-            setNplFileFromClipboard(imageBlob);
+            nplStatus.textContent = 'Formato de archivo no reconocido. Use PDF, Excel o Word nativo.';
+            addLog(`[WARN] ${getTimestamp()} - Motor NPL: imagen rechazada; la extracción OCR está desactivada.`);
         }
 
         function readFileAsBase64(file) {
@@ -555,14 +537,14 @@
             latestNplFileName = file.name;
             setNplExportState(false);
             nplResultPreview.classList.add('hidden');
-            nplStatus.textContent = `Procesando ${file.name}...`;
+            nplStatus.textContent = `Extrayendo texto nativo de ${file.name}...`;
             btnProcessNpl.disabled = true;
             btnProcessNpl.classList.add('opacity-70', 'cursor-wait');
-            addLog(`[SYNC] ${getTimestamp()} - Motor NPL: enviando documento para extracción stateless.`);
+            addLog(`[SYNC] ${getTimestamp()} - Motor NPL: enviando documento para extracción nativa.`);
 
             try {
                 const fileContent = await readFileAsBase64(file);
-                const response = await fetch('/.netlify/functions/npl-engine', {
+                const response = await fetch('/api/native-vessel-ingest', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

@@ -4,13 +4,9 @@
   functions = "netlify/functions"
 
 [build.environment]
-  # ESTO BLOQUEA LAS MIGRACIONES AUTOMÁTICAS
   SKIP_PRISMA_MIGRATE = "true"
   PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
-  NETLIFY_SKIP_BUILD_DATABASE = "true"
   NODE_ENV = "production"
-  # Mantenemos la conexión real para que tu app funcione
-  DATABASE_URL = "tu_valor_real_de_la_variable"
 
 [[headers]]
   for = "/*"
