@@ -11,8 +11,8 @@
 [functions]
   node_bundle = "esbuild"
 
-  [functions.external_node_modules]
-    include = ["@netlify/blobs", "ws"]
+[functions.external_node_modules]
+  include = ["@netlify/blobs", "ws"]
 
 [[headers]]
   for = "/*"
