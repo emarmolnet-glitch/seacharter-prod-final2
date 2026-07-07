@@ -14,11 +14,15 @@
     "cheerio": "^1.2.0",
     "geojson-path-finder": "^2.1.0",
     "jspdf": "^2.5.2",
+    "mammoth": "^1.12.0",
     "openai": "^6.45.0",
+    "pdf-parse": "^2.4.5",
+    "pg": "^8.22.0",
     "searoute-ts": "^2.0.0",
     "sharp": "^0.34.5",
     "vite": "^5.0.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "xlsx": "^0.18.5"
   },
   "browser": {
     "crypto": false,
@@ -27,6 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
+    "@types/pg": "^8.20.0",
     "@types/ws": "^8.18.1",
     "typescript": "^6.0.3"
   }
