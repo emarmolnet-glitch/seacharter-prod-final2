@@ -5,6 +5,7 @@
 
 [build.environment]
   SKIP_PRISMA_MIGRATE = "true"
+  PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
 
 [functions]
   node_bundler = "esbuild"
