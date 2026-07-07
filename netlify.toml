@@ -4,20 +4,20 @@
   functions = "netlify/functions"
 
 [build.environment]
-  # Bloqueo total de migraciones Prisma para evitar errores de despliegue
-  # Esto es seguro: tu Motor NPL funciona en memoria y no necesita la base de datos
-  NETLIFY_SKIP_BUILD_DATABASE = "true"
+  # ESTO ES LO QUE SOLUCIONA EL ERROR:
+  # Desactivamos completamente Prisma y la base de datos para este despliegue.
+  # Netlify no intentará realizar ninguna migración, solo construirá el código.
   SKIP_PRISMA_MIGRATE = "true"
   PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
+  NETLIFY_SKIP_BUILD_DATABASE = "true"
+  DATABASE_URL = "none"
   NODE_ENV = "production"
 
-# Configuración de cabeceras para seguridad (CORS/CSP)
 [[headers]]
   for = "/*"
   [headers.values]
     Content-Security-Policy = "default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * wss: https:; img-src * data: blob:; style-src * 'unsafe-inline';"
 
-# Redirecciones para asegurar que las funciones del Motor NPL sean accesibles
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
