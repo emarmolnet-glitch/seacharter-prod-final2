@@ -6353,7 +6353,7 @@
                                 <label id="label-pda-pol" class="text-emerald-400 font-bold">Gastos PDA POL ($)</label>
 	                                <div class="flex gap-1">
 	                                    <input type="number" id="pda-pol" class="input-gc required-use-highlight text-emerald-300 font-bold" value="8675" step="any" oninput="runEngine()">
-	                                    <button id="btn-estimate-pda-pol" onclick="autoFillPDA('pol')" class="required-use-highlight bg-slate-800 text-slate-400 px-2 rounded hover:text-white" title="Consultar Data Bridge o estimar algorítmicamente (GT/LOA/Manga)"><i class="fa-solid fa-rotate-right"></i></button>
+	                                    <button id="btn-estimate-pda-pol" onclick="autoFillPDA('pol')" class="required-use-highlight bg-slate-800 text-slate-400 px-2 rounded hover:text-white" title="Consultar Data Bridge o estimar algorítmicamente por DWT"><i class="fa-solid fa-rotate-right"></i></button>
 	                                </div>
 	                                <div id="pda-pol-status" class="hidden mt-1 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em]" role="status" aria-live="polite"></div>
 	                            </div>
@@ -6361,7 +6361,7 @@
 	                                <label id="label-pda-pod" class="text-emerald-400 font-bold">Gastos PDA POD ($)</label>
 	                                <div class="flex gap-1">
 	                                    <input type="number" id="pda-pod" class="input-gc required-use-highlight text-emerald-300 font-bold" value="10675" step="any" oninput="runEngine()">
-	                                    <button id="btn-estimate-pda-pod" onclick="autoFillPDA('pod')" class="required-use-highlight bg-slate-800 text-slate-400 px-2 rounded hover:text-white" title="Consultar Data Bridge o estimar algorítmicamente (GT/LOA/Manga)"><i class="fa-solid fa-rotate-right"></i></button>
+	                                    <button id="btn-estimate-pda-pod" onclick="autoFillPDA('pod')" class="required-use-highlight bg-slate-800 text-slate-400 px-2 rounded hover:text-white" title="Consultar Data Bridge o estimar algorítmicamente por DWT"><i class="fa-solid fa-rotate-right"></i></button>
 	                                </div>
 	                                <div id="pda-pod-status" class="hidden mt-1 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em]" role="status" aria-live="polite"></div>
 	                            </div>
@@ -18209,14 +18209,44 @@
 	            };
 	        }
 
-	        function calculateEmpiricalPDA(vesselData) {
-	            const multiplier = getPortMultiplier(vesselData.portName);
-	            const tasasAutoridad = vesselData.gt * 0.70 * multiplier; // Tonnage, Sanitary, Quay dues, Fenders
-	            const navManiobra = vesselData.loa * vesselData.beam * 6.0 * multiplier; // Pilotage, Towage & Mooring
-	            const muelleEstadia = (vesselData.loa * 0.75 * vesselData.totalDaysInPort) * multiplier; // Anchorage & Stay tax
-	            const agenciaVarios = (2000 + (vesselData.totalDaysInPort * 50)) * multiplier; // Agencia base plana + extras
+	        function calculateGlobalPdaEstimate(dwt) {
+	            const cleanDwt = Number(dwt);
+	            if (!Number.isFinite(cleanDwt) || cleanDwt <= 0) return 0;
+
+	            const anchors = [
+	                { dwt: 8250, amount: 14500 },
+	                { dwt: 17351, amount: 24500 },
+	                { dwt: 34743, amount: 42000 }
+	            ];
+	            const baseFee = 6500;
+	            const boundedDwt = Math.min(Math.max(cleanDwt, 3000), 60000);
+
+	            if (boundedDwt <= anchors[0].dwt) {
+	                const variableRate = (anchors[0].amount - baseFee) / anchors[0].dwt;
+	                return Math.round(baseFee + (boundedDwt * variableRate));
+	            }
+
+	            for (let index = 1; index < anchors.length; index += 1) {
+	                const lower = anchors[index - 1];
+	                const upper = anchors[index];
+	                if (boundedDwt <= upper.dwt) {
+	                    const tramoRate = (upper.amount - lower.amount) / (upper.dwt - lower.dwt);
+	                    return Math.round(lower.amount + ((boundedDwt - lower.dwt) * tramoRate));
+	                }
+	            }
+
+	            const largeShipRate = 0.78;
+	            return Math.round(anchors[2].amount + ((boundedDwt - anchors[2].dwt) * largeShipRate));
+	        }
+
+	        function calculateGlobalPdaEstimateBreakdown(vesselData) {
+	            const totalPDA = calculateGlobalPdaEstimate(vesselData.dwt);
+	            const tasasAutoridad = totalPDA * 0.38;
+	            const navManiobra = totalPDA * 0.32;
+	            const muelleEstadia = totalPDA * 0.18;
+	            const agenciaVarios = totalPDA * 0.12;
 	            return {
-	                totalPDA: tasasAutoridad + navManiobra + muelleEstadia + agenciaVarios,
+	                totalPDA,
 	                tasasAutoridad,
 	                navManiobra,
 	                muelleEstadia,
@@ -18246,8 +18276,8 @@
 	            const status = document.getElementById(`pda-${type}-status`);
 	            if (!status) return;
 	            const official = mode === 'official';
-	            status.className = `mt-1 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${official ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-300' : 'border-amber-400/40 bg-amber-500/10 text-amber-300'}`;
-	            status.innerHTML = `<i class="fa-solid ${official ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i><span>${official ? 'Cálculo Oficial' : 'Cálculo Estimado'}</span>`;
+	            status.className = `mt-1 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${official ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-300' : 'border-sky-400/40 bg-sky-500/10 text-sky-300'}`;
+	            status.innerHTML = `<i class="fa-solid ${official ? 'fa-circle-check' : 'fa-chart-line'}"></i><span>${official ? 'Cálculo Oficial' : 'Estimación Algorítmica Global'}</span>`;
 	        }
 
 	        async function autoFillPDA(type, showNotification = true) {
@@ -18300,7 +18330,8 @@
 	                calculation = null;
 	            }
 	            if (!calculation) {
-	                calculation = calculateEmpiricalPDA(vesselData);
+	                calculation = calculateGlobalPdaEstimateBreakdown(vesselData);
+	                calculationMode = 'global-estimate';
 	            }
 
 	            let { totalPDA, tasasAutoridad, navManiobra, muelleEstadia, agenciaVarios } = calculation;
@@ -18326,8 +18357,8 @@
 	            if (showNotification) {
 	                const podTag = type === 'pod' ? ' (+10% POD)' : '';
 	                const extraSurcharges = `${podTag}${liquidSurchargeTag}`;
-	                const sourceTag = calculationMode === 'official' ? ' | Data Bridge' : (loaFromInput > 0 || netTonnage > 0 ? ' | Datos buque reales aplicados' : '');
-	                const sourceLabel = calculationMode === 'official' ? 'Cálculo Oficial' : 'Cálculo Estimado';
+	                const sourceTag = calculationMode === 'official' ? ' | Data Bridge' : ' | Curva global DWT';
+	                const sourceLabel = calculationMode === 'official' ? 'Cálculo Oficial' : 'Estimación Algorítmica Global';
 	                showToast(`PDA ${type.toUpperCase()}: $${finalPDA.toLocaleString('en-US')} · ${sourceLabel}${extraSurcharges}<br><span class="text-[10px] text-emerald-300 mt-1 block font-mono">Nav/Maniobra: $${Math.round(navManiobra)} | Tasas: $${Math.round(tasasAutoridad)} | Agencia/Misc: $${Math.round(agenciaVarios)} | Muelle: $${Math.round(muelleEstadia)}${sourceTag}</span>`);
 	            }
 	            runEngine();
