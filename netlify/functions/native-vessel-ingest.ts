@@ -35,9 +35,13 @@ type Vessel = {
 };
 
 type DataBridgeVessel = {
-  nombre_buque: string;
+  vesselName: string;
   imo: string;
   dwt: number;
+};
+
+type DataBridgePayload = {
+  buques: DataBridgeVessel[];
 };
 
 const FIELD_NAMES = [
@@ -301,14 +305,16 @@ function formatDateRange(value: string | null) {
 
 function toDataBridgeVessel(vessel: Vessel): DataBridgeVessel {
   return {
-    nombre_buque: vessel.ship || "N/A",
+    vesselName: vessel.ship || "N/A",
     imo: vessel.imo ? String(vessel.imo) : "N/A",
     dwt: Number.isFinite(vessel.dwt) ? Math.trunc(Number(vessel.dwt)) : 0,
   };
 }
 
-function toDataBridgePayload(vessels: Vessel[]) {
-  return vessels.map(toDataBridgeVessel);
+function toDataBridgePayload(vessels: Vessel[]): DataBridgePayload {
+  return {
+    buques: vessels.map(toDataBridgeVessel),
+  };
 }
 
 function parseRows(rows: unknown[][]) {
