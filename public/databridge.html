@@ -256,6 +256,10 @@
                     <i class="fa-solid fa-file-pdf"></i>
                     <span>Imprimir</span>
                 </button>
+                <button type="button" id="btn-reset-npl" onclick="resetNPLEngine()" class="npl-action-button bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span>Cerrar consulta</span>
+                </button>
                 <button type="button" id="btn-close-npl" onclick="closeNPLEngine()" class="npl-action-button bg-white border border-slate-200 text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150">
                     <i class="fa-solid fa-xmark"></i>
                     <span>Salir</span>
@@ -501,8 +505,18 @@
 
         function getNplTechnicalJson(result = latestNplResult) {
             if (!result) return null;
+            if (result.data_bridge_json) return result.data_bridge_json;
             return {
-                vessels: getNplVessels(result)
+                origen_archivo: getNplDownloadBaseName(),
+                fecha_extraccion: new Date().toISOString().slice(0, 10),
+                buques_detectados: getNplVessels(result).map(vessel => ({
+                    nombre_buque: vessel.ship || 'N/A',
+                    imo: vessel.imo ? String(vessel.imo) : 'N/A',
+                    tipo: vessel.type || 'N/A',
+                    dwt: Number.isFinite(Number(vessel.dwt)) ? Math.trunc(Number(vessel.dwt)) : null,
+                    puerto_apertura: vessel.open_port || vessel.open_date || 'N/A',
+                    fechas_apertura: vessel.opening_dates || 'N/A'
+                }))
             };
         }
 
@@ -522,6 +536,12 @@
             const overflow = names.length > 12 ? ` y ${names.length - 12} más` : '';
             nplComparativeSummaryText.textContent = `Se han detectado ${detected} buques. Detalle: ${briefNames}${overflow}.`;
             nplComparativeSummary.classList.remove('hidden');
+        }
+
+        function hideNplAnalysisPanels() {
+            updateNplComparativeSummary(null);
+            nplResultPreview.textContent = '';
+            nplResultPreview.classList.add('hidden');
         }
 
         async function processNplDocument() {
@@ -565,11 +585,9 @@
                     : getNplVessels(result).length;
                 const cargoCount = Array.isArray(result?.cargoes) ? result.cargoes.length : 0;
                 nplStatus.textContent = result
-                    ? `Extracción completada: ${cargoCount} carga(s), ${vesselCount} buque(s).`
+                    ? `Extracción completada: ${cargoCount} carga(s), ${vesselCount} buque(s). Use JSON o Imprimir.`
                     : 'Extracción completada sin datos verificables. El motor devolvió null.';
-                updateNplComparativeSummary(result);
-                nplResultPreview.textContent = JSON.stringify(result, null, 2);
-                nplResultPreview.classList.remove('hidden');
+                hideNplAnalysisPanels();
                 setNplExportState(Boolean(result));
                 addLog(`[SUCCESS] ${getTimestamp()} - Motor NPL: extracción finalizada sin persistencia.`);
             } catch (error) {
@@ -694,7 +712,7 @@
             addLog(`[INFO] ${getTimestamp()} - Motor NPL: PDF generado.`);
         }
 
-        function closeNPLEngine() {
+        function resetNPLEngine() {
             vesselDataCache = null;
             latestNplResult = null;
             latestNplFileName = null;
@@ -708,11 +726,16 @@
             clearTimeout(nplPasteToastTimer);
             updateNplComparativeSummary(null);
             revokeNplPreviewUrl();
+            nplStatus.textContent = 'Motor listo para procesar documentos.';
+            addLog(`[INFO] ${getTimestamp()} - Motor NPL: consulta cerrada y motor listo para nuevo archivo.`);
+        }
+
+        function closeNPLEngine() {
+            resetNPLEngine();
             const motorPanel = document.getElementById('motor-npl-panel');
             if (motorPanel) motorPanel.style.display = 'none';
             const dataBridgeMain = document.getElementById('databridge-main-container');
             if (dataBridgeMain) dataBridgeMain.style.display = 'block';
-            nplStatus.textContent = 'Motor listo para procesar documentos.';
             console.log('Motor NPL reseteado');
         }
 
