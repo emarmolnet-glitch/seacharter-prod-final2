@@ -8968,9 +8968,12 @@
                                 <button id="commercial-nlp-export-json-btn" onclick="downloadCommercialNlpJson()" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition whitespace-nowrap">
                                     <i class="fa-solid fa-file-arrow-down"></i> Exportar JSON
                                 </button>
+                                <button onclick="resetCommercialNlpPanel()" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition whitespace-nowrap">
+                                    <i class="fa-solid fa-xmark"></i> Cerrar
+                                </button>
                             </div>
                         </div>
-                        <div class="overflow-x-auto">
+                        <div class="hidden overflow-x-auto">
                             <table class="w-full text-sm text-left">
                                 <thead class="bg-slate-50 text-slate-600 uppercase text-xs">
                                     <tr>
@@ -8983,20 +8986,20 @@
                                 <tbody id="commercial-nlp-rows"></tbody>
                             </table>
                         </div>
-                        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+                        <div class="hidden px-5 py-4 bg-slate-50 border-t border-slate-200">
                             <p id="commercial-nlp-confirmation" class="text-sm font-semibold text-emerald-800"></p>
                             <p class="text-xs text-slate-600 mt-2">ESTE DOCUMENTO ES SOLO A TÍTULO INFORMATIVO. LOS CÁLCULOS DEFINITIVOS DEBEN REALIZARSE EN LA CALCULADORA SEACHARTER</p>
                             <p class="text-xs text-slate-500 mt-1">Motor sin permisos de escritura: la persistencia se realiza copiando manualmente el JSON en SeaCharter Data Bridge.</p>
                             <div class="mt-3 grid gap-3">
-                                <div>
+                                <div class="hidden">
                                     <div class="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Informe comparativo previo a JSON</div>
                                     <pre id="commercial-nlp-comparative-block" class="whitespace-pre-wrap rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-slate-800"></pre>
                                 </div>
-                                <div>
+                                <div class="hidden">
                                     <div class="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Informe para impresión</div>
                                     <pre id="commercial-nlp-print-block" class="whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-700"></pre>
                                 </div>
-                                <div>
+                                <div class="hidden">
                                     <div class="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">JSON para importación manual</div>
                                     <pre id="commercial-nlp-json-block" class="whitespace-pre-wrap rounded-lg border border-emerald-200 bg-emerald-950 p-4 text-xs text-emerald-50 overflow-x-auto"></pre>
                                 </div>
@@ -13147,17 +13150,23 @@
                 const vessel = getStandaloneNplDisplayData(payload);
                 const comparativePreview = document.getElementById('nlp-comparative-preview');
 
-                document.getElementById('nlp-res-type').innerText = vessel.vesselName || 'No presente';
-                document.getElementById('nlp-res-qty').innerText = vessel.quantity ? `${Number(vessel.quantity).toLocaleString('es-ES')} MT` : 'No presente';
-                document.getElementById('nlp-res-pol').innerText = vessel.ports || 'No presente';
-                document.getElementById('nlp-res-pod').innerText = vessel.dates || 'No presente';
-                document.getElementById('nlp-res-rate').innerText = vessel.freight ? formatCommercialNlpMoney(vessel.freight) : formatCommercialNlpMoney(vessel.chartererSaleFreight || 0);
-                document.getElementById('nlp-res-geared').innerText = payload.sourceId ? 'Blob NPL' : 'Carga manual Data Bridge';
+                const typeEl = document.getElementById('nlp-res-type');
+                const qtyEl = document.getElementById('nlp-res-qty');
+                const polEl = document.getElementById('nlp-res-pol');
+                const podEl = document.getElementById('nlp-res-pod');
+                const rateEl = document.getElementById('nlp-res-rate');
+                const gearedEl = document.getElementById('nlp-res-geared');
+                if (typeEl) typeEl.innerText = vessel.vesselName || 'No presente';
+                if (qtyEl) qtyEl.innerText = vessel.quantity ? `${Number(vessel.quantity).toLocaleString('es-ES')} MT` : 'No presente';
+                if (polEl) polEl.innerText = vessel.ports || 'No presente';
+                if (podEl) podEl.innerText = vessel.dates || 'No presente';
+                if (rateEl) rateEl.innerText = vessel.freight ? formatCommercialNlpMoney(vessel.freight) : formatCommercialNlpMoney(vessel.chartererSaleFreight || 0);
+                if (gearedEl) gearedEl.innerText = payload.sourceId ? 'Blob NPL' : 'Carga manual Data Bridge';
                 if (comparativePreview) comparativePreview.innerText = payload.comparativeReport || buildNplBackendPreview(payload) || 'No hay informe comparativo disponible.';
                 
                 resultsDiv.classList.remove('hidden');
 
-                if (!silent) showToast("Motor NPL: veredicto listo. Revise antes de exportar JSON.");
+                if (!silent) showToast("Motor NPL: análisis completado. JSON e impresión disponibles.");
 
             } catch (err) {
                 console.error("NPL parsing failed: ", err);
@@ -13200,7 +13209,7 @@
                 }
                 await parseCargoNLP({ silent: true });
                 if (typeof showToast === 'function') {
-                    showToast(source === 'paste' ? 'Imagen pegada correctamente' : 'Motor NPL: fuente captada e informe comparativo listo.');
+                    showToast(source === 'paste' ? 'Imagen pegada correctamente' : 'Motor NPL: fuente captada. JSON e impresión disponibles.');
                 }
             } catch (error) {
                 console.error('NPL standalone file read failed:', error);
@@ -13279,6 +13288,21 @@
             const payload = window.lastStandaloneNplPayload || (input?.value?.trim() ? buildCommercialNlpLocalPayload(input.value.trim()) : null);
             if (!payload) return;
             openNplPrintWindow(`${payload.comparativeReport || ''}\n\n${payload.printableReport || ''}`.trim());
+        }
+
+        function resetStandaloneNplPanel() {
+            window.lastStandaloneNplPayload = null;
+            const input = document.getElementById('nlp-cargo-input');
+            const sourcePreview = document.getElementById('nlp-source-preview');
+            const resultsDiv = document.getElementById('nlp-parsed-results');
+            const comparativePreview = document.getElementById('nlp-comparative-preview');
+            if (input) input.value = '';
+            if (sourcePreview) {
+                sourcePreview.innerHTML = '';
+                sourcePreview.classList.add('hidden');
+            }
+            if (comparativePreview) comparativePreview.innerText = '';
+            if (resultsDiv) resultsDiv.classList.add('hidden');
         }
 
         function generateFrozenReport() {
@@ -15699,10 +15723,10 @@
                             </button>
                         </div>
                         <div id="nlp-parsed-results" class="hidden npl-results-panel text-[11px] space-y-1.5 font-sans text-slate-700 bg-slate-50 rounded-lg border border-slate-100">
-                            <div class="text-[10px] font-black uppercase tracking-wider text-[#004e64] mb-2"><i class="fa-solid fa-circle-check text-[#25a18e] mr-1"></i> Informe comparativo previo:</div>
-                            <pre id="nlp-comparative-preview" class="whitespace-pre-wrap rounded-md border border-amber-200 bg-amber-50 p-2 text-slate-800"></pre>
-                            <div class="text-[10px] font-black uppercase tracking-wider text-[#004e64] pt-1">Datos procesados para carga manual:</div>
-                            <div class="npl-data-grid">
+                            <div class="hidden text-[10px] font-black uppercase tracking-wider text-[#004e64] mb-2"><i class="fa-solid fa-circle-check text-[#25a18e] mr-1"></i> Informe comparativo previo:</div>
+                            <pre id="nlp-comparative-preview" class="hidden whitespace-pre-wrap rounded-md border border-amber-200 bg-amber-50 p-2 text-slate-800"></pre>
+                            <div class="hidden text-[10px] font-black uppercase tracking-wider text-[#004e64] pt-1">Datos procesados para carga manual:</div>
+                            <div class="hidden npl-data-grid">
                                 <div class="npl-data-row flex justify-between"><span>Buque:</span><span id="nlp-res-type" class="font-bold text-slate-800">-</span></div>
                                 <div class="npl-data-row flex justify-between"><span>Cantidad / Qty:</span><span id="nlp-res-qty" class="font-bold text-slate-800">-</span></div>
                                 <div class="npl-data-row flex justify-between"><span>Puertos:</span><span id="nlp-res-pol" class="font-bold text-slate-800 truncate max-w-[150px]">-</span></div>
@@ -15710,12 +15734,15 @@
                                 <div class="npl-data-row flex justify-between"><span>Flete venta:</span><span id="nlp-res-rate" class="font-bold text-slate-800">-</span></div>
                                 <div class="npl-data-row flex justify-between"><span>Persistencia:</span><span id="nlp-res-geared" class="font-bold text-slate-800">-</span></div>
                             </div>
-                            <div class="grid grid-cols-2 gap-2 pt-2">
+                            <div class="grid grid-cols-3 gap-2 pt-2">
                                 <button type="button" onclick="printStandaloneNplReport()" class="rounded-lg bg-emerald-700 px-3 py-2 text-[11px] font-black uppercase tracking-wider text-white hover:bg-emerald-800">
                                     <i class="fa-solid fa-print mr-1.5"></i> Imprimir
                                 </button>
                                 <button type="button" onclick="downloadStandaloneNplJson()" class="rounded-lg bg-slate-800 px-3 py-2 text-[11px] font-black uppercase tracking-wider text-white hover:bg-slate-900">
                                     <i class="fa-solid fa-file-arrow-down mr-1.5"></i> JSON
+                                </button>
+                                <button type="button" onclick="resetStandaloneNplPanel()" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-wider text-slate-700 hover:bg-slate-50">
+                                    <i class="fa-solid fa-xmark mr-1.5"></i> Cerrar
                                 </button>
                             </div>
                         </div>
@@ -28452,8 +28479,8 @@ ADDITIONAL NOTES:
 
             window.lastCommercialNplPayload = payload;
             summary.innerText = payload?.comparativeReport
-                ? 'Informe comparativo generado. Revise los campos detectados antes de exportar el JSON.'
-                : (payload?.analysis?.summary || 'Análisis comercial local generado para carga manual.');
+                ? 'Análisis completado. JSON e impresión disponibles.'
+                : (payload?.analysis?.summary || 'Análisis completado. JSON e impresión disponibles.');
             rows.innerHTML = vessels.length ? vessels.map((vessel) => `
                 <tr class="hover:bg-slate-50">
                     <td class="p-3 border-b border-slate-100 font-semibold text-slate-800">${escapeHtml(vessel.vesselName || 'No presente')}</td>
@@ -28466,16 +28493,34 @@ ADDITIONAL NOTES:
                     <td colspan="4" class="p-4 text-center text-slate-500">No se detectaron buques en el material recibido.</td>
                 </tr>
             `;
-            confirmation.innerText = 'Analisis completado en memoria. El JSON queda disponible solo despues de revisar el informe comparativo previo.';
+            confirmation.innerText = 'Analisis completado en memoria. JSON e impresión disponibles.';
             if (comparativeBlock) comparativeBlock.innerText = payload?.comparativeReport || 'No hay informe comparativo disponible.';
             printBlock.innerText = payload?.printableReport || '';
             if (jsonBlock) jsonBlock.innerText = payload?.manualImportJson || JSON.stringify(payload?.manualImportPackage || {}, null, 2);
             if (exportBtn) {
                 exportBtn.disabled = false;
-                exportBtn.title = 'Exportar JSON despues de revisar el informe comparativo.';
+                exportBtn.title = 'Exportar JSON';
                 exportBtn.classList.remove('opacity-60', 'cursor-not-allowed');
             }
             panel.classList.remove('hidden');
+        }
+
+        function resetCommercialNlpPanel() {
+            window.lastCommercialNplPayload = null;
+            const panel = document.getElementById('commercial-nlp-panel');
+            const rows = document.getElementById('commercial-nlp-rows');
+            const summary = document.getElementById('commercial-nlp-summary');
+            const confirmation = document.getElementById('commercial-nlp-confirmation');
+            const comparativeBlock = document.getElementById('commercial-nlp-comparative-block');
+            const printBlock = document.getElementById('commercial-nlp-print-block');
+            const jsonBlock = document.getElementById('commercial-nlp-json-block');
+            if (panel) panel.classList.add('hidden');
+            if (rows) rows.innerHTML = '';
+            if (summary) summary.innerText = '';
+            if (confirmation) confirmation.innerText = '';
+            if (comparativeBlock) comparativeBlock.innerText = '';
+            if (printBlock) printBlock.innerText = '';
+            if (jsonBlock) jsonBlock.innerText = '';
         }
 
         async function runCommercialNlpMotor() {
@@ -28500,7 +28545,7 @@ ADDITIONAL NOTES:
             try {
                 const payload = buildCommercialNlpLocalPayload(text);
                 renderCommercialNlpPanel(payload);
-                if (typeof showToast === 'function') showToast('Motor NPL: informe comparativo listo. Revise antes de exportar JSON.');
+                if (typeof showToast === 'function') showToast('Motor NPL: análisis completado. JSON e impresión disponibles.');
             } catch (error) {
                 console.error(error);
                 document.getElementById('errorBox').innerText = error.message;
@@ -28513,8 +28558,8 @@ ADDITIONAL NOTES:
         }
 
         function printCommercialNlpReport() {
-            const comparativeText = document.getElementById('commercial-nlp-comparative-block')?.innerText || '';
-            const reportText = document.getElementById('commercial-nlp-print-block')?.innerText || '';
+            const comparativeText = document.getElementById('commercial-nlp-comparative-block')?.textContent || '';
+            const reportText = document.getElementById('commercial-nlp-print-block')?.textContent || '';
             const printText = `${comparativeText}\n\n${reportText}`.trim();
             if (!printText) return;
             openNplPrintWindow(printText);
@@ -28522,7 +28567,7 @@ ADDITIONAL NOTES:
 
         function downloadCommercialNlpJson() {
             const payload = window.lastCommercialNplPayload;
-            const jsonText = document.getElementById('commercial-nlp-json-block')?.innerText || '';
+            const jsonText = document.getElementById('commercial-nlp-json-block')?.textContent || '';
             if (!payload && !jsonText) {
                 if (typeof showToast === 'function') showToast('Primero analiza el archivo o texto para generar el informe comparativo.');
                 return;

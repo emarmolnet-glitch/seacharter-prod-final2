@@ -20,6 +20,8 @@ type Vessel = {
   imo: number | null;
   type: string | null;
   dwt: number | null;
+  open_port: string | null;
+  opening_dates: string | null;
   capacity: string | null;
   gear: string | null;
   rating: string | null;
@@ -32,11 +34,22 @@ type Vessel = {
   validation_status?: "INCOMPLETO";
 };
 
+type DataBridgeVessel = {
+  nombre_buque: string;
+  imo: string;
+  tipo: string;
+  dwt: number | null;
+  puerto_apertura: string;
+  fechas_apertura: string;
+};
+
 const FIELD_NAMES = [
   "ship",
   "imo",
   "type",
   "dwt",
+  "open_port",
+  "opening_dates",
   "capacity",
   "gear",
   "rating",
@@ -51,19 +64,33 @@ const FIELD_NAMES = [
 const HEADER_ALIASES: Record<string, keyof Vessel> = {
   vessel: "ship",
   vesselname: "ship",
+  shipname: "ship",
+  buque: "ship",
+  nombrebuque: "ship",
   ship: "ship",
   name: "ship",
   imo: "imo",
   imonumber: "imo",
   type: "type",
   vesseltype: "type",
+  typebypurpose: "type",
+  tipobuque: "type",
   dwt: "dwt",
   deadweight: "dwt",
+  deadweightmt: "dwt",
+  pesomuerto: "dwt",
   capacity: "capacity",
   gear: "gear",
   gears: "gear",
   rating: "rating",
-  open: "open_date",
+  open: "open_port",
+  openingport: "open_port",
+  puertoapertura: "open_port",
+  date: "opening_dates",
+  dates: "opening_dates",
+  openingdate: "opening_dates",
+  openingdates: "opening_dates",
+  fechasapertura: "opening_dates",
   opendate: "open_date",
   dateopen: "open_date",
   tcindex: "tc_index",
@@ -108,11 +135,31 @@ function cleanNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   const raw = String(value).trim();
   if (!raw) return null;
-  const compact = raw.replace(/\s/g, "");
-  const normalized = compact.includes(",") && compact.includes(".")
-    ? compact.replace(/[,.](?=\d{3}\b)/g, "").replace(",", ".")
-    : compact.replace(",", ".");
-  const numeric = Number(normalized.replace(/[^\d.-]/g, ""));
+  const compact = raw.replace(/\s/g, "").replace(/[^\d,.-]/g, "");
+  if (!compact) return null;
+  const hasComma = compact.includes(",");
+  const hasDot = compact.includes(".");
+  let normalized = compact;
+
+  if (hasComma && hasDot) {
+    const lastComma = compact.lastIndexOf(",");
+    const lastDot = compact.lastIndexOf(".");
+    const decimalSeparator = lastComma > lastDot ? "," : ".";
+    const thousandsSeparator = decimalSeparator === "," ? "." : ",";
+    normalized = compact.split(thousandsSeparator).join("").replace(decimalSeparator, ".");
+  } else if (hasComma) {
+    const groups = compact.split(",");
+    normalized = groups.length > 1 && groups.slice(1).every((group) => group.length === 3)
+      ? groups.join("")
+      : compact.replace(",", ".");
+  } else if (hasDot) {
+    const groups = compact.split(".");
+    normalized = groups.length > 1 && groups.slice(1).every((group) => group.length === 3)
+      ? groups.join("")
+      : compact;
+  }
+
+  const numeric = Number(normalized);
   return Number.isFinite(numeric) ? numeric : null;
 }
 
@@ -121,6 +168,11 @@ function cleanInteger(value: unknown) {
   if (!digits) return null;
   const numeric = Number.parseInt(digits, 10);
   return Number.isFinite(numeric) ? numeric : null;
+}
+
+function cleanRoundedInteger(value: unknown) {
+  const numeric = cleanNumber(value);
+  return Number.isFinite(numeric) ? Math.round(Number(numeric)) : null;
 }
 
 function cleanDate(value: unknown) {
@@ -229,7 +281,9 @@ function normalizeVessel(partial: Record<string, unknown>) {
     ship: cleanText(partial.ship),
     imo: cleanInteger(partial.imo),
     type: cleanText(partial.type),
-    dwt: cleanNumber(partial.dwt),
+    dwt: cleanRoundedInteger(partial.dwt),
+    open_port: cleanText(partial.open_port),
+    opening_dates: cleanText(partial.opening_dates),
     capacity: cleanText(partial.capacity),
     gear: cleanText(partial.gear),
     rating: cleanText(partial.rating),
@@ -242,6 +296,29 @@ function normalizeVessel(partial: Record<string, unknown>) {
   };
   if (!vessel.ship || !vessel.imo) vessel.validation_status = "INCOMPLETO";
   return vessel;
+}
+
+function formatDateRange(value: string | null) {
+  return value?.replace(/\u00a0/g, " ").replace(/\s*-\s*/g, " - ") || "N/A";
+}
+
+function toDataBridgeVessel(vessel: Vessel): DataBridgeVessel {
+  return {
+    nombre_buque: vessel.ship || "N/A",
+    imo: vessel.imo ? String(vessel.imo) : "N/A",
+    tipo: vessel.type || "N/A",
+    dwt: Number.isFinite(vessel.dwt) ? Math.trunc(Number(vessel.dwt)) : null,
+    puerto_apertura: vessel.open_port || vessel.open_date || "N/A",
+    fechas_apertura: formatDateRange(vessel.opening_dates),
+  };
+}
+
+function toDataBridgePayload(nativeData: Awaited<ReturnType<typeof extractNative>>, vessels: Vessel[]) {
+  return {
+    origen_archivo: nativeData.fileName.replace(/\.[^.]+$/, "") || "N/A",
+    fecha_extraccion: new Date().toISOString().slice(0, 10),
+    buques_detectados: vessels.map(toDataBridgeVessel),
+  };
 }
 
 function parseRows(rows: unknown[][]) {
@@ -323,26 +400,35 @@ export default async (req: Request) => {
     const nativeData = await extractNative(body);
     const vessels = parseVessels(nativeData);
     if (!vessels.length) throw new Error("Formato de archivo no reconocido");
+    const dataBridgeJson = toDataBridgePayload(nativeData, vessels);
 
     const payload = {
       file_type: nativeData.fileType,
       source_provider: inferProvider(nativeData.fileName, nativeData.rawText),
       audit_status: "PENDIENTE_AUDITORIA",
+      totalVesselsDetected: vessels.length,
       vessels,
+      data_bridge_json: dataBridgeJson,
     };
 
-    const record = await createDataBridgeVesselIngestion({
-      sourceFileName: nativeData.fileName,
-      sourceFileType: nativeData.fileType,
-      sourceProvider: payload.source_provider,
-      auditStatus: "PENDIENTE_AUDITORIA",
-      vesselCount: vessels.length,
-      payload,
-      rawText: nativeData.rawText.slice(0, 200000),
-      errorMessage: null,
-    });
+    let ingestionId: number | undefined;
+    try {
+      const record = await createDataBridgeVesselIngestion({
+        sourceFileName: nativeData.fileName,
+        sourceFileType: nativeData.fileType,
+        sourceProvider: payload.source_provider,
+        auditStatus: "PENDIENTE_AUDITORIA",
+        vesselCount: vessels.length,
+        payload,
+        rawText: nativeData.rawText.slice(0, 200000),
+        errorMessage: null,
+      });
+      ingestionId = record?.id;
+    } catch (storageError) {
+      console.warn("[NPL] Ingesta procesada sin persistencia de auditoria.", storageError instanceof Error ? storageError.message : "storage unavailable");
+    }
 
-    return json({ success: true, ingestionId: record?.id, ...payload });
+    return json({ success: true, ingestionId, ...payload });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Formato de archivo no reconocido";
     return json({
