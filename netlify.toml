@@ -4,16 +4,17 @@
   functions = "netlify/functions"
 
 [build.environment]
-  # ESTO ES LO QUE SOLUCIONA EL ERROR:
-  # Desactivamos completamente las migraciones de Prisma para este despliegue
-  # Le decimos a Prisma que ignore los archivos de migración y la DB
+  NODE_VERSION = "20"
+  NETLIFY_SKIP_BUILD_DATABASE = "true"
   SKIP_PRISMA_MIGRATE = "true"
   PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
-  NETLIFY_SKIP_BUILD_DATABASE = "true"
   NODE_ENV = "production"
 
+# Configuración de funciones corregida (Netlify v2 syntax)
 [functions]
-  node_bundle = "esbuild"
+  # Usamos la configuración de empaquetado recomendada por Netlify
+  # para evitar el error de objeto
+  directory = "netlify/functions"
 
 [[headers]]
   for = "/*"
@@ -23,14 +24,4 @@
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
-  status = 200
-
-[[redirects]]
-  from = "/components.js"
-  to = "/public/components.js"
-  status = 200
-
-[[redirects]]
-  from = "/databridge.html"
-  to = "/public/databridge.html"
   status = 200
