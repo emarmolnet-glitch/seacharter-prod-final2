@@ -29,6 +29,7 @@
     </script>
     <!-- FontAwesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
         
@@ -90,6 +91,17 @@
             .databridge-workspace {
                 grid-template-columns: 1fr;
             }
+        }
+        .npl-preview-frame {
+            position: relative;
+            min-height: 92px;
+        }
+        .npl-preview-frame::after {
+            content: "";
+            position: absolute;
+            inset: 10px;
+            border: 1px dashed rgba(30, 58, 138, 0.45);
+            pointer-events: none;
         }
     </style>
 </head>
@@ -196,6 +208,49 @@
         </section>
     </div>
 
+    <section id="motor-npl-panel" class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 shrink-0">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h2 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Motor NPL Independiente</h2>
+                <p class="text-[11px] text-slate-500 mt-1">Procesamiento stateless de documentos logísticos sin escritura en base de datos.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <input id="npl-file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.csv,.json" onchange="handleNplFileSelected()" class="block w-64 text-xs text-slate-600 file:mr-3 file:rounded-lg file:border file:border-slate-200 file:bg-slate-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-100">
+                <button type="button" id="btn-process-npl" onclick="processNplDocument()" class="bg-[#1E3A8A] hover:bg-blue-900 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 shadow-sm transition duration-150">
+                    <i class="fa-solid fa-file-import"></i>
+                    <span>Procesar Documento</span>
+                </button>
+                <button type="button" id="btn-download-npl-json" onclick="downloadNplJson()" disabled class="bg-white border border-slate-200 text-slate-400 disabled:cursor-not-allowed enabled:hover:bg-slate-50 enabled:text-slate-700 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150">
+                    <i class="fa-solid fa-download"></i>
+                    <span>JSON</span>
+                </button>
+                <button type="button" id="btn-download-npl-pdf" onclick="downloadNplPdf()" disabled class="bg-white border border-slate-200 text-slate-400 disabled:cursor-not-allowed enabled:hover:bg-slate-50 enabled:text-slate-700 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150">
+                    <i class="fa-solid fa-file-pdf"></i>
+                    <span>Imprimir</span>
+                </button>
+                <button type="button" id="btn-close-npl" onclick="closeNplEngine()" class="bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150">
+                    <i class="fa-solid fa-xmark"></i>
+                    <span>Cerrar</span>
+                </button>
+            </div>
+        </div>
+        <div class="mt-3 grid grid-cols-1 lg:grid-cols-[minmax(220px,0.75fr)_minmax(280px,1fr)] gap-3">
+            <div class="rounded-lg border border-blue-100 bg-blue-50/70 p-3 text-[11px] leading-relaxed text-slate-700">
+                <div class="font-bold uppercase tracking-wider text-[#1E3A8A] mb-1">Guía de captura</div>
+                Recorte o enfoque primero la tabla de Shipnext. Si envía una captura de más de 1500px de ancho, el motor la corta en dos mitades en memoria: cargas a la izquierda y flota a la derecha.
+            </div>
+            <div id="npl-image-preview-wrap" class="hidden npl-preview-frame overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                <img id="file-preview" alt="Previsualización Motor NPL" class="max-h-40 w-full object-contain bg-white">
+            </div>
+        </div>
+        <div id="npl-status" class="mt-3 text-[11px] text-slate-500 console-font">Motor listo para procesar documentos.</div>
+        <div id="npl-comparative-summary" class="hidden mt-3 rounded-lg border border-emerald-100 bg-emerald-50/80 p-3 text-[11px] leading-relaxed text-slate-700">
+            <div class="font-bold uppercase tracking-wider text-emerald-700 mb-1">Informe Comparativo Previo</div>
+            <p id="npl-comparative-summary-text">-</p>
+        </div>
+        <pre id="npl-result-preview" class="hidden mt-3 max-h-40 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-700 console-font whitespace-pre-wrap"></pre>
+    </section>
+
     <!-- Controls Footer -->
     <footer class="flex items-center justify-between border-t border-slate-200 pt-4 mt-4 shrink-0">
         <p class="text-[11px] text-slate-500">Módulo de Orquestación SeaCharter Bridge. No cerrar esta ventana para mantener el flujo constante.</p>
@@ -221,12 +276,25 @@
         const btnPauseSync = document.getElementById('btn-pause-sync');
         const pauseIcon = document.getElementById('pause-icon');
         const pauseText = document.getElementById('pause-text');
+        const nplFileInput = document.getElementById('npl-file-input');
+        const nplStatus = document.getElementById('npl-status');
+        const nplResultPreview = document.getElementById('npl-result-preview');
+        const btnProcessNpl = document.getElementById('btn-process-npl');
+        const btnDownloadNplJson = document.getElementById('btn-download-npl-json');
+        const btnDownloadNplPdf = document.getElementById('btn-download-npl-pdf');
+        const nplImagePreviewWrap = document.getElementById('npl-image-preview-wrap');
+        const nplImagePreview = document.getElementById('file-preview');
+        const nplComparativeSummary = document.getElementById('npl-comparative-summary');
+        const nplComparativeSummaryText = document.getElementById('npl-comparative-summary-text');
 
         let isPaused = false;
         let countdown = 30;
         let rateCount = 1482;
         let vesselCount = 482;
         let timer = null;
+        let latestNplResult = null;
+        let latestNplFileName = null;
+        let latestNplPreviewUrl = null;
 
         function hideDataBridgeWindow() {
             if (window.dataBridgeAPI && typeof window.dataBridgeAPI.hide === 'function') {
@@ -298,6 +366,289 @@
         function clearConsole() {
             logsContainer.innerHTML = '';
             addLog(`[INFO] ${getTimestamp()} - Consola de registro reiniciada por el usuario.`);
+        }
+
+        function setNplExportState(enabled) {
+            btnDownloadNplJson.disabled = !enabled;
+            btnDownloadNplPdf.disabled = !enabled;
+        }
+
+        function revokeNplPreviewUrl() {
+            if (latestNplPreviewUrl) {
+                URL.revokeObjectURL(latestNplPreviewUrl);
+                latestNplPreviewUrl = null;
+            }
+        }
+
+        function handleNplFileSelected() {
+            const file = nplFileInput.files && nplFileInput.files[0];
+            latestNplResult = null;
+            latestNplFileName = file ? file.name : null;
+            setNplExportState(false);
+            nplResultPreview.classList.add('hidden');
+            nplResultPreview.textContent = '';
+            updateNplComparativeSummary(null);
+            revokeNplPreviewUrl();
+
+            if (file && file.type.startsWith('image/')) {
+                latestNplPreviewUrl = URL.createObjectURL(file);
+                nplImagePreview.src = latestNplPreviewUrl;
+                nplImagePreviewWrap.classList.remove('hidden');
+                nplStatus.textContent = 'Imagen lista. Recorte o enfoque la zona de datos si puede; si no, la función cortará capturas anchas en izquierda/derecha.';
+            } else {
+                nplImagePreview.removeAttribute('src');
+                nplImagePreviewWrap.classList.add('hidden');
+                nplStatus.textContent = file ? `Archivo listo: ${file.name}` : 'Motor listo para procesar documentos.';
+            }
+        }
+
+        function readFileAsBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const result = String(reader.result || '');
+                    resolve(result.includes(',') ? result.split(',').pop() : result);
+                };
+                reader.onerror = () => reject(reader.error || new Error('No se pudo leer el archivo.'));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function getNplDownloadBaseName() {
+            const rawName = latestNplFileName || 'resultado-npl';
+            return rawName.replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_') || 'resultado-npl';
+        }
+
+        function getNplVessels(result = latestNplResult) {
+            return Array.isArray(result?.vessels) ? result.vessels : [];
+        }
+
+        function getNplPdfRows(result = latestNplResult) {
+            const rows = Array.isArray(result?.pdfRows) ? result.pdfRows : [];
+            if (rows.length) return rows;
+            return getNplVessels(result).map(vessel => ({
+                ship: vessel.vesselName,
+                imoType: [vessel.imo, vessel.vesselType].filter(Boolean).join(' / ') || null,
+                dwtCapacity: [vessel.dwt, vessel.dwt].filter(value => value !== null && value !== undefined && value !== '').join(' / ') || null,
+                gear: vessel.hasGears === null || vessel.hasGears === undefined ? null : (vessel.hasGears ? 'Geared' : 'Gearless'),
+                ratingOpenDate: vessel.etaPuertoCarga,
+                tcIndexOffers: null,
+                dispOwner: vessel.ownerManager
+            }));
+        }
+
+        function getNplTechnicalJson(result = latestNplResult) {
+            if (!result) return null;
+            return {
+                totalVesselsDetected: Number.isFinite(Number(result.totalVesselsDetected))
+                    ? Number(result.totalVesselsDetected)
+                    : getNplVessels(result).length,
+                cargoes: Array.isArray(result.cargoes) ? result.cargoes : null,
+                vessels: getNplVessels(result)
+            };
+        }
+
+        function updateNplComparativeSummary(result) {
+            if (!nplComparativeSummary || !nplComparativeSummaryText) return;
+            const vessels = getNplVessels(result);
+            if (!result || vessels.length === 0) {
+                nplComparativeSummary.classList.add('hidden');
+                nplComparativeSummaryText.textContent = '-';
+                return;
+            }
+            const detected = Number.isFinite(Number(result.totalVesselsDetected))
+                ? Number(result.totalVesselsDetected)
+                : vessels.length;
+            const names = vessels.map(vessel => vessel.vesselName).filter(Boolean);
+            const briefNames = names.slice(0, 12).join(', ') || 'Sin nombres legibles';
+            const overflow = names.length > 12 ? ` y ${names.length - 12} más` : '';
+            nplComparativeSummaryText.textContent = `Se han detectado ${detected} buques. Detalle: ${briefNames}${overflow}.`;
+            nplComparativeSummary.classList.remove('hidden');
+        }
+
+        async function processNplDocument() {
+            const file = nplFileInput.files && nplFileInput.files[0];
+            if (!file) {
+                nplStatus.textContent = 'Seleccione un archivo antes de procesar.';
+                addLog(`[WARNING] ${getTimestamp()} - Motor NPL: no hay archivo seleccionado.`);
+                return;
+            }
+
+            latestNplResult = null;
+            latestNplFileName = file.name;
+            setNplExportState(false);
+            nplResultPreview.classList.add('hidden');
+            nplStatus.textContent = `Procesando ${file.name}...`;
+            btnProcessNpl.disabled = true;
+            btnProcessNpl.classList.add('opacity-70', 'cursor-wait');
+            addLog(`[SYNC] ${getTimestamp()} - Motor NPL: enviando documento para extracción stateless.`);
+
+            try {
+                const fileContent = await readFileAsBase64(file);
+                const response = await fetch('/.netlify/functions/npl-engine', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fileName: file.name,
+                        fileContent
+                    })
+                });
+
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || 'El Motor NPL no devolvió una respuesta válida.');
+                }
+
+                latestNplResult = result;
+                const vesselCount = Number.isFinite(Number(result?.totalVesselsDetected))
+                    ? Number(result.totalVesselsDetected)
+                    : getNplVessels(result).length;
+                const cargoCount = Array.isArray(result?.cargoes) ? result.cargoes.length : 0;
+                nplStatus.textContent = result
+                    ? `Extracción completada: ${cargoCount} carga(s), ${vesselCount} buque(s).`
+                    : 'Extracción completada sin datos verificables. El motor devolvió null.';
+                updateNplComparativeSummary(result);
+                nplResultPreview.textContent = JSON.stringify(result, null, 2);
+                nplResultPreview.classList.remove('hidden');
+                setNplExportState(Boolean(result));
+                addLog(`[SUCCESS] ${getTimestamp()} - Motor NPL: extracción finalizada sin persistencia.`);
+            } catch (error) {
+                nplStatus.textContent = error.message || 'No se pudo procesar el documento.';
+                addLog(`[ERROR] ${getTimestamp()} - Motor NPL: ${nplStatus.textContent}`);
+            } finally {
+                btnProcessNpl.disabled = false;
+                btnProcessNpl.classList.remove('opacity-70', 'cursor-wait');
+            }
+        }
+
+        function downloadNplJson() {
+            if (!latestNplResult) return;
+            const blob = new Blob([JSON.stringify(getNplTechnicalJson(), null, 2)], { type: 'application/json' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${getNplDownloadBaseName()}-npl.json`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+            addLog(`[INFO] ${getTimestamp()} - Motor NPL: JSON descargado.`);
+        }
+
+        function downloadNplPdf() {
+            if (!latestNplResult || !window.jspdf?.jsPDF) return;
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape' });
+            const vessels = getNplVessels();
+            const pdfRows = getNplPdfRows();
+            const detected = Number.isFinite(Number(latestNplResult.totalVesselsDetected))
+                ? Number(latestNplResult.totalVesselsDetected)
+                : vessels.length;
+            const margin = 34;
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const columns = [
+                ['Ship', 100],
+                ['IMO / Type', 95],
+                ['DWT / Capacity', 95],
+                ['Gear', 70],
+                ['Rating / Open Date', 115],
+                ['T/C INDEX / OFFERS', 130],
+                ['DISP OWNER', 125]
+            ];
+            let y = 46;
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(18);
+            doc.setTextColor(15, 23, 42);
+            doc.text('Informe Motor NPL', margin, y);
+            doc.setDrawColor(59, 130, 246);
+            doc.setLineWidth(1.2);
+            doc.line(margin, y + 8, pageWidth - margin, y + 8);
+            y += 30;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(10);
+            doc.setTextColor(71, 85, 105);
+            doc.text(`Documento: ${latestNplFileName || 'N/A'}`, margin, y);
+            doc.text(`Generado: ${new Date().toLocaleString('es-ES')}`, margin + 270, y);
+            doc.text(`Buques detectados: ${detected}`, margin + 520, y);
+            y += 24;
+
+            if (!pdfRows.length) {
+                doc.text('No se detectaron buques en el documento.', margin, y);
+                doc.save(`${getNplDownloadBaseName()}-npl.pdf`);
+                addLog(`[INFO] ${getTimestamp()} - Motor NPL: PDF generado.`);
+                return;
+            }
+
+            function drawHeader() {
+                let x = margin;
+                doc.setFillColor(239, 246, 255);
+                doc.setDrawColor(191, 219, 254);
+                doc.rect(margin, y, pageWidth - margin * 2, 24, 'FD');
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(8);
+                doc.setTextColor(30, 58, 138);
+                columns.forEach(([label, width]) => {
+                    doc.text(label, x + 5, y + 15);
+                    x += width;
+                });
+                y += 24;
+            }
+
+            function fitCell(value, width) {
+                const text = value === null || value === undefined || value === '' ? 'N/A' : String(value);
+                return doc.splitTextToSize(text, width - 10).slice(0, 2);
+            }
+
+            drawHeader();
+            pdfRows.forEach((rowData, index) => {
+                if (y > pageHeight - 48) {
+                    doc.addPage();
+                    y = 42;
+                    drawHeader();
+                }
+                const row = [
+                    rowData.ship,
+                    rowData.imoType,
+                    rowData.dwtCapacity,
+                    rowData.gear,
+                    rowData.ratingOpenDate,
+                    rowData.tcIndexOffers,
+                    rowData.dispOwner
+                ];
+                const cellLines = row.map((value, cellIndex) => fitCell(value, columns[cellIndex][1]));
+                const rowHeight = Math.max(24, ...cellLines.map(lines => lines.length * 10 + 12));
+                let x = margin;
+                doc.setFillColor(index % 2 === 0 ? 255 : 248, index % 2 === 0 ? 255 : 250, index % 2 === 0 ? 255 : 252);
+                doc.setDrawColor(226, 232, 240);
+                doc.rect(margin, y, pageWidth - margin * 2, rowHeight, 'FD');
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(7.5);
+                doc.setTextColor(15, 23, 42);
+                cellLines.forEach((lines, cellIndex) => {
+                    doc.text(lines, x + 5, y + 13);
+                    x += columns[cellIndex][1];
+                });
+                y += rowHeight;
+            });
+
+            doc.save(`${getNplDownloadBaseName()}-npl.pdf`);
+            addLog(`[INFO] ${getTimestamp()} - Motor NPL: PDF generado.`);
+        }
+
+        function closeNplEngine() {
+            latestNplResult = null;
+            latestNplFileName = null;
+            setNplExportState(false);
+            nplFileInput.value = '';
+            nplResultPreview.textContent = '';
+            nplResultPreview.classList.add('hidden');
+            nplImagePreviewWrap.classList.add('hidden');
+            updateNplComparativeSummary(null);
+            revokeNplPreviewUrl();
+            document.getElementById('motor-npl-panel').style.display = 'none';
+            sessionStorage.clear();
+            document.getElementById('file-preview').src = '';
+            nplStatus.textContent = 'Motor listo para procesar documentos.';
+            console.log('Motor NPL reseteado');
         }
 
         function populateInitialLogs() {
