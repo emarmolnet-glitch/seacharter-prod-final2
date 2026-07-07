@@ -4,25 +4,21 @@
   functions = "netlify/functions"
 
 [build.environment]
-  # Desactivación total de base de datos y migraciones
-  NETLIFY_SKIP_BUILD_DATABASE = "true"
+  # ESTO ES LO QUE SOLUCIONA EL ERROR:
+  # Desactivamos completamente las migraciones de Prisma para este despliegue
+  # Le decimos a Prisma que ignore los archivos de migración y la DB
   SKIP_PRISMA_MIGRATE = "true"
   PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
+  NETLIFY_SKIP_BUILD_DATABASE = "true"
   NODE_ENV = "production"
 
-# Configuración de funciones simplificada sin errores de objeto
 [functions]
-  # Eliminamos node_bundle para dejar que Netlify gestione el empaquetado por defecto
+  node_bundle = "esbuild"
 
 [[headers]]
   for = "/*"
   [headers.values]
     Content-Security-Policy = "default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * wss: https:; img-src * data: blob:; style-src * 'unsafe-inline';"
-
-[[redirects]]
-  from = "/api/receive-vessels"
-  to = "/.netlify/functions/receive-vessels"
-  status = 200
 
 [[redirects]]
   from = "/api/*"
