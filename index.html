@@ -13172,9 +13172,13 @@
             const file = event.target.files && event.target.files[0];
             if (!file) return;
 
+            await processNplStandaloneClipboardOrFile(file, 'file');
+            event.target.value = '';
+        }
+
+        async function processNplStandaloneClipboardOrFile(file, source = 'file') {
             const input = document.getElementById('nlp-cargo-input');
             const preview = document.getElementById('nlp-source-preview');
-            const fileInput = event.target;
             const originalPlaceholder = input ? input.placeholder : '';
 
             if (input) {
@@ -13193,7 +13197,9 @@
                     preview.classList.remove('hidden');
                 }
                 await parseCargoNLP({ silent: true });
-                if (typeof showToast === 'function') showToast('Motor NPL: fuente captada e informe comparativo listo.');
+                if (typeof showToast === 'function') {
+                    showToast(source === 'paste' ? 'Imagen pegada correctamente' : 'Motor NPL: fuente captada e informe comparativo listo.');
+                }
             } catch (error) {
                 console.error('NPL standalone file read failed:', error);
                 if (input) input.placeholder = originalPlaceholder;
@@ -13202,10 +13208,40 @@
                     preview.classList.remove('hidden');
                 }
                 if (typeof showToast === 'function') showToast('No se pudo leer el archivo en el Motor NPL.');
-            } finally {
-                fileInput.value = '';
             }
         }
+
+        function getNplClipboardImageFile(event) {
+            const clipboardData = event.clipboardData;
+            if (!clipboardData) return null;
+
+            const imageFile = Array.from(clipboardData.files || []).find((file) => file.type && file.type.startsWith('image/'));
+            if (imageFile) return imageFile;
+
+            const imageItem = Array.from(clipboardData.items || []).find((item) => item.type && item.type.startsWith('image/'));
+            return imageItem ? imageItem.getAsFile() : null;
+        }
+
+        function isStandaloneNplOpen() {
+            const menu = document.getElementById('npl-module-menu');
+            const panel = document.getElementById('advanced-nlp-panel');
+            return Boolean(menu?.classList.contains('is-open') && panel?.classList.contains('is-open'));
+        }
+
+        function handleStandaloneNplPaste(event) {
+            if (!isStandaloneNplOpen()) return;
+
+            const imageFile = getNplClipboardImageFile(event);
+            if (!imageFile) return;
+
+            event.preventDefault();
+            const extension = (imageFile.type.split('/')[1] || 'png').replace(/[^a-z0-9.+-]/gi, '') || 'png';
+            const fileName = imageFile.name || `imagen-pegada-npl-${Date.now()}.${extension}`;
+            const pastedFile = imageFile.name ? imageFile : new File([imageFile], fileName, { type: imageFile.type || 'image/png' });
+            processNplStandaloneClipboardOrFile(pastedFile, 'paste');
+        }
+
+        document.addEventListener('paste', handleStandaloneNplPaste);
 
         async function extractStandaloneNplText(file) {
             const fileName = file.name || (file.type?.startsWith('image/') ? 'foto-capturada.jpg' : 'archivo-cargado');

@@ -113,6 +113,20 @@
             right: 0.85rem;
             z-index: 40;
         }
+        .npl-paste-toast {
+            position: absolute;
+            right: 1rem;
+            bottom: 1rem;
+            z-index: 45;
+            transform: translateY(8px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 180ms ease, transform 180ms ease;
+        }
+        .npl-paste-toast.is-visible {
+            transform: translateY(0);
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden p-6 select-none bg-slate-50 text-slate-800">
@@ -218,7 +232,7 @@
         </section>
     </div>
 
-    <section id="motor-npl-panel" class="relative bg-white border border-slate-200 rounded-xl shadow-sm p-4 pr-24 shrink-0">
+    <section id="motor-npl-panel" tabindex="0" class="relative bg-white border border-slate-200 rounded-xl shadow-sm p-4 pr-24 shrink-0">
         <button type="button" id="btn-exit-npl" onclick="closeNPLEngine()" class="npl-exit-button bg-white border border-slate-300 text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-2 transition duration-150" title="Salir del Motor NPL" aria-label="Salir del Motor NPL">
             <i class="fa-solid fa-xmark"></i>
             <span>Salir</span>
@@ -263,6 +277,9 @@
             <p id="npl-comparative-summary-text">-</p>
         </div>
         <pre id="npl-result-preview" class="hidden mt-3 max-h-40 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-700 console-font whitespace-pre-wrap"></pre>
+        <div id="npl-paste-toast" class="npl-paste-toast rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-800 shadow-lg" role="status" aria-live="polite">
+            Imagen pegada correctamente
+        </div>
     </section>
 
     <!-- Controls Footer -->
@@ -300,6 +317,8 @@
         const nplImagePreview = document.getElementById('file-preview');
         const nplComparativeSummary = document.getElementById('npl-comparative-summary');
         const nplComparativeSummaryText = document.getElementById('npl-comparative-summary-text');
+        const motorNplPanel = document.getElementById('motor-npl-panel');
+        const nplPasteToast = document.getElementById('npl-paste-toast');
 
         let isPaused = false;
         let countdown = 30;
@@ -309,6 +328,7 @@
         let latestNplResult = null;
         let latestNplFileName = null;
         let latestNplPreviewUrl = null;
+        let nplPasteToastTimer = null;
         let vesselDataCache = null;
 
         function hideDataBridgeWindow() {
@@ -416,6 +436,50 @@
                 nplImagePreviewWrap.classList.add('hidden');
                 nplStatus.textContent = file ? `Archivo listo: ${file.name}` : 'Motor listo para procesar documentos.';
             }
+        }
+
+        function showNplPasteToast() {
+            if (!nplPasteToast) return;
+            clearTimeout(nplPasteToastTimer);
+            nplPasteToast.classList.add('is-visible');
+            nplPasteToastTimer = setTimeout(() => {
+                nplPasteToast.classList.remove('is-visible');
+            }, 2200);
+        }
+
+        function setNplFileFromClipboard(imageBlob) {
+            const extension = (imageBlob.type.split('/')[1] || 'png').replace(/[^a-z0-9.+-]/gi, '') || 'png';
+            const pastedFile = new File([imageBlob], `imagen-pegada-npl-${Date.now()}.${extension}`, {
+                type: imageBlob.type || 'image/png'
+            });
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(pastedFile);
+            nplFileInput.files = dataTransfer.files;
+            handleNplFileSelected();
+            showNplPasteToast();
+            addLog(`[INFO] ${getTimestamp()} - Motor NPL: imagen pegada desde portapapeles.`);
+        }
+
+        function handleNplClipboardPaste(event) {
+            if (event.defaultPrevented) return;
+            if (motorNplPanel && motorNplPanel.style.display === 'none') return;
+            const clipboardFiles = Array.from(event.clipboardData?.files || []);
+            const imageFile = clipboardFiles.find((file) => file.type && file.type.startsWith('image/'));
+            if (imageFile) {
+                event.preventDefault();
+                setNplFileFromClipboard(imageFile);
+                return;
+            }
+
+            const clipboardItems = Array.from(event.clipboardData?.items || []);
+            const imageItem = clipboardItems.find((item) => item.type && item.type.startsWith('image/'));
+            if (!imageItem) return;
+
+            const imageBlob = imageItem.getAsFile();
+            if (!imageBlob) return;
+
+            event.preventDefault();
+            setNplFileFromClipboard(imageBlob);
         }
 
         function readFileAsBase64(file) {
@@ -658,6 +722,8 @@
             nplResultPreview.classList.add('hidden');
             nplImagePreviewWrap.classList.add('hidden');
             nplImagePreview.removeAttribute('src');
+            if (nplPasteToast) nplPasteToast.classList.remove('is-visible');
+            clearTimeout(nplPasteToastTimer);
             updateNplComparativeSummary(null);
             revokeNplPreviewUrl();
             const motorPanel = document.getElementById('motor-npl-panel');
@@ -667,6 +733,12 @@
             nplStatus.textContent = 'Motor listo para procesar documentos.';
             console.log('Motor NPL reseteado');
         }
+
+        if (motorNplPanel) {
+            motorNplPanel.addEventListener('paste', handleNplClipboardPaste);
+            motorNplPanel.addEventListener('click', () => motorNplPanel.focus({ preventScroll: true }));
+        }
+        document.addEventListener('paste', handleNplClipboardPaste);
 
         function closeNplEngine() {
             closeNPLEngine();
