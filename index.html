@@ -586,10 +586,10 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 0.35rem;
-            width: min(100%, 168px);
+            gap: 0.62rem;
+            width: min(100%, 262px);
             min-width: 0;
-            padding: 0.36rem 0.48rem 0.46rem;
+            padding: 0.46rem 0.72rem 0.64rem;
             border: 1px solid #CBD5E1;
             border-radius: 0.6rem;
             background: rgba(255, 255, 255, 0.82);
@@ -598,7 +598,7 @@
             -webkit-backdrop-filter: blur(10px) saturate(1.08);
             color: var(--text);
             overflow: hidden;
-            flex: 0 1 168px;
+            flex: 0 0 262px;
         }
 
         .connection-status-bar::before {
@@ -618,8 +618,8 @@
             z-index: 1;
             display: inline-flex;
             align-items: center;
-            gap: 0.24rem;
-            min-width: 0;
+            gap: 0.32rem;
+            min-width: max-content;
             color: var(--connection-muted);
         }
 
@@ -638,7 +638,7 @@
         }
 
         .connection-status-label {
-            font-size: 0.5rem;
+            font-size: 0.56rem;
             font-weight: 800;
             line-height: 1;
             letter-spacing: 0.06em;
@@ -649,10 +649,10 @@
         .connection-pipeline {
             position: relative;
             z-index: 1;
-            width: clamp(34px, 4vw, 50px);
+            width: clamp(72px, 7vw, 96px);
             height: 14px;
             color: var(--connection-accent);
-            flex: 0 1 50px;
+            flex: 1 1 86px;
         }
 
         .connection-pipeline svg {
@@ -682,10 +682,10 @@
         .connection-status-text {
             position: absolute;
             left: 50%;
-            bottom: 0.14rem;
+            bottom: 0.18rem;
             z-index: 2;
             transform: translateX(-50%);
-            font-size: 0.43rem;
+            font-size: 0.48rem;
             font-weight: 900;
             letter-spacing: 0.08em;
             line-height: 1;
@@ -766,8 +766,15 @@
 
         @media (max-width: 1180px) {
             .connection-status-bar {
-                flex: 0 1 148px;
-                width: 148px;
+                flex: 0 0 228px;
+                width: 228px;
+                gap: 0.48rem;
+                padding-inline: 0.6rem;
+            }
+
+            .connection-pipeline {
+                width: 62px;
+                flex-basis: 62px;
             }
         }
 
@@ -778,8 +785,8 @@
             }
 
             .connection-status-bar {
-                width: 106px;
-                flex-basis: 106px;
+                width: 132px;
+                flex-basis: 132px;
                 gap: 0.28rem;
                 padding: 0.34rem 0.4rem;
             }
@@ -790,8 +797,8 @@
             }
 
             .connection-pipeline {
-                width: 32px;
-                flex-basis: 32px;
+                width: 42px;
+                flex-basis: 42px;
             }
         }
 
