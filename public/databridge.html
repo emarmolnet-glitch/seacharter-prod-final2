@@ -504,18 +504,42 @@
         }
 
         function getNplTechnicalJson(result = latestNplResult) {
-            if (!result) return [];
-            if (Array.isArray(result.data_bridge_json)) return result.data_bridge_json;
-            if (Array.isArray(result.data_bridge_json?.buques_detectados)) return result.data_bridge_json.buques_detectados.map(vessel => ({
-                nombre_buque: vessel.nombre_buque || 'N/A',
-                imo: vessel.imo ? String(vessel.imo) : 'N/A',
-                dwt: Number.isFinite(Number(vessel.dwt)) ? Math.trunc(Number(vessel.dwt)) : 0
-            }));
-            return getNplVessels(result).map(vessel => ({
-                nombre_buque: vessel.ship || vessel.vesselName || 'N/A',
-                imo: vessel.imo ? String(vessel.imo) : 'N/A',
-                dwt: Number.isFinite(Number(vessel.dwt)) ? Math.trunc(Number(vessel.dwt)) : 0
-            }));
+            const emptyPayload = { buques: [] };
+            if (!result) return emptyPayload;
+            if (Array.isArray(result.data_bridge_json?.buques)) {
+                return {
+                    buques: result.data_bridge_json.buques.map(vessel => ({
+                        vesselName: vessel.vesselName || vessel.ship || vessel.nombre_buque || 'N/A',
+                        imo: vessel.imo ? String(vessel.imo) : 'N/A',
+                        dwt: Number.isFinite(Number(vessel.dwt)) ? Math.trunc(Number(vessel.dwt)) : 0
+                    }))
+                };
+            }
+            if (Array.isArray(result.data_bridge_json)) {
+                return {
+                    buques: result.data_bridge_json.map(vessel => ({
+                        vesselName: vessel.vesselName || vessel.ship || vessel.nombre_buque || 'N/A',
+                        imo: vessel.imo ? String(vessel.imo) : 'N/A',
+                        dwt: Number.isFinite(Number(vessel.dwt)) ? Math.trunc(Number(vessel.dwt)) : 0
+                    }))
+                };
+            }
+            if (Array.isArray(result.data_bridge_json?.buques_detectados)) {
+                return {
+                    buques: result.data_bridge_json.buques_detectados.map(vessel => ({
+                        vesselName: vessel.vesselName || vessel.nombre_buque || 'N/A',
+                        imo: vessel.imo ? String(vessel.imo) : 'N/A',
+                        dwt: Number.isFinite(Number(vessel.dwt)) ? Math.trunc(Number(vessel.dwt)) : 0
+                    }))
+                };
+            }
+            return {
+                buques: getNplVessels(result).map(vessel => ({
+                    vesselName: vessel.ship || vessel.vesselName || 'N/A',
+                    imo: vessel.imo ? String(vessel.imo) : 'N/A',
+                    dwt: Number.isFinite(Number(vessel.dwt)) ? Math.trunc(Number(vessel.dwt)) : 0
+                }))
+            };
         }
 
         function updateNplComparativeSummary(result) {
