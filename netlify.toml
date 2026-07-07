@@ -4,17 +4,15 @@
   functions = "netlify/functions"
 
 [build.environment]
-  # Bloqueo total de migraciones y gestión de base de datos
+  # Desactivación total de base de datos y migraciones
   NETLIFY_SKIP_BUILD_DATABASE = "true"
   SKIP_PRISMA_MIGRATE = "true"
   PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
   NODE_ENV = "production"
 
+# Configuración de funciones simplificada sin errores de objeto
 [functions]
-  node_bundle = "esbuild"
-
-[functions.external_node_modules]
-  include = ["@netlify/blobs", "ws"]
+  # Eliminamos node_bundle para dejar que Netlify gestione el empaquetado por defecto
 
 [[headers]]
   for = "/*"
