@@ -2,21 +2,19 @@ import OpenAI from "openai";
 import sharp from "sharp";
 
 const CARGO_PROMPT = "Extrae solo datos de cargas: Commodity, cantidad, POL, POD. Devuelve JSON";
-const VESSEL_PROMPT = `Analiza la tabla de la imagen. Tu tarea es mapear los datos de cada barco a dos salidas distintas:
+const VESSEL_PROMPT = `Analiza imagenes de tablas de buques bajo estas reglas estrictas:
 
-Salida A (JSON): Datos técnicos normalizados para base de datos.
+Ignora encabezados y pies de pagina.
 
-Salida B (PDF): Lista ordenada bajo los encabezados visuales [Ship, IMO / Type, DWT, Capacity, Gear, Rating, Open Date, T/C INDEX, OFFERS, DISP OWNER].
+Extrae todas las filas visibles de buques. No proceses un solo buque si hay multiples filas.
 
-Eres un experto en extracción de datos marítimos. Identifica que es una tabla con múltiples filas. No intentes procesar un solo buque. Itera por todas las filas visibles de la tabla de la derecha.
+Extrae obligatoriamente estos 13 campos por cada buque: ship, imo, type, dwt, capacity, gear, rating, open_date, tc_index, offers, disp_owner, freight_cost, remarks.
 
-Para la Salida A, extrae datos técnicos siguiendo estrictamente este esquema por buque: imo, vesselName, dwt, hasGears, flag, lastPort, vesselType, yearBuilt, ownerManager, etaPuertoCarga.
+Si un dato falta, usa exactamente "N/A".
 
-Para la Salida B, conserva los valores visuales visibles para el informe PDF: Ship, IMO / Type, DWT, Capacity, Gear, Rating, Open Date, T/C INDEX, OFFERS, DISP OWNER.
+La salida debe ser UNICAMENTE un objeto JSON estructurado como {"vessels": [...]}.
 
-Si detectas 10 barcos, el JSON técnico debe devolver una lista con 10 objetos y la lista PDF debe devolver 10 filas.
-
-Importante: Añade un campo al principio del JSON llamado totalVesselsDetected con el número total de barcos encontrados.`;
+No incluyas explicaciones ni texto adicional.`;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -101,16 +99,19 @@ function normalizeCargo(cargo = {}) {
 
 function normalizeVessel(vessel = {}) {
   return {
-    imo: normalizeNullableString(vessel.imo),
-    vesselName: normalizeNullableString(vessel.vesselName),
-    dwt: normalizeNumber(vessel.dwt),
-    hasGears: normalizeBoolean(vessel.hasGears),
-    flag: normalizeNullableString(vessel.flag),
-    lastPort: normalizeNullableString(vessel.lastPort),
-    vesselType: normalizeNullableString(vessel.vesselType),
-    yearBuilt: normalizeNumber(vessel.yearBuilt),
-    ownerManager: normalizeNullableString(vessel.ownerManager),
-    etaPuertoCarga: normalizeNullableString(vessel.etaPuertoCarga),
+    ship: normalizeNullableString(vessel.ship ?? vessel.vesselName ?? vessel.Ship) || "N/A",
+    imo: normalizeNullableString(vessel.imo ?? vessel.IMO) || "N/A",
+    type: normalizeNullableString(vessel.type ?? vessel.vesselType ?? vessel.Type) || "N/A",
+    dwt: normalizeNullableString(vessel.dwt ?? vessel.DWT) || "N/A",
+    capacity: normalizeNullableString(vessel.capacity ?? vessel.Capacity) || "N/A",
+    gear: normalizeNullableString(vessel.gear ?? vessel.Gear ?? vessel.hasGears) || "N/A",
+    rating: normalizeNullableString(vessel.rating ?? vessel.Rating) || "N/A",
+    open_date: normalizeNullableString(vessel.open_date ?? vessel.openDate ?? vessel.etaPuertoCarga ?? vessel["Open Date"]) || "N/A",
+    tc_index: normalizeNullableString(vessel.tc_index ?? vessel.tcIndex ?? vessel["T/C INDEX"]) || "N/A",
+    offers: normalizeNullableString(vessel.offers ?? vessel.Offers ?? vessel.OFFERS) || "N/A",
+    disp_owner: normalizeNullableString(vessel.disp_owner ?? vessel.dispOwner ?? vessel.ownerManager ?? vessel["DISP OWNER"]) || "N/A",
+    freight_cost: normalizeNullableString(vessel.freight_cost ?? vessel.freightCost ?? vessel["Freight Cost"]) || "N/A",
+    remarks: normalizeNullableString(vessel.remarks ?? vessel.Remarks) || "N/A",
   };
 }
 
@@ -159,50 +160,37 @@ function cargoSchema() {
 }
 
 function vesselSchema() {
+  const vesselProperties = {
+    ship: { type: "string" },
+    imo: { type: "string" },
+    type: { type: "string" },
+    dwt: { type: "string" },
+    capacity: { type: "string" },
+    gear: { type: "string" },
+    rating: { type: "string" },
+    open_date: { type: "string" },
+    tc_index: { type: "string" },
+    offers: { type: "string" },
+    disp_owner: { type: "string" },
+    freight_cost: { type: "string" },
+    remarks: { type: "string" },
+  };
+  const requiredVesselFields = Object.keys(vesselProperties);
   return {
     type: "object",
     additionalProperties: false,
     properties: {
-      totalVesselsDetected: { type: "number" },
       vessels: {
-        type: ["array", "null"],
+        type: "array",
         items: {
           type: "object",
           additionalProperties: false,
-          properties: {
-            imo: { type: ["string", "null"] },
-            vesselName: { type: ["string", "null"] },
-            dwt: { type: ["number", "null"] },
-            hasGears: { type: ["boolean", "null"] },
-            flag: { type: ["string", "null"] },
-            lastPort: { type: ["string", "null"] },
-            vesselType: { type: ["string", "null"] },
-            yearBuilt: { type: ["number", "null"] },
-            ownerManager: { type: ["string", "null"] },
-            etaPuertoCarga: { type: ["string", "null"] },
-          },
-          required: ["imo", "vesselName", "dwt", "hasGears", "flag", "lastPort", "vesselType", "yearBuilt", "ownerManager", "etaPuertoCarga"],
-        },
-      },
-      pdfRows: {
-        type: ["array", "null"],
-        items: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            ship: { type: ["string", "null"] },
-            imoType: { type: ["string", "null"] },
-            dwtCapacity: { type: ["string", "null"] },
-            gear: { type: ["string", "null"] },
-            ratingOpenDate: { type: ["string", "null"] },
-            tcIndexOffers: { type: ["string", "null"] },
-            dispOwner: { type: ["string", "null"] },
-          },
-          required: ["ship", "imoType", "dwtCapacity", "gear", "ratingOpenDate", "tcIndexOffers", "dispOwner"],
+          properties: vesselProperties,
+          required: requiredVesselFields,
         },
       },
     },
-    required: ["totalVesselsDetected", "vessels", "pdfRows"],
+    required: ["vessels"],
   };
 }
 
@@ -210,7 +198,7 @@ async function analyzeJson({ client, prompt, content, schema, schemaName }) {
   const response = await client.responses.create({
     model: process.env.OPENAI_MODEL || "gpt-5.2",
     input: [
-      { role: "system", content: `${prompt}\nSi no hay datos verificables, devuelve null en el campo principal. No inventes datos.` },
+      { role: "system", content: prompt },
       { role: "user", content },
     ],
     text: {
@@ -267,7 +255,7 @@ function hasAnyMeaningfulCargo(cargo) {
 }
 
 function hasAnyMeaningfulVessel(vessel) {
-  return Boolean(vessel && (vessel.imo || vessel.vesselName || vessel.dwt || vessel.hasGears !== null || vessel.lastPort || vessel.etaPuertoCarga));
+  return Boolean(vessel && Object.values(vessel).some((value) => value !== "N/A"));
 }
 
 function hasAnyMeaningfulPdfRow(row) {
@@ -278,14 +266,8 @@ function normalizeVesselResult(vesselResult) {
   const vessels = Array.isArray(vesselResult?.vessels)
     ? vesselResult.vessels.map(normalizeVessel).filter(hasAnyMeaningfulVessel)
     : [];
-  const pdfRows = Array.isArray(vesselResult?.pdfRows)
-    ? vesselResult.pdfRows.map(normalizePdfRow).filter(hasAnyMeaningfulPdfRow)
-    : [];
-  const detected = normalizeNumber(vesselResult?.totalVesselsDetected);
   return {
-    totalVesselsDetected: Number.isFinite(detected) ? detected : vessels.length,
-    vessels: vessels.length ? vessels : null,
-    pdfRows: pdfRows.length ? pdfRows : null,
+    vessels,
   };
 }
 
@@ -346,19 +328,9 @@ export default async function handler(req) {
         : null;
       const vesselPayload = normalizeVesselResult(vesselResult);
 
-      if (!cargoes?.length && !vesselPayload.vessels?.length) return jsonResponse(null);
+      if (!cargoes?.length && !vesselPayload.vessels?.length) return jsonResponse({ vessels: [] });
 
-      return jsonResponse({
-        totalVesselsDetected: vesselPayload.totalVesselsDetected,
-        cargoes: cargoes?.length ? cargoes : null,
-        vessels: vesselPayload.vessels,
-        pdfRows: vesselPayload.pdfRows,
-        preprocessing: {
-          mode: "split-vertical",
-          originalWidth: screenshot.width,
-          originalHeight: screenshot.height,
-        },
-      });
+      return jsonResponse({ vessels: vesselPayload.vessels || [] });
     }
 
     if (mimeType.startsWith("image/")) {
@@ -372,17 +344,11 @@ export default async function handler(req) {
       const vesselPayload = normalizeVesselResult(vesselResult);
 
       return vesselPayload.vessels?.length
-        ? jsonResponse({
-            totalVesselsDetected: vesselPayload.totalVesselsDetected,
-            cargoes: null,
-            vessels: vesselPayload.vessels,
-            pdfRows: vesselPayload.pdfRows,
-            preprocessing: { mode: "full-image" },
-          })
-        : jsonResponse(null);
+        ? jsonResponse({ vessels: vesselPayload.vessels })
+        : jsonResponse({ vessels: [] });
     }
 
-    return jsonResponse(null);
+    return jsonResponse({ vessels: [] });
   } catch (error) {
     console.error("NPL engine OpenAI processing failed:", error?.message || error);
     return jsonResponse({ error: "No se pudo procesar el documento con el Motor NPL." }, 502);
