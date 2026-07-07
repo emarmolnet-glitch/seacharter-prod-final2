@@ -6351,18 +6351,20 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-pda-pol" class="text-emerald-400 font-bold">Gastos PDA POL ($)</label>
-                                <div class="flex gap-1">
-                                    <input type="number" id="pda-pol" class="input-gc required-use-highlight text-emerald-300 font-bold" value="8675" step="any" oninput="runEngine()">
-                                    <button id="btn-estimate-pda-pol" onclick="autoFillPDA('pol')" class="required-use-highlight bg-slate-800 text-slate-400 px-2 rounded hover:text-white" title="Estimar algorítmicamente (GT/LOA/Manga)"><i class="fa-solid fa-rotate-right"></i></button>
-                                </div>
-                            </div>
-                            <div class="input-group">
-                                <label id="label-pda-pod" class="text-emerald-400 font-bold">Gastos PDA POD ($)</label>
-                                <div class="flex gap-1">
-                                    <input type="number" id="pda-pod" class="input-gc required-use-highlight text-emerald-300 font-bold" value="10675" step="any" oninput="runEngine()">
-                                    <button id="btn-estimate-pda-pod" onclick="autoFillPDA('pod')" class="required-use-highlight bg-slate-800 text-slate-400 px-2 rounded hover:text-white" title="Estimar algorítmicamente (GT/LOA/Manga)"><i class="fa-solid fa-rotate-right"></i></button>
-                                </div>
-                            </div>
+	                                <div class="flex gap-1">
+	                                    <input type="number" id="pda-pol" class="input-gc required-use-highlight text-emerald-300 font-bold" value="8675" step="any" oninput="runEngine()">
+	                                    <button id="btn-estimate-pda-pol" onclick="autoFillPDA('pol')" class="required-use-highlight bg-slate-800 text-slate-400 px-2 rounded hover:text-white" title="Consultar Data Bridge o estimar algorítmicamente (GT/LOA/Manga)"><i class="fa-solid fa-rotate-right"></i></button>
+	                                </div>
+	                                <div id="pda-pol-status" class="hidden mt-1 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em]" role="status" aria-live="polite"></div>
+	                            </div>
+	                            <div class="input-group">
+	                                <label id="label-pda-pod" class="text-emerald-400 font-bold">Gastos PDA POD ($)</label>
+	                                <div class="flex gap-1">
+	                                    <input type="number" id="pda-pod" class="input-gc required-use-highlight text-emerald-300 font-bold" value="10675" step="any" oninput="runEngine()">
+	                                    <button id="btn-estimate-pda-pod" onclick="autoFillPDA('pod')" class="required-use-highlight bg-slate-800 text-slate-400 px-2 rounded hover:text-white" title="Consultar Data Bridge o estimar algorítmicamente (GT/LOA/Manga)"><i class="fa-solid fa-rotate-right"></i></button>
+	                                </div>
+	                                <div id="pda-pod-status" class="hidden mt-1 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em]" role="status" aria-live="polite"></div>
+	                            </div>
                             <div class="input-group">
                                 <label id="label-stevedoring" title="Solo usar si la póliza NO es FIOS">Estiba/Terminal ($)</label>
                                 <input type="number" id="stevedoring-costs" class="input-gc text-purple-300 font-bold" value="0" step="any" oninput="runEngine()">
@@ -18129,9 +18131,9 @@
             });
         }
 
-        function getPortMultiplier(portName) {
-            if (!portName) return 1.2;
-            const p = portName.toLowerCase();
+	        function getPortMultiplier(portName) {
+	            if (!portName) return 1.2;
+	            const p = portName.toLowerCase();
             
             // Calibrado mundial basado en datos empíricos (Referencia: Bejaia D.A.)
             if (p.includes("estados unidos") || p.includes("usa") || p.includes("canadá") || p.includes("reino unido") || p.includes("australia")) return 2.5;
@@ -18142,14 +18144,116 @@
             if (p.includes("méxico") || p.includes("panamá") || p.includes("costa rica") || p.includes("república dominicana") || p.includes("jamaica")) return 1.2;
             if (p.includes("china") || p.includes("singapur") || p.includes("corea") || p.includes("india")) return 1.1;
             if (p.includes("sudáfrica") || p.includes("nigeria") || p.includes("angola") || p.includes("ghana") || p.includes("camerún")) return 1.5; 
-            
-            return 1.1; // Base global por defecto
-        }
 
-        function autoFillPDA(type, showNotification = true) {
-            const readNumber = (id) => {
-                const raw = document.getElementById(id)?.value;
-                if (raw === undefined || raw === null) return 0;
+	            return 1.1; // Base global por defecto
+	        }
+
+	        function readPdaTariffNumber(source, aliases) {
+	            if (!source || typeof source !== 'object') return 0;
+	            const normalizeKey = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+	            const normalizedAliases = aliases.map(normalizeKey);
+	            const entries = Object.entries(source);
+	            for (const [key, value] of entries) {
+	                if (!normalizedAliases.includes(normalizeKey(key))) continue;
+	                if (typeof value === 'number' && Number.isFinite(value)) return value;
+	                if (typeof value === 'string') {
+	                    const parsed = parseFloat(value.replace(',', '.').replace(/[^\d.-]/g, ''));
+	                    if (Number.isFinite(parsed)) return parsed;
+	                }
+	            }
+	            for (const value of entries.map(([, value]) => value)) {
+	                if (value && typeof value === 'object' && !Array.isArray(value)) {
+	                    const nested = readPdaTariffNumber(value, aliases);
+	                    if (nested > 0) return nested;
+	                }
+	            }
+	            return 0;
+	        }
+
+	        function calculateFromTariff(tarifaJson, vesselData) {
+	            const tariff = tarifaJson?.tariff || tarifaJson?.tarifa || tarifaJson?.data || tarifaJson;
+	            if (!tariff || typeof tariff !== 'object') return null;
+
+	            const directTotal = readPdaTariffNumber(tariff, [
+	                'total_pda', 'pda_total', 'total', 'total_usd', 'amount_usd', 'pda_usd', 'official_pda_usd'
+	            ]);
+	            if (directTotal > 0) {
+	                return {
+	                    totalPDA: directTotal,
+	                    tasasAutoridad: readPdaTariffNumber(tariff, ['tasas_autoridad', 'authority_dues', 'port_dues']) || directTotal,
+	                    navManiobra: readPdaTariffNumber(tariff, ['nav_maniobra', 'pilotage_towage_mooring', 'maneuvering_dues']),
+	                    muelleEstadia: readPdaTariffNumber(tariff, ['muelle_estadia', 'berth_stay', 'quay_stay_dues']),
+	                    agenciaVarios: readPdaTariffNumber(tariff, ['agencia_varios', 'agency_misc', 'agency_fee'])
+	                };
+	            }
+
+	            const gtRate = readPdaTariffNumber(tariff, ['gt_rate', 'rate_gt', 'tarifa_gt', 'tonnage_rate', 'tonnage_dues_rate']);
+	            const loaBeamRate = readPdaTariffNumber(tariff, ['loa_beam_rate', 'rate_loa_beam', 'tarifa_loa_manga', 'pilotage_towage_rate']);
+	            const loaDayRate = readPdaTariffNumber(tariff, ['loa_day_rate', 'rate_loa_day', 'tarifa_eslora_dia', 'berth_day_rate']);
+	            const agencyBase = readPdaTariffNumber(tariff, ['agency_base', 'base_agencia', 'agency_fee_base', 'agencia_base']);
+	            const agencyDayRate = readPdaTariffNumber(tariff, ['agency_day_rate', 'agencia_dia', 'agency_extras_day_rate']);
+
+	            if (gtRate <= 0 || loaBeamRate <= 0 || loaDayRate <= 0 || agencyBase <= 0) return null;
+
+	            const tasasAutoridad = vesselData.gt * gtRate;
+	            const navManiobra = vesselData.loa * vesselData.beam * loaBeamRate;
+	            const muelleEstadia = vesselData.loa * vesselData.totalDaysInPort * loaDayRate;
+	            const agenciaVarios = agencyBase + (vesselData.totalDaysInPort * agencyDayRate);
+
+	            return {
+	                totalPDA: tasasAutoridad + navManiobra + muelleEstadia + agenciaVarios,
+	                tasasAutoridad,
+	                navManiobra,
+	                muelleEstadia,
+	                agenciaVarios
+	            };
+	        }
+
+	        function calculateEmpiricalPDA(vesselData) {
+	            const multiplier = getPortMultiplier(vesselData.portName);
+	            const tasasAutoridad = vesselData.gt * 0.70 * multiplier; // Tonnage, Sanitary, Quay dues, Fenders
+	            const navManiobra = vesselData.loa * vesselData.beam * 6.0 * multiplier; // Pilotage, Towage & Mooring
+	            const muelleEstadia = (vesselData.loa * 0.75 * vesselData.totalDaysInPort) * multiplier; // Anchorage & Stay tax
+	            const agenciaVarios = (2000 + (vesselData.totalDaysInPort * 50)) * multiplier; // Agencia base plana + extras
+	            return {
+	                totalPDA: tasasAutoridad + navManiobra + muelleEstadia + agenciaVarios,
+	                tasasAutoridad,
+	                navManiobra,
+	                muelleEstadia,
+	                agenciaVarios
+	            };
+	        }
+
+	        async function fetchPdaTariffFromDataBridge(type, vesselData) {
+	            const params = new URLSearchParams({
+	                port: vesselData.portName,
+	                type,
+	                dwt: String(Math.round(vesselData.dwt)),
+	                gt: String(Math.round(vesselData.gt)),
+	                loa: String(Math.round(vesselData.loa))
+	            });
+	            const response = await fetch(`/api/databridge-port-tariff?${params.toString()}`, {
+	                method: 'GET',
+	                headers: { Accept: 'application/json' }
+	            });
+	            if (response.status === 404) return null;
+	            if (!response.ok) throw new Error(`Data Bridge tariff lookup failed (${response.status})`);
+	            const payload = await response.json();
+	            return payload?.tariff || payload?.tarifa || payload?.data || payload;
+	        }
+
+	        function setPdaCalculationStatus(type, mode) {
+	            const status = document.getElementById(`pda-${type}-status`);
+	            if (!status) return;
+	            const official = mode === 'official';
+	            status.className = `mt-1 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${official ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-300' : 'border-amber-400/40 bg-amber-500/10 text-amber-300'}`;
+	            status.innerHTML = `<i class="fa-solid ${official ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i><span>${official ? 'Cálculo Oficial' : 'Cálculo Estimado'}</span>`;
+	        }
+
+	        async function autoFillPDA(type, showNotification = true) {
+	            const readNumber = (id) => {
+	                const raw = document.getElementById(id)?.value;
+	                if (raw === undefined || raw === null) return 0;
                 const normalized = String(raw).replace(',', '.').replace(/[^\d.-]/g, '');
                 return parseFloat(normalized) || 0;
             };
@@ -18179,20 +18283,29 @@
             const loaFromInput = readNumber('vessel-loa');
             const loa = Math.round(loaFromInput > 0 ? loaFromInput : Math.pow(dwt, 0.333) * 5.2);
             const beam = Math.round(Math.pow(dwt, 0.333) * 0.82);
-            const daysInPort = cargo > 0 && activeRate > 0 ? (cargo / activeRate) : 0;
-            const totalDaysInPort = daysInPort + (marginDays / 2);
+	            const daysInPort = cargo > 0 && activeRate > 0 ? (cargo / activeRate) : 0;
+	            const totalDaysInPort = daysInPort + (marginDays / 2);
 
-            const multiplier = getPortMultiplier(portName);
+	            const vesselData = { portName, dwt, cargo, gt, loa, beam, totalDaysInPort, netTonnage, loaFromInput };
+	            let calculation = null;
+	            let calculationMode = 'estimated';
+	            try {
+	                const tariffJson = await fetchPdaTariffFromDataBridge(type, vesselData);
+	                const tariffCalculation = tariffJson ? calculateFromTariff(tariffJson, vesselData) : null;
+	                if (tariffCalculation && tariffCalculation.totalPDA > 0) {
+	                    calculation = tariffCalculation;
+	                    calculationMode = 'official';
+	                }
+	            } catch {
+	                calculation = null;
+	            }
+	            if (!calculation) {
+	                calculation = calculateEmpiricalPDA(vesselData);
+	            }
 
-            // Fórmulas re-calibradas empíricamente con la PDA real de Bejaia (Acqua Stella 10k DWT)
-            const tasasAutoridad = gt * 0.70 * multiplier; // Tonnage, Sanitary, Quay dues, Fenders
-            const navManiobra = loa * beam * 6.0 * multiplier; // Pilotage, Towage & Mooring
-            const muelleEstadia = (loa * 0.75 * totalDaysInPort) * multiplier; // Anchorage & Stay tax
-            const agenciaVarios = (2000 + (totalDaysInPort * 50)) * multiplier; // Agencia base plana + extras
+	            let { totalPDA, tasasAutoridad, navManiobra, muelleEstadia, agenciaVarios } = calculation;
 
-            let totalPDA = tasasAutoridad + navManiobra + muelleEstadia + agenciaVarios;
-            
-            if (type === 'pod') totalPDA *= 1.10; // Recargo general POD (MARPOL, etc)
+	            if (type === 'pod') totalPDA *= 1.10; // Recargo general POD (MARPOL, etc)
 
             // Adjustments based on Cargo Type (Dry vs Liquid bulk)
             const cargoType = document.getElementById('cargo-type').value;
@@ -18203,19 +18316,22 @@
             }
 
             const finalPDA = Math.round(totalPDA / 50) * 50;
-            const pdaInput = document.getElementById(`pda-${type}`);
-            if (!pdaInput) return;
-            pdaInput.value = finalPDA;
-            pdaInput.dispatchEvent(new Event('input', { bubbles: true }));
-            
-            if (showNotification) {
-                const podTag = type === 'pod' ? ' (+10% POD)' : '';
-                const extraSurcharges = `${podTag}${liquidSurchargeTag}`;
-                const sourceTag = loaFromInput > 0 || netTonnage > 0 ? ' | Datos buque reales aplicados' : '';
-                showToast(`PDA ${type.toUpperCase()}: $${finalPDA.toLocaleString('en-US')}${extraSurcharges}<br><span class="text-[10px] text-emerald-300 mt-1 block font-mono">Nav/Maniobra: $${Math.round(navManiobra)} | Tasas: $${Math.round(tasasAutoridad)} | Agencia/Misc: $${Math.round(agenciaVarios)} | Muelle: $${Math.round(muelleEstadia)}${sourceTag}</span>`);
-            }
-            runEngine();
-        }
+	            const pdaInput = document.getElementById(`pda-${type}`);
+	            if (!pdaInput) return;
+	            pdaInput.value = finalPDA;
+	            pdaInput.dataset.calculationMode = calculationMode;
+	            pdaInput.dispatchEvent(new Event('input', { bubbles: true }));
+	            setPdaCalculationStatus(type, calculationMode);
+
+	            if (showNotification) {
+	                const podTag = type === 'pod' ? ' (+10% POD)' : '';
+	                const extraSurcharges = `${podTag}${liquidSurchargeTag}`;
+	                const sourceTag = calculationMode === 'official' ? ' | Data Bridge' : (loaFromInput > 0 || netTonnage > 0 ? ' | Datos buque reales aplicados' : '');
+	                const sourceLabel = calculationMode === 'official' ? 'Cálculo Oficial' : 'Cálculo Estimado';
+	                showToast(`PDA ${type.toUpperCase()}: $${finalPDA.toLocaleString('en-US')} · ${sourceLabel}${extraSurcharges}<br><span class="text-[10px] text-emerald-300 mt-1 block font-mono">Nav/Maniobra: $${Math.round(navManiobra)} | Tasas: $${Math.round(tasasAutoridad)} | Agencia/Misc: $${Math.round(agenciaVarios)} | Muelle: $${Math.round(muelleEstadia)}${sourceTag}</span>`);
+	            }
+	            runEngine();
+	        }
 
         async function autoFillVesselSpecs() {
             let vesselName = document.getElementById('vessel-name').value.trim();
