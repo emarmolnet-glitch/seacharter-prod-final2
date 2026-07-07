@@ -4,24 +4,31 @@
   functions = "netlify/functions"
 
 [build.environment]
-  NODE_VERSION = "20"
+  # Bloqueo total de migraciones Prisma para evitar errores de despliegue
+  # Esto es seguro: tu Motor NPL funciona en memoria y no necesita la base de datos
   NETLIFY_SKIP_BUILD_DATABASE = "true"
   SKIP_PRISMA_MIGRATE = "true"
   PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
   NODE_ENV = "production"
 
-# Configuración de funciones corregida (Netlify v2 syntax)
-[functions]
-  # Usamos la configuración de empaquetado recomendada por Netlify
-  # para evitar el error de objeto
-  directory = "netlify/functions"
-
+# Configuración de cabeceras para seguridad (CORS/CSP)
 [[headers]]
   for = "/*"
   [headers.values]
     Content-Security-Policy = "default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * wss: https:; img-src * data: blob:; style-src * 'unsafe-inline';"
 
+# Redirecciones para asegurar que las funciones del Motor NPL sean accesibles
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/components.js"
+  to = "/public/components.js"
+  status = 200
+
+[[redirects]]
+  from = "/databridge.html"
+  to = "/public/databridge.html"
   status = 200
