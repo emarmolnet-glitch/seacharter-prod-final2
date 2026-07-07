@@ -4,14 +4,13 @@
   functions = "netlify/functions"
 
 [build.environment]
-  # ESTO ES LO QUE SOLUCIONA EL ERROR:
-  # Desactivamos completamente Prisma y la base de datos para este despliegue.
-  # Netlify no intentará realizar ninguna migración, solo construirá el código.
+  # ESTO BLOQUEA LAS MIGRACIONES AUTOMÁTICAS
   SKIP_PRISMA_MIGRATE = "true"
   PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
   NETLIFY_SKIP_BUILD_DATABASE = "true"
-  DATABASE_URL = "none"
   NODE_ENV = "production"
+  # Mantenemos la conexión real para que tu app funcione
+  DATABASE_URL = "tu_valor_real_de_la_variable"
 
 [[headers]]
   for = "/*"
