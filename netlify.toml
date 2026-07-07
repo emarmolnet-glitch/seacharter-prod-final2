@@ -3,12 +3,14 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[build.environment]
+  SKIP_PRISMA_MIGRATE = "true"
+
 [functions]
   node_bundle = "esbuild"
-  external_node_modules = ["@netlify/blobs", "ws"]
 
-[build.environment]
-  SKIP_PRISMA_MIGRATE = "true" 
+[functions.external_node_modules]
+  include = ["@netlify/blobs", "ws"]
 
 [[headers]]
   for = "/*"
