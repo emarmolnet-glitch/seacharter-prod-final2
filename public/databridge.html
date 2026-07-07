@@ -103,6 +103,16 @@
             border: 1px dashed rgba(30, 58, 138, 0.45);
             pointer-events: none;
         }
+        .npl-action-button {
+            position: relative;
+            z-index: 30;
+        }
+        .npl-exit-button {
+            position: absolute;
+            top: 0.85rem;
+            right: 0.85rem;
+            z-index: 40;
+        }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden p-6 select-none bg-slate-50 text-slate-800">
@@ -163,7 +173,7 @@
     </section>
 
     <!-- Main Split Area -->
-    <div class="databridge-workspace flex-1 overflow-hidden min-h-0 my-4">
+    <div id="databridge-main-container" class="databridge-workspace flex-1 overflow-hidden min-h-0 my-4">
         <!-- Terminal Console Area (Left Pane) -->
         <main class="flex-1 bg-white border border-slate-200 rounded-xl flex flex-col overflow-hidden relative shadow-sm">
             <!-- Terminal Header -->
@@ -208,7 +218,11 @@
         </section>
     </div>
 
-    <section id="motor-npl-panel" class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 shrink-0">
+    <section id="motor-npl-panel" class="relative bg-white border border-slate-200 rounded-xl shadow-sm p-4 pr-24 shrink-0">
+        <button type="button" id="btn-exit-npl" onclick="closeNPLEngine()" class="npl-exit-button bg-white border border-slate-300 text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-2 transition duration-150" title="Salir del Motor NPL" aria-label="Salir del Motor NPL">
+            <i class="fa-solid fa-xmark"></i>
+            <span>Salir</span>
+        </button>
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
                 <h2 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Motor NPL Independiente</h2>
@@ -216,21 +230,21 @@
             </div>
             <div class="flex flex-wrap items-center gap-2">
                 <input id="npl-file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.csv,.json" onchange="handleNplFileSelected()" class="block w-64 text-xs text-slate-600 file:mr-3 file:rounded-lg file:border file:border-slate-200 file:bg-slate-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-100">
-                <button type="button" id="btn-process-npl" onclick="processNplDocument()" class="bg-[#1E3A8A] hover:bg-blue-900 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 shadow-sm transition duration-150">
+                <button type="button" id="btn-process-npl" onclick="processNplDocument()" class="npl-action-button bg-[#1E3A8A] hover:bg-blue-900 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 shadow-sm transition duration-150">
                     <i class="fa-solid fa-file-import"></i>
                     <span>Procesar Documento</span>
                 </button>
-                <button type="button" id="btn-download-npl-json" onclick="downloadNplJson()" disabled class="bg-white border border-slate-200 text-slate-400 disabled:cursor-not-allowed enabled:hover:bg-slate-50 enabled:text-slate-700 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150">
+                <button type="button" id="btn-download-npl-json" onclick="downloadNplJson()" disabled class="npl-action-button bg-white border border-slate-200 text-slate-400 disabled:cursor-not-allowed enabled:hover:bg-slate-50 enabled:text-slate-700 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150">
                     <i class="fa-solid fa-download"></i>
                     <span>JSON</span>
                 </button>
-                <button type="button" id="btn-download-npl-pdf" onclick="downloadNplPdf()" disabled class="bg-white border border-slate-200 text-slate-400 disabled:cursor-not-allowed enabled:hover:bg-slate-50 enabled:text-slate-700 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150">
+                <button type="button" id="btn-download-npl-pdf" onclick="downloadNplPdf()" disabled class="npl-action-button bg-white border border-slate-200 text-slate-400 disabled:cursor-not-allowed enabled:hover:bg-slate-50 enabled:text-slate-700 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150">
                     <i class="fa-solid fa-file-pdf"></i>
                     <span>Imprimir</span>
                 </button>
-                <button type="button" id="btn-close-npl" onclick="closeNplEngine()" class="bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150">
+                <button type="button" id="btn-close-npl" onclick="closeNPLEngine()" class="npl-action-button bg-white border border-slate-200 text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition duration-150">
                     <i class="fa-solid fa-xmark"></i>
-                    <span>Cerrar</span>
+                    <span>Salir</span>
                 </button>
             </div>
         </div>
@@ -295,6 +309,7 @@
         let latestNplResult = null;
         let latestNplFileName = null;
         let latestNplPreviewUrl = null;
+        let vesselDataCache = null;
 
         function hideDataBridgeWindow() {
             if (window.dataBridgeAPI && typeof window.dataBridgeAPI.hide === 'function') {
@@ -383,6 +398,7 @@
         function handleNplFileSelected() {
             const file = nplFileInput.files && nplFileInput.files[0];
             latestNplResult = null;
+            vesselDataCache = null;
             latestNplFileName = file ? file.name : null;
             setNplExportState(false);
             nplResultPreview.classList.add('hidden');
@@ -427,23 +443,19 @@
             const rows = Array.isArray(result?.pdfRows) ? result.pdfRows : [];
             if (rows.length) return rows;
             return getNplVessels(result).map(vessel => ({
-                ship: vessel.vesselName,
-                imoType: [vessel.imo, vessel.vesselType].filter(Boolean).join(' / ') || null,
-                dwtCapacity: [vessel.dwt, vessel.dwt].filter(value => value !== null && value !== undefined && value !== '').join(' / ') || null,
-                gear: vessel.hasGears === null || vessel.hasGears === undefined ? null : (vessel.hasGears ? 'Geared' : 'Gearless'),
-                ratingOpenDate: vessel.etaPuertoCarga,
-                tcIndexOffers: null,
-                dispOwner: vessel.ownerManager
+                ship: vessel.ship,
+                imoType: [vessel.imo, vessel.type].filter(value => value && value !== 'N/A').join(' / ') || 'N/A',
+                dwtCapacity: [vessel.dwt, vessel.capacity].filter(value => value && value !== 'N/A').join(' / ') || 'N/A',
+                gear: vessel.gear,
+                ratingOpenDate: [vessel.rating, vessel.open_date].filter(value => value && value !== 'N/A').join(' / ') || 'N/A',
+                tcIndexOffers: [vessel.tc_index, vessel.offers].filter(value => value && value !== 'N/A').join(' / ') || 'N/A',
+                dispOwner: vessel.disp_owner
             }));
         }
 
         function getNplTechnicalJson(result = latestNplResult) {
             if (!result) return null;
             return {
-                totalVesselsDetected: Number.isFinite(Number(result.totalVesselsDetected))
-                    ? Number(result.totalVesselsDetected)
-                    : getNplVessels(result).length,
-                cargoes: Array.isArray(result.cargoes) ? result.cargoes : null,
                 vessels: getNplVessels(result)
             };
         }
@@ -459,7 +471,7 @@
             const detected = Number.isFinite(Number(result.totalVesselsDetected))
                 ? Number(result.totalVesselsDetected)
                 : vessels.length;
-            const names = vessels.map(vessel => vessel.vesselName).filter(Boolean);
+            const names = vessels.map(vessel => vessel.ship).filter(Boolean);
             const briefNames = names.slice(0, 12).join(', ') || 'Sin nombres legibles';
             const overflow = names.length > 12 ? ` y ${names.length - 12} más` : '';
             nplComparativeSummaryText.textContent = `Se han detectado ${detected} buques. Detalle: ${briefNames}${overflow}.`;
@@ -475,6 +487,7 @@
             }
 
             latestNplResult = null;
+            vesselDataCache = null;
             latestNplFileName = file.name;
             setNplExportState(false);
             nplResultPreview.classList.add('hidden');
@@ -500,6 +513,7 @@
                 }
 
                 latestNplResult = result;
+                vesselDataCache = result;
                 const vesselCount = Number.isFinite(Number(result?.totalVesselsDetected))
                     ? Number(result.totalVesselsDetected)
                     : getNplVessels(result).length;
@@ -634,7 +648,8 @@
             addLog(`[INFO] ${getTimestamp()} - Motor NPL: PDF generado.`);
         }
 
-        function closeNplEngine() {
+        function closeNPLEngine() {
+            vesselDataCache = null;
             latestNplResult = null;
             latestNplFileName = null;
             setNplExportState(false);
@@ -642,13 +657,19 @@
             nplResultPreview.textContent = '';
             nplResultPreview.classList.add('hidden');
             nplImagePreviewWrap.classList.add('hidden');
+            nplImagePreview.removeAttribute('src');
             updateNplComparativeSummary(null);
             revokeNplPreviewUrl();
-            document.getElementById('motor-npl-panel').style.display = 'none';
-            sessionStorage.clear();
-            document.getElementById('file-preview').src = '';
+            const motorPanel = document.getElementById('motor-npl-panel');
+            if (motorPanel) motorPanel.style.display = 'none';
+            const dataBridgeMain = document.getElementById('databridge-main-container');
+            if (dataBridgeMain) dataBridgeMain.style.display = 'block';
             nplStatus.textContent = 'Motor listo para procesar documentos.';
             console.log('Motor NPL reseteado');
+        }
+
+        function closeNplEngine() {
+            closeNPLEngine();
         }
 
         function populateInitialLogs() {

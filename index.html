@@ -583,6 +583,7 @@
             --connection-accent: var(--accent);
             --connection-muted: #475569;
             position: relative;
+            z-index: 40;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -3707,7 +3708,7 @@
         header .module-tabs-wrapper {
             display: flex !important;
             align-items: center !important;
-            gap: 0.5rem !important;
+            gap: 15px !important;
             justify-content: center !important;
             justify-self: center !important;
             width: 100% !important;
@@ -3791,9 +3792,12 @@
             align-items: center !important;
             justify-content: center !important;
             flex: 0 0 auto !important;
+            z-index: 80 !important;
         }
 
         header .tools-dropdown-trigger {
+            position: relative !important;
+            z-index: 85 !important;
             width: 40px !important;
             height: 40px !important;
             min-height: 40px !important;
@@ -5667,6 +5671,7 @@
         </div>
 
         <div class="module-tabs-wrapper">
+            <div id="connection-status-root"></div>
             <div class="tools-dropdown-container">
                 <button
                     type="button"
@@ -5719,7 +5724,6 @@
         </div>
 
         <div class="header-actions-right">
-            <div id="connection-status-root"></div>
             <!-- Session Actions Container -->
             <div class="flex items-center gap-2" id="session-actions">
                 <div class="tools-dropdown-container">
