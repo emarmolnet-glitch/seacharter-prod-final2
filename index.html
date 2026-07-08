@@ -19790,6 +19790,8 @@
                 return;
             }
 
+            applyPendingDraftCargoAdjustment();
+
             const distBal = parseFloat(document.getElementById('dist-ballast').value) || 0;
             const distLaden = parseFloat(document.getElementById('dist-laden').value) || 0;
             const spdBal = parseFloat(document.getElementById('spd-ballast').value) || 11;
@@ -20864,6 +20866,7 @@
             } else if (typeof renderStressTestScenario === 'function') {
                 renderStressTestScenario(State);
             }
+            notifyPendingDraftRecalculation();
         }
 
         function bindShadowEstimator() {
@@ -22225,6 +22228,84 @@
             };
         }
 
+        function getPortInfoRequiredDraft() {
+            const rawDraft = document.getElementById('current-draft')?.value;
+            const requiredDraft = parseFloat(String(rawDraft || '').replace(',', '.'));
+            return Number.isFinite(requiredDraft) && requiredDraft > 0 ? requiredDraft : null;
+        }
+
+        function flashPortInfoDraftInput(input) {
+            if (!input) return;
+            input.style.transition = 'background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease';
+            input.style.setProperty('border-color', '#10b981', 'important');
+            input.style.setProperty('box-shadow', '0 0 0 3px rgba(16,185,129,0.35)', 'important');
+            input.style.setProperty('background-color', 'rgba(16,185,129,0.14)', 'important');
+            window.clearTimeout(input.dataset.portInfoFlashTimer);
+            input.dataset.portInfoFlashTimer = window.setTimeout(() => {
+                input.style.removeProperty('border-color');
+                input.style.removeProperty('box-shadow');
+                input.style.removeProperty('background-color');
+            }, 1400);
+        }
+
+        function updateMainCurrentDraftInput(draft) {
+            const draftInput = document.getElementById('current-draft');
+            if (!draftInput) return;
+            draftInput.value = Number(draft).toFixed(2).replace(/\.00$/, '');
+            flashPortInfoDraftInput(draftInput);
+        }
+
+        function preparePortInfoDraftCargoAdjustment(draft) {
+            const cargoInput = document.getElementById('cargo-qty');
+            const maxDraft = parseFloat(document.getElementById('vessel-draft')?.value) || 0;
+            const currentCargo = parseFloat(cargoInput?.value) || 0;
+            window.SeaCharterState = window.SeaCharterState || {};
+            window.SeaCharterState.pendingDraftRecalculation = {
+                draft,
+                maxDraft,
+                originalCargo: currentCargo,
+                adjustedCargo: currentCargo,
+                reduced: false
+            };
+        }
+
+        function applyPendingDraftCargoAdjustment() {
+            const pending = window.SeaCharterState?.pendingDraftRecalculation;
+            if (!pending) return null;
+
+            const cargoInput = document.getElementById('cargo-qty');
+            const draft = Number(pending.draft) || 0;
+            const maxDraft = Number(pending.maxDraft) || (parseFloat(document.getElementById('vessel-draft')?.value) || 0);
+            const originalCargo = Number(pending.originalCargo) || (parseFloat(cargoInput?.value) || 0);
+
+            if (cargoInput && draft > 0 && maxDraft > 0 && originalCargo > 0 && draft < maxDraft) {
+                const adjustedCargo = Math.max(0, Math.floor(originalCargo * (draft / maxDraft)));
+                if (adjustedCargo < originalCargo) {
+                    cargoInput.value = String(adjustedCargo);
+                    pending.adjustedCargo = adjustedCargo;
+                    pending.reduced = true;
+                }
+            }
+
+            return pending;
+        }
+
+        function notifyPendingDraftRecalculation() {
+            const pending = window.SeaCharterState?.pendingDraftRecalculation;
+            if (!pending) return;
+
+            const draftLabel = (Number(pending.draft) || 0).toFixed(2).replace(/\.00$/, '');
+            const stateCargo = typeof State !== 'undefined' ? Number(State.cargo) || 0 : 0;
+            const adjustedCargo = Math.round(Number(pending.adjustedCargo) || stateCargo || 0);
+            if (pending.reduced) {
+                showToast(`⚠️ Calado restringido a ${draftLabel}m. La carga máxima ha sido ajustada a ${adjustedCargo.toLocaleString('en-US')} TM. Costes recalculados.`);
+            } else {
+                showToast(`✅ Calado de ${draftLabel}m aplicado. Capacidad de carga óptima. Costes actualizados.`);
+            }
+
+            delete window.SeaCharterState.pendingDraftRecalculation;
+        }
+
         function parsePortInfoJson(rawText, portName) {
             const text = String(rawText || '').replace(/```json|```/g, '').trim();
             const match = text.match(/\{[\s\S]*\}/);
@@ -22360,10 +22441,13 @@
 
             window.SeaCharterState = window.SeaCharterState || {};
             window.SeaCharterState.selectedDraft = draft;
+            updateMainCurrentDraftInput(draft);
+            preparePortInfoDraftCargoAdjustment(draft);
             if (window.AppCalculadora && typeof window.AppCalculadora.recalcularCostes === 'function') {
                 window.AppCalculadora.recalcularCostes();
+            } else if (typeof runEngine === 'function') {
+                runEngine();
             }
-            showToast(`Calado aplicado: ${draft}`, true);
         }
         window.aplicarTerminal = aplicarTerminal;
 
@@ -22423,6 +22507,7 @@
             const portName = document.getElementById(inputId).value;
             const currentLang = document.getElementById('language-selector')?.value || 'es';
             const cargoContext = getPortInfoCargoContext(inputId);
+            const caladoRequerido = getPortInfoRequiredDraft();
 
             if(!portName) {
                 if (currentLang === 'en') return alert("Please enter a port name first.");
@@ -22505,7 +22590,7 @@
 
             openAIModal(modalTitle, loaderText);
 
-            const cacheKey = normalizarClaveCachePuerto(portName);
+            const cacheKey = `${normalizarClaveCachePuerto(portName)}::draft:${caladoRequerido ?? 'na'}`;
             if (cachePuertos[cacheKey]) {
                 mostrarPortInfoData(cachePuertos[cacheKey], inputId, portName, true);
                 showToast("Port Info cargado desde caché local.", true);
@@ -22513,7 +22598,10 @@
             }
 
             try {
-                const payload = { contents: [{ parts: [{ text: prompt }] }] };
+                const payload = {
+                    contents: [{ parts: [{ text: prompt }] }],
+                    calado_requerido: caladoRequerido
+                };
                 const data = await executeGeminiRequest(payload);
                 let rawText = data.candidates[0].content.parts[0].text;
                 const portInfoData = parsePortInfoJson(rawText, portName);
