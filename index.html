@@ -3368,6 +3368,7 @@
         #view-matching {
             background-color: var(--bg) !important;
             color: var(--text) !important;
+            padding-bottom: 7.75rem !important;
         }
 
         .ai-work-card {
@@ -3380,6 +3381,100 @@
 
         .ai-work-grid {
             gap: 1.5rem !important;
+        }
+
+        #view-matching .matching-actions-host {
+            display: contents;
+        }
+
+        #matching-results-panel {
+            grid-column: 1 / -1 !important;
+            width: 100% !important;
+        }
+
+        #matching-action-dock {
+            position: fixed;
+            left: 50%;
+            bottom: 1.75rem;
+            z-index: 180;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            width: min(760px, calc(100vw - 2.5rem));
+            padding: 0.55rem;
+            transform: translateX(-50%);
+            background: rgba(248, 250, 252, 0.94);
+            border: 1px solid rgba(148, 163, 184, 0.42);
+            border-radius: 10px;
+            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+            backdrop-filter: blur(12px);
+        }
+
+        #matching-action-dock #btn-run-matching,
+        #matching-action-dock #btnGenerateReport,
+        #matching-action-dock #btnReportDropdownTrigger {
+            min-height: 2.25rem;
+            padding-top: 0.48rem !important;
+            padding-bottom: 0.48rem !important;
+            font-size: 0.62rem !important;
+            border-radius: 7px !important;
+        }
+
+        #matching-action-dock #btn-run-matching {
+            background: #fbd38d !important;
+            border-color: #f6ad55 !important;
+            color: #5f370e !important;
+        }
+
+        #matching-action-dock #btn-run-matching:hover {
+            background: #f6c26b !important;
+            color: #4a2a07 !important;
+        }
+
+        #matching-action-dock #btnGenerateReport,
+        #matching-action-dock #btnReportDropdownTrigger {
+            background: #bbf7d0 !important;
+            border-color: #86efac !important;
+            color: #14532d !important;
+        }
+
+        #matching-action-dock #btnGenerateReport:hover,
+        #matching-action-dock #btnReportDropdownTrigger:hover {
+            background: #a7f3c0 !important;
+            color: #0f3d24 !important;
+        }
+
+        #matching-action-dock #report-split-button-container {
+            margin-top: 0 !important;
+            min-width: 270px;
+        }
+
+        #matching-action-dock #btnGenerateReport {
+            border-radius: 7px 0 0 7px !important;
+        }
+
+        #matching-action-dock #btnReportDropdownTrigger {
+            border-radius: 0 7px 7px 0 !important;
+        }
+
+        #matching-action-dock #btn-matching-subtitle {
+            display: none;
+        }
+
+        @media (max-width: 720px) {
+            #view-matching {
+                padding-bottom: 9.5rem !important;
+            }
+
+            #matching-action-dock {
+                align-items: stretch;
+                flex-direction: column;
+                bottom: 1.1rem;
+            }
+
+            #matching-action-dock #report-split-button-container {
+                min-width: 0;
+            }
         }
 
         /* 4. NLP Smart Cargo Parser Card Light-Theme overrides */
@@ -10076,54 +10171,56 @@
             <div class="grid grid-cols-1 lg:grid-cols-12 ai-work-grid">
                 
                 <!-- Left Panel: Operational Controls (4 cols) -->
-                <div class="lg:col-span-4 flex flex-col gap-6">
+                <div class="matching-actions-host">
                     <!-- Run Match Button -->
-                    <button id="btn-run-matching" onclick="executeMatchingEngine()" class="w-full bg-[#004e64] hover:bg-[#003f52] text-white font-black text-xs uppercase py-3 rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-[#004e64]">
-                        <i class="fa-solid fa-play"></i>
-                        Ejecutar Coincidencias / Run Match
-                    </button>
-                    <!-- Text requested below "Run Match" button: "Hierarchical search and intelligent sorting of vessels according to availability, technical specifications, profitability and risks" -->
-                    <p id="btn-matching-subtitle" class="text-slate-500 text-[11px] text-center mt-2 leading-relaxed italic">
-                        Búsqueda jerárquica y ordenamiento inteligente de buques según disponibilidad, especificaciones técnicas, rentabilidad y riesgos.
-                    </p>
+                    <div id="matching-action-dock" aria-label="Acciones del motor de coincidencias">
+                        <button id="btn-run-matching" onclick="executeMatchingEngine()" class="w-full bg-[#004e64] hover:bg-[#003f52] text-white font-black text-xs uppercase py-3 rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-[#004e64]">
+                            <i class="fa-solid fa-play"></i>
+                            Ejecutar Coincidencias / Run Match
+                        </button>
+                        <!-- Text requested below "Run Match" button: "Hierarchical search and intelligent sorting of vessels according to availability, technical specifications, profitability and risks" -->
+                        <p id="btn-matching-subtitle" class="text-slate-500 text-[11px] text-center mt-2 leading-relaxed italic">
+                            Búsqueda jerárquica y ordenamiento inteligente de buques según disponibilidad, especificaciones técnicas, rentabilidad y riesgos.
+                        </p>
 
-                    <!-- Generar Informe Split Button (SeaCharter Core PRO) -->
-                    <div class="relative inline-flex w-full mt-4" id="report-split-button-container">
-                        <!-- Left Action: Enviar a Data Bridge -->
-                        <button id="btnGenerateReport" onclick="exportSelectedMatchingToAudit()" class="flex-grow bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase py-3 pl-4 pr-3 rounded-l-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border-r border-emerald-700/30 focus:outline-none cursor-pointer">
-                            <i class="fa-solid fa-paper-plane"></i>
-                            <span>Exportar Selección a Auditoría</span>
-                        </button>
-                        <!-- Right Dropdown Trigger -->
-                        <button id="btnReportDropdownTrigger" onclick="toggleReportDropdown(event)" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 rounded-r-lg shadow-md transition flex items-center justify-center border-none cursor-pointer focus:outline-none" title="Opciones de exportación / Export options">
-                            <i class="fa-solid fa-chevron-down text-xs transition-transform duration-200" id="reportDropdownArrow"></i>
-                        </button>
-                        
-                        <!-- Dropdown Menu -->
-                        <div id="reportDropdownMenu" class="hidden absolute left-0 bottom-full mb-2 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 z-[100] font-sans">
-                            <button onclick="triggerReportOption('send', event)" class="w-full text-left px-4 py-2.5 text-xs text-slate-100 hover:bg-slate-700/80 transition flex items-center gap-3 font-bold border-none bg-transparent cursor-pointer">
-                                <i class="fa-solid fa-paper-plane text-emerald-400 w-4 text-center"></i>
-                                <div>
-                                    <div class="font-black uppercase tracking-wider text-[10px] text-emerald-400">Enviar a Data Bridge</div>
-                                    <div class="text-[9px] text-slate-300 font-normal normal-case mt-0.5">Envía manualmente la selección preparada del motor.</div>
-                                </div>
+                        <!-- Generar Informe Split Button (SeaCharter Core PRO) -->
+                        <div class="relative inline-flex w-full mt-4" id="report-split-button-container">
+                            <!-- Left Action: Enviar a Data Bridge -->
+                            <button id="btnGenerateReport" onclick="exportSelectedMatchingToAudit()" class="flex-grow bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase py-3 pl-4 pr-3 rounded-l-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border-r border-emerald-700/30 focus:outline-none cursor-pointer">
+                                <i class="fa-solid fa-paper-plane"></i>
+                                <span>Exportar Selección a Auditoría</span>
                             </button>
-                            <div class="border-t border-slate-700 my-1"></div>
-                            <button onclick="triggerReportOption('download', event)" class="w-full text-left px-4 py-2.5 text-xs text-slate-100 hover:bg-slate-700/80 transition flex items-center gap-3 font-bold border-none bg-transparent cursor-pointer">
-                                <i class="fa-solid fa-file-arrow-down text-cyan-400 w-4 text-center"></i>
-                                <div>
-                                    <div class="font-black uppercase tracking-wider text-[10px] text-cyan-400">Exportar Barrido Crudo (JSON)</div>
-                                    <div class="text-[9px] text-slate-300 font-normal normal-case mt-0.5">Genera un archivo .json con los resultados crudos del motor de coincidencias para Data Bridge.</div>
-                                </div>
+                            <!-- Right Dropdown Trigger -->
+                            <button id="btnReportDropdownTrigger" onclick="toggleReportDropdown(event)" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 rounded-r-lg shadow-md transition flex items-center justify-center border-none cursor-pointer focus:outline-none" title="Opciones de exportación / Export options">
+                                <i class="fa-solid fa-chevron-down text-xs transition-transform duration-200" id="reportDropdownArrow"></i>
                             </button>
-                            <div class="border-t border-slate-700 my-1"></div>
-                            <button onclick="triggerReportOption('upload', event)" class="w-full text-left px-4 py-2.5 text-xs text-slate-100 hover:bg-slate-700/80 transition flex items-center gap-3 font-bold border-none bg-transparent cursor-pointer">
-                                <i class="fa-solid fa-file-import text-amber-400 w-4 text-center"></i>
-                                <div>
-                                    <div class="font-black uppercase tracking-wider text-[10px] text-amber-400">📥 Cargar Feedback / Informe de Data Bridge</div>
-                                    <div class="text-[9px] text-slate-300 font-normal normal-case mt-0.5">Cargar un archivo .json de Data Bridge para absorber el aprendizaje.</div>
-                                </div>
-                            </button>
+
+                            <!-- Dropdown Menu -->
+                            <div id="reportDropdownMenu" class="hidden absolute left-0 bottom-full mb-2 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 z-[100] font-sans">
+                                <button onclick="triggerReportOption('send', event)" class="w-full text-left px-4 py-2.5 text-xs text-slate-100 hover:bg-slate-700/80 transition flex items-center gap-3 font-bold border-none bg-transparent cursor-pointer">
+                                    <i class="fa-solid fa-paper-plane text-emerald-400 w-4 text-center"></i>
+                                    <div>
+                                        <div class="font-black uppercase tracking-wider text-[10px] text-emerald-400">Enviar a Data Bridge</div>
+                                        <div class="text-[9px] text-slate-300 font-normal normal-case mt-0.5">Envía manualmente la selección preparada del motor.</div>
+                                    </div>
+                                </button>
+                                <div class="border-t border-slate-700 my-1"></div>
+                                <button onclick="triggerReportOption('download', event)" class="w-full text-left px-4 py-2.5 text-xs text-slate-100 hover:bg-slate-700/80 transition flex items-center gap-3 font-bold border-none bg-transparent cursor-pointer">
+                                    <i class="fa-solid fa-file-arrow-down text-cyan-400 w-4 text-center"></i>
+                                    <div>
+                                        <div class="font-black uppercase tracking-wider text-[10px] text-cyan-400">Exportar Barrido Crudo (JSON)</div>
+                                        <div class="text-[9px] text-slate-300 font-normal normal-case mt-0.5">Genera un archivo .json con los resultados crudos del motor de coincidencias para Data Bridge.</div>
+                                    </div>
+                                </button>
+                                <div class="border-t border-slate-700 my-1"></div>
+                                <button onclick="triggerReportOption('upload', event)" class="w-full text-left px-4 py-2.5 text-xs text-slate-100 hover:bg-slate-700/80 transition flex items-center gap-3 font-bold border-none bg-transparent cursor-pointer">
+                                    <i class="fa-solid fa-file-import text-amber-400 w-4 text-center"></i>
+                                    <div>
+                                        <div class="font-black uppercase tracking-wider text-[10px] text-amber-400">📥 Cargar Feedback / Informe de Data Bridge</div>
+                                        <div class="text-[9px] text-slate-300 font-normal normal-case mt-0.5">Cargar un archivo .json de Data Bridge para absorber el aprendizaje.</div>
+                                    </div>
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <input type="file" id="feedback-file-input" accept=".json" style="display: none" onchange="handleFeedbackFileUpload(event)">
@@ -10307,7 +10404,7 @@
                 </div>
 
                 <!-- Right Panel: Matching Ranked Results (8 cols) -->
-                <div class="lg:col-span-8 flex flex-col gap-6">
+                <div id="matching-results-panel" class="flex flex-col gap-6 w-full">
                     <div class="ai-work-card p-5 flex-1 min-h-[500px] flex flex-col">
                         <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                             <div class="flex items-center gap-2">
