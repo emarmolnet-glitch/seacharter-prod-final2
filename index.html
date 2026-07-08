@@ -4441,6 +4441,362 @@
             }
         }
 
+        /* Responsive hardening for desktop, tablet and mobile */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+
+        body > .flex-1 {
+            min-height: 0;
+        }
+
+        .view-section {
+            max-width: 100%;
+        }
+
+        .view-section.absolute.inset-0 {
+            padding: clamp(0.75rem, 1.8vw, 1.5rem) !important;
+        }
+
+        #view-map.view-section.absolute.inset-0 {
+            padding: 0 !important;
+        }
+
+        .view-section *,
+        header * {
+            min-width: 0;
+        }
+
+        img,
+        svg,
+        canvas,
+        video,
+        iframe {
+            max-width: 100%;
+        }
+
+        table {
+            max-width: 100%;
+            border-collapse: collapse;
+        }
+
+        .view-section table {
+            display: block;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .view-section thead,
+        .view-section tbody,
+        .view-section tr {
+            width: max-content;
+            min-width: 100%;
+        }
+
+        .view-section input,
+        .view-section select,
+        .view-section textarea,
+        header input,
+        header select,
+        header textarea {
+            max-width: 100%;
+        }
+
+        .view-section .grid {
+            min-width: 0;
+        }
+
+        .view-section [class*="grid-cols-"] > *,
+        .view-section [class*="flex"] > *,
+        header [class*="flex"] > * {
+            min-width: 0;
+        }
+
+        .view-section .overflow-x-auto {
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .view-section .rounded-xl,
+        .view-section .rounded-lg,
+        .ecosystem-panel,
+        .route-sync-card {
+            max-width: 100%;
+        }
+
+        .view-section h1,
+        .view-section h2,
+        .view-section h3,
+        .view-section p,
+        .view-section label,
+        .view-section button,
+        .view-section span,
+        .view-section strong,
+        .tools-dropdown-action {
+            overflow-wrap: anywhere;
+        }
+
+        header {
+            max-width: 100vw !important;
+        }
+
+        header > .flex.items-center.gap-3,
+        header .header-actions-right,
+        header .module-tabs-wrapper {
+            max-width: 100% !important;
+        }
+
+        header .module-tabs-wrapper {
+            overflow: visible !important;
+        }
+
+        header .module-tabs {
+            scrollbar-width: thin;
+        }
+
+        header .header-actions-right > .flex.items-center.bg-slate-950,
+        header .header-actions-right > .flex.items-center.bg-slate-950.border {
+            flex: 1 1 9rem !important;
+            max-width: 12rem !important;
+        }
+
+        header #gemini-api-key {
+            width: 100% !important;
+        }
+
+        .tools-dropdown-menu {
+            max-width: calc(100vw - 1rem) !important;
+        }
+
+        #view-estimator .estimator-dashboard-grid {
+            grid-template-columns: minmax(0, 2fr) minmax(320px, 0.95fr);
+        }
+
+        #web-databridge-container {
+            max-width: 100% !important;
+        }
+
+        .field-tooltip-content {
+            max-width: min(15rem, calc(100vw - 2rem));
+        }
+
+        @media (max-width: 1180px) {
+            .view-section.absolute.inset-0 {
+                padding: 1rem !important;
+            }
+
+            #view-map.view-section.absolute.inset-0 {
+                padding: 0 !important;
+            }
+
+            .view-section .lg\:grid-cols-2,
+            .view-section .lg\:grid-cols-3,
+            .view-section .lg\:grid-cols-4,
+            .view-section .xl\:grid-cols-2,
+            .view-section .xl\:grid-cols-3,
+            .view-section .xl\:grid-cols-4 {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            }
+
+            .view-section .lg\:flex-row,
+            .view-section .xl\:flex-row {
+                flex-direction: column !important;
+            }
+        }
+
+        @media (max-width: 900px) {
+            header {
+                align-content: start !important;
+            }
+
+            header .module-tabs-wrapper {
+                width: 100% !important;
+            }
+
+            header #npl-module-menu,
+            header #advanced-modules-menu,
+            header #tools-dropdown-menu {
+                position: fixed !important;
+                top: auto !important;
+                right: 0.5rem !important;
+                left: 0.5rem !important;
+                bottom: 0.5rem !important;
+                width: auto !important;
+                max-height: min(74vh, 34rem) !important;
+                transform: none !important;
+                overflow-y: auto !important;
+            }
+
+            header #npl-module-menu .npl-data-grid {
+                grid-template-columns: 1fr !important;
+            }
+
+            #view-estimator .estimator-dashboard-grid {
+                grid-template-columns: 1fr !important;
+                gap: 1rem;
+            }
+        }
+
+        @media (max-width: 767px) {
+            body {
+                min-width: 320px;
+            }
+
+            header {
+                padding-top: 0.65rem !important;
+                padding-bottom: 0.65rem !important;
+            }
+
+            header h1 {
+                font-size: 0.86rem !important;
+                line-height: 1.2 !important;
+            }
+
+            header h1 span {
+                display: inline-flex !important;
+                margin-left: 0.25rem !important;
+                vertical-align: middle;
+            }
+
+            header .module-tabs-wrapper {
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+
+            header .module-tabs {
+                width: 100% !important;
+                max-width: 100% !important;
+                padding-bottom: 0.45rem !important;
+            }
+
+            header .header-actions-right {
+                display: grid !important;
+                grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) !important;
+            }
+
+            header #session-actions {
+                justify-content: flex-start !important;
+            }
+
+            header .header-actions-right > .flex.items-center.bg-slate-950,
+            header .header-actions-right > .flex.items-center.bg-slate-950.border {
+                max-width: none !important;
+                width: 100% !important;
+                padding-left: 0.55rem !important;
+                padding-right: 0.55rem !important;
+            }
+
+            .view-section.absolute.inset-0 {
+                padding: 0.75rem !important;
+            }
+
+            #view-map.view-section.absolute.inset-0 {
+                padding: 0 !important;
+            }
+
+            .view-section .md\:grid-cols-2,
+            .view-section .md\:grid-cols-3,
+            .view-section .md\:grid-cols-4,
+            .view-section .md\:grid-cols-5,
+            .view-section .lg\:grid-cols-2,
+            .view-section .lg\:grid-cols-3,
+            .view-section .lg\:grid-cols-4,
+            .view-section .xl\:grid-cols-2,
+            .view-section .xl\:grid-cols-3,
+            .view-section .xl\:grid-cols-4 {
+                grid-template-columns: 1fr !important;
+            }
+
+            .view-section .md\:flex-row,
+            .view-section .lg\:flex-row,
+            .view-section .xl\:flex-row {
+                flex-direction: column !important;
+            }
+
+            .view-section .justify-between,
+            .view-section .items-center {
+                align-items: stretch;
+            }
+
+            .view-section button,
+            .view-section .btn-light-action,
+            .view-section input,
+            .view-section select,
+            .view-section textarea {
+                min-height: 40px;
+            }
+
+            .view-section .text-\[10px\],
+            .view-section .text-xs {
+                line-height: 1.25;
+            }
+
+            #map-host {
+                min-height: 100% !important;
+            }
+
+            .map-floating-panel {
+                top: 0.75rem !important;
+                left: 0.75rem !important;
+                right: 0.75rem !important;
+                width: auto !important;
+                max-height: min(52svh, 26rem) !important;
+                padding: 0.85rem !important;
+            }
+
+            .map-command-shell.input-collapsed .map-floating-panel {
+                transform: translateY(calc(-100% - 1rem));
+            }
+
+            .map-control-stack {
+                right: 0.75rem !important;
+                bottom: calc(7.25rem + env(safe-area-inset-bottom, 0px)) !important;
+            }
+
+            .map-route-summary-overlay {
+                left: 0.75rem !important;
+                right: 0.75rem !important;
+                bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)) !important;
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                gap: 0.5rem !important;
+            }
+
+            .map-route-summary-overlay > div {
+                padding: 0.6rem !important;
+            }
+
+            #web-databridge-container.web-databridge-fullscreen {
+                height: calc(100svh - 180px) !important;
+            }
+        }
+
+        @media (max-width: 420px) {
+            header .header-actions-right {
+                grid-template-columns: auto minmax(0, 1fr) !important;
+            }
+
+            header .header-actions-right > .flex.items-center.bg-slate-950:last-child {
+                grid-column: 1 / -1;
+            }
+
+            header .module-tabs .tab-btn {
+                font-size: 0.6rem !important;
+                min-height: 2.35rem !important;
+            }
+
+            .map-route-summary-overlay {
+                grid-template-columns: 1fr 1fr !important;
+            }
+        }
+
         #view-estimator,
         #view-auditor,
         #view-auditor .bg-slate-100,
