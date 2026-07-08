@@ -22297,11 +22297,13 @@
                 const numericDraft = parseFloat(calado);
                 const hasValidDraft = Number.isFinite(numericDraft) && !/^n\/?a$/i.test(calado);
                 const canApplyDraft = compatible && hasValidDraft;
+                const terminalCardId = `port-info-terminal-${escapePortInfoAttr(inputId)}-${index}`;
+                const terminalButtonId = `port-info-terminal-btn-${escapePortInfoAttr(inputId)}-${index}`;
                 const actionControl = canApplyDraft
-                    ? `<button type="button" onclick="aplicarTerminal(${escapePortInfoAttr(JSON.stringify(calado))})" style="display:inline-flex !important; background:#0284c7 !important; color:#ffffff !important; border:0 !important; border-radius:8px !important; padding:8px 14px !important; font-size:12px !important; font-weight:800 !important; cursor:pointer !important; flex:0 0 auto !important; align-items:center !important; justify-content:center !important;">Aplicar</button>`
+                    ? `<button id="${terminalButtonId}" class="btn-aplicar-terminal" type="button" onclick="aplicarTerminal(${escapePortInfoAttr(JSON.stringify(calado))}, this)" style="display:inline-flex !important; background:#0284c7 !important; color:#ffffff !important; border:0 !important; border-radius:8px !important; padding:8px 14px !important; font-size:12px !important; font-weight:800 !important; cursor:pointer !important; flex:0 0 auto !important; align-items:center !important; justify-content:center !important;">Aplicar</button>`
                     : `<button type="button" disabled aria-disabled="true" title="Operación bloqueada por seguridad para la calculadora" style="display:inline-flex !important; background:#cbd5e1 !important; color:#64748b !important; border:0 !important; border-radius:8px !important; padding:8px 14px !important; font-size:12px !important; font-weight:800 !important; cursor:not-allowed !important; flex:0 0 auto !important; align-items:center !important; justify-content:center !important; white-space:nowrap !important;">No aplicable</button>`;
                 return `
-                <div style="background:${compatible ? '#ffffff' : '#fee2e2'} !important; color:#1e293b !important; border:1px solid #e2e8f0 !important; border-radius:10px !important; padding:12px !important; display:flex !important; align-items:center !important; justify-content:space-between !important; gap:12px !important;">
+                <div id="${terminalCardId}" data-port-info-terminal-card="${index}" style="background:${compatible ? '#ffffff' : '#fee2e2'} !important; color:#1e293b !important; border:1px solid #e2e8f0 !important; border-radius:10px !important; padding:12px !important; display:flex !important; align-items:center !important; justify-content:space-between !important; gap:12px !important;">
                     <div style="min-width:0 !important;">
                         <div style="font-weight:800 !important; color:#1e293b !important; font-size:13px !important;">${escapePortInfoAttr(terminal.nombre || 'No disponible')}</div>
                         <div style="margin-top:4px !important; color:#475569 !important; font-size:12px !important;">Calado: <strong style="color:#0f172a !important;">${escapePortInfoAttr(calado)}</strong></div>
@@ -22339,12 +22341,23 @@
             return container.outerHTML;
         }
 
-        function aplicarTerminal(calado) {
+        function aplicarTerminal(calado, elementoBoton) {
             const draft = parseFloat(calado);
             if (!Number.isFinite(draft)) {
                 showToast("Calado no disponible para aplicar a la calculadora.");
                 return;
             }
+
+            document.querySelectorAll('.btn-aplicar-terminal').forEach((button) => {
+                button.textContent = 'Aplicar';
+                button.style.setProperty('background', '#0284c7', 'important');
+            });
+
+            if (elementoBoton) {
+                elementoBoton.textContent = '¡Seleccionado!';
+                elementoBoton.style.setProperty('background', '#10b981', 'important');
+            }
+
             window.SeaCharterState = window.SeaCharterState || {};
             window.SeaCharterState.selectedDraft = draft;
             if (window.AppCalculadora && typeof window.AppCalculadora.recalcularCostes === 'function') {
