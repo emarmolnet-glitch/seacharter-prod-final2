@@ -1185,7 +1185,7 @@
 
             return {
                 imo: validImo ? imo : 0,
-                is_audit_required: !validImo,
+                is_audit_required: false,
                 vessel_name: cleanText(source.vessel_name || source.nombre || source.name),
                 dwt: cleanNumber(source.dwt || source.dwt_ajustado),
                 has_gears: Boolean(source.has_gears || source.gruas),
