@@ -9899,18 +9899,18 @@
     </div>
 
     <!-- MODAL DE INTELIGENCIA ARTIFICIAL GENERAL -->
-    <div id="ai-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4 no-print">
-        <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[90vh]">
-            <div class="flex justify-between items-center p-4 border-b border-slate-800">
-                <h3 class="font-bold text-white flex items-center gap-2" id="ai-modal-title"><i class="fa-solid fa-microchip text-indigo-400"></i> Asistente RODAHMAR IA</h3>
-                <button onclick="closeAIModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+    <div id="ai-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] hidden flex items-start justify-center px-4 pb-4 pt-20 sm:px-6 sm:pb-6 no-print">
+        <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-11/12 max-w-7xl flex flex-col max-h-[85vh] overflow-hidden">
+            <div class="flex justify-between items-center gap-4 px-5 py-4 sm:px-6 border-b border-slate-800 shrink-0">
+                <h3 class="font-bold text-white flex items-center gap-2 min-w-0 pr-4" id="ai-modal-title"><i class="fa-solid fa-microchip text-indigo-400 shrink-0"></i> <span class="truncate">Asistente RODAHMAR IA</span></h3>
+                <button onclick="closeAIModal()" class="text-slate-400 hover:text-white shrink-0 w-10 h-10 inline-flex items-center justify-center rounded-lg hover:bg-slate-800 transition" aria-label="Cerrar informe"><i class="fa-solid fa-xmark text-lg"></i></button>
             </div>
-            <div class="p-6 overflow-y-auto flex-1">
+            <div class="px-5 py-6 sm:px-8 lg:px-12 overflow-y-auto flex-1">
                 <div id="ai-modal-loader" class="text-center py-8">
                     <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-slate-700 border-t-indigo-500 mb-4"></div>
                     <p id="ai-modal-loader-text" class="text-indigo-400 font-mono animate-pulse text-sm">Actualizando datos del motor SeaCharter Core PRO...</p>
                 </div>
-                <div id="ai-modal-content" class="hidden text-slate-300 text-sm space-y-4 prose prose-invert">
+                <div id="ai-modal-content" class="hidden text-slate-300 text-sm space-y-4 prose prose-invert max-w-none">
                     <!-- Contenido IA -->
                 </div>
             </div>
@@ -22342,7 +22342,7 @@
         // --- LLAMADAS IA GEMINI MODALES ---
         function openAIModal(title, loaderText = "Actualizando datos del motor SeaCharter Core PRO...") {
             document.getElementById('ai-modal').classList.remove('light-mode');
-            document.getElementById('ai-modal-title').innerHTML = `<i class="fa-solid fa-microchip text-indigo-400"></i> ${title}`;
+            document.getElementById('ai-modal-title').innerHTML = `<i class="fa-solid fa-microchip text-indigo-400 shrink-0"></i> <span class="truncate">${title}</span>`;
             const loaderTextEl = document.getElementById('ai-modal-loader-text');
             if (loaderTextEl) {
                 loaderTextEl.innerText = loaderText;
