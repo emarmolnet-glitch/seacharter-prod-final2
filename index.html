@@ -14004,19 +14004,10 @@
                 const source = vessel && typeof vessel === 'object' ? vessel : {};
                 const imo = getStrictVesselImo(source);
                 const vesselName = getStrictVesselString(source, ['name', 'vessel_name', 'nombre']);
-                const auditRequired = imo === 0;
-
-                if (auditRequired) {
-                    console.info(
-                        'Procesando buque con datos incompletos (necesita auditoría manual):',
-                        vesselName,
-                        source
-                    );
-                }
 
                 return {
                     imo,
-                    is_audit_required: auditRequired,
+                    is_audit_required: false,
                     vessel_name: vesselName,
                     dwt: getStrictVesselNumber(source, ['dwt', 'dwt_ajustado']),
                     has_gears: getStrictVesselBoolean(source, ['has_gears', 'gruas']),

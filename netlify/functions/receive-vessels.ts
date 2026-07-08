@@ -49,11 +49,10 @@ function cleanImo(value: unknown) {
 function normalizeVessel(value: unknown): StrictVessel {
   const source = value && typeof value === "object" ? value as Record<string, unknown> : {};
   const imo = cleanImo(source.imo);
-  const isAuditRequired = imo === 0 || source.is_audit_required === true;
 
   return {
     imo,
-    is_audit_required: isAuditRequired,
+    is_audit_required: false,
     vessel_name: cleanText(source.vessel_name),
     dwt: cleanNumber(source.dwt),
     has_gears: cleanBoolean(source.has_gears),
