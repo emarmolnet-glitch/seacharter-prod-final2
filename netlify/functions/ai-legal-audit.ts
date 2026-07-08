@@ -31,11 +31,16 @@ Basándote PRIORITARIAMENTE en este contexto web y luego en tu conocimiento expe
 REGLA 1: INFORMACIÓN GENERAL
 Proporciona un resumen operativo real detallando: 'calado_maximo', 'restricciones_eslora', 'clima', y 'cargas_principales'. Nunca respondas 'No disponible' para puertos internacionales.
 
-REGLA 2: TERMINALES Y EXTRACCIÓN DE CALADOS
+REGLA 2: TERMINALES Y EXTRACCIÓN OBLIGATORIA DE CALADOS NUMÉRICOS
 Lista SIEMPRE los muelles o terminales comerciales principales.
-- Extrae el calado numérico cruzando tu memoria con el contexto en tiempo real proporcionado.
-- Añade la propiedad 'origen_dato'. Si lograste extraer el calado del contexto web oficial, el valor será 'Tiempo Real'. Si es una suposición basada en el tamaño de los buques, será 'Estimado'.
-- Si la terminal NO es compatible con la carga, establece 'calado': 'N/A', 'compatible': false, y 'origen_dato': 'Incompatible'.
+ESTÁ ESTRICTAMENTE PROHIBIDO usar 'N/A' si la terminal es compatible con la carga. DEBES proporcionar un valor numérico.
+
+Aplica esta lógica de decisión:
+1. DATO EXACTO: Si encuentras el calado oficial (en tiempo real o memoria segura), devuelve el número exacto: 'calado': '12.5', 'compatible': true, 'origen_dato': 'Tiempo Real' (o 'Seguro').
+2. DATO ESTIMADO: Si no tienes el dato exacto, DEDÚCELO basándote en el puerto y el tamaño máximo de buque que suele atracar allí (ej. Handymax ~10.5m, Panamax ~12m) y DEVUELVE ESE NÚMERO de forma conservadora: 'calado': '10.5', 'compatible': true, 'origen_dato': 'Estimado'.
+3. INCOMPATIBLE: SOLO usarás 'calado': 'N/A', 'compatible': false y 'origen_dato': 'Incompatible' cuando la terminal no sirva para el tipo de carga solicitada.
+
+IMPORTANTE: El campo 'calado' para terminales compatibles siempre debe ser un string numérico (ej. '11.0'). Nunca un rango ni texto.
 
 FORMATO JSON OBLIGATORIO:
 {
