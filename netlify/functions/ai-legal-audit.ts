@@ -13,6 +13,7 @@ type GeminiPayload = {
   generationConfig?: {
     responseMimeType?: string;
   };
+  calado_requerido?: number | string | null;
 };
 
 const jsonHeaders = {
@@ -20,7 +21,19 @@ const jsonHeaders = {
   "cache-control": "no-store",
 };
 
-function buildPortInfoSystemPrompt(contexto_tiempo_real: string) {
+function normalizeRequiredDraft(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(String(value).replace(",", "."));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function formatRequiredDraft(value: number | null) {
+  return value === null ? "No informado" : String(Number(value.toFixed(2)));
+}
+
+function buildPortInfoSystemPrompt(contexto_tiempo_real: string, puerto: string, calado_requerido: number | null) {
+  const requiredDraftLabel = formatRequiredDraft(calado_requerido);
+
   return `ERES EL EXPERTO EN LOGÍSTICA MARÍTIMA DE SEACHARTER CORE PRO. Tu respuesta debe ser exclusivamente un JSON estricto y válido, sin bloques de código markdown.
 
 CONTEXTO EN TIEMPO REAL RECIENTE:
@@ -28,19 +41,30 @@ ${contexto_tiempo_real}
 
 Basándote PRIORITARIAMENTE en este contexto web y luego en tu conocimiento experto, genera el informe.
 
+DATOS OPERATIVOS ESTRICTOS:
+- Puerto solicitado: ${puerto || "No identificado"}
+- Calado requerido por el buque: ${requiredDraftLabel} metros.
+
 REGLA 1: INFORMACIÓN GENERAL
 Proporciona un resumen operativo real detallando: 'calado_maximo', 'restricciones_eslora', 'clima', y 'cargas_principales'. Nunca respondas 'No disponible' para puertos internacionales.
 
-REGLA 2: TERMINALES Y EXTRACCIÓN OBLIGATORIA DE CALADOS NUMÉRICOS
-Lista SIEMPRE los muelles o terminales comerciales principales.
+REGLA 2: TERMINALES Y FILTRADO POR CALADO (CRÍTICO)
+Extrae el calado máximo de cada terminal comercial principal del puerto.
 ESTÁ ESTRICTAMENTE PROHIBIDO usar 'N/A' si la terminal es compatible con la carga. DEBES proporcionar un valor numérico.
 
+APLICA ESTE FILTRO MATEMÁTICO:
+- Compara el calado de la terminal con el 'Calado requerido por el buque'.
+- Si el calado de la terminal es MENOR que el calado requerido, OBLIGATORIAMENTE establece 'compatible': false, y en el campo 'origen_dato' añade el texto: 'Calado insuficiente (Mínimo: ${requiredDraftLabel}m)'.
+- Si la terminal tiene calado MAYOR O IGUAL al requerido y es compatible con la carga, establece 'compatible': true.
+- Si no encuentras el dato exacto de la terminal, aplica la regla de estimación conservadora vista anteriormente, pero crúzala siempre con el calado requerido.
+
 Aplica esta lógica de decisión:
-1. DATO EXACTO: Si encuentras el calado oficial (en tiempo real o memoria segura), devuelve el número exacto: 'calado': '12.5', 'compatible': true, 'origen_dato': 'Tiempo Real' (o 'Seguro').
-2. DATO ESTIMADO: Si no tienes el dato exacto, DEDÚCELO basándote en el puerto y el tamaño máximo de buque que suele atracar allí (ej. Handymax ~10.5m, Panamax ~12m) y DEVUELVE ESE NÚMERO de forma conservadora: 'calado': '10.5', 'compatible': true, 'origen_dato': 'Estimado'.
-3. INCOMPATIBLE: SOLO usarás 'calado': 'N/A', 'compatible': false y 'origen_dato': 'Incompatible' cuando la terminal no sirva para el tipo de carga solicitada.
+1. DATO EXACTO: Si encuentras el calado oficial (en tiempo real o memoria segura), devuelve el número exacto: 'calado': '12.5' y decide 'compatible' mediante el filtro matemático anterior.
+2. DATO ESTIMADO: Si no tienes el dato exacto, DEDÚCELO basándote en el puerto y el tamaño máximo de buque que suele atracar allí (ej. Handymax ~10.5m, Panamax ~12m) y DEVUELVE ESE NÚMERO de forma conservadora: 'calado': '10.5', 'origen_dato': 'Estimado'. Después decide 'compatible' mediante el filtro matemático anterior.
+3. INCOMPATIBLE: Usa 'compatible': false cuando la terminal no sirva para el tipo de carga solicitada o cuando no supere el calado requerido.
 
 IMPORTANTE: El campo 'calado' para terminales compatibles siempre debe ser un string numérico (ej. '11.0'). Nunca un rango ni texto.
+FORMATO JSON: Mantiene la misma estructura, pero asegúrate de que el motivo de incompatibilidad por calado sea visible.
 
 FORMATO JSON OBLIGATORIO:
 {
@@ -192,9 +216,9 @@ async function getRealTimePortContext(portName: string) {
   return `No se pudo obtener contexto web en tiempo real para la búsqueda: "${query}". Usa conocimiento experto como respaldo.`;
 }
 
-function buildMessages(prompt: string, jsonOnly: boolean, contexto_tiempo_real: string): ChatCompletionMessageParam[] {
+function buildMessages(prompt: string, jsonOnly: boolean, contexto_tiempo_real: string, puerto: string, calado_requerido: number | null): ChatCompletionMessageParam[] {
   const system = jsonOnly
-    ? buildPortInfoSystemPrompt(contexto_tiempo_real)
+    ? buildPortInfoSystemPrompt(contexto_tiempo_real, puerto, calado_requerido)
     : "Eres el motor backend de SeaCharter Core PRO. Responde con precisión, sin exponer configuración interna ni credenciales.\n\nREGLA DE CONSISTENCIA ESTRICTA: Eres un sistema de consulta de datos, no un asistente conversacional. Nunca resumas, abrevies o cambies el formato de tu respuesta, sin importar cuántas veces el usuario consulte el mismo puerto. Debes devolver siempre el JSON completo con absolutamente todas las terminales y detalles requeridos, cada vez que se te pregunte.";
 
   return [
@@ -223,6 +247,7 @@ export default async (req: Request) => {
   try {
     const jsonOnly = wantsJson(payload, prompt);
     const portName = jsonOnly ? extractPortName(prompt) : "";
+    const calado_requerido = normalizeRequiredDraft(payload.calado_requerido);
     const contexto_tiempo_real = jsonOnly
       ? await getRealTimePortContext(portName)
       : "";
@@ -231,7 +256,7 @@ export default async (req: Request) => {
       model: "gpt-5.2",
       temperature: 0,
       response_format: jsonOnly ? { type: "json_object" } : undefined,
-      messages: buildMessages(prompt, jsonOnly, contexto_tiempo_real),
+      messages: buildMessages(prompt, jsonOnly, contexto_tiempo_real, portName, calado_requerido),
     });
 
     const text = completion.choices[0]?.message?.content || "";
