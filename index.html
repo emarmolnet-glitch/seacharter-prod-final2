@@ -14029,6 +14029,19 @@
         }
         window.postDataBridgeReceiveVessels = postDataBridgeReceiveVessels;
 
+        const DATA_BRIDGE_VESSEL_BATCH_SIZE = 50;
+
+        function chunkVesselsForDataBridge(vessels, batchSize = DATA_BRIDGE_VESSEL_BATCH_SIZE) {
+            const list = Array.isArray(vessels) ? vessels : [];
+            const safeBatchSize = Math.max(1, Number(batchSize) || DATA_BRIDGE_VESSEL_BATCH_SIZE);
+            const chunks = [];
+            for (let index = 0; index < list.length; index += safeBatchSize) {
+                chunks.push(list.slice(index, index + safeBatchSize));
+            }
+            return chunks;
+        }
+        window.chunkVesselsForDataBridge = chunkVesselsForDataBridge;
+
         async function exportSelectedMatchingToAudit() {
             try {
                 const frozenReport = String(localStorage.getItem('core_pro_frozen_report') || '').trim();
@@ -14081,36 +14094,49 @@
                     showToast("No hay buques para exportar a Data Bridge.");
                     return;
                 }
-                console.log('Enviando lote validado:', payloadLimpio);
+                const dataBridgeBatches = chunkVesselsForDataBridge(payloadLimpio);
+                console.log(`[Data Bridge] Enviando ${payloadLimpio.length} buque(s) en ${dataBridgeBatches.length} lote(s) secuenciales.`, dataBridgeBatches);
 
                 const dataBridgeSecret = typeof process !== 'undefined' && process?.env?.API_SECRET
                     ? process.env.API_SECRET
                     : '';
 
-                const bridgeResponse = await postDataBridgeReceiveVessels({
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer ' + dataBridgeSecret,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(payloadLimpio)
-                });
+                let acceptedCount = 0;
+                for (let batchIndex = 0; batchIndex < dataBridgeBatches.length; batchIndex += 1) {
+                    const batch = dataBridgeBatches[batchIndex].map(vessel => ({
+                        ...vessel,
+                        is_audit_required: false
+                    }));
+                    showToast(`Enviando lote ${batchIndex + 1}/${dataBridgeBatches.length} a Data Bridge (${batch.length} buques).`);
 
-                const bridgeResponseText = await bridgeResponse.text();
-                let bridgePayload = null;
-                try {
-                    bridgePayload = bridgeResponseText ? JSON.parse(bridgeResponseText) : null;
-                } catch (parseErr) {
-                    bridgePayload = null;
+                    const bridgeResponse = await postDataBridgeReceiveVessels({
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + dataBridgeSecret,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(batch)
+                    });
+
+                    const bridgeResponseText = await bridgeResponse.text();
+                    let bridgePayload = null;
+                    try {
+                        bridgePayload = bridgeResponseText ? JSON.parse(bridgeResponseText) : null;
+                    } catch (parseErr) {
+                        bridgePayload = null;
+                    }
+
+                    if (bridgeResponse.status !== 200) {
+                        console.error('Error del servidor:', bridgeResponseText);
+                        throw new Error(bridgePayload?.error || bridgePayload?.message || bridgeResponseText || `Data Bridge respondió ${bridgeResponse.status}`);
+                    }
+
+                    acceptedCount += Number(bridgePayload?.acceptedCount) || batch.length;
+                    console.log(`[Data Bridge] Lote ${batchIndex + 1}/${dataBridgeBatches.length} enviado correctamente:`, bridgePayload);
                 }
 
-                if (bridgeResponse.status !== 200) {
-                    console.error('Error del servidor:', bridgeResponseText);
-                    throw new Error(bridgePayload?.error || bridgePayload?.message || bridgeResponseText || `Data Bridge respondió ${bridgeResponse.status}`);
-                }
-
-                console.log('[Data Bridge] Buques enviados correctamente a /api/receive-vessels:', bridgePayload);
-                showToast(`✅ ${payloadLimpio.length} buque${payloadLimpio.length === 1 ? '' : 's'} enviado${payloadLimpio.length === 1 ? '' : 's'} a Auditoría.`);
+                console.log(`[Data Bridge] Exportación completa a /api/receive-vessels: ${acceptedCount}/${payloadLimpio.length} buque(s).`);
+                showToast(`✅ ${acceptedCount} de ${payloadLimpio.length} buque${payloadLimpio.length === 1 ? '' : 's'} enviado${payloadLimpio.length === 1 ? '' : 's'} a Data Bridge.`);
             } catch (err) {
                 console.error('Error en exportación:', err?.status || 'client', err);
                 showToast("❌ Error al exportar la selección a auditoría.");
@@ -15372,9 +15398,8 @@
                     pod: document.getElementById('port-pod')?.value || document.getElementById('map-port-pod')?.value || ''
                 };
 
-                // Map the ranked Core PRO results to the audit structure for Data Bridge.
-                const topCoreProMatchesForDataBridge = matches.slice(0, 15);
-                const arrayDeBuquesEncontrados = topCoreProMatchesForDataBridge.map(m => {
+                // Map all ranked Core PRO results to the audit structure for Data Bridge.
+                const arrayDeBuquesEncontrados = matches.map(m => {
                     const v = m.vessel || {};
                     const ais = m.ais || {};
                     const route = m.routing || {};
