@@ -46,7 +46,13 @@ export function ConnectionStatusBar() {
   const config = useMemo(() => STATUS_CONFIG[status] || STATUS_CONFIG.disconnected, [status]);
 
   const verifyConnection = useCallback(async () => {
-    const token = String(import.meta.env?.VITE_DATA_BRIDGE_API_SECRET || "").trim();
+    const token = String(
+      import.meta.env?.VITE_DATA_BRIDGE_API_SECRET ||
+        window.localStorage?.getItem("seacharter_databridge_api_secret") ||
+        "",
+    ).trim();
+    const requestHeaders = { Accept: "application/json" };
+    if (token) requestHeaders.Authorization = `Bearer ${token}`;
 
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -54,10 +60,7 @@ export function ConnectionStatusBar() {
     try {
       const response = await fetch(VERIFY_ENDPOINT, {
         method: "POST",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: requestHeaders,
         signal: controller.signal,
       });
 
