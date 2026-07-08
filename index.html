@@ -7122,7 +7122,7 @@
                                 <label id="label-demurrage-rate" class="text-[10px] font-bold text-red-400 uppercase block mb-1">Demurrage ($/d)</label>
                                 <div class="flex">
                                     <input type="number" id="demurrage-rate" class="input-gc text-red-300 font-bold h-9 text-sm rounded-r-none" value="10000" step="any" oninput="updateDemurrageExposureAlert(); runEngine()">
-                                    <button id="btn-estimate-demurrage" onclick="autoCalculateDemurrage(true)" class="bg-red-900/30 border border-red-500/50 hover:bg-red-500/30 px-2 rounded-r-md text-red-400 transition" title="Estimar Algorítmicamente (Mercado 2026)"><i class="fa-solid fa-rotate-right"></i></button>
+                                    <button id="btn-estimate-demurrage" onclick="sugerirDemoraAutomatica(true)" class="bg-red-900/30 border border-red-500/50 hover:bg-red-500/30 px-2 rounded-r-md text-red-400 transition" title="Sugerir Demurrage desde TCE actual"><i class="fa-solid fa-rotate-right"></i></button>
                                 </div>
                                 <!-- ASBATANKVOY Delay Hours input (only relevant for Liquid Bulk / ASBATANKVOY) -->
                                 <div id="asb-delay-hours-container" class="mt-2 p-2 bg-slate-950/40 border border-red-500/20 rounded-lg hidden">
@@ -18084,24 +18084,81 @@
             }
         }
 
-        function autoCalculateDemurrage(showToastMsg = false) {
-            const dwt = parseFloat(document.getElementById('vessel-dwt').value) || 0;
-            if (dwt <= 0) return;
+        function leerTceActualParaDemora() {
+            const stateTce = Number(State.tceOwner);
+            if (Number.isFinite(stateTce) && stateTce > 0) return stateTce;
 
-            const dynamicDemurrage = calculateDynamicDemurrageFromRisk();
-            const baseDemurrage = 4500;
-            const sizeFactor = dwt * 0.25;
-            const estimatedDemurrage = dynamicDemurrage.demurrageRate > 0
-                ? Math.round(dynamicDemurrage.demurrageRate / 250) * 250
-                : Math.round((baseDemurrage + sizeFactor) / 250) * 250;
+            const storeTce = Number(window.SeaCharterStore?.getState?.()?.tceOwner);
+            if (Number.isFinite(storeTce) && storeTce > 0) return storeTce;
 
-            document.getElementById('demurrage-rate').value = estimatedDemurrage;
+            const labelText = document.getElementById('res-tce-label')?.innerText || '';
+            const match = labelText.match(/TCE\s+Obtenido:\s*\$?([\d,.\s]+)/i);
+            if (!match) return 0;
+            const parsed = parseFloat(match[1].replace(/,/g, '').trim());
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+
+        function redondearDemoraComercial(valor) {
+            const cantidad = Number(valor);
+            if (!Number.isFinite(cantidad) || cantidad <= 0) return 0;
+            const step = cantidad >= 10000 ? 100 : 50;
+            return Math.round(cantidad / step) * step;
+        }
+
+        function aplicarFeedbackDemoraAutomatica(input) {
+            if (!input) return;
+            const previousTransition = input.style.transition;
+            const previousBackground = input.style.backgroundColor;
+            const previousBorder = input.style.borderColor;
+            const previousBoxShadow = input.style.boxShadow;
+            input.style.transition = 'background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease';
+            input.style.backgroundColor = '#d1fae5';
+            input.style.borderColor = '#10b981';
+            input.style.boxShadow = '0 0 0 2px rgba(16, 185, 129, 0.35)';
+            window.setTimeout(() => {
+                input.style.backgroundColor = previousBackground;
+                input.style.borderColor = previousBorder;
+                input.style.boxShadow = previousBoxShadow;
+                input.style.transition = previousTransition;
+            }, 1000);
+        }
+
+        function sugerirDemoraAutomatica(showToastMsg = false) {
+            const tceActual = leerTceActualParaDemora();
+            if (!Number.isFinite(tceActual) || tceActual <= 0) {
+                if (showToastMsg) showToast('Calcula primero el TCE del viaje para sugerir Demurrage.');
+                return 0;
+            }
+
+            const demoraSugerida = redondearDemoraComercial(tceActual * 1.10);
+            const demurrageInput = document.getElementById('demurrage-rate');
+            if (!demurrageInput || demoraSugerida <= 0) return 0;
+
+            demurrageInput.value = demoraSugerida;
+            State.demurrage = demoraSugerida;
+            window.SeaCharterState = window.SeaCharterState || {};
+            window.SeaCharterState.demurrage = demoraSugerida;
+            window.SeaCharterState.suggestedDemurrageFromTce = {
+                tce: tceActual,
+                multiplier: 1.10,
+                value: demoraSugerida
+            };
+
+            aplicarFeedbackDemoraAutomatica(demurrageInput);
+            updateDemurrageExposureAlert();
+            if (window.AppCalculadora && typeof window.AppCalculadora.recalcularCostes === 'function') {
+                window.AppCalculadora.recalcularCostes();
+            }
+            if (typeof runEngine === 'function') runEngine();
 
             if (showToastMsg) {
-                const suffix = dynamicDemurrage.hasRiskAdjustment ? ' ajustado por riesgo histórico' : '';
-                showToast(`📈 Demurrage estimado${suffix}: $${estimatedDemurrage.toLocaleString('en-US')}/día`);
+                showToast(`Demurrage sugerido por TCE: $${demoraSugerida.toLocaleString('en-US')}/día`);
             }
-            runEngine();
+            return demoraSugerida;
+        }
+
+        function autoCalculateDemurrage(showToastMsg = false) {
+            return sugerirDemoraAutomatica(showToastMsg);
         }
 
         function autoCalculateSeasonalMargin() {
