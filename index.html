@@ -3870,6 +3870,94 @@
             color: #FFFFFF !important;
         }
 
+        header .mobile-module-nav {
+            display: none !important;
+            position: relative !important;
+            width: min(100%, 28rem) !important;
+            z-index: 90 !important;
+        }
+
+        header .mobile-module-nav-trigger {
+            width: 100% !important;
+            min-height: 44px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 0.75rem !important;
+            padding: 0 0.9rem !important;
+            border: 1px solid #CBD5E1 !important;
+            border-radius: 8px !important;
+            background: #FFFFFF !important;
+            color: var(--primary) !important;
+            box-shadow: none !important;
+            font-size: 0.78rem !important;
+            font-weight: 800 !important;
+            text-transform: uppercase !important;
+            cursor: pointer !important;
+        }
+
+        header .mobile-module-nav-trigger:focus-visible {
+            outline: 2px solid rgba(0, 78, 100, 0.24) !important;
+            outline-offset: 2px !important;
+        }
+
+        header .mobile-module-nav-label {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 0.55rem !important;
+            min-width: 0 !important;
+        }
+
+        header .mobile-module-nav-label span {
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+        header .mobile-module-nav-trigger .mobile-module-nav-chevron {
+            flex: 0 0 auto !important;
+            transition: transform 160ms ease !important;
+        }
+
+        header .mobile-module-nav-trigger[aria-expanded="true"] .mobile-module-nav-chevron {
+            transform: rotate(180deg) !important;
+        }
+
+        header .mobile-module-nav-menu {
+            position: absolute !important;
+            top: calc(100% + 0.45rem) !important;
+            right: 0 !important;
+            left: 0 !important;
+            z-index: 9999 !important;
+            display: none !important;
+            flex-direction: column !important;
+            gap: 0.25rem !important;
+            max-height: min(64vh, 26rem) !important;
+            overflow-y: auto !important;
+            padding: 0.45rem !important;
+            margin: 0 !important;
+            list-style: none !important;
+            background: #FFFFFF !important;
+            border: 1px solid #CBD5E1 !important;
+            border-radius: 8px !important;
+            box-shadow: 0 18px 36px -18px rgba(15, 23, 42, 0.42) !important;
+        }
+
+        header .mobile-module-nav-menu.is-open {
+            display: flex !important;
+        }
+
+        header .mobile-module-nav-menu .tools-dropdown-action {
+            min-height: 42px !important;
+            border-radius: 6px !important;
+            font-size: 0.78rem !important;
+        }
+
+        header .mobile-module-nav-menu .tools-dropdown-action[aria-current="page"] {
+            background: var(--primary) !important;
+            color: #FFFFFF !important;
+        }
+
         header .header-actions-right {
             display: flex !important;
             flex-direction: row !important;
@@ -4370,6 +4458,24 @@
             }
         }
 
+        @media (max-width: 1024px) {
+            header .module-tabs-wrapper {
+                display: grid !important;
+                grid-template-columns: auto auto minmax(12rem, 28rem) auto !important;
+                align-items: center !important;
+                justify-content: center !important;
+                gap: 0.5rem !important;
+            }
+
+            header .mobile-module-nav {
+                display: block !important;
+            }
+
+            header #primary-module-tabs {
+                display: none !important;
+            }
+        }
+
         @media (max-width: 767px) {
             header {
                 gap: 0.75rem !important;
@@ -4380,8 +4486,15 @@
             header .module-tabs-wrapper {
                 order: 2 !important;
                 padding: 0 !important;
-                justify-content: flex-start !important;
+                grid-template-columns: auto auto auto 1fr !important;
+                justify-content: stretch !important;
                 overflow-x: auto !important;
+            }
+
+            header .mobile-module-nav {
+                grid-column: 1 / -1 !important;
+                grid-row: 2 !important;
+                width: 100% !important;
             }
 
             header .module-tabs {
@@ -6171,6 +6284,23 @@
                 <span class="master-report-label-full">Generar Informe Master</span>
                 <span class="master-report-label-tablet hidden">Informe Master</span>
             </button>
+            <div class="mobile-module-nav" aria-label="Navegación móvil de módulos principales">
+                <button
+                    type="button"
+                    id="mobile-module-nav-btn"
+                    class="mobile-module-nav-trigger"
+                    onclick="toggleMobileModuleNav(event)"
+                    aria-controls="mobile-module-nav-menu"
+                    aria-expanded="false"
+                >
+                    <span class="mobile-module-nav-label">
+                        <i class="fa-solid fa-compass" aria-hidden="true"></i>
+                        <span id="mobile-module-nav-current">Mapa</span>
+                    </span>
+                    <i class="fa-solid fa-chevron-down mobile-module-nav-chevron" aria-hidden="true"></i>
+                </button>
+                <ul id="mobile-module-nav-menu" class="mobile-module-nav-menu" aria-label="Seleccionar módulo"></ul>
+            </div>
             <div id="primary-module-tabs" class="module-tabs flex bg-slate-950 p-1 rounded-xl border border-slate-800 max-w-full" aria-label="Navegación de módulos principales"></div>
         </div>
 
@@ -16068,7 +16198,11 @@
         function createModuleButton(moduleConfig, variant = 'primary') {
             const button = document.createElement('button');
             button.type = 'button';
-            button.id = variant === 'primary' ? `tab-btn-${moduleConfig.id}` : `advanced-tab-btn-${moduleConfig.id}`;
+            button.id = variant === 'primary'
+                ? `tab-btn-${moduleConfig.id}`
+                : variant === 'mobile'
+                    ? `mobile-tab-btn-${moduleConfig.id}`
+                    : `advanced-tab-btn-${moduleConfig.id}`;
             button.dataset.moduleId = moduleConfig.id;
             button.className = variant === 'primary'
                 ? 'tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap'
@@ -16078,6 +16212,7 @@
             button.addEventListener('click', () => {
                 switchTab(moduleConfig.id);
                 if (variant !== 'primary') closeAdvancedModulesMenu();
+                if (variant === 'mobile') closeMobileModuleNav();
             });
             return button;
         }
@@ -16091,12 +16226,64 @@
 
         function renderPrimaryNavigation() {
             const tabs = document.getElementById('primary-module-tabs');
-            if (!tabs) return;
-            tabs.innerHTML = '';
-            getPrimaryNavigationModules().forEach(moduleConfig => {
-                tabs.appendChild(createModuleButton(moduleConfig, 'primary'));
-            });
+            const mobileMenu = document.getElementById('mobile-module-nav-menu');
+            const modules = getPrimaryNavigationModules();
+            if (tabs) {
+                tabs.innerHTML = '';
+                modules.forEach(moduleConfig => {
+                    tabs.appendChild(createModuleButton(moduleConfig, 'primary'));
+                });
+            }
+            if (mobileMenu) {
+                mobileMenu.innerHTML = '';
+                modules.forEach(moduleConfig => {
+                    const item = document.createElement('li');
+                    item.className = 'tools-dropdown-item';
+                    item.appendChild(createModuleButton(moduleConfig, 'mobile'));
+                    mobileMenu.appendChild(item);
+                });
+            }
+            updateMobileModuleNavLabel(document.querySelector('.view-section.active-block, .view-section.active-flex')?.id?.replace('view-', '') || 'map');
         }
+
+        function updateMobileModuleNavLabel(tabId) {
+            const currentLabel = document.getElementById('mobile-module-nav-current');
+            if (!currentLabel) return;
+            const currentModule = [...PRIMARY_MODULES, ...OPTIONAL_MODULES].find(moduleConfig => moduleConfig.id === tabId);
+            currentLabel.textContent = currentModule?.label || 'Mapa';
+        }
+
+        function closeMobileModuleNav() {
+            const menu = document.getElementById('mobile-module-nav-menu');
+            const button = document.getElementById('mobile-module-nav-btn');
+            if (menu) menu.classList.remove('is-open');
+            if (button) button.setAttribute('aria-expanded', 'false');
+        }
+
+        function toggleMobileModuleNav(event) {
+            if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+            closeMobileSessionMenu();
+            closeAdvancedModulesMenu();
+            closeNplModuleMenu();
+            const menu = document.getElementById('mobile-module-nav-menu');
+            const button = document.getElementById('mobile-module-nav-btn');
+            if (!menu) return;
+            const isOpen = menu.classList.toggle('is-open');
+            if (button) button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        }
+
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('mobile-module-nav-menu');
+            const button = document.getElementById('mobile-module-nav-btn');
+            if (!menu || !button || !menu.classList.contains('is-open')) return;
+            if (menu.contains(event.target) || button.contains(event.target)) return;
+            closeMobileModuleNav();
+        });
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key !== 'Escape') return;
+            closeMobileModuleNav();
+        });
 
         function renderAdvancedModulesMenu() {
             const menu = document.getElementById('advanced-modules-menu');
@@ -16298,6 +16485,7 @@
                 el.classList.remove('active-block', 'active-flex');
             });
             updateNavigationContext(tabId);
+            updateMobileModuleNavLabel(tabId);
 
             if (tabId === 'auditor') {
                 document.getElementById('view-auditor').classList.add('active-flex');
@@ -16312,6 +16500,7 @@
                 sessionActions.classList.add('flex');
             }
             closeMobileSessionMenu();
+            closeMobileModuleNav();
             closeAdvancedModulesMenu();
 
             if (tabId === 'matching') {
