@@ -22200,9 +22200,216 @@
             document.getElementById('ai-modal').classList.add('hidden');
         }
 
+        const PORT_INFO_BLOCK_MESSAGE = "⚠️ ADVERTENCIA: No se ha seleccionado una terminal compatible. Elige una de la lista para proceder con la estimación precisa.";
+        const PORT_INFO_CALCULATOR_DENIED_MESSAGE = "Acceso denegado: El módulo de calculadora está protegido por integridad operativa.";
+        const cachePuertos = {};
+        window.cachePuertos = cachePuertos;
+
+        function getSelectedOptionText(selectId) {
+            const select = document.getElementById(selectId);
+            if (!select) return '';
+            return select.options?.[select.selectedIndex]?.text || select.value || '';
+        }
+
+        function getPortInfoCargoContext(inputId) {
+            const isDischargePort = inputId === 'port-pod';
+            const cargoType = getSelectedOptionText('cargo-type') || document.getElementById('cargo-type')?.value || 'No disponible';
+            const cargoSpec = document.getElementById('cargo-type-manual')?.value?.trim() || 'No disponible';
+            const methodId = isDischargePort ? 'metodo_descarga_pod' : 'metodo_carga';
+            const method = getSelectedOptionText(methodId) || document.getElementById(methodId)?.value || 'No disponible';
+
+            return {
+                tipo: `${cargoType}${cargoSpec && cargoSpec !== 'No disponible' ? ` - ${cargoSpec}` : ''}`,
+                metodo: method,
+                operacion: isDischargePort ? 'descarga' : 'carga'
+            };
+        }
+
+        function parsePortInfoJson(rawText, portName) {
+            const text = String(rawText || '').replace(/```json|```/g, '').trim();
+            const match = text.match(/\{[\s\S]*\}/);
+            const parsed = JSON.parse(match ? match[0] : text);
+            const terminalSource = Array.isArray(parsed.terminales_disponibles)
+                ? parsed.terminales_disponibles
+                : (Array.isArray(parsed.terminales) ? parsed.terminales : []);
+            const terminales = terminalSource.map((terminal) => ({
+                    nombre: String(terminal.nombre || 'No disponible').trim() || 'No disponible',
+                    calado: String(terminal.calado || 'No disponible').trim() || 'No disponible',
+                    compatible: terminal.compatible !== false,
+                    origen_dato: String(terminal.origen_dato || terminal.origen || '').trim(),
+                    motivo: String(terminal.motivo || terminal.razon || terminal.compatibilidad || '').trim()
+                }));
+            return {
+                puerto_info: String(parsed.puerto_info || parsed.puerto || portName || '').trim(),
+                informacion_general: {
+                    calado_maximo: String(parsed.informacion_general?.calado_maximo || parsed.calado_maximo || 'No disponible').trim() || 'No disponible',
+                    restricciones_eslora: String(parsed.informacion_general?.restricciones_eslora || parsed.restricciones_eslora || 'No disponible').trim() || 'No disponible',
+                    clima: String(parsed.informacion_general?.clima || parsed.clima || 'No disponible').trim() || 'No disponible',
+                    cargas_principales: String(parsed.informacion_general?.cargas_principales || parsed.cargas_principales || 'No disponible').trim() || 'No disponible'
+                },
+                carga_analizada: {
+                    tipo: String(parsed.carga_analizada?.tipo || '').trim(),
+                    metodo: String(parsed.carga_analizada?.metodo || parsed.carga_analizada?.compatibilidad || '').trim(),
+                    compatibilidad: String(parsed.carga_analizada?.compatibilidad || parsed.carga_analizada?.metodo || '').trim()
+                },
+                terminales_disponibles: terminales,
+                instruccion: String(parsed.instruccion || "Selecciona una terminal compatible para aplicar el calado a la calculadora.").trim(),
+                puerto: String(parsed.puerto || parsed.puerto_info || portName || '').trim(),
+                terminales,
+                bloqueo_calculo: true
+            };
+        }
+
+        function escapePortInfoAttr(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
+        function renderPortInfoSelection(data, inputId) {
+            window.currentPortInfoResults = window.currentPortInfoResults || {};
+            window.currentPortInfoResults[inputId] = data;
+
+            data.terminales = Array.isArray(data.terminales)
+                ? data.terminales
+                : (Array.isArray(data.terminales_disponibles) ? data.terminales_disponibles : []);
+            data.terminales_disponibles = data.terminales;
+            data.informacion_general = data.informacion_general || {};
+
+            const container = document.createElement('div');
+            container.setAttribute('data-port-info-input', inputId);
+            container.style.cssText = [
+                'background:#ffffff !important',
+                'color:#1e293b !important',
+                'border:1px solid #e2e8f0 !important',
+                'box-shadow:0 18px 45px rgba(15,23,42,0.10) !important',
+                'border-radius:12px !important',
+                'padding:16px !important',
+                'font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif !important'
+            ].join(';');
+
+            const terminalCards = data.terminales.length ? data.terminales.map((terminal, index) => {
+                const compatible = terminal.compatible !== false;
+                const calado = String(terminal.calado || 'No disponible').trim() || 'No disponible';
+                const numericDraft = parseFloat(calado);
+                const hasValidDraft = Number.isFinite(numericDraft) && !/^n\/?a$/i.test(calado);
+                const canApplyDraft = compatible && hasValidDraft;
+                const actionControl = canApplyDraft
+                    ? `<button type="button" onclick="aplicarTerminal(${escapePortInfoAttr(JSON.stringify(calado))})" style="display:inline-flex !important; background:#0284c7 !important; color:#ffffff !important; border:0 !important; border-radius:8px !important; padding:8px 14px !important; font-size:12px !important; font-weight:800 !important; cursor:pointer !important; flex:0 0 auto !important; align-items:center !important; justify-content:center !important;">Aplicar</button>`
+                    : `<button type="button" disabled aria-disabled="true" title="Operación bloqueada por seguridad para la calculadora" style="display:inline-flex !important; background:#cbd5e1 !important; color:#64748b !important; border:0 !important; border-radius:8px !important; padding:8px 14px !important; font-size:12px !important; font-weight:800 !important; cursor:not-allowed !important; flex:0 0 auto !important; align-items:center !important; justify-content:center !important; white-space:nowrap !important;">No aplicable</button>`;
+                return `
+                <div style="background:${compatible ? '#ffffff' : '#fee2e2'} !important; color:#1e293b !important; border:1px solid #e2e8f0 !important; border-radius:10px !important; padding:12px !important; display:flex !important; align-items:center !important; justify-content:space-between !important; gap:12px !important;">
+                    <div style="min-width:0 !important;">
+                        <div style="font-weight:800 !important; color:#1e293b !important; font-size:13px !important;">${escapePortInfoAttr(terminal.nombre || 'No disponible')}</div>
+                        <div style="margin-top:4px !important; color:#475569 !important; font-size:12px !important;">Calado: <strong style="color:#0f172a !important;">${escapePortInfoAttr(calado)}</strong></div>
+                        ${terminal.origen_dato ? `<div style="margin-top:4px !important; color:#475569 !important; font-size:11px !important; font-weight:700 !important;">Origen dato: ${escapePortInfoAttr(terminal.origen_dato)}</div>` : ''}
+                        ${!compatible && terminal.motivo ? `<div style="margin-top:6px !important; color:#991b1b !important; font-size:11px !important; font-weight:700 !important;">${escapePortInfoAttr(terminal.motivo)}</div>` : ''}
+                        ${!canApplyDraft ? `<div style="margin-top:6px !important; color:#64748b !important; font-size:11px !important; font-weight:700 !important;">Operación no viable para aplicar calado</div>` : ''}
+                    </div>
+                    ${actionControl}
+                </div>
+            `;
+            }).join('') : `
+                <div style="background:#fee2e2 !important; color:#991b1b !important; border:1px solid #fecaca !important; border-radius:10px !important; padding:14px !important; font-size:13px !important; font-weight:700 !important;">
+                    No se encontraron terminales comerciales conocidas para este puerto. El resumen general del puerto sigue disponible arriba.
+                </div>
+            `;
+
+            container.innerHTML = `
+                    <div style="border-bottom:1px solid #e2e8f0 !important; padding-bottom:12px !important; margin-bottom:12px !important;">
+                        <div style="color:#1e293b !important; font-size:16px !important; font-weight:900 !important;">${escapePortInfoAttr(data.puerto || data.puerto_info || 'Puerto no disponible')}</div>
+                        <div style="margin-top:6px !important; color:#475569 !important; font-size:12px !important;">Resumen operativo Port Info</div>
+                    </div>
+                    <section style="background:#f8fafc !important; color:#1e293b !important; border:1px solid #e2e8f0 !important; border-radius:10px !important; padding:14px !important; margin-bottom:14px !important; line-height:1.55 !important; font-size:12px !important;">
+                        <div style="margin-bottom:8px !important;"><strong style="color:#0f172a !important;">Calado Máximo Aproximado:</strong> ${escapePortInfoAttr(data.informacion_general.calado_maximo || 'No disponible')}</div>
+                        <div style="margin-bottom:8px !important;"><strong style="color:#0f172a !important;">Restricciones Conocidas:</strong> ${escapePortInfoAttr(data.informacion_general.restricciones_eslora || 'No disponible')}</div>
+                        <div style="margin-bottom:8px !important;"><strong style="color:#0f172a !important;">Eslora (LOA):</strong> ${escapePortInfoAttr(data.informacion_general.restricciones_eslora || 'No disponible')}</div>
+                        <div style="margin-bottom:8px !important;"><strong style="color:#0f172a !important;">Clima:</strong> ${escapePortInfoAttr(data.informacion_general.clima || 'No disponible')}</div>
+                        <div><strong style="color:#0f172a !important;">Principales Cargas Operadas:</strong> ${escapePortInfoAttr(data.informacion_general.cargas_principales || 'No disponible')}</div>
+                    </section>
+                    <div style="color:#1e293b !important; font-size:13px !important; font-weight:900 !important; margin-bottom:10px !important;">
+                        Terminales específicas
+                    </div>
+                    <div style="display:grid !important; gap:10px !important;">${terminalCards}</div>
+            `;
+
+            return container.outerHTML;
+        }
+
+        function aplicarTerminal(calado) {
+            const draft = parseFloat(calado);
+            if (!Number.isFinite(draft)) {
+                showToast("Calado no disponible para aplicar a la calculadora.");
+                return;
+            }
+            window.SeaCharterState = window.SeaCharterState || {};
+            window.SeaCharterState.selectedDraft = draft;
+            if (window.AppCalculadora && typeof window.AppCalculadora.recalcularCostes === 'function') {
+                window.AppCalculadora.recalcularCostes();
+            }
+            showToast(`Calado aplicado: ${draft}`, true);
+        }
+        window.aplicarTerminal = aplicarTerminal;
+
+        function normalizarClaveCachePuerto(portName) {
+            return String(portName || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
+        }
+
+        function mostrarPortInfoData(portInfoData, inputId, portName, fromCache = false) {
+            const cleanHtml = renderPortInfoSelection(portInfoData, inputId);
+            markMasterReportTrigger('portInfoGenerated', {
+                inputId,
+                portName,
+                generatedAt: new Date().toISOString(),
+                source: fromCache ? 'cache' : 'ai',
+                json: portInfoData,
+                html: cleanHtml
+            });
+
+            document.getElementById('ai-modal-loader').classList.add('hidden');
+            document.getElementById('ai-modal-content').innerHTML = cleanHtml;
+            document.getElementById('ai-modal-content').classList.remove('hidden');
+        }
+
+        function applyPortInfoTerminal(inputId, terminalIndex) {
+            const terminal = window.currentPortInfoResults?.[inputId]?.terminales_disponibles?.[terminalIndex];
+            if (!terminal || terminal.compatible === false) {
+                showToast(PORT_INFO_BLOCK_MESSAGE);
+                return;
+            }
+
+            const terminalName = terminal.nombre || 'No disponible';
+            const draftValue = terminal.calado || 'No disponible';
+            window.SeaCharterState = window.SeaCharterState || {};
+            window.SeaCharterState.selectedDraft = draftValue;
+            window.selectedPortInfoTerminals = window.selectedPortInfoTerminals || {};
+            window.selectedPortInfoTerminals[inputId] = {
+                terminal: terminalName,
+                calado: draftValue,
+                compatible: true,
+                appliedAt: new Date().toISOString()
+            };
+
+            const draftInput = document.getElementById(`${inputId}-draft`);
+            if (draftInput) draftInput.value = draftValue || 'No disponible';
+            if (window.AppCalculadora && typeof window.AppCalculadora.recalcularCostes === 'function') {
+                window.AppCalculadora.recalcularCostes();
+            }
+            showToast(`Terminal aplicada: ${terminalName} | Calado: ${draftValue}`, true);
+        }
+
         async function getAIPortInfo(inputId) {
             const portName = document.getElementById(inputId).value;
             const currentLang = document.getElementById('language-selector')?.value || 'es';
+            const cargoContext = getPortInfoCargoContext(inputId);
 
             if(!portName) {
                 if (currentLang === 'en') return alert("Please enter a port name first.");
@@ -22212,52 +22419,95 @@
 
             showToast("Actualizando datos del motor SeaCharter Core PRO...", true);
 
-            let modalTitle = `Info Inteligente: ${portName}`;
+            window.selectedPortInfoTerminals = window.selectedPortInfoTerminals || {};
+            delete window.selectedPortInfoTerminals[inputId];
+
+            let modalTitle = `Port Info: ${portName}`;
             let loaderText = "Actualizando datos del motor SeaCharter Core PRO...";
-            let prompt = `Escribe un breve reporte portuario para el puerto de '${portName}'.
-            Devuelve el resultado en HTML básico (usando <ul>, <li>, <strong>, sin etiquetas <html> ni markdown \`\`\`).
-            Incluye:
-            - Calado máximo aproximado (Draft).
-            - Restricciones conocidas (Eslora, clima).
-            - Principales cargas operadas en terminales de granel.`;
+            let prompt = `Consulta Port Info para SeaCharter Core PRO.
+            PUERTO: ${portName}
+            CARGA: ${cargoContext.tipo}
+            MÉTODO DE ${cargoContext.operacion.toUpperCase()}: ${cargoContext.metodo}
+            ESTADO CALCULADORA: módulo protegido; no modifiques, describas ni interfieras con ninguna calculadora, fórmula matemática o lógica contable. Si se solicita modificar lógica de costes, responde exactamente: "${PORT_INFO_CALCULATOR_DENIED_MESSAGE}"
+            Sigue estrictamente la separación del sistema: informacion_general usa conocimiento experto del puerto comercial; terminales debe listar los muelles comerciales principales conocidos. Si un muelle no es compatible o no tiene calado exacto 100% seguro, inclúyelo igualmente con "calado": "N/A" y "compatible": false para proteger la calculadora.
+            Devuelve exclusivamente JSON puro con esta estructura:
+            {
+              "puerto": "Nombre del puerto",
+              "informacion_general": {
+                "calado_maximo": "Resumen del calado general del puerto...",
+                "restricciones_eslora": "Detalles sobre restricciones de LOA...",
+                "clima": "Detalles sobre vientos, mareas o clima...",
+                "cargas_principales": "Resumen de granel seco, líquido, etc."
+              },
+              "terminales": [
+                {"nombre": "Nombre de la terminal", "calado": "10.5", "compatible": true, "origen_dato": "Tiempo Real"}
+              ]
+            }`;
 
             if (currentLang === 'en') {
-                modalTitle = `Smart Info: ${portName}`;
+                modalTitle = `Port Info: ${portName}`;
                 loaderText = "Updating SeaCharter Core PRO engine data...";
-                prompt = `Write a brief port report for the port of '${portName}'.
-                Return the result in basic HTML (using <ul>, <li>, <strong>, without <html> tags or markdown \`\`\`).
-                Include:
-                - Approximate maximum draft (Draft).
-                - Known restrictions (Length, weather).
-                - Main cargoes handled at bulk terminals.`;
+                prompt = `SeaCharter Core PRO Port Info query.
+                PORT: ${portName}
+                CARGO: ${cargoContext.tipo}
+                ${cargoContext.operacion.toUpperCase()} METHOD: ${cargoContext.metodo}
+                CALCULATOR STATUS: protected module; do not modify, describe, or interfere with any calculator, mathematical formula, or accounting logic.
+                Follow the system separation strictly: informacion_general uses expert knowledge about the commercial port; terminales must list the known main commercial berths. If a berth is not compatible or its exact draft is not 100% certain, include it anyway with "calado": "N/A" and "compatible": false to protect the calculator.
+                Return only pure JSON with this structure:
+                {
+                  "puerto": "Port name",
+                  "informacion_general": {
+                    "calado_maximo": "General port draft summary...",
+                    "restricciones_eslora": "LOA restriction details...",
+                    "clima": "Wind, tide, or weather details...",
+                    "cargas_principales": "Dry bulk, liquid bulk, and other main cargo summary..."
+                  },
+                  "terminales": [
+                    {"nombre": "Terminal name", "calado": "10.5", "compatible": true, "origen_dato": "Tiempo Real"}
+                  ]
+                }`;
             } else if (currentLang === 'fr') {
-                modalTitle = `Informations Intelligentes : ${portName}`;
+                modalTitle = `Port Info : ${portName}`;
                 loaderText = "Mise à jour des données du moteur SeaCharter Core PRO...";
-                prompt = `Rédigez un bref rapport portuaire pour le port de '${portName}'.
-                Retournez le résultat en HTML de base (en utilisant <ul>, <li>, <strong>, sans balises <html> ni markdown \`\`\`).
-                Incluez :
-                - Tirant d'eau maximum approximatif (Draft).
-                - Restrictions connues (Longueur, météo).
-                - Principales cargaisons traitées aux terminaux de vrac.`;
+                prompt = `Requête Port Info pour SeaCharter Core PRO.
+                PORT : ${portName}
+                CARGAISON : ${cargoContext.tipo}
+                MÉTHODE DE ${cargoContext.operacion.toUpperCase()} : ${cargoContext.metodo}
+                STATUT CALCULATRICE : module protégé ; ne modifiez, ne décrivez et n'interférez avec aucune calculatrice, formule mathématique ou logique comptable.
+                Respectez strictement la séparation du système : informacion_general utilise la connaissance experte du port commercial ; terminales doit lister les principaux postes commerciaux connus. Si un poste n'est pas compatible ou si son tirant d'eau exact n'est pas certain à 100 %, incluez-le quand même avec "calado": "N/A" et "compatible": false pour protéger la calculatrice.
+                Retournez uniquement un JSON pur avec cette structure :
+                {
+                  "puerto": "Nom du port",
+                  "informacion_general": {
+                    "calado_maximo": "Résumé du tirant d'eau général du port...",
+                    "restricciones_eslora": "Détails sur les restrictions LOA...",
+                    "clima": "Détails sur vents, marées ou météo...",
+                    "cargas_principales": "Résumé des vracs secs, liquides, etc."
+                  },
+                  "terminales": [
+                    {"nombre": "Nom du terminal", "calado": "10.5", "compatible": true, "origen_dato": "Tiempo Real"}
+                  ]
+                }`;
             }
 
             openAIModal(modalTitle, loaderText);
 
+            const cacheKey = normalizarClaveCachePuerto(portName);
+            if (cachePuertos[cacheKey]) {
+                mostrarPortInfoData(cachePuertos[cacheKey], inputId, portName, true);
+                showToast("Port Info cargado desde caché local.", true);
+                return;
+            }
+
             try {
                 const payload = { contents: [{ parts: [{ text: prompt }] }] };
                 const data = await executeGeminiRequest(payload);
-                let html = data.candidates[0].content.parts[0].text;
-                const cleanHtml = html.replace(/```html|```/g, '').trim();
-                markMasterReportTrigger('portInfoGenerated', {
-                    inputId,
-                    portName,
-                    generatedAt: new Date().toISOString(),
-                    html: cleanHtml
-                });
-
-                document.getElementById('ai-modal-loader').classList.add('hidden');
-                document.getElementById('ai-modal-content').innerHTML = cleanHtml;
-                document.getElementById('ai-modal-content').classList.remove('hidden');
+                let rawText = data.candidates[0].content.parts[0].text;
+                const portInfoData = parsePortInfoJson(rawText, portName);
+                if (!portInfoData.carga_analizada.tipo) portInfoData.carga_analizada.tipo = `${cargoContext.tipo} | Método: ${cargoContext.metodo}`;
+                portInfoData.terminales = portInfoData.terminales_disponibles;
+                cachePuertos[cacheKey] = portInfoData;
+                mostrarPortInfoData(portInfoData, inputId, portName, false);
             } catch(e) {
                 document.getElementById('ai-modal-content').innerHTML = `<div class="text-red-400">Error: ${e.message}</div>`;
                 document.getElementById('ai-modal-loader').classList.add('hidden');
