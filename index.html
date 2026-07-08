@@ -36245,11 +36245,20 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function getStoredDataBridgeToken() {
-            return DATA_BRIDGE_API_SECRET;
+            try {
+                return DATA_BRIDGE_API_SECRET || String(window.localStorage.getItem('seacharter_databridge_api_secret') || '').trim();
+            } catch (error) {
+                return DATA_BRIDGE_API_SECRET;
+            }
         }
 
         function setStoredDataBridgeToken(token) {
-            return Boolean(token);
+            const normalizedToken = String(token || '').trim();
+            if (!normalizedToken || DATA_BRIDGE_API_SECRET) return Boolean(normalizedToken || DATA_BRIDGE_API_SECRET);
+            try {
+                window.localStorage.setItem('seacharter_databridge_api_secret', normalizedToken);
+            } catch (error) {}
+            return true;
         }
 
         function updateDataBridgeConnectionIndicator() {
@@ -36334,9 +36343,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             try {
                 const dataBridgeToken = getStoredDataBridgeToken();
                 const headers = {
-                    Accept: 'application/json',
-                    Authorization: 'Bearer ' + dataBridgeToken
+                    Accept: 'application/json'
                 };
+                if (dataBridgeToken) headers.Authorization = 'Bearer ' + dataBridgeToken;
                 const response = await fetch(DATA_BRIDGE_VERIFY_ENDPOINT, {
                     method: 'POST',
                     headers

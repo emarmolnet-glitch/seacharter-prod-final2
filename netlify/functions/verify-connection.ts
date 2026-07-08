@@ -2,10 +2,40 @@ import type { Config } from "@netlify/functions";
 
 declare const process: { env: Record<string, string | undefined> };
 
-const headers = {
+const baseHeaders = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-headers": "Content-Type, Authorization, Accept",
+  "vary": "Origin",
 };
+
+function getAllowedOrigins() {
+  return String(process.env.CORE_PRO_ALLOWED_ORIGINS || process.env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
+}
+
+function getCorsHeaders(req: Request) {
+  const requestOrigin = String(req.headers.get("origin") || "").trim().replace(/\/+$/, "");
+  const allowedOrigins = getAllowedOrigins();
+  const isLocalOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(requestOrigin);
+  const configuredOrigin =
+    requestOrigin &&
+    (allowedOrigins.includes("*") ||
+      allowedOrigins.includes(requestOrigin) ||
+      requestOrigin === String(process.env.URL || "").trim().replace(/\/+$/, "") ||
+      requestOrigin === String(process.env.DEPLOY_URL || "").trim().replace(/\/+$/, "") ||
+      isLocalOrigin)
+      ? requestOrigin
+      : "";
+
+  return {
+    ...baseHeaders,
+    ...(configuredOrigin ? { "access-control-allow-origin": configuredOrigin } : {}),
+  };
+}
 
 function getDataBridgeApiUrl() {
   return String(process.env.DATA_BRIDGE_API_URL || process.env.VITE_DATA_BRIDGE_API_URL || "").trim();
@@ -28,6 +58,11 @@ function getDataBridgeApiSecret(req: Request) {
 }
 
 export default async (req: Request) => {
+  const headers = getCorsHeaders(req);
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers });
+  }
+
   if (req.method !== "GET" && req.method !== "POST") {
     return Response.json({ success: false, error: "Method not allowed" }, { status: 405, headers });
   }
