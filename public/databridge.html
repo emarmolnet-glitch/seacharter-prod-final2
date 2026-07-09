@@ -1162,6 +1162,30 @@
             }).filter(v => v.imo > 0);
         }
 
+        function extractIncomingVesselsPayload(payload) {
+            if (Array.isArray(payload)) return payload;
+            if (!payload || typeof payload !== 'object') return [];
+            if (Array.isArray(payload.vessels)) return payload.vessels;
+            if (Array.isArray(payload.buques)) return payload.buques;
+            if (Array.isArray(payload.data)) return payload.data;
+            return [];
+        }
+
+        function receiveCoreProVessels(payload, sourceLabel = 'Core PRO') {
+            const incomingVessels = extractIncomingVesselsPayload(payload);
+            const buques = mapFrozenReportVessels(incomingVessels);
+            console.log(`¡Datos reales recibidos en Data Bridge desde ${sourceLabel}!`, incomingVessels);
+
+            resetAuditTray();
+
+            if (buques.length > 0) {
+                addLog(`[SYNC] ${getTimestamp()} - Recibidos ${buques.length} buques reales desde ${sourceLabel}.`);
+                addVesselsToAuditList(buques);
+            } else {
+                addLog(`[SYNC] ${getTimestamp()} - El payload recibido desde ${sourceLabel} no contiene buques válidos para pintar.`);
+            }
+        }
+
         function resetAuditTray() {
             pendingAudits = [];
             const container = document.getElementById('audit-vessels-container');
@@ -1209,12 +1233,13 @@
             const container = document.getElementById('audit-vessels-container');
             const emptyState = document.getElementById('empty-audit-state');
             const badge = document.getElementById('audit-badge');
+            const safeVesselsList = Array.isArray(vesselsList) ? vesselsList : [];
 
-            if (vesselsList.length > 0 && emptyState) {
+            if (safeVesselsList.length > 0 && emptyState) {
                 emptyState.classList.add('hidden');
             }
 
-            vesselsList.forEach(vessel => {
+            safeVesselsList.forEach(vessel => {
                 if (pendingAudits.some(item => item.imo === vessel.imo && item.name === vessel.name)) {
                     return;
                 }
@@ -1230,8 +1255,19 @@
                 const escapedName = (vessel.name || "Unknown").replace(/'/g, "\\'");
                 const escapedType = String(vessel.type || "Bulk Carrier").replace(/'/g, "\\'");
                 const originalEta = vessel.eta || new Date().toISOString().split('T')[0];
-
                 const etaDelta = vessel.eta_delta || '0.0 días (En ventana)';
+                const displayName = escapeHtml(vessel.name || "Unknown");
+                const displayType = escapeHtml(vessel.type || "Bulk Carrier");
+                const displayImo = escapeHtml(vessel.imo || 'N/A');
+                const displayLastPort = escapeHtml(vessel.ultimo_puerto || 'N/A');
+                const displayDestination = escapeHtml(vessel.destino_actual || 'N/A');
+                const displayEtaPort = escapeHtml(vessel.eta_puerto_carga || originalEta);
+                const displayEtaDelta = escapeHtml(etaDelta);
+                const displayDraft = escapeHtml(vessel.draft ? vessel.draft : 'N/A');
+                const displayOriginalEta = escapeHtml(originalEta);
+                const inputDwtValue = escapeHtml(vessel.dwt || 0);
+                const inputFlagValue = escapeHtml(vessel.flag || vessel.bandera || 'Panama');
+
                 let deltaColorClass = 'text-emerald-700 bg-white border-emerald-200';
                 if (etaDelta.includes('+')) {
                     deltaColorClass = 'text-rose-700 bg-white border-rose-200';
@@ -1242,11 +1278,11 @@
                         <div class="min-w-0 flex-1 pr-2">
                             <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 truncate">
                                 <i class="fa-solid fa-ship text-indigo-400 shrink-0"></i>
-                                <span class="truncate" title="${vessel.name}">${vessel.name}</span>
+                                <span class="truncate" title="${displayName}">${displayName}</span>
                             </h4>
-                            <p class="text-[10px] text-[#1E3A8A] font-semibold mt-0.5 truncate">${vessel.type}</p>
+                            <p class="text-[10px] text-[#1E3A8A] font-semibold mt-0.5 truncate">${displayType}</p>
                         </div>
-                        <span class="text-[9px] font-bold text-slate-500 bg-white px-2 py-0.5 border border-slate-200 rounded console-font shrink-0">IMO ${vessel.imo || 'N/A'}</span>
+                        <span class="text-[9px] font-bold text-slate-500 bg-white px-2 py-0.5 border border-slate-200 rounded console-font shrink-0">IMO ${displayImo}</span>
                     </div>
 
                     ${renderAuditFlowColumns(vessel, safeImo)}
@@ -1254,35 +1290,35 @@
                     <div class="grid grid-cols-2 gap-2 border-t border-b border-slate-200/60 py-2.5 text-[10px] text-slate-600">
                         <div class="flex items-center gap-1 col-span-2">
                             <span class="text-slate-500 font-medium">Último Puerto:</span>
-                            <span class="font-bold text-slate-700 console-font truncate">${vessel.ultimo_puerto || 'N/A'}</span>
+                            <span class="font-bold text-slate-700 console-font truncate">${displayLastPort}</span>
                         </div>
                         <div class="flex items-center gap-1 col-span-2">
                             <span class="text-slate-500 font-medium">Destino Actual:</span>
-                            <span class="font-bold text-slate-700 console-font truncate">${vessel.destino_actual || 'N/A'}</span>
+                            <span class="font-bold text-slate-700 console-font truncate">${displayDestination}</span>
                         </div>
                         <div class="flex items-center gap-1 col-span-2">
                             <span class="text-slate-500 font-medium">ETA Calculado Radar:</span>
-                            <span class="font-bold text-slate-700 console-font">${vessel.eta_puerto_carga || originalEta}</span>
+                            <span class="font-bold text-slate-700 console-font">${displayEtaPort}</span>
                         </div>
                         <div class="flex items-center gap-1 col-span-2">
                             <span class="text-slate-500 font-medium">Delta:</span>
-                            <span class="font-bold ${deltaColorClass} border px-1.5 py-0.5 rounded console-font">${etaDelta}</span>
+                            <span class="font-bold ${deltaColorClass} border px-1.5 py-0.5 rounded console-font">${displayEtaDelta}</span>
                         </div>
                         <div class="flex items-center gap-1 mt-1 border-t border-slate-200/30 pt-1.5">
                             <span class="text-slate-500 font-medium">DWT:</span>
-                            <input type="number" id="input-dwt-${safeImo}" class="bg-white border border-slate-200/80 focus:border-indigo-500 focus:outline-none rounded px-1.5 py-0.5 text-slate-800 w-24 text-[10px] font-bold console-font" value="${vessel.dwt || 0}">
+                            <input type="number" id="input-dwt-${safeImo}" class="bg-white border border-slate-200/80 focus:border-indigo-500 focus:outline-none rounded px-1.5 py-0.5 text-slate-800 w-24 text-[10px] font-bold console-font" value="${inputDwtValue}">
                         </div>
                         <div class="flex items-center gap-1 mt-1 border-t border-slate-200/30 pt-1.5">
                             <span class="text-slate-500 font-medium">Calado:</span>
-                            <span class="font-bold text-slate-700 console-font">${vessel.draft ? vessel.draft : 'N/A'} m</span>
+                            <span class="font-bold text-slate-700 console-font">${displayDraft} m</span>
                         </div>
                         <div class="flex items-center gap-1 col-span-2">
                             <span class="text-slate-500 font-medium">Bandera:</span>
-                            <input type="text" id="input-flag-${safeImo}" class="bg-white border border-slate-200/80 focus:border-indigo-500 focus:outline-none rounded px-1.5 py-0.5 text-slate-800 w-24 text-[10px] font-bold" value="${vessel.flag || vessel.bandera || 'Panama'}">
+                            <input type="text" id="input-flag-${safeImo}" class="bg-white border border-slate-200/80 focus:border-indigo-500 focus:outline-none rounded px-1.5 py-0.5 text-slate-800 w-24 text-[10px] font-bold" value="${inputFlagValue}">
                         </div>
                         <div class="flex items-center gap-1 col-span-2">
                             <span class="text-slate-500 font-medium">ETA Radar:</span>
-                            <span class="font-bold text-slate-700 console-font">${originalEta}</span>
+                            <span class="font-bold text-slate-700 console-font">${displayOriginalEta}</span>
                         </div>
                         <div class="col-span-2 flex items-center justify-between border-t border-slate-200/40 pt-2 mt-1">
                             <div class="flex items-center gap-1">
@@ -1462,25 +1498,21 @@
         const localSyncChannel = new BroadcastChannel('seacharter_sync');
         localSyncChannel.onmessage = (event) => {
             if (event.data && event.data.type === 'recibir-auditoria') {
-                const buques = event.data.vessels;
-                console.log("¡Datos reales recibidos en Data Bridge!", buques);
-                
-                // 1. Limpiar tabla/bandeja de cualquier dato residual
-                resetAuditTray();
-
-                // 2. Renderizar array 'buques' recibido
-                if (buques && buques.length > 0) {
-                    addLog(`[SYNC] ${getTimestamp()} - Recibidos ${buques.length} buques reales desde Core PRO.`);
-                    addVesselsToAuditList(buques);
-                }
+                receiveCoreProVessels(event.data, 'Core PRO');
             }
         };
+
+        if (window.electronAPI && typeof window.electronAPI.onVesselsForAudit === 'function') {
+            window.electronAPI.onVesselsForAudit((payload) => {
+                receiveCoreProVessels(payload, 'Core PRO IPC');
+            });
+        }
 
         // Escuchar en seacharter_broadcast para capturar instantáneas consolidadas ('CONGELAR_REPORTE')
         const broadcastChannel = new BroadcastChannel('seacharter_broadcast');
         broadcastChannel.onmessage = (event) => {
             if (event.data && event.data.type === 'CONGELAR_REPORTE') {
-                const buquesOriginales = event.data.vessels || [];
+                const buquesOriginales = extractIncomingVesselsPayload(event.data);
                 console.log("[CONGELAR_REPORTE] ¡Instantánea de buques recibida en Data Bridge!", buquesOriginales);
 
                 const buquesMapeados = mapFrozenReportVessels(buquesOriginales);
