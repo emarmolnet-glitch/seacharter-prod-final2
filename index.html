@@ -13945,6 +13945,41 @@
         }
         window.saveCoreProFrozenReport = saveCoreProFrozenReport;
 
+        function readValidatedCoreProFrozenReport(storageKey = CORE_PRO_FROZEN_REPORT_STORAGE_KEY) {
+            const clave_leida = localStorage.getItem(storageKey);
+            console.log('Validación previa al envío. Clave encontrada:', clave_leida);
+
+            if (clave_leida === null || clave_leida === undefined || !String(clave_leida).trim()) {
+                throw new Error('Bloqueo de seguridad: no hay datos congelados para enviar a Data Bridge.');
+            }
+
+            let parsedReport = null;
+            try {
+                parsedReport = JSON.parse(clave_leida);
+            } catch (parseErr) {
+                throw new Error('Bloqueo de seguridad: el reporte congelado no contiene JSON válido.');
+            }
+
+            if (parsedReport === null || parsedReport === undefined) {
+                throw new Error('Bloqueo de seguridad: el reporte congelado está vacío.');
+            }
+
+            const validatedVessels = Array.isArray(parsedReport)
+                ? parsedReport
+                : (Array.isArray(parsedReport?.vessels) ? parsedReport.vessels : []);
+
+            if (validatedVessels.length === 0) {
+                throw new Error('Bloqueo de seguridad: el reporte congelado no contiene buques para enviar.');
+            }
+
+            return {
+                raw: clave_leida,
+                parsed: parsedReport,
+                vessels: validatedVessels
+            };
+        }
+        window.readValidatedCoreProFrozenReport = readValidatedCoreProFrozenReport;
+
         function formatDateForBridge(dateString) {
             if (typeof dateString !== 'string') return dateString;
             const value = dateString.trim();
@@ -14146,8 +14181,14 @@
                 });
                 saveCoreProFrozenReport(selectedAuditReport);
 
-                const dataBridgeBatches = chunkVesselsForDataBridge(payloadLimpio);
-                console.log(`[Data Bridge] Enviando ${payloadLimpio.length} buque(s) en ${dataBridgeBatches.length} lote(s) secuenciales.`, dataBridgeBatches);
+                const validatedFrozenReport = readValidatedCoreProFrozenReport();
+                const validatedPayload = cleanDataBridgeVesselsPayload(JSON.parse(JSON.stringify(validatedFrozenReport.vessels)));
+                if (validatedPayload.length === 0) {
+                    throw new Error('Bloqueo de seguridad: el reporte validado no contiene buques válidos para Data Bridge.');
+                }
+
+                const dataBridgeBatches = chunkVesselsForDataBridge(validatedPayload);
+                console.log(`[Data Bridge] Enviando ${validatedPayload.length} buque(s) en ${dataBridgeBatches.length} lote(s) secuenciales.`, dataBridgeBatches);
 
                 const dataBridgeSecret = typeof process !== 'undefined' && process?.env?.API_SECRET
                     ? process.env.API_SECRET
@@ -14155,10 +14196,7 @@
 
                 let acceptedCount = 0;
                 for (let batchIndex = 0; batchIndex < dataBridgeBatches.length; batchIndex += 1) {
-                    const batch = dataBridgeBatches[batchIndex].map(vessel => ({
-                        ...vessel,
-                        is_audit_required: false
-                    }));
+                    const batch = dataBridgeBatches[batchIndex];
                     showToast(`Enviando lote ${batchIndex + 1}/${dataBridgeBatches.length} a Data Bridge (${batch.length} buques).`);
 
                     const bridgeResponse = await postDataBridgeReceiveVessels({
@@ -14187,8 +14225,8 @@
                     console.log(`[Data Bridge] Lote ${batchIndex + 1}/${dataBridgeBatches.length} enviado correctamente:`, bridgePayload);
                 }
 
-                console.log(`[Data Bridge] Exportación completa a /api/receive-vessels: ${acceptedCount}/${payloadLimpio.length} buque(s).`);
-                showToast(`✅ ${acceptedCount} de ${payloadLimpio.length} buque${payloadLimpio.length === 1 ? '' : 's'} enviado${payloadLimpio.length === 1 ? '' : 's'} a Data Bridge.`);
+                console.log(`[Data Bridge] Exportación completa a /api/receive-vessels: ${acceptedCount}/${validatedPayload.length} buque(s).`);
+                showToast(`✅ ${acceptedCount} de ${validatedPayload.length} buque${validatedPayload.length === 1 ? '' : 's'} enviado${validatedPayload.length === 1 ? '' : 's'} a Data Bridge.`);
             } catch (err) {
                 console.error('Error en exportación:', err?.status || 'client', err);
                 showToast("❌ Error al exportar la selección a auditoría.");
