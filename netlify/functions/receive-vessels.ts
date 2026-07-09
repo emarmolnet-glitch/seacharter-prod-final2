@@ -48,23 +48,34 @@ function cleanImo(value: unknown) {
 
 function normalizeVessel(value: unknown): StrictVessel {
   const source = value && typeof value === "object" ? value as Record<string, unknown> : {};
-  const imo = cleanImo(source.imo);
+  const imo = cleanImo(source.imo ?? source.IMO ?? source.numero_imo ?? source.imoNumber);
 
   return {
     imo,
-    is_audit_required: false,
-    vessel_name: cleanText(source.vessel_name),
-    dwt: cleanNumber(source.dwt),
-    has_gears: cleanBoolean(source.has_gears),
-    flag: cleanText(source.flag).slice(0, 3) || "N/A",
-    last_port: cleanText(source.last_port),
-    vessel_type: cleanText(source.vessel_type),
-    year_built: cleanNumber(source.year_built),
-    owner_manager: cleanText(source.owner_manager),
-    draft_meters: cleanNumber(source.draft_meters),
-    eta: cleanEta(source.eta),
-    detected_at: cleanEta(source.detected_at),
+    is_audit_required: cleanBoolean(source.is_audit_required ?? source.auditRequired),
+    vessel_name: cleanText(source.vessel_name ?? source.name ?? source.nombre ?? source.ShipName ?? source.vesselName),
+    dwt: cleanNumber(source.dwt ?? source.DWT),
+    has_gears: cleanBoolean(source.has_gears ?? source.gruas_geared ?? source.gruas),
+    flag: cleanText(source.flag ?? source.bandera ?? source.Flag).slice(0, 3) || "N/A",
+    last_port: cleanText(source.last_port ?? source.ultimo_puerto ?? source.lastPort),
+    vessel_type: cleanText(source.vessel_type ?? source.type ?? source.tipo_buque ?? source.tipo),
+    year_built: cleanNumber(source.year_built ?? source.ano_construccion ?? source.builtYear ?? source.built_year ?? source.built),
+    owner_manager: cleanText(source.owner_manager ?? source.armador_manager ?? source.owner ?? source.manager ?? source.armador),
+    draft_meters: cleanNumber(source.draft_meters ?? source.draft ?? source.Draft ?? source.calado),
+    eta: cleanEta(source.eta ?? source.ETA ?? source.eta_puerto_carga),
+    detected_at: cleanEta(source.detected_at ?? source.detectedAt ?? source.created_at ?? source.createdAt ?? source.generated_at ?? source.generatedAt),
   };
+}
+
+function extractVesselsPayload(rawPayload: unknown) {
+  if (Array.isArray(rawPayload)) return rawPayload;
+  if (!rawPayload || typeof rawPayload !== "object") return [];
+
+  const payload = rawPayload as Record<string, unknown>;
+  if (Array.isArray(payload.vessels)) return payload.vessels;
+  if (Array.isArray(payload.buques)) return payload.buques;
+  if (Array.isArray(payload.data)) return payload.data;
+  return [];
 }
 
 function getDataBridgeApiUrl() {
@@ -102,7 +113,7 @@ export default async (req: Request) => {
   }
 
   const rawPayload = await req.json().catch(() => null);
-  const rawVessels = Array.isArray(rawPayload) ? rawPayload : [];
+  const rawVessels = extractVesselsPayload(rawPayload);
   const vessels = rawVessels.map(normalizeVessel);
   const auditRequiredCount = vessels.filter((vessel) => vessel.is_audit_required).length;
 
@@ -117,7 +128,7 @@ export default async (req: Request) => {
   }
 
   if (rawVessels.length === 0) {
-    return Response.json({ success: false, error: "Expected a plain JSON array of vessels." }, { status: 400, headers: jsonHeaders });
+    return Response.json({ success: false, error: "Expected a JSON array of vessels or an object with vessels/buques." }, { status: 400, headers: jsonHeaders });
   }
 
   const apiUrl = getDataBridgeApiUrl();
