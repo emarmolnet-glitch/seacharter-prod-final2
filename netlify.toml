@@ -2,6 +2,8 @@
   command = "npm run build"
   publish = "dist"
   functions = "netlify/functions"
+  # Añade esta línea si tu carpeta de migraciones está aquí:
+  ignore = "netlify/database/migrations/*"
 
 [build.environment]
   SKIP_PRISMA_MIGRATE = "true"
