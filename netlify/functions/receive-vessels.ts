@@ -10,11 +10,19 @@ const jsonHeaders = {
 };
 
 function getTargetUrl() {
-  if (!process.env.DATA_BRIDGE_URL) {
+  const usadaUrl = process.env.DATA_BRIDGE_URL ?? process.env.VITE_DATA_BRIDGE_URL;
+
+  console.log('URL detectada:', usadaUrl ? 'Sí' : 'No');
+
+  if (!usadaUrl) {
     throw new Error("DATA_BRIDGE_URL is not configured. Cannot forward vessels payload to Data Bridge.");
   }
 
-  return process.env.DATA_BRIDGE_URL + "/.netlify/functions/receive-audit";
+  return usadaUrl + "/.netlify/functions/receive-audit";
+}
+
+function getApiSecret() {
+  return process.env.DATA_BRIDGE_API_SECRET ?? process.env.VITE_DATA_BRIDGE_API_SECRET ?? "";
 }
 
 function getErrorMessage(error: unknown) {
@@ -43,7 +51,7 @@ export default async (req: Request) => {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-api-key": process.env.DATA_BRIDGE_API_SECRET || "",
+        "x-api-key": getApiSecret(),
       },
       body: rawPayload,
       signal: controller.signal,
