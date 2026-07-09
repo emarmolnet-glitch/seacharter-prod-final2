@@ -10,7 +10,7 @@ const jsonHeaders = {
 };
 
 function getTargetUrl() {
-  const usadaUrl = process.env.DATA_BRIDGE_URL ?? process.env.VITE_DATA_BRIDGE_URL;
+  const usadaUrl = process.env.DATA_BRIDGE_URL;
 
   console.log('URL detectada:', usadaUrl ? 'Sí' : 'No');
 
@@ -22,7 +22,18 @@ function getTargetUrl() {
 }
 
 function getApiSecret() {
-  return process.env.DATA_BRIDGE_API_SECRET ?? process.env.VITE_DATA_BRIDGE_API_SECRET ?? "";
+  const apiKey = process.env.DATA_BRIDGE_API_SECRET || process.env.VITE_DATA_BRIDGE_API_SECRET || "";
+
+  console.log(
+    'Enviando petición. Llave cargada:',
+    apiKey.length > 0 ? 'Sí (longitud: ' + apiKey.length + ')' : 'NO',
+  );
+
+  if (!apiKey) {
+    throw new Error('ERROR_CRITICO: API_KEY_NO_CARGADA');
+  }
+
+  return apiKey;
 }
 
 function getErrorMessage(error: unknown) {
@@ -43,26 +54,26 @@ export default async (req: Request) => {
 
   try {
     const targetUrl = getTargetUrl();
+    const apiKey = getApiSecret();
     const rawPayload = await req.text();
 
     console.log(`[Data Bridge] Forwarding vessels payload to: ${targetUrl}`);
-    console.log("Longitud de API KEY enviada:", process.env.DATA_BRIDGE_API_SECRET?.length);
-
-    if (!process.env.DATA_BRIDGE_API_SECRET?.length) {
-      throw new Error("API KEY no encontrada en variables de entorno");
-    }
 
     const bridgeResponse = await fetch(targetUrl, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-api-key": process.env.DATA_BRIDGE_API_SECRET,
+        "x-api-key": apiKey,
       },
       body: rawPayload,
       signal: controller.signal,
     });
 
     const responseBody = await bridgeResponse.text();
+
+    if (bridgeResponse.status !== 200) {
+      throw new Error(`Data Bridge rejected request with status ${bridgeResponse.status}: ${responseBody}`);
+    }
 
     return new Response(responseBody, {
       status: bridgeResponse.status,
