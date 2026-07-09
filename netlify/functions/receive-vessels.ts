@@ -14,7 +14,7 @@ function getTargetUrl() {
     throw new Error("DATA_BRIDGE_URL is not configured. Cannot forward vessels payload to Data Bridge.");
   }
 
-  return process.env.DATA_BRIDGE_URL + "/.netlify/functions/receive-core-data";
+  return process.env.DATA_BRIDGE_URL + "/.netlify/functions/receive-audit";
 }
 
 function getErrorMessage(error: unknown) {
