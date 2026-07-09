@@ -102,7 +102,7 @@ function extractVesselsPayload(rawPayload: unknown) {
 }
 
 function getDataBridgeApiUrl() {
-  return String(process.env.DATA_BRIDGE_API_URL || process.env.VITE_DATA_BRIDGE_API_URL || "").trim();
+  return String(process.env.DATA_BRIDGE_URL || "").trim();
 }
 
 function isValidHttpUrl(value: string) {
@@ -112,18 +112,6 @@ function isValidHttpUrl(value: string) {
   } catch {
     return false;
   }
-}
-
-function getBearerToken() {
-  return String(process.env.API_SECRET || process.env.VITE_API_SECRET || "").trim();
-}
-
-function extractRemoteError(payload: unknown, fallback: string) {
-  if (payload && typeof payload === "object") {
-    const record = payload as Record<string, unknown>;
-    return String(record.error || record.message || record.detail || fallback);
-  }
-  return fallback;
 }
 
 export default async (req: Request) => {
@@ -157,22 +145,17 @@ export default async (req: Request) => {
   const apiUrl = getDataBridgeApiUrl();
   if (!isValidHttpUrl(apiUrl)) {
     return Response.json(
-      { success: false, error: "Configura DATA_BRIDGE_API_URL o VITE_DATA_BRIDGE_API_URL para exportar a Data Bridge." },
+      { success: false, error: "Configura DATA_BRIDGE_URL para exportar a Data Bridge." },
       { status: 500, headers: jsonHeaders },
     );
   }
 
-  const token = getBearerToken();
-  if (!token) {
-    return Response.json({ success: false, error: "Conecta Data Bridge antes de exportar." }, { status: 400, headers: jsonHeaders });
-  }
-
   try {
-    const bridgeResponse = await fetch(`${apiUrl.replace(/\/+$/, "")}/api/receive-vessels`, {
+    const bridgeResponse = await fetch(process.env.DATA_BRIDGE_URL + "/.netlify/functions/receive-core-data", {
       method: "POST",
       headers: {
-        "Authorization": "Bearer " + token,
         "Content-Type": "application/json",
+        "x-api-key": process.env.DATA_BRIDGE_API_SECRET || "",
       },
       body: JSON.stringify(vessels),
     });
@@ -184,26 +167,24 @@ export default async (req: Request) => {
       bridgePayload = null;
     }
 
-    if (bridgeResponse.status === 200) {
-      console.log(`[Data Bridge] Envío exitoso a /api/receive-vessels: ${vessels.length} buque(s).`);
+    if (bridgeResponse.ok) {
+      console.log(`[Data Bridge] Envío exitoso a receive-core-data: ${vessels.length} buque(s).`);
       return Response.json(
         { success: true, acceptedCount: vessels.length, auditRequiredCount, dataBridgeResponse: bridgePayload },
         { status: 200, headers: jsonHeaders },
       );
     }
 
-    console.error("[Data Bridge] Rechazo desde /api/receive-vessels:", {
+    console.error("[Data Bridge] Rechazo desde receive-core-data:", {
       status: bridgeResponse.status,
       response: bridgePayload,
     });
 
+    throw new Error(bridgeResponse.statusText ? `${bridgeResponse.statusText} (${bridgeResponse.status})` : String(bridgeResponse.status));
+  } catch (error) {
+    console.error("[Data Bridge] Error enviando payload:", error);
     return Response.json(
-      { success: false, error: extractRemoteError(bridgePayload, `Data Bridge respondió ${bridgeResponse.status}`), dataBridgeResponse: bridgePayload },
-      { status: bridgeResponse.status, headers: jsonHeaders },
-    );
-  } catch {
-    return Response.json(
-      { success: false, error: "No se pudo enviar el payload a Data Bridge." },
+      { success: false, error: error instanceof Error ? error.message : "No se pudo enviar el payload a Data Bridge." },
       { status: 502, headers: jsonHeaders },
     );
   }
