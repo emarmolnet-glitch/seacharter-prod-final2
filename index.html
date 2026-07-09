@@ -13917,11 +13917,11 @@
                 
                 console.log("[CONGELAR_REPORTE] Capturando instantánea de " + frozenVessels.length + " buques.");
                 
-                localStorage.setItem('core_pro_frozen_report', JSON.stringify({
+                saveCoreProFrozenReport({
                     format: 'seacharter.matching.export.v1',
                     created_at: new Date().toISOString(),
                     vessels: frozenVessels
-                }));
+                });
                 
                 if (typeof showToast === 'function') {
                     showToast("✅ Informe preparado. Usa Enviar a Data Bridge para exportarlo.");
@@ -13936,6 +13936,14 @@
             }
         }
         window.generateFrozenReport = generateFrozenReport;
+
+        const CORE_PRO_FROZEN_REPORT_STORAGE_KEY = 'core_pro_frozen_report';
+
+        function saveCoreProFrozenReport(reportData, storageKey = CORE_PRO_FROZEN_REPORT_STORAGE_KEY) {
+            console.log('Guardando reporte en clave:', storageKey, 'Datos:', reportData);
+            localStorage.setItem(storageKey, JSON.stringify(reportData));
+        }
+        window.saveCoreProFrozenReport = saveCoreProFrozenReport;
 
         function formatDateForBridge(dateString) {
             if (typeof dateString !== 'string') return dateString;
@@ -14079,7 +14087,7 @@
 
         async function exportSelectedMatchingToAudit() {
             try {
-                const frozenReport = String(localStorage.getItem('core_pro_frozen_report') || '').trim();
+                const frozenReport = String(localStorage.getItem(CORE_PRO_FROZEN_REPORT_STORAGE_KEY) || '').trim();
                 if (!frozenReport) {
                     alert('Error: No hay datos seleccionados para exportar');
                     return;
@@ -14129,6 +14137,15 @@
                     showToast("No hay buques para exportar a Data Bridge.");
                     return;
                 }
+
+                const selectedAuditReport = normalizeBridgeDateFields({
+                    format: 'seacharter.matching.export.v1',
+                    source: 'core-pro-matching-selected',
+                    created_at: new Date().toISOString(),
+                    vessels: payloadLimpio
+                });
+                saveCoreProFrozenReport(selectedAuditReport);
+
                 const dataBridgeBatches = chunkVesselsForDataBridge(payloadLimpio);
                 console.log(`[Data Bridge] Enviando ${payloadLimpio.length} buque(s) en ${dataBridgeBatches.length} lote(s) secuenciales.`, dataBridgeBatches);
 
@@ -15479,14 +15496,14 @@
                 });
                 window.lastDataBridgeAuditVessels = arrayDeBuquesEncontrados;
                 if (arrayDeBuquesEncontrados.length > 0) {
-                    localStorage.setItem('core_pro_frozen_report', JSON.stringify(normalizeBridgeDateFields({
+                    saveCoreProFrozenReport(normalizeBridgeDateFields({
                         format: 'seacharter.matching.export.v1',
                         source: 'core-pro-matching-selected',
                         created_at: new Date().toISOString(),
                         vessels: arrayDeBuquesEncontrados
-                    })));
+                    }));
                 } else {
-                    localStorage.removeItem('core_pro_frozen_report');
+                    localStorage.removeItem(CORE_PRO_FROZEN_REPORT_STORAGE_KEY);
                 }
 
                 // Al terminar el algoritmo y tener el array final de buques listos:
