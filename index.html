@@ -14004,28 +14004,58 @@
             return rawValue.split('T')[0] || 'N/A';
         }
 
-        function mapVesselsForReceiveVessels(vessels) {
-            return vessels.map((vessel) => {
-                const source = vessel && typeof vessel === 'object' ? vessel : {};
-                const imo = getStrictVesselImo(source);
-                const vesselName = getStrictVesselString(source, ['name', 'vessel_name', 'nombre']);
+        function isStructuredDataBridgeVessel(vessel) {
+            return !!(
+                vessel &&
+                typeof vessel === 'object' &&
+                !Array.isArray(vessel) &&
+                Object.prototype.hasOwnProperty.call(vessel, 'imo') &&
+                Object.prototype.hasOwnProperty.call(vessel, 'is_audit_required') &&
+                Object.prototype.hasOwnProperty.call(vessel, 'vessel_name') &&
+                Object.prototype.hasOwnProperty.call(vessel, 'dwt') &&
+                Object.prototype.hasOwnProperty.call(vessel, 'has_gears') &&
+                Object.prototype.hasOwnProperty.call(vessel, 'flag') &&
+                Object.prototype.hasOwnProperty.call(vessel, 'last_port') &&
+                Object.prototype.hasOwnProperty.call(vessel, 'vessel_type') &&
+                Object.prototype.hasOwnProperty.call(vessel, 'year_built') &&
+                Object.prototype.hasOwnProperty.call(vessel, 'owner_manager') &&
+                Object.prototype.hasOwnProperty.call(vessel, 'draft_meters') &&
+                Object.prototype.hasOwnProperty.call(vessel, 'eta') &&
+                Object.prototype.hasOwnProperty.call(vessel, 'detected_at')
+            );
+        }
 
-                return {
-                    imo,
-                    is_audit_required: false,
-                    vessel_name: vesselName,
-                    dwt: getStrictVesselNumber(source, ['dwt', 'dwt_ajustado']),
-                    has_gears: getStrictVesselBoolean(source, ['has_gears', 'gruas']),
-                    flag: getStrictVesselString(source, ['flag', 'bandera']).slice(0, 3) || 'N/A',
-                    last_port: getStrictVesselString(source, ['last_port', 'ultimo_puerto']),
-                    vessel_type: getStrictVesselString(source, ['vessel_type', 'type', 'tipo']),
-                    year_built: getStrictVesselNumber(source, ['year_built', 'built', 'anio_construccion']),
-                    owner_manager: getStrictVesselString(source, ['owner_manager', 'owner', 'manager', 'armador']),
-                    draft_meters: getStrictVesselNumber(source, ['draft_meters', 'draft', 'calado']),
-                    eta: normalizeStrictVesselDate(getStrictVesselString(source, ['eta', 'ETA', 'eta_puerto_carga', 'estimatedEta', 'etaEstimated'], 'N/A')),
-                    detected_at: normalizeStrictVesselDate(getStrictVesselString(source, ['detected_at', 'detectedAt', 'timestamp', 'created_at', 'createdAt', 'generatedAt', 'generated_at'], 'N/A'))
-                };
-            });
+        function cleanDataBridgeVesselsPayload(vessels) {
+            const list = Array.isArray(vessels) ? vessels : [];
+            return list
+                .filter(vessel => vessel && typeof vessel === 'object' && !Array.isArray(vessel))
+                .map((vessel) => {
+                    const source = vessel && typeof vessel === 'object' ? vessel : {};
+                    const imo = getStrictVesselImo(source);
+                    const vesselName = getStrictVesselString(source, ['name', 'vessel_name', 'vesselName', 'ShipName', 'nombre']);
+
+                    return {
+                        imo,
+                        is_audit_required: false,
+                        vessel_name: vesselName,
+                        dwt: getStrictVesselNumber(source, ['dwt', 'DWT', 'dwt_ajustado']),
+                        has_gears: getStrictVesselBoolean(source, ['has_gears', 'gruas', 'gruas_geared']),
+                        flag: getStrictVesselString(source, ['flag', 'Flag', 'bandera']).slice(0, 3) || 'N/A',
+                        last_port: getStrictVesselString(source, ['last_port', 'lastPort', 'ultimo_puerto']),
+                        vessel_type: getStrictVesselString(source, ['vessel_type', 'type', 'tipo', 'tipo_buque']),
+                        year_built: getStrictVesselNumber(source, ['year_built', 'built', 'builtYear', 'built_year', 'anio_construccion']),
+                        owner_manager: getStrictVesselString(source, ['owner_manager', 'owner', 'manager', 'armador']),
+                        draft_meters: getStrictVesselNumber(source, ['draft_meters', 'draft', 'Draft', 'calado']),
+                        eta: normalizeStrictVesselDate(getStrictVesselString(source, ['eta', 'ETA', 'eta_puerto_carga', 'estimatedEta', 'etaEstimated'], 'N/A')),
+                        detected_at: normalizeStrictVesselDate(getStrictVesselString(source, ['detected_at', 'detectedAt', 'timestamp', 'created_at', 'createdAt', 'generatedAt', 'generated_at'], 'N/A'))
+                    };
+                })
+                .filter(isStructuredDataBridgeVessel);
+        }
+        window.cleanDataBridgeVesselsPayload = cleanDataBridgeVesselsPayload;
+
+        function mapVesselsForReceiveVessels(vessels) {
+            return cleanDataBridgeVesselsPayload(vessels);
         }
         window.mapVesselsForReceiveVessels = mapVesselsForReceiveVessels;
 
@@ -14094,7 +14124,7 @@
                     return;
                 }
 
-                const payloadLimpio = mapVesselsForReceiveVessels(JSON.parse(JSON.stringify(vesselsToSend)));
+                const payloadLimpio = cleanDataBridgeVesselsPayload(JSON.parse(JSON.stringify(vesselsToSend)));
                 if (payloadLimpio.length === 0) {
                     showToast("No hay buques para exportar a Data Bridge.");
                     return;
@@ -17962,16 +17992,30 @@
 
                     try {
                         const forecastRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${node.lat}&longitude=${node.lon}&hourly=wind_speed_10m`);
-                        if (forecastRes.ok) {
-                            const forecastData = await forecastRes.json();
-                            if (forecastData && forecastData.hourly && forecastData.hourly.wind_speed_10m) {
-                                let idx = forecastData.hourly.time.findIndex(t => t.startsWith(nowISO));
-                                if (idx === -1) idx = 0;
-                                windSpeedKmH = forecastData.hourly.wind_speed_10m[idx];
+                        if (!forecastRes.ok) {
+                            console.warn(`[Weather] Forecast API unavailable for ${node.name}: HTTP ${forecastRes.status}`);
+                        } else {
+                            try {
+                                const forecastData = await forecastRes.json();
+                                const windSeries = Array.isArray(forecastData?.hourly?.wind_speed_10m)
+                                    ? forecastData.hourly.wind_speed_10m
+                                    : [];
+                                const timeSeries = Array.isArray(forecastData?.hourly?.time)
+                                    ? forecastData.hourly.time
+                                    : [];
+                                if (windSeries.length > 0) {
+                                    let idx = timeSeries.findIndex(t => String(t).startsWith(nowISO));
+                                    if (idx === -1) idx = 0;
+                                    windSpeedKmH = Number.isFinite(Number(windSeries[idx])) ? Number(windSeries[idx]) : null;
+                                } else {
+                                    console.warn(`[Weather] Forecast payload missing wind data for ${node.name}.`);
+                                }
+                            } catch (parseErr) {
+                                console.warn(`[Weather] Forecast payload could not be parsed for ${node.name}.`, parseErr);
                             }
                         }
                     } catch (err) {
-                        console.error("Error obteniendo viento para", node.name, err);
+                        console.warn("Forecast API failed; continuing weather cycle for", node.name, err);
                     }
 
                     const windKnots = windSpeedKmH !== null ? parseFloat((windSpeedKmH / 1.852).toFixed(1)) : null;

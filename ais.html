@@ -1200,6 +1200,31 @@
             };
         }
 
+        function cleanRadarVesselsForDataBridge(vessels) {
+            const list = Array.isArray(vessels) ? vessels : [];
+            return list
+                .filter(vessel => vessel && typeof vessel === 'object' && !Array.isArray(vessel))
+                .map(mapRadarVesselForReceiveVessels)
+                .filter(vessel => (
+                    vessel &&
+                    typeof vessel === 'object' &&
+                    typeof vessel.imo === 'number' &&
+                    typeof vessel.is_audit_required === 'boolean' &&
+                    typeof vessel.vessel_name === 'string' &&
+                    typeof vessel.dwt === 'number' &&
+                    typeof vessel.has_gears === 'boolean' &&
+                    typeof vessel.flag === 'string' &&
+                    typeof vessel.last_port === 'string' &&
+                    typeof vessel.vessel_type === 'string' &&
+                    typeof vessel.year_built === 'number' &&
+                    typeof vessel.owner_manager === 'string' &&
+                    typeof vessel.draft_meters === 'number' &&
+                    typeof vessel.eta === 'string' &&
+                    typeof vessel.detected_at === 'string'
+                ));
+        }
+        window.cleanRadarVesselsForDataBridge = cleanRadarVesselsForDataBridge;
+
         async function postDataBridgeExport(requestOptions) {
             return fetch('/api/receive-vessels', requestOptions);
         }
@@ -1218,7 +1243,7 @@
                         { 'content-type': 'application/json' },
                         dataBridgeToken ? { Authorization: `Bearer ${dataBridgeToken}` } : {}
                     ),
-                    body: JSON.stringify(report.vessels.map(mapRadarVesselForReceiveVessels))
+                    body: JSON.stringify(cleanRadarVesselsForDataBridge(report.vessels))
                 });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok || payload.success === false) throw new Error(payload.error || 'Data Bridge export failed');
@@ -1248,7 +1273,7 @@
                         { 'content-type': 'application/json' },
                         dataBridgeToken ? { Authorization: `Bearer ${dataBridgeToken}` } : {}
                     ),
-                    body: JSON.stringify([mapRadarVesselForReceiveVessels(vessel)])
+                    body: JSON.stringify(cleanRadarVesselsForDataBridge([vessel]))
                 });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok || payload.success === false) throw new Error(payload.error || 'Data Bridge export failed');

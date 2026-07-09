@@ -46,8 +46,12 @@ function cleanImo(value: unknown) {
   return Number.isInteger(imo) && imo >= 1000000 && imo <= 9999999 ? imo : 0;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
 function normalizeVessel(value: unknown): StrictVessel {
-  const source = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const source = isRecord(value) ? value : {};
   const imo = cleanImo(source.imo ?? source.IMO ?? source.numero_imo ?? source.imoNumber);
 
   return {
@@ -65,6 +69,25 @@ function normalizeVessel(value: unknown): StrictVessel {
     eta: cleanEta(source.eta ?? source.ETA ?? source.eta_puerto_carga),
     detected_at: cleanEta(source.detected_at ?? source.detectedAt ?? source.created_at ?? source.createdAt ?? source.generated_at ?? source.generatedAt),
   };
+}
+
+function isStrictVessel(value: unknown): value is StrictVessel {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.imo === "number" &&
+    typeof value.is_audit_required === "boolean" &&
+    typeof value.vessel_name === "string" &&
+    typeof value.dwt === "number" &&
+    typeof value.has_gears === "boolean" &&
+    typeof value.flag === "string" &&
+    typeof value.last_port === "string" &&
+    typeof value.vessel_type === "string" &&
+    typeof value.year_built === "number" &&
+    typeof value.owner_manager === "string" &&
+    typeof value.draft_meters === "number" &&
+    typeof value.eta === "string" &&
+    typeof value.detected_at === "string"
+  );
 }
 
 function extractVesselsPayload(rawPayload: unknown) {
@@ -113,8 +136,8 @@ export default async (req: Request) => {
   }
 
   const rawPayload = await req.json().catch(() => null);
-  const rawVessels = extractVesselsPayload(rawPayload);
-  const vessels = rawVessels.map(normalizeVessel);
+  const rawVessels = extractVesselsPayload(rawPayload).filter(isRecord);
+  const vessels = rawVessels.map(normalizeVessel).filter(isStrictVessel);
   const auditRequiredCount = vessels.filter((vessel) => vessel.is_audit_required).length;
 
   for (const vessel of vessels) {
