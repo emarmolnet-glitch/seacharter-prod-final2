@@ -46,12 +46,17 @@ export default async (req: Request) => {
     const rawPayload = await req.text();
 
     console.log(`[Data Bridge] Forwarding vessels payload to: ${targetUrl}`);
+    console.log("Longitud de API KEY enviada:", process.env.DATA_BRIDGE_API_SECRET?.length);
+
+    if (!process.env.DATA_BRIDGE_API_SECRET?.length) {
+      throw new Error("API KEY no encontrada en variables de entorno");
+    }
 
     const bridgeResponse = await fetch(targetUrl, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-api-key": getApiSecret(),
+        "x-api-key": process.env.DATA_BRIDGE_API_SECRET,
       },
       body: rawPayload,
       signal: controller.signal,
