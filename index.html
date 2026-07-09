@@ -12225,7 +12225,7 @@
             if (forceGeocode && typeof geocodeAllPorts === 'function') {
                 await geocodeAllPorts();
             } else if (typeof autoCalculateDistances === 'function') {
-                autoCalculateDistances();
+                await autoCalculateDistances();
             }
             if (typeof applyPortIntelligenceToSmartCalculations === 'function') {
                 applyPortIntelligenceToSmartCalculations();
@@ -12377,8 +12377,13 @@
             ctx.closePath();
             ctx.stroke();
             ctx.fill();
-            routeMap.addImage(imageId, canvas, { pixelRatio: 2 });
-            return imageId;
+            try {
+                routeMap.addImage(imageId, canvas, { pixelRatio: 2 });
+                return imageId;
+            } catch (err) {
+                console.warn('[Route Map] No se pudo registrar el icono de dirección de la ruta.', err);
+                return '';
+            }
         }
 
         function normalizeRouteCoordinatesForMapbox(coords) {
@@ -17631,7 +17636,6 @@
                         hasBounds = true;
                     }
 
-                    const arrowIconId = ensureMapboxRouteArrowIcon(routeMap);
                     const addLine = (id, coords, options = {}) => {
                         const color = options.color || ROUTE_LADEN_LINE_COLOR;
                         const opacity = Number.isFinite(options.opacity) ? options.opacity : 1;
@@ -17664,27 +17668,37 @@
                                 'line-dasharray': dashArray
                             }
                         });
-                        routeMap.addLayer({
-                            id: `${id}-arrows`,
-                            type: 'symbol',
-                            source: `${id}-source`,
-                            layout: {
-                                'symbol-placement': 'line',
-                                'symbol-spacing': 130,
-                                'icon-image': arrowIconId,
-                                'icon-size': 0.42,
-                                'icon-allow-overlap': true,
-                                'icon-ignore-placement': true,
-                                'icon-rotation-alignment': 'map'
-                            },
-                            paint: {
-                                'icon-opacity': arrowOpacity
-                            }
-                        });
+                        const arrowIconId = ensureMapboxRouteArrowIcon(routeMap);
+                        if (arrowIconId && typeof routeMap.hasImage === 'function' && routeMap.hasImage(arrowIconId)) {
+                            routeMap.addLayer({
+                                id: `${id}-arrows`,
+                                type: 'symbol',
+                                source: `${id}-source`,
+                                layout: {
+                                    'symbol-placement': 'line',
+                                    'symbol-spacing': 130,
+                                    'icon-image': arrowIconId,
+                                    'icon-size': 0.42,
+                                    'icon-allow-overlap': true,
+                                    'icon-ignore-placement': true,
+                                    'icon-rotation-alignment': 'map'
+                                },
+                                paint: {
+                                    'icon-opacity': arrowOpacity
+                                }
+                            });
+                        }
                     };
 
-                    if (result.routes?.ballast?.coordinates) {
-                        addLine('route-ballast', result.routes.ballast.coordinates, {
+                    const ballastCoordinates = result.routes?.ballast?.coordinates?.length
+                        ? result.routes.ballast.coordinates
+                        : (cBal && cPol ? [[cBal.lat, cBal.lon], [cPol.lat, cPol.lon]] : []);
+                    const ladenCoordinates = result.routes?.laden?.coordinates?.length
+                        ? result.routes.laden.coordinates
+                        : (cPol && cPod ? [[cPol.lat, cPol.lon], [cPod.lat, cPod.lon]] : []);
+
+                    if (ballastCoordinates.length > 1) {
+                        addLine('route-ballast', ballastCoordinates, {
                             color: ROUTE_BALLAST_LINE_COLOR,
                             opacity: 0.6,
                             arrowOpacity: 0.68,
@@ -17693,8 +17707,8 @@
                             destination: cPol
                         });
                     }
-                    if (result.routes?.laden?.coordinates) {
-                        addLine('route-laden', result.routes.laden.coordinates, {
+                    if (ladenCoordinates.length > 1) {
+                        addLine('route-laden', ladenCoordinates, {
                             color: ROUTE_LADEN_LINE_COLOR,
                             opacity: 1,
                             arrowOpacity: 1,
@@ -17744,7 +17758,13 @@
                 bounds.push([cBal.lat, cBal.lon]);
             }
 
-            const ballastRouteBounds = pinRouteEndpoints(result.routes?.ballast?.coordinates, cBal, cPol);
+            const fallbackBallastBounds = cBal && cPol ? [[cBal.lat, cBal.lon], [cPol.lat, cPol.lon]] : [];
+            const fallbackLadenBounds = cPol && cPod ? [[cPol.lat, cPol.lon], [cPod.lat, cPod.lon]] : [];
+            const ballastRouteBounds = pinRouteEndpoints(
+                result.routes?.ballast?.coordinates?.length ? result.routes.ballast.coordinates : fallbackBallastBounds,
+                cBal,
+                cPol
+            );
             if(ballastRouteBounds.length > 1) {
                 L.polyline(ballastRouteBounds, {
                     color: ROUTE_BALLAST_LINE_COLOR,
@@ -17755,7 +17775,11 @@
                 bounds = bounds.concat(ballastRouteBounds);
             }
 
-            const ladenRouteBounds = pinRouteEndpoints(result.routes?.laden?.coordinates, cPol, cPod);
+            const ladenRouteBounds = pinRouteEndpoints(
+                result.routes?.laden?.coordinates?.length ? result.routes.laden.coordinates : fallbackLadenBounds,
+                cPol,
+                cPod
+            );
             if(ladenRouteBounds.length > 1) {
                 L.polyline(ladenRouteBounds, {
                     color: ROUTE_LADEN_LINE_COLOR,
@@ -17778,6 +17802,9 @@
         async function autoCalculateDistances() {
             const result = await calculateVoyageRouteService();
             applyRouteServiceResult(result);
+            if (isMasterRouteMapMounted()) {
+                renderMasterRouteMap(result);
+            }
             if (result.routes.laden?.nodes) {
                 fetchMarineWeatherForRoute(result.routes.laden.nodes);
             } else {
