@@ -36902,8 +36902,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         let webDataBridgeVisible = false;
         let webDataBridgeFullScreen = false;
         const LOCAL_DATA_BRIDGE_URL = './public/databridge.html';
+        const DEFAULT_DATA_BRIDGE_FRONTEND_URL = 'https://calm-shortbread-55bcfc.netlify.app/';
         const VITE_ENV = import.meta && import.meta.env ? import.meta.env : {};
-        const DATA_BRIDGE_FRONTEND_URL = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_FRONTEND_URL, LOCAL_DATA_BRIDGE_URL);
+        const DATA_BRIDGE_FRONTEND_URL = resolveDataBridgeExternalUrl(
+            resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_URL, VITE_ENV.VITE_DATA_BRIDGE_FRONTEND_URL),
+            DEFAULT_DATA_BRIDGE_FRONTEND_URL
+        );
         const DATA_BRIDGE_API_URL = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_API_URL, '');
         const DATA_BRIDGE_API_SECRET = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_API_SECRET, '');
         const HAS_VALID_DATA_BRIDGE_API_URL = isValidDataBridgeApiUrl(DATA_BRIDGE_API_URL);
@@ -36964,6 +36968,24 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return normalized;
         }
 
+        function removeDataBridgeUrlWrappers(value) {
+            let normalized = String(value || '').trim();
+            while (normalized.startsWith('[') && normalized.endsWith(']')) {
+                normalized = normalized.slice(1, -1).trim();
+            }
+            return normalized;
+        }
+
+        function resolveDataBridgeExternalUrl(value, fallback) {
+            const normalized = removeDataBridgeUrlWrappers(value);
+            const fallbackUrl = removeDataBridgeUrlWrappers(fallback);
+            try {
+                const url = new URL(normalized);
+                if (url.protocol === 'http:' || url.protocol === 'https:') return url.href;
+            } catch (error) {}
+            return fallbackUrl;
+        }
+
         function isValidDataBridgeApiUrl(value) {
             try {
                 const url = new URL(String(value || '').trim());
@@ -37014,8 +37036,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function openDataBridgeDashboard() {
-            const targetUrl = DATA_BRIDGE_FRONTEND_URL || LOCAL_DATA_BRIDGE_URL;
-            window.open(targetUrl, '_blank');
+            window.open(DATA_BRIDGE_FRONTEND_URL, '_blank', 'noopener');
         }
 
         function openDataBridgeLinkModal() {
