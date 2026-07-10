@@ -84,8 +84,41 @@ function parseRequestedBoxes(url: URL) {
   }
 }
 
+function parseRouteCoordinate(url: URL, name: "coords_pol" | "coords_pod") {
+  const raw = url.searchParams.get(name);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed) || parsed.length < 2) return null;
+    const lat = Number(parsed[0]);
+    const lon = Number(parsed[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+    return { lat, lon };
+  } catch (_) {
+    return null;
+  }
+}
+
+function createBoundingBoxAroundCoordinate(point: { lat: number; lon: number }, radiusNm: number): AisBoundingBox {
+  const latDelta = radiusNm / 60;
+  const lonDelta = radiusNm / (60 * Math.max(0.25, Math.cos(point.lat * Math.PI / 180)));
+  return [
+    [Math.max(-90, point.lat - latDelta), Math.max(-180, point.lon - lonDelta)],
+    [Math.min(90, point.lat + latDelta), Math.min(180, point.lon + lonDelta)],
+  ];
+}
+
 function getRequestedBoundingBoxes(url: URL) {
-  return parseRequestedBoxes(url);
+  const requestedBoxes = parseRequestedBoxes(url);
+  if (requestedBoxes) return requestedBoxes;
+  const pol = parseRouteCoordinate(url, "coords_pol");
+  const pod = parseRouteCoordinate(url, "coords_pod");
+  const boxes = [
+    pol ? createBoundingBoxAroundCoordinate(pol, POL_VISUAL_RADIUS_NM) : null,
+    pod ? createBoundingBoxAroundCoordinate(pod, POD_VISUAL_RADIUS_NM) : null,
+  ].filter((box): box is AisBoundingBox => box !== null);
+  return boxes.length > 0 ? boxes : null;
 }
 
 function isForceLiveRequest(url: URL) {
@@ -358,10 +391,12 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
   const isGlobalNameSearch = normalizedVesselSearch.length > 0;
-  const polLat = normalizeNumber(url.searchParams.get("polLat"));
-  const polLon = normalizeNumber(url.searchParams.get("polLon"));
-  const podLat = normalizeNumber(url.searchParams.get("podLat"));
-  const podLon = normalizeNumber(url.searchParams.get("podLon"));
+  const coordsPol = parseRouteCoordinate(url, "coords_pol");
+  const coordsPod = parseRouteCoordinate(url, "coords_pod");
+  const polLat = coordsPol?.lat ?? normalizeNumber(url.searchParams.get("polLat"));
+  const polLon = coordsPol?.lon ?? normalizeNumber(url.searchParams.get("polLon"));
+  const podLat = coordsPod?.lat ?? normalizeNumber(url.searchParams.get("podLat"));
+  const podLon = coordsPod?.lon ?? normalizeNumber(url.searchParams.get("podLon"));
   const zone = textParam(url, ["zone"], "DUAL").toUpperCase();
   const matchingMode = ["1", "true", "yes"].includes(textParam(url, ["matchingMode", "projectionMatching"], "0").toLowerCase());
   const activePoints = [
@@ -416,12 +451,17 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
       }));
       const pointMatches = pointDistances.filter((point) => point.distanceNm <= point.radiusNm);
 
-      const nearestByDistance = pointDistances.sort((a, b) => a.distanceNm - b.distanceNm)[0] || activePoints[0];
+      const nearestByDistance = pointDistances.sort((a, b) => a.distanceNm - b.distanceNm)[0] || null;
       const nearestVisual = pointMatches.sort((a, b) => a.distanceNm - b.distanceNm)[0] || null;
       const routeCorridor = routeCorridorMatch(lat, lon, routePol, routePod);
       const insideRouteCorridor = !!routeCorridor?.inside;
       const projection = buildProjection(vessel, selectedPolTarget || nearestVisual || nearestByDistance);
       const distanceToPol = selectedPolTarget ? haversineNm(selectedPolTarget.lat, selectedPolTarget.lon, lat, lon) : null;
+      const distanceToPod = routePod ? haversineNm(routePod.lat, routePod.lon, lat, lon) : null;
+      const isPolOperationalMatch = distanceToPol !== null && distanceToPol <= POL_VISUAL_RADIUS_NM && loadState === "Laden";
+      const isPodOperationalMatch = distanceToPod !== null && distanceToPod <= POD_VISUAL_RADIUS_NM && loadState === "Ballast";
+      if (selective && !isGlobalNameSearch && nearestVisual?.role === "POL" && !isPolOperationalMatch) return null;
+      if (selective && !isGlobalNameSearch && nearestVisual?.role === "POD" && !isPodOperationalMatch) return null;
       const hoursToPolCircle = Number(projection?.distanceToRadiusNm ?? Infinity) / Math.max(Number(projection?.sog ?? 0), 0.1);
       const isProjectionCandidate = !!(
         matchingMode &&
@@ -480,6 +520,10 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
         ultimo_puerto: lastPort,
         matchZone,
         distanceNm: priorityDistance,
+        distanceToPolNm: distanceToPol !== null ? Math.round(distanceToPol) : null,
+        distanceToPodNm: distanceToPod !== null ? Math.round(distanceToPod) : null,
+        destinationAvailability: isPodOperationalMatch,
+        matchAlert: isPodOperationalMatch ? "Disponibilidad Destino" : null,
         MetaData: {
           ...metadata,
           IMO: imo || "N/A",
@@ -499,6 +543,10 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
           ultimo_puerto: lastPort,
           matchZone,
           distanceNm: priorityDistance,
+          distanceToPolNm: distanceToPol !== null ? Math.round(distanceToPol) : null,
+          distanceToPodNm: distanceToPod !== null ? Math.round(distanceToPod) : null,
+          destinationAvailability: isPodOperationalMatch,
+          matchAlert: isPodOperationalMatch ? "Disponibilidad Destino" : null,
         },
       };
       return enriched;
@@ -926,7 +974,7 @@ export default async (req: Request) => {
     return vesselsResponse({ ok: true, valid: true });
   }
 
-  if (!parseRequestedBoxes(url)) {
+  if (!getRequestedBoundingBoxes(url)) {
     const vesselSearch = textParam(url, ["q", "search", "vesselName"], "");
     if (vesselSearch) {
       if (vesselCache.length === 0) {
