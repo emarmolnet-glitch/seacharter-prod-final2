@@ -23616,10 +23616,13 @@
                         break;
                     } else {
                         const errData = await response.json().catch(() => ({}));
-                        throw new Error(errData.error?.message || `Error HTTP ${response.status}`);
+                        const requestError = new Error(errData.error?.message || `Error HTTP ${response.status}`);
+                        requestError.code = errData.error?.code || '';
+                        throw requestError;
                     }
                 } catch (error) {
                     lastError = error;
+                    if (error?.code === 'AUDIT_GATE_BLOCKED') throw error;
                     // Si es error de red (no 404) y no hay inputKey para fallback, reintentar con delay
                     if (!inputKey && i < delays.length) {
                         await new Promise(resolve => setTimeout(resolve, delays[i]));
@@ -23628,6 +23631,12 @@
                         break;
                     }
                 }
+            }
+
+            if (payload?.auditMode === 'strict') {
+                throw new Error(
+                    lastError ? lastError.message : 'La Auditoría IA estricta requiere validación del backend de Netlify.'
+                );
             }
 
             // 2. Fallback: Llamada directa a Gemini si el usuario ha introducido una API Key
@@ -30461,6 +30470,58 @@ ADDITIONAL NOTES:
             printWindow.print();
         }
 
+        const STRICT_AUDIT_REQUIREMENTS = [
+            { key: 'puertosInforme', module: 'Calculadora' },
+            { key: 'viabilidad', module: 'Calculadora' },
+            { key: 'calculoFlete', module: 'Calculadora' },
+            { key: 'polizaAnalizada', module: 'GENCON/Alternativa' }
+        ];
+
+        function hasStrictAuditData(value) {
+            if (!value || typeof value !== 'object') return false;
+            return Array.isArray(value) ? value.length > 0 : Object.keys(value).length > 0;
+        }
+
+        function getStrictAuditGateError(data) {
+            const missingRequirement = STRICT_AUDIT_REQUIREMENTS.find(({ key }) => !hasStrictAuditData(data?.[key]));
+            return missingRequirement
+                ? `Auditoría bloqueada: Completa ${missingRequirement.module} antes de continuar.`
+                : '';
+        }
+
+        function buildStrictAuditSessionData(policyText) {
+            const calculatorData = hasValidMasterCalculatorData() ? gatherMasterAuditData() : null;
+            const policyStandard = State.charterPartyStandard
+                || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
+            const normalizedPolicyText = String(policyText || '').trim();
+            const hasPolicy = Boolean(normalizedPolicyText)
+                && /GENCON|ASBATANKVOY|Recap|Charter|Fletamento|P[oó]liza|Alternativa/i.test(normalizedPolicyText);
+
+            return {
+                puertosInforme: Object.keys(masterReportWorkflowState.portInfoReports || {}).length
+                    ? { ...masterReportWorkflowState.portInfoReports }
+                    : null,
+                viabilidad: masterReportWorkflowState.viabilityAIGenerated && masterReportWorkflowState.viabilityAIReport
+                    ? { ...masterReportWorkflowState.viabilityAIReport }
+                    : null,
+                calculoFlete: calculatorData
+                    ? {
+                        operacional: calculatorData.operational,
+                        financiero: calculatorData.financial,
+                        regulatorio: calculatorData.regulatory
+                    }
+                    : null,
+                polizaAnalizada: hasPolicy
+                    ? {
+                        tipo: policyStandard,
+                        referencia: masterReportWorkflowState.legalAddendum?.reference || null,
+                        contenido: normalizedPolicyText
+                    }
+                    : null,
+                posicion: 'Fletador'
+            };
+        }
+
         async function applyAuditSessionPayload(decodedData) {
             if (!isValidAuditSessionPayload(decodedData)) {
                 throw new Error("Invalid session content");
@@ -30530,6 +30591,15 @@ ADDITIONAL NOTES:
             if (!text) {
                 document.getElementById('errorBox').innerText = "Por favor, pega el texto de un Recap o sube un archivo para analizar.";
                 document.getElementById('errorBox').classList.remove('hidden');
+                return;
+            }
+
+            const strictAuditData = buildStrictAuditSessionData(text);
+            const strictAuditGateError = getStrictAuditGateError(strictAuditData);
+            if (strictAuditGateError) {
+                document.getElementById('errorBox').innerText = strictAuditGateError;
+                document.getElementById('errorBox').classList.remove('hidden');
+                if (typeof showToast === 'function') showToast(strictAuditGateError);
                 return;
             }
 
@@ -30614,6 +30684,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
 
                 const payload = {
+                    auditMode: 'strict',
+                    data: strictAuditData,
                     contents: [{ parts: parts }],
                     systemInstruction: { parts: [{ text: dynamicSystemPrompt }] },
                     generationConfig: {
