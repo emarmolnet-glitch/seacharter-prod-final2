@@ -33,10 +33,9 @@ BLOQUE 5: Borrador de Respuesta: Redacta un correo profesional persuasivo listo 
 Usa un tono profesional, ejecutivo y directo. La información proviene de: {contexto_de_datos}.`;
 
 const strictAuditRequirements = [
-  { key: "puertosInforme", module: "Calculadora" },
-  { key: "viabilidad", module: "Calculadora" },
-  { key: "calculoFlete", module: "Calculadora" },
-  { key: "polizaAnalizada", module: "GENCON/Alternativa" },
+  { key: "puertosInforme", message: "⚠️ Bloqueado: Faltan los datos del puerto. Ve al módulo Mapa/Calculadora." },
+  { key: "viabilidad", message: "⚠️ Bloqueado: Falta el cálculo de viabilidad." },
+  { key: "polizaAnalizada", message: "⚠️ Bloqueado: Sube o pega un documento para auditar." },
 ] as const;
 
 const jsonHeaders = {
@@ -113,19 +112,45 @@ function hasCompletedData(value: unknown) {
   return Array.isArray(value) ? value.length > 0 : Object.keys(value).length > 0;
 }
 
+function toPromptText(value: unknown, fallback = "Sin datos") {
+  if (typeof value === "string") return value;
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return fallback;
+    }
+  }
+  return String(value);
+}
+
+function serializePromptContext(value: unknown) {
+  try {
+    return JSON.stringify(value ?? {}, (_key, nestedValue) => {
+      if (nestedValue === undefined) return "Sin datos";
+      if (typeof nestedValue === "bigint") return String(nestedValue);
+      return nestedValue;
+    }, 2) || "{}";
+  } catch {
+    return "{}";
+  }
+}
+
 function getStrictAuditGateError(data: Record<string, unknown> | undefined) {
   for (const requirement of strictAuditRequirements) {
     if (!hasCompletedData(data?.[requirement.key])) {
-      return `Auditoría bloqueada: Completa ${requirement.module} antes de continuar.`;
+      return requirement.message;
     }
   }
   return "";
 }
 
 function buildStrictAuditMessages(data: Record<string, unknown>): ChatCompletionMessageParam[] {
-  const position = String(data.posicion || "Fletador").trim() || "Fletador";
-  const context = JSON.stringify(data, null, 2);
-  const auditPrompt = STRICT_AUDIT_PROMPT
+  const position = toPromptText(data.posicion, "Fletador").trim() || "Fletador";
+  const context = serializePromptContext(data);
+  const promptTemplate = toPromptText(STRICT_AUDIT_PROMPT, "");
+  const auditPrompt = promptTemplate
     .replace("[Armador o Fletador]", position)
     .replace("{contexto_de_datos}", context);
 
@@ -144,7 +169,7 @@ function buildStrictAuditMessages(data: Record<string, unknown>): ChatCompletion
 function extractPrompt(payload: GeminiPayload) {
   return (payload.contents || [])
     .flatMap((content) => content.parts || [])
-    .map((part) => String(part.text || "").trim())
+    .map((part) => toPromptText(part.text, "").trim())
     .filter(Boolean)
     .join("\n\n")
     .trim();
