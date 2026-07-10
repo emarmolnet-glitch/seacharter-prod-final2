@@ -380,45 +380,6 @@
             box-shadow: 0 6px 16px rgba(15, 23, 42, 0.22);
         }
 
-        .operational-region-node-marker {
-            background: transparent !important;
-            border: 0 !important;
-        }
-
-        .operational-region-node {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            max-width: 132px;
-            padding: 4px 7px 4px 5px;
-            border: 1px solid rgba(249, 115, 22, 0.9);
-            border-radius: 999px;
-            background: rgba(255, 247, 237, 0.96);
-            color: #9a3412;
-            box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.16), 0 10px 22px rgba(15, 23, 42, 0.22);
-            font-size: 10px;
-            font-weight: 900;
-            line-height: 1;
-            white-space: nowrap;
-        }
-
-        .operational-region-node span {
-            width: 10px;
-            height: 10px;
-            flex: 0 0 10px;
-            border-radius: 999px;
-            background: #f97316;
-            border: 2px solid #ffffff;
-            box-shadow: 0 0 0 2px var(--node-parent-color, #16a34a);
-        }
-
-        .operational-region-node strong {
-            min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            letter-spacing: 0;
-        }
-
         #view-map {
             padding: 0 !important;
             overflow: hidden !important;
@@ -3170,111 +3131,6 @@
             border-radius: 8px !important;
             box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12) !important;
             background-color: #dbeafe !important;
-        }
-
-        .ais-prospection-radius {
-            filter: drop-shadow(0 0 8px rgba(15, 23, 42, 0.22));
-            transition: stroke-opacity 180ms ease, fill-opacity 180ms ease;
-        }
-
-        .ais-prospection-radius.is-scanning {
-            animation: aisRadiusPulse 1.6s ease-in-out infinite;
-        }
-
-        .ais-port-summary-marker {
-            background: transparent !important;
-            border: 0 !important;
-        }
-
-        .ais-port-summary {
-            position: relative;
-            width: 190px;
-            overflow: hidden;
-            border: 2px solid rgba(255, 255, 255, 0.94);
-            border-radius: 10px;
-            background: var(--ais-port-color);
-            color: #ffffff;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.30);
-            transform-origin: 50% 100%;
-        }
-
-        .ais-port-summary::after {
-            content: "";
-            position: absolute;
-            left: 50%;
-            bottom: -6px;
-            width: 12px;
-            height: 12px;
-            transform: translateX(-50%) rotate(45deg);
-            border-right: 2px solid rgba(255, 255, 255, 0.94);
-            border-bottom: 2px solid rgba(255, 255, 255, 0.94);
-            background: var(--ais-port-color);
-        }
-
-        .ais-port-summary__header {
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            min-height: 30px;
-            padding: 6px 9px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.24);
-        }
-
-        .ais-port-summary__role {
-            flex: 0 0 auto;
-            padding: 3px 5px;
-            border-radius: 4px;
-            background: rgba(15, 23, 42, 0.24);
-            font-size: 9px;
-            font-weight: 900;
-            letter-spacing: 0.08em;
-        }
-
-        .ais-port-summary__name {
-            overflow: hidden;
-            font-size: 11px;
-            font-weight: 900;
-            line-height: 1.15;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .ais-port-summary__body {
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-            gap: 10px;
-            padding: 7px 9px 8px;
-            background: rgba(15, 23, 42, 0.12);
-        }
-
-        .ais-port-summary__count {
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-size: 17px;
-            font-weight: 900;
-            line-height: 1;
-        }
-
-        .ais-port-summary__caption {
-            font-size: 9px;
-            font-weight: 800;
-            letter-spacing: 0.03em;
-            opacity: 0.9;
-            text-transform: uppercase;
-        }
-
-        .ais-port-summary.is-scanning {
-            animation: aisLabelPulse 1.2s ease-in-out infinite;
-        }
-
-        @keyframes aisRadiusPulse {
-            0%, 100% { stroke-width: 2; stroke-opacity: 0.82; }
-            50% { stroke-width: 5; stroke-opacity: 1; }
-        }
-
-        @keyframes aisLabelPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.04); }
         }
 
         #view-ais table thead tr {
@@ -12716,12 +12572,11 @@
             const MAPBOX_ROUTE_SOURCE_ID = 'map-manager-route-source';
             const MAPBOX_ROUTE_LAYER_ID = 'map-manager-route-line';
             const ROUTE_DYNAMIC_COLOR = '#0055ff';
-            const dynamicKinds = Object.freeze({ route: 'route', pol: 'pol', pod: 'pod', nearby: 'nearby' });
+            const dynamicKinds = Object.freeze({ route: 'route', pol: 'pol', pod: 'pod' });
             const state = {
                 route: [],
                 pol: null,
                 pod: null,
-                nearbyPorts: [],
                 routeMap: null,
                 densityMap: null,
                 mapboxPortMarkers: { POL: null, POD: null }
@@ -12844,7 +12699,7 @@
                 state.route = normalizePoints(points);
                 if (state.route.length < 2) return false;
                 let rendered = false;
-                getMaps().forEach((mapInstance) => {
+                [state.routeMap || map].filter(Boolean).forEach((mapInstance) => {
                     cleanDynamicLayers(mapInstance, dynamicKinds.route);
                     rendered = renderRouteOnMap(mapInstance) || rendered;
                 });
@@ -12867,9 +12722,7 @@
                 const dynamicKind = type.toLowerCase();
                 cleanDynamicLayers(mapInstance, dynamicKind);
                 const isDensityMap = mapInstance === state.densityMap || mapInstance === aisMap;
-                if (isDensityMap) {
-                    return true;
-                }
+                if (isDensityMap && type !== 'POL') return false;
                 if (isMapboxRouteMap(mapInstance)) {
                     if (typeof mapboxgl === 'undefined') return false;
                     state.mapboxPortMarkers[type] = new mapboxgl.Marker({ element: createPortElement(type) })
@@ -12888,7 +12741,7 @@
                     fillOpacity: 1,
                     isDynamic: true,
                     dynamicKind
-                }).bindPopup(port.name || type).bindTooltip(`${type} · ${port.name || type}`, { permanent: true, direction: 'top', offset: [0, -8] }).addTo(mapInstance);
+                }).bindPopup(port.name || type).bindTooltip(`${type}: ${port.name || type}`, { permanent: true, direction: 'top', offset: [0, -8] }).addTo(mapInstance);
                 return true;
             }
 
@@ -12905,40 +12758,6 @@
                 return rendered;
             }
 
-            function renderNearbyPorts() {
-                const densityMap = state.densityMap || aisMap;
-                if (!densityMap || typeof L === 'undefined' || typeof L.circleMarker !== 'function') return false;
-                cleanDynamicLayers(densityMap, dynamicKinds.nearby);
-                state.nearbyPorts.forEach((port) => {
-                    L.circleMarker([port.lat, port.lon], {
-                        radius: 7,
-                        color: '#fff7ed',
-                        weight: 2,
-                        fillColor: '#f97316',
-                        fillOpacity: 0.88,
-                        isDynamic: true,
-                        dynamicKind: dynamicKinds.nearby
-                    }).bindTooltip(`${port.name || 'Puerto cercano'}${Number.isFinite(port.distanceNm) ? ` · ${Math.round(port.distanceNm)} MN` : ''}`).addTo(densityMap);
-                });
-                const densityPoints = [state.pol, ...state.nearbyPorts].filter(Boolean).map((point) => [point.lat, point.lon]);
-                if (densityPoints.length > 1) fitLeaflet(densityMap, densityPoints);
-                return true;
-            }
-
-            function findNearbyPorts(pol, limit = 14) {
-                if (!pol || typeof PORT_DB === 'undefined') return [];
-                return Object.entries(PORT_DB)
-                    .map(([name, port]) => {
-                        const normalized = normalizePoint({ ...port, name });
-                        if (!normalized) return null;
-                        const distanceNm = haversine(pol.lat, pol.lon, normalized.lat, normalized.lon);
-                        return distanceNm > 1 ? { ...normalized, distanceNm } : null;
-                    })
-                    .filter(Boolean)
-                    .sort((first, second) => first.distanceNm - second.distanceNm)
-                    .slice(0, limit);
-            }
-
             function drawRoute(points) {
                 return renderRoute(points);
             }
@@ -12948,19 +12767,10 @@
                 return port ? renderPort([port.lat, port.lon], port.name, 'POL') : false;
             }
 
-            function drawNearbyPorts(list) {
-                state.nearbyPorts = (Array.isArray(list) ? list : []).map((item) => {
-                    const port = normalizePoint(item);
-                    return port ? { ...port, distanceNm: Number(item?.distanceNm) } : null;
-                }).filter(Boolean);
-                return renderNearbyPorts();
-            }
-
             function refresh() {
                 if (state.route.length > 1) renderRoute(state.route);
                 if (state.pol) renderPort([state.pol.lat, state.pol.lon], state.pol.name, 'POL');
                 if (state.pod) renderPort([state.pod.lat, state.pod.lon], state.pod.name, 'POD');
-                renderNearbyPorts();
             }
 
             function syncRouteResult(result) {
@@ -12970,14 +12780,12 @@
                 state.route = ballastPoints.concat(ladenPoints.filter((point, index) => index > 0 || ballastPoints.length === 0));
                 state.pol = normalizePoint(result.coordinates?.pol);
                 state.pod = normalizePoint(result.coordinates?.pod);
-                state.nearbyPorts = findNearbyPorts(state.pol);
                 refresh();
                 return true;
             }
 
             function renderMapData(payload) {
                 if (!payload || payload.type !== 'MAP_DATA') return false;
-                state.nearbyPorts = [];
                 clearMap();
                 const routeRendered = renderRoute(payload.points || []);
                 const polRendered = payload.pol ? renderPort(payload.pol.coords, payload.pol.name, 'POL') : false;
@@ -12999,7 +12807,7 @@
                 if (!mapInstance || state.densityMap === mapInstance) state.densityMap = null;
             }
 
-            return { renderRoute, renderPort, clearMap, checkReady, renderMapData, drawRoute, drawPOL, drawNearbyPorts, normalizePoints, cleanDynamicLayers, syncRouteResult, attachRouteMap, attachDensityMap, detachDensityMap, refresh };
+            return { renderRoute, renderPort, clearMap, checkReady, renderMapData, drawRoute, drawPOL, normalizePoints, cleanDynamicLayers, syncRouteResult, attachRouteMap, attachDensityMap, detachDensityMap, refresh };
         })();
         window.MapManager = window.MapController;
 
@@ -31028,36 +30836,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         };
         window.aisProspectionLayers = window.aisProspectionLayers || { group: null, circles: {}, markers: {}, labels: {} };
 
-        function escapeAisPortMarkerText(value) {
-            return String(value ?? '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        }
-
-        function removeLegacyAisPortLayers(mapInstance, role, group) {
-            const dynamicKind = role.toLowerCase();
-            if (window.MapController?.cleanDynamicLayers) {
-                window.MapController.cleanDynamicLayers(mapInstance, dynamicKind);
-            } else if (typeof mapInstance.eachLayer === 'function') {
-                mapInstance.eachLayer((layer) => {
-                    if (layer?.options?.isDynamic === true && layer.options.dynamicKind === dynamicKind) {
-                        mapInstance.removeLayer(layer);
-                    }
-                });
-            }
-
-            const legacyLabel = window.aisProspectionLayers.labels?.[role];
-            const currentMarker = window.aisProspectionLayers.markers?.[role];
-            if (legacyLabel && legacyLabel !== currentMarker) {
-                if (group && typeof group.removeLayer === 'function') group.removeLayer(legacyLabel);
-                else if (typeof mapInstance.removeLayer === 'function') mapInstance.removeLayer(legacyLabel);
-                delete window.aisProspectionLayers.labels[role];
-            }
-        }
-
         function getAisProspectionMap() {
             return window.mapaAIS || window.mapAIS || window.aisMap || window.map || aisMap || null;
         }
@@ -31080,88 +30858,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 : null;
         }
 
-        function ensureAisProspectionLayerGroup(mapInstance) {
-            if (!mapInstance || typeof L === 'undefined' || !L.layerGroup) return null;
-            const layers = window.aisProspectionLayers;
-            if (!layers.group || (typeof mapInstance.hasLayer === 'function' && !mapInstance.hasLayer(layers.group))) {
-                layers.group = L.layerGroup().addTo(mapInstance);
-                layers.circles = {};
-                layers.markers = {};
-                layers.labels = {};
-            }
-            layers.markers = layers.markers || {};
-            layers.labels = layers.labels || {};
-            return layers.group;
-        }
-
         window.renderAisProspectionRadii = function(options = {}) {
             const mapInstance = getAisProspectionMap();
-            if (!mapInstance || typeof L === 'undefined' || !L.circle || !L.divIcon || !L.marker) return false;
+            if (!mapInstance) return false;
             const state = window.aisProspectionVisualState;
-            const group = ensureAisProspectionLayerGroup(mapInstance);
-            if (!group) return false;
+            const port = state.zones.POL.port || getAisRoutePortForVisual('POL');
+            if (!port) return false;
+            state.zones.POL.port = port;
+            window.MapController?.drawPOL(port);
 
-            ['POL', 'POD'].forEach((role) => {
-                const zone = state.zones[role];
-                const port = zone.port || getAisRoutePortForVisual(role);
-                if (!port) return;
-                zone.port = port;
-                const isScanning = zone.status === 'scanning';
-                const vesselCount = Number.isFinite(zone.count) ? zone.count : 0;
-                const safePortName = escapeAisPortMarkerText(port.name || role);
-                const statusText = isScanning ? 'Radar activo' : 'Barrido completado';
-
-                removeLegacyAisPortLayers(mapInstance, role, group);
-
-                if (!window.aisProspectionLayers.circles[role]) {
-                    window.aisProspectionLayers.circles[role] = L.circle([port.lat, port.lon], {
-                        color: zone.color,
-                        fillColor: zone.color,
-                        fillOpacity: role === 'POL' ? 0.13 : 0.10,
-                        radius: zone.radiusNm * 1852,
-                        weight: 2,
-                        dashArray: role === 'POL' ? '8, 8' : '5, 8',
-                        className: `ais-prospection-radius ${isScanning ? 'is-scanning' : ''}`
-                    }).addTo(group);
-                } else {
-                    window.aisProspectionLayers.circles[role]
-                        .setLatLng([port.lat, port.lon])
-                        .setRadius(zone.radiusNm * 1852)
-                        .setStyle({ color: zone.color, fillColor: zone.color, className: `ais-prospection-radius ${isScanning ? 'is-scanning' : ''}` });
-                }
-                const circleElement = window.aisProspectionLayers.circles[role].getElement && window.aisProspectionLayers.circles[role].getElement();
-                if (circleElement) {
-                    circleElement.setAttribute('class', `leaflet-interactive ais-prospection-radius ${isScanning ? 'is-scanning' : ''}`.trim());
-                }
-                window.aisProspectionLayers.circles[role].bindTooltip(`${role}: ${zone.radiusNm} MN`, { sticky: true });
-
-                const markerHtml = `<div class="ais-port-summary ${isScanning ? 'is-scanning' : ''}" style="--ais-port-color:${zone.color}"><div class="ais-port-summary__header"><span class="ais-port-summary__role">${role}</span><span class="ais-port-summary__name" title="${safePortName}">${safePortName}</span></div><div class="ais-port-summary__body"><strong class="ais-port-summary__count">${isScanning ? '—' : vesselCount}</strong><span class="ais-port-summary__caption">${isScanning ? 'Detectando buques' : 'Buques detectados'}</span></div></div>`;
-                const markerIcon = L.divIcon({
-                    className: 'ais-port-summary-marker',
-                    html: markerHtml,
-                    iconSize: [190, 66],
-                    iconAnchor: [95, 72],
-                    popupAnchor: [0, -68]
-                });
-                const popupHtml = `<div class="seacharter-map-popup"><strong>${role} · ${safePortName}</strong><br><span>${isScanning ? 'Buques detectados: calculando…' : `Buques detectados: ${vesselCount}`}</span><br><small>Radio AIS: ${zone.radiusNm} MN · ${statusText}</small></div>`;
-                if (!window.aisProspectionLayers.markers[role]) {
-                    window.aisProspectionLayers.markers[role] = L.marker([port.lat, port.lon], {
-                        icon: markerIcon,
-                        interactive: true,
-                        keyboard: true,
-                        title: `${role} · ${port.name || role}`
-                    }).bindPopup(popupHtml).addTo(group);
-                } else {
-                    window.aisProspectionLayers.markers[role]
-                        .setLatLng([port.lat, port.lon])
-                        .setIcon(markerIcon)
-                        .setPopupContent(popupHtml);
-                }
-                window.aisProspectionLayers.labels[role] = window.aisProspectionLayers.markers[role];
-            });
-
-            if (options.fit !== false && typeof fitAisMapToProspectionRadii === 'function') {
-                fitAisMapToProspectionRadii(mapInstance, state.zones.POL.port, state.zones.POD.port);
+            if (options.fit !== false && typeof mapInstance.setView === 'function') {
+                mapInstance.setView([port.lat, port.lon], Math.max(mapInstance.getZoom?.() || 2, 5));
             }
             return true;
         };
@@ -31193,15 +30900,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (layers.group && mapInstance && typeof mapInstance.removeLayer === 'function') {
                 try { mapInstance.removeLayer(layers.group); } catch (_) {}
             }
-            ['aisSearchRadiusCircle', 'aisPolHighlightCircle', 'aisPodHighlightCircle'].forEach((layerKey) => {
-                if (window[layerKey] && mapInstance && typeof mapInstance.removeLayer === 'function') {
-                    try { mapInstance.removeLayer(window[layerKey]); } catch (_) {}
-                }
-            });
             window.aisProspectionLayers = { group: null, circles: {}, markers: {}, labels: {} };
-            window.aisSearchRadiusCircle = null;
-            window.aisPolHighlightCircle = null;
-            window.aisPodHighlightCircle = null;
             window.aisProspectionVisualState.active = false;
             Object.values(window.aisProspectionVisualState.zones).forEach((zone) => {
                 zone.status = 'idle';
@@ -31223,7 +30922,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 window.GlobalStore.polPrimaryVessels = [];
             }
             if (aisClusterGroup && typeof aisClusterGroup.clearLayers === 'function') aisClusterGroup.clearLayers();
-            if (window.aisProjectedTrackLayer && typeof window.aisProjectedTrackLayer.clearLayers === 'function') window.aisProjectedTrackLayer.clearLayers();
             aisMarkers = [];
             const tbody = document.getElementById('ais-vessels-tbody');
             if (tbody) {
@@ -32127,9 +31825,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (window.aisProspectionVisualState && window.aisProspectionVisualState.active && typeof window.renderAisProspectionRadii === 'function') {
                     window.renderAisProspectionRadii({ fit: false });
                 }
-                if (typeof window.updateOperationalRegionLayer === 'function') {
-                    window.updateOperationalRegionLayer();
-                }
                 if (window.GlobalStore && window.GlobalStore.getRawVessels && window.GlobalStore.getRawVessels().length > 0 && typeof window.reapplyCentralFiltersAndRedraw === 'function') {
                     window.reapplyCentralFiltersAndRedraw();
                 }
@@ -32143,9 +31838,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (!aisMap) return;
             cancelAisMapAnimationFrame();
             window.MapController?.detachDensityMap(aisMap);
-            if (window.MapLoader && typeof window.MapLoader.clearOperationalRegionLayer === 'function') {
-                window.MapLoader.clearOperationalRegionLayer(aisMap);
-            }
             try {
                 aisMap.remove();
             } catch (e) {
@@ -32189,26 +31881,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const newMarkers = [];
             const survivingIds = new Set();
             const routePorts = getCurrentRoutePortNames();
-            if (window.aisProjectedTrackLayer && aisMap.hasLayer(window.aisProjectedTrackLayer)) {
-                window.aisProjectedTrackLayer.clearLayers();
-            } else if (typeof L !== 'undefined' && L.layerGroup) {
-                window.aisProjectedTrackLayer = L.layerGroup().addTo(aisMap);
-            }
-
-            const projectedTrackHours = 24;
-            const buildProjectedTrack = (v) => {
-                const lat = Number(v.latitude);
-                const lon = Number(v.longitude);
-                const speed = Number(v.speed);
-                const course = Number(v.course ?? v.COG ?? v.heading ?? v.TrueHeading);
-                if (![lat, lon, speed, course].every(Number.isFinite) || speed <= 0) return null;
-                const distanceNm = Math.min(300, speed * projectedTrackHours);
-                const bearing = course * Math.PI / 180;
-                const latDelta = (Math.cos(bearing) * distanceNm) / 60;
-                const lonDelta = (Math.sin(bearing) * distanceNm) / (60 * Math.max(0.25, Math.cos(lat * Math.PI / 180)));
-                return [[lat - latDelta, lon - lonDelta], [lat, lon]];
-            };
-
             vessels.forEach(v => {
                 if (Number.isFinite(Number(v.latitude)) && Number.isFinite(Number(v.longitude))) {
                     const isCompatible = window.GlobalStore && window.GlobalStore.compatibleVessels && window.GlobalStore.compatibleVessels.some(cv => 
@@ -32260,19 +31932,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         aisClusterGroup.addLayer(marker);
                         newMarkers.push(marker);
                         if (idStr) survivingIds.add(idStr);
-                    }
-
-                    if (window.aisProjectedTrackLayer && typeof L !== 'undefined' && L.polyline) {
-                        const track = buildProjectedTrack(v);
-                        if (track) {
-                            L.polyline(track, {
-                                color: isCompatible ? '#34d399' : '#38bdf8',
-                                weight: isCompatible ? 2.5 : 1.5,
-                                opacity: isCompatible ? 0.55 : 0.28,
-                                dashArray: '6, 8',
-                                interactive: false
-                            }).addTo(window.aisProjectedTrackLayer);
-                        }
                     }
                 }
             });
@@ -32586,19 +32245,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     .filter(Boolean);
             }
 
-            function updateOperationalRegionLayer() {
-                const targetMap = window.mapaAIS || window.mapAIS || window.AISmap || window.aisMap || window.map;
-                if (!window.MapLoader || typeof window.MapLoader.renderOperationalRegionLayer !== 'function') return;
-                const targets = [
-                    ...getRouteAisScanTargets('POL'),
-                    ...getRouteAisScanTargets('POD')
-                ];
-                window.MapLoader.renderOperationalRegionLayer(targetMap, targets, {
-                    radiusByRole: AIS_PROSPECTION_RADII_NM
-                });
-            }
-            window.updateOperationalRegionLayer = updateOperationalRegionLayer;
-
             function getActiveRouteAisBox(role = 'POL') {
                 const normalizedRole = String(role || 'POL').toUpperCase();
                 return getRouteAisScanTargets(normalizedRole)
@@ -32831,9 +32477,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     return { started: false, reason: 'global-sweep-limit-reached' };
                 }
                 const activeMap = mapInstance || window.mapaAIS || window.mapAIS || window.map;
-                if (typeof window.updateOperationalRegionLayer === 'function') {
-                    window.updateOperationalRegionLayer();
-                }
                 window.stopDirectAisLiveRadar();
                 if (window.MapLoader && typeof window.MapLoader.closeAisStreamSocket === 'function') {
                     window.MapLoader.closeAisStreamSocket();
@@ -32881,9 +32524,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 window.stopDirectAisLiveRadar();
                 clearDirectAisStore();
                 window.AIS_PROXY_POLLING_ACTIVE = true;
-                if (typeof window.updateOperationalRegionLayer === 'function') {
-                    window.updateOperationalRegionLayer();
-                }
                 if (window.MapLoader && typeof window.MapLoader.startAisProxyPolling === 'function') {
                     const endpoint = typeof window.getRouteAisSweepEndpoint === 'function'
                         ? window.getRouteAisSweepEndpoint(45000)
@@ -34677,25 +34317,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             refreshAisBtnSpanish.addEventListener('click', window.ejecutarBarridoAIS);
         }
 
-        function fitAisMapToProspectionRadii(mapInstance, polData, podData) {
-            if (!mapInstance || typeof L === 'undefined' || !L.latLngBounds) return;
-            const bounds = L.latLngBounds([]);
-            const addRadiusBounds = (port, radiusNm) => {
-                if (!port || !Number.isFinite(Number(port.lat)) || !Number.isFinite(Number(port.lon))) return;
-                const lat = Number(port.lat);
-                const lon = Number(port.lon);
-                const latDelta = radiusNm / 60;
-                const lonDelta = radiusNm / (60 * Math.max(0.25, Math.cos(lat * Math.PI / 180)));
-                bounds.extend([lat - latDelta, lon - lonDelta]);
-                bounds.extend([lat + latDelta, lon + lonDelta]);
-            };
-            addRadiusBounds(polData, (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 2000);
-            addRadiusBounds(podData, (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POD) || 100);
-            if (bounds.isValid()) {
-                mapInstance.fitBounds(bounds, { padding: [32, 32], maxZoom: 8 });
-            }
-        }
-
         function performAisSearch() {
             const query = (document.getElementById('ais-vessel-search')?.value || '').toLowerCase().trim();
             if (!query) {
@@ -34711,7 +34332,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             let polData = null;
-            let podData = null;
             if (pol) {
                 if (typeof findPortData === 'function') {
                     polData = findPortData(pol);
@@ -34719,41 +34339,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     polData = PORT_DB[pol];
                 }
             }
-            const pod = document.getElementById('port-pod')?.value.trim() || '';
-            if (pod) {
-                if (typeof findPortData === 'function') {
-                    podData = findPortData(pod);
-                } else if (typeof PORT_DB !== 'undefined' && PORT_DB[pod]) {
-                    podData = PORT_DB[pod];
-                }
-            }
             if (!polData && pol && !isTestEnv) {
                 alert("No se pudieron determinar las coordenadas del Puerto de Carga (POL) seleccionado.");
                 return;
             }
 
-            // Draw a circle with the search radius on the AIS map
             const targetMap = window.mapaAIS || window.map;
-            if (targetMap && polData && typeof L !== 'undefined' && L.circle) {
-                if (window.aisSearchRadiusCircle) {
-                    targetMap.removeLayer(window.aisSearchRadiusCircle);
-                    window.aisSearchRadiusCircle = null;
-                }
-                const isLocalMode = true;
-                if (isLocalMode) {
-                    const polRadiusNm = (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 2000;
-                    const radiusMeters = polRadiusNm * 1852;
-                    window.aisSearchRadiusCircle = L.circle([polData.lat, polData.lon], {
-                        color: '#e53e3e',
-                        fillColor: '#feb2b2',
-                        fillOpacity: 0.15,
-                        radius: radiusMeters,
-                        weight: 1.5,
-                        dashArray: '5, 5'
-                    }).addTo(targetMap);
-                    window.aisSearchRadiusCircle.bindTooltip(`BUSCAR POL: ${polRadiusNm} MN`, { sticky: true });
-                }
-                fitAisMapToProspectionRadii(targetMap, polData, podData);
+            if (targetMap && polData && typeof targetMap.setView === 'function') {
+                targetMap.setView([polData.lat, polData.lon], Math.max(targetMap.getZoom?.() || 2, 5));
             }
 
             // Helper to calculate distance in nautical miles (using local haversine if available, otherwise defining a basic one)
@@ -35797,44 +35390,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 });
             }
 
-            // Draw the POL radius without changing the user's current viewport.
-            const targetMap = window.mapaAIS || window.map;
-            if (targetMap && closestVessels.length > 0) {
-                if (window.aisPolHighlightCircle) {
-                    targetMap.removeLayer(window.aisPolHighlightCircle);
-                }
-                if (typeof L !== 'undefined' && L.circle) {
-                    window.aisPolHighlightCircle = L.circle([polCoords.lat, polCoords.lon], {
-                        color: '#16a34a',
-                        fillColor: '#16a34a',
-                        fillOpacity: 0.15,
-                        radius: polRadiusNm * 1852,
-                        weight: 1.5,
-                        dashArray: '5, 5'
-                    }).addTo(targetMap);
-                    window.aisPolHighlightCircle.bindTooltip(`BUSCAR POL: ${polRadiusNm} MN (POL: ${polValue})`, { sticky: true });
-                }
-                const podValue = document.getElementById('port-pod')?.value?.trim() || '';
-                const podCoords = podValue && typeof findPortData === 'function'
-                    ? findPortData(podValue)
-                    : (podValue && typeof PORT_DB !== 'undefined' ? PORT_DB[podValue] : null);
-                if (podCoords) {
-                    if (window.aisPodHighlightCircle) {
-                        targetMap.removeLayer(window.aisPodHighlightCircle);
-                    }
-                    const podRadiusNm = (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POD) || 100;
-                    window.aisPodHighlightCircle = L.circle([podCoords.lat, podCoords.lon], {
-                        color: '#2563eb',
-                        fillColor: '#2563eb',
-                        fillOpacity: 0.10,
-                        radius: podRadiusNm * 1852,
-                        weight: 1.25,
-                        dashArray: '4, 8'
-                    }).addTo(targetMap);
-                    window.aisPodHighlightCircle.bindTooltip("POD visual: 100 MN (POD: " + podValue + ")", { sticky: true });
-                    fitAisMapToProspectionRadii(targetMap, polCoords, podCoords);
-                }
-            }
         };
 
         // Initialize display on startup and sync listeners
@@ -35848,16 +35403,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             portInputEl.addEventListener('input', () => {
                 window.isFirstLoad = true;
                 window.updateAisDetectedVesselsRoute();
-                if (typeof window.updateOperationalRegionLayer === 'function') {
-                    window.updateOperationalRegionLayer();
-                }
             });
             portInputEl.addEventListener('change', () => {
                 window.isFirstLoad = true;
                 window.updateAisDetectedVesselsRoute();
-                if (typeof window.updateOperationalRegionLayer === 'function') {
-                    window.updateOperationalRegionLayer();
-                }
             });
         });
 

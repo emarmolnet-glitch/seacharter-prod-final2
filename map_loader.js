@@ -162,10 +162,6 @@
         map: null,
         waitingForMapIdle: false
     };
-    const operationalRegionLayerState = {
-        layer: null,
-        key: ''
-    };
     const searchNodes = Object.freeze({
         mediterranean: [
             { name: 'Barcelona', lat: 41.35, lon: 2.17, region: 'Mediterráneo' },
@@ -683,107 +679,6 @@
 
     function setAisStreamBoundsFromLeafletBounds(bounds) {
         return setAisStreamBounds(readLeafletBounds(bounds));
-    }
-
-    function clearOperationalRegionLayer(mapInstance) {
-        const targetMap = mapInstance || getDefaultAisMap();
-        if (operationalRegionLayerState.layer && targetMap && typeof targetMap.removeLayer === 'function') {
-            try {
-                targetMap.removeLayer(operationalRegionLayerState.layer);
-            } catch (_) {}
-        }
-        operationalRegionLayerState.layer = null;
-        operationalRegionLayerState.key = '';
-        return { cleared: true };
-    }
-
-    function renderOperationalRegionLayer(mapInstance, targets, options) {
-        const targetMap = mapInstance || getDefaultAisMap();
-        const nodes = (Array.isArray(targets) ? targets : [])
-            .filter((target) => target && target.source === 'NODE' && Number.isFinite(Number(target.lat)) && Number.isFinite(Number(target.lon)));
-
-        if (!targetMap || typeof L === 'undefined' || !L || typeof L.layerGroup !== 'function') {
-            return { rendered: false, reason: 'leaflet-map-unavailable', nodeCount: nodes.length };
-        }
-
-        const key = nodes
-            .map((node) => [
-                node.role || '',
-                node.name || '',
-                Number(node.lat).toFixed(4),
-                Number(node.lon).toFixed(4)
-            ].join(':'))
-            .join('|');
-        if (operationalRegionLayerState.layer && operationalRegionLayerState.key === key) {
-            return { rendered: true, unchanged: true, nodeCount: nodes.length };
-        }
-
-        clearOperationalRegionLayer(targetMap);
-        if (!nodes.length) {
-            return { rendered: false, reason: 'no-operational-nodes', nodeCount: 0 };
-        }
-
-        const layer = L.layerGroup();
-        const portTargets = (Array.isArray(targets) ? targets : [])
-            .filter((target) => target && target.source === 'PORT' && Number.isFinite(Number(target.lat)) && Number.isFinite(Number(target.lon)));
-        const portsByRole = portTargets.reduce((acc, port) => {
-            acc[String(port.role || '').toUpperCase()] = port;
-            return acc;
-        }, {});
-        const radiusByRole = options && options.radiusByRole ? options.radiusByRole : {};
-
-        nodes.forEach((node) => {
-            const role = String(node.role || '').toUpperCase();
-            const parentRole = role.includes('POD') ? 'POD' : 'POL';
-            const parentPort = portsByRole[parentRole];
-            const color = parentRole === 'POD' ? '#2563eb' : '#16a34a';
-            const nodeColor = '#f97316';
-            const radiusNm = Number(radiusByRole[parentRole] || (parentRole === 'POD' ? 100 : 2000));
-            const lat = Number(node.lat);
-            const lon = Number(node.lon);
-
-            if (parentPort && typeof L.polyline === 'function') {
-                L.polyline([[Number(parentPort.lat), Number(parentPort.lon)], [lat, lon]], {
-                    color: nodeColor,
-                    weight: 1.4,
-                    opacity: 0.72,
-                    dashArray: '6, 8',
-                    interactive: false
-                }).addTo(layer);
-            }
-
-            if (typeof L.circle === 'function') {
-                L.circle([lat, lon], {
-                    color: nodeColor,
-                    fillColor: nodeColor,
-                    fillOpacity: 0.07,
-                    radius: radiusNm * 1852,
-                    weight: 1,
-                    dashArray: '3, 7',
-                    interactive: false
-                }).addTo(layer);
-            }
-
-            if (typeof L.marker === 'function' && typeof L.divIcon === 'function') {
-                const label = `${parentRole} nodo · ${node.region || 'Región operativa'}`;
-                L.marker([lat, lon], {
-                    interactive: true,
-                    icon: L.divIcon({
-                        className: 'operational-region-node-marker',
-                        html: `<div class="operational-region-node operational-region-node-${parentRole.toLowerCase()}" style="--node-parent-color:${color};"><span></span><strong>${escapePopupText(node.name || 'Nodo')}</strong></div>`,
-                        iconSize: [120, 28],
-                        iconAnchor: [12, 14]
-                    })
-                })
-                    .bindTooltip(`${escapePopupText(node.name || 'Nodo vecino')} · ${escapePopupText(label)}`, { sticky: true })
-                    .addTo(layer);
-            }
-        });
-
-        layer.addTo(targetMap);
-        operationalRegionLayerState.layer = layer;
-        operationalRegionLayerState.key = key;
-        return { rendered: true, nodeCount: nodes.length };
     }
 
     function obtenerBoundingBoxesActuales(mapInstance) {
@@ -1347,8 +1242,6 @@
         stopAisProxyPolling,
         resetAisCache,
         pollAisProxyOnce,
-        renderOperationalRegionLayer,
-        clearOperationalRegionLayer,
         searchNodes,
         getSearchNodesForPort,
         _aisStreamState: aisStreamState,
