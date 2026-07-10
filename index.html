@@ -3181,22 +3181,89 @@
             animation: aisRadiusPulse 1.6s ease-in-out infinite;
         }
 
-        .ais-prospection-result-label {
-            background: rgba(15, 23, 42, 0.88);
-            color: #f8fafc;
-            border: 1px solid currentColor;
-            border-radius: 6px;
-            padding: 4px 7px;
-            font-size: 10px;
-            font-weight: 900;
-            line-height: 1;
-            letter-spacing: 0;
-            text-transform: uppercase;
-            white-space: nowrap;
-            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.28);
+        .ais-port-summary-marker {
+            background: transparent !important;
+            border: 0 !important;
         }
 
-        .ais-prospection-result-label.is-scanning {
+        .ais-port-summary {
+            position: relative;
+            width: 190px;
+            overflow: hidden;
+            border: 2px solid rgba(255, 255, 255, 0.94);
+            border-radius: 10px;
+            background: var(--ais-port-color);
+            color: #ffffff;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.30);
+            transform-origin: 50% 100%;
+        }
+
+        .ais-port-summary::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            bottom: -6px;
+            width: 12px;
+            height: 12px;
+            transform: translateX(-50%) rotate(45deg);
+            border-right: 2px solid rgba(255, 255, 255, 0.94);
+            border-bottom: 2px solid rgba(255, 255, 255, 0.94);
+            background: var(--ais-port-color);
+        }
+
+        .ais-port-summary__header {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            min-height: 30px;
+            padding: 6px 9px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.24);
+        }
+
+        .ais-port-summary__role {
+            flex: 0 0 auto;
+            padding: 3px 5px;
+            border-radius: 4px;
+            background: rgba(15, 23, 42, 0.24);
+            font-size: 9px;
+            font-weight: 900;
+            letter-spacing: 0.08em;
+        }
+
+        .ais-port-summary__name {
+            overflow: hidden;
+            font-size: 11px;
+            font-weight: 900;
+            line-height: 1.15;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .ais-port-summary__body {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 7px 9px 8px;
+            background: rgba(15, 23, 42, 0.12);
+        }
+
+        .ais-port-summary__count {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 17px;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        .ais-port-summary__caption {
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0.03em;
+            opacity: 0.9;
+            text-transform: uppercase;
+        }
+
+        .ais-port-summary.is-scanning {
             animation: aisLabelPulse 1.2s ease-in-out infinite;
         }
 
@@ -12649,7 +12716,7 @@
             const MAPBOX_ROUTE_SOURCE_ID = 'map-manager-route-source';
             const MAPBOX_ROUTE_LAYER_ID = 'map-manager-route-line';
             const ROUTE_DYNAMIC_COLOR = '#0055ff';
-            const dynamicKinds = Object.freeze({ route: 'route', pol: 'pol', nearby: 'nearby' });
+            const dynamicKinds = Object.freeze({ route: 'route', pol: 'pol', pod: 'pod', nearby: 'nearby' });
             const state = {
                 route: [],
                 pol: null,
@@ -12799,6 +12866,10 @@
                 if (!checkReady(mapInstance) || !port) return false;
                 const dynamicKind = type.toLowerCase();
                 cleanDynamicLayers(mapInstance, dynamicKind);
+                const isDensityMap = mapInstance === state.densityMap || mapInstance === aisMap;
+                if (isDensityMap) {
+                    return true;
+                }
                 if (isMapboxRouteMap(mapInstance)) {
                     if (typeof mapboxgl === 'undefined') return false;
                     state.mapboxPortMarkers[type] = new mapboxgl.Marker({ element: createPortElement(type) })
@@ -30792,7 +30863,37 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 POD: { radiusNm: 100, color: '#2563eb', port: null, status: 'idle', count: null }
             }
         };
-        window.aisProspectionLayers = window.aisProspectionLayers || { group: null, circles: {}, labels: {} };
+        window.aisProspectionLayers = window.aisProspectionLayers || { group: null, circles: {}, markers: {}, labels: {} };
+
+        function escapeAisPortMarkerText(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function removeLegacyAisPortLayers(mapInstance, role, group) {
+            const dynamicKind = role.toLowerCase();
+            if (window.MapController?.cleanDynamicLayers) {
+                window.MapController.cleanDynamicLayers(mapInstance, dynamicKind);
+            } else if (typeof mapInstance.eachLayer === 'function') {
+                mapInstance.eachLayer((layer) => {
+                    if (layer?.options?.isDynamic === true && layer.options.dynamicKind === dynamicKind) {
+                        mapInstance.removeLayer(layer);
+                    }
+                });
+            }
+
+            const legacyLabel = window.aisProspectionLayers.labels?.[role];
+            const currentMarker = window.aisProspectionLayers.markers?.[role];
+            if (legacyLabel && legacyLabel !== currentMarker) {
+                if (group && typeof group.removeLayer === 'function') group.removeLayer(legacyLabel);
+                else if (typeof mapInstance.removeLayer === 'function') mapInstance.removeLayer(legacyLabel);
+                delete window.aisProspectionLayers.labels[role];
+            }
+        }
 
         function getAisProspectionMap() {
             return window.mapaAIS || window.mapAIS || window.aisMap || window.map || aisMap || null;
@@ -30822,8 +30923,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (!layers.group || (typeof mapInstance.hasLayer === 'function' && !mapInstance.hasLayer(layers.group))) {
                 layers.group = L.layerGroup().addTo(mapInstance);
                 layers.circles = {};
+                layers.markers = {};
                 layers.labels = {};
             }
+            layers.markers = layers.markers || {};
+            layers.labels = layers.labels || {};
             return layers.group;
         }
 
@@ -30840,9 +30944,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (!port) return;
                 zone.port = port;
                 const isScanning = zone.status === 'scanning';
-                const labelText = isScanning
-                    ? `${role} ${zone.radiusNm} MN · RADAR ACTIVO`
-                    : `${role} ${zone.radiusNm} MN · ${Number.isFinite(zone.count) ? zone.count : 0} resultados`;
+                const vesselCount = Number.isFinite(zone.count) ? zone.count : 0;
+                const safePortName = escapeAisPortMarkerText(port.name || role);
+                const statusText = isScanning ? 'Radar activo' : 'Barrido completado';
+
+                removeLegacyAisPortLayers(mapInstance, role, group);
 
                 if (!window.aisProspectionLayers.circles[role]) {
                     window.aisProspectionLayers.circles[role] = L.circle([port.lat, port.lon], {
@@ -30866,17 +30972,29 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
                 window.aisProspectionLayers.circles[role].bindTooltip(`${role}: ${zone.radiusNm} MN`, { sticky: true });
 
-                const labelHtml = `<div class="ais-prospection-result-label ${isScanning ? 'is-scanning' : ''}" style="color:${zone.color}">${labelText}</div>`;
-                const labelIcon = L.divIcon({ className: '', html: labelHtml, iconSize: [150, 24], iconAnchor: [75, 12] });
-                if (!window.aisProspectionLayers.labels[role]) {
-                    window.aisProspectionLayers.labels[role] = L.marker([port.lat, port.lon], {
-                        icon: labelIcon,
-                        interactive: false,
-                        keyboard: false
-                    }).addTo(group);
+                const markerHtml = `<div class="ais-port-summary ${isScanning ? 'is-scanning' : ''}" style="--ais-port-color:${zone.color}"><div class="ais-port-summary__header"><span class="ais-port-summary__role">${role}</span><span class="ais-port-summary__name" title="${safePortName}">${safePortName}</span></div><div class="ais-port-summary__body"><strong class="ais-port-summary__count">${isScanning ? '—' : vesselCount}</strong><span class="ais-port-summary__caption">${isScanning ? 'Detectando buques' : 'Buques detectados'}</span></div></div>`;
+                const markerIcon = L.divIcon({
+                    className: 'ais-port-summary-marker',
+                    html: markerHtml,
+                    iconSize: [190, 66],
+                    iconAnchor: [95, 72],
+                    popupAnchor: [0, -68]
+                });
+                const popupHtml = `<div class="seacharter-map-popup"><strong>${role} · ${safePortName}</strong><br><span>${isScanning ? 'Buques detectados: calculando…' : `Buques detectados: ${vesselCount}`}</span><br><small>Radio AIS: ${zone.radiusNm} MN · ${statusText}</small></div>`;
+                if (!window.aisProspectionLayers.markers[role]) {
+                    window.aisProspectionLayers.markers[role] = L.marker([port.lat, port.lon], {
+                        icon: markerIcon,
+                        interactive: true,
+                        keyboard: true,
+                        title: `${role} · ${port.name || role}`
+                    }).bindPopup(popupHtml).addTo(group);
                 } else {
-                    window.aisProspectionLayers.labels[role].setLatLng([port.lat, port.lon]).setIcon(labelIcon);
+                    window.aisProspectionLayers.markers[role]
+                        .setLatLng([port.lat, port.lon])
+                        .setIcon(markerIcon)
+                        .setPopupContent(popupHtml);
                 }
+                window.aisProspectionLayers.labels[role] = window.aisProspectionLayers.markers[role];
             });
 
             if (options.fit !== false && typeof fitAisMapToProspectionRadii === 'function') {
@@ -30917,7 +31035,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     try { mapInstance.removeLayer(window[layerKey]); } catch (_) {}
                 }
             });
-            window.aisProspectionLayers = { group: null, circles: {}, labels: {} };
+            window.aisProspectionLayers = { group: null, circles: {}, markers: {}, labels: {} };
             window.aisSearchRadiusCircle = null;
             window.aisPolHighlightCircle = null;
             window.aisPodHighlightCircle = null;
@@ -31874,7 +31992,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.mapaAIS = null;
             aisClusterGroup = null;
             aisMarkers = [];
-            window.aisProspectionLayers = { group: null, circles: {}, labels: {} };
+            window.aisProspectionLayers = { group: null, circles: {}, markers: {}, labels: {} };
         }
 
         function updateAisMarkers(vessels) {
