@@ -1497,6 +1497,14 @@
         // Setup BroadcastChannel for Local-First synchronization
         const localSyncChannel = new BroadcastChannel('seacharter_sync');
         localSyncChannel.onmessage = (event) => {
+            if (event.data?.type === 'MAP_DATA') {
+                const payload = event.data;
+                window.dispatchEvent(new CustomEvent('seacharter:map-data', { detail: payload }));
+                localSyncChannel.postMessage({ type: 'MAP_DATA_ACK', messageId: payload.messageId });
+                localSyncChannel.postMessage({ type: 'MAP_DATA_EVENT', messageId: payload.messageId, payload });
+                addLog(`[MAP_DATA] ${getTimestamp()} - Ruta y puertos recibidos desde Core PRO y reenviados al controlador cartográfico.`);
+                return;
+            }
             if (event.data && event.data.type === 'recibir-auditoria') {
                 receiveCoreProVessels(event.data, 'Core PRO');
             }

@@ -12645,6 +12645,293 @@
         let routeMapInvalidateTimer = null;
         let aisTabInitTimer = null;
 
+        window.MapController = (() => {
+            const MAPBOX_ROUTE_SOURCE_ID = 'map-manager-route-source';
+            const MAPBOX_ROUTE_LAYER_ID = 'map-manager-route-line';
+            const ROUTE_DYNAMIC_COLOR = '#0055ff';
+            const dynamicKinds = Object.freeze({ route: 'route', pol: 'pol', nearby: 'nearby' });
+            const state = {
+                route: [],
+                pol: null,
+                pod: null,
+                nearbyPorts: [],
+                routeMap: null,
+                densityMap: null,
+                mapboxPortMarkers: { POL: null, POD: null }
+            };
+
+            function normalizePoint(point) {
+                if (!point) return null;
+                let lat;
+                let lon;
+                let name = '';
+                if (Array.isArray(point)) {
+                    [lat, lon] = point;
+                } else {
+                    lat = point.lat ?? point.latitude;
+                    lon = point.lon ?? point.lng ?? point.longitude;
+                    name = point.name || point.portName || point.label || '';
+                }
+                lat = Number(lat);
+                lon = Number(lon);
+                if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+                return { lat, lon, name };
+            }
+
+            function normalizePoints(points) {
+                if (!Array.isArray(points)) return [];
+                return points.map(normalizePoint).filter(Boolean).map(({ lat, lon }) => [lat, lon]);
+            }
+
+            function cleanDynamicLayers(mapInstance, kind) {
+                if (!mapInstance) return;
+                if (typeof mapInstance.eachLayer === 'function') {
+                    mapInstance.eachLayer((layer) => {
+                        if (layer?.options?.isDynamic === true && (!kind || layer.options.dynamicKind === kind)) {
+                            mapInstance.removeLayer(layer);
+                        }
+                    });
+                }
+                if (isMapboxRouteMap(mapInstance) && (!kind || kind === dynamicKinds.route)) {
+                    if (mapInstance.getLayer(MAPBOX_ROUTE_LAYER_ID)) mapInstance.removeLayer(MAPBOX_ROUTE_LAYER_ID);
+                    if (mapInstance.getSource(MAPBOX_ROUTE_SOURCE_ID)) mapInstance.removeSource(MAPBOX_ROUTE_SOURCE_ID);
+                }
+                if (isMapboxRouteMap(mapInstance)) {
+                    ['POL', 'POD'].forEach((type) => {
+                        if ((!kind || kind === type.toLowerCase()) && state.mapboxPortMarkers[type]) {
+                            state.mapboxPortMarkers[type].remove();
+                            state.mapboxPortMarkers[type] = null;
+                        }
+                    });
+                }
+            }
+
+            function getMaps() {
+                return [state.routeMap || map, state.densityMap || aisMap].filter((mapInstance, index, list) => mapInstance && list.indexOf(mapInstance) === index);
+            }
+
+            function checkReady(mapInstance = state.routeMap || map) {
+                return Boolean(mapInstance && (
+                    typeof mapInstance.eachLayer === 'function'
+                    || isMapboxRouteMap(mapInstance)
+                ));
+            }
+
+            function clearMap(mapInstance) {
+                const maps = mapInstance ? [mapInstance] : getMaps();
+                maps.forEach((targetMap) => cleanDynamicLayers(targetMap));
+                return maps.length > 0;
+            }
+
+            function fitLeaflet(mapInstance, points) {
+                if (!mapInstance || points.length === 0 || typeof L === 'undefined') return;
+                const bounds = L.latLngBounds(points);
+                if (bounds.isValid()) mapInstance.fitBounds(bounds, { padding: [40, 40], maxZoom: 8 });
+            }
+
+            function renderRouteOnMap(routeMap) {
+                if (!checkReady(routeMap) || state.route.length < 2) return false;
+                if (isMapboxRouteMap(routeMap)) {
+                    const renderMapboxRoute = () => {
+                        cleanDynamicLayers(routeMap, dynamicKinds.route);
+                        routeMap.addSource(MAPBOX_ROUTE_SOURCE_ID, {
+                            type: 'geojson',
+                            data: {
+                                type: 'Feature',
+                                properties: { isDynamic: true },
+                                geometry: { type: 'LineString', coordinates: state.route.map(([lat, lon]) => [lon, lat]) }
+                            }
+                        });
+                        routeMap.addLayer({
+                            id: MAPBOX_ROUTE_LAYER_ID,
+                            type: 'line',
+                            source: MAPBOX_ROUTE_SOURCE_ID,
+                            layout: { 'line-join': 'round', 'line-cap': 'round' },
+                            paint: { 'line-color': ROUTE_DYNAMIC_COLOR, 'line-width': 4, 'line-opacity': 0.95, 'line-dasharray': [10, 10] }
+                        });
+                        if (typeof mapboxgl !== 'undefined') {
+                            const bounds = new mapboxgl.LngLatBounds();
+                            state.route.forEach(([lat, lon]) => bounds.extend([lon, lat]));
+                            routeMap.fitBounds(bounds, { padding: 50, maxZoom: 8, duration: 500 });
+                        }
+                    };
+                    if ((routeMap.isStyleLoaded && routeMap.isStyleLoaded()) || (routeMap.loaded && routeMap.loaded())) renderMapboxRoute();
+                    else routeMap.once('load', renderMapboxRoute);
+                    return true;
+                }
+                if (typeof L === 'undefined' || typeof L.polyline !== 'function') return false;
+                cleanDynamicLayers(routeMap, dynamicKinds.route);
+                L.polyline(state.route, {
+                    color: ROUTE_DYNAMIC_COLOR,
+                    weight: 4,
+                    opacity: 0.95,
+                    dashArray: '10, 10',
+                    isDynamic: true,
+                    dynamicKind: dynamicKinds.route
+                }).addTo(routeMap);
+                fitLeaflet(routeMap, state.route);
+                return true;
+            }
+
+            function renderRoute(points) {
+                state.route = normalizePoints(points);
+                if (state.route.length < 2) return false;
+                let rendered = false;
+                getMaps().forEach((mapInstance) => {
+                    cleanDynamicLayers(mapInstance, dynamicKinds.route);
+                    rendered = renderRouteOnMap(mapInstance) || rendered;
+                });
+                return rendered;
+            }
+
+            function createPortElement(type) {
+                const element = document.createElement('div');
+                element.style.width = '20px';
+                element.style.height = '20px';
+                element.style.borderRadius = '999px';
+                element.style.background = type === 'POD' ? '#f97316' : '#16a34a';
+                element.style.border = '3px solid #ffffff';
+                element.style.boxShadow = '0 2px 10px rgba(15, 23, 42, 0.45)';
+                return element;
+            }
+
+            function renderPortOnMap(mapInstance, port, type) {
+                if (!checkReady(mapInstance) || !port) return false;
+                const dynamicKind = type.toLowerCase();
+                cleanDynamicLayers(mapInstance, dynamicKind);
+                if (isMapboxRouteMap(mapInstance)) {
+                    if (typeof mapboxgl === 'undefined') return false;
+                    state.mapboxPortMarkers[type] = new mapboxgl.Marker({ element: createPortElement(type) })
+                        .setLngLat([port.lon, port.lat])
+                        .setPopup(new mapboxgl.Popup({ offset: 18 }).setText(port.name || type))
+                        .addTo(mapInstance);
+                    return true;
+                }
+                if (typeof L === 'undefined' || typeof L.circleMarker !== 'function') return false;
+                const fillColor = type === 'POD' ? '#f97316' : '#16a34a';
+                L.circleMarker([port.lat, port.lon], {
+                    radius: 9,
+                    color: '#ffffff',
+                    weight: 3,
+                    fillColor,
+                    fillOpacity: 1,
+                    isDynamic: true,
+                    dynamicKind
+                }).bindPopup(port.name || type).bindTooltip(`${type} · ${port.name || type}`, { permanent: true, direction: 'top', offset: [0, -8] }).addTo(mapInstance);
+                return true;
+            }
+
+            function renderPort(coords, name, type) {
+                const normalizedType = String(type || '').toUpperCase();
+                if (!['POL', 'POD'].includes(normalizedType)) return false;
+                const port = normalizePoint(Array.isArray(coords) ? { lat: coords[0], lon: coords[1], name } : { ...coords, name: name || coords?.name });
+                if (!port) return false;
+                state[normalizedType.toLowerCase()] = port;
+                let rendered = false;
+                getMaps().forEach((mapInstance) => {
+                    rendered = renderPortOnMap(mapInstance, port, normalizedType) || rendered;
+                });
+                return rendered;
+            }
+
+            function renderNearbyPorts() {
+                const densityMap = state.densityMap || aisMap;
+                if (!densityMap || typeof L === 'undefined' || typeof L.circleMarker !== 'function') return false;
+                cleanDynamicLayers(densityMap, dynamicKinds.nearby);
+                state.nearbyPorts.forEach((port) => {
+                    L.circleMarker([port.lat, port.lon], {
+                        radius: 7,
+                        color: '#fff7ed',
+                        weight: 2,
+                        fillColor: '#f97316',
+                        fillOpacity: 0.88,
+                        isDynamic: true,
+                        dynamicKind: dynamicKinds.nearby
+                    }).bindTooltip(`${port.name || 'Puerto cercano'}${Number.isFinite(port.distanceNm) ? ` · ${Math.round(port.distanceNm)} MN` : ''}`).addTo(densityMap);
+                });
+                const densityPoints = [state.pol, ...state.nearbyPorts].filter(Boolean).map((point) => [point.lat, point.lon]);
+                if (densityPoints.length > 1) fitLeaflet(densityMap, densityPoints);
+                return true;
+            }
+
+            function findNearbyPorts(pol, limit = 14) {
+                if (!pol || typeof PORT_DB === 'undefined') return [];
+                return Object.entries(PORT_DB)
+                    .map(([name, port]) => {
+                        const normalized = normalizePoint({ ...port, name });
+                        if (!normalized) return null;
+                        const distanceNm = haversine(pol.lat, pol.lon, normalized.lat, normalized.lon);
+                        return distanceNm > 1 ? { ...normalized, distanceNm } : null;
+                    })
+                    .filter(Boolean)
+                    .sort((first, second) => first.distanceNm - second.distanceNm)
+                    .slice(0, limit);
+            }
+
+            function drawRoute(points) {
+                return renderRoute(points);
+            }
+
+            function drawPOL(location) {
+                const port = normalizePoint(location);
+                return port ? renderPort([port.lat, port.lon], port.name, 'POL') : false;
+            }
+
+            function drawNearbyPorts(list) {
+                state.nearbyPorts = (Array.isArray(list) ? list : []).map((item) => {
+                    const port = normalizePoint(item);
+                    return port ? { ...port, distanceNm: Number(item?.distanceNm) } : null;
+                }).filter(Boolean);
+                return renderNearbyPorts();
+            }
+
+            function refresh() {
+                if (state.route.length > 1) renderRoute(state.route);
+                if (state.pol) renderPort([state.pol.lat, state.pol.lon], state.pol.name, 'POL');
+                if (state.pod) renderPort([state.pod.lat, state.pod.lon], state.pod.name, 'POD');
+                renderNearbyPorts();
+            }
+
+            function syncRouteResult(result) {
+                if (!result) return false;
+                const ballastPoints = normalizePoints(result.routes?.ballast?.coordinates || result.routes?.ballast?.nodes || []);
+                const ladenPoints = normalizePoints(result.routes?.laden?.coordinates || result.routes?.laden?.nodes || []);
+                state.route = ballastPoints.concat(ladenPoints.filter((point, index) => index > 0 || ballastPoints.length === 0));
+                state.pol = normalizePoint(result.coordinates?.pol);
+                state.pod = normalizePoint(result.coordinates?.pod);
+                state.nearbyPorts = findNearbyPorts(state.pol);
+                refresh();
+                return true;
+            }
+
+            function renderMapData(payload) {
+                if (!payload || payload.type !== 'MAP_DATA') return false;
+                state.nearbyPorts = [];
+                clearMap();
+                const routeRendered = renderRoute(payload.points || []);
+                const polRendered = payload.pol ? renderPort(payload.pol.coords, payload.pol.name, 'POL') : false;
+                const podRendered = payload.pod ? renderPort(payload.pod.coords, payload.pod.name, 'POD') : false;
+                return routeRendered || polRendered || podRendered;
+            }
+
+            function attachRouteMap(mapInstance) {
+                state.routeMap = mapInstance || null;
+                refresh();
+            }
+
+            function attachDensityMap(mapInstance) {
+                state.densityMap = mapInstance || null;
+                refresh();
+            }
+
+            function detachDensityMap(mapInstance) {
+                if (!mapInstance || state.densityMap === mapInstance) state.densityMap = null;
+            }
+
+            return { renderRoute, renderPort, clearMap, checkReady, renderMapData, drawRoute, drawPOL, drawNearbyPorts, normalizePoints, cleanDynamicLayers, syncRouteResult, attachRouteMap, attachDensityMap, detachDensityMap, refresh };
+        })();
+        window.MapManager = window.MapController;
+
         // --- HELPER FUNCTIONS FOR WAR RISKS DETERMINATION ---
         function getCountryFromPort(portStr) {
             if (!portStr) return "";
@@ -16859,7 +17146,7 @@
                 scheduleRouteMapRedraw(200, () => {
                     forceVisibleRouteMapResize(map);
                     updateRouteSummary();
-                    renderMasterRouteMap();
+                    window.MapController?.attachRouteMap(map);
                 });
             }
             if(tabId === 'estimator') {
@@ -16878,6 +17165,7 @@
                         return;
                     }
                     initAisMap();
+                    window.MapController?.attachDensityMap(aisMap);
                     if (window.GlobalStore && typeof updateAisMarkers === 'function') {
                         updateAisMarkers(window.GlobalStore.getVessels());
                     }
@@ -17263,6 +17551,7 @@
             if (map) {
                 window.map = map;
                 resizeRouteMap(map);
+                window.MapController?.attachRouteMap(map);
             }
 
             return map;
@@ -17743,6 +18032,11 @@
                 totalMiles: result.totalMiles,
                 routeGeometry: result
             });
+            if (typeof window.sendMapDataToDataBridge === 'function') {
+                window.sendMapDataToDataBridge(result);
+            } else {
+                window.MapController?.syncRouteResult(result);
+            }
             updateRouteSummary();
         }
 
@@ -17957,6 +18251,11 @@
 
         function renderMasterRouteMap(result = State.routeGeometry) {
             if (!result) return false;
+            if (window.MapController) {
+                const managedRouteMap = ensureRouteMapReady('map-host');
+                window.MapController.attachRouteMap(managedRouteMap);
+                return window.MapController.syncRouteResult(result);
+            }
             const routeMap = ensureRouteMapReady('map-host');
             if (!routeMap || !isMasterRouteMapMounted()) {
                 console.warn('[Route Map] Render pospuesto: mapa no montado todavía.', { hasMap: Boolean(routeMap), hasResult: Boolean(result) });
@@ -31519,6 +31818,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             aisMap = L.map(mapContainer, {zoomControl: true, attributionControl: false, preferCanvas: true}).setView([20.0, 0.0], 2);
             window.mapaAIS = aisMap;
             createNauticalBaseLayer().addTo(aisMap);
+            window.MapController?.attachDensityMap(aisMap);
 
             if (typeof L.markerClusterGroup === 'function') {
                 aisClusterGroup = L.markerClusterGroup({
@@ -31561,6 +31861,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function destroyAisMap() {
             if (!aisMap) return;
             cancelAisMapAnimationFrame();
+            window.MapController?.detachDensityMap(aisMap);
             if (window.MapLoader && typeof window.MapLoader.clearOperationalRegionLayer === 'function') {
                 window.MapLoader.clearOperationalRegionLayer(aisMap);
             }
@@ -38602,7 +38903,67 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         // Initialize BroadcastChannel listener for seacharter_sync
         const syncChannel = new BroadcastChannel('seacharter_sync');
+        const pendingMapDataMessages = new Map();
+        const MAP_DATA_RETRY_DELAY_MS = 300;
+        const MAP_DATA_MAX_ATTEMPTS = 3;
+
+        function buildMapDataPayload(result) {
+            const normalize = (points) => window.MapController?.normalizePoints(points) || [];
+            const ballastPoints = normalize(result?.routes?.ballast?.coordinates || result?.routes?.ballast?.nodes || []);
+            const ladenPoints = normalize(result?.routes?.laden?.coordinates || result?.routes?.laden?.nodes || []);
+            const points = ballastPoints.concat(ladenPoints.filter((point, index) => index > 0 || ballastPoints.length === 0));
+            const toPort = (port, fallbackName) => {
+                if (!port) return null;
+                const coords = normalize([port])[0];
+                return coords ? { coords, name: port.name || fallbackName } : null;
+            };
+            return {
+                type: 'MAP_DATA',
+                messageId: `map-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+                points,
+                pol: toPort(result?.coordinates?.pol, result?.pol || 'POL'),
+                pod: toPort(result?.coordinates?.pod, result?.pod || 'POD')
+            };
+        }
+
+        function clearPendingMapData(messageId) {
+            const pending = pendingMapDataMessages.get(messageId);
+            if (!pending) return;
+            clearTimeout(pending.timer);
+            pendingMapDataMessages.delete(messageId);
+        }
+
+        function postMapDataWithRetry(payload, attempt = 1) {
+            syncChannel.postMessage(payload);
+            const timer = setTimeout(() => {
+                if (!pendingMapDataMessages.has(payload.messageId)) return;
+                if (attempt >= MAP_DATA_MAX_ATTEMPTS) {
+                    clearPendingMapData(payload.messageId);
+                    window.MapController?.renderMapData(payload);
+                    console.warn(`[MAP_DATA] Data Bridge no confirmó recepción tras ${attempt} intentos; se aplicó render local.`);
+                    return;
+                }
+                postMapDataWithRetry(payload, attempt + 1);
+            }, MAP_DATA_RETRY_DELAY_MS);
+            pendingMapDataMessages.set(payload.messageId, { payload, attempt, timer });
+        }
+
+        window.sendMapDataToDataBridge = function(result) {
+            const payload = buildMapDataPayload(result);
+            postMapDataWithRetry(payload);
+            return payload;
+        };
+
         syncChannel.onmessage = async (event) => {
+            if (event.data?.type === 'MAP_DATA_ACK') {
+                clearPendingMapData(event.data.messageId);
+                return;
+            }
+            if (event.data?.type === 'MAP_DATA_EVENT') {
+                clearPendingMapData(event.data.messageId);
+                window.MapController?.renderMapData(event.data.payload);
+                return;
+            }
             if (event.data && event.data.type === 'vessel_validated') {
                 const validatedVessel = event.data.vessel;
                 if (typeof updateConnectionStatusBar === 'function') updateConnectionStatusBar('secure');
