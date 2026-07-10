@@ -14205,7 +14205,7 @@
                             'Authorization': 'Bearer ' + dataBridgeSecret,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify(batch)
+                        body: JSON.stringify({ vessels: batch })
                     });
 
                     const bridgeResponseText = await bridgeResponse.text();
@@ -14216,7 +14216,11 @@
                         bridgePayload = null;
                     }
 
-                    if (bridgeResponse.status !== 200) {
+                    if (bridgeResponse.status === 404) {
+                        console.error('Error: El endpoint de Data Bridge no fue encontrado. Verifica la URL de recepción');
+                    }
+
+                    if (!bridgeResponse.ok) {
                         console.error('Error del servidor:', bridgeResponseText);
                         throw new Error(bridgePayload?.error || bridgePayload?.message || bridgeResponseText || `Data Bridge respondió ${bridgeResponse.status}`);
                     }
@@ -14225,7 +14229,7 @@
                     console.log(`[Data Bridge] Lote ${batchIndex + 1}/${dataBridgeBatches.length} enviado correctamente:`, bridgePayload);
                 }
 
-                console.log(`[Data Bridge] Exportación completa a /api/receive-vessels: ${acceptedCount}/${validatedPayload.length} buque(s).`);
+                console.log(`[Data Bridge] Exportación completa a receive-core-data: ${acceptedCount}/${validatedPayload.length} buque(s).`);
                 showToast(`✅ ${acceptedCount} de ${validatedPayload.length} buque${validatedPayload.length === 1 ? '' : 's'} enviado${validatedPayload.length === 1 ? '' : 's'} a Data Bridge.`);
             } catch (err) {
                 console.error('Error en exportación:', err?.status || 'client', err);
