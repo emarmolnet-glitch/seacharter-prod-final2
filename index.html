@@ -14970,18 +14970,6 @@
             }
         }
 
-        try {
-            const frozenReportStatusChannel = new BroadcastChannel('seacharter_broadcast');
-            frozenReportStatusChannel.onmessage = (event) => {
-                if (event.data && event.data.type === 'PENDING_FROZEN_REPORT_READY') {
-                    window.pending_frozen_report = event.data.pending_frozen_report;
-                    updatePendingFrozenReportButton();
-                }
-            };
-        } catch (err) {
-            console.error("No se pudo iniciar el canal de estado de informe congelado:", err);
-        }
-
         function toggleReportDropdown(event) {
             if (event) {
                 event.stopPropagation();
@@ -23679,7 +23667,7 @@
 
             while (Date.now() - startedAt < maximumWaitMs) {
                 await new Promise(resolve => setTimeout(resolve, 3000));
-                const response = await fetch(`/api/status/${encodeURIComponent(taskId)}`, {
+                const response = await fetch(`/api/syncPull/${encodeURIComponent(taskId)}`, {
                     headers: { 'Accept': 'application/json' },
                     cache: 'no-store'
                 });
@@ -23688,8 +23676,9 @@
                 if (!response.ok) {
                     throw new Error(task.error || `No se pudo consultar la auditoría (${response.status}).`);
                 }
-                if (task.status === 'completed') return task.result;
-                if (task.status === 'failed') {
+                const status = String(task.status || '').toUpperCase();
+                if (status === 'COMPLETED') return task.result;
+                if (status === 'FAILED') {
                     throw new Error(task.error || 'La auditoría legal no pudo completarse.');
                 }
             }
@@ -23698,7 +23687,7 @@
         }
 
         async function executeAsyncLegalAudit(payload) {
-            const response = await fetch('/api/legal-audit-tasks', {
+            const response = await fetch('/api/syncPush', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -38094,7 +38083,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.toggleWebDataBridgeFullScreen = toggleWebDataBridgeFullScreen;
     </script>
 
-    <!-- SeaCharter Calculations Engine Adjustments with IndexedDB and BroadcastChannel -->
+    <!-- SeaCharter Calculations Engine Adjustments with IndexedDB cache -->
     <script>
         const DB_NAME = 'SeaCharterDB';
         const DB_VERSION = 1;
@@ -39130,12 +39119,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (status) status.textContent = 'Live';
         }
 
-        // Initialize BroadcastChannel listener for seacharter_sync
-        const syncChannel = new BroadcastChannel('seacharter_sync');
-        const pendingMapDataMessages = new Map();
-        const MAP_DATA_RETRY_DELAY_MS = 300;
-        const MAP_DATA_MAX_ATTEMPTS = 3;
-
         function buildMapDataPayload(result) {
             const normalize = (points) => window.MapController?.normalizePoints(points) || [];
             const ballastPoints = normalize(result?.routes?.ballast?.coordinates || result?.routes?.ballast?.nodes || []);
@@ -39155,59 +39138,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             };
         }
 
-        function clearPendingMapData(messageId) {
-            const pending = pendingMapDataMessages.get(messageId);
-            if (!pending) return;
-            clearTimeout(pending.timer);
-            pendingMapDataMessages.delete(messageId);
-        }
-
-        function postMapDataWithRetry(payload, attempt = 1) {
-            syncChannel.postMessage(payload);
-            const timer = setTimeout(() => {
-                if (!pendingMapDataMessages.has(payload.messageId)) return;
-                if (attempt >= MAP_DATA_MAX_ATTEMPTS) {
-                    clearPendingMapData(payload.messageId);
-                    window.MapController?.renderMapData(payload);
-                    console.warn(`[MAP_DATA] Data Bridge no confirmó recepción tras ${attempt} intentos; se aplicó render local.`);
-                    return;
-                }
-                postMapDataWithRetry(payload, attempt + 1);
-            }, MAP_DATA_RETRY_DELAY_MS);
-            pendingMapDataMessages.set(payload.messageId, { payload, attempt, timer });
-        }
-
         window.sendMapDataToDataBridge = function(result) {
             const payload = buildMapDataPayload(result);
-            postMapDataWithRetry(payload);
+            window.MapController?.renderMapData(payload);
             return payload;
-        };
-
-        syncChannel.onmessage = async (event) => {
-            if (event.data?.type === 'MAP_DATA_ACK') {
-                clearPendingMapData(event.data.messageId);
-                return;
-            }
-            if (event.data?.type === 'MAP_DATA_EVENT') {
-                clearPendingMapData(event.data.messageId);
-                window.MapController?.renderMapData(event.data.payload);
-                return;
-            }
-            if (event.data && event.data.type === 'vessel_validated') {
-                const validatedVessel = event.data.vessel;
-                if (typeof updateConnectionStatusBar === 'function') updateConnectionStatusBar('secure');
-                console.log("[SYNC] Received vessel validation from Data Bridge:", validatedVessel);
-                await saveVesselToIndexedDB(validatedVessel);
-                appendCoreProDataBridgeReceiptLog(validatedVessel, event.data.persistence);
-                
-                // If the currently loaded vessel was validated, reload parameters
-                if (State.imo && String(State.imo) === String(validatedVessel.imo)) {
-                    loadVesselParamsFromIndexedDB(State.imo);
-                }
-                if (typeof updateConnectionStatusBar === 'function') {
-                    setTimeout(() => updateConnectionStatusBar('secure'), 900);
-                }
-            }
         };
 
         // Initialize defaults on load

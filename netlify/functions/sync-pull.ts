@@ -1,5 +1,5 @@
 import type { Config, Context } from "@netlify/functions";
-import { getLegalAuditTask } from "../../db/legal-audit-tasks.js";
+import { getSessionSyncTask } from "../../db/session-sync.js";
 
 const headers = {
   "cache-control": "no-store",
@@ -11,21 +11,21 @@ export default async (req: Request, context: Context) => {
   }
 
   const taskId = String(context.params.task_id || new URL(req.url).pathname.split("/").filter(Boolean).at(-1) || "");
-  const task = taskId ? await getLegalAuditTask(taskId) : null;
+  const task = taskId ? await getSessionSyncTask(taskId) : null;
   if (!task) {
     return Response.json({ error: "Tarea de auditoría no encontrada." }, { status: 404, headers });
   }
 
   return Response.json({
-    task_id: task.id,
+    task_id: task.taskId,
     status: task.status,
-    result: task.status === "completed" ? task.result : null,
-    error: task.status === "failed" ? task.errorMessage : null,
+    result: task.status === "COMPLETED" ? task.result : null,
+    error: task.status === "FAILED" ? task.errorMessage : null,
     created_at: task.createdAt,
     updated_at: task.updatedAt,
   }, { headers });
 };
 
 export const config: Config = {
-  path: "/api/status/:task_id",
+  path: "/api/syncPull/:task_id",
 };

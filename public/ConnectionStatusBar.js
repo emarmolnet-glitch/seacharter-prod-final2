@@ -4,7 +4,6 @@ import { createRoot } from "https://esm.sh/react-dom@18.3.1/client";
 const VERIFY_ENDPOINT = "/api/verify-connection";
 const POLLING_INTERVAL_MS = 30000;
 const REQUEST_TIMEOUT_MS = 8000;
-const PULSE_DURATION_MS = 1200;
 
 const STATUS_CONFIG = {
   secure: {
@@ -27,21 +26,8 @@ const STATUS_CONFIG = {
   },
 };
 
-function isValidBroadcastMessage(message) {
-  if (!message || typeof message !== "object") return false;
-  return Boolean(
-    message.type ||
-      message.event ||
-      message.payload ||
-      message.data ||
-      message.source === "SeaCharter Data Bridge" ||
-      message.source === "Core PRO",
-  );
-}
-
 export function ConnectionStatusBar() {
   const [status, setStatus] = useState("disconnected");
-  const [pulse, setPulse] = useState(false);
 
   const config = useMemo(() => STATUS_CONFIG[status] || STATUS_CONFIG.disconnected, [status]);
 
@@ -84,31 +70,11 @@ export function ConnectionStatusBar() {
     return () => window.clearInterval(intervalId);
   }, [verifyConnection]);
 
-  useEffect(() => {
-    if (typeof BroadcastChannel === "undefined") return undefined;
-    const channel = new BroadcastChannel("seacharter_broadcast");
-    let pulseTimeoutId = 0;
-
-    channel.onmessage = (event) => {
-      if (!isValidBroadcastMessage(event.data)) return;
-      setPulse(false);
-      window.requestAnimationFrame(() => {
-        setPulse(true);
-        pulseTimeoutId = window.setTimeout(() => setPulse(false), PULSE_DURATION_MS);
-      });
-    };
-
-    return () => {
-      window.clearTimeout(pulseTimeoutId);
-      channel.close();
-    };
-  }, []);
-
   return (
     React.createElement(
       "div",
       {
-        className: `connection-status-bar ${pulse ? "is-pulsing" : ""}`,
+        className: "connection-status-bar",
         "data-state": config.state,
         role: "status",
         "aria-live": "polite",

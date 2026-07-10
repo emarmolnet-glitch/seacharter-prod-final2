@@ -1206,16 +1206,7 @@
 
         function notifyFrozenReportReady() {
             if (!pending_frozen_report || !Array.isArray(pending_frozen_report.vessels) || pending_frozen_report.vessels.length === 0) return;
-            try {
-                const statusChannel = new BroadcastChannel('seacharter_broadcast');
-                statusChannel.postMessage({
-                    type: 'PENDING_FROZEN_REPORT_READY',
-                    pending_frozen_report: pending_frozen_report
-                });
-                statusChannel.close();
-            } catch (err) {
-                console.error("[CONGELAR_REPORTE] No se pudo notificar informe listo:", err);
-            }
+            window.pending_frozen_report = pending_frozen_report;
         }
 
         function loadPendingFrozenReport() {
@@ -1445,31 +1436,6 @@
                     addLog(`[WARNING] ${getTimestamp()} - Buque '${name}' (IMO ${imo}) DESCARTADO de forma segura localmente.`);
                 }
 
-                // Sincronizar con Core PRO via canal seacharter_sync
-                try {
-                    const syncChannel = new BroadcastChannel('seacharter_sync');
-                    syncChannel.postMessage({
-                        type: 'vessel_validated',
-                        vessel: {
-                            imo: safeImo,
-                            name: name,
-                            type: type,
-                            draft: draft,
-                            dwt: dwtVal,
-                            flag: flagVal,
-                            status: status,
-                            delta_historico: deltaDays
-                        },
-                        persistence: {
-                            postgres: apiSuccess,
-                            indexedDB: true
-                        }
-                    });
-                    syncChannel.close();
-                } catch (syncErr) {
-                    console.error("Error sending BroadcastChannel message:", syncErr);
-                }
-
                 pendingAudits = pendingAudits.filter(item => !(item.imo === imo && item.name === name));
 
                 card.style.transform = "translateX(50px)";
@@ -1494,52 +1460,11 @@
             }
         }
 
-        // Setup BroadcastChannel for Local-First synchronization
-        const localSyncChannel = new BroadcastChannel('seacharter_sync');
-        localSyncChannel.onmessage = (event) => {
-            if (event.data?.type === 'MAP_DATA') {
-                const payload = event.data;
-                window.dispatchEvent(new CustomEvent('seacharter:map-data', { detail: payload }));
-                localSyncChannel.postMessage({ type: 'MAP_DATA_ACK', messageId: payload.messageId });
-                localSyncChannel.postMessage({ type: 'MAP_DATA_EVENT', messageId: payload.messageId, payload });
-                addLog(`[MAP_DATA] ${getTimestamp()} - Ruta y puertos recibidos desde Core PRO y reenviados al controlador cartográfico.`);
-                return;
-            }
-            if (event.data && event.data.type === 'recibir-auditoria') {
-                receiveCoreProVessels(event.data, 'Core PRO');
-            }
-        };
-
         if (window.electronAPI && typeof window.electronAPI.onVesselsForAudit === 'function') {
             window.electronAPI.onVesselsForAudit((payload) => {
                 receiveCoreProVessels(payload, 'Core PRO IPC');
             });
         }
-
-        // Escuchar en seacharter_broadcast para capturar instantáneas consolidadas ('CONGELAR_REPORTE')
-        const broadcastChannel = new BroadcastChannel('seacharter_broadcast');
-        broadcastChannel.onmessage = (event) => {
-            if (event.data && event.data.type === 'CONGELAR_REPORTE') {
-                const buquesOriginales = extractIncomingVesselsPayload(event.data);
-                console.log("[CONGELAR_REPORTE] ¡Instantánea de buques recibida en Data Bridge!", buquesOriginales);
-
-                const buquesMapeados = mapFrozenReportVessels(buquesOriginales);
-                if (buquesMapeados.length > 0) {
-                    pending_frozen_report = {
-                        type: 'pending_frozen_report',
-                        created_at: event.data.created_at || new Date().toISOString(),
-                        vessels: buquesMapeados
-                    };
-                    window.pending_frozen_report = pending_frozen_report;
-                    addLog(`[CONGELAR_REPORTE] ${getTimestamp()} - pending_frozen_report creado con ${buquesMapeados.length} buques desde Core PRO.`);
-                    notifyFrozenReportReady();
-                } else {
-                    addLog(`[CONGELAR_REPORTE] ${getTimestamp()} - La instantánea recibida no contiene buques válidos.`);
-                }
-            } else if (event.data && event.data.type === 'CARGAR_INFORME_AUTOMATICO') {
-                loadPendingFrozenReport();
-            }
-        };
 
         // Initialize
         populateInitialLogs();

@@ -3,6 +3,8 @@ import { dirname, resolve } from "node:path";
 import { defineConfig } from "vite";
 
 const legacyAssets = [
+  "_headers",
+  "_redirects",
   "npl-data-analysis-engine.js",
   "npl-secret-module.js",
   "wpi.csv",

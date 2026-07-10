@@ -1,9 +1,9 @@
 import {
-  completeLegalAuditTask,
-  failLegalAuditTask,
-  getLegalAuditTask,
-  markLegalAuditTaskProcessing,
-} from "../../db/legal-audit-tasks.js";
+  completeSessionSyncTask,
+  failSessionSyncTask,
+  getSessionSyncTask,
+  markSessionSyncTaskProcessing,
+} from "../../db/session-sync.js";
 import { processLegalAuditPayload, type GeminiPayload } from "./ai-legal-audit.js";
 
 export default async (req: Request) => {
@@ -14,16 +14,16 @@ export default async (req: Request) => {
   if (!taskId) return;
 
   try {
-    const task = await getLegalAuditTask(taskId);
-    if (!task || task.status === "completed") return;
+    const task = await getSessionSyncTask(taskId);
+    if (!task || task.status === "COMPLETED") return;
 
-    await markLegalAuditTaskProcessing(taskId);
+    await markSessionSyncTaskProcessing(taskId);
     const result = await processLegalAuditPayload(task.requestPayload as GeminiPayload);
-    await completeLegalAuditTask(taskId, result);
+    await completeSessionSyncTask(taskId, result);
   } catch (error) {
     const message = error instanceof Error && error.message
       ? error.message
       : "No se pudo completar la auditoría legal.";
-    await failLegalAuditTask(taskId, message);
+    await failSessionSyncTask(taskId, message);
   }
 };
