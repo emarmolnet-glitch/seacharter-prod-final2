@@ -1,1 +1,0 @@
--- Historial restaurado para bypass.
