@@ -16461,13 +16461,20 @@
             dataList.appendChild(fragment);
         }
 
-        function showToast(message, isSpinner = false) {
+        function showToast(message, isSpinner = false, variant = 'success') {
             const currentLang = document.getElementById('language-selector')?.value || 'es';
             const translatedMessage = translateToastMessage(message, currentLang);
             const toast = document.getElementById('toast');
             const icon = isSpinner
                 ? `<i class="fa-solid fa-spinner fa-spin text-indigo-400 mr-2"></i>`
-                : `<i class="fa-solid fa-check-circle text-green-400 mr-2"></i>`;
+                : variant === 'warning'
+                    ? `<i class="fa-solid fa-triangle-exclamation text-amber-400 mr-2"></i>`
+                    : variant === 'error'
+                        ? `<i class="fa-solid fa-circle-exclamation text-red-400 mr-2"></i>`
+                        : `<i class="fa-solid fa-check-circle text-green-400 mr-2"></i>`;
+            toast.classList.toggle('border-amber-500', variant === 'warning');
+            toast.classList.toggle('border-red-500', variant === 'error');
+            toast.classList.toggle('bg-red-950', variant === 'error');
             toast.innerHTML = `${icon} ${translatedMessage}`;
             toast.classList.remove('opacity-0', 'translate-y-4');
             setTimeout(() => {
@@ -29922,10 +29929,11 @@ ADDITIONAL NOTES:
         }
 
         function formatMarkdownBold(text) {
-            if (!text) return "";
+            if (text === null || text === undefined || text === '') return "";
+            const safeText = typeof text === 'string' ? text : toAuditText(text);
             
             // Reemplazar negrita (**texto**) con strong
-            let formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-slate-800">$1</strong>');
+            let formatted = safeText.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-slate-800">$1</strong>');
             
             // Convertir saltos de línea y formatear según sintaxis markdown (tablas, listas, cabeceras)
             const lines = formatted.split('\n');
@@ -30499,11 +30507,33 @@ ADDITIONAL NOTES:
         }
 
         const STRICT_AUDIT_REQUIREMENTS = [
-            { key: 'puertosInforme', module: 'Calculadora' },
-            { key: 'viabilidad', module: 'Calculadora' },
-            { key: 'calculoFlete', module: 'Calculadora' },
-            { key: 'polizaAnalizada', module: 'GENCON/Alternativa' }
+            { key: 'puertosInforme', message: '⚠️ Bloqueado: Faltan los datos del puerto. Ve al módulo Mapa/Calculadora.' },
+            { key: 'viabilidad', message: '⚠️ Bloqueado: Falta el cálculo de viabilidad.' },
+            { key: 'polizaAnalizada', message: '⚠️ Bloqueado: Sube o pega un documento para auditar.' }
         ];
+
+        function toAuditText(value, fallback = '') {
+            if (typeof value === 'string') return value;
+            if (value === null || value === undefined) return fallback;
+            if (typeof value === 'object') {
+                try {
+                    return JSON.stringify(value);
+                } catch (error) {
+                    console.warn('No se pudo serializar un dato de auditoría.', error);
+                    return fallback;
+                }
+            }
+            return String(value);
+        }
+
+        function showAuditGateError(message) {
+            const errorBox = document.getElementById('errorBox');
+            if (errorBox) {
+                errorBox.innerText = message;
+                errorBox.classList.remove('hidden');
+            }
+            if (typeof showToast === 'function') showToast(message, false, 'warning');
+        }
 
         function hasStrictAuditData(value) {
             if (!value || typeof value !== 'object') return false;
@@ -30512,18 +30542,15 @@ ADDITIONAL NOTES:
 
         function getStrictAuditGateError(data) {
             const missingRequirement = STRICT_AUDIT_REQUIREMENTS.find(({ key }) => !hasStrictAuditData(data?.[key]));
-            return missingRequirement
-                ? `Auditoría bloqueada: Completa ${missingRequirement.module} antes de continuar.`
-                : '';
+            return missingRequirement?.message || '';
         }
 
         function buildStrictAuditSessionData(policyText) {
             const calculatorData = hasValidMasterCalculatorData() ? gatherMasterAuditData() : null;
             const policyStandard = State.charterPartyStandard
                 || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
-            const normalizedPolicyText = String(policyText || '').trim();
-            const hasPolicy = Boolean(normalizedPolicyText)
-                && /GENCON|ASBATANKVOY|Recap|Charter|Fletamento|P[oó]liza|Alternativa/i.test(normalizedPolicyText);
+            const normalizedPolicyText = toAuditText(policyText).trim();
+            const hasPolicy = Boolean(normalizedPolicyText);
 
             return {
                 puertosInforme: Object.keys(masterReportWorkflowState.portInfoReports || {}).length
@@ -30611,23 +30638,15 @@ ADDITIONAL NOTES:
         }
 
         async function analyzeDocument() {
-            const text = document.getElementById('recapInput').value.trim();
+            const text = toAuditText(document.getElementById('recapInput')?.value).trim();
             const btn = document.getElementById('analyzeBtn');
 
             document.getElementById('errorBox').classList.add('hidden');
 
-            if (!text) {
-                document.getElementById('errorBox').innerText = "Por favor, pega el texto de un Recap o sube un archivo para analizar.";
-                document.getElementById('errorBox').classList.remove('hidden');
-                return;
-            }
-
             const strictAuditData = buildStrictAuditSessionData(text);
             const strictAuditGateError = getStrictAuditGateError(strictAuditData);
             if (strictAuditGateError) {
-                document.getElementById('errorBox').innerText = strictAuditGateError;
-                document.getElementById('errorBox').classList.remove('hidden');
-                if (typeof showToast === 'function') showToast(strictAuditGateError);
+                showAuditGateError(strictAuditGateError);
                 return;
             }
 
@@ -30645,9 +30664,9 @@ ADDITIONAL NOTES:
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Procesando análisis legal...';
 
             try {
-                const cpStandard = State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
-                const countryPol = getCountryFromPort(State.pol) || "desconocido";
-                const countryPod = getCountryFromPort(State.pod) || "desconocido";
+                const cpStandard = toAuditText(State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON'), 'GENCON');
+                const countryPol = toAuditText(getCountryFromPort(toAuditText(State.pol)) || 'desconocido', 'desconocido');
+                const countryPod = toAuditText(getCountryFromPort(toAuditText(State.pod)) || 'desconocido', 'desconocido');
                 const polUnstable = isUnstableCountry(countryPol);
                 const podUnstable = isUnstableCountry(countryPod);
                 const warRiskApplies = polUnstable || podUnstable;
@@ -30684,29 +30703,33 @@ You MUST structure "auditoria_contrato_html" with the five mandatory sections fr
                 const charterPolicyInstruction = `
 
 [POLÍTICA DE PÓLIZA DE FLETAMENTO DE REFERENCIA (CHARTER PARTY POLICY)]:
-- Buque: ${State.vessel || 'No especificado'} (DWT: ${State.dwt || 0}, Clase: ${State.class || 'No especificada'})
-- Puerto de Carga (POL): ${State.pol || 'No especificado'} (País: ${countryPol})
-- Puerto de Descarga (POD): ${State.pod || 'No especificado'} (País: ${countryPod})
-- Tipo de Carga: ${State.cargoTypeManual || State.cargoType || 'No especificado'} (${State.cargo || 0} MT)
-- Tarifas de Carga/Descarga: Carga ${State.loadRate || 0} MT/día, Descarga ${State.dischRate || 0} MT/día
-- Tarifa de Demora (Demurrage): USD ${State.demurrage || 0} por día
-- Flete: USD ${State.freightSell || 0} por TM (${cpStandard})
-- Regulación EU ETS: ${State.applyEtsSurcharge === 'YES' ? 'Aplica Recargo ETS' : 'Integrado en el flete'} (Precio CO2: USD ${State.euCarbonPrice || 80}/ton)
+- Buque: ${toAuditText(State.vessel, 'No especificado')} (DWT: ${toAuditText(State.dwt, '0')}, Clase: ${toAuditText(State.class, 'No especificada')})
+- Puerto de Carga (POL): ${toAuditText(State.pol, 'No especificado')} (País: ${countryPol})
+- Puerto de Descarga (POD): ${toAuditText(State.pod, 'No especificado')} (País: ${countryPod})
+- Tipo de Carga: ${toAuditText(State.cargoTypeManual || State.cargoType, 'No especificado')} (${toAuditText(State.cargo, '0')} MT)
+- Tarifas de Carga/Descarga: Carga ${toAuditText(State.loadRate, '0')} MT/día, Descarga ${toAuditText(State.dischRate, '0')} MT/día
+- Tarifa de Demora (Demurrage): USD ${toAuditText(State.demurrage, '0')} por día
+- Flete: USD ${toAuditText(State.freightSell, '0')} por TM (${cpStandard})
+- Regulación EU ETS: ${State.applyEtsSurcharge === 'YES' ? 'Aplica Recargo ETS' : 'Integrado en el flete'} (Precio CO2: USD ${toAuditText(State.euCarbonPrice, '80')}/ton)
 
 [INSTRUCCIÓN DE AUDITORÍA]:
 Compara el documento suministrado (que puede ser un contrato, carta de crédito (L/C), factura comercial, packing list u otro documento relacionado con la mercancía o el viaje) contra esta Política de Póliza de Fletamento y el estándar aplicable (${cpStandard}). Identifica discrepancias graves, contradicciones directas, riesgos de retraso operativos (por clima, burocracia, marea, etc.), o cargos extra imprevistos que puedan afectar negativamente al armador o al fletador y comprometer la viabilidad comercial de la travesía.`;
 
-                const dynamicSystemPrompt = DEFINITIVE_SYSTEM_PROMPT + warRiskInstruction + wibonWiponInstruction + genconInstruction + charterPolicyInstruction;
+                const dynamicSystemPrompt = [DEFINITIVE_SYSTEM_PROMPT, warRiskInstruction, wibonWiponInstruction, genconInstruction, charterPolicyInstruction]
+                    .map((value) => toAuditText(value))
+                    .join('');
 
-                let parts = [];
+                const parts = [];
                 parts.push({ text: "Analiza el siguiente documento y devuélveme la auditoría en formato JSON estructurado según el esquema del System Prompt. \n\nDOCUMENTO:\n" + text });
                 
                 // If there's an image photograph or a PDF document, include it as inlineData for native multimodal processing and OCR
-                if (State.uploadedFile && State.uploadedFile.base64 && (State.uploadedFile.type.startsWith('image/') || State.uploadedFile.type === 'application/pdf')) {
+                const uploadedMimeType = toAuditText(State.uploadedFile?.type);
+                const uploadedBase64 = toAuditText(State.uploadedFile?.base64);
+                if (uploadedBase64 && (uploadedMimeType.startsWith('image/') || uploadedMimeType === 'application/pdf')) {
                     parts.push({
                         inlineData: {
-                            mimeType: State.uploadedFile.type,
-                            data: State.uploadedFile.base64
+                            mimeType: uploadedMimeType,
+                            data: uploadedBase64
                         }
                     });
                 }
@@ -30762,14 +30785,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 };
 
                 const data = await executeAsyncLegalAudit(payload);
-                const jsonText = data.candidates[0].content.parts[0].text;
+                const jsonText = toAuditText(data?.candidates?.[0]?.content?.parts?.[0]?.text);
+                if (!jsonText) throw new Error('La IA no devolvió un resultado de auditoría válido.');
                 const result = JSON.parse(jsonText);
-                const detectedType = String(result.tipo_documento_detectado || '');
+                const detectedType = toAuditText(result.tipo_documento_detectado);
                 const isContractAudit = /GENCON|ASBATANKVOY|P[oó]liza|Recap|Charter|Fletamento/i.test(detectedType);
-                const contractAuditHtml = result.auditoria_contrato_html || '';
-                const operationalAuditHtml = result.auditoria_operativa_html || result.auditoria_fletador || result.auditoria_armador || '';
-                const armadorAudit = result.auditoria_armador || formatMarkdownBold(result.proforma || '');
-                const fletadorAudit = result.auditoria_fletador || formatMarkdownBold(result.estrategia || '');
+                const contractAuditHtml = toAuditText(result.auditoria_contrato_html);
+                const operationalAuditHtml = toAuditText(result.auditoria_operativa_html || result.auditoria_fletador || result.auditoria_armador);
+                const armadorAudit = toAuditText(result.auditoria_armador) || formatMarkdownBold(result.proforma);
+                const fletadorAudit = toAuditText(result.auditoria_fletador) || formatMarkdownBold(result.estrategia);
                 if (isContractAudit && (contractAuditHtml.trim() || operationalAuditHtml.trim() || armadorAudit.trim() || fletadorAudit.trim())) {
                     markMasterReportTrigger('legalReportGenerated', {
                         detectedType,
@@ -30787,7 +30811,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
                 const docBadge = document.getElementById('doc-badge');
                 if (docBadge && result.tipo_documento_detectado) {
-                    docBadge.innerText = result.tipo_documento_detectado;
+                    docBadge.innerText = detectedType;
                     docBadge.classList.remove('hidden');
                 }
 
@@ -30806,8 +30830,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
 
                 document.getElementById('resProforma').innerHTML = armadorAudit;
-                document.getElementById('resRiesgos').innerHTML = fletadorAudit ? `<li>${fletadorAudit}</li>` : (result.riesgos || []).map(r => `<li>${formatMarkdownBold(r)}</li>`).join('');
-                document.getElementById('resClausulas').innerHTML = (result.clausulas || []).map(c => `
+                const auditRisks = Array.isArray(result.riesgos) ? result.riesgos : [];
+                const auditClauses = Array.isArray(result.clausulas) ? result.clausulas : [];
+                document.getElementById('resRiesgos').innerHTML = fletadorAudit ? `<li>${fletadorAudit}</li>` : auditRisks.map(r => `<li>${formatMarkdownBold(r)}</li>`).join('');
+                document.getElementById('resClausulas').innerHTML = auditClauses.map(c => `
                     <div class="bg-slate-50 p-4 rounded border border-slate-200">
                         <p class="text-sm font-mono text-slate-800 whitespace-pre-wrap">${formatMarkdownBold(c)}</p>
                     </div>
@@ -30816,7 +30842,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 document.getElementById('resEstrategia').innerHTML = laytimeExcelData.length
                     ? formatMarkdownBold(`### Laytime Excel Data\n${laytimeExcelData.map(row => `- ${row.Fecha || ''} ${row.Desde || ''}-${row.Hasta || ''}: ${row.Evento || ''} | ${row.Tiempo_Plancha_Contado || ''} | ${row.Argumento_Defensa || ''}`).join('\n')}`)
                     : formatMarkdownBold(result.estrategia || '');
-                document.getElementById('resEmail').value = result.email || '';
+                document.getElementById('resEmail').value = toAuditText(result.email);
 
                 // Actualizar identificador de referencia y rellenar vista imprimible
                 const refEl = cpStandard === 'ASBATANKVOY' ? document.getElementById('asb-ref') : document.getElementById('gc-ref');
@@ -30833,8 +30859,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     : (operationalAuditHtml || armadorAudit);
                 document.getElementById('print-audit-riesgos').innerHTML = hasMasterContractReport || operationalAuditHtml
                     ? ''
-                    : (fletadorAudit ? `<li>${fletadorAudit}</li>` : (result.riesgos || []).map(r => `<li>${formatMarkdownBold(r)}</li>`).join(''));
-                document.getElementById('print-audit-clausulas').innerHTML = (result.clausulas || []).map(c => `
+                    : (fletadorAudit ? `<li>${fletadorAudit}</li>` : auditRisks.map(r => `<li>${formatMarkdownBold(r)}</li>`).join(''));
+                document.getElementById('print-audit-clausulas').innerHTML = auditClauses.map(c => `
                     <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; border-radius: 6px; margin-bottom: 8px;">
                         <p style="font-size: 8.5pt; color: #1e293b; font-family: monospace; white-space: pre-wrap; margin: 0;">${formatMarkdownBold(c)}</p>
                     </div>
@@ -30842,7 +30868,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 document.getElementById('print-audit-estrategia').innerHTML = laytimeExcelData.length
                     ? formatMarkdownBold(`### Laytime Excel Data\n${laytimeExcelData.map(row => `- ${row.Fecha || ''} ${row.Desde || ''}-${row.Hasta || ''}: ${row.Evento || ''} | ${row.Tiempo_Plancha_Contado || ''} | ${row.Argumento_Defensa || ''}`).join('\n')}`)
                     : formatMarkdownBold(result.estrategia || '');
-                document.getElementById('print-audit-email').innerText = result.email || '';
+                document.getElementById('print-audit-email').innerText = toAuditText(result.email);
 
                 document.getElementById('loadingState').classList.add('hidden');
                 document.getElementById('resultsContent').classList.remove('hidden');
