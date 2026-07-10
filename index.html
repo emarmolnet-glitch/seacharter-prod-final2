@@ -587,19 +587,20 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 0.62rem;
-            width: min(100%, 262px);
+            gap: 0.5rem;
+            width: min(100%, 210px);
             min-width: 0;
-            padding: 0.46rem 0.72rem 0.64rem;
+            padding: 0.37rem 0.58rem 0.51rem;
             border: 1px solid #CBD5E1;
-            border-radius: 0.6rem;
-            background: rgba(255, 255, 255, 0.82);
+            border-radius: 0.48rem;
+            background: rgba(255, 255, 255, 0.88);
             box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
             backdrop-filter: blur(10px) saturate(1.08);
             -webkit-backdrop-filter: blur(10px) saturate(1.08);
             color: var(--text);
             overflow: hidden;
-            flex: 0 0 262px;
+            flex: 0 0 210px;
+            transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, background 180ms ease;
         }
 
         .connection-status-bar::before {
@@ -612,6 +613,18 @@
                         radial-gradient(circle at 84% 50%, color-mix(in srgb, var(--connection-accent) 9%, transparent), transparent 32%);
             opacity: 0.95;
             pointer-events: none;
+            transition: opacity 180ms ease;
+        }
+
+        .connection-status-bar:hover {
+            border-color: color-mix(in srgb, var(--connection-accent) 36%, #CBD5E1);
+            background: rgba(255, 255, 255, 0.94);
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.1), 0 0 0 3px color-mix(in srgb, var(--connection-accent) 10%, transparent);
+            transform: translateY(-1px);
+        }
+
+        .connection-status-bar:hover::before {
+            opacity: 1;
         }
 
         .connection-status-node {
@@ -619,7 +632,7 @@
             z-index: 1;
             display: inline-flex;
             align-items: center;
-            gap: 0.32rem;
+            gap: 0.26rem;
             min-width: max-content;
             color: var(--connection-muted);
         }
@@ -627,19 +640,19 @@
         .connection-status-icon {
             display: inline-grid;
             place-items: center;
-            width: 1.38rem;
-            height: 1.38rem;
+            width: 1.1rem;
+            height: 1.1rem;
             border: 1px solid #CBD5E1;
-            border-radius: 0.48rem;
+            border-radius: 0.38rem;
             background: #F8FAFC;
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
             transition: color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
             flex: 0 0 auto;
-            font-size: 0.76rem;
+            font-size: 0.61rem;
         }
 
         .connection-status-label {
-            font-size: 0.56rem;
+            font-size: 0.5rem;
             font-weight: 800;
             line-height: 1;
             letter-spacing: 0.06em;
@@ -650,10 +663,10 @@
         .connection-pipeline {
             position: relative;
             z-index: 1;
-            width: clamp(72px, 7vw, 96px);
-            height: 14px;
+            width: clamp(58px, 5.6vw, 77px);
+            height: 12px;
             color: var(--connection-accent);
-            flex: 1 1 86px;
+            flex: 1 1 69px;
         }
 
         .connection-pipeline svg {
@@ -667,7 +680,7 @@
         .connection-pipe-flow {
             fill: none;
             stroke-linecap: round;
-            stroke-width: 3.2;
+            stroke-width: 2.6;
         }
 
         .connection-pipe-track {
@@ -680,13 +693,32 @@
             filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--connection-accent) 28%, transparent));
         }
 
+        .connection-live-icon {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            z-index: 2;
+            display: inline-grid;
+            place-items: center;
+            width: 1rem;
+            height: 1rem;
+            transform: translate(-50%, -50%);
+            border: 1px solid color-mix(in srgb, var(--connection-accent) 40%, #CBD5E1);
+            border-radius: 999px;
+            background: #FFFFFF;
+            color: var(--connection-accent);
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.84), 0 0 10px color-mix(in srgb, var(--connection-accent) 14%, transparent);
+            font-size: 0.52rem;
+            line-height: 1;
+        }
+
         .connection-status-text {
             position: absolute;
             left: 50%;
-            bottom: 0.18rem;
+            bottom: 0.14rem;
             z-index: 2;
             transform: translateX(-50%);
-            font-size: 0.48rem;
+            font-size: 0.43rem;
             font-weight: 900;
             letter-spacing: 0.08em;
             line-height: 1;
@@ -705,11 +737,14 @@
             color: var(--accent);
             border-color: color-mix(in srgb, var(--accent) 44%, #CBD5E1);
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 0 3px color-mix(in srgb, var(--accent) 11%, transparent);
-            animation: connectionNodePulse 2.2s ease-in-out infinite;
         }
 
         .connection-status-bar[data-state="secure"] .connection-pipe-flow {
             animation: connectionPipeFlow 1.55s linear infinite;
+        }
+
+        .connection-status-bar[data-state="secure"] .connection-live-icon {
+            animation: connectionLiveHeartbeat 2s ease-in-out infinite;
         }
 
         .connection-status-bar[data-state="unauthorized"] {
@@ -759,23 +794,28 @@
             50% { transform: scale(1.04); }
         }
 
+        @keyframes connectionLiveHeartbeat {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
         @keyframes connectionDataPulse {
-            0% { stroke-width: 3.2; opacity: 0.55; }
-            45% { stroke-width: 5.4; opacity: 1; }
-            100% { stroke-width: 3.2; opacity: 0.82; }
+            0% { stroke-width: 2.6; opacity: 0.55; }
+            45% { stroke-width: 4.3; opacity: 1; }
+            100% { stroke-width: 2.6; opacity: 0.82; }
         }
 
         @media (max-width: 1180px) {
             .connection-status-bar {
-                flex: 0 0 228px;
-                width: 228px;
-                gap: 0.48rem;
-                padding-inline: 0.6rem;
+                flex: 0 0 182px;
+                width: 182px;
+                gap: 0.38rem;
+                padding-inline: 0.48rem;
             }
 
             .connection-pipeline {
-                width: 62px;
-                flex-basis: 62px;
+                width: 50px;
+                flex-basis: 50px;
             }
         }
 
@@ -786,10 +826,10 @@
             }
 
             .connection-status-bar {
-                width: 132px;
-                flex-basis: 132px;
-                gap: 0.28rem;
-                padding: 0.34rem 0.4rem;
+                width: 106px;
+                flex-basis: 106px;
+                gap: 0.22rem;
+                padding: 0.27rem 0.32rem;
             }
 
             .connection-status-label,
@@ -798,8 +838,8 @@
             }
 
             .connection-pipeline {
-                width: 42px;
-                flex-basis: 42px;
+                width: 34px;
+                flex-basis: 34px;
             }
         }
 
@@ -12262,7 +12302,8 @@
         };
         const ROUTE_FIT_BOUNDS_OPTIONS = { padding: [50, 50], maxZoom: 18 };
         const ROUTE_LADEN_LINE_COLOR = SEA_MAP_STYLE_CONFIG?.colors?.routeLine || '#2a7b9b';
-        const ROUTE_BALLAST_LINE_COLOR = '#8ba6b5';
+        const ROUTE_BALLAST_LINE_COLOR = SEA_MAP_STYLE_CONFIG?.colors?.routeLine || '#2a7b9b';
+        const MARITIME_ROUTING_API_ENDPOINT = '/api/route';
         const MARITIME_ICON_PATHS = SEA_MAP_STYLE_CONFIG?.icons || {
             load: '/Ancla Load.svg',
             discharge: '/Ancla Discharge.svg'
@@ -12391,6 +12432,189 @@
                 .map((coord) => [Number(coord[1]), Number(coord[0])])
                 .filter((coord) => Number.isFinite(coord[0]) && Number.isFinite(coord[1]));
         }
+
+        function getDrawableRouteCoordinates(route, fallbackCoordinates, label) {
+            if (route?.coordinates?.length > 1) return route.coordinates;
+            const fallback = Array.isArray(fallbackCoordinates) ? fallbackCoordinates : [];
+            if (fallback.length > 1) {
+                console.warn(`[Route Map] ${label || 'Ruta'} sin polyline marítima disponible. Se dibuja línea recta de respaldo.`);
+            }
+            return fallback;
+        }
+
+        function normalizePointForLeaflet(point, coordinateOrder = 'latLon') {
+            if (Array.isArray(point) && point.length >= 2) {
+                const first = Number(point[0]);
+                const second = Number(point[1]);
+                const lat = coordinateOrder === 'lonLat' ? second : first;
+                const lon = coordinateOrder === 'lonLat' ? first : second;
+                return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
+                    ? [lat, lon]
+                    : null;
+            }
+
+            if (point && typeof point === 'object') {
+                const rawOrder = point.coordinateOrder === 'lonLat' || point.order === 'lonLat' ? 'lonLat' : coordinateOrder;
+                const nested = point.coordinates || point.coordinate || point.point;
+                if (Array.isArray(nested)) {
+                    const nestedPoint = normalizePointForLeaflet(nested, rawOrder);
+                    if (nestedPoint) return nestedPoint;
+                }
+
+                const lat = Number(point.lat ?? point.latitude ?? point.Latitude ?? point.LAT);
+                const lon = Number(point.lon ?? point.lng ?? point.longitude ?? point.Longitude ?? point.LON ?? point.LNG);
+                return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
+                    ? [lat, lon]
+                    : null;
+            }
+
+            return null;
+        }
+
+        function normalizePointsForLeaflet(points, coordinateOrder = 'latLon') {
+            return (Array.isArray(points) ? points : [])
+                .map((point) => normalizePointForLeaflet(point, coordinateOrder))
+                .filter(Boolean);
+        }
+
+        function getRouteEndpointLabel(endpoint, fallback) {
+            return String(endpoint?.name || endpoint?.port || endpoint?.label || fallback || '').trim() || fallback || 'Puerto';
+        }
+
+        function ensureLeafletRouteLinePane(routeMap = map) {
+            if (!routeMap || isMapboxRouteMap(routeMap) || typeof routeMap.createPane !== 'function') return null;
+            const paneName = 'routeLinePane';
+            const pane = routeMap.getPane?.(paneName) || routeMap.createPane(paneName);
+            if (pane) {
+                pane.style.zIndex = '650';
+                pane.style.pointerEvents = 'none';
+            }
+            return paneName;
+        }
+
+        function removeMapboxRouteLayers(routeMap, id) {
+            if (!routeMap || !id) return;
+            [`${id}-arrows`, `${id}-line`].forEach((layerId) => {
+                if (routeMap.getLayer(layerId)) routeMap.removeLayer(layerId);
+            });
+            const sourceId = `${id}-source`;
+            if (routeMap.getSource(sourceId)) routeMap.removeSource(sourceId);
+        }
+
+        function dibujarRuta(puntos, options = {}) {
+            const routeMap = options.map || map;
+            const id = options.id || 'route-live';
+            const label = options.label || id;
+            const origin = options.origin || null;
+            const destination = options.destination || null;
+            const polLabel = getRouteEndpointLabel(origin, 'POL');
+            const podLabel = getRouteEndpointLabel(destination, 'POD');
+            const normalizedPoints = normalizePointsForLeaflet(puntos, options.coordinateOrder || 'latLon');
+            const fallbackPoints = origin && destination ? normalizePointsForLeaflet([origin, destination]) : [];
+            const usingFallback = normalizedPoints.length < 2 && fallbackPoints.length > 1;
+            const leafletPoints = usingFallback
+                ? fallbackPoints
+                : pinRouteEndpoints(normalizedPoints, origin, destination);
+
+            console.log(`[Route Map] ${label} puntos [lat, lon]:`, leafletPoints);
+
+            if (usingFallback || leafletPoints.length < 2) {
+                console.warn(`Ruta no disponible para este par de puertos: ${polLabel} -> ${podLabel}`);
+            }
+
+            if (!routeMap || leafletPoints.length < 2) {
+                console.warn(`[Route Map] ${label} no se pudo pintar: mapa no disponible o polyline insuficiente.`, { routeMap: Boolean(routeMap), puntos: leafletPoints });
+                return { painted: false, leafletPoints: [] };
+            }
+
+            if (isMapboxRouteMap(routeMap)) {
+                const lngLatCoords = normalizeRouteCoordinatesForMapbox(leafletPoints);
+                if (lngLatCoords.length < 2) {
+                    console.warn(`[Route Map] ${label} no se pudo pintar en Mapbox: coordenadas [lng, lat] inválidas.`, lngLatCoords);
+                    return { painted: false, leafletPoints, lngLatCoords };
+                }
+
+                removeMapboxRouteLayers(routeMap, id);
+                routeMap.addSource(`${id}-source`, {
+                    type: 'geojson',
+                    data: {
+                        type: 'Feature',
+                        geometry: { type: 'LineString', coordinates: lngLatCoords },
+                        properties: { planned: true }
+                    }
+                });
+                const dashArray = Array.isArray(options.dashArray) ? options.dashArray : [5, 10];
+                routeMap.addLayer({
+                    id: `${id}-line`,
+                    type: 'line',
+                    source: `${id}-source`,
+                    layout: { 'line-join': 'round', 'line-cap': 'round' },
+                    paint: {
+                        'line-color': options.color || ROUTE_LADEN_LINE_COLOR,
+                        'line-width': options.weight || 3,
+                        'line-opacity': Number.isFinite(options.opacity) ? options.opacity : 1,
+                        'line-dasharray': dashArray
+                    }
+                });
+
+                const arrowIconId = ensureMapboxRouteArrowIcon(routeMap);
+                if (arrowIconId && typeof routeMap.hasImage === 'function' && routeMap.hasImage(arrowIconId)) {
+                    routeMap.addLayer({
+                        id: `${id}-arrows`,
+                        type: 'symbol',
+                        source: `${id}-source`,
+                        layout: {
+                            'symbol-placement': 'line',
+                            'symbol-spacing': 130,
+                            'icon-image': arrowIconId,
+                            'icon-size': 0.42,
+                            'icon-allow-overlap': true,
+                            'icon-ignore-placement': true,
+                            'icon-rotation-alignment': 'map'
+                        },
+                        paint: { 'icon-opacity': Number.isFinite(options.arrowOpacity) ? options.arrowOpacity : 1 }
+                    });
+                }
+
+                [`${id}-line`, `${id}-arrows`].forEach((layerId) => {
+                    if (routeMap.getLayer(layerId) && typeof routeMap.moveLayer === 'function') {
+                        try { routeMap.moveLayer(layerId); } catch (_) {}
+                    }
+                });
+                if (lngLatCoords.length > 1 && typeof mapboxgl !== 'undefined') {
+                    const bounds = new mapboxgl.LngLatBounds();
+                    lngLatCoords.forEach((coord) => bounds.extend(coord));
+                    routeMap.fitBounds(bounds, { padding: 50, maxZoom: 8, duration: 600 });
+                }
+                return { painted: true, leafletPoints, lngLatCoords };
+            }
+
+            if (typeof L === 'undefined' || typeof L.polyline !== 'function') {
+                console.warn(`[Route Map] ${label} no se pudo pintar: Leaflet no está disponible.`);
+                return { painted: false, leafletPoints };
+            }
+
+            const pane = ensureLeafletRouteLinePane(routeMap);
+            const polyline = L.polyline(leafletPoints, {
+                color: options.color || ROUTE_LADEN_LINE_COLOR,
+                weight: options.weight || 3,
+                opacity: Number.isFinite(options.opacity) ? options.opacity : 1,
+                dashArray: options.leafletDashArray || '5, 10',
+                pane: pane || undefined,
+                interactive: false
+            });
+
+            polyline.addTo(options.layer || routeMarkerLayer || routeMap);
+            if (typeof polyline.bringToFront === 'function') {
+                polyline.bringToFront();
+                requestAnimationFrame(() => polyline.bringToFront());
+            }
+            if (typeof polyline.getBounds === 'function' && typeof routeMap.fitBounds === 'function') {
+                routeMap.fitBounds(polyline.getBounds(), { padding: [50, 50] });
+            }
+            return { painted: true, leafletPoints, layer: polyline };
+        }
+        window.dibujarRuta = dibujarRuta;
 
         function getCurrentRoutePortNames() {
             const polEl = document.getElementById('port-pol');
@@ -17046,6 +17270,7 @@
 
         function ensureRouteOverlayLayers(routeMap = map) {
             if (!routeMap || isMapboxRouteMap(routeMap) || typeof L === 'undefined') return;
+            ensureLeafletRouteLinePane(routeMap);
             if (!routeMarkerLayer) {
                 routeMarkerLayer = L.layerGroup().addTo(routeMap);
             } else if (!routeMap.hasLayer(routeMarkerLayer)) {
@@ -17267,6 +17492,106 @@
             }
         }
 
+        function normalizeMaritimeRouteCoordinates(coordinates = [], coordinateOrder = 'latLon') {
+            return normalizePointsForLeaflet(coordinates, coordinateOrder);
+        }
+
+        async function requestMaritimeRouteSegment(origin, destination) {
+            const payload = { origin, destination };
+            const response = await fetch(MARITIME_ROUTING_API_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const responseText = await response.text().catch(() => '');
+                console.warn('[Routing Engine] /route response error:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    payload,
+                    response: responseText
+                });
+                throw new Error(`HTTP ${response.status}: ${responseText || response.statusText}`);
+            }
+
+            const data = await response.json();
+            const coordinateOrder = data?.coordinateOrder === 'lonLat' ? 'lonLat' : 'latLon';
+            const coordinates = normalizeMaritimeRouteCoordinates(data?.coordinates, coordinateOrder);
+            const distance = Number(data?.distance);
+            if (!data?.success || coordinates.length < 2 || !Number.isFinite(distance)) {
+                console.warn('[Routing Engine] /route returned an unusable payload:', { payload, response: data, coordinates });
+                throw new Error(data?.error || 'Maritime routing API returned no navigable polyline');
+            }
+
+            console.log('[Routing Engine] /route 200 OK:', {
+                distance,
+                coordinateOrder,
+                points: coordinates.length,
+                firstPoint: coordinates[0],
+                lastPoint: coordinates[coordinates.length - 1]
+            });
+
+            return {
+                distance,
+                coordinates: pinRouteEndpoints(coordinates, origin, destination),
+                nodes: Array.isArray(data.nodes) ? data.nodes : [origin, destination],
+                passages: data.passages || [],
+                source: 'maritime-routing-api',
+                success: true
+            };
+        }
+
+        function buildStraightFallbackRouteSegment(origin, destination, reason) {
+            console.warn(`[Routing Engine] Ruta marítima no disponible para ${origin.name || 'origen'} -> ${destination.name || 'destino'}. Se dibuja línea recta de respaldo.`, reason || '');
+            return {
+                distance: haversine(origin.lat, origin.lon, destination.lat, destination.lon) * 1.15,
+                coordinates: [[origin.lat, origin.lon], [destination.lat, destination.lon]],
+                nodes: [origin, destination],
+                source: 'straight-line-fallback',
+                success: false
+            };
+        }
+
+        async function calculateLocalSeaRouteSegment(origin, destination) {
+            const localSeaRoute = await ensureSeaRouteAvailable();
+            if (!localSeaRoute) {
+                throw new Error('Local searoute engine unavailable');
+            }
+
+            const routeGeoJSON = localSeaRoute([origin.lon, origin.lat], [destination.lon, destination.lat], {
+                units: 'nauticalmiles',
+                appendOriginDestination: true,
+                returnPassages: true,
+                maxSnapDistanceKm: 250
+            });
+            const distance = Number(routeGeoJSON?.properties?.length);
+            const rawCoords = routeGeoJSON?.geometry?.coordinates;
+            const coordinates = [];
+
+            if (Array.isArray(rawCoords?.[0]?.[0])) {
+                rawCoords.forEach((line) => {
+                    line.forEach((coord) => coordinates.push([Number(coord[1]), Number(coord[0])]));
+                });
+            } else if (Array.isArray(rawCoords)) {
+                rawCoords.forEach((coord) => coordinates.push([Number(coord[1]), Number(coord[0])]));
+            }
+
+            const normalizedCoordinates = normalizeMaritimeRouteCoordinates(coordinates);
+            if (normalizedCoordinates.length < 2 || !Number.isFinite(distance)) {
+                throw new Error('Local searoute engine returned no navigable polyline');
+            }
+
+            return {
+                distance,
+                coordinates: pinRouteEndpoints(normalizedCoordinates, origin, destination),
+                nodes: [origin, destination],
+                passages: routeGeoJSON?.properties?.passages || [],
+                source: 'local-searoute-fallback',
+                success: true
+            };
+        }
+
         /**
          * Calcula la ruta marítima completa de manera secuencial pasando por los chokepoints requeridos.
          * Divide el viaje en sub-segmentos independientes, calcula la distancia de cada uno y une los trayectos.
@@ -17289,30 +17614,6 @@
                 };
             }
 
-            // Intenta calcular la ruta en el backend usando pesos de corredores oceánicos preferidos
-            try {
-                const response = await fetch('/api/route', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ origin, destination })
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data && data.success) {
-                        return {
-                            distance: data.distance,
-                            coordinates: pinRouteEndpoints(data.coordinates, origin, destination),
-                            nodes: [origin, destination],
-                            success: true
-                        };
-                    }
-                }
-            } catch (err) {
-                console.warn('[Routing Engine] Fallo en el backend de rutas, recurriendo a cálculo local:', err);
-            }
-
-            // Fallback local (en el cliente) si el backend no responde o falla
             const regOrigin = getPortRegion(origin.name, origin.lat, origin.lon);
             const regDest = getPortRegion(destination.name, destination.lat, destination.lon);
             
@@ -17329,56 +17630,34 @@
             let totalDistance = 0;
             let combinedCoordinates = [];
             let segmentCalculatedCount = 0;
-            const localSeaRoute = await ensureSeaRouteAvailable();
+            let usedStraightFallback = false;
+            let usedLocalFallback = false;
 
-            // Bucle iterativo para calcular cada sub-segmento secuencial
             for (let i = 0; i < sequentialNodes.length - 1; i++) {
                 const segStart = sequentialNodes[i];
                 const segEnd = sequentialNodes[i+1];
-                
-                let segDistance = 0;
-                let segCoords = [];
-                let segmentSuccess = false;
+                let segmentRoute = null;
 
-                if (localSeaRoute) {
+                try {
+                    segmentRoute = await requestMaritimeRouteSegment(segStart, segEnd);
+                } catch (apiError) {
+                    console.warn(`[Routing Engine] API marítima falló para ${segStart.name} -> ${segEnd.name}. Recurriendo al motor marítimo local.`, apiError);
+                }
+
+                if (!segmentRoute) {
                     try {
-                        // Llamamos al algoritmo actual (seaRoute) para calcular la ruta más corta del sub-segmento
-                        const routeGeoJSON = localSeaRoute([segStart.lon, segStart.lat], [segEnd.lon, segEnd.lat], {
-                            units: 'nauticalmiles',
-                            appendOriginDestination: true,
-                            returnPassages: true,
-                            maxSnapDistanceKm: 250
-                        });
-                        segDistance = routeGeoJSON.properties.length;
-                        
-                        // Extraemos la geometría (coordenadas) para unirlas y dibujarlas en el mapa
-                        if (routeGeoJSON.geometry && routeGeoJSON.geometry.coordinates) {
-                            const coords = routeGeoJSON.geometry.coordinates;
-                            // Manejo seguro tanto de LineString como de MultiLineString
-                            if (Array.isArray(coords[0]) && Array.isArray(coords[0][0])) {
-                                coords.forEach(line => {
-                                    line.forEach(c => segCoords.push([c[1], c[0]])); // Convertir [lon, lat] a [lat, lon]
-                                });
-                            } else {
-                                coords.forEach(c => segCoords.push([c[1], c[0]]));
-                            }
-                            segmentSuccess = true;
-                        }
-                    } catch (e) {
-                        console.warn(`[Routing Engine] Fallo en seaRoute para segmento ${segStart.name} -> ${segEnd.name}. Usando Haversine.`, e);
+                        segmentRoute = await calculateLocalSeaRouteSegment(segStart, segEnd);
+                        usedLocalFallback = true;
+                    } catch (localError) {
+                        segmentRoute = buildStraightFallbackRouteSegment(segStart, segEnd, localError);
+                        usedStraightFallback = true;
                     }
                 }
 
-                // Fallback por defecto si no está disponible seaRoute o si falla la llamada
-                if (!segmentSuccess) {
-                    segDistance = haversine(segStart.lat, segStart.lon, segEnd.lat, segEnd.lon) * 1.15;
-                    segCoords = [[segStart.lat, segStart.lon], [segEnd.lat, segEnd.lon]];
-                }
-
-                totalDistance += segDistance;
+                totalDistance += Number(segmentRoute.distance) || 0;
                 segmentCalculatedCount++;
 
-                // Unimos la geografía del segmento evitando duplicar la coordenada de unión en la costura
+                const segCoords = normalizeMaritimeRouteCoordinates(segmentRoute.coordinates);
                 if (combinedCoordinates.length > 0 && segCoords.length > 0) {
                     combinedCoordinates.pop();
                 }
@@ -17389,7 +17668,8 @@
                 distance: totalDistance,
                 coordinates: pinRouteEndpoints(combinedCoordinates, origin, destination),
                 nodes: sequentialNodes,
-                success: segmentCalculatedCount > 0
+                source: usedStraightFallback ? 'mixed-with-straight-line-fallback' : (usedLocalFallback ? 'local-searoute-fallback' : 'maritime-routing-api'),
+                success: segmentCalculatedCount > 0 && !usedStraightFallback
             };
         }
 
@@ -17676,9 +17956,13 @@
         window.focusMatchingVesselOnMap = focusMatchingVesselOnMap;
 
         function renderMasterRouteMap(result = State.routeGeometry) {
-            if (!result || !isMasterRouteMapMounted()) return false;
+            if (!result) return false;
             const routeMap = ensureRouteMapReady('map-host');
-            if (!routeMap) return false;
+            if (!routeMap || !isMasterRouteMapMounted()) {
+                console.warn('[Route Map] Render pospuesto: mapa no montado todavía.', { hasMap: Boolean(routeMap), hasResult: Boolean(result) });
+                scheduleRouteMapRedraw(180, () => renderMasterRouteMap(result));
+                return false;
+            }
 
             if (isMapboxRouteMap(routeMap)) {
                 const renderMapbox = () => {
@@ -17725,97 +18009,61 @@
                         hasBounds = true;
                     }
 
-                    const addLine = (id, coords, options = {}) => {
-                        const color = options.color || ROUTE_LADEN_LINE_COLOR;
-                        const opacity = Number.isFinite(options.opacity) ? options.opacity : 1;
-                        const dashArray = Array.isArray(options.dashArray) ? options.dashArray : [2, 2];
-                        const arrowOpacity = Number.isFinite(options.arrowOpacity) ? options.arrowOpacity : opacity;
-                        const pinnedCoords = pinRouteEndpoints(coords, options.origin, options.destination);
-                        const lngLatCoords = normalizeRouteCoordinatesForMapbox(pinnedCoords);
-                        if (lngLatCoords.length < 2) return;
-                        lngLatCoords.forEach((coord) => {
-                            bounds.extend(coord);
-                            hasBounds = true;
-                        });
-                        routeMap.addSource(`${id}-source`, {
-                            type: 'geojson',
-                            data: {
-                                type: 'Feature',
-                                geometry: { type: 'LineString', coordinates: lngLatCoords },
-                                properties: { planned: true }
-                            }
-                        });
-                        routeMap.addLayer({
-                            id: `${id}-line`,
-                            type: 'line',
-                            source: `${id}-source`,
-                            layout: { 'line-join': 'round', 'line-cap': 'round' },
-                            paint: {
-                                'line-color': color,
-                                'line-width': 3,
-                                'line-opacity': opacity,
-                                'line-dasharray': dashArray
-                            }
-                        });
-                        const arrowIconId = ensureMapboxRouteArrowIcon(routeMap);
-                        if (arrowIconId && typeof routeMap.hasImage === 'function' && routeMap.hasImage(arrowIconId)) {
-                            routeMap.addLayer({
-                                id: `${id}-arrows`,
-                                type: 'symbol',
-                                source: `${id}-source`,
-                                layout: {
-                                    'symbol-placement': 'line',
-                                    'symbol-spacing': 130,
-                                    'icon-image': arrowIconId,
-                                    'icon-size': 0.42,
-                                    'icon-allow-overlap': true,
-                                    'icon-ignore-placement': true,
-                                    'icon-rotation-alignment': 'map'
-                                },
-                                paint: {
-                                    'icon-opacity': arrowOpacity
-                                }
-                            });
-                        }
-                    };
-
-                    const ballastCoordinates = result.routes?.ballast?.coordinates?.length
-                        ? result.routes.ballast.coordinates
-                        : (cBal && cPol ? [[cBal.lat, cBal.lon], [cPol.lat, cPol.lon]] : []);
-                    const ladenCoordinates = result.routes?.laden?.coordinates?.length
-                        ? result.routes.laden.coordinates
-                        : (cPol && cPod ? [[cPol.lat, cPol.lon], [cPod.lat, cPod.lon]] : []);
+                    const fallbackBallastCoordinates = cBal && cPol ? [[cBal.lat, cBal.lon], [cPol.lat, cPol.lon]] : [];
+                    const fallbackLadenCoordinates = cPol && cPod ? [[cPol.lat, cPol.lon], [cPod.lat, cPod.lon]] : [];
+                    const ballastCoordinates = getDrawableRouteCoordinates(result.routes?.ballast, fallbackBallastCoordinates, 'Ruta de lastre');
+                    const ladenCoordinates = getDrawableRouteCoordinates(result.routes?.laden, fallbackLadenCoordinates, 'Ruta de carga');
 
                     if (ballastCoordinates.length > 1) {
-                        addLine('route-ballast', ballastCoordinates, {
+                        const drawn = dibujarRuta(ballastCoordinates, {
+                            map: routeMap,
+                            id: 'route-ballast',
+                            label: 'Ruta de lastre',
                             color: ROUTE_BALLAST_LINE_COLOR,
+                            weight: 3,
                             opacity: 0.6,
                             arrowOpacity: 0.68,
-                            dashArray: [4, 4],
+                            dashArray: [5, 10],
                             origin: cBal,
                             destination: cPol
                         });
+                        (drawn.lngLatCoords || []).forEach((coord) => {
+                            bounds.extend(coord);
+                            hasBounds = true;
+                        });
                     }
                     if (ladenCoordinates.length > 1) {
-                        addLine('route-laden', ladenCoordinates, {
+                        const drawn = dibujarRuta(ladenCoordinates, {
+                            map: routeMap,
+                            id: 'route-laden',
+                            label: 'Ruta de carga',
                             color: ROUTE_LADEN_LINE_COLOR,
+                            weight: 3,
                             opacity: 1,
                             arrowOpacity: 1,
-                            dashArray: [2, 2],
+                            dashArray: [5, 10],
                             origin: cPol,
                             destination: cPod
+                        });
+                        (drawn.lngLatCoords || []).forEach((coord) => {
+                            bounds.extend(coord);
+                            hasBounds = true;
                         });
                     }
 
                     if (hasBounds) {
-                        routeMap.fitBounds(bounds, { padding: 72, maxZoom: 8, duration: 600 });
                         resizeRouteMap(routeMap);
                     }
                 };
-                if (routeMap.isStyleLoaded && routeMap.isStyleLoaded()) {
+                if ((routeMap.isStyleLoaded && routeMap.isStyleLoaded()) || (routeMap.loaded && routeMap.loaded())) {
                     renderMapbox();
                 } else {
                     routeMap.once('load', renderMapbox);
+                    setTimeout(() => {
+                        if ((routeMap.isStyleLoaded && routeMap.isStyleLoaded()) || (routeMap.loaded && routeMap.loaded())) {
+                            renderMapbox();
+                        }
+                    }, 450);
                 }
                 return true;
             }
@@ -17850,40 +18098,56 @@
             const fallbackBallastBounds = cBal && cPol ? [[cBal.lat, cBal.lon], [cPol.lat, cPol.lon]] : [];
             const fallbackLadenBounds = cPol && cPod ? [[cPol.lat, cPol.lon], [cPod.lat, cPod.lon]] : [];
             const ballastRouteBounds = pinRouteEndpoints(
-                result.routes?.ballast?.coordinates?.length ? result.routes.ballast.coordinates : fallbackBallastBounds,
+                getDrawableRouteCoordinates(result.routes?.ballast, fallbackBallastBounds, 'Ruta de lastre'),
                 cBal,
                 cPol
             );
             if(ballastRouteBounds.length > 1) {
-                L.polyline(ballastRouteBounds, {
+                const drawn = dibujarRuta(ballastRouteBounds, {
+                    map: routeMap,
+                    layer: routeMarkerLayer,
+                    id: 'route-ballast',
+                    label: 'Ruta de lastre',
                     color: ROUTE_BALLAST_LINE_COLOR,
                     weight: 3,
                     opacity: 0.6,
-                    dashArray: '12, 12'
-                }).addTo(routeMarkerLayer);
-                bounds = bounds.concat(ballastRouteBounds);
+                    leafletDashArray: '5, 10',
+                    origin: cBal,
+                    destination: cPol
+                });
+                bounds = bounds.concat(drawn.leafletPoints || ballastRouteBounds);
             }
 
             const ladenRouteBounds = pinRouteEndpoints(
-                result.routes?.laden?.coordinates?.length ? result.routes.laden.coordinates : fallbackLadenBounds,
+                getDrawableRouteCoordinates(result.routes?.laden, fallbackLadenBounds, 'Ruta de carga'),
                 cPol,
                 cPod
             );
             if(ladenRouteBounds.length > 1) {
-                L.polyline(ladenRouteBounds, {
+                const drawn = dibujarRuta(ladenRouteBounds, {
+                    map: routeMap,
+                    layer: routeMarkerLayer,
+                    id: 'route-laden',
+                    label: 'Ruta de carga',
                     color: ROUTE_LADEN_LINE_COLOR,
                     weight: 3,
                     opacity: 1,
-                    dashArray: '6, 6'
-                }).addTo(routeMarkerLayer);
-                bounds = bounds.concat(ladenRouteBounds);
+                    leafletDashArray: '5, 10',
+                    origin: cPol,
+                    destination: cPod
+                });
+                bounds = bounds.concat(drawn.leafletPoints || ladenRouteBounds);
             }
 
             if(bounds.length > 0) {
-                routeMap.fitBounds(bounds, ROUTE_FIT_BOUNDS_OPTIONS);
                 resizeRouteMap(routeMap);
                 scheduleRouteMapOverlayRefresh(100);
                 ensureRouteBaseLayer();
+                if (routeMarkerLayer && typeof routeMarkerLayer.eachLayer === 'function') {
+                    routeMarkerLayer.eachLayer((layer) => {
+                        if (layer && typeof layer.bringToFront === 'function') layer.bringToFront();
+                    });
+                }
             }
             return true;
         }
