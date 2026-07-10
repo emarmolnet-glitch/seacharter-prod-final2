@@ -20,9 +20,7 @@ export default async (req: Request, context: Context) => {
     task_id: task.taskId,
     status: task.status,
     result: task.status === "COMPLETED" ? task.result : null,
-    error: task.status === "FAILED" ? task.errorMessage : null,
-    created_at: task.createdAt,
-    updated_at: task.updatedAt,
+    error: task.status === "ERROR" ? task.errorMessage : null,
   }, { headers });
 };
 

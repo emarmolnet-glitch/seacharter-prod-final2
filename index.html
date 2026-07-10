@@ -23678,7 +23678,7 @@
                 }
                 const status = String(task.status || '').toUpperCase();
                 if (status === 'COMPLETED') return task.result;
-                if (status === 'FAILED') {
+                if (status === 'ERROR') {
                     throw new Error(task.error || 'La auditoría legal no pudo completarse.');
                 }
             }
