@@ -2,8 +2,6 @@
   command = "npm run build"
   publish = "dist"
   functions = "netlify/functions"
-  # Añade esta línea si tu carpeta de migraciones está aquí:
-  ignore = "netlify/database/migrations/*"
 
 [build.environment]
   SKIP_PRISMA_MIGRATE = "true"
@@ -14,6 +12,11 @@
   for = "/*"
   [headers.values]
     Content-Security-Policy = "default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * wss: https:; img-src * data: blob:; style-src * 'unsafe-inline';"
+
+[[redirects]]
+  from = "/api/status/*"
+  to = "/.netlify/functions/audit-status/:splat"
+  status = 200
 
 [[redirects]]
   from = "/api/*"
