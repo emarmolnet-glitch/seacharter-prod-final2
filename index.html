@@ -9635,7 +9635,7 @@
                 <!-- Loading State -->
                 <div id="loadingState" class="hidden absolute inset-0 flex flex-col items-center justify-center text-slate-600 bg-slate-100/80 backdrop-blur-sm z-10">
                     <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-slate-300 border-t-blue-600 mb-4"></div>
-                    <p class="text-lg font-medium animate-pulse">Analizando riesgos legales y comerciales...</p>
+                    <p id="audit-loading-message" class="text-lg font-medium animate-pulse">Procesando análisis legal...</p>
                 </div>
 
                 <!-- Results Content -->
@@ -23673,6 +23673,45 @@
             );
         }
 
+        async function waitForLegalAuditTask(taskId) {
+            const startedAt = Date.now();
+            const maximumWaitMs = 15 * 60 * 1000;
+
+            while (Date.now() - startedAt < maximumWaitMs) {
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                const response = await fetch(`/api/status/${encodeURIComponent(taskId)}`, {
+                    headers: { 'Accept': 'application/json' },
+                    cache: 'no-store'
+                });
+                const task = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    throw new Error(task.error || `No se pudo consultar la auditoría (${response.status}).`);
+                }
+                if (task.status === 'completed') return task.result;
+                if (task.status === 'failed') {
+                    throw new Error(task.error || 'La auditoría legal no pudo completarse.');
+                }
+            }
+
+            throw new Error('La auditoría continúa procesándose más tiempo del esperado. Inténtalo de nuevo en unos minutos.');
+        }
+
+        async function executeAsyncLegalAudit(payload) {
+            const response = await fetch('/api/legal-audit-tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const task = await response.json().catch(() => ({}));
+            if (!response.ok || !task.task_id) {
+                const requestError = new Error(task.error?.message || `No se pudo iniciar la auditoría (${response.status}).`);
+                requestError.code = task.error?.code || '';
+                throw requestError;
+            }
+            return waitForLegalAuditTask(task.task_id);
+        }
+
         // --- LLAMADAS IA GEMINI MODALES ---
         function openAIModal(title, loaderText = "Actualizando datos del motor SeaCharter Core PRO...") {
             document.getElementById('ai-modal').classList.remove('light-mode');
@@ -30614,7 +30653,7 @@ ADDITIONAL NOTES:
             
             const originalBtnHtml = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Procesando...';
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Procesando análisis legal...';
 
             try {
                 const cpStandard = State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
@@ -30733,7 +30772,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     }
                 };
 
-                const data = await executeGeminiRequest(payload);
+                const data = await executeAsyncLegalAudit(payload);
                 const jsonText = data.candidates[0].content.parts[0].text;
                 const result = JSON.parse(jsonText);
                 const detectedType = String(result.tipo_documento_detectado || '');

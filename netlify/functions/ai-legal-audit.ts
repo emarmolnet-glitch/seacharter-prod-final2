@@ -6,7 +6,7 @@ type GeminiPart = {
   text?: string;
 };
 
-type GeminiPayload = {
+export type GeminiPayload = {
   contents?: Array<{
     parts?: GeminiPart[];
   }>;
@@ -283,6 +283,50 @@ function buildMessages(prompt: string, jsonOnly: boolean, contexto_tiempo_real: 
   ];
 }
 
+export async function processLegalAuditPayload(payload: GeminiPayload) {
+  const prompt = extractPrompt(payload);
+  const isStrictAudit = payload.auditMode === "strict";
+  if (!prompt && !isStrictAudit) {
+    throw new Error("No hay prompt para procesar.");
+  }
+
+  if (isStrictAudit) {
+    const gateError = getStrictAuditGateError(payload.data);
+    if (gateError) {
+      const error = new Error(gateError) as Error & { code?: string };
+      error.code = "AUDIT_GATE_BLOCKED";
+      throw error;
+    }
+  }
+
+  const jsonOnly = isStrictAudit || wantsJson(payload, prompt);
+  const portName = jsonOnly && !isStrictAudit ? extractPortName(prompt) : "";
+  const calado_requerido = normalizeRequiredDraft(payload.calado_requerido);
+  const contexto_tiempo_real = jsonOnly && !isStrictAudit
+    ? await getRealTimePortContext(portName)
+    : "";
+  const openai = new OpenAI();
+  const completion = await openai.chat.completions.create({
+    model: "gpt-5.2",
+    temperature: 0,
+    response_format: jsonOnly ? { type: "json_object" } : undefined,
+    messages: isStrictAudit
+      ? buildStrictAuditMessages(payload.data as Record<string, unknown>)
+      : buildMessages(prompt, jsonOnly, contexto_tiempo_real, portName, calado_requerido),
+  });
+
+  const text = completion.choices[0]?.message?.content || "";
+  return {
+    candidates: [
+      {
+        content: {
+          parts: [{ text }],
+        },
+      },
+    ],
+  };
+}
+
 export default async (req: Request) => {
   if (req.method !== "POST") {
     return responseJson({ error: { message: "Metodo no permitido. Use POST." } }, 405);
@@ -295,50 +339,14 @@ export default async (req: Request) => {
     return responseJson({ error: { message: "JSON de entrada invalido." } }, 400);
   }
 
-  const prompt = extractPrompt(payload);
-  const isStrictAudit = payload.auditMode === "strict";
-  if (!prompt && !isStrictAudit) {
-    return responseJson({ error: { message: "No hay prompt para procesar." } }, 400);
-  }
-
-  if (isStrictAudit) {
-    const gateError = getStrictAuditGateError(payload.data);
-    if (gateError) {
-      return responseJson({ error: { message: gateError, code: "AUDIT_GATE_BLOCKED" } }, 422);
-    }
-  }
-
   try {
-    const jsonOnly = isStrictAudit || wantsJson(payload, prompt);
-    const portName = jsonOnly && !isStrictAudit ? extractPortName(prompt) : "";
-    const calado_requerido = normalizeRequiredDraft(payload.calado_requerido);
-    const contexto_tiempo_real = jsonOnly && !isStrictAudit
-      ? await getRealTimePortContext(portName)
-      : "";
-    const openai = new OpenAI();
-    const completion = await openai.chat.completions.create({
-      model: "gpt-5.2",
-      temperature: 0,
-      response_format: jsonOnly ? { type: "json_object" } : undefined,
-      messages: isStrictAudit
-        ? buildStrictAuditMessages(payload.data as Record<string, unknown>)
-        : buildMessages(prompt, jsonOnly, contexto_tiempo_real, portName, calado_requerido),
-    });
-
-    const text = completion.choices[0]?.message?.content || "";
-    return responseJson({
-      candidates: [
-        {
-          content: {
-            parts: [{ text }],
-          },
-        },
-      ],
-    });
+    return responseJson(await processLegalAuditPayload(payload));
   } catch (error) {
-    const message = error instanceof Error && error.message
-      ? error.message
-      : "No se pudo completar la inferencia en backend.";
+    const typedError = error as Error & { code?: string };
+    const message = typedError.message || "No se pudo completar la inferencia en backend.";
+    if (typedError.code === "AUDIT_GATE_BLOCKED") {
+      return responseJson({ error: { message, code: typedError.code } }, 422);
+    }
 
     return responseJson({ error: { message } }, 500);
   }

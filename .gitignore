@@ -1,4 +1,6 @@
 # Local Netlify folder
 .netlify
 node_modules/
-netlify/database/
+netlify/database/*
+!netlify/database/migrations/
+!netlify/database/migrations/**
