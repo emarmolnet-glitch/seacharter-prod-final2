@@ -14527,6 +14527,42 @@
         }
         window.saveCoreProFrozenReport = saveCoreProFrozenReport;
 
+        const CORE_PRO_SESSION_SYNC_USER_ID = '11111111-1111-1111-1111-111111111111';
+        const CORE_PRO_MATCHING_MODULE = 'CORE_PRO_MATCHING';
+
+        async function syncCoreProMatchingReport(reportData) {
+            const response = await fetch('/api/session-sync', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    user_id: CORE_PRO_SESSION_SYNC_USER_ID,
+                    last_action_module: CORE_PRO_MATCHING_MODULE,
+                    last_sync_data: reportData
+                })
+            });
+
+            const responseText = await response.text();
+            let responsePayload = null;
+            try {
+                responsePayload = responseText ? JSON.parse(responseText) : null;
+            } catch (parseErr) {
+                responsePayload = responseText;
+            }
+
+            if (response.status === 200) {
+                console.log('[Core PRO] Exportación enviada a Neon con éxito', responsePayload);
+            }
+
+            if (!response.ok) {
+                throw new Error(responsePayload?.error || responseText || `Neon respondió ${response.status}`);
+            }
+
+            return responsePayload;
+        }
+        window.syncCoreProMatchingReport = syncCoreProMatchingReport;
+
         function readValidatedCoreProFrozenReport(storageKey = CORE_PRO_FROZEN_REPORT_STORAGE_KEY) {
             const clave_leida = localStorage.getItem(storageKey);
             console.log('Validación previa al envío. Clave encontrada:', clave_leida);
@@ -14762,6 +14798,7 @@
                     vessels: payloadLimpio
                 });
                 saveCoreProFrozenReport(selectedAuditReport);
+                await syncCoreProMatchingReport(selectedAuditReport);
 
                 const validatedFrozenReport = readValidatedCoreProFrozenReport();
                 const validatedPayload = cleanDataBridgeVesselsPayload(JSON.parse(JSON.stringify(validatedFrozenReport.vessels)));
