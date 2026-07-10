@@ -1,6 +1,6 @@
 import { Pool, type Pool as PgPool } from "pg";
 
-export type SessionSyncStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+export type SessionSyncStatus = "PENDING" | "COMPLETED" | "ERROR";
 
 export type SessionSyncTask = {
   taskId: string;
@@ -8,29 +8,14 @@ export type SessionSyncTask = {
   requestPayload: unknown;
   result: unknown | null;
   errorMessage: string | null;
-  createdAt: unknown | null;
-  updatedAt: unknown | null;
 };
 
-type SessionSyncColumns = {
-  taskId: string;
-  status: string;
-  requestPayload: string;
-  result: string;
-  errorMessage: string | null;
-  createdAt: string | null;
-  updatedAt: string | null;
+type SessionSyncData = {
+  request_payload?: unknown;
+  result?: unknown;
+  error_message?: unknown;
 };
 
-const TASK_ID_COLUMNS = ["task_id", "id"];
-const STATUS_COLUMNS = ["status", "estado"];
-const REQUEST_COLUMNS = ["request_payload", "request", "payload", "data"];
-const RESULT_COLUMNS = ["result", "response_payload", "response", "resultado"];
-const ERROR_COLUMNS = ["error_message", "error"];
-const CREATED_COLUMNS = ["created_at", "created"];
-const UPDATED_COLUMNS = ["updated_at", "updated"];
-
-let columnsPromise: Promise<SessionSyncColumns> | null = null;
 let pool: PgPool | null = null;
 
 function getPool() {
@@ -50,80 +35,34 @@ function getPool() {
   return pool;
 }
 
-function quoteIdentifier(identifier: string) {
-  return `"${identifier.replaceAll('"', '""')}"`;
-}
-
-function pickColumn(available: Set<string>, candidates: string[], label: string) {
-  const column = candidates.find((candidate) => available.has(candidate));
-  if (!column) {
-    throw new Error(`La tabla session_sync no contiene la columna requerida para ${label}.`);
-  }
-  return column;
-}
-
-function pickOptionalColumn(available: Set<string>, candidates: string[]) {
-  return candidates.find((candidate) => available.has(candidate)) || null;
-}
-
-async function getColumns() {
-  columnsPromise ??= (async () => {
-    const result = await getPool().query(`
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_schema = current_schema()
-        AND table_name = 'session_sync'
-      ORDER BY ordinal_position
-    `);
-    const available = new Set(result.rows.map((row) => String(row.column_name)));
-    if (available.size === 0) {
-      throw new Error("La tabla session_sync no existe en el esquema activo de Neon.");
-    }
-
-    return {
-      taskId: pickColumn(available, TASK_ID_COLUMNS, "task_id"),
-      status: pickColumn(available, STATUS_COLUMNS, "status"),
-      requestPayload: pickColumn(available, REQUEST_COLUMNS, "request_payload"),
-      result: pickColumn(available, RESULT_COLUMNS, "result"),
-      errorMessage: pickOptionalColumn(available, ERROR_COLUMNS),
-      createdAt: pickOptionalColumn(available, CREATED_COLUMNS),
-      updatedAt: pickOptionalColumn(available, UPDATED_COLUMNS),
-    };
-  })();
-
-  return columnsPromise;
-}
-
-function selectExpression(column: string | null, alias: string, fallback: string) {
-  return column ? `${quoteIdentifier(column)} AS ${quoteIdentifier(alias)}` : `${fallback} AS ${quoteIdentifier(alias)}`;
-}
-
 function mapTask(row: Record<string, unknown>): SessionSyncTask {
+  const syncData = (row.last_sync_data || {}) as SessionSyncData;
   return {
-    taskId: String(row.task_id),
-    status: String(row.status).toUpperCase() as SessionSyncStatus,
-    requestPayload: row.request_payload,
-    result: row.result ?? null,
-    errorMessage: row.error_message ? String(row.error_message) : null,
-    createdAt: row.created_at ?? null,
-    updatedAt: row.updated_at ?? null,
+    taskId: String(row.user_id),
+    status: String(row.last_action_module).toUpperCase() as SessionSyncStatus,
+    requestPayload: syncData.request_payload ?? null,
+    result: syncData.result ?? null,
+    errorMessage: syncData.error_message ? String(syncData.error_message) : null,
   };
 }
 
-async function selectTask(taskId: string) {
-  const columns = await getColumns();
+export async function createSessionSyncTask(taskId: string, requestPayload: unknown) {
+  await getPool().query(
+    `
+      INSERT INTO session_sync (user_id, last_sync_data, last_action_module)
+      VALUES ($1, $2::jsonb, 'PENDING')
+    `,
+    [taskId, JSON.stringify({ request_payload: requestPayload, result: null })],
+  );
+  return getSessionSyncTask(taskId);
+}
+
+export async function getSessionSyncTask(taskId: string) {
   const result = await getPool().query(
     `
-      SELECT
-        ${quoteIdentifier(columns.taskId)} AS task_id,
-        ${quoteIdentifier(columns.status)} AS status,
-        ${quoteIdentifier(columns.requestPayload)} AS request_payload,
-        ${quoteIdentifier(columns.result)} AS result,
-        ${selectExpression(columns.errorMessage, "error_message", "NULL::text")},
-        ${selectExpression(columns.createdAt, "created_at", "NULL::timestamptz")},
-        ${selectExpression(columns.updatedAt, "updated_at", "NULL::timestamptz")}
+      SELECT user_id, last_sync_data, last_action_module
       FROM session_sync
-      WHERE ${quoteIdentifier(columns.taskId)} = $1
+      WHERE user_id = $1
       LIMIT 1
     `,
     [taskId],
@@ -131,59 +70,36 @@ async function selectTask(taskId: string) {
   return result.rows[0] ? mapTask(result.rows[0]) : undefined;
 }
 
-export async function createSessionSyncTask(taskId: string, requestPayload: unknown) {
-  const columns = await getColumns();
-  const insertColumns = [columns.taskId, columns.status, columns.requestPayload];
-  const placeholders = ["$1", "$2", "$3"];
-
-  if (columns.result) {
-    insertColumns.push(columns.result);
-    placeholders.push("NULL");
-  }
-  if (columns.errorMessage) {
-    insertColumns.push(columns.errorMessage);
-    placeholders.push("NULL");
-  }
-
-  await getPool().query(
-    `INSERT INTO session_sync (${insertColumns.map(quoteIdentifier).join(", ")}) VALUES (${placeholders.join(", ")})`,
-    [taskId, "PENDING", JSON.stringify(requestPayload)],
-  );
-  return selectTask(taskId);
-}
-
-export async function getSessionSyncTask(taskId: string) {
-  return selectTask(taskId);
-}
-
-async function updateTask(taskId: string, status: SessionSyncStatus, result: unknown | null, errorMessage: string | null) {
-  const columns = await getColumns();
-  const assignments = [`${quoteIdentifier(columns.status)} = $2`, `${quoteIdentifier(columns.result)} = $3`];
-  const values: unknown[] = [taskId, status, result === null ? null : JSON.stringify(result)];
-
-  if (columns.errorMessage) {
-    assignments.push(`${quoteIdentifier(columns.errorMessage)} = $4`);
-    values.push(errorMessage ? errorMessage.slice(0, 2000) : null);
-  }
-  if (columns.updatedAt) {
-    assignments.push(`${quoteIdentifier(columns.updatedAt)} = now()`);
-  }
-
-  await getPool().query(
-    `UPDATE session_sync SET ${assignments.join(", ")} WHERE ${quoteIdentifier(columns.taskId)} = $1`,
-    values,
-  );
-}
-
-export async function markSessionSyncTaskProcessing(taskId: string) {
-  const task = await selectTask(taskId);
-  await updateTask(taskId, "PROCESSING", task?.result ?? null, null);
-}
-
 export async function completeSessionSyncTask(taskId: string, result: unknown) {
-  await updateTask(taskId, "COMPLETED", result, null);
+  await getPool().query(
+    `
+      UPDATE session_sync
+      SET last_sync_data = jsonb_set(
+            jsonb_set(COALESCE(last_sync_data, '{}'::jsonb), '{result}', $2::jsonb, true),
+            '{error_message}',
+            'null'::jsonb,
+            true
+          ),
+          last_action_module = 'COMPLETED'
+      WHERE user_id = $1
+    `,
+    [taskId, JSON.stringify(result)],
+  );
 }
 
 export async function failSessionSyncTask(taskId: string, errorMessage: string) {
-  await updateTask(taskId, "FAILED", null, errorMessage);
+  await getPool().query(
+    `
+      UPDATE session_sync
+      SET last_sync_data = jsonb_set(
+            jsonb_set(COALESCE(last_sync_data, '{}'::jsonb), '{result}', 'null'::jsonb, true),
+            '{error_message}',
+            $2::jsonb,
+            true
+          ),
+          last_action_module = 'ERROR'
+      WHERE user_id = $1
+    `,
+    [taskId, JSON.stringify(errorMessage)],
+  );
 }

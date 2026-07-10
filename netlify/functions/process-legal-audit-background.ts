@@ -2,7 +2,6 @@ import {
   completeSessionSyncTask,
   failSessionSyncTask,
   getSessionSyncTask,
-  markSessionSyncTaskProcessing,
 } from "../../db/session-sync.js";
 import { processLegalAuditPayload, type GeminiPayload } from "./ai-legal-audit.js";
 
@@ -17,7 +16,6 @@ export default async (req: Request) => {
     const task = await getSessionSyncTask(taskId);
     if (!task || task.status === "COMPLETED") return;
 
-    await markSessionSyncTaskProcessing(taskId);
     const result = await processLegalAuditPayload(task.requestPayload as GeminiPayload);
     await completeSessionSyncTask(taskId, result);
   } catch (error) {
