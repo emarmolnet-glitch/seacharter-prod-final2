@@ -21,6 +21,11 @@
   status = 200
 
 [[redirects]]
+  from = "/route"
+  to = "/.netlify/functions/route"
+  status = 200
+
+[[redirects]]
   from = "/components.js"
   to = "/public/components.js"
   status = 200

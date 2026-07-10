@@ -129,6 +129,7 @@ export function ConnectionStatusBar() {
           React.createElement("path", { className: "connection-pipe-track", d: "M3 9 C25 9 28 9 50 9 S75 9 97 9" }),
           React.createElement("path", { className: "connection-pipe-flow", d: "M3 9 C25 9 28 9 50 9 S75 9 97 9" }),
         ),
+        React.createElement("span", { className: "connection-live-icon" }, React.createElement("i", { className: "fa-solid fa-bridge-lock" })),
       ),
       React.createElement(
         "div",
