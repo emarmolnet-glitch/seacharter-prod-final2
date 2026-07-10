@@ -1240,12 +1240,15 @@
                 const response = await postDataBridgeExport({
                     method: 'POST',
                     headers: Object.assign(
-                        { 'content-type': 'application/json' },
+                        { 'Content-Type': 'application/json' },
                         dataBridgeToken ? { Authorization: `Bearer ${dataBridgeToken}` } : {}
                     ),
-                    body: JSON.stringify(cleanRadarVesselsForDataBridge(report.vessels))
+                    body: JSON.stringify({ vessels: cleanRadarVesselsForDataBridge(report.vessels) })
                 });
                 const payload = await response.json().catch(() => ({}));
+                if (response.status === 404) {
+                    console.error('Error: El endpoint de Data Bridge no fue encontrado. Verifica la URL de recepción');
+                }
                 if (!response.ok || payload.success === false) throw new Error(payload.error || 'Data Bridge export failed');
                 markRadarVesselsPendingAudit(report.vessels, payload);
                 setRadarWorkflowPhase('export');
@@ -1270,12 +1273,15 @@
                 const response = await postDataBridgeExport({
                     method: 'POST',
                     headers: Object.assign(
-                        { 'content-type': 'application/json' },
+                        { 'Content-Type': 'application/json' },
                         dataBridgeToken ? { Authorization: `Bearer ${dataBridgeToken}` } : {}
                     ),
-                    body: JSON.stringify(cleanRadarVesselsForDataBridge([vessel]))
+                    body: JSON.stringify({ vessels: cleanRadarVesselsForDataBridge([vessel]) })
                 });
                 const payload = await response.json().catch(() => ({}));
+                if (response.status === 404) {
+                    console.error('Error: El endpoint de Data Bridge no fue encontrado. Verifica la URL de recepción');
+                }
                 if (!response.ok || payload.success === false) throw new Error(payload.error || 'Data Bridge export failed');
                 markRadarVesselsPendingAudit([vessel], payload);
                 if (statusEl) statusEl.innerText = `En Auditoría: ${vessel.nombre || vesselId}`;
