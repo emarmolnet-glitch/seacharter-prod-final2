@@ -14,7 +14,30 @@ type GeminiPayload = {
     responseMimeType?: string;
   };
   calado_requerido?: number | string | null;
+  auditMode?: string;
+  data?: Record<string, unknown>;
 };
+
+const STRICT_AUDIT_PROMPT = `Actúa como un alto ejecutivo marítimo con experiencia en derecho y fletamento. Tu tarea es auditar la viabilidad comercial y legal. Entrega tu reporte estructurado estrictamente en estos 5 bloques:
+
+BLOQUE 1: Recomendación de Pro-forma: Indica si la propuesta es óptima o requiere ajustes.
+
+BLOQUE 2: Riesgos Identificados (Red Flags): Analiza riesgos técnicos, legales y financieros (ej. restricciones de calado, demoras, responsabilidad).
+
+BLOQUE 3: Rider Clauses Sugeridas: Propón 3 cláusulas técnicas específicas, adaptadas a nuestra posición como [Armador o Fletador].
+
+BLOQUE 4: Estrategia de Negociación: Define puntos de inflexión, concesiones aceptables y 'líneas rojas'.
+
+BLOQUE 5: Borrador de Respuesta: Redacta un correo profesional persuasivo listo para enviar, incluyendo marcadores de posición [como este].
+
+Usa un tono profesional, ejecutivo y directo. La información proviene de: {contexto_de_datos}.`;
+
+const strictAuditRequirements = [
+  { key: "puertosInforme", module: "Calculadora" },
+  { key: "viabilidad", module: "Calculadora" },
+  { key: "calculoFlete", module: "Calculadora" },
+  { key: "polizaAnalizada", module: "GENCON/Alternativa" },
+] as const;
 
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
@@ -83,6 +106,39 @@ FORMATO JSON OBLIGATORIO:
 
 function responseJson(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: jsonHeaders });
+}
+
+function hasCompletedData(value: unknown) {
+  if (!value || typeof value !== "object") return false;
+  return Array.isArray(value) ? value.length > 0 : Object.keys(value).length > 0;
+}
+
+function getStrictAuditGateError(data: Record<string, unknown> | undefined) {
+  for (const requirement of strictAuditRequirements) {
+    if (!hasCompletedData(data?.[requirement.key])) {
+      return `Auditoría bloqueada: Completa ${requirement.module} antes de continuar.`;
+    }
+  }
+  return "";
+}
+
+function buildStrictAuditMessages(data: Record<string, unknown>): ChatCompletionMessageParam[] {
+  const position = String(data.posicion || "Fletador").trim() || "Fletador";
+  const context = JSON.stringify(data, null, 2);
+  const auditPrompt = STRICT_AUDIT_PROMPT
+    .replace("[Armador o Fletador]", position)
+    .replace("{contexto_de_datos}", context);
+
+  return [
+    {
+      role: "system",
+      content: `${auditPrompt}\n\nDevuelve únicamente JSON válido con estas claves: "tipo_documento_detectado", "auditoria_contrato_html", "auditoria_operativa_html", "auditoria_armador", "auditoria_fletador", "detalles_sof", "laytime_excel_data", "proforma", "riesgos", "clausulas", "estrategia" y "email". "auditoria_contrato_html" debe contener los cinco bloques, en ese orden. "clausulas" debe contener exactamente 3 cláusulas. No omitas ningún bloque.`,
+    },
+    {
+      role: "user",
+      content: "Ejecuta la Auditoría IA estricta usando exclusivamente el contexto validado proporcionado.",
+    },
+  ];
 }
 
 function extractPrompt(payload: GeminiPayload) {
@@ -240,15 +296,23 @@ export default async (req: Request) => {
   }
 
   const prompt = extractPrompt(payload);
-  if (!prompt) {
+  const isStrictAudit = payload.auditMode === "strict";
+  if (!prompt && !isStrictAudit) {
     return responseJson({ error: { message: "No hay prompt para procesar." } }, 400);
   }
 
+  if (isStrictAudit) {
+    const gateError = getStrictAuditGateError(payload.data);
+    if (gateError) {
+      return responseJson({ error: { message: gateError, code: "AUDIT_GATE_BLOCKED" } }, 422);
+    }
+  }
+
   try {
-    const jsonOnly = wantsJson(payload, prompt);
-    const portName = jsonOnly ? extractPortName(prompt) : "";
+    const jsonOnly = isStrictAudit || wantsJson(payload, prompt);
+    const portName = jsonOnly && !isStrictAudit ? extractPortName(prompt) : "";
     const calado_requerido = normalizeRequiredDraft(payload.calado_requerido);
-    const contexto_tiempo_real = jsonOnly
+    const contexto_tiempo_real = jsonOnly && !isStrictAudit
       ? await getRealTimePortContext(portName)
       : "";
     const openai = new OpenAI();
@@ -256,7 +320,9 @@ export default async (req: Request) => {
       model: "gpt-5.2",
       temperature: 0,
       response_format: jsonOnly ? { type: "json_object" } : undefined,
-      messages: buildMessages(prompt, jsonOnly, contexto_tiempo_real, portName, calado_requerido),
+      messages: isStrictAudit
+        ? buildStrictAuditMessages(payload.data as Record<string, unknown>)
+        : buildMessages(prompt, jsonOnly, contexto_tiempo_real, portName, calado_requerido),
     });
 
     const text = completion.choices[0]?.message?.content || "";
