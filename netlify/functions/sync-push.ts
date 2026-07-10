@@ -1,5 +1,5 @@
 import type { Config, Context } from "@netlify/functions";
-import { createLegalAuditTask, failLegalAuditTask } from "../../db/legal-audit-tasks.js";
+import { createSessionSyncTask, failSessionSyncTask } from "../../db/session-sync.js";
 import type { GeminiPayload } from "./ai-legal-audit.js";
 
 const headers = {
@@ -17,7 +17,7 @@ export default async (req: Request, _context: Context) => {
   }
 
   const taskId = crypto.randomUUID();
-  await createLegalAuditTask(taskId, payload);
+  await createSessionSyncTask(taskId, payload);
 
   const workerUrl = new URL("/.netlify/functions/process-legal-audit-background", req.url);
   try {
@@ -32,17 +32,17 @@ export default async (req: Request, _context: Context) => {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo iniciar la auditoría.";
-    await failLegalAuditTask(taskId, message);
+    await failSessionSyncTask(taskId, message);
     return Response.json({ error: { message } }, { status: 503, headers });
   }
 
   return Response.json({
     task_id: taskId,
-    status: "queued",
-    status_url: `/api/status/${taskId}`,
+    status: "PENDING",
+    status_url: `/api/syncPull/${taskId}`,
   }, { status: 202, headers });
 };
 
 export const config: Config = {
-  path: "/api/legal-audit-tasks",
+  path: "/api/syncPush",
 };
