@@ -923,15 +923,30 @@
         function toRadarReportRow(vessel) {
             const meta = vessel && vessel.MetaData ? vessel.MetaData : {};
             const coords = typeof getVesselCoords === 'function' ? getVesselCoords(vessel) : [vessel.latitude || meta.latitude, vessel.longitude || meta.longitude];
+            const pol = typeof window.updateGeofencePOLDisplay === 'function' ? window.updateGeofencePOLDisplay() : null;
+            const pod = typeof getAisPODDisplay === 'function' ? getAisPODDisplay() : null;
+            const lat = coords ? Number(coords[0]) : null;
+            const lon = coords ? Number(coords[1]) : null;
+            const loadState = estimateAisLoadState(vessel);
+            const distanceToPolNm = readAisNumber(vessel.distanceToPolNm, meta.distanceToPolNm,
+                Number.isFinite(lat) && Number.isFinite(lon) && pol ? window.getDistance(pol.lat, pol.lon, lat, lon) : null);
+            const distanceToPodNm = readAisNumber(vessel.distanceToPodNm, meta.distanceToPodNm,
+                Number.isFinite(lat) && Number.isFinite(lon) && pod ? window.getDistance(pod.lat, pod.lon, lat, lon) : null);
+            const destinationAvailability = loadState === 'Ballast' && distanceToPodNm !== null && distanceToPodNm <= AIS_RADAR_POD_RADIUS_NM;
             return {
                 mmsi: firstAisText(vessel.MMSI, vessel.mmsi, meta.MMSI) || 'N/A',
                 imo: firstAisText(vessel.IMO, vessel.imo, meta.IMO) || 'N/A',
                 nombre: firstAisText(vessel.vesselName, vessel.ShipName, vessel.name, meta.ShipName) || 'Unknown vessel',
                 calado: readAisNumber(vessel.draught, vessel.draft, vessel.Draught, vessel.Draft, meta.Draught, meta.Draft),
-                latitud: coords ? Number(coords[0]) : null,
-                longitud: coords ? Number(coords[1]) : null,
+                latitud: lat,
+                longitud: lon,
                 tipo: firstAisText(vessel.ShipType, vessel.shipType, meta.ShipType) || 'N/A',
-                shipTypeCode: getAisShipTypeCode(vessel)
+                shipTypeCode: getAisShipTypeCode(vessel),
+                estadoCarga: loadState,
+                distanciaPolNm: distanceToPolNm,
+                distanciaPodNm: distanceToPodNm,
+                disponibilidadDestino: destinationAvailability,
+                alertaCoincidencia: destinationAvailability ? 'Disponibilidad Destino' : ''
             };
         }
 
@@ -1139,12 +1154,15 @@
                 container.innerHTML = '<div style="padding:14px; color:#64748b; font-weight:800;">Sin coincidencias para la taxonomía seleccionada.</div>';
                 return;
             }
-            container.innerHTML = `<table style="margin:0;"><thead><tr><th>MMSI</th><th>IMO</th><th>Nombre</th><th>Calado</th><th>Coordenadas</th><th>Tipo</th><th>Data Bridge</th></tr></thead><tbody>${rows.map(row => {
+            container.innerHTML = `<table style="margin:0;"><thead><tr><th>MMSI</th><th>IMO</th><th>Nombre</th><th>Estado</th><th>Dist. POL</th><th>Dist. POD</th><th>Coincidencia</th><th>Data Bridge</th></tr></thead><tbody>${rows.map(row => {
                 const pendingAudit = isRadarReportVesselPendingAudit(row);
+                const availabilityCell = row.disponibilidadDestino
+                    ? '<span style="display:inline-flex;align-items:center;gap:5px;background:#dbeafe;color:#1d4ed8;border:1px solid #60a5fa;border-radius:999px;padding:3px 8px;font-weight:900;">Disponibilidad Destino</span>'
+                    : '<span style="color:#64748b;">—</span>';
                 const bridgeCell = pendingAudit
                     ? '<span style="display:inline-flex;align-items:center;gap:5px;background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:999px;padding:3px 8px;font-weight:900;">⏳ En Auditoría</span>'
                     : '<button type="button" class="radar-primary-action" style="padding:4px 8px;font-size:0.7rem;" onclick="window.exportSingleRadarVesselToDataBridge(this)" data-vessel-id="' + getRadarReportVesselId(row).replace(/"/g, '&quot;') + '">Exportar</button>';
-                return `<tr data-bridge-state="${pendingAudit ? 'pending_audit' : 'ready'}"><td>${row.mmsi}</td><td>${row.imo}</td><td>${row.nombre}</td><td>${row.calado ?? 'N/A'}</td><td>${Number.isFinite(row.latitud) ? row.latitud.toFixed(4) : 'N/A'}, ${Number.isFinite(row.longitud) ? row.longitud.toFixed(4) : 'N/A'}</td><td>${row.tipo}</td><td>${bridgeCell}</td></tr>`;
+                return `<tr data-bridge-state="${pendingAudit ? 'pending_audit' : 'ready'}" data-destination-availability="${row.disponibilidadDestino ? 'true' : 'false'}"><td>${row.mmsi}</td><td>${row.imo}</td><td>${row.nombre}</td><td>${row.estadoCarga}</td><td>${Number.isFinite(row.distanciaPolNm) ? Math.round(row.distanciaPolNm) + ' MN' : 'N/A'}</td><td>${Number.isFinite(row.distanciaPodNm) ? Math.round(row.distanciaPodNm) + ' MN' : 'N/A'}</td><td>${availabilityCell}</td><td>${bridgeCell}</td></tr>`;
             }).join('')}</tbody></table>`;
         }
 
@@ -1156,7 +1174,11 @@
             const frozenVessels = window.radarWorkflowState.frozenSnapshot;
             const vessels = frozenVessels?.length > 0 ? frozenVessels
                 .filter(v => matchesRadarTaxonomy(v, taxonomyKey))
-                .map(toRadarReportRow) : [];
+                .map(toRadarReportRow)
+                .filter(row => (
+                    (row.estadoCarga === 'Laden' && Number.isFinite(row.distanciaPolNm) && row.distanciaPolNm <= AIS_RADAR_POL_RADIUS_NM) ||
+                    (row.estadoCarga === 'Ballast' && Number.isFinite(row.distanciaPodNm) && row.distanciaPodNm <= AIS_RADAR_POD_RADIUS_NM)
+                )) : [];
             window.radarWorkflowState.report = {
                 generatedAt: new Date().toISOString(),
                 frozenAt: window.radarWorkflowState.frozenAt,
@@ -3080,11 +3102,13 @@
                 scope: 'route'
             });
             if (polPort) {
+                params.set('coords_pol', JSON.stringify([polPort.lat, polPort.lon]));
                 params.set('polLat', String(polPort.lat));
                 params.set('polLon', String(polPort.lon));
                 params.set('polName', polPort.name || polName);
             }
             if (podPort) {
+                params.set('coords_pod', JSON.stringify([podPort.lat, podPort.lon]));
                 params.set('podLat', String(podPort.lat));
                 params.set('podLon', String(podPort.lon));
                 params.set('podName', podPort.name || podName);
@@ -3175,8 +3199,8 @@
             const [lat, lon] = coords;
             const polDistance = pol && pol.lat !== null && pol.lon !== null ? window.getDistance(pol.lat, pol.lon, lat, lon) : Infinity;
             const podDistance = pod ? window.getDistance(pod.lat, pod.lon, lat, lon) : Infinity;
-            if (polDistance <= AIS_RADAR_POL_RADIUS_NM) return { zone: 'POL', color: AIS_RADAR_COLORS.POL, distance: polDistance };
             if (podDistance <= AIS_RADAR_POD_RADIUS_NM) return { zone: 'POD', color: AIS_RADAR_COLORS.POD, distance: podDistance };
+            if (polDistance <= AIS_RADAR_POL_RADIUS_NM) return { zone: 'POL', color: AIS_RADAR_COLORS.POL, distance: polDistance };
             return null;
         }
 
@@ -3240,6 +3264,16 @@
         function applyAisHybridPriority(vessel, lat, lon, pol, pod) {
             const zoneMatch = assignAisRadarZone(vessel, pol, pod);
             const routeCorridor = getAisRouteCorridorMatch(lat, lon, pol, pod);
+            const loadState = estimateAisLoadState(vessel);
+            const distanceToPolNm = pol ? window.getDistance(pol.lat, pol.lon, lat, lon) : null;
+            const distanceToPodNm = pod ? window.getDistance(pod.lat, pod.lon, lat, lon) : null;
+            const destinationAvailability = loadState === 'Ballast' && distanceToPodNm !== null && distanceToPodNm <= AIS_RADAR_POD_RADIUS_NM;
+            vessel.loadState = loadState;
+            vessel.estado_carga = loadState;
+            vessel.distanceToPolNm = distanceToPolNm;
+            vessel.distanceToPodNm = distanceToPodNm;
+            vessel.destinationAvailability = destinationAvailability;
+            vessel.matchAlert = destinationAvailability ? 'Disponibilidad Destino' : '';
             if (zoneMatch && (
                 (zoneMatch.zone === 'POL' && window.aisRadarZoneState.pol) ||
                 (zoneMatch.zone === 'POD' && window.aisRadarZoneState.pod)
@@ -3261,6 +3295,12 @@
                 vessel.MetaData.aisRadarZone = vessel.aisRadarZone;
                 vessel.MetaData.aisRadarColor = vessel.aisRadarColor;
                 vessel.MetaData.aisMarkerStyle = vessel.aisMarkerStyle;
+                vessel.MetaData.loadState = loadState;
+                vessel.MetaData.estado_carga = loadState;
+                vessel.MetaData.distanceToPolNm = distanceToPolNm;
+                vessel.MetaData.distanceToPodNm = distanceToPodNm;
+                vessel.MetaData.destinationAvailability = destinationAvailability;
+                vessel.MetaData.matchAlert = vessel.matchAlert;
                 if (vessel.aisRouteCorridor) vessel.MetaData.aisRouteCorridor = vessel.aisRouteCorridor;
             }
             return vessel;
@@ -3352,6 +3392,10 @@
                 }
                 
                 applyAisHybridPriority(v, lat, lon, pol, pod);
+                const zone = v.aisRadarZone;
+                const loadState = v.loadState || v.estado_carga;
+                if (zone === 'POL' && loadState !== 'Laden') return false;
+                if (zone === 'POD' && loadState !== 'Ballast') return false;
                 
                 return true;
             });
