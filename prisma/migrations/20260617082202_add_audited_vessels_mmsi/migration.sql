@@ -1,1 +1,0 @@
--- Migración restaurada artificialmente para sincronizar el historial de Prisma con Neon.
