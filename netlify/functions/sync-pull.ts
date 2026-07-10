@@ -1,5 +1,5 @@
 import type { Config, Context } from "@netlify/functions";
-import { getSessionSyncTask } from "../../db/session-sync.js";
+import { getSessionSyncTask, SESSION_SYNC_USER_ID } from "../../db/session-sync.js";
 
 const headers = {
   "cache-control": "no-store",
@@ -11,7 +11,7 @@ export default async (req: Request, context: Context) => {
   }
 
   const taskId = String(context.params.task_id || new URL(req.url).pathname.split("/").filter(Boolean).at(-1) || "");
-  const task = taskId ? await getSessionSyncTask(taskId) : null;
+  const task = taskId === SESSION_SYNC_USER_ID ? await getSessionSyncTask() : null;
   if (!task) {
     return Response.json({ error: "Tarea de auditoría no encontrada." }, { status: 404, headers });
   }

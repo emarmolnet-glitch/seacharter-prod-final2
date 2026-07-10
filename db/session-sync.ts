@@ -1,5 +1,7 @@
 import { Pool, type Pool as PgPool } from "pg";
 
+export const SESSION_SYNC_USER_ID = "11111111-1111-1111-1111-111111111111";
+
 export type SessionSyncStatus = "PENDING" | "COMPLETED" | "ERROR";
 
 export type SessionSyncTask = {
@@ -46,18 +48,21 @@ function mapTask(row: Record<string, unknown>): SessionSyncTask {
   };
 }
 
-export async function createSessionSyncTask(taskId: string, requestPayload: unknown) {
+export async function createSessionSyncTask(requestPayload: unknown) {
   await getPool().query(
     `
       INSERT INTO session_sync (user_id, last_sync_data, last_action_module)
       VALUES ($1, $2::jsonb, 'PENDING')
+      ON CONFLICT (user_id) DO UPDATE
+      SET last_sync_data = EXCLUDED.last_sync_data,
+          last_action_module = EXCLUDED.last_action_module
     `,
-    [taskId, JSON.stringify({ request_payload: requestPayload, result: null })],
+    [SESSION_SYNC_USER_ID, JSON.stringify({ request_payload: requestPayload, result: null })],
   );
-  return getSessionSyncTask(taskId);
+  return getSessionSyncTask();
 }
 
-export async function getSessionSyncTask(taskId: string) {
+export async function getSessionSyncTask() {
   const result = await getPool().query(
     `
       SELECT user_id, last_sync_data, last_action_module
@@ -65,41 +70,49 @@ export async function getSessionSyncTask(taskId: string) {
       WHERE user_id = $1
       LIMIT 1
     `,
-    [taskId],
+    [SESSION_SYNC_USER_ID],
   );
   return result.rows[0] ? mapTask(result.rows[0]) : undefined;
 }
 
-export async function completeSessionSyncTask(taskId: string, result: unknown) {
+export async function completeSessionSyncTask(result: unknown) {
+  const data = { result };
+  console.log('[Core PRO] Guardando auditoría en Neon con UUID estático 1111...:', data);
   await getPool().query(
     `
-      UPDATE session_sync
+      INSERT INTO session_sync (user_id, last_sync_data, last_action_module)
+      VALUES (
+        $1,
+        jsonb_build_object('result', $2::jsonb, 'error_message', null),
+        'COMPLETED'
+      )
+      ON CONFLICT (user_id) DO UPDATE
       SET last_sync_data = jsonb_set(
-            jsonb_set(COALESCE(last_sync_data, '{}'::jsonb), '{result}', $2::jsonb, true),
+            jsonb_set(COALESCE(session_sync.last_sync_data, '{}'::jsonb), '{result}', $2::jsonb, true),
             '{error_message}',
             'null'::jsonb,
             true
           ),
-          last_action_module = 'COMPLETED'
-      WHERE user_id = $1
+          last_action_module = EXCLUDED.last_action_module
     `,
-    [taskId, JSON.stringify(result)],
+    [SESSION_SYNC_USER_ID, JSON.stringify(result)],
   );
 }
 
-export async function failSessionSyncTask(taskId: string, errorMessage: string) {
+export async function failSessionSyncTask(errorMessage: string) {
   await getPool().query(
     `
-      UPDATE session_sync
+      INSERT INTO session_sync (user_id, last_sync_data, last_action_module)
+      VALUES ($1, jsonb_build_object('result', null, 'error_message', $2::jsonb), 'ERROR')
+      ON CONFLICT (user_id) DO UPDATE
       SET last_sync_data = jsonb_set(
-            jsonb_set(COALESCE(last_sync_data, '{}'::jsonb), '{result}', 'null'::jsonb, true),
+            jsonb_set(COALESCE(session_sync.last_sync_data, '{}'::jsonb), '{result}', 'null'::jsonb, true),
             '{error_message}',
             $2::jsonb,
             true
           ),
-          last_action_module = 'ERROR'
-      WHERE user_id = $1
+          last_action_module = EXCLUDED.last_action_module
     `,
-    [taskId, JSON.stringify(errorMessage)],
+    [SESSION_SYNC_USER_ID, JSON.stringify(errorMessage)],
   );
 }
