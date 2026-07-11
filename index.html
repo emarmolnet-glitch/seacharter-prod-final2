@@ -14336,8 +14336,6 @@
         window.saveCoreProFrozenReport = saveCoreProFrozenReport;
 
         const CORE_PRO_SESSION_SYNC_USER_ID = '11111111-1111-1111-1111-111111111111';
-        const CORE_PRO_MATCHING_MODULE = 'CORE_PRO_MATCHING';
-
         async function syncCoreProMatchingReport(reportData) {
             const response = await fetch('/api/session-sync', {
                 method: 'POST',
@@ -14346,8 +14344,7 @@
                 },
                 body: JSON.stringify({
                     user_id: CORE_PRO_SESSION_SYNC_USER_ID,
-                    last_action_module: CORE_PRO_MATCHING_MODULE,
-                    last_sync_data: reportData
+                    last_sync_data: Array.isArray(reportData?.vessels) ? reportData.vessels : []
                 })
             });
 
