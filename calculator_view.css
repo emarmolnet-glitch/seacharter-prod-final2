@@ -1,0 +1,495 @@
+/* Rodahmar Shipping stable presentation layer.
+   CSS-only overrides: no operational logic or data bindings are changed. */
+
+:root {
+    --rodahmar-bg: #0b1320;
+    --rodahmar-panel: #0b1320;
+    --rodahmar-field: #0b1320;
+    --rodahmar-border: #2d3748;
+    --rodahmar-text: #ffffff;
+    --rodahmar-muted: #e0e0e0;
+    --rodahmar-green: #004d40;
+}
+
+body,
+main,
+#main-content {
+    background: var(--rodahmar-bg) !important;
+    background-image: none !important;
+    color: var(--rodahmar-text) !important;
+}
+
+header,
+header .module-tabs,
+header .header-actions-right,
+header .tools-dropdown-menu,
+.view-section {
+    background: var(--rodahmar-bg) !important;
+    background-image: none !important;
+    border-color: var(--rodahmar-border) !important;
+    box-shadow: none !important;
+    color: var(--rodahmar-text) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+header h1,
+header p,
+header span,
+header label,
+header i {
+    color: var(--rodahmar-muted) !important;
+    text-shadow: none !important;
+}
+
+header button,
+header .tab-btn,
+header .tools-dropdown-action,
+header select,
+header input {
+    background: var(--rodahmar-panel) !important;
+    background-image: none !important;
+    border: 1px solid var(--rodahmar-border) !important;
+    color: var(--rodahmar-text) !important;
+    box-shadow: none !important;
+}
+
+header button:hover,
+header .tab-btn:hover,
+header .tools-dropdown-action:hover {
+    background: var(--rodahmar-panel) !important;
+    border-color: var(--rodahmar-green) !important;
+    color: var(--rodahmar-muted) !important;
+}
+
+.view-section [class*="bg-gradient"] {
+    background: var(--rodahmar-panel) !important;
+    background-image: none !important;
+}
+
+#view-map,
+#view-estimator,
+#view-gencon,
+#view-auditor,
+#view-ais {
+    background: var(--rodahmar-bg) !important;
+    background-image: none !important;
+    color: var(--rodahmar-text) !important;
+}
+
+#view-map *,
+#view-estimator *,
+#view-gencon *,
+#view-auditor *,
+#view-ais * {
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+#view-map [class*="text-"],
+#view-estimator [class*="text-"],
+#view-gencon [class*="text-"],
+#view-auditor [class*="text-"],
+#view-ais [class*="text-"] {
+    color: var(--rodahmar-muted) !important;
+}
+
+#view-map [class*="bg-"],
+#view-estimator [class*="bg-"],
+#view-gencon [class*="bg-"],
+#view-auditor [class*="bg-"],
+#view-ais [class*="bg-"] {
+    background-color: var(--rodahmar-panel) !important;
+    background-image: none !important;
+}
+
+#view-map [class*="border-"],
+#view-estimator [class*="border-"],
+#view-gencon [class*="border-"],
+#view-auditor [class*="border-"],
+#view-ais [class*="border-"] {
+    border-color: var(--rodahmar-border) !important;
+}
+
+/* Plain blocks and linear separation across all primary modules. */
+#view-map section,
+#view-map .route-sync-card,
+#view-map .map-floating-panel,
+#view-map #map-route-summary > div,
+#view-estimator .estimator-inputs-column > .rounded-xl,
+#view-estimator .estimator-results-rail > .rounded-xl,
+#view-estimator .rounded-xl,
+#view-estimator .rounded-lg,
+#view-gencon #gc-form-view,
+#view-gencon .gencon-view,
+#view-gencon .bg-white,
+#view-gencon .bg-slate-50,
+#view-gencon .bg-slate-100,
+#view-auditor .bg-white,
+#view-auditor .bg-slate-50,
+#view-auditor .bg-slate-100,
+#view-auditor .bg-slate-900,
+#view-auditor #resultsContent > div,
+#view-ais .bg-white,
+#view-ais .bg-slate-50,
+#view-ais .bg-slate-100,
+#view-ais .bg-slate-800,
+#view-ais .bg-slate-900,
+#view-ais .bg-slate-950,
+#view-ais section,
+#view-ais article {
+    background: var(--rodahmar-panel) !important;
+    background-image: none !important;
+    border: 1px solid var(--rodahmar-border) !important;
+    box-shadow: none !important;
+    color: var(--rodahmar-text) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+/* Remove residual light cards and decorative surfaces. */
+#view-map .bg-white,
+#view-map .bg-slate-50,
+#view-map .bg-slate-100,
+#view-estimator .bg-white,
+#view-estimator .bg-slate-50,
+#view-estimator .bg-slate-100,
+#view-estimator .bg-slate-800,
+#view-estimator .bg-slate-900,
+#view-estimator .bg-slate-950,
+#view-estimator .bg-slate-900\/60,
+#view-estimator .bg-slate-950\/50,
+#view-estimator .bg-slate-950\/40,
+#view-estimator .bg-blue-50\/50,
+#view-estimator .bg-blue-950\/40,
+#view-estimator .bg-amber-950\/40,
+#view-gencon [class*="bg-gradient"],
+#view-auditor [class*="bg-gradient"],
+#view-ais [class*="bg-gradient"],
+#view-estimator [class*="bg-gradient"] {
+    background: var(--rodahmar-panel) !important;
+    background-image: none !important;
+    border-color: var(--rodahmar-border) !important;
+    color: var(--rodahmar-text) !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+/* Consistent readable copy; green remains the only semantic accent. */
+#view-map h1,
+#view-map h2,
+#view-map h3,
+#view-map h4,
+#view-estimator h1,
+#view-estimator h2,
+#view-estimator h3,
+#view-estimator h4,
+#view-gencon h1,
+#view-gencon h2,
+#view-gencon h3,
+#view-gencon h4,
+#view-auditor h1,
+#view-auditor h2,
+#view-auditor h3,
+#view-auditor h4,
+#view-ais h1,
+#view-ais h2,
+#view-ais h3,
+#view-ais h4 {
+    color: var(--rodahmar-text) !important;
+}
+
+#view-map p,
+#view-map span,
+#view-map label,
+#view-map li,
+#view-map td,
+#view-map th,
+#view-estimator p,
+#view-estimator span,
+#view-estimator label,
+#view-estimator li,
+#view-estimator td,
+#view-estimator th,
+#view-gencon p,
+#view-gencon span,
+#view-gencon label,
+#view-gencon li,
+#view-gencon td,
+#view-gencon th,
+#view-auditor p,
+#view-auditor span,
+#view-auditor label,
+#view-auditor li,
+#view-auditor td,
+#view-auditor th,
+#view-ais p,
+#view-ais span,
+#view-ais label,
+#view-ais li,
+#view-ais td,
+#view-ais th {
+    color: var(--rodahmar-muted) !important;
+}
+
+#view-map strong,
+#view-map output,
+#view-estimator strong,
+#view-estimator output,
+#view-estimator [id^="res-"],
+#view-gencon strong,
+#view-gencon output,
+#view-auditor strong,
+#view-auditor output,
+#view-ais strong,
+#view-ais output {
+    color: var(--rodahmar-text) !important;
+}
+
+#view-map i,
+#view-estimator i,
+#view-gencon i,
+#view-auditor i,
+#view-ais i {
+    color: currentColor !important;
+}
+
+/* Inputs remain conventional, high-contrast, and unembellished. */
+#view-map input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+#view-map select,
+#view-map textarea,
+#view-estimator input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+#view-estimator select,
+#view-estimator textarea,
+#view-gencon input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+#view-gencon select,
+#view-gencon textarea,
+#view-auditor input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+#view-auditor select,
+#view-auditor textarea,
+#view-ais input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+#view-ais select,
+#view-ais textarea {
+    background: var(--rodahmar-field) !important;
+    background-image: none !important;
+    border: 1px solid var(--rodahmar-border) !important;
+    color: var(--rodahmar-text) !important;
+    box-shadow: none !important;
+    color-scheme: dark;
+}
+
+#view-map input::placeholder,
+#view-map textarea::placeholder,
+#view-estimator input::placeholder,
+#view-estimator textarea::placeholder,
+#view-gencon input::placeholder,
+#view-gencon textarea::placeholder,
+#view-auditor input::placeholder,
+#view-auditor textarea::placeholder,
+#view-ais input::placeholder,
+#view-ais textarea::placeholder {
+    color: var(--rodahmar-muted) !important;
+    opacity: 0.7;
+}
+
+#view-map input:focus,
+#view-map select:focus,
+#view-map textarea:focus,
+#view-estimator input:focus,
+#view-estimator select:focus,
+#view-estimator textarea:focus,
+#view-gencon input:focus,
+#view-gencon select:focus,
+#view-gencon textarea:focus,
+#view-auditor input:focus,
+#view-auditor select:focus,
+#view-auditor textarea:focus,
+#view-ais input:focus,
+#view-ais select:focus,
+#view-ais textarea:focus {
+    border-color: var(--rodahmar-green) !important;
+    box-shadow: none !important;
+    outline: 1px solid var(--rodahmar-green) !important;
+}
+
+#view-map option,
+#view-estimator option,
+#view-gencon option,
+#view-auditor option,
+#view-ais option {
+    background: var(--rodahmar-bg);
+    color: var(--rodahmar-text);
+}
+
+/* Green cells and important fields are the only accent treatment. */
+#view-estimator .required-use-highlight,
+#view-estimator .action-required-field,
+#view-estimator input.required-use-highlight,
+#view-estimator select.required-use-highlight,
+#view-estimator textarea.required-use-highlight,
+#view-estimator .text-emerald-300,
+#view-estimator .text-emerald-400,
+#view-estimator .text-emerald-500,
+#view-estimator .text-emerald-600,
+#view-estimator .text-emerald-700,
+#view-estimator .text-\[\#047857\] {
+    background-color: var(--rodahmar-green) !important;
+    background-image: none !important;
+    border-color: var(--rodahmar-green) !important;
+    color: var(--rodahmar-text) !important;
+    text-shadow: none !important;
+}
+
+#view-map .text-emerald-300,
+#view-map .text-emerald-400,
+#view-map .text-emerald-500,
+#view-map .text-emerald-600,
+#view-map .text-emerald-700,
+#view-gencon .text-emerald-300,
+#view-gencon .text-emerald-400,
+#view-gencon .text-emerald-500,
+#view-gencon .text-emerald-600,
+#view-gencon .text-emerald-700,
+#view-auditor .text-emerald-300,
+#view-auditor .text-emerald-400,
+#view-auditor .text-emerald-500,
+#view-auditor .text-emerald-600,
+#view-auditor .text-emerald-700,
+#view-ais .text-emerald-300,
+#view-ais .text-emerald-400,
+#view-ais .text-emerald-500,
+#view-ais .text-emerald-600,
+#view-ais .text-emerald-700 {
+    color: var(--rodahmar-text) !important;
+}
+
+/* Tables use borders instead of tint, elevation, or glow. */
+#view-map table,
+#view-estimator table,
+#view-gencon table,
+#view-auditor table,
+#view-ais table {
+    background: var(--rodahmar-panel) !important;
+    background-image: none !important;
+    border: 1px solid var(--rodahmar-border) !important;
+    border-collapse: collapse !important;
+    box-shadow: none !important;
+    color: var(--rodahmar-text) !important;
+}
+
+#view-map th,
+#view-map td,
+#view-estimator th,
+#view-estimator td,
+#view-gencon th,
+#view-gencon td,
+#view-auditor th,
+#view-auditor td,
+#view-ais th,
+#view-ais td {
+    background: var(--rodahmar-panel) !important;
+    border: 1px solid var(--rodahmar-border) !important;
+}
+
+#view-map tr:hover,
+#view-estimator tr:hover,
+#view-gencon tr:hover,
+#view-auditor tr:hover,
+#view-ais tr:hover {
+    background: var(--rodahmar-field) !important;
+}
+
+/* Flat controls across all primary modules. */
+#view-map button,
+#view-map .tab-btn,
+#view-estimator button,
+#view-estimator .tab-btn,
+#view-gencon button,
+#view-gencon .tab-btn,
+#view-auditor button,
+#view-auditor .tab-btn,
+#view-ais button,
+#view-ais .tab-btn {
+    background: var(--rodahmar-panel) !important;
+    background-image: none !important;
+    border: 1px solid var(--rodahmar-border) !important;
+    color: var(--rodahmar-text) !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    transform: none !important;
+    filter: none !important;
+}
+
+#view-map button:hover,
+#view-map .tab-btn:hover,
+#view-estimator button:hover,
+#view-estimator .tab-btn:hover,
+#view-gencon button:hover,
+#view-gencon .tab-btn:hover,
+#view-auditor button:hover,
+#view-auditor .tab-btn:hover,
+#view-ais button:hover,
+#view-ais .tab-btn:hover {
+    background: var(--rodahmar-panel) !important;
+    border-color: var(--rodahmar-green) !important;
+    color: var(--rodahmar-muted) !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+#view-map button:focus-visible,
+#view-estimator button:focus-visible,
+#view-gencon button:focus-visible,
+#view-auditor button:focus-visible,
+#view-ais button:focus-visible {
+    outline: 1px solid var(--rodahmar-green) !important;
+    outline-offset: 2px;
+}
+
+/* Estimator summaries and formerly decorative panels stay plain. */
+#view-estimator #total-costs-bar,
+#view-estimator #lumpsum-box,
+#view-estimator #stress-test-panel,
+#view-estimator .estimator-results-rail > div,
+#view-estimator .estimator-results-rail > div:has(#freight-analysis-title),
+#view-estimator .estimator-results-rail > div:has(#freight-analysis-title) * {
+    background-color: var(--rodahmar-panel) !important;
+    background-image: none !important;
+    border-color: var(--rodahmar-border) !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+#view-estimator #btn-viability-ai,
+#view-estimator #btn-viability-ai * {
+    background: var(--rodahmar-panel) !important;
+    background-image: none !important;
+    color: var(--rodahmar-text) !important;
+    font-weight: 700 !important;
+}
+
+/* Preserve map canvases while simplifying their surrounding controls. */
+#view-map #map,
+#view-map #map-host,
+#view-ais #ais-map,
+#view-ais #ais-map-container,
+#view-ais canvas {
+    border: 1px solid var(--rodahmar-border) !important;
+    box-shadow: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #view-map *,
+    #view-estimator *,
+    #view-gencon *,
+    #view-auditor *,
+    #view-ais * {
+        transition: none !important;
+        animation: none !important;
+    }
+}
