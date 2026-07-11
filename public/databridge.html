@@ -1244,16 +1244,6 @@
         }
 
         const SyncService = {
-            async fetchFleet() {
-                const response = await fetch('/api/session-sync', { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
-                const payload = await response.json().catch(() => ({}));
-                if (!response.ok) throw new Error(payload.error || `Fleet sync failed (${response.status})`);
-                const rows = Array.isArray(payload.session_sync) ? payload.session_sync : [];
-                const vessels = rows.flatMap(row => extractIncomingVesselsPayload(row.lastSyncData));
-                receiveCoreProVessels({ vessels }, 'session_sync');
-                return vessels;
-            },
-
             async fetchReports() {
                 const response = await fetch('/api/ia-reports', { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
                 const payload = await response.json().catch(() => ({}));
@@ -1264,11 +1254,10 @@
             },
 
             async refresh() {
-                const results = await Promise.allSettled([this.fetchFleet(), this.fetchReports()]);
-                results.forEach((result, index) => {
+                const results = await Promise.allSettled([this.fetchReports()]);
+                results.forEach((result) => {
                     if (result.status === 'rejected') {
-                        const lane = index === 0 ? 'session_sync' : 'ia_reports';
-                        addLog(`[ERROR] ${getTimestamp()} - Falló la consulta independiente de ${lane}: ${result.reason?.message || result.reason}`);
+                        addLog(`[ERROR] ${getTimestamp()} - Falló la consulta independiente de ia_reports: ${result.reason?.message || result.reason}`);
                     }
                 });
             }
@@ -1547,14 +1536,6 @@
                 card.innerHTML = originalHtml;
                 addLog(`[INFO] ${getTimestamp()} - Intente auditar nuevamente el buque '${name}'.`);
             }
-        }
-
-        if (window.electronAPI && typeof window.electronAPI.onVesselsForAudit === 'function') {
-            window.electronAPI.onVesselsForAudit(() => {
-                SyncService.fetchFleet().catch(error => {
-                    addLog(`[ERROR] ${getTimestamp()} - No se pudo refrescar session_sync tras la señal IPC: ${error.message}`);
-                });
-            });
         }
 
         // Initialize
