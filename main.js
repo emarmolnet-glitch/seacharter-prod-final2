@@ -1,3 +1,8 @@
+// Inyectar estilos espaciales para módulos
+const link = document.createElement('link');
+link.rel = 'stylesheet';
+link.href = 'custom_styles.css';
+document.head.appendChild(link);
 /**
  * SeaCharter Core PRO - Electron Main Process Orchestrator
  * This file manages the application lifecycle and coordinates the windows:
