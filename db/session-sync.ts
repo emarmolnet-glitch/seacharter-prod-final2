@@ -31,10 +31,11 @@ export async function upsertSessionSync(input: SessionSyncInput) {
   await ensureApplicationSchema();
   const result = await getPool().query<SessionSyncDatabaseRow>(
     `
-      INSERT INTO session_sync (user_id, last_sync_data, updated_at)
-      VALUES ($1::uuid, $2::jsonb, NOW())
+      INSERT INTO session_sync (user_id, last_sync_data, last_action_module, updated_at)
+      VALUES ($1::uuid, $2::jsonb, 'CORE_PRO_MATCHING', NOW())
       ON CONFLICT (user_id) DO UPDATE SET
         last_sync_data = EXCLUDED.last_sync_data,
+        last_action_module = 'CORE_PRO_MATCHING',
         updated_at = NOW()
       RETURNING user_id, last_sync_data, updated_at
     `,
