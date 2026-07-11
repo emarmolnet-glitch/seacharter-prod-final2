@@ -14316,9 +14316,9 @@
                 await syncCoreProMatchingReport(frozenReport);
                 
                 if (typeof showToast === 'function') {
-                    showToast("✅ Informe preparado y exportado a Neon.");
+                    showToast("✅ Informe preparado y exportado a Data Bridge.");
                 } else {
-                    alert("✅ Informe preparado y exportado a Neon.");
+                    alert("✅ Informe preparado y exportado a Data Bridge.");
                 }
             } catch (err) {
                 console.error("Error al generar el informe congelado:", err);
@@ -14337,24 +14337,18 @@
         }
         window.saveCoreProFrozenReport = saveCoreProFrozenReport;
 
-        const CORE_PRO_SESSION_SYNC_USER_ID = '1c8db801b-b053-4847-bbc4-edd7d0abbe0e';
-        const CORE_PRO_SESSION_SYNC_ACTION_MODULE = 'CORE_PRO_MATCHING';
         async function syncCoreProMatchingReport(reportData) {
             const vesselsArray = Array.isArray(reportData?.vessels) ? reportData.vessels : [];
-            const payload = {
-                user_id: CORE_PRO_SESSION_SYNC_USER_ID,
-                last_sync_data: {
-                    vessels: vesselsArray,
-                    updated_at: new Date().toISOString()
-                },
-                last_action_module: CORE_PRO_SESSION_SYNC_ACTION_MODULE
-            };
-            const response = await fetch('/api/session-sync', {
+            if (vesselsArray.length === 0) {
+                throw new Error('No hay buques para sincronizar con Data Bridge.');
+            }
+
+            const response = await postDataBridgeReceiveVessels({
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({ vessels: vesselsArray })
             });
 
             const responseText = await response.text();
@@ -14366,11 +14360,11 @@
             }
 
             if (response.status === 200) {
-                console.log('[Core PRO] Exportación enviada a Neon con éxito', responsePayload);
+                console.log('[Core PRO] Flota enviada a Data Bridge con éxito', responsePayload);
             }
 
             if (!response.ok) {
-                throw new Error(responsePayload?.error || responseText || `Neon respondió ${response.status}`);
+                throw new Error(responsePayload?.error || responseText || `Data Bridge respondió ${response.status}`);
             }
 
             return responsePayload;
@@ -14612,7 +14606,6 @@
                     vessels: payloadLimpio
                 });
                 saveCoreProFrozenReport(selectedAuditReport);
-                await syncCoreProMatchingReport(selectedAuditReport);
 
                 const validatedFrozenReport = readValidatedCoreProFrozenReport();
                 const validatedPayload = cleanDataBridgeVesselsPayload(JSON.parse(JSON.stringify(validatedFrozenReport.vessels)));
@@ -14623,10 +14616,6 @@
                 const dataBridgeBatches = chunkVesselsForDataBridge(validatedPayload);
                 console.log(`[Data Bridge] Enviando ${validatedPayload.length} buque(s) en ${dataBridgeBatches.length} lote(s) secuenciales.`, dataBridgeBatches);
 
-                const dataBridgeSecret = typeof process !== 'undefined' && process?.env?.API_SECRET
-                    ? process.env.API_SECRET
-                    : '';
-
                 let acceptedCount = 0;
                 for (let batchIndex = 0; batchIndex < dataBridgeBatches.length; batchIndex += 1) {
                     const batch = dataBridgeBatches[batchIndex];
@@ -14635,7 +14624,6 @@
                     const bridgeResponse = await postDataBridgeReceiveVessels({
                         method: 'POST',
                         headers: {
-                            'Authorization': 'Bearer ' + dataBridgeSecret,
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({ vessels: batch })

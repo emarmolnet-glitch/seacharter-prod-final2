@@ -128,6 +128,7 @@ export default async (req: Request) => {
 
     if (apiKey) {
       headers["x-api-key"] = apiKey;
+      headers.Authorization = `Bearer ${apiKey}`;
     }
 
     const bridgeResponse = await fetch(DATA_BRIDGE_RECEIVE_CORE_DATA_URL, {
