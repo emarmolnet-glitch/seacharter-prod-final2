@@ -1,8 +1,10 @@
-/* Estilo de bordes espaciales para módulos de Rodahmar */
-.module-box, .section, #calculadora-container, #gencon-container {
+/* Bordes espaciales forzados para módulos */
+div[class*="module"], 
+div[class*="container"], 
+div[id*="container"],
+.section {
     border: 2px solid #0b1320 !important;
-    box-shadow: 0 4px 10px rgba(11, 19, 32, 0.2) !important;
-    border-radius: 8px;
-    padding: 15px;
-    background-color: transparent; /* Mantiene tu fondo actual */
+    box-shadow: 0 4px 10px rgba(11, 19, 32, 0.3) !important;
+    border-radius: 8px !important;
+    margin: 10px !important;
 }
