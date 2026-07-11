@@ -252,15 +252,18 @@ export default async (req: Request) => {
     const fuelPrice = (numberValue(params.fuelPrice, 650) || 650) * bunkerMultiplier;
     const dailyOpex = numberValue(params.dailyOpex, 6500) || 6500;
     const portExpenses = (numberValue(params.portExpenses, 40000) || 40000) * riskCoefficient;
+    const matchRadiusNm = numberValue(body.matchRadiusNm, cargo.matchRadiusNm, 2000) || 2000;
 
     if (!Number.isFinite(loadingPortLat) || !Number.isFinite(loadingPortLon)) {
       return Response.json({ success: false, error: "Invalid loading port coordinates", data: [] }, { status: 400, headers: jsonHeaders });
     }
 
-    const matches = vessels
+    const vessels_buffer = vessels
       .map(normalizeVessel)
       .filter((vessel): vessel is NonNullable<ReturnType<typeof normalizeVessel>> => Boolean(vessel))
-      .filter((vessel) => vesselMatchesTaxonomy(vessel, vesselClassValue))
+      .filter((vessel) => vesselMatchesTaxonomy(vessel, vesselClassValue));
+
+    const matches = vessels_buffer
       .map((vessel) => {
         const cementSignal = classifyCementCarrierCandidate(vessel);
         const distance = haversineNm(loadingPortLat, loadingPortLon, vessel.latitude, vessel.longitude);
@@ -380,14 +383,13 @@ export default async (req: Request) => {
           timestamp: Date.now(),
         };
       })
-      .filter((match) => match.scores.overall > 0)
-      .sort((a, b) => b.scores.overall - a.scores.overall || a.ais.currentDistanceToLoadPort - b.ais.currentDistanceToLoadPort)
-      .slice(0, 50);
+      .filter((match) => match.scores.overall > 0 && match.ais.currentDistanceToLoadPort <= matchRadiusNm)
+      .sort((a, b) => b.scores.overall - a.scores.overall || a.ais.currentDistanceToLoadPort - b.ais.currentDistanceToLoadPort);
 
     return Response.json({
       success: true,
       data: matches,
-      snapshot: { frozenAt: body.frozenAt || new Date().toISOString(), vesselCount: vessels.length },
+      snapshot: { frozenAt: body.frozenAt || new Date().toISOString(), vesselCount: vessels_buffer.length },
       memory: { knownVesselsSaved: matches.length },
     }, { headers: jsonHeaders });
   } catch (error) {
