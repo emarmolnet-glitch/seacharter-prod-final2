@@ -3133,6 +3133,128 @@
             background-color: #dbeafe !important;
         }
 
+        .global-opportunities-panel {
+            position: absolute;
+            top: 56px;
+            right: 12px;
+            bottom: 12px;
+            z-index: 900;
+            width: min(320px, calc(100% - 24px));
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid rgba(148, 163, 184, 0.42);
+            border-radius: 12px;
+            background: rgba(248, 250, 252, 0.96);
+            box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
+            backdrop-filter: blur(12px);
+            transform: translateX(0);
+            opacity: 1;
+            transition: transform 180ms ease, opacity 180ms ease;
+        }
+
+        .global-opportunities-panel[hidden] {
+            display: none !important;
+        }
+
+        .global-opportunities-panel.is-collapsed {
+            transform: translateX(calc(100% - 44px));
+        }
+
+        .global-opportunities-panel__header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 52px;
+            padding: 10px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            background: rgba(255, 255, 255, 0.82);
+        }
+
+        .global-opportunities-panel__toggle {
+            width: 30px;
+            height: 30px;
+            flex: 0 0 30px;
+            display: grid;
+            place-items: center;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            color: #1e3a8a;
+            background: #fff;
+            cursor: pointer;
+            transition: transform 160ms ease, background-color 160ms ease;
+        }
+
+        .global-opportunities-panel__toggle:hover,
+        .global-opportunities-panel__toggle:focus-visible {
+            background: #eff6ff;
+            outline: none;
+        }
+
+        .global-opportunities-panel.is-collapsed .global-opportunities-panel__toggle i {
+            transform: rotate(180deg);
+        }
+
+        .global-opportunities-panel__body {
+            min-height: 0;
+            padding: 10px;
+            overflow-y: auto;
+        }
+
+        .global-opportunity-card {
+            padding: 11px;
+            border: 1px solid #e2e8f0;
+            border-left: 3px solid #1e3a8a;
+            border-radius: 9px;
+            background: #fff;
+        }
+
+        .global-opportunity-card + .global-opportunity-card {
+            margin-top: 8px;
+        }
+
+        .global-opportunity-card__map-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: 100%;
+            margin-top: 9px;
+            padding: 7px 10px;
+            border: 1px solid #bfdbfe;
+            border-radius: 7px;
+            color: #1e3a8a;
+            background: #eff6ff;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: background-color 160ms ease, border-color 160ms ease;
+        }
+
+        .global-opportunity-card__map-button:hover,
+        .global-opportunity-card__map-button:focus-visible {
+            border-color: #93c5fd;
+            background: #dbeafe;
+            outline: none;
+        }
+
+        @media (max-width: 720px) {
+            .global-opportunities-panel {
+                top: auto;
+                right: 8px;
+                bottom: 8px;
+                left: 8px;
+                width: auto;
+                max-height: 58%;
+            }
+
+            .global-opportunities-panel.is-collapsed {
+                transform: translateY(calc(100% - 52px));
+            }
+        }
+
         #view-ais table thead tr {
             border-bottom: 2px solid #E2E8F0 !important;
         }
@@ -9887,6 +10009,21 @@
                         </div>
                         <div class="relative">
                             <div id="ais-map" style="height: 450px; min-height: 450px;" class="rounded-lg border border-slate-800 bg-slate-950"></div>
+                            <aside id="global-opportunities-panel" class="global-opportunities-panel" hidden aria-label="Oportunidades globales de Data Bridge">
+                                <div class="global-opportunities-panel__header">
+                                    <button id="global-opportunities-toggle" type="button" class="global-opportunities-panel__toggle" aria-expanded="true" aria-controls="global-opportunities-list" title="Plegar panel">
+                                        <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                                    </button>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <p class="truncate text-[10px] font-black uppercase tracking-[0.12em] text-[#1E3A8A]">Oportunidades globales</p>
+                                            <span id="global-opportunities-count" class="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-800">0</span>
+                                        </div>
+                                        <p class="mt-0.5 truncate text-[10px] text-slate-500">Candidatos óptimos fuera del barrido actual</p>
+                                    </div>
+                                </div>
+                                <div id="global-opportunities-list" class="global-opportunities-panel__body" role="list"></div>
+                            </aside>
                             <!-- Floating button on map -->
                             <div style="position: absolute; top: 10px; right: 10px; z-index: 1000; display: flex; align-items: center; gap: 8px;">
                                 <span id="radar-frozen-timestamp" class="text-xs font-bold text-rose-400 bg-slate-950/80 border border-rose-500/20 px-2.5 py-1 rounded-md" style="display: none;"></span>
@@ -32096,11 +32233,22 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.mapaAIS = null;
             aisClusterGroup = null;
             aisMarkers = [];
+            if (typeof globalOpportunitiesState !== 'undefined') globalOpportunitiesState.focusedMarker = null;
             window.aisProspectionLayers = { group: null, circles: {}, markers: {}, labels: {} };
         }
 
         function updateAisMarkers(vessels) {
             if (!aisMap) return;
+
+            const dataBridgeLocalCandidates = Array.isArray(window.dataBridgeLocalCandidates)
+                ? window.dataBridgeLocalCandidates
+                : [];
+            const renderableVessels = [...(Array.isArray(vessels) ? vessels : []), ...dataBridgeLocalCandidates]
+                .filter((vessel, index, collection) => {
+                    const id = vessel && (vessel.mmsi || vessel.imo || vessel.vesselName);
+                    if (!id) return true;
+                    return collection.findIndex(item => String(item && (item.mmsi || item.imo || item.vesselName)) === String(id)) === index;
+                });
 
             if (!aisClusterGroup) {
                 if (typeof L.markerClusterGroup === 'function') {
@@ -32130,7 +32278,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const newMarkers = [];
             const survivingIds = new Set();
             const routePorts = getCurrentRoutePortNames();
-            vessels.forEach(v => {
+            renderableVessels.forEach(v => {
                 if (Number.isFinite(Number(v.latitude)) && Number.isFinite(Number(v.longitude))) {
                     const isCompatible = window.GlobalStore && window.GlobalStore.compatibleVessels && window.GlobalStore.compatibleVessels.some(cv => 
                         (cv.imo && cv.imo.toString() === v.imo?.toString()) || 
@@ -32200,6 +32348,206 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             window.isFirstLoad = false;
         }
+
+        const globalOpportunitiesState = {
+            candidates: [],
+            localCandidates: [],
+            globalCandidates: [],
+            focusedMarker: null
+        };
+
+        function readGlobalOpportunityValue(candidate, keys) {
+            const sources = [candidate, candidate && candidate.MetaData, candidate && candidate.metadata, candidate && candidate.position];
+            for (const source of sources) {
+                if (!source) continue;
+                for (const key of keys) {
+                    const value = source[key];
+                    if (value !== undefined && value !== null && value !== '') return value;
+                }
+            }
+            return '';
+        }
+
+        function normalizeGlobalOpportunity(candidate, index) {
+            if (!candidate || typeof candidate !== 'object') return null;
+            const normalizedCoordinates = window.MapLoader && typeof window.MapLoader.normalizeCoordinates === 'function'
+                ? window.MapLoader.normalizeCoordinates(candidate)
+                : null;
+            const latitude = normalizedCoordinates ? Number(normalizedCoordinates[0]) : Number(readGlobalOpportunityValue(candidate, ['latitude', 'lat', 'Latitude']));
+            const longitude = normalizedCoordinates ? Number(normalizedCoordinates[1]) : Number(readGlobalOpportunityValue(candidate, ['longitude', 'lon', 'lng', 'Longitude']));
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+            const vesselName = String(readGlobalOpportunityValue(candidate, ['vesselName', 'vessel_name', 'ShipName', 'name', 'nombre']) || 'Buque sin nombre').trim();
+            const port = String(readGlobalOpportunityValue(candidate, ['port', 'currentPort', 'current_port', 'puerto', 'PortName']) || '').trim();
+            const country = String(readGlobalOpportunityValue(candidate, ['country', 'currentCountry', 'current_country', 'pais', 'país', 'Country']) || '').trim();
+            const destination = String(readGlobalOpportunityValue(candidate, ['destination', 'Destination']) || '').trim();
+            const location = [port, country].filter(Boolean).join(', ') || destination || `${latitude.toFixed(3)}°, ${longitude.toFixed(3)}°`;
+            const imo = String(readGlobalOpportunityValue(candidate, ['imo', 'IMO']) || '').trim();
+            const mmsi = String(readGlobalOpportunityValue(candidate, ['mmsi', 'MMSI']) || '').trim();
+
+            return {
+                ...candidate,
+                opportunityId: imo || mmsi || `${vesselName}-${latitude}-${longitude}-${index}`,
+                vesselName,
+                latitude,
+                longitude,
+                port,
+                country,
+                location,
+                imo,
+                mmsi,
+                destination,
+                speed: Number(readGlobalOpportunityValue(candidate, ['speed', 'SOG'])) || 0,
+                statusLabel: String(readGlobalOpportunityValue(candidate, ['statusLabel', 'status', 'NavigationalStatus']) || 'Candidato Data Bridge'),
+                vesselClass: String(readGlobalOpportunityValue(candidate, ['vesselClass', 'vessel_type', 'ShipType']) || 'Data Bridge')
+            };
+        }
+
+        function isGlobalOpportunityInsideCurrentSweep(candidate) {
+            const polName = (document.getElementById('port-pol')?.value || window.State?.pol || '').trim();
+            const portRecord = polName && typeof PORT_DB !== 'undefined' ? PORT_DB[polName] : null;
+            const polPort = portRecord
+                ? { lat: Number(portRecord.lat ?? portRecord.latitude), lon: Number(portRecord.lon ?? portRecord.lng ?? portRecord.longitude) }
+                : null;
+            if (!polPort) return true;
+            const radiusNm = (window.AIS_PROSPECTION_RADII_NM && Number(window.AIS_PROSPECTION_RADII_NM.POL)) || 2000;
+            const toRadians = Math.PI / 180;
+            const dLat = (candidate.latitude - polPort.lat) * toRadians;
+            const dLon = (candidate.longitude - polPort.lon) * toRadians;
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(polPort.lat * toRadians) * Math.cos(candidate.latitude * toRadians) * Math.sin(dLon / 2) ** 2;
+            const distanceNm = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 0.539957;
+            return distanceNm <= radiusNm;
+        }
+
+        function escapeGlobalOpportunityHtml(value) {
+            return String(value ?? '').replace(/[&<>'"]/g, char => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            }[char]));
+        }
+
+        function renderGlobalOpportunitiesPanel() {
+            const panel = document.getElementById('global-opportunities-panel');
+            const list = document.getElementById('global-opportunities-list');
+            const count = document.getElementById('global-opportunities-count');
+            if (!panel || !list || !count) return;
+
+            const candidates = globalOpportunitiesState.globalCandidates;
+            panel.hidden = candidates.length === 0;
+            count.textContent = String(candidates.length);
+            if (!candidates.length) {
+                list.innerHTML = '';
+                return;
+            }
+
+            list.innerHTML = candidates.map(candidate => `
+                <article class="global-opportunity-card" role="listitem">
+                    <div class="flex items-start gap-2.5">
+                        <span class="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-blue-100 bg-blue-50 text-[#1E3A8A]">
+                            <i class="fa-solid fa-ship text-xs" aria-hidden="true"></i>
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <h4 class="truncate text-xs font-black text-slate-800" title="${escapeGlobalOpportunityHtml(candidate.vesselName)}">${escapeGlobalOpportunityHtml(candidate.vesselName)}</h4>
+                            <p class="mt-1 flex items-start gap-1.5 text-[10px] leading-4 text-slate-500">
+                                <i class="fa-solid fa-location-dot mt-0.5 text-slate-400" aria-hidden="true"></i>
+                                <span>${escapeGlobalOpportunityHtml(candidate.location)}</span>
+                            </p>
+                        </div>
+                    </div>
+                    <button type="button" class="global-opportunity-card__map-button" data-global-opportunity-id="${escapeGlobalOpportunityHtml(candidate.opportunityId)}">
+                        <i class="fa-solid fa-crosshairs" aria-hidden="true"></i>
+                        Ver en mapa
+                    </button>
+                </article>
+            `).join('');
+        }
+
+        function createGlobalOpportunityMarker(candidate) {
+            if (!aisMap || typeof L === 'undefined') return null;
+            const icon = L.divIcon({
+                className: 'global-opportunity-map-marker',
+                html: '<div style="width:34px;height:34px;display:grid;place-items:center;border:2px solid #fff;border-radius:50%;color:#fff;background:#1e3a8a;box-shadow:0 8px 20px rgba(15,23,42,.28)"><i class="fa-solid fa-ship" style="font-size:14px"></i></div>',
+                iconSize: [34, 34],
+                iconAnchor: [17, 17],
+                popupAnchor: [0, -18]
+            });
+            const marker = L.marker([candidate.latitude, candidate.longitude], { icon, zIndexOffset: 1400 });
+            marker.bindPopup(`
+                <div class="p-1 text-xs text-slate-900">
+                    <strong>${escapeGlobalOpportunityHtml(candidate.vesselName)}</strong>
+                    <div class="mt-1 text-slate-600">${escapeGlobalOpportunityHtml(candidate.location)}</div>
+                    <div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-blue-800">Oportunidad Data Bridge</div>
+                </div>
+            `);
+            marker.addTo(aisMap);
+            return marker;
+        }
+
+        function focusGlobalOpportunity(opportunityId) {
+            const candidate = globalOpportunitiesState.globalCandidates.find(item => String(item.opportunityId) === String(opportunityId));
+            if (!candidate) return;
+            if (!aisMap) initAisMap();
+            if (!aisMap) return;
+
+            if (globalOpportunitiesState.focusedMarker) aisMap.removeLayer(globalOpportunitiesState.focusedMarker);
+            globalOpportunitiesState.focusedMarker = createGlobalOpportunityMarker(candidate);
+            aisMap.setView([candidate.latitude, candidate.longitude], Math.max(aisMap.getZoom(), 7), { animate: true });
+            globalOpportunitiesState.focusedMarker?.openPopup();
+        }
+
+        function setGlobalOpportunityCandidates(candidates) {
+            const normalizedCandidates = (Array.isArray(candidates) ? candidates : []).map(normalizeGlobalOpportunity).filter(Boolean);
+            const localCandidates = [];
+            const globalCandidates = [];
+
+            normalizedCandidates.forEach(candidate => {
+                if (isGlobalOpportunityInsideCurrentSweep(candidate)) localCandidates.push(candidate);
+                else globalCandidates.push(candidate);
+            });
+
+            globalOpportunitiesState.candidates = normalizedCandidates;
+            globalOpportunitiesState.localCandidates = localCandidates;
+            globalOpportunitiesState.globalCandidates = globalCandidates;
+            window.dataBridgeLocalCandidates = localCandidates;
+            window.dataBridgeGlobalCandidates = globalCandidates;
+            renderGlobalOpportunitiesPanel();
+
+            if (!globalCandidates.length && globalOpportunitiesState.focusedMarker && aisMap) {
+                aisMap.removeLayer(globalOpportunitiesState.focusedMarker);
+                globalOpportunitiesState.focusedMarker = null;
+            }
+
+            if (aisMap) {
+                const currentRadarVessels = Array.isArray(window.aisVesselsData) ? window.aisVesselsData : [];
+                updateAisMarkers(currentRadarVessels);
+            }
+
+            return { localCandidates, globalCandidates };
+        }
+
+        window.setDataBridgeOpportunityCandidates = setGlobalOpportunityCandidates;
+        window.receiveDataBridgeOpportunities = payload => setGlobalOpportunityCandidates(
+            Array.isArray(payload) ? payload : (payload && (payload.candidates || payload.vessels || payload.buques)) || []
+        );
+        window.focusGlobalOpportunity = focusGlobalOpportunity;
+
+        const refreshGlobalOpportunitySeparation = () => {
+            if (globalOpportunitiesState.candidates.length) setGlobalOpportunityCandidates(globalOpportunitiesState.candidates);
+        };
+        document.getElementById('port-pol')?.addEventListener('change', refreshGlobalOpportunitySeparation);
+
+        document.getElementById('global-opportunities-toggle')?.addEventListener('click', () => {
+            const panel = document.getElementById('global-opportunities-panel');
+            const toggle = document.getElementById('global-opportunities-toggle');
+            if (!panel || !toggle) return;
+            const collapsed = panel.classList.toggle('is-collapsed');
+            toggle.setAttribute('aria-expanded', String(!collapsed));
+            toggle.title = collapsed ? 'Desplegar panel' : 'Plegar panel';
+        });
+
+        document.getElementById('global-opportunities-list')?.addEventListener('click', event => {
+            const button = event.target instanceof Element ? event.target.closest('[data-global-opportunity-id]') : null;
+            if (button) focusGlobalOpportunity(button.dataset.globalOpportunityId);
+        });
 
         // --- REAL-TIME AIS SWEEP LAYER (IIFE-scoped to prevent redeclaring errors) ---
         (function() {
@@ -37651,6 +37999,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 hideWebDataBridge();
             } else if (event.data && event.data.type === 'SEACHARTER_DATABRIDGE_FULLSCREEN') {
                 toggleWebDataBridgeFullScreen();
+            } else if (event.data && event.data.type === 'SEACHARTER_DATABRIDGE_OPPORTUNITIES') {
+                const dataBridgeFrame = document.getElementById('web-databridge-iframe');
+                if (event.source !== window && event.source !== dataBridgeFrame?.contentWindow) return;
+                const candidates = event.data.candidates || event.data.vessels || event.data.buques || [];
+                window.receiveDataBridgeOpportunities?.(candidates);
             }
         });
 
