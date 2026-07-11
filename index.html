@@ -14283,10 +14283,10 @@
             if (resultsDiv) resultsDiv.classList.add('hidden');
         }
 
-        function generateFrozenReport() {
+        async function generateFrozenReport() {
             try {
                 if (document && typeof document.querySelector === 'function' && document.querySelector('.matching-audit-select')) {
-                    exportSelectedMatchingToAudit();
+                    await exportSelectedMatchingToAudit();
                     return;
                 }
 
@@ -14307,16 +14307,18 @@
                 
                 console.log("[CONGELAR_REPORTE] Capturando instantánea de " + frozenVessels.length + " buques.");
                 
-                saveCoreProFrozenReport({
+                const frozenReport = {
                     format: 'seacharter.matching.export.v1',
                     created_at: new Date().toISOString(),
                     vessels: frozenVessels
-                });
+                };
+                saveCoreProFrozenReport(frozenReport);
+                await syncCoreProMatchingReport(frozenReport);
                 
                 if (typeof showToast === 'function') {
-                    showToast("✅ Informe preparado. Usa Enviar a Data Bridge para exportarlo.");
+                    showToast("✅ Informe preparado y exportado a Neon.");
                 } else {
-                    alert("✅ Informe preparado. Usa Enviar a Data Bridge para exportarlo.");
+                    alert("✅ Informe preparado y exportado a Neon.");
                 }
             } catch (err) {
                 console.error("Error al generar el informe congelado:", err);
@@ -14335,17 +14337,24 @@
         }
         window.saveCoreProFrozenReport = saveCoreProFrozenReport;
 
-        const CORE_PRO_SESSION_SYNC_USER_ID = '11111111-1111-1111-1111-111111111111';
+        const CORE_PRO_SESSION_SYNC_USER_ID = '1c8db801b-b053-4847-bbc4-edd7d0abbe0e';
+        const CORE_PRO_SESSION_SYNC_ACTION_MODULE = 'CORE_PRO_MATCHING';
         async function syncCoreProMatchingReport(reportData) {
+            const vesselsArray = Array.isArray(reportData?.vessels) ? reportData.vessels : [];
+            const payload = {
+                user_id: CORE_PRO_SESSION_SYNC_USER_ID,
+                last_sync_data: {
+                    vessels: vesselsArray,
+                    updated_at: new Date().toISOString()
+                },
+                last_action_module: CORE_PRO_SESSION_SYNC_ACTION_MODULE
+            };
             const response = await fetch('/api/session-sync', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    user_id: CORE_PRO_SESSION_SYNC_USER_ID,
-                    last_sync_data: Array.isArray(reportData?.vessels) ? reportData.vessels : []
-                })
+                body: JSON.stringify(payload)
             });
 
             const responseText = await response.text();
