@@ -85,11 +85,9 @@ function normalizeCoreVessel(value) {
 }
 
 function buildCoreDataPayload(payload) {
-  return {
-    vessels: getVesselsFromPayload(payload)
-      .map(normalizeCoreVessel)
-      .filter((vessel) => vessel.IMO !== "N/A" || vessel.nombre !== "N/A"),
-  };
+  return getVesselsFromPayload(payload)
+    .map(normalizeCoreVessel)
+    .filter((vessel) => vessel.IMO !== "N/A" || vessel.nombre !== "N/A");
 }
 
 export const handler = async (event) => {
@@ -108,7 +106,7 @@ export const handler = async (event) => {
 
   try {
     const coreDataPayload = buildCoreDataPayload(payload);
-    if (coreDataPayload.vessels.length === 0) {
+    if (coreDataPayload.length === 0) {
       return response(400, { success: false, error: "No valid vessels were provided" });
     }
 
