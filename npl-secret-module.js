@@ -35,8 +35,40 @@
         return lines.join('\n');
     }
 
-    function buildDataBridgePackage(text) {
+    function normalizeOrigin(value) {
+        return value === 'Core PRO' ? 'Core PRO' : 'Externo';
+    }
+
+    function buildTechnicalVessel(vessel, origenDatos) {
+        const detectedAt = new Date().toISOString();
+        return {
+            imo: vessel.imo ? Number(String(vessel.imo).replace(/\D/g, '')) || 0 : 0,
+            is_audit_required: false,
+            vessel_name: vessel.vesselName || 'N/A',
+            dwt: Number.isFinite(Number(vessel.dwt)) ? Math.trunc(Number(vessel.dwt)) : 0,
+            has_gears: false,
+            flag: vessel.flag || 'N/A',
+            last_port: 'N/A',
+            vessel_type: vessel.vesselType || 'N/A',
+            year_built: Number.isFinite(Number(vessel.yearBuilt)) ? Math.trunc(Number(vessel.yearBuilt)) : 0,
+            owner_manager: 'N/A',
+            draft_meters: 0,
+            eta: 'N/A',
+            detected_at: detectedAt,
+            origen_datos: origenDatos,
+            dates: vessel.dates || '',
+            ports: vessel.ports || '',
+            quantity: Number(vessel.quantity) || 0,
+            owner_cost: Number(vessel.ownerCost) || 0,
+            owner_internal_price: Number(vessel.ownerInternalPrice) || 0,
+            charterer_sale_freight: Number(vessel.chartererSaleFreight) || 0,
+            cost_breakdown: { ...(vessel.costBreakdown || {}) }
+        };
+    }
+
+    function buildDataBridgePackage(text, options = {}) {
         const { analysis, sourceProfile, detectionMatrix } = analysisEngine.analyze(text);
+        const origenDatos = normalizeOrigin(options.origenDatos);
         const comparativeReport = buildComparativeReport(analysis, sourceProfile, detectionMatrix);
         const rows = analysis.vessels.map((vessel) =>
             `${vessel.vesselName || 'No presente'} | ${money(vessel.ownerCost)} | ${money(vessel.ownerInternalPrice)} | ${money(vessel.chartererSaleFreight)}`
@@ -56,11 +88,14 @@
             '',
             DATA_BRIDGE_NOTICE
         ].join('\n');
-        const manualImportPackage = analysis.vessels.map((vessel) => ({
-            nombre_buque: vessel.vesselName || 'N/A',
-            imo: vessel.imo ? String(vessel.imo) : 'N/A',
-            dwt: Number.isFinite(Number(vessel.dwt)) ? Math.trunc(Number(vessel.dwt)) : 0
-        }));
+        const technicalVessels = analysis.vessels.map((vessel) => buildTechnicalVessel(vessel, origenDatos));
+        const manualImportPackage = {
+            format: 'seacharter.npl.external.v1',
+            source: 'core-pro-npl-direct',
+            created_at: new Date().toISOString(),
+            origen_datos: origenDatos,
+            vessels: technicalVessels
+        };
 
         return {
             success: true,
@@ -73,8 +108,8 @@
             manualImportPackage,
             manualImportJson: JSON.stringify(manualImportPackage, null, 2),
             persistedCount: 0,
-            confirmation: 'Paquete JSON preparado para carga manual en SeaCharter Data Bridge. No se ha interactuado con base de datos, Prisma ni migraciones.',
-            safetyNotice: 'Modo independiente: el motor especializado analiza datos localmente; la fachada NPL solo prepara reportes y JSON manual.'
+            confirmation: 'Paquete JSON preparado para envío directo a SeaCharter Data Bridge. No se ha interactuado con ninguna base de datos.',
+            safetyNotice: 'Modo independiente: el motor especializado analiza datos localmente y envía el JSON directamente sin pasar por el Motor de Coincidencias.'
         };
     }
 

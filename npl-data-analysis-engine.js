@@ -8,10 +8,21 @@
     function parseNumber(value) {
         const raw = String(value || '').trim();
         if (!raw) return 0;
-        const compact = raw.replace(/\s/g, '');
-        const normalized = compact.includes(',') && compact.includes('.')
-            ? compact.replace(/\./g, '').replace(',', '.')
-            : compact.replace(',', '.');
+        const compact = raw.replace(/\s/g, '').replace(/[^\d,.-]/g, '');
+        const commaCount = (compact.match(/,/g) || []).length;
+        const dotCount = (compact.match(/\./g) || []).length;
+        let normalized = compact;
+
+        if (commaCount && dotCount) {
+            const decimalSeparator = compact.lastIndexOf(',') > compact.lastIndexOf('.') ? ',' : '.';
+            const thousandsSeparator = decimalSeparator === ',' ? '.' : ',';
+            normalized = compact.split(thousandsSeparator).join('').replace(decimalSeparator, '.');
+        } else if (commaCount || dotCount) {
+            const separator = commaCount ? ',' : '.';
+            const groups = compact.split(separator);
+            const isThousandsFormat = groups.length > 1 && groups.slice(1).every((group) => /^\d{3}$/.test(group));
+            normalized = isThousandsFormat ? groups.join('') : compact.replace(separator, '.');
+        }
         const numeric = Number(normalized.replace(/[^\d.-]/g, ''));
         return Number.isFinite(numeric) ? numeric : 0;
     }
@@ -71,6 +82,16 @@
             /(?:dwt|deadweight)\s*[:\-]?\s*([\d.,]+)/i,
             /([\d.,]+)\s*(?:dwt|mt\s+dwt|mts\s+dwt)\b/i
         ], normalized);
+        const vesselType = findText([
+            /(?:vessel\s*type|ship\s*type|tipo\s+de\s+buque|tipo\s+buque)\s*[:\-]\s*([^\n,;]+)/i,
+            /(?:type|tipo)\s*[:\-]\s*([^\n,;]+)/i
+        ], normalized);
+        const flag = findText([
+            /(?:flag|bandera)\s*[:\-]\s*([^\n,;]+)/i
+        ], normalized);
+        const yearBuilt = findNumber([
+            /(?:year\s*built|built\s*year|built|a[nñ]o\s+de\s+construcci[oó]n|a[nñ]o)\s*[:\-]?\s*((?:19|20)\d{2})/i
+        ], normalized);
         const dates = findText([
             /(?:fechas|dates|laycan)\s*[:\-]\s*([^\n;]+)/i,
             /\b(laycan\s+[^\n;]+)/i
@@ -107,6 +128,9 @@
                 vesselName,
                 imo,
                 dwt,
+                vesselType,
+                flag,
+                yearBuilt,
                 dates,
                 ports,
                 quantity,
@@ -124,7 +148,11 @@
         const fields = [
             ['Tipo de fuente', sourceProfile.sourceType, 'contexto'],
             ['Buque', vessel.vesselName, 'dato comercial'],
+            ['Tipo de buque', vessel.vesselType, 'dato tecnico'],
+            ['IMO', vessel.imo, 'dato tecnico'],
             ['DWT', vessel.dwt, 'dato tecnico'],
+            ['Bandera', vessel.flag, 'dato tecnico'],
+            ['Año', vessel.yearBuilt, 'dato tecnico'],
             ['Fechas / Laycan', vessel.dates, 'operacion'],
             ['Puertos / Ruta', vessel.ports, 'operacion'],
             ['Cantidad', vessel.quantity, 'carga'],
