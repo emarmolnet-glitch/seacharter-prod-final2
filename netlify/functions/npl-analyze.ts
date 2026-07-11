@@ -1,5 +1,4 @@
 import type { Config } from "@netlify/functions";
-import { getStore } from "@netlify/blobs";
 import OpenAI from "openai";
 
 type NplRequest = {
@@ -8,34 +7,24 @@ type NplRequest = {
   sourceFileType?: string;
   sourceFileBase64?: string;
   sourceFileDataUrl?: string;
-  costoOperativoEstimado?: number;
-  mercadoPromedio?: number;
+  origenDatos?: "Core PRO" | "Externo";
 };
 
-type CriticalData = {
-  flete: number | null;
-  fleteUnidad: string | null;
-  laycan: string | null;
-  cantidadCarga: number | null;
-  cantidadUnidad: string | null;
-  puertoCarga: string | null;
-  puertoDescarga: string | null;
-  condicionesDemurrage: string | null;
+type TechnicalVessel = {
+  vesselName: string;
+  imo: string;
+  dwt: number;
+  vesselType: string;
+  flag: string;
+  flagAlpha2: string;
+  yearBuilt: number;
+  hasGears: boolean;
+  lastPort: string;
+  ownerManager: string;
+  draftMeters: number;
+  eta: string;
+  specifications: Array<{ field: string; value: string }>;
 };
-
-const SYSTEM_PROMPT = `Eres un analista de mercado marítimo independiente. Recibirás texto extraído de documentos (PDF, capturas de pantalla, Excels). Tu trabajo es puramente analítico y deliberativo:
-
-Extracción de Datos Críticos: Identifica: (a) Flete (Freight Rate), (b) Laycan, (c) Cantidad de carga, (d) Puerto carga/descarga, (e) Condiciones de Demurrage.
-
-Simulación de Escenarios:
-
-Posición Armador: Analiza si el flete cubre costos operativos (OPEX + VOYAGE) según los promedios del mercado.
-
-Posición Fletador: Analiza si el costo de transporte es competitivo para el margen de beneficio de la mercancía.
-
-Veredicto Final: Indica si la oferta es: [Muy Rentable / Rentable / Arriesgada / No Recomendable].
-
-Salida Obligatoria: Debes responder ÚNICAMENTE en formato JSON plano para permitir la automatización de la interfaz.`;
 
 const jsonHeaders = { "content-type": "application/json; charset=utf-8" };
 
@@ -45,13 +34,24 @@ function responseJson(body: unknown, status = 200) {
 
 function parseNumber(value: unknown) {
   const raw = String(value ?? "").trim();
-  if (!raw) return null;
-  const compact = raw.replace(/\s/g, "");
-  const normalized = compact.includes(",") && compact.includes(".")
-    ? compact.replace(/\./g, "").replace(",", ".")
-    : compact.replace(",", ".");
+  if (!raw) return 0;
+  const compact = raw.replace(/\s/g, "").replace(/[^\d,.-]/g, "");
+  const commaCount = (compact.match(/,/g) || []).length;
+  const dotCount = (compact.match(/\./g) || []).length;
+  let normalized = compact;
+  if (commaCount && dotCount) {
+    const decimalSeparator = compact.lastIndexOf(",") > compact.lastIndexOf(".") ? "," : ".";
+    const thousandsSeparator = decimalSeparator === "," ? "." : ",";
+    normalized = compact.split(thousandsSeparator).join("").replace(decimalSeparator, ".");
+  } else if (commaCount || dotCount) {
+    const separator = commaCount ? "," : ".";
+    const groups = compact.split(separator);
+    normalized = groups.length > 1 && groups.slice(1).every((group) => /^\d{3}$/.test(group))
+      ? groups.join("")
+      : compact.replace(separator, ".");
+  }
   const numeric = Number(normalized.replace(/[^\d.-]/g, ""));
-  return Number.isFinite(numeric) ? numeric : null;
+  return Number.isFinite(numeric) ? numeric : 0;
 }
 
 function readDataUrl(dataUrl: string) {
@@ -61,6 +61,12 @@ function readDataUrl(dataUrl: string) {
     contentType: match[1] || "",
     base64: match[2] ? match[3] : Buffer.from(decodeURIComponent(match[3]), "utf8").toString("base64"),
   };
+}
+
+function buildDataUrl(body: NplRequest) {
+  if (String(body.sourceFileDataUrl || "").startsWith("data:")) return String(body.sourceFileDataUrl);
+  if (!body.sourceFileBase64) return "";
+  return `data:${body.sourceFileType || "image/jpeg"};base64,${body.sourceFileBase64}`;
 }
 
 function decodeTextFile(base64: string) {
@@ -73,103 +79,147 @@ function decodeTextFile(base64: string) {
 
 function extractPlainText(input: NplRequest) {
   if (input.text?.trim()) return input.text.trim();
-
   const dataUrl = input.sourceFileDataUrl ? readDataUrl(input.sourceFileDataUrl) : null;
   const contentType = input.sourceFileType || dataUrl?.contentType || "";
   const base64 = input.sourceFileBase64 || dataUrl?.base64 || "";
-  const fileName = input.sourceFileName || "documento";
-  const extension = fileName.includes(".") ? fileName.split(".").pop()?.toLowerCase() : "";
-  const isTextLike = contentType.startsWith("text/") || ["txt", "csv", "md"].includes(extension || "");
-
-  if (base64 && isTextLike) {
-    const text = decodeTextFile(base64);
-    if (text) return text;
+  const extension = String(input.sourceFileName || "").split(".").pop()?.toLowerCase() || "";
+  if (base64 && (contentType.startsWith("text/") || ["txt", "csv", "md"].includes(extension))) {
+    return decodeTextFile(base64);
   }
-
-  if (base64) {
-    return [
-      `[Fuente recibida por Blob: ${fileName}]`,
-      `Tipo: ${contentType || "desconocido"}.`,
-      "No se pudo extraer texto plano en backend para este formato. Envie texto extraido por OCR/PDF/Excel desde el cliente para inferencia completa.",
-    ].join("\n");
-  }
-
   return "";
 }
 
-function extractFallback(text: string): CriticalData {
-  const freight = text.match(/(?:flete|freight|rate)\s*[:\-]?\s*(?:usd|\$)?\s*([\d.,]+)\s*(?:usd)?\s*\/?\s*(mt|tm|ton|tons|t|day|día|dia)?/i);
-  const qty = text.match(/(?:cantidad|quantity|cargo|qty)\s*[:\-]?\s*([\d.,]+)\s*(mt|tm|tons|toneladas|t)?/i) || text.match(/([\d.,]+)\s*(mt|tm|tons|toneladas)\b/i);
-  const route = text.match(/(?:from|desde)\s+([^,\n;]+?)\s+(?:to|a|hasta)\s+([^,\n;]+)/i) || text.match(/(?:pol\s*\/\s*pod|load\s*\/\s*disch)\s*[:\-]\s*([^\/\n;]+)\s*\/\s*([^\n;]+)/i);
-  const laycan = text.match(/(?:laycan|fechas|dates)\s*[:\-]?\s*([^\n;]+)/i);
-  const demurrage = text.match(/(?:demurrage|demoras?)\s*[:\-]?\s*([^\n;]+)/i);
-
+function extractFallback(text: string): TechnicalVessel {
+  const find = (patterns: RegExp[]) => {
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match?.[1]) return match[1].trim();
+    }
+    return "";
+  };
+  const flag = find([/(?:flag|bandera)\s*[:\-]\s*([^\n,;]+)/i]);
   return {
-    flete: parseNumber(freight?.[1]),
-    fleteUnidad: freight?.[2]?.toUpperCase() || null,
-    laycan: laycan?.[1]?.trim() || null,
-    cantidadCarga: parseNumber(qty?.[1]),
-    cantidadUnidad: qty?.[2]?.toUpperCase() || null,
-    puertoCarga: route?.[1]?.trim() || null,
-    puertoDescarga: route?.[2]?.trim() || null,
-    condicionesDemurrage: demurrage?.[1]?.trim() || null,
+    vesselName: find([/(?:vessel\s*name|ship\s*name|nombre\s+del\s+buque|buque|vessel|ship|m\/?v)\s*[:\-]\s*([^\n,;]+)/i]),
+    imo: find([/\bimo\s*(?:no\.?|number|n[uú]mero)?\s*[:\-]?\s*(\d{7})\b/i]),
+    dwt: parseNumber(find([/(?:dwt|deadweight)\s*[:\-]?\s*([\d.,]+)/i, /([\d.,]+)\s*(?:dwt|mt\s+dwt)\b/i])),
+    vesselType: find([/(?:vessel\s*type|ship\s*type|tipo\s+de\s+buque|tipo\s+buque)\s*[:\-]\s*([^\n,;]+)/i]),
+    flag,
+    flagAlpha2: countryAlpha2(flag),
+    yearBuilt: parseNumber(find([/(?:year\s*built|built|a[nñ]o\s+de\s+construcci[oó]n|a[nñ]o)\s*[:\-]?\s*((?:19|20)\d{2})/i])),
+    hasGears: /\b(?:geared|gr[uú]as?)\b/i.test(text),
+    lastPort: "",
+    ownerManager: "",
+    draftMeters: 0,
+    eta: "",
+    specifications: [],
   };
 }
 
-function normalizeCriticalData(value: any, fallback: CriticalData): CriticalData {
-  const data = value?.datosCriticos || value?.criticalData || value || {};
+function countryAlpha2(country: string) {
+  const normalized = country.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  const codes: Record<string, string> = {
+    antigua: "AG", "antigua and barbuda": "AG", bahamas: "BS", barbados: "BB", belize: "BZ",
+    bermuda: "BM", china: "CN", chipre: "CY", cyprus: "CY", dinamarca: "DK", denmark: "DK",
+    espana: "ES", spain: "ES", grecia: "GR", greece: "GR", hongkong: "HK", "hong kong": "HK",
+    india: "IN", indonesia: "ID", "islas caiman": "KY", "cayman islands": "KY", japon: "JP", japan: "JP",
+    liberia: "LR", malta: "MT", "marshall islands": "MH", "islas marshall": "MH", noruega: "NO", norway: "NO",
+    panama: "PA", portugal: "PT", singapur: "SG", singapore: "SG", turquia: "TR", turkey: "TR",
+    "reino unido": "GB", "united kingdom": "GB", vanuatu: "VU", vietnam: "VN", "viet nam": "VN",
+  };
+  return codes[normalized] || (/^[a-z]{2}$/.test(normalized) ? normalized.toUpperCase() : "");
+}
+
+function normalizeVessel(value: any, fallback: TechnicalVessel): TechnicalVessel {
+  const vessel = value?.vessel || value?.buque || value || {};
+  const imo = String(vessel.imo ?? fallback.imo ?? "").replace(/\D/g, "").slice(0, 7);
   return {
-    flete: parseNumber(data.flete ?? data.freightRate) ?? fallback.flete,
-    fleteUnidad: data.fleteUnidad || data.freightUnit || fallback.fleteUnidad,
-    laycan: data.laycan || fallback.laycan,
-    cantidadCarga: parseNumber(data.cantidadCarga ?? data.cargoQuantity) ?? fallback.cantidadCarga,
-    cantidadUnidad: data.cantidadUnidad || data.quantityUnit || fallback.cantidadUnidad,
-    puertoCarga: data.puertoCarga || data.loadPort || fallback.puertoCarga,
-    puertoDescarga: data.puertoDescarga || data.dischargePort || fallback.puertoDescarga,
-    condicionesDemurrage: data.condicionesDemurrage || data.demurrageTerms || fallback.condicionesDemurrage,
+    vesselName: String(vessel.vesselName ?? vessel.vessel_name ?? vessel.nombre_buque ?? fallback.vesselName ?? "").trim(),
+    imo: /^\d{7}$/.test(imo) ? imo : "",
+    dwt: parseNumber(vessel.dwt ?? fallback.dwt),
+    vesselType: String(vessel.vesselType ?? vessel.vessel_type ?? vessel.tipo_buque ?? fallback.vesselType ?? "").trim(),
+    flag: String(vessel.flag ?? vessel.bandera ?? fallback.flag ?? "").trim(),
+    flagAlpha2: String(vessel.flagAlpha2 ?? vessel.flag_alpha2 ?? fallback.flagAlpha2 ?? "").trim().toUpperCase().slice(0, 2)
+      || countryAlpha2(String(vessel.flag ?? vessel.bandera ?? fallback.flag ?? "")),
+    yearBuilt: Math.trunc(parseNumber(vessel.yearBuilt ?? vessel.year_built ?? vessel.ano_construccion ?? fallback.yearBuilt)),
+    hasGears: Boolean(vessel.hasGears ?? vessel.has_gears ?? fallback.hasGears),
+    lastPort: String(vessel.lastPort ?? vessel.last_port ?? "").trim(),
+    ownerManager: String(vessel.ownerManager ?? vessel.owner_manager ?? "").trim(),
+    draftMeters: parseNumber(vessel.draftMeters ?? vessel.draft_meters),
+    eta: String(vessel.eta ?? "").trim(),
+    specifications: Array.isArray(vessel.specifications)
+      ? vessel.specifications
+          .map((item: any) => ({ field: String(item?.field || "").trim(), value: String(item?.value || "").trim() }))
+          .filter((item: { field: string; value: string }) => item.field && item.value)
+      : [],
   };
 }
 
-function analizarRentabilidad(fleteExtraido: number, costoOperativoEstimado: number, mercadoPromedio: number) {
-  const margen = fleteExtraido - costoOperativoEstimado;
-  return {
-    margen,
-    veredictoArmador: margen > 0 ? "Rentable" : "Pérdida operativa",
-    veredictoFletador: fleteExtraido < mercadoPromedio ? "Ventajoso" : "Caro",
-    recomendacion: margen > (fleteExtraido * 0.15) ? "Aceptar oferta" : "Negociar flete",
-  };
-}
-
-function classifyFinalVerdict(flete: number, costo: number, mercado: number) {
-  const margen = flete - costo;
-  if (margen > flete * 0.15 && flete <= mercado) return "Muy Rentable";
-  if (margen > 0) return "Rentable";
-  if (margen > -Math.abs(flete) * 0.1) return "Arriesgada";
-  return "No Recomendable";
-}
-
-async function runInference(text: string) {
+async function extractTechnicalVessel(body: NplRequest, text: string) {
+  const dataUrl = buildDataUrl(body);
+  const canUseVision = Boolean(dataUrl && String(body.sourceFileType || "").startsWith("image/"));
+  const fallback = extractFallback(text);
   const openai = new OpenAI();
-  const completion = await openai.chat.completions.create({
+  const userContent = canUseVision
+    ? [
+        { type: "input_text" as const, text: `Lee la ficha o captura marítima y extrae todos los datos técnicos visibles del buque. No inventes valores. Texto adicional:\n${text}` },
+        { type: "input_image" as const, image_url: dataUrl, detail: "high" as const },
+      ]
+    : `Extrae todos los datos técnicos visibles del buque sin inventar valores:\n${text}`;
+
+  const response = await openai.responses.create({
     model: "gpt-5.2",
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+    input: [
       {
-        role: "user",
-        content: `Devuelve JSON plano con las claves datosCriticos, simulacionArmador, simulacionFletador y veredictoFinal. Texto:\n${text}`,
+        role: "system",
+        content: "Eres un extractor técnico marítimo para SeaCharter Core PRO. Devuelve exclusivamente JSON. Prioriza nombre del buque, IMO, DWT, tipo, bandera, código de país ISO 3166-1 Alfa-2 de la bandera y año de construcción. flag debe contener el país y flagAlpha2 sus dos letras en mayúsculas. Conserva cualquier otra especificación visible dentro de specifications. Usa string vacío o 0 si un dato no aparece.",
       },
+      { role: "user", content: userContent },
     ],
+    text: {
+      format: {
+        type: "json_schema",
+        name: "technical_vessel",
+        strict: true,
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          required: ["vesselName", "imo", "dwt", "vesselType", "flag", "flagAlpha2", "yearBuilt", "hasGears", "lastPort", "ownerManager", "draftMeters", "eta", "specifications"],
+          properties: {
+            vesselName: { type: "string" },
+            imo: { type: "string" },
+            dwt: { type: "number" },
+            vesselType: { type: "string" },
+            flag: { type: "string" },
+            flagAlpha2: { type: "string" },
+            yearBuilt: { type: "number" },
+            hasGears: { type: "boolean" },
+            lastPort: { type: "string" },
+            ownerManager: { type: "string" },
+            draftMeters: { type: "number" },
+            eta: { type: "string" },
+            specifications: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["field", "value"],
+                properties: {
+                  field: { type: "string" },
+                  value: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   });
 
-  const raw = completion.choices[0]?.message?.content || "{}";
-  return JSON.parse(raw);
+  return normalizeVessel(JSON.parse(response.output_text || "{}"), fallback);
 }
 
 export default async (req: Request) => {
-  if (req.method !== "POST") {
-    return responseJson({ error: "Metodo no permitido. Use POST." }, 405);
-  }
+  if (req.method !== "POST") return responseJson({ error: "Metodo no permitido. Use POST." }, 405);
 
   let body: NplRequest;
   try {
@@ -179,69 +229,57 @@ export default async (req: Request) => {
   }
 
   const text = extractPlainText(body);
-  if (!text) {
-    return responseJson({ error: "No hay texto ni archivo procesable para analizar." }, 400);
-  }
+  const dataUrl = buildDataUrl(body);
+  if (!text && !dataUrl) return responseJson({ error: "No hay texto ni imagen procesable para analizar." }, 400);
 
-  const store = getStore("npl-ingesta");
-  const sourceId = crypto.randomUUID();
-  await store.setJSON(sourceId, {
-    sourceFileName: body.sourceFileName || null,
-    sourceFileType: body.sourceFileType || null,
-    receivedAt: new Date().toISOString(),
-    text,
-  });
-
-  const fallback = extractFallback(text);
-  let inference: any = {};
-  let inferenceStatus = "ok";
+  let vessel: TechnicalVessel;
   try {
-    inference = await runInference(text);
+    vessel = await extractTechnicalVessel(body, text);
   } catch (error) {
-    inferenceStatus = "fallback_regex";
-    inference = {
-      datosCriticos: fallback,
-      simulacionArmador: "Inferencia AI no disponible; se aplico extraccion regex.",
-      simulacionFletador: "Inferencia AI no disponible; se aplico extraccion regex.",
-      veredictoFinal: "Arriesgada",
-    };
+    vessel = extractFallback(text);
+    if (!vessel.vesselName && !vessel.imo) {
+      return responseJson({ error: "No se pudieron extraer datos técnicos de la imagen o texto." }, 422);
+    }
   }
 
-  const datosCriticos = normalizeCriticalData(inference, fallback);
-  const fleteExtraido = datosCriticos.flete ?? 0;
-  const costoOperativoEstimado = Number.isFinite(Number(body.costoOperativoEstimado))
-    ? Number(body.costoOperativoEstimado)
-    : Math.round(fleteExtraido * 0.82 * 100) / 100;
-  const mercadoPromedio = Number.isFinite(Number(body.mercadoPromedio))
-    ? Number(body.mercadoPromedio)
-    : Math.round(fleteExtraido * 1.05 * 100) / 100;
-  const decision = analizarRentabilidad(fleteExtraido, costoOperativoEstimado, mercadoPromedio);
-  const veredictoFinal = fleteExtraido > 0
-    ? classifyFinalVerdict(fleteExtraido, costoOperativoEstimado, mercadoPromedio)
-    : "Arriesgada";
+  const origenDatos = body.origenDatos === "Core PRO" ? "Core PRO" : "Externo";
+  const detectedAt = new Date().toISOString();
+  const bridgeVessel = {
+    imo: vessel.imo ? Number(vessel.imo) : 0,
+    is_audit_required: false,
+    vessel_name: vessel.vesselName || "N/A",
+    dwt: Math.trunc(vessel.dwt || 0),
+    has_gears: vessel.hasGears,
+    flag: vessel.flag || "N/A",
+    flag_alpha2: vessel.flagAlpha2 || "N/A",
+    last_port: vessel.lastPort || "N/A",
+    vessel_type: vessel.vesselType || "N/A",
+    year_built: vessel.yearBuilt || 0,
+    owner_manager: vessel.ownerManager || "N/A",
+    draft_meters: vessel.draftMeters || 0,
+    eta: vessel.eta || "N/A",
+    detected_at: detectedAt,
+    origen_datos: origenDatos,
+    specifications: vessel.specifications,
+  };
+  const manualImportPackage = {
+    format: "seacharter.npl.external.v1",
+    source: "core-pro-npl-direct",
+    created_at: detectedAt,
+    origen_datos: origenDatos,
+    vessels: [bridgeVessel],
+  };
 
   return responseJson({
-    modulo: "NPL",
-    arquitectura: "Ingesta -> Inferencia -> Veredicto",
-    sourceId,
-    inferenceStatus,
-    datosCriticos,
-    simulacion: {
-      armador: inference.simulacionArmador || inference.ownerScenario || null,
-      fletador: inference.simulacionFletador || inference.chartererScenario || null,
+    success: true,
+    analysis: {
+      documentType: "Ficha técnica marítima",
+      summary: "Datos técnicos extraídos de la imagen o texto recibido.",
+      vessels: [vessel],
     },
-    motorDecision: {
-      fleteExtraido,
-      costoOperativoEstimado,
-      mercadoPromedio,
-      ...decision,
-    },
-    veredictoFinal,
-    informe: {
-      titulo: "Informe Motor NPL Independiente",
-      resumen: `Oferta ${veredictoFinal}. Armador: ${decision.veredictoArmador}. Fletador: ${decision.veredictoFletador}. Recomendacion: ${decision.recomendacion}.`,
-      imprimible: true,
-    },
+    manualImportPackage,
+    manualImportJson: JSON.stringify(manualImportPackage, null, 2),
+    persistedCount: 0,
   });
 };
 

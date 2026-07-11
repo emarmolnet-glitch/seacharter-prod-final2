@@ -9473,6 +9473,13 @@
                     <button id="commercialNlpBtn" onclick="runCommercialNlpMotor()" class="mt-2 w-full bg-emerald-700 hover:bg-emerald-800 text-white font-medium py-3 px-4 rounded-lg transition-colors flex justify-center items-center shadow-sm">
                         <i class="fa-solid fa-table-list mr-2"></i> Motor NPL · Analizar Documento
                     </button>
+                    <div class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        <label for="commercial-nlp-origin" class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Origen de datos</label>
+                        <select id="commercial-nlp-origin" onchange="handleCommercialNlpOriginChange(this.value)" class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-100">
+                            <option value="Externo" selected>Externo</option>
+                            <option value="Core PRO">Core PRO</option>
+                        </select>
+                    </div>
                 </div>
                 
                 <div id="errorBox" class="hidden bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-md text-sm shadow-sm"></div>
@@ -9512,23 +9519,17 @@
                                 <button id="commercial-nlp-export-json-btn" onclick="downloadCommercialNlpJson()" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition whitespace-nowrap">
                                     <i class="fa-solid fa-file-arrow-down"></i> Exportar JSON
                                 </button>
+                                <button id="commercial-nlp-send-btn" onclick="sendCommercialNlpToDataBridge()" class="bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition whitespace-nowrap">
+                                    <i class="fa-solid fa-paper-plane"></i> Enviar a Data Bridge
+                                </button>
                                 <button onclick="resetCommercialNlpPanel()" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition whitespace-nowrap">
                                     <i class="fa-solid fa-xmark"></i> Cerrar
                                 </button>
                             </div>
                         </div>
-                        <div class="hidden overflow-x-auto">
-                            <table class="w-full text-sm text-left">
-                                <thead class="bg-slate-50 text-slate-600 uppercase text-xs">
-                                    <tr>
-                                        <th class="p-3 border-b border-slate-200">Buque</th>
-                                        <th class="p-3 border-b border-slate-200 text-right">Coste Armador Total</th>
-                                        <th class="p-3 border-b border-slate-200 text-right">Precio Int. Armador (+15%)</th>
-                                        <th class="p-3 border-b border-slate-200 text-right">Flete Venta Fletador (10%)</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="commercial-nlp-rows"></tbody>
-                            </table>
+                        <div class="p-5">
+                            <div id="commercial-nlp-rows" class="grid grid-cols-2 gap-3 sm:grid-cols-3"></div>
+                            <div id="commercial-nlp-send-status" class="hidden mt-4 rounded-lg border px-3 py-2 text-xs font-semibold" role="status" aria-live="polite"></div>
                         </div>
                         <div class="hidden px-5 py-4 bg-slate-50 border-t border-slate-200">
                             <p id="commercial-nlp-confirmation" class="text-sm font-semibold text-emerald-800"></p>
@@ -11833,6 +11834,7 @@
             vessel: "", dwt: 0, class: "", opex: 0, vesselDwtFixed: false,
             userHasEditedSpecialty: false,
             uploadedFile: null,
+            nplDataOrigin: "Externo",
             portBallast: "", pol: "", pod: "",
             distBallast: 0, distLaden: 0, totalDays: 0,
             cargo: 0, loadRate: 0, dischRate: 0,
@@ -14112,7 +14114,7 @@
             
             const text = input.value.trim();
             if (!text) {
-                if (!silent) showToast("Por favor, introduce una descripción de carga.");
+                if (!silent) showToast("Captura una imagen, carga una ficha o introduce datos técnicos del buque.");
                 return;
             }
 
@@ -14123,23 +14125,21 @@
             }
 
             try {
-                const payload = await buildStandaloneNplPayload(text);
+                const payload = await buildStandaloneNplPayload(text, window.lastStandaloneNplSource || null);
                 window.lastStandaloneNplPayload = payload;
                 const vessel = getStandaloneNplDisplayData(payload);
                 const comparativePreview = document.getElementById('nlp-comparative-preview');
 
-                const typeEl = document.getElementById('nlp-res-type');
-                const qtyEl = document.getElementById('nlp-res-qty');
-                const polEl = document.getElementById('nlp-res-pol');
-                const podEl = document.getElementById('nlp-res-pod');
-                const rateEl = document.getElementById('nlp-res-rate');
-                const gearedEl = document.getElementById('nlp-res-geared');
-                if (typeEl) typeEl.innerText = vessel.vesselName || 'No presente';
-                if (qtyEl) qtyEl.innerText = vessel.quantity ? `${Number(vessel.quantity).toLocaleString('es-ES')} MT` : 'No presente';
-                if (polEl) polEl.innerText = vessel.ports || 'No presente';
-                if (podEl) podEl.innerText = vessel.dates || 'No presente';
-                if (rateEl) rateEl.innerText = vessel.freight ? formatCommercialNlpMoney(vessel.freight) : formatCommercialNlpMoney(vessel.chartererSaleFreight || 0);
-                if (gearedEl) gearedEl.innerText = payload.sourceId ? 'Blob NPL' : 'Carga manual Data Bridge';
+                const nameEl = document.getElementById('nlp-res-name');
+                const dwtEl = document.getElementById('nlp-res-dwt');
+                const imoEl = document.getElementById('nlp-res-imo');
+                const flagEl = document.getElementById('nlp-res-flag');
+                const yearEl = document.getElementById('nlp-res-year');
+                if (nameEl) nameEl.innerText = vessel.vesselName || 'No presente';
+                if (dwtEl) dwtEl.innerText = formatStandaloneNplDwt(vessel.dwt);
+                if (imoEl) imoEl.innerText = vessel.imo || 'No presente';
+                if (flagEl) flagEl.innerText = formatStandaloneNplFlag(vessel);
+                if (yearEl) yearEl.innerText = vessel.yearBuilt || 'No presente';
                 if (comparativePreview) comparativePreview.innerText = payload.comparativeReport || buildNplBackendPreview(payload) || 'No hay informe comparativo disponible.';
                 
                 resultsDiv.classList.remove('hidden');
@@ -14155,6 +14155,19 @@
                     btn.disabled = false;
                 }
             }
+        }
+
+        function formatStandaloneNplDwt(value) {
+            const numeric = Math.trunc(Number(value));
+            return Number.isFinite(numeric) && numeric > 0 ? String(numeric) : 'No presente';
+        }
+
+        function formatStandaloneNplFlag(vessel) {
+            const country = String(vessel?.flag || '').trim();
+            const alpha2 = String(vessel?.flagAlpha2 || vessel?.flag_alpha2 || '').trim().toUpperCase().slice(0, 2);
+            if (!country && !alpha2) return 'No presente';
+            if (!country || country === 'N/A') return alpha2 || 'No presente';
+            return alpha2 && !country.toUpperCase().includes(`(${alpha2})`) ? `${country} (${alpha2})` : country;
         }
 
         async function handleNplStandaloneFile(event) {
@@ -14177,6 +14190,12 @@
 
             try {
                 const extractedText = await extractStandaloneNplText(file);
+                const isImage = Boolean(file.type && file.type.startsWith('image/'));
+                window.lastStandaloneNplSource = isImage ? {
+                    sourceFileName: file.name || 'foto-capturada.jpg',
+                    sourceFileType: file.type || 'image/jpeg',
+                    sourceFileDataUrl: await readStandaloneNplFileAsDataUrl(file)
+                } : null;
                 if (input) {
                     input.value = extractedText.trim();
                     input.placeholder = originalPlaceholder;
@@ -14232,6 +14251,15 @@
 
         document.addEventListener('paste', handleStandaloneNplPaste);
 
+        function readStandaloneNplFileAsDataUrl(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ''));
+                reader.onerror = () => reject(new Error('No se pudo leer la imagen seleccionada.'));
+                reader.readAsDataURL(file);
+            });
+        }
+
         async function extractStandaloneNplText(file) {
             const fileName = file.name || (file.type?.startsWith('image/') ? 'foto-capturada.jpg' : 'archivo-cargado');
             const extension = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
@@ -14245,31 +14273,41 @@
             if (extension === 'xlsx' || extension === 'xls') return extractTextFromExcel(file);
             if (extension === 'txt' || extension === 'md' || extension === 'csv') return extractTextFromTxt(file);
             if ((file.type && file.type.startsWith('image/')) || imageExtensions.includes(extension)) {
-                return `[Fotografía captada por Motor NPL: ${fileName}]\nFuente recopilada en memoria local. Añade o corrige debajo el texto visible de la foto para extraer campos comerciales estrictos antes de generar el JSON para Data Bridge.`;
+                return `[Fotografía captada por Motor NPL: ${fileName}]`;
             }
 
             throw new Error('Formato no soportado por el Motor NPL independiente.');
         }
 
-        function downloadStandaloneNplJson() {
+        async function downloadStandaloneNplJson() {
             const input = document.getElementById('nlp-cargo-input');
             const payload = window.lastStandaloneNplPayload || (input?.value?.trim() ? buildCommercialNlpLocalPayload(input.value.trim()) : null);
             if (!payload) {
-                if (typeof showToast === 'function') showToast('Ejecuta primero el Motor NPL para obtener el informe comparativo.');
+                if (typeof showToast === 'function') showToast('Ejecuta primero el Motor NPL para extraer los datos técnicos.');
                 return;
             }
-            downloadJsonPayload(payload.manualImportPackage, 'seacharter-npl-databridge.json');
+            await sendStandaloneNplJsonToDataBridge(payload);
         }
 
         function printStandaloneNplReport() {
             const input = document.getElementById('nlp-cargo-input');
             const payload = window.lastStandaloneNplPayload || (input?.value?.trim() ? buildCommercialNlpLocalPayload(input.value.trim()) : null);
             if (!payload) return;
-            openNplPrintWindow(`${payload.comparativeReport || ''}\n\n${payload.printableReport || ''}`.trim());
+            const vessel = getStandaloneNplDisplayData(payload);
+            openNplPrintWindow([
+                'MOTOR NPL · RESUMEN TÉCNICO DE LA IMAGEN',
+                '',
+                `Nombre del buque: ${vessel.vesselName || 'No presente'}`,
+                `DWT: ${formatStandaloneNplDwt(vessel.dwt)}`,
+                `IMO: ${vessel.imo || 'No presente'}`,
+                `Bandera: ${formatStandaloneNplFlag(vessel)}`,
+                `Año de construcción: ${vessel.yearBuilt || 'No presente'}`
+            ].join('\n'));
         }
 
         function resetStandaloneNplPanel() {
             window.lastStandaloneNplPayload = null;
+            window.lastStandaloneNplSource = null;
             const input = document.getElementById('nlp-cargo-input');
             const sourcePreview = document.getElementById('nlp-source-preview');
             const resultsDiv = document.getElementById('nlp-parsed-results');
@@ -14280,6 +14318,11 @@
                 sourcePreview.classList.add('hidden');
             }
             if (comparativePreview) comparativePreview.innerText = '';
+            const sendStatus = document.getElementById('nlp-direct-send-status');
+            if (sendStatus) {
+                sendStatus.innerText = '';
+                sendStatus.className = 'hidden';
+            }
             if (resultsDiv) resultsDiv.classList.add('hidden');
         }
 
@@ -16865,7 +16908,7 @@
                     <div class="ai-work-card npl-work-card">
                         <div class="npl-card-heading border-b border-slate-200">
                             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 font-sans">Motor NPL · Arma Secreta Data Bridge</h3>
-                            <p class="text-xs text-slate-600 leading-relaxed font-sans">Capta fotos, carga archivos o introduce texto. Este motor independiente analiza primero lo detectado y despues permite imprimir o exportar JSON para Data Bridge sin llamar a APIs, bases de datos ni otros módulos.</p>
+                            <p class="text-xs text-slate-600 leading-relaxed font-sans">Capta una foto, carga una ficha o introduce texto. El Motor NPL extrae los datos técnicos del buque, permite imprimirlos y envía el JSON directamente a Data Bridge sin pasar por el Motor de Coincidencias ni guardar en la base de datos.</p>
                         </div>
                         <div class="npl-input-panel">
                             <input type="file" id="nlp-file-input" class="hidden" accept=".pdf,.docx,.xlsx,.xls,.txt,.csv,.md,.png,.jpg,.jpeg,.webp,.gif,image/*" onchange="handleNplStandaloneFile(event)">
@@ -16894,21 +16937,21 @@
                         <div id="nlp-parsed-results" class="hidden npl-results-panel text-[11px] space-y-1.5 font-sans text-slate-700 bg-slate-50 rounded-lg border border-slate-100">
                             <div class="hidden text-[10px] font-black uppercase tracking-wider text-[#004e64] mb-2"><i class="fa-solid fa-circle-check text-[#25a18e] mr-1"></i> Informe comparativo previo:</div>
                             <pre id="nlp-comparative-preview" class="hidden whitespace-pre-wrap rounded-md border border-amber-200 bg-amber-50 p-2 text-slate-800"></pre>
-                            <div class="hidden text-[10px] font-black uppercase tracking-wider text-[#004e64] pt-1">Datos procesados para carga manual:</div>
-                            <div class="hidden npl-data-grid">
-                                <div class="npl-data-row flex justify-between"><span>Buque:</span><span id="nlp-res-type" class="font-bold text-slate-800">-</span></div>
-                                <div class="npl-data-row flex justify-between"><span>Cantidad / Qty:</span><span id="nlp-res-qty" class="font-bold text-slate-800">-</span></div>
-                                <div class="npl-data-row flex justify-between"><span>Puertos:</span><span id="nlp-res-pol" class="font-bold text-slate-800 truncate max-w-[150px]">-</span></div>
-                                <div class="npl-data-row flex justify-between"><span>Fechas:</span><span id="nlp-res-pod" class="font-bold text-slate-800 truncate max-w-[150px]">-</span></div>
-                                <div class="npl-data-row flex justify-between"><span>Flete venta:</span><span id="nlp-res-rate" class="font-bold text-slate-800">-</span></div>
-                                <div class="npl-data-row flex justify-between"><span>Persistencia:</span><span id="nlp-res-geared" class="font-bold text-slate-800">-</span></div>
+                            <div class="text-[10px] font-black uppercase tracking-wider text-[#004e64] pt-1">Datos técnicos extraídos de la imagen</div>
+                            <div class="npl-data-grid">
+                                <div class="npl-data-row flex justify-between gap-3"><span>Nombre del buque:</span><span id="nlp-res-name" class="font-bold text-right text-slate-800">-</span></div>
+                                <div class="npl-data-row flex justify-between gap-3"><span>DWT:</span><span id="nlp-res-dwt" class="font-bold text-right text-slate-800">-</span></div>
+                                <div class="npl-data-row flex justify-between gap-3"><span>IMO:</span><span id="nlp-res-imo" class="font-bold text-right text-slate-800">-</span></div>
+                                <div class="npl-data-row flex justify-between gap-3"><span>Bandera:</span><span id="nlp-res-flag" class="font-bold text-right text-slate-800">-</span></div>
+                                <div class="npl-data-row flex justify-between gap-3"><span>Año construcción:</span><span id="nlp-res-year" class="font-bold text-right text-slate-800">-</span></div>
                             </div>
+                            <div id="nlp-direct-send-status" class="hidden"></div>
                             <div class="grid grid-cols-3 gap-2 pt-2">
                                 <button type="button" onclick="printStandaloneNplReport()" class="rounded-lg bg-emerald-700 px-3 py-2 text-[11px] font-black uppercase tracking-wider text-white hover:bg-emerald-800">
                                     <i class="fa-solid fa-print mr-1.5"></i> Imprimir
                                 </button>
-                                <button type="button" onclick="downloadStandaloneNplJson()" class="rounded-lg bg-slate-800 px-3 py-2 text-[11px] font-black uppercase tracking-wider text-white hover:bg-slate-900">
-                                    <i class="fa-solid fa-file-arrow-down mr-1.5"></i> JSON
+                                <button id="nlp-json-send-btn" type="button" onclick="downloadStandaloneNplJson()" class="rounded-lg bg-slate-800 px-3 py-2 text-[11px] font-black uppercase tracking-wider text-white hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60">
+                                    <i class="fa-solid fa-paper-plane mr-1.5"></i> JSON / Enviar
                                 </button>
                                 <button type="button" onclick="resetStandaloneNplPanel()" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-wider text-slate-700 hover:bg-slate-50">
                                     <i class="fa-solid fa-xmark mr-1.5"></i> Cerrar
@@ -29218,6 +29261,7 @@ Example:
             if (!previewEl || !textEl || !iconEl) return;
             
             if (type === 'file') {
+                setCommercialNlpOrigin('Externo');
                 const ext = info.split('.').pop().toLowerCase();
                 const imageExtensions = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
                 
@@ -29239,15 +29283,35 @@ Example:
                 }
                 textEl.innerHTML = `Archivo cargado: <span class="font-semibold text-slate-800 mono">${info}</span>`;
             } else if (type === 'addendum') {
+                setCommercialNlpOrigin('Core PRO');
                 iconEl.innerHTML = '<i class="fa-solid fa-file-signature text-indigo-500 text-base shrink-0"></i>';
                 textEl.innerHTML = `Addendum cargado: <span class="font-semibold text-slate-800 mono">${info}</span>`;
             } else if (type === 'paste') {
+                setCommercialNlpOrigin('Externo');
                 iconEl.innerHTML = '<i class="fa-solid fa-clipboard text-amber-500 text-base shrink-0"></i>';
                 textEl.innerHTML = `<span class="font-semibold text-slate-800">Texto pegado/copiado</span> en el auditor`;
             }
             
             previewEl.classList.remove('hidden');
             previewEl.classList.add('flex');
+        }
+
+        function setCommercialNlpOrigin(origin) {
+            const normalizedOrigin = origin === 'Core PRO' ? 'Core PRO' : 'Externo';
+            State.nplDataOrigin = normalizedOrigin;
+            const selector = document.getElementById('commercial-nlp-origin');
+            if (selector) selector.value = normalizedOrigin;
+        }
+
+        function handleCommercialNlpOriginChange(origin) {
+            setCommercialNlpOrigin(origin);
+            const text = document.getElementById('recapInput')?.value.trim();
+            if (!text || !window.lastCommercialNplPayload) return;
+            try {
+                renderCommercialNlpPanel(buildCommercialNlpLocalPayload(text));
+            } catch (error) {
+                console.error('No se pudo actualizar el origen del JSON NPL:', error);
+            }
         }
         
         function clearDocPreview() {
@@ -30122,56 +30186,139 @@ ADDITIONAL NOTES:
             return { ownerInternalPrice, chartererSaleFreight };
         }
 
+        function getCommercialNlpOrigin() {
+            const selectedOrigin = document.getElementById('commercial-nlp-origin')?.value;
+            return selectedOrigin === 'Core PRO' ? 'Core PRO' : 'Externo';
+        }
+
         function buildCommercialNlpLocalPayload(text) {
             if (!window.SeaCharterNplSecretModule || typeof window.SeaCharterNplSecretModule.buildDataBridgePackage !== 'function') {
                 throw new Error('Motor NPL independiente no disponible.');
             }
-            return window.SeaCharterNplSecretModule.buildDataBridgePackage(text);
+            const origenDatos = getCommercialNlpOrigin();
+            State.nplDataOrigin = origenDatos;
+            return window.SeaCharterNplSecretModule.buildDataBridgePackage(text, { origenDatos });
         }
 
-        function normalizeNplPureVesselArray(payload) {
+        function normalizeNplPureVesselArray(payload, origin = getCommercialNlpOrigin()) {
+            const origenDatos = origin === 'Core PRO' ? 'Core PRO' : 'Externo';
             if (Array.isArray(payload)) return payload.map((vessel) => ({
-                nombre_buque: vessel.nombre_buque || vessel.ship || vessel.vesselName || 'N/A',
-                imo: vessel.imo ? String(vessel.imo) : 'N/A',
-                dwt: Number.isFinite(Number(vessel.dwt)) ? Math.trunc(Number(vessel.dwt)) : 0
+                ...vessel,
+                imo: getStrictVesselImo(vessel),
+                is_audit_required: getStrictVesselBoolean(vessel, ['is_audit_required'], false),
+                vessel_name: getStrictVesselString(vessel, ['vessel_name', 'nombre_buque', 'ship', 'vesselName', 'name']),
+                dwt: getStrictVesselNumber(vessel, ['dwt', 'DWT']),
+                has_gears: getStrictVesselBoolean(vessel, ['has_gears', 'gruas', 'gruas_geared'], false),
+                flag: getStrictVesselString(vessel, ['flag', 'Flag', 'bandera']),
+                last_port: getStrictVesselString(vessel, ['last_port', 'lastPort', 'ultimo_puerto']),
+                vessel_type: getStrictVesselString(vessel, ['vessel_type', 'vesselType', 'type', 'tipo', 'tipo_buque']),
+                year_built: getStrictVesselNumber(vessel, ['year_built', 'yearBuilt', 'built', 'builtYear', 'built_year', 'anio_construccion']),
+                owner_manager: getStrictVesselString(vessel, ['owner_manager', 'owner', 'manager', 'armador']),
+                draft_meters: getStrictVesselNumber(vessel, ['draft_meters', 'draft', 'Draft', 'calado']),
+                eta: normalizeStrictVesselDate(getStrictVesselString(vessel, ['eta', 'ETA'], 'N/A')),
+                detected_at: normalizeStrictVesselDate(getStrictVesselString(vessel, ['detected_at', 'detectedAt'], new Date().toISOString())),
+                origen_datos: origenDatos
             }));
             if (Array.isArray(payload?.data_bridge_json)) return normalizeNplPureVesselArray(payload.data_bridge_json);
             if (Array.isArray(payload?.data_bridge_json?.buques_detectados)) return normalizeNplPureVesselArray(payload.data_bridge_json.buques_detectados);
+            if (Array.isArray(payload?.vessels)) return normalizeNplPureVesselArray(payload.vessels, payload.origen_datos || origenDatos);
             if (Array.isArray(payload?.analysis?.vessels)) return normalizeNplPureVesselArray(payload.analysis.vessels);
             if (payload?.datosCriticos) return [];
             return [];
         }
 
-        async function buildStandaloneNplPayload(text) {
+        function buildNplDirectDataBridgeJson(payload) {
+            const origenDatos = payload?.manualImportPackage?.origen_datos || getCommercialNlpOrigin();
+            const existingPackage = payload?.manualImportPackage;
+            const vessels = normalizeNplPureVesselArray(existingPackage || payload, origenDatos);
+            return {
+                ...(existingPackage && !Array.isArray(existingPackage) ? existingPackage : {}),
+                format: existingPackage?.format || 'seacharter.npl.external.v1',
+                source: existingPackage?.source || 'core-pro-npl-direct',
+                created_at: existingPackage?.created_at || new Date().toISOString(),
+                origen_datos: origenDatos,
+                vessels
+            };
+        }
+
+        async function buildStandaloneNplPayload(text, sourceFile = null) {
             try {
                 const response = await fetch('/api/npl-analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text })
+                    body: JSON.stringify({
+                        text,
+                        origenDatos: 'Externo',
+                        ...(sourceFile || {})
+                    })
                 });
                 if (!response.ok) throw new Error(`Motor NPL backend HTTP ${response.status}`);
                 const payload = await response.json();
-                payload.manualImportPackage = normalizeNplPureVesselArray(payload);
+                payload.manualImportPackage = buildNplDirectDataBridgeJson(payload);
                 payload.manualImportJson = JSON.stringify(payload.manualImportPackage, null, 2);
-                payload.printableReport = buildNplBackendPreview(payload);
                 return payload;
             } catch (error) {
+                if (sourceFile?.sourceFileDataUrl) throw error;
                 console.warn('Motor NPL backend no disponible; usando motor local.', error);
                 return buildCommercialNlpLocalPayload(text);
             }
         }
 
         function getStandaloneNplDisplayData(payload) {
-            if (payload?.datosCriticos) {
-                return {
-                    vesselName: 'Oferta maritime',
-                    quantity: payload.datosCriticos.cantidadCarga || 0,
-                    ports: [payload.datosCriticos.puertoCarga, payload.datosCriticos.puertoDescarga].filter(Boolean).join(' / '),
-                    dates: payload.datosCriticos.laycan || '',
-                    freight: payload.datosCriticos.flete || 0
-                };
-            }
             return payload?.analysis?.vessels?.[0] || {};
+        }
+
+        async function sendStandaloneNplJsonToDataBridge(payload) {
+            const directPayload = buildNplDirectDataBridgeJson(payload);
+            const validation = validateNplDirectPayload(directPayload);
+            const button = document.getElementById('nlp-json-send-btn');
+            const status = document.getElementById('nlp-direct-send-status');
+            if (!validation.valid) {
+                if (status) {
+                    status.innerText = validation.message;
+                    status.className = 'rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-800';
+                }
+                if (typeof showToast === 'function') showToast(validation.message);
+                return;
+            }
+
+            const originalHtml = button?.innerHTML || '';
+            if (button) {
+                button.disabled = true;
+                button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Enviando';
+            }
+            if (status) {
+                status.innerText = 'Enviando JSON directamente a Data Bridge...';
+                status.className = 'rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold text-blue-800';
+            }
+
+            try {
+                const response = await fetch(DATA_BRIDGE_RECEIVE_CORE_DATA_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...directPayload, vessels: validation.validVessels })
+                });
+                const responseText = await response.text();
+                let responsePayload = null;
+                try { responsePayload = responseText ? JSON.parse(responseText) : null; } catch (error) { responsePayload = null; }
+                if (!response.ok) throw new Error(responsePayload?.error || responsePayload?.message || responseText || `Data Bridge respondió ${response.status}`);
+                if (status) {
+                    status.innerText = 'JSON enviado correctamente a Data Bridge.';
+                    status.className = 'rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-800';
+                }
+                if (typeof showToast === 'function') showToast('JSON enviado directamente a Data Bridge.');
+            } catch (error) {
+                console.error('Error enviando JSON NPL directo:', error);
+                if (status) {
+                    status.innerText = `Error de envío: ${error.message}`;
+                    status.className = 'rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-800';
+                }
+            } finally {
+                if (button) {
+                    button.disabled = false;
+                    button.innerHTML = originalHtml;
+                }
+            }
         }
 
         function buildNplBackendPreview(payload) {
@@ -30204,26 +30351,30 @@ ADDITIONAL NOTES:
             const printBlock = document.getElementById('commercial-nlp-print-block');
             const jsonBlock = document.getElementById('commercial-nlp-json-block');
             const exportBtn = document.getElementById('commercial-nlp-export-json-btn');
+            const sendBtn = document.getElementById('commercial-nlp-send-btn');
             const vessels = Array.isArray(payload?.analysis?.vessels) ? payload.analysis.vessels : [];
             if (!panel || !rows) return;
 
+            payload.manualImportPackage = buildNplDirectDataBridgeJson(payload);
+            payload.manualImportJson = JSON.stringify(payload.manualImportPackage, null, 2);
             window.lastCommercialNplPayload = payload;
-            summary.innerText = payload?.comparativeReport
-                ? 'Análisis completado. JSON e impresión disponibles.'
-                : (payload?.analysis?.summary || 'Análisis completado. JSON e impresión disponibles.');
-            rows.innerHTML = vessels.length ? vessels.map((vessel) => `
-                <tr class="hover:bg-slate-50">
-                    <td class="p-3 border-b border-slate-100 font-semibold text-slate-800">${escapeHtml(vessel.vesselName || 'No presente')}</td>
-                    <td class="p-3 border-b border-slate-100 text-right font-mono">${formatCommercialNlpMoney(vessel.ownerCost)}</td>
-                    <td class="p-3 border-b border-slate-100 text-right font-mono">${formatCommercialNlpMoney(vessel.ownerInternalPrice)}</td>
-                    <td class="p-3 border-b border-slate-100 text-right font-mono font-bold text-emerald-800">${formatCommercialNlpMoney(vessel.chartererSaleFreight)}</td>
-                </tr>
-            `).join('') : `
-                <tr>
-                    <td colspan="4" class="p-4 text-center text-slate-500">No se detectaron buques en el material recibido.</td>
-                </tr>
-            `;
-            confirmation.innerText = 'Analisis completado en memoria. JSON e impresión disponibles.';
+            summary.innerText = `Resumen técnico · Origen: ${payload.manualImportPackage.origen_datos}`;
+            const vessel = vessels[0] || {};
+            const technicalSummary = [
+                ['Tipo de buque', vessel.vesselType],
+                ['Nombre', vessel.vesselName],
+                ['IMO', vessel.imo],
+                ['DWT', vessel.dwt ? `${Number(vessel.dwt).toLocaleString('es-ES')} MT` : ''],
+                ['Bandera', vessel.flag],
+                ['Año', vessel.yearBuilt]
+            ];
+            rows.innerHTML = vessels.length ? technicalSummary.map(([label, value]) => `
+                <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                    <div class="text-[10px] font-black uppercase tracking-wider text-slate-500">${label}</div>
+                    <div class="mt-1 text-sm font-semibold text-slate-900">${escapeHtml(value || 'No presente')}</div>
+                </div>
+            `).join('') : '<div class="col-span-full rounded-lg border border-amber-200 bg-amber-50 p-4 text-center text-sm text-amber-800">No se detectaron buques en el material recibido.</div>';
+            confirmation.innerText = 'Análisis completado en memoria. El JSON conserva el detalle técnico completo.';
             if (comparativeBlock) comparativeBlock.innerText = payload?.comparativeReport || 'No hay informe comparativo disponible.';
             printBlock.innerText = payload?.printableReport || '';
             if (jsonBlock) jsonBlock.innerText = payload?.manualImportJson || JSON.stringify(payload?.manualImportPackage || {}, null, 2);
@@ -30232,6 +30383,11 @@ ADDITIONAL NOTES:
                 exportBtn.title = 'Exportar JSON';
                 exportBtn.classList.remove('opacity-60', 'cursor-not-allowed');
             }
+            if (sendBtn) {
+                sendBtn.disabled = false;
+                sendBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+            }
+            setCommercialNlpSendStatus('', 'idle');
             panel.classList.remove('hidden');
         }
 
@@ -30311,6 +30467,102 @@ ADDITIONAL NOTES:
                     downloadJsonPayload(JSON.parse(jsonText), 'seacharter-npl-databridge.json');
                 } catch (error) {
                     console.error(error);
+                }
+            }
+        }
+
+        function setCommercialNlpSendStatus(message, state = 'idle') {
+            const status = document.getElementById('commercial-nlp-send-status');
+            if (!status) return;
+            if (!message) {
+                status.textContent = '';
+                status.className = 'hidden mt-4 rounded-lg border px-3 py-2 text-xs font-semibold';
+                return;
+            }
+            const stateClasses = {
+                loading: 'border-blue-200 bg-blue-50 text-blue-800',
+                success: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+                error: 'border-red-200 bg-red-50 text-red-800'
+            };
+            status.textContent = message;
+            status.className = `mt-4 rounded-lg border px-3 py-2 text-xs font-semibold ${stateClasses[state] || stateClasses.loading}`;
+        }
+
+        function validateNplDirectPayload(payload) {
+            const vessels = Array.isArray(payload?.vessels) ? payload.vessels : [];
+            const validVessels = vessels.filter((vessel) => {
+                const imo = getStrictVesselImo(vessel);
+                const name = getStrictVesselString(vessel, ['vessel_name', 'vesselName', 'nombre_buque', 'name'], '');
+                return Boolean(imo || (name && name !== 'N/A'));
+            });
+            return {
+                valid: validVessels.length > 0,
+                validVessels,
+                message: validVessels.length > 0
+                    ? ''
+                    : 'Falta el dato mínimo requerido: añade un IMO válido o el nombre del buque antes de enviar.'
+            };
+        }
+
+        async function sendCommercialNlpToDataBridge() {
+            const currentPayload = window.lastCommercialNplPayload;
+            const sendBtn = document.getElementById('commercial-nlp-send-btn');
+            if (!currentPayload) {
+                setCommercialNlpSendStatus('Primero analiza una imagen o texto para generar el JSON.', 'error');
+                return;
+            }
+
+            const directPayload = buildNplDirectDataBridgeJson(currentPayload);
+            const validation = validateNplDirectPayload(directPayload);
+            if (!validation.valid) {
+                setCommercialNlpSendStatus(validation.message, 'error');
+                if (typeof showToast === 'function') showToast(validation.message);
+                return;
+            }
+
+            const requestPayload = {
+                ...directPayload,
+                vessels: validation.validVessels.map((vessel) => ({
+                    ...vessel,
+                    origen_datos: directPayload.origen_datos
+                }))
+            };
+
+            const originalButtonHtml = sendBtn?.innerHTML || '';
+            if (sendBtn) {
+                sendBtn.disabled = true;
+                sendBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                sendBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
+            }
+            setCommercialNlpSendStatus('Enviando JSON directamente a Data Bridge...', 'loading');
+
+            try {
+                const response = await fetch(DATA_BRIDGE_RECEIVE_CORE_DATA_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestPayload)
+                });
+                const responseText = await response.text();
+                let responsePayload = null;
+                try {
+                    responsePayload = responseText ? JSON.parse(responseText) : null;
+                } catch (error) {
+                    responsePayload = null;
+                }
+                if (!response.ok) {
+                    throw new Error(responsePayload?.error || responsePayload?.message || responseText || `Data Bridge respondió ${response.status}`);
+                }
+                const acceptedCount = Number(responsePayload?.acceptedCount) || requestPayload.vessels.length;
+                setCommercialNlpSendStatus(`${acceptedCount} buque${acceptedCount === 1 ? '' : 's'} enviado${acceptedCount === 1 ? '' : 's'} correctamente a Data Bridge.`, 'success');
+                if (typeof showToast === 'function') showToast('JSON NPL enviado directamente a Data Bridge.');
+            } catch (error) {
+                console.error('Error en el envío directo NPL a Data Bridge:', error);
+                setCommercialNlpSendStatus(`No se pudo enviar el JSON: ${error.message}`, 'error');
+            } finally {
+                if (sendBtn) {
+                    sendBtn.disabled = false;
+                    sendBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                    sendBtn.innerHTML = originalButtonHtml;
                 }
             }
         }
