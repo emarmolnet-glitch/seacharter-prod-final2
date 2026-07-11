@@ -14528,8 +14528,11 @@
         }
         window.mapVesselsForReceiveVessels = mapVesselsForReceiveVessels;
 
+        const DATA_BRIDGE_RECEIVE_CORE_DATA_URL = 'https://calm-shortbread-55bcfc.netlify.app/api/receive-core-data';
+
         async function postDataBridgeReceiveVessels(requestOptions) {
-            return fetch('/api/receive-vessels', requestOptions);
+            console.log('[Data Bridge] URL de sincronización:', DATA_BRIDGE_RECEIVE_CORE_DATA_URL);
+            return fetch(DATA_BRIDGE_RECEIVE_CORE_DATA_URL, requestOptions);
         }
         window.postDataBridgeReceiveVessels = postDataBridgeReceiveVessels;
 
