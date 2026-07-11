@@ -30,14 +30,11 @@
     </script>
     <!-- FontAwesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <!-- Mapbox GL + Leaflet fallback CSS & JS -->
+    <!-- Shared Globe.gl renderer for the master route and AIS density views. -->
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css" rel="stylesheet"/>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css"/>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css"/>
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script src="https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js"></script>
+    <script src="./map_view.js"></script>
     <script type="module" src="./map_loader.js"></script>
     <!-- Maritime Routing Library -->
     <script type="module">
@@ -490,7 +487,7 @@
             background: #004e64 !important;
         }
 
-        #map {
+        #map-container {
             border: 0 !important;
             border-radius: 0 !important;
             height: 100% !important;
@@ -1442,7 +1439,7 @@
             .gencon-box-title { margin-bottom: 1px !important; font-size: 6pt !important; }
         }
 
-        #map { z-index: 10; }
+        #map-container { z-index: 10; }
         .leaflet-control-attribution { display: none !important; }
         .nautical-map-base {
             filter: saturate(1.05) contrast(1.02);
@@ -2226,7 +2223,7 @@
         }
 
         /* Route map owns the full map tab; visual separation belongs to overlays only. */
-        #view-map #map {
+        #view-map #map-container {
             height: 100% !important;
             min-height: 500px !important;
             border: 0 !important;
@@ -6514,7 +6511,7 @@
         <div id="view-map" class="view-section active-block absolute inset-0 overflow-y-auto p-6 scroll-smooth">
             <div id="map-command-shell" class="map-command-shell">
                 <div id="map-host" class="min-h-[450px] h-[520px] w-full rounded-lg border border-[#e0e0e0] bg-blue-100 overflow-hidden shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
-                    <div id="map" class="h-full w-full rounded-lg border border-slate-200 bg-blue-100"></div>
+                    <div id="map-container" class="h-full w-full rounded-lg border border-slate-200 bg-slate-950"></div>
                 </div>
                 <div class="map-control-stack">
                     <button id="btn-map-toggle-input" onclick="toggleRouteInputPanel()" class="map-icon-button" title="Mostrar u ocultar input geográfico" aria-label="Mostrar u ocultar input geográfico">
@@ -10761,7 +10758,7 @@
                 <div class="matching-actions-host">
                     <!-- Run Match Button -->
                     <div id="matching-action-dock" aria-label="Acciones del motor de coincidencias">
-                        <button id="btn-run-matching" onclick="executeMatchingEngine()" class="w-full bg-[#004e64] hover:bg-[#003f52] text-white font-black text-xs uppercase py-3 rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-[#004e64]">
+                        <button id="btn-run-matching" onclick="runMatchingEngine()" class="w-full bg-[#004e64] hover:bg-[#003f52] text-white font-black text-xs uppercase py-3 rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-[#004e64]">
                             <i class="fa-solid fa-play"></i>
                             Ejecutar Coincidencias / Run Match
                         </button>
@@ -12432,7 +12429,9 @@
 
         function resizeRouteMap(routeMap = map) {
             if (!routeMap) return;
-            if (isMapboxRouteMap(routeMap) && typeof routeMap.resize === 'function') {
+            if (window.GlobeMapView && routeMap === window.GlobeMapView.getInstance()) {
+                window.GlobeMapView.resize();
+            } else if (typeof routeMap.resize === 'function') {
                 routeMap.resize();
             } else if (typeof routeMap.invalidateSize === 'function') {
                 routeMap.invalidateSize();
@@ -15236,23 +15235,34 @@
                     window.toggleLiveTracking();
                 }
 
-                const contextVessels = window.vesselClassContext && Array.isArray(window.vesselClassContext.filteredVessels)
-                    ? window.vesselClassContext.filteredVessels
-                    : null;
+                const rawStoreVessels = window.GlobalStore && typeof window.GlobalStore.getRawVessels === 'function'
+                    ? window.GlobalStore.getRawVessels()
+                    : [];
+                const normalizedStoreVessels = window.GlobalStore && typeof window.GlobalStore.getVessels === 'function'
+                    ? window.GlobalStore.getVessels()
+                    : [];
                 const matchingVessels = window.GlobalStore && Array.isArray(window.GlobalStore.matchingVessels)
                     ? window.GlobalStore.matchingVessels
-                    : null;
-                const rawVessels = matchingVessels
-                    || contextVessels
-                    || (window.GlobalStore && typeof window.GlobalStore.getRawVessels === 'function'
-                        ? window.GlobalStore.getRawVessels()
-                        : (window.GlobalStore && typeof window.GlobalStore.getVessels === 'function'
-                            ? window.GlobalStore.getVessels()
-                            : []));
+                    : [];
+                const contextVessels = window.vesselClassContext && Array.isArray(window.vesselClassContext.filteredVessels)
+                    ? window.vesselClassContext.filteredVessels
+                    : [];
+                const vessels_buffer = Array.from(new Map(
+                    [...rawStoreVessels, ...normalizedStoreVessels, ...matchingVessels, ...contextVessels]
+                        .filter(Boolean)
+                        .map((vessel, index) => {
+                            const key = String(
+                                vessel.mmsi || vessel.MMSI || vessel.imo || vessel.IMO ||
+                                vessel.vesselName || vessel.name || vessel.ShipName ||
+                                `${vessel.latitude || vessel.lat || ''}:${vessel.longitude || vessel.lon || vessel.lng || ''}:${index}`
+                            );
+                            return [key, vessel];
+                        })
+                ).values());
 
                 return {
                     frozenAt: new Date().toISOString(),
-                    vessels: JSON.parse(JSON.stringify(Array.isArray(rawVessels) ? rawVessels : []))
+                    vessels: JSON.parse(JSON.stringify(Array.isArray(vessels_buffer) ? vessels_buffer : []))
                 };
             };
 
@@ -15458,7 +15468,8 @@
                     radarSnapshot: radarSnapshot.vessels,
                     vesselClassContext: window.vesselClassContext || null,
                     frozenAt: radarSnapshot.frozenAt,
-                    searchMode: window.currentOperationMode || 'local'
+                    searchMode: window.currentOperationMode || 'local',
+                    matchRadiusNm: (window.AIS_PROSPECTION_RADII_NM && Number(window.AIS_PROSPECTION_RADII_NM.POL)) || 2000
                 };
 
                 const res = await fetch('/api/ai-ais-filter', {
@@ -16163,6 +16174,10 @@
                 btn.innerHTML = '<i class="fa-solid fa-play"></i> Ejecutar Coincidencias / Run Match';
             }
         }
+        async function runMatchingEngine() {
+            return executeMatchingEngine();
+        }
+        window.runMatchingEngine = runMatchingEngine;
 
         function applyMatchingVesselToCalculator(vesselJsonEscaped, loadPortLat, loadPortLon, unloadPortLat, unloadPortLon, quantity, freightRate, cargoType, loadName, unloadName) {
             try {
@@ -17608,7 +17623,7 @@
 
         function mountRouteMap(hostId) {
             const host = document.getElementById(hostId);
-            const mapEl = document.getElementById('map');
+            const mapEl = document.getElementById('map-container');
             if (!host || !mapEl) return;
             if (!host.contains(mapEl)) {
                 host.appendChild(mapEl);
@@ -17617,6 +17632,7 @@
         }
 
         function ensureRouteBaseLayer() {
+            if (window.GlobeMapView && map === window.GlobeMapView.getInstance()) return;
             if (!map || isMapboxRouteMap(map) || typeof L === 'undefined' || typeof L.tileLayer !== 'function') return;
 
             if (!routeBaseLayer || !map.hasLayer(routeBaseLayer)) {
@@ -17639,13 +17655,16 @@
             if (map) {
                 window.map = map;
                 resizeRouteMap(map);
-                window.MapController?.attachRouteMap(map);
+                if (!window.GlobeMapView || map !== window.GlobeMapView.getInstance()) {
+                    window.MapController?.attachRouteMap(map);
+                }
             }
 
             return map;
         }
 
         function ensureRouteOverlayLayers(routeMap = map) {
+            if (window.GlobeMapView && routeMap === window.GlobeMapView.getInstance()) return;
             if (!routeMap || isMapboxRouteMap(routeMap) || typeof L === 'undefined') return;
             ensureLeafletRouteLinePane(routeMap);
             if (!routeMarkerLayer) {
@@ -17657,12 +17676,12 @@
 
         function isMasterRouteMapMounted() {
             const host = document.getElementById('map-host');
-            const mapEl = document.getElementById('map');
+            const mapEl = document.getElementById('map-container');
             return Boolean(host && mapEl && host.contains(mapEl) && map);
         }
 
         function initMap() {
-            const mapContainer = document.getElementById('map');
+            const mapContainer = document.getElementById('map-container');
             if (!mapContainer) {
                 setTimeout(initMap, 100);
                 return;
@@ -17671,34 +17690,14 @@
                 resizeRouteMap(map);
                 return;
             }
-            if (window.MapLoader && typeof window.MapLoader.createUnifiedMap === 'function') {
-                map = window.MapLoader.createUnifiedMap('map', { center: [35, 0], zoom: 3 });
-                window.map = map;
-                if (isMapboxRouteMap(map)) {
-                    map.once('load', () => {
-                        resizeRouteMap(map);
-                        renderMasterRouteMap(State.routeGeometry);
-                    });
-                    return;
-                }
-                ensureRouteBaseLayer();
-                ensureRouteOverlayLayers(map);
-                return;
-            }
-            if (typeof L === 'undefined' || typeof L.map !== 'function') {
-                console.error('Leaflet no está disponible; no se puede iniciar el mapa de ruta.');
-                return;
-            }
-            if (mapContainer._leaflet_id) {
-                ensureRouteBaseLayer();
-                if (map) window.map = map;
-                return;
-            }
-
-            map = L.map(mapContainer, {zoomControl: true, attributionControl: false, preferCanvas: true}).setView([35, 0], 3);
+            map = window.GlobeMapView?.mount({
+                containerId: 'map-container',
+                vesselsData: Array.isArray(window.vessels_data)
+                    ? window.vessels_data
+                    : (window.GlobalStore?.getRawVessels?.() || [])
+            });
             window.map = map;
-            ensureRouteBaseLayer();
-            ensureRouteOverlayLayers(map);
+            if (State.routeGeometry) window.GlobeMapView?.setRouteResult(State.routeGeometry);
         }
 
         async function getCoordinates(query) {
@@ -18339,6 +18338,23 @@
 
         function renderMasterRouteMap(result = State.routeGeometry) {
             if (!result) return false;
+            if (window.GlobeMapView) {
+                const routeGlobe = ensureRouteMapReady('map-host');
+                if (!routeGlobe || !isMasterRouteMapMounted()) {
+                    scheduleRouteMapRedraw(180, () => renderMasterRouteMap(result));
+                    return false;
+                }
+                window.GlobeMapView.updateVessels(
+                    Array.isArray(window.vessels_data)
+                        ? window.vessels_data
+                        : (window.GlobalStore?.getRawVessels?.() || [])
+                );
+                window.GlobeMapView.setRouteResult(result);
+                if (window.GlobeMapView.getInstance('density')) {
+                    window.GlobeMapView.setRouteResult(result, 'density', { focus: false });
+                }
+                return true;
+            }
             if (window.MapController) {
                 const managedRouteMap = ensureRouteMapReady('map-host');
                 window.MapController.attachRouteMap(managedRouteMap);
@@ -31251,6 +31267,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const port = state.zones.POL.port || getAisRoutePortForVisual('POL');
             if (!port) return false;
             state.zones.POL.port = port;
+            const pod = state.zones.POD.port || getAisRoutePortForVisual('POD');
+            if (pod) state.zones.POD.port = pod;
+            if (window.GlobeMapView?.getInstance('density')) {
+                window.GlobeMapView.setRoute(port, pod, 'density', { focus: options.fit !== false });
+                return true;
+            }
             window.MapController?.drawPOL(port);
 
             if (options.fit !== false && typeof mapInstance.setView === 'function') {
@@ -32160,6 +32182,20 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function initAisMap() {
             const mapContainer = document.getElementById('ais-map');
             if (!mapContainer) return;
+            if (window.GlobeMapView) {
+                aisMap = window.GlobeMapView.mount({
+                    key: 'density',
+                    containerId: 'ais-map',
+                    vesselsData: window.GlobalStore?.getRawVessels?.() || window.GlobalStore?.getVessels?.() || [],
+                    autoRotate: true
+                });
+                window.mapaAIS = aisMap;
+                const pol = getAisRoutePortForVisual('POL');
+                const pod = getAisRoutePortForVisual('POD');
+                window.GlobeMapView.setRoute(pol, pod, 'density', { focus: false });
+                updateAisMarkers(window.GlobalStore?.getRawVessels?.() || window.GlobalStore?.getVessels?.() || []);
+                return;
+            }
             if (typeof L === 'undefined' || typeof L.map !== 'function') {
                 console.error('Leaflet no está disponible; no se puede iniciar el radar AIS.');
                 return;
@@ -32223,6 +32259,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function destroyAisMap() {
             if (!aisMap) return;
             cancelAisMapAnimationFrame();
+            if (window.GlobeMapView?.getInstance('density') === aisMap) {
+                window.GlobeMapView.destroy('density');
+                aisMap = null;
+                window.mapaAIS = null;
+                aisClusterGroup = null;
+                aisMarkers = [];
+                if (typeof globalOpportunitiesState !== 'undefined') globalOpportunitiesState.focusedMarker = null;
+                return;
+            }
             window.MapController?.detachDensityMap(aisMap);
             try {
                 aisMap.remove();
@@ -32249,6 +32294,29 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     if (!id) return true;
                     return collection.findIndex(item => String(item && (item.mmsi || item.imo || item.vesselName)) === String(id)) === index;
                 });
+
+            if (window.GlobeMapView?.getInstance('density') === aisMap) {
+                window.GlobeMapView.updateVessels(renderableVessels, 'density');
+                aisMarkers = renderableVessels
+                    .filter((vessel) => Number.isFinite(Number(vessel.latitude ?? vessel.lat)) && Number.isFinite(Number(vessel.longitude ?? vessel.lon ?? vessel.lng)))
+                    .map((vessel) => ({
+                        vesselData: vessel,
+                        getLatLng: () => ({
+                            lat: Number(vessel.latitude ?? vessel.lat),
+                            lng: Number(vessel.longitude ?? vessel.lon ?? vessel.lng)
+                        }),
+                        setLatLng: () => {},
+                        bindPopup: () => {},
+                        setIcon: () => {},
+                        openPopup: () => window.GlobeMapView.focusVessel(vessel, 'density')
+                    }));
+                aisClusterGroup = {
+                    clearLayers: () => window.GlobeMapView.updateVessels([], 'density'),
+                    addLayer: () => {},
+                    removeLayer: () => {}
+                };
+                return;
+            }
 
             if (!aisClusterGroup) {
                 if (typeof L.markerClusterGroup === 'function') {
@@ -32462,6 +32530,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function createGlobalOpportunityMarker(candidate) {
+            if (window.GlobeMapView?.getInstance('density')) {
+                return {
+                    vesselData: candidate,
+                    openPopup: () => window.GlobeMapView.focusVessel(candidate, 'density'),
+                    remove: () => {}
+                };
+            }
             if (!aisMap || typeof L === 'undefined') return null;
             const icon = L.divIcon({
                 className: 'global-opportunity-map-marker',
@@ -32488,6 +32563,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (!aisMap) initAisMap();
             if (!aisMap) return;
 
+            if (window.GlobeMapView?.getInstance('density')) {
+                globalOpportunitiesState.focusedMarker = createGlobalOpportunityMarker(candidate);
+                window.GlobeMapView.focusVessel(candidate, 'density');
+                return;
+            }
             if (globalOpportunitiesState.focusedMarker) aisMap.removeLayer(globalOpportunitiesState.focusedMarker);
             globalOpportunitiesState.focusedMarker = createGlobalOpportunityMarker(candidate);
             aisMap.setView([candidate.latitude, candidate.longitude], Math.max(aisMap.getZoom(), 7), { animate: true });
@@ -32593,14 +32673,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 // 2. Automatically locate on the map
                 const mapAIS = window.mapaAIS || window.mapAIS || window.map;
                 if (mapAIS) {
-                    mapAIS.setView([lat, lon], 10); // Zooms in on the ship
+                    if (window.GlobeMapView?.getInstance('density')) {
+                        window.GlobeMapView.focusVessel({ name, vesselName: name, mmsi, imo, lat, lng: lon, latitude: lat, longitude: lon }, 'density');
+                    } else {
+                        mapAIS.setView([lat, lon], 10); // Zooms in on the ship
 
-                    // Automatically opens the popup
-                    mapAIS.eachLayer((layer) => {
-                        if (layer instanceof L.Marker && layer.getLatLng().lat === lat && layer.getLatLng().lng === lon) {
-                            layer.openPopup();
-                        }
-                    });
+                        // Automatically opens the popup
+                        mapAIS.eachLayer((layer) => {
+                            if (layer instanceof L.Marker && layer.getLatLng().lat === lat && layer.getLatLng().lng === lon) {
+                                layer.openPopup();
+                            }
+                        });
+                    }
                 }
                 console.log(`Selected: ${name} (${mmsi}) at coordinates ${lat}, ${lon}, IMO: ${imo}, Dest: ${destination}`);
             };

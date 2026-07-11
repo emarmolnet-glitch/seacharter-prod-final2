@@ -1245,12 +1245,16 @@
 
         const SyncService = {
             async fetchReports() {
-                const response = await fetch('/api/ia-reports', { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
-                const payload = await response.json().catch(() => ({}));
-                if (!response.ok) throw new Error(payload.error || `IA report sync failed (${response.status})`);
-                const reports = Array.isArray(payload.ia_reports) ? payload.ia_reports : [];
-                renderIaReports(reports);
-                return reports;
+                try {
+                    const response = await fetch('/api/ia-reports', { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok) return [];
+                    const reports = Array.isArray(payload.ia_reports) ? payload.ia_reports : [];
+                    renderIaReports(reports);
+                    return reports;
+                } catch (_) {
+                    return [];
+                }
             },
 
             async refresh() {
