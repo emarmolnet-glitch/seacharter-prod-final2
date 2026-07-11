@@ -1,21 +1,30 @@
 import { ensureApplicationSchema, getPool } from "./index.js";
 
-export const SESSION_SYNC_USER_ID = "11111111-1111-1111-1111-111111111111";
+export const SESSION_SYNC_USER_ID = "1c8db801b-b053-4847-bbc4-edd7d0abbe0e";
+export const SESSION_SYNC_ACTION_MODULE = "CORE_PRO_MATCHING";
+
+export type SessionSyncData = {
+  vessels: unknown[];
+  updated_at: string;
+};
 
 type SessionSyncInput = {
   userId: string;
-  lastSyncData: unknown;
+  lastSyncData: SessionSyncData;
+  lastActionModule: string;
 };
 
 export type SessionSyncRow = {
   userId: string;
-  lastSyncData: unknown;
+  lastSyncData: SessionSyncData;
+  lastActionModule: string;
   updatedAt: Date;
 };
 
 type SessionSyncDatabaseRow = {
   user_id: string;
-  last_sync_data: unknown;
+  last_sync_data: SessionSyncData;
+  last_action_module: string;
   updated_at: Date;
 };
 
@@ -23,23 +32,25 @@ function mapSessionSyncRow(row: SessionSyncDatabaseRow): SessionSyncRow {
   return {
     userId: row.user_id,
     lastSyncData: row.last_sync_data,
+    lastActionModule: row.last_action_module,
     updatedAt: row.updated_at,
   };
 }
 
 export async function upsertSessionSync(input: SessionSyncInput) {
   await ensureApplicationSchema();
+  const serializedSyncData = JSON.stringify(input.lastSyncData);
   const result = await getPool().query<SessionSyncDatabaseRow>(
     `
       INSERT INTO session_sync (user_id, last_sync_data, last_action_module, updated_at)
-      VALUES ($1::uuid, $2::jsonb, 'CORE_PRO_MATCHING', NOW())
+      VALUES ($1, $2::jsonb, $3, NOW())
       ON CONFLICT (user_id) DO UPDATE SET
         last_sync_data = EXCLUDED.last_sync_data,
-        last_action_module = 'CORE_PRO_MATCHING',
+        last_action_module = EXCLUDED.last_action_module,
         updated_at = NOW()
-      RETURNING user_id, last_sync_data, updated_at
+      RETURNING user_id, last_sync_data, last_action_module, updated_at
     `,
-    [input.userId, JSON.stringify(input.lastSyncData)],
+    [input.userId, serializedSyncData, input.lastActionModule],
   );
 
   return mapSessionSyncRow(result.rows[0]);
@@ -48,7 +59,7 @@ export async function upsertSessionSync(input: SessionSyncInput) {
 export async function fetchFleetRows() {
   await ensureApplicationSchema();
   const result = await getPool().query<SessionSyncDatabaseRow>(`
-    SELECT user_id, last_sync_data, updated_at
+    SELECT user_id, last_sync_data, last_action_module, updated_at
     FROM session_sync
     ORDER BY updated_at DESC
   `);
@@ -60,9 +71,9 @@ export async function getFleetRow(userId = SESSION_SYNC_USER_ID) {
   await ensureApplicationSchema();
   const result = await getPool().query<SessionSyncDatabaseRow>(
     `
-      SELECT user_id, last_sync_data, updated_at
+      SELECT user_id, last_sync_data, last_action_module, updated_at
       FROM session_sync
-      WHERE user_id = $1::uuid
+      WHERE user_id = $1
       LIMIT 1
     `,
     [userId],
