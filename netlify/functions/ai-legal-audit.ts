@@ -1,6 +1,7 @@
 import type { Config } from "@netlify/functions";
 import OpenAI from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import { completeIaReport, createIaReport, failIaReport } from "../../db/ia-reports.js";
 
 type GeminiPart = {
   text?: string;
@@ -365,7 +366,20 @@ export default async (req: Request) => {
   }
 
   try {
-    return responseJson(await processLegalAuditPayload(payload));
+    if (payload.auditMode !== "strict") {
+      return responseJson(await processLegalAuditPayload(payload));
+    }
+
+    const report = await createIaReport(payload);
+    try {
+      const result = await processLegalAuditPayload(payload);
+      await completeIaReport(report.id, result);
+      return responseJson(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo completar la inferencia en backend.";
+      await failIaReport(report.id, message);
+      throw error;
+    }
   } catch (error) {
     const typedError = error as Error & { code?: string };
     const message = typedError.message || "No se pudo completar la inferencia en backend.";

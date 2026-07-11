@@ -1,5 +1,5 @@
 import type { Config, Context } from "@netlify/functions";
-import { getSessionSyncTask, SESSION_SYNC_USER_ID } from "../../db/session-sync.js";
+import { getIaReport } from "../../db/ia-reports.js";
 
 const headers = {
   "cache-control": "no-store",
@@ -11,15 +11,15 @@ export default async (req: Request, context: Context) => {
   }
 
   const taskId = String(context.params.task_id || new URL(req.url).pathname.split("/").filter(Boolean).at(-1) || "");
-  const task = taskId === SESSION_SYNC_USER_ID ? await getSessionSyncTask() : null;
+  const task = taskId ? await getIaReport(taskId) : null;
   if (!task) {
     return Response.json({ error: "Tarea de auditoría no encontrada." }, { status: 404, headers });
   }
 
   return Response.json({
-    task_id: task.taskId,
+    task_id: task.id,
     status: task.status,
-    result: task.status === "COMPLETED" ? task.result : null,
+    result: task.status === "COMPLETED" ? task.reportData : null,
     error: task.status === "ERROR" ? task.errorMessage : null,
   }, { headers });
 };
