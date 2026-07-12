@@ -3,7 +3,7 @@ import type { Config } from "@netlify/functions";
 declare const process: { env: Record<string, string | undefined> };
 
 const FETCH_TIMEOUT_MS = 15000;
-const DATA_BRIDGE_RECEIVE_CORE_DATA_URL = "https://calm-shortbread-55bcfc.netlify.app/api/receive-core-data";
+const DATA_BRIDGE_RECEIVE_CORE_DATA_URL = "https://calm-shortbread-55bcfc.netlify.app/api/databridge-port";
 
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",

@@ -3,7 +3,7 @@ const jsonHeaders = {
   "cache-control": "no-store",
 };
 
-const DATA_BRIDGE_RECEIVE_CORE_DATA_URL = "https://calm-shortbread-55bcfc.netlify.app/api/receive-core-data";
+const DATA_BRIDGE_RECEIVE_CORE_DATA_URL = "https://calm-shortbread-55bcfc.netlify.app/api/databridge-port";
 
 function getBearerToken(event) {
   const authorization = String(event.headers?.authorization || event.headers?.Authorization || "").trim();
