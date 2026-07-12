@@ -2159,6 +2159,38 @@
         #view-auditor .audit-results-panel > .collapsible-section__collapse > .collapsible-section__inner {
             position: relative;
             overflow-y: auto;
+            padding: 1rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: var(--panel-shadow);
+        }
+
+        #view-auditor .audit-results-panel > .collapsible-section__collapse.is-collapsed {
+            overflow: hidden;
+        }
+
+        #view-auditor .audit-results-panel > .collapsible-section__header {
+            margin-bottom: 0.75rem;
+            padding: 1rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: var(--panel-shadow);
+        }
+
+        #view-auditor .audit-results-panel.is-collapsed > .collapsible-section__header {
+            margin-bottom: 0;
+        }
+
+        @media (min-width: 768px) {
+            #view-auditor .audit-results-panel > .collapsible-section__collapse > .collapsible-section__inner {
+                padding: 1.5rem;
+            }
+
+            #view-auditor .audit-results-panel > .collapsible-section__collapse > .collapsible-section__inner {
+                max-height: calc(100vh - 9rem);
+            }
         }
 
         #view-ais .collapsible-section__header,
@@ -9725,7 +9757,7 @@
         <!-- ========================================== -->
         <div id="view-auditor" class="view-section absolute inset-0 overflow-hidden flex flex-col bg-slate-100">
             <!-- Content Area (split columns) -->
-            <div class="flex-1 flex flex-col md:flex-row overflow-hidden ai-work-grid p-4 md:p-6">
+            <div class="flex-1 flex flex-col md:flex-row md:items-start overflow-hidden ai-work-grid p-4 md:p-6">
                 <!-- Left Panel: Input -->
                 <div class="w-full md:w-1/3 h-1/2 md:h-full shrink-0 flex flex-col gap-4 overflow-y-auto">
                 <div class="audit-collapsible-panel ai-work-card p-4 md:p-6 flex-1 flex flex-col" data-collapsible-section data-default-open="false">
@@ -9783,7 +9815,7 @@
             </div>
 
             <!-- Right Panel: Results -->
-            <div class="audit-collapsible-panel audit-results-panel w-full md:w-2/3 flex-1 ai-work-card p-4 md:p-6 overflow-y-auto relative flex flex-col" data-collapsible-section data-default-open="false">
+            <div class="audit-collapsible-panel audit-results-panel w-full md:w-2/3 self-start" data-collapsible-section data-default-open="false">
                 <div class="collapsible-section-header">
                     <h2 data-collapsible-title class="text-sm font-bold uppercase flex items-center text-slate-800">
                         <i class="fa-solid fa-file-shield text-slate-500 mr-2"></i>
@@ -9792,7 +9824,7 @@
                 </div>
                 
                 <!-- Empty State -->
-                <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+                <div id="emptyState" class="min-h-96 flex flex-col items-center justify-center text-slate-400">
                     <i class="fa-solid fa-ship text-6xl mb-4 opacity-50"></i>
                     <p class="text-lg font-medium">Esperando documento...</p>
                     <p class="text-sm">Sube o pega un contrato a la izquierda para comenzar la auditoría.</p>
