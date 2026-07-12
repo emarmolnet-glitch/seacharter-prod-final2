@@ -7545,8 +7545,6 @@
                                 </span>
                             </div>
 
-                            <!-- Aviso de cumplimiento CBAM (inyectado dinámicamente por el módulo CBAM) -->
-                            <div id="cbam-result-container" class="mt-3"></div>
                         </div>
                     </div>
                     <!-- ANÁLISIS DE FLETES (Break Even y Sugeridos) -->
@@ -8363,7 +8361,7 @@
                         </button>
                     </div>
 
-                    <div class="cbam-form-row grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
+                    <div class="cbam-form-row grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                         <div class="input-group">
                             <label class="text-teal-700 font-bold uppercase text-[10px]">Sector regulado</label>
                             <select id="cbam-sector" class="input-gc font-bold text-teal-300" onchange="updateCBAMModuleView();">
@@ -8387,12 +8385,16 @@
                             <input type="number" id="cbam-quantity" class="input-gc font-bold text-white" value="0" oninput="updateCBAMModuleView()">
                         </div>
                         <div class="input-group">
-                            <label class="text-slate-700 font-bold uppercase text-[10px]">Emisiones Reportadas Sin Verificar (tCO2e/t)</label>
-                            <input type="number" id="cbam-reported-emissions" class="input-gc font-bold text-white" placeholder="Opcional" min="0" step="0.01" oninput="updateCBAMModuleView()">
+                            <label class="text-slate-700 font-bold uppercase text-[10px]">Factor SEE certificado de fábrica (tCO2e/t)</label>
+                            <input type="number" id="cbam-reported-emissions" class="input-gc font-bold text-white" placeholder="Opcional; usa valor UE si está vacío" min="0" step="0.01" oninput="updateCBAMModuleView()">
                         </div>
                         <div class="input-group">
-                            <label class="text-slate-700 font-bold uppercase text-[10px]">Impuesto de Carbono pagado en origen (€/t CO2e)</label>
-                            <input type="number" id="cbam-origin-carbon-paid" class="input-gc font-bold text-white" placeholder="Opcional" min="0" step="0.01" oninput="updateCBAMModuleView()">
+                            <label class="text-slate-700 font-bold uppercase text-[10px]">Origen competidor de referencia</label>
+                            <input type="text" id="cbam-competitor-origin" class="input-gc font-bold text-white" placeholder="Ej: Turquía" oninput="updateCBAMModuleView()">
+                        </div>
+                        <div class="input-group">
+                            <label class="text-slate-700 font-bold uppercase text-[10px]">Factor competidor (tCO2e/t)</label>
+                            <input type="number" id="cbam-competitor-factor" class="input-gc font-bold text-white" placeholder="Valor UE por defecto" min="0" step="0.01" oninput="updateCBAMModuleView()">
                         </div>
                     </div>
 
@@ -23090,44 +23092,9 @@
                 </p>`;
         }
 
-        // Invoca el módulo CBAM y, si procede, inyecta un aviso informativo bajo el total de costes.
-        // Encapsulado: cualquier fallo se ignora silenciosamente para no detener el motor de fletes.
+        // CBAM se presenta únicamente en su espacio comercial, fuera de TOTAL COSTS.
         function updateCBAMResult() {
-            try {
-                const container = document.getElementById('cbam-result-container');
-                if (!container) return;
-
-                const evaluate = (typeof window !== 'undefined') ? window.evaluateCBAMOperation : null;
-                if (typeof evaluate !== 'function') return; // El módulo aún no se ha cargado.
-
-                const sector = document.getElementById('cargo-category')?.value || document.getElementById('product-sector')?.value || '';
-                const origin = getCountryFromPortField(document.getElementById('port-pol')?.value);
-                const destination = getCountryFromPortField(document.getElementById('port-pod')?.value);
-                const quantity = Number(document.getElementById('cargo-qty')?.value);
-                const reportedEmissions = document.getElementById('cbam-reported-emissions')?.value || '';
-                const originCarbonPaid = document.getElementById('cbam-origin-carbon-paid')?.value || '';
-                const result = evaluate(sector, origin, destination, quantity, reportedEmissions, originCarbonPaid);
-
-                if (result.status === 'subject') {
-                    container.innerHTML = `
-                        <div class="bg-white border border-slate-200 rounded-lg p-3 no-print shadow-md text-slate-800">
-                            <div class="flex items-center justify-between gap-3 mb-3">
-                                <div class="flex items-center gap-2 text-[#002060]">
-                                    <i class="fa-solid fa-leaf"></i>
-                                    <span class="text-xs font-bold uppercase tracking-wide">Cumplimiento CBAM (UE) — Análisis comparativo de riesgo</span>
-                                </div>
-                            </div>
-                            ${renderCBAMScenarioTable(result, true)}
-                            <p class="text-[10px] text-slate-500 mt-1 leading-snug">
-                                Importación de <span class="font-bold">${escapeCBAMHtml(result.sector)}</span> desde ${escapeCBAMHtml(result.origin)} hacia ${escapeCBAMHtml(result.destination)}.
-                            </p>
-                        </div>`;
-                } else {
-                    container.innerHTML = '';
-                }
-            } catch (error) {
-                // Silencioso: el módulo CBAM nunca debe interrumpir la calculadora principal.
-            }
+            return null;
         }
 
         function updateCargoAutoClassification(inputString) {
@@ -23198,8 +23165,8 @@
                 const container = document.getElementById('cbam-module-result');
                 if (!container) return;
 
-                const evaluate = (typeof window !== 'undefined') ? window.evaluateCBAMOperation : null;
-                if (typeof evaluate !== 'function') {
+                const buildAnalysis = (typeof window !== 'undefined') ? window.buildCBAMCommercialAnalysis : null;
+                if (typeof buildAnalysis !== 'function') {
                     container.innerHTML = '';
                     return;
                 }
@@ -23208,49 +23175,68 @@
                 const origin = document.getElementById('cbam-origin')?.value || '';
                 const destination = document.getElementById('cbam-destination')?.value || '';
                 const quantity = Number(document.getElementById('cbam-quantity')?.value);
-                const reportedEmissions = document.getElementById('cbam-reported-emissions')?.value || '';
-                const originCarbonPaid = document.getElementById('cbam-origin-carbon-paid')?.value || '';
-                if (typeof window.updateCBAMState === 'function') {
-                    window.updateCBAMState({ sector, origen: origin, destino: destination, tonelaje: quantity, factorManual: reportedEmissions, impuestoOrigen: originCarbonPaid });
-                }
-                const result = evaluate(sector, origin, destination, quantity, reportedEmissions, originCarbonPaid);
+                const certifiedFactor = document.getElementById('cbam-reported-emissions')?.value || '';
+                const competitorOrigin = document.getElementById('cbam-competitor-origin')?.value || 'Origen competidor';
+                const competitorFactor = document.getElementById('cbam-competitor-factor')?.value || '';
+                const analysis = buildAnalysis({ productType: sector, quantity, certifiedFactor, competitorFactor });
 
-                if (result.status === 'subject') {
-                    const escapedResult = encodeURIComponent(JSON.stringify(result));
-                    container.innerHTML = `
-                        <div class="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
-                            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                <div>
-                                    <span class="block text-[10px] font-black uppercase tracking-wide text-slate-500">Análisis comparativo CBAM</span>
-                                    <strong class="text-2xl font-black text-[#002060]">Escenarios financieros de riesgo</strong>
-                                </div>
-                                <div class="flex flex-wrap gap-2 self-start md:self-center">
-                                    <button type="button" onclick="generateCBAMRequirementsPDF()" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 text-xs font-bold px-4 py-2 rounded-lg transition">
-                                        <i class="fa-solid fa-file-contract mr-1.5"></i> Generar Requerimientos CBAM (PDF)
-                                    </button>
-                                    <button type="button" onclick="generateCBAMReportPDF()" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-4 py-2 rounded-lg transition">
-                                        <i class="fa-solid fa-print mr-1.5"></i> Imprimir Informe PDF
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="mt-4">${renderCBAMScenarioTable(result)}</div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mt-4 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3">
-                                <div><span class="block text-[10px] uppercase font-black text-slate-500">Origen</span><strong>${escapeCBAMHtml(result.origin)}</strong></div>
-                                <div><span class="block text-[10px] uppercase font-black text-slate-500">Destino</span><strong>${escapeCBAMHtml(result.destination)}</strong></div>
-                                <div><span class="block text-[10px] uppercase font-black text-slate-500">Precio Referencia 2026</span><strong>${result.carbonPrice.toFixed(2)} EUR/t</strong></div>
-                                <div><span class="block text-[10px] uppercase font-black text-slate-500">Impuesto Carbono Origen</span><strong>${Number(result.carbonTaxAtOrigin || result.carbonPaidAtOrigin || 0).toFixed(2)} EUR/tCO2e</strong></div>
-                            </div>
-                            <div class="mt-3 bg-white border border-slate-200 rounded-lg p-3 text-xs text-slate-700">
-                                Escenario A: Tonelaje x Factor_Alto x ${result.carbonPrice.toFixed(2)} EUR/t. Escenario B: Tonelaje x Factor_Seleccionado_B x ${result.carbonPrice.toFixed(2)} EUR/t. Escenario C: Tonelaje x Factor_Seleccionado_C x (${result.carbonPrice.toFixed(2)} - Impuesto_Origen_Usuario).
-                            </div>
-                            <p class="text-xs text-slate-600 mt-3">Nota: Esta estimación es informativa basada en el precio de referencia de 2026 (75,36 €/t). No constituye asesoramiento fiscal. La liquidación efectiva se realizará a partir de febrero de 2027.</p>
-                        </div>`;
-                } else {
-                    container.innerHTML = renderCBAMStatusMessage(result, true);
+                if (analysis.status !== 'ready') {
+                    container.innerHTML = `<div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong class="block">Selecciona el tipo de carga e introduce el tonelaje.</strong><span class="text-xs">El cálculo comercial se activa automáticamente con esos dos datos.</span></div>`;
+                    return;
                 }
+
+                const commercialNote = `Este es el sobrecoste estimado que el importador asumirá en frontera. Si su fábrica dispone de un certificado SEE inferior al valor por defecto (${analysis.defaultFactor.toFixed(2)}), su mercancía ganará competitividad directa frente a orígenes competidores.`;
+                const originLabel = origin || 'Su origen exportador';
+                container.innerHTML = `
+                    <section class="overflow-hidden rounded-2xl border border-teal-200 bg-white shadow-lg">
+                        <div class="bg-gradient-to-r from-[#002060] via-[#063b78] to-teal-700 p-5 text-white">
+                            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <span class="text-[10px] font-black uppercase tracking-[0.2em] text-teal-200">Impacto Aduanero para el Comprador (Landed Cost)</span>
+                                    <h3 class="mt-1 text-2xl font-black">Estimación de Pago en Aduana UE (Buyer)</h3>
+                                    <p class="mt-1 text-xs text-blue-100">Cálculo comercial independiente. No se incorpora a OPEX, bunkers, PDAs, flete ni TOTAL COSTS.</p>
+                                </div>
+                                <button type="button" onclick="exportCBAMCommercialProforma()" class="rounded-lg bg-white px-4 py-3 text-xs font-black text-[#002060] shadow-md transition hover:bg-teal-50">
+                                    <i class="fa-solid fa-file-pdf mr-1.5 text-red-600"></i> Exportar Proforma Comercial (PDF)
+                                </button>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[1.1fr_1fr]">
+                            <div class="rounded-xl border border-teal-200 bg-teal-50 p-5">
+                                <span class="block text-[10px] font-black uppercase tracking-wide text-teal-700">Pago estimado del importador</span>
+                                <strong class="mt-1 block text-4xl font-black text-[#002060]">${formatCBAMEuro(analysis.customsPayment)}</strong>
+                                <p class="mt-2 text-xs font-semibold text-slate-600">${analysis.quantity.toLocaleString('es-ES')} TM × ${analysis.certifiedFactor.toFixed(2)} tCO2e/t × ${analysis.carbonPrice.toFixed(2)} EUR/tCO2e</p>
+                                <span class="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase text-teal-800 ring-1 ring-teal-200">${analysis.calculationMode === 'certified' ? 'Factor SEE certificado' : 'Valor por defecto UE'}</span>
+                            </div>
+                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div class="rounded-xl border border-slate-200 p-4"><span class="block text-[10px] font-black uppercase text-slate-500">${escapeCBAMHtml(originLabel)}</span><strong class="mt-1 block text-xl text-[#002060]">${formatCBAMEuro(analysis.certifiedCost)}</strong><span class="text-xs text-slate-500">Factor ${analysis.certifiedFactor.toFixed(2)} tCO2e/t</span></div>
+                                <div class="rounded-xl border border-slate-200 p-4"><span class="block text-[10px] font-black uppercase text-slate-500">${escapeCBAMHtml(competitorOrigin)}</span><strong class="mt-1 block text-xl text-slate-800">${formatCBAMEuro(analysis.competitorCost)}</strong><span class="text-xs text-slate-500">Factor ${analysis.competitorFactor.toFixed(2)} tCO2e/t</span></div>
+                                <div class="sm:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4"><span class="block text-[10px] font-black uppercase text-emerald-700">Ventaja comercial potencial</span><strong class="mt-1 block text-2xl text-emerald-800">${formatCBAMEuro(analysis.competitiveSaving)}</strong><span class="text-xs text-emerald-700">Menor landed cost frente al origen competidor indicado.</span></div>
+                            </div>
+                        </div>
+                        ${analysis.validationMessage ? `<div class="mx-5 mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700">${escapeCBAMHtml(analysis.validationMessage)}</div>` : ''}
+                        <div class="mx-5 mb-5 rounded-xl border-l-4 border-amber-400 bg-amber-50 p-4 text-sm text-amber-950"><strong class="block text-xs uppercase tracking-wide">Nota Comercial</strong><p class="mt-1 leading-relaxed">${escapeCBAMHtml(commercialNote)}</p></div>
+                    </section>`;
             } catch (error) {
                 // Silencioso: el módulo CBAM nunca debe interrumpir la calculadora principal.
             }
+        }
+
+        function exportCBAMCommercialProforma() {
+            const generate = window.generateCBAMCommercialProformaPDF;
+            if (typeof generate !== 'function') return;
+            const quantity = Number(document.getElementById('cbam-quantity')?.value || 0);
+            const freightRate = Number(document.getElementById('freight-sell')?.value || 0);
+            generate({
+                productType: document.getElementById('cbam-sector')?.value || '',
+                quantity,
+                certifiedFactor: document.getElementById('cbam-reported-emissions')?.value || '',
+                competitorFactor: document.getElementById('cbam-competitor-factor')?.value || '',
+                origin: document.getElementById('cbam-origin')?.value || '',
+                destination: document.getElementById('cbam-destination')?.value || '',
+                freightRate,
+                freightTotal: freightRate * quantity
+            });
         }
 
         function buildCBAMReportHTML(result) {
@@ -40004,6 +39990,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             updateCBAMState,
             generateCBAMRequirementsPDF,
             generateCBAMReportPDF,
+            buildCBAMCommercialAnalysis,
+            generateCBAMCommercialProformaPDF,
             CBAM_FACTORS
         } from './cbam-module.js';
         window.CBAM_FACTORS = CBAM_FACTORS;
@@ -40012,6 +40000,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.updateCBAMState = updateCBAMState;
         window.generateCBAMRequirementsPDF = generateCBAMRequirementsPDF;
         window.generateCBAMReportPDF = generateCBAMReportPDF;
+        window.buildCBAMCommercialAnalysis = buildCBAMCommercialAnalysis;
+        window.generateCBAMCommercialProformaPDF = generateCBAMCommercialProformaPDF;
         window.printCBAMReport = generateCBAMReportPDF;
 
         const getCBAMModuleInputValues = () => ({
@@ -40020,7 +40010,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             destination: document.getElementById('cbam-destination')?.value || '',
             quantity: document.getElementById('cbam-quantity')?.value || '',
             reportedEmissions: document.getElementById('cbam-reported-emissions')?.value || '',
-            originCarbonPaid: document.getElementById('cbam-origin-carbon-paid')?.value || ''
+            originCarbonPaid: ''
         });
 
         window.calculateCBAMImpact = (...args) => {
@@ -40029,10 +40019,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             const { sector, origin, destination, quantity, reportedEmissions, originCarbonPaid } = getCBAMModuleInputValues();
-            updateCBAMState({ sector, origen: origin, destino: destination, tonelaje: quantity, factorManual: reportedEmissions, impuestoOrigen: originCarbonPaid });
             const scenarios = calculateCBAMImpactFromModule(sector, origin, destination, quantity, reportedEmissions, originCarbonPaid);
             window.updateCBAMModuleView?.();
-            window.updateCBAMResult?.();
             return scenarios;
         };
 
@@ -40047,10 +40035,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (calculatorDrivenCBAMFields.has(sourceId)) {
                 window.syncCBAMModuleFromCalculator?.();
             }
-            window.calculateCBAMImpact?.();
+            window.updateCBAMModuleView?.();
         };
         refreshCargoClassification();
-        ['cargo-qty', 'cargo-type-manual', 'product-sector', 'cargo-category', 'port-pol', 'port-pod', 'cbam-sector', 'cbam-origin', 'cbam-destination', 'cbam-quantity', 'cbam-reported-emissions', 'cbam-origin-carbon-paid'].forEach((id) => {
+        ['cargo-qty', 'cargo-type-manual', 'product-sector', 'cargo-category', 'port-pol', 'port-pod', 'cbam-sector', 'cbam-origin', 'cbam-destination', 'cbam-quantity', 'cbam-reported-emissions', 'cbam-competitor-origin', 'cbam-competitor-factor'].forEach((id) => {
             const el = document.getElementById(id);
             if (!el) return;
             el.addEventListener('input', () => {
@@ -40095,7 +40083,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (!el) return;
             el.addEventListener('input', updateUI);
         });
-        // Refrescar el aviso CBAM una vez que el módulo está disponible.
+        // Inicializar la capa comercial CBAM una vez cargado el módulo.
         window.syncCBAMModuleFromCalculator?.();
         refreshCBAMCalculations();
     </script>

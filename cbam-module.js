@@ -395,7 +395,7 @@ function getManualFactorStatus(value, factorSet) {
     const hasManualFactor = value !== null && value !== undefined && String(value).trim() !== '';
     const parsedFactor = Number(value);
     const isNumeric = hasManualFactor && isFinite(parsedFactor);
-    const isWithinRange = isNumeric && parsedFactor >= factorSet.bajo && parsedFactor <= factorSet.alto;
+    const isWithinRange = isNumeric && parsedFactor > 0 && parsedFactor <= factorSet.alto;
 
     return {
         hasManualFactor,
@@ -403,6 +403,136 @@ function getManualFactorStatus(value, factorSet) {
         isOutOfRange: hasManualFactor && !isWithinRange,
         message: hasManualFactor && !isWithinRange ? 'Factor fuera de rango para este sector' : ''
     };
+}
+
+export function buildCBAMCommercialAnalysis(values = {}) {
+    const productType = values.productType || values.sector || '';
+    const quantity = getPositiveNumber(values.quantity || values.tonnage);
+    const factorSet = getCBAMFactorSet(productType);
+    const sector = getSectorData(productType);
+    const certifiedStatus = factorSet ? getManualFactorStatus(values.certifiedFactor, factorSet) : null;
+    const competitorFactorInput = getPositiveNumber(values.competitorFactor);
+    const defaultFactor = factorSet?.alto || sector?.emissionFactor || 0;
+    const certifiedFactor = certifiedStatus?.factor || defaultFactor;
+    const competitorFactor = competitorFactorInput || defaultFactor;
+    const defaultCost = quantity * defaultFactor * PRICE_2026;
+    const certifiedCost = quantity * certifiedFactor * PRICE_2026;
+    const competitorCost = quantity * competitorFactor * PRICE_2026;
+
+    return {
+        status: quantity > 0 && defaultFactor > 0 ? 'ready' : 'insufficient_data',
+        product: sector?.label || String(productType || '').trim(),
+        quantity,
+        carbonPrice: PRICE_2026,
+        defaultFactor,
+        certifiedFactor,
+        competitorFactor,
+        certifiedFactorValid: Boolean(certifiedStatus?.factor),
+        validationMessage: certifiedStatus?.message || '',
+        customsPayment: certifiedStatus?.factor ? certifiedCost : defaultCost,
+        defaultCost,
+        certifiedCost,
+        competitorCost,
+        competitiveSaving: Math.max(0, competitorCost - certifiedCost),
+        calculationMode: certifiedStatus?.factor ? 'certified' : 'eu_default'
+    };
+}
+
+export function generateCBAMCommercialProformaPDF(values = {}) {
+    try {
+        const analysis = buildCBAMCommercialAnalysis(values);
+        if (analysis.status !== 'ready') {
+            globalThis.showToast?.('Completa tipo de carga y tonelaje para exportar la proforma');
+            return false;
+        }
+
+        const JsPDF = getJsPDFConstructor();
+        if (!JsPDF) throw new Error('jsPDF no disponible');
+
+        const freightRate = getPositiveNumber(values.freightRate);
+        const freightTotal = getPositiveNumber(values.freightTotal) || freightRate * analysis.quantity;
+        const origin = String(values.origin || 'Origen extracomunitario').trim();
+        const destination = String(values.destination || 'Unión Europea').trim();
+        const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+
+        drawHeader(doc, 'PROFORMA COMERCIAL · LANDED COST PARA EL COMPRADOR UE');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(15, 23, 42);
+        doc.text('Resumen comercial de la operación', 18, 56);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text(`Mercancía: ${analysis.product}`, 18, 65);
+        doc.text(`Tonelaje: ${formatPDFNumber(analysis.quantity, 0)} TM`, 18, 72);
+        doc.text(`Ruta comercial: ${origin} → ${destination}`, 18, 79);
+
+        const rows = [
+            ['Flete marítimo estimado', freightRate > 0 ? `${formatPDFNumber(freightRate, 2)} USD/TM` : 'Importe comercial', `${formatPDFNumber(freightTotal, 2)} USD`],
+            ['Pago estimado en Aduana UE (Buyer)', `${formatPDFNumber(analysis.certifiedFactor, 2)} tCO2e/t × ${formatPDFNumber(analysis.carbonPrice, 2)} EUR`, formatPDFEuro(analysis.customsPayment)]
+        ];
+
+        doc.setFillColor(0, 32, 96);
+        doc.rect(18, 91, 174, 10, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(255, 255, 255);
+        doc.text('Concepto', 22, 97.5);
+        doc.text('Base', 92, 97.5);
+        doc.text('Importe', 158, 97.5);
+
+        let y = 101;
+        rows.forEach((row, index) => {
+            doc.setFillColor(index % 2 === 0 ? 248 : 255, index % 2 === 0 ? 250 : 255, index % 2 === 0 ? 252 : 255);
+            doc.setDrawColor(226, 232, 240);
+            doc.rect(18, y, 174, 14, 'FD');
+            doc.setTextColor(15, 23, 42);
+            doc.setFont('helvetica', index === 1 ? 'bold' : 'normal');
+            doc.text(row[0], 22, y + 8.5);
+            doc.setFont('helvetica', 'normal');
+            doc.text(row[1], 92, y + 8.5);
+            doc.setFont('helvetica', 'bold');
+            doc.text(row[2], 158, y + 8.5);
+            y += 14;
+        });
+
+        doc.setFillColor(236, 253, 245);
+        doc.setDrawColor(13, 148, 136);
+        doc.roundedRect(18, y + 10, 174, 30, 2, 2, 'FD');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(15, 118, 110);
+        doc.text('Impacto Aduanero para el Comprador (Landed Cost)', 24, y + 20);
+        doc.setFontSize(15);
+        doc.text(formatPDFEuro(analysis.customsPayment), 24, y + 31);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text('El flete se expresa en USD y el CBAM en EUR; no se aplica conversión de divisa.', 92, y + 31);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(0, 32, 96);
+        doc.text('Nota Comercial', 18, y + 54);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(51, 65, 85);
+        drawWrappedText(
+            doc,
+            `Este es el sobrecoste estimado que el importador asumirá en frontera. Si su fábrica dispone de un certificado SEE inferior al valor por defecto (${formatPDFNumber(analysis.defaultFactor, 2)}), su mercancía ganará competitividad directa frente a orígenes competidores.`,
+            18,
+            y + 61,
+            174,
+            4.5
+        );
+
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        drawWrappedText(doc, 'Documento comercial informativo. El importe CBAM no forma parte de los costes operativos del buque ni constituye asesoramiento fiscal.', 18, 276, 174, 4);
+
+        saveDocument(doc, `Proforma_Comercial_CBAM_${safePDFName(origin)}_${safePDFName(destination)}.pdf`);
+        return true;
+    } catch (error) {
+        globalThis.showToast?.('No se pudo generar la proforma comercial CBAM');
+        return false;
+    }
 }
 
 function buildCBAMRiskScenarios(qty, factorSet, manualEmissionFactor, originCarbonTax) {
