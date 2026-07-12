@@ -2069,6 +2069,84 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
         }
 
+        .collapsible-section .collapsible-section__header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: nowrap;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+            transition: margin-bottom 280ms ease;
+        }
+
+        .collapsible-section.is-collapsed .collapsible-section__header {
+            margin-bottom: 0;
+        }
+
+        .collapsible-section__toggle {
+            display: flex;
+            min-width: 0;
+            flex: 1 1 auto;
+            align-items: center;
+            gap: 0.75rem;
+            text-align: left;
+            border-radius: 0.5rem;
+            cursor: pointer;
+        }
+
+        .collapsible-section__toggle:focus-visible {
+            outline: 2px solid #38BDF8;
+            outline-offset: 4px;
+        }
+
+        .collapsible-section__title {
+            min-width: 0;
+            flex: 1 1 auto;
+            width: auto;
+        }
+
+        .collapsible-section__chevron {
+            flex: 0 0 auto;
+            transition: transform 280ms ease;
+        }
+
+        .collapsible-section.is-collapsed .collapsible-section__chevron {
+            transform: rotate(-90deg);
+        }
+
+        .collapsible-section__collapse {
+            display: grid;
+            grid-template-rows: 1fr;
+            opacity: 1;
+            transition: grid-template-rows 320ms ease, opacity 220ms ease;
+        }
+
+        .collapsible-section__collapse.is-collapsed {
+            grid-template-rows: 0fr;
+            opacity: 0;
+        }
+
+        .collapsible-section__inner {
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .collapsible-section__actions {
+            display: flex;
+            flex: 0 0 auto;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .collapsible-section .collapsible-section__header,
+            .collapsible-section__chevron,
+            .collapsible-section__collapse {
+                transition: none;
+            }
+        }
+
         /* Refined Badges and Status Components: Rounded Pill-shaped Badges with 20px border radius and corporate navy backgrounds */
         #vessel-badge,
         .douglas-badge,
@@ -2213,7 +2291,7 @@
             accent-color: #1E3A8A !important;
         }
 
-        #stress-test-panel > .mt-4 {
+        #stress-test-panel > .collapsible-section__collapse > .collapsible-section__inner > .mt-4 {
             border-top-color: #E2E8F0 !important;
             color: #475569 !important;
         }
@@ -6600,10 +6678,10 @@
                 <!-- COLUMNA IZQUIERDA (Inputs Operativos) -->
                 <div class="estimator-inputs-column space-y-6">
                     <!-- 1. Derrota y Puertos -->
-                    <div class="bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg">
-                        <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
+                    <div class="collapsible-section bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg" data-collapsible-section data-default-open="true">
+                        <div class="collapsible-section-header flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
                             <h2 id="route-header-title" class="text-sm font-bold text-blue-400 uppercase"><i class="fa-solid fa-route mr-2"></i> 1. Derrota y Puertos Geográficos</h2>
-                            <div class="flex items-center gap-2">
+                            <div class="collapsible-section-actions flex items-center gap-2">
                                 <input type="file" id="wpi-upload" accept=".csv" class="hidden" onchange="handleWPILoad(event)">
                                 <button onclick="document.getElementById('wpi-upload').click()" id="btn-wpi" class="text-xs bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300 px-3 py-1.5 rounded flex items-center gap-1.5 transition border border-emerald-700/50" title="Sube el archivo WPI.csv">
                                     <i class="fa-solid fa-database"></i> Integrar WPI.csv
@@ -6717,12 +6795,15 @@
                         </div>
 
                         <!-- Open-Meteo Marine Weather Section -->
-                        <div id="weather-section" class="mt-4 bg-slate-950 p-4 rounded-lg border border-slate-800 hidden">
-                            <div class="flex justify-between items-center mb-3">
-                                <h3 id="weather-header-title" class="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
-                                    <i class="fa-solid fa-cloud-sun-rain"></i> Pronóstico Marítimo Open-Meteo & Retrasos por Clima
-                                </h3>
-                                <span class="satellite-badge text-[9px] bg-[#1E3A8A] text-white border border-[#1E3A8A] px-2.5 py-1 rounded-[20px] uppercase font-bold tracking-widest animate-pulse shadow-sm">SATELLITE DATA</span>
+                        <div id="weather-section" class="collapsible-section mt-4 bg-slate-950 p-4 rounded-lg border border-slate-800 hidden" data-collapsible-section data-default-open="true">
+                            <div class="collapsible-section-header flex justify-between items-center gap-3">
+                                <span id="weather-header-title" data-collapsible-title class="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+                                    <i class="fa-solid fa-cloud-sun-rain" aria-hidden="true"></i>
+                                    <span>Pronóstico Marítimo Open-Meteo & Retrasos por Clima</span>
+                                </span>
+                                <div class="collapsible-section-actions">
+                                    <button type="button" class="satellite-badge text-[9px] bg-[#1E3A8A] text-white border border-[#1E3A8A] px-2.5 py-1 rounded-[20px] uppercase font-bold tracking-widest animate-pulse shadow-sm shrink-0">SATELLITE DATA</button>
+                                </div>
                             </div>
                             <div id="weather-container" class="flex flex-col lg:flex-row items-stretch justify-center gap-3 py-2 overflow-x-auto">
                                 <!-- Cards will be generated dynamically here -->
@@ -6732,10 +6813,10 @@
                     </div>
 
                     <!-- 2. Buque, Carga y Tiempos -->
-                    <div class="bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg">
-                        <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
+                    <div class="collapsible-section bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg" data-collapsible-section data-default-open="true">
+                        <div class="collapsible-section-header flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
                             <h2 id="vessel-header-title" class="text-sm font-bold text-blue-400 uppercase"><i class="fa-solid fa-anchor mr-2"></i> 2. Especificaciones del Buque y Carga / Ship Requirements</h2>
-                            <div class="flex items-center gap-2">
+                            <div class="collapsible-section-actions flex items-center gap-2">
                                 <button id="btn-vessel-specs-real-1" onclick="autoFillVesselSpecs()" class="badge-ai text-[10px] text-sky-400 hover:text-sky-300 transition" title="Buscar especificaciones reales en internet (IA)">
                                     <i class="fa-solid fa-robot mr-0.5"></i> Specs (IA)
                                 </button>
@@ -6957,8 +7038,13 @@
                     </div>
 
                     <!-- 3. Bunkers y Gastos -->
-                    <div class="bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg">
-                        <h2 id="costs-header-title" class="text-sm font-bold text-blue-400 uppercase mb-4 border-b border-slate-800 pb-2"><i class="fa-solid fa-gas-pump mr-2"></i> 3. Estructura de Costes (OPEX, Bunkers, PDAs)</h2>
+                    <div class="collapsible-section bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg" data-collapsible-section data-default-open="true">
+                        <div class="collapsible-section-header flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
+                            <h2 id="costs-header-title" class="text-sm font-bold text-blue-400 uppercase"><i class="fa-solid fa-gas-pump mr-2"></i> 3. Estructura de Costes (OPEX, Bunkers, PDAs)</h2>
+                            <div class="collapsible-section-actions">
+                                <button id="btn-consult-bunker" onclick="autoFillBunkers()" class="badge-ai text-[10px] text-sky-400 hover:text-sky-300 transition" title="Consultar BunkerIndex (IA)"><i class="fa-solid fa-robot mr-1"></i> ✨ Consultar Bunkerindex IA</button>
+                            </div>
+                        </div>
                         
                         <!-- Bunkers Matrix -->
                         <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 mb-4">
@@ -6966,7 +7052,6 @@
                                 <div>
                                     <h3 id="fuel-prices-title" class="text-xs font-bold text-slate-400 uppercase">BUNKER / COMBUSTIBLE</h3>
                                 </div>
-                                <button id="btn-consult-bunker" onclick="autoFillBunkers()" class="badge-ai text-[10px] text-sky-400 hover:text-sky-300 transition" title="Consultar BunkerIndex (IA)"><i class="fa-solid fa-robot mr-1"></i> ✨ Consultar Bunkerindex IA</button>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                                 <div class="input-group">
@@ -7105,10 +7190,12 @@
                     </div>
 
                     <!-- 4. Ajustes Inteligentes (Optimización de Cálculo) -->
-                    <div class="bg-white border border-slate-300 rounded-xl p-5 shadow-lg mt-6 text-[#212529]">
-                        <h2 class="text-sm font-bold text-[#1E3A8A] uppercase mb-4 border-b border-slate-200 pb-2">
+                    <div class="collapsible-section bg-white border border-slate-300 rounded-xl p-5 shadow-lg mt-6 text-[#212529]" data-collapsible-section data-default-open="true">
+                        <div class="collapsible-section-header mb-4 border-b border-slate-200 pb-2">
+                        <h2 class="text-sm font-bold text-[#1E3A8A] uppercase">
                             <i class="fa-solid fa-gears mr-2"></i> 4. Ajustes Inteligentes de ETA y Tiempos / Smart Calculations
                         </h2>
+                        </div>
                         
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div class="input-group">
@@ -7239,8 +7326,10 @@
                 <div class="estimator-results-rail space-y-6">
                     
                     <!-- Resumen de Costes y Tiempos -->
-                    <div class="bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg">
-                        <h2 id="summary-header-title" class="text-sm font-bold text-slate-300 uppercase mb-3 border-b border-slate-800 pb-2"><i class="fa-solid fa-chart-pie mr-2"></i> Resumen de Operación</h2>
+                    <div class="collapsible-section bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg" data-collapsible-section data-default-open="true">
+                        <div class="collapsible-section-header mb-3 border-b border-slate-800 pb-2">
+                            <h2 id="summary-header-title" class="text-sm font-bold text-slate-300 uppercase"><i class="fa-solid fa-chart-pie mr-2"></i> Resumen de Operación</h2>
+                        </div>
 
                         <div class="flex justify-between items-center mb-1 text-sm mono">
                             <span id="label-days-mar-port" class="text-[#334155] font-bold">Días Mar + Puerto + Margen Clima:</span>
@@ -7301,10 +7390,12 @@
                         </div>
                     </div>
                     <!-- ANÁLISIS DE FLETES (Break Even y Sugeridos) -->
-                    <div class="bg-white border border-slate-300 rounded-xl p-5 shadow-xl ring-2 ring-indigo-500/20 text-[#212529]">
-                        <div class="flex justify-between items-center mb-3 border-b border-slate-200 pb-2">
+                    <div class="collapsible-section bg-white border border-slate-300 rounded-xl p-5 shadow-xl ring-2 ring-indigo-500/20 text-[#212529]" data-collapsible-section data-default-open="true">
+                        <div class="collapsible-section-header flex justify-between items-center mb-3 border-b border-slate-200 pb-2">
                             <h2 id="freight-analysis-title" class="text-sm font-bold text-[#212529] uppercase"><i class="fa-solid fa-scale-unbalanced mr-2"></i> Análisis de Fletes</h2>
-                            <button id="btn-baf-analysis" onclick="analyzeBAFScenarios()" class="text-[10px] bg-white hover:bg-slate-50 text-[#212529] px-2 py-1 rounded transition border border-slate-300 shadow" title="Escenarios de Volatilidad y Fórmula BAF"><i class="fa-solid fa-fire-flame-curved mr-1"></i> Análisis Riesgo BAF</button>
+                            <div class="collapsible-section-actions">
+                                <button id="btn-baf-analysis" onclick="analyzeBAFScenarios()" class="text-[10px] bg-white hover:bg-slate-50 text-[#212529] px-2 py-1 rounded transition border border-slate-300 shadow" title="Escenarios de Volatilidad y Fórmula BAF"><i class="fa-solid fa-fire-flame-curved mr-1"></i> Análisis Riesgo BAF</button>
+                            </div>
                         </div>
                         
                         <div class="space-y-4">
@@ -7769,7 +7860,12 @@
                     </div>
 
                     <!-- FLETE REAL Y BENEFICIO NETO DESGLOSADO -->
-                    <div class="bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg relative overflow-hidden">
+                    <div class="collapsible-section bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg relative overflow-hidden" data-collapsible-section data-default-open="true">
+                        <div class="collapsible-section-header flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
+                            <h2 class="text-sm font-bold text-blue-400 uppercase">
+                                <i class="fa-solid fa-handshake mr-2"></i> Negociación Comercial y Fletes
+                            </h2>
+                        </div>
                         <div class="absolute top-0 right-0 w-16 h-16 bg-emerald-500/10 rounded-bl-full"></div>
                         
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
@@ -7876,15 +7972,15 @@
                         </div>
                     </div>
 
-                    <div id="stress-test-panel" class="bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg no-print">
-                        <div class="mb-4 flex items-center justify-between gap-3 border-b border-slate-800 pb-2">
-                            <div>
+                    <div id="stress-test-panel" class="collapsible-section bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg no-print" data-collapsible-section data-default-open="true">
+                        <div class="collapsible-section-header mb-4 flex items-center justify-between gap-3 border-b border-slate-800 pb-2">
+                            <div data-collapsible-title>
                                 <h2 class="text-sm font-bold text-amber-300 uppercase">
                                     <i class="fa-solid fa-triangle-exclamation mr-2"></i> Matriz de Riesgo
                                 </h2>
                                 <div class="mt-0.5 text-[10px] text-slate-500">Analisis automatico de sensibilidad sobre el escenario base calculado</div>
                             </div>
-                            <div class="flex items-center gap-2">
+                            <div class="collapsible-section-actions flex items-center gap-2">
                                 <span id="auto-risk-tooltip" class="hidden cursor-help text-[11px] font-black text-amber-200" title="Margen insuficiente">Margen insuficiente</span>
                                 <span id="auto-risk-status" class="rounded-md border border-slate-600 bg-slate-950 px-2 py-1 text-[10px] font-black uppercase text-slate-300">Sin analisis</span>
                             </div>
@@ -7910,18 +8006,20 @@
 
                     <div id="smart-advisor-panel" class="hidden no-print"></div>
 
-                    <div id="shadow-estimator-panel" class="bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg no-print">
-                        <div class="flex flex-col gap-3 border-b border-slate-800 pb-3 md:flex-row md:items-center md:justify-between">
-                            <div>
+                    <div id="shadow-estimator-panel" class="collapsible-section bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg no-print" data-collapsible-section data-default-open="true">
+                        <div class="collapsible-section-header flex flex-col gap-3 border-b border-slate-800 pb-3 md:flex-row md:items-center md:justify-between">
+                            <div data-collapsible-title>
                                 <h2 class="text-sm font-bold text-indigo-300 uppercase">
                                     <i class="fa-solid fa-layer-group mr-2"></i> Simulador de Viaje Combinado (Shadow Estimator)
                                 </h2>
                                 <div class="mt-0.5 text-[10px] text-slate-500">Escenario especulativo aislado: no modifica la cotizacion activa.</div>
                             </div>
-                            <button id="btn-open-shadow-estimator-panel" type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-slate-600 bg-slate-950/50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-slate-200 transition hover:border-indigo-400 hover:text-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-400/50">
-                                <i class="fa-solid fa-calculator"></i>
-                                Abrir simulador
-                            </button>
+                            <div class="collapsible-section-actions">
+                                <button id="btn-open-shadow-estimator-panel" type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-slate-600 bg-slate-950/50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-slate-200 transition hover:border-indigo-400 hover:text-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-400/50">
+                                    <i class="fa-solid fa-calculator"></i>
+                                    Abrir simulador
+                                </button>
+                            </div>
                         </div>
                         <div class="mt-3 grid grid-cols-1 gap-3 text-[10px] text-slate-400 md:grid-cols-3">
                             <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
@@ -8023,8 +8121,8 @@
                     </div>
 
                     <!-- PANEL DE IMPRESIÓN Y RESPALDO -->
-                    <div class="bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg no-print">
-                        <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
+                    <div class="collapsible-section bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg no-print" data-collapsible-section data-default-open="false">
+                        <div class="collapsible-section-header flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
                             <h2 id="backup-header-title" class="text-sm font-bold text-indigo-400 uppercase">
                                 <i class="fa-solid fa-print mr-2"></i> Impresión y Respaldo de Cotizaciones
                             </h2>
@@ -18674,6 +18772,111 @@
             if (knots <= 55) return { code: 10, label: "Temporal Duro (Storm)" };
             if (knots <= 63) return { code: 11, label: "Temporal Muy Duro (Violent Storm)" };
             return { code: 12, label: "Huracán (Hurricane)" };
+        }
+
+        class CollapsibleSection {
+            constructor(root, options = {}) {
+                this.root = root;
+                this.options = options;
+                this.header = root.querySelector(':scope > .collapsible-section-header');
+                this.title = this.resolveTitle(options.title, options.icon);
+                this.headerActions = options.headerActions || this.header?.querySelector(':scope > .collapsible-section-actions');
+                this.children = options.children || Array.from(root.children).filter((node) => node !== this.header);
+                this.isOpen = options.defaultOpen ?? root.dataset.defaultOpen !== 'false';
+
+                if (!this.header || !this.title) return;
+                this.render();
+                this.bind();
+            }
+
+            resolveTitle(title, icon) {
+                if (title instanceof Element) return title;
+                if (typeof title !== 'string') {
+                    return this.header?.querySelector('[data-collapsible-title], h2, h3');
+                }
+
+                const titleElement = document.createElement('span');
+                titleElement.dataset.collapsibleTitle = '';
+                if (icon) {
+                    const iconElement = document.createElement('i');
+                    iconElement.className = icon;
+                    iconElement.setAttribute('aria-hidden', 'true');
+                    titleElement.append(iconElement);
+                }
+                titleElement.append(document.createTextNode(title));
+                return titleElement;
+            }
+
+            render() {
+                const sectionId = this.root.id || `collapsible-section-${CollapsibleSection.nextId++}`;
+                const contentId = `${sectionId}-content`;
+                const contentNodes = Array.from(this.children);
+
+                this.root.classList.add('collapsible-section');
+                this.root.dataset.collapsibleInitialized = 'true';
+                this.header.classList.add('collapsible-section__header');
+
+                this.toggle = document.createElement('button');
+                this.toggle.type = 'button';
+                this.toggle.className = 'collapsible-section__toggle';
+                this.toggle.setAttribute('aria-controls', contentId);
+
+                this.title.classList.add('collapsible-section__title');
+                this.toggle.append(this.title);
+
+                this.header.replaceChildren(this.toggle);
+                if (this.headerActions) {
+                    this.headerActions.classList.add('collapsible-section__actions');
+                    this.header.append(this.headerActions);
+                }
+
+                this.chevron = document.createElement('i');
+                this.chevron.className = 'collapsible-section__chevron fa-solid fa-chevron-down';
+                this.chevron.setAttribute('aria-hidden', 'true');
+                this.header.append(this.chevron);
+
+                this.collapse = document.createElement('div');
+                this.collapse.id = contentId;
+                this.collapse.className = 'collapsible-section__collapse';
+
+                const inner = document.createElement('div');
+                inner.className = 'collapsible-section__inner';
+                inner.append(...contentNodes);
+                this.collapse.append(inner);
+                this.root.append(this.collapse);
+
+                this.update();
+            }
+
+            bind() {
+                this.header.addEventListener('click', () => {
+                    this.isOpen = !this.isOpen;
+                    this.update();
+                });
+
+                this.headerActions?.addEventListener('click', (event) => event.stopPropagation());
+            }
+
+            update() {
+                this.toggle.setAttribute('aria-expanded', String(this.isOpen));
+                this.collapse.setAttribute('aria-hidden', String(!this.isOpen));
+                this.collapse.classList.toggle('is-collapsed', !this.isOpen);
+                this.root.classList.toggle('is-collapsed', !this.isOpen);
+            }
+
+            static mountAll() {
+                document.querySelectorAll('[data-collapsible-section]:not([data-collapsible-initialized])')
+                    .forEach((root) => new CollapsibleSection(root));
+            }
+        }
+
+        CollapsibleSection.nextId = 1;
+        window.CollapsibleSection = CollapsibleSection;
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', CollapsibleSection.mountAll);
+        } else {
+            CollapsibleSection.mountAll();
         }
 
         /**
