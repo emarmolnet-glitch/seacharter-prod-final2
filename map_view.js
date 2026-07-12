@@ -52,7 +52,11 @@
 
     function getRoutePortsFromResult(result) {
         const coordinates = result?.coordinates || {};
-        return { pol: coordinates.pol || null, pod: coordinates.pod || null };
+        return {
+            ballast: coordinates.ballast || null,
+            pol: coordinates.pol || null,
+            pod: coordinates.pod || null
+        };
     }
 
     function createPortLabel(role, port) {
@@ -67,8 +71,52 @@
             lng,
             name,
             text: `${role} · ${name}`,
-            color: role === 'POL' ? '#34d399' : '#60a5fa'
+            color: role === 'LASTRE' ? '#9ca3af' : (role === 'POL' ? '#34d399' : '#60a5fa')
         };
+    }
+
+    function createRouteSegment(type, origin, destination) {
+        if (!origin || !destination) return null;
+        const isBallast = type === 'ballast';
+        return {
+            type,
+            startLat: origin.lat,
+            startLng: origin.lng,
+            endLat: destination.lat,
+            endLng: destination.lng,
+            name: `${isBallast ? 'Lastre' : 'Carga'} · ${origin.name} → ${destination.name}`,
+            color: isBallast ? '#808080' : '#facc15',
+            stroke: isBallast ? 0.48 : 0.76,
+            dashLength: isBallast ? 0.18 : 0.72,
+            dashGap: isBallast ? 0.12 : 0.08,
+            dashAnimateTime: isBallast ? 2600 : 1200
+        };
+    }
+
+    function setRouteSegments(ports, key = DEFAULT_KEY, options = {}) {
+        const view = getView(key);
+        if (!view) return [];
+
+        const ballastLabel = createPortLabel('LASTRE', ports?.ballast);
+        const polLabel = createPortLabel('POL', ports?.pol);
+        const podLabel = createPortLabel('POD', ports?.pod);
+        view.portLabels = [ballastLabel, polLabel, podLabel].filter(Boolean);
+        view.routeSegments = [
+            createRouteSegment('ballast', ballastLabel, polLabel),
+            createRouteSegment('laden', polLabel, podLabel)
+        ].filter(Boolean);
+        view.globe.arcsData(view.routeSegments);
+        renderLabels(view);
+
+        if (view.routeSegments.length && options.focus !== false) {
+            const routePorts = [ballastLabel, polLabel, podLabel].filter(Boolean);
+            view.globe.pointOfView({
+                lat: routePorts.reduce((sum, port) => sum + port.lat, 0) / routePorts.length,
+                lng: routePorts.reduce((sum, port) => sum + port.lng, 0) / routePorts.length,
+                altitude: routePorts.length > 2 ? 1.85 : 1.65
+            }, 900);
+        }
+        return view.routeSegments;
     }
 
     function clusterVessels(vessels, altitude) {
@@ -164,34 +212,11 @@
     }
 
     function setRoute(pol, pod, key = DEFAULT_KEY, options = {}) {
-        const view = getView(key);
-        if (!view) return [];
-        const polLabel = createPortLabel('POL', pol);
-        const podLabel = createPortLabel('POD', pod);
-        view.portLabels = [polLabel, podLabel].filter(Boolean);
-        view.routeArc = polLabel && podLabel ? [{
-            startLat: polLabel.lat,
-            startLng: polLabel.lng,
-            endLat: podLabel.lat,
-            endLng: podLabel.lng,
-            name: `${polLabel.name} → ${podLabel.name}`
-        }] : [];
-        view.globe.arcsData(view.routeArc);
-        renderLabels(view);
-
-        if (view.routeArc.length && options.focus !== false) {
-            view.globe.pointOfView({
-                lat: (polLabel.lat + podLabel.lat) / 2,
-                lng: (polLabel.lng + podLabel.lng) / 2,
-                altitude: 1.65
-            }, 900);
-        }
-        return view.routeArc;
+        return setRouteSegments({ pol, pod }, key, options);
     }
 
     function setRouteResult(result, key = DEFAULT_KEY, options = {}) {
-        const { pol, pod } = getRoutePortsFromResult(result);
-        return setRoute(pol, pod, key, options);
+        return setRouteSegments(getRoutePortsFromResult(result), key, options);
     }
 
     function resize(key = DEFAULT_KEY) {
@@ -280,12 +305,12 @@
             .arcStartLng('startLng')
             .arcEndLat('endLat')
             .arcEndLng('endLng')
-            .arcColor(() => ['#22d3ee', '#f59e0b'])
+            .arcColor('color')
             .arcAltitudeAutoScale(0.32)
-            .arcStroke(0.7)
-            .arcDashLength(0.55)
-            .arcDashGap(0.18)
-            .arcDashAnimateTime(1800)
+            .arcStroke('stroke')
+            .arcDashLength('dashLength')
+            .arcDashGap('dashGap')
+            .arcDashAnimateTime('dashAnimateTime')
             .arcLabel('name')
             .arcsData([]);
 
@@ -296,7 +321,7 @@
             vessels: [],
             clusters: [],
             portLabels: [],
-            routeArc: [],
+            routeSegments: [],
             selectedVessel: null,
             zoomBucket: null,
             clickHandler: null,
@@ -373,6 +398,7 @@
         resize,
         updateVessels,
         setRoute,
+        setRouteSegments,
         setRouteResult,
         focusVessel,
         focusCoordinates,
