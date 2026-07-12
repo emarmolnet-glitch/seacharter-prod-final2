@@ -463,7 +463,10 @@
             right: 18px;
             bottom: 18px;
             z-index: 25;
-            width: min(540px, calc(100vw - 36px));
+            width: min(760px, calc(100vw - 36px));
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 0.75rem;
             pointer-events: none;
         }
 
@@ -473,6 +476,23 @@
             border-color: rgba(203, 213, 225, 0.8);
             box-shadow: 0 10px 24px rgba(0, 35, 48, 0.14);
             backdrop-filter: blur(10px);
+        }
+
+        .map-route-summary-overlay strong,
+        .map-route-summary-overlay small {
+            display: block;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .map-route-summary-overlay small {
+            margin-top: 0.25rem;
+            color: #64748b;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
         }
 
         #map-host {
@@ -6561,10 +6581,11 @@
                         </button>
                     </div>
                 </section>
-                <div id="map-route-summary" class="map-route-summary-overlay grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div id="map-route-summary" class="map-route-summary-overlay text-xs">
+                        <div class="border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">Lastre</span><strong id="sync-ballast-label">TBA</strong></div>
                         <div class="border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">POL</span><strong id="sync-pol-label">TBA</strong></div>
                         <div class="border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">POD</span><strong id="sync-pod-label">TBA</strong></div>
-                        <div class="border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">Millas</span><strong id="sync-miles-label">0 NM</strong></div>
+                        <div id="sync-miles-card" class="border border-slate-200 rounded p-3" title="Lastre: 0 NM | Carga: 0 NM"><span class="block text-slate-500 uppercase">Millas</span><strong id="sync-miles-label">0 NM</strong><small id="sync-miles-breakdown">L: 0 | C: 0</small></div>
                         <div class="border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">Laycan</span><strong id="sync-laycan-label">TBA</strong></div>
                 </div>
             </div>
@@ -12264,22 +12285,30 @@
         }
 
         function updateRouteSummary() {
-            const totalMiles = State.totalMiles || State.distBallast + State.distLaden || 0;
+            const ballastMiles = Number(State.distBallast) || 0;
+            const ladenMiles = Number(State.distLaden) || 0;
+            const totalMiles = Number(State.totalMiles) || ballastMiles + ladenMiles;
             const laycanStart = [State.laycanDate, State.laycanTime].filter(Boolean).join(' ');
             const cancelling = [State.cancellingDate, State.cancellingTime].filter(Boolean).join(' ');
             const laycan = State.laycanDate && State.cancellingDate
                 ? `${laycanStart} / ${cancelling}`
                 : (laycanStart || cancelling || 'TBA');
             const pairs = {
+                'sync-ballast-label': State.portBallast || 'TBA',
                 'sync-pol-label': State.pol || 'TBA',
                 'sync-pod-label': State.pod || 'TBA',
                 'sync-miles-label': `${Math.round(totalMiles).toLocaleString('en-US')} NM`,
+                'sync-miles-breakdown': `L: ${Math.round(ballastMiles).toLocaleString('en-US')} | C: ${Math.round(ladenMiles).toLocaleString('en-US')}`,
                 'sync-laycan-label': laycan
             };
             Object.entries(pairs).forEach(([id, value]) => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = value;
             });
+            const milesCard = document.getElementById('sync-miles-card');
+            if (milesCard) {
+                milesCard.title = `Total: ${Math.round(totalMiles).toLocaleString('en-US')} NM | Lastre: ${Math.round(ballastMiles).toLocaleString('en-US')} NM | Carga: ${Math.round(ladenMiles).toLocaleString('en-US')} NM`;
+            }
         }
 
         function syncGlobalStateToForms() {
