@@ -68,13 +68,14 @@
         :root {
             --primary: #004e64;
             --accent: #25a18e;
-            --bg: #F8FAFC;
+            --bg: #004e64;
             --text: #334155;
             --danger: #F43F5E;
             --surface: #FFFFFF;
             --border: #E2E8F0;
             --muted: #64748B;
             --panel-shadow: 0 4px 10px -6px rgba(15, 23, 42, 0.22);
+            --floating-panel-shadow: 0 18px 42px rgba(0, 35, 48, 0.24), 0 3px 10px rgba(0, 35, 48, 0.16);
         }
         
         body { font-family: 'Inter', 'Roboto', sans-serif; background-color: var(--bg); color: var(--text); }
@@ -6482,13 +6483,89 @@
             color: #052E16 !important;
         }
 
+        /* Premium application shell: matches the globe canvas background. */
+        body.theme-light,
+        .app-main {
+            background: var(--bg) !important;
+        }
+
+        .app-main > .view-section:not(#view-map),
+        #view-estimator,
+        #view-cbam,
+        #view-fcl,
+        #view-gencon,
+        #view-asbatankvoy,
+        #view-auditor,
+        #view-ais,
+        #view-matching {
+            background: var(--bg) !important;
+        }
+
+        body.theme-light > header.app-header {
+            width: calc(100% - 1.5rem) !important;
+            margin: 0.75rem 0.75rem 0 !important;
+            border: 1px solid rgba(226, 232, 240, 0.95) !important;
+            border-radius: 0.875rem !important;
+            background: #FFFFFF !important;
+            box-shadow: var(--floating-panel-shadow) !important;
+        }
+
+        .collapsible-section.collapsible-section--card {
+            background: #FFFFFF !important;
+            border: 1px solid rgba(226, 232, 240, 0.96) !important;
+            border-radius: 0.875rem !important;
+            box-shadow: var(--floating-panel-shadow) !important;
+            color: var(--text) !important;
+        }
+
+        .collapsible-section.collapsible-section--card > .collapsible-section__header {
+            background: #FFFFFF !important;
+            border: 0 !important;
+            box-shadow: none !important;
+        }
+
+        .collapsible-section.collapsible-section--card > .collapsible-section__collapse > .collapsible-section__inner {
+            background: #FFFFFF !important;
+            border: 0 !important;
+            box-shadow: none !important;
+        }
+
+        .collapsible-section.collapsible-section--card.is-collapsed > .collapsible-section__header {
+            border-radius: inherit;
+        }
+
+        .collapsible-section.collapsible-section--card .collapsible-section__toggle {
+            background: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+        }
+
+        .app-footer {
+            border: 0 !important;
+            background: var(--bg) !important;
+            color: #E5E7EB !important;
+        }
+
+        .app-footer span,
+        .app-footer div {
+            color: #E5E7EB !important;
+        }
+
+        @media (max-width: 767px) {
+            body.theme-light > header.app-header {
+                width: calc(100% - 1rem) !important;
+                margin: 0.5rem 0.5rem 0 !important;
+                border-radius: 0.75rem !important;
+            }
+        }
+
     </style>
     <link href="./calculator_view.css" rel="stylesheet">
 </head>
 <body class="theme-light h-screen flex flex-col overflow-hidden">
 
     <!-- NAVBAR TOP -->
-    <header class="bg-slate-900 border-b border-slate-800 px-4 py-3 md:px-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-md shrink-0 no-print z-50">
+    <header class="app-header bg-white border-b border-slate-200 px-4 py-3 md:px-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-md shrink-0 no-print z-50">
         <div class="flex items-center gap-3">
             <div class="bg-blue-600 p-2 rounded-lg text-white shadow-lg">
                 <i class="fa-solid fa-ship text-base"></i>
@@ -6686,7 +6763,7 @@
     <datalist id="ports-list"></datalist>
 
     <!-- MAIN CONTENT CONTAINER -->
-    <div class="flex-1 overflow-hidden relative">
+    <main class="app-main flex-1 overflow-hidden relative">
 
         <!-- ========================================== -->
         <!-- MÓDULO 1: MAPA Y ESTADO GEOGRÁFICO         -->
@@ -10323,7 +10400,7 @@
             </div>
         </div>
 
-    </div>
+    </main>
 
     <!-- SECCIÓN DE IMPRESIÓN DEL INFORME EJECUTIVO -->
     <div id="executive-report-print-view" class="hidden font-sans">
@@ -18919,7 +18996,7 @@
                 const contentId = `${sectionId}-content`;
                 const contentNodes = Array.from(this.children);
 
-                this.root.classList.add('collapsible-section');
+                this.root.classList.add('collapsible-section', 'collapsible-section--card');
                 this.root.dataset.collapsibleInitialized = 'true';
                 this.header.classList.add('collapsible-section__header');
 
@@ -39913,7 +39990,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
     </script>
 
     <!-- SUBTLE FOOTER -->
-    <footer class="bg-white border-t border-slate-200 px-4 py-2.5 text-center text-xs text-slate-400 no-print shrink-0 flex flex-col sm:flex-row justify-between items-center z-50">
+    <footer class="app-footer px-4 py-2.5 text-center text-xs no-print shrink-0 flex flex-col sm:flex-row justify-between items-center z-50">
         <div>&copy; 2026 <span class="font-semibold text-slate-600">SeaCharter Core PRO</span>. All rights reserved.</div>
         <div class="text-[10px] text-slate-400 mt-1 sm:mt-0">Enterprise Logistics & Voyage Estimation Suite</div>
     </footer>
