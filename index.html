@@ -36170,6 +36170,36 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
         }
 
+        const AIS_MATCHING_DEBOUNCE_MS = 350;
+        const aisMatchingExecutionState = {
+            lastGeoSignature: null,
+            lastCountSignature: null,
+            pendingGeoSignature: null,
+            debounceTimer: null,
+            forceNextExecution: false,
+            nearbyVessels: [],
+            compatibleVessels: [],
+            proximityDebug: null
+        };
+
+        function scheduleAisMatchingRefresh(geoSignature) {
+            if (aisMatchingExecutionState.debounceTimer && aisMatchingExecutionState.pendingGeoSignature === geoSignature) {
+                return;
+            }
+
+            if (aisMatchingExecutionState.debounceTimer) {
+                clearTimeout(aisMatchingExecutionState.debounceTimer);
+            }
+
+            aisMatchingExecutionState.pendingGeoSignature = geoSignature;
+            aisMatchingExecutionState.debounceTimer = setTimeout(() => {
+                aisMatchingExecutionState.debounceTimer = null;
+                aisMatchingExecutionState.pendingGeoSignature = null;
+                aisMatchingExecutionState.forceNextExecution = true;
+                calculateAndDisplayAisFreight();
+            }, AIS_MATCHING_DEBOUNCE_MS);
+        }
+
         function calculateAndDisplayAisFreight() {
             const baseBEText = document.getElementById('res-breakeven')?.innerText || "$0.00";
             const baseBE = parseFloat(baseBEText.replace('$', '')) || State.breakEven || 0;
@@ -36252,9 +36282,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const hasRenderableAisVessels = sourceAisVessels.length > 0;
             const isAisWaitingForHydration = !hasRenderableAisVessels && typeof window !== 'undefined' && window.isAisHydrationSyncing === true;
             const hasRealAisData = !isAisWaitingForHydration && pricingSourceVessels.length > 0;
-            const nearbyVessels = [];
-            const compatibleVessels = [];
-            const proximityDebug = {
+            let nearbyVessels = [];
+            let compatibleVessels = [];
+            let proximityDebug = {
                 sourceCount: proximitySourceVessels.length,
                 pricingSourceCount: pricingSourceVessels.length,
                 invalidCoordinates: 0,
@@ -36264,8 +36294,26 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 hydrationActive: window.isAisHydrationSyncing === true,
                 polCoordinates: polCoords
             };
-            
-            if (hasRenderableAisVessels && polCoords) {
+            const geoSignature = JSON.stringify({
+                pol: pol.trim().toUpperCase(),
+                pod: pod.trim().toUpperCase(),
+                polLat: polCoords ? Number(polCoords.lat.toFixed(6)) : null,
+                polLon: polCoords ? Number(polCoords.lon.toFixed(6)) : null
+            });
+            const countSignature = `${proximityDebug.sourceCount}:${proximityDebug.pricingSourceCount}`;
+            const hasPreviousMatching = aisMatchingExecutionState.lastGeoSignature !== null;
+            const geographicInputsChanged = hasPreviousMatching && aisMatchingExecutionState.lastGeoSignature !== geoSignature;
+            const sourceCountsChanged = hasPreviousMatching && aisMatchingExecutionState.lastCountSignature !== countSignature;
+
+            if (geographicInputsChanged && !aisMatchingExecutionState.forceNextExecution) {
+                scheduleAisMatchingRefresh(geoSignature);
+            }
+
+            const shouldExecuteAisMatching = !hasPreviousMatching
+                || aisMatchingExecutionState.forceNextExecution
+                || (!geographicInputsChanged && sourceCountsChanged);
+
+            if (shouldExecuteAisMatching && hasRenderableAisVessels && polCoords) {
                 const maxNearbyRadiusNm = (window.AIS_PROSPECTION_RADII_NM && window.AIS_PROSPECTION_RADII_NM.POL) || 2000;
 
                 const normalizeAisRadarTextKey = (value) => String(value || '')
@@ -36369,14 +36417,28 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (window.GlobalStore) {
                     window.GlobalStore.compatibleVessels = compatibleVessels;
                 }
-            } else {
+            } else if (shouldExecuteAisMatching) {
                 nearbyCount = 0; 
                 if (window.GlobalStore) {
                     window.GlobalStore.compatibleVessels = [];
                 }
             }
-            proximityDebug.nearbyCount = nearbyVessels.length;
-            console.info('[AIS Matching] Buques Cercanos en POL', proximityDebug);
+
+            if (shouldExecuteAisMatching) {
+                proximityDebug.nearbyCount = nearbyVessels.length;
+                aisMatchingExecutionState.lastGeoSignature = geoSignature;
+                aisMatchingExecutionState.lastCountSignature = countSignature;
+                aisMatchingExecutionState.nearbyVessels = nearbyVessels;
+                aisMatchingExecutionState.compatibleVessels = compatibleVessels;
+                aisMatchingExecutionState.proximityDebug = proximityDebug;
+                aisMatchingExecutionState.forceNextExecution = false;
+                console.info('[AIS Matching] Buques Cercanos en POL', proximityDebug);
+            } else {
+                nearbyVessels = aisMatchingExecutionState.nearbyVessels;
+                compatibleVessels = aisMatchingExecutionState.compatibleVessels;
+                proximityDebug = aisMatchingExecutionState.proximityDebug || proximityDebug;
+                nearbyCount = nearbyVessels.length;
+            }
 
             const badgeEl = document.getElementById('ais-nearby-vessels-badge');
             if (badgeEl) {
@@ -36728,10 +36790,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             portInputEl.addEventListener('input', () => {
                 window.isFirstLoad = true;
                 window.updateAisDetectedVesselsRoute();
+                if (typeof calculateAndDisplayAisFreight === 'function') {
+                    calculateAndDisplayAisFreight();
+                }
             });
             portInputEl.addEventListener('change', () => {
                 window.isFirstLoad = true;
                 window.updateAisDetectedVesselsRoute();
+                if (typeof calculateAndDisplayAisFreight === 'function') {
+                    calculateAndDisplayAisFreight();
+                }
             });
         });
 
