@@ -1,7 +1,7 @@
 import type { Config } from "@netlify/functions";
 import OpenAI from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-import { completeIaReport, createIaReport, failIaReport } from "../../db/ia-reports.js";
+import { completeIaReport, createIaReport, failIaReport, getVesselSyncContext } from "../../db/ia-reports.js";
 
 type GeminiPart = {
   text?: string;
@@ -17,7 +17,41 @@ export type GeminiPayload = {
   calado_requerido?: number | string | null;
   auditMode?: string;
   data?: Record<string, unknown>;
+  dataBridgeSyncId?: string | null;
+  persistedImoNumbers?: string[];
 };
+
+export async function validateAuditVesselSync(payload: GeminiPayload) {
+  const syncId = String(payload.dataBridgeSyncId || "").trim();
+  if (!syncId) return { available: true, payload };
+
+  const syncContext = await getVesselSyncContext(syncId);
+  if (!syncContext || syncContext.existingImoNumbers.length === 0) {
+    return { available: false, payload, syncId };
+  }
+
+  const allowedImoNumbers = new Set(syncContext.existingImoNumbers);
+  const data = payload.data && typeof payload.data === "object" ? { ...payload.data } : payload.data;
+  if (data && Array.isArray(data.vessels)) {
+    data.vessels = data.vessels.filter((vessel) => {
+      if (!vessel || typeof vessel !== "object") return false;
+      const source = vessel as Record<string, unknown>;
+      const rawImo = source.imo_number ?? source.IMO_NUMBER ?? source.IMO ?? source.imo ?? source.numero_imo ?? source.imoNumber;
+      const digits = String(rawImo ?? "").replace(/\D/g, "");
+      return allowedImoNumbers.has(digits);
+    });
+  }
+
+  return {
+    available: true,
+    syncId,
+    payload: {
+      ...payload,
+      data,
+      persistedImoNumbers: syncContext.existingImoNumbers,
+    },
+  };
+}
 
 const STRICT_AUDIT_PROMPT = `Actúa como un alto ejecutivo marítimo con experiencia en derecho y fletamento. Tu tarea es auditar la viabilidad comercial y legal. Entrega tu reporte estructurado estrictamente en estos 5 bloques:
 
@@ -370,9 +404,14 @@ export default async (req: Request) => {
       return responseJson(await processLegalAuditPayload(payload));
     }
 
-    const report = await createIaReport(payload);
+    const syncValidation = await validateAuditVesselSync(payload);
+    if (!syncValidation.available) {
+      return responseJson({ success: true, available: false, message: "Reporte no disponible" });
+    }
+
+    const report = await createIaReport(syncValidation.payload);
     try {
-      const result = await processLegalAuditPayload(payload);
+      const result = await processLegalAuditPayload(syncValidation.payload);
       await completeIaReport(report.id, result);
       return responseJson(result);
     } catch (error) {

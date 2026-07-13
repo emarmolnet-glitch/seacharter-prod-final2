@@ -11,9 +11,18 @@ export default async (req: Request, context: Context) => {
   }
 
   const taskId = String(context.params.task_id || new URL(req.url).pathname.split("/").filter(Boolean).at(-1) || "");
-  const task = taskId ? await getIaReport(taskId) : null;
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(taskId);
+  const task = isUuid ? await getIaReport(taskId) : null;
   if (!task) {
-    return Response.json({ error: "Tarea de auditoría no encontrada." }, { status: 404, headers });
+    return Response.json({
+      success: true,
+      available: false,
+      message: "Reporte no disponible",
+      task_id: taskId || null,
+      status: "UNAVAILABLE",
+      result: null,
+      error: null,
+    }, { status: 200, headers });
   }
 
   return Response.json({

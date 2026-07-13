@@ -4,6 +4,7 @@ import {
   failIaReport,
 } from "../../db/ia-reports.js";
 import type { GeminiPayload } from "./ai-legal-audit.js";
+import { validateAuditVesselSync } from "./ai-legal-audit.js";
 
 const headers = {
   "cache-control": "no-store",
@@ -19,7 +20,17 @@ export default async (req: Request, _context: Context) => {
     return Response.json({ error: { message: "La tarea requiere una auditoría contractual válida." } }, { status: 400, headers });
   }
 
-  const report = await createIaReport(payload);
+  const syncValidation = await validateAuditVesselSync(payload);
+  if (!syncValidation.available) {
+    return Response.json({
+      success: true,
+      available: false,
+      message: "Reporte no disponible",
+      task_id: null,
+    }, { status: 200, headers });
+  }
+
+  const report = await createIaReport(syncValidation.payload);
 
   const workerUrl = new URL("/.netlify/functions/process-legal-audit-background", req.url);
   try {
