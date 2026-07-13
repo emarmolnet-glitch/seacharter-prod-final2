@@ -4,6 +4,14 @@
     const views = new Map();
     const DEFAULT_KEY = 'main';
     const VESSEL_FOCUS_ALTITUDE = 500 / 6371;
+    const ROUTE_MAX_POINTS = 720;
+    const ROUTE_SIMPLIFY_TOLERANCE = 0.012;
+    const ROUTE_COLORS = Object.freeze({
+        ballast: '#b8a06a',
+        ballastFlow: '#ead49e',
+        laden: '#20d69b',
+        ladenFlow: '#7cf7cf'
+    });
 
     function toFiniteNumber(...values) {
         for (const value of values) {
@@ -59,6 +67,117 @@
         };
     }
 
+    function normalizeRoutePoint(point) {
+        const lat = toFiniteNumber(point?.lat, point?.latitude, Array.isArray(point) ? point[0] : null);
+        const lng = toFiniteNumber(point?.lng, point?.lon, point?.longitude, Array.isArray(point) ? point[1] : null);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+        return { lat, lng };
+    }
+
+    function unwrapRouteLongitudes(points) {
+        let previousLng = null;
+        return points.map((point) => {
+            let lng = point.lng;
+            if (previousLng !== null) {
+                while (lng - previousLng > 180) lng -= 360;
+                while (lng - previousLng < -180) lng += 360;
+            }
+            previousLng = lng;
+            return { lat: point.lat, lng };
+        });
+    }
+
+    function squaredSegmentDistance(point, start, end) {
+        let x = start.lng;
+        let y = start.lat;
+        let dx = end.lng - x;
+        let dy = end.lat - y;
+
+        if (dx !== 0 || dy !== 0) {
+            const ratio = ((point.lng - x) * dx + (point.lat - y) * dy) / (dx * dx + dy * dy);
+            if (ratio > 1) {
+                x = end.lng;
+                y = end.lat;
+            } else if (ratio > 0) {
+                x += dx * ratio;
+                y += dy * ratio;
+            }
+        }
+
+        dx = point.lng - x;
+        dy = point.lat - y;
+        return dx * dx + dy * dy;
+    }
+
+    function simplifyRoutePoints(points, tolerance) {
+        if (points.length <= 2) return points.slice();
+        const squaredTolerance = tolerance * tolerance;
+        const markers = new Uint8Array(points.length);
+        const stack = [[0, points.length - 1]];
+        markers[0] = 1;
+        markers[points.length - 1] = 1;
+
+        while (stack.length) {
+            const [first, last] = stack.pop();
+            let maxDistance = squaredTolerance;
+            let splitIndex = 0;
+
+            for (let index = first + 1; index < last; index++) {
+                const distance = squaredSegmentDistance(points[index], points[first], points[last]);
+                if (distance > maxDistance) {
+                    splitIndex = index;
+                    maxDistance = distance;
+                }
+            }
+
+            if (splitIndex) {
+                markers[splitIndex] = 1;
+                stack.push([first, splitIndex], [splitIndex, last]);
+            }
+        }
+
+        return points.filter((_, index) => markers[index]);
+    }
+
+    function prepareRoutePoints(route, origin, destination) {
+        const sourcePoints = Array.isArray(route?.coordinates) ? route.coordinates : [];
+        const fallbackPoints = [origin, destination].map(normalizeRoutePoint).filter(Boolean);
+        const normalized = sourcePoints.map(normalizeRoutePoint).filter(Boolean);
+        const points = normalized.length > 1 ? normalized : fallbackPoints;
+        if (points.length < 2) return [];
+
+        const unwrapped = unwrapRouteLongitudes(points);
+        let tolerance = ROUTE_SIMPLIFY_TOLERANCE;
+        let simplified = simplifyRoutePoints(unwrapped, tolerance);
+        while (simplified.length > ROUTE_MAX_POINTS && tolerance < 0.2) {
+            tolerance *= 1.6;
+            simplified = simplifyRoutePoints(unwrapped, tolerance);
+        }
+
+        if (origin) simplified[0] = normalizeRoutePoint(origin) || simplified[0];
+        if (destination) simplified[simplified.length - 1] = normalizeRoutePoint(destination) || simplified[simplified.length - 1];
+        return simplified;
+    }
+
+    function mergeRoutePoints(ballastPoints, ladenPoints) {
+        if (!ballastPoints.length) return ladenPoints.slice();
+        if (!ladenPoints.length) return ballastPoints.slice();
+        const merged = ballastPoints.slice();
+        const lastBallast = merged[merged.length - 1];
+        const firstLaden = ladenPoints[0];
+        const sharesPol = Math.abs(lastBallast.lat - firstLaden.lat) < 0.000001
+            && Math.abs(lastBallast.lng - firstLaden.lng) < 0.000001;
+        return merged.concat(sharesPol ? ladenPoints.slice(1) : ladenPoints);
+    }
+
+    function createFlowGradient(ballastPointCount, totalPointCount) {
+        const stopCount = 32;
+        const ballastRatio = totalPointCount > 1 ? Math.max(0, Math.min(1, (ballastPointCount - 1) / (totalPointCount - 1))) : 0;
+        return Array.from({ length: stopCount }, (_, index) => (
+            index / (stopCount - 1) <= ballastRatio ? ROUTE_COLORS.ballastFlow : ROUTE_COLORS.ladenFlow
+        ));
+    }
+
     function createPortLabel(role, port) {
         const lat = toFiniteNumber(port?.lat, port?.latitude);
         const lng = toFiniteNumber(port?.lng, port?.lon, port?.longitude);
@@ -75,25 +194,24 @@
         };
     }
 
-    function createRouteSegment(type, origin, destination) {
+    function createRouteSegment(type, origin, destination, route) {
         if (!origin || !destination) return null;
         const isBallast = type === 'ballast';
+        const points = prepareRoutePoints(route, origin, destination);
+        if (points.length < 2) return null;
         return {
             type,
-            startLat: origin.lat,
-            startLng: origin.lng,
-            endLat: destination.lat,
-            endLng: destination.lng,
+            points,
             name: `${isBallast ? 'Lastre' : 'Carga'} · ${origin.name} → ${destination.name}`,
-            color: isBallast ? '#808080' : '#facc15',
-            stroke: isBallast ? 0.48 : 0.76,
-            dashLength: isBallast ? 0.18 : 0.72,
-            dashGap: isBallast ? 0.12 : 0.08,
-            dashAnimateTime: isBallast ? 2600 : 1200
+            color: isBallast ? ROUTE_COLORS.ballast : ROUTE_COLORS.laden,
+            stroke: isBallast ? 0.42 : 0.68,
+            dashLength: isBallast ? 0.022 : 0.035,
+            dashGap: isBallast ? 0.016 : 0.012,
+            dashAnimateTime: 0
         };
     }
 
-    function setRouteSegments(ports, key = DEFAULT_KEY, options = {}) {
+    function setRouteSegments(ports, key = DEFAULT_KEY, options = {}, routes = {}) {
         const view = getView(key);
         if (!view) return [];
 
@@ -101,11 +219,25 @@
         const polLabel = createPortLabel('POL', ports?.pol);
         const podLabel = createPortLabel('POD', ports?.pod);
         view.portLabels = [ballastLabel, polLabel, podLabel].filter(Boolean);
-        view.routeSegments = [
-            createRouteSegment('ballast', ballastLabel, polLabel),
-            createRouteSegment('laden', polLabel, podLabel)
+        const baseSegments = [
+            createRouteSegment('ballast', ballastLabel, polLabel, routes?.ballast),
+            createRouteSegment('laden', polLabel, podLabel, routes?.laden)
         ].filter(Boolean);
-        view.globe.arcsData(view.routeSegments);
+        const ballastSegment = baseSegments.find((segment) => segment.type === 'ballast');
+        const ladenSegment = baseSegments.find((segment) => segment.type === 'laden');
+        const flowPoints = mergeRoutePoints(ballastSegment?.points || [], ladenSegment?.points || []);
+        const flowSegment = flowPoints.length > 1 ? {
+            type: 'flow',
+            points: flowPoints,
+            name: `${ballastLabel?.name || 'Lastre'} → ${polLabel?.name || 'POL'} → ${podLabel?.name || 'POD'}`,
+            color: createFlowGradient(ballastSegment?.points.length || 0, flowPoints.length),
+            stroke: 0.24,
+            dashLength: 0.018,
+            dashGap: 0.055,
+            dashAnimateTime: 5200
+        } : null;
+        view.routeSegments = flowSegment ? [...baseSegments, flowSegment] : baseSegments;
+        view.globe.pathsData(view.routeSegments);
         renderLabels(view);
 
         if (view.routeSegments.length && options.focus !== false) {
@@ -216,7 +348,7 @@
     }
 
     function setRouteResult(result, key = DEFAULT_KEY, options = {}) {
-        return setRouteSegments(getRoutePortsFromResult(result), key, options);
+        return setRouteSegments(getRoutePortsFromResult(result), key, options, result?.routes || {});
     }
 
     function resize(key = DEFAULT_KEY) {
@@ -301,18 +433,17 @@
             .labelSize((label) => label.kind === 'port' ? 1.25 : (label.kind === 'selected-vessel' ? 1.05 : 0.95))
             .labelDotRadius((label) => label.kind === 'port' ? 0.34 : (label.kind === 'selected-vessel' ? 0.28 : 0.5))
             .labelResolution(3)
-            .arcStartLat('startLat')
-            .arcStartLng('startLng')
-            .arcEndLat('endLat')
-            .arcEndLng('endLng')
-            .arcColor('color')
-            .arcAltitudeAutoScale(0.32)
-            .arcStroke('stroke')
-            .arcDashLength('dashLength')
-            .arcDashGap('dashGap')
-            .arcDashAnimateTime('dashAnimateTime')
-            .arcLabel('name')
-            .arcsData([]);
+            .pathPoints('points')
+            .pathPointLat('lat')
+            .pathPointLng('lng')
+            .pathColor('color')
+            .pathStroke('stroke')
+            .pathDashLength('dashLength')
+            .pathDashGap('dashGap')
+            .pathDashAnimateTime('dashAnimateTime')
+            .pathLabel('name')
+            .pathTransitionDuration(0)
+            .pathsData([]);
 
         const view = {
             key,
