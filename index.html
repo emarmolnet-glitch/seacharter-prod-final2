@@ -4674,7 +4674,7 @@
             }
         }
 
-        @media (max-width: 1024px) {
+        @media (max-width: 767px) {
             header .module-tabs-wrapper {
                 display: grid !important;
                 grid-template-columns: auto auto minmax(12rem, 28rem) auto !important;
@@ -6499,6 +6499,139 @@
                 margin: 0.5rem 0.5rem 0 !important;
                 border-radius: 0.75rem !important;
             }
+
+            header.app-header {
+                grid-template-columns: minmax(0, 1fr) auto auto !important;
+                align-items: center !important;
+                justify-items: stretch !important;
+                gap: 0.35rem !important;
+                min-height: 0 !important;
+                padding: 0.35rem 0.4rem !important;
+                overflow: visible !important;
+            }
+
+            header.app-header > .flex.items-center.gap-3 {
+                width: auto !important;
+                min-width: 0 !important;
+                gap: 0.4rem !important;
+                justify-self: stretch !important;
+            }
+
+            header.app-header > .flex.items-center.gap-3 > .bg-blue-600 {
+                display: none !important;
+            }
+
+            header.app-header h1 {
+                display: flex !important;
+                align-items: center !important;
+                min-width: 0 !important;
+                font-size: 0.76rem !important;
+                line-height: 1 !important;
+                white-space: nowrap !important;
+            }
+
+            header.app-header h1 span {
+                display: none !important;
+            }
+
+            header.app-header > .flex.items-center.gap-3 p,
+            header.app-header #connection-status-root {
+                display: none !important;
+            }
+
+            header.app-header .module-tabs-wrapper {
+                order: initial !important;
+                display: flex !important;
+                width: auto !important;
+                max-width: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                gap: 0.25rem !important;
+                overflow: visible !important;
+                justify-self: end !important;
+            }
+
+            header.app-header .tools-dropdown-trigger,
+            header.app-header #mobile-session-menu-btn,
+            header.app-header .mobile-module-nav-trigger {
+                width: 34px !important;
+                height: 34px !important;
+                min-height: 34px !important;
+                padding: 0 !important;
+                border-radius: 7px !important;
+            }
+
+            header.app-header #advanced-modules-btn.tools-dropdown-trigger,
+            header.app-header #npl-module-btn.tools-dropdown-trigger,
+            header.app-header #btn-master-executive-report.tools-dropdown-trigger {
+                width: 34px !important;
+                height: 34px !important;
+                min-height: 34px !important;
+                border-radius: 7px !important;
+            }
+
+            header.app-header #advanced-modules-btn.tools-dropdown-trigger i,
+            header.app-header #npl-module-btn.tools-dropdown-trigger i {
+                font-size: 0.9rem !important;
+            }
+
+            header.app-header .mobile-module-nav {
+                display: block !important;
+                position: static !important;
+                width: 34px !important;
+                z-index: 90 !important;
+            }
+
+            header.app-header .mobile-module-nav-trigger {
+                justify-content: center !important;
+                color: var(--primary) !important;
+            }
+
+            header.app-header .mobile-module-nav-trigger .mobile-menu-bars {
+                font-size: 1rem !important;
+                transition: transform 160ms ease !important;
+            }
+
+            header.app-header .mobile-module-nav-trigger[aria-expanded="true"] .mobile-menu-bars {
+                transform: rotate(90deg) !important;
+            }
+
+            header.app-header .mobile-module-nav-menu {
+                position: fixed !important;
+                top: 3.65rem !important;
+                right: 0.5rem !important;
+                left: 0.5rem !important;
+                width: auto !important;
+                max-height: calc(100svh - 4.25rem) !important;
+                padding: 0.5rem !important;
+                gap: 0.25rem !important;
+                border-radius: 0.75rem !important;
+                box-shadow: 0 22px 48px -20px rgba(15, 23, 42, 0.52) !important;
+            }
+
+            header.app-header .mobile-module-nav-menu .tools-dropdown-action {
+                width: 100% !important;
+                min-height: 42px !important;
+                justify-content: flex-start !important;
+                padding: 0.65rem 0.8rem !important;
+                text-align: left !important;
+            }
+
+            header.app-header > .header-actions-right {
+                order: initial !important;
+                display: flex !important;
+                width: auto !important;
+                gap: 0 !important;
+                justify-self: end !important;
+            }
+
+            header.app-header > .header-actions-right > :not(#session-actions) {
+                display: none !important;
+            }
+
+            header.app-header #session-actions {
+                display: flex !important;
+            }
         }
 
     </style>
@@ -6574,12 +6707,11 @@
                     onclick="toggleMobileModuleNav(event)"
                     aria-controls="mobile-module-nav-menu"
                     aria-expanded="false"
+                    aria-label="Abrir menú de módulos"
+                    title="Menú de módulos"
                 >
-                    <span class="mobile-module-nav-label">
-                        <i class="fa-solid fa-compass" aria-hidden="true"></i>
-                        <span id="mobile-module-nav-current">Mapa</span>
-                    </span>
-                    <i class="fa-solid fa-chevron-down mobile-module-nav-chevron" aria-hidden="true"></i>
+                    <i class="fa-solid fa-bars mobile-menu-bars" aria-hidden="true"></i>
+                    <span id="mobile-module-nav-current" class="sr-only">Mapa</span>
                 </button>
                 <ul id="mobile-module-nav-menu" class="mobile-module-nav-menu" aria-label="Seleccionar módulo"></ul>
             </div>
