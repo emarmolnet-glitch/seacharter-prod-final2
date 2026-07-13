@@ -465,8 +465,6 @@
             bottom: 18px;
             z-index: 25;
             width: min(760px, calc(100vw - 36px));
-            display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 0.75rem;
             pointer-events: none;
         }
@@ -6819,12 +6817,12 @@
                         </button>
                     </div>
                 </section>
-                <div id="map-route-summary" class="map-route-summary-overlay text-xs">
-                        <div class="border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">Lastre</span><strong id="sync-ballast-label">TBA</strong></div>
-                        <div class="border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">POL</span><strong id="sync-pol-label">TBA</strong></div>
-                        <div class="border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">POD</span><strong id="sync-pod-label">TBA</strong></div>
-                        <div id="sync-miles-card" class="border border-slate-200 rounded p-3" title="Lastre: 0 NM | Carga: 0 NM"><span class="block text-slate-500 uppercase">Millas</span><strong id="sync-miles-label">0 NM</strong><small id="sync-miles-breakdown">L: 0 | C: 0</small></div>
-                        <div class="border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">Laycan</span><strong id="sync-laycan-label">TBA</strong></div>
+                <div id="map-route-summary" class="map-route-summary-overlay grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 text-xs">
+                        <div class="w-full border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">Lastre</span><strong id="sync-ballast-label">TBA</strong></div>
+                        <div class="w-full border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">POL</span><strong id="sync-pol-label">TBA</strong></div>
+                        <div class="w-full border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">POD</span><strong id="sync-pod-label">TBA</strong></div>
+                        <div id="sync-miles-card" class="w-full border border-slate-200 rounded p-3" title="Lastre: 0 NM | Carga: 0 NM"><span class="block text-slate-500 uppercase">Millas</span><strong id="sync-miles-label">0 NM</strong><small id="sync-miles-breakdown">L: 0 | C: 0</small></div>
+                        <div class="w-full border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">Laycan</span><strong id="sync-laycan-label">TBA</strong></div>
                 </div>
             </div>
         </div>
