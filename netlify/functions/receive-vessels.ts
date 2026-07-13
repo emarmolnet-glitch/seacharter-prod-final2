@@ -1,53 +1,99 @@
 import type { Config } from "@netlify/functions";
-
-declare const process: { env: Record<string, string | undefined> };
-
-const FETCH_TIMEOUT_MS = 15000;
-const DATA_BRIDGE_RECEIVE_CORE_DATA_URL = "https://calm-shortbread-55bcfc.netlify.app/api/databridge-port";
+import { getPool } from "../../db/index.js";
 
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store",
 };
 
-function getApiSecret() {
-  return process.env.DATA_BRIDGE_API_SECRET || process.env.VITE_DATA_BRIDGE_API_SECRET || "";
-}
+type ValidationIssue = {
+  index: number;
+  vessel: string;
+  field: string;
+  message: string;
+};
 
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Unable to forward vessels payload to Data Bridge.";
-}
+type PostgreSqlError = Error & {
+  code?: string;
+  constraint?: string;
+  detail?: string;
+  table?: string;
+  column?: string;
+  cause?: unknown;
+};
 
-function cleanText(value: unknown, fallback = "N/A") {
+type VesselRow = {
+  imoNumber: string;
+  vesselName: string;
+  dwt: number | null;
+  mmsi: string | null;
+  vesselType: string | null;
+  draftMeters: number | null;
+  flag: string | null;
+  eta: string | null;
+  lastPort: string | null;
+  currentDestination: string | null;
+  yearBuilt: string | null;
+  ownerManager: string | null;
+  hasGears: boolean;
+  processStatus: string | null;
+  source: string | null;
+  sourcePayload: Record<string, unknown>;
+};
+
+type PersistenceIssue = {
+  vessel: string;
+  imoNumber: string;
+  sqlState: string | null;
+  message: string;
+};
+
+let vesselsMasterSchemaReady: Promise<void> | null = null;
+
+function cleanText(value: unknown) {
   const text = String(value ?? "").trim();
-  return text || fallback;
+  const normalized = text.toUpperCase();
+  return text && !["N/A", "NA", "UNK", "UNKNOWN", "NULL", "NONE", "-", "--"].includes(normalized) ? text : null;
 }
 
-function readFirst(source: Record<string, unknown>, keys: string[], fallback: unknown = "N/A") {
+function readFirst(source: Record<string, unknown>, keys: string[]) {
   for (const key of keys) {
     const value = source[key];
-    if (value !== undefined && value !== null && String(value).trim() !== "") {
-      return value;
-    }
+    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
   }
-  return fallback;
+  return null;
 }
 
-function cleanNumber(value: unknown, fallback = 0) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : fallback;
+function cleanNumber(value: unknown) {
+  if (value === null || value === undefined || String(value).trim() === "") return null;
+  const normalized = typeof value === "string"
+    ? value.trim().replace(/\s/g, "").replace(/,(?=\d{1,2}$)/, ".").replace(/[^\d.-]/g, "")
+    : value;
+  const numeric = Number(normalized);
+  return Number.isFinite(numeric) ? numeric : null;
 }
 
 function cleanImo(value: unknown) {
-  const rawValue = String(value ?? "").trim();
-  const digits = rawValue.replace(/\D/g, "");
-  return digits.length === 7 ? digits : rawValue || "N/A";
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits.length === 7 ? digits : "";
 }
 
-function getVesselsFromPayload(payload: unknown) {
+function readValidImo(source: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const imoNumber = cleanImo(source[key]);
+    if (imoNumber) return imoNumber;
+  }
+  return "";
+}
+
+function cleanBoolean(value: unknown) {
+  if (typeof value === "boolean") return value;
+  return ["1", "true", "yes", "si", "sí", "geared"].includes(String(value ?? "").trim().toLowerCase());
+}
+
+function getVessels(payload: unknown) {
   if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== "object") return [];
-
   const source = payload as Record<string, unknown>;
   if (Array.isArray(source.vessels)) return source.vessels;
   if (Array.isArray(source.buques)) return source.buques;
@@ -55,50 +101,186 @@ function getVesselsFromPayload(payload: unknown) {
   return [];
 }
 
-function normalizeCoreVessel(value: unknown) {
+function normalizeVessel(value: unknown, index: number) {
   const source = value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
+    ? value as Record<string, unknown>
     : {};
+  const name = cleanText(readFirst(source, ["vessel_name", "vesselName", "nombre", "name", "ShipName", "ship"]));
+  const imoKeys = ["imo_number", "IMO_NUMBER", "IMO", "imo", "numero_imo", "imoNumber", "numeroIMO"];
+  const rawImo = readFirst(source, imoKeys);
+  const imoNumber = readValidImo(source, imoKeys);
+  const label = name || (rawImo ? `IMO ${String(rawImo)}` : `índice ${index}`);
+  const rawDwt = readFirst(source, ["dwt", "DWT", "deadweight", "dwt_ajustado"]);
+  const rawDraft = readFirst(source, ["draft_meters", "draft", "Draft", "calado"]);
+  const dwt = cleanNumber(rawDwt);
+  const draftMeters = cleanNumber(rawDraft);
+  const issues: ValidationIssue[] = [];
 
-  return {
-    IMO: cleanImo(readFirst(source, ["IMO", "imo", "numero_imo", "imoNumber", "numeroIMO"], "")),
-    nombre: cleanText(readFirst(source, ["nombre", "name", "vessel_name", "vesselName", "ShipName"], "")),
-    dwt: cleanNumber(readFirst(source, ["dwt", "DWT", "deadweight", "dwt_ajustado"], 0)),
-    mmsi: cleanText(readFirst(source, ["mmsi", "MMSI"], "")),
-    type: cleanText(readFirst(source, ["type", "vessel_type", "tipo", "tipo_buque"], "")),
-    draft: cleanNumber(readFirst(source, ["draft", "Draft", "draft_meters", "calado"], 0)),
-    flag: cleanText(readFirst(source, ["flag", "Flag", "bandera"], "")),
-    eta: cleanText(readFirst(source, ["eta", "ETA", "eta_puerto_carga", "estimatedEta", "etaEstimated"], "")),
-    ultimo_puerto: cleanText(readFirst(source, ["ultimo_puerto", "last_port", "lastPort", "lastPortOfCall"], "")),
-    destino_actual: cleanText(readFirst(source, ["destino_actual", "destination", "plannedDestination"], "")),
-    eta_puerto_carga: cleanText(readFirst(source, ["eta_puerto_carga", "eta", "ETA"], "")),
-    eta_delta: cleanText(readFirst(source, ["eta_delta"], "")),
-    numero_imo: cleanText(readFirst(source, ["numero_imo", "IMO", "imo", "imoNumber"], "")),
-    tipo_buque: cleanText(readFirst(source, ["tipo_buque", "vessel_type", "type", "tipo"], "")),
-    ano_construccion: cleanText(readFirst(source, ["ano_construccion", "year_built", "builtYear", "built_year", "built"], "")),
-    bandera: cleanText(readFirst(source, ["bandera", "flag", "Flag"], "")),
-    armador_manager: cleanText(readFirst(source, ["armador_manager", "owner_manager", "armador", "owner", "manager", "operator"], "")),
-    gruas_geared: Boolean(readFirst(source, ["gruas_geared", "has_gears", "hasCranes", "gruas"], false)),
-    estadoProcesos: cleanText(readFirst(source, ["estadoProcesos", "status", "audit_status", "auditStatus"], "")),
-  };
+  if (!imoNumber) {
+    issues.push({
+      index,
+      vessel: label,
+      field: "imo_number",
+      message: rawImo === null ? "El campo obligatorio imo_number está ausente." : "imo_number debe contener exactamente 7 dígitos.",
+    });
+  }
+  if (!name) issues.push({ index, vessel: label, field: "vessel_name", message: "El campo obligatorio vessel_name está ausente." });
+  if (rawDwt !== null && dwt === null) issues.push({ index, vessel: label, field: "dwt", message: "dwt no contiene un número válido." });
+  if (rawDraft !== null && draftMeters === null) issues.push({ index, vessel: label, field: "draft_meters", message: "draft_meters no contiene un número válido." });
+
+  const vessel: VesselRow | null = issues.length === 0 && name ? {
+    imoNumber,
+    vesselName: name,
+    dwt,
+    mmsi: cleanText(readFirst(source, ["mmsi", "MMSI"])),
+    vesselType: cleanText(readFirst(source, ["vessel_type", "type", "tipo", "tipo_buque"])),
+    draftMeters,
+    flag: cleanText(readFirst(source, ["flag", "Flag", "bandera"])),
+    eta: cleanText(readFirst(source, ["eta", "ETA", "eta_puerto_carga", "estimatedEta", "etaEstimated"])),
+    lastPort: cleanText(readFirst(source, ["last_port", "lastPort", "ultimo_puerto", "lastPortOfCall"])),
+    currentDestination: cleanText(readFirst(source, ["current_destination", "destino_actual", "destination", "plannedDestination"])),
+    yearBuilt: cleanText(readFirst(source, ["year_built", "yearBuilt", "ano_construccion", "anio_construccion", "builtYear"])),
+    ownerManager: cleanText(readFirst(source, ["owner_manager", "armador_manager", "owner", "manager", "operator"])),
+    hasGears: cleanBoolean(readFirst(source, ["has_gears", "gruas_geared", "hasCranes", "gruas"])),
+    processStatus: cleanText(readFirst(source, ["process_status", "estadoProcesos", "status", "audit_status", "auditStatus"])),
+    source: cleanText(readFirst(source, ["source", "origen_datos", "provider"])),
+    sourcePayload: source,
+  } : null;
+
+  return { vessel, issues };
 }
 
-function buildCoreDataPayload(payload: unknown) {
-  return {
-    vessels: getVesselsFromPayload(payload)
-      .map(normalizeCoreVessel)
-      .filter((vessel) => vessel.IMO !== "N/A" || vessel.nombre !== "N/A"),
-  };
+async function ensureVesselsMasterSchema() {
+  vesselsMasterSchemaReady ??= getPool().query(`
+    CREATE TABLE IF NOT EXISTS vessels_master (
+      imo_number TEXT PRIMARY KEY,
+      vessel_name TEXT NOT NULL,
+      dwt DOUBLE PRECISION,
+      mmsi TEXT,
+      vessel_type TEXT,
+      draft_meters DOUBLE PRECISION,
+      flag TEXT,
+      eta TEXT,
+      last_port TEXT,
+      current_destination TEXT,
+      year_built TEXT,
+      owner_manager TEXT,
+      has_gears BOOLEAN NOT NULL DEFAULT FALSE,
+      process_status TEXT,
+      source TEXT,
+      source_payload JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS databridge_vessel_syncs (
+      sync_id UUID PRIMARY KEY,
+      persisted_imo_numbers JSONB NOT NULL DEFAULT '[]'::jsonb,
+      rejected_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `).then(() => undefined).catch((error: unknown) => {
+    vesselsMasterSchemaReady = null;
+    throw error;
+  });
+  return vesselsMasterSchemaReady;
 }
 
-export default async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: jsonHeaders });
+function findPostgreSqlError(error: unknown): PostgreSqlError | null {
+  let current = error;
+  const visited = new Set<unknown>();
+  while (current && typeof current === "object" && !visited.has(current)) {
+    visited.add(current);
+    const candidate = current as PostgreSqlError;
+    if (typeof candidate.code === "string") return candidate;
+    current = candidate.cause;
   }
+  return null;
+}
 
-  if (req.method !== "POST") {
-    return Response.json({ success: false, error: "Method not allowed" }, { status: 405, headers: jsonHeaders });
+async function upsertVesselBatch(vessels: VesselRow[]) {
+  await ensureVesselsMasterSchema();
+  const client = await getPool().connect();
+  const persistenceErrors: PersistenceIssue[] = [];
+  let processedCount = 0;
+  try {
+    for (const vessel of vessels) {
+      try {
+        await client.query(
+          `
+            INSERT INTO vessels_master (
+              imo_number, vessel_name, dwt, mmsi, vessel_type, draft_meters, flag, eta,
+              last_port, current_destination, year_built, owner_manager, has_gears,
+              process_status, source, source_payload, updated_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb, NOW())
+            ON CONFLICT (imo_number) DO UPDATE SET
+              vessel_name = EXCLUDED.vessel_name,
+              dwt = EXCLUDED.dwt,
+              mmsi = EXCLUDED.mmsi,
+              vessel_type = EXCLUDED.vessel_type,
+              draft_meters = EXCLUDED.draft_meters,
+              flag = EXCLUDED.flag,
+              eta = EXCLUDED.eta,
+              last_port = EXCLUDED.last_port,
+              current_destination = EXCLUDED.current_destination,
+              year_built = EXCLUDED.year_built,
+              owner_manager = EXCLUDED.owner_manager,
+              has_gears = EXCLUDED.has_gears,
+              process_status = EXCLUDED.process_status,
+              source = EXCLUDED.source,
+              source_payload = EXCLUDED.source_payload,
+              updated_at = NOW()
+          `,
+          [
+            vessel.imoNumber, vessel.vesselName, vessel.dwt, vessel.mmsi, vessel.vesselType,
+            vessel.draftMeters, vessel.flag, vessel.eta, vessel.lastPort, vessel.currentDestination,
+            vessel.yearBuilt, vessel.ownerManager, vessel.hasGears, vessel.processStatus, vessel.source,
+            JSON.stringify(vessel.sourcePayload),
+          ],
+        );
+        processedCount += 1;
+      } catch (error) {
+        const postgresError = findPostgreSqlError(error);
+        const issue = {
+          vessel: vessel.vesselName,
+          imoNumber: vessel.imoNumber,
+          sqlState: postgresError?.code || null,
+          message: error instanceof Error ? error.message : "Error desconocido",
+        };
+        persistenceErrors.push(issue);
+        console.error("[databridge-post] Error PostgreSQL en buque individual", {
+          ...issue,
+          constraint: postgresError?.constraint || null,
+          table: postgresError?.table || "vessels_master",
+          column: postgresError?.column || null,
+          detail: postgresError?.detail || null,
+        });
+      }
+    }
+  } finally {
+    client.release();
   }
+  return { processedCount, persistenceErrors };
+}
+
+async function saveVesselSync(syncId: string, persistedImoNumbers: string[], rejectedCount: number) {
+  await ensureVesselsMasterSchema();
+  await getPool().query(
+    `
+      INSERT INTO databridge_vessel_syncs (sync_id, persisted_imo_numbers, rejected_count)
+      VALUES ($1::uuid, $2::jsonb, $3)
+      ON CONFLICT (sync_id) DO UPDATE SET
+        persisted_imo_numbers = EXCLUDED.persisted_imo_numbers,
+        rejected_count = EXCLUDED.rejected_count
+    `,
+    [syncId, JSON.stringify(persistedImoNumbers), rejectedCount],
+  );
+}
+
+export async function handleVesselBatch(req: Request) {
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: jsonHeaders });
+  if (req.method !== "POST") return Response.json({ success: false, error: "Method not allowed" }, { status: 405, headers: jsonHeaders });
 
   let payload: unknown;
   try {
@@ -107,74 +289,91 @@ export default async (req: Request) => {
     return Response.json({ success: false, error: "Payload JSON inválido." }, { status: 400, headers: jsonHeaders });
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const apiKey = getApiSecret();
-    const coreDataPayload = buildCoreDataPayload(payload);
+  const inputVessels = getVessels(payload);
+  if (inputVessels.length === 0) return Response.json({ success: false, error: "El lote no contiene buques." }, { status: 400, headers: jsonHeaders });
 
-    if (coreDataPayload.vessels.length === 0) {
-      return Response.json(
-        { success: false, error: "No valid vessels were provided" },
-        { status: 400, headers: jsonHeaders },
-      );
-    }
-
-    console.log(`[Data Bridge] Forwarding vessels payload to: ${DATA_BRIDGE_RECEIVE_CORE_DATA_URL}`);
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-
-    if (apiKey) {
-      headers["x-api-key"] = apiKey;
-      headers.Authorization = `Bearer ${apiKey}`;
-    }
-
-    const bridgeResponse = await fetch(DATA_BRIDGE_RECEIVE_CORE_DATA_URL, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(coreDataPayload),
-      signal: controller.signal,
+  const normalized = inputVessels.map(normalizeVessel);
+  const validationErrors = normalized.flatMap((result) => result.issues);
+  if (validationErrors.length > 0) {
+    console.warn("[databridge-post] Buques descartados por validación", {
+      vesselCount: inputVessels.length,
+      rejectedCount: validationErrors.length,
+      validationErrors,
     });
-
-    const responseBody = await bridgeResponse.text();
-
-    if (bridgeResponse.status === 404) {
-      console.error("Error: El endpoint de Data Bridge no fue encontrado. Verifica la URL de recepción");
-    }
-
-    if (!bridgeResponse.ok) {
-      return new Response(responseBody || JSON.stringify({ success: false, error: `Data Bridge responded ${bridgeResponse.status}` }), {
-        status: bridgeResponse.status,
-        headers: {
-          ...jsonHeaders,
-          "content-type": bridgeResponse.headers.get("content-type") || jsonHeaders["content-type"],
-        },
-      });
-    }
-
-    return new Response(responseBody, {
-      status: bridgeResponse.status,
-      headers: {
-        ...jsonHeaders,
-        "content-type": bridgeResponse.headers.get("content-type") || jsonHeaders["content-type"],
-      },
-    });
-  } catch (error) {
-    const isTimeout = error instanceof DOMException && error.name === "AbortError";
-    const status = isTimeout ? 504 : 500;
-
-    console.error("[Data Bridge] Error forwarding vessels payload:", error);
-
-    return Response.json(
-      { success: false, error: isTimeout ? "Data Bridge request timed out." : getErrorMessage(error) },
-      { status, headers: jsonHeaders },
-    );
-  } finally {
-    clearTimeout(timeout);
   }
-};
+
+  const vesselsByImo = new Map<string, VesselRow>();
+  normalized.forEach(({ vessel }) => { if (vessel) vesselsByImo.set(vessel.imoNumber, vessel); });
+  const vessels = Array.from(vesselsByImo.values());
+  const rejectedVesselIndexes = new Set(validationErrors.map((issue) => issue.index));
+  const rejectedCount = rejectedVesselIndexes.size;
+  const syncId = crypto.randomUUID();
+
+  if (vessels.length === 0) {
+    await saveVesselSync(syncId, [], rejectedCount);
+    return Response.json({
+      success: true,
+      partial: rejectedCount > 0,
+      message: `Se procesaron 0 buques correctamente, ${rejectedCount} buques fueron rechazados por formato inválido.`,
+      receivedCount: inputVessels.length,
+      processedCount: 0,
+      acceptedCount: 0,
+      rejectedCount,
+      validationErrors,
+      syncId,
+      persistedImoNumbers: [],
+    }, { headers: jsonHeaders });
+  }
+
+  try {
+    const persistenceResult = await upsertVesselBatch(vessels);
+    const totalRejectedCount = rejectedCount + persistenceResult.persistenceErrors.length;
+    const failedImoNumbers = new Set(persistenceResult.persistenceErrors.map((issue) => issue.imoNumber));
+    const persistedImoNumbers = vessels.map((vessel) => vessel.imoNumber).filter((imoNumber) => !failedImoNumbers.has(imoNumber));
+    await saveVesselSync(syncId, persistedImoNumbers, totalRejectedCount);
+    console.log("[databridge-post] Lote persistido en vessels_master", {
+      receivedCount: inputVessels.length,
+      persistedCount: persistenceResult.processedCount,
+      rejectedCount: totalRejectedCount,
+    });
+    return Response.json({
+      success: true,
+      partial: totalRejectedCount > 0,
+      message: `Se procesaron ${persistenceResult.processedCount} buques correctamente, ${totalRejectedCount} buques fueron rechazados.`,
+      receivedCount: inputVessels.length,
+      processedCount: persistenceResult.processedCount,
+      acceptedCount: persistenceResult.processedCount,
+      persistedCount: persistenceResult.processedCount,
+      rejectedCount: totalRejectedCount,
+      formatRejectedCount: rejectedCount,
+      persistenceRejectedCount: persistenceResult.persistenceErrors.length,
+      validationErrors,
+      persistenceErrors: persistenceResult.persistenceErrors,
+      duplicateImosInBatch: normalized.filter((result) => result.vessel).length - vessels.length,
+      syncId,
+      persistedImoNumbers,
+    }, { headers: jsonHeaders });
+  } catch (error) {
+    const postgresError = findPostgreSqlError(error);
+    console.error("[databridge-post] Error PostgreSQL al persistir vessels_master", {
+      sqlState: postgresError?.code || "UNKNOWN",
+      constraint: postgresError?.constraint || null,
+      table: postgresError?.table || "vessels_master",
+      column: postgresError?.column || null,
+      detail: postgresError?.detail || null,
+      message: error instanceof Error ? error.message : "Error desconocido",
+      batchSize: vessels.length,
+      imoNumbers: vessels.map((vessel) => vessel.imoNumber),
+    });
+    return Response.json({
+      success: false,
+      error: "No se pudo persistir el lote en vessels_master.",
+      sqlState: postgresError?.code || null,
+    }, { status: 500, headers: jsonHeaders });
+  }
+}
+
+export default handleVesselBatch;
 
 export const config: Config = {
   path: ["/api/receive-vessels", "/.netlify/functions/receive-vessels"],

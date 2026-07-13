@@ -1246,9 +1246,14 @@
         const SyncService = {
             async fetchReports() {
                 try {
-                    const response = await fetch('/api/ia-reports', { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+                    const syncId = String(localStorage.getItem('databridge_last_sync_id') || '').trim();
+                    const endpoint = syncId ? `/api/ia-reports?sync_id=${encodeURIComponent(syncId)}` : '/api/ia-reports';
+                    const response = await fetch(endpoint, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
                     const payload = await response.json().catch(() => ({}));
                     if (!response.ok) return [];
+                    if (payload.available === false) {
+                        addLog(`[INFO] ${getTimestamp()} - ${payload.message || 'Reporte no disponible'}.`);
+                    }
                     const reports = Array.isArray(payload.ia_reports) ? payload.ia_reports : [];
                     renderIaReports(reports);
                     return reports;

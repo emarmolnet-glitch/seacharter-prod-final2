@@ -4,7 +4,7 @@ let pool: PgPool | null = null;
 let applicationSchemaReady: Promise<void> | null = null;
 
 function getConnectionString() {
-  const connectionString = process.env.NETLIFY_DB_URL || process.env.DATABASE_URL;
+  const connectionString = process.env.DATABASE_URL || process.env.NETLIFY_DB_URL;
   if (!connectionString || connectionString === "tu_valor_real_de_la_variable") {
     throw new Error("La conexión de Netlify Database no está configurada.");
   }
