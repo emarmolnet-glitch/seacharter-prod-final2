@@ -4277,19 +4277,9 @@
         }
 
         @media (max-width: 640px) {
-            header #advanced-modules-btn.tools-dropdown-trigger {
-                width: 52px !important;
-                height: 52px !important;
-                min-height: 52px !important;
-                border-radius: 10px !important;
-            }
-
-            header #advanced-modules-btn.tools-dropdown-trigger i {
-                font-size: 1.35rem !important;
-            }
-
-            header #npl-module-btn.tools-dropdown-trigger {
-                min-width: 52px !important;
+            header #advanced-modules-btn.tools-dropdown-trigger,
+            header #npl-module-btn.tools-dropdown-trigger,
+            header #btn-master-executive-report.tools-dropdown-trigger {
                 width: 52px !important;
                 height: 52px !important;
                 min-height: 52px !important;
@@ -4297,8 +4287,8 @@
                 border-radius: 10px !important;
             }
 
-            header #npl-module-btn.tools-dropdown-trigger span {
-                display: none !important;
+            header #advanced-modules-btn.tools-dropdown-trigger i {
+                font-size: 1.35rem !important;
             }
 
             header #npl-module-btn.tools-dropdown-trigger i {
@@ -4389,20 +4379,8 @@
             overscroll-behavior: contain !important;
         }
 
-        header #npl-module-btn.tools-dropdown-trigger {
-            width: auto !important;
-            min-width: 118px !important;
-            padding: 0 0.75rem !important;
-            gap: 0.45rem !important;
-            font-size: 0.72rem !important;
-            font-weight: 800 !important;
-            text-transform: uppercase !important;
-            letter-spacing: 0 !important;
-            white-space: nowrap !important;
-        }
-
         header #npl-module-btn.tools-dropdown-trigger i {
-            font-size: 0.95rem !important;
+            font-size: 1rem !important;
         }
 
         header .advanced-nlp-menu-item {
@@ -4601,26 +4579,10 @@
             color: var(--primary) !important;
         }
 
-        header #btn-master-executive-report {
-            width: auto !important;
-            min-width: 40px !important;
-            padding: 0 0.8rem !important;
-            border-color: #25a18e !important;
-            background: #25a18e !important;
-            color: #FFFFFF !important;
-            box-shadow: 0 10px 24px -16px rgba(37, 161, 142, 0.75) !important;
-        }
-
-        header #btn-master-executive-report:hover {
-            border-color: #1d8f7e !important;
-            background: #1d8f7e !important;
-            color: #FFFFFF !important;
-        }
-
         header #btn-master-executive-report.btn-thinking {
             opacity: 0.78 !important;
             cursor: wait !important;
-            box-shadow: 0 0 0 3px rgba(37, 161, 142, 0.18), 0 10px 24px -16px rgba(37, 161, 142, 0.75) !important;
+            box-shadow: 0 0 0 3px rgba(0, 51, 102, 0.14) !important;
         }
 
         header .header-utility-btn:focus-visible {
@@ -4707,14 +4669,6 @@
                 gap: 0.5rem !important;
             }
 
-            header #btn-master-executive-report .master-report-label-full {
-                display: none !important;
-            }
-
-            header #btn-master-executive-report .master-report-label-tablet {
-                display: inline !important;
-            }
-
             header .tools-dropdown-menu {
                 top: 120% !important;
             }
@@ -4782,16 +4736,6 @@
                 justify-content: space-between !important;
                 position: relative !important;
                 gap: 0.5rem !important;
-            }
-
-            header #btn-master-executive-report {
-                width: 40px !important;
-                padding: 0 !important;
-            }
-
-            header #btn-master-executive-report .master-report-label-full,
-            header #btn-master-executive-report .master-report-label-tablet {
-                display: none !important;
             }
 
             header #language-selector,
@@ -6602,27 +6546,25 @@
                     title="Motor NPL"
                     aria-label="Motor NPL"
                 >
-                    <i class="fa-solid fa-brain" aria-hidden="true"></i>
-                    <span>Motor NPL</span>
+                    <i class="fa-solid fa-gears text-base" aria-hidden="true"></i>
                 </button>
                 <ul id="npl-module-menu" class="tools-dropdown-menu" aria-label="Motor NPL"></ul>
             </div>
             <button
+                type="button"
                 id="btn-master-executive-report"
                 onclick="generarInformeMasterOnClick()"
-                class="header-utility-btn px-3 py-1.5 rounded-lg transition text-xs font-semibold flex items-center gap-1.5"
-                title="Generar Informe Master (Auditoría Total)"
-                aria-label="Generar Informe Master (Auditoría Total)"
+                class="tools-dropdown-trigger"
+                title="Generar Informe Master"
+                aria-label="Generar Informe Master"
             >
-                <svg class="header-utility-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <path d="M14 2v6h6" />
                     <path d="M8 13h8" />
                     <path d="M8 17h5" />
                     <path d="M8 9h2" />
                 </svg>
-                <span class="master-report-label-full">Generar Informe Master</span>
-                <span class="master-report-label-tablet hidden">Informe Master</span>
             </button>
             <div class="mobile-module-nav" aria-label="Navegación móvil de módulos principales">
                 <button
@@ -29515,8 +29457,13 @@ Example:
             masterReportWorkflowState.selectedReportMode = reportMode;
 
             const contenidoOriginal = btn?.innerHTML;
+            const tituloOriginal = btn?.getAttribute('title');
+            const ariaLabelOriginal = btn?.getAttribute('aria-label');
             if (btn) {
-                btn.innerHTML = `<span>Analizando Dossier ${reportMode === 'strict' ? 'Estricto' : 'Standard'}...</span>`;
+                const loadingLabel = `Generando Informe Master ${reportMode === 'strict' ? 'Estricto' : 'Standard'}`;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>';
+                btn.setAttribute('title', loadingLabel);
+                btn.setAttribute('aria-label', loadingLabel);
                 btn.classList.add('btn-thinking');
                 btn.style.pointerEvents = 'none';
                 btn.disabled = true;
@@ -29555,6 +29502,8 @@ Example:
             } finally {
                 if (btn) {
                     btn.innerHTML = contenidoOriginal;
+                    btn.setAttribute('title', tituloOriginal || 'Generar Informe Master');
+                    btn.setAttribute('aria-label', ariaLabelOriginal || 'Generar Informe Master');
                     btn.classList.remove('btn-thinking');
                     btn.style.pointerEvents = 'auto';
                     btn.disabled = false;
