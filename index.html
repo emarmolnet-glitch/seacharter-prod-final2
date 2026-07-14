@@ -35280,10 +35280,25 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 window.updateAisAvailabilitySweepFeedback();
 
                 try {
-                    const response = await fetch('/api/ais/scan-request', {
-                        method: 'POST',
-                        headers: { 'Accept': 'application/json' }
-                    });
+                    // 1. Extraer las coordenadas actuales del mapa (Bounding Box)
+        let boxesParam = "-180,-90,180,90"; // Coordenadas globales por defecto
+        try {
+            // Compatible con las librerías de mapas más usadas (Mapbox / Leaflet)
+            if (window.map && typeof window.map.getBounds === 'function') {
+                const bounds = window.map.getBounds();
+                boxesParam = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
+            }
+        } catch(e) {
+            console.warn("No se pudieron leer las coordenadas del mapa. Usando escaneo global.");
+        }
+
+        // 2. Disparar directamente la ingesta en Data Bridge
+        const dataBridgeUrl = `https://calm-shortbread-55bcfc.netlify.app/api/ais-ingest?boxes=${boxesParam}`;
+        
+        const response = await fetch(dataBridgeUrl, {
+            method: 'GET', 
+            headers: { 'Accept': 'application/json' }
+        });
                     const payload = await response.json().catch(() => ({}));
                     if (!response.ok || payload.success !== true) {
                         throw new Error(payload.error || 'No se pudo enviar la solicitud de barrido.');
