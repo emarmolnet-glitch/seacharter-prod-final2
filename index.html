@@ -33735,27 +33735,29 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             };
             window.taxonomyMap = taxonomyMap;
             const FLEET_INTEL_TAXONOMY = {
-                cargo: ['cargo', 'bulk', 'bulker', 'general cargo', 'container', 'cement', 'multipurpose', 'mpp', 'heavy lift', 'coaster'],
-                tanker: ['tanker', 'crude', 'lng', 'lpg', 'chemical', 'product tanker', 'oil'],
-                passenger: ['passenger', 'cruise', 'ferry', 'ropax'],
-                other: ['offshore', 'tug', 'fishing', 'pilot', 'dredg', 'yacht', 'sailing'],
-                bulk: taxonomyMap["Bulk Carrier"],
-                general: ['general cargo', 'coaster'],
-                container: taxonomyMap["Container Ship"],
-                cement: ['cement'],
-                mpv: ['multipurpose', 'mpp'],
-                heavy_lift: ['heavy lift'],
-                crude_tanker: ['crude', 'oil tanker'],
-                lng_tanker: ['lng'],
-                chemical_tanker: ['chemical'],
-                product_tanker: ['product tanker'],
-                lpg_tanker: ['lpg'],
-                cruise: ['cruise'],
-                ferry: ['ferry', 'ropax'],
-                offshore: ['offshore'],
-                tug: ['tug', 'support'],
-                fishing: ['fishing']
-            };
+                const FLEET_INTEL_TAXONOMY = {
+    // Añadimos los tipos específicos que encontramos en tu DB
+    cargo: ['cargo', 'bulk', 'bulker', 'general cargo', 'container', 'cement', 'multipurpose', 'mpp', 'heavy lift', 'coaster', 'handymax', 'supramax', 'handysize', 'mini bulker', 'coastal', 'cabotage'],
+    tanker: ['tanker', 'crude', 'lng', 'lpg', 'chemical', 'product tanker', 'oil'],
+    passenger: ['passenger', 'cruise', 'ferry', 'ropax'],
+    other: ['offshore', 'tug', 'fishing', 'pilot', 'dredg', 'yacht', 'sailing'],
+    bulk: ['bulk carrier', 'handymax', 'supramax', 'handysize', 'mini bulker', 'dry cargo'], 
+    general: ['general cargo', 'general cargo vessel', 'coaster', 'costeros', 'cabotage'],
+    container: ['container ship'],
+    cement: ['cement'],
+    mpv: ['multipurpose', 'mpp', 'multipurpose vessel'],
+    heavy_lift: ['heavy lift', 'heavy lift vessel'],
+    crude_tanker: ['crude', 'oil tanker'],
+    lng_tanker: ['lng'],
+    chemical_tanker: ['chemical'],
+    product_tanker: ['product tanker'],
+    lpg_tanker: ['lpg'],
+    cruise: ['cruise'],
+    ferry: ['ferry', 'ropax'],
+    offshore: ['offshore'],
+    tug: ['tug', 'support'],
+    fishing: ['fishing']
+};
             const FLEET_CEMENT_CONFIRMED_TERMS = ['cement carrier', 'cement', 'cemento', 'ciment', 'clinker carrier', 'clinker'];
             const FLEET_CEMENT_POSSIBLE_TERMS = ['cem', 'cementos', 'cemex', 'holcim', 'lafarge', 'heidelberg', 'heidelbergcement', 'buzzi', 'votorantim', 'argos', 'calucem', 'portland', 'bulk cement', 'terminal cemento', 'cement terminal'];
             const FLEET_CEMENT_GENERIC_CARGO_TERMS = ['cargo', 'general cargo', 'bulk', 'bulker', 'bulk carrier', 'carrier', 'freighter'];
