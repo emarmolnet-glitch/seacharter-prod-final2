@@ -1,5 +1,7 @@
 import type { Config } from "@netlify/functions";
-import { getPool } from "../../db/index.js";
+import { eq } from "drizzle-orm";
+import { db } from "../../db/index.js";
+import { appConfig } from "../../db/schema.js";
 
 const SCAN_STATUS_KEY = "scan_status";
 const SCAN_STATUS_ON = "ON";
@@ -10,19 +12,11 @@ export default async (req: Request) => {
   }
 
   try {
-    const result = await getPool().query<{
-      value: string;
-      updated_at: Date;
-    }>(
-      `
-        UPDATE "AppConfig"
-        SET value = $1, updated_at = NOW()
-        WHERE key = $2
-        RETURNING value, updated_at
-      `,
-      [SCAN_STATUS_ON, SCAN_STATUS_KEY],
-    );
-    const updatedConfig = result.rows[0];
+    const [updatedConfig] = await db
+      .update(appConfig)
+      .set({ value: SCAN_STATUS_ON, updatedAt: new Date() })
+      .where(eq(appConfig.key, SCAN_STATUS_KEY))
+      .returning({ value: appConfig.value, updatedAt: appConfig.updatedAt });
 
     if (!updatedConfig) {
       return Response.json(
@@ -34,7 +28,7 @@ export default async (req: Request) => {
     return Response.json({
       success: true,
       scanStatus: updatedConfig.value,
-      requestedAt: updatedConfig.updated_at.toISOString(),
+      requestedAt: updatedConfig.updatedAt.toISOString(),
     });
   } catch (error) {
     console.error("[ais-scan-request] Failed to activate Data Bridge scan.", error);
