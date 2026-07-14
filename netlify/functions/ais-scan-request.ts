@@ -1,7 +1,7 @@
 import type { Config } from "@netlify/functions";
 import { eq } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { appState } from "../../db/schema.js";
+import { appConfig } from "../../db/schema.js";
 
 const SCAN_STATUS_KEY = "scan_status";
 const SCAN_STATUS_ON = "ON";
@@ -13,10 +13,10 @@ export default async (req: Request) => {
 
   try {
     const [updatedConfig] = await db
-      .update(appState)
+      .update(appConfig)
       .set({ value: SCAN_STATUS_ON, updatedAt: new Date() })
-      .where(eq(appState.key, SCAN_STATUS_KEY))
-      .returning({ value: appState.value, updatedAt: appState.updatedAt });
+      .where(eq(appConfig.key, SCAN_STATUS_KEY))
+      .returning({ value: appConfig.value, updatedAt: appConfig.updatedAt });
 
     if (!updatedConfig) {
       return Response.json(
