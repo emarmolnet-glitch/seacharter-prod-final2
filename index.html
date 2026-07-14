@@ -35271,7 +35271,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
             };
 
-            window.executeSweepAIS = async function() {
+           window.executeSweepAIS = async function() {
+    console.log("¡Clic detectado! El botón funciona.");
     state.status = 'requesting';
     state.error = null;
     window.updateAisAvailabilitySweepFeedback();
