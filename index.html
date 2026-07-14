@@ -35293,14 +35293,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         // 2. Disparar directamente la ingesta en Data Bridge
-        const dataBridgeUrl = `https://calm-shortbread-55bcfc.netlify.app/api/ais-ingest?boxes=${boxesParam}`;
+        const dataBridgeUrl = `/api/databridge/ais-ingest?boxes=${boxesParam}`;
         
         const response = await fetch(dataBridgeUrl, {
             method: 'GET', 
             headers: { 'Accept': 'application/json' }
         });
                     const payload = await response.json().catch(() => ({}));
-                    if (!response.ok || payload.success !== true) {
+                    if (!response.ok || payload.ok !== true) {
                         throw new Error(payload.error || 'No se pudo enviar la solicitud de barrido.');
                     }
 
