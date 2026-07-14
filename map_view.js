@@ -3,6 +3,8 @@
 
     const views = new Map();
     const DEFAULT_KEY = 'main';
+    let lastAnimationAuditSignature = '';
+    let shouldFreezeMaps = false;
     const VESSEL_FOCUS_ALTITUDE = 500 / 6371;
     const ROUTE_MAX_POINTS = 720;
     const ROUTE_SIMPLIFY_TOLERANCE = 0.012;
@@ -56,6 +58,40 @@
 
     function getView(key = DEFAULT_KEY) {
         return views.get(key) || null;
+    }
+
+    function setAutonomousAnimationState(view, shouldFreeze) {
+        if (!view) return;
+        const controls = view.globe.controls();
+        controls.autoRotate = view.autoRotateEnabled && !shouldFreeze;
+        view.shouldFreeze = shouldFreeze;
+        view.globe.pathDashAnimateTime((segment) => shouldFreeze ? 0 : (Number(segment?.dashAnimateTime) || 0));
+        if (view.routeSegments.length) view.globe.pathsData([...view.routeSegments]);
+    }
+
+    function syncAnimationState(updatedView = null) {
+        const routeView = Array.from(views.values()).find((view) => view.routeSegments.length > 0);
+        const routes = routeView?.routeSegments.filter((segment) => segment.type !== 'flow') || [];
+        const densityData = getView('density')?.vessels || [];
+        const hasActiveRoutes = routes.length > 0;
+        const hasDensityData = densityData.length > 0;
+        const shouldFreeze = hasActiveRoutes || hasDensityData;
+        const freezeChanged = shouldFreezeMaps !== shouldFreeze;
+
+        shouldFreezeMaps = shouldFreeze;
+        if (freezeChanged) {
+            views.forEach((view) => setAutonomousAnimationState(view, shouldFreeze));
+        } else if (updatedView) {
+            setAutonomousAnimationState(updatedView, shouldFreeze);
+        }
+
+        const auditSignature = `${routes.length}:${densityData.length}:${shouldFreeze}`;
+        if (auditSignature !== lastAnimationAuditSignature) {
+            lastAnimationAuditSignature = auditSignature;
+            console.log('Estado del Mapa - Rutas:', routes.length, 'Densidad:', densityData.length, 'Congelado:', shouldFreeze);
+        }
+
+        return shouldFreeze;
     }
 
     function getRoutePortsFromResult(result) {
@@ -239,6 +275,7 @@
         view.routeSegments = flowSegment ? [...baseSegments, flowSegment] : baseSegments;
         view.globe.pathsData(view.routeSegments);
         renderLabels(view);
+        syncAnimationState(view);
 
         if (view.routeSegments.length && options.focus !== false) {
             const routePorts = [ballastLabel, polLabel, podLabel].filter(Boolean);
@@ -340,6 +377,7 @@
         if (!view) return [];
         view.vessels = prepareVessels(vesselsData);
         renderClusters(view, true);
+        syncAnimationState(view);
         return view.vessels;
     }
 
@@ -366,6 +404,7 @@
         if (typeof view.globe._destructor === 'function') view.globe._destructor();
         view.container.replaceChildren();
         views.delete(key);
+        syncAnimationState();
         if (key === DEFAULT_KEY) window.map = null;
         if (key === 'density') window.mapaAIS = null;
     }
@@ -453,6 +492,8 @@
             clusters: [],
             portLabels: [],
             routeSegments: [],
+            autoRotateEnabled: options.autoRotate !== false,
+            shouldFreeze: false,
             selectedVessel: null,
             zoomBucket: null,
             clickHandler: null,
@@ -503,7 +544,7 @@
         };
         nextContainer.addEventListener('click', view.clickHandler);
 
-        globe.controls().autoRotate = options.autoRotate !== false;
+        globe.controls().autoRotate = view.autoRotateEnabled;
         globe.controls().autoRotateSpeed = key === 'density' ? 0.16 : 0.28;
         globe.controls().enableDamping = true;
         globe.pointOfView({ lat: 25, lng: 0, altitude: 2.15 });
