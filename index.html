@@ -35271,22 +35271,32 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
             };
 
-           window.executeSweepAIS = async function() {
-    // Definimos state si no existe, para evitar que explote
+          window.executeSweepAIS = async function() {
+    // Definimos state si no existe
     window.state = window.state || { status: 'idle', error: null };
     const state = window.state;
-    
-    console.log("¡Clic detectado! El botón funciona.");
-    state.status = 'requesting';
+
+    // 1. ESTADO: Escaneando (para que la ruedecita gire 30s)
+    state.status = 'scanning'; 
     state.error = null;
     window.updateAisAvailabilitySweepFeedback();
-    
+
+    console.log("Radar activado: Esperando 30 segundos para estabilizar barridos...");
+
+    // 2. Esperamos los 30 segundos
+    await new Promise(resolve => setTimeout(resolve, 30000));
+
+    // 3. ESTADO: Requesting (ahora sí, llamamos al motor)
+    state.status = 'requesting'; 
+    window.updateAisAvailabilitySweepFeedback();
+
+    console.log("¡Clic detectado! El botón funciona.");
+
     try {
-        // ... el resto de tu código sigue igual
+        // ... (aquí empieza tu código original, línea 35284)
         // 1. Extraer las coordenadas actuales del mapa (Bounding Box)
-        let boxesParam = "-180,-90,180,90"; // Coordenadas globales por defecto
+        let boxesParam = "-180,-90,180,90"; 
         try {
-            // Compatible con las librerías de mapas más usadas (Mapbox / Leaflet)
             if (window.map && typeof window.map.getBounds === 'function') {
                 const bounds = window.map.getBounds();
                 boxesParam = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
