@@ -84,7 +84,6 @@ export const dataBridgeVesselSyncs = pgTable("databridge_vessel_syncs", {
   rejectedCount: integer("rejected_count").default(0).notNull(),
   createdAt: createdAt(),
 });
-Haz "Commit" de este archivo.
 
 2. Arregla la función de Netlify
 Ahora abre el archivo netlify/functions/ais-scan-request.ts, borra todo lo que tiene, y pega este código final (fíjate que ya tiene las extensiones .js y el uso correcto de appConfig):
