@@ -35272,22 +35272,41 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             };
 
           window.executeSweepAIS = async function() {
-    // Definimos state si no existe
     window.state = window.state || { status: 'idle', error: null };
     const state = window.state;
+    
+    // Identificamos los elementos con la información de la imagen
+    const btnLabel = document.getElementById('ais-refresh-label');
+    const btn = document.querySelector('[data-scan-request-bound="true"]');
+    const originalText = btnLabel.innerText; // Guardamos el texto original
 
-    // 1. ESTADO: Escaneando (para que la ruedecita gire 30s)
+    // 1. ESTADO: Escaneando (30s)
     state.status = 'scanning'; 
     state.error = null;
-    window.updateAisAvailabilitySweepFeedback();
+    btn.disabled = true; // Deshabilitamos el botón
+    
+    // Iniciamos cuenta atrás visual
+    let seconds = 30;
+    btnLabel.innerText = `Escaneando (${seconds}s)...`;
+    
+    const timer = setInterval(() => {
+        seconds--;
+        if (seconds > 0) {
+            btnLabel.innerText = `Escaneando (${seconds}s)...`;
+        }
+    }, 1000);
 
     console.log("Radar activado: Esperando 30 segundos para estabilizar barridos...");
 
-    // 2. Esperamos los 30 segundos
+    // 2. Esperamos los 30 segundos reales
     await new Promise(resolve => setTimeout(resolve, 30000));
+    clearInterval(timer); // Detenemos la cuenta atrás
 
-    // 3. ESTADO: Requesting (ahora sí, llamamos al motor)
+    // 3. ESTADO: Requesting
     state.status = 'requesting'; 
+    btn.disabled = false; // Reactivamos el botón
+    btnLabel.innerText = originalText; // Restauramos el texto
+    
     window.updateAisAvailabilitySweepFeedback();
 
     console.log("¡Clic detectado! El botón funciona.");
