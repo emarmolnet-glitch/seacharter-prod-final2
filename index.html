@@ -32806,13 +32806,45 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
             
             const targetMap = window.mapaAIS || window.mapAIS || window.aisMap || window.map;
-            if (targetMap) {
-                window.isUserNavigating = true;
+            if (!targetMap) return false;
+
+            if (typeof window.releaseAisCenterNavigation === 'function') {
+                window.releaseAisCenterNavigation();
+            }
+
+            const centerButton = document.getElementById('btn-center-map');
+            let navigationFallbackTimer = null;
+            let navigationReleased = false;
+            const releaseNavigation = () => {
+                if (navigationReleased) return;
+                navigationReleased = true;
+                if (navigationFallbackTimer) clearTimeout(navigationFallbackTimer);
+                if (typeof targetMap.off === 'function') targetMap.off('moveend', releaseNavigation);
+                window.isUserNavigating = false;
+                window.releaseAisCenterNavigation = null;
+                centerButton?.removeAttribute('aria-busy');
+            };
+
+            window.releaseAisCenterNavigation = releaseNavigation;
+            window.isUserNavigating = true;
+            centerButton?.setAttribute('aria-busy', 'true');
+
+            try {
+                if (typeof targetMap.once === 'function') targetMap.once('moveend', releaseNavigation);
+                navigationFallbackTimer = setTimeout(releaseNavigation, 2500);
                 if (typeof targetMap.flyTo === 'function') {
                     targetMap.flyTo([lat, lon], 8);
-                } else {
+                } else if (typeof targetMap.setView === 'function') {
                     targetMap.setView([lat, lon], 8);
+                } else {
+                    releaseNavigation();
+                    return false;
                 }
+                return true;
+            } catch (error) {
+                console.error('[AIS Map] No se pudo centrar el mapa en el POL.', error);
+                releaseNavigation();
+                return false;
             }
         };
 
@@ -35237,7 +35269,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.aisAvailabilitySweepUi = Object.assign({
                 status: 'idle',
                 requestedAt: null,
-                error: null
+                error: null,
+                secondsRemaining: null
             }, window.aisAvailabilitySweepUi || {});
 
             window.updateAisAvailabilitySweepFeedback = function() {
@@ -35247,132 +35280,127 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const label = document.getElementById('ais-refresh-label');
                 const monitor = document.getElementById('ais-availability-monitor');
                 const status = document.getElementById('ais-availability-status');
+                const isScanning = state.status === 'scanning';
                 const isRequesting = state.status === 'requesting';
                 const isSent = state.status === 'sent';
                 const hasError = state.status === 'error';
+                const isBusy = isScanning || isRequesting;
 
-                if (btn) btn.disabled = isRequesting;
-                if (icon) icon.classList.toggle('fa-spin', isRequesting);
+                if (btn) btn.disabled = isBusy;
+                if (icon) {
+                    icon.classList.toggle('fa-spin', isBusy);
+                    icon.classList.toggle('animate-spin', isBusy);
+                }
                 if (label) {
-                    label.textContent = isRequesting
-                        ? 'Enviando solicitud...'
-                        : (isSent ? 'Solicitud enviada' : 'Consultar Disponibilidad Real-Time');
+                    label.textContent = isScanning
+                        ? `Escaneando (${Math.max(0, Number(state.secondsRemaining) || 0)}s)...`
+                        : (isRequesting
+                            ? 'Enviando solicitud...'
+                            : (isSent ? 'Solicitud enviada' : 'Consultar Disponibilidad Real-Time'));
                 }
                 if (monitor) {
-                    monitor.classList.toggle('active', isRequesting || isSent || hasError);
+                    monitor.classList.toggle('active', isBusy || isSent || hasError);
                     monitor.classList.toggle('done', isSent);
                 }
                 if (status) {
-                    status.textContent = isRequesting
-                        ? 'Enviando solicitud de barrido al Data Bridge...'
-                        : (isSent
-                            ? 'Solicitud enviada. El Data Bridge iniciará la ingesta automáticamente.'
-                            : (hasError ? state.error : ''));
+                    status.textContent = isScanning
+                        ? 'Estabilizando el radar antes de solicitar el barrido...'
+                        : (isRequesting
+                            ? 'Enviando solicitud de barrido al Data Bridge...'
+                            : (isSent
+                                ? 'Solicitud enviada. El Data Bridge iniciará la ingesta automáticamente.'
+                                : (hasError ? state.error : '')));
                 }
             };
 
-          window.executeSweepAIS = async function() {
-    window.state = window.state || { status: 'idle', error: null };
-    const state = window.state;
-    
-    // Identificamos los elementos con la información de la imagen
-    const btnLabel = document.getElementById('ais-refresh-label');
-    const btn = document.querySelector('[data-scan-request-bound="true"]');
-    const originalText = btnLabel.innerText; // Guardamos el texto original
+            window.executeSweepAIS = async function() {
+                if (window.isAisScanning) {
+                    console.warn('[AIS Scan] Ya existe un barrido en curso; se ignora la ejecución duplicada.');
+                    return null;
+                }
 
-    // 1. ESTADO: Escaneando (30s)
-    state.status = 'scanning'; 
-    state.error = null;
-    btn.disabled = true; // Deshabilitamos el botón
-    
-    // Iniciamos cuenta atrás visual
-    let seconds = 30;
-    btnLabel.innerText = `Escaneando (${seconds}s)...`;
-    
-    const timer = setInterval(() => {
-        seconds--;
-        if (seconds > 0) {
-            btnLabel.innerText = `Escaneando (${seconds}s)...`;
-        }
-    }, 1000);
+                window.isAisScanning = true;
+                const state = window.aisAvailabilitySweepUi;
+                const scanDurationSeconds = 30;
+                let countdownTimer = null;
 
-    console.log("Radar activado: Esperando 30 segundos para estabilizar barridos...");
+                try {
+                    state.status = 'scanning';
+                    state.error = null;
+                    state.secondsRemaining = scanDurationSeconds;
+                    window.updateAisAvailabilitySweepFeedback();
 
-    // 2. Esperamos los 30 segundos reales
-    await new Promise(resolve => setTimeout(resolve, 30000));
-    clearInterval(timer); // Detenemos la cuenta atrás
+                    countdownTimer = setInterval(() => {
+                        state.secondsRemaining = Math.max(0, state.secondsRemaining - 1);
+                        window.updateAisAvailabilitySweepFeedback();
+                    }, 1000);
 
-    // 3. ESTADO: Requesting
-    state.status = 'requesting'; 
-    btn.disabled = false; // Reactivamos el botón
-    btnLabel.innerText = originalText; // Restauramos el texto
-    
-    window.updateAisAvailabilitySweepFeedback();
+                    console.log('Radar activado: esperando 30 segundos para estabilizar barridos...');
+                    await new Promise(resolve => setTimeout(resolve, scanDurationSeconds * 1000));
 
-    console.log("¡Clic detectado! El botón funciona.");
+                    clearInterval(countdownTimer);
+                    countdownTimer = null;
+                    state.status = 'requesting';
+                    state.secondsRemaining = null;
+                    window.updateAisAvailabilitySweepFeedback();
 
-    try {
-        // ... (aquí empieza tu código original, línea 35284)
-        // 1. Extraer las coordenadas actuales del mapa (Bounding Box)
-        let boxesParam = "-180,-90,180,90"; 
-        try {
-            if (window.map && typeof window.map.getBounds === 'function') {
-                const bounds = window.map.getBounds();
-                boxesParam = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
-            }
-        } catch(e) {
-            console.warn("No se pudieron leer las coordenadas del mapa. Usando escaneo global.");
-        }
+                    let boxesParam = '-180,-90,180,90';
+                    try {
+                        const scanMap = window.mapaAIS || window.mapAIS || window.aisMap || window.map;
+                        if (scanMap && typeof scanMap.getBounds === 'function') {
+                            const bounds = scanMap.getBounds();
+                            boxesParam = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
+                        }
+                    } catch (error) {
+                        console.warn('No se pudieron leer las coordenadas del mapa. Usando escaneo global.', error);
+                    }
 
-        // 2. EL CAZADOR: Core PRO hace el barrido con su propio motor
-        const response = await fetch('/api/ais/scan-request', {
-            method: 'POST',
-            headers: { 
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ boxes: boxesParam }) 
-        });
+                    const response = await fetch('/api/ais/scan-request', {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ boxes: boxesParam })
+                    });
 
-        const payload = await response.json().catch(() => ({}));
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok || payload.success !== true) {
+                        throw new Error(payload.error || 'No se pudo enviar la solicitud de barrido al motor local.');
+                    }
 
-        if (!response.ok || payload.success !== true) {
-            throw new Error(payload.error || 'No se pudo enviar la solicitud de barrido al motor local.');
-        }
+                    const barcosDetectados = aisMatchingExecutionState.nearbyVessels;
+                    if (!barcosDetectados || barcosDetectados.length === 0) {
+                        console.warn('Radar completado, pero no se detectaron barcos en esta zona. Exportación cancelada.');
+                    } else {
+                        console.log(`Radar completado. Exportando ${barcosDetectados.length} barcos al Data Bridge...`);
+                        const exportResponse = await fetch('/api/export-to-bridge', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ vessels: barcosDetectados })
+                        });
+                        await exportResponse.json().catch(() => ({}));
+                    }
 
-        // 3. LA AUTO-EXPORTACIÓN
-        const barcosDetectados = aisMatchingExecutionState.nearbyVessels;
-        
-        if (!barcosDetectados || barcosDetectados.length === 0) {
-            console.warn("Radar completado, pero no se detectaron barcos en esta zona. Exportación cancelada.");
-        } else {
-            console.log("Radar completado. Exportando " + barcosDetectados.length + " barcos al Data Bridge...");
-            
-            const exportResponse = await fetch('/api/export-to-bridge', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ vessels: barcosDetectados })
-            });
-            
-            const exportResult = await exportResponse.json().catch(() => ({}));
-            // Aquí puedes añadir un log para confirmar el éxito si quieres
-        }
-        // 4. Finalizamos el estado visual del botón
-        state.status = 'sent';
-        state.requestedAt = payload.requestedAt || new Date().toISOString();
-        window.updateAisAvailabilitySweepFeedback();
-        return payload;
-
-    } catch (error) {
-        state.status = 'error';
-        state.error = error instanceof Error 
-            ? error.message 
-            : 'No se pudo enviar la solicitud de barrido.';
-        window.updateAisAvailabilitySweepFeedback();
-        console.error('[AIS Scan] Error al solicitar el barrido al Data Bridge.', error);
-        return null;
-    }
-};
+                    state.status = 'sent';
+                    state.requestedAt = payload.requestedAt || new Date().toISOString();
+                    window.updateAisAvailabilitySweepFeedback();
+                    return payload;
+                } catch (error) {
+                    state.status = 'error';
+                    state.error = error instanceof Error
+                        ? error.message
+                        : 'No se pudo enviar la solicitud de barrido.';
+                    window.updateAisAvailabilitySweepFeedback();
+                    console.error('[AIS Scan] Error al solicitar el barrido al Data Bridge.', error);
+                    return null;
+                } finally {
+                    if (countdownTimer) clearInterval(countdownTimer);
+                    state.secondsRemaining = null;
+                    window.isAisScanning = false;
+                    window.updateAisAvailabilitySweepFeedback();
+                }
+            };
 
             window.executeAISSweep = window.executeSweepAIS;
             window.executeAISScan = window.executeSweepAIS;
