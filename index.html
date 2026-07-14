@@ -35313,7 +35313,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         // 3. LA AUTO-EXPORTACIÓN: Enviamos lo cazado a Data Bridge instantáneamente
         console.log("Radar completado. Auto-exportando a Data Bridge...", payload);
-        
+        console.log("Datos a exportar:", payload);
         const exportResponse = await fetch('/api/export-to-bridge', {
             method: 'POST',
             headers: { 
