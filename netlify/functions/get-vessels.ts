@@ -382,7 +382,7 @@ function etaDriftHours(aisEta: string, projectedEta: unknown) {
 }
 
 function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
-  const selective = !["0", "false", "no"].includes(textParam(url, ["selective"], "1").toLowerCase());
+  const selective = false;
   const requestedState = textParam(url, ["loadState", "estado", "cargoState"], "any");
   const vesselSearch = textParam(url, ["q", "search", "vesselName"], "");
   const normalizedVesselSearch = vesselSearch
