@@ -35311,17 +35311,23 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             throw new Error(payload.error || 'No se pudo enviar la solicitud de barrido al motor local.');
         }
 
-        // 3. LA AUTO-EXPORTACIÓN: Enviamos lo cazado a Data Bridge instantáneamente
-        console.log("Radar completado. Auto-exportando a Data Bridge...", aisMatchingExecutionState.nearbyVessels);
-
-        const exportResponse = await fetch('/api/export-to-bridge', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ vessels: aisMatchingExecutionState.nearbyVessels })
-        });
-
-        const exportResult = await exportResponse.json().catch(() => ({}));
-
+        // 3. LA AUTO-EXPORTACIÓN
+        const barcosDetectados = aisMatchingExecutionState.nearbyVessels;
+        
+        if (!barcosDetectados || barcosDetectados.length === 0) {
+            console.warn("Radar completado, pero no se detectaron barcos en esta zona. Exportación cancelada.");
+        } else {
+            console.log("Radar completado. Exportando " + barcosDetectados.length + " barcos al Data Bridge...");
+            
+            const exportResponse = await fetch('/api/export-to-bridge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vessels: barcosDetectados })
+            });
+            
+            const exportResult = await exportResponse.json().catch(() => ({}));
+            // Aquí puedes añadir un log para confirmar el éxito si quieres
+        }
         // 4. Finalizamos el estado visual del botón
         state.status = 'sent';
         state.requestedAt = payload.requestedAt || new Date().toISOString();
