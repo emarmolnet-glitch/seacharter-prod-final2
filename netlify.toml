@@ -37,3 +37,9 @@
   from = "/databridge.html"
   to = "/public/databridge.html"
   status = 200
+
+  [[redirects]]
+  from = "/api/databridge/*"
+  to = "https://calm-shortbread-55bcfc.netlify.app/api/:splat"
+  status = 200
+  force = true
