@@ -35272,12 +35272,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             };
 
            window.executeSweepAIS = async function() {
+    // Definimos state si no existe, para evitar que explote
+    window.state = window.state || { status: 'idle', error: null };
+    const state = window.state;
+    
     console.log("¡Clic detectado! El botón funciona.");
     state.status = 'requesting';
     state.error = null;
     window.updateAisAvailabilitySweepFeedback();
-
+    
     try {
+        // ... el resto de tu código sigue igual
         // 1. Extraer las coordenadas actuales del mapa (Bounding Box)
         let boxesParam = "-180,-90,180,90"; // Coordenadas globales por defecto
         try {
