@@ -1,1 +1,0 @@
--- Migración vacía para bypass de build de Netlify. No ejecutar en producción.
