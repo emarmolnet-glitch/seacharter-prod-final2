@@ -1,3 +1,9 @@
+[[redirects]]
+  from = "/api/databridge/*"
+  to = "https://calm-shortbread-55bcfc.netlify.app/api/:splat"
+  status = 200
+  force = true
+
 [build]
   # Compile the application only; database lifecycle is managed externally.
   command = "npm run build"
@@ -38,8 +44,4 @@
   to = "/public/databridge.html"
   status = 200
 
-  [[redirects]]
-  from = "/api/databridge/*"
-  to = "https://calm-shortbread-55bcfc.netlify.app/api/:splat"
-  status = 200
-  force = true
+  
