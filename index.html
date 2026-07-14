@@ -35312,23 +35312,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         // 3. LA AUTO-EXPORTACIÓN: Enviamos lo cazado a Data Bridge instantáneamente
-        console.log("Radar completado. Auto-exportando a Data Bridge...", payload);
-        console.log("Datos a exportar:", payload);
+        console.log("Radar completado. Auto-exportando a Data Bridge...", aisMatchingExecutionState.nearbyVessels);
+
         const exportResponse = await fetch('/api/export-to-bridge', {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(payload) 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ vessels: aisMatchingExecutionState.nearbyVessels })
         });
 
         const exportResult = await exportResponse.json().catch(() => ({}));
-        
-        if (!exportResponse.ok || exportResult.success !== true) {
-            console.error("Fallo en la exportación a Data Bridge:", exportResult.error);
-        } else {
-            console.log("¡Exportación exitosa! Data Bridge ha recibido los datos.");
-        }
 
         // 4. Finalizamos el estado visual del botón
         state.status = 'sent';
