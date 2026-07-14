@@ -1,7 +1,7 @@
 import type { Config } from "@netlify/functions";
 import { eq } from "drizzle-orm";
-import { db } from "../../db/index.js";
-import { appConfig } from "../../db/schema.js"; // Importa appConfig
+import { db } from "../../db/index"; // <-- Eliminado el .js
+import { appConfig } from "../../db/schema"; // <-- Eliminado el .js
 
 const SCAN_STATUS_KEY = "scan_status";
 const SCAN_STATUS_ON = "ON";
@@ -12,9 +12,8 @@ export default async (req: Request) => {
   }
 
   try {
-    // Usa appConfig en lugar de appState
     const [updatedConfig] = await db
-      .update(appConfig) 
+      .update(appConfig)
       .set({ value: SCAN_STATUS_ON, updatedAt: new Date() })
       .where(eq(appConfig.key, SCAN_STATUS_KEY))
       .returning({ value: appConfig.value, updatedAt: appConfig.updatedAt });
