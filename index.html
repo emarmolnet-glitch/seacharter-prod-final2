@@ -35331,7 +35331,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ boxes: boxesParam }) 
+            body: JSON.stringify({ boxes: boxesParam, zoom: 5 }) 
         });
 
         const payload = await response.json().catch(() => ({}));
