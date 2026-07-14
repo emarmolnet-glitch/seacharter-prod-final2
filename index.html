@@ -35289,24 +35289,47 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 boxesParam = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
             }
         } catch(e) {
-            console.warn("No se pudieron leer las coordenadas del mapa. Usando escaneo global.");
-        }
+           try {
+            // 1. EL CAZADOR: Core PRO hace el barrido con su propio motor
+            const response = await fetch('/api/ais/scan-request', {
+                method: 'POST',
+                headers: { 
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ boxes: boxesParam }) 
+            });
 
-        // 2. Disparar directamente la ingesta en Data Bridge
-        const dataBridgeUrl = `/api/databridge/ais-ingest?boxes=${boxesParam}`;
-        
-        const response = await fetch(dataBridgeUrl, {
-            method: 'GET', 
-            headers: { 'Accept': 'application/json' }
-        });
-                    const payload = await response.json().catch(() => ({}));
-                    if (!response.ok || payload.ok !== true) {
-                        throw new Error(payload.error || 'No se pudo enviar la solicitud de barrido.');
-                    }
+            const payload = await response.json().catch(() => ({}));
 
-                    state.status = 'sent';
-                    state.requestedAt = payload.requestedAt || new Date().toISOString();
-                    window.updateAisAvailabilitySweepFeedback();
+            if (!response.ok || payload.success !== true) {
+                throw new Error(payload.error || 'No se pudo enviar la solicitud de barrido al motor local.');
+            }
+
+            // 2. LA AUTO-EXPORTACIÓN: Enviamos lo cazado a Data Bridge instantáneamente
+            console.log("Radar completado. Auto-exportando a Data Bridge...", payload);
+            
+            const exportResponse = await fetch('/api/export-to-bridge', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json' 
+                },
+                body: JSON.stringify(payload) 
+            });
+
+            const exportResult = await exportResponse.json().catch(() => ({}));
+            
+            if (!exportResponse.ok || exportResult.success !== true) {
+                console.error("Fallo en la exportación a Data Bridge:", exportResult.error);
+            } else {
+                console.log("¡Exportación exitosa! Data Bridge ha recibido los datos.");
+            }
+
+            // 3. Finalizamos el estado visual del botón
+            state.status = 'sent';
+            state.requestedAt = payload.requestedAt || new Date().toISOString();
+            window.updateAisAvailabilitySweepFeedback();
+            return payload;
                     return payload;
                 } catch (error) {
                     state.status = 'error';
