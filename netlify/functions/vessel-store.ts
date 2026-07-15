@@ -454,18 +454,16 @@ function mergeVesselRecord(existing: VesselRecord | undefined, incoming: VesselR
 
 async function readVesselIndex(): Promise<VesselRecord[]> {
   try {
-    // En lugar de leer el Blob vacío, pedimos los datos a la API de la base de datos
-    const response = await fetch('/.netlify/functions/get-vessels?limit=1000');
-    const data = await response.json();
+    const store = getVesselStore();
+    const data = await store.get(VESSEL_INDEX_KEY, { type: "json" });
     
-    // Si la API devuelve los barcos, los usamos
-    if (data && Array.isArray(data.vessels)) {
-      return data.vessels.filter(isVesselRecord);
+    if (Array.isArray(data)) {
+      return data.filter(isVesselRecord);
     }
   } catch (error) {
-    console.error("Error al conectar con la base de datos:", error);
+    console.warn("AIS vessel store index read failed:", error);
   }
-  return []; // Si falla, devolvemos vacío en lugar de romper
+  return [];
 }
 
 async function writeVesselIndex(rows: VesselRecord[]): Promise<void> {
