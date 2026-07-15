@@ -989,7 +989,7 @@ export default async (req: Request) => {
       });
     }
     if (vesselCache.length === 0) {
-      vesselCache = await readStoredVesselMessages(requestedQuantity);
+      vesselCache = await readVessels();
       if (vesselCache.length > 0) cacheUpdatedAt = Date.now();
     }
     const filtered = vesselCache;
