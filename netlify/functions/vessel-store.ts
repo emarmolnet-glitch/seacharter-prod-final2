@@ -453,16 +453,19 @@ function mergeVesselRecord(existing: VesselRecord | undefined, incoming: VesselR
 }
 
 async function readVesselIndex(): Promise<VesselRecord[]> {
-  const stored = await getVesselStore().get(VESSEL_INDEX_KEY, { type: "json" });
-  const rows = Array.isArray(stored) ? stored : [];
-  return rows.filter(isVesselRecord).map((row) => ({
-    ...row,
-    missingData: Array.isArray(row.missingData) ? row.missingData : [],
-    firstSeenAt: toIso(row.firstSeenAt || row.createdAt),
-    lastSeenAt: toIso(row.lastSeenAt),
-    updatedAt: toIso(row.updatedAt),
-    createdAt: toIso(row.createdAt),
-  }));
+  try {
+    // En lugar de leer el Blob vacío, pedimos los datos a la API de la base de datos
+    const response = await fetch('/.netlify/functions/get-vessels?limit=1000');
+    const data = await response.json();
+    
+    // Si la API devuelve los barcos, los usamos
+    if (data && Array.isArray(data.vessels)) {
+      return data.vessels.filter(isVesselRecord);
+    }
+  } catch (error) {
+    console.error("Error al conectar con la base de datos:", error);
+  }
+  return []; // Si falla, devolvemos vacío en lugar de romper
 }
 
 async function writeVesselIndex(rows: VesselRecord[]): Promise<void> {
