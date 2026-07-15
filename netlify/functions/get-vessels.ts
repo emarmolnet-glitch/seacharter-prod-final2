@@ -981,7 +981,7 @@ export default async (req: Request) => {
         vesselCache = await readStoredVesselMessages(requestedQuantity);
         if (vesselCache.length > 0) cacheUpdatedAt = Date.now();
       }
-      const filtered = filterSelectiveVessels(url, vesselCache);
+      const filtered = vesselCache;
       return vesselsResponse({
         vessels: filtered,
         updatedAt: cacheUpdatedAt,
@@ -992,7 +992,7 @@ export default async (req: Request) => {
       vesselCache = await readStoredVesselMessages(requestedQuantity);
       if (vesselCache.length > 0) cacheUpdatedAt = Date.now();
     }
-    const filtered = filterSelectiveVessels(url, vesselCache);
+    const filtered = vesselCache;
     return vesselsResponse({
       vessels: filtered,
       updatedAt: cacheUpdatedAt,
