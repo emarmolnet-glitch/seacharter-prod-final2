@@ -35339,15 +35339,26 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         if (!response.ok || payload.success !== true) {
             throw new Error(payload.error || 'No se pudo enviar la solicitud de barrido al motor local.');
         }
-
+(async function() {
         // 3. LA AUTO-EXPORTACIÓN
-console.log("!!! EL RADAR HA LLEGADO AL BLOQUE DE EXPORTACIÓN !!!"); // <-- AÑADE ESTO
-    let barcosDetectados = [];
-    try {
-        // Llamada directa a la base de datos sin filtros
-        const dbResponse = await fetch('/.netlify/functions/get-vessels?limit=1000');
-        const dbPayload = await dbResponse.json();
-        barcosDetectados = dbPayload.vessels || [];
+console.log("!!! EL RADAR HA LLEGADO AL BLOQUE DE EXPORTACIÓN !!!"); 
+
+// --- AÑADIDO: Espera de 5 segundos para que la BD se pueble ---
+console.log("Esperando 5 segundos a que el radar escriba en la BD...");
+await new Promise(resolve => setTimeout(resolve, 5000)); 
+
+let barcosDetectados = [];
+try {
+    const dbResponse = await fetch('/.netlify/functions/get-vessels?limit=1000');
+    const dbPayload = await dbResponse.json();
+    
+    // --- AÑADIDO: Log de depuración para ver qué recibe la BD ---
+    console.log("Payload recibido de la BD:", dbPayload);
+    
+    barcosDetectados = dbPayload.vessels || [];
+} catch (error) {
+    console.error("Fallo al descargar barcos de la BD:", error);
+}
     } catch (error) {
         console.error("Fallo al descargar barcos de la BD:", error);
     }
