@@ -35340,34 +35340,22 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             throw new Error(payload.error || 'No se pudo enviar la solicitud de barrido al motor local.');
         }
 (async function() {
+    try {
         // 3. LA AUTO-EXPORTACIÓN
-console.log("!!! EL RADAR HA LLEGADO AL BLOQUE DE EXPORTACIÓN !!!"); 
+        console.log("!!! EL RADAR HA LLEGADO AL BLOQUE DE EXPORTACIÓN !!!");
 
-// --- AÑADIDO: Espera de 5 segundos para que la BD se pueble ---
-console.log("Esperando 5 segundos a que el radar escriba en la BD...");
-await new Promise(resolve => setTimeout(resolve, 5000)); 
+        // --- Espera de 5 segundos ---
+        console.log("Esperando 5 segundos a que el radar escriba en la BD...");
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
-let barcosDetectados = [];
-try {
-    const dbResponse = await fetch('/.netlify/functions/get-vessels?limit=1000');
-    const dbPayload = await dbResponse.json();
-    
-    // --- AÑADIDO: Log de depuración para ver qué recibe la BD ---
-    console.log("Payload recibido de la BD:", dbPayload);
-    
-    barcosDetectados = dbPayload.vessels || [];
-} catch (error) {
-    console.error("Fallo al descargar barcos de la BD:", error);
-}
-    } catch (error) {
-        console.error("Fallo al descargar barcos de la BD:", error);
-    }
+        const dbResponse = await fetch('/.netlify/functions/get-vessels?limit=1000');
+        const dbPayload = await dbResponse.json();
+        const barcosDetectados = dbPayload.vessels || [];
 
-    if (barcosDetectados.length === 0) {
-        console.warn("Radar completado, pero la base de datos devolvió 0 barcos. Exportación cancelada.");
-    } else {
-        console.log("¡Éxito! Exportando " + barcosDetectados.length + " barcos al Data Bridge...");
-        try {
+        if (barcosDetectados.length === 0) {
+            console.warn("Radar completado, pero la base de datos devolvió 0 barcos.");
+        } else {
+            console.log("¡Éxito! Exportando " + barcosDetectados.length + " barcos...");
             const exportResponse = await fetch('/api/databridge-post', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -35375,24 +35363,22 @@ try {
             });
             const exportResult = await exportResponse.json().catch(() => ({}));
             console.log("Confirmación de Data Bridge:", exportResult);
-        } catch (err) {
-            console.error("Error al enviar los datos al Data Bridge:", err);
         }
-    }
 
-    // 4. Finalizamos el estado visual del botón
-    if (window.state) {
-        window.state.status = 'sent';
-        window.state.requestedAt = new Date().toISOString();
-    }
-    if (typeof window.updateAisAvailabilitySweepFeedback === 'function') {
-        window.updateAisAvailabilitySweepFeedback();
-    }
+        // 4. Finalizamos el estado visual
+        if (window.state) {
+            window.state.status = 'sent';
+            window.state.requestedAt = new Date().toISOString();
+        }
+        if (typeof window.updateAisAvailabilitySweepFeedback === 'function') {
+            window.updateAisAvailabilitySweepFeedback();
+        }
 
-} catch (error) {
-    console.error("Error global en el radar:", error);
-    if (window.state) window.state.status = 'error';
-} finally {
+    } catch (error) {
+        console.error("Error global en el radar:", error);
+        if (window.state) window.state.status = 'error';
+    }
+})();
     // Abrimos el candado pase lo que pase
     window.isAisScanning = false;
 }
