@@ -35357,7 +35357,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
     } else {
         console.log("¡Éxito! Exportando " + barcosDetectados.length + " barcos al Data Bridge...");
         try {
-            const exportResponse = await fetch('/api/export-to-bridge', {
+            const exportResponse = await fetch('/api/databridge-post', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ vessels: barcosDetectados })
