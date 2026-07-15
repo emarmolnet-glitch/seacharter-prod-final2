@@ -35369,6 +35369,24 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
     }
 
+    // 4. Finalizamos el estado visual del botón
+    if (window.state) {
+        window.state.status = 'sent';
+        window.state.requestedAt = new Date().toISOString();
+    }
+    if (typeof window.updateAisAvailabilitySweepFeedback === 'function') {
+        window.updateAisAvailabilitySweepFeedback();
+    }
+
+} catch (error) {
+    console.error("Error global en el radar:", error);
+    if (window.state) window.state.status = 'error';
+} finally {
+    // Abrimos el candado pase lo que pase
+    window.isAisScanning = false;
+}
+};
+
             window.executeAISSweep = window.executeSweepAIS;
             window.executeAISScan = window.executeSweepAIS;
             window.ejecutarBarridoAIS = window.executeSweepAIS;
