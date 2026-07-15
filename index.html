@@ -35271,130 +35271,47 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
             };
 
-          window.executeSweepAIS = async function() {
-    window.state = window.state || { status: 'idle', error: null };
-    const state = window.state;
-    
-    // Identificamos los elementos con la información de la imagen
-    const btnLabel = document.getElementById('ais-refresh-label');
-    const btn = document.querySelector('[data-scan-request-bound="true"]');
-    const originalText = btnLabel.innerText; // Guardamos el texto original
+            window.executeSweepAIS = function() {
+                const btn = document.getElementById('btn-refresh-ais');
+                if (!btn) return;
 
-    // 1. ESTADO: Escaneando (30s)
-    state.status = 'scanning'; 
-    state.error = null;
-    btn.disabled = true; // Deshabilitamos el botón
-    
-    // Iniciamos cuenta atrás visual
-    let seconds = 30;
-    btnLabel.innerText = `Escaneando (${seconds}s)...`;
-    
-    const timer = setInterval(() => {
-        seconds--;
-        if (seconds > 0) {
-            btnLabel.innerText = `Escaneando (${seconds}s)...`;
-        }
-    }, 1000);
+                btn.disabled = true;
 
-    console.log("Radar activado: Esperando 30 segundos para estabilizar barridos...");
+                fetch('https://calm-shortbread-55bcfc.netlify.app/api/trigger-ais-sweep', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'iniciar_barrido_radar',
+                        timestamp: new Date().toISOString()
+                    })
+                }).catch((error) => {
+                    console.error('Error al iniciar el barrido AIS:', error);
+                });
 
-    // 2. Esperamos los 30 segundos reales
-    await new Promise(resolve => setTimeout(resolve, 30000));
-    clearInterval(timer); // Detenemos la cuenta atrás
+                let segundos = 30;
+                btn.innerHTML = `<i class="fa-solid fa-satellite-dish fa-fade text-white"></i> Sincronizando Radar... (${segundos}s)`;
 
-    // 3. ESTADO: Requesting
-    state.status = 'requesting'; 
-    btn.disabled = false; // Reactivamos el botón
-    btnLabel.innerText = originalText; // Restauramos el texto
-    
-    window.updateAisAvailabilitySweepFeedback();
+                const countdown = setInterval(() => {
+                    segundos -= 1;
 
-    console.log("¡Clic detectado! El botón funciona.");
+                    if (segundos > 0) {
+                        btn.innerHTML = `<i class="fa-solid fa-satellite-dish fa-fade text-white"></i> Sincronizando Radar... (${segundos}s)`;
+                        return;
+                    }
 
-    try {
-        // ... (aquí empieza tu código original, línea 35284)
-        // 1. Extraer las coordenadas actuales del mapa (Bounding Box)
-        let boxesParam = "-180,-90,180,90"; 
-        try {
-            if (window.map && typeof window.map.getBounds === 'function') {
-                const bounds = window.map.getBounds();
-                boxesParam = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
-            }
-        } catch(e) {
-            console.warn("No se pudieron leer las coordenadas del mapa. Usando escaneo global.");
-        }
+                    clearInterval(countdown);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-rotate text-white"></i> Consultar Disponibilidad Real-Time';
 
-        // 2. EL CAZADOR: Core PRO hace el barrido con su propio motor
-        const response = await fetch('/api/ais/scan-request', {
-            method: 'POST',
-            headers: { 
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ boxes: boxesParam, zoom: 5 }) 
-        });
-
-        const payload = await response.json().catch(() => ({}));
-
-        if (!response.ok || payload.success !== true) {
-            throw new Error(payload.error || 'No se pudo enviar la solicitud de barrido al motor local.');
-        }
-
-        // 3. LA AUTO-EXPORTACIÓN
-        console.log("!!! EL RADAR HA LLEGADO AL BLOQUE DE EXPORTACIÓN !!!");
-
-        // --- AÑADIDO: Espera de 5 segundos ---
-        console.log("Esperando 5 segundos a que la BD se actualice...");
-        await new Promise(resolve => setTimeout(resolve, 5000));
-
-        let barcosDetectados = [];
-        try {
-            // Llamada directa a la base de datos sin filtros
-            const dbResponse = await fetch('/.netlify/functions/get-vessels?limit=1000');
-            const dbPayload = await dbResponse.json();
-            
-            // --- AÑADIDO: Log para ver qué recibe la BD ---
-            console.log("Payload recibido de la BD:", dbPayload);
-            
-            barcosDetectados = dbPayload.vessels || [];
-        } catch (error) {
-            console.error("Fallo al descargar barcos de la BD:", error);
-        }
-
-    if (barcosDetectados.length === 0) {
-        console.warn("Radar completado, pero la base de datos devolvió 0 barcos. Exportación cancelada.");
-    } else {
-        console.log("¡Éxito! Exportando " + barcosDetectados.length + " barcos al Data Bridge...");
-        try {
-            const exportResponse = await fetch('/api/databridge-post', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ vessels: barcosDetectados })
-            });
-            const exportResult = await exportResponse.json().catch(() => ({}));
-            console.log("Confirmación de Data Bridge:", exportResult);
-        } catch (err) {
-            console.error("Error al enviar los datos al Data Bridge:", err);
-        }
-    }
-
-    // 4. Finalizamos el estado visual del botón
-    if (window.state) {
-        window.state.status = 'sent';
-        window.state.requestedAt = new Date().toISOString();
-    }
-    if (typeof window.updateAisAvailabilitySweepFeedback === 'function') {
-        window.updateAisAvailabilitySweepFeedback();
-    }
-
-} catch (error) {
-    console.error("Error global en el radar:", error);
-    if (window.state) window.state.status = 'error';
-} finally {
-    // Abrimos el candado pase lo que pase
-    window.isAisScanning = false;
-}
-};
+                    if (window.MapLoader && typeof window.MapLoader.pollAisProxyOnce === 'function') {
+                        window.MapLoader.pollAisProxyOnce({
+                            map: window.mapaAIS || window.mapAIS || window.aisMap || window.map
+                        }).catch((error) => {
+                            console.error('Error al recargar el mapa de densidad AIS:', error);
+                        });
+                    }
+                }, 1000);
+            };
 
             window.executeAISSweep = window.executeSweepAIS;
             window.executeAISScan = window.executeSweepAIS;
