@@ -1092,7 +1092,7 @@ export default async (req: Request) => {
       if (vesselCache.length > 0) cacheUpdatedAt = Date.now();
     }
 
-    const filtered = filterSelectiveVessels(url, vesselCache);
+    const filtered = vesselCache;
     return vesselsResponse({
       vessels: filtered,
       message: `Data recolectada: ${filtered.length} buques filtrados con éxito`,
