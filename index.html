@@ -35341,16 +35341,25 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         // 3. LA AUTO-EXPORTACIÓN
-console.log("!!! EL RADAR HA LLEGADO AL BLOQUE DE EXPORTACIÓN !!!"); // <-- AÑADE ESTO
-    let barcosDetectados = [];
-    try {
-        // Llamada directa a la base de datos sin filtros
-        const dbResponse = await fetch('/.netlify/functions/get-vessels?limit=1000');
-        const dbPayload = await dbResponse.json();
-        barcosDetectados = dbPayload.vessels || [];
-    } catch (error) {
-        console.error("Fallo al descargar barcos de la BD:", error);
-    }
+        console.log("!!! EL RADAR HA LLEGADO AL BLOQUE DE EXPORTACIÓN !!!");
+
+        // --- AÑADIDO: Espera de 5 segundos ---
+        console.log("Esperando 5 segundos a que la BD se actualice...");
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        let barcosDetectados = [];
+        try {
+            // Llamada directa a la base de datos sin filtros
+            const dbResponse = await fetch('/.netlify/functions/get-vessels?limit=1000');
+            const dbPayload = await dbResponse.json();
+            
+            // --- AÑADIDO: Log para ver qué recibe la BD ---
+            console.log("Payload recibido de la BD:", dbPayload);
+            
+            barcosDetectados = dbPayload.vessels || [];
+        } catch (error) {
+            console.error("Fallo al descargar barcos de la BD:", error);
+        }
 
     if (barcosDetectados.length === 0) {
         console.warn("Radar completado, pero la base de datos devolvió 0 barcos. Exportación cancelada.");
