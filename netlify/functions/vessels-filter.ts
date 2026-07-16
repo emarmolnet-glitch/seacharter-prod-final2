@@ -1,8 +1,7 @@
 import type { Config } from "@netlify/functions";
 import type { QueryResultRow } from "pg";
 import { getPool } from "../../db/index.js";
-
-const MAX_FILTERED_VESSELS = 5000;
+import { missingAisGeofenceResponse, parseAisGeofence } from "./ais-geofence.js";
 
 type FilteredVesselRow = QueryResultRow & {
   storage_key: string;
@@ -17,6 +16,7 @@ type FilteredVesselRow = QueryResultRow & {
   raw_data: unknown;
   first_seen_at: Date | string;
   last_seen_at: Date | string;
+  distance_nm: number;
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -51,6 +51,7 @@ export default async (req: Request) => {
     const url = new URL(req.url);
     const rawVesselType = url.searchParams.get("vesselType") || "";
     const vesselType = decodeFilterValue(rawVesselType);
+    const geofence = parseAisGeofence(url);
 
     if (!vesselType) {
       return Response.json(
@@ -58,17 +59,42 @@ export default async (req: Request) => {
         { status: 400 },
       );
     }
+    if (!geofence) return missingAisGeofenceResponse();
 
     const result = await getPool().query<FilteredVesselRow>(
       `
+        WITH candidates AS (
+          SELECT *,
+            3440.065 * 2 * ASIN(SQRT(LEAST(1,
+              POWER(SIN(RADIANS(latitude - $1) / 2), 2) +
+              COS(RADIANS($1)) * COS(RADIANS(latitude)) *
+              POWER(SIN(RADIANS(longitude - $2) / 2), 2)
+            ))) AS distance_nm
+          FROM ais_vessels
+          WHERE latitude BETWEEN $3 AND $4
+            AND (($7 = FALSE AND longitude BETWEEN $5 AND $6)
+              OR ($7 = TRUE AND (longitude >= $5 OR longitude <= $6)))
+            AND audit_status = 'VALIDATED'
+            AND vessel_type ILIKE '%' || $9 || '%'
+        )
         SELECT *
-        FROM ais_vessels
-        WHERE audit_status = 'VALIDATED'
-          AND vessel_type ILIKE '%' || $1 || '%'
-        ORDER BY last_seen_at DESC
-        LIMIT $2
+        FROM candidates
+        WHERE distance_nm <= $8
+        ORDER BY distance_nm ASC, last_seen_at DESC
+        LIMIT $10
       `,
-      [vesselType, MAX_FILTERED_VESSELS],
+      [
+        geofence.latitude,
+        geofence.longitude,
+        geofence.minLatitude,
+        geofence.maxLatitude,
+        geofence.minLongitude,
+        geofence.maxLongitude,
+        geofence.crossesAntimeridian,
+        geofence.radiusNm,
+        vesselType,
+        geofence.limit,
+      ],
     );
 
     const vessels = result.rows.map((row) => ({
@@ -88,6 +114,7 @@ export default async (req: Request) => {
       auditStatus: row.audit_status,
       firstSeenAt: toIsoString(row.first_seen_at),
       lastSeenAt: toIsoString(row.last_seen_at),
+      distanceToPolNm: Number(row.distance_nm),
     }));
 
     return Response.json({
@@ -95,6 +122,11 @@ export default async (req: Request) => {
       source: "ais_vessels",
       auditStatus: "VALIDATED",
       filterApplied: true,
+      geofence: {
+        polLat: geofence.latitude,
+        polLon: geofence.longitude,
+        radiusNm: geofence.radiusNm,
+      },
       count: vessels.length,
       vessels,
     }, {

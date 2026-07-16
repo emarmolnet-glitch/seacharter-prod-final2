@@ -1,6 +1,6 @@
 import type { Config } from "@netlify/functions";
 import WebSocket from "ws";
-import { countVessels, isCargoShipType, readVessels, upsertVessels, type VesselRecord } from "./vessel-store.js";
+import { countVessels, isCargoShipType, readVessels, readVesselsNearPoint, upsertVessels, type VesselRecord } from "./vessel-store.js";
 
 type VesselMessage = Record<string, unknown>;
 type LiveCollectionResult = {
@@ -18,7 +18,7 @@ const MAX_QUANTITY = 1000;
 const STORED_LOOKUP_LIMIT = 1000;
 const HANDYSIZE_MIN_DWT = 25000;
 const SUPRAMAX_MAX_DWT = 65000;
-const POL_VISUAL_RADIUS_NM = 2000;
+const POL_VISUAL_RADIUS_NM = 1000;
 const POD_VISUAL_RADIUS_NM = 100;
 const ROUTE_CORRIDOR_RADIUS_NM = 100;
 const PROJECTION_SCAN_RADIUS_NM = 1000;
@@ -114,8 +114,9 @@ function getRequestedBoundingBoxes(url: URL) {
   if (requestedBoxes) return requestedBoxes;
   const pol = parseRouteCoordinate(url, "coords_pol");
   const pod = parseRouteCoordinate(url, "coords_pod");
+  const requestedRadiusNm = Math.min(2000, Math.max(25, numberParam(url, ["radiusNm", "radius_nm"], POL_VISUAL_RADIUS_NM)));
   const boxes = [
-    pol ? createBoundingBoxAroundCoordinate(pol, POL_VISUAL_RADIUS_NM) : null,
+    pol ? createBoundingBoxAroundCoordinate(pol, requestedRadiusNm) : null,
     pod ? createBoundingBoxAroundCoordinate(pod, POD_VISUAL_RADIUS_NM) : null,
   ].filter((box): box is AisBoundingBox => box !== null);
   return boxes.length > 0 ? boxes : null;
@@ -399,12 +400,13 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
   const podLon = coordsPod?.lon ?? normalizeNumber(url.searchParams.get("podLon"));
   const zone = textParam(url, ["zone"], "DUAL").toUpperCase();
   const matchingMode = ["1", "true", "yes"].includes(textParam(url, ["matchingMode", "projectionMatching"], "0").toLowerCase());
+  const requestedPolRadiusNm = Math.min(2000, Math.max(25, numberParam(url, ["radiusNm", "radius_nm"], POL_VISUAL_RADIUS_NM)));
   const activePoints = [
-    zone !== "POD" && polLat !== undefined && polLon !== undefined ? { role: "POL", lat: polLat, lon: polLon, radiusNm: POL_VISUAL_RADIUS_NM } : null,
+    zone !== "POD" && polLat !== undefined && polLon !== undefined ? { role: "POL", lat: polLat, lon: polLon, radiusNm: requestedPolRadiusNm } : null,
     zone !== "POL" && podLat !== undefined && podLon !== undefined ? { role: "POD", lat: podLat, lon: podLon, radiusNm: POD_VISUAL_RADIUS_NM } : null,
   ].filter((point): point is { role: string; lat: number; lon: number; radiusNm: number } => Boolean(point));
   const selectedPolTarget = polLat !== undefined && polLon !== undefined
-    ? { role: "POL", lat: polLat, lon: polLon, radiusNm: POL_VISUAL_RADIUS_NM }
+    ? { role: "POL", lat: polLat, lon: polLon, radiusNm: requestedPolRadiusNm }
     : null;
   const routePol = polLat !== undefined && polLon !== undefined ? { lat: polLat, lon: polLon } : null;
   const routePod = podLat !== undefined && podLon !== undefined ? { lat: podLat, lon: podLon } : null;
@@ -455,10 +457,12 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
       const nearestVisual = pointMatches.sort((a, b) => a.distanceNm - b.distanceNm)[0] || null;
       const routeCorridor = routeCorridorMatch(lat, lon, routePol, routePod);
       const insideRouteCorridor = !!routeCorridor?.inside;
+      const insidePolGeofence = !selectedPolTarget || pointMatches.some((point) => point.role === "POL");
+      if (!isGlobalNameSearch && selectedPolTarget && !insidePolGeofence && !insideRouteCorridor) return null;
       const projection = buildProjection(vessel, selectedPolTarget || nearestVisual || nearestByDistance);
       const distanceToPol = selectedPolTarget ? haversineNm(selectedPolTarget.lat, selectedPolTarget.lon, lat, lon) : null;
       const distanceToPod = routePod ? haversineNm(routePod.lat, routePod.lon, lat, lon) : null;
-      const isPolOperationalMatch = distanceToPol !== null && distanceToPol <= POL_VISUAL_RADIUS_NM && loadState === "Laden";
+      const isPolOperationalMatch = distanceToPol !== null && distanceToPol <= requestedPolRadiusNm && loadState === "Laden";
       const isPodOperationalMatch = distanceToPod !== null && distanceToPod <= POD_VISUAL_RADIUS_NM && loadState === "Ballast";
       if (selective && !isGlobalNameSearch && nearestVisual?.role === "POL" && !isPolOperationalMatch) return null;
       if (selective && !isGlobalNameSearch && nearestVisual?.role === "POD" && !isPodOperationalMatch) return null;
@@ -467,7 +471,7 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
         matchingMode &&
         selectedPolTarget &&
         distanceToPol !== null &&
-        distanceToPol > POL_VISUAL_RADIUS_NM &&
+        distanceToPol > requestedPolRadiusNm &&
         distanceToPol <= PROJECTION_SCAN_RADIUS_NM &&
         projection &&
         projection.projectedIntersection === true &&
@@ -806,9 +810,17 @@ function fromVesselRecord(row: VesselRecord): VesselMessage {
   });
 }
 
-async function readStoredVesselMessages(limit: number) {
+async function readStoredVesselMessages(limit: number, url?: URL) {
   try {
-    return (await readVessels()).slice(0, limit).map(fromVesselRecord);
+    const pol = url ? parseRouteCoordinate(url, "coords_pol") : null;
+    const polLat = pol?.lat ?? (url ? normalizeNumber(url.searchParams.get("polLat")) : undefined);
+    const polLon = pol?.lon ?? (url ? normalizeNumber(url.searchParams.get("polLon")) : undefined);
+    const requestedRadius = url ? numberParam(url, ["radiusNm", "radius_nm"], POL_VISUAL_RADIUS_NM) : POL_VISUAL_RADIUS_NM;
+    const radiusNm = Math.min(2000, Math.max(25, requestedRadius));
+    const storedRows = polLat !== undefined && polLon !== undefined
+      ? await readVesselsNearPoint(polLat, polLon, radiusNm, limit)
+      : (await readVessels()).slice(0, limit);
+    return storedRows.map(fromVesselRecord);
   } catch (error) {
     console.warn("AIS vessel store read failed:", error);
     return [];
@@ -995,17 +1007,12 @@ export async function handleGetVessels(req: Request) {
         source: vesselCache.length ? "global-cache-search" : "empty-fallback",
       });
     }
-    if (vesselCache.length === 0) {
-      vesselCache = await readVessels();
-      if (vesselCache.length > 0) cacheUpdatedAt = Date.now();
-    }
-    const filtered = vesselCache;
     return vesselsResponse({
-      vessels: filtered,
+      vessels: [],
       updatedAt: cacheUpdatedAt,
-      source: vesselCache.length ? "global-cache" : "empty-fallback",
-      message: `Data recolectada: ${filtered.length} buques filtrados sin geofencing obligatorio`,
-    });
+      source: "geofence-required",
+      message: "POL coordinates and a geographic radius are required.",
+    }, { status: 400 });
   }
 
   if (!apiKey) {
@@ -1022,7 +1029,7 @@ export async function handleGetVessels(req: Request) {
       );
     }
 
-    const storedVessels = await readStoredVesselMessages(requestedQuantity);
+    const storedVessels = await readStoredVesselMessages(requestedQuantity, url);
     if (storedVessels.length > 0) {
       vesselCache = storedVessels;
       cacheUpdatedAt = Date.now();
@@ -1041,7 +1048,7 @@ export async function handleGetVessels(req: Request) {
   try {
     const liveResult = await collectVessels(url, apiKey);
     const liveVessels = liveResult.vessels;
-    const storedVessels = await readStoredVesselMessages(Math.max(requestedQuantity, STORED_LOOKUP_LIMIT));
+    const storedVessels = await readStoredVesselMessages(Math.max(requestedQuantity, STORED_LOOKUP_LIMIT), url);
     const completedLiveVessels = completeIncomingVesselsFromStore(storedVessels, liveVessels);
     const vessels = completedLiveVessels.length > 0
       ? mergeVesselMessageLists(storedVessels, liveVessels)
@@ -1057,9 +1064,10 @@ export async function handleGetVessels(req: Request) {
       if (vesselCache.length > 0) cacheUpdatedAt = Date.now();
     }
 
-    const responseVessels = forceLive
-      ? completedLiveVessels
-      : filterSelectiveVessels(url, vessels.length ? vessels : vesselCache);
+    const responseVessels = filterSelectiveVessels(
+      url,
+      forceLive ? completedLiveVessels : (vessels.length ? vessels : vesselCache),
+    );
     const source = vessels.length
       ? "aisstream-live"
       : forceLive && liveResult.completion === "timeout"

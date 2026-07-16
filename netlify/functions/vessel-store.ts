@@ -1,6 +1,6 @@
 import { getStore } from "@netlify/blobs";
 import { count, desc, sql } from "drizzle-orm";
-import { db } from "../../db/index.js";
+import { db, getPool } from "../../db/index.js";
 import { aisVessels } from "../../db/schema.js";
 
 export type VesselRecord = {
@@ -512,6 +512,55 @@ async function writeVesselIndex(rows: VesselRecord[]): Promise<void> {
 
 export async function readVessels(): Promise<VesselRecord[]> {
   return sortByLastSeen(await readVesselIndex()).slice(0, 45000);
+}
+
+export async function readVesselsNearPoint(
+  latitude: number,
+  longitude: number,
+  radiusNm: number,
+  limit: number,
+): Promise<VesselRecord[]> {
+  const latitudeDelta = radiusNm / 60;
+  const longitudeDelta = radiusNm / (60 * Math.max(0.1, Math.cos(latitude * Math.PI / 180)));
+  const rawMinLongitude = longitude - longitudeDelta;
+  const rawMaxLongitude = longitude + longitudeDelta;
+  const normalizeLongitude = (value: number) => ((value + 540) % 360) - 180;
+  const minLongitude = normalizeLongitude(rawMinLongitude);
+  const maxLongitude = normalizeLongitude(rawMaxLongitude);
+  const crossesAntimeridian = rawMinLongitude < -180 || rawMaxLongitude > 180;
+  const result = await getPool().query<{ raw_data: unknown }>(
+    `
+      WITH candidates AS (
+        SELECT raw_data,
+          3440.065 * 2 * ASIN(SQRT(LEAST(1,
+            POWER(SIN(RADIANS(latitude - $1) / 2), 2) +
+            COS(RADIANS($1)) * COS(RADIANS(latitude)) *
+            POWER(SIN(RADIANS(longitude - $2) / 2), 2)
+          ))) AS distance_nm
+        FROM ais_vessels
+        WHERE latitude BETWEEN $3 AND $4
+          AND (($7 = FALSE AND longitude BETWEEN $5 AND $6)
+            OR ($7 = TRUE AND (longitude >= $5 OR longitude <= $6)))
+      )
+      SELECT raw_data
+      FROM candidates
+      WHERE distance_nm <= $8
+      ORDER BY distance_nm ASC
+      LIMIT $9
+    `,
+    [
+      latitude,
+      longitude,
+      Math.max(-90, latitude - latitudeDelta),
+      Math.min(90, latitude + latitudeDelta),
+      minLongitude,
+      maxLongitude,
+      crossesAntimeridian,
+      radiusNm,
+      Math.min(1000, Math.max(1, limit)),
+    ],
+  );
+  return result.rows.map((row) => row.raw_data).filter(isVesselRecord);
 }
 
 export async function countVessels(): Promise<number> {
