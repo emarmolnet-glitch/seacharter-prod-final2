@@ -3033,9 +3033,7 @@
             const workflowCapture = window.radarWorkflowState && window.radarWorkflowState.phase === 'capture';
             const captureLimit = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
             const requestedQuantity = workflowCapture ? captureLimit : Math.min(Number(quantity) || captureLimit, captureLimit);
-            const timeoutMs = workflowCapture
-                ? Math.min(65000, Math.max(2500, Number(window.radarWorkflowState.captureSeconds || 60) * 1000))
-                : 8000;
+            const timeoutMs = 6000;
             const params = new URLSearchParams({
                 quantity: String(requestedQuantity),
                 limit: String(requestedQuantity),

@@ -7,6 +7,8 @@ const SCAN_STATUS_KEY = "scan_status";
 const SCAN_STATUS_RUNNING = "RUNNING";
 const SCAN_STATUS_COMPLETE = "COMPLETE";
 const SCAN_STATUS_ERROR = "ERROR";
+const DEFAULT_CAPTURE_TIMEOUT_MS = 6000;
+const MAX_CAPTURE_TIMEOUT_MS = 6000;
 const ALLOWED_QUERY_PARAMETERS = new Set([
   "boxes",
   "quantity",
@@ -71,7 +73,12 @@ function buildCaptureUrl(req: Request, body: ScanRequestBody) {
   captureUrl.searchParams.set("force", "1");
   if (!captureUrl.searchParams.has("quantity")) captureUrl.searchParams.set("quantity", "1000");
   if (!captureUrl.searchParams.has("limit")) captureUrl.searchParams.set("limit", captureUrl.searchParams.get("quantity") || "1000");
-  if (!captureUrl.searchParams.has("timeoutMs")) captureUrl.searchParams.set("timeoutMs", "60000");
+  const rawTimeoutMs = captureUrl.searchParams.get("timeoutMs");
+  const requestedTimeoutMs = rawTimeoutMs === null ? Number.NaN : Number(rawTimeoutMs);
+  const captureTimeoutMs = Number.isFinite(requestedTimeoutMs)
+    ? Math.min(MAX_CAPTURE_TIMEOUT_MS, Math.max(2500, requestedTimeoutMs))
+    : DEFAULT_CAPTURE_TIMEOUT_MS;
+  captureUrl.searchParams.set("timeoutMs", String(captureTimeoutMs));
   return captureUrl;
 }
 
