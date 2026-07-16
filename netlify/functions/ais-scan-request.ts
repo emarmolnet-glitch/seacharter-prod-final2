@@ -1,5 +1,4 @@
 import type { Config } from "@netlify/functions";
-import { eq } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { appConfig } from "../../db/schema.js";
 
@@ -12,18 +11,15 @@ export default async (req: Request) => {
   }
 
   try {
+    const requestedAt = new Date();
     const [updatedConfig] = await db
-      .update(appConfig)
-      .set({ value: SCAN_STATUS_ON, updatedAt: new Date() })
-      .where(eq(appConfig.key, SCAN_STATUS_KEY))
+      .insert(appConfig)
+      .values({ key: SCAN_STATUS_KEY, value: SCAN_STATUS_ON, updatedAt: requestedAt })
+      .onConflictDoUpdate({
+        target: appConfig.key,
+        set: { value: SCAN_STATUS_ON, updatedAt: requestedAt },
+      })
       .returning({ value: appConfig.value, updatedAt: appConfig.updatedAt });
-
-    if (!updatedConfig) {
-      return Response.json(
-        { success: false, error: "Scan configuration is not initialized" },
-        { status: 409 },
-      );
-    }
 
     return Response.json({
       success: true,
@@ -41,4 +37,5 @@ export default async (req: Request) => {
 
 export const config: Config = {
   path: "/api/ais/scan-request",
+  method: "POST",
 };
