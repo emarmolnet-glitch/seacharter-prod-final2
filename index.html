@@ -24875,6 +24875,7 @@
         async function waitForLegalAuditTask(taskId) {
             const startedAt = Date.now();
             const maximumWaitMs = 15 * 60 * 1000;
+            const loadingMessage = document.getElementById('audit-loading-message');
 
             while (Date.now() - startedAt < maximumWaitMs) {
                 await new Promise(resolve => setTimeout(resolve, 3000));
@@ -24888,11 +24889,18 @@
                     throw new Error(task.error || `No se pudo consultar la auditoría (${response.status}).`);
                 }
                 if (task.available === false) {
+                    localStorage.removeItem('legal_audit_task_id');
                     throw new Error(task.message || 'Reporte no disponible');
                 }
                 const status = String(task.status || '').toUpperCase();
-                if (status === 'COMPLETED') return task.result;
+                const progress = Number.isFinite(Number(task.progress)) ? Math.max(0, Math.min(100, Number(task.progress))) : 0;
+                if (loadingMessage) loadingMessage.textContent = `Análisis en curso · ${progress}% · Tarea ${taskId.slice(0, 8)}`;
+                if (status === 'COMPLETED') {
+                    localStorage.removeItem('legal_audit_task_id');
+                    return task.result;
+                }
                 if (status === 'ERROR') {
+                    localStorage.removeItem('legal_audit_task_id');
                     throw new Error(task.error || 'La auditoría legal no pudo completarse.');
                 }
             }
@@ -24915,6 +24923,10 @@
                 requestError.code = task.error?.code || '';
                 throw requestError;
             }
+            localStorage.setItem('legal_audit_task_id', task.task_id);
+            const loadingMessage = document.getElementById('audit-loading-message');
+            if (loadingMessage) loadingMessage.textContent = `Análisis en curso · Tarea ${task.task_id.slice(0, 8)}`;
+            if (typeof showToast === 'function') showToast('Análisis en curso. La auditoría continúa en segundo plano.', false, 'success');
             return waitForLegalAuditTask(task.task_id);
         }
 
@@ -32079,12 +32091,13 @@ ADDITIONAL NOTES:
         async function analyzeDocument() {
             const text = toAuditText(document.getElementById('recapInput')?.value).trim();
             const btn = document.getElementById('analyzeBtn');
+            const activeTaskId = toAuditText(localStorage.getItem('legal_audit_task_id')).trim();
 
             document.getElementById('errorBox').classList.add('hidden');
 
             const strictAuditData = buildStrictAuditSessionData(text);
             const strictAuditGateError = getStrictAuditGateError(strictAuditData);
-            if (strictAuditGateError) {
+            if (!activeTaskId && strictAuditGateError) {
                 showAuditGateError(strictAuditGateError);
                 return;
             }
@@ -32100,7 +32113,9 @@ ADDITIONAL NOTES:
             
             const originalBtnHtml = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Procesando análisis legal...';
+            btn.innerHTML = activeTaskId
+                ? '<i class="fa-solid fa-rotate fa-spin mr-2"></i> Reanudando auditoría...'
+                : '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Procesando análisis legal...';
 
             try {
                 const cpStandard = toAuditText(State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON'), 'GENCON');
@@ -32154,7 +32169,7 @@ You MUST structure "auditoria_contrato_html" with the five mandatory sections fr
 [INSTRUCCIÓN DE AUDITORÍA]:
 Compara el documento suministrado (que puede ser un contrato, carta de crédito (L/C), factura comercial, packing list u otro documento relacionado con la mercancía o el viaje) contra esta Política de Póliza de Fletamento y el estándar aplicable (${cpStandard}). Identifica discrepancias graves, contradicciones directas, riesgos de retraso operativos (por clima, burocracia, marea, etc.), o cargos extra imprevistos que puedan afectar negativamente al armador o al fletador y comprometer la viabilidad comercial de la travesía.`;
 
-                const dynamicSystemPrompt = [DEFINITIVE_SYSTEM_PROMPT, warRiskInstruction, wibonWiponInstruction, genconInstruction, charterPolicyInstruction]
+                const dynamicSystemPrompt = [warRiskInstruction, wibonWiponInstruction, genconInstruction, charterPolicyInstruction]
                     .map((value) => toAuditText(value))
                     .join('');
 
@@ -32182,7 +32197,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     })(),
                     data: strictAuditData,
                     contents: [{ parts: parts }],
-                    systemInstruction: { parts: [{ text: dynamicSystemPrompt }] },
+                    sessionInstructions: dynamicSystemPrompt,
                     generationConfig: {
                         temperature: 0.2,
                         responseMimeType: "application/json",
@@ -32194,6 +32209,22 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                                 auditoria_operativa_html: { type: "STRING" },
                                 auditoria_armador: { type: "STRING" },
                                 auditoria_fletador: { type: "STRING" },
+                                comparativa_clausulas: {
+                                    type: "ARRAY",
+                                    items: {
+                                        type: "OBJECT",
+                                        properties: {
+                                            clausula: { type: "STRING" },
+                                            estandar: { type: "STRING" },
+                                            desviacion: { type: "STRING" },
+                                            impacto_armador: { type: "STRING" },
+                                            impacto_fletador: { type: "STRING" },
+                                            riesgo: { type: "STRING" },
+                                            cambio_solicitado: { type: "STRING" }
+                                        }
+                                    }
+                                },
+                                mapa_red_flags: { type: "ARRAY", items: { type: "STRING" } },
                                 detalles_sof: {
                                     type: "OBJECT",
                                     properties: {
@@ -32223,12 +32254,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                                 estrategia: { type: "STRING" },
                                 email: { type: "STRING" }
                             },
-                            required: ["tipo_documento_detectado", "auditoria_contrato_html", "auditoria_operativa_html", "detalles_sof", "laytime_excel_data"]
+                            required: ["tipo_documento_detectado", "auditoria_contrato_html", "auditoria_operativa_html", "comparativa_clausulas", "mapa_red_flags", "detalles_sof", "laytime_excel_data", "proforma", "riesgos", "clausulas", "estrategia", "email"]
                         }
                     }
                 };
 
-                const data = await executeAsyncLegalAudit(payload);
+                const loadingMessage = document.getElementById('audit-loading-message');
+                if (activeTaskId && loadingMessage) {
+                    loadingMessage.textContent = `Reanudando análisis en curso · Tarea ${activeTaskId.slice(0, 8)}`;
+                }
+                const data = activeTaskId
+                    ? await waitForLegalAuditTask(activeTaskId)
+                    : await executeAsyncLegalAudit(payload);
                 const jsonText = toAuditText(data?.candidates?.[0]?.content?.parts?.[0]?.text);
                 if (!jsonText) throw new Error('La IA no devolvió un resultado de auditoría válido.');
                 const result = JSON.parse(jsonText);

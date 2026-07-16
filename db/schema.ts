@@ -37,9 +37,13 @@ export const sessionSync = pgTable(
 export const iaReports = pgTable("ia_reports", {
   id: uuid("id").defaultRandom().primaryKey(),
   status: text("status").default("PENDING").notNull(),
+  progress: integer("progress").default(0).notNull(),
+  attemptCount: integer("attempt_count").default(0).notNull(),
   requestPayload: jsonb("request_payload").notNull(),
   reportData: jsonb("report_data"),
   errorMessage: text("error_message"),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
