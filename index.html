@@ -10225,7 +10225,7 @@
                         <i class="fa-solid fa-satellite-dish text-blue-500 animate-pulse"></i>
                         Mapa Densidad
                     </h2>
-                    <p class="text-slate-400 text-sm mt-1">Captura AIS ejecutada por el backend para predicción de disponibilidad y cálculo de flete justo.</p>
+                    <p class="text-slate-400 text-sm mt-1">Consulta AIS de solo lectura para predicción de disponibilidad y cálculo de flete justo.</p>
                     
                     <!-- Mode Toggle Selector -->
                     <div class="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 bg-blue-50/50 border border-blue-100 p-3.5 rounded-xl max-w-2xl shadow-sm hidden" style="display: none !important;" aria-hidden="true">
@@ -10250,7 +10250,7 @@
                     </button>
                     <div id="ais-availability-monitor" class="ais-availability-monitor" role="status" aria-live="polite" aria-atomic="true">
                         <span class="ais-availability-spinner" aria-hidden="true"></span>
-                        <span id="ais-availability-status">Preparado para iniciar captura AIS desde el servidor.</span>
+                        <span id="ais-availability-status">Solo lectura activo: preparado para consultar buques auditados.</span>
                     </div>
                 </div>
             </div>
@@ -15528,7 +15528,7 @@
             const state = window.matchingAuditModeState;
             const button = document.getElementById('btnGenerateReport');
             const status = document.getElementById('matching-audit-mode-status');
-            const captureControls = document.querySelectorAll('#btn-refresh-ais, #btn-search-closest-vessels, #btn-freeze-radar');
+            const captureControls = document.querySelectorAll('#btn-search-closest-vessels, #btn-freeze-radar');
             if (button) {
                 button.disabled = state.loading;
                 button.setAttribute('aria-pressed', state.enabled ? 'true' : 'false');
@@ -15551,6 +15551,9 @@
                 control.style.opacity = state.enabled || state.loading ? '0.5' : '';
                 control.style.cursor = state.enabled || state.loading ? 'not-allowed' : '';
             });
+            if (typeof window.updateAisAvailabilitySweepFeedback === 'function') {
+                window.updateAisAvailabilitySweepFeedback();
+            }
         }
 
         async function toggleMatchingAuditMode() {
@@ -17824,22 +17827,19 @@
                 if (aisTabInitTimer) {
                     clearTimeout(aisTabInitTimer);
                 }
-                aisTabInitTimer = setTimeout(async () => {
+                aisTabInitTimer = setTimeout(() => {
                     aisTabInitTimer = null;
                     const aisView = document.getElementById('view-ais');
                     if (!aisView || !aisView.classList.contains('active-block')) {
                         return;
                     }
-                    if (typeof window.loadValidatedAisDensityVessels === 'function') {
-                        await window.loadValidatedAisDensityVessels();
-                    }
-                    if (!aisView.classList.contains('active-block')) {
-                        return;
+                    if (typeof window.resetAisDensityResults === 'function') {
+                        window.resetAisDensityResults();
                     }
                     initAisMap();
                     window.MapController?.attachDensityMap(aisMap);
-                    if (window.GlobalStore && typeof updateAisMarkers === 'function') {
-                        updateAisMarkers(window.GlobalStore.getVessels());
+                    if (typeof updateAisMarkers === 'function') {
+                        updateAisMarkers([]);
                     }
                     if (typeof calculateAndDisplayAisFreight === 'function') {
                         calculateAndDisplayAisFreight();
@@ -32878,7 +32878,43 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.isFirstLoad = true;
         window.isUserNavigating = false;
 
-        window.loadValidatedAisDensityVessels = async function() {
+        window.getSelectedAisVesselTypeFilter = function() {
+            const select = document.getElementById('fleet-intel-vessel-type');
+            if (!select) return '';
+            return String(select?.selectedOptions?.[0]?.textContent || '').trim();
+        };
+
+        window.resetAisDensityResults = function() {
+            window.buquesAlmacenados = new Map();
+            window.buquesEncontrados = {};
+            window.listaBarcos = [];
+            window.lastVesselsInArea = [];
+            window.vessels_data = [];
+            window.aisMatchingCache = [];
+            window.aisPersistedVesselCount = 0;
+            window.aisDatabaseVesselCount = 0;
+            window.lastAisDensityReadPayload = null;
+            if (window.matchingAuditModeState?.enabled) {
+                window.matchingAuditModeState.vessels = [];
+            }
+            if (window.GlobalStore) {
+                window.GlobalStore.rawVessels = [];
+                window.GlobalStore.vessels = [];
+                window.GlobalStore.polPrimaryVessels = [];
+            }
+            window.dispatchEvent(new CustomEvent('ais:vessels-updated', {
+                detail: { source: 'density-map-empty', rawVessels: [], vessels: [] }
+            }));
+            const densityCount = document.getElementById('ais-density-count');
+            if (densityCount) densityCount.innerText = '0';
+            const hiddenCount = document.getElementById('buques-count');
+            if (hiddenCount) hiddenCount.innerText = '0';
+            if (typeof window.setAisRadarStatus === 'function') {
+                window.setAisRadarStatus('inactive', 0);
+            }
+        };
+
+        window.loadValidatedAisDensityVessels = async function(options = {}) {
             window.aisRadarUserActivated = false;
             window.isLiveTrackingEnabled = false;
             clearTimeout(window.contextualAisRadarTimer);
@@ -32897,7 +32933,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             try {
-                const response = await fetch('/api/audit-vessels', {
+                const selectedTaxonomy = typeof options.selectedTaxonomy === 'string'
+                    ? options.selectedTaxonomy.trim()
+                    : window.getSelectedAisVesselTypeFilter();
+                const endpoint = selectedTaxonomy === 'All Cargo' || !selectedTaxonomy
+                    ? '/api/audit-vessels'
+                    : `/api/vessels-filter?vesselType=${encodeURIComponent(selectedTaxonomy)}`;
+                const response = await fetch(endpoint, {
                     method: 'GET',
                     headers: { Accept: 'application/json' },
                     cache: 'no-store'
@@ -32907,9 +32949,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     throw new Error(payload.error || 'No se pudieron cargar los buques auditados.');
                 }
 
-                const validatedVessels = Array.isArray(payload.vessels)
-                    ? payload.vessels.filter(vessel => String(vessel.audit_status || vessel.auditStatus || '').toUpperCase() === 'VALIDATED')
-                    : [];
+                const validatedVessels = Array.isArray(payload.vessels) ? payload.vessels : [];
                 const normalizedVessels = validatedVessels
                     .map(vessel => typeof window.normalizeAisVesselForRadar === 'function'
                         ? window.normalizeAisVesselForRadar(vessel)
@@ -32927,6 +32967,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 window.buquesEncontrados = Object.fromEntries(window.buquesAlmacenados.entries());
                 window.listaBarcos = validatedVessels.slice();
                 window.aisPersistedVesselCount = validatedVessels.length;
+                window.aisDatabaseVesselCount = Number.isFinite(Number(payload.count))
+                    ? Number(payload.count)
+                    : validatedVessels.length;
+                window.lastAisDensityReadPayload = payload;
 
                 if (window.GlobalStore) {
                     window.GlobalStore.rawVessels = validatedVessels.slice();
@@ -32934,7 +32978,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
                 window.dispatchEvent(new CustomEvent('ais:vessels-updated', {
                     detail: {
-                        source: 'audit-database-readonly',
+                        source: selectedTaxonomy === 'All Cargo' || !selectedTaxonomy
+                            ? 'audit-database-readonly'
+                            : 'audit-database-filtered',
+                        vesselType: selectedTaxonomy,
                         rawVessels: validatedVessels,
                         vessels: normalizedVessels
                     }
@@ -32951,6 +32998,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (typeof window.showAisDisconnectedState === 'function') {
                     window.showAisDisconnectedState();
                 }
+                if (options.throwOnError) throw error;
                 return [];
             }
         };
@@ -34600,9 +34648,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 localStorage.setItem(FLEET_INTEL_FILTER_KEY, selectedTaxonomy);
                 localStorage.setItem('ais_filter_vessel_types', JSON.stringify([selectedTaxonomy]));
                 localStorage.setItem('ais_filters_updated', Date.now().toString());
-                const filteredVessels = Array.isArray(window.lastVesselsInArea) ? window.lastVesselsInArea : [];
-                setVesselClassContext(selectedTaxonomy, filteredVessels);
-                if (typeof window.reapplyCentralFiltersAndRedraw === 'function') window.reapplyCentralFiltersAndRedraw();
+                setVesselClassContext(selectedTaxonomy, []);
+                if (typeof window.resetAisDensityResults === 'function') window.resetAisDensityResults();
                 dispatchVesselClassContextRecalculation(window.vesselClassContext);
             });
 
@@ -35444,7 +35491,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }, window.aisAvailabilitySweepUi || {});
 
             const AIS_SWEEP_IDLE_LABEL = 'Consultar Disponibilidad Real-Time';
-            const AIS_SWEEP_IDLE_MESSAGE = 'Preparado para iniciar captura AIS desde el servidor.';
+            const AIS_SWEEP_IDLE_MESSAGE = 'Solo lectura activo: preparado para consultar buques auditados.';
 
             const resetAisAvailabilitySweepFeedback = function(errorMessage = null) {
                 const state = window.aisAvailabilitySweepUi;
@@ -35482,38 +35529,74 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const hasError = state.status === 'error';
 
                 const auditMode = !!window.matchingAuditModeState?.enabled;
-                if (btn) btn.disabled = isRequesting || auditMode;
+                const readOnlyMode = window.aisDensityReadOnly === true || auditMode;
+                if (btn) btn.disabled = isRequesting;
                 if (icon) icon.classList.toggle('fa-spin', isRequesting);
                 if (label) {
-                    label.textContent = auditMode
-                        ? 'Captura desactivada · Modo Auditoría'
-                        : isRequesting
-                        ? 'Enviando solicitud...'
-                        : (isSent ? 'Solicitud enviada' : AIS_SWEEP_IDLE_LABEL);
+                    label.textContent = isRequesting
+                        ? (readOnlyMode ? 'Consultando base de datos...' : 'Enviando solicitud...')
+                        : (isSent ? 'Datos actualizados' : AIS_SWEEP_IDLE_LABEL);
                 }
                 if (monitor) {
                     monitor.classList.toggle('active', isRequesting || isSent || hasError);
                     monitor.classList.toggle('done', isSent);
                 }
                 if (status) {
-                    status.textContent = auditMode
-                        ? 'El motor usa exclusivamente registros VALIDATED de Neon.'
-                        : isRequesting
-                        ? 'El backend está capturando AISStream y guardando buques en Neon...'
+                    status.textContent = isRequesting
+                        ? (readOnlyMode
+                            ? 'Consultando registros AIS mediante GET, sin modificar la base de datos...'
+                            : 'El backend está capturando AISStream y guardando buques en Neon...')
                         : (isSent
-                            ? `Captura completada: ${Number(state.vesselCount) || 0} buques actualizados en Neon${Number.isFinite(Number(state.databaseVesselCount)) ? `; ${Number(state.databaseVesselCount)} buques almacenados en total.` : '.'}`
+                            ? (readOnlyMode
+                                ? `Consulta completada: ${Number(state.vesselCount) || 0} buques cargados desde la base de datos.`
+                                : `Captura completada: ${Number(state.vesselCount) || 0} buques actualizados en Neon${Number.isFinite(Number(state.databaseVesselCount)) ? `; ${Number(state.databaseVesselCount)} buques almacenados en total.` : '.'}`)
                             : (hasError ? state.error : AIS_SWEEP_IDLE_MESSAGE));
                 }
             };
 
-            window.executeSweepAIS = async function() {
-                if (window.aisDensityReadOnly) {
-                    showToast('El Mapa de Densidad está bloqueado en modo de solo lectura.');
+            window.executeReadOnlyAisRefresh = async function() {
+                const state = window.aisAvailabilitySweepUi;
+                if (state.isLoading) return [];
+
+                state.status = 'requesting';
+                state.isLoading = true;
+                state.error = null;
+                window.updateAisAvailabilitySweepFeedback();
+
+                try {
+                    const selectedTaxonomy = window.getSelectedAisVesselTypeFilter();
+                    const vessels = await window.loadValidatedAisDensityVessels({
+                        throwOnError: true,
+                        selectedTaxonomy
+                    });
+                    state.status = 'sent';
+                    state.vesselCount = vessels.length;
+                    state.databaseVesselCount = Number.isFinite(Number(window.aisDatabaseVesselCount))
+                        ? Number(window.aisDatabaseVesselCount)
+                        : vessels.length;
+                    state.requestedAt = new Date().toISOString();
+                    if (typeof showToast === 'function') {
+                        showToast(`Consulta completada: ${vessels.length} buques cargados.`, false, 'success');
+                    }
+                    return vessels;
+                } catch (error) {
+                    state.status = 'error';
+                    state.error = error && error.message
+                        ? error.message
+                        : 'No se pudieron consultar los buques auditados.';
+                    if (typeof showToast === 'function') {
+                        showToast(state.error, false, 'error');
+                    }
                     return [];
+                } finally {
+                    state.isLoading = false;
+                    window.updateAisAvailabilitySweepFeedback();
                 }
-                if (window.matchingAuditModeState?.enabled) {
-                    showToast('La captura AIS está desactivada durante el Modo Auditoría.');
-                    return { success: false, skipped: true, reason: 'audit-mode' };
+            };
+
+            window.executeSweepAIS = async function() {
+                if (window.aisDensityReadOnly || window.matchingAuditModeState?.enabled) {
+                    return window.executeReadOnlyAisRefresh();
                 }
                 const btn = document.getElementById('btn-refresh-ais');
                 if (!btn) return;
