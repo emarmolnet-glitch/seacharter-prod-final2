@@ -87,6 +87,7 @@ export const aisVessels = pgTable("ais_vessels", {
   latitude: doublePrecision("latitude").notNull(),
   longitude: doublePrecision("longitude").notNull(),
   source: text("source").notNull(),
+  auditStatus: text("audit_status").default("PENDING").notNull(),
   rawData: jsonb("raw_data").notNull(),
   firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull(),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull(),

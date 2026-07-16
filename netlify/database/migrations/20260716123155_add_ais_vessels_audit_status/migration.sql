@@ -1,0 +1,1 @@
+ALTER TABLE "ais_vessels" ADD COLUMN "audit_status" text DEFAULT 'PENDING' NOT NULL;
