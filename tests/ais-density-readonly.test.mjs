@@ -4,7 +4,9 @@ import test from 'node:test';
 
 const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const mapLoaderSource = await readFile(new URL('../map_loader.js', import.meta.url), 'utf8');
-const mapViewSource = await readFile(new URL('../map_view.js', import.meta.url), 'utf8');
+const globeSource = await readFile(new URL('../GlobalFleetGlobe.js', import.meta.url), 'utf8');
+const globeCssSource = await readFile(new URL('../assets/css/density-globe.css', import.meta.url), 'utf8');
+const dataBridgeSource = await readFile(new URL('../public/databridge.html', import.meta.url), 'utf8');
 const auditFunctionSource = await readFile(new URL('../netlify/functions/audit-vessels.ts', import.meta.url), 'utf8');
 const filterFunctionSource = await readFile(new URL('../netlify/functions/vessels-filter.ts', import.meta.url), 'utf8');
 const getVesselsFunctionSource = await readFile(new URL('../netlify/functions/get-vessels.ts', import.meta.url), 'utf8');
@@ -85,17 +87,140 @@ test('Core PRO sends POL coordinates and a bounded radius to AIS endpoints', () 
   assert.match(indexSource, /POL: 1000/);
 });
 
-test('Core PRO renders no AIS fleet without a valid loading port', () => {
-  assert.match(indexSource, /const hasLoadingPort =[\s\S]*?getAisOperationalPort\('POL'\)/);
-  assert.match(indexSource, /const renderableVessels = \(hasLoadingPort[\s\S]*?: \[\]\)/);
+test('Core PRO renders the globally filtered AIS fleet independently of route ports', () => {
+  assert.match(indexSource, /const renderableVessels = \(Array\.isArray\(vessels\)/);
+  assert.match(indexSource, /GlobalFleetGlobe\.updateVessels\(renderableVessels, 'density'\)/);
+  assert.doesNotMatch(indexSource, /const renderableVessels = \(hasLoadingPort/);
 });
 
-test('filtered AIS state is global and drives WebGL redraws', () => {
+test('filtered AIS state is global and immediately redraws every globe', () => {
   assert.match(indexSource, /filteredVessels: \[\]/);
   assert.match(indexSource, /setFilteredVessels\(newFilteredVessels/);
   assert.match(indexSource, /ais:filtered-vessels-updated/);
-  assert.match(mapViewSource, /ais:filtered-vessels-updated/);
-  assert.match(mapViewSource, /updateVessels\(vessels, 'density'\)/);
+  assert.ok(globeSource.includes("window.addEventListener('ais:filtered-vessels-updated', syncAllViews)"));
+  assert.ok(globeSource.includes('views.forEach((view) => updateVessels(null, view.key))'));
+  assert.ok(globeSource.includes('view.vessels = prepareVessels(getFilteredVessels())'));
+});
+
+test('Core PRO and Data Bridge share Globe.gl 2.46.1', () => {
+  assert.ok(indexSource.includes('globe.gl@2.46.1/dist/globe.gl.min.js'));
+  assert.ok(dataBridgeSource.includes('globe.gl@2.46.1/dist/globe.gl.min.js'));
+  assert.ok(indexSource.includes('GlobalFleetGlobe.js'));
+  assert.ok(dataBridgeSource.includes('GlobalFleetGlobe.js'));
+  assert.ok(globeSource.includes('window.Globe({ animateIn: false, waitForGlobeReady: true })(container)'));
+  assert.ok(globeSource.includes('window.GlobalFleetGlobe = globalFleetGlobe'));
+  assert.ok(dataBridgeSource.includes("window.GlobalFleetGlobe?.mount({ key: 'bridge'"));
+  assert.doesNotMatch(indexSource, /deck\.gl|map_view\.js/);
+  assert.doesNotMatch(dataBridgeSource, /deck\.gl|map_view\.js/);
+});
+
+test('Globe View containers have explicit visible dimensions and responsive rules', () => {
+  assert.match(indexSource, /html,[\s\S]*?body \{[\s\S]*?height: 100%;/);
+  assert.match(globeCssSource, /\.global-fleet-globe,[\s\S]*?width: 100% !important;[\s\S]*?height: 100% !important;[\s\S]*?min-height: 280px !important;/);
+  assert.ok(globeCssSource.includes('border: 1px solid #cad8e7'));
+  assert.ok(globeCssSource.includes('box-shadow: 0 20px 50px rgba(15, 52, 124, 0.16)'));
+  assert.ok(globeCssSource.includes('background-size: 30px 30px, 30px 30px'));
+  assert.match(globeCssSource, /@media \(max-width: 1180px\)[\s\S]*?width: 32%/);
+  assert.match(globeCssSource, /@media \(max-width: 820px\)[\s\S]*?display: none/);
+  assert.ok(dataBridgeSource.includes('global-fleet-globe-responsive'));
+});
+
+test('master globe waits for layout and reports mounting diagnostics', () => {
+  assert.ok(indexSource.includes('mapBounds.width <= 1 || mapBounds.height <= 1'));
+  assert.ok(indexSource.includes("dataset.renderKey = 'loading'"));
+  assert.ok(indexSource.includes("dataset.renderKey = 'mounted'"));
+  assert.ok(globeSource.includes('size.width <= 1 || size.height <= 1'));
+  assert.ok(globeSource.includes('globalFleetGlobeDiagnostics'));
+  assert.ok(globeSource.includes('mapboxTokenRequired: false'));
+  assert.ok(globeSource.includes("typeof ResizeObserver !== 'undefined'"));
+  assert.ok(globeSource.includes('globalFleetGlobeLastError'));
+});
+
+test('all maps render independent AIS points without heatmaps or fixed labels', () => {
+  assert.ok(globeSource.includes('.pointsData(view.vessels)'));
+  assert.ok(globeSource.includes("POINT_COLOR = 'rgba(0, 255, 255, 0.8)'"));
+  assert.ok(globeSource.includes('POINT_ALTITUDE = 0.008'));
+  assert.ok(globeSource.includes('cameraAltitude <= 0.45) return 0.060'));
+  assert.ok(globeSource.includes('cameraAltitude >= 2.40) return 0.025'));
+  assert.doesNotMatch(globeSource, /ColumnLayer|TextLayer|ScatterplotLayer|heatmap|cluster/i);
+});
+
+test('Globe engine uses the requested earth textures atmosphere and camera', () => {
+  assert.ok(globeSource.includes('earth-blue-marble.jpg'));
+  assert.ok(globeSource.includes('earth-topology.png'));
+  assert.ok(globeSource.includes(".atmosphereColor('#39D7E8')"));
+  assert.ok(globeSource.includes('.atmosphereAltitude(0.16)'));
+  assert.ok(globeSource.includes('lat: 12, lng: -24, altitude: 2.15'));
+  assert.ok(globeSource.includes('dampingFactor = 0.08'));
+  assert.ok(globeSource.includes('autoRotateSpeed = 0.45'));
+});
+
+test('Globe pauses automatic rotation on direct interaction', () => {
+  assert.ok(globeSource.includes('.onPointClick(() => setAutoRotate(false, key))'));
+  assert.ok(globeSource.includes("view.controls.addEventListener?.('start', view.handleInteractionStart)"));
+  assert.ok(globeSource.includes("view.container.addEventListener('pointerdown', view.handleContainerPointerDown)"));
+  assert.ok(globeSource.includes('view.handleInteractionStart = () => setAutoRotate(false, key)'));
+});
+
+test('Globe exposes an accessible manual Play Pause control', () => {
+  assert.ok(globeSource.includes("button.className = 'global-fleet-rotation-toggle'"));
+  assert.ok(globeSource.includes('toggleAutoRotate(view.key)'));
+  assert.ok(globeSource.includes("button.setAttribute('aria-pressed', String(isActive))"));
+  assert.ok(globeSource.includes("Pausar rotación automática"));
+  assert.ok(globeSource.includes("Reanudar rotación automática"));
+  assert.ok(globeSource.includes('setAutoRotate(true, key)'));
+  assert.ok(globeCssSource.includes('.global-fleet-rotation-toggle {'));
+  assert.ok(globeCssSource.includes('z-index: 8;'));
+  assert.match(globeCssSource, /.global-fleet-rotation-toggle:focus-visible/);
+});
+
+test('Globe renders only the cyan maritime POL to POD path', () => {
+  assert.ok(globeSource.includes("PATH_STYLE = Object.freeze({ color: '#00FFFF', width: 2, simplify: true })"));
+  assert.ok(globeSource.includes('.arcsData([])'));
+  assert.ok(globeSource.includes('.pathsData(view.routePaths)'));
+  assert.ok(globeSource.includes('prepareRoutePoints(routes?.laden, pol, pod)'));
+  assert.ok(globeSource.includes('.pathColor(() => PATH_STYLE.color)'));
+  assert.ok(globeSource.includes('.pathStroke(() => PATH_STYLE.width)'));
+  assert.ok(!globeSource.includes('routes?.ballast'));
+  assert.ok(!globeSource.includes('BALLAST_COLOR'));
+  assert.ok(!globeSource.includes("type: 'line'"));
+});
+
+test('Globe restores white POL and POD labels', () => {
+  assert.ok(globeSource.includes("createPortLabel('POL', ports?.pol)"));
+  assert.ok(globeSource.includes("createPortLabel('POD', ports?.pod)"));
+  assert.ok(globeSource.includes('.labelsData(view.portLabels)'));
+  assert.ok(globeSource.includes(".labelColor(() => '#FFFFFF')"));
+});
+
+test('GlobalStore retains normalized port and maritime path state', () => {
+  assert.ok(globeSource.includes('window.GlobalStore.globeRouteState'));
+  assert.ok(globeSource.includes('saveGlobalRouteState(ports, view.routePaths)'));
+  assert.ok(globeSource.includes('restoreGlobalRouteState(view)'));
+  assert.ok(globeSource.includes('.pointsData(view.vessels)'));
+});
+
+test('AIS normalization accepts nested payloads and rejects invalid coordinates', () => {
+  assert.match(globeSource, /'vesselData'.*'source_payload'.*'ais'/);
+  assert.ok(globeSource.includes('lat < -90 || lat > 90 || lng < -180 || lng > 180'));
+  assert.ok(globeSource.includes('FOCUS_ALTITUDE = 1.8'));
+  assert.ok(globeSource.includes('focusFirstVessel'));
+});
+
+test('vessel tooltip exposes only name and DWT with safe fallbacks', () => {
+  assert.ok(globeSource.includes('function getTooltip'));
+  assert.ok(globeSource.includes('Buque sin nombre'));
+  assert.ok(globeSource.includes('DWT no disponible'));
+  assert.ok(globeSource.includes('.pointLabel(getTooltip)'));
+  assert.match(globeCssSource, /\.global-fleet-tooltip strong \{[\s\S]*?color: #ffffff;[\s\S]*?text-shadow:/);
+  assert.match(globeCssSource, /\.global-fleet-tooltip span \{[\s\S]*?color: #8fc7d0/);
+});
+
+test('Data Bridge publishes its audit fleet through filteredVessels', () => {
+  assert.match(dataBridgeSource, /filteredVessels: \[\]/);
+  assert.match(dataBridgeSource, /setFilteredVessels\(vessels\)/);
+  assert.match(dataBridgeSource, /window\.GlobalStore\.setFilteredVessels\(pendingAudits\)/);
+  assert.match(dataBridgeSource, /id="databridge-map"/);
 });
 
 test('taxonomy changes reapply filters without clearing the global fleet', () => {

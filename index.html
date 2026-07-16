@@ -30,11 +30,10 @@
     </script>
     <!-- FontAwesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <!-- Shared Globe.gl renderer for the master route and AIS density views. -->
-    <link href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css" rel="stylesheet"/>
-    <script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
+    <!-- Master Globe.gl renderer shared by Core PRO and Data Bridge. -->
     <script src="https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js"></script>
-    <script src="./map_view.js"></script>
+    <link rel="stylesheet" href="./assets/css/density-globe.css?v=20260716-globe-gl-2461">
+    <script src="./GlobalFleetGlobe.js"></script>
     <script type="module" src="./map_loader.js"></script>
     <!-- Maritime Routing Library -->
     <script type="module">
@@ -76,6 +75,34 @@
             --muted: #64748B;
             --panel-shadow: 0 4px 10px -6px rgba(15, 23, 42, 0.22);
             --floating-panel-shadow: 0 18px 42px rgba(0, 35, 48, 0.24), 0 3px 10px rgba(0, 35, 48, 0.16);
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            min-height: 100%;
+            margin: 0;
+        }
+
+        body.theme-light {
+            display: flex;
+            flex-direction: column;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-main {
+            position: relative;
+            display: block;
+            flex: 1 1 auto;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
         }
         
         body { font-family: 'Inter', 'Roboto', sans-serif; background-color: var(--bg); color: var(--text); }
@@ -379,6 +406,11 @@
         }
 
         #view-map {
+            position: absolute !important;
+            inset: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            min-height: 500px !important;
             padding: 0 !important;
             overflow: hidden !important;
             background: transparent !important;
@@ -389,6 +421,7 @@
             width: 100%;
             height: 100%;
             min-height: 100%;
+            min-height: 500px;
             background: transparent !important;
             isolation: isolate;
         }
@@ -532,9 +565,12 @@
         #map-host {
             position: absolute;
             inset: 0;
+            z-index: 0;
+            display: block;
             width: 100%;
             height: 100%;
             min-height: 100%;
+            overflow: hidden;
             border: 0 !important;
             border-radius: 0 !important;
             box-shadow: none !important;
@@ -542,10 +578,17 @@
         }
 
         #map-container {
+            position: absolute !important;
+            inset: 0 !important;
+            display: block !important;
+            width: 100% !important;
             border: 0 !important;
             border-radius: 0 !important;
             height: 100% !important;
             min-height: 100% !important;
+            overflow: hidden !important;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
 
         .route-anchor-svg-marker {
@@ -3340,8 +3383,16 @@
         }
 
         #ais-map {
+            position: absolute !important;
+            inset: 0 !important;
+            z-index: 0 !important;
+            display: block !important;
+            width: 100% !important;
             height: 450px !important;
             min-height: 450px !important;
+            overflow: hidden !important;
+            visibility: visible !important;
+            opacity: 1 !important;
             border: 1px solid #E0E0E0 !important;
             border-radius: 8px !important;
             box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12) !important;
@@ -6925,8 +6976,8 @@
         <!-- ========================================== -->
         <div id="view-map" class="view-section active-block absolute inset-0 overflow-y-auto p-6 scroll-smooth">
             <div id="map-command-shell" class="map-command-shell">
-                <div id="map-host" class="min-h-[450px] h-[520px] w-full rounded-lg border border-[#e0e0e0] bg-blue-100 overflow-hidden shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
-                    <div id="map-container" class="h-full w-full rounded-lg border border-slate-200 bg-slate-950"></div>
+                <div id="map-host" class="density-globe-stage min-h-[450px] h-[520px] w-full rounded-lg border border-[#e0e0e0] bg-blue-100 overflow-hidden shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
+                    <div id="map-container" class="density-globe-canvas h-full w-full rounded-lg border border-slate-200 bg-slate-950" data-globe-renderer></div>
                 </div>
                 <div class="map-control-stack">
                     <div class="map-route-legend" aria-label="Leyenda de rutas">
@@ -10463,8 +10514,8 @@
                                 <button id="btn-ais-vessel-search" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors shrink-0">Buscar</button>
                             </div>
                         </div>
-                        <div class="relative">
-                            <div id="ais-map" style="height: 450px; min-height: 450px;" class="rounded-lg border border-slate-800 bg-slate-950"></div>
+                        <div class="density-globe-stage relative" style="height: 450px; min-height: 450px;">
+                            <div id="ais-map" class="density-globe-canvas rounded-lg border border-slate-800 bg-slate-950" data-globe-renderer></div>
                             <aside id="global-opportunities-panel" class="global-opportunities-panel" hidden aria-label="Oportunidades globales de Data Bridge">
                                 <div class="global-opportunities-panel__header">
                                     <button id="global-opportunities-toggle" type="button" class="global-opportunities-panel__toggle" aria-expanded="true" aria-controls="global-opportunities-list" title="Plegar panel">
@@ -12868,8 +12919,8 @@
 
         function resizeRouteMap(routeMap = map) {
             if (!routeMap) return;
-            if (window.GlobeMapView && routeMap === window.GlobeMapView.getInstance()) {
-                window.GlobeMapView.resize();
+            if (window.GlobalFleetGlobe && routeMap === window.GlobalFleetGlobe.getInstance()) {
+                window.GlobalFleetGlobe.resize();
             } else if (typeof routeMap.resize === 'function') {
                 routeMap.resize();
             } else if (typeof routeMap.invalidateSize === 'function') {
@@ -13141,6 +13192,7 @@
         }
 
         let map, routeBaseLayer, routeMarkerLayer, markers = [], routeMapboxMarkers = [];
+        let routeMapMountFrameId = null;
         const ROUTE_LINE_COLOR = ROUTE_LADEN_LINE_COLOR;
         let routeMapInvalidateTimer = null;
         let aisTabInitTimer = null;
@@ -18236,7 +18288,7 @@
         }
 
         function ensureRouteBaseLayer() {
-            if (window.GlobeMapView && map === window.GlobeMapView.getInstance()) return;
+            if (window.GlobalFleetGlobe && map === window.GlobalFleetGlobe.getInstance()) return;
             if (!map || isMapboxRouteMap(map) || typeof L === 'undefined' || typeof L.tileLayer !== 'function') return;
 
             if (!routeBaseLayer || !map.hasLayer(routeBaseLayer)) {
@@ -18259,7 +18311,7 @@
             if (map) {
                 window.map = map;
                 resizeRouteMap(map);
-                if (!window.GlobeMapView || map !== window.GlobeMapView.getInstance()) {
+                if (!window.GlobalFleetGlobe || map !== window.GlobalFleetGlobe.getInstance()) {
                     window.MapController?.attachRouteMap(map);
                 }
             }
@@ -18268,7 +18320,7 @@
         }
 
         function ensureRouteOverlayLayers(routeMap = map) {
-            if (window.GlobeMapView && routeMap === window.GlobeMapView.getInstance()) return;
+            if (window.GlobalFleetGlobe && routeMap === window.GlobalFleetGlobe.getInstance()) return;
             if (!routeMap || isMapboxRouteMap(routeMap) || typeof L === 'undefined') return;
             ensureLeafletRouteLinePane(routeMap);
             if (!routeMarkerLayer) {
@@ -18294,14 +18346,28 @@
                 resizeRouteMap(map);
                 return;
             }
-            map = window.GlobeMapView?.mount({
+            const mapBounds = mapContainer.getBoundingClientRect();
+            if (mapBounds.width <= 1 || mapBounds.height <= 1) {
+                mapContainer.dataset.renderKey = 'loading';
+                if (!routeMapMountFrameId) {
+                    routeMapMountFrameId = requestAnimationFrame(() => {
+                        routeMapMountFrameId = null;
+                        initMap();
+                    });
+                }
+                return;
+            }
+            mapContainer.dataset.renderKey = 'mounted';
+            const vessels = window.GlobalStore?.filteredVesselsInitialized
+                ? (window.GlobalStore?.getFilteredVessels?.() || [])
+                : [];
+            map = window.GlobalFleetGlobe?.mount({
                 containerId: 'map-container',
-                vesselsData: Array.isArray(window.vessels_data)
-                    ? window.vessels_data
-                    : (window.GlobalStore?.getRawVessels?.() || [])
+                vesselsData: vessels,
+                renderKey: JSON.stringify(vessels)
             });
             window.map = map;
-            if (State.routeGeometry) window.GlobeMapView?.setRouteResult(State.routeGeometry);
+            if (State.routeGeometry) window.GlobalFleetGlobe?.setRouteResult(State.routeGeometry);
         }
 
         async function getCoordinates(query) {
@@ -18522,13 +18588,39 @@
             };
         }
 
-        function buildStraightFallbackRouteSegment(origin, destination, reason) {
-            console.warn(`[Routing Engine] Ruta marítima no disponible para ${origin.name || 'origen'} -> ${destination.name || 'destino'}. Se dibuja línea recta de respaldo.`, reason || '');
+        function buildGeodesicFallbackRouteSegment(origin, destination, reason) {
+            console.warn(`[Routing Engine] Ruta marítima no disponible para ${origin.name || 'origen'} -> ${destination.name || 'destino'}. Se usa un arco geodésico de respaldo.`, reason || '');
+            const toRadians = value => value * Math.PI / 180;
+            const toDegrees = value => value * 180 / Math.PI;
+            const startLat = toRadians(origin.lat);
+            const startLon = toRadians(origin.lon);
+            const endLat = toRadians(destination.lat);
+            const endLon = toRadians(destination.lon);
+            const angularDistance = 2 * Math.asin(Math.sqrt(
+                Math.sin((endLat - startLat) / 2) ** 2
+                + Math.cos(startLat) * Math.cos(endLat) * Math.sin((endLon - startLon) / 2) ** 2
+            ));
+            const denominator = Math.sin(angularDistance);
+            const coordinates = Array.from({ length: 97 }, (_, index) => {
+                const fraction = index / 96;
+                if (!Number.isFinite(denominator) || Math.abs(denominator) < 0.000001) {
+                    return [
+                        origin.lat + (destination.lat - origin.lat) * fraction,
+                        origin.lon + (destination.lon - origin.lon) * fraction
+                    ];
+                }
+                const startWeight = Math.sin((1 - fraction) * angularDistance) / denominator;
+                const endWeight = Math.sin(fraction * angularDistance) / denominator;
+                const x = startWeight * Math.cos(startLat) * Math.cos(startLon) + endWeight * Math.cos(endLat) * Math.cos(endLon);
+                const y = startWeight * Math.cos(startLat) * Math.sin(startLon) + endWeight * Math.cos(endLat) * Math.sin(endLon);
+                const z = startWeight * Math.sin(startLat) + endWeight * Math.sin(endLat);
+                return [toDegrees(Math.atan2(z, Math.sqrt(x * x + y * y))), toDegrees(Math.atan2(y, x))];
+            });
             return {
                 distance: haversine(origin.lat, origin.lon, destination.lat, destination.lon) * 1.15,
-                coordinates: [[origin.lat, origin.lon], [destination.lat, destination.lon]],
+                coordinates,
                 nodes: [origin, destination],
-                source: 'straight-line-fallback',
+                source: 'geodesic-fallback',
                 success: false
             };
         }
@@ -18610,7 +18702,7 @@
             let totalDistance = 0;
             let combinedCoordinates = [];
             let segmentCalculatedCount = 0;
-            let usedStraightFallback = false;
+            let usedGeodesicFallback = false;
             let usedLocalFallback = false;
 
             for (let i = 0; i < sequentialNodes.length - 1; i++) {
@@ -18629,8 +18721,8 @@
                         segmentRoute = await calculateLocalSeaRouteSegment(segStart, segEnd);
                         usedLocalFallback = true;
                     } catch (localError) {
-                        segmentRoute = buildStraightFallbackRouteSegment(segStart, segEnd, localError);
-                        usedStraightFallback = true;
+                        segmentRoute = buildGeodesicFallbackRouteSegment(segStart, segEnd, localError);
+                        usedGeodesicFallback = true;
                     }
                 }
 
@@ -18648,8 +18740,8 @@
                 distance: totalDistance,
                 coordinates: pinRouteEndpoints(combinedCoordinates, origin, destination),
                 nodes: sequentialNodes,
-                source: usedStraightFallback ? 'mixed-with-straight-line-fallback' : (usedLocalFallback ? 'local-searoute-fallback' : 'maritime-routing-api'),
-                success: segmentCalculatedCount > 0 && !usedStraightFallback
+                source: usedGeodesicFallback ? 'mixed-with-geodesic-fallback' : (usedLocalFallback ? 'local-searoute-fallback' : 'maritime-routing-api'),
+                success: segmentCalculatedCount > 0 && !usedGeodesicFallback
             };
         }
 
@@ -18942,20 +19034,16 @@
 
         function renderMasterRouteMap(result = State.routeGeometry) {
             if (!result) return false;
-            if (window.GlobeMapView) {
+            if (window.GlobalFleetGlobe) {
                 const routeGlobe = ensureRouteMapReady('map-host');
                 if (!routeGlobe || !isMasterRouteMapMounted()) {
                     scheduleRouteMapRedraw(180, () => renderMasterRouteMap(result));
                     return false;
                 }
-                window.GlobeMapView.updateVessels(
-                    Array.isArray(window.vessels_data)
-                        ? window.vessels_data
-                        : (window.GlobalStore?.getRawVessels?.() || [])
-                );
-                window.GlobeMapView.setRouteResult(result);
-                if (window.GlobeMapView.getInstance('density')) {
-                    window.GlobeMapView.setRouteResult(result, 'density', { focus: false });
+                window.GlobalFleetGlobe.updateVessels();
+                window.GlobalFleetGlobe.setRouteResult(result);
+                if (window.GlobalFleetGlobe.getInstance('density')) {
+                    window.GlobalFleetGlobe.setRouteResult(result, 'density', { focus: false });
                 }
                 return true;
             }
@@ -31993,8 +32081,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             state.zones.POL.port = port;
             const pod = state.zones.POD.port || getAisRoutePortForVisual('POD');
             if (pod) state.zones.POD.port = pod;
-            if (window.GlobeMapView?.getInstance('density')) {
-                window.GlobeMapView.setRoute(port, pod, 'density', { focus: options.fit !== false });
+            if (window.GlobalFleetGlobe?.getInstance('density')) {
+                window.GlobalFleetGlobe.setRoute(port, pod, 'density', { focus: options.fit !== false });
                 return true;
             }
             window.MapController?.drawPOL(port);
@@ -32051,8 +32139,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 window.GlobalStore.rawVessels = [];
                 window.GlobalStore.vessels = [];
                 window.GlobalStore.polPrimaryVessels = [];
-                window.GlobalStore.filteredVessels = [];
-                window.GlobalStore.filteredVesselsInitialized = false;
+                window.GlobalStore.resetFilteredVessels({ taxonomy: 'category:cargo' });
                 window.GlobalStore.matchingVessels = [];
             }
             if (aisClusterGroup && typeof aisClusterGroup.clearLayers === 'function') aisClusterGroup.clearLayers();
@@ -32337,6 +32424,19 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     detail: {
                         vessels: this.filteredVessels,
                         vesselCount: this.filteredVessels.length,
+                        taxonomy: this.selectedTaxonomy,
+                        updatedAt: Date.now()
+                    }
+                }));
+            },
+            resetFilteredVessels(metadata = {}) {
+                this.filteredVessels = [];
+                this.filteredVesselsInitialized = false;
+                this.selectedTaxonomy = metadata.taxonomy || 'category:cargo';
+                window.dispatchEvent(new CustomEvent('ais:filtered-vessels-updated', {
+                    detail: {
+                        vessels: [],
+                        vesselCount: 0,
                         taxonomy: this.selectedTaxonomy,
                         updatedAt: Date.now()
                     }
@@ -33128,20 +33228,35 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function initAisMap() {
             const mapContainer = document.getElementById('ais-map');
             if (!mapContainer) return;
-            if (window.GlobeMapView) {
-                aisMap = window.GlobeMapView.mount({
+            const mapBounds = mapContainer.getBoundingClientRect();
+            if (mapBounds.width <= 1 || mapBounds.height <= 1) {
+                mapContainer.dataset.renderKey = 'loading';
+                cancelAisMapAnimationFrame();
+                aisMapAnimationFrameId = requestAnimationFrame(() => {
+                    aisMapAnimationFrameId = null;
+                    initAisMap();
+                });
+                return;
+            }
+            mapContainer.dataset.renderKey = 'mounted';
+            if (window.GlobalFleetGlobe) {
+                const vessels = window.GlobalStore?.getFilteredVessels?.() || [];
+                aisMap = window.GlobalFleetGlobe.mount({
                     key: 'density',
                     containerId: 'ais-map',
-                    vesselsData: typeof getAisOperationalPort === 'function' && getAisOperationalPort('POL')
-                        ? (window.GlobalStore?.getFilteredVessels?.() || [])
-                        : [],
+                    vesselsData: vessels,
+                    renderKey: JSON.stringify(vessels),
                     autoRotate: true
                 });
                 window.mapaAIS = aisMap;
-                const pol = getAisRoutePortForVisual('POL');
-                const pod = getAisRoutePortForVisual('POD');
-                window.GlobeMapView.setRoute(pol, pod, 'density', { focus: false });
-                updateAisMarkers(window.GlobalStore?.getFilteredVessels?.() || []);
+                if (State.routeGeometry) {
+                    window.GlobalFleetGlobe.setRouteResult(State.routeGeometry, 'density', { focus: false });
+                } else {
+                    const pol = getAisRoutePortForVisual('POL');
+                    const pod = getAisRoutePortForVisual('POD');
+                    window.GlobalFleetGlobe.setRoute(pol, pod, 'density', { focus: false });
+                }
+                updateAisMarkers(vessels);
                 return;
             }
             if (typeof L === 'undefined' || typeof L.map !== 'function') {
@@ -33207,8 +33322,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function destroyAisMap() {
             if (!aisMap) return;
             cancelAisMapAnimationFrame();
-            if (window.GlobeMapView?.getInstance('density') === aisMap) {
-                window.GlobeMapView.destroy('density');
+            if (window.GlobalFleetGlobe?.getInstance('density') === aisMap) {
+                window.GlobalFleetGlobe.destroy('density');
                 aisMap = null;
                 window.mapaAIS = null;
                 aisClusterGroup = null;
@@ -33233,21 +33348,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function updateAisMarkers(vessels) {
             if (!aisMap) return;
 
-            const dataBridgeLocalCandidates = Array.isArray(window.dataBridgeLocalCandidates)
-                ? window.dataBridgeLocalCandidates
-                : [];
-            const hasLoadingPort = typeof getAisOperationalPort === 'function' && Boolean(getAisOperationalPort('POL'));
-            const renderableVessels = (hasLoadingPort
-                ? [...(Array.isArray(vessels) ? vessels : []), ...dataBridgeLocalCandidates]
-                : [])
+            const renderableVessels = (Array.isArray(vessels)
+                ? vessels
+                : (window.GlobalStore?.getFilteredVessels?.() || []))
                 .filter((vessel, index, collection) => {
                     const id = vessel && (vessel.mmsi || vessel.imo || vessel.vesselName);
                     if (!id) return true;
                     return collection.findIndex(item => String(item && (item.mmsi || item.imo || item.vesselName)) === String(id)) === index;
                 });
 
-            if (window.GlobeMapView?.getInstance('density') === aisMap) {
-                window.GlobeMapView.updateVessels(renderableVessels, 'density');
+            if (window.GlobalFleetGlobe?.getInstance('density') === aisMap) {
+                window.GlobalFleetGlobe.updateVessels(renderableVessels, 'density');
                 aisMarkers = renderableVessels
                     .filter((vessel) => Number.isFinite(Number(vessel.latitude ?? vessel.lat)) && Number.isFinite(Number(vessel.longitude ?? vessel.lon ?? vessel.lng)))
                     .map((vessel) => ({
@@ -33259,10 +33370,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         setLatLng: () => {},
                         bindPopup: () => {},
                         setIcon: () => {},
-                        openPopup: () => window.GlobeMapView.focusVessel(vessel, 'density')
+                        openPopup: () => window.GlobalFleetGlobe.focusVessel(vessel, 'density')
                     }));
                 aisClusterGroup = {
-                    clearLayers: () => window.GlobeMapView.updateVessels([], 'density'),
+                    clearLayers: () => window.GlobalFleetGlobe.updateVessels([], 'density'),
                     addLayer: () => {},
                     removeLayer: () => {}
                 };
@@ -33481,10 +33592,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function createGlobalOpportunityMarker(candidate) {
-            if (window.GlobeMapView?.getInstance('density')) {
+            if (window.GlobalFleetGlobe?.getInstance('density')) {
                 return {
                     vesselData: candidate,
-                    openPopup: () => window.GlobeMapView.focusVessel(candidate, 'density'),
+                    openPopup: () => window.GlobalFleetGlobe.focusVessel(candidate, 'density'),
                     remove: () => {}
                 };
             }
@@ -33514,9 +33625,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (!aisMap) initAisMap();
             if (!aisMap) return;
 
-            if (window.GlobeMapView?.getInstance('density')) {
+            if (window.GlobalFleetGlobe?.getInstance('density')) {
                 globalOpportunitiesState.focusedMarker = createGlobalOpportunityMarker(candidate);
-                window.GlobeMapView.focusVessel(candidate, 'density');
+                window.GlobalFleetGlobe.focusVessel(candidate, 'density');
                 return;
             }
             if (globalOpportunitiesState.focusedMarker) aisMap.removeLayer(globalOpportunitiesState.focusedMarker);
@@ -33624,8 +33735,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 // 2. Automatically locate on the map
                 const mapAIS = window.mapaAIS || window.mapAIS || window.map;
                 if (mapAIS) {
-                    if (window.GlobeMapView?.getInstance('density')) {
-                        window.GlobeMapView.focusVessel({ name, vesselName: name, mmsi, imo, lat, lng: lon, latitude: lat, longitude: lon }, 'density');
+                    if (window.GlobalFleetGlobe?.getInstance('density')) {
+                        window.GlobalFleetGlobe.focusVessel({ name, vesselName: name, mmsi, imo, lat, lng: lon, latitude: lat, longitude: lon }, 'density');
                     } else {
                         mapAIS.setView([lat, lon], 10); // Zooms in on the ship
 

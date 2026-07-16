@@ -7,7 +7,7 @@ const legacyAssets = [
   "_redirects",
   "npl-data-analysis-engine.js",
   "npl-secret-module.js",
-  "map_view.js",
+  "GlobalFleetGlobe.js",
   "wpi.csv",
   "Ancla Load.svg",
   "Ancla Discharge.svg",
