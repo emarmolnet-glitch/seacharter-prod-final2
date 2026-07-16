@@ -10,8 +10,8 @@ type LiveCollectionResult = {
 declare const process: { env: Record<string, string | undefined> };
 
 const AIS_STREAM_URL = "wss://stream.aisstream.io/v0/stream";
-const DEFAULT_TIMEOUT_MS = 60000;
-const MAX_TIMEOUT_MS = 65000;
+const DEFAULT_TIMEOUT_MS = 6000;
+const MAX_TIMEOUT_MS = 6000;
 const DEFAULT_QUANTITY = 1000;
 const MAX_AIS_STREAM_COLLECTION = 1000;
 const MAX_QUANTITY = 1000;

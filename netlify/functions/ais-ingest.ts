@@ -2,8 +2,8 @@ import WebSocket from "ws";
 import { upsertVessels, type VesselRecord } from "./vessel-store.js";
 
 const AISSTREAM_ENDPOINT = "wss://stream.aisstream.io/v0/stream";
-const DEFAULT_TIMEOUT_MS = 8500;
-const MAX_TIMEOUT_MS = 12000;
+const DEFAULT_TIMEOUT_MS = 6000;
+const MAX_TIMEOUT_MS = 6000;
 const DEFAULT_LIMIT = 250;
 
 declare const process: { env: Record<string, string | undefined> };

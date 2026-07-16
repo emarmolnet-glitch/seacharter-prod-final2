@@ -33635,7 +33635,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     return '';
                 }
                 const zone = 'POL';
-                return `/.netlify/functions/get-vessels?quantity=${encodeURIComponent(quantity)}&force=1&zone=${encodeURIComponent(zone)}&boxes=${encodeURIComponent(JSON.stringify(boxes))}`;
+                return `/.netlify/functions/get-vessels?quantity=${encodeURIComponent(quantity)}&timeoutMs=6000&force=1&zone=${encodeURIComponent(zone)}&boxes=${encodeURIComponent(JSON.stringify(boxes))}`;
             };
 
             function getActiveBoundingBox() {
@@ -35263,6 +35263,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             window.aisAvailabilitySweepUi = Object.assign({
                 status: 'idle',
+                isLoading: false,
                 requestedAt: null,
                 vesselCount: 0,
                 databaseVesselCount: null,
@@ -35276,7 +35277,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const label = document.getElementById('ais-refresh-label');
                 const monitor = document.getElementById('ais-availability-monitor');
                 const status = document.getElementById('ais-availability-status');
-                const isRequesting = state.status === 'requesting';
+                const isRequesting = state.isLoading === true;
                 const isSent = state.status === 'sent';
                 const hasError = state.status === 'error';
 
@@ -35304,6 +35305,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const btn = document.getElementById('btn-refresh-ais');
                 if (!btn) return;
                 window.aisAvailabilitySweepUi.status = 'requesting';
+                window.aisAvailabilitySweepUi.isLoading = true;
                 window.aisAvailabilitySweepUi.error = null;
                 window.updateAisAvailabilitySweepFeedback();
                 window.aisRadarUserActivated = true;
@@ -35358,7 +35360,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         ? error.message
                         : 'No se pudo completar la captura AIS.';
                 } finally {
+                    window.aisAvailabilitySweepUi.isLoading = false;
                     window.updateAisAvailabilitySweepFeedback();
+                    if (typeof showToast === 'function') {
+                        const state = window.aisAvailabilitySweepUi;
+                        if (state.status === 'sent') {
+                            showToast(`Captura AIS completada: ${Number(state.vesselCount) || 0} buques actualizados.`, false, 'success');
+                        } else {
+                            showToast(state.error || 'No se pudo completar la captura AIS.', false, 'error');
+                        }
+                    }
                 }
             };
 
