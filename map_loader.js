@@ -158,7 +158,7 @@
         retryIndex: 0,
         retryDelaysMs: [5000, 10000, 30000],
         userActivated: false,
-        endpoint: '/.netlify/functions/get-vessels?force=1',
+        endpoint: '/api/audit-vessels',
         map: null,
         waitingForMapIdle: false
     };
