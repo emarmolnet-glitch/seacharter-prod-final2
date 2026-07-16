@@ -7405,6 +7405,28 @@
                             </div>
                         </div>
                         <p id="vessel-specs-inference-note" class="hidden mt-3 text-[10px] font-semibold text-[#1d4ed8] bg-white border border-blue-200 rounded-lg px-3 py-2 shadow-sm"></p>
+
+                        <div class="mt-4 rounded-lg border border-indigo-500/30 bg-indigo-950/30 p-3 shadow-inner">
+                            <div class="mb-2 flex items-center justify-between gap-3">
+                                <label id="backup-ref-label" for="quick-ref" class="text-[10px] font-black uppercase tracking-wide text-indigo-300">
+                                    <i class="fa-solid fa-hashtag mr-1 text-indigo-400"></i> Referencia Única del Viaje / Contrato
+                                </label>
+                                <span class="text-[9px] font-bold uppercase text-slate-500">Identificador de cotización</span>
+                            </div>
+                            <input type="text" id="quick-ref" class="input-gc font-bold text-indigo-300" placeholder="Ej: RDM/GC/2026-0716-XXXX" oninput="syncQuickRef(this.value)">
+
+                            <div class="hidden" style="display: none !important;">
+                                <input type="text" id="search-ref" value="">
+                                <button id="btn-print-historical" disabled></button>
+                                <button id="btn-dl-report" disabled></button>
+                                <button id="btn-dl-contract" disabled></button>
+                                <div id="quotes-history-container">
+                                    <select id="quotes-history-select">
+                                        <option value=""></option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- 3. Bunkers y Gastos -->
@@ -8072,7 +8094,7 @@
                                         <div class="mt-0.5 text-[10px] font-semibold text-slate-500">Cálculo desde OPEX, bunker, puertos y margen comercial.</div>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
-                                        <button id="btn-sync-cost-plus-route" type="button" onclick="syncCostPlusFromRoute(true)" class="rounded border border-green-300 bg-green-100 px-2 py-1 text-[10px] font-black uppercase text-green-800 shadow-sm transition hover:border-green-500 hover:bg-green-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400" disabled>Sincronizar con Ruta</button>
+                                        <button id="btn-sync-cost-plus-route" type="button" onclick="syncCostPlusFromRoute(true)" class="rounded border border-[#32D6C3] bg-[#32D6C3] px-2 py-1 text-[10px] font-bold uppercase text-white shadow-sm transition hover:border-[#29b8a9] hover:bg-[#29b8a9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#32D6C3] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400" disabled>Sincronizar con Ruta</button>
                                         <span class="rounded bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-700 shadow-sm">Modo Coaster: Cálculo Cost-Plus (OPEX)</span>
                                     </div>
                                 </div>
@@ -8113,13 +8135,19 @@
                                                 <label for="cost-plus-cargo-volume" class="mb-1 block text-[10px] font-black uppercase text-slate-500">Toneladas carga</label>
                                                 <input type="number" id="cost-plus-cargo-volume" class="input-gc bg-white text-slate-900 border-slate-300 font-bold text-right" value="8000" min="1" step="any" oninput="calculateCostPlusFreight()">
                                             </div>
+                                            <div class="md:col-span-2">
+                                                <label for="cost-plus-contingency-days" class="mb-1 block text-[10px] font-black uppercase text-slate-500">Contingencia por Clima/Congestión (Días Extra)</label>
+                                                <input type="number" id="cost-plus-contingency-days" class="input-gc bg-white text-slate-900 border-slate-300 font-bold text-right" value="0" min="0" step="0.25" oninput="runEngine()">
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="rounded-md border border-sky-200 bg-sky-50 p-3 shadow-sm ring-1 ring-sky-100">
                                         <div class="text-[10px] font-black uppercase text-sky-700">Flete mínimo Cost-Plus</div>
                                         <div id="cost-plus-min-freight-rate" class="mono mt-1 text-2xl font-black text-sky-950">$12.65 /MT</div>
                                         <div class="mt-3 space-y-1 border-t border-sky-100 pt-2 text-sm font-semibold text-sky-800">
-                                            <div>Coste Total Riesgo: <span id="cost-plus-total-costs">$88,000</span></div>
+                                            <div>Coste Total Riesgo: <span id="cost-plus-total-costs">$0</span></div>
+                                            <div id="cost-plus-total-costs-breakdown" class="text-[10px] font-bold text-sky-700">Base global compartida con Negociación.</div>
+                                            <div id="cost-plus-contingency-warning" class="hidden rounded border border-orange-200 bg-orange-50 px-2 py-1 text-[10px] font-bold text-orange-700"></div>
                                             <div>Beneficio Neto Proyectado: <span id="cost-plus-calculated-margin">$13,200</span></div>
                                             <div>Demurrage ($/d): <span id="cost-plus-demurrage-rate">$5,625</span></div>
                                         </div>
@@ -8303,7 +8331,7 @@
                             <div class="rounded-xl border border-slate-700 bg-slate-950/35 p-3">
                                 <div class="mb-2 flex items-center justify-center gap-1.5">
                                     <div id="label-owner-profit-header" class="text-[11px] text-slate-400 font-bold uppercase">Beneficio Armador</div>
-                                    <span id="owner-profit-tooltip" class="cursor-help text-[11px] text-slate-500" title="El Beneficio Neto descuenta bunkers, puertos, OPEX y CAPEX diario del viaje.">ℹ️</span>
+                                    <span id="owner-profit-tooltip" class="cursor-help text-[11px] text-slate-500" title="El Beneficio Neto descuenta el Coste Total Riesgo global del viaje.">ℹ️</span>
                                 </div>
                                 <div class="text-4xl font-bold text-indigo-400 mono leading-none" id="res-net-profit-owner">$0</div>
                                 <div class="mt-2 text-[10px] text-slate-400" id="res-net-profit-owner-daily">Beneficio Neto Diario: $0 / día</div>
@@ -8316,7 +8344,7 @@
                                     <summary class="cursor-pointer text-[10px] font-black uppercase text-indigo-300">Desglose Neto Armador</summary>
                                     <div class="mt-2 space-y-1 text-[10px] text-slate-400">
                                         <div class="flex justify-between gap-2"><span>Ingreso Bruto</span><strong id="res-owner-gross-revenue" class="mono text-slate-200">$0</strong></div>
-                                        <div class="flex justify-between gap-2"><span>Combustible + Puertos</span><strong id="res-owner-voyage-costs" class="mono text-red-300">$0</strong></div>
+                                        <div class="flex justify-between gap-2"><span>Viaje + ETS + Ajustes</span><strong id="res-owner-voyage-costs" class="mono text-red-300">$0</strong></div>
                                         <div class="flex justify-between gap-2"><span>Costes Operativos (OPEX/CAPEX)</span><strong id="res-owner-opex-capex" class="mono text-orange-300">$0</strong></div>
                                         <div class="flex justify-between gap-2 border-t border-slate-800 pt-1 font-bold"><span>Beneficio Neto Final</span><strong id="res-owner-final-net" class="mono text-emerald-300">$0</strong></div>
                                     </div>
@@ -8488,40 +8516,74 @@
                         </div>
                     </div>
 
-                    <!-- PANEL DE IMPRESIÓN Y RESPALDO -->
-                    <div class="collapsible-section bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg no-print" data-collapsible-section data-default-open="false">
-                        <div class="collapsible-section-header flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
-                            <h2 id="backup-header-title" class="text-sm font-bold text-indigo-400 uppercase">
-                                <i class="fa-solid fa-print mr-2"></i> Impresión y Respaldo de Cotizaciones
+                    <!-- 5. Simulador de Negociación -->
+                    <div id="charterer-negotiation-simulator" class="collapsible-section overflow-hidden rounded-xl border border-slate-200 bg-white p-5 text-slate-900 shadow-sm no-print" data-collapsible-section data-default-open="true">
+                        <div class="collapsible-section-header flex justify-between items-center mb-4 border-b border-slate-200 pb-2">
+                            <h2 id="negotiation-simulator-title" class="text-sm font-bold uppercase text-slate-950">
+                                <i class="fa-solid fa-comments-dollar mr-2 text-cyan-600"></i> 5. Simulador de Negociación y Contraofertas
                             </h2>
-                        </div>
-                        
-                        <!-- Mensaje de aviso para guardar en PDF -->
-                        <div class="bg-blue-950/40 border border-blue-500/30 text-blue-200 text-xs p-3 rounded-lg flex items-start gap-2.5 mb-4">
-                            <i class="fa-solid fa-circle-info text-blue-400 text-sm mt-0.5"></i>
-                            <div>
-                                <span id="backup-notice-title" class="font-bold block text-blue-300">Important backup notice:</span>
-                                <span id="backup-notice-text">SeaCharter Core PRO does not store sensitive data related to customer quotes. We strongly advise you to use the options at the bottom of the page to <strong>print your reports</strong> and <strong>save the documents locally in PDF format</strong> to preserve your quote for future reference.</span>
-                            </div>
+                            <span class="rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-cyan-700">Fletador</span>
                         </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                            <div class="md:col-span-12 space-y-1">
-                                <label id="backup-ref-label" class="text-[10px] font-bold text-slate-400 uppercase">Referencia Única del Viaje / Contrato</label>
-                                <input type="text" id="quick-ref" class="input-gc font-bold text-indigo-300" placeholder="Ej: RDM/2026-0604" oninput="syncQuickRef(this.value)">
-                            </div>
-                        </div>
+                        <p class="mb-4 max-w-3xl text-xs font-semibold leading-relaxed text-slate-600">Compara la petición del armador con tu contraoferta y mide el ahorro potencial sin cruzar el coste operativo mínimo del viaje.</p>
 
-                        <!-- Elementos legacy ocultos para evitar errores en JavaScript antiguo -->
-                        <div class="hidden" style="display: none !important;">
-                            <input type="text" id="search-ref" value="">
-                            <button id="btn-print-historical" disabled></button>
-                            <button id="btn-dl-report" disabled></button>
-                            <button id="btn-dl-contract" disabled></button>
-                            <div id="quotes-history-container">
-                                <select id="quotes-history-select">
-                                    <option value=""></option>
-                                </select>
+                        <div class="grid grid-cols-1 gap-4 lg:grid-cols-12">
+                            <div class="lg:col-span-7">
+                                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <label class="rounded-lg border border-indigo-200 bg-white p-3 shadow-sm">
+                                        <span class="mb-2 block text-[10px] font-black uppercase tracking-wide text-indigo-700">Oferta Inicial Armador ($/MT)</span>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-lg font-black text-indigo-600">$</span>
+                                            <input id="negotiation-owner-offer" type="number" min="0" step="0.01" class="input-gc mono border-slate-300 bg-white text-lg font-black text-slate-900" placeholder="0.00" oninput="this.dataset.userEdited='true'; updateChartererNegotiationSimulator()">
+                                            <span class="text-[10px] font-black uppercase text-slate-500">/MT</span>
+                                        </div>
+                                        <span id="negotiation-owner-tce" class="mt-2 block border-t border-indigo-100 pt-2 text-xs font-bold text-sky-700">TCE Proyectado: $0 / día</span>
+                                    </label>
+                                    <div class="rounded-lg border border-emerald-200 bg-white p-3 shadow-sm">
+                                        <label for="negotiation-charterer-target" class="mb-2 block text-[10px] font-black uppercase tracking-wide text-emerald-700">Target Fletador / Contraoferta ($/MT)</label>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-lg font-black text-emerald-600">$</span>
+                                            <input id="negotiation-charterer-target" type="number" min="0" step="0.01" class="input-gc mono border-slate-300 bg-white text-lg font-black text-slate-900" placeholder="0.00" oninput="this.dataset.userEdited='true'; updateChartererNegotiationSimulator()">
+                                            <span class="text-[10px] font-black uppercase text-slate-500">/MT</span>
+                                        </div>
+                                        <button id="negotiation-ai-suggestion" type="button" onclick="applySuggestedNegotiationTarget()" class="mt-2 inline-flex items-center rounded-md border border-transparent px-1 py-1 text-left text-[11px] font-bold text-emerald-700 transition hover:border-emerald-200 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 disabled:cursor-not-allowed disabled:text-slate-400" disabled>🎯 Sugerencia IA: $0.00 / MT (Margen +5%)</button>
+                                        <span id="negotiation-target-tce" class="mt-2 block border-t border-emerald-100 pt-2 text-xs font-bold text-sky-700">TCE Proyectado: $0 / día</span>
+                                    </div>
+                                </div>
+
+                                <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <div class="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                                        <span class="block text-[9px] font-black uppercase tracking-[0.16em] text-sky-700">Spread de Negociación</span>
+                                        <strong id="negotiation-spread-pmt" class="mono mt-1 block text-2xl font-black text-sky-950">$0.00 /MT</strong>
+                                        <span id="negotiation-spread-caption" class="mt-1 block text-[10px] font-semibold text-slate-600">Diferencia entre oferta y target.</span>
+                                    </div>
+                                    <div class="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                                        <span class="block text-[9px] font-black uppercase tracking-[0.16em] text-blue-700">Ahorro Total Proyectado</span>
+                                        <strong id="negotiation-total-savings" class="mono mt-1 block text-2xl font-black text-blue-950">$0</strong>
+                                        <span id="negotiation-cargo-caption" class="mt-1 block text-[10px] font-semibold text-slate-600">Calculado sobre 0 TM.</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="lg:col-span-5">
+                                <div id="negotiation-viability-card" class="h-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors" role="status" aria-live="polite">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <span class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Termómetro de Viabilidad</span>
+                                        <span id="negotiation-viability-dot" class="h-3 w-3 rounded-full bg-slate-500 shadow-[0_0_12px_rgba(100,116,139,0.55)]"></span>
+                                    </div>
+                                    <div class="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
+                                        <div id="negotiation-viability-meter" class="h-full w-0 rounded-full bg-slate-500 transition-all duration-300"></div>
+                                    </div>
+                                    <div class="mt-4 flex items-end justify-between gap-3">
+                                        <div>
+                                            <span class="block text-[9px] font-bold uppercase text-slate-500">Break-Even Armador</span>
+                                            <strong id="negotiation-break-even" class="mono mt-1 block text-xl font-black text-slate-950">$0.00 /MT</strong>
+                                        </div>
+                                        <span id="negotiation-target-delta" class="mono rounded-md bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">Δ $0.00</span>
+                                    </div>
+                                    <p id="negotiation-friction-limit" class="mt-2 text-[10px] font-semibold leading-relaxed text-slate-500">Límite de Fricción: pendiente de Break-Even.</p>
+                                    <p id="negotiation-viability-message" class="mt-4 rounded-lg border border-slate-200 bg-white p-3 text-xs font-bold leading-relaxed text-slate-600">Introduce una oferta y un target para evaluar la negociación.</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -12457,7 +12519,7 @@
             cargoType: "Granel Sólido (Dry Bulk)",
             cargoTypeManual: "Cement",
             charterPartyStandard: "GENCON",
-            costBunkers: 0, costOpex: 0, costPda: 0, costTotal: 0,
+            costBunkers: 0, costOpex: 0, costPda: 0, costTotal: 0, totalCosts: 0,
             breakEven: 0, sugOwner: 0, sugCharterer: 0,
             freightRate: 0, freightSell: 0,
             netProfitOwner: 0, netProfitCharterer: 0, demurrage: 0,
@@ -22336,7 +22398,13 @@
             const extraOpexCost = isZeroCalculation ? 0 : ((smartWeatherDays + smartDelayDays) * opex);
             const anchorageBunkerCost = isZeroCalculation ? 0 : anchorageConsumptionCost;
             const delaySmartCostIncrement = isZeroCalculation ? 0 : (extraOpexCost + anchorageBunkerCost);
-            const adjustedCostTotal = isZeroCalculation ? 0 : (costTotal + tugTotalCost);
+            const costPlusContingency = calculateCostPlusContingency({
+                extraDays: isZeroCalculation ? 0 : document.getElementById('cost-plus-contingency-days')?.value,
+                dailyOpex: opex,
+                totalBunkerCost: totalBunkers,
+                totalDays
+            });
+            const adjustedCostTotal = isZeroCalculation ? 0 : (costTotal + tugTotalCost + costPlusContingency.totalCost);
             const totalSmartCostIncrement = isZeroCalculation ? 0 : Math.max(0, adjustedCostTotal - basicBreakEvenNumerator);
             const smartCostsComplete = !isZeroCalculation && missingSmartFields.length === 0;
             const smartBreakEvenNumerator = adjustedCostTotal;
@@ -22494,7 +22562,9 @@
             const voyageRevenues = isZeroCalculation ? 0 : (grossRevOwner + voyageExtras);
             const voyageExpenses = isZeroCalculation ? 0 : (totalBunkers + portExpensesForMode);
             const tceTotal = isZeroCalculation ? 0 : (voyageRevenues - voyageExpenses);
-            const netProfitOwner = isZeroCalculation ? 0 : (tceTotal - ownerOperatingCapitalCosts);
+            State.totalCosts = isZeroCalculation ? 0 : adjustedCostTotal;
+            const sharedTotalCosts = State.totalCosts;
+            const netProfitOwner = isZeroCalculation ? 0 : (voyageRevenues - sharedTotalCosts);
             const grossRevCharterer = multiplier * freightSell;
             const chartererCommissionCost = isZeroCalculation ? 0 : (grossRevCharterer * (commPct / 100));
             let netProfitCharterer = isZeroCalculation ? 0 : (grossRevCharterer - grossRevOwner - chartererCommissionCost);
@@ -22797,16 +22867,20 @@
             if (netProfitOwnerDailyEl) netProfitOwnerDailyEl.innerText = `Beneficio Neto Diario: $${netProfitOwnerDaily.toLocaleString('en-US', {maximumFractionDigits:0})} / día`;
             document.getElementById('res-tce-label').innerText = `TCE Obtenido: $${tceOwner.toLocaleString('en-US', {maximumFractionDigits:0})} / día (Total: $${tceTotal.toLocaleString('en-US', {maximumFractionDigits:0})})`;
             const ownerProfitTooltip = document.getElementById('owner-profit-tooltip');
-            if (ownerProfitTooltip) ownerProfitTooltip.title = `Beneficio Neto Armador = Flete recibido - bunkers - puertos - OPEX ($${opex.toLocaleString('en-US', {maximumFractionDigits:0})}/día) - CAPEX ($${capexDaily.toLocaleString('en-US', {maximumFractionDigits:0})}/día). Clase: ${ownerClassAnalysis?.shipClass?.label || 'Buque estándar'}.`;
+            if (ownerProfitTooltip) ownerProfitTooltip.title = `Beneficio Neto Armador = Ingresos del viaje - Coste Total Riesgo global. La base incluye bunkers, puertos, OPEX, CAPEX, ETS y ajustes operativos aplicables. Clase: ${ownerClassAnalysis?.shipClass?.label || 'Buque estándar'}.`;
             const ownerGrossRevenueEl = document.getElementById('res-owner-gross-revenue');
             const ownerVoyageCostsEl = document.getElementById('res-owner-voyage-costs');
             const ownerOpexCapexEl = document.getElementById('res-owner-opex-capex');
             const ownerFinalNetEl = document.getElementById('res-owner-final-net');
             if (ownerGrossRevenueEl) {
-                ownerGrossRevenueEl.innerText = `$${grossRevOwner.toLocaleString('en-US', {maximumFractionDigits:0})}`;
-                ownerGrossRevenueEl.title = `Ingreso Bruto = ${freightBuy.toFixed(2)} USD/MT × ${cargo.toLocaleString('en-US')} TM`;
+                ownerGrossRevenueEl.innerText = `$${voyageRevenues.toLocaleString('en-US', {maximumFractionDigits:0})}`;
+                ownerGrossRevenueEl.title = `Ingresos del viaje = flete bruto + recargos aplicables`;
             }
-            if (ownerVoyageCostsEl) ownerVoyageCostsEl.innerText = `$${(totalBunkers + portExpensesForMode).toLocaleString('en-US', {maximumFractionDigits:0})}`;
+            const sharedVoyageCosts = Math.max(0, sharedTotalCosts - ownerOperatingCapitalCosts);
+            if (ownerVoyageCostsEl) {
+                ownerVoyageCostsEl.innerText = `$${sharedVoyageCosts.toLocaleString('en-US', {maximumFractionDigits:0})}`;
+                ownerVoyageCostsEl.title = `Bunkers, puertos, ETS y ajustes operativos incluidos en la base global`;
+            }
             if (ownerOpexCapexEl) {
                 ownerOpexCapexEl.innerText = `$${ownerOperatingCapitalCosts.toLocaleString('en-US', {maximumFractionDigits:0})}`;
                 ownerOpexCapexEl.title = `OPEX $${Math.round(totalOpex).toLocaleString('en-US')} + CAPEX $${Math.round(totalCapex).toLocaleString('en-US')}`;
@@ -22878,6 +22952,8 @@
             State.delayHours = delayHours;
             State.delayDailyRate = delayDailyRate;
             State.delayCost = delayCost;
+            State.costPlusContingencyDays = costPlusContingency.extraDays;
+            State.costPlusContingencyCost = costPlusContingency.totalCost;
             setCostPlusRouteSyncState(totalDays > 0 || cargo > 0 || totalBunkers > 0 || smartPortExpenses > 0);
             State.costBreakdown = {
                 bunkers: totalBunkers,
@@ -22885,6 +22961,12 @@
                 capex: totalCapex,
                 pda: smartPortExpenses,
                 basePda: pdas,
+                ets: etsCost,
+                contingency: costPlusContingency.totalCost,
+                contingencyDays: costPlusContingency.extraDays,
+                contingencyOpex: costPlusContingency.opexCost,
+                contingencyBunker: costPlusContingency.bunkerCost,
+                includesPositioning: distBal > 0,
                 total: adjustedCostTotal,
                 baseTotal: costTotal,
                 smartIncrement: totalSmartCostIncrement
@@ -22914,6 +22996,10 @@
                 baseVoyageCosts: costTotal,
                 extraOpexCost,
                 anchorageBunkerCost: anchorageConsumptionCost,
+                contingencyDays: costPlusContingency.extraDays,
+                contingencyCost: costPlusContingency.totalCost,
+                contingencyOpexCost: costPlusContingency.opexCost,
+                contingencyBunkerCost: costPlusContingency.bunkerCost,
                 totalCostIncrement: totalSmartCostIncrement,
                 basicBreakEven,
                 basicBreakEvenOperativo,
@@ -22934,7 +23020,7 @@
             State.netProfitOwnerDaily = netProfitOwnerDaily;
             State.ownerNetBreakdown = {
                 grossRevenue: voyageRevenues,
-                bunkerAndPortCosts: totalBunkers + portExpensesForMode,
+                bunkerAndPortCosts: sharedVoyageCosts,
                 opex: totalOpex,
                 capex: totalCapex,
                 operatingCapitalCosts: ownerOperatingCapitalCosts,
@@ -23113,6 +23199,10 @@
                     distBallast: State.distBallast,
                     distLaden: State.distLaden,
                     totalMiles: State.totalMiles,
+                    totalCosts: State.totalCosts,
+                    costTotal: State.costTotal,
+                    costBreakdown: State.costBreakdown,
+                    etsCost: State.etsCost,
                     laycanDate: State.laycanDate,
                     laycanTime: State.laycanTime,
                     cancellingDate: State.cancellingDate,
@@ -23143,6 +23233,7 @@
             syncAsbatankvoy();
             if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
             syncPrintPolicyClass();
+            updateChartererNegotiationSimulator();
 
             // Traducir dinámicamente todo el contenido recién actualizado por el motor
             const currentLang = document.getElementById('language-selector')?.value || 'es';
@@ -24407,6 +24498,182 @@
                 quickRefEl.value = val;
             }
         }
+
+        function updateChartererNegotiationSimulator() {
+            const ownerOfferInput = document.getElementById('negotiation-owner-offer');
+            const chartererTargetInput = document.getElementById('negotiation-charterer-target');
+            if (!ownerOfferInput || !chartererTargetInput) return null;
+
+            const breakEvenText = document.getElementById('res-breakeven')?.textContent || '';
+            const parsedBreakEven = parseFloat(breakEvenText.replace(/[^0-9.-]+/g, '')) || 0;
+            const breakEven = Math.max(0, Number(State.breakEvenArmador || State.breakEven || parsedBreakEven) || 0);
+            const TargetSugerido = calculateSuggestedNegotiationTarget(breakEven, 5);
+            const cargo = Math.max(0, Number(State.cargo || document.getElementById('cargo-qty')?.value) || 0);
+
+            if (ownerOfferInput.dataset.userEdited !== 'true') {
+                const suggestedOwnerOffer = Math.max(0, Number(State.sugOwner || document.getElementById('freight-rate')?.value || breakEven) || 0);
+                ownerOfferInput.value = suggestedOwnerOffer > 0 ? suggestedOwnerOffer.toFixed(2) : '';
+            }
+            if (chartererTargetInput.dataset.userEdited !== 'true') {
+                const suggestedTarget = Math.max(0, Number(State.precioObjetivoFletador || document.getElementById('freight-sell')?.value || breakEven) || 0);
+                chartererTargetInput.value = suggestedTarget > 0 ? suggestedTarget.toFixed(2) : '';
+            }
+
+            const ownerOffer = Math.max(0, Number(ownerOfferInput.value) || 0);
+            const chartererTarget = Math.max(0, Number(chartererTargetInput.value) || 0);
+            const spreadPerMt = ownerOffer - chartererTarget;
+            const projectedSavings = spreadPerMt * cargo;
+            const targetDelta = chartererTarget - breakEven;
+            const hasViabilityData = chartererTarget > 0 && breakEven > 0;
+            const isViable = hasViabilityData && chartererTarget >= breakEven;
+            const meterRatio = hasViabilityData ? Math.min(100, Math.max(4, (chartererTarget / breakEven) * 100)) : 0;
+            const money = (value, decimals = 0) => `$${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
+            const costBreakdown = State.costBreakdown || {};
+            const contingencyDays = Math.max(0, Number(State.costPlusContingencyDays || costBreakdown.contingencyDays) || 0);
+            const baseDays = Math.max(0, Number(State.daysSea) || 0) + Math.max(0, Number(State.daysPort) || 0);
+            const totalTceDays = (baseDays > 0 ? baseDays : Math.max(0, Number(State.totalDays) || 0)) + contingencyDays;
+            const bunkerTotal = Math.max(0, Number(costBreakdown.bunkers ?? State.totalBunkers ?? State.costBunkers) || 0)
+                + Math.max(0, Number(costBreakdown.contingencyBunker) || 0);
+            const portCostsTotal = Math.max(0, Number(costBreakdown.pda ?? State.adjustedCostPda ?? State.portExpenses ?? State.costPda) || 0);
+            const commissionPct = Math.max(0, Number(document.getElementById('comm-pct')?.value ?? State.commPct) || 0);
+            const ownerTce = calculateNegotiationTce({
+                freightPerMt: ownerOffer,
+                cargoTons: cargo,
+                commissionPct,
+                bunkerTotal,
+                portCostsTotal,
+                totalDays: totalTceDays
+            });
+            const targetTce = calculateNegotiationTce({
+                freightPerMt: chartererTarget,
+                cargoTons: cargo,
+                commissionPct,
+                bunkerTotal,
+                portCostsTotal,
+                totalDays: totalTceDays
+            });
+
+            const spreadEl = document.getElementById('negotiation-spread-pmt');
+            const spreadCaptionEl = document.getElementById('negotiation-spread-caption');
+            const savingsEl = document.getElementById('negotiation-total-savings');
+            const cargoCaptionEl = document.getElementById('negotiation-cargo-caption');
+            const breakEvenEl = document.getElementById('negotiation-break-even');
+            const targetDeltaEl = document.getElementById('negotiation-target-delta');
+            const viabilityCardEl = document.getElementById('negotiation-viability-card');
+            const viabilityDotEl = document.getElementById('negotiation-viability-dot');
+            const viabilityMeterEl = document.getElementById('negotiation-viability-meter');
+            const viabilityMessageEl = document.getElementById('negotiation-viability-message');
+            const ownerTceEl = document.getElementById('negotiation-owner-tce');
+            const targetTceEl = document.getElementById('negotiation-target-tce');
+            const suggestionEl = document.getElementById('negotiation-ai-suggestion');
+            const frictionLimitEl = document.getElementById('negotiation-friction-limit');
+
+            const renderProjectedTce = (element, result, borderClass) => {
+                if (!element) return;
+                const tceValue = result.tceDaily;
+                element.textContent = `TCE Proyectado: ${tceValue < 0 ? '-' : ''}${money(tceValue)} / día`;
+                element.className = `mt-2 block border-t ${borderClass} pt-2 text-xs font-bold ${tceValue < 0 ? 'text-red-700' : 'text-sky-700'}`;
+                element.title = `Ingresos netos ${money(result.netRevenue)} - costes de viaje ${money(result.voyageCosts)} ÷ ${result.totalDays.toFixed(2)} días`;
+            };
+
+            renderProjectedTce(ownerTceEl, ownerTce, 'border-indigo-100');
+            renderProjectedTce(targetTceEl, targetTce, 'border-emerald-100');
+            if (suggestionEl) {
+                suggestionEl.disabled = TargetSugerido <= 0;
+                suggestionEl.textContent = `🎯 Sugerencia IA: ${money(TargetSugerido, 2)} / MT (Margen +5%)`;
+            }
+            if (frictionLimitEl) {
+                frictionLimitEl.textContent = TargetSugerido > 0
+                    ? `Límite de Fricción: Ofertas por debajo de ${money(TargetSugerido, 2)} tienen alto riesgo de rechazo.`
+                    : 'Límite de Fricción: pendiente de Break-Even.';
+            }
+
+            if (spreadEl) {
+                spreadEl.textContent = `${spreadPerMt < 0 ? '-' : ''}${money(spreadPerMt, 2)} /MT`;
+                spreadEl.className = `mono mt-1 block text-2xl font-black ${spreadPerMt >= 0 ? 'text-sky-950' : 'text-red-700'}`;
+            }
+            if (spreadCaptionEl) {
+                spreadCaptionEl.textContent = spreadPerMt >= 0
+                    ? 'Ahorro unitario negociado frente a la petición inicial.'
+                    : 'El target supera la oferta inicial del armador.';
+            }
+            if (savingsEl) {
+                savingsEl.textContent = `${projectedSavings < 0 ? '-' : ''}${money(projectedSavings)}`;
+                savingsEl.className = `mono mt-1 block text-2xl font-black ${projectedSavings >= 0 ? 'text-blue-950' : 'text-red-700'}`;
+            }
+            if (cargoCaptionEl) cargoCaptionEl.textContent = `Calculado sobre ${Math.round(cargo).toLocaleString('en-US')} TM.`;
+            if (breakEvenEl) breakEvenEl.textContent = `${money(breakEven, 2)} /MT`;
+            if (targetDeltaEl) targetDeltaEl.textContent = `Δ ${targetDelta < 0 ? '-' : '+'}${money(targetDelta, 2)}`;
+            if (viabilityMeterEl) viabilityMeterEl.style.width = `${meterRatio}%`;
+
+            if (!hasViabilityData) {
+                if (viabilityCardEl) viabilityCardEl.className = 'h-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors';
+                if (viabilityDotEl) viabilityDotEl.className = 'h-3 w-3 rounded-full bg-slate-500 shadow-[0_0_12px_rgba(100,116,139,0.55)]';
+                if (viabilityMeterEl) viabilityMeterEl.className = 'h-full rounded-full bg-slate-500 transition-all duration-300';
+                if (targetDeltaEl) targetDeltaEl.className = 'mono rounded-md bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600';
+                if (viabilityMessageEl) {
+                    viabilityMessageEl.textContent = 'Introduce una oferta y un target para evaluar la negociación.';
+                    viabilityMessageEl.className = 'mt-4 rounded-lg border border-slate-200 bg-white p-3 text-xs font-bold leading-relaxed text-slate-600';
+                }
+            } else if (isViable) {
+                if (viabilityCardEl) viabilityCardEl.className = 'h-full rounded-xl border border-emerald-300 bg-white p-4 shadow-sm transition-colors';
+                if (viabilityDotEl) viabilityDotEl.className = 'h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.8)]';
+                if (viabilityMeterEl) viabilityMeterEl.className = 'h-full rounded-full bg-emerald-500 transition-all duration-300';
+                if (targetDeltaEl) targetDeltaEl.className = 'mono rounded-md bg-white px-2 py-1 text-[10px] font-black text-emerald-700';
+                if (viabilityMessageEl) {
+                    viabilityMessageEl.textContent = 'Target viable: la contraoferta cubre el coste operativo del armador.';
+                    viabilityMessageEl.className = 'mt-4 rounded-lg border border-emerald-200 bg-white p-3 text-xs font-bold leading-relaxed text-emerald-700';
+                }
+            } else {
+                if (viabilityCardEl) viabilityCardEl.className = 'h-full rounded-xl border border-red-300 bg-white p-4 shadow-sm transition-colors';
+                if (viabilityDotEl) viabilityDotEl.className = 'h-3 w-3 rounded-full bg-red-400 shadow-[0_0_14px_rgba(248,113,113,0.8)]';
+                if (viabilityMeterEl) viabilityMeterEl.className = 'h-full rounded-full bg-red-500 transition-all duration-300';
+                if (targetDeltaEl) targetDeltaEl.className = 'mono rounded-md bg-white px-2 py-1 text-[10px] font-black text-red-700';
+                if (viabilityMessageEl) {
+                    viabilityMessageEl.textContent = 'Riesgo de rechazo: Oferta por debajo del coste operativo del armador.';
+                    viabilityMessageEl.className = 'mt-4 rounded-lg border border-red-200 bg-white p-3 text-xs font-bold leading-relaxed text-red-700';
+                }
+            }
+
+            State.negotiationSimulator = {
+                ownerOffer,
+                chartererTarget,
+                spreadPerMt,
+                projectedSavings,
+                cargo,
+                breakEven,
+                TargetSugerido,
+                targetDelta,
+                isViable,
+                ownerTceDaily: ownerTce.tceDaily,
+                targetTceDaily: targetTce.tceDaily,
+                tceInputs: {
+                    commissionPct,
+                    bunkerTotal,
+                    portCostsTotal,
+                    totalDays: totalTceDays
+                }
+            };
+            return State.negotiationSimulator;
+        }
+
+        function applySuggestedNegotiationTarget() {
+            const targetInput = document.getElementById('negotiation-charterer-target');
+            if (!targetInput) return false;
+            const breakEvenText = document.getElementById('res-breakeven')?.textContent || '';
+            const parsedBreakEven = parseFloat(breakEvenText.replace(/[^0-9.-]+/g, '')) || 0;
+            const breakEven = Math.max(0, Number(State.breakEvenArmador || State.breakEven || parsedBreakEven) || 0);
+            const TargetSugerido = Number(State.negotiationSimulator?.TargetSugerido) || calculateSuggestedNegotiationTarget(breakEven, 5);
+            if (TargetSugerido <= 0) return false;
+            targetInput.value = TargetSugerido.toFixed(2);
+            targetInput.dataset.userEdited = 'true';
+            updateChartererNegotiationSimulator();
+            targetInput.focus();
+            return true;
+        }
+
+        window.updateChartererNegotiationSimulator = updateChartererNegotiationSimulator;
+        window.applySuggestedNegotiationTarget = applySuggestedNegotiationTarget;
 
         // --- SISTEMA ROBUSTO API GEMINI (CON RETRIES Y SIN FALLOS JSON) ---
         async function executeGeminiRequest(payload) {
@@ -39812,6 +40079,80 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return Number.isFinite(numericValue) ? numericValue : fallback;
         }
 
+        function calculateCostPlusContingency({ extraDays = 0, dailyOpex = 0, totalBunkerCost = 0, totalDays = 0 } = {}) {
+            const normalizedExtraDays = Math.max(0, safeCalculationNumber(extraDays));
+            const normalizedDailyOpex = Math.max(0, safeCalculationNumber(dailyOpex));
+            const normalizedTotalBunkerCost = Math.max(0, safeCalculationNumber(totalBunkerCost));
+            const normalizedTotalDays = Math.max(0, safeCalculationNumber(totalDays));
+            const dailyBunkerCost = normalizedTotalDays > 0 ? normalizedTotalBunkerCost / normalizedTotalDays : 0;
+            const opexCost = normalizedExtraDays * normalizedDailyOpex;
+            const bunkerCost = normalizedExtraDays * dailyBunkerCost;
+            return {
+                extraDays: normalizedExtraDays,
+                dailyBunkerCost,
+                opexCost,
+                bunkerCost,
+                totalCost: opexCost + bunkerCost
+            };
+        }
+
+        window.calculateCostPlusContingency = calculateCostPlusContingency;
+
+        function calculateNegotiationTce({ freightPerMt = 0, cargoTons = 0, commissionPct = 0, bunkerTotal = 0, portCostsTotal = 0, extraVoyageCosts = 0, totalDays = 0 } = {}) {
+            const normalizedFreight = Math.max(0, safeCalculationNumber(freightPerMt));
+            const normalizedCargo = Math.max(0, safeCalculationNumber(cargoTons));
+            const normalizedCommissionPct = Math.max(0, safeCalculationNumber(commissionPct));
+            const normalizedBunkerTotal = Math.max(0, safeCalculationNumber(bunkerTotal));
+            const normalizedPortCosts = Math.max(0, safeCalculationNumber(portCostsTotal));
+            const normalizedExtraCosts = Math.max(0, safeCalculationNumber(extraVoyageCosts));
+            const normalizedTotalDays = Math.max(0, safeCalculationNumber(totalDays));
+            const grossRevenue = normalizedFreight * normalizedCargo;
+            const commissionCost = grossRevenue * (normalizedCommissionPct / 100);
+            const netRevenue = grossRevenue - commissionCost;
+            const voyageCosts = normalizedBunkerTotal + normalizedPortCosts + normalizedExtraCosts;
+            const tceDaily = normalizedTotalDays > 0 ? (netRevenue - voyageCosts) / normalizedTotalDays : 0;
+            return {
+                grossRevenue,
+                commissionCost,
+                netRevenue,
+                voyageCosts,
+                totalDays: normalizedTotalDays,
+                tceDaily
+            };
+        }
+
+        window.calculateNegotiationTce = calculateNegotiationTce;
+
+        function calculateSuggestedNegotiationTarget(breakEven, marginPct = 5) {
+            const normalizedBreakEven = Math.max(0, safeCalculationNumber(breakEven));
+            const normalizedMarginPct = Math.max(0, safeCalculationNumber(marginPct));
+            return Math.floor((normalizedBreakEven * (1 + normalizedMarginPct / 100)) * 100) / 100;
+        }
+
+        window.calculateSuggestedNegotiationTarget = calculateSuggestedNegotiationTarget;
+
+        function getSharedVoyageCostBasis(sourceState = SeaCharterStore.getState()) {
+            const totalCosts = Math.max(0, safeCalculationNumber(sourceState?.totalCosts ?? sourceState?.costTotal));
+            const breakdown = sourceState?.costBreakdown || {};
+            const includesPositioning = Boolean(breakdown.includesPositioning || safeCalculationNumber(sourceState?.distBallast) > 0);
+            const includesEts = safeCalculationNumber(breakdown.ets ?? sourceState?.etsCost) > 0;
+            const includedCosts = [];
+            if (includesPositioning) includedCosts.push('posicionamiento');
+            if (includesEts) includedCosts.push('ETS');
+            if (safeCalculationNumber(breakdown.capex ?? sourceState?.costCapex) > 0) includedCosts.push('CAPEX');
+            if (safeCalculationNumber(breakdown.contingency) > 0) includedCosts.push('contingencia clima/congestión');
+            if (safeCalculationNumber(breakdown.smartIncrement) > 0) includedCosts.push('ajustes operativos');
+            return {
+                totalCosts,
+                breakdown,
+                disclosure: includedCosts.length
+                    ? `Incluye ${includedCosts.join(', ')}. Misma base usada por Negociación.`
+                    : 'Base global compartida con Negociación.'
+            };
+        }
+
+        window.getSharedVoyageCostBasis = getSharedVoyageCostBasis;
+
         function roundCalculationMoney(value) {
             return Number(safeCalculationNumber(value).toFixed(2));
         }
@@ -40059,7 +40400,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (!button) return;
             button.disabled = !enabled;
             button.className = enabled
-                ? 'rounded border border-green-300 bg-green-100 px-2 py-1 text-[10px] font-black uppercase text-green-800 shadow-sm transition hover:border-green-500 hover:bg-green-200'
+                ? 'rounded border border-[#32D6C3] bg-[#32D6C3] px-2 py-1 text-[10px] font-bold uppercase text-white shadow-sm transition hover:border-[#29b8a9] hover:bg-[#29b8a9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#32D6C3] focus-visible:ring-offset-2'
                 : 'rounded border border-slate-200 bg-slate-100 px-2 py-1 text-[10px] font-black uppercase text-slate-400 shadow-sm transition cursor-not-allowed';
             button.title = enabled
                 ? 'Sincronizar con los datos calculados de la ruta actual'
@@ -40067,6 +40408,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function syncCostPlusFromRoute(showFeedback = false) {
+            if (showFeedback && typeof runEngine === 'function') runEngine();
+            const sharedCostBasis = getSharedVoyageCostBasis();
             const routeTotalDays = Math.max(0, safeCalculationNumber(State.totalDays));
             const routeSeaDays = Math.max(0, safeCalculationNumber(State.daysSea));
             const routePortDays = Math.max(0, safeCalculationNumber(State.daysPort));
@@ -40075,7 +40418,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const routeBunkerCost = Math.max(0, safeCalculationNumber(State.totalBunkers || State.inverseTceBunkerCost));
             const routeOpex = Math.max(0, safeCalculationNumber(State.opex || document.getElementById('opex-daily')?.value));
             const routeSyncedDays = (routeSeaDays + routePortDays) > 0 ? routeSeaDays + routePortDays : routeTotalDays;
-            const routeTotalCosts = Math.max(0, safeCalculationNumber(State.totalCosts || State.costTotal || State.smartAdjustments?.totalCosts));
+            const routeTotalCosts = sharedCostBasis.totalCosts;
             const routeDirectPortCosts = Math.max(0, safeCalculationNumber(State.portExpenses || State.pdas || State.smartAdjustments?.gpt || getSyncedInversePortCosts()));
             const routePortCosts = routeDirectPortCosts > 0
                 ? routeDirectPortCosts
@@ -40104,7 +40447,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 input.value = decimals > 0 ? numericValue.toFixed(decimals) : String(Math.round(numericValue));
             });
 
-            calculateCostPlusFreight();
+            const costPlusResults = calculateCostPlusFreight();
+            SeaCharterStore.set({
+                totalCosts: sharedCostBasis.totalCosts,
+                costPlusTotalCosts: costPlusResults.totalCosts,
+                costPlusMinFreightRate: costPlusResults.minFreightRate,
+                costPlusTargetRevenue: costPlusResults.targetRevenue,
+                costPlusSyncedAt: Date.now()
+            });
             if (showFeedback && typeof showToast === 'function') showToast('Cost-Plus sincronizado con la ruta');
             return true;
         }
@@ -40257,34 +40607,42 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const targetMargin = Math.max(0, readInverseTceNumber('cost-plus-target-margin'));
             const daysSea = Math.max(0, readInverseTceNumber('cost-plus-days-sea'));
             const daysPort = Math.max(0, readInverseTceNumber('cost-plus-days-port'));
-            const bunkerCost = Math.max(0, readInverseTceNumber('cost-plus-bunker-cost'));
-            const portCosts = Math.max(0, readInverseTceNumber('cost-plus-port-costs'));
             const cargoVolume = Math.max(0, readInverseTceNumber('cost-plus-cargo-volume'));
 
             const totalDays = daysSea + daysPort;
-            const totalOpex = dailyOpex * totalDays;
-            const totalCosts = totalOpex + bunkerCost + portCosts;
-            const calculatedMargin = costPlusMarginType === 'fixed'
+            const sharedCostBasis = getSharedVoyageCostBasis();
+            const totalCosts = sharedCostBasis.totalCosts;
+            const calculatedMargin = roundCalculationMoney(costPlusMarginType === 'fixed'
                 ? targetMargin
-                : totalCosts * (targetMargin / 100);
+                : totalCosts * (targetMargin / 100));
             const targetRevenue = totalCosts + calculatedMargin;
             const minFreightRate = cargoVolume > 0 ? roundCalculationMoney(totalCosts / cargoVolume) : 0;
             const demurrageRate = roundCalculationMoney(dailyOpex * 1.25);
 
             const minFreightEl = document.getElementById('cost-plus-min-freight-rate');
             const totalCostsEl = document.getElementById('cost-plus-total-costs');
+            const totalCostsBreakdownEl = document.getElementById('cost-plus-total-costs-breakdown');
+            const contingencyWarningEl = document.getElementById('cost-plus-contingency-warning');
             const marginEl = document.getElementById('cost-plus-calculated-margin');
             const demurrageEl = document.getElementById('cost-plus-demurrage-rate');
 
             if (minFreightEl) minFreightEl.textContent = `${formatInverseTceMoney(minFreightRate, { decimals: 2 })} /MT`;
             if (totalCostsEl) totalCostsEl.textContent = formatInverseTceMoney(totalCosts);
+            if (totalCostsBreakdownEl) totalCostsBreakdownEl.textContent = sharedCostBasis.disclosure;
+            if (contingencyWarningEl) {
+                const contingencyDays = Math.max(0, readInverseTceNumber('cost-plus-contingency-days'));
+                contingencyWarningEl.classList.toggle('hidden', contingencyDays <= 0);
+                contingencyWarningEl.textContent = contingencyDays > 0
+                    ? `Cálculo estresado: Incluye ${Number.isInteger(contingencyDays) ? contingencyDays : contingencyDays.toFixed(2)} días extra de margen de seguridad`
+                    : '';
+            }
             if (marginEl) marginEl.textContent = formatInverseTceMoney(calculatedMargin);
             if (demurrageEl) demurrageEl.textContent = formatInverseTceMoney(demurrageRate);
             State.costPlusMinFreightRate = minFreightRate;
             State.costPlusTotalCosts = totalCosts;
             State.costPlusTargetRevenue = targetRevenue;
             State.costPlusDemurrageRate = demurrageRate;
-            return { minFreightRate, totalCosts, calculatedMargin, targetRevenue, demurrageRate };
+            return { minFreightRate, totalCosts, calculatedMargin, targetRevenue, demurrageRate, totalDays };
         }
 
         function setCostPlusMarginType(type) {
@@ -40469,8 +40827,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             loadCoaClientProfiles();
             hydrateFearnleysMarketData();
             updateManualFearnleysOverrideUi();
+            if (!window.costPlusGlobalCostSubscription) {
+                window.costPlusGlobalCostSubscription = SeaCharterStore.subscribe(() => calculateCostPlusFreight());
+            }
             calculateInverseTce();
             calculateCostPlusFreight();
+            updateChartererNegotiationSimulator();
             updateVesselPricingRouter();
             resetTotalEstimation({ silent: true });
 

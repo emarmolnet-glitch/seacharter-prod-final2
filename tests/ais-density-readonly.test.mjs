@@ -209,24 +209,21 @@ test('Globe exposes an accessible manual Play Pause control', () => {
   assert.match(globeCssSource, /.global-fleet-rotation-toggle:focus-visible/);
 });
 
-test('Globe renders independent ballast and laden maritime paths', () => {
-  assert.ok(globeSource.includes("ladenColor: '#00FFFF'"));
-  assert.ok(globeSource.includes("ballastColor: '#FF9900'"));
+test('Globe renders only the cyan maritime POL to POD path', () => {
+  assert.ok(globeSource.includes("PATH_STYLE = Object.freeze({ color: '#00FFFF', width: 2, simplify: true })"));
   assert.ok(globeSource.includes('.arcsData([])'));
   assert.ok(globeSource.includes('.pathsData(view.routePaths)'));
-  assert.ok(globeSource.includes("createRoutePath('ballast', routes?.ballast, ballast, pol, PATH_STYLE.ballastColor)"));
-  assert.ok(globeSource.includes("createRoutePath('laden', routes?.laden, pol, pod, PATH_STYLE.ladenColor)"));
-  assert.ok(globeSource.includes('simplifyMaritimePath(prepareRoutePoints(route, origin, destination))'));
-  assert.ok(globeSource.includes('.pathColor((path) => path.color)'));
-  assert.ok(globeSource.includes('.pathPoints((path) => path.coordinates)'));
+  assert.ok(globeSource.includes('prepareRoutePoints(routes?.laden, pol, pod)'));
+  assert.ok(globeSource.includes('.pathColor(() => PATH_STYLE.color)'));
   assert.ok(globeSource.includes('.pathStroke(() => PATH_STYLE.width)'));
+  assert.ok(!globeSource.includes('routes?.ballast'));
+  assert.ok(!globeSource.includes('BALLAST_COLOR'));
+  assert.ok(!globeSource.includes("type: 'line'"));
 });
 
-test('Globe renders and restores the ballast POL and POD labels', () => {
-  assert.ok(globeSource.includes("createPortLabel('LASTRE', ports?.ballast)"));
+test('Globe restores white POL and POD labels', () => {
   assert.ok(globeSource.includes("createPortLabel('POL', ports?.pol)"));
   assert.ok(globeSource.includes("createPortLabel('POD', ports?.pod)"));
-  assert.ok(globeSource.includes("'LASTRE - ' + name"));
   assert.ok(globeSource.includes('.labelsData(view.portLabels)'));
   assert.ok(globeSource.includes(".labelColor(() => '#FFFFFF')"));
 });
@@ -290,4 +287,296 @@ test('filter endpoint reads the exact vesselType parameter and matches audit res
   assert.match(filterFunctionSource, /auditStatus: "VALIDATED"/);
   assert.match(filterFunctionSource, /filterApplied: true/);
   assert.match(filterFunctionSource, /count: vessels\.length,[\s\S]*vessels/);
+});
+
+test('Cost-Plus and negotiation consume the same global total cost basis', () => {
+  const costPlusStart = indexSource.indexOf('function calculateCostPlusFreight()');
+  const costPlusEnd = indexSource.indexOf('function setCostPlusMarginType', costPlusStart);
+  const costPlusSource = indexSource.slice(costPlusStart, costPlusEnd);
+  const syncStart = indexSource.indexOf('function syncCostPlusFromRoute');
+  const syncEnd = indexSource.indexOf('function vesselHasScrubber', syncStart);
+  const syncSource = indexSource.slice(syncStart, syncEnd);
+
+  assert.match(indexSource, /costTotal: 0, totalCosts: 0/);
+  assert.match(indexSource, /State\.totalCosts = isZeroCalculation \? 0 : adjustedCostTotal/);
+  assert.match(indexSource, /const sharedTotalCosts = State\.totalCosts/);
+  assert.match(indexSource, /netProfitOwner = isZeroCalculation \? 0 : \(voyageRevenues - sharedTotalCosts\)/);
+  assert.match(costPlusSource, /const sharedCostBasis = getSharedVoyageCostBasis\(\)/);
+  assert.match(costPlusSource, /const totalCosts = sharedCostBasis\.totalCosts/);
+  assert.doesNotMatch(costPlusSource, /totalOpex \+ bunkerCost \+ portCosts/);
+  assert.match(syncSource, /SeaCharterStore\.set\(\{[\s\S]*totalCosts: sharedCostBasis\.totalCosts/);
+  assert.match(indexSource, /cost-plus-total-costs-breakdown/);
+});
+
+test('Cost-Plus projects margins and freight from the exact 291017 global cost', () => {
+  const functionStart = indexSource.indexOf('function calculateCostPlusFreight()');
+  const functionEnd = indexSource.indexOf('function setCostPlusMarginType', functionStart);
+  const functionSource = indexSource.slice(functionStart, functionEnd).trim();
+  const elements = new Map();
+  const inputValues = {
+    'cost-plus-daily-opex': 4500,
+    'cost-plus-target-margin': 15,
+    'cost-plus-days-sea': 10,
+    'cost-plus-days-port': 4,
+    'cost-plus-bunker-cost': 100000,
+    'cost-plus-port-costs': 75000,
+    'cost-plus-cargo-volume': 8000,
+  };
+  const context = {
+    costPlusMarginType: 'percentage',
+    State: {},
+    readInverseTceNumber: (id) => inputValues[id] || 0,
+    getSharedVoyageCostBasis: () => ({
+      totalCosts: 291017,
+      disclosure: 'Incluye posicionamiento, ETS. Misma base usada por Negociación.',
+    }),
+    roundCalculationMoney: (value) => Number(value.toFixed(2)),
+    formatInverseTceMoney: (value) => `$${Math.round(value).toLocaleString('en-US')}`,
+    document: {
+      getElementById(id) {
+        if (!elements.has(id)) elements.set(id, { textContent: '', classList: { toggle() {} } });
+        return elements.get(id);
+      },
+    },
+  };
+
+  const calculateCostPlusFreight = Function(
+    ...Object.keys(context),
+    `${functionSource}; return calculateCostPlusFreight;`,
+  )(...Object.values(context));
+  const result = calculateCostPlusFreight();
+
+  assert.equal(result.totalCosts, 291017);
+  assert.equal(result.minFreightRate, 36.38);
+  assert.equal(result.calculatedMargin, 43652.55);
+  assert.equal(context.State.costPlusTotalCosts, 291017);
+  assert.equal(elements.get('cost-plus-total-costs').textContent, '$291,017');
+});
+
+test('voyage reference is moved to the left vessel card and the print backup card is removed', () => {
+  const estimatorStart = indexSource.indexOf('<div id="view-estimator"');
+  const estimatorEnd = indexSource.indexOf('<!-- MÓDULO 5: CUMPLIMIENTO CBAM', estimatorStart);
+  const estimatorMarkup = indexSource.slice(estimatorStart, estimatorEnd);
+  const vesselCardEnd = estimatorMarkup.indexOf('<!-- 3. Bunkers y Gastos -->');
+  const quickReferencePosition = estimatorMarkup.indexOf('id="quick-ref"');
+
+  assert.ok(quickReferencePosition > 0 && quickReferencePosition < vesselCardEnd);
+  assert.equal((estimatorMarkup.match(/id="quick-ref"/g) || []).length, 1);
+  assert.doesNotMatch(estimatorMarkup, /Impresión y Respaldo de Cotizaciones/);
+  assert.match(estimatorMarkup, /5\. Simulador de Negociación y Contraofertas/);
+});
+
+test('charterer negotiation simulator calculates spread, savings, and viability against break-even', () => {
+  const functionStart = indexSource.indexOf('function updateChartererNegotiationSimulator()');
+  const functionEnd = indexSource.indexOf('window.updateChartererNegotiationSimulator', functionStart);
+  const functionSource = indexSource.slice(functionStart, functionEnd).trim();
+  const elements = new Map();
+  const createElement = (overrides = {}) => ({
+    value: '',
+    textContent: '',
+    className: '',
+    dataset: {},
+    style: {},
+    ...overrides,
+  });
+
+  elements.set('negotiation-owner-offer', createElement({ value: '40', dataset: { userEdited: 'true' } }));
+  elements.set('negotiation-charterer-target', createElement({ value: '35', dataset: { userEdited: 'true' } }));
+  elements.set('cargo-qty', createElement({ value: '10000' }));
+  elements.set('comm-pct', createElement({ value: '2.5' }));
+  elements.set('res-breakeven', createElement({ textContent: '$32.00' }));
+  [
+    'negotiation-spread-pmt',
+    'negotiation-spread-caption',
+    'negotiation-total-savings',
+    'negotiation-cargo-caption',
+    'negotiation-break-even',
+    'negotiation-target-delta',
+    'negotiation-viability-card',
+    'negotiation-viability-dot',
+    'negotiation-viability-meter',
+    'negotiation-viability-message',
+    'negotiation-owner-tce',
+    'negotiation-target-tce',
+    'negotiation-ai-suggestion',
+    'negotiation-friction-limit',
+  ].forEach((id) => elements.set(id, createElement()));
+
+  const context = {
+    State: {
+      breakEvenArmador: 32,
+      cargo: 10000,
+      daysSea: 10,
+      daysPort: 5,
+      commPct: 2.5,
+      costBreakdown: { bunkers: 100000, pda: 50000 },
+    },
+    calculateNegotiationTce: ({ freightPerMt, cargoTons, commissionPct, bunkerTotal, portCostsTotal, extraVoyageCosts = 0, totalDays }) => {
+      const grossRevenue = freightPerMt * cargoTons;
+      const commissionCost = grossRevenue * (commissionPct / 100);
+      const netRevenue = grossRevenue - commissionCost;
+      const voyageCosts = bunkerTotal + portCostsTotal + extraVoyageCosts;
+      return { grossRevenue, commissionCost, netRevenue, voyageCosts, totalDays, tceDaily: totalDays > 0 ? (netRevenue - voyageCosts) / totalDays : 0 };
+    },
+    calculateSuggestedNegotiationTarget: (breakEven) => Math.floor((breakEven * 1.05) * 100) / 100,
+    document: {
+      getElementById(id) {
+        return elements.get(id) || null;
+      },
+    },
+  };
+  const updateSimulator = Function(
+    ...Object.keys(context),
+    `${functionSource}; return updateChartererNegotiationSimulator;`,
+  )(...Object.values(context));
+
+  const viableResult = updateSimulator();
+  assert.equal(viableResult.spreadPerMt, 5);
+  assert.equal(viableResult.projectedSavings, 50000);
+  assert.equal(viableResult.isViable, true);
+  assert.equal(viableResult.ownerTceDaily, 16000);
+  assert.equal(viableResult.targetTceDaily, 12750);
+  assert.equal(viableResult.TargetSugerido, 33.6);
+  assert.equal(elements.get('negotiation-total-savings').textContent, '$50,000');
+  assert.equal(elements.get('negotiation-owner-tce').textContent, 'TCE Proyectado: $16,000 / día');
+  assert.equal(elements.get('negotiation-target-tce').textContent, 'TCE Proyectado: $12,750 / día');
+  assert.equal(elements.get('negotiation-ai-suggestion').textContent, '🎯 Sugerencia IA: $33.60 / MT (Margen +5%)');
+  assert.match(elements.get('negotiation-friction-limit').textContent, /\$33\.60/);
+  assert.match(elements.get('negotiation-viability-message').textContent, /Target viable/);
+
+  elements.get('negotiation-charterer-target').value = '30';
+  const rejectedResult = updateSimulator();
+  assert.equal(rejectedResult.isViable, false);
+  assert.equal(rejectedResult.targetDelta, -2);
+  assert.match(elements.get('negotiation-viability-message').textContent, /Riesgo de rechazo/);
+
+  elements.get('negotiation-charterer-target').value = '10';
+  const negativeTceResult = updateSimulator();
+  assert.equal(negativeTceResult.targetTceDaily, -3500);
+  assert.match(elements.get('negotiation-target-tce').className, /text-red-700/);
+});
+
+test('negotiation simulator uses the light application design system', () => {
+  const moduleStart = indexSource.indexOf('id="charterer-negotiation-simulator"');
+  const moduleEnd = indexSource.indexOf('<!-- Acciones Finales -->', moduleStart);
+  const moduleMarkup = indexSource.slice(moduleStart, moduleEnd);
+  const logicStart = indexSource.indexOf('function updateChartererNegotiationSimulator()');
+  const logicEnd = indexSource.indexOf('window.updateChartererNegotiationSimulator', logicStart);
+  const simulatorLogic = indexSource.slice(logicStart, logicEnd);
+
+  assert.match(moduleMarkup, /border border-slate-200 bg-white/);
+  assert.match(moduleMarkup, /input-gc mono border-slate-300 bg-white/);
+  assert.doesNotMatch(moduleMarkup, /bg-(?:slate|gray|stone|neutral|amber|emerald|red|cyan|indigo)-9\d\d/);
+  assert.doesNotMatch(simulatorLogic, /bg-(?:slate|gray|stone|neutral|amber|emerald|red|cyan|indigo)-9\d\d/);
+  assert.match(simulatorLogic, /text-emerald-700/);
+  assert.match(simulatorLogic, /text-red-700/);
+});
+
+test('Cost-Plus contingency adds extra OPEX and average daily bunker cost', () => {
+  const functionStart = indexSource.indexOf('function calculateCostPlusContingency');
+  const functionEnd = indexSource.indexOf('window.calculateCostPlusContingency', functionStart);
+  const functionSource = indexSource.slice(functionStart, functionEnd).trim();
+  const safeCalculationNumber = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+  const calculateContingency = Function(
+    'safeCalculationNumber',
+    `${functionSource}; return calculateCostPlusContingency;`,
+  )(safeCalculationNumber);
+
+  const result = calculateContingency({
+    extraDays: 2,
+    dailyOpex: 4500,
+    totalBunkerCost: 25000,
+    totalDays: 10,
+  });
+
+  assert.equal(result.dailyBunkerCost, 2500);
+  assert.equal(result.opexCost, 9000);
+  assert.equal(result.bunkerCost, 5000);
+  assert.equal(result.totalCost, 14000);
+  assert.match(indexSource, /cost-plus-contingency-days/);
+  assert.match(indexSource, /costTotal \+ tugTotalCost \+ costPlusContingency\.totalCost/);
+  assert.match(indexSource, /Cálculo estresado: Incluye/);
+});
+
+test('negotiation TCE excludes OPEX and CAPEX and applies commissions strictly', () => {
+  const functionStart = indexSource.indexOf('function calculateNegotiationTce');
+  const functionEnd = indexSource.indexOf('window.calculateNegotiationTce', functionStart);
+  const functionSource = indexSource.slice(functionStart, functionEnd).trim();
+  const safeCalculationNumber = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+  const calculateTce = Function(
+    'safeCalculationNumber',
+    `${functionSource}; return calculateNegotiationTce;`,
+  )(safeCalculationNumber);
+
+  const result = calculateTce({
+    freightPerMt: 40,
+    cargoTons: 10000,
+    commissionPct: 2.5,
+    bunkerTotal: 100000,
+    portCostsTotal: 50000,
+    extraVoyageCosts: 5000,
+    totalDays: 17,
+  });
+
+  assert.equal(result.grossRevenue, 400000);
+  assert.equal(result.commissionCost, 10000);
+  assert.equal(result.netRevenue, 390000);
+  assert.equal(result.voyageCosts, 155000);
+  assert.equal(Number(result.tceDaily.toFixed(2)), 13823.53);
+  assert.match(indexSource, /negotiation-owner-tce/);
+  assert.match(indexSource, /negotiation-target-tce/);
+  assert.match(indexSource, /costBreakdown\.contingencyBunker/);
+  assert.doesNotMatch(functionSource, /opex|capex/i);
+});
+
+test('suggested negotiation target applies the five percent psychological floor', () => {
+  const functionStart = indexSource.indexOf('function calculateSuggestedNegotiationTarget');
+  const functionEnd = indexSource.indexOf('window.calculateSuggestedNegotiationTarget', functionStart);
+  const functionSource = indexSource.slice(functionStart, functionEnd).trim();
+  const safeCalculationNumber = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+  const calculateSuggestedTarget = Function(
+    'safeCalculationNumber',
+    `${functionSource}; return calculateSuggestedNegotiationTarget;`,
+  )(safeCalculationNumber);
+
+  assert.equal(calculateSuggestedTarget(28.54), 29.96);
+  assert.equal(calculateSuggestedTarget(32), 33.6);
+  assert.equal(calculateSuggestedTarget(0), 0);
+});
+
+test('AI suggestion click fills target and recalculates negotiation immediately', () => {
+  const functionStart = indexSource.indexOf('function applySuggestedNegotiationTarget()');
+  const functionEnd = indexSource.indexOf('window.updateChartererNegotiationSimulator', functionStart);
+  const functionSource = indexSource.slice(functionStart, functionEnd).trim();
+  let recalculationCount = 0;
+  let focusCount = 0;
+  const targetInput = {
+    value: '',
+    dataset: {},
+    focus() {
+      focusCount += 1;
+    },
+  };
+  const elements = new Map([
+    ['negotiation-charterer-target', targetInput],
+    ['res-breakeven', { textContent: '$28.54' }],
+  ]);
+  const context = {
+    State: { breakEvenArmador: 28.54, negotiationSimulator: { TargetSugerido: 29.96 } },
+    document: { getElementById: (id) => elements.get(id) || null },
+    calculateSuggestedNegotiationTarget: (breakEven) => Math.floor((breakEven * 1.05) * 100) / 100,
+    updateChartererNegotiationSimulator: () => {
+      recalculationCount += 1;
+    },
+  };
+  const applySuggestion = Function(
+    ...Object.keys(context),
+    `${functionSource}; return applySuggestedNegotiationTarget;`,
+  )(...Object.values(context));
+
+  assert.equal(applySuggestion(), true);
+  assert.equal(targetInput.value, '29.96');
+  assert.equal(targetInput.dataset.userEdited, 'true');
+  assert.equal(recalculationCount, 1);
+  assert.equal(focusCount, 1);
 });
