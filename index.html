@@ -35277,7 +35277,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
                 btn.disabled = true;
 
-                fetch('https://calm-shortbread-55bcfc.netlify.app/api/trigger-ais-sweep', {
+                fetch('/api/trigger-ais-sweep', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
