@@ -209,21 +209,24 @@ test('Globe exposes an accessible manual Play Pause control', () => {
   assert.match(globeCssSource, /.global-fleet-rotation-toggle:focus-visible/);
 });
 
-test('Globe renders only the cyan maritime POL to POD path', () => {
-  assert.ok(globeSource.includes("PATH_STYLE = Object.freeze({ color: '#00FFFF', width: 2, simplify: true })"));
+test('Globe renders independent ballast and laden maritime paths', () => {
+  assert.ok(globeSource.includes("ladenColor: '#00FFFF'"));
+  assert.ok(globeSource.includes("ballastColor: '#FF9900'"));
   assert.ok(globeSource.includes('.arcsData([])'));
   assert.ok(globeSource.includes('.pathsData(view.routePaths)'));
-  assert.ok(globeSource.includes('prepareRoutePoints(routes?.laden, pol, pod)'));
-  assert.ok(globeSource.includes('.pathColor(() => PATH_STYLE.color)'));
+  assert.ok(globeSource.includes("createRoutePath('ballast', routes?.ballast, ballast, pol, PATH_STYLE.ballastColor)"));
+  assert.ok(globeSource.includes("createRoutePath('laden', routes?.laden, pol, pod, PATH_STYLE.ladenColor)"));
+  assert.ok(globeSource.includes('simplifyMaritimePath(prepareRoutePoints(route, origin, destination))'));
+  assert.ok(globeSource.includes('.pathColor((path) => path.color)'));
+  assert.ok(globeSource.includes('.pathPoints((path) => path.coordinates)'));
   assert.ok(globeSource.includes('.pathStroke(() => PATH_STYLE.width)'));
-  assert.ok(!globeSource.includes('routes?.ballast'));
-  assert.ok(!globeSource.includes('BALLAST_COLOR'));
-  assert.ok(!globeSource.includes("type: 'line'"));
 });
 
-test('Globe restores white POL and POD labels', () => {
+test('Globe renders and restores the ballast POL and POD labels', () => {
+  assert.ok(globeSource.includes("createPortLabel('LASTRE', ports?.ballast)"));
   assert.ok(globeSource.includes("createPortLabel('POL', ports?.pol)"));
   assert.ok(globeSource.includes("createPortLabel('POD', ports?.pod)"));
+  assert.ok(globeSource.includes("'LASTRE - ' + name"));
   assert.ok(globeSource.includes('.labelsData(view.portLabels)'));
   assert.ok(globeSource.includes(".labelColor(() => '#FFFFFF')"));
 });

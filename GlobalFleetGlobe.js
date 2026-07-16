@@ -11,7 +11,7 @@
     const POINT_ALTITUDE = 0.008;
     const POINT_HOVER_ALTITUDE = 0.016;
     const POINT_HOVER_RADIUS_FACTOR = 1.45;
-    const PATH_STYLE = Object.freeze({ color: '#00FFFF', width: 2, simplify: true });
+    const PATH_STYLE = Object.freeze({ ladenColor: '#00FFFF', ballastColor: '#FF9900', width: 2, simplify: true });
     const EARTH_IMAGE_URL = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
     const EARTH_TOPOLOGY_URL = 'https://unpkg.com/three-globe/example/img/earth-topology.png';
     const NESTED_KEYS = ['vesselData', 'vessel_data', 'source_payload', 'sourcePayload', 'ais', 'AIS', 'radar', 'radarData', 'radar_data', 'response', 'results', 'records', 'items', 'payload', 'data', 'vessel', 'ship', 'position', 'PositionReport', 'details', 'registry', 'staticData', 'static_data', 'metadata', 'MetaData'];
@@ -202,18 +202,25 @@
     function createPortLabel(role, port) {
         const coordinates = normalizeRoutePoint(port);
         if (!coordinates) return null;
-        const name = String(port?.name || port?.portName || (role === 'POL' ? 'ORIGEN' : 'DESTINO')).trim();
-        return { ...coordinates, role, text: role + ' · ' + name };
+        const fallbackName = role === 'LASTRE' ? 'ORIGEN EN LASTRE' : (role === 'POL' ? 'ORIGEN' : 'DESTINO');
+        const name = String(port?.name || port?.portName || fallbackName).trim();
+        return { ...coordinates, role, text: role === 'LASTRE' ? 'LASTRE - ' + name : role + ' · ' + name };
+    }
+
+    function createRoutePath(role, route, origin, destination, color) {
+        if (!origin || !destination) return null;
+        const coordinates = simplifyMaritimePath(prepareRoutePoints(route, origin, destination));
+        return coordinates.length > 1 ? { role, color, coordinates } : null;
     }
 
     function applyRoutes(view) {
         view.globe
             .arcsData([])
-            .pathPoints((coordinates) => coordinates)
+            .pathPoints((path) => path.coordinates)
             .pathPointLat('lat')
             .pathPointLng('lng')
             .pathPointAlt(() => 0.012)
-            .pathColor(() => PATH_STYLE.color)
+            .pathColor((path) => path.color)
             .pathStroke(() => PATH_STYLE.width)
             .pathTransitionDuration(0)
             .pathsData(view.routePaths)
@@ -223,17 +230,33 @@
     function saveGlobalRouteState(ports, routePaths) {
         if (!window.GlobalStore || !routePaths.length) return;
         window.GlobalStore.globeRouteState = {
-            ports: { pol: ports?.pol || null, pod: ports?.pod || null },
-            paths: routePaths.map((coordinates) => coordinates.map((point) => ({ ...point })))
+            ports: { ballast: ports?.ballast || null, pol: ports?.pol || null, pod: ports?.pod || null },
+            paths: routePaths.map((path) => ({
+                role: path.role,
+                color: path.color,
+                coordinates: path.coordinates.map((point) => ({ ...point }))
+            }))
         };
     }
 
     function restoreGlobalRouteState(view) {
         const state = window.GlobalStore?.globeRouteState;
-        const storedPath = Array.isArray(state?.paths?.[0]) ? state.paths[0].map(normalizeRoutePoint).filter(Boolean) : [];
-        if (storedPath.length < 2) return;
-        view.routePaths = [storedPath];
-        view.portLabels = [createPortLabel('POL', state?.ports?.pol), createPortLabel('POD', state?.ports?.pod)].filter(Boolean);
+        const storedPaths = Array.isArray(state?.paths) ? state.paths : [];
+        view.routePaths = storedPaths.map((storedPath, index) => {
+            const coordinates = (Array.isArray(storedPath) ? storedPath : storedPath?.coordinates || [])
+                .map(normalizeRoutePoint)
+                .filter(Boolean);
+            if (coordinates.length < 2) return null;
+            const role = storedPath?.role || (index === 0 && state?.ports?.ballast ? 'ballast' : 'laden');
+            const color = storedPath?.color || (role === 'ballast' ? PATH_STYLE.ballastColor : PATH_STYLE.ladenColor);
+            return { role, color, coordinates };
+        }).filter(Boolean);
+        if (!view.routePaths.length) return;
+        view.portLabels = [
+            createPortLabel('LASTRE', state?.ports?.ballast),
+            createPortLabel('POL', state?.ports?.pol),
+            createPortLabel('POD', state?.ports?.pod)
+        ].filter(Boolean);
         applyRoutes(view);
     }
 
@@ -285,7 +308,7 @@
     }
 
     function fitRoute(view) {
-        const points = view.routePaths.flat();
+        const points = view.routePaths.flatMap((path) => path.coordinates);
         if (!points.length) return;
         const center = points[Math.floor(points.length / 2)];
         const latSpan = Math.max(...points.map((point) => point.lat)) - Math.min(...points.map((point) => point.lat));
@@ -296,11 +319,18 @@
     function setRouteSegments(ports, key = DEFAULT_KEY, options = {}, routes = {}) {
         const view = getView(key);
         if (!view) return [];
+        const ballast = normalizeRoutePoint(ports?.ballast);
         const pol = normalizeRoutePoint(ports?.pol);
         const pod = normalizeRoutePoint(ports?.pod);
-        const maritimePath = pol && pod ? simplifyMaritimePath(prepareRoutePoints(routes?.laden, pol, pod)) : [];
-        view.routePaths = maritimePath.length > 1 ? [maritimePath] : [];
-        view.portLabels = [createPortLabel('POL', ports?.pol), createPortLabel('POD', ports?.pod)].filter(Boolean);
+        view.routePaths = [
+            createRoutePath('ballast', routes?.ballast, ballast, pol, PATH_STYLE.ballastColor),
+            createRoutePath('laden', routes?.laden, pol, pod, PATH_STYLE.ladenColor)
+        ].filter(Boolean);
+        view.portLabels = [
+            createPortLabel('LASTRE', ports?.ballast),
+            createPortLabel('POL', ports?.pol),
+            createPortLabel('POD', ports?.pod)
+        ].filter(Boolean);
         saveGlobalRouteState(ports, view.routePaths);
         applyRoutes(view);
         if (view.routePaths.length && options.focus !== false) fitRoute(view);
@@ -505,11 +535,11 @@
                 .onPointClick(() => setAutoRotate(false, key))
                 .pointsTransitionDuration(0)
                 .arcsData([])
-                .pathPoints((coordinates) => coordinates)
+                .pathPoints((path) => path.coordinates)
                 .pathPointLat('lat')
                 .pathPointLng('lng')
                 .pathPointAlt(() => 0.012)
-                .pathColor(() => PATH_STYLE.color)
+                .pathColor((path) => path.color)
                 .pathStroke(() => PATH_STYLE.width)
                 .pathTransitionDuration(0)
                 .pathsData([])
