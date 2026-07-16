@@ -462,11 +462,11 @@ function toDate(value: string | undefined): Date {
 async function readVesselIndex(): Promise<VesselRecord[]> {
   try {
     const rows = await db
-      .select({ vesselData: aisVessels.vesselData })
+      .select({ rawData: aisVessels.rawData })
       .from(aisVessels)
       .orderBy(desc(aisVessels.lastSeenAt))
       .limit(45000);
-    return rows.map((row) => row.vesselData).filter(isVesselRecord);
+    return rows.map((row) => row.rawData).filter(isVesselRecord);
   } catch (error) {
     console.warn("AIS Neon vessel index read failed:", error);
   }
@@ -482,11 +482,11 @@ async function writeVesselIndex(rows: VesselRecord[]): Promise<void> {
       imoNumber: row.imoNumber,
       mmsi: row.mmsi,
       vesselName: row.vesselName,
-      shipType: row.shipType,
+      vesselType: row.shipType,
       latitude: row.latitude,
       longitude: row.longitude,
       source: row.source,
-      vesselData: row,
+      rawData: row,
       firstSeenAt: toDate(row.firstSeenAt || row.createdAt),
       lastSeenAt: toDate(row.lastSeenAt),
       createdAt: toDate(row.createdAt),
@@ -498,11 +498,11 @@ async function writeVesselIndex(rows: VesselRecord[]): Promise<void> {
         imoNumber: sql`excluded.imo_number`,
         mmsi: sql`excluded.mmsi`,
         vesselName: sql`excluded.vessel_name`,
-        shipType: sql`excluded.ship_type`,
+        vesselType: sql`excluded.vessel_type`,
         latitude: sql`excluded.latitude`,
         longitude: sql`excluded.longitude`,
         source: sql`excluded.source`,
-        vesselData: sql`excluded.vessel_data`,
+        rawData: sql`excluded.raw_data`,
         firstSeenAt: sql`excluded.first_seen_at`,
         lastSeenAt: sql`excluded.last_seen_at`,
         updatedAt: sql`excluded.updated_at`,

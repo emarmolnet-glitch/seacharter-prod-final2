@@ -108,7 +108,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "ship_type",
+      "name": "vessel_type",
       "entityType": "columns",
       "schema": "public",
       "table": "ais_vessels"
@@ -160,7 +160,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "vessel_data",
+      "name": "raw_data",
       "entityType": "columns",
       "schema": "public",
       "table": "ais_vessels"
