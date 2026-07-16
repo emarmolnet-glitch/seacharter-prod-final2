@@ -114,6 +114,41 @@ test('Core PRO and Data Bridge share Globe.gl 2.46.1', () => {
   assert.doesNotMatch(dataBridgeSource, /deck\.gl|map_view\.js/);
 });
 
+test('both globe views expose nested radar vessel details on hover', () => {
+  assert.ok(globeSource.includes('.pointLabel(getTooltip)'));
+  assert.match(globeSource, /function getTooltip\(vessel\) \{[\s\S]*?return `<div class="global-fleet-tooltip">/);
+  assert.ok(globeSource.includes('.onPointHover((vessel) => {'));
+  assert.ok(globeSource.includes("'radarData'"));
+  assert.ok(globeSource.includes("'source_payload'"));
+  assert.match(globeSource, /DWT · \$\{escapeHtml\(formatDwt\(vessel\?\.dwt\)\)\}/);
+  assert.match(globeSource, /IMO · \$\{escapeHtml\(imo && imo !== 'N\/A' \? imo : 'IMO no disponible'\)\}/);
+  assert.ok(globeSource.includes("'Buque sin nombre'"));
+  assert.ok(globeSource.includes("'DWT no disponible'"));
+});
+
+test('globe hover styling increases raycast target and matches radar tooltip design', () => {
+  assert.ok(globeSource.includes('POINT_HOVER_RADIUS_FACTOR = 1.45'));
+  assert.ok(globeSource.includes('vessel === view.hoveredVessel ? view.pointRadius * POINT_HOVER_RADIUS_FACTOR'));
+  assert.ok(globeSource.includes('if (cameraAltitude <= 0.45) return 0.075'));
+  assert.match(globeCssSource, /\.global-fleet-tooltip \{[\s\S]*?border-radius: 7px;[\s\S]*?background: rgba\(4, 18, 34, 0\.92\);[\s\S]*?font-family: 'Inter'/);
+  assert.match(globeCssSource, /\.global-fleet-tooltip strong \{[\s\S]*?color: #ffffff;[\s\S]*?font-weight: 800;[\s\S]*?text-transform: uppercase/);
+  assert.match(globeCssSource, /\.global-fleet-tooltip span \{[\s\S]*?color: #32d6c3/);
+});
+
+test('Core PRO tooltip escapes map clipping and floats above interface overlays', () => {
+  assert.match(globeCssSource, /\.global-fleet-globe \.scene-tooltip \{[\s\S]*?z-index: 9999 !important/);
+  assert.match(globeCssSource, /#view-map #map-container,[\s\S]*?#view-ais #ais-map \{[\s\S]*?overflow: visible !important/);
+  assert.ok(indexSource.includes('density-globe.css?v=20260716-radar-tooltip-visible'));
+  assert.ok(dataBridgeSource.includes('density-globe.css?v=20260716-radar-tooltip-visible'));
+});
+
+test('custom point highlighting waits until native pointLabel handling completes', () => {
+  assert.ok(globeSource.includes('function schedulePointInteractionStyle(view)'));
+  assert.ok(globeSource.includes('view.hoverStyleFrameId = requestAnimationFrame(() => {'));
+  assert.ok(globeSource.includes('schedulePointInteractionStyle(view)'));
+  assert.doesNotMatch(globeSource, /\.onPointHover\(\(vessel\) => \{[\s\S]{0,180}applyPointInteractionStyle\(view\)/);
+});
+
 test('Globe View containers have explicit visible dimensions and responsive rules', () => {
   assert.match(indexSource, /html,[\s\S]*?body \{[\s\S]*?height: 100%;/);
   assert.match(globeCssSource, /\.global-fleet-globe,[\s\S]*?width: 100% !important;[\s\S]*?height: 100% !important;[\s\S]*?min-height: 280px !important;/);
@@ -140,8 +175,8 @@ test('all maps render independent AIS points without heatmaps or fixed labels', 
   assert.ok(globeSource.includes('.pointsData(view.vessels)'));
   assert.ok(globeSource.includes("POINT_COLOR = 'rgba(0, 255, 255, 0.8)'"));
   assert.ok(globeSource.includes('POINT_ALTITUDE = 0.008'));
-  assert.ok(globeSource.includes('cameraAltitude <= 0.45) return 0.060'));
-  assert.ok(globeSource.includes('cameraAltitude >= 2.40) return 0.025'));
+  assert.ok(globeSource.includes('cameraAltitude <= 0.45) return 0.075'));
+  assert.ok(globeSource.includes('cameraAltitude >= 2.40) return 0.032'));
   assert.doesNotMatch(globeSource, /ColumnLayer|TextLayer|ScatterplotLayer|heatmap|cluster/i);
 });
 
@@ -207,13 +242,14 @@ test('AIS normalization accepts nested payloads and rejects invalid coordinates'
   assert.ok(globeSource.includes('focusFirstVessel'));
 });
 
-test('vessel tooltip exposes only name and DWT with safe fallbacks', () => {
+test('vessel tooltip exposes name, DWT, and IMO with safe fallbacks', () => {
   assert.ok(globeSource.includes('function getTooltip'));
   assert.ok(globeSource.includes('Buque sin nombre'));
   assert.ok(globeSource.includes('DWT no disponible'));
   assert.ok(globeSource.includes('.pointLabel(getTooltip)'));
   assert.match(globeCssSource, /\.global-fleet-tooltip strong \{[\s\S]*?color: #ffffff;[\s\S]*?text-shadow:/);
-  assert.match(globeCssSource, /\.global-fleet-tooltip span \{[\s\S]*?color: #8fc7d0/);
+  assert.ok(globeSource.includes('IMO no disponible'));
+  assert.match(globeCssSource, /\.global-fleet-tooltip span \{[\s\S]*?color: #32d6c3/);
 });
 
 test('Data Bridge publishes its audit fleet through filteredVessels', () => {
