@@ -1,7 +1,8 @@
 import {
+  claimIaReport,
   completeIaReport,
   failIaReport,
-  getIaReport,
+  updateIaReportProgress,
 } from "../../db/ia-reports.js";
 import { processLegalAuditPayload, type GeminiPayload } from "./ai-legal-audit.js";
 
@@ -12,10 +13,13 @@ export default async (req: Request) => {
   if (!body.task_id) return;
 
   try {
-    const task = await getIaReport(body.task_id);
-    if (!task || task.status === "COMPLETED") return;
+    const task = await claimIaReport(body.task_id);
+    if (!task) return;
 
-    const result = await processLegalAuditPayload(task.requestPayload as GeminiPayload);
+    const result = await processLegalAuditPayload(
+      task.requestPayload as GeminiPayload,
+      (progress) => updateIaReportProgress(task.id, progress),
+    );
     await completeIaReport(task.id, result);
   } catch (error) {
     const message = error instanceof Error && error.message

@@ -52,6 +52,8 @@ export default async (req: Request, _context: Context) => {
   return Response.json({
     task_id: report.id,
     status: "PENDING",
+    progress: 0,
+    message: "Análisis en curso",
     status_url: `/api/syncPull/${report.id}`,
   }, { status: 202, headers });
 };

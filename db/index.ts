@@ -1,4 +1,4 @@
-import { drizzle } from "drizzle-orm/node-postgres";
+import { drizzle } from "drizzle-orm/netlify-db";
 import { Pool, type Pool as PgPool } from "pg";
 import * as schema from "./schema.js";
 
@@ -29,7 +29,7 @@ export function getPool() {
   return pool;
 }
 
-export const db = drizzle({ client: getPool(), schema });
+export const db = drizzle({ schema });
 
 export async function ensureApplicationSchema() {
   applicationSchemaReady ??= getPool().query(`
@@ -89,12 +89,21 @@ export async function ensureApplicationSchema() {
     CREATE TABLE IF NOT EXISTS ia_reports (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       status TEXT NOT NULL DEFAULT 'PENDING',
+      progress INTEGER NOT NULL DEFAULT 0,
+      attempt_count INTEGER NOT NULL DEFAULT 0,
       request_payload JSONB NOT NULL,
       report_data JSONB,
       error_message TEXT,
+      started_at TIMESTAMPTZ,
+      completed_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    ALTER TABLE ia_reports ADD COLUMN IF NOT EXISTS progress INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE ia_reports ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE ia_reports ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
+    ALTER TABLE ia_reports ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
   `).then(() => undefined).catch((error: unknown) => {
     applicationSchemaReady = null;
     throw error;
