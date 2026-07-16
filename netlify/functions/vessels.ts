@@ -58,7 +58,7 @@ export default async (req: Request) => {
     const imoNumber = String(vessel.imoNumber || vessel.imo || "").trim();
     const latitude = Number(vessel.latitude ?? vessel.lat ?? 0);
     const longitude = Number(vessel.longitude ?? vessel.lon ?? vessel.lng ?? 0);
-    const shipTypeValue = vessel.shipType ?? vessel.ship_type ?? vessel.ShipType ?? vessel.tipo_buque ?? vessel.tipo ?? vessel.type ?? vessel.radarCategory ?? vessel.cargoClass ?? vessel.vesselClass;
+    const shipTypeValue = vessel.vesselType ?? vessel.vessel_type ?? vessel.shipType ?? vessel.ShipType ?? vessel.tipo_buque ?? vessel.tipo ?? vessel.type ?? vessel.radarCategory ?? vessel.cargoClass ?? vessel.vesselClass;
     const shipType = shipTypeValue ? String(shipTypeValue) : null;
 
     if (!imoNumber || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
