@@ -47,6 +47,9 @@
     }
 
     function getVesselsData() {
+        if (window.GlobalStore && typeof window.GlobalStore.getFilteredVessels === 'function' && window.GlobalStore.filteredVesselsInitialized) {
+            return window.GlobalStore.getFilteredVessels();
+        }
         if (Array.isArray(window.vessels_data)) return window.vessels_data;
         if (window.GlobalStore && typeof window.GlobalStore.getRawVessels === 'function') {
             const raw = window.GlobalStore.getRawVessels();
@@ -561,7 +564,17 @@
 
     window.addEventListener('ais:vessels-updated', (event) => {
         const vessels = event.detail?.rawVessels?.length ? event.detail.rawVessels : (event.detail?.vessels || getVesselsData());
-        views.forEach((view) => updateVessels(vessels, view.key));
+        views.forEach((view) => {
+            const viewVessels = view.key === 'density' && window.GlobalStore?.filteredVesselsInitialized
+                ? window.GlobalStore.getFilteredVessels()
+                : vessels;
+            updateVessels(viewVessels, view.key);
+        });
+    });
+
+    window.addEventListener('ais:filtered-vessels-updated', (event) => {
+        const vessels = Array.isArray(event.detail?.vessels) ? event.detail.vessels : [];
+        if (views.has('density')) updateVessels(vessels, 'density');
     });
 
     window.GlobeMapView = Object.freeze({
