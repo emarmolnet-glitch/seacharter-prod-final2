@@ -1,5 +1,5 @@
 import WebSocket from "ws";
-import { isCargoShipType, upsertVessels, type VesselRecord } from "./vessel-store.js";
+import { upsertVessels, type VesselRecord } from "./vessel-store.js";
 
 const AISSTREAM_ENDPOINT = "wss://stream.aisstream.io/v0/stream";
 const DEFAULT_TIMEOUT_MS = 8500;
@@ -128,7 +128,6 @@ function normalizeVessel(item: unknown, etaTarget: EtaTarget | null): VesselReco
   const longitude = toNumber(readNested(merged, ["longitude", "Longitude", "lon", "Lon", "lng", "Lng"]));
 
   if (!mmsi || latitude === null || longitude === null) return null;
-  if (shipType && !isCargoShipType(shipType)) return null;
 
   const now = new Date().toISOString();
   const speed = toNumber(readNested(merged, ["speed", "Sog", "SOG", "Speed"]));
@@ -183,7 +182,12 @@ function collectVessels(apiKey: string, boundingBoxes: unknown[], timeoutMs: num
       ws.send(JSON.stringify({
         APIKey: apiKey,
         BoundingBoxes: boundingBoxes,
-        FilterMessageTypes: ["PositionReport", "ShipStaticData"],
+        FilterMessageTypes: [
+          "PositionReport",
+          "StandardClassBPositionReport",
+          "ExtendedClassBPositionReport",
+          "ShipStaticData",
+        ],
       }));
     });
 
@@ -192,7 +196,14 @@ function collectVessels(apiKey: string, boundingBoxes: unknown[], timeoutMs: num
         const payload = JSON.parse(data.toString()) as Record<string, unknown>;
         const metadata = pickObject(payload.MetaData);
         const message = pickObject(payload.Message);
-        const position = pickObject(message.PositionReport ?? payload.PositionReport);
+        const position = pickObject(
+          message.PositionReport
+            ?? payload.PositionReport
+            ?? message.StandardClassBPositionReport
+            ?? payload.StandardClassBPositionReport
+            ?? message.ExtendedClassBPositionReport
+            ?? payload.ExtendedClassBPositionReport,
+        );
         const staticData = pickObject(message.ShipStaticData ?? payload.ShipStaticData);
         const mmsi = toText(readNested({ ...payload, ...message, ...position, ...metadata, ...staticData }, ["MMSI", "mmsi", "UserID"]));
         if (!mmsi) return;

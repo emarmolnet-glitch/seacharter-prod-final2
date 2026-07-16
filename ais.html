@@ -435,7 +435,7 @@
             AISmap.getPane('aisProjectionPane').style.zIndex = 680;
             AISmap.getPane('aisProjectionPane').style.pointerEvents = 'auto';
         }
-        window.AIS_DIRECT_FRONTEND_MODE = true;
+        window.AIS_DIRECT_FRONTEND_MODE = false;
         const AIS_RADAR_POL_RADIUS_NM = 2000;
         const AIS_RADAR_POD_RADIUS_NM = 100;
         const AIS_ROUTE_CORRIDOR_RADIUS_NM = 100;
@@ -1570,19 +1570,6 @@
             return storedKey;
         }
 
-        async function fetchAisStreamApiKey() {
-            const response = await fetch('/.netlify/functions/get-key', {
-                headers: { Accept: 'application/json' },
-                cache: 'no-store'
-            });
-            const payload = await response.json().catch(() => ({}));
-            const apiKey = String(payload.apiKey || payload.key || '').trim();
-            if (!response.ok || payload.success === false || !apiKey) {
-                throw new Error(payload.error || 'AISSTREAM_API_KEY no está configurada en Netlify.');
-            }
-            return apiKey;
-        }
-
         function getActiveLoadingPort() {
             const portName = (document.getElementById('port-pol')?.value || window.State?.pol || '').trim();
             const portRecord = (typeof PORT_DB !== 'undefined' && portName && PORT_DB[portName]) ? PORT_DB[portName] : {};
@@ -1864,117 +1851,27 @@
         window.closeDirectAisStreamSocket = closeDirectAisStreamSocket;
 
         async function connectLiveAisForCurrentBounds() {
-            if (!window.AIS_DIRECT_FRONTEND_MODE || !window.isLiveTrackingEnabled) return;
-            if (!window.aisRadarUserActivated) return;
-            if (typeof window.isAisRouteReady === 'function' && !window.isAisRouteReady()) return;
-            const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
-            if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
-                window.detenerRadar();
-                return;
+            if (!window.isLiveTrackingEnabled || !window.aisRadarUserActivated) return { success: false, skipped: true };
+            if (typeof window.isAisRouteReady === 'function' && !window.isAisRouteReady()) {
+                return { success: false, skipped: true, reason: 'route-inputs-missing' };
             }
-            if (typeof window.isAisRouteReady !== 'function' && typeof localStorage !== 'undefined') {
-                const polReady = (localStorage.getItem('calculator_pol') || '').trim();
-                const podReady = (localStorage.getItem('calculator_pod') || '').trim();
-                const laycanReady = (localStorage.getItem('calculator_laycan') || '').trim();
-                if (!polReady || !podReady || !laycanReady) return;
+            const limit = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
+            const endpoint = typeof window.getRouteAisSweepEndpoint === 'function'
+                ? window.getRouteAisSweepEndpoint(limit, '', false)
+                : '';
+            if (!endpoint) {
+                return { success: false, skipped: true, reason: 'route-port-coordinates-missing' };
             }
-            if (window.simulacionRadarActiva) {
-                console.log("⏳ Modo Sandbox activo. Saltando actualización automática para no borrar los buques de test.");
-                return;
-            }
-            const boxes = typeof window.getRouteAisBoundingBoxes === 'function'
-                ? window.getRouteAisBoundingBoxes()
+
+            const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
+            const vessels = typeof window.parseAisVesselsResponse === 'function'
+                ? await window.parseAisVesselsResponse(response, 'server-proxy-live-radar')
                 : [];
-            if (!boxes.length) {
-                console.warn('[AIS Direct] POL/POD coordinates not ready for route-limited WebSocket capture.');
-                stopLiveAisVisualLoop();
-                return;
-            }
-            const boundsKey = boxes.flat(2).map(value => Number(value).toFixed(4)).join(',');
-            if (boundsKey === aisLiveState.lastBoundsKey && aisLiveState.ws && aisLiveState.ws.readyState <= 1) return;
-            aisLiveState.lastBoundsKey = boundsKey;
-            aisLiveState.vessels.clear();
-            aisLiveState.vesselIndex.clear();
-            aisLiveState.staticByMmsi.clear();
-            aisLiveState.markers.forEach(marker => aisClusterGroup.removeLayer(marker));
-            aisLiveState.markers.clear();
-            renderLiveAisVessels();
-
-            let apiKey = '';
-            try {
-                apiKey = await fetchAisStreamApiKey();
-            } catch (error) {
-                window.showAisDisconnectedState();
-                window.showAisApiKeyError(error);
-                cancelRadarCapture();
-                return;
-            }
-
-            closeDirectAisStreamSocket('restart');
-            const ws = new WebSocket("wss://stream.aisstream.io/v0/stream");
-            aisLiveState.ws = ws;
-            ws.onopen = () => {
-                const subscriptionMessage = {
-                    APIKey: apiKey,
-                    BoundingBoxes: boxes,
-                    FilterMessageTypes: ["PositionReport", "ShipStaticData"]
-                };
-                ws.send(JSON.stringify(subscriptionMessage));
-                const summaryTextEl = document.getElementById('geofence-summary-text');
-                if (summaryTextEl) summaryTextEl.innerText = 'Escuchando AISStream directo durante 60 segundos...';
-            };
-            ws.onmessage = (event) => {
-                if (!window.isLiveTrackingEnabled || window.radarWorkflowState.frozenAt) return;
-                let message = null;
-                try {
-                    message = JSON.parse(event.data);
-                } catch (error) {
-                    console.warn('[AIS Direct] Mensaje AIS no parseable.', error);
-                    return;
-                }
-                const body = message && message.Message ? message.Message : {};
-                const staticData = message.ShipStaticData || body.ShipStaticData || null;
-                const staticMmsi = staticData ? String(staticData.UserID || staticData.MMSI || staticData.Mmsi || '').trim() : '';
-                if (staticMmsi) {
-                    aisLiveState.staticByMmsi.set(staticMmsi, staticData);
-                }
-                const report = message.PositionReport || body.PositionReport || null;
-                const reportMmsi = report ? String(report.UserID || message?.MetaData?.MMSI || '').trim() : '';
-                if (reportMmsi && aisLiveState.staticByMmsi.has(reportMmsi) && !staticData) {
-                    message = Object.assign({}, message, {
-                        ShipStaticData: aisLiveState.staticByMmsi.get(reportMmsi)
-                    });
-                }
-                const vessel = normalizeLiveAisMessage(message);
-                if (!vessel) return;
-                const taxonomySelect = document.getElementById('radar-taxonomy-select');
-                const selectedTaxonomy = taxonomySelect?.value || window.radarWorkflowState.selectedTaxonomy || 'cargo';
-                window.radarWorkflowState.selectedTaxonomy = selectedTaxonomy;
-                if (filtrarRadarPorTipoLocal([vessel], selectedTaxonomy).length === 0) return;
-                const keys = getAisVesselIdentityKeys(vessel);
-                const directId = window.obtenerIdUnicoBuque(vessel);
-                const id = keys.map(key => aisLiveState.vesselIndex.get(key)).find(Boolean) || directId;
-                if (!id) return;
-                const indexedStored = getIndexedAisVessel(vessel, id);
-                const existing = aisLiveState.vessels.get(id) || indexedStored.vessel;
-                const merged = existing ? mergeAisVesselState(existing, vessel) : vessel;
-                aisLiveState.vessels.set(id, merged);
-                keys.forEach(key => aisLiveState.vesselIndex.set(key, id));
-                indexAisVesselIdentities(merged, id);
-                window.procesarMensajeAIS(merged);
-                pruneLiveAisStore();
-                scheduleLiveAisRender();
-                updateRadarWorkflowUi();
-            };
-            ws.onerror = (error) => {
-                console.warn('[AIS Direct] WebSocket error.', error);
-            };
-            ws.onclose = (event) => {
-                if (aisLiveState.ws === ws) aisLiveState.ws = null;
-                if (window.isLiveTrackingEnabled && !window.radarWorkflowState.frozenAt) {
-                    console.warn(`[AIS Direct] WebSocket cerrado durante captura. code=${event.code} reason=${event.reason || 'N/A'}`);
-                }
-            };
+            vessels.forEach((vessel) => window.procesarMensajeAIS(vessel));
+            window.rawVesselsInArea = vessels;
+            scheduleLiveAisRender();
+            updateRadarWorkflowUi();
+            return { success: true, vesselCount: vessels.length };
         }
 
         window.startDirectAisLiveRadar = connectLiveAisForCurrentBounds;
@@ -2892,7 +2789,13 @@
         };
 
         window.validateAisApiKeyStatus = async function() {
-            await fetchAisStreamApiKey();
+            const response = await fetch('/.netlify/functions/get-vessels?action=validate-key', {
+                headers: { Accept: 'application/json' }
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || payload.valid === false) {
+                throw new Error(payload.error || 'AIS API key inválida o expirada.');
+            }
             return true;
         };
 

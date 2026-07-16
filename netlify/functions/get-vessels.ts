@@ -1,6 +1,6 @@
 import type { Config } from "@netlify/functions";
 import WebSocket from "ws";
-import { isCargoShipType, readVessels, upsertVessels, type VesselRecord } from "./vessel-store.js";
+import { countVessels, isCargoShipType, readVessels, upsertVessels, type VesselRecord } from "./vessel-store.js";
 
 type VesselMessage = Record<string, unknown>;
 type LiveCollectionResult = {
@@ -572,7 +572,14 @@ function getVesselKey(message: VesselMessage) {
 function normalizeVesselMessage(message: VesselMessage): VesselMessage {
   const metadata = asRecord(message.MetaData);
   const nestedMessage = asRecord(message.Message);
-  const positionReport = asRecord(message.PositionReport || nestedMessage.PositionReport);
+  const positionReport = asRecord(
+    message.PositionReport
+      || nestedMessage.PositionReport
+      || message.StandardClassBPositionReport
+      || nestedMessage.StandardClassBPositionReport
+      || message.ExtendedClassBPositionReport
+      || nestedMessage.ExtendedClassBPositionReport,
+  );
   const staticData = asRecord(message.ShipStaticData || nestedMessage.ShipStaticData);
 
   const latitude = normalizeNumber(firstDefined(
@@ -680,7 +687,6 @@ function toVesselRecord(message: VesselMessage): VesselRecord | null {
   const longitude = normalizeNumber(firstDefined(normalized.longitude, normalized.AIS_Live_Lon, metadata.longitude));
 
   if (!mmsi || latitude === undefined || longitude === undefined) return null;
-  if (!isCargoShipType(getShipTypeValue(normalized))) return null;
 
   const now = new Date().toISOString();
   const imo = String(firstDefined(normalized.imo, normalized.IMO, metadata.IMO, "") || "").trim();
@@ -811,13 +817,9 @@ async function readStoredVesselMessages(limit: number) {
 
 async function persistVesselMessages(vessels: VesselMessage[]) {
   const rows = vessels.map(toVesselRecord).filter((row): row is VesselRecord => row !== null);
-  if (rows.length === 0) return;
-
-  try {
-    await upsertVessels(rows);
-  } catch (error) {
-    console.warn("AIS vessel store write failed:", error);
-  }
+  if (rows.length === 0) return { persistedCount: 0, databaseVesselCount: await countVessels() };
+  await upsertVessels(rows);
+  return { persistedCount: rows.length, databaseVesselCount: await countVessels() };
 }
 
 function mergeVesselMessageLists(baseVessels: VesselMessage[], incomingVessels: VesselMessage[]) {
@@ -921,7 +923,12 @@ function collectVessels(url: URL, apiKey: string): Promise<LiveCollectionResult>
       const subscriptionMessage: Record<string, unknown> = {
         APIKey: apiKey,
         BoundingBoxes: bounds,
-        FilterMessageTypes: ["PositionReport", "ShipStaticData"],
+        FilterMessageTypes: [
+          "PositionReport",
+          "StandardClassBPositionReport",
+          "ExtendedClassBPositionReport",
+          "ShipStaticData",
+        ],
       };
       const debugSubscriptionMessage = { ...subscriptionMessage, APIKey: apiKey ? "[redacted]" : "" };
       console.log(JSON.stringify(debugSubscriptionMessage));
@@ -951,7 +958,7 @@ function collectVessels(url: URL, apiKey: string): Promise<LiveCollectionResult>
   });
 }
 
-export default async (req: Request) => {
+export async function handleGetVessels(req: Request) {
   const url = new URL(req.url);
   const requestedQuantity = Math.min(MAX_QUANTITY, Math.max(1, numberParam(url, ["quantity", "limit"], DEFAULT_QUANTITY)));
   const apiKey = getApiKey();
@@ -1039,11 +1046,12 @@ export default async (req: Request) => {
     const vessels = completedLiveVessels.length > 0
       ? mergeVesselMessageLists(storedVessels, liveVessels)
       : [];
+    let persistenceResult = { persistedCount: 0, databaseVesselCount: await countVessels() };
 
     if (completedLiveVessels.length > 0) {
       vesselCache = vessels;
       cacheUpdatedAt = Date.now();
-      await persistVesselMessages(completedLiveVessels);
+      persistenceResult = await persistVesselMessages(completedLiveVessels);
     } else if (!forceLive && vesselCache.length === 0) {
       vesselCache = storedVessels;
       if (vesselCache.length > 0) cacheUpdatedAt = Date.now();
@@ -1064,13 +1072,15 @@ export default async (req: Request) => {
         vessels: responseVessels,
         updatedAt: cacheUpdatedAt,
         source,
+        persistedCount: persistenceResult.persistedCount,
+        databaseVesselCount: persistenceResult.databaseVesselCount,
         message: forceLive
           ? `Data recolectada: ${responseVessels.length} buques recibidos del barrido en vivo`
           : `Data recolectada: ${responseVessels.length} buques filtrados con éxito`,
       },
       {
         headers: {
-          "x-ais-persisted-count": String(responseVessels.length),
+          "x-ais-persisted-count": String(persistenceResult.persistedCount),
           "x-ais-target-count": String(requestedQuantity),
         },
       },
@@ -1078,13 +1088,16 @@ export default async (req: Request) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "AIS stream request failed.";
     if (forceLive) {
-      return vesselsResponse({
-        vessels: [],
-        message: "Data recolectada: 0 buques recibidos del barrido en vivo",
-        warning: message,
-        updatedAt: cacheUpdatedAt,
-        source: "live-error-empty",
-      });
+      return vesselsResponse(
+        {
+          vessels: [],
+          message: "La captura AIS no pudo persistirse o completarse.",
+          error: message,
+          updatedAt: cacheUpdatedAt,
+          source: "live-error-empty",
+        },
+        { status: 502 },
+      );
     }
 
     if (vesselCache.length === 0) {
@@ -1101,7 +1114,9 @@ export default async (req: Request) => {
       source: vesselCache.length ? "stored-cache" : "empty-fallback",
     });
   }
-};
+}
+
+export default handleGetVessels;
 
 export const config: Config = {
   method: ["GET", "POST"],

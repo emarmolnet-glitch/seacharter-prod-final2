@@ -1,4 +1,7 @@
 import { getStore } from "@netlify/blobs";
+import { count, desc, sql } from "drizzle-orm";
+import { db } from "../../db/index.js";
+import { aisVessels } from "../../db/schema.js";
 
 export type VesselRecord = {
   imoNumber: string;
@@ -46,7 +49,6 @@ export type VesselRecord = {
 };
 
 const STORE_NAME = "ais-vessels";
-const VESSEL_INDEX_KEY = "vessels-index.json";
 const CARGO_LOG_KEY = "cargo-vessels-log.csv";
 const CARGO_LOG_HEADER = "MMSI,IMO,Nombre,ShipType,Draught,Latitud,Longitud,ETA,ETA_Estimado,ETA_Objetivo,Distancia_NM,Velocidad_Kn,Confianza_ETA";
 
@@ -452,36 +454,74 @@ function mergeVesselRecord(existing: VesselRecord | undefined, incoming: VesselR
   };
 }
 
+function toDate(value: string | undefined): Date {
+  const parsed = value ? new Date(value) : new Date();
+  return Number.isFinite(parsed.getTime()) ? parsed : new Date();
+}
+
 async function readVesselIndex(): Promise<VesselRecord[]> {
   try {
-    const store = getVesselStore();
-    const data = await store.get(VESSEL_INDEX_KEY, { type: "json" });
-    
-    if (Array.isArray(data)) {
-      return data.filter(isVesselRecord);
-    }
+    const rows = await db
+      .select({ vesselData: aisVessels.vesselData })
+      .from(aisVessels)
+      .orderBy(desc(aisVessels.lastSeenAt))
+      .limit(45000);
+    return rows.map((row) => row.vesselData).filter(isVesselRecord);
   } catch (error) {
-    console.warn("AIS vessel store index read failed:", error);
+    console.warn("AIS Neon vessel index read failed:", error);
   }
   return [];
 }
 
 async function writeVesselIndex(rows: VesselRecord[]): Promise<void> {
-  await getVesselStore().setJSON(VESSEL_INDEX_KEY, rows.slice(0, 45000), {
-    metadata: {
-      contentType: "application/json; charset=utf-8",
-      purpose: "classified-radar-vessel-index",
-    },
-  });
+  if (rows.length === 0) return;
+  await db
+    .insert(aisVessels)
+    .values(rows.map((row) => ({
+      storageKey: vesselStorageKey(row),
+      imoNumber: row.imoNumber,
+      mmsi: row.mmsi,
+      vesselName: row.vesselName,
+      shipType: row.shipType,
+      latitude: row.latitude,
+      longitude: row.longitude,
+      source: row.source,
+      vesselData: row,
+      firstSeenAt: toDate(row.firstSeenAt || row.createdAt),
+      lastSeenAt: toDate(row.lastSeenAt),
+      createdAt: toDate(row.createdAt),
+      updatedAt: toDate(row.updatedAt),
+    })))
+    .onConflictDoUpdate({
+      target: aisVessels.storageKey,
+      set: {
+        imoNumber: sql`excluded.imo_number`,
+        mmsi: sql`excluded.mmsi`,
+        vesselName: sql`excluded.vessel_name`,
+        shipType: sql`excluded.ship_type`,
+        latitude: sql`excluded.latitude`,
+        longitude: sql`excluded.longitude`,
+        source: sql`excluded.source`,
+        vesselData: sql`excluded.vessel_data`,
+        firstSeenAt: sql`excluded.first_seen_at`,
+        lastSeenAt: sql`excluded.last_seen_at`,
+        updatedAt: sql`excluded.updated_at`,
+      },
+    });
 }
 
 export async function readVessels(): Promise<VesselRecord[]> {
   return sortByLastSeen(await readVesselIndex()).slice(0, 45000);
 }
 
+export async function countVessels(): Promise<number> {
+  const [result] = await db.select({ value: count() }).from(aisVessels);
+  return Number(result?.value || 0);
+}
+
 export async function upsertVessels(rows: VesselRecord[]): Promise<VesselRecord[]> {
-  const cargoRows = rows.filter((row) => isCargoShipType(row.shipType)).map(enrichVesselRecord);
-  if (cargoRows.length === 0) return readVessels();
+  const incomingRows = rows.map(enrichVesselRecord);
+  if (incomingRows.length === 0) return readVessels();
 
   const currentRows = await readVesselIndex();
   const rowsByKey = new Map<string, VesselRecord>();
@@ -490,19 +530,25 @@ export async function upsertVessels(rows: VesselRecord[]): Promise<VesselRecord[
     rowsByKey.set(vesselStorageKey(row), row);
   }
 
-  for (const row of cargoRows) {
+  const mergedRows: VesselRecord[] = [];
+  for (const row of incomingRows) {
     const primaryKey = vesselStorageKey(row);
     const existingByPrimary = rowsByKey.get(primaryKey);
     const existingByImo = row.mmsi ? rowsByKey.get(`imo:${row.imoNumber}`) : undefined;
     const merged = mergeVesselRecord(existingByPrimary || existingByImo, row);
     rowsByKey.set(vesselStorageKey(merged), merged);
+    mergedRows.push(merged);
     if (existingByImo && vesselStorageKey(existingByImo) !== vesselStorageKey(merged)) {
       rowsByKey.delete(vesselStorageKey(existingByImo));
     }
   }
 
-  await writeVesselIndex(sortByLastSeen(Array.from(rowsByKey.values())));
-  await appendCargoVesselCsvLog(cargoRows);
+  await writeVesselIndex(mergedRows);
+  try {
+    await appendCargoVesselCsvLog(incomingRows);
+  } catch (error) {
+    console.warn("AIS CSV audit log write failed after Neon persistence:", error);
+  }
 
   return readVessels();
 }

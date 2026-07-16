@@ -415,64 +415,21 @@
     }
 
     /**
-     * Position Filtering: Validation function that discards any coordinates
-     * that do not fall within a body of water or that are linked to an office/port point.
-     * 
+     * Coordinate validation without coastline or port exclusions.
+     *
      * @param {number} lat Latitude
      * @param {number} lon Longitude
-     * @returns {boolean} True if position is in water and not an office or port point
+     * @returns {boolean} True when the coordinates are finite and in range
      */
     function isValidWaterPosition(lat, lon) {
-        if (isNaN(lat) || isNaN(lon)) return false;
-
-        // 1. Known office or port points to discard (exact or very close coordinates)
-        const restrictedPoints = [
-            { lat: 39.46, lon: -0.31, name: "Valencia Port" },
-            { lat: 39.46, lon: -0.37, name: "Valencia Office" },
-            { lat: 41.38, lon: 2.18, name: "Barcelona Port/Office" },
-            { lat: 36.13, lon: -5.45, name: "Algeciras Port" },
-            { lat: 44.41, lon: 8.92, name: "Genoa Port" },
-            { lat: 37.94, lon: 23.64, name: "Piraeus Port" },
-            { lat: 35.12, lon: 14.51, name: "Malta Office" },
-            { lat: 36.14, lon: -5.35, name: "Gibraltar Port" }
-        ];
-
-        for (const pt of restrictedPoints) {
-            const dLat = Math.abs(lat - pt.lat);
-            const dLon = Math.abs(lon - pt.lon);
-            // If within ~500 meters of an office/port, discard it as it's not "at sea" / "live in water"
-            if (dLat < 0.005 && dLon < 0.005) {
-                return false;
-            }
-        }
-
-        // 2. Mediterranean region inland boundary filtering (simple but effective water heuristic)
-        // Inland Spain
-        if (lat > 36.5 && lat < 43.5 && lon > -9.0 && lon < -1.5) {
-            return false;
-        }
-        // Inland Africa (Morocco / Algeria / Tunisia)
-        if (lat < 35.0 && lon > -10.0 && lon < 11.0) {
-            // Keep coastal zone within 0.1 deg
-            if (lat < 34.8) {
-                return false;
-            }
-        }
-        // Inland France
-        if (lat > 43.8 && lat < 50.0 && lon > -5.0 && lon < 8.2) {
-            return false;
-        }
-        // Inland Italy
-        if (lat > 41.0 && lat < 46.5 && lon > 12.0 && lon < 16.5) {
-            return false;
-        }
-
-        // 3. Sanity coordinates range check
-        if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-            return false;
-        }
-
-        return true;
+        const latitude = Number(lat);
+        const longitude = Number(lon);
+        return Number.isFinite(latitude)
+            && Number.isFinite(longitude)
+            && latitude >= -90
+            && latitude <= 90
+            && longitude >= -180
+            && longitude <= 180;
     }
 
     /**
@@ -726,7 +683,7 @@
                     [aisStreamState.currentBounds.latMax, aisStreamState.currentBounds.lonMax]
                 ]
             ],
-            "FilterMessageTypes": ["PositionReport", "ShipStaticData"]
+            "FilterMessageTypes": ["PositionReport", "StandardClassBPositionReport", "ExtendedClassBPositionReport", "ShipStaticData"]
         };
     }
 
