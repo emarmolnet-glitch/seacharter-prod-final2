@@ -7,11 +7,14 @@
     const FOCUS_ALTITUDE = 1.8;
     const CAMERA_TRANSITION_MS = 700;
     const POINT_COLOR = 'rgba(0, 255, 255, 0.8)';
+    const POINT_HOVER_COLOR = '#FFFFFF';
     const POINT_ALTITUDE = 0.008;
+    const POINT_HOVER_ALTITUDE = 0.016;
+    const POINT_HOVER_RADIUS_FACTOR = 1.45;
     const PATH_STYLE = Object.freeze({ color: '#00FFFF', width: 2, simplify: true });
     const EARTH_IMAGE_URL = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
     const EARTH_TOPOLOGY_URL = 'https://unpkg.com/three-globe/example/img/earth-topology.png';
-    const NESTED_KEYS = ['vesselData', 'vessel_data', 'source_payload', 'sourcePayload', 'ais', 'AIS', 'payload', 'data', 'vessel', 'ship', 'position', 'PositionReport', 'metadata', 'MetaData'];
+    const NESTED_KEYS = ['vesselData', 'vessel_data', 'source_payload', 'sourcePayload', 'ais', 'AIS', 'radar', 'radarData', 'radar_data', 'response', 'results', 'records', 'items', 'payload', 'data', 'vessel', 'ship', 'position', 'PositionReport', 'details', 'registry', 'staticData', 'static_data', 'metadata', 'MetaData'];
 
     function toFiniteNumber(...values) {
         for (const value of values) {
@@ -39,8 +42,8 @@
             if (!current || typeof current !== 'object' || Array.isArray(current) || visited.has(current)) continue;
             visited.add(current);
             scopes.push(current);
-            NESTED_KEYS.forEach((key) => {
-                if (current[key] && typeof current[key] === 'object' && !Array.isArray(current[key])) queue.push(current[key]);
+            Object.values(current).forEach((nestedValue) => {
+                if (nestedValue && typeof nestedValue === 'object' && !Array.isArray(nestedValue)) queue.push(nestedValue);
             });
         }
         return scopes;
@@ -61,9 +64,9 @@
         const lat = toFiniteNumber(firstValue(scopes, ['lat', 'latitude', 'Latitude', 'AIS_Live_Lat', 'LAT']));
         const lng = toFiniteNumber(firstValue(scopes, ['lng', 'lon', 'long', 'longitude', 'Longitude', 'AIS_Live_Lon', 'LON', 'LONG']));
         if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
-        const rawName = firstValue(scopes, ['name', 'vesselName', 'vessel_name', 'ShipName', 'shipName', 'NAME']);
-        const rawImo = firstValue(scopes, ['imo', 'IMO', 'imoNumber', 'imo_number']);
-        const rawDwt = firstValue(scopes, ['dwt', 'DWT', 'deadweight', 'deadweightTonnage']);
+        const rawName = firstValue(scopes, ['name', 'vesselName', 'VesselName', 'vessel_name', 'ShipName', 'shipName', 'ship_name', 'NAME']);
+        const rawImo = firstValue(scopes, ['imo', 'IMO', 'imoNumber', 'imo_number', 'imo_no', 'IMO_Number']);
+        const rawDwt = firstValue(scopes, ['dwt', 'DWT', 'DWT_real', 'dwt_real', 'deadweight', 'deadweightTonnage', 'deadweight_tonnage']);
         const dwt = toFiniteNumber(rawDwt);
         return {
             ...vessel,
@@ -82,11 +85,11 @@
     function extractVesselRecords(input) {
         if (Array.isArray(input)) return input.flatMap(extractVesselRecords);
         if (!input || typeof input !== 'object') return [];
-        if (normalizeVessel(input)) return [input];
         for (const key of NESTED_KEYS) {
             if (Array.isArray(input[key])) return extractVesselRecords(input[key]);
         }
-        return [];
+        if (normalizeVessel(input)) return [input];
+        return Object.values(input).flatMap(extractVesselRecords);
     }
 
     function prepareVessels(input) {
@@ -116,10 +119,10 @@
     }
 
     function getPointRadius(cameraAltitude) {
-        if (cameraAltitude <= 0.45) return 0.060;
-        if (cameraAltitude >= 2.40) return 0.025;
+        if (cameraAltitude <= 0.45) return 0.075;
+        if (cameraAltitude >= 2.40) return 0.032;
         const progress = (cameraAltitude - 0.45) / (2.40 - 0.45);
-        return 0.060 + (0.025 - 0.060) * progress;
+        return 0.075 + (0.032 - 0.075) * progress;
     }
 
     function formatDwt(value) {
@@ -128,7 +131,17 @@
     }
 
     function getTooltip(vessel) {
-        return `<div class="global-fleet-tooltip"><strong>${escapeHtml(vessel?.name || 'Buque sin nombre')}</strong><span>${escapeHtml(formatDwt(vessel?.dwt))}</span></div>`;
+        const name = String(vessel?.name || 'Buque sin nombre').trim() || 'Buque sin nombre';
+        const imo = String(vessel?.imo || '').trim();
+        return `<div class="global-fleet-tooltip"><strong>${escapeHtml(name)}</strong><span>DWT · ${escapeHtml(formatDwt(vessel?.dwt))}</span><span>IMO · ${escapeHtml(imo && imo !== 'N/A' ? imo : 'IMO no disponible')}</span></div>`;
+    }
+
+    function schedulePointInteractionStyle(view) {
+        if (!view?.globe || view.hoverStyleFrameId) return;
+        view.hoverStyleFrameId = requestAnimationFrame(() => {
+            view.hoverStyleFrameId = null;
+            applyPointInteractionStyle(view);
+        });
     }
 
     function normalizeRoutePoint(point) {
@@ -248,14 +261,24 @@
         const radius = getPointRadius(getCameraAltitude(view));
         if (Math.abs(radius - view.pointRadius) < 0.0005) return;
         view.pointRadius = radius;
-        view.globe.pointRadius(() => radius).pointsData(view.vessels);
+        applyPointInteractionStyle(view);
+    }
+
+    function applyPointInteractionStyle(view) {
+        if (!view?.globe) return;
+        view.globe
+            .pointColor((vessel) => vessel === view.hoveredVessel ? POINT_HOVER_COLOR : POINT_COLOR)
+            .pointAltitude((vessel) => vessel === view.hoveredVessel ? POINT_HOVER_ALTITUDE : POINT_ALTITUDE)
+            .pointRadius((vessel) => vessel === view.hoveredVessel ? view.pointRadius * POINT_HOVER_RADIUS_FACTOR : view.pointRadius);
     }
 
     function updateVessels(_vessels, key = DEFAULT_KEY) {
         const view = getView(key);
         if (!view) return [];
+        view.hoveredVessel = null;
         view.vessels = prepareVessels(getFilteredVessels());
         view.globe.pointsData(view.vessels);
+        applyPointInteractionStyle(view);
         refreshPointRadius(view);
         focusFirstVessel(view);
         return view.vessels;
@@ -379,6 +402,7 @@
         const view = getView(key);
         if (!view) return;
         view.resizeObserver?.disconnect();
+        if (view.hoverStyleFrameId) cancelAnimationFrame(view.hoverStyleFrameId);
         view.controls?.removeEventListener?.('change', view.handleControlsChange);
         view.controls?.removeEventListener?.('start', view.handleInteractionStart);
         view.container.removeEventListener?.('pointerdown', view.handleContainerPointerDown);
@@ -445,6 +469,8 @@
             routePaths: [],
             portLabels: [],
             pointRadius: getPointRadius(INITIAL_VIEW.altitude),
+            hoveredVessel: null,
+            hoverStyleFrameId: null,
             autoRotate: options.autoRotate !== false,
             hasFocusedVessel: false,
             resizeObserver: null,
@@ -467,10 +493,15 @@
                 .atmosphereAltitude(0.16)
                 .pointLat('lat')
                 .pointLng('lng')
-                .pointColor(() => POINT_COLOR)
-                .pointAltitude(() => POINT_ALTITUDE)
-                .pointRadius(() => view.pointRadius)
+                .pointColor((vessel) => vessel === view.hoveredVessel ? POINT_HOVER_COLOR : POINT_COLOR)
+                .pointAltitude((vessel) => vessel === view.hoveredVessel ? POINT_HOVER_ALTITUDE : POINT_ALTITUDE)
+                .pointRadius((vessel) => vessel === view.hoveredVessel ? view.pointRadius * POINT_HOVER_RADIUS_FACTOR : view.pointRadius)
                 .pointLabel(getTooltip)
+                .onPointHover((vessel) => {
+                    if (view.hoveredVessel === vessel) return;
+                    view.hoveredVessel = vessel || null;
+                    schedulePointInteractionStyle(view);
+                })
                 .onPointClick(() => setAutoRotate(false, key))
                 .pointsTransitionDuration(0)
                 .arcsData([])
@@ -551,7 +582,7 @@
         toggleAutoRotate,
         getInstance: (key = DEFAULT_KEY) => getView(key)?.adapter || null,
         getVessels: (key = DEFAULT_KEY) => getView(key)?.vessels || [],
-        pointProps: Object.freeze({ color: POINT_COLOR, altitude: POINT_ALTITUDE, nearRadius: 0.060, farRadius: 0.025 })
+        pointProps: Object.freeze({ color: POINT_COLOR, hoverColor: POINT_HOVER_COLOR, altitude: POINT_ALTITUDE, nearRadius: 0.075, farRadius: 0.032 })
     });
 
     window.GlobalFleetGlobe = globalFleetGlobe;

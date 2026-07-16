@@ -171,23 +171,34 @@
 .global-fleet-tooltip strong {
   color: #ffffff;
   font-size: 12px;
+  font-weight: 800;
   line-height: 1.25;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  text-transform: uppercase;
 }
 
 .global-fleet-tooltip span {
-  color: #8fc7d0;
+  color: #32d6c3;
   font-size: 10px;
   font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .density-globe-stage .scene-tooltip,
 .global-fleet-globe .scene-tooltip {
-  z-index: 4;
+  z-index: 9999 !important;
   padding: 0;
   border: 0;
   background: transparent;
   pointer-events: none;
+}
+
+#view-map .map-command-shell,
+#view-map #map-host,
+#view-map #map-container,
+#view-ais .density-globe-stage,
+#view-ais #ais-map {
+  overflow: visible !important;
 }
 
 .density-globe-empty {
