@@ -421,12 +421,27 @@ export function calculateCoreFreight(
   };
 }
 
-function calculateCostPlusResults(values: CostPlusCalculatorState) {
+function calculateCostPlusResults(values: CostPlusCalculatorState, sharedTotalCosts: number) {
   const dailyOpex = safeNumber(values.dailyOpex);
   const coreFreight = calculateCoreFreight(values);
+  const totalCosts = Math.max(0, safeNumber(sharedTotalCosts));
+  const targetMargin = safeNumber(values.targetMargin);
+  const cargoVolume = safeNumber(values.cargoVolume);
+  const calculatedMargin = roundMoney(values.marginType === 'fixed'
+    ? targetMargin
+    : totalCosts * (targetMargin / 100));
+  const targetRevenue = totalCosts + calculatedMargin;
+  const minFreightRate = cargoVolume > 0 ? roundMoney(totalCosts / cargoVolume) : 0;
   const demurrageRate = roundMoney(dailyOpex * 1.25);
 
-  return { ...coreFreight, demurrageRate };
+  return {
+    ...coreFreight,
+    totalCosts,
+    calculatedMargin,
+    targetRevenue,
+    minFreightRate,
+    demurrageRate,
+  };
 }
 
 function calculateReverseTceResults(values: ReverseCalculatorState) {
@@ -2007,8 +2022,12 @@ export function CostPlusCalculator({
 }: CostPlusCalculatorProps) {
   const [values, setValues] = useState<CostPlusCalculatorState>(COST_PLUS_DEFAULT_VALUES);
   const [renderRefreshTick, setRenderRefreshTick] = useState(0);
+  const sharedTotalCosts = safeNumber(syncedCostData?.totalCosts);
 
-  const results = useMemo(() => calculateCostPlusResults(values), [values, renderRefreshTick]);
+  const results = useMemo(
+    () => calculateCostPlusResults(values, sharedTotalCosts),
+    [values, renderRefreshTick, sharedTotalCosts],
+  );
 
   const routeSyncData = useMemo(() => {
     const routeDaysSea = safeNumber(daysSea);
@@ -2111,7 +2130,7 @@ export function CostPlusCalculator({
               type="button"
               onClick={handleSyncWithRoute}
               disabled={!routeSyncData}
-              className="rounded-lg border border-green-300 bg-green-100 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-green-800 shadow-sm transition hover:border-green-500 hover:bg-green-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
+              className="rounded-lg border border-[#32D6C3] bg-[#32D6C3] px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm transition hover:border-[#29b8a9] hover:bg-[#29b8a9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#32D6C3] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
             >
               Sincronizar con Ruta
             </button>
@@ -2195,6 +2214,7 @@ export function CostPlusCalculator({
           <p className="mt-1 text-xs font-bold text-sky-700">USD / MT</p>
           <div className="mt-4 space-y-1 border-t border-sky-100 pt-3 text-sm font-semibold text-sky-800">
             <p>Coste Total Riesgo: {wholeCurrencyFormatter.format(results.totalCosts)}</p>
+            <p className="text-xs font-bold text-sky-700">Incluye posicionamiento, ETS y ajustes globales cuando aplican.</p>
             <p>Beneficio Neto Proyectado: {wholeCurrencyFormatter.format(results.calculatedMargin)}</p>
             <p>Demurrage ($/d): {wholeCurrencyFormatter.format(results.demurrageRate)}</p>
           </div>
