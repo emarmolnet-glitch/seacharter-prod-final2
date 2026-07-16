@@ -35270,6 +35270,33 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 error: null
             }, window.aisAvailabilitySweepUi || {});
 
+            const AIS_SWEEP_IDLE_LABEL = 'Consultar Disponibilidad Real-Time';
+            const AIS_SWEEP_IDLE_MESSAGE = 'Preparado para iniciar captura AIS desde el servidor.';
+
+            const resetAisAvailabilitySweepFeedback = function(errorMessage = null) {
+                const state = window.aisAvailabilitySweepUi;
+                const btn = document.getElementById('btn-refresh-ais');
+                const icon = document.getElementById('ais-refresh-icon');
+                const label = document.getElementById('ais-refresh-label');
+                const monitor = document.getElementById('ais-availability-monitor');
+                const status = document.getElementById('ais-availability-status');
+                const hasError = typeof errorMessage === 'string' && errorMessage.trim().length > 0;
+
+                state.status = hasError ? 'error' : 'idle';
+                state.isLoading = false;
+                state.error = hasError ? errorMessage : null;
+
+                if (btn) btn.disabled = false;
+                if (icon) icon.classList.remove('fa-spin');
+                if (label) label.textContent = AIS_SWEEP_IDLE_LABEL;
+                if (monitor) {
+                    monitor.classList.toggle('active', hasError);
+                    monitor.classList.remove('done');
+                }
+                if (status) status.textContent = hasError ? errorMessage : AIS_SWEEP_IDLE_MESSAGE;
+            };
+            window.resetAisAvailabilitySweepFeedback = resetAisAvailabilitySweepFeedback;
+
             window.updateAisAvailabilitySweepFeedback = function() {
                 const state = window.aisAvailabilitySweepUi;
                 const btn = document.getElementById('btn-refresh-ais');
@@ -35286,7 +35313,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (label) {
                     label.textContent = isRequesting
                         ? 'Enviando solicitud...'
-                        : (isSent ? 'Solicitud enviada' : 'Consultar Disponibilidad Real-Time');
+                        : (isSent ? 'Solicitud enviada' : AIS_SWEEP_IDLE_LABEL);
                 }
                 if (monitor) {
                     monitor.classList.toggle('active', isRequesting || isSent || hasError);
@@ -35297,18 +35324,21 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         ? 'El backend está capturando AISStream y guardando buques en Neon...'
                         : (isSent
                             ? `Captura completada: ${Number(state.vesselCount) || 0} buques actualizados en Neon${Number.isFinite(Number(state.databaseVesselCount)) ? `; ${Number(state.databaseVesselCount)} buques almacenados en total.` : '.'}`
-                            : (hasError ? state.error : ''));
+                            : (hasError ? state.error : AIS_SWEEP_IDLE_MESSAGE));
                 }
             };
 
             window.executeSweepAIS = async function() {
                 const btn = document.getElementById('btn-refresh-ais');
                 if (!btn) return;
+                if (window.aisAvailabilitySweepUi.isLoading) return;
                 window.aisAvailabilitySweepUi.status = 'requesting';
                 window.aisAvailabilitySweepUi.isLoading = true;
                 window.aisAvailabilitySweepUi.error = null;
                 window.updateAisAvailabilitySweepFeedback();
                 window.aisRadarUserActivated = true;
+                let completedSuccessfully = false;
+                let finalErrorMessage = null;
 
                 try {
                     if (typeof window.isAisRouteReady === 'function' && !window.isAisRouteReady()) {
@@ -35353,21 +35383,20 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     window.aisAvailabilitySweepUi.databaseVesselCount = Number.isFinite(Number(window.aisDatabaseVesselCount))
                         ? Number(window.aisDatabaseVesselCount)
                         : null;
+                    completedSuccessfully = true;
                 } catch (error) {
                     console.error('Error durante la captura AIS de servidor:', error);
-                    window.aisAvailabilitySweepUi.status = 'error';
-                    window.aisAvailabilitySweepUi.error = error && error.message
+                    finalErrorMessage = error && error.message
                         ? error.message
                         : 'No se pudo completar la captura AIS.';
                 } finally {
-                    window.aisAvailabilitySweepUi.isLoading = false;
-                    window.updateAisAvailabilitySweepFeedback();
+                    resetAisAvailabilitySweepFeedback(finalErrorMessage);
                     if (typeof showToast === 'function') {
                         const state = window.aisAvailabilitySweepUi;
-                        if (state.status === 'sent') {
+                        if (completedSuccessfully) {
                             showToast(`Captura AIS completada: ${Number(state.vesselCount) || 0} buques actualizados.`, false, 'success');
                         } else {
-                            showToast(state.error || 'No se pudo completar la captura AIS.', false, 'error');
+                            showToast(finalErrorMessage || 'No se pudo completar la captura AIS.', false, 'error');
                         }
                     }
                 }
