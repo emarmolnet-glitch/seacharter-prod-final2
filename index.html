@@ -3697,8 +3697,7 @@
         }
 
         #matching-action-dock #btn-run-matching,
-        #matching-action-dock #btnGenerateReport,
-        #matching-action-dock #btnReportDropdownTrigger {
+        #matching-action-dock #btnGenerateReport {
             min-height: 1.9rem;
             padding-top: 0.32rem !important;
             padding-bottom: 0.32rem !important;
@@ -3722,36 +3721,38 @@
             color: #4a2a07 !important;
         }
 
-        #matching-action-dock #btnGenerateReport,
-        #matching-action-dock #btnReportDropdownTrigger {
-            background: #bbf7d0 !important;
-            border-color: #86efac !important;
-            color: #14532d !important;
+        #matching-action-dock #btnGenerateReport {
+            background: #e2e8f0 !important;
+            border-color: #cbd5e1 !important;
+            color: #334155 !important;
         }
 
-        #matching-action-dock #btnGenerateReport:hover,
-        #matching-action-dock #btnReportDropdownTrigger:hover {
-            background: #a7f3c0 !important;
-            color: #0f3d24 !important;
+        #matching-action-dock #btnGenerateReport:hover {
+            background: #cbd5e1 !important;
+            color: #1e293b !important;
         }
 
-        #matching-action-dock #report-split-button-container {
+        #matching-action-dock #matching-audit-mode-container {
             margin-top: 0 !important;
             min-width: 0;
             width: auto !important;
         }
 
         #matching-action-dock #btnGenerateReport {
-            border-radius: 7px 0 0 7px !important;
+            border-radius: 7px !important;
             padding-left: 0.7rem !important;
-            padding-right: 0.6rem !important;
+            padding-right: 0.7rem !important;
             white-space: nowrap;
         }
 
-        #matching-action-dock #btnReportDropdownTrigger {
-            border-radius: 0 7px 7px 0 !important;
-            padding-left: 0.55rem !important;
-            padding-right: 0.55rem !important;
+        #matching-action-dock #btnGenerateReport[aria-pressed="true"] {
+            background: #bbf7d0 !important;
+            border-color: #4ade80 !important;
+            color: #14532d !important;
+        }
+
+        #matching-action-dock #matching-audit-mode-status {
+            display: none;
         }
 
         #matching-action-dock #btn-matching-subtitle {
@@ -3807,7 +3808,7 @@
                 flex: 1 1 auto;
             }
 
-            #matching-action-dock #report-split-button-container {
+            #matching-action-dock #matching-audit-mode-container {
                 width: 100% !important;
             }
 
@@ -11416,39 +11417,12 @@
                                     <p id="btn-matching-subtitle" class="text-slate-500 text-[11px] text-center mt-2 leading-relaxed italic">
                                         Búsqueda jerárquica y ordenamiento inteligente de buques según disponibilidad, especificaciones técnicas, rentabilidad y riesgos.
                                     </p>
-                                    <div class="relative inline-flex w-full mt-4" id="report-split-button-container">
-                                        <button id="btnGenerateReport" onclick="exportSelectedMatchingToAudit()" class="flex-grow bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase py-3 pl-4 pr-3 rounded-l-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border-r border-emerald-700/30 focus:outline-none cursor-pointer">
-                                            <i class="fa-solid fa-paper-plane"></i>
-                                            <span>Exportar Selección a Auditoría</span>
+                                    <div class="w-full mt-4" id="matching-audit-mode-container">
+                                        <button id="btnGenerateReport" type="button" onclick="toggleMatchingAuditMode()" aria-pressed="false" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-black text-xs uppercase py-3 px-4 rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-slate-600 focus:outline-none cursor-pointer">
+                                            <i class="fa-solid fa-database"></i>
+                                            <span>MODO AUDITORÍA</span>
                                         </button>
-                                        <button id="btnReportDropdownTrigger" onclick="toggleReportDropdown(event)" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 rounded-r-lg shadow-md transition flex items-center justify-center border-none cursor-pointer focus:outline-none" title="Opciones de exportación / Export options">
-                                            <i class="fa-solid fa-chevron-down text-xs transition-transform duration-200" id="reportDropdownArrow"></i>
-                                        </button>
-                                        <div id="reportDropdownMenu" class="hidden absolute left-0 top-full mt-2 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 z-[100] font-sans">
-                                            <button onclick="triggerReportOption('send', event)" class="w-full text-left px-4 py-2.5 text-xs text-slate-100 hover:bg-slate-700/80 transition flex items-center gap-3 font-bold border-none bg-transparent cursor-pointer">
-                                                <i class="fa-solid fa-paper-plane text-emerald-400 w-4 text-center"></i>
-                                                <div>
-                                                    <div class="font-black uppercase tracking-wider text-[10px] text-emerald-400">Enviar a Data Bridge</div>
-                                                    <div class="text-[9px] text-slate-300 font-normal normal-case mt-0.5">Envía manualmente la selección preparada del motor.</div>
-                                                </div>
-                                            </button>
-                                            <div class="border-t border-slate-700 my-1"></div>
-                                            <button onclick="triggerReportOption('download', event)" class="w-full text-left px-4 py-2.5 text-xs text-slate-100 hover:bg-slate-700/80 transition flex items-center gap-3 font-bold border-none bg-transparent cursor-pointer">
-                                                <i class="fa-solid fa-file-arrow-down text-cyan-400 w-4 text-center"></i>
-                                                <div>
-                                                    <div class="font-black uppercase tracking-wider text-[10px] text-cyan-400">Exportar Barrido Crudo (JSON)</div>
-                                                    <div class="text-[9px] text-slate-300 font-normal normal-case mt-0.5">Genera un archivo .json con los resultados crudos del motor de coincidencias para Data Bridge.</div>
-                                                </div>
-                                            </button>
-                                            <div class="border-t border-slate-700 my-1"></div>
-                                            <button onclick="triggerReportOption('upload', event)" class="w-full text-left px-4 py-2.5 text-xs text-slate-100 hover:bg-slate-700/80 transition flex items-center gap-3 font-bold border-none bg-transparent cursor-pointer">
-                                                <i class="fa-solid fa-file-import text-amber-400 w-4 text-center"></i>
-                                                <div>
-                                                    <div class="font-black uppercase tracking-wider text-[10px] text-amber-400">📥 Cargar Feedback / Informe de Data Bridge</div>
-                                                    <div class="text-[9px] text-slate-300 font-normal normal-case mt-0.5">Cargar un archivo .json de Data Bridge para absorber el aprendizaje.</div>
-                                                </div>
-                                            </button>
-                                        </div>
+                                        <p id="matching-audit-mode-status" class="mt-2 text-center text-[10px] font-bold text-slate-500" aria-live="polite">Fuente actual: radar AIS en vivo</p>
                                     </div>
                                 </div>
                             </div>
@@ -15503,45 +15477,6 @@
             }
         }
 
-        function toggleReportDropdown(event) {
-            if (event) {
-                event.stopPropagation();
-                event.preventDefault();
-            }
-            const dropdown = document.getElementById('reportDropdownMenu');
-            const arrow = document.getElementById('reportDropdownArrow');
-            if (dropdown) {
-                if (dropdown.classList.contains('hidden')) {
-                    dropdown.classList.remove('hidden');
-                    if (arrow) arrow.classList.add('rotate-180');
-                } else {
-                    dropdown.classList.add('hidden');
-                    if (arrow) arrow.classList.remove('rotate-180');
-                }
-            }
-        }
-        window.toggleReportDropdown = toggleReportDropdown;
-
-        function triggerReportOption(option, event) {
-            if (event) {
-                event.stopPropagation();
-                event.preventDefault();
-            }
-            const dropdown = document.getElementById('reportDropdownMenu');
-            const arrow = document.getElementById('reportDropdownArrow');
-            if (dropdown) dropdown.classList.add('hidden');
-            if (arrow) arrow.classList.remove('rotate-180');
-
-            if (option === 'send') {
-                exportSelectedMatchingToAudit();
-            } else if (option === 'download') {
-                downloadFrozenReport();
-            } else if (option === 'upload') {
-                document.getElementById('feedback-file-input').click();
-            }
-        }
-        window.triggerReportOption = triggerReportOption;
-
         async function handleFeedbackFileUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -15582,20 +15517,111 @@
         }
         window.handleFeedbackFileUpload = handleFeedbackFileUpload;
 
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function(event) {
-            const container = document.getElementById('report-split-button-container');
-            const dropdown = document.getElementById('reportDropdownMenu');
-            const arrow = document.getElementById('reportDropdownArrow');
-            if (container && !container.contains(event.target)) {
-                if (dropdown && !dropdown.classList.contains('hidden')) {
-                    dropdown.classList.add('hidden');
-                    if (arrow) arrow.classList.remove('rotate-180');
-                }
+        window.matchingAuditModeState = Object.assign({
+            enabled: false,
+            loading: false,
+            vessels: [],
+            loadedAt: null
+        }, window.matchingAuditModeState || {});
+
+        function updateMatchingAuditModeUi() {
+            const state = window.matchingAuditModeState;
+            const button = document.getElementById('btnGenerateReport');
+            const status = document.getElementById('matching-audit-mode-status');
+            const captureControls = document.querySelectorAll('#btn-refresh-ais, #btn-search-closest-vessels, #btn-freeze-radar');
+            if (button) {
+                button.disabled = state.loading;
+                button.setAttribute('aria-pressed', state.enabled ? 'true' : 'false');
+                button.innerHTML = state.loading
+                    ? '<i class="fa-solid fa-spinner fa-spin"></i><span>CARGANDO DATOS AUDITADOS</span>'
+                    : '<i class="fa-solid fa-database"></i><span>MODO AUDITORÍA</span>';
             }
-        });
+            if (status) {
+                status.textContent = state.loading
+                    ? 'Consultando ais_vessels en Neon…'
+                    : state.enabled
+                        ? `Fuente: Neon · ${state.vessels.length} registros VALIDATED`
+                        : 'Fuente actual: radar AIS en vivo';
+                status.classList.toggle('text-emerald-600', state.enabled);
+                status.classList.toggle('text-slate-500', !state.enabled);
+            }
+            captureControls.forEach((control) => {
+                control.disabled = state.enabled || state.loading;
+                control.setAttribute('aria-disabled', state.enabled || state.loading ? 'true' : 'false');
+                control.style.opacity = state.enabled || state.loading ? '0.5' : '';
+                control.style.cursor = state.enabled || state.loading ? 'not-allowed' : '';
+            });
+        }
+
+        async function toggleMatchingAuditMode() {
+            const state = window.matchingAuditModeState;
+            if (state.loading) return;
+
+            if (state.enabled) {
+                state.enabled = false;
+                state.vessels = [];
+                state.loadedAt = null;
+                window.frozenRadarSnapshot = null;
+                window.aisMatchingCache = [];
+                if (window.GlobalStore) {
+                    window.GlobalStore.rawVessels = [];
+                    window.GlobalStore.vessels = [];
+                    window.GlobalStore.matchingVessels = [];
+                }
+                updateMatchingAuditModeUi();
+                showToast('Modo Auditoría desactivado. El radar queda disponible para una nueva captura.');
+                return;
+            }
+
+            state.enabled = true;
+            state.loading = true;
+            state.vessels = [];
+            window.aisRadarUserActivated = false;
+            window.isLiveTrackingEnabled = false;
+            window.AIS_PROXY_POLLING_ACTIVE = false;
+            if (typeof window.stopAisRadarPolling === 'function') window.stopAisRadarPolling();
+            if (window.MapLoader && typeof window.MapLoader.stopAisProxyPolling === 'function') window.MapLoader.stopAisProxyPolling();
+            updateMatchingAuditModeUi();
+
+            try {
+                const response = await fetch('/api/audit-vessels', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+                const payload = await response.json();
+                if (!response.ok || payload.success === false) throw new Error(payload.error || 'No se pudieron cargar los datos auditados.');
+                const vessels = Array.isArray(payload.vessels) ? payload.vessels : [];
+                state.vessels = vessels;
+                state.loadedAt = new Date().toISOString();
+                window.aisMatchingCache = vessels.slice();
+                window.frozenRadarSnapshot = { frozenAt: state.loadedAt, vessels: vessels.slice(), source: 'audit_database' };
+                if (window.GlobalStore) {
+                    window.GlobalStore.rawVessels = vessels.slice();
+                    window.GlobalStore.vessels = vessels.slice();
+                    window.GlobalStore.matchingVessels = vessels.slice();
+                }
+                showToast(`${vessels.length} buques VALIDATED cargados desde Neon.`);
+            } catch (error) {
+                state.enabled = false;
+                state.vessels = [];
+                state.loadedAt = null;
+                showToast(`❌ ${error instanceof Error ? error.message : 'No se pudieron cargar los datos auditados.'}`);
+            } finally {
+                state.loading = false;
+                updateMatchingAuditModeUi();
+            }
+
+            if (state.enabled && state.vessels.length > 0 && typeof window.runMatchingEngine === 'function') {
+                await window.runMatchingEngine();
+            }
+        }
+        window.toggleMatchingAuditMode = toggleMatchingAuditMode;
 
         function freezeRadarForFleetMatching() {
+            if (window.matchingAuditModeState?.enabled) {
+                return {
+                    frozenAt: window.matchingAuditModeState.loadedAt || new Date().toISOString(),
+                    vessels: JSON.parse(JSON.stringify(window.matchingAuditModeState.vessels || [])),
+                    source: 'audit_database'
+                };
+            }
             if (window.isLiveTrackingEnabled !== false && typeof window.toggleLiveTracking === 'function') {
                 window.toggleLiveTracking();
             }
@@ -15739,6 +15765,13 @@
 
         async function executeMatchingEngine() {
             const captureRadarSnapshotForFleetMatching = () => {
+                if (window.matchingAuditModeState?.enabled) {
+                    return {
+                        frozenAt: window.matchingAuditModeState.loadedAt || new Date().toISOString(),
+                        vessels: JSON.parse(JSON.stringify(window.matchingAuditModeState.vessels || [])),
+                        source: 'audit_database'
+                    };
+                }
                 if (typeof freezeRadarForFleetMatching === 'function') {
                     return freezeRadarForFleetMatching();
                 }
@@ -15980,7 +16013,7 @@
                     radarSnapshot: radarSnapshot.vessels,
                     vesselClassContext: window.vesselClassContext || null,
                     frozenAt: radarSnapshot.frozenAt,
-                    searchMode: window.currentOperationMode || 'local',
+                    searchMode: window.matchingAuditModeState?.enabled ? 'audit_database' : (window.currentOperationMode || 'local'),
                     matchRadiusNm: (window.AIS_PROSPECTION_RADII_NM && Number(window.AIS_PROSPECTION_RADII_NM.POL)) || 2000
                 };
 
@@ -32062,6 +32095,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         };
 
         window.procesarMensajeAIS = function(nuevoBarco) {
+            if (window.matchingAuditModeState?.enabled) return false;
             const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
             if (!(window.buquesAlmacenados instanceof Map)) {
                 window.buquesAlmacenados = new Map();
@@ -32146,6 +32180,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         };
 
         window.actualizarVistaRadar = function() {
+            if (window.matchingAuditModeState?.enabled) {
+                const auditedVessels = Array.isArray(window.matchingAuditModeState.vessels)
+                    ? window.matchingAuditModeState.vessels
+                    : [];
+                if (window.GlobalStore) {
+                    window.GlobalStore.rawVessels = auditedVessels.slice();
+                    window.GlobalStore.vessels = auditedVessels.slice();
+                    window.GlobalStore.matchingVessels = auditedVessels.slice();
+                }
+                return;
+            }
             const listaCompleta = window.buquesAlmacenados instanceof Map
                 ? Array.from(window.buquesAlmacenados.values())
                 : Object.values(window.buquesEncontrados || {});
@@ -32174,6 +32219,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             vessels: [],
             rawVessels: [],
             setVessels(newVessels) {
+                if (window.matchingAuditModeState?.enabled) return;
                 const incomingVessels = Array.isArray(newVessels) ? newVessels : [];
                 const hasExistingProxyData = Array.isArray(this.rawVessels) && this.rawVessels.length > 0;
                 if (incomingVessels.length === 0 && hasExistingProxyData) {
@@ -32200,6 +32246,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return this.vessels;
             },
             setRawVessels(newRawVessels) {
+                if (window.matchingAuditModeState?.enabled) return;
                 window.isAisBatchingRawStore = true;
                 try {
                     newRawVessels.forEach(nuevoBarco => {
@@ -32222,6 +32269,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.aisMatchingCache = Array.isArray(window.aisMatchingCache) ? window.aisMatchingCache : [];
 
         window.getCachedAisVessels = function() {
+            if (window.matchingAuditModeState?.enabled) {
+                return Array.isArray(window.matchingAuditModeState.vessels)
+                    ? window.matchingAuditModeState.vessels.slice()
+                    : [];
+            }
             const sources = [
                 window.aisMatchingCache,
                 typeof aisVesselsData !== 'undefined' ? aisVesselsData : null,
@@ -32255,6 +32307,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         };
 
         window.addEventListener('ais:vessels-updated', (event) => {
+            if (window.matchingAuditModeState?.enabled) return;
             const detail = event && event.detail ? event.detail : {};
             const incoming = Array.isArray(detail.rawVessels) && detail.rawVessels.length > 0
                 ? detail.rawVessels
@@ -32751,6 +32804,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         window.isLiveTrackingEnabled = true;
         window.toggleLiveTracking = function() {
+            if (window.matchingAuditModeState?.enabled) return;
             window.isLiveTrackingEnabled = !window.isLiveTrackingEnabled;
             const btn = document.getElementById('btn-freeze-radar');
             const timestampEl = document.getElementById('radar-frozen-timestamp');
@@ -33657,6 +33711,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             window.startAisClientEngine = function(mapInstance) {
+                if (window.matchingAuditModeState?.enabled) {
+                    return { started: false, reason: 'audit-mode' };
+                }
                 if (!window.aisRadarUserActivated) {
                     if (typeof window.setAisRadarStatus === 'function') {
                         window.setAisRadarStatus('inactive');
@@ -35308,10 +35365,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const isSent = state.status === 'sent';
                 const hasError = state.status === 'error';
 
-                if (btn) btn.disabled = isRequesting;
+                const auditMode = !!window.matchingAuditModeState?.enabled;
+                if (btn) btn.disabled = isRequesting || auditMode;
                 if (icon) icon.classList.toggle('fa-spin', isRequesting);
                 if (label) {
-                    label.textContent = isRequesting
+                    label.textContent = auditMode
+                        ? 'Captura desactivada · Modo Auditoría'
+                        : isRequesting
                         ? 'Enviando solicitud...'
                         : (isSent ? 'Solicitud enviada' : AIS_SWEEP_IDLE_LABEL);
                 }
@@ -35320,7 +35380,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     monitor.classList.toggle('done', isSent);
                 }
                 if (status) {
-                    status.textContent = isRequesting
+                    status.textContent = auditMode
+                        ? 'El motor usa exclusivamente registros VALIDATED de Neon.'
+                        : isRequesting
                         ? 'El backend está capturando AISStream y guardando buques en Neon...'
                         : (isSent
                             ? `Captura completada: ${Number(state.vesselCount) || 0} buques actualizados en Neon${Number.isFinite(Number(state.databaseVesselCount)) ? `; ${Number(state.databaseVesselCount)} buques almacenados en total.` : '.'}`
@@ -35329,6 +35391,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             };
 
             window.executeSweepAIS = async function() {
+                if (window.matchingAuditModeState?.enabled) {
+                    showToast('La captura AIS está desactivada durante el Modo Auditoría.');
+                    return { success: false, skipped: true, reason: 'audit-mode' };
+                }
                 const btn = document.getElementById('btn-refresh-ais');
                 if (!btn) return;
                 if (window.aisAvailabilitySweepUi.isLoading) return;
