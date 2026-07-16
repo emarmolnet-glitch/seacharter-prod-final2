@@ -17748,6 +17748,24 @@
 
         // --- AISLAMIENTO STRICTO DE TABS ---
         function switchTab(tabId) {
+            const openingReadOnlyDensityMap = tabId === 'ais';
+            const leavingReadOnlyDensityMap = window.aisDensityReadOnly === true && !openingReadOnlyDensityMap;
+            window.aisDensityReadOnly = openingReadOnlyDensityMap;
+            if (leavingReadOnlyDensityMap) {
+                window.isLiveTrackingEnabled = true;
+            }
+            if (openingReadOnlyDensityMap) {
+                window.aisRadarUserActivated = false;
+                window.isLiveTrackingEnabled = false;
+                clearTimeout(window.contextualAisRadarTimer);
+                window.contextualAisRadarTimer = null;
+                if (typeof window.stopAisRadarPolling === 'function') {
+                    window.stopAisRadarPolling();
+                }
+                if (window.MapLoader && typeof window.MapLoader.stopAisProxyPolling === 'function') {
+                    window.MapLoader.stopAisProxyPolling();
+                }
+            }
             SeaCharterStore.set(readRouteStateFromCalculator());
             syncGlobalStateToForms();
             document.querySelectorAll('.view-section').forEach(el => {
@@ -17806,10 +17824,16 @@
                 if (aisTabInitTimer) {
                     clearTimeout(aisTabInitTimer);
                 }
-                aisTabInitTimer = setTimeout(() => {
+                aisTabInitTimer = setTimeout(async () => {
                     aisTabInitTimer = null;
                     const aisView = document.getElementById('view-ais');
                     if (!aisView || !aisView.classList.contains('active-block')) {
+                        return;
+                    }
+                    if (typeof window.loadValidatedAisDensityVessels === 'function') {
+                        await window.loadValidatedAisDensityVessels();
+                    }
+                    if (!aisView.classList.contains('active-block')) {
                         return;
                     }
                     initAisMap();
@@ -32486,6 +32510,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         window.ejecutarRadarDualAIS = async function() {
+            if (window.aisDensityReadOnly) {
+                return window.GlobalStore ? window.GlobalStore.getRawVessels() : [];
+            }
             if (window.isDualSweepRunning) {
                 return window.listaBarcos;
             }
@@ -32632,7 +32659,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         window.scheduleContextualAisRadarRefresh = function() {
             clearTimeout(window.contextualAisRadarTimer);
+            if (window.aisDensityReadOnly) {
+                window.contextualAisRadarTimer = null;
+                return;
+            }
             window.contextualAisRadarTimer = setTimeout(async () => {
+                if (window.aisDensityReadOnly) return;
                 if (typeof window.isAisRouteReady === 'function' && !window.isAisRouteReady()) return;
                 window.aisRadarUserActivated = true;
                 if (typeof window.setAisRadarStatus === 'function') {
@@ -32769,6 +32801,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         };
 
         window.startAisRadarPolling = function() {
+            if (window.aisDensityReadOnly) {
+                return { started: false, reason: 'density-map-read-only' };
+            }
             const limite = Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000;
             if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size >= limite) {
                 window.detenerRadar();
@@ -32804,6 +32839,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         window.isLiveTrackingEnabled = true;
         window.toggleLiveTracking = function() {
+            if (window.aisDensityReadOnly) {
+                if (typeof showToast === 'function') {
+                    showToast('El Mapa de Densidad usa exclusivamente buques auditados en modo de solo lectura.');
+                }
+                return;
+            }
             if (window.matchingAuditModeState?.enabled) return;
             window.isLiveTrackingEnabled = !window.isLiveTrackingEnabled;
             const btn = document.getElementById('btn-freeze-radar');
@@ -32837,12 +32878,84 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.isFirstLoad = true;
         window.isUserNavigating = false;
 
-        window.runInitialAisRadarLoad = async function() {
-            if (typeof window.setAisRadarStatus === 'function') {
-                window.setAisRadarStatus('inactive');
+        window.loadValidatedAisDensityVessels = async function() {
+            window.aisRadarUserActivated = false;
+            window.isLiveTrackingEnabled = false;
+            clearTimeout(window.contextualAisRadarTimer);
+            window.contextualAisRadarTimer = null;
+            if (typeof window.stopAisRadarPolling === 'function') window.stopAisRadarPolling();
+            if (window.MapLoader && typeof window.MapLoader.stopAisProxyPolling === 'function') {
+                window.MapLoader.stopAisProxyPolling();
             }
-            return [];
+
+            const readOnlyButton = document.getElementById('btn-freeze-radar');
+            if (readOnlyButton) {
+                readOnlyButton.disabled = true;
+                readOnlyButton.innerHTML = '<i class="fa-solid fa-database text-[10px] mr-1"></i>Radar: READ ONLY';
+                readOnlyButton.style.backgroundColor = '#475569';
+                readOnlyButton.title = 'Vista de solo lectura: ais_vessels con audit_status VALIDATED';
+            }
+
+            try {
+                const response = await fetch('/api/audit-vessels', {
+                    method: 'GET',
+                    headers: { Accept: 'application/json' },
+                    cache: 'no-store'
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(payload.error || 'No se pudieron cargar los buques auditados.');
+                }
+
+                const validatedVessels = Array.isArray(payload.vessels)
+                    ? payload.vessels.filter(vessel => String(vessel.audit_status || vessel.auditStatus || '').toUpperCase() === 'VALIDATED')
+                    : [];
+                const normalizedVessels = validatedVessels
+                    .map(vessel => typeof window.normalizeAisVesselForRadar === 'function'
+                        ? window.normalizeAisVesselForRadar(vessel)
+                        : vessel)
+                    .filter(Boolean);
+
+                window.buquesAlmacenados = new Map();
+                validatedVessels.forEach((vessel, index) => {
+                    const storageKey = String(
+                        vessel.storageKey || vessel.imoNumber || vessel.IMO || vessel.imo ||
+                        vessel.MMSI || vessel.mmsi || vessel.vesselName || `validated-${index}`
+                    );
+                    window.buquesAlmacenados.set(storageKey, vessel);
+                });
+                window.buquesEncontrados = Object.fromEntries(window.buquesAlmacenados.entries());
+                window.listaBarcos = validatedVessels.slice();
+                window.aisPersistedVesselCount = validatedVessels.length;
+
+                if (window.GlobalStore) {
+                    window.GlobalStore.rawVessels = validatedVessels.slice();
+                    window.GlobalStore.vessels = normalizedVessels;
+                }
+                window.dispatchEvent(new CustomEvent('ais:vessels-updated', {
+                    detail: {
+                        source: 'audit-database-readonly',
+                        rawVessels: validatedVessels,
+                        vessels: normalizedVessels
+                    }
+                }));
+                if (typeof window.actualizarContadorBuquesAlmacenados === 'function') {
+                    window.actualizarContadorBuquesAlmacenados();
+                }
+                if (typeof window.setAisRadarStatus === 'function') {
+                    window.setAisRadarStatus('frozen', validatedVessels.length);
+                }
+                return validatedVessels;
+            } catch (error) {
+                console.error('[Density Map] No se pudieron cargar los buques validados en modo de solo lectura.', error);
+                if (typeof window.showAisDisconnectedState === 'function') {
+                    window.showAisDisconnectedState();
+                }
+                return [];
+            }
         };
+
+        window.runInitialAisRadarLoad = window.loadValidatedAisDensityVessels;
 
         window.centrarEnZonaDeCarga = function() {
             const pol = document.getElementById('port-pol')?.value || '';
@@ -35286,6 +35399,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             // Centralized Single Source of Truth Fetch Function
             window.fetchAisData = async function(bypassMissingCheck = false) {
+                if (window.aisDensityReadOnly) {
+                    return window.GlobalStore ? window.GlobalStore.getRawVessels() : [];
+                }
                 if (window.isLiveTrackingEnabled === false) {
                     return window.GlobalStore ? window.GlobalStore.getRawVessels() : [];
                 }
@@ -35391,6 +35507,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             };
 
             window.executeSweepAIS = async function() {
+                if (window.aisDensityReadOnly) {
+                    showToast('El Mapa de Densidad está bloqueado en modo de solo lectura.');
+                    return [];
+                }
                 if (window.matchingAuditModeState?.enabled) {
                     showToast('La captura AIS está desactivada durante el Modo Auditoría.');
                     return { success: false, skipped: true, reason: 'audit-mode' };
