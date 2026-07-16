@@ -8527,6 +8527,43 @@
 
                         <p class="mb-4 max-w-3xl text-xs font-semibold leading-relaxed text-slate-600">Compara la petición del armador con tu contraoferta y mide el ahorro potencial sin cruzar el coste operativo mínimo del viaje.</p>
 
+                        <div class="mb-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm" aria-label="Parámetros del buque sincronizados con la negociación">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                                <div>
+                                    <span class="block text-[9px] font-black uppercase tracking-[0.16em] text-slate-400">Sincronización en tiempo real · Módulos 2 y 3</span>
+                                    <strong id="negotiation-vessel-sync-title" class="mt-1 block text-xs font-black text-slate-900">Esperando datos del buque</strong>
+                                </div>
+                                <div class="flex flex-col gap-2 sm:flex-row sm:items-end">
+                                    <span id="negotiation-fuel-strategy" class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase text-slate-600">Combustible pendiente</span>
+                                    <label for="negotiation-safety-factor" class="block min-w-[190px]">
+                                        <span class="mb-1 block text-[9px] font-black uppercase tracking-wide text-slate-500">Factor de Seguridad / Contingencia (%)</span>
+                                        <div class="flex items-center rounded-lg border border-slate-300 bg-white px-2 shadow-sm focus-within:border-cyan-500 focus-within:ring-2 focus-within:ring-cyan-500/10">
+                                            <input id="negotiation-safety-factor" type="number" min="0" max="100" step="0.5" value="0" class="mono w-full border-0 bg-white py-1.5 text-right text-sm font-black text-slate-900 outline-none" oninput="updateChartererNegotiationSimulator()">
+                                            <span class="ml-1 text-xs font-black text-slate-500">%</span>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                                <div class="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                                    <span class="block text-[9px] font-bold uppercase text-slate-400">Estrategia / Velocidades</span>
+                                    <strong id="negotiation-navigation-summary" class="mt-1 block text-[11px] font-black text-slate-800">—</strong>
+                                </div>
+                                <div class="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                                    <span class="block text-[9px] font-bold uppercase text-slate-400">Días Reales TCE</span>
+                                    <strong id="negotiation-days-summary" class="mt-1 block text-[11px] font-black text-slate-800">—</strong>
+                                </div>
+                                <div class="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                                    <span class="block text-[9px] font-bold uppercase text-slate-400">Estrés Algorítmico</span>
+                                    <strong id="negotiation-contingency-summary" class="mt-1 block text-[11px] font-black text-slate-800">—</strong>
+                                </div>
+                                <div class="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                                    <span class="block text-[9px] font-bold uppercase text-slate-400">Exposición Demurrage</span>
+                                    <strong id="negotiation-demurrage-summary" class="mt-1 block text-[11px] font-black text-slate-800">—</strong>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="grid grid-cols-1 gap-4 lg:grid-cols-12">
                             <div class="lg:col-span-7">
                                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -8546,18 +8583,18 @@
                                             <input id="negotiation-charterer-target" type="number" min="0" step="0.01" class="input-gc mono border-slate-300 bg-white text-lg font-black text-slate-900" placeholder="0.00" oninput="this.dataset.userEdited='true'; updateChartererNegotiationSimulator()">
                                             <span class="text-[10px] font-black uppercase text-slate-500">/MT</span>
                                         </div>
-                                        <button id="negotiation-ai-suggestion" type="button" onclick="applySuggestedNegotiationTarget()" class="mt-2 inline-flex items-center rounded-md border border-transparent px-1 py-1 text-left text-[11px] font-bold text-emerald-700 transition hover:border-emerald-200 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 disabled:cursor-not-allowed disabled:text-slate-400" disabled>🎯 Sugerencia IA: $0.00 / MT (Margen +5%)</button>
+                                        <button id="negotiation-ai-suggestion" type="button" onclick="applySuggestedNegotiationTarget()" class="mt-2 inline-flex items-center gap-1.5 rounded-md border border-transparent px-1 py-1 text-left text-[11px] font-bold text-emerald-700 transition hover:border-emerald-200 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 disabled:cursor-not-allowed disabled:text-slate-400" disabled><i class="fa-solid fa-bullseye" aria-hidden="true"></i><span>Sugerencia IA: $0.00 / MT (Margen +5%)</span></button>
                                         <span id="negotiation-target-tce" class="mt-2 block border-t border-emerald-100 pt-2 text-xs font-bold text-sky-700">TCE Proyectado: $0 / día</span>
                                     </div>
                                 </div>
 
                                 <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    <div class="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                                    <div class="rounded-lg border border-sky-200 bg-white p-3 shadow-sm">
                                         <span class="block text-[9px] font-black uppercase tracking-[0.16em] text-sky-700">Spread de Negociación</span>
                                         <strong id="negotiation-spread-pmt" class="mono mt-1 block text-2xl font-black text-sky-950">$0.00 /MT</strong>
                                         <span id="negotiation-spread-caption" class="mt-1 block text-[10px] font-semibold text-slate-600">Diferencia entre oferta y target.</span>
                                     </div>
-                                    <div class="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                                    <div class="rounded-lg border border-blue-200 bg-white p-3 shadow-sm">
                                         <span class="block text-[9px] font-black uppercase tracking-[0.16em] text-blue-700">Ahorro Total Proyectado</span>
                                         <strong id="negotiation-total-savings" class="mono mt-1 block text-2xl font-black text-blue-950">$0</strong>
                                         <span id="negotiation-cargo-caption" class="mt-1 block text-[10px] font-semibold text-slate-600">Calculado sobre 0 TM.</span>
@@ -8578,6 +8615,8 @@
                                         <div>
                                             <span class="block text-[9px] font-bold uppercase text-slate-500">Break-Even Armador</span>
                                             <strong id="negotiation-break-even" class="mono mt-1 block text-xl font-black text-slate-950">$0.00 /MT</strong>
+                                            <span id="negotiation-algorithmic-reference" class="mt-1 block text-[9px] font-semibold text-slate-500">Basado en estimación algorítmica (ref: pendiente)</span>
+                                            <span id="negotiation-safety-caption" class="mt-1 hidden text-[9px] font-black text-cyan-700">Contingencia aplicada: +0% sobre estimación IA</span>
                                         </div>
                                         <span id="negotiation-target-delta" class="mono rounded-md bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">Δ $0.00</span>
                                     </div>
@@ -22404,7 +22443,11 @@
                 totalBunkerCost: totalBunkers,
                 totalDays
             });
-            const adjustedCostTotal = isZeroCalculation ? 0 : (costTotal + tugTotalCost + costPlusContingency.totalCost);
+            const demurrageExposure = isZeroCalculation
+                ? { active: false, exposedDays: 0, financialExposure: 0 }
+                : (updateDemurrageExposureAlert() || { active: false, exposedDays: 0, financialExposure: 0 });
+            const demurrageExposureCost = Math.max(0, Number(demurrageExposure.financialExposure) || 0);
+            const adjustedCostTotal = isZeroCalculation ? 0 : (costTotal + tugTotalCost + costPlusContingency.totalCost + demurrageExposureCost);
             const totalSmartCostIncrement = isZeroCalculation ? 0 : Math.max(0, adjustedCostTotal - basicBreakEvenNumerator);
             const smartCostsComplete = !isZeroCalculation && missingSmartFields.length === 0;
             const smartBreakEvenNumerator = adjustedCostTotal;
@@ -22929,6 +22972,13 @@
             State.vessel = document.getElementById('vessel-name').value;
             State.dwt = document.getElementById('vessel-dwt').value;
             State.hasScrubber = hasScrubber;
+            State.navigationStrategy = navigationStrategy;
+            State.navigationStrategyMode = navigationStrategyMode;
+            State.speedBallast = spdBal;
+            State.speedLaden = spdLaden;
+            State.seaConsumptionDaily = cSea;
+            State.activeSeaFuel = hasScrubber ? 'IFO 380' : 'VLSFO';
+            State.activeSeaFuelPrice = pSea;
             State.draft = parseFloat(document.getElementById('vessel-draft')?.value) || 0;
             State.loa = parseFloat(document.getElementById('vessel-loa')?.value) || 0;
             State.pol = document.getElementById('port-pol').value;
@@ -22966,6 +23016,8 @@
                 contingencyDays: costPlusContingency.extraDays,
                 contingencyOpex: costPlusContingency.opexCost,
                 contingencyBunker: costPlusContingency.bunkerCost,
+                demurrageExposure: demurrageExposureCost,
+                demurrageExposureDays: Math.max(0, Number(demurrageExposure.exposedDays) || 0),
                 includesPositioning: distBal > 0,
                 total: adjustedCostTotal,
                 baseTotal: costTotal,
@@ -24506,16 +24558,38 @@
 
             const breakEvenText = document.getElementById('res-breakeven')?.textContent || '';
             const parsedBreakEven = parseFloat(breakEvenText.replace(/[^0-9.-]+/g, '')) || 0;
-            const breakEven = Math.max(0, Number(State.breakEvenArmador || State.breakEven || parsedBreakEven) || 0);
-            const TargetSugerido = calculateSuggestedNegotiationTarget(breakEven, 5);
+            const baseBreakEven = Math.max(0, Number(State.breakEvenArmador || State.breakEven || parsedBreakEven) || 0);
             const cargo = Math.max(0, Number(State.cargo || document.getElementById('cargo-qty')?.value) || 0);
+            const costBreakdown = State.costBreakdown || {};
+            const contingencyDays = Math.max(0, Number(State.costPlusContingencyDays || costBreakdown.contingencyDays) || 0);
+            const baseDays = Math.max(0, Number(State.daysSea) || 0) + Math.max(0, Number(State.daysPort) || 0);
+            const totalTceDays = (baseDays > 0 ? baseDays : Math.max(0, Number(State.totalDays) || 0)) + contingencyDays;
+            const commissionPct = Math.max(0, Number(document.getElementById('comm-pct')?.value ?? State.commPct) || 0);
+            const safetyFactorPct = Math.min(100, Math.max(0, Number(document.getElementById('negotiation-safety-factor')?.value) || 0));
+            const algorithmicPdaPol = Math.max(0, Number(document.getElementById('pda-pol')?.value ?? State.pdaPol) || 0);
+            const algorithmicPdaPod = Math.max(0, Number(document.getElementById('pda-pod')?.value ?? State.pdaPod) || 0);
+            const algorithmicDailyOpex = Math.max(0, Number(document.getElementById('opex-daily')?.value ?? State.opex) || 0);
+            const algorithmicStress = calculateNegotiationAlgorithmicStress({
+                pdaPol: algorithmicPdaPol,
+                pdaPod: algorithmicPdaPod,
+                dailyOpex: algorithmicDailyOpex,
+                totalDays: totalTceDays,
+                factorPct: safetyFactorPct
+            });
+            const freightTons = State.typeOfFreightApplied === 'Lumpsum' ? 5000 : cargo;
+            const commissionFactor = Math.max(0, 1 - (commissionPct / 100));
+            const stressBreakEvenImpact = freightTons > 0 && commissionFactor > 0
+                ? algorithmicStress.totalIncrement / (freightTons * commissionFactor)
+                : 0;
+            const breakEven = baseBreakEven + stressBreakEvenImpact;
+            const TargetSugerido = calculateSuggestedNegotiationTarget(breakEven, 5);
 
             if (ownerOfferInput.dataset.userEdited !== 'true') {
                 const suggestedOwnerOffer = Math.max(0, Number(State.sugOwner || document.getElementById('freight-rate')?.value || breakEven) || 0);
                 ownerOfferInput.value = suggestedOwnerOffer > 0 ? suggestedOwnerOffer.toFixed(2) : '';
             }
             if (chartererTargetInput.dataset.userEdited !== 'true') {
-                const suggestedTarget = Math.max(0, Number(State.precioObjetivoFletador || document.getElementById('freight-sell')?.value || breakEven) || 0);
+                const suggestedTarget = TargetSugerido || Math.max(0, Number(State.precioObjetivoFletador || document.getElementById('freight-sell')?.value || breakEven) || 0);
                 chartererTargetInput.value = suggestedTarget > 0 ? suggestedTarget.toFixed(2) : '';
             }
 
@@ -24528,20 +24602,19 @@
             const isViable = hasViabilityData && chartererTarget >= breakEven;
             const meterRatio = hasViabilityData ? Math.min(100, Math.max(4, (chartererTarget / breakEven) * 100)) : 0;
             const money = (value, decimals = 0) => `$${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
-            const costBreakdown = State.costBreakdown || {};
-            const contingencyDays = Math.max(0, Number(State.costPlusContingencyDays || costBreakdown.contingencyDays) || 0);
-            const baseDays = Math.max(0, Number(State.daysSea) || 0) + Math.max(0, Number(State.daysPort) || 0);
-            const totalTceDays = (baseDays > 0 ? baseDays : Math.max(0, Number(State.totalDays) || 0)) + contingencyDays;
             const bunkerTotal = Math.max(0, Number(costBreakdown.bunkers ?? State.totalBunkers ?? State.costBunkers) || 0)
                 + Math.max(0, Number(costBreakdown.contingencyBunker) || 0);
             const portCostsTotal = Math.max(0, Number(costBreakdown.pda ?? State.adjustedCostPda ?? State.portExpenses ?? State.costPda) || 0);
-            const commissionPct = Math.max(0, Number(document.getElementById('comm-pct')?.value ?? State.commPct) || 0);
+            const demurrageExposureCost = Math.max(0, Number(costBreakdown.demurrageExposure ?? State.demurrageExposure?.financialExposure) || 0);
+            const etsCost = Math.max(0, Number(costBreakdown.ets ?? State.etsCost) || 0);
+            const extraVoyageCosts = demurrageExposureCost + etsCost + algorithmicStress.pdaIncrement;
             const ownerTce = calculateNegotiationTce({
                 freightPerMt: ownerOffer,
                 cargoTons: cargo,
                 commissionPct,
                 bunkerTotal,
                 portCostsTotal,
+                extraVoyageCosts,
                 totalDays: totalTceDays
             });
             const targetTce = calculateNegotiationTce({
@@ -24550,6 +24623,7 @@
                 commissionPct,
                 bunkerTotal,
                 portCostsTotal,
+                extraVoyageCosts,
                 totalDays: totalTceDays
             });
 
@@ -24567,6 +24641,14 @@
             const targetTceEl = document.getElementById('negotiation-target-tce');
             const suggestionEl = document.getElementById('negotiation-ai-suggestion');
             const frictionLimitEl = document.getElementById('negotiation-friction-limit');
+            const vesselSyncTitleEl = document.getElementById('negotiation-vessel-sync-title');
+            const fuelStrategyEl = document.getElementById('negotiation-fuel-strategy');
+            const navigationSummaryEl = document.getElementById('negotiation-navigation-summary');
+            const daysSummaryEl = document.getElementById('negotiation-days-summary');
+            const contingencySummaryEl = document.getElementById('negotiation-contingency-summary');
+            const demurrageSummaryEl = document.getElementById('negotiation-demurrage-summary');
+            const algorithmicReferenceEl = document.getElementById('negotiation-algorithmic-reference');
+            const safetyCaptionEl = document.getElementById('negotiation-safety-caption');
 
             const renderProjectedTce = (element, result, borderClass) => {
                 if (!element) return;
@@ -24580,7 +24662,10 @@
             renderProjectedTce(targetTceEl, targetTce, 'border-emerald-100');
             if (suggestionEl) {
                 suggestionEl.disabled = TargetSugerido <= 0;
-                suggestionEl.textContent = `🎯 Sugerencia IA: ${money(TargetSugerido, 2)} / MT (Margen +5%)`;
+                const suggestionText = `Sugerencia IA: ${money(TargetSugerido, 2)} / MT (Margen +5%)`;
+                const suggestionTextEl = typeof suggestionEl.querySelector === 'function' ? suggestionEl.querySelector('span') : null;
+                if (suggestionTextEl) suggestionTextEl.textContent = suggestionText;
+                else suggestionEl.textContent = suggestionText;
             }
             if (frictionLimitEl) {
                 frictionLimitEl.textContent = TargetSugerido > 0
@@ -24605,6 +24690,30 @@
             if (breakEvenEl) breakEvenEl.textContent = `${money(breakEven, 2)} /MT`;
             if (targetDeltaEl) targetDeltaEl.textContent = `Δ ${targetDelta < 0 ? '-' : '+'}${money(targetDelta, 2)}`;
             if (viabilityMeterEl) viabilityMeterEl.style.width = `${meterRatio}%`;
+            const voyageReference = String(document.getElementById('quick-ref')?.value || document.getElementById('gc-ref')?.value || document.getElementById('asb-ref')?.value || 'pendiente').trim() || 'pendiente';
+            if (algorithmicReferenceEl) algorithmicReferenceEl.textContent = `Basado en estimación algorítmica (ref: ${voyageReference})`;
+            if (safetyCaptionEl) {
+                safetyCaptionEl.classList.toggle('hidden', safetyFactorPct <= 0);
+                safetyCaptionEl.textContent = `Contingencia aplicada: +${safetyFactorPct.toLocaleString('es-ES', { maximumFractionDigits: 1 })}% sobre estimación IA`;
+            }
+
+            const currentNavigationStrategy = State.navigationStrategy || (typeof navigationStrategy !== 'undefined' ? navigationStrategy : 'eco');
+            const strategyLabel = String(currentNavigationStrategy).toUpperCase() === 'FULL' ? 'FULL-SPEED' : 'ECO-SPEED';
+            const ballastSpeed = Math.max(0, Number(State.speedBallast ?? document.getElementById('spd-ballast')?.value) || 0);
+            const ladenSpeed = Math.max(0, Number(State.speedLaden ?? document.getElementById('spd-laden')?.value) || 0);
+            const activeFuel = State.activeSeaFuel || (State.hasScrubber ? 'IFO 380' : 'VLSFO');
+            const activeFuelPrice = Math.max(0, Number(State.activeSeaFuelPrice) || 0);
+            const demurrageExposureDays = Math.max(0, Number(costBreakdown.demurrageExposureDays ?? State.demurrageExposure?.exposedDays) || 0);
+            if (vesselSyncTitleEl) vesselSyncTitleEl.textContent = `${strategyLabel} · ${State.hasScrubber ? 'Scrubber activo' : 'Sin scrubber'}`;
+            if (fuelStrategyEl) fuelStrategyEl.textContent = `${activeFuel}${activeFuelPrice > 0 ? ` · ${money(activeFuelPrice)} /t` : ''}`;
+            if (navigationSummaryEl) navigationSummaryEl.textContent = `${strategyLabel} · ${ballastSpeed.toFixed(1)} / ${ladenSpeed.toFixed(1)} kn`;
+            if (daysSummaryEl) daysSummaryEl.textContent = `${totalTceDays.toFixed(2)} d · Mar ${Math.max(0, Number(State.daysSea) || 0).toFixed(2)} · Puerto ${Math.max(0, Number(State.daysPort) || 0).toFixed(2)}`;
+            if (contingencySummaryEl) contingencySummaryEl.textContent = safetyFactorPct > 0
+                ? `+${safetyFactorPct.toFixed(1)}% · ${money(algorithmicStress.totalIncrement)} buffer`
+                : `PDA ${money(algorithmicStress.basePda)} · OPEX ${money(algorithmicDailyOpex)}/d`;
+            if (demurrageSummaryEl) demurrageSummaryEl.textContent = demurrageExposureCost > 0
+                ? `${demurrageExposureDays.toFixed(2)} d · ${money(demurrageExposureCost)}`
+                : 'Sin exposición calculada';
 
             if (!hasViabilityData) {
                 if (viabilityCardEl) viabilityCardEl.className = 'h-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors';
@@ -24641,8 +24750,11 @@
                 spreadPerMt,
                 projectedSavings,
                 cargo,
+                baseBreakEven,
                 breakEven,
                 TargetSugerido,
+                voyageReference,
+                algorithmicStress,
                 targetDelta,
                 isViable,
                 ownerTceDaily: ownerTce.tceDaily,
@@ -24651,6 +24763,12 @@
                     commissionPct,
                     bunkerTotal,
                     portCostsTotal,
+                    extraVoyageCosts,
+                    etsCost,
+                    demurrageExposureCost,
+                    algorithmicPdaPol,
+                    algorithmicPdaPod,
+                    algorithmicDailyOpex,
                     totalDays: totalTceDays
                 }
             };
@@ -38966,7 +39084,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const genconTurnTimeDays = (!isZeroCalculation && cpStandard === 'GENCON') ? 1.0 : 0;
 
             const cSea = parseFloat(document.getElementById('cons-sea')?.value) || 0;
-            const pSea = parseFloat(document.getElementById('price-sea')?.value) || 0;
+            const vlsfoPrice = parseFloat(document.getElementById('price-sea')?.value) || 0;
+            const ifoPrice = parseFloat(document.getElementById('price-ifo')?.value) || 0;
+            const isolatedHasScrubber = vessel.hasScrubber !== undefined ? Boolean(vessel.hasScrubber) : vesselHasScrubber();
+            const pSea = isolatedHasScrubber ? ifoPrice : vlsfoPrice;
             const cPort = parseFloat(document.getElementById('cons-port')?.value) || 0;
             const cAnchorage = parseFloat(document.getElementById('cons-anchorage')?.value) || cPort;
             const cAnchorageAux = parseFloat(document.getElementById('cons-anchorage-aux')?.value) || 2.0;
@@ -40130,6 +40251,34 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         window.calculateSuggestedNegotiationTarget = calculateSuggestedNegotiationTarget;
+
+        function calculateNegotiationAlgorithmicStress({ pdaPol = 0, pdaPod = 0, dailyOpex = 0, totalDays = 0, factorPct = 0 } = {}) {
+            const normalizedPdaPol = Math.max(0, safeCalculationNumber(pdaPol));
+            const normalizedPdaPod = Math.max(0, safeCalculationNumber(pdaPod));
+            const normalizedDailyOpex = Math.max(0, safeCalculationNumber(dailyOpex));
+            const normalizedTotalDays = Math.max(0, safeCalculationNumber(totalDays));
+            const normalizedFactorPct = Math.min(100, Math.max(0, safeCalculationNumber(factorPct)));
+            const multiplier = 1 + (normalizedFactorPct / 100);
+            const basePda = normalizedPdaPol + normalizedPdaPod;
+            const baseOpex = normalizedDailyOpex * normalizedTotalDays;
+            const stressedPda = basePda * multiplier;
+            const stressedOpex = baseOpex * multiplier;
+            const pdaIncrement = stressedPda - basePda;
+            const opexIncrement = stressedOpex - baseOpex;
+            return {
+                factorPct: normalizedFactorPct,
+                multiplier,
+                basePda,
+                baseOpex,
+                stressedPda,
+                stressedOpex,
+                pdaIncrement,
+                opexIncrement,
+                totalIncrement: pdaIncrement + opexIncrement
+            };
+        }
+
+        window.calculateNegotiationAlgorithmicStress = calculateNegotiationAlgorithmicStress;
 
         function getSharedVoyageCostBasis(sourceState = SeaCharterStore.getState()) {
             const totalCosts = Math.max(0, safeCalculationNumber(sourceState?.totalCosts ?? sourceState?.costTotal));

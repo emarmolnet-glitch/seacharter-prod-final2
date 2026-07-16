@@ -377,6 +377,7 @@ test('charterer negotiation simulator calculates spread, savings, and viability 
     className: '',
     dataset: {},
     style: {},
+    classList: { toggle() {} },
     ...overrides,
   });
 
@@ -384,6 +385,11 @@ test('charterer negotiation simulator calculates spread, savings, and viability 
   elements.set('negotiation-charterer-target', createElement({ value: '35', dataset: { userEdited: 'true' } }));
   elements.set('cargo-qty', createElement({ value: '10000' }));
   elements.set('comm-pct', createElement({ value: '2.5' }));
+  elements.set('negotiation-safety-factor', createElement({ value: '0' }));
+  elements.set('pda-pol', createElement({ value: '20000' }));
+  elements.set('pda-pod', createElement({ value: '30000' }));
+  elements.set('opex-daily', createElement({ value: '2800' }));
+  elements.set('quick-ref', createElement({ value: 'RDM/GC/2026-0716-TEST' }));
   elements.set('res-breakeven', createElement({ textContent: '$32.00' }));
   [
     'negotiation-spread-pmt',
@@ -400,6 +406,14 @@ test('charterer negotiation simulator calculates spread, savings, and viability 
     'negotiation-target-tce',
     'negotiation-ai-suggestion',
     'negotiation-friction-limit',
+    'negotiation-vessel-sync-title',
+    'negotiation-fuel-strategy',
+    'negotiation-navigation-summary',
+    'negotiation-days-summary',
+    'negotiation-contingency-summary',
+    'negotiation-demurrage-summary',
+    'negotiation-algorithmic-reference',
+    'negotiation-safety-caption',
   ].forEach((id) => elements.set(id, createElement()));
 
   const context = {
@@ -409,6 +423,12 @@ test('charterer negotiation simulator calculates spread, savings, and viability 
       daysSea: 10,
       daysPort: 5,
       commPct: 2.5,
+      hasScrubber: true,
+      navigationStrategy: 'eco',
+      speedBallast: 10.5,
+      speedLaden: 9.5,
+      activeSeaFuel: 'IFO 380',
+      activeSeaFuelPrice: 475,
       costBreakdown: { bunkers: 100000, pda: 50000 },
     },
     calculateNegotiationTce: ({ freightPerMt, cargoTons, commissionPct, bunkerTotal, portCostsTotal, extraVoyageCosts = 0, totalDays }) => {
@@ -419,6 +439,24 @@ test('charterer negotiation simulator calculates spread, savings, and viability 
       return { grossRevenue, commissionCost, netRevenue, voyageCosts, totalDays, tceDaily: totalDays > 0 ? (netRevenue - voyageCosts) / totalDays : 0 };
     },
     calculateSuggestedNegotiationTarget: (breakEven) => Math.floor((breakEven * 1.05) * 100) / 100,
+    calculateNegotiationAlgorithmicStress: ({ pdaPol, pdaPod, dailyOpex, totalDays, factorPct }) => {
+      const multiplier = 1 + (factorPct / 100);
+      const basePda = pdaPol + pdaPod;
+      const baseOpex = dailyOpex * totalDays;
+      const stressedPda = basePda * multiplier;
+      const stressedOpex = baseOpex * multiplier;
+      return {
+        factorPct,
+        multiplier,
+        basePda,
+        baseOpex,
+        stressedPda,
+        stressedOpex,
+        pdaIncrement: stressedPda - basePda,
+        opexIncrement: stressedOpex - baseOpex,
+        totalIncrement: (stressedPda - basePda) + (stressedOpex - baseOpex),
+      };
+    },
     document: {
       getElementById(id) {
         return elements.get(id) || null;
@@ -440,9 +478,15 @@ test('charterer negotiation simulator calculates spread, savings, and viability 
   assert.equal(elements.get('negotiation-total-savings').textContent, '$50,000');
   assert.equal(elements.get('negotiation-owner-tce').textContent, 'TCE Proyectado: $16,000 / día');
   assert.equal(elements.get('negotiation-target-tce').textContent, 'TCE Proyectado: $12,750 / día');
-  assert.equal(elements.get('negotiation-ai-suggestion').textContent, '🎯 Sugerencia IA: $33.60 / MT (Margen +5%)');
+  assert.equal(elements.get('negotiation-ai-suggestion').textContent, 'Sugerencia IA: $33.60 / MT (Margen +5%)');
   assert.match(elements.get('negotiation-friction-limit').textContent, /\$33\.60/);
   assert.match(elements.get('negotiation-viability-message').textContent, /Target viable/);
+  assert.match(elements.get('negotiation-vessel-sync-title').textContent, /ECO-SPEED · Scrubber activo/);
+  assert.match(elements.get('negotiation-fuel-strategy').textContent, /IFO 380 · \$475 \/t/);
+  assert.match(elements.get('negotiation-navigation-summary').textContent, /10\.5 \/ 9\.5 kn/);
+  assert.match(elements.get('negotiation-days-summary').textContent, /15\.00 d/);
+  assert.match(elements.get('negotiation-algorithmic-reference').textContent, /RDM\/GC\/2026-0716-TEST/);
+  assert.match(elements.get('negotiation-contingency-summary').textContent, /PDA \$50,000 · OPEX \$2,800\/d/);
 
   elements.get('negotiation-charterer-target').value = '30';
   const rejectedResult = updateSimulator();
@@ -470,6 +514,57 @@ test('negotiation simulator uses the light application design system', () => {
   assert.doesNotMatch(simulatorLogic, /bg-(?:slate|gray|stone|neutral|amber|emerald|red|cyan|indigo)-9\d\d/);
   assert.match(simulatorLogic, /text-emerald-700/);
   assert.match(simulatorLogic, /text-red-700/);
+});
+
+test('negotiation consumes vessel strategy, scrubber fuel, contingency, ETS, and demurrage from shared state', () => {
+  const functionStart = indexSource.indexOf('function updateChartererNegotiationSimulator()');
+  const functionEnd = indexSource.indexOf('window.updateChartererNegotiationSimulator', functionStart);
+  const functionSource = indexSource.slice(functionStart, functionEnd);
+  const engineStart = indexSource.indexOf('function runEngine()');
+  const engineEnd = indexSource.indexOf('function syncQuickRef', engineStart);
+  const engineSource = indexSource.slice(engineStart, engineEnd);
+
+  assert.match(engineSource, /const pSea = hasScrubber \? ifoPrice : vlsfoPrice/);
+  assert.match(engineSource, /State\.navigationStrategy = navigationStrategy/);
+  assert.match(engineSource, /State\.speedBallast = spdBal/);
+  assert.match(engineSource, /State\.speedLaden = spdLaden/);
+  assert.match(engineSource, /costPlusContingency\.totalCost \+ demurrageExposureCost/);
+  assert.match(engineSource, /demurrageExposure: demurrageExposureCost/);
+  assert.match(functionSource, /const extraVoyageCosts = demurrageExposureCost \+ etsCost \+ algorithmicStress\.pdaIncrement/);
+  assert.match(functionSource, /extraVoyageCosts,/);
+  assert.match(functionSource, /document\.getElementById\('pda-pol'\)/);
+  assert.match(functionSource, /document\.getElementById\('pda-pod'\)/);
+  assert.match(functionSource, /document\.getElementById\('opex-daily'\)/);
+  assert.match(functionSource, /negotiation-safety-factor/);
+  assert.match(functionSource, /Contingencia aplicada:/);
+  assert.match(functionSource, /negotiation-navigation-summary/);
+  assert.match(functionSource, /negotiation-demurrage-summary/);
+  assert.doesNotMatch(indexSource.slice(indexSource.indexOf('id="charterer-negotiation-simulator"'), indexSource.indexOf('<!-- Acciones Finales -->')), /vessel-has-scrubber-choice/);
+});
+
+test('algorithmic negotiation stress multiplies PDA and voyage OPEX by the selected safety factor', () => {
+  const functionStart = indexSource.indexOf('function calculateNegotiationAlgorithmicStress');
+  const functionEnd = indexSource.indexOf('window.calculateNegotiationAlgorithmicStress', functionStart);
+  const functionSource = indexSource.slice(functionStart, functionEnd).trim();
+  const safeCalculationNumber = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+  const calculateStress = Function(
+    'safeCalculationNumber',
+    `${functionSource}; return calculateNegotiationAlgorithmicStress;`,
+  )(safeCalculationNumber);
+
+  const result = calculateStress({
+    pdaPol: 8675,
+    pdaPod: 9375,
+    dailyOpex: 2800,
+    totalDays: 15,
+    factorPct: 5,
+  });
+
+  assert.equal(result.basePda, 18050);
+  assert.equal(result.stressedPda, 18952.5);
+  assert.equal(result.baseOpex, 42000);
+  assert.equal(result.stressedOpex, 44100);
+  assert.equal(result.totalIncrement, 3002.5);
 });
 
 test('Cost-Plus contingency adds extra OPEX and average daily bunker cost', () => {
