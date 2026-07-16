@@ -10224,7 +10224,7 @@
                         <i class="fa-solid fa-satellite-dish text-blue-500 animate-pulse"></i>
                         Mapa Densidad
                     </h2>
-                    <p class="text-slate-400 text-sm mt-1">Solicitud de barrido al Data Bridge para predicción de disponibilidad de Bulk Carriers y cálculo de flete justo.</p>
+                    <p class="text-slate-400 text-sm mt-1">Captura AIS ejecutada por el backend para predicción de disponibilidad y cálculo de flete justo.</p>
                     
                     <!-- Mode Toggle Selector -->
                     <div class="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 bg-blue-50/50 border border-blue-100 p-3.5 rounded-xl max-w-2xl shadow-sm hidden" style="display: none !important;" aria-hidden="true">
@@ -10249,7 +10249,7 @@
                     </button>
                     <div id="ais-availability-monitor" class="ais-availability-monitor" role="status" aria-live="polite" aria-atomic="true">
                         <span class="ais-availability-spinner" aria-hidden="true"></span>
-                        <span id="ais-availability-status">Enviando solicitud al Data Bridge...</span>
+                        <span id="ais-availability-status">Preparado para iniciar captura AIS desde el servidor.</span>
                     </div>
                 </div>
             </div>
@@ -10548,7 +10548,7 @@
                                     <tr>
                                         <td colspan="6" class="py-8 text-center text-slate-500">
                                             <i class="fa-solid fa-satellite-dish text-xl mb-2 animate-bounce block"></i>
-                                            Haz clic en "Consultar Disponibilidad Real-Time" para solicitar el barrido al Data Bridge
+                                            Haz clic en "Consultar Disponibilidad Real-Time" para iniciar la captura AIS del servidor
                                         </td>
                                     </tr>
                                 </tbody>
@@ -32263,7 +32263,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 window.aisMatchingCache = incoming.slice();
             }
         });
-        window.AIS_DIRECT_FRONTEND_MODE = true;
+        window.AIS_DIRECT_FRONTEND_MODE = false;
 
         window.parseAisVesselsResponse = async function(response, contextLabel = 'AIS') {
             const responseText = await response.text();
@@ -32289,6 +32289,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const targetCount = Number(targetCountHeader);
             if (Number.isFinite(persistedCount)) {
                 window.aisPersistedVesselCount = persistedCount;
+            }
+            const databaseVesselCount = Number(payload && payload.databaseVesselCount);
+            if (Number.isFinite(databaseVesselCount)) {
+                window.aisDatabaseVesselCount = databaseVesselCount;
             }
             if (Number.isFinite(targetCount) && targetCount > 0) {
                 window.AIS_DUAL_SWEEP_LIMIT = targetCount;
@@ -35237,6 +35241,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.aisAvailabilitySweepUi = Object.assign({
                 status: 'idle',
                 requestedAt: null,
+                vesselCount: 0,
+                databaseVesselCount: null,
                 error: null
             }, window.aisAvailabilitySweepUi || {});
 
@@ -35264,53 +35270,73 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
                 if (status) {
                     status.textContent = isRequesting
-                        ? 'Enviando solicitud de barrido al Data Bridge...'
+                        ? 'El backend está capturando AISStream y guardando buques en Neon...'
                         : (isSent
-                            ? 'Solicitud enviada. El Data Bridge iniciará la ingesta automáticamente.'
+                            ? `Captura completada: ${Number(state.vesselCount) || 0} buques actualizados en Neon${Number.isFinite(Number(state.databaseVesselCount)) ? `; ${Number(state.databaseVesselCount)} buques almacenados en total.` : '.'}`
                             : (hasError ? state.error : ''));
                 }
             };
 
-            window.executeSweepAIS = function() {
+            window.executeSweepAIS = async function() {
                 const btn = document.getElementById('btn-refresh-ais');
                 if (!btn) return;
+                window.aisAvailabilitySweepUi.status = 'requesting';
+                window.aisAvailabilitySweepUi.error = null;
+                window.updateAisAvailabilitySweepFeedback();
+                window.aisRadarUserActivated = true;
 
-                btn.disabled = true;
-
-                fetch('/api/trigger-ais-sweep', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'iniciar_barrido_radar',
-                        timestamp: new Date().toISOString()
-                    })
-                }).catch((error) => {
-                    console.error('Error al iniciar el barrido AIS:', error);
-                });
-
-                let segundos = 30;
-                btn.innerHTML = `<i class="fa-solid fa-satellite-dish fa-fade text-white"></i> Sincronizando Radar... (${segundos}s)`;
-
-                const countdown = setInterval(() => {
-                    segundos -= 1;
-
-                    if (segundos > 0) {
-                        btn.innerHTML = `<i class="fa-solid fa-satellite-dish fa-fade text-white"></i> Sincronizando Radar... (${segundos}s)`;
-                        return;
+                try {
+                    if (typeof window.isAisRouteReady === 'function' && !window.isAisRouteReady()) {
+                        throw new Error('Es necesario completar POL, POD y laycan antes del barrido AIS.');
+                    }
+                    const endpoint = typeof window.getRouteAisSweepEndpoint === 'function'
+                        ? window.getRouteAisSweepEndpoint(window.AIS_DUAL_SWEEP_LIMIT || 1000)
+                        : '';
+                    if (!endpoint) {
+                        throw new Error('No se pudieron determinar las coordenadas del POL para el barrido AIS.');
                     }
 
-                    clearInterval(countdown);
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fa-solid fa-rotate text-white"></i> Consultar Disponibilidad Real-Time';
+                    const captureUrl = new URL(endpoint, window.location.origin);
+                    const query = Object.fromEntries(captureUrl.searchParams.entries());
+                    const response = await fetch('/api/trigger-ais-sweep', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                        body: JSON.stringify({ query })
+                    });
+                    const vessels = typeof window.parseAisVesselsResponse === 'function'
+                        ? await window.parseAisVesselsResponse(response, 'trigger-ais-sweep')
+                        : [];
 
-                    if (window.MapLoader && typeof window.MapLoader.pollAisProxyOnce === 'function') {
-                        window.MapLoader.pollAisProxyOnce({
-                            map: window.mapaAIS || window.mapAIS || window.aisMap || window.map
-                        }).catch((error) => {
-                            console.error('Error al recargar el mapa de densidad AIS:', error);
-                        });
+                    if (typeof window.reiniciarMemoriaBarridoAIS === 'function') {
+                        window.reiniciarMemoriaBarridoAIS();
                     }
-                }, 1000);
+                    vessels.forEach((vessel) => {
+                        if (typeof window.procesarMensajeAIS === 'function') {
+                            window.procesarMensajeAIS(vessel);
+                        }
+                    });
+                    window.listaBarcos = vessels;
+                    if (typeof window.reapplyCentralFiltersAndRedraw === 'function') {
+                        window.reapplyCentralFiltersAndRedraw();
+                    }
+
+                    window.aisAvailabilitySweepUi.status = 'sent';
+                    window.aisAvailabilitySweepUi.requestedAt = new Date().toISOString();
+                    window.aisAvailabilitySweepUi.vesselCount = Number.isFinite(Number(window.aisPersistedVesselCount))
+                        ? Number(window.aisPersistedVesselCount)
+                        : vessels.length;
+                    window.aisAvailabilitySweepUi.databaseVesselCount = Number.isFinite(Number(window.aisDatabaseVesselCount))
+                        ? Number(window.aisDatabaseVesselCount)
+                        : null;
+                } catch (error) {
+                    console.error('Error durante la captura AIS de servidor:', error);
+                    window.aisAvailabilitySweepUi.status = 'error';
+                    window.aisAvailabilitySweepUi.error = error && error.message
+                        ? error.message
+                        : 'No se pudo completar la captura AIS.';
+                } finally {
+                    window.updateAisAvailabilitySweepFeedback();
+                }
             };
 
             window.executeAISSweep = window.executeSweepAIS;

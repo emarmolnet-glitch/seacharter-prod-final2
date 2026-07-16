@@ -78,6 +78,22 @@ export const vesselsMaster = pgTable("vessels_master", {
   updatedAt: updatedAt(),
 });
 
+export const aisVessels = pgTable("ais_vessels", {
+  storageKey: text("storage_key").primaryKey(),
+  imoNumber: text("imo_number").notNull(),
+  mmsi: text("mmsi"),
+  vesselName: text("vessel_name"),
+  shipType: text("ship_type"),
+  latitude: doublePrecision("latitude").notNull(),
+  longitude: doublePrecision("longitude").notNull(),
+  source: text("source").notNull(),
+  vesselData: jsonb("vessel_data").notNull(),
+  firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
 export const dataBridgeVesselSyncs = pgTable("databridge_vessel_syncs", {
   syncId: uuid("sync_id").primaryKey(),
   persistedImoNumbers: jsonb("persisted_imo_numbers").default(sql`'[]'::jsonb`).notNull(),
