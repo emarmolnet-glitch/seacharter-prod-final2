@@ -15259,7 +15259,6 @@
                 console.log("[CONGELAR_REPORTE] Capturando instantánea de " + frozenVessels.length + " buques.");
                 
                 const frozenReport = createCoreProDataBridgePayload(frozenVessels);
-                saveCoreProFrozenReport(frozenReport);
                 await syncCoreProMatchingReport(frozenReport);
                 
                 if (typeof showToast === 'function') {
@@ -15275,8 +15274,6 @@
             }
         }
         window.generateFrozenReport = generateFrozenReport;
-
-        const CORE_PRO_FROZEN_REPORT_STORAGE_KEY = 'core_pro_frozen_report';
 
         function generateSyncId() {
             if (window.crypto && typeof window.crypto.randomUUID === 'function') {
@@ -15295,12 +15292,6 @@
             };
         }
         window.createCoreProDataBridgePayload = createCoreProDataBridgePayload;
-
-        function saveCoreProFrozenReport(reportData, storageKey = CORE_PRO_FROZEN_REPORT_STORAGE_KEY) {
-            console.log('Guardando reporte en clave:', storageKey, 'Datos:', reportData);
-            localStorage.setItem(storageKey, JSON.stringify(reportData));
-        }
-        window.saveCoreProFrozenReport = saveCoreProFrozenReport;
 
         function emitCoreProLiveSync(persistedReport) {
             const liveSyncSignal = {
@@ -15371,41 +15362,6 @@
             return responsePayload;
         }
         window.syncCoreProMatchingReport = syncCoreProMatchingReport;
-
-        function readValidatedCoreProFrozenReport(storageKey = CORE_PRO_FROZEN_REPORT_STORAGE_KEY) {
-            const clave_leida = localStorage.getItem(storageKey);
-            console.log('Validación previa al envío. Clave encontrada:', clave_leida);
-
-            if (clave_leida === null || clave_leida === undefined || !String(clave_leida).trim()) {
-                throw new Error('Bloqueo de seguridad: no hay datos congelados para enviar a Data Bridge.');
-            }
-
-            let parsedReport = null;
-            try {
-                parsedReport = JSON.parse(clave_leida);
-            } catch (parseErr) {
-                throw new Error('Bloqueo de seguridad: el reporte congelado no contiene JSON válido.');
-            }
-
-            if (parsedReport === null || parsedReport === undefined) {
-                throw new Error('Bloqueo de seguridad: el reporte congelado está vacío.');
-            }
-
-            const validatedVessels = Array.isArray(parsedReport)
-                ? parsedReport
-                : (Array.isArray(parsedReport?.vessels) ? parsedReport.vessels : []);
-
-            if (validatedVessels.length === 0) {
-                throw new Error('Bloqueo de seguridad: el reporte congelado no contiene buques para enviar.');
-            }
-
-            return {
-                raw: clave_leida,
-                parsed: parsedReport,
-                vessels: validatedVessels
-            };
-        }
-        window.readValidatedCoreProFrozenReport = readValidatedCoreProFrozenReport;
 
         function formatDateForBridge(dateString) {
             if (typeof dateString !== 'string') return dateString;
@@ -15590,31 +15546,17 @@
 
         async function exportSelectedMatchingToAudit() {
             try {
-                const frozenReport = String(localStorage.getItem(CORE_PRO_FROZEN_REPORT_STORAGE_KEY) || '').trim();
-                if (!frozenReport) {
-                    alert('Error: No hay datos seleccionados para exportar');
-                    return;
-                }
-
-                let frozenPayload = null;
-                try {
-                    frozenPayload = JSON.parse(frozenReport);
-                } catch (parseErr) {
-                    alert('Error: No hay datos seleccionados para exportar');
-                    return;
-                }
-
-                const frozenVessels = Array.isArray(frozenPayload)
-                    ? frozenPayload
-                    : (Array.isArray(frozenPayload?.vessels) ? frozenPayload.vessels : []);
-                if (frozenVessels.length === 0) {
-                    alert('Error: No hay datos seleccionados para exportar');
-                    return;
-                }
-
                 const auditVessels = Array.isArray(window.lastDataBridgeAuditVessels) && window.lastDataBridgeAuditVessels.length > 0
                     ? window.lastDataBridgeAuditVessels
-                    : frozenVessels;
+                    : (Array.isArray(window.lastClassifiedVessels) && window.lastClassifiedVessels.length > 0
+                        ? window.lastClassifiedVessels
+                        : ((window.GlobalStore && typeof window.GlobalStore.getRawVessels === 'function')
+                            ? (window.GlobalStore.getRawVessels() || [])
+                            : ((window.GlobalStore && window.GlobalStore.rawVessels) || [])));
+                if (auditVessels.length === 0) {
+                    alert('Error: No hay datos seleccionados para exportar');
+                    return;
+                }
                 const auditSelectionInputs = Array.from(document.querySelectorAll('.matching-audit-select'));
                 const selectedKeys = auditSelectionInputs
                     .filter(input => input.checked)
@@ -15638,64 +15580,9 @@
                 const selectedAuditReport = createCoreProDataBridgePayload(
                     normalizeBridgeDateFields(JSON.parse(JSON.stringify(vesselsToSend)))
                 );
-                saveCoreProFrozenReport(selectedAuditReport);
-                await syncCoreProMatchingReport(selectedAuditReport);
-
-                const validatedFrozenReport = readValidatedCoreProFrozenReport();
-                const preparedAuditVessels = prepareDataBridgeVesselsForSend(JSON.parse(JSON.stringify(validatedFrozenReport.vessels)));
-                const validatedPayload = preparedAuditVessels.validVessels;
-                if (preparedAuditVessels.rejectedCount > 0) {
-                    showToast(`${preparedAuditVessels.rejectedCount} buque${preparedAuditVessels.rejectedCount === 1 ? '' : 's'} descartado${preparedAuditVessels.rejectedCount === 1 ? '' : 's'} por IMO inválido para la ingesta operativa. El reporte congelado completo sí quedó persistido.`, false, 'warning');
-                }
-                if (validatedPayload.length === 0) {
-                    throw new Error('Bloqueo de seguridad: el reporte validado no contiene buques válidos para Data Bridge.');
-                }
-
-                const dataBridgeBatches = chunkVesselsForDataBridge(validatedPayload);
-                console.log(`[Data Bridge] Enviando ${validatedPayload.length} buque(s) en ${dataBridgeBatches.length} lote(s) secuenciales.`, dataBridgeBatches);
-
-                let acceptedCount = 0;
-                let rejectedCount = preparedAuditVessels.rejectedCount;
-                for (let batchIndex = 0; batchIndex < dataBridgeBatches.length; batchIndex += 1) {
-                    const batch = dataBridgeBatches[batchIndex];
-                    showToast(`Enviando lote ${batchIndex + 1}/${dataBridgeBatches.length} a Data Bridge (${batch.length} buques).`);
-
-                    const bridgeResponse = await postDataBridgeReceiveVessels({
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(createCoreProDataBridgePayload(batch, selectedAuditReport.syncId))
-                    });
-
-                    const bridgeResponseText = await bridgeResponse.text();
-                    let bridgePayload = null;
-                    try {
-                        bridgePayload = bridgeResponseText ? JSON.parse(bridgeResponseText) : null;
-                    } catch (parseErr) {
-                        bridgePayload = null;
-                    }
-
-                    if (bridgeResponse.status === 404) {
-                        console.error('Error: El endpoint de Data Bridge no fue encontrado. Verifica la URL de recepción');
-                    }
-
-                    if (!bridgeResponse.ok) {
-                        console.error('Error del servidor:', bridgeResponseText);
-                        throw new Error(bridgePayload?.error || bridgePayload?.message || bridgeResponseText || `Data Bridge respondió ${bridgeResponse.status}`);
-                    }
-
-                    acceptedCount += Number(bridgePayload?.acceptedCount) || batch.length;
-                    rejectedCount += Number(bridgePayload?.rejectedCount) || 0;
-                    if (bridgePayload?.syncId) {
-                        localStorage.setItem('databridge_last_sync_id', String(bridgePayload.syncId));
-                        localStorage.setItem('databridge_last_persisted_imos', JSON.stringify(bridgePayload.persistedImoNumbers || []));
-                    }
-                    console.log(`[Data Bridge] Lote ${batchIndex + 1}/${dataBridgeBatches.length} enviado correctamente:`, bridgePayload);
-                }
-
-                console.log(`[Data Bridge] Exportación completa a receive-core-data: ${acceptedCount}/${validatedPayload.length} buque(s).`);
-                showToast(`Se procesaron ${acceptedCount} buques correctamente, ${rejectedCount} fueron descartados o rechazados.`, false, rejectedCount > 0 ? 'warning' : 'success');
+                const persistedReport = await syncCoreProMatchingReport(selectedAuditReport);
+                const persistedCount = Number(persistedReport?.vessel_count) || 0;
+                showToast(`✅ ${persistedCount} buque${persistedCount === 1 ? '' : 's'} persistido${persistedCount === 1 ? '' : 's'}. Data Bridge los descargará desde la API central.`);
             } catch (err) {
                 console.error('Error en exportación:', err?.status || 'client', err);
                 showToast("❌ Error al exportar la selección a auditoría.");
@@ -17093,13 +16980,6 @@
                     };
                 });
                 window.lastDataBridgeAuditVessels = arrayDeBuquesEncontrados;
-                if (arrayDeBuquesEncontrados.length > 0) {
-                    saveCoreProFrozenReport(createCoreProDataBridgePayload(
-                        normalizeBridgeDateFields(arrayDeBuquesEncontrados)
-                    ));
-                } else {
-                    localStorage.removeItem(CORE_PRO_FROZEN_REPORT_STORAGE_KEY);
-                }
 
                 // Al terminar el algoritmo y tener el array final de buques listos:
                 console.log("[DEBUG] Core PRO: Array top 15 de buques para auditar listo (longitud: " + arrayDeBuquesEncontrados.length + "). Payload:", arrayDeBuquesEncontrados);

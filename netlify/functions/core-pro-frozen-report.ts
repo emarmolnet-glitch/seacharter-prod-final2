@@ -6,10 +6,11 @@ import {
   type SessionSyncData,
   upsertSessionSync,
 } from "../../db/session-sync.js";
+import { createCorsHeaders } from "./_shared/cors.js";
 
 const MAX_REPORT_BYTES = 10 * 1024 * 1024;
 
-const headers = {
+const cacheHeaders = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
   "Pragma": "no-cache",
   "Expires": "0",
@@ -49,6 +50,15 @@ function normalizeReport(payload: Record<string, unknown>): SessionSyncData | nu
 }
 
 export default async (req: Request) => {
+  const headers = {
+    ...cacheHeaders,
+    ...createCorsHeaders(req, "GET, POST, PUT, OPTIONS"),
+  };
+
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers });
+  }
+
   if (req.method === "GET") {
     const savedReport = await getFleetRow();
     const report = savedReport?.lastSyncData;
