@@ -274,11 +274,131 @@ test('matching consumes the exact global filtered array and reports exclusions',
   assert.match(indexSource, /Integridad de flota verificada/);
 });
 
-test('live vessel endpoint rejects unbounded fleet requests and filters streamed positions', () => {
+test('live vessel endpoint rejects unbounded requests and persists only strict taxonomy matches', () => {
   assert.match(getVesselsFunctionSource, /source: "geofence-required"/);
   assert.match(getVesselsFunctionSource, /status: 400/);
   assert.match(getVesselsFunctionSource, /insidePolGeofence/);
-  assert.match(getVesselsFunctionSource, /forceLive \? completedLiveVessels/);
+  assert.match(getVesselsFunctionSource, /filterVesselsByTaxonomies\(completedLiveVessels, requestedTaxonomies\)/);
+  assert.match(getVesselsFunctionSource, /persistVesselMessages\(acceptedLiveVessels\)/);
+  assert.match(getVesselsFunctionSource, /forceLive \? acceptedLiveVessels/);
+});
+
+test('radar taxonomy selector supports multiple choices and a saved preset', () => {
+  assert.match(indexSource, /id="fleet-intel-taxonomy-options"/);
+  assert.match(indexSource, /Guardar selección actual/);
+  assert.match(indexSource, /ais_taxonomy_preset_v1/);
+  assert.match(indexSource, /background: #FFFFFF !important/);
+  assert.match(indexSource, /#fleet-intel-taxonomy-menu \{[\s\S]*?z-index: 9999 !important/);
+  assert.match(indexSource, /<optgroup label="CARGO">[\s\S]*?<option value="category:cargo">All Cargo<\/option>[\s\S]*?<option value="type:bulk">Bulk Carrier<\/option>[\s\S]*?<option value="type:general">General Cargo<\/option>[\s\S]*?<option value="type:container">Container Ship<\/option>[\s\S]*?<option value="type:cement">Cement Carrier<\/option>[\s\S]*?<option value="type:mpv">Multipurpose \/ MPP<\/option>[\s\S]*?<option value="type:heavy_lift">Heavy Lift<\/option>[\s\S]*?<\/optgroup>/);
+  assert.match(indexSource, /<optgroup label="TANKERS">[\s\S]*?<option value="category:tanker">All Tankers<\/option>[\s\S]*?<option value="type:crude_tanker">Crude Oil Tanker<\/option>[\s\S]*?<option value="type:lng_tanker">LNG Tanker<\/option>[\s\S]*?<option value="type:chemical_tanker">Chemical Tanker<\/option>[\s\S]*?<option value="type:product_tanker">Product Tanker<\/option>[\s\S]*?<option value="type:lpg_tanker">LPG Tanker<\/option>[\s\S]*?<\/optgroup>/);
+  assert.match(indexSource, /<optgroup label="PASSENGER">[\s\S]*?<option value="category:passenger">All Passenger<\/option>[\s\S]*?<option value="type:passenger">Passenger Ship<\/option>[\s\S]*?<option value="type:cruise">Cruise Ship<\/option>[\s\S]*?<option value="type:ferry">Ferry \/ RoPax<\/option>[\s\S]*?<\/optgroup>/);
+  assert.match(indexSource, /<optgroup label="OTHER">[\s\S]*?<option value="category:other">All Other<\/option>[\s\S]*?<option value="type:offshore">Offshore<\/option>[\s\S]*?<option value="type:tug">Tug \/ Support<\/option>[\s\S]*?<option value="type:fishing">Fishing<\/option>[\s\S]*?<\/optgroup>/);
+  assert.match(indexSource, /fleet-taxonomy-section-title/);
+  assert.doesNotMatch(indexSource, /id="fleet-intel-listing-url"/);
+  assert.doesNotMatch(indexSource, /id="btn-fleet-intel-capture"/);
+  assert.match(indexSource, /getSelectedFleetTaxonomies\(\)/);
+  assert.match(indexSource, /params\.set\('taxonomies', JSON\.stringify\(selectedTaxonomies\)\)/);
+  assert.match(indexSource, /params\.set\('taxonomyMode', 'strict'\)/);
+});
+
+test('fleet density and POL counters render positive ship type breakdowns from their exact arrays', () => {
+  assert.match(indexSource, /id="ais-density-taxonomy-breakdown"/);
+  assert.match(indexSource, /id="ais-pol-taxonomy-breakdown"/);
+  assert.match(indexSource, /window\.groupAisVesselsByTaxonomy = function\(vessels\)/);
+  assert.match(indexSource, /\.filter\(\(\[, count\]\) => count > 0\)/);
+  assert.match(indexSource, /window\.renderAisTaxonomyBreakdown\('ais-density-taxonomy-breakdown', primaryVisibleVessels\)/);
+  assert.match(indexSource, /'ais-pol-taxonomy-breakdown',[\s\S]*?isAisWaitingForHydration \? \[\] : nearbyVessels/);
+  assert.match(indexSource, /const breakdownTotal = groups\.reduce\(\(sum, group\) => sum \+ group\.count, 0\)/);
+  assert.match(indexSource, /window\.resolveAisTaxonomyBreakdownSource = function\(targetCount\)/);
+  assert.match(indexSource, /window\.syncAisTaxonomyBreakdowns = function\(\)/);
+  assert.match(indexSource, /new MutationObserver\(scheduleBreakdownSync\)/);
+  assert.match(indexSource, /window\.aisMatchingExecutionState = aisMatchingExecutionState/);
+  assert.doesNotMatch(indexSource, /currentVessels\.length === total \? currentVessels : \[\]/);
+});
+
+test('taxonomy breakdown renderer produces visible totals for simulated fleet and POL arrays', () => {
+  const blockStart = indexSource.indexOf('const AIS_TAXONOMY_BREAKDOWN_ORDER');
+  const blockEnd = indexSource.indexOf('function classifyBulkCarrierRealTime', blockStart);
+  const breakdownSource = indexSource.slice(blockStart, blockEnd);
+  class FakeNode {
+    constructor(tag = '') {
+      this.tag = tag;
+      this.children = [];
+      this.dataset = {};
+      this.attributes = new Map();
+      this.className = '';
+      this.value = '';
+    }
+    append(...nodes) { nodes.forEach(node => this.appendChild(node)); }
+    appendChild(node) {
+      this.children.push(...(node?.isFragment ? node.children : [node]));
+      return node;
+    }
+    replaceChildren(...nodes) {
+      this.children = [];
+      nodes.forEach(node => this.appendChild(node));
+    }
+    setAttribute(name, value) { this.attributes.set(name, String(value)); }
+    getAttribute(name) { return this.attributes.get(name) || null; }
+    get textContent() { return this.value + this.children.map(child => child?.textContent || '').join(''); }
+    set textContent(value) { this.value = String(value); this.children = []; }
+  }
+  const elements = new Map();
+  const addElement = (id, text = '') => {
+    const element = new FakeNode('div');
+    element.textContent = text;
+    elements.set(id, element);
+    return element;
+  };
+  const densityBreakdown = addElement('ais-density-taxonomy-breakdown');
+  densityBreakdown.setAttribute('aria-label', 'Desglose total');
+  const polBreakdown = addElement('ais-pol-taxonomy-breakdown');
+  polBreakdown.setAttribute('aria-label', 'Desglose POL');
+  addElement('ais-density-count', '6');
+  addElement('buques-count', '6');
+  addElement('ais-nearby-vessels-badge', '3 buques');
+  const documentMock = {
+    getElementById: id => elements.get(id) || null,
+    createDocumentFragment() { const node = new FakeNode(); node.isFragment = true; return node; },
+    createElement: tag => new FakeNode(tag),
+    createTextNode(text) { const node = new FakeNode('#text'); node.textContent = text; return node; }
+  };
+  const totalVessels = [
+    { ship_type: 'Bulk Carrier' },
+    { shipType: 'Handysize Bulk Carrier' },
+    { vessel_type: 'Cement Carrier' },
+    { ShipType: 'Multipurpose / MPP' },
+    { ship_type: 'LNG Tanker' },
+    { ship_type: 'Research vessel' }
+  ];
+  const windowMock = {
+    GlobalStore: {
+      filteredVesselsInitialized: true,
+      getFilteredVessels: () => totalVessels,
+      polPrimaryVessels: totalVessels,
+      getRawVessels: () => totalVessels,
+      getVessels: () => totalVessels
+    },
+    aisMatchingExecutionState: { nearbyVessels: totalVessels.slice(0, 3) },
+    addEventListener() {}
+  };
+  class MutationObserverMock { observe() {} }
+  new Function('window', 'document', 'MutationObserver', 'requestAnimationFrame', 'cancelAnimationFrame', breakdownSource)(
+    windowMock,
+    documentMock,
+    MutationObserverMock,
+    () => 1,
+    () => {}
+  );
+  const groups = windowMock.groupAisVesselsByTaxonomy(totalVessels);
+  assert.equal(groups.reduce((sum, group) => sum + group.count, 0), 6);
+  assert.deepEqual(groups.find(group => group.label === 'Bulk Carrier'), { label: 'Bulk Carrier', count: 2 });
+  windowMock.renderAisTaxonomyBreakdown('ais-density-taxonomy-breakdown', totalVessels);
+  windowMock.renderAisTaxonomyBreakdown('ais-pol-taxonomy-breakdown', totalVessels.slice(0, 3), { compact: true });
+  assert.equal(densityBreakdown.dataset.total, '6');
+  assert.equal(polBreakdown.dataset.total, '3');
+  assert.match(densityBreakdown.textContent, /Bulk Carrier: 2/);
+  assert.match(polBreakdown.textContent, /Bulk: 2/);
 });
 
 test('filter endpoint reads the exact vesselType parameter and matches audit response shape', () => {

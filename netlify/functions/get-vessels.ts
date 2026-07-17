@@ -1,6 +1,7 @@
 import type { Config } from "@netlify/functions";
 import WebSocket from "ws";
 import { countVessels, isCargoShipType, readVessels, readVesselsNearPoint, upsertVessels, type VesselRecord } from "./vessel-store.js";
+import { filterVesselsByTaxonomies, parseRequestedTaxonomies } from "./ais-taxonomy.js";
 
 type VesselMessage = Record<string, unknown>;
 type LiveCollectionResult = {
@@ -972,6 +973,15 @@ function collectVessels(url: URL, apiKey: string): Promise<LiveCollectionResult>
 
 export async function handleGetVessels(req: Request) {
   const url = new URL(req.url);
+  const strictTaxonomyMode = url.searchParams.get("taxonomyMode") === "strict";
+  const requestedTaxonomies = parseRequestedTaxonomies(url);
+  if (strictTaxonomyMode && requestedTaxonomies.length === 0) {
+    return vesselsResponse({
+      vessels: [],
+      error: "At least one valid vessel taxonomy is required",
+      source: "strict-taxonomy-validation",
+    }, { status: 400 });
+  }
   const requestedQuantity = Math.min(MAX_QUANTITY, Math.max(1, numberParam(url, ["quantity", "limit"], DEFAULT_QUANTITY)));
   const apiKey = getApiKey();
   const forceLive = isForceLiveRequest(url);
@@ -1050,15 +1060,18 @@ export async function handleGetVessels(req: Request) {
     const liveVessels = liveResult.vessels;
     const storedVessels = await readStoredVesselMessages(Math.max(requestedQuantity, STORED_LOOKUP_LIMIT), url);
     const completedLiveVessels = completeIncomingVesselsFromStore(storedVessels, liveVessels);
+    const acceptedLiveVessels = strictTaxonomyMode
+      ? filterVesselsByTaxonomies(completedLiveVessels, requestedTaxonomies)
+      : completedLiveVessels;
     const vessels = completedLiveVessels.length > 0
       ? mergeVesselMessageLists(storedVessels, liveVessels)
       : [];
     let persistenceResult = { persistedCount: 0, databaseVesselCount: await countVessels() };
 
-    if (completedLiveVessels.length > 0) {
+    if (acceptedLiveVessels.length > 0) {
       vesselCache = vessels;
       cacheUpdatedAt = Date.now();
-      persistenceResult = await persistVesselMessages(completedLiveVessels);
+      persistenceResult = await persistVesselMessages(acceptedLiveVessels);
     } else if (!forceLive && vesselCache.length === 0) {
       vesselCache = storedVessels;
       if (vesselCache.length > 0) cacheUpdatedAt = Date.now();
@@ -1066,7 +1079,7 @@ export async function handleGetVessels(req: Request) {
 
     const responseVessels = filterSelectiveVessels(
       url,
-      forceLive ? completedLiveVessels : (vessels.length ? vessels : vesselCache),
+      forceLive ? acceptedLiveVessels : (vessels.length ? vessels : vesselCache),
     );
     const source = vessels.length
       ? "aisstream-live"
@@ -1082,6 +1095,8 @@ export async function handleGetVessels(req: Request) {
         source,
         persistedCount: persistenceResult.persistedCount,
         databaseVesselCount: persistenceResult.databaseVesselCount,
+        selectedTaxonomies: strictTaxonomyMode ? requestedTaxonomies : undefined,
+        discardedByTaxonomy: strictTaxonomyMode ? Math.max(0, completedLiveVessels.length - acceptedLiveVessels.length) : 0,
         message: forceLive
           ? `Data recolectada: ${responseVessels.length} buques recibidos del barrido en vivo`
           : `Data recolectada: ${responseVessels.length} buques filtrados con éxito`,
