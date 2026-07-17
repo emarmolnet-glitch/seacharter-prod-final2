@@ -15346,13 +15346,21 @@
             } catch (parseErr) {
                 responsePayload = responseText;
             }
+            console.log('[Core PRO] Respuesta de persistencia del backend:', responsePayload);
 
             if (response.status !== 200) {
                 throw new Error(responsePayload?.error || responseText || `El backend respondió ${response.status}`);
             }
 
             const persistedVessels = Array.isArray(responsePayload?.vessels) ? responsePayload.vessels : [];
-            if (persistedVessels.length !== vesselsArray.length || Number(responsePayload?.vessel_count) !== vesselsArray.length) {
+            if (
+                responsePayload?.success !== true
+                || responsePayload?.available !== true
+                || responsePayload?.format !== 'v2'
+                || responsePayload?.syncId !== payload.syncId
+                || persistedVessels.length !== vesselsArray.length
+                || Number(responsePayload?.vessel_count) !== vesselsArray.length
+            ) {
                 throw new Error(`El backend no confirmó el reporte completo (${persistedVessels.length}/${vesselsArray.length} buques).`);
             }
 

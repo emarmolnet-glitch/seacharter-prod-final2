@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [coreProSource, endpointSource, dataBridgeSource, mainSource, preloadSource] = await Promise.all([
+const [coreProSource, endpointSource, sessionSyncSource, dataBridgeSource, mainSource, preloadSource] = await Promise.all([
   readFile(new URL("../index.html", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/core-pro-frozen-report.ts", import.meta.url), "utf8"),
+  readFile(new URL("../netlify/functions/session-sync.ts", import.meta.url), "utf8"),
   readFile(new URL("../public/databridge.html", import.meta.url), "utf8"),
   readFile(new URL("../main.js", import.meta.url), "utf8"),
   readFile(new URL("../preload.js", import.meta.url), "utf8"),
@@ -22,12 +23,14 @@ test("Core PRO uploads the complete frozen report before continuing Data Bridge 
   assert.doesNotMatch(coreProSource, /seacharter\.matching\.export\.v1|core-pro-matching-selected/);
   assert.match(coreProSource, /await syncCoreProMatchingReport\(selectedAuditReport\);[\s\S]*prepareDataBridgeVesselsForSend/);
   assert.match(coreProSource, /response\.status !== 200/);
+  assert.match(coreProSource, /Respuesta de persistencia del backend/);
+  assert.match(coreProSource, /responsePayload\?\.syncId !== payload\.syncId/);
   assert.match(coreProSource, /persistedVessels\.length !== vesselsArray\.length/);
 
   const statusCheckIndex = coreProSource.indexOf("if (response.status !== 200)");
-  const countCheckIndex = coreProSource.indexOf("if (persistedVessels.length !== vesselsArray.length");
+  const confirmationCheckIndex = coreProSource.indexOf("responsePayload?.syncId !== payload.syncId");
   const signalIndex = coreProSource.indexOf("emitCoreProLiveSync(responsePayload)");
-  assert.ok(statusCheckIndex >= 0 && countCheckIndex > statusCheckIndex && signalIndex > countCheckIndex);
+  assert.ok(statusCheckIndex >= 0 && confirmationCheckIndex > statusCheckIndex && signalIndex > confirmationCheckIndex);
 });
 
 test("the backend preserves and returns the complete vessel array", () => {
@@ -37,8 +40,19 @@ test("the backend preserves and returns the complete vessel array", () => {
   assert.match(endpointSource, /source:\s*"Core PRO"/);
   assert.match(endpointSource, /syncId:[\s\S]*generateSyncId\(\)/);
   assert.match(endpointSource, /savedVessels\.length !== report\.vessels\.length/);
-  assert.match(endpointSource, /MAX_REPORT_BYTES = 50 \* 1024 \* 1024/);
+  assert.match(endpointSource, /MAX_REPORT_BYTES = 10 \* 1024 \* 1024/);
   assert.match(endpointSource, /status:\s*413/);
+  assert.match(endpointSource, /savedSync\.lastSyncData\.syncId !== report\.syncId/);
+});
+
+test("the compatibility session endpoint keeps the complete v2 payload", () => {
+  assert.match(sessionSyncSource, /MAX_SYNC_PAYLOAD_BYTES = 10 \* 1024 \* 1024/);
+  assert.match(sessionSyncSource, /lastSyncData\.format !== "v2"/);
+  assert.match(sessionSyncSource, /last_sync_data\.syncId must be a non-empty string/);
+  assert.match(sessionSyncSource, /const completeSyncData = \{[\s\S]*\.\.\.lastSyncData,[\s\S]*syncId,[\s\S]*vessels: lastSyncData\.vessels/);
+  assert.match(sessionSyncSource, /lastSyncData: completeSyncData/);
+  assert.match(sessionSyncSource, /savedSync\.lastSyncData\.syncId !== syncId/);
+  assert.match(sessionSyncSource, /last_sync_data: savedSync\.lastSyncData/);
 });
 
 test("Data Bridge reads only the persisted frozen report endpoint", () => {
