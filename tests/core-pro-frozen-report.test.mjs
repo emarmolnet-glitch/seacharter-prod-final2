@@ -111,10 +111,11 @@ test("central report APIs allow only the two Netlify applications", () => {
   assert.match(corsSource, /https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app/);
   assert.match(corsSource, /https:\/\/calm-shortbread-55bcfc\.netlify\.app/);
   assert.match(corsSource, /CORE_PRO_CORS_ORIGINS/);
+  assert.match(corsSource, /"Access-Control-Allow-Headers": "Content-Type, Authorization, Pragma, Cache-Control, X-Requested-With"/);
   assert.match(endpointSource, /createCorsHeaders\(req, "GET, POST, PUT, OPTIONS"\)/);
   assert.match(iaReportsSource, /createCorsHeaders\(req, "GET, OPTIONS"\)/);
-  assert.match(endpointSource, /req\.method === "OPTIONS"/);
-  assert.match(iaReportsSource, /req\.method === "OPTIONS"/);
+  assert.match(endpointSource, /req\.method === "OPTIONS"[\s\S]*status: 204/);
+  assert.match(iaReportsSource, /req\.method === "OPTIONS"[\s\S]*status: 204/);
 });
 
 test("Live Sync signals only the committed report and triggers one backend read", () => {

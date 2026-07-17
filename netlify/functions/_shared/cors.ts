@@ -32,7 +32,7 @@ export function createCorsHeaders(req: Request, methods: string) {
 
   return {
     "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Headers": "Accept, Content-Type, Cache-Control",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Pragma, Cache-Control, X-Requested-With",
     "Access-Control-Allow-Methods": methods,
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
