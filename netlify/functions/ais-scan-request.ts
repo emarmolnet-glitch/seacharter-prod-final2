@@ -2,6 +2,7 @@ import type { Config } from "@netlify/functions";
 import { db } from "../../db/index.js";
 import { appConfig } from "../../db/schema.js";
 import { handleGetVessels } from "./get-vessels.js";
+import { parseRequestedTaxonomies } from "./ais-taxonomy.js";
 
 const SCAN_STATUS_KEY = "scan_status";
 const SCAN_STATUS_RUNNING = "RUNNING";
@@ -28,6 +29,8 @@ const ALLOWED_QUERY_PARAMETERS = new Set([
   "selective",
   "matchingMode",
   "scope",
+  "taxonomies",
+  "taxonomyMode",
 ]);
 
 type ScanRequestBody = {
@@ -42,7 +45,7 @@ async function setScanStatus(value: string, updatedAt = new Date()) {
       target: appConfig.key,
       set: { value, updatedAt },
     })
-    .returning({ value: appConfig.value, updatedAt: appConfig.updatedAt });
+    .returning();
   return updatedConfig;
 }
 
@@ -96,6 +99,13 @@ export default async (req: Request) => {
       && !captureUrl.searchParams.has("coords_pod")) {
       return Response.json(
         { success: false, error: "AIS bounding boxes or POL/POD coordinates are required" },
+        { status: 400 },
+      );
+    }
+    const selectedTaxonomies = parseRequestedTaxonomies(captureUrl);
+    if (captureUrl.searchParams.get("taxonomyMode") !== "strict" || selectedTaxonomies.length === 0) {
+      return Response.json(
+        { success: false, error: "At least one valid vessel taxonomy is required for a strict AIS sweep" },
         { status: 400 },
       );
     }

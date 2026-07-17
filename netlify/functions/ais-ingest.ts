@@ -1,5 +1,6 @@
 import WebSocket from "ws";
 import { upsertVessels, type VesselRecord } from "./vessel-store.js";
+import { filterVesselsByTaxonomies, parseRequestedTaxonomies } from "./ais-taxonomy.js";
 
 const AISSTREAM_ENDPOINT = "wss://stream.aisstream.io/v0/stream";
 const DEFAULT_TIMEOUT_MS = 6000;
@@ -234,12 +235,26 @@ export default async (req: Request) => {
     const limit = Math.max(1, Math.min(1000, Number(url.searchParams.get("limit")) || Number(url.searchParams.get("quantity")) || DEFAULT_LIMIT));
     const etaTarget = getEtaTarget(url);
     const rows = await collectVessels(apiKey, boundingBoxes, timeoutMs, limit, etaTarget);
+    const strictTaxonomyMode = url.searchParams.get("taxonomyMode") === "strict";
+    const selectedTaxonomies = parseRequestedTaxonomies(url);
+    if (strictTaxonomyMode && selectedTaxonomies.length === 0) {
+      return Response.json({ ok: false, error: "At least one valid vessel taxonomy is required" }, { status: 400 });
+    }
+    const acceptedRows = strictTaxonomyMode
+      ? filterVesselsByTaxonomies(rows as unknown as Record<string, unknown>[], selectedTaxonomies) as unknown as VesselRecord[]
+      : rows;
 
-    if (rows.length > 0) {
-      await upsertVessels(rows);
+    if (acceptedRows.length > 0) {
+      await upsertVessels(acceptedRows);
     }
 
-    return Response.json({ ok: true, inserted: rows.length, etaTarget: etaTarget ? etaTarget.label : null });
+    return Response.json({
+      ok: true,
+      inserted: acceptedRows.length,
+      discardedByTaxonomy: strictTaxonomyMode ? Math.max(0, rows.length - acceptedRows.length) : 0,
+      selectedTaxonomies: strictTaxonomyMode ? selectedTaxonomies : undefined,
+      etaTarget: etaTarget ? etaTarget.label : null,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "AIS ingest failed";
     console.error("AIS ingest failed:", message);
