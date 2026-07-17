@@ -7,7 +7,7 @@ import {
   upsertSessionSync,
 } from "../../db/session-sync.js";
 
-const MAX_REPORT_BYTES = 50 * 1024 * 1024;
+const MAX_REPORT_BYTES = 10 * 1024 * 1024;
 
 const headers = {
   "cache-control": "no-store",
@@ -76,7 +76,7 @@ export default async (req: Request) => {
   if (contentLength !== null && contentLength > MAX_REPORT_BYTES) {
     return Response.json({
       success: false,
-      error: "El reporte supera el límite de 50 MB.",
+      error: "El reporte supera el límite de 10 MB.",
     }, { status: 413, headers });
   }
 
@@ -85,7 +85,7 @@ export default async (req: Request) => {
     if (Buffer.byteLength(rawBody, "utf8") > MAX_REPORT_BYTES) {
       return Response.json({
         success: false,
-        error: "El reporte supera el límite de 50 MB.",
+        error: "El reporte supera el límite de 10 MB.",
       }, { status: 413, headers });
     }
 
@@ -109,7 +109,11 @@ export default async (req: Request) => {
     });
 
     const savedVessels = savedSync.lastSyncData.vessels;
-    if (!Array.isArray(savedVessels) || savedVessels.length !== report.vessels.length) {
+    if (
+      savedSync.lastSyncData.syncId !== report.syncId
+      || !Array.isArray(savedVessels)
+      || savedVessels.length !== report.vessels.length
+    ) {
       throw new Error("The persisted vessel array does not match the uploaded report.");
     }
 
