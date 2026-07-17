@@ -58,8 +58,59 @@ test('read-only refresh button performs a GET instead of blocking the click', ()
 test('read-only response feeds rendering, counters, and freight calculation', () => {
   assert.match(indexSource, /const validatedVessels = Array\.isArray\(payload\.vessels\) \? payload\.vessels : \[\]/);
   assert.match(indexSource, /dispatchEvent\(new CustomEvent\('ais:vessels-updated'/);
-  assert.match(indexSource, /aisDensityCount\.innerText = primaryVisibleVessels\.length/);
+  assert.match(indexSource, /renderFilteredAisCounters\(primaryVisibleVessels\)/);
   assert.match(indexSource, /calculateAndDisplayAisFreight\(\)/);
+});
+
+test('main AIS KPI is derived only from the filtered vessel array', () => {
+  const derivedCounterStart = indexSource.indexOf('window.getDerivedFilteredAisVessels = function()');
+  const derivedCounterEnd = indexSource.indexOf('// Global Store (Shared Memory)', derivedCounterStart);
+  const derivedCounterSource = indexSource.slice(derivedCounterStart, derivedCounterEnd);
+  const elements = new Map([
+    ['ais-density-count', { textContent: '--' }],
+    ['buques-count', { textContent: '--' }]
+  ]);
+  const filteredVessels = [
+    { ship_type: 'Bulk Carrier' },
+    { ship_type: 'Cement Carrier' }
+  ];
+  let breakdownVessels = null;
+  const windowMock = {
+    GlobalStore: {
+      filteredVesselsInitialized: true,
+      getFilteredVessels: () => filteredVessels
+    },
+    renderAisTaxonomyBreakdown: (_containerId, vessels) => {
+      breakdownVessels = vessels;
+    }
+  };
+  const documentMock = { getElementById: id => elements.get(id) || null };
+  new Function('window', 'document', derivedCounterSource)(windowMock, documentMock);
+
+  assert.equal(windowMock.renderFilteredAisCounters(), 2);
+  assert.equal(elements.get('ais-density-count').textContent, '2');
+  assert.equal(elements.get('buques-count').textContent, '2');
+  assert.equal(breakdownVessels, filteredVessels);
+
+  windowMock.GlobalStore.filteredVesselsInitialized = false;
+  assert.equal(windowMock.renderFilteredAisCounters(), 0);
+  assert.equal(elements.get('ais-density-count').textContent, '0');
+  assert.deepEqual(breakdownVessels, []);
+});
+
+test('empty taxonomy selection stays empty instead of falling back to All Cargo', () => {
+  const filterLabelStart = indexSource.indexOf('function getFleetTypeFilterLabel()');
+  const filterLabelEnd = indexSource.indexOf('const VESSEL_CLASS_CONTEXT_PROFILES', filterLabelStart);
+  const filterLabelSource = indexSource.slice(filterLabelStart, filterLabelEnd);
+  assert.match(filterLabelSource, /return getSelectedFleetTaxonomies\(\)/);
+  assert.doesNotMatch(filterLabelSource, /category:cargo/);
+});
+
+test('POL matching cache invalidates when filtered taxonomy composition changes', () => {
+  assert.match(indexSource, /const selectedTaxonomySignature = typeof getSelectedFleetTaxonomies/);
+  assert.match(indexSource, /const sourceVesselSignature = proximitySourceVessels\.map/);
+  assert.match(indexSource, /lastSourceSignature !== sourceSignature/);
+  assert.match(indexSource, /\|\| \(!geographicInputsChanged && filteredSourceChanged\)/);
 });
 
 test('vessel filter decodes text and uses a parameterized ILIKE query', () => {
@@ -306,7 +357,7 @@ test('fleet density and POL counters render positive ship type breakdowns from t
   assert.match(indexSource, /id="ais-pol-taxonomy-breakdown"/);
   assert.match(indexSource, /window\.groupAisVesselsByTaxonomy = function\(vessels\)/);
   assert.match(indexSource, /\.filter\(\(\[, count\]\) => count > 0\)/);
-  assert.match(indexSource, /window\.renderAisTaxonomyBreakdown\('ais-density-taxonomy-breakdown', primaryVisibleVessels\)/);
+  assert.match(indexSource, /window\.renderFilteredAisCounters\(primaryVisibleVessels\)/);
   assert.match(indexSource, /'ais-pol-taxonomy-breakdown',[\s\S]*?isAisWaitingForHydration \? \[\] : nearbyVessels/);
   assert.match(indexSource, /const breakdownTotal = groups\.reduce\(\(sum, group\) => sum \+ group\.count, 0\)/);
   assert.match(indexSource, /window\.resolveAisTaxonomyBreakdownSource = function\(targetCount\)/);
