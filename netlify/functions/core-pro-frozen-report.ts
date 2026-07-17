@@ -22,6 +22,10 @@ function readContentLength(req: Request) {
   return Number.isFinite(contentLength) && contentLength >= 0 ? contentLength : null;
 }
 
+function generateSyncId() {
+  return crypto.randomUUID();
+}
+
 function normalizeReport(payload: Record<string, unknown>): SessionSyncData | null {
   if (!Array.isArray(payload.vessels) || payload.vessels.length === 0) return null;
 
@@ -31,9 +35,11 @@ function normalizeReport(payload: Record<string, unknown>): SessionSyncData | nu
 
   return {
     ...payload,
-    format: typeof payload.format === "string" && payload.format.trim()
-      ? payload.format
-      : "seacharter.matching.export.v1",
+    format: "v2",
+    source: "Core PRO",
+    syncId: typeof payload.syncId === "string" && payload.syncId.trim()
+      ? payload.syncId
+      : generateSyncId(),
     created_at: createdAt,
     updated_at: new Date().toISOString(),
     vessels: payload.vessels,
