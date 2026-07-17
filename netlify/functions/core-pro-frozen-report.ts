@@ -10,7 +10,9 @@ import {
 const MAX_REPORT_BYTES = 10 * 1024 * 1024;
 
 const headers = {
-  "cache-control": "no-store",
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  "Pragma": "no-cache",
+  "Expires": "0",
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {

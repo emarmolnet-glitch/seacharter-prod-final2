@@ -978,6 +978,7 @@
 
         let pendingAudits = [];
         let pending_frozen_report = null;
+        const DATA_BRIDGE_PAYLOAD_FINGERPRINT_KEY = 'databridge_active_payload_fingerprint';
 
         window.GlobalStore = window.GlobalStore || {
             filteredVessels: [],
@@ -1288,16 +1289,52 @@
             }).join('');
         }
 
+        function clearIaAuditState() {
+            localStorage.removeItem('databridge_last_sync_id');
+            localStorage.removeItem('databridge_last_persisted_imos');
+            renderIaReports([]);
+        }
+
+        function getFrozenReportFingerprint(payload) {
+            return [
+                String(payload?.syncId || ''),
+                String(payload?.updated_at || payload?.created_at || ''),
+                String(payload?.vessel_count || 0)
+            ].join(':');
+        }
+
+        async function rehydrateIaAuditState(payload) {
+            const nextFingerprint = getFrozenReportFingerprint(payload);
+            const previousFingerprint = localStorage.getItem(DATA_BRIDGE_PAYLOAD_FINGERPRINT_KEY) || '';
+            if (nextFingerprint === previousFingerprint) return;
+
+            clearIaAuditState();
+            localStorage.setItem(DATA_BRIDGE_PAYLOAD_FINGERPRINT_KEY, nextFingerprint);
+            await SyncService.refresh();
+        }
+
         const SyncService = {
-            async fetchReports() {
+            async fetchReports(allowOrphanRecovery = true) {
                 try {
                     const syncId = String(localStorage.getItem('databridge_last_sync_id') || '').trim();
-                    const endpoint = syncId ? `/api/ia-reports?sync_id=${encodeURIComponent(syncId)}` : '/api/ia-reports';
-                    const response = await fetch(endpoint, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+                    const query = new URLSearchParams({ t: String(Date.now()) });
+                    if (syncId) query.set('sync_id', syncId);
+                    const endpoint = `/api/ia-reports?${query.toString()}`;
+                    const response = await fetch(endpoint, {
+                        headers: {
+                            'Accept': 'application/json',
+                            'Cache-Control': 'no-cache, no-store, must-revalidate'
+                        },
+                        cache: 'no-store'
+                    });
                     const payload = await response.json().catch(() => ({}));
                     if (!response.ok) return [];
                     if (payload.available === false) {
                         addLog(`[INFO] ${getTimestamp()} - ${payload.message || 'Reporte no disponible'}.`);
+                        if (syncId && allowOrphanRecovery) {
+                            clearIaAuditState();
+                            return this.fetchReports(false);
+                        }
                     }
                     const reports = Array.isArray(payload.ia_reports) ? payload.ia_reports : [];
                     renderIaReports(reports);
@@ -1343,9 +1380,13 @@
         }
 
         async function fetchCoreProFrozenReport() {
-            const response = await fetch('/api/core-pro-frozen-report', {
+            const endpoint = `/api/core-pro-frozen-report?t=${Date.now()}`;
+            const response = await fetch(endpoint, {
                 method: 'GET',
-                headers: { 'Accept': 'application/json' },
+                headers: {
+                    'Accept': 'application/json',
+                    'Cache-Control': 'no-cache, no-store, must-revalidate'
+                },
                 cache: 'no-store'
             });
             const payload = await response.json().catch(() => null);
@@ -1367,6 +1408,7 @@
             pending_frozen_report = { ...payload, vessels: mapFrozenReportVessels(vessels) };
             notifyFrozenReportReady();
             loadPendingFrozenReport();
+            await rehydrateIaAuditState(payload);
             return pending_frozen_report;
         }
         window.fetchCoreProFrozenReport = fetchCoreProFrozenReport;
