@@ -15258,11 +15258,7 @@
                 
                 console.log("[CONGELAR_REPORTE] Capturando instantánea de " + frozenVessels.length + " buques.");
                 
-                const frozenReport = {
-                    format: 'seacharter.matching.export.v1',
-                    created_at: new Date().toISOString(),
-                    vessels: frozenVessels
-                };
+                const frozenReport = createCoreProDataBridgePayload(frozenVessels);
                 saveCoreProFrozenReport(frozenReport);
                 await syncCoreProMatchingReport(frozenReport);
                 
@@ -15281,6 +15277,24 @@
         window.generateFrozenReport = generateFrozenReport;
 
         const CORE_PRO_FROZEN_REPORT_STORAGE_KEY = 'core_pro_frozen_report';
+
+        function generateSyncId() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                return window.crypto.randomUUID();
+            }
+            return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        }
+        window.generateSyncId = generateSyncId;
+
+        function createCoreProDataBridgePayload(vessels, syncId = generateSyncId()) {
+            return {
+                format: 'v2',
+                source: 'Core PRO',
+                syncId,
+                vessels: Array.isArray(vessels) ? vessels : []
+            };
+        }
+        window.createCoreProDataBridgePayload = createCoreProDataBridgePayload;
 
         function saveCoreProFrozenReport(reportData, storageKey = CORE_PRO_FROZEN_REPORT_STORAGE_KEY) {
             console.log('Guardando reporte en clave:', storageKey, 'Datos:', reportData);
@@ -15314,10 +15328,7 @@
                 throw new Error('No hay buques para sincronizar con Data Bridge.');
             }
 
-            const payload = {
-                ...(reportData && typeof reportData === 'object' ? reportData : {}),
-                vessels: vesselsArray
-            };
+            const payload = createCoreProDataBridgePayload(vesselsArray, reportData?.syncId || generateSyncId());
             const response = await fetch('/api/core-pro-frozen-report', {
                 method: 'POST',
                 headers: {
@@ -15615,12 +15626,9 @@
                     return;
                 }
 
-                const selectedAuditReport = normalizeBridgeDateFields({
-                    format: 'seacharter.matching.export.v1',
-                    source: 'core-pro-matching-selected',
-                    created_at: new Date().toISOString(),
-                    vessels: JSON.parse(JSON.stringify(vesselsToSend))
-                });
+                const selectedAuditReport = createCoreProDataBridgePayload(
+                    normalizeBridgeDateFields(JSON.parse(JSON.stringify(vesselsToSend)))
+                );
                 saveCoreProFrozenReport(selectedAuditReport);
                 await syncCoreProMatchingReport(selectedAuditReport);
 
@@ -15648,7 +15656,7 @@
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ vessels: batch })
+                        body: JSON.stringify(createCoreProDataBridgePayload(batch, selectedAuditReport.syncId))
                     });
 
                     const bridgeResponseText = await bridgeResponse.text();
@@ -15767,12 +15775,7 @@
                     };
                 });
 
-                const exportPayload = {
-                    type: 'CONGELAR_REPORTE',
-                    format: 'seacharter.matching.export.v1',
-                    created_at: new Date().toISOString(),
-                    vessels: exportedVessels
-                };
+                const exportPayload = createCoreProDataBridgePayload(exportedVessels);
 
                 const jsonContent = JSON.stringify(exportPayload, null, 2);
                 const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
@@ -17082,12 +17085,9 @@
                 });
                 window.lastDataBridgeAuditVessels = arrayDeBuquesEncontrados;
                 if (arrayDeBuquesEncontrados.length > 0) {
-                    saveCoreProFrozenReport(normalizeBridgeDateFields({
-                        format: 'seacharter.matching.export.v1',
-                        source: 'core-pro-matching-selected',
-                        created_at: new Date().toISOString(),
-                        vessels: arrayDeBuquesEncontrados
-                    }));
+                    saveCoreProFrozenReport(createCoreProDataBridgePayload(
+                        normalizeBridgeDateFields(arrayDeBuquesEncontrados)
+                    ));
                 } else {
                     localStorage.removeItem(CORE_PRO_FROZEN_REPORT_STORAGE_KEY);
                 }

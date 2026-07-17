@@ -8,6 +8,7 @@ export type SessionSyncData = {
   updated_at: string;
   format?: string;
   source?: string;
+  syncId?: string;
   created_at?: string;
   [key: string]: unknown;
 };
