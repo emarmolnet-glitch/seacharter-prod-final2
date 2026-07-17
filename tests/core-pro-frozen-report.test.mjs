@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [coreProSource, endpointSource, iaReportsSource, sessionSyncSource, sessionSyncDatabaseSource, dataBridgeSource, corsSource, mainSource, preloadSource] = await Promise.all([
+const [coreProSource, endpointSource, healthCheckSource, iaReportsSource, sessionSyncSource, sessionSyncDatabaseSource, dataBridgeSource, corsSource, mainSource, preloadSource] = await Promise.all([
   readFile(new URL("../index.html", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/core-pro-frozen-report.ts", import.meta.url), "utf8"),
+  readFile(new URL("../netlify/functions/verify-connection.ts", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/ia-reports.ts", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/session-sync.ts", import.meta.url), "utf8"),
   readFile(new URL("../db/session-sync.ts", import.meta.url), "utf8"),
@@ -107,14 +108,21 @@ test("critical report endpoints disable browser and CDN caching", () => {
   assert.match(dataBridgeSource, /await rehydrateIaAuditState\(payload\)/);
 });
 
-test("central report APIs allow only the two Netlify applications", () => {
+test("central APIs dynamically allow Data Bridge production, previews, and localhost", () => {
   assert.match(corsSource, /https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app/);
   assert.match(corsSource, /https:\/\/calm-shortbread-55bcfc\.netlify\.app/);
   assert.match(corsSource, /CORE_PRO_CORS_ORIGINS/);
+  assert.match(corsSource, /deploy-preview-\[a-z0-9-\]\+--calm-shortbread-55bcfc/);
+  assert.match(corsSource, /url\.hostname === "localhost"/);
+  assert.match(corsSource, /headers\["Access-Control-Allow-Origin"\] = requestOrigin/);
+  assert.doesNotMatch(corsSource, /"Access-Control-Allow-Origin": "\*"/);
+  assert.doesNotMatch(corsSource, /: DEFAULT_ALLOWED_ORIGINS\[0\]/);
   assert.match(corsSource, /"Access-Control-Allow-Headers": "Content-Type, Authorization, Pragma, Cache-Control, X-Requested-With"/);
   assert.match(endpointSource, /createCorsHeaders\(req, "GET, POST, PUT, OPTIONS"\)/);
+  assert.match(healthCheckSource, /createCorsHeaders\(req, "GET, POST, OPTIONS"\)/);
   assert.match(iaReportsSource, /createCorsHeaders\(req, "GET, OPTIONS"\)/);
   assert.match(endpointSource, /req\.method === "OPTIONS"[\s\S]*status: 204/);
+  assert.match(healthCheckSource, /req\.method === "OPTIONS"[\s\S]*status: 204/);
   assert.match(iaReportsSource, /req\.method === "OPTIONS"[\s\S]*status: 204/);
 });
 
