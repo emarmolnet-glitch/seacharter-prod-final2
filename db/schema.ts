@@ -25,6 +25,7 @@ export const sessionSync = pgTable(
   "session_sync",
   {
     userId: text("user_id").primaryKey(),
+    syncId: text("sync_id").notNull(),
     lastSyncData: jsonb("last_sync_data").notNull(),
     lastActionModule: text("last_action_module").notNull(),
     updatedAt: updatedAt(),

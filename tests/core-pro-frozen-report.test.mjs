@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [coreProSource, endpointSource, iaReportsSource, sessionSyncSource, dataBridgeSource, corsSource, mainSource, preloadSource] = await Promise.all([
+const [coreProSource, endpointSource, iaReportsSource, sessionSyncSource, sessionSyncDatabaseSource, dataBridgeSource, corsSource, mainSource, preloadSource] = await Promise.all([
   readFile(new URL("../index.html", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/core-pro-frozen-report.ts", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/ia-reports.ts", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/session-sync.ts", import.meta.url), "utf8"),
+  readFile(new URL("../db/session-sync.ts", import.meta.url), "utf8"),
   readFile(new URL("../public/databridge.html", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/_shared/cors.ts", import.meta.url), "utf8"),
   readFile(new URL("../main.js", import.meta.url), "utf8"),
@@ -68,6 +69,12 @@ test("the compatibility session endpoint keeps the complete v2 payload", () => {
   assert.match(sessionSyncSource, /lastSyncData: completeSyncData/);
   assert.match(sessionSyncSource, /savedSync\.lastSyncData\.syncId !== syncId/);
   assert.match(sessionSyncSource, /last_sync_data: savedSync\.lastSyncData/);
+});
+
+test("session persistence writes the required relational sync id", () => {
+  assert.match(sessionSyncDatabaseSource, /last_sync_data\.syncId must be a non-empty string/);
+  assert.match(sessionSyncDatabaseSource, /INSERT INTO session_sync \(user_id, sync_id, last_sync_data, last_action_module, updated_at\)/);
+  assert.match(sessionSyncDatabaseSource, /sync_id = EXCLUDED\.sync_id/);
 });
 
 test("Data Bridge reads only the persisted frozen report endpoint", () => {

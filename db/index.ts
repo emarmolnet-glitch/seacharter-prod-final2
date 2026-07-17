@@ -35,6 +35,7 @@ export async function ensureApplicationSchema() {
   applicationSchemaReady ??= getPool().query(`
     CREATE TABLE IF NOT EXISTS session_sync (
       user_id TEXT PRIMARY KEY,
+      sync_id TEXT NOT NULL,
       last_sync_data JSONB NOT NULL,
       last_action_module TEXT NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -50,6 +51,9 @@ export async function ensureApplicationSchema() {
 
     ALTER TABLE session_sync
       ADD COLUMN IF NOT EXISTS last_action_module TEXT;
+
+    ALTER TABLE session_sync
+      ADD COLUMN IF NOT EXISTS sync_id TEXT;
 
     UPDATE session_sync
     SET
@@ -68,8 +72,23 @@ export async function ensureApplicationSchema() {
       END,
       last_action_module = COALESCE(last_action_module, 'CORE_PRO_MATCHING');
 
+    UPDATE session_sync
+    SET sync_id = COALESCE(
+      NULLIF(BTRIM(sync_id), ''),
+      NULLIF(BTRIM(last_sync_data->>'syncId'), ''),
+      gen_random_uuid()::text
+    )
+    WHERE sync_id IS NULL OR BTRIM(sync_id) = '';
+
+    UPDATE session_sync
+    SET last_sync_data = jsonb_set(last_sync_data, '{syncId}', to_jsonb(sync_id), true)
+    WHERE last_sync_data->>'syncId' IS DISTINCT FROM sync_id;
+
     ALTER TABLE session_sync
       ALTER COLUMN last_action_module SET NOT NULL;
+
+    ALTER TABLE session_sync
+      ALTER COLUMN sync_id SET NOT NULL;
 
     DO $schema_update$
     BEGIN
