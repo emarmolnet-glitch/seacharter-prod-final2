@@ -33,6 +33,7 @@
     <!-- Master Globe.gl renderer shared by Core PRO and Data Bridge. -->
     <script src="https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js"></script>
     <link rel="stylesheet" href="./assets/css/density-globe.css?v=20260716-radar-tooltip-visible">
+    <link rel="stylesheet" href="./assets/css/contextual-feedback.css?v=20260717-ui-hotfix">
     <script src="./GlobalFleetGlobe.js"></script>
     <script type="module" src="./map_loader.js"></script>
     <!-- Maritime Routing Library -->
@@ -7129,6 +7130,16 @@
             </div>
         </div>
     </header>
+
+    <aside id="module-help-banner" class="contextual-guide-banner no-print" data-current-module="map" aria-label="Guía del módulo" aria-hidden="false">
+        <div class="contextual-guide-banner__content">
+            <span class="contextual-guide-banner__icon" aria-hidden="true"><i class="fa-solid fa-compass"></i></span>
+            <p class="contextual-guide-banner__text">Define la ruta: Marca coordenadas POL (Carga) y POD (Descarga).</p>
+        </div>
+        <button type="button" class="contextual-guide-banner__close" aria-label="Cerrar guía" title="No volver a mostrar">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+    </aside>
 
     <!-- DATALIST DE PUERTOS -->
     <datalist id="ports-list"></datalist>
@@ -42797,5 +42808,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             else bind();
         }());
     </script>
+    <script src="./contextual-feedback.js?v=20260717-global-banner"></script>
 </body>
 </html>
