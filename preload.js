@@ -62,6 +62,6 @@ contextBridge.exposeInMainWorld('dataBridgeAPI', {
 
 // Expose electronAPI for Core PRO to safely communicate with the main process for auditing
 contextBridge.exposeInMainWorld('electronAPI', {
-  sendVesselsForAudit: (vesselsList) => ipcRenderer.send('enviar-a-auditoria', vesselsList),
+  sendVesselsForAudit: (liveSyncSignal) => ipcRenderer.send('enviar-a-auditoria', liveSyncSignal),
   onVesselsForAudit: (callback) => ipcRenderer.on('recibir-auditoria', (event, data) => callback(data)),
 });

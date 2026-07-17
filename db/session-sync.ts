@@ -6,6 +6,10 @@ export const SESSION_SYNC_ACTION_MODULE = "CORE_PRO_MATCHING";
 export type SessionSyncData = {
   vessels: unknown[];
   updated_at: string;
+  format?: string;
+  source?: string;
+  created_at?: string;
+  [key: string]: unknown;
 };
 
 type SessionSyncInput = {

@@ -15288,18 +15288,44 @@
         }
         window.saveCoreProFrozenReport = saveCoreProFrozenReport;
 
+        function emitCoreProLiveSync(persistedReport) {
+            const liveSyncSignal = {
+                type: 'CORE_PRO_FROZEN_REPORT_COMMITTED',
+                vessel_count: Number(persistedReport?.vessel_count) || 0,
+                updated_at: persistedReport?.updated_at || new Date().toISOString()
+            };
+
+            if (window.electronAPI && typeof window.electronAPI.sendVesselsForAudit === 'function') {
+                window.electronAPI.sendVesselsForAudit(liveSyncSignal);
+                return;
+            }
+
+            if (typeof BroadcastChannel === 'function') {
+                const liveSyncChannel = new BroadcastChannel('seacharter-core-pro-live-sync');
+                liveSyncChannel.postMessage(liveSyncSignal);
+                liveSyncChannel.close();
+            }
+        }
+        window.emitCoreProLiveSync = emitCoreProLiveSync;
+
         async function syncCoreProMatchingReport(reportData) {
             const vesselsArray = Array.isArray(reportData?.vessels) ? reportData.vessels : [];
             if (vesselsArray.length === 0) {
                 throw new Error('No hay buques para sincronizar con Data Bridge.');
             }
 
-            const response = await postDataBridgeReceiveVessels({
+            const payload = {
+                ...(reportData && typeof reportData === 'object' ? reportData : {}),
+                vessels: vesselsArray
+            };
+            const response = await fetch('/api/core-pro-frozen-report', {
                 method: 'POST',
                 headers: {
+                    'Accept': 'application/json',
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ vessels: vesselsArray })
+                body: JSON.stringify(payload),
+                cache: 'no-store'
             });
 
             const responseText = await response.text();
@@ -15310,13 +15336,17 @@
                 responsePayload = responseText;
             }
 
-            if (response.status === 200) {
-                console.log('[Core PRO] Flota enviada a Data Bridge con éxito', responsePayload);
+            if (response.status !== 200) {
+                throw new Error(responsePayload?.error || responseText || `El backend respondió ${response.status}`);
             }
 
-            if (!response.ok) {
-                throw new Error(responsePayload?.error || responseText || `Data Bridge respondió ${response.status}`);
+            const persistedVessels = Array.isArray(responsePayload?.vessels) ? responsePayload.vessels : [];
+            if (persistedVessels.length !== vesselsArray.length || Number(responsePayload?.vessel_count) !== vesselsArray.length) {
+                throw new Error(`El backend no confirmó el reporte completo (${persistedVessels.length}/${vesselsArray.length} buques).`);
             }
+
+            emitCoreProLiveSync(responsePayload);
+            console.log(`[Core PRO] Reporte congelado persistido con ${persistedVessels.length} buques. Señal Live Sync emitida después del commit.`, responsePayload);
 
             return responsePayload;
         }
@@ -15585,26 +15615,21 @@
                     return;
                 }
 
-                const preparedAuditVessels = prepareDataBridgeVesselsForSend(JSON.parse(JSON.stringify(vesselsToSend)));
-                const payloadLimpio = preparedAuditVessels.validVessels;
-                if (preparedAuditVessels.rejectedCount > 0) {
-                    showToast(`${preparedAuditVessels.rejectedCount} buque${preparedAuditVessels.rejectedCount === 1 ? '' : 's'} descartado${preparedAuditVessels.rejectedCount === 1 ? '' : 's'} por IMO inválido.`, false, 'warning');
-                }
-                if (payloadLimpio.length === 0) {
-                    showToast("No hay buques para exportar a Data Bridge.");
-                    return;
-                }
-
                 const selectedAuditReport = normalizeBridgeDateFields({
                     format: 'seacharter.matching.export.v1',
                     source: 'core-pro-matching-selected',
                     created_at: new Date().toISOString(),
-                    vessels: payloadLimpio
+                    vessels: JSON.parse(JSON.stringify(vesselsToSend))
                 });
                 saveCoreProFrozenReport(selectedAuditReport);
+                await syncCoreProMatchingReport(selectedAuditReport);
 
                 const validatedFrozenReport = readValidatedCoreProFrozenReport();
-                const validatedPayload = cleanDataBridgeVesselsPayload(JSON.parse(JSON.stringify(validatedFrozenReport.vessels)));
+                const preparedAuditVessels = prepareDataBridgeVesselsForSend(JSON.parse(JSON.stringify(validatedFrozenReport.vessels)));
+                const validatedPayload = preparedAuditVessels.validVessels;
+                if (preparedAuditVessels.rejectedCount > 0) {
+                    showToast(`${preparedAuditVessels.rejectedCount} buque${preparedAuditVessels.rejectedCount === 1 ? '' : 's'} descartado${preparedAuditVessels.rejectedCount === 1 ? '' : 's'} por IMO inválido para la ingesta operativa. El reporte congelado completo sí quedó persistido.`, false, 'warning');
+                }
                 if (validatedPayload.length === 0) {
                     throw new Error('Bloqueo de seguridad: el reporte validado no contiene buques válidos para Data Bridge.');
                 }
