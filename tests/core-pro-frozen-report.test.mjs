@@ -57,7 +57,9 @@ test("the compatibility session endpoint keeps the complete v2 payload", () => {
 });
 
 test("Data Bridge reads only the persisted frozen report endpoint", () => {
-  assert.match(dataBridgeSource, /`\/api\/core-pro-frozen-report\?t=\$\{Date\.now\(\)\}`/);
+  assert.match(dataBridgeSource, /new URL\('\/api\/core-pro-frozen-report', window\.location\.origin\)/);
+  assert.match(dataBridgeSource, /url\.searchParams\.append\('t', String\(Date\.now\(\)\)\)/);
+  assert.match(dataBridgeSource, /fetch\(url\.toString\(\), \{/);
   assert.match(dataBridgeSource, /'Cache-Control': 'no-cache, no-store, must-revalidate'/);
   assert.match(dataBridgeSource, /response\.status !== 200/);
   assert.match(dataBridgeSource, /Number\(payload\?\.vessel_count\) !== vessels\.length/);
@@ -71,8 +73,14 @@ test("critical report endpoints disable browser and CDN caching", () => {
   assert.match(iaReportsSource, /"Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate"/);
   assert.match(iaReportsSource, /"Pragma": "no-cache"/);
   assert.match(iaReportsSource, /"Expires": "0"/);
-  assert.match(dataBridgeSource, /new URLSearchParams\(\{ t: String\(Date\.now\(\)\) \}\)/);
-  assert.match(dataBridgeSource, /clearIaAuditState\(\);[\s\S]*return this\.fetchReports\(false\)/);
+  assert.match(dataBridgeSource, /new URL\('\/api\/ia-reports', window\.location\.origin\)/);
+  assert.match(dataBridgeSource, /url\.searchParams\.append\('sync_id', currentSyncId\)/);
+  assert.match(dataBridgeSource, /url\.searchParams\.append\('t', String\(Date\.now\(\)\)\)/);
+  assert.match(dataBridgeSource, /if \(!currentSyncId\) return \[\];/);
+  assert.match(dataBridgeSource, /currentSyncId = nextSyncId;[\s\S]*await SyncService\.refresh\(\)/);
+  assert.doesNotMatch(dataBridgeSource, /\/api\/ia-reports\?\$\{/);
+  assert.doesNotMatch(dataBridgeSource, /\/api\/core-pro-frozen-report\?t=/);
+  assert.doesNotMatch(dataBridgeSource, /return this\.fetchReports\(false\)/);
   assert.match(dataBridgeSource, /await rehydrateIaAuditState\(payload\)/);
 });
 

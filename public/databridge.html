@@ -978,6 +978,7 @@
 
         let pendingAudits = [];
         let pending_frozen_report = null;
+        let currentSyncId = null;
         const DATA_BRIDGE_PAYLOAD_FINGERPRINT_KEY = 'databridge_active_payload_fingerprint';
 
         window.GlobalStore = window.GlobalStore || {
@@ -1290,6 +1291,7 @@
         }
 
         function clearIaAuditState() {
+            currentSyncId = null;
             localStorage.removeItem('databridge_last_sync_id');
             localStorage.removeItem('databridge_last_persisted_imos');
             renderIaReports([]);
@@ -1304,23 +1306,32 @@
         }
 
         async function rehydrateIaAuditState(payload) {
+            const nextSyncId = typeof payload?.syncId === 'string' ? payload.syncId.trim() : '';
+            if (!nextSyncId) {
+                clearIaAuditState();
+                return;
+            }
+
             const nextFingerprint = getFrozenReportFingerprint(payload);
             const previousFingerprint = localStorage.getItem(DATA_BRIDGE_PAYLOAD_FINGERPRINT_KEY) || '';
-            if (nextFingerprint === previousFingerprint) return;
-
-            clearIaAuditState();
-            localStorage.setItem(DATA_BRIDGE_PAYLOAD_FINGERPRINT_KEY, nextFingerprint);
+            if (nextFingerprint !== previousFingerprint) {
+                clearIaAuditState();
+                localStorage.setItem(DATA_BRIDGE_PAYLOAD_FINGERPRINT_KEY, nextFingerprint);
+            }
+            currentSyncId = nextSyncId;
+            localStorage.setItem('databridge_last_sync_id', currentSyncId);
             await SyncService.refresh();
         }
 
         const SyncService = {
-            async fetchReports(allowOrphanRecovery = true) {
+            async fetchReports() {
+                if (!currentSyncId) return [];
+
                 try {
-                    const syncId = String(localStorage.getItem('databridge_last_sync_id') || '').trim();
-                    const query = new URLSearchParams({ t: String(Date.now()) });
-                    if (syncId) query.set('sync_id', syncId);
-                    const endpoint = `/api/ia-reports?${query.toString()}`;
-                    const response = await fetch(endpoint, {
+                    const url = new URL('/api/ia-reports', window.location.origin);
+                    url.searchParams.append('sync_id', currentSyncId);
+                    url.searchParams.append('t', String(Date.now()));
+                    const response = await fetch(url.toString(), {
                         headers: {
                             'Accept': 'application/json',
                             'Cache-Control': 'no-cache, no-store, must-revalidate'
@@ -1331,10 +1342,6 @@
                     if (!response.ok) return [];
                     if (payload.available === false) {
                         addLog(`[INFO] ${getTimestamp()} - ${payload.message || 'Reporte no disponible'}.`);
-                        if (syncId && allowOrphanRecovery) {
-                            clearIaAuditState();
-                            return this.fetchReports(false);
-                        }
                     }
                     const reports = Array.isArray(payload.ia_reports) ? payload.ia_reports : [];
                     renderIaReports(reports);
@@ -1380,8 +1387,9 @@
         }
 
         async function fetchCoreProFrozenReport() {
-            const endpoint = `/api/core-pro-frozen-report?t=${Date.now()}`;
-            const response = await fetch(endpoint, {
+            const url = new URL('/api/core-pro-frozen-report', window.location.origin);
+            url.searchParams.append('t', String(Date.now()));
+            const response = await fetch(url.toString(), {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
