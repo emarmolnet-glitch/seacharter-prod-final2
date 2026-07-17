@@ -11805,7 +11805,12 @@
         </div>
 
     <!-- TOAST NOTIFICATION -->
-    <div id="toast" class="fixed bottom-6 right-6 max-w-[min(42rem,calc(100vw-3rem))] bg-slate-800 border border-slate-700 text-white px-5 py-3 rounded-lg shadow-xl transition-all duration-300 opacity-0 translate-y-4 pointer-events-none z-[200] flex items-start text-xs leading-relaxed">
+    <div id="toast" class="fixed right-4 md:right-6 max-w-[min(42rem,calc(100vw-2rem))] bg-slate-800 border border-slate-700 text-white px-4 py-3 rounded-lg shadow-xl transition-all duration-300 opacity-0 translate-y-4 pointer-events-none z-[200] flex items-start gap-2 text-xs leading-relaxed" role="status" aria-live="polite">
+        <i id="toast-icon" class="fa-solid fa-check-circle text-green-400 mt-0.5 shrink-0" aria-hidden="true"></i>
+        <span id="toast-message" class="flex-1">Operación completada</span>
+        <button id="toast-close" type="button" class="shrink-0 -mr-1 -mt-1 rounded p-1 text-slate-300 transition hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/70" aria-label="Cerrar notificación" onclick="dismissToast()">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
     </div>
 
     <div id="databridge-link-modal" class="fixed inset-0 z-[210] flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-200" role="dialog" aria-modal="true" aria-labelledby="databridge-link-title">
@@ -17361,26 +17366,58 @@
             dataList.appendChild(fragment);
         }
 
+        let toastDismissTimer = null;
+
+        function updateToastPosition() {
+            const header = document.querySelector('header.app-header');
+            const toast = document.getElementById('toast');
+            if (!header || !toast) return;
+            toast.style.top = `${Math.max(12, Math.round(header.getBoundingClientRect().bottom + 12))}px`;
+        }
+
+        function dismissToast() {
+            const toast = document.getElementById('toast');
+            if (!toast) return;
+            if (toastDismissTimer) {
+                clearTimeout(toastDismissTimer);
+                toastDismissTimer = null;
+            }
+            toast.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
+            toast.classList.remove('pointer-events-auto');
+        }
+
         function showToast(message, isSpinner = false, variant = 'success') {
             const currentLang = document.getElementById('language-selector')?.value || 'es';
             const translatedMessage = translateToastMessage(message, currentLang);
             const toast = document.getElementById('toast');
-            const icon = isSpinner
-                ? `<i class="fa-solid fa-spinner fa-spin text-indigo-400 mr-2"></i>`
+            const toastIcon = document.getElementById('toast-icon');
+            const toastMessage = document.getElementById('toast-message');
+            const iconClass = isSpinner
+                ? 'fa-solid fa-spinner fa-spin text-indigo-400 mt-0.5 shrink-0'
                 : variant === 'warning'
-                    ? `<i class="fa-solid fa-triangle-exclamation text-amber-400 mr-2"></i>`
+                    ? 'fa-solid fa-triangle-exclamation text-amber-400 mt-0.5 shrink-0'
                     : variant === 'error'
-                        ? `<i class="fa-solid fa-circle-exclamation text-red-400 mr-2"></i>`
-                        : `<i class="fa-solid fa-check-circle text-green-400 mr-2"></i>`;
+                        ? 'fa-solid fa-circle-exclamation text-red-400 mt-0.5 shrink-0'
+                        : 'fa-solid fa-check-circle text-green-400 mt-0.5 shrink-0';
+            if (!toast || !toastIcon || !toastMessage) return;
             toast.classList.toggle('border-amber-500', variant === 'warning');
             toast.classList.toggle('border-red-500', variant === 'error');
             toast.classList.toggle('bg-red-950', variant === 'error');
-            toast.innerHTML = `${icon} ${translatedMessage}`;
-            toast.classList.remove('opacity-0', 'translate-y-4');
-            setTimeout(() => {
-                toast.classList.add('opacity-0', 'translate-y-4');
-            }, isSpinner ? 4000 : 3000);
+            toastIcon.className = iconClass;
+            toastMessage.textContent = translatedMessage;
+            updateToastPosition();
+            toast.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
+            toast.classList.add('pointer-events-auto');
+            if (toastDismissTimer) clearTimeout(toastDismissTimer);
+            toastDismissTimer = setTimeout(dismissToast, isSpinner ? 4000 : 3000);
         }
+
+        const appHeader = document.querySelector('header.app-header');
+        if (appHeader && typeof ResizeObserver !== 'undefined') {
+            new ResizeObserver(updateToastPosition).observe(appHeader);
+        }
+        window.addEventListener('resize', updateToastPosition);
+        updateToastPosition();
 
         let isSyncing = false;
         function syncCalculatorAndMatching(source) {

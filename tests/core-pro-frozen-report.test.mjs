@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [coreProSource, endpointSource, healthCheckSource, iaReportsSource, sessionSyncSource, sessionSyncDatabaseSource, dataBridgeSource, corsSource, mainSource, preloadSource] = await Promise.all([
+const [coreProSource, endpointSource, healthCheckSource, iaReportsSource, sessionSyncSource, sessionSyncDatabaseSource, dataBridgeSource, corsSource, mainSource, preloadSource, netlifyConfigSource] = await Promise.all([
   readFile(new URL("../index.html", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/core-pro-frozen-report.ts", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/verify-connection.ts", import.meta.url), "utf8"),
@@ -13,6 +13,7 @@ const [coreProSource, endpointSource, healthCheckSource, iaReportsSource, sessio
   readFile(new URL("../netlify/functions/_shared/cors.ts", import.meta.url), "utf8"),
   readFile(new URL("../main.js", import.meta.url), "utf8"),
   readFile(new URL("../preload.js", import.meta.url), "utf8"),
+  readFile(new URL("../netlify.toml", import.meta.url), "utf8"),
 ]);
 
 test("Core PRO uploads the complete frozen report before continuing Data Bridge sync", () => {
@@ -124,6 +125,18 @@ test("central APIs dynamically allow Data Bridge production, previews, and local
   assert.match(endpointSource, /req\.method === "OPTIONS"[\s\S]*status: 204/);
   assert.match(healthCheckSource, /req\.method === "OPTIONS"[\s\S]*status: 204/);
   assert.match(iaReportsSource, /req\.method === "OPTIONS"[\s\S]*status: 204/);
+});
+
+test("Netlify static headers never override API CORS", () => {
+  assert.doesNotMatch(netlifyConfigSource, /Access-Control-Allow-Origin/i);
+  assert.doesNotMatch(netlifyConfigSource, /\[\[headers\]\][\s\S]*?for\s*=\s*["']\/api\//i);
+});
+
+test("Core PRO toasts stay below the header and support manual dismissal", () => {
+  assert.doesNotMatch(coreProSource, /id="toast"[^>]*\bbottom-/);
+  assert.match(coreProSource, /id="toast-close"[\s\S]*?onclick="dismissToast\(\)"/);
+  assert.match(coreProSource, /header\.getBoundingClientRect\(\)\.bottom \+ 12/);
+  assert.match(coreProSource, /new ResizeObserver\(updateToastPosition\)\.observe\(appHeader\)/);
 });
 
 test("Live Sync signals only the committed report and triggers one backend read", () => {
