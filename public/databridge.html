@@ -979,7 +979,19 @@
         let pendingAudits = [];
         let pending_frozen_report = null;
         let currentSyncId = null;
-        const DATA_BRIDGE_PAYLOAD_FINGERPRINT_KEY = 'databridge_active_payload_fingerprint';
+        let activePayloadFingerprint = '';
+        const CORE_PRO_PRODUCTION_ORIGIN = 'https://neon-seachartercorepro-4ce09d.netlify.app';
+        const CORE_PRO_API_ORIGIN = (() => {
+            const configuredOrigin = String(window.CORE_PRO_API_ORIGIN || '').trim().replace(/\/+$/, '');
+            if (configuredOrigin) return configuredOrigin;
+            if (/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)) return window.location.origin;
+            if (window.location.hostname.includes('neon-seachartercorepro-4ce09d')) return window.location.origin;
+            return CORE_PRO_PRODUCTION_ORIGIN;
+        })();
+
+        function createCoreProApiUrl(pathname) {
+            return new URL(pathname, `${CORE_PRO_API_ORIGIN}/`);
+        }
 
         window.GlobalStore = window.GlobalStore || {
             filteredVessels: [],
@@ -1292,8 +1304,6 @@
 
         function clearIaAuditState() {
             currentSyncId = null;
-            localStorage.removeItem('databridge_last_sync_id');
-            localStorage.removeItem('databridge_last_persisted_imos');
             renderIaReports([]);
         }
 
@@ -1313,13 +1323,11 @@
             }
 
             const nextFingerprint = getFrozenReportFingerprint(payload);
-            const previousFingerprint = localStorage.getItem(DATA_BRIDGE_PAYLOAD_FINGERPRINT_KEY) || '';
-            if (nextFingerprint !== previousFingerprint) {
+            if (nextFingerprint !== activePayloadFingerprint) {
                 clearIaAuditState();
-                localStorage.setItem(DATA_BRIDGE_PAYLOAD_FINGERPRINT_KEY, nextFingerprint);
+                activePayloadFingerprint = nextFingerprint;
             }
             currentSyncId = nextSyncId;
-            localStorage.setItem('databridge_last_sync_id', currentSyncId);
             await SyncService.refresh();
         }
 
@@ -1328,7 +1336,7 @@
                 if (!currentSyncId) return [];
 
                 try {
-                    const url = new URL('/api/ia-reports', window.location.origin);
+                    const url = createCoreProApiUrl('/api/ia-reports');
                     url.searchParams.append('sync_id', currentSyncId);
                     url.searchParams.append('t', String(Date.now()));
                     const response = await fetch(url.toString(), {
@@ -1387,7 +1395,7 @@
         }
 
         async function fetchCoreProFrozenReport() {
-            const url = new URL('/api/core-pro-frozen-report', window.location.origin);
+            const url = createCoreProApiUrl('/api/core-pro-frozen-report');
             url.searchParams.append('t', String(Date.now()));
             const response = await fetch(url.toString(), {
                 method: 'GET',

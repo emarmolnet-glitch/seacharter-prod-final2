@@ -1,13 +1,23 @@
 import type { Config } from "@netlify/functions";
 import { fetchIaReports, getVesselSyncContext } from "../../db/ia-reports.js";
+import { createCorsHeaders } from "./_shared/cors.js";
 
-const headers = {
+const cacheHeaders = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
   "Pragma": "no-cache",
   "Expires": "0",
 };
 
 export default async (req: Request) => {
+  const headers = {
+    ...cacheHeaders,
+    ...createCorsHeaders(req, "GET, OPTIONS"),
+  };
+
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers });
+  }
+
   if (req.method !== "GET") {
     return Response.json({ success: false, error: "Method not allowed" }, { status: 405, headers });
   }
