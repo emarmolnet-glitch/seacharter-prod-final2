@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [coreProSource, endpointSource, sessionSyncSource, dataBridgeSource, mainSource, preloadSource] = await Promise.all([
+const [coreProSource, endpointSource, iaReportsSource, sessionSyncSource, dataBridgeSource, mainSource, preloadSource] = await Promise.all([
   readFile(new URL("../index.html", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/core-pro-frozen-report.ts", import.meta.url), "utf8"),
+  readFile(new URL("../netlify/functions/ia-reports.ts", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/session-sync.ts", import.meta.url), "utf8"),
   readFile(new URL("../public/databridge.html", import.meta.url), "utf8"),
   readFile(new URL("../main.js", import.meta.url), "utf8"),
@@ -56,10 +57,23 @@ test("the compatibility session endpoint keeps the complete v2 payload", () => {
 });
 
 test("Data Bridge reads only the persisted frozen report endpoint", () => {
-  assert.match(dataBridgeSource, /fetch\('\/api\/core-pro-frozen-report'/);
+  assert.match(dataBridgeSource, /`\/api\/core-pro-frozen-report\?t=\$\{Date\.now\(\)\}`/);
+  assert.match(dataBridgeSource, /'Cache-Control': 'no-cache, no-store, must-revalidate'/);
   assert.match(dataBridgeSource, /response\.status !== 200/);
   assert.match(dataBridgeSource, /Number\(payload\?\.vessel_count\) !== vessels\.length/);
   assert.match(dataBridgeSource, /fetchCoreProFrozenReport\(\)\.catch/);
+});
+
+test("critical report endpoints disable browser and CDN caching", () => {
+  assert.match(endpointSource, /"Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate"/);
+  assert.match(endpointSource, /"Pragma": "no-cache"/);
+  assert.match(endpointSource, /"Expires": "0"/);
+  assert.match(iaReportsSource, /"Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate"/);
+  assert.match(iaReportsSource, /"Pragma": "no-cache"/);
+  assert.match(iaReportsSource, /"Expires": "0"/);
+  assert.match(dataBridgeSource, /new URLSearchParams\(\{ t: String\(Date\.now\(\)\) \}\)/);
+  assert.match(dataBridgeSource, /clearIaAuditState\(\);[\s\S]*return this\.fetchReports\(false\)/);
+  assert.match(dataBridgeSource, /await rehydrateIaAuditState\(payload\)/);
 });
 
 test("Live Sync signals only the committed report and triggers one backend read", () => {
