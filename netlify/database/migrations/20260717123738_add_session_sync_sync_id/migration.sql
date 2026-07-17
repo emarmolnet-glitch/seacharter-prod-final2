@@ -1,0 +1,1 @@
+ALTER TABLE "session_sync" ADD COLUMN "sync_id" text NOT NULL;

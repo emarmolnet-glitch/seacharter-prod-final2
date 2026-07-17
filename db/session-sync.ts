@@ -28,6 +28,7 @@ export type SessionSyncRow = {
 
 type SessionSyncDatabaseRow = {
   user_id: string;
+  sync_id: string;
   last_sync_data: SessionSyncData;
   last_action_module: string;
   updated_at: Date;
@@ -44,18 +45,29 @@ function mapSessionSyncRow(row: SessionSyncDatabaseRow): SessionSyncRow {
 
 export async function upsertSessionSync(input: SessionSyncInput) {
   await ensureApplicationSchema();
-  const serializedSyncData = JSON.stringify(input.lastSyncData);
+  const syncId = typeof input.lastSyncData.syncId === "string" ? input.lastSyncData.syncId.trim() : "";
+  if (!syncId) {
+    throw new Error("last_sync_data.syncId must be a non-empty string");
+  }
+
+  const completeSyncData = {
+    ...input.lastSyncData,
+    syncId,
+    vessels: input.lastSyncData.vessels,
+  };
+  const serializedSyncData = JSON.stringify(completeSyncData);
   const result = await getPool().query<SessionSyncDatabaseRow>(
     `
-      INSERT INTO session_sync (user_id, last_sync_data, last_action_module, updated_at)
-      VALUES ($1, $2::jsonb, $3, NOW())
+      INSERT INTO session_sync (user_id, sync_id, last_sync_data, last_action_module, updated_at)
+      VALUES ($1, $2, $3::jsonb, $4, NOW())
       ON CONFLICT (user_id) DO UPDATE SET
+        sync_id = EXCLUDED.sync_id,
         last_sync_data = EXCLUDED.last_sync_data,
         last_action_module = EXCLUDED.last_action_module,
         updated_at = NOW()
-      RETURNING user_id, last_sync_data, last_action_module, updated_at
+      RETURNING user_id, sync_id, last_sync_data, last_action_module, updated_at
     `,
-    [input.userId, serializedSyncData, input.lastActionModule],
+    [input.userId, syncId, serializedSyncData, input.lastActionModule],
   );
 
   return mapSessionSyncRow(result.rows[0]);
@@ -64,7 +76,7 @@ export async function upsertSessionSync(input: SessionSyncInput) {
 export async function fetchFleetRows() {
   await ensureApplicationSchema();
   const result = await getPool().query<SessionSyncDatabaseRow>(`
-    SELECT user_id, last_sync_data, last_action_module, updated_at
+    SELECT user_id, sync_id, last_sync_data, last_action_module, updated_at
     FROM session_sync
     ORDER BY updated_at DESC
   `);
@@ -76,7 +88,7 @@ export async function getFleetRow(userId = SESSION_SYNC_USER_ID) {
   await ensureApplicationSchema();
   const result = await getPool().query<SessionSyncDatabaseRow>(
     `
-      SELECT user_id, last_sync_data, last_action_module, updated_at
+      SELECT user_id, sync_id, last_sync_data, last_action_module, updated_at
       FROM session_sync
       WHERE user_id = $1
       LIMIT 1
