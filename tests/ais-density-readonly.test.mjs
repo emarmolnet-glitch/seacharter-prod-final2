@@ -18,6 +18,139 @@ test('density map loads validated vessels through the read-only endpoint', () =>
   assert.match(indexSource, /audit-database-readonly/);
 });
 
+test('database ingestion summary groups the raw payload taxonomy before normalization', () => {
+  const loaderStart = indexSource.indexOf('window.loadValidatedAisDensityVessels = async function');
+  const loaderEnd = indexSource.indexOf('window.runInitialAisRadarLoad', loaderStart);
+  const loaderSource = indexSource.slice(loaderStart, loaderEnd);
+  const payloadIndex = loaderSource.indexOf('const validatedVessels = Array.isArray(payload.vessels)');
+  const summaryIndex = loaderSource.indexOf('window.buildAisIngestionTaxonomySummary(validatedVessels)');
+  const normalizationIndex = loaderSource.indexOf('const normalizedVessels = validatedVessels');
+
+  assert.ok(payloadIndex >= 0 && summaryIndex > payloadIndex && normalizationIndex > summaryIndex);
+
+  const helperStart = indexSource.indexOf('window.buildAisIngestionTaxonomySummary = function');
+  const helperEnd = indexSource.indexOf('window.groupAisVesselsByTaxonomy', helperStart);
+  const helperSource = indexSource.slice(helperStart, helperEnd);
+  const windowMock = {};
+  new Function('window', helperSource)(windowMock);
+
+  const summary = windowMock.buildAisIngestionTaxonomySummary([
+    { ship_type: 'Bulk Carrier' },
+    { cargoType: 'General Cargo' },
+    { ship_type: 'Bulk Carrier' },
+  ]);
+
+  assert.deepEqual(summary.groups, [
+    { label: 'Bulk Carrier', count: 2 },
+    { label: 'General Cargo', count: 1 },
+  ]);
+  assert.equal(
+    summary.message,
+    'Consulta completada: 3 buques cargados desde la base de datos. (2 Bulk Carrier, 1 General Cargo)',
+  );
+  assert.doesNotMatch(summary.message, /0 /);
+});
+
+test('ingestion summary catches taxonomy failures without interrupting the UI flow', () => {
+  const helperStart = indexSource.indexOf('window.buildAisIngestionTaxonomySummary = function');
+  const helperEnd = indexSource.indexOf('window.groupAisVesselsByTaxonomy', helperStart);
+  const helperSource = indexSource.slice(helperStart, helperEnd);
+  const windowMock = {};
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  try {
+    new Function('window', helperSource)(windowMock);
+    const brokenVessel = {};
+    Object.defineProperty(brokenVessel, 'ship_type', {
+      get() { throw new Error('taxonomy getter failed'); },
+    });
+
+    const summary = windowMock.buildAisIngestionTaxonomySummary([brokenVessel]);
+
+    assert.deepEqual(summary.groups, []);
+    assert.equal(summary.details, '');
+    assert.equal(summary.message, 'Consulta completada: 1 buques cargados desde la base de datos.');
+  } finally {
+    console.warn = originalWarn;
+  }
+});
+
+test('All Cargo bypasses type matching and strict checkboxes update the derived counter', () => {
+  const filterStart = indexSource.indexOf('function getAisVesselDeclaredTaxonomyType');
+  const filterEnd = indexSource.indexOf('function isStrictFleetMode', filterStart);
+  const filterSource = indexSource.slice(filterStart, filterEnd);
+  const windowMock = {};
+  const normalizeFleetTaxonomyText = value => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  new Function('window', 'normalizeFleetTaxonomyText', filterSource)(windowMock, normalizeFleetTaxonomyText);
+
+  const vessels = [
+    { ship_type: 'Bulk Carrier', cargoType: 'Cement Carrier' },
+    { ship_type: 'Bulk Carrier' },
+    { ship_type: 'Cement Carrier', cargoType: 'Bulk Carrier' },
+  ];
+  const elements = new Map([
+    ['ais-density-count', { textContent: '0' }],
+    ['buques-count', { textContent: '0' }],
+  ]);
+  let currentFilteredVessels = [];
+  windowMock.GlobalStore = {
+    filteredVesselsInitialized: true,
+    getFilteredVessels: () => currentFilteredVessels,
+  };
+  windowMock.renderAisTaxonomyBreakdown = () => {};
+  const counterStart = indexSource.indexOf('window.getDerivedFilteredAisVessels = function()');
+  const counterEnd = indexSource.indexOf('window.reiniciarMemoriaBarridoAIS', counterStart);
+  new Function('window', 'document', indexSource.slice(counterStart, counterEnd))(
+    windowMock,
+    { getElementById: id => elements.get(id) || null },
+  );
+
+  currentFilteredVessels = windowMock.filterVessels(vessels, 'Bulk Carrier');
+  assert.equal(windowMock.renderFilteredAisCounters(), 2);
+  assert.equal(elements.get('ais-density-count').textContent, '2');
+
+  currentFilteredVessels = windowMock.filterVessels(vessels, 'type:cement');
+  assert.equal(windowMock.renderFilteredAisCounters(), 1);
+  assert.equal(elements.get('ais-density-count').textContent, '1');
+
+  currentFilteredVessels = windowMock.filterVessels(vessels, ['ALL CARGO']);
+  assert.equal(windowMock.renderFilteredAisCounters(), 3);
+  assert.equal(elements.get('buques-count').textContent, '3');
+});
+
+test('ingestion reduce groups by each vessel declared type without cross-field contamination', () => {
+  const helperStart = indexSource.indexOf('window.buildAisIngestionTaxonomySummary = function');
+  const helperEnd = indexSource.indexOf('window.groupAisVesselsByTaxonomy', helperStart);
+  const helperSource = indexSource.slice(helperStart, helperEnd);
+  const windowMock = {};
+  new Function('window', helperSource)(windowMock);
+
+  const summary = windowMock.buildAisIngestionTaxonomySummary([
+    { ship_type: 'Bulk Carrier', cargoType: 'Cement Carrier' },
+    { ship_type: 'Bulk Carrier', cargoType: 'Cement Carrier' },
+    { ship_type: 'Cement Carrier', cargoType: 'Cement Carrier' },
+  ]);
+
+  assert.deepEqual(summary.groups, [
+    { label: 'Bulk Carrier', count: 2 },
+    { label: 'Cement Carrier', count: 1 },
+  ]);
+  assert.equal(
+    summary.message,
+    'Consulta completada: 3 buques cargados desde la base de datos. (2 Bulk Carrier, 1 Cement Carrier)',
+  );
+});
+
+test('read-only success feedback and toast use the ingestion taxonomy summary', () => {
+  assert.match(indexSource, /state\.taxonomySummary\?\.message \|\| `Consulta completada:/);
+  assert.match(indexSource, /showToast\([\s\S]*?state\.taxonomySummary\?\.message/);
+});
+
 test('density map restores globally filtered vessels without refetching', () => {
   const tabInitialization = indexSource.slice(indexSource.indexOf("if(tabId === 'ais')"), indexSource.indexOf("} else if (typeof destroyAisMap"));
   assert.doesNotMatch(tabInitialization, /resetAisDensityResults\(\)/);
@@ -439,7 +572,7 @@ test('taxonomy breakdown renderer produces visible totals for simulated fleet an
     documentMock,
     MutationObserverMock,
     () => 1,
-    () => {}
+    () => {},
   );
   const groups = windowMock.groupAisVesselsByTaxonomy(totalVessels);
   assert.equal(groups.reduce((sum, group) => sum + group.count, 0), 6);

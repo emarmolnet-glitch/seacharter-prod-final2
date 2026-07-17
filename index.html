@@ -11794,7 +11794,7 @@
         </div>
 
     <!-- TOAST NOTIFICATION -->
-    <div id="toast" class="fixed bottom-6 right-6 bg-slate-800 border border-slate-700 text-white px-5 py-3 rounded-lg shadow-xl transition-all duration-300 opacity-0 translate-y-4 pointer-events-none z-[200] flex items-center text-xs">
+    <div id="toast" class="fixed bottom-6 right-6 max-w-[min(42rem,calc(100vw-3rem))] bg-slate-800 border border-slate-700 text-white px-5 py-3 rounded-lg shadow-xl transition-all duration-300 opacity-0 translate-y-4 pointer-events-none z-[200] flex items-start text-xs leading-relaxed">
     </div>
 
     <div id="databridge-link-modal" class="fixed inset-0 z-[210] flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-200" role="dialog" aria-modal="true" aria-labelledby="databridge-link-title">
@@ -33711,6 +33711,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.aisPersistedVesselCount = 0;
             window.aisDatabaseVesselCount = 0;
             window.lastAisDensityReadPayload = null;
+            window.lastAisIngestionTaxonomySummary = null;
             if (window.matchingAuditModeState?.enabled) {
                 window.matchingAuditModeState.vessels = [];
             }
@@ -33775,6 +33776,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
 
                 const validatedVessels = Array.isArray(payload.vessels) ? payload.vessels : [];
+                window.lastAisIngestionTaxonomySummary = typeof window.buildAisIngestionTaxonomySummary === 'function'
+                    ? window.buildAisIngestionTaxonomySummary(validatedVessels)
+                    : null;
                 const normalizedVessels = validatedVessels
                     .map(vessel => typeof window.normalizeAisVesselForRadar === 'function'
                         ? window.normalizeAisVesselForRadar(vessel)
@@ -35794,16 +35798,67 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return vessel;
             }
 
+            function getAisVesselDeclaredTaxonomyType(vessel) {
+                const source = vessel && typeof vessel === 'object' ? vessel : {};
+                const meta = source.MetaData && typeof source.MetaData === 'object' ? source.MetaData : {};
+                const declaredType = [
+                    source.ship_type,
+                    source.vessel_type,
+                    source.type,
+                    source.cargoType,
+                    source.tipo_carga,
+                    source.shipType,
+                    source.ShipType,
+                    source.vesselType,
+                    source.Tipo,
+                    source.tipo,
+                    meta.ship_type,
+                    meta.vessel_type,
+                    meta.type,
+                    meta.cargoType,
+                    meta.tipo_carga,
+                    meta.shipType,
+                    meta.ShipType,
+                    meta.vesselType,
+                    meta.Tipo,
+                    meta.tipo
+                ].find(value => value !== undefined && value !== null && String(value).trim());
+                return declaredType === undefined ? 'Unknown' : String(declaredType).trim();
+            }
+
+            function getStrictFleetTaxonomyKey(vessel) {
+                const type = normalizeFleetTaxonomyText(getAisVesselDeclaredTaxonomyType(vessel));
+                if (!type || type === 'unknown') return 'unknown';
+                if (type.includes('cement') || type.includes('clinker')) return 'cement';
+                if (type.includes('bulk carrier') || type.includes('bulker') || type.includes('handysize') || type.includes('handymax') || type.includes('supramax') || type.includes('ultramax') || type.includes('panamax') || type.includes('capesize') || type === 'dry bulk') return 'bulk';
+                return type;
+            }
+
+            function isAllCargoFilter(category) {
+                const normalizedCategory = String(category || '').trim().toLowerCase();
+                return normalizedCategory === 'category:cargo'
+                    || normalizedCategory === 'all cargo'
+                    || normalizedCategory === 'all';
+            }
+
             function filterVessels(vessels, category) {
                 const source = Array.isArray(vessels) ? vessels : [];
                 if (Array.isArray(category)) {
                     const categories = Array.from(new Set(category.filter(Boolean)));
                     if (categories.length === 0) return [];
+                    if (categories.some(isAllCargoFilter)) return source;
                     return source.filter(vessel => categories.some(item => filterVessels([vessel], item).length > 0));
                 }
-                if (!category || category === 'All') return source;
+                if (!category || isAllCargoFilter(category)) return source;
 
-                const taxonomyKey = String(category || '').replace(/^type:/, '');
+                const taxonomyKey = String(category || '').replace(/^type:/i, '');
+                const strictTaxonomyKey = {
+                    'bulk carrier': 'bulk',
+                    'cement carrier': 'cement'
+                }[normalizeFleetTaxonomyText(taxonomyKey)] || taxonomyKey;
+                if (strictTaxonomyKey === 'bulk' || strictTaxonomyKey === 'cement') {
+                    return source.filter(vessel => getStrictFleetTaxonomyKey(vessel) === strictTaxonomyKey);
+                }
                 const taxonomyTerms = FLEET_INTEL_TAXONOMY[taxonomyKey]
                     || window.taxonomyMap[category]
                     || window.taxonomyMap[taxonomyKey]
@@ -35821,7 +35876,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const cementSignal = typeof classifyFleetCementCarrier === 'function'
                         ? classifyFleetCementCarrier(v, record)
                         : { level: 'none' };
-                    if (taxonomyKey === 'cement' && cementSignal.level !== 'none') return true;
                     const shipTypeCode = getAisShipTypeCode(v.ShipType ?? v.shipType ?? meta.ShipType ?? meta.shipType);
                     const text = normalizeFleetTaxonomyText([
                         v.Tipo,
@@ -36410,6 +36464,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 requestedAt: null,
                 vesselCount: 0,
                 databaseVesselCount: null,
+                taxonomySummary: null,
                 error: null
             }, window.aisAvailabilitySweepUi || {});
 
@@ -36471,7 +36526,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                             : 'El backend está capturando AISStream y guardando buques en Neon...')
                         : (isSent
                             ? (readOnlyMode
-                                ? `Consulta completada: ${Number(state.vesselCount) || 0} buques cargados desde la base de datos.`
+                                ? (state.taxonomySummary?.message || `Consulta completada: ${Number(state.vesselCount) || 0} buques cargados desde la base de datos.`)
                                 : `Captura completada: ${Number(state.vesselCount) || 0} buques actualizados en Neon${Number.isFinite(Number(state.databaseVesselCount)) ? `; ${Number(state.databaseVesselCount)} buques almacenados en total.` : '.'}`)
                             : (hasError ? state.error : AIS_SWEEP_IDLE_MESSAGE));
                 }
@@ -36484,6 +36539,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 state.status = 'requesting';
                 state.isLoading = true;
                 state.error = null;
+                state.taxonomySummary = null;
                 window.updateAisAvailabilitySweepFeedback();
 
                 try {
@@ -36497,9 +36553,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     state.databaseVesselCount = Number.isFinite(Number(window.aisDatabaseVesselCount))
                         ? Number(window.aisDatabaseVesselCount)
                         : vessels.length;
+                    state.taxonomySummary = window.lastAisIngestionTaxonomySummary;
                     state.requestedAt = new Date().toISOString();
                     if (typeof showToast === 'function') {
-                        showToast(`Consulta completada: ${vessels.length} buques cargados.`, false, 'success');
+                        showToast(
+                            state.taxonomySummary?.message || `Consulta completada: ${vessels.length} buques cargados desde la base de datos.`,
+                            false,
+                            'success'
+                        );
                     }
                     return vessels;
                 } catch (error) {
@@ -36926,38 +36987,26 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function getAisTaxonomyBreakdownLabel(vessel) {
-            const source = vessel && typeof vessel === 'object' ? vessel : {};
-            const meta = source.MetaData && typeof source.MetaData === 'object' ? source.MetaData : {};
-            const rawValues = [
-                source.ship_type,
-                source.shipType,
-                source.ShipType,
-                source.vessel_type,
-                source.vesselType,
-                source.Tipo,
-                source.tipo,
-                source.tipo_carga,
-                source.cargoType,
-                source.cargoTaxonomyLabel,
-                source.categoryLabel,
-                source.radarCategory,
-                source.vesselClass,
-                meta.ship_type,
-                meta.shipType,
-                meta.ShipType,
-                meta.vessel_type,
-                meta.vesselType,
-                meta.Tipo,
-                meta.tipo,
-                meta.tipo_carga,
-                meta.cargoType,
-                meta.cargoTaxonomyLabel,
-                meta.categoryLabel,
-                meta.radarCategory,
-                meta.vesselClass
-            ].filter(value => value !== undefined && value !== null && String(value).trim());
-            const text = normalizeAisTaxonomyBreakdownText(rawValues.join(' '));
-            const codeMatch = rawValues.map(value => String(value).match(/(?:^|\D)(\d{2})(?:\D|$)/)).find(Boolean);
+            const declaredType = vessel?.ship_type
+                || vessel?.vessel_type
+                || vessel?.type
+                || vessel?.cargoType
+                || vessel?.tipo_carga
+                || vessel?.shipType
+                || vessel?.ShipType
+                || vessel?.vesselType
+                || vessel?.Tipo
+                || vessel?.tipo
+                || vessel?.MetaData?.ship_type
+                || vessel?.MetaData?.vessel_type
+                || vessel?.MetaData?.type
+                || vessel?.MetaData?.cargoType
+                || vessel?.MetaData?.tipo_carga
+                || vessel?.MetaData?.shipType
+                || vessel?.MetaData?.ShipType
+                || 'Unknown';
+            const text = normalizeAisTaxonomyBreakdownText(declaredType);
+            const codeMatch = String(declaredType).match(/(?:^|\D)(\d{2})(?:\D|$)/);
             const shipTypeCode = codeMatch ? Number(codeMatch[1]) : null;
 
             if (text.includes('possible cement') || text.includes('cement') || text.includes('clinker')) return 'Cement Carrier';
@@ -37005,6 +37054,27 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             };
             return compactLabels[label] || label;
         }
+
+        window.buildAisIngestionTaxonomySummary = function(vessels) {
+            const list = Array.isArray(vessels) ? vessels : [];
+            const fallbackMessage = `Consulta completada: ${list.length} buques cargados desde la base de datos.`;
+            try {
+                const taxonomyCounts = list.reduce((acc, vessel) => {
+                    const type = vessel?.ship_type || vessel?.type || vessel?.cargoType || 'Unknown';
+                    acc[type] = (acc[type] || 0) + 1;
+                    return acc;
+                }, {});
+                const groups = Object.entries(taxonomyCounts)
+                    .filter(([, count]) => count > 0)
+                    .map(([label, count]) => ({ label, count }));
+                const details = groups.map(({ label, count }) => `${count} ${label}`).join(', ');
+                const message = `${fallbackMessage}${details ? ` (${details})` : ''}`;
+                return { total: list.length, groups, details, message };
+            } catch (error) {
+                console.warn('[AIS] No se pudo generar el desglose de taxonomías de la ingesta.', error);
+                return { total: list.length, groups: [], details: '', message: fallbackMessage };
+            }
+        };
 
         window.groupAisVesselsByTaxonomy = function(vessels) {
             const list = Array.isArray(vessels) ? vessels : [];
