@@ -1342,6 +1342,57 @@
             window.pending_frozen_report = pending_frozen_report;
         }
 
+        async function fetchCoreProFrozenReport() {
+            const response = await fetch('/api/core-pro-frozen-report', {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' },
+                cache: 'no-store'
+            });
+            const payload = await response.json().catch(() => null);
+
+            if (response.status !== 200) {
+                throw new Error(payload?.error || `Core PRO respondió ${response.status}`);
+            }
+
+            const vessels = Array.isArray(payload?.vessels) ? payload.vessels : [];
+            if (!payload?.available || vessels.length === 0) {
+                addLog(`[CONGELAR_REPORTE] ${getTimestamp()} - Core PRO no tiene un informe persistido disponible.`);
+                return null;
+            }
+
+            if (Number(payload?.vessel_count) !== vessels.length) {
+                throw new Error(`Core PRO devolvió un conteo inconsistente (${vessels.length}/${payload?.vessel_count || 0}).`);
+            }
+
+            pending_frozen_report = { ...payload, vessels: mapFrozenReportVessels(vessels) };
+            notifyFrozenReportReady();
+            loadPendingFrozenReport();
+            return pending_frozen_report;
+        }
+        window.fetchCoreProFrozenReport = fetchCoreProFrozenReport;
+
+        async function handleCoreProLiveSyncSignal(signal) {
+            if (signal?.type !== 'CORE_PRO_FROZEN_REPORT_COMMITTED') return;
+            addLog(`[SYNC] ${getTimestamp()} - Commit confirmado en Core PRO para ${Number(signal.vessel_count) || 0} buques. Leyendo el reporte persistido.`);
+            await fetchCoreProFrozenReport();
+        }
+
+        if (window.electronAPI && typeof window.electronAPI.onVesselsForAudit === 'function') {
+            window.electronAPI.onVesselsForAudit((signal) => {
+                handleCoreProLiveSyncSignal(signal).catch((error) => {
+                    addLog(`[ERROR] ${getTimestamp()} - Falló la lectura posterior al Live Sync: ${error.message}`);
+                });
+            });
+        } else if (typeof BroadcastChannel === 'function') {
+            const coreProLiveSyncChannel = new BroadcastChannel('seacharter-core-pro-live-sync');
+            coreProLiveSyncChannel.addEventListener('message', (event) => {
+                handleCoreProLiveSyncSignal(event.data).catch((error) => {
+                    addLog(`[ERROR] ${getTimestamp()} - Falló la lectura posterior al Live Sync: ${error.message}`);
+                });
+            });
+            window.coreProLiveSyncChannel = coreProLiveSyncChannel;
+        }
+
         function loadPendingFrozenReport() {
             if (!pending_frozen_report || !Array.isArray(pending_frozen_report.vessels) || pending_frozen_report.vessels.length === 0) {
                 addLog(`[CONGELAR_REPORTE] ${getTimestamp()} - No hay pending_frozen_report con buques para cargar.`);
@@ -1599,6 +1650,9 @@
         populateInitialLogs();
         syncDataBridgeMasterMap();
         SyncService.refresh();
+        fetchCoreProFrozenReport().catch((error) => {
+            addLog(`[ERROR] ${getTimestamp()} - No se pudo cargar el informe congelado de Core PRO: ${error.message}`);
+        });
     </script>
 </body>
 </html>

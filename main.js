@@ -174,10 +174,11 @@ ipcMain.on('request-databridge-status', (event) => {
 });
 
 // 3. Flow Matching Engine -> Audit in Data Bridge
-ipcMain.on('enviar-a-auditoria', (event, vesselsList) => {
-    console.log(`[IPC MAIN] Recibidos ${vesselsList.length} buques. Redirigiendo a Data Bridge...`);
+ipcMain.on('enviar-a-auditoria', (event, liveSyncSignal) => {
+    const vesselCount = Number(liveSyncSignal?.vessel_count) || 0;
+    console.log(`[IPC MAIN] Commit confirmado para ${vesselCount} buques. Emitiendo Live Sync a Data Bridge...`);
     if (dataBridgeWindow && !dataBridgeWindow.webContents.isDestroyed()) {
-        dataBridgeWindow.webContents.send('recibir-auditoria', vesselsList);
+        dataBridgeWindow.webContents.send('recibir-auditoria', liveSyncSignal);
     } else {
         console.error("[IPC MAIN] Error: dataBridgeWindow no está disponible.");
     }
