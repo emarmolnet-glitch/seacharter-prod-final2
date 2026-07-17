@@ -16447,6 +16447,23 @@
                 });
 
                 const matches = deduplicatedMatches;
+                window.lastMatchingEngineResults = matches;
+
+                let persistedMatchingReport = null;
+                if (matches.length > 0) {
+                    const currentSyncId = generateSyncId();
+                    const persistencePayload = {
+                        source: 'Core PRO',
+                        syncId: currentSyncId,
+                        format: 'v2',
+                        vessels: matches
+                    };
+
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando auditoría...';
+                    persistedMatchingReport = await syncCoreProMatchingReport(persistencePayload);
+                    window.currentCoreProSyncId = currentSyncId;
+                }
+
                 const deduplicatedCount = Math.max(0, rawMatches.length - matches.length);
                 if (sourceIntegrity && deduplicatedCount > 0) {
                     sourceIntegrity.className = 'mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900';
@@ -16986,6 +17003,11 @@
 
                 if (arrayDeBuquesEncontrados.length === 0) {
                     console.log("Data Bridge no recibió datos porque el Motor de Coincidencia no produjo resultados.");
+                } else if (persistedMatchingReport) {
+                    const persistedCount = Number(persistedMatchingReport.vessel_count) || 0;
+                    if (typeof showToast === 'function') {
+                        showToast(`✅ Auditoría completada. ${persistedCount} buque${persistedCount === 1 ? '' : 's'} persistido${persistedCount === 1 ? '' : 's'} y disponible${persistedCount === 1 ? '' : 's'} para Data Bridge.`);
+                    }
                 }
                 
             } catch (err) {

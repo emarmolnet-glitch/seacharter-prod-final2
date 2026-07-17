@@ -35,6 +35,19 @@ test("Core PRO uploads the complete frozen report before continuing Data Bridge 
   assert.ok(statusCheckIndex >= 0 && confirmationCheckIndex > statusCheckIndex && signalIndex > confirmationCheckIndex);
 });
 
+test("the matching engine persists evaluated vessels before reporting completion", () => {
+  assert.match(coreProSource, /const matches = deduplicatedMatches;[\s\S]*window\.lastMatchingEngineResults = matches;/);
+  assert.match(coreProSource, /const currentSyncId = generateSyncId\(\);[\s\S]*source: 'Core PRO',[\s\S]*syncId: currentSyncId,[\s\S]*format: 'v2',[\s\S]*vessels: matches/);
+  assert.match(coreProSource, /persistedMatchingReport = await syncCoreProMatchingReport\(persistencePayload\);/);
+  assert.match(coreProSource, /window\.currentCoreProSyncId = currentSyncId;/);
+
+  const engineFetchIndex = coreProSource.indexOf("fetch('/api/ai-ais-filter'");
+  const engineStateIndex = coreProSource.indexOf("window.lastMatchingEngineResults = matches", engineFetchIndex);
+  const persistenceIndex = coreProSource.indexOf("persistedMatchingReport = await syncCoreProMatchingReport(persistencePayload)", engineStateIndex);
+  const completionIndex = coreProSource.indexOf("Auditoría completada.", persistenceIndex);
+  assert.ok(engineFetchIndex >= 0 && engineStateIndex > engineFetchIndex && persistenceIndex > engineStateIndex && completionIndex > persistenceIndex);
+});
+
 test("the backend preserves and returns the complete vessel array", () => {
   assert.match(endpointSource, /path:\s*"\/api\/core-pro-frozen-report"/);
   assert.match(endpointSource, /\.\.\.payload,[\s\S]*vessels:\s*payload\.vessels/);
