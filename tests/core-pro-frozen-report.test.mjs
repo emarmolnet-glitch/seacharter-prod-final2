@@ -71,7 +71,31 @@ test("the matching engine persists evaluated vessels before reporting completion
   assert.match(coreProSource, /const matches = deduplicatedMatches;[\s\S]*window\.lastMatchingEngineResults = matches;/);
   assert.match(coreProSource, /const currentSyncId = generateSyncId\(\);[\s\S]*source: 'Core PRO',[\s\S]*syncId: currentSyncId,[\s\S]*format: 'v2',[\s\S]*vessels: matches/);
   assert.match(coreProSource, /persistedMatchingReport = await syncCoreProMatchingReport\(persistencePayload\);/);
-  assert.match(coreProSource, /window\.currentCoreProSyncId = currentSyncId;/);
+  assert.match(coreProSource, /window\.currentCoreProSyncId = persistedMatchingReport\.syncId;/);
+  assert.match(coreProSource, /pol: \{ lat: pol\.lat, lon: pol\.lon \}/);
+  assert.match(coreProSource, /pod: \{ lat: pod\.lat, lon: pod\.lon \}/);
+  assert.match(coreProSource, /const laycan = coreProMatchingRouteContext\?\.laycan \|\| routeReadiness\.laycan/);
+  assert.match(coreProSource, /window\.currentCoreProSyncId = responsePayload\.syncId;/);
+  assert.match(coreProSource, /window\.addEventListener\('SEA_ROUTE_DEFINED'/);
+  assert.match(coreProSource, /coreProMatchingRouteContext = \{[\s\S]*pol: \{ lat: Number\(lat\?\.pol\), lon: Number\(lon\?\.pol\) \}[\s\S]*pod: \{ lat: Number\(lat\?\.pod\), lon: Number\(lon\?\.pod\) \}[\s\S]*laycan: String\(laycan \|\| ''\)\.trim\(\)/);
+  assert.match(coreProSource, /id="matching-route-sync-panel"/);
+  assert.match(coreProSource, /id="matching-route-status-text">Pendiente ➔ Pendiente/);
+  assert.match(coreProSource, /id="matching-laycan-status-text">Pendiente/);
+  assert.match(coreProSource, /📍 Ruta Sincronizada:/);
+  assert.match(coreProSource, /📅 Laycan:/);
+  assert.match(coreProSource, /routeStatusText\.textContent = `\$\{pol \|\| 'Pendiente'\} ➔ \$\{pod \|\| 'Pendiente'\}`/);
+  assert.doesNotMatch(coreProSource, /routeSyncNotice/);
+  assert.match(coreProSource, /SeaCharterStore\.set\(\{ pol, pod, laycanDate: laycan \}\)/);
+  assert.match(coreProSource, /syncGlobalStateToForms\(\);[\s\S]*syncCalculatorAndMatching\('calculator'\)/);
+  assert.match(coreProSource, /setInputValue\('match-load-lat', lat\?\.pol\)/);
+  assert.match(coreProSource, /setInputValue\('match-unload-lon', lon\?\.pod\)/);
+  assert.match(coreProSource, /await window\.runMatchingEngine\(\{ pol, pod, laycan, lat, lon \}\)/);
+  assert.match(coreProSource, /async function executeMatchingEngine\(routeOverride = null\)/);
+  assert.match(coreProSource, /routeOverride\?\.pol \|\| loadSelect\.options/);
+  assert.match(coreProSource, /routeOverride\?\.lat\?\.pol \?\? document\.getElementById\('match-load-lat'\)\.value/);
+  assert.match(coreProSource, /const laycanStart = String\(routeOverride\?\.laycan \|\| document\.getElementById\('match-laycan-start'\)\.value \|\| todayIso\)/);
+  assert.match(coreProSource, /coreProMatchingRouteContext\?\.laycan \|\| routeReadiness\.laycan/);
+  assert.match(coreProSource, /new CustomEvent\('SEA_ROUTE_DEFINED', \{ detail: \{ pol, pod, laycan, lat, lon \} \}\)/);
 
   const engineFetchIndex = coreProSource.indexOf("fetch('/api/ai-ais-filter'");
   const engineStateIndex = coreProSource.indexOf("window.lastMatchingEngineResults = matches", engineFetchIndex);
@@ -117,13 +141,15 @@ test("session persistence writes the required relational sync id", () => {
 test("Data Bridge reads only the persisted frozen report endpoint", () => {
   assert.match(dataBridgeSource, /CORE_PRO_PRODUCTION_ORIGIN = 'https:\/\/neon-seachartercorepro-4ce09d\.netlify\.app'/);
   assert.match(dataBridgeSource, /createCoreProApiUrl\('\/api\/core-pro-frozen-report'\)/);
-  assert.match(dataBridgeSource, /if \(expectedSyncId\) url\.searchParams\.append\('sync_id', expectedSyncId\)/);
+  assert.match(dataBridgeSource, /const syncId = String\(expectedSyncId \|\| currentSyncId \|\| ''\)\.trim\(\)/);
+  assert.match(dataBridgeSource, /if \(!syncId\) return null/);
+  assert.match(dataBridgeSource, /url\.searchParams\.set\('syncId', syncId\)/);
   assert.match(dataBridgeSource, /url\.searchParams\.append\('t', String\(Date\.now\(\)\)\)/);
   assert.match(dataBridgeSource, /fetch\(url\.toString\(\), \{/);
   assert.match(dataBridgeSource, /'Cache-Control': 'no-cache, no-store, must-revalidate'/);
   assert.match(dataBridgeSource, /response\.status !== 200/);
   assert.match(dataBridgeSource, /Number\(payload\?\.vessel_count\) !== vessels\.length/);
-  assert.match(dataBridgeSource, /fetchCoreProFrozenReport\(\)\.catch/);
+  assert.match(dataBridgeSource, /currentSyncId = syncId;[\s\S]*await fetchCoreProFrozenReport\(syncId\)/);
   assert.doesNotMatch(dataBridgeSource, /core_pro_frozen_report|localStorage|sessionStorage/);
 });
 
@@ -182,5 +208,7 @@ test("Live Sync signals only the committed report and triggers one backend read"
   assert.match(mainSource, /webContents\.send\('recibir-auditoria', liveSyncSignal\)/);
   assert.match(preloadSource, /ipcRenderer\.send\('enviar-a-auditoria', liveSyncSignal\)/);
   assert.match(dataBridgeSource, /signal\?\.type !== 'CORE_PRO_FROZEN_REPORT_COMMITTED'/);
-  assert.match(dataBridgeSource, /await fetchCoreProFrozenReport\(signal\.syncId \|\| ''\)/);
+  assert.match(dataBridgeSource, /const syncId = typeof signal\.syncId === 'string' \? signal\.syncId\.trim\(\) : ''/);
+  assert.match(dataBridgeSource, /if \(!syncId\) return;[\s\S]*currentSyncId = syncId;[\s\S]*await fetchCoreProFrozenReport\(syncId\)/);
+  assert.match(dataBridgeSource, /if \(currentSyncId\) \{[\s\S]*fetchCoreProFrozenReport\(currentSyncId\)\.catch/);
 });
