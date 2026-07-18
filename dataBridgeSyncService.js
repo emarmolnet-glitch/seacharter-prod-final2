@@ -1,4 +1,5 @@
 const DATA_BRIDGE_SYNC_ENDPOINT = '/api/databridge-dual-sync';
+let lastSyncFailure = null;
 
 function readValue(value) {
     return value ?? '';
@@ -8,6 +9,22 @@ function readSyncId(rawData) {
     const syncid = rawData?.operation?.syncid;
     if (syncid === null || syncid === undefined) return '';
     return String(syncid).trim();
+}
+
+function recordSyncFailure(stage, error) {
+    try {
+        lastSyncFailure = Object.freeze({
+            stage,
+            message: error instanceof Error ? error.message : String(error ?? 'Unknown sync failure'),
+            timestamp: new Date().toISOString(),
+        });
+    } catch {
+        lastSyncFailure = null;
+    }
+}
+
+export function getDataBridgeSyncDiagnostics() {
+    return lastSyncFailure ? { ...lastSyncFailure } : null;
 }
 
 export function buildDataBridgeSyncPayload(rawData = {}, timestamp = new Date().toISOString()) {
@@ -50,7 +67,7 @@ export function buildDataBridgeSyncPayload(rawData = {}, timestamp = new Date().
 
 export async function syncDualTradingChartering(rawData = {}, options = {}) {
     const syncid = readSyncId(rawData);
-    if (!syncid) return false;
+    if (!syncid || options.enabled === false) return false;
 
     const fetchImpl = options.fetchImpl ?? globalThis.fetch;
     const timestamp = typeof options.timestamp === 'string'
@@ -59,14 +76,16 @@ export async function syncDualTradingChartering(rawData = {}, options = {}) {
 
     try {
         if (typeof fetchImpl !== 'function') return false;
+        await Promise.resolve();
         const response = await fetchImpl(DATA_BRIDGE_SYNC_ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(buildDataBridgeSyncPayload(rawData, timestamp)),
             keepalive: true,
         });
-        return response.ok;
-    } catch {
+        return response?.ok === true;
+    } catch (error) {
+        recordSyncFailure('post', error);
         return false;
     }
 }

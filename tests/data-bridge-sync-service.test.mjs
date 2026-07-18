@@ -6,7 +6,11 @@ const serviceSource = await readFile(new URL('../dataBridgeSyncService.js', impo
 const viewSource = await readFile(new URL('../dual-trading-chartering-view.js', import.meta.url), 'utf8');
 const overlaySource = await readFile(new URL('../dual-mode-overlay.js', import.meta.url), 'utf8');
 const serviceModuleUrl = `data:text/javascript;base64,${Buffer.from(serviceSource).toString('base64')}`;
-const { buildDataBridgeSyncPayload, syncDualTradingChartering } = await import(serviceModuleUrl);
+const {
+    buildDataBridgeSyncPayload,
+    getDataBridgeSyncDiagnostics,
+    syncDualTradingChartering,
+} = await import(serviceModuleUrl);
 
 const snapshot = Object.freeze({
     operation: Object.freeze({ syncid: 'sync-123', id: 'RDM/2026-0604' }),
@@ -65,6 +69,54 @@ test('contains network failures without rejecting the PDF flow', async () => {
     });
 
     assert.equal(result, false);
+    assert.equal(getDataBridgeSyncDiagnostics()?.stage, 'post');
+    assert.equal(getDataBridgeSyncDiagnostics()?.message, 'offline');
+});
+
+test('starts the POST after yielding control to the caller', async () => {
+    let postStarted = false;
+    const syncResult = syncDualTradingChartering(snapshot, {
+        fetchImpl: async () => {
+            postStarted = true;
+            return { ok: true };
+        },
+    });
+
+    assert.equal(postStarted, false);
+    assert.equal(await syncResult, true);
+    assert.equal(postStarted, true);
+});
+
+test('ignores the response body and preserves the read-only snapshot', async () => {
+    let responseBodyReads = 0;
+    const snapshotBeforeSync = structuredClone(snapshot);
+    const result = await syncDualTradingChartering(snapshot, {
+        fetchImpl: async () => ({
+            ok: true,
+            json: async () => {
+                responseBodyReads += 1;
+                return { overwriteLocalState: true };
+            },
+        }),
+    });
+
+    assert.equal(result, true);
+    assert.equal(responseBodyReads, 0);
+    assert.deepEqual(snapshot, snapshotBeforeSync);
+});
+
+test('can be disabled without invoking the network', async () => {
+    let fetchCalls = 0;
+    const result = await syncDualTradingChartering(snapshot, {
+        enabled: false,
+        fetchImpl: async () => {
+            fetchCalls += 1;
+            return { ok: true };
+        },
+    });
+
+    assert.equal(result, false);
+    assert.equal(fetchCalls, 0);
 });
 
 test('exports the PDF before launching fire-and-forget sync', () => {
