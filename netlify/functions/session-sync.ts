@@ -1,6 +1,7 @@
 import type { Config } from "@netlify/functions";
 import {
   fetchFleetRows,
+  normalizeSessionSyncVessels,
   SESSION_SYNC_ACTION_MODULE,
   SESSION_SYNC_USER_ID,
   upsertSessionSync,
@@ -66,7 +67,11 @@ export default async (req: Request) => {
       return Response.json({ success: false, error: "last_sync_data.format must be v2" }, { status: 400, headers });
     }
 
-    const syncId = typeof lastSyncData.syncId === "string" ? lastSyncData.syncId.trim() : "";
+    const syncId = typeof lastSyncData.syncId === "string" && lastSyncData.syncId.trim()
+      ? lastSyncData.syncId.trim()
+      : typeof lastSyncData.sync_id === "string"
+        ? lastSyncData.sync_id.trim()
+        : "";
     if (!syncId) {
       return Response.json({ success: false, error: "last_sync_data.syncId must be a non-empty string" }, { status: 400, headers });
     }
@@ -74,16 +79,25 @@ export default async (req: Request) => {
     if (!Array.isArray(lastSyncData.vessels)) {
       return Response.json({ success: false, error: "last_sync_data.vessels must be an array" }, { status: 400, headers });
     }
+    const normalizedVessels = normalizeSessionSyncVessels(lastSyncData.vessels);
+    if (normalizedVessels.invalidCoordinateIndex >= 0) {
+      return Response.json({
+        success: false,
+        error: `last_sync_data.vessels[${normalizedVessels.invalidCoordinateIndex}] must include valid latitude and longitude`,
+      }, { status: 400, headers });
+    }
 
     if (typeof lastSyncData.updated_at !== "string" || Number.isNaN(Date.parse(lastSyncData.updated_at))) {
       return Response.json({ success: false, error: "last_sync_data.updated_at must be an ISO date" }, { status: 400, headers });
     }
 
+    const canonicalSyncData = { ...lastSyncData };
+    delete canonicalSyncData.sync_id;
     const completeSyncData = {
-      ...lastSyncData,
+      ...canonicalSyncData,
       format: "v2",
       syncId,
-      vessels: lastSyncData.vessels,
+      vessels: normalizedVessels.vessels,
       updated_at: lastSyncData.updated_at,
     };
 
@@ -94,7 +108,7 @@ export default async (req: Request) => {
     });
 
     const savedVessels = Array.isArray(savedSync.lastSyncData.vessels) ? savedSync.lastSyncData.vessels : [];
-    if (savedSync.lastSyncData.syncId !== syncId || savedVessels.length !== lastSyncData.vessels.length) {
+    if (savedSync.lastSyncData.syncId !== syncId || savedVessels.length !== normalizedVessels.vessels.length) {
       throw new Error("Persisted session sync does not match the submitted v2 payload");
     }
 

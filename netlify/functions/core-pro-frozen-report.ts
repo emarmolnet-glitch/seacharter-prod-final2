@@ -1,6 +1,8 @@
 import type { Config } from "@netlify/functions";
 import {
   getFleetRow,
+  getFleetRowBySyncId,
+  normalizeSessionSyncVessels,
   SESSION_SYNC_ACTION_MODULE,
   SESSION_SYNC_USER_ID,
   type SessionSyncData,
@@ -29,23 +31,39 @@ function generateSyncId() {
   return crypto.randomUUID();
 }
 
-function normalizeReport(payload: Record<string, unknown>): SessionSyncData | null {
-  if (!Array.isArray(payload.vessels) || payload.vessels.length === 0) return null;
+function normalizeReport(payload: Record<string, unknown>): { report?: SessionSyncData; error?: string } {
+  if (!Array.isArray(payload.vessels) || payload.vessels.length === 0) {
+    return { error: "vessels must be a non-empty array" };
+  }
+
+  const normalizedVessels = normalizeSessionSyncVessels(payload.vessels);
+  if (normalizedVessels.invalidCoordinateIndex >= 0) {
+    return { error: `vessels[${normalizedVessels.invalidCoordinateIndex}] must include valid latitude and longitude` };
+  }
+
+  const incomingSyncId = typeof payload.syncId === "string" && payload.syncId.trim()
+    ? payload.syncId
+    : typeof payload.sync_id === "string" && payload.sync_id.trim()
+      ? payload.sync_id
+      : generateSyncId();
 
   const createdAt = typeof payload.created_at === "string" && !Number.isNaN(Date.parse(payload.created_at))
     ? payload.created_at
     : new Date().toISOString();
 
+  const canonicalPayload = { ...payload };
+  delete canonicalPayload.sync_id;
+
   return {
-    ...payload,
-    format: "v2",
-    source: "Core PRO",
-    syncId: typeof payload.syncId === "string" && payload.syncId.trim()
-      ? payload.syncId
-      : generateSyncId(),
-    created_at: createdAt,
-    updated_at: new Date().toISOString(),
-    vessels: payload.vessels,
+    report: {
+      ...canonicalPayload,
+      format: "v2",
+      source: "Core PRO",
+      syncId: incomingSyncId.trim(),
+      created_at: createdAt,
+      updated_at: new Date().toISOString(),
+      vessels: normalizedVessels.vessels,
+    },
   };
 }
 
@@ -60,13 +78,20 @@ export default async (req: Request) => {
   }
 
   if (req.method === "GET") {
-    const savedReport = await getFleetRow();
+    const requestedSyncId = new URL(req.url).searchParams.get("sync_id")?.trim()
+      || new URL(req.url).searchParams.get("syncId")?.trim()
+      || "";
+    const savedReport = requestedSyncId
+      ? await getFleetRowBySyncId(requestedSyncId)
+      : await getFleetRow();
     const report = savedReport?.lastSyncData;
 
     if (!report || !Array.isArray(report.vessels)) {
       return Response.json({
         success: true,
         available: false,
+        message: "Reporte no disponible",
+        syncId: requestedSyncId || null,
         vessels: [],
         vessel_count: 0,
       }, { status: 200, headers });
@@ -106,13 +131,14 @@ export default async (req: Request) => {
       return Response.json({ success: false, error: "A JSON object is required" }, { status: 400, headers });
     }
 
-    const report = normalizeReport(payload);
-    if (!report) {
+    const normalized = normalizeReport(payload);
+    if (!normalized.report) {
       return Response.json({
         success: false,
-        error: "vessels must be a non-empty array",
+        error: normalized.error || "Invalid frozen report",
       }, { status: 400, headers });
     }
+    const report = normalized.report;
 
     const savedSync = await upsertSessionSync({
       userId: SESSION_SYNC_USER_ID,
@@ -120,9 +146,11 @@ export default async (req: Request) => {
       lastActionModule: SESSION_SYNC_ACTION_MODULE,
     });
 
-    const savedVessels = savedSync.lastSyncData.vessels;
+    const committedSync = await getFleetRowBySyncId(report.syncId || "");
+    const savedVessels = committedSync?.lastSyncData.vessels;
     if (
-      savedSync.lastSyncData.syncId !== report.syncId
+      savedSync.syncId !== report.syncId
+      || committedSync?.syncId !== report.syncId
       || !Array.isArray(savedVessels)
       || savedVessels.length !== report.vessels.length
     ) {
@@ -130,7 +158,7 @@ export default async (req: Request) => {
     }
 
     return Response.json({
-      ...savedSync.lastSyncData,
+      ...committedSync!.lastSyncData,
       success: true,
       available: true,
       vessel_count: savedVessels.length,
