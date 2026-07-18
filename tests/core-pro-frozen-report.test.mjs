@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [coreProSource, endpointSource, healthCheckSource, iaReportsSource, sessionSyncSource, sessionSyncDatabaseSource, dataBridgeSource, corsSource, mainSource, preloadSource, netlifyConfigSource] = await Promise.all([
+const [coreProSource, endpointSource, healthCheckSource, iaReportsSource, sessionSyncSource, sessionSyncDatabaseSource, dataBridgeSource, corsSource, mainSource, preloadSource, netlifyConfigSource, globalFleetGlobeSource] = await Promise.all([
   readFile(new URL("../index.html", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/core-pro-frozen-report.ts", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/verify-connection.ts", import.meta.url), "utf8"),
@@ -14,6 +14,7 @@ const [coreProSource, endpointSource, healthCheckSource, iaReportsSource, sessio
   readFile(new URL("../main.js", import.meta.url), "utf8"),
   readFile(new URL("../preload.js", import.meta.url), "utf8"),
   readFile(new URL("../netlify.toml", import.meta.url), "utf8"),
+  readFile(new URL("../GlobalFleetGlobe.js", import.meta.url), "utf8"),
 ]);
 
 test("Core PRO uploads the complete frozen report before continuing Data Bridge sync", () => {
@@ -53,6 +54,17 @@ test("Core PRO reads matching engine coordinates from the nested AIS object", ()
   assert.equal(normalized.longitude, -5.35);
   assert.deepEqual(normalized.vessel, vessel.vessel);
   assert.deepEqual(normalized.ais, vessel.ais);
+});
+
+test("matching export snapshots keep AIS coordinates at the vessel root", () => {
+  assert.match(coreProSource, /renderedVesselsForReport\.push\(\{[\s\S]*latitude:\s*Number\(m\.ais\?\.latitude[\s\S]*longitude:\s*Number\(m\.ais\?\.longitude/);
+  assert.match(coreProSource, /const arrayDeBuquesEncontrados = matches\.map[\s\S]*latitude:\s*Number\(ais\.latitude[\s\S]*longitude:\s*Number\(ais\.longitude/);
+  assert.match(coreProSource, /const latitude = Number\(\s*vessel\?\.latitude/);
+  assert.match(coreProSource, /const longitude = Number\(\s*vessel\?\.longitude/);
+});
+
+test("the globe suppresses invalid ballast destination labels", () => {
+  assert.match(globalFleetGlobeSource, /role === 'LASTRE'[\s\S]*!rawName[\s\S]*rawName\.toUpperCase\(\)\.includes\('TBA'\)[\s\S]*coordinates\.lat === 0 && coordinates\.lng === 0[\s\S]*return null/);
 });
 
 test("the matching engine persists evaluated vessels before reporting completion", () => {

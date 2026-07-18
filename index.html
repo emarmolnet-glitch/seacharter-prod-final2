@@ -6542,6 +6542,7 @@
 
         #cargo-qty.required-use-highlight,
         #cargo-type.required-use-highlight,
+        #cargo-type-manual.required-use-highlight,
         #metodo_carga.required-use-highlight,
         #rate-load.required-use-highlight,
         #metodo_descarga_pod.required-use-highlight,
@@ -7544,13 +7545,13 @@
 
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div class="input-group">
-                                <label id="label-cargo-type-manual" class="flex items-center min-h-[24px]">Especificación Carga</label>
-                                <input type="text" id="cargo-type-manual" class="input-gc font-bold text-white" value="Cement" oninput="handleCargoManualInput();">
+                                <label id="label-cargo-type-manual" class="text-action-required flex items-center min-h-[24px]">Especificación Carga</label>
+                                <input type="text" id="cargo-type-manual" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="" required aria-required="true" oninput="handleCargoManualInput();">
                                 <p id="cargo-auto-classification" class="text-[10px] text-teal-300 mt-1 min-h-[14px]"></p>
                             </div>
                             <div class="input-group">
                                 <label id="label-product-sector" class="text-teal-400 flex items-center min-h-[24px]" title="Sector regulado por el Mecanismo de Ajuste en Frontera por Carbono (CBAM) de la UE">Sector CBAM</label>
-                                <select id="product-sector" class="input-gc font-bold text-teal-300" onchange="runEngine()">
+                                <select id="product-sector" class="input-gc font-bold text-teal-300" disabled aria-disabled="true" onchange="runEngine()">
                                     <option value="">— N/A —</option>
                                     <option value="Cemento">Cemento</option>
                                     <option value="Acero">Acero</option>
@@ -12759,7 +12760,7 @@
             distBallast: 0, distLaden: 0, totalDays: 0,
             cargo: 0, loadRate: 0, dischRate: 0,
             cargoType: "Granel Sólido (Dry Bulk)",
-            cargoTypeManual: "Cement",
+            cargoTypeManual: "",
             charterPartyStandard: "GENCON",
             costBunkers: 0, costOpex: 0, costPda: 0, costTotal: 0, totalCosts: 0,
             breakEven: 0, sugOwner: 0, sugCharterer: 0,
@@ -12863,9 +12864,13 @@
         function hasRequiredCalculationInputs() {
             const read = (id) => String(document.getElementById(id)?.value || '').trim();
             const num = (id) => Number(read(id));
+            const cargoSpecification = read('cargo-type-manual');
+            const cargoSpecificationInput = document.getElementById('cargo-type-manual');
+            if (cargoSpecificationInput) cargoSpecificationInput.setAttribute('aria-invalid', String(!cargoSpecification));
             return Boolean(
                 read('port-pol') &&
                 read('port-pod') &&
+                cargoSpecification &&
                 num('vessel-dwt') > 0 &&
                 num('cargo-qty') > 0 &&
                 num('cons-sea') > 0 &&
@@ -16781,6 +16786,8 @@
                         renderedVesselsForReport.push({
                             imo: v.imo || v.IMO || m.imo || (m.ais && m.ais.imo) || 0,
                             vesselName: v.vesselName || v.vessel_name || v.ShipName || m.name || "Unknown",
+                            latitude: Number(m.ais?.latitude ?? m.ais?.lat ?? v.latitude ?? v.lat),
+                            longitude: Number(m.ais?.longitude ?? m.ais?.lon ?? m.ais?.lng ?? v.longitude ?? v.lon ?? v.lng),
                             vesselClass: v.vesselClass || v.specialtyType || m.type || "Bulk Carrier",
                             draft: Number(v.draft || m.ais?.draft) || 0,
                             dwt: Number(v.dwt || m.ais?.dwt) || 0,
@@ -17031,6 +17038,8 @@
                         imo: Number(v.imo || ais.imo) || 0,
                         name: vesselName,
                         nombre: vesselName,
+                        latitude: Number(ais.latitude ?? ais.lat ?? v.latitude ?? v.lat),
+                        longitude: Number(ais.longitude ?? ais.lon ?? ais.lng ?? v.longitude ?? v.lon ?? v.lng),
                         type: v.vesselClass || v.specialtyType || "Bulk Carrier",
                         draft: Number(v.draft) || 0,
                         dwt: Number(v.dwt) || 0,
@@ -17483,10 +17492,6 @@
                     }
                     const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
                     const cargoType = document.getElementById('cargo-type')?.value || '';
-                    const cargoTypeManual = document.getElementById('cargo-type-manual')?.value || '';
-                    if (cargoTypeManual && typeof window.applyFleetCargoTaxonomy === 'function') {
-                        window.applyFleetCargoTaxonomy(cargoTypeManual, { silent: true });
-                    }
                     const vesselDraft = parseFloat(document.getElementById('vessel-draft')?.value) || 0;
                     const vesselLoa = parseFloat(document.getElementById('vessel-loa')?.value) || 0;
                     const freightRate = parseFloat(document.getElementById('freight-rate')?.value) || 0;
@@ -23833,16 +23838,26 @@
                 const sectorEl = document.getElementById('product-sector');
                 const classifier = (typeof window !== 'undefined') ? window.autoClassifyCargo : null;
                 const result = typeof classifier === 'function' ? classifier(inputString) : null;
+                const regulatedSector = result?.cbamSector || '';
 
                 if (!messageEl && !cargoCategoryEl && !sectorEl) return result;
 
                 if (result && result.category) {
                     if (cargoCategoryEl) cargoCategoryEl.value = result.category;
-                    if (sectorEl && result.cbamSector) sectorEl.value = result.cbamSector;
-                    if (messageEl) messageEl.textContent = `Clasificado automáticamente como: ${result.category}`;
+                    if (messageEl) messageEl.textContent = `Clasificado automáticamente como: ${result.category} · CBAM: ${regulatedSector || 'N/A'}`;
                     if (typeof updateCBAMResult === 'function') updateCBAMResult();
                 } else {
-                    if (messageEl) messageEl.textContent = '';
+                    if (cargoCategoryEl) cargoCategoryEl.value = '';
+                    if (messageEl) {
+                        messageEl.textContent = String(inputString || '').trim()
+                            ? 'Carga no regulada por CBAM · Sector: N/A'
+                            : 'Campo obligatorio: especifica la carga para evaluar CBAM.';
+                    }
+                }
+                if (sectorEl) {
+                    sectorEl.value = regulatedSector;
+                    sectorEl.disabled = !regulatedSector;
+                    sectorEl.setAttribute('aria-disabled', String(!regulatedSector));
                 }
                 return result;
             } catch (error) {
@@ -23854,18 +23869,16 @@
             const cargoInput = document.getElementById('cargo-type-manual');
             const cargoValue = cargoInput ? cargoInput.value : '';
             const inferred = updateCargoAutoClassification(cargoValue);
-            const fleetTaxonomy = typeof window.applyFleetCargoTaxonomy === 'function'
-                ? window.applyFleetCargoTaxonomy(cargoValue, { silent: true })
+            const fleetTaxonomy = typeof window.inferFleetCargoTaxonomy === 'function'
+                ? window.inferFleetCargoTaxonomy(cargoValue)
                 : null;
             const messageEl = document.getElementById('cargo-auto-classification');
             if (messageEl && fleetTaxonomy) {
-                messageEl.textContent = `Clasificado automáticamente como: ${inferred && inferred.category ? inferred.category : fleetTaxonomy.label} | Taxonomía buque: ${fleetTaxonomy.label}`;
+                const cbamSector = document.getElementById('product-sector')?.value || 'N/A';
+                messageEl.textContent = `Clasificado automáticamente como: ${inferred && inferred.category ? inferred.category : fleetTaxonomy.label} | CBAM: ${cbamSector} | Taxonomía buque: ${fleetTaxonomy.label}`;
             }
             runEngine();
             syncCalculatorAndMatching('calculator');
-            if (fleetTaxonomy && typeof window.reapplyCentralFiltersAndRedraw === 'function') {
-                window.reapplyCentralFiltersAndRedraw();
-            }
         }
 
         function syncCBAMModuleFromCalculator() {
@@ -29454,7 +29467,7 @@ Example:
             const pdaMisc = num(val('pda-misc'));
             const cargoSurcharge = num(val('cargo-surcharge'));
             const cbamInputs = {
-                sector: val('cbam-sector') || val('product-sector') || State.cargoType || 'N/A',
+                sector: val('cbam-sector') || val('product-sector') || '',
                 origin: val('cbam-origin') || State.pol || val('port-pol') || 'N/A',
                 destination: val('cbam-destination') || State.pod || val('port-pod') || 'N/A',
                 quantity: val('cbam-quantity') || val('cargo-qty') || State.cargo || 0,
@@ -31624,7 +31637,7 @@ ADDITIONAL NOTES:
             setVal('spd-laden', State.spdLaden !== undefined ? State.spdLaden : 11);
             setVal('cargo-qty', State.cargo);
             setVal('cargo-type', State.cargoType);
-            setVal('cargo-type-manual', State.cargoTypeManual !== undefined ? State.cargoTypeManual : 'Cement');
+            setVal('cargo-type-manual', State.cargoTypeManual !== undefined ? State.cargoTypeManual : '');
             setVal('charter-party-standard', State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON'));
             setVal('rate-load', State.loadRate !== undefined ? State.loadRate : 1000);
             setVal('rate-disch', State.dischRate !== undefined ? State.dischRate : 1500);
@@ -35027,27 +35040,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             function classifyFleetCementCarrier(vessel, record = null) {
                 const meta = vessel && vessel.MetaData ? vessel.MetaData : {};
+                const taxonomyRecord = record && record.source !== 'calculator' ? record : null;
                 const text = normalizeFleetTaxonomyText([
                     vessel && (vessel.vesselName || vessel.name || vessel.ShipName || vessel.VesselName),
-                    vessel && (vessel.Tipo || vessel.tipo || vessel.type || vessel.shipType || vessel.ShipType || vessel.vesselType || vessel.cargoType || vessel.tipo_carga || vessel.cargoTaxonomyLabel || vessel.categoryLabel || vessel.categoryValue || vessel.radarCategory || vessel.vesselClass),
+                    vessel && getAisVesselDeclaredTaxonomyType(vessel),
                     vessel && (vessel.destination || vessel.Destination || vessel.lastPortOfCall || vessel.last_port_of_call || vessel.ultimo_puerto),
                     meta.ShipName,
-                    meta.Tipo,
-                    meta.tipo,
-                    meta.type,
-                    meta.shipType,
-                    meta.ShipType,
-                    meta.vesselType,
-                    meta.cargoType,
-                    meta.tipo_carga,
-                    meta.cargoTaxonomyLabel,
-                    meta.categoryLabel,
-                    meta.categoryValue,
-                    meta.vesselClass,
                     meta.Destination,
                     meta.LastPort,
-                    record && (record.vessel || record.nombre || record.name),
-                    record && (record.Tipo || record.tipo || record.tipo_carga || record.cargoType || record.type || record.shipType || record.vesselType || record.categoryLabel || record.categoryValue || record.scrapedType)
+                    taxonomyRecord && (taxonomyRecord.vessel || taxonomyRecord.nombre || taxonomyRecord.name),
+                    taxonomyRecord && (taxonomyRecord.Tipo || taxonomyRecord.tipo || taxonomyRecord.tipo_carga || taxonomyRecord.cargoType || taxonomyRecord.type || taxonomyRecord.shipType || taxonomyRecord.vesselType || taxonomyRecord.categoryLabel || taxonomyRecord.categoryValue || taxonomyRecord.scrapedType)
                 ].filter(Boolean).join(' '));
                 const confirmedReasons = FLEET_CEMENT_CONFIRMED_TERMS.filter(term => {
                     const normalized = normalizeFleetTaxonomyText(term);
@@ -35418,7 +35420,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             function hydrateRadarVesselCargoType(vessel) {
                 if (!vessel || typeof vessel !== 'object') return vessel;
-                const record = findFleetIntelRecord(vessel) || syncCalculatorCargoRecordForVessel(vessel);
+                const storedRecord = findFleetIntelRecord(vessel);
+                const record = storedRecord && storedRecord.source !== 'calculator' ? storedRecord : null;
                 const cementSignal = classifyFleetCementCarrier(vessel, record);
                 const cargoType = getFleetCargoTypeFromRecord(record);
                 if (cargoType && cargoType !== 'N/A') {
@@ -35574,17 +35577,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         : []
                 );
                 dispatchVesselClassContextRecalculation(context);
-            });
-
-            ['cargo-type', 'cargo-type-manual', 'nombre-buque-calculadora', 'name-of-ship-calculator', 'vessel-name'].forEach((id) => {
-                document.getElementById(id)?.addEventListener('change', () => {
-                    const cargoType = readCalculatorCargoTypeForRadar();
-                    if (cargoType !== 'N/A' && typeof applyFleetCargoTaxonomy === 'function') {
-                        applyFleetCargoTaxonomy(cargoType, { silent: true });
-                    }
-                    hydrateRadarCargoStore();
-                    if (typeof window.reapplyCentralFiltersAndRedraw === 'function') window.reapplyCentralFiltersAndRedraw();
-                });
             });
 
             window.getCentralFilters = function() {
@@ -35799,26 +35791,40 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const declaredType = [
                     source.ship_type,
                     source.vessel_type,
-                    source.type,
-                    source.cargoType,
-                    source.tipo_carga,
                     source.shipType,
                     source.ShipType,
                     source.vesselType,
-                    source.Tipo,
-                    source.tipo,
                     meta.ship_type,
                     meta.vessel_type,
-                    meta.type,
-                    meta.cargoType,
-                    meta.tipo_carga,
                     meta.shipType,
                     meta.ShipType,
                     meta.vesselType,
-                    meta.Tipo,
-                    meta.tipo
+                    source.type,
+                    meta.type
                 ].find(value => value !== undefined && value !== null && String(value).trim());
                 return declaredType === undefined ? 'Unknown' : String(declaredType).trim();
+            }
+            window.getAisVesselDeclaredTaxonomyType = getAisVesselDeclaredTaxonomyType;
+
+            const FLEET_TAXONOMY_CATEGORY_CHILDREN = {
+                'category:cargo': ['bulk', 'general', 'container', 'cement', 'mpv', 'heavy_lift'],
+                'category:tanker': ['crude_tanker', 'lng_tanker', 'chemical_tanker', 'product_tanker', 'lpg_tanker'],
+                'category:passenger': ['passenger', 'cruise', 'ferry'],
+                'category:other': ['offshore', 'tug', 'fishing']
+            };
+
+            function matchesFleetTaxonomyCategory(vessel, category) {
+                const categoryKey = String(category || '').trim().toLowerCase();
+                const children = FLEET_TAXONOMY_CATEGORY_CHILDREN[categoryKey];
+                if (!children) return false;
+                const declaredType = getAisVesselDeclaredTaxonomyType(vessel);
+                const text = normalizeFleetTaxonomyText(declaredType);
+                const shipTypeCode = getAisShipTypeCode(declaredType);
+                if (categoryKey === 'category:cargo' && shipTypeCode !== null && shipTypeCode >= 70 && shipTypeCode <= 79) return true;
+                if (categoryKey === 'category:tanker' && shipTypeCode !== null && shipTypeCode >= 80 && shipTypeCode <= 89) return true;
+                if (categoryKey === 'category:passenger' && shipTypeCode !== null && shipTypeCode >= 60 && shipTypeCode <= 69) return true;
+                if (categoryKey === 'category:other' && shipTypeCode !== null && (shipTypeCode < 60 || shipTypeCode > 89)) return true;
+                return children.some(child => (FLEET_INTEL_TAXONOMY[child] || []).some(term => text.includes(normalizeFleetTaxonomyText(term))));
             }
 
             function getStrictFleetTaxonomyKey(vessel) {
@@ -35841,10 +35847,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (Array.isArray(category)) {
                     const categories = Array.from(new Set(category.filter(Boolean)));
                     if (categories.length === 0) return [];
-                    if (categories.some(isAllCargoFilter)) return source;
                     return source.filter(vessel => categories.some(item => filterVessels([vessel], item).length > 0));
                 }
-                if (!category || isAllCargoFilter(category)) return source;
+                if (!category) return source;
+                const normalizedCategory = isAllCargoFilter(category) ? 'category:cargo' : String(category).trim().toLowerCase();
+                if (normalizedCategory.startsWith('category:')) {
+                    return source.filter(vessel => matchesFleetTaxonomyCategory(vessel, normalizedCategory));
+                }
 
                 const taxonomyKey = String(category || '').replace(/^type:/i, '');
                 const strictTaxonomyKey = {
@@ -35871,36 +35880,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const cementSignal = typeof classifyFleetCementCarrier === 'function'
                         ? classifyFleetCementCarrier(v, record)
                         : { level: 'none' };
-                    const shipTypeCode = getAisShipTypeCode(v.ShipType ?? v.shipType ?? meta.ShipType ?? meta.shipType);
                     const text = normalizeFleetTaxonomyText([
-                        v.Tipo,
-                        v.tipo,
-                        v.type,
-                        v.shipType,
-                        v.ShipType,
-                        v.vesselType,
-                        v.cargoType,
-                        v.tipo_carga,
-                        v.categoryLabel,
-                        v.radarCategory,
-                        v.vesselClass,
-                        meta.Tipo,
-                        meta.tipo,
-                        meta.type,
-                        meta.shipType,
-                        meta.ShipType,
-                        meta.vesselType,
-                        meta.cargoType,
-                        meta.tipo_carga,
-                        meta.categoryLabel
+                        getAisVesselDeclaredTaxonomyType(v)
                     ].filter(Boolean).join(' '));
-                    if (isUnknownRadarVesselTipo(v.Tipo) || (!text && shipTypeCode === null)) return true;
-                    if (shipTypeCode !== null && shipTypeCode >= 70 && shipTypeCode <= 79) {
-                        return ['cargo', 'bulk', 'general', 'container', 'cement', 'mpv', 'heavy_lift'].includes(taxonomyKey);
-                    }
-                    if (shipTypeCode !== null && shipTypeCode >= 80 && shipTypeCode <= 89) {
-                        return ['tanker', 'crude_tanker', 'lng_tanker', 'chemical_tanker', 'product_tanker', 'lpg_tanker'].includes(taxonomyKey);
-                    }
+                    if (!text || text === 'unknown') return false;
                     return normalizedTerms.some(term => text.includes(term));
                 });
             }
@@ -36946,6 +36929,29 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             );
         }
 
+        function readAisVesselDeclaredTaxonomyType(vessel) {
+            if (typeof window.getAisVesselDeclaredTaxonomyType === 'function') {
+                return window.getAisVesselDeclaredTaxonomyType(vessel);
+            }
+            const source = vessel && typeof vessel === 'object' ? vessel : {};
+            const meta = source.MetaData && typeof source.MetaData === 'object' ? source.MetaData : {};
+            const declaredType = [
+                source.ship_type,
+                source.vessel_type,
+                source.shipType,
+                source.ShipType,
+                source.vesselType,
+                meta.ship_type,
+                meta.vessel_type,
+                meta.shipType,
+                meta.ShipType,
+                meta.vesselType,
+                source.type,
+                meta.type
+            ].find(value => value !== undefined && value !== null && String(value).trim());
+            return declaredType === undefined ? 'Unknown' : String(declaredType).trim();
+        }
+
         const AIS_TAXONOMY_BREAKDOWN_ORDER = [
             'Bulk Carrier',
             'Cement Carrier',
@@ -36982,24 +36988,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function getAisTaxonomyBreakdownLabel(vessel) {
-            const declaredType = vessel?.ship_type
-                || vessel?.vessel_type
-                || vessel?.type
-                || vessel?.cargoType
-                || vessel?.tipo_carga
-                || vessel?.shipType
-                || vessel?.ShipType
-                || vessel?.vesselType
-                || vessel?.Tipo
-                || vessel?.tipo
-                || vessel?.MetaData?.ship_type
-                || vessel?.MetaData?.vessel_type
-                || vessel?.MetaData?.type
-                || vessel?.MetaData?.cargoType
-                || vessel?.MetaData?.tipo_carga
-                || vessel?.MetaData?.shipType
-                || vessel?.MetaData?.ShipType
-                || 'Unknown';
+            const declaredType = readAisVesselDeclaredTaxonomyType(vessel);
             const text = normalizeAisTaxonomyBreakdownText(declaredType);
             const codeMatch = String(declaredType).match(/(?:^|\D)(\d{2})(?:\D|$)/);
             const shipTypeCode = codeMatch ? Number(codeMatch[1]) : null;
@@ -37055,7 +37044,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const fallbackMessage = `Consulta completada: ${list.length} buques cargados desde la base de datos.`;
             try {
                 const taxonomyCounts = list.reduce((acc, vessel) => {
-                    const type = vessel?.ship_type || vessel?.type || vessel?.cargoType || 'Unknown';
+                    const type = readAisVesselDeclaredTaxonomyType(vessel);
                     acc[type] = (acc[type] || 0) + 1;
                     return acc;
                 }, {});
@@ -37797,8 +37786,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                             : "px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-900 hover:bg-indigo-600/30 text-indigo-300 hover:text-white border border-slate-800 hover:border-indigo-500/50 transition-colors flex items-center gap-1 cursor-pointer";
                         const etaHours = Number(v.etaHoursToPol);
                         const etaLabel = Number.isFinite(etaHours) ? `${Math.round(etaHours)} h ETA` : 'ETA N/D';
-                        btn.title = `${Math.round(v.distanceToPol)} NM a POL · ${etaLabel}${isCommerciallyCompatible ? ' · compatible comercialmente' : ' · cercano, pendiente de compatibilidad comercial'}`;
-                        btn.innerHTML = `<i class="fa-solid fa-magnifying-glass text-[8px] opacity-75"></i> ${v.vesselName} <span class="text-[9px] opacity-70">${etaLabel}</span>`;
+                        const vesselTypeLabel = getAisTaxonomyBreakdownLabel(v);
+                        btn.title = `${vesselTypeLabel} · ${Math.round(v.distanceToPol)} NM a POL · ${etaLabel}${isCommerciallyCompatible ? ' · compatible comercialmente' : ' · cercano, pendiente de compatibilidad comercial'}`;
+                        btn.innerHTML = `<i class="fa-solid fa-magnifying-glass text-[8px] opacity-75"></i> ${v.vesselName} <span class="text-[9px] text-sky-300/80">${vesselTypeLabel}</span> <span class="text-[9px] opacity-70">${etaLabel}</span>`;
                         btn.onclick = (e) => {
                             e.preventDefault();
                             const searchInput = document.getElementById('ais-vessel-search');
@@ -41781,7 +41771,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 window.updateCargoAutoClassification(cargoInput ? cargoInput.value : '');
             }
         };
-        const calculatorDrivenCBAMFields = new Set(['cargo-qty', 'product-sector', 'cargo-category', 'port-pol', 'port-pod']);
+        const calculatorDrivenCBAMFields = new Set(['cargo-qty', 'cargo-type-manual', 'product-sector', 'cargo-category', 'port-pol', 'port-pod']);
         const refreshCBAMCalculations = (sourceId = '') => {
             if (calculatorDrivenCBAMFields.has(sourceId)) {
                 window.syncCBAMModuleFromCalculator?.();
