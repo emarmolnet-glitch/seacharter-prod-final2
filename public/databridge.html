@@ -1394,8 +1394,9 @@
             window.pending_frozen_report = pending_frozen_report;
         }
 
-        async function fetchCoreProFrozenReport() {
+        async function fetchCoreProFrozenReport(expectedSyncId = '') {
             const url = createCoreProApiUrl('/api/core-pro-frozen-report');
+            if (expectedSyncId) url.searchParams.append('sync_id', expectedSyncId);
             url.searchParams.append('t', String(Date.now()));
             const response = await fetch(url.toString(), {
                 method: 'GET',
@@ -1432,7 +1433,7 @@
         async function handleCoreProLiveSyncSignal(signal) {
             if (signal?.type !== 'CORE_PRO_FROZEN_REPORT_COMMITTED') return;
             addLog(`[SYNC] ${getTimestamp()} - Commit confirmado en Core PRO para ${Number(signal.vessel_count) || 0} buques. Leyendo el reporte persistido.`);
-            await fetchCoreProFrozenReport();
+            await fetchCoreProFrozenReport(signal.syncId || '');
         }
 
         if (window.electronAPI && typeof window.electronAPI.onVesselsForAudit === 'function') {

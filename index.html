@@ -15316,9 +15316,34 @@
         }
         window.createCoreProDataBridgePayload = createCoreProDataBridgePayload;
 
+        function normalizeCoreProVesselCoordinates(vessel, index) {
+            const metadata = vessel?.MetaData || {};
+            const positionReport = vessel?.PositionReport || {};
+            const metadataPositionReport = metadata?.PositionReport || {};
+            const latitude = Number(
+                vessel?.latitude ?? vessel?.lat ?? vessel?.Latitude ?? vessel?.AIS_Live_Lat
+                ?? metadata?.latitude ?? metadata?.lat ?? metadata?.Latitude ?? metadata?.AIS_Live_Lat
+                ?? positionReport?.latitude ?? positionReport?.lat ?? positionReport?.Latitude
+                ?? metadataPositionReport?.latitude ?? metadataPositionReport?.lat ?? metadataPositionReport?.Latitude
+            );
+            const longitude = Number(
+                vessel?.longitude ?? vessel?.lon ?? vessel?.lng ?? vessel?.Longitude ?? vessel?.AIS_Live_Lon
+                ?? metadata?.longitude ?? metadata?.lon ?? metadata?.lng ?? metadata?.Longitude ?? metadata?.AIS_Live_Lon
+                ?? positionReport?.longitude ?? positionReport?.lon ?? positionReport?.lng ?? positionReport?.Longitude
+                ?? metadataPositionReport?.longitude ?? metadataPositionReport?.lon ?? metadataPositionReport?.lng ?? metadataPositionReport?.Longitude
+            );
+
+            if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+                throw new Error(`El buque en la posición ${index + 1} no incluye coordenadas AIS válidas.`);
+            }
+
+            return { ...vessel, latitude, longitude };
+        }
+
         function emitCoreProLiveSync(persistedReport) {
             const liveSyncSignal = {
                 type: 'CORE_PRO_FROZEN_REPORT_COMMITTED',
+                syncId: persistedReport?.syncId || null,
                 vessel_count: Number(persistedReport?.vessel_count) || 0,
                 updated_at: persistedReport?.updated_at || new Date().toISOString()
             };
@@ -15342,7 +15367,8 @@
                 throw new Error('No hay buques para sincronizar con Data Bridge.');
             }
 
-            const payload = createCoreProDataBridgePayload(vesselsArray, reportData?.syncId || generateSyncId());
+            const vesselsWithCoordinates = vesselsArray.map(normalizeCoreProVesselCoordinates);
+            const payload = createCoreProDataBridgePayload(vesselsWithCoordinates, reportData?.syncId || reportData?.sync_id || generateSyncId());
             const response = await fetch('/api/core-pro-frozen-report', {
                 method: 'POST',
                 headers: {
