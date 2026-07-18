@@ -397,7 +397,7 @@ test('Globe renders an orange ballast path and preserves the cyan laden path', (
   assert.ok(globeSource.includes("PATH_STYLE = Object.freeze({ color: '#00FFFF', width: 2, simplify: true })"));
   assert.ok(globeSource.includes("BALLAST_PATH_COLOR = '#F59E0B'"));
   assert.ok(globeSource.includes('.arcsData([])'));
-  assert.ok(globeSource.includes('.pathsData(view.routePaths)'));
+  assert.ok(globeSource.includes('.pathsData(renderableRoutePaths)'));
   assert.ok(globeSource.includes('prepareRoutePoints(routes?.ballast, ballast, pol)'));
   assert.ok(globeSource.includes('prepareRoutePoints(routes?.laden, pol, pod)'));
   assert.ok(globeSource.includes('view.routePaths = [ballastPath, maritimePath].filter((path) => path.length > 1)'));
@@ -405,6 +405,43 @@ test('Globe renders an orange ballast path and preserves the cyan laden path', (
   assert.ok(globeSource.includes('.pathStroke(() => PATH_STYLE.width)'));
   assert.ok(indexSource.includes('.map-route-legend .ballast { --route-color: #F59E0B; }'));
   assert.ok(!globeSource.includes("type: 'line'"));
+});
+
+test('Globe omits ballast routing when the ballast port text is empty', () => {
+  assert.ok(globeSource.includes("const ballastPort = typeof result?.portBallast === 'string' ? result.portBallast.trim() : ''"));
+  assert.ok(globeSource.includes("const hasBallastPort = ballastPort !== '' && ballastPort !== 'TBA'"));
+  assert.ok(globeSource.includes("{ ...(result?.coordinates || {}), ballast: null }"));
+  assert.ok(globeSource.includes("{ ...(result?.routes || {}), ballast: null }"));
+});
+
+test('Globe filters invalid ballast geometry at the pathsData rendering boundary', () => {
+  const helperStart = globeSource.indexOf('function applyRoutes(view)');
+  const helperEnd = globeSource.indexOf('function saveGlobalRouteState', helperStart);
+  const helperSource = globeSource.slice(helperStart, helperEnd);
+  const applyRoutes = new Function('PATH_STYLE', 'BALLAST_PATH_COLOR', `${helperSource}; return applyRoutes;`)(
+    { color: '#00FFFF', width: 2 },
+    '#F59E0B'
+  );
+  let renderedPaths = null;
+  const globe = {};
+  ['arcsData', 'pathPoints', 'pathPointLat', 'pathPointLng', 'pathPointAlt', 'pathColor', 'pathStroke', 'pathTransitionDuration', 'labelsData']
+    .forEach((method) => { globe[method] = () => globe; });
+  globe.pathsData = (paths) => {
+    renderedPaths = paths;
+    return globe;
+  };
+  const tbaBallast = [{ lat: 10, lng: 10 }, { lat: 20, lng: 20 }];
+  tbaBallast.routeType = 'ballast';
+  tbaBallast.ballastPortName = 'TBA ';
+  const nullIslandBallast = [{ lat: 0, lng: 0 }, { lat: 20, lng: 20 }];
+  nullIslandBallast.routeType = 'ballast';
+  nullIslandBallast.ballastPortName = 'Puerto válido';
+  const laden = [{ lat: 20, lng: 20 }, { lat: 30, lng: 30 }];
+  laden.routeType = 'laden';
+
+  applyRoutes({ globe, routePaths: [tbaBallast, nullIslandBallast, laden], portLabels: [] });
+
+  assert.deepEqual(renderedPaths, [laden]);
 });
 
 test('Main map controls stay below the header and reset in fullscreen mode', () => {

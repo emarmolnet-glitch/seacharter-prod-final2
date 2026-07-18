@@ -22,7 +22,8 @@ test("Core PRO uploads the complete frozen report before continuing Data Bridge 
   assert.match(coreProSource, /format:\s*'v2',[\s\S]*source:\s*'Core PRO',[\s\S]*syncId,[\s\S]*vessels:/);
   assert.match(coreProSource, /fetch\('\/api\/core-pro-frozen-report'/);
   assert.match(coreProSource, /body:\s*JSON\.stringify\(payload\)/);
-  assert.match(coreProSource, /const vesselsWithCoordinates = vesselsArray\.map\(normalizeCoreProVesselCoordinates\)/);
+  assert.match(coreProSource, /const vesselsWithCoordinates = vesselsArray[\s\S]*\.map\(normalizeCoreProVesselCoordinates\)[\s\S]*\.filter\(Boolean\)/);
+  assert.match(coreProSource, /return null;[\s\S]*No hay buques con coordenadas AIS válidas para sincronizar con Data Bridge/);
   assert.match(coreProSource, /createCoreProDataBridgePayload\(vesselsWithCoordinates, reportData\?\.syncId \|\| reportData\?\.sync_id \|\| generateSyncId\(\)\)/);
   assert.match(coreProSource, /const selectedAuditReport = createCoreProDataBridgePayload\([\s\S]*JSON\.parse\(JSON\.stringify\(vesselsToSend\)\)[\s\S]*const persistedReport = await syncCoreProMatchingReport\(selectedAuditReport\);/);
   assert.doesNotMatch(coreProSource, /seacharter\.matching\.export\.v1|core-pro-matching-selected/);
@@ -31,12 +32,27 @@ test("Core PRO uploads the complete frozen report before continuing Data Bridge 
   assert.match(coreProSource, /response\.status !== 200/);
   assert.match(coreProSource, /Respuesta de persistencia del backend/);
   assert.match(coreProSource, /responsePayload\?\.syncId !== payload\.syncId/);
-  assert.match(coreProSource, /persistedVessels\.length !== vesselsArray\.length/);
+  assert.match(coreProSource, /persistedVessels\.length !== vesselsWithCoordinates\.length/);
 
   const statusCheckIndex = coreProSource.indexOf("if (response.status !== 200)");
   const confirmationCheckIndex = coreProSource.indexOf("responsePayload?.syncId !== payload.syncId");
   const signalIndex = coreProSource.indexOf("emitCoreProLiveSync(responsePayload)");
   assert.ok(statusCheckIndex >= 0 && confirmationCheckIndex > statusCheckIndex && signalIndex > confirmationCheckIndex);
+});
+
+test("Core PRO reads matching engine coordinates from the nested AIS object", () => {
+  const helperStart = coreProSource.indexOf("function normalizeCoreProVesselCoordinates");
+  const helperEnd = coreProSource.indexOf("function emitCoreProLiveSync", helperStart);
+  const helperSource = coreProSource.slice(helperStart, helperEnd);
+  const normalizeCoordinates = new Function(`${helperSource}; return normalizeCoreProVesselCoordinates;`)();
+  const vessel = { vessel: { vesselName: "Test Vessel" }, ais: { latitude: 36.14, longitude: -5.35 } };
+
+  const normalized = normalizeCoordinates(vessel, 0);
+
+  assert.equal(normalized.latitude, 36.14);
+  assert.equal(normalized.longitude, -5.35);
+  assert.deepEqual(normalized.vessel, vessel.vessel);
+  assert.deepEqual(normalized.ais, vessel.ais);
 });
 
 test("the matching engine persists evaluated vessels before reporting completion", () => {

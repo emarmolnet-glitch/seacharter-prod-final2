@@ -15318,23 +15318,27 @@
 
         function normalizeCoreProVesselCoordinates(vessel, index) {
             const metadata = vessel?.MetaData || {};
+            const ais = vessel?.ais || vessel?.AIS || {};
             const positionReport = vessel?.PositionReport || {};
             const metadataPositionReport = metadata?.PositionReport || {};
             const latitude = Number(
                 vessel?.latitude ?? vessel?.lat ?? vessel?.Latitude ?? vessel?.AIS_Live_Lat
+                ?? ais?.latitude ?? ais?.lat ?? ais?.Latitude ?? ais?.AIS_Live_Lat
                 ?? metadata?.latitude ?? metadata?.lat ?? metadata?.Latitude ?? metadata?.AIS_Live_Lat
                 ?? positionReport?.latitude ?? positionReport?.lat ?? positionReport?.Latitude
                 ?? metadataPositionReport?.latitude ?? metadataPositionReport?.lat ?? metadataPositionReport?.Latitude
             );
             const longitude = Number(
                 vessel?.longitude ?? vessel?.lon ?? vessel?.lng ?? vessel?.Longitude ?? vessel?.AIS_Live_Lon
+                ?? ais?.longitude ?? ais?.lon ?? ais?.lng ?? ais?.Longitude ?? ais?.AIS_Live_Lon
                 ?? metadata?.longitude ?? metadata?.lon ?? metadata?.lng ?? metadata?.Longitude ?? metadata?.AIS_Live_Lon
                 ?? positionReport?.longitude ?? positionReport?.lon ?? positionReport?.lng ?? positionReport?.Longitude
                 ?? metadataPositionReport?.longitude ?? metadataPositionReport?.lon ?? metadataPositionReport?.lng ?? metadataPositionReport?.Longitude
             );
 
             if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-                throw new Error(`El buque en la posición ${index + 1} no incluye coordenadas AIS válidas.`);
+                console.warn(`[Core PRO] Se omite el buque en la posición ${index + 1} porque no incluye coordenadas AIS válidas.`);
+                return null;
             }
 
             return { ...vessel, latitude, longitude };
@@ -15367,7 +15371,15 @@
                 throw new Error('No hay buques para sincronizar con Data Bridge.');
             }
 
-            const vesselsWithCoordinates = vesselsArray.map(normalizeCoreProVesselCoordinates);
+            const vesselsWithCoordinates = vesselsArray
+                .map(normalizeCoreProVesselCoordinates)
+                .filter(Boolean);
+            if (vesselsWithCoordinates.length === 0) {
+                throw new Error('No hay buques con coordenadas AIS válidas para sincronizar con Data Bridge.');
+            }
+            if (vesselsWithCoordinates.length !== vesselsArray.length) {
+                console.warn(`[Core PRO] Se sincronizan ${vesselsWithCoordinates.length} de ${vesselsArray.length} buques; los registros sin coordenadas AIS válidas fueron omitidos.`);
+            }
             const payload = createCoreProDataBridgePayload(vesselsWithCoordinates, reportData?.syncId || reportData?.sync_id || generateSyncId());
             const response = await fetch('/api/core-pro-frozen-report', {
                 method: 'POST',
@@ -15399,10 +15411,10 @@
                 || responsePayload?.available !== true
                 || responsePayload?.format !== 'v2'
                 || responsePayload?.syncId !== payload.syncId
-                || persistedVessels.length !== vesselsArray.length
-                || Number(responsePayload?.vessel_count) !== vesselsArray.length
+                || persistedVessels.length !== vesselsWithCoordinates.length
+                || Number(responsePayload?.vessel_count) !== vesselsWithCoordinates.length
             ) {
-                throw new Error(`El backend no confirmó el reporte completo (${persistedVessels.length}/${vesselsArray.length} buques).`);
+                throw new Error(`El backend no confirmó el reporte completo (${persistedVessels.length}/${vesselsWithCoordinates.length} buques).`);
             }
 
             emitCoreProLiveSync(responsePayload);
