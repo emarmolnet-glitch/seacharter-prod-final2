@@ -35830,9 +35830,44 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             function getStrictFleetTaxonomyKey(vessel) {
                 const type = normalizeFleetTaxonomyText(getAisVesselDeclaredTaxonomyType(vessel));
                 if (!type || type === 'unknown') return 'unknown';
-                if (type.includes('cement') || type.includes('clinker')) return 'cement';
-                if (type.includes('bulk carrier') || type.includes('bulker') || type.includes('handysize') || type.includes('handymax') || type.includes('supramax') || type.includes('ultramax') || type.includes('panamax') || type.includes('capesize') || type === 'dry bulk') return 'bulk';
+                const taxonomyPriority = [
+                    'cement', 'bulk', 'general', 'container', 'mpv', 'heavy_lift',
+                    'crude_tanker', 'lng_tanker', 'chemical_tanker', 'product_tanker', 'lpg_tanker',
+                    'cruise', 'ferry', 'passenger', 'offshore', 'tug', 'fishing'
+                ];
+                const matchedTaxonomy = taxonomyPriority.find(key =>
+                    (FLEET_INTEL_TAXONOMY[key] || []).some(term => type.includes(normalizeFleetTaxonomyText(term)))
+                );
+                if (matchedTaxonomy) return matchedTaxonomy;
                 return type;
+            }
+
+            const STRICT_FLEET_TAXONOMY_KEYS = new Set([
+                'bulk', 'general', 'container', 'cement', 'mpv', 'heavy_lift',
+                'crude_tanker', 'lng_tanker', 'chemical_tanker', 'product_tanker', 'lpg_tanker',
+                'passenger', 'cruise', 'ferry', 'offshore', 'tug', 'fishing'
+            ]);
+
+            function resolveStrictFleetTaxonomySelection(category) {
+                const rawKey = String(category || '').replace(/^type:/i, '').trim().toLowerCase();
+                const aliases = {
+                    'bulk carrier': 'bulk',
+                    'general cargo': 'general',
+                    'container ship': 'container',
+                    'cement carrier': 'cement',
+                    'multipurpose mpp': 'mpv',
+                    'heavy lift': 'heavy_lift',
+                    'crude oil tanker': 'crude_tanker',
+                    'lng tanker': 'lng_tanker',
+                    'chemical tanker': 'chemical_tanker',
+                    'product tanker': 'product_tanker',
+                    'lpg tanker': 'lpg_tanker',
+                    'passenger ship': 'passenger',
+                    'cruise ship': 'cruise',
+                    'ferry ropax': 'ferry',
+                    'tug support': 'tug'
+                };
+                return aliases[normalizeFleetTaxonomyText(rawKey)] || rawKey;
             }
 
             function isAllCargoFilter(category) {
@@ -35847,6 +35882,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (Array.isArray(category)) {
                     const categories = Array.from(new Set(category.filter(Boolean)));
                     if (categories.length === 0) return [];
+                    const hasAllAggregator = categories.some(item => {
+                        const normalizedItem = String(item || '').trim().toLowerCase();
+                        return isAllCargoFilter(item) || normalizedItem.startsWith('category:');
+                    });
+                    if (!hasAllAggregator) {
+                        const strictSelections = categories.map(resolveStrictFleetTaxonomySelection);
+                        if (strictSelections.every(item => STRICT_FLEET_TAXONOMY_KEYS.has(item))) {
+                            const selectedTaxonomies = new Set(strictSelections);
+                            return source.filter(vessel => selectedTaxonomies.has(getStrictFleetTaxonomyKey(vessel)));
+                        }
+                    }
                     return source.filter(vessel => categories.some(item => filterVessels([vessel], item).length > 0));
                 }
                 if (!category) return source;
@@ -35856,11 +35902,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
 
                 const taxonomyKey = String(category || '').replace(/^type:/i, '');
-                const strictTaxonomyKey = {
-                    'bulk carrier': 'bulk',
-                    'cement carrier': 'cement'
-                }[normalizeFleetTaxonomyText(taxonomyKey)] || taxonomyKey;
-                if (strictTaxonomyKey === 'bulk' || strictTaxonomyKey === 'cement') {
+                const strictTaxonomyKey = resolveStrictFleetTaxonomySelection(category);
+                if (STRICT_FLEET_TAXONOMY_KEYS.has(strictTaxonomyKey)) {
                     return source.filter(vessel => getStrictFleetTaxonomyKey(vessel) === strictTaxonomyKey);
                 }
                 const taxonomyTerms = FLEET_INTEL_TAXONOMY[taxonomyKey]
