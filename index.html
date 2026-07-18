@@ -61,6 +61,7 @@
     <script type="module" src="./public/ConnectionStatusBar.js"></script>
     <script type="module" src="./voyage-cost-engine.js"></script>
     <script type="module" src="./stress-test-engine.js"></script>
+    <script type="module" src="./dual-mode-overlay.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -17969,6 +17970,20 @@
                 item.className = 'tools-dropdown-item';
                 item.appendChild(createModuleButton(moduleConfig, 'advanced'));
                 menu.appendChild(item);
+            });
+
+            const dualModeItem = document.createElement('li');
+            dualModeItem.className = 'tools-dropdown-item';
+            dualModeItem.innerHTML = `
+                <button type="button" id="open-dual-mode-btn" class="tools-dropdown-action" aria-haspopup="dialog" aria-label="Abrir Modo Dual Trading y Chartering">
+                    <span>Modo Dual · Trading &amp; Chartering</span>
+                </button>
+            `;
+            menu.appendChild(dualModeItem);
+            dualModeItem.querySelector('#open-dual-mode-btn')?.addEventListener('click', event => {
+                event.preventDefault();
+                closeAdvancedModulesMenu();
+                window.openDualModeOverlay?.(event);
             });
 
             const preferenceItem = document.createElement('li');
