@@ -18092,6 +18092,34 @@
                 });
                 const dualModeReadOnlyStateSource = Object.freeze({
                     getSnapshot: () => selectDualModeReadOnlyState(SeaCharterStore.getState()),
+                    getExportContext: () => {
+                        const state = SeaCharterStore.getState();
+                        const readFirstContextValue = (...values) => values.find((value) => (
+                            value !== null && value !== undefined && String(value).trim() !== ''
+                        )) ?? '';
+                        const charterPartyStandard = state.charterPartyStandard || 'GENCON';
+                        const referenceInput = charterPartyStandard === 'ASBATANKVOY'
+                            ? document.getElementById('asb-ref')
+                            : document.getElementById('gc-ref');
+                        return Object.freeze({
+                            syncid: readFirstContextValue(
+                                state.syncid,
+                                state.syncId,
+                                state.dataBridgeSyncId,
+                                localStorage.getItem('databridge_last_sync_id')
+                            ),
+                            id: readFirstContextValue(
+                                state.operationId,
+                                state.operation_id,
+                                referenceInput?.value
+                            ),
+                            toleranceType: readFirstContextValue(
+                                state.toleranceType,
+                                state.cargoToleranceType,
+                                'MOLOO / MOLCO'
+                            )
+                        });
+                    },
                     subscribe: (listener) => SeaCharterStore.subscribe((state) => {
                         listener(selectDualModeReadOnlyState(state));
                     }),

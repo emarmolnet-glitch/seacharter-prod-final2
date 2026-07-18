@@ -95,8 +95,12 @@ class DualTradingCharteringView extends HTMLElement {
             });
         });
         this.shadowRoot.getElementById('export-commercial-recap')?.addEventListener('click', async () => {
+            const snapshot = this.#createCommercialRecapSnapshot();
             const { exportCommercialRecapPdf } = await import('./pdf-export-service.js');
-            exportCommercialRecapPdf(this.#createCommercialRecapSnapshot());
+            exportCommercialRecapPdf(snapshot);
+            void import('./dataBridgeSyncService.js')
+                .then(({ syncDualTradingChartering }) => syncDualTradingChartering(snapshot))
+                .catch(() => false);
         });
         this.#renderEditableInputs();
         this.#renderReadOnlyCargoInputs();
@@ -115,8 +119,15 @@ class DualTradingCharteringView extends HTMLElement {
         };
         const sessionDraft = this.sessionDraft;
         const hasFairFreight = this.#fleteJustoCalculado > 0;
+        const exportContext = typeof this.getExportContext === 'function'
+            ? this.getExportContext() ?? {}
+            : {};
 
         return Object.freeze({
+            operation: Object.freeze({
+                syncid: exportContext.syncid,
+                id: exportContext.id,
+            }),
             route: Object.freeze({
                 loadPort: readFirstValue('port-pol', 'map-port-pol', 'sync-pol-label'),
                 dischargePort: readFirstValue('port-pod', 'map-port-pod', 'sync-pod-label'),
@@ -130,6 +141,7 @@ class DualTradingCharteringView extends HTMLElement {
             cargo: Object.freeze({
                 tonnage: this.#toneladasTotales,
                 tolerance: this.#toleranciaCarga,
+                toleranceType: exportContext.toleranceType,
             }),
             trading: Object.freeze({
                 fobPrice: sessionDraft.precioFOB,

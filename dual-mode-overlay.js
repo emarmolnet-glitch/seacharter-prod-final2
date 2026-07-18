@@ -227,6 +227,7 @@ async function openDualModeOverlay(event, readOnlyStateSource = null) {
 
         const panel = overlay.querySelector('.dual-mode-overlay__panel');
         const dualView = document.createElement('dual-trading-chartering-view');
+        dualView.getExportContext = () => readOnlyStateSource?.getExportContext?.() ?? {};
         const applyReadOnlySnapshot = (snapshot = {}) => {
             dualView.fleteJustoCalculado = snapshot.fleteJustoCalculado;
             dualView.toneladasTotales = snapshot.toneladasTotales;
