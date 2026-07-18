@@ -15568,8 +15568,12 @@
             if (vesselsWithCoordinates.length !== vesselsArray.length) {
                 console.warn(`[Core PRO] Se sincronizan ${vesselsWithCoordinates.length} de ${vesselsArray.length} buques; los registros sin coordenadas AIS válidas fueron omitidos.`);
             }
+            const syncId = reportData?.syncId || reportData?.sync_id || generateSyncId();
             const payload = {
-                ...createCoreProDataBridgePayload(vesselsWithCoordinates, reportData?.syncId || reportData?.sync_id || generateSyncId()),
+                format: 'v2',
+                source: 'Core PRO',
+                syncId,
+                vessels: vesselsWithCoordinates,
                 ...getCoreProMatchingRequestContext()
             };
             const response = await fetch('/api/core-pro-frozen-report', {
