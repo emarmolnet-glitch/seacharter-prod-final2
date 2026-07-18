@@ -11842,6 +11842,27 @@
 
                 <!-- Right Panel: Matching Ranked Results (8 cols) -->
                 <div id="matching-results-panel" class="flex flex-col gap-6 w-full">
+                    <div id="matching-route-sync-panel" class="rounded-xl border border-teal-200 bg-white p-4 shadow-sm">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p class="text-[10px] font-black uppercase tracking-[0.18em] text-teal-700">Estado de Sincronización</p>
+                                <p class="mt-1 text-xs font-semibold text-slate-600">Datos operativos recibidos desde el mapa</p>
+                            </div>
+                            <span id="matching-route-sync-badge" class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase text-slate-500">Pendiente</span>
+                        </div>
+                        <div class="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                            <div class="rounded-lg border border-teal-100 bg-teal-50/70 px-3 py-2 text-slate-700">
+                                <span id="matching-route-status-icon" class="mr-1">○</span>
+                                <strong class="text-teal-800">📍 Ruta Sincronizada:</strong>
+                                <span id="matching-route-status-text">Pendiente ➔ Pendiente</span>
+                            </div>
+                            <div class="rounded-lg border border-teal-100 bg-teal-50/70 px-3 py-2 text-slate-700">
+                                <span id="matching-laycan-status-icon" class="mr-1">○</span>
+                                <strong class="text-teal-800">📅 Laycan:</strong>
+                                <span id="matching-laycan-status-text">Pendiente</span>
+                            </div>
+                        </div>
+                    </div>
                     <div class="matching-results-collapsible ai-work-card p-5 flex-1 min-h-[500px] flex flex-col" data-collapsible-section data-default-open="false">
                         <div class="collapsible-section-header flex items-center justify-between border-b border-slate-100 pb-3">
                             <div class="flex items-center gap-2">
@@ -15421,6 +15442,68 @@
         }
         window.createCoreProDataBridgePayload = createCoreProDataBridgePayload;
 
+        let coreProMatchingRouteContext = null;
+
+        window.addEventListener('SEA_ROUTE_DEFINED', async (event) => {
+            const { pol, pod, laycan, lat, lon } = event.detail || {};
+            coreProMatchingRouteContext = {
+                pol: { lat: Number(lat?.pol), lon: Number(lon?.pol) },
+                pod: { lat: Number(lat?.pod), lon: Number(lon?.pod) },
+                laycan: String(laycan || '').trim()
+            };
+
+            SeaCharterStore.set({ pol, pod, laycanDate: laycan });
+            syncGlobalStateToForms();
+            syncCalculatorAndMatching('calculator');
+            setInputValue('match-load-lat', lat?.pol);
+            setInputValue('match-load-lon', lon?.pol);
+            setInputValue('match-unload-lat', lat?.pod);
+            setInputValue('match-unload-lon', lon?.pod);
+
+            const routeReady = Boolean(pol && pod);
+            const laycanReady = Boolean(laycan);
+            const routeStatusText = document.getElementById('matching-route-status-text');
+            const laycanStatusText = document.getElementById('matching-laycan-status-text');
+            const routeStatusIcon = document.getElementById('matching-route-status-icon');
+            const laycanStatusIcon = document.getElementById('matching-laycan-status-icon');
+            const syncBadge = document.getElementById('matching-route-sync-badge');
+            if (routeStatusText) routeStatusText.textContent = `${pol || 'Pendiente'} ➔ ${pod || 'Pendiente'}`;
+            if (laycanStatusText) laycanStatusText.textContent = laycan || 'Pendiente';
+            if (routeStatusIcon) routeStatusIcon.textContent = routeReady ? '✅' : '○';
+            if (laycanStatusIcon) laycanStatusIcon.textContent = laycanReady ? '✅' : '○';
+            if (syncBadge) {
+                syncBadge.textContent = routeReady && laycanReady ? 'Sincronizado' : 'Pendiente';
+                syncBadge.className = routeReady && laycanReady
+                    ? 'rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-[10px] font-black uppercase text-teal-700'
+                    : 'rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase text-slate-500';
+            }
+
+            if (typeof window.runMatchingEngine === 'function') {
+                await window.runMatchingEngine({ pol, pod, laycan, lat, lon });
+            }
+        });
+
+        function getCoreProMatchingRequestContext() {
+            const pol = coreProMatchingRouteContext?.pol
+                || (typeof getAisOperationalPort === 'function' ? getAisOperationalPort('POL') : null);
+            const pod = coreProMatchingRouteContext?.pod
+                || (typeof getAisOperationalPort === 'function' ? getAisOperationalPort('POD') : null);
+            const routeReadiness = typeof window.getAisRouteReadiness === 'function'
+                ? window.getAisRouteReadiness()
+                : { laycan: '' };
+            const laycan = coreProMatchingRouteContext?.laycan || routeReadiness.laycan;
+
+            if (!pol || !pod || !laycan) {
+                throw new Error('POL, POD y Laycan son obligatorios para solicitar el cruce de datos.');
+            }
+
+            return {
+                pol: { lat: pol.lat, lon: pol.lon },
+                pod: { lat: pod.lat, lon: pod.lon },
+                laycan
+            };
+        }
+
         function normalizeCoreProVesselCoordinates(vessel, index) {
             const metadata = vessel?.MetaData || {};
             const ais = vessel?.ais || vessel?.AIS || {};
@@ -15485,7 +15568,10 @@
             if (vesselsWithCoordinates.length !== vesselsArray.length) {
                 console.warn(`[Core PRO] Se sincronizan ${vesselsWithCoordinates.length} de ${vesselsArray.length} buques; los registros sin coordenadas AIS válidas fueron omitidos.`);
             }
-            const payload = createCoreProDataBridgePayload(vesselsWithCoordinates, reportData?.syncId || reportData?.sync_id || generateSyncId());
+            const payload = {
+                ...createCoreProDataBridgePayload(vesselsWithCoordinates, reportData?.syncId || reportData?.sync_id || generateSyncId()),
+                ...getCoreProMatchingRequestContext()
+            };
             const response = await fetch('/api/core-pro-frozen-report', {
                 method: 'POST',
                 headers: {
@@ -15522,6 +15608,7 @@
                 throw new Error(`El backend no confirmó el reporte completo (${persistedVessels.length}/${vesselsWithCoordinates.length} buques).`);
             }
 
+            window.currentCoreProSyncId = responsePayload.syncId;
             emitCoreProLiveSync(responsePayload);
             console.log(`[Core PRO] Reporte congelado persistido con ${persistedVessels.length} buques. Señal Live Sync emitida después del commit.`, responsePayload);
 
@@ -16343,7 +16430,7 @@
             return normalized;
         }
 
-        async function executeMatchingEngine() {
+        async function executeMatchingEngine(routeOverride = null) {
             const captureRadarSnapshotForFleetMatching = () => {
                 const filteredStoreVessels = window.GlobalStore && typeof window.GlobalStore.getFilteredVessels === 'function'
                     ? window.GlobalStore.getFilteredVessels()
@@ -16495,23 +16582,23 @@
             try {
                 // Determine ports and coordinates
                 const loadSelect = document.getElementById('match-load-port');
-                let loadingPortName = loadSelect.options[loadSelect.selectedIndex].text.split(' - ')[0];
-                let loadingPortLat = parseFloat(document.getElementById('match-load-lat').value);
-                let loadingPortLon = parseFloat(document.getElementById('match-load-lon').value);
+                let loadingPortName = String(routeOverride?.pol || loadSelect.options[loadSelect.selectedIndex].text.split(' - ')[0]);
+                let loadingPortLat = Number(routeOverride?.lat?.pol ?? document.getElementById('match-load-lat').value);
+                let loadingPortLon = Number(routeOverride?.lon?.pol ?? document.getElementById('match-load-lon').value);
                 if (typeof activateRadarForLoadingPort === 'function') {
                     activateRadarForLoadingPort(loadingPortName);
                 }
 
                 const unloadSelect = document.getElementById('match-unload-port');
-                let unloadingPortName = unloadSelect.options[unloadSelect.selectedIndex].text.split(' - ')[0];
-                let unloadingPortLat = parseFloat(document.getElementById('match-unload-lat').value);
-                let unloadingPortLon = parseFloat(document.getElementById('match-unload-lon').value);
+                let unloadingPortName = String(routeOverride?.pod || unloadSelect.options[unloadSelect.selectedIndex].text.split(' - ')[0]);
+                let unloadingPortLat = Number(routeOverride?.lat?.pod ?? document.getElementById('match-unload-lat').value);
+                let unloadingPortLon = Number(routeOverride?.lon?.pod ?? document.getElementById('match-unload-lon').value);
 
                 const quantity = parseFloat(document.getElementById('match-quantity').value) || 45000;
                 const cargoType = document.getElementById('match-cargo-type').value || "Grain";
                 const todayIso = new Date().toISOString().slice(0, 10);
                 const fallbackLaycanEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-                const laycanStart = document.getElementById('match-laycan-start').value || todayIso;
+                const laycanStart = String(routeOverride?.laycan || document.getElementById('match-laycan-start').value || todayIso);
                 const laycanEnd = document.getElementById('match-laycan-end').value || fallbackLaycanEnd;
                 const maxDraft = parseFloat(document.getElementById('match-max-draft').value) || 12.5;
                 const maxLoa = parseFloat(document.getElementById('match-max-loa').value) || 200;
@@ -16771,7 +16858,7 @@
 
                     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando auditoría...';
                     persistedMatchingReport = await syncCoreProMatchingReport(persistencePayload);
-                    window.currentCoreProSyncId = currentSyncId;
+                    window.currentCoreProSyncId = persistedMatchingReport.syncId;
                 }
 
                 const deduplicatedCount = Math.max(0, rawMatches.length - matches.length);
@@ -17340,8 +17427,8 @@
                 btn.innerHTML = '<i class="fa-solid fa-play"></i> Ejecutar Coincidencias / Run Match';
             }
         }
-        async function runMatchingEngine() {
-            return executeMatchingEngine();
+        async function runMatchingEngine(routeOverride = null) {
+            return executeMatchingEngine(routeOverride);
         }
         window.runMatchingEngine = runMatchingEngine;
 
@@ -19446,6 +19533,7 @@
                 window.MapController?.syncRouteResult(result);
             }
             updateRouteSummary();
+            (({ pol, pod, laycan, lat, lon }) => window.dispatchEvent(new CustomEvent('SEA_ROUTE_DEFINED', { detail: { pol, pod, laycan, lat, lon } })))({ pol: result.pol, pod: result.pod, laycan: State.laycanDate, lat: { pol: result.coordinates?.pol?.lat, pod: result.coordinates?.pod?.lat }, lon: { pol: result.coordinates?.pol?.lon, pod: result.coordinates?.pod?.lon } });
         }
 
         const MATCHING_TARGET_SOURCE_ID = 'matching-target-live-ballast-source';

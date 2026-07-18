@@ -1395,8 +1395,11 @@
         }
 
         async function fetchCoreProFrozenReport(expectedSyncId = '') {
+            const syncId = String(expectedSyncId || currentSyncId || '').trim();
+            if (!syncId) return null;
+
             const url = createCoreProApiUrl('/api/core-pro-frozen-report');
-            if (expectedSyncId) url.searchParams.append('sync_id', expectedSyncId);
+            url.searchParams.set('syncId', syncId);
             url.searchParams.append('t', String(Date.now()));
             const response = await fetch(url.toString(), {
                 method: 'GET',
@@ -1432,8 +1435,11 @@
 
         async function handleCoreProLiveSyncSignal(signal) {
             if (signal?.type !== 'CORE_PRO_FROZEN_REPORT_COMMITTED') return;
+            const syncId = typeof signal.syncId === 'string' ? signal.syncId.trim() : '';
+            if (!syncId) return;
+            currentSyncId = syncId;
             addLog(`[SYNC] ${getTimestamp()} - Commit confirmado en Core PRO para ${Number(signal.vessel_count) || 0} buques. Leyendo el reporte persistido.`);
-            await fetchCoreProFrozenReport(signal.syncId || '');
+            await fetchCoreProFrozenReport(syncId);
         }
 
         if (window.electronAPI && typeof window.electronAPI.onVesselsForAudit === 'function') {
@@ -1709,9 +1715,11 @@
         populateInitialLogs();
         syncDataBridgeMasterMap();
         SyncService.refresh();
-        fetchCoreProFrozenReport().catch((error) => {
-            addLog(`[ERROR] ${getTimestamp()} - No se pudo cargar el informe congelado de Core PRO: ${error.message}`);
-        });
+        if (currentSyncId) {
+            fetchCoreProFrozenReport(currentSyncId).catch((error) => {
+                addLog(`[ERROR] ${getTimestamp()} - No se pudo cargar el informe congelado de Core PRO: ${error.message}`);
+            });
+        }
     </script>
 </body>
 </html>
