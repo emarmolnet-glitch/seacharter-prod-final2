@@ -208,6 +208,15 @@
     }
 
     function applyRoutes(view) {
+        const renderableRoutePaths = view.routePaths.filter((coordinates) => {
+            if (coordinates?.routeType !== 'ballast') return true;
+            const ballastPortName = String(coordinates?.ballastPortName || '').trim().toUpperCase();
+            const origin = coordinates?.[0];
+            const originLatitude = Number(Array.isArray(origin) ? origin[0] : origin?.lat);
+            const originLongitude = Number(Array.isArray(origin) ? origin[1] : origin?.lng);
+            const originIsZero = origin === 0 || (originLatitude === 0 && originLongitude === 0);
+            return Boolean(ballastPortName) && !ballastPortName.includes('TBA') && !originIsZero;
+        });
         view.globe
             .arcsData([])
             .pathPoints((coordinates) => coordinates)
@@ -217,7 +226,7 @@
             .pathColor((coordinates) => coordinates?.routeType === 'ballast' ? BALLAST_PATH_COLOR : PATH_STYLE.color)
             .pathStroke(() => PATH_STYLE.width)
             .pathTransitionDuration(0)
-            .pathsData(view.routePaths)
+            .pathsData(renderableRoutePaths)
             .labelsData(view.portLabels);
     }
 
@@ -236,7 +245,10 @@
             ? state.paths.map((path) => Array.isArray(path) ? path.map(normalizeRoutePoint).filter(Boolean) : []).filter((path) => path.length > 1)
             : [];
         if (!storedPaths.length) return;
-        storedPaths.forEach((path, index) => { path.routeType = state.routeTypes?.[index] || 'laden'; });
+        storedPaths.forEach((path, index) => {
+            path.routeType = state.routeTypes?.[index] || 'laden';
+            if (path.routeType === 'ballast') path.ballastPortName = String(state?.ports?.ballast?.name || '').trim();
+        });
         view.routePaths = storedPaths;
         view.portLabels = [createPortLabel('LASTRE', state?.ports?.ballast), createPortLabel('POL', state?.ports?.pol), createPortLabel('POD', state?.ports?.pod)].filter(Boolean);
         applyRoutes(view);
@@ -306,7 +318,10 @@
         const pod = normalizeRoutePoint(ports?.pod);
         const ballastPath = ballast && pol ? simplifyMaritimePath(prepareRoutePoints(routes?.ballast, ballast, pol)) : [];
         const maritimePath = pol && pod ? simplifyMaritimePath(prepareRoutePoints(routes?.laden, pol, pod)) : [];
-        if (ballastPath.length > 1) ballastPath.routeType = 'ballast';
+        if (ballastPath.length > 1) {
+            ballastPath.routeType = 'ballast';
+            ballastPath.ballastPortName = String(options?.ballastPortName || ports?.ballast?.name || '').trim();
+        }
         if (maritimePath.length > 1) maritimePath.routeType = 'laden';
         view.routePaths = [ballastPath, maritimePath].filter((path) => path.length > 1);
         view.portLabels = [createPortLabel('LASTRE', ports?.ballast), createPortLabel('POL', ports?.pol), createPortLabel('POD', ports?.pod)].filter(Boolean);
@@ -321,7 +336,15 @@
     }
 
     function setRouteResult(result, key = DEFAULT_KEY, options = {}) {
-        return setRouteSegments(result?.coordinates || {}, key, options, result?.routes || {});
+        const ballastPort = typeof result?.portBallast === 'string' ? result.portBallast.trim() : '';
+        const hasBallastPort = ballastPort !== '' && ballastPort !== 'TBA';
+        const coordinates = hasBallastPort
+            ? (result?.coordinates || {})
+            : { ...(result?.coordinates || {}), ballast: null };
+        const routes = hasBallastPort
+            ? (result?.routes || {})
+            : { ...(result?.routes || {}), ballast: null };
+        return setRouteSegments(coordinates, key, { ...options, ballastPortName: ballastPort }, routes);
     }
 
     function resize(key = DEFAULT_KEY) {
