@@ -15766,7 +15766,13 @@
                 }
             }
 
-            const requestBody = JSON.stringify({ ...payload, sync_id: syncId, type });
+            const requestBody = type === 'fleet'
+                ? JSON.stringify({
+                    type: 'fleet',
+                    syncId,
+                    vessels: Array.isArray(payload.vessels) ? payload.vessels : []
+                })
+                : JSON.stringify({ ...payload, sync_id: syncId, type });
             const headers = {
                 ...(nextOptions.headers || {}),
                 'Content-Type': 'application/json',

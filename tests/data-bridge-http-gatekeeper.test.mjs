@@ -46,7 +46,7 @@ function fleetRequest(payload) {
   };
 }
 
-test('wraps existing fleet data with sync_id and type', async () => {
+test('sends the exact flat fleet contract at the JSON root', async () => {
   let receivedUrl = '';
   let receivedPayload = null;
   const client = createClient(async (url, options) => {
@@ -55,16 +55,22 @@ test('wraps existing fleet data with sync_id and type', async () => {
     return Response.json({ success: true }, { status: 200 });
   });
 
-  const response = await client.postDataBridgeReceiveVessels(fleetRequest({ vessels: [{ imo: 1234567 }] }));
+  const response = await client.postDataBridgeReceiveVessels(fleetRequest({
+    data: { ignored: true },
+    report: { ignored: true },
+    vessels: [{ imo: 1234567 }],
+  }));
   const body = await response.json();
 
   assert.equal(receivedUrl, '/api/databridge/receive-core-data');
-  assert.equal(receivedPayload.type, 'fleet');
-  assert.equal(receivedPayload.sync_id, '00000000-0000-4000-8000-000000000001');
-  assert.deepEqual(receivedPayload.vessels, [{ imo: 1234567 }]);
+  assert.deepEqual(receivedPayload, {
+    type: 'fleet',
+    syncId: '00000000-0000-4000-8000-000000000001',
+    vessels: [{ imo: 1234567 }],
+  });
   assert.equal(response.status, 200);
   assert.equal(body.success, true);
-  assert.equal(body.sync_id, receivedPayload.sync_id);
+  assert.equal(body.syncId, receivedPayload.syncId);
 });
 
 test('rejects every non-200 response even when fetch marks it ok', async () => {
@@ -85,10 +91,10 @@ test('rejects HTTP 200 when success is not explicitly true', async () => {
   assert.equal((await response.json()).success, false);
 });
 
-test('retries rollback responses and preserves the same sync_id', async () => {
+test('retries rollback responses and preserves the same syncId', async () => {
   const syncIds = [];
   const client = createClient(async (_url, options) => {
-    syncIds.push(JSON.parse(options.body).sync_id);
+    syncIds.push(JSON.parse(options.body).syncId);
     return syncIds.length < 3
       ? Response.json({ success: false }, { status: 500 })
       : Response.json({ success: true }, { status: 200 });
@@ -101,11 +107,11 @@ test('retries rollback responses and preserves the same sync_id', async () => {
   assert.equal(new Set(syncIds).size, 1);
 });
 
-test('manual retry reuses the original in-memory sync_id', async () => {
+test('manual retry reuses the original in-memory syncId', async () => {
   const syncIds = [];
   let successful = false;
   const client = createClient(async (_url, options) => {
-    syncIds.push(JSON.parse(options.body).sync_id);
+    syncIds.push(JSON.parse(options.body).syncId);
     return successful
       ? Response.json({ success: true }, { status: 200 })
       : Response.json({ success: false }, { status: 500 });
