@@ -15661,37 +15661,175 @@
         }
         window.mapVesselsForReceiveVessels = mapVesselsForReceiveVessels;
 
-        const DATA_BRIDGE_RECEIVE_CORE_DATA_URL = '/api/databridge-post';
+        const DATA_BRIDGE_RECEIVE_CORE_DATA_URL = '/api/databridge/receive-core-data';
+        const DATA_BRIDGE_MAX_ATTEMPTS = 3;
+        const DATA_BRIDGE_RETRY_BASE_DELAY_MS = 300;
+        const dataBridgeSyncIdsByPayload = new Map();
+        const confirmedDataBridgeFleetSyncIds = new Set();
 
-        async function postDataBridgeReceiveVessels(requestOptions) {
+        function stableDataBridgeSerialize(value) {
+            if (Array.isArray(value)) {
+                return `[${value.map(stableDataBridgeSerialize).join(',')}]`;
+            }
+            if (value && typeof value === 'object') {
+                return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableDataBridgeSerialize(value[key])}`).join(',')}}`;
+            }
+            return JSON.stringify(value);
+        }
+
+        function getDataBridgePayloadIdentity(payload, type) {
+            const source = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+            const {
+                sync_id: ignoredSyncId,
+                syncId: ignoredCamelSyncId,
+                type: ignoredType,
+                created_at: ignoredCreatedAt,
+                updated_at: ignoredUpdatedAt,
+                ...identityPayload
+            } = source;
+            return `${type}:${stableDataBridgeSerialize(identityPayload)}`;
+        }
+
+        function resolveDataBridgeSyncId(payload, type, requestedSyncId = '') {
+            const explicitSyncId = String(requestedSyncId || payload?.sync_id || payload?.syncId || '').trim();
+            if (explicitSyncId) return explicitSyncId;
+
+            const payloadIdentity = getDataBridgePayloadIdentity(payload, type);
+            const cachedSyncId = dataBridgeSyncIdsByPayload.get(payloadIdentity);
+            if (cachedSyncId) return cachedSyncId;
+
+            const syncId = generateSyncId();
+            dataBridgeSyncIdsByPayload.set(payloadIdentity, syncId);
+            return syncId;
+        }
+
+        function createDataBridgeFailureResponse(status, error, detail = {}) {
+            return Response.json({
+                success: false,
+                error,
+                ...detail
+            }, { status });
+        }
+
+        async function waitForDataBridgeRetry(attempt) {
+            const exponentialDelay = DATA_BRIDGE_RETRY_BASE_DELAY_MS * (2 ** attempt);
+            const jitter = Math.floor(Math.random() * DATA_BRIDGE_RETRY_BASE_DELAY_MS);
+            await new Promise(resolve => setTimeout(resolve, exponentialDelay + jitter));
+        }
+
+        async function postDataBridgeReceiveVessels(requestOptions, contract = {}) {
             const nextOptions = { ...(requestOptions || {}) };
-            if (typeof nextOptions.body === 'string') {
+            let payload;
+            try {
+                payload = typeof nextOptions.body === 'string' ? JSON.parse(nextOptions.body) : nextOptions.body;
+            } catch (error) {
+                return createDataBridgeFailureResponse(400, 'El cuerpo de envío a Data Bridge no contiene JSON válido.');
+            }
+
+            if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+                return createDataBridgeFailureResponse(400, 'El cuerpo de envío a Data Bridge debe ser un objeto JSON.');
+            }
+
+            const type = String(contract.type || payload.type || 'fleet').trim();
+            if (type !== 'fleet' && type !== 'ia_report') {
+                return createDataBridgeFailureResponse(400, 'El tipo de sincronización debe ser fleet o ia_report.');
+            }
+
+            const syncId = resolveDataBridgeSyncId(payload, type, contract.syncId);
+            if (!syncId) {
+                return createDataBridgeFailureResponse(400, 'El sync_id es obligatorio.');
+            }
+
+            if (type === 'ia_report' && !confirmedDataBridgeFleetSyncIds.has(syncId)) {
+                return createDataBridgeFailureResponse(409, 'No existe una confirmación 200 previa de fleet para este sync_id.', { sync_id: syncId });
+            }
+
+            if (type === 'fleet') {
                 try {
-                    const payload = JSON.parse(nextOptions.body);
                     const sourceVessels = Array.isArray(payload?.vessels) ? payload.vessels : [];
                     const prepared = prepareDataBridgeVesselsForSend(sourceVessels);
                     if (prepared.rejectedCount > 0 && typeof showToast === 'function') {
                         showToast(`${prepared.rejectedCount} buque${prepared.rejectedCount === 1 ? '' : 's'} descartado${prepared.rejectedCount === 1 ? '' : 's'} por IMO inválido antes del envío.`, false, 'warning');
                     }
                     if (sourceVessels.length > 0) {
-                        nextOptions.body = JSON.stringify({ ...payload, vessels: prepared.validVessels });
+                        payload = { ...payload, vessels: prepared.validVessels };
                     }
                     if (sourceVessels.length > 0 && prepared.validVessels.length === 0) {
-                        return Response.json({
-                            success: false,
-                            error: 'No hay buques con IMO válido para enviar.',
+                        return createDataBridgeFailureResponse(422, 'No hay buques con IMO válido para enviar.', {
                             processedCount: 0,
-                            rejectedCount: prepared.rejectedCount
-                        }, { status: 422 });
+                            rejectedCount: prepared.rejectedCount,
+                            sync_id: syncId
+                        });
                     }
                 } catch (error) {
-                    console.warn('[Data Bridge] No se pudo limpiar el cuerpo del lote antes del envío.', error);
+                    return createDataBridgeFailureResponse(400, 'No se pudo validar el cuerpo antes del envío.', { sync_id: syncId });
                 }
             }
-            console.log('[Data Bridge] URL de sincronización:', DATA_BRIDGE_RECEIVE_CORE_DATA_URL);
-            return fetch(DATA_BRIDGE_RECEIVE_CORE_DATA_URL, nextOptions);
+
+            const requestBody = JSON.stringify({ ...payload, sync_id: syncId, type });
+            const headers = {
+                ...(nextOptions.headers || {}),
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            };
+
+            for (let attempt = 0; attempt < DATA_BRIDGE_MAX_ATTEMPTS; attempt += 1) {
+                try {
+                    const response = await fetch(DATA_BRIDGE_RECEIVE_CORE_DATA_URL, {
+                        ...nextOptions,
+                        method: 'POST',
+                        headers,
+                        body: requestBody
+                    });
+                    const responseText = await response.text();
+                    let responsePayload = null;
+                    try {
+                        responsePayload = responseText ? JSON.parse(responseText) : null;
+                    } catch (error) {
+                        responsePayload = null;
+                    }
+
+                    if (response.status === 200 && responsePayload?.success === true) {
+                        if (type === 'fleet') confirmedDataBridgeFleetSyncIds.add(syncId);
+                        return Response.json({ ...responsePayload, sync_id: syncId, syncId }, { status: 200 });
+                    }
+
+                    if (response.status === 500 && attempt < DATA_BRIDGE_MAX_ATTEMPTS - 1) {
+                        await waitForDataBridgeRetry(attempt);
+                        continue;
+                    }
+
+                    const failureStatus = response.status === 500 ? 500 : 502;
+                    return createDataBridgeFailureResponse(
+                        failureStatus,
+                        responsePayload?.error || responsePayload?.message || `Data Bridge no confirmó la persistencia con HTTP 200 y success=true.`,
+                        { sync_id: syncId, upstream_status: response.status }
+                    );
+                } catch (error) {
+                    if (attempt < DATA_BRIDGE_MAX_ATTEMPTS - 1) {
+                        await waitForDataBridgeRetry(attempt);
+                        continue;
+                    }
+                    return createDataBridgeFailureResponse(502, 'No se pudo completar el envío a Data Bridge.', { sync_id: syncId });
+                }
+            }
+
+            return createDataBridgeFailureResponse(502, 'No se pudo completar el envío a Data Bridge.', { sync_id: syncId });
         }
         window.postDataBridgeReceiveVessels = postDataBridgeReceiveVessels;
+
+        async function postDataBridgeIaReport(syncId, reportPayload) {
+            const response = await postDataBridgeReceiveVessels({
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(reportPayload)
+            }, { type: 'ia_report', syncId });
+            const responsePayload = await response.json().catch(() => ({}));
+            if (response.status !== 200 || responsePayload?.success !== true) {
+                throw new Error(responsePayload?.error || `Data Bridge rechazó ia_report (${response.status}).`);
+            }
+            return responsePayload;
+        }
 
         const DATA_BRIDGE_VESSEL_BATCH_SIZE = 50;
 
@@ -25277,7 +25415,7 @@
             );
         }
 
-        async function waitForLegalAuditTask(taskId) {
+        async function waitForLegalAuditTask(taskId, dataBridgeSyncId = '') {
             const startedAt = Date.now();
             const maximumWaitMs = 15 * 60 * 1000;
             const loadingMessage = document.getElementById('audit-loading-message');
@@ -25301,6 +25439,7 @@
                 const progress = Number.isFinite(Number(task.progress)) ? Math.max(0, Math.min(100, Number(task.progress))) : 0;
                 if (loadingMessage) loadingMessage.textContent = `Análisis en curso · ${progress}% · Tarea ${taskId.slice(0, 8)}`;
                 if (status === 'COMPLETED') {
+                    await postDataBridgeIaReport(dataBridgeSyncId, task.result);
                     localStorage.removeItem('legal_audit_task_id');
                     return task.result;
                 }
@@ -25332,7 +25471,7 @@
             const loadingMessage = document.getElementById('audit-loading-message');
             if (loadingMessage) loadingMessage.textContent = `Análisis en curso · Tarea ${task.task_id.slice(0, 8)}`;
             if (typeof showToast === 'function') showToast('Análisis en curso. La auditoría continúa en segundo plano.', false, 'success');
-            return waitForLegalAuditTask(task.task_id);
+            return waitForLegalAuditTask(task.task_id, payload?.dataBridgeSyncId);
         }
 
         // --- LLAMADAS IA GEMINI MODALES ---
@@ -32669,7 +32808,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     loadingMessage.textContent = `Reanudando análisis en curso · Tarea ${activeTaskId.slice(0, 8)}`;
                 }
                 const data = activeTaskId
-                    ? await waitForLegalAuditTask(activeTaskId)
+                    ? await waitForLegalAuditTask(activeTaskId, payload?.dataBridgeSyncId)
                     : await executeAsyncLegalAudit(payload);
                 const jsonText = toAuditText(data?.candidates?.[0]?.content?.parts?.[0]?.text);
                 if (!jsonText) throw new Error('La IA no devolvió un resultado de auditoría válido.');
