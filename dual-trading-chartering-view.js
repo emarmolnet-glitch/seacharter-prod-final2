@@ -94,9 +94,54 @@ class DualTradingCharteringView extends HTMLElement {
                 }
             });
         });
+        this.shadowRoot.getElementById('export-commercial-recap')?.addEventListener('click', async () => {
+            const { exportCommercialRecapPdf } = await import('./pdf-export-service.js');
+            exportCommercialRecapPdf(this.#createCommercialRecapSnapshot());
+        });
         this.#renderEditableInputs();
         this.#renderReadOnlyCargoInputs();
         this.#renderResults();
+    }
+
+    #createCommercialRecapSnapshot() {
+        const sourceDocument = this.ownerDocument;
+        const readFirstValue = (...ids) => {
+            for (const id of ids) {
+                const element = sourceDocument.getElementById(id);
+                const value = String(element?.value ?? element?.textContent ?? '').trim();
+                if (value && value !== 'TBA') return value;
+            }
+            return '';
+        };
+        const sessionDraft = this.sessionDraft;
+        const hasFairFreight = this.#fleteJustoCalculado > 0;
+
+        return Object.freeze({
+            route: Object.freeze({
+                loadPort: readFirstValue('port-pol', 'map-port-pol', 'sync-pol-label'),
+                dischargePort: readFirstValue('port-pod', 'map-port-pod', 'sync-pod-label'),
+            }),
+            laycan: Object.freeze({
+                startDate: readFirstValue('gc-laycan-date', 'asb-laycan-date', 'map-laycan-date'),
+                startTime: readFirstValue('gc-laycan-time', 'asb-laycan-time'),
+                endDate: readFirstValue('gc-cancel-date', 'asb-cancel-date'),
+                endTime: readFirstValue('gc-cancel-time', 'asb-cancel-time'),
+            }),
+            cargo: Object.freeze({
+                tonnage: this.#toneladasTotales,
+                tolerance: this.#toleranciaCarga,
+            }),
+            trading: Object.freeze({
+                fobPrice: sessionDraft.precioFOB,
+                cifPrice: sessionDraft.precioCIF,
+            }),
+            chartering: Object.freeze({
+                fairFreight: hasFairFreight ? this.#fleteJustoCalculado : '',
+            }),
+            result: Object.freeze({
+                netMargin: hasFairFreight ? sessionDraft.margenNeto : '',
+            }),
+        });
     }
 
     #normalizeReadOnlyNumber(value) {
@@ -277,6 +322,7 @@ class DualTradingCharteringView extends HTMLElement {
                 }
 
                 .back-link:focus-visible,
+                .export-recap-button:focus-visible,
                 input:focus-visible {
                     outline: 3px solid rgba(37, 161, 142, 0.22);
                     outline-offset: 2px;
@@ -647,6 +693,50 @@ class DualTradingCharteringView extends HTMLElement {
                     background: #fef2f2;
                 }
 
+                .export-footer {
+                    display: flex;
+                    align-items: center;
+                    justify-content: flex-end;
+                    margin-top: 18px;
+                    padding-top: 18px;
+                    border-top: 1px solid #e2e8f0;
+                }
+
+                .export-recap-button {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 9px;
+                    min-height: 44px;
+                    padding: 0 18px;
+                    border: 1px solid var(--navy);
+                    border-radius: 8px;
+                    color: #ffffff;
+                    background: var(--navy);
+                    font-size: 0.76rem;
+                    font-weight: 800;
+                    letter-spacing: 0.035em;
+                    cursor: pointer;
+                    box-shadow: 0 7px 14px rgba(15, 39, 64, 0.14);
+                    transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+                }
+
+                .export-recap-button svg {
+                    width: 17px;
+                    height: 17px;
+                }
+
+                .export-recap-button:hover {
+                    border-color: #0f766e;
+                    background: #0f766e;
+                    box-shadow: 0 9px 18px rgba(15, 118, 110, 0.18);
+                    transform: translateY(-1px);
+                }
+
+                .export-recap-button:active {
+                    transform: translateY(0);
+                }
+
                 @media (max-width: 760px) {
                     .shell {
                         width: min(100% - 22px, 620px);
@@ -677,6 +767,10 @@ class DualTradingCharteringView extends HTMLElement {
 
                     .column {
                         min-height: auto;
+                    }
+
+                    .export-recap-button {
+                        width: 100%;
                     }
                 }
 
@@ -814,6 +908,16 @@ class DualTradingCharteringView extends HTMLElement {
                         </div>
                     </article>
                 </section>
+
+                <footer class="export-footer">
+                    <button id="export-commercial-recap" class="export-recap-button" type="button">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M12 3v12m0 0 4-4m-4 4-4-4"/>
+                            <path d="M5 15v4h14v-4"/>
+                        </svg>
+                        Exportar Recap
+                    </button>
+                </footer>
             </main>
         `;
     }
