@@ -37,6 +37,7 @@ function mountDualComponent({
 } = {}) {
     const inputListeners = new Map();
     const editableInputs = ['fobPrice', 'cifPrice'].map((name) => ({
+        id: name === 'fobPrice' ? 'dual-fob-price' : 'dual-cif-price',
         name,
         value: '',
         addEventListener(type, listener) {
@@ -62,7 +63,10 @@ function mountDualComponent({
             this.shadowRoot = {
                 innerHTML: '',
                 querySelectorAll: () => editableInputs,
-                getElementById: (id) => outputs[id] || readOnlyInputs[id] || null,
+                getElementById: (id) => outputs[id]
+                    || readOnlyInputs[id]
+                    || editableInputs.find((input) => input.id === id)
+                    || null,
             };
         }
     }
@@ -185,6 +189,46 @@ test('Dual Mode shows guidance when the main calculator has no fair freight', ()
     assert.equal(component.outputs['dual-net-margin'].textContent, 'Pendiente');
 });
 
+test('restoring a Dual Mode draft preserves formulas, reactivity and protected inputs', () => {
+    const component = mountDualComponent({
+        fleteJustoCalculado: 24.5,
+        toneladasTotales: 18500,
+        factorDeEstiba: 1.35,
+        toleranciaCarga: 10,
+    });
+    const updates = [];
+    component.component.onSessionDraftChange = (draft) => updates.push(draft);
+
+    component.component.sessionDraft = {
+        precioFOB: '80',
+        precioCIF: '112',
+        margenBruto: 32,
+        margenNeto: 7.5,
+    };
+
+    assert.equal(component.outputs['dual-gross-margin'].textContent, '$ 32.00 / TM');
+    assert.equal(component.outputs['dual-net-margin'].textContent, '$ 7.50 / TM');
+    assert.equal(component.readOnlyInputs['dual-total-tonnage'].value, 18500);
+    assert.equal(component.readOnlyInputs['dual-stowage-factor'].value, 1.35);
+    assert.equal(component.readOnlyInputs['dual-cargo-tolerance'].value, 10);
+
+    component.input('cifPrice', '115');
+
+    assert.equal(component.outputs['dual-gross-margin'].textContent, '$ 35.00 / TM');
+    assert.equal(component.outputs['dual-net-margin'].textContent, '$ 10.50 / TM');
+    assert.deepEqual({ ...updates.at(-1) }, {
+        precioFOB: '80',
+        precioCIF: '115',
+        margenBruto: 35,
+        margenNeto: 10.5,
+    });
+    assert.match(componentSource, /const grossMargin = cifPrice - fobPrice;/);
+    assert.match(componentSource, /const netMargin = normalizedMargin - this\.#fleteJustoCalculado;/);
+    assert.match(componentSource, /id="dual-total-tonnage"[^>]*readonly/);
+    assert.match(componentSource, /id="dual-stowage-factor"[^>]*readonly/);
+    assert.match(componentSource, /id="dual-cargo-tolerance"[^>]*readonly/);
+});
+
 test('Dual Mode receives frozen read-only snapshots from the main calculator state', () => {
     assert.match(indexSource, /getSnapshot:\s*\(\)\s*=>\s*selectDualModeReadOnlyState\(SeaCharterStore\.getState\(\)\)/);
     assert.match(indexSource, /subscribe:\s*\(listener\)\s*=>\s*SeaCharterStore\.subscribe/);
@@ -194,6 +238,8 @@ test('Dual Mode receives frozen read-only snapshots from the main calculator sta
     assert.match(indexSource, /id="cargo-tolerance"[^>]*oninput="runEngine\(\)"/);
     assert.match(overlaySource, /dualView\.fleteJustoCalculado\s*=/);
     assert.match(overlaySource, /dualView\.toneladasTotales\s*=/);
+    assert.match(overlaySource, /dualView\.sessionDraft\s*=/);
+    assert.match(overlaySource, /readOnlyStateSource\?\.updateDualState\?\./);
     assert.match(overlaySource, /dualModeReadOnlyUnsubscribe\(\)/);
     assert.doesNotMatch(componentSource, /SeaCharterStore|\.set\(|dispatch\(|Object\.assign\(State/);
 });
