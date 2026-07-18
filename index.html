@@ -8847,6 +8847,10 @@
                                             <span class="text-[10px] font-black uppercase text-slate-500">/MT</span>
                                         </div>
                                         <span id="negotiation-owner-tce" class="mt-2 block border-t border-indigo-100 pt-2 text-xs font-bold text-sky-700">TCE Proyectado: $0 / día</span>
+                                        <div id="negotiation-suggested-floor" class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2" aria-live="polite" hidden>
+                                            <span class="block text-[9px] font-black uppercase tracking-wide text-amber-700">Suelo Sugerido</span>
+                                            <strong id="negotiation-suggested-floor-value" class="mono mt-0.5 block text-sm font-black text-amber-950"></strong>
+                                        </div>
                                     </label>
                                     <div class="rounded-lg border border-emerald-200 bg-white p-3 shadow-sm">
                                         <label for="negotiation-charterer-target" class="mb-2 block text-[10px] font-black uppercase tracking-wide text-emerald-700">Target Fletador / Contraoferta ($/MT)</label>
@@ -43249,6 +43253,56 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.actualizarIndicesMercado = actualizarIndicesMercado;
             if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
             else bind();
+        }());
+    </script>
+    <script>
+        (function initNegotiationSuggestedFloor() {
+            const SUGGESTED_FLOOR_MULTIPLIER = 1.05;
+
+            function readNegotiationBreakEven() {
+                try {
+                    if (typeof State === 'undefined' || State === null) return null;
+                    const breakEven = State.breakEvenArmador;
+                    if (breakEven === null || breakEven === undefined || breakEven === '') return null;
+                    const numericBreakEven = Number(breakEven);
+                    return Number.isFinite(numericBreakEven) ? numericBreakEven : null;
+                } catch (_error) {
+                    return null;
+                }
+            }
+
+            function renderNegotiationSuggestedFloor() {
+                const container = document.getElementById('negotiation-suggested-floor');
+                const valueElement = document.getElementById('negotiation-suggested-floor-value');
+                if (!container || !valueElement) return null;
+
+                const breakEven = readNegotiationBreakEven();
+                const suggestedFloor = breakEven === null ? null : breakEven * SUGGESTED_FLOOR_MULTIPLIER;
+                if (suggestedFloor === null || !Number.isFinite(suggestedFloor)) {
+                    valueElement.textContent = '';
+                    container.hidden = true;
+                    return null;
+                }
+
+                valueElement.textContent = `$${suggestedFloor.toFixed(2)} /MT`;
+                container.hidden = false;
+                return container;
+            }
+
+            function bindNegotiationSuggestedFloor() {
+                renderNegotiationSuggestedFloor();
+                const breakEvenElement = document.getElementById('res-breakeven');
+                if (!breakEvenElement || typeof MutationObserver === 'undefined') return;
+
+                const observer = new MutationObserver(renderNegotiationSuggestedFloor);
+                observer.observe(breakEvenElement, { childList: true, characterData: true, subtree: true });
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', bindNegotiationSuggestedFloor, { once: true });
+            } else {
+                bindNegotiationSuggestedFloor();
+            }
         }());
     </script>
     <script src="./contextual-feedback.js?v=20260717-global-banner"></script>

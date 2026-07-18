@@ -1102,3 +1102,39 @@ test('AI suggestion click fills target and recalculates negotiation immediately'
   assert.equal(recalculationCount, 1);
   assert.equal(focusCount, 1);
 });
+
+test('suggested floor reads break-even defensively without changing calculator state', () => {
+  assert.match(indexSource, /id="negotiation-suggested-floor"[\s\S]*?Suelo Sugerido/);
+
+  const scriptStart = indexSource.indexOf('(function initNegotiationSuggestedFloor()');
+  const scriptEnd = indexSource.indexOf('</script>', scriptStart);
+  const scriptSource = indexSource.slice(scriptStart, scriptEnd);
+
+  function runSuggestedFloor(state) {
+    const container = { hidden: true };
+    const valueElement = { textContent: '' };
+    const elements = new Map([
+      ['negotiation-suggested-floor', container],
+      ['negotiation-suggested-floor-value', valueElement],
+    ]);
+    const document = {
+      readyState: 'complete',
+      getElementById: id => elements.get(id) || null,
+    };
+
+    Function('State', 'document', 'MutationObserver', scriptSource)(state, document, undefined);
+    return { container, valueElement, state };
+  }
+
+  const validState = { breakEvenArmador: 28.54 };
+  const rendered = runSuggestedFloor(validState);
+  assert.equal(rendered.container.hidden, false);
+  assert.equal(rendered.valueElement.textContent, '$29.97 /MT');
+  assert.deepEqual(rendered.state, validState);
+
+  for (const breakEvenArmador of [null, undefined, '', Number.NaN]) {
+    const missing = runSuggestedFloor({ breakEvenArmador });
+    assert.equal(missing.container.hidden, true);
+    assert.equal(missing.valueElement.textContent, '');
+  }
+});
