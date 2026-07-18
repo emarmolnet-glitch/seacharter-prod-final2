@@ -1,4 +1,5 @@
 import type { Config } from "@netlify/functions";
+import { calculateTaxonomyTechnicalScore } from "./_shared/taxonomy-compatibility.mjs";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -158,6 +159,8 @@ function normalizeVessel(value: unknown) {
   const imo = textValue(source.imo, source.IMO, meta.IMO) || (mmsi ? "PENDING" : "");
   const vesselName = textValue(source.vesselName, source.vessel_name, source.ShipName, source.name, meta.ShipName) || "Unknown vessel";
   const shipType = textValue(
+    source.ship_type,
+    source.vessel_type,
     source.radarCategory,
     source.cargoClass,
     source.tipo_buque,
@@ -168,6 +171,8 @@ function normalizeVessel(value: unknown) {
     source.type,
     meta.radarCategory,
     meta.cargoClass,
+    meta.ship_type,
+    meta.vessel_type,
     meta.tipo_buque,
     meta.tipo,
     meta.ShipType,
@@ -244,6 +249,7 @@ export default async (req: Request) => {
     const laycanStart = parseLaycanStart(cargo.laycanStart);
     const laycanEnd = parseLaycanEnd(cargo.laycanEnd);
     const quantity = numberValue(cargo.quantity);
+    const cargoSpecification = textValue(cargo.cargoSpecification, cargo.cargoType, cargo.tipoCarga, cargo.tipo_carga);
     const maxDraft = numberValue(cargo.maxDraft) || Number.POSITIVE_INFINITY;
     const maxLoa = numberValue(cargo.maxLoa) || Number.POSITIVE_INFINITY;
     const freightRate = numberValue(cargo.freightRate);
@@ -282,13 +288,16 @@ export default async (req: Request) => {
         const loaOk = vessel.loa <= 0 || vessel.loa <= maxLoa;
         const dateOk = laycan.ok;
         const etaConsistencyScore = etaDriftHours === null ? 8 : etaDriftHours <= 12 ? 10 : etaDriftHours <= 36 ? 6 : 2;
-        const technical = (capacityOk ? 20 : 6) + (draftOk ? 10 : 0) + (loaOk ? 10 : 0) + loadState.score + laycan.score + etaConsistencyScore;
+        const calculatedTechnical = (capacityOk ? 20 : 6) + (draftOk ? 10 : 0) + (loaOk ? 10 : 0) + loadState.score + laycan.score + etaConsistencyScore;
+        const taxonomyScoring = calculateTaxonomyTechnicalScore(cargoSpecification, vessel.source, calculatedTechnical);
+        const taxonomyCompatibility = taxonomyScoring.compatibility;
+        const technical = taxonomyScoring.technicalScore;
         const economic = Math.max(0, 100 - distance / 35);
         const risk = Math.max(0, 100 - Math.max(0, daysToLoadPort - 7) * 8 * riskCoefficient);
         const overall = Math.round(Math.min(100, technical * 0.55 + economic * 0.30 + risk * 0.15));
         const ballastFuelCost = distance * (fuelPrice / 100);
         const suggestedFreightRate = freightRate > 0 ? freightRate : Math.max(0, (ballastFuelCost + portExpenses + dailyOpex) / Math.max(quantity, 1));
-        const idealVessel = loadState.ballastReady && capacityOk && draftOk && loaOk && dateOk;
+        const idealVessel = taxonomyCompatibility.compatible && loadState.ballastReady && capacityOk && draftOk && loaOk && dateOk;
 
         return {
           vessel: {
@@ -357,6 +366,12 @@ export default async (req: Request) => {
             cranesOk: true,
             holdOk: true,
             dateOk,
+            taxonomyCompatible: taxonomyCompatibility.compatible,
+            taxonomyGoverned: taxonomyCompatibility.governed,
+            cargoTaxonomy: taxonomyCompatibility.cargoTaxonomy,
+            declaredVesselType: taxonomyCompatibility.declaredVesselType,
+            vesselTaxonomies: taxonomyCompatibility.vesselTaxonomies,
+            allowedVesselTaxonomies: taxonomyCompatibility.allowedVesselTaxonomies,
             ballastReady: loadState.ballastReady,
             idealVessel,
             laycanStatus: laycan.status,
@@ -371,10 +386,13 @@ export default async (req: Request) => {
                 : etaDriftHours <= 12
                   ? "ETA AIS declarado consistente con distancia y velocidad"
                   : `ETA AIS declarado difiere ${etaDriftHours.toFixed(1)} horas del cálculo a POL`,
+              taxonomy: taxonomyCompatibility.compatible
+                ? "Taxonomía carga-buque compatible"
+                : `Taxonomía incompatible: ${cargoSpecification || "carga no especificada"} no admite ${taxonomyCompatibility.declaredVesselType}`,
             },
           },
           scores: { technical, economic, risk, overall },
-          aiStatus: idealVessel && overall > 55 && cementSignal.level !== "possible" ? "IDEAL" : overall > 50 ? "MATCH" : "REVIEW",
+          aiStatus: !taxonomyCompatibility.compatible ? "INCOMPATIBLE" : idealVessel && overall > 55 && cementSignal.level !== "possible" ? "IDEAL" : overall > 50 ? "MATCH" : "REVIEW",
           idealVessel,
           cementCarrierClassification: cementSignal,
           eta_puerto_carga: etaDate.toISOString(),
