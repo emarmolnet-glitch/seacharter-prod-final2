@@ -1,4 +1,3 @@
-const DATA_BRIDGE_SYNC_ENDPOINT = '/api/databridge-dual-sync';
 let lastSyncFailure = null;
 
 function readValue(value) {
@@ -37,8 +36,9 @@ export function buildDataBridgeSyncPayload(rawData = {}, timestamp = new Date().
     const result = rawData.result ?? {};
 
     return {
+        type: 'fleet',
+        syncId: readSyncId(rawData),
         operation: {
-            syncid: readSyncId(rawData),
             id: readValue(operation.id),
             timestamp,
             status: 'finalized',
@@ -69,21 +69,34 @@ export async function syncDualTradingChartering(rawData = {}, options = {}) {
     const syncid = readSyncId(rawData);
     if (!syncid || options.enabled === false) return false;
 
+    const url = String(options.url ?? (import.meta.env && import.meta.env.VITE_DATA_BRIDGE_URL) ?? '').trim();
+    const token = String(options.token ?? (import.meta.env && import.meta.env.VITE_DATA_BRIDGE_TOKEN) ?? '').trim();
     const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+    const logger = options.logger ?? console;
     const timestamp = typeof options.timestamp === 'string'
         ? options.timestamp
         : new Date().toISOString();
 
     try {
+        if (!url) {
+            logger.warn('[Data Bridge] VITE_DATA_BRIDGE_URL no está configurada; se omite el Live Sync.');
+            return false;
+        }
         if (typeof fetchImpl !== 'function') return false;
         await Promise.resolve();
-        const response = await fetchImpl(DATA_BRIDGE_SYNC_ENDPOINT, {
+        logger.log('[DEBUG] Enviando a Gatekeeper:', url);
+        const response = await fetchImpl(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
             body: JSON.stringify(buildDataBridgeSyncPayload(rawData, timestamp)),
             keepalive: true,
         });
-        return response?.ok === true;
+        const responseStatus = `${response?.status ?? ''} ${response?.statusText ?? ''}`.trim();
+        logger.log('[DEBUG] Respuesta de Gatekeeper:', response, responseStatus);
+        return response?.status === 200;
     } catch (error) {
         recordSyncFailure('post', error);
         return false;
