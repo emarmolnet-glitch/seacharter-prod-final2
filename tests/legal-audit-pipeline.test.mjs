@@ -48,8 +48,9 @@ test("contract audits are not blocked by unrelated stale vessel sync state", () 
 test("frontend acknowledges and polls the legal audit task", () => {
   assert.match(frontendSource, /localStorage\.setItem\('legal_audit_task_id', task\.task_id\)/);
   assert.match(frontendSource, /Análisis en curso ·/);
-  assert.match(frontendSource, /waitForLegalAuditTask\(task\.task_id\)/);
-  assert.match(frontendSource, /activeTaskId\s*\? await waitForLegalAuditTask\(activeTaskId\)/);
+  assert.match(frontendSource, /waitForLegalAuditTask\(task\.task_id, payload\?\.dataBridgeSyncId\)/);
+  assert.match(frontendSource, /activeTaskId\s*\? await waitForLegalAuditTask\(activeTaskId, payload\?\.dataBridgeSyncId\)/);
+  assert.match(frontendSource, /await postDataBridgeIaReport\(dataBridgeSyncId, task\.result\)/);
   assert.match(frontendSource, /Reanudando auditoría/);
   assert.match(frontendSource, /sessionInstructions: dynamicSystemPrompt/);
   assert.match(frontendSource, /"comparativa_clausulas"/);
