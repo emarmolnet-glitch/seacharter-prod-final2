@@ -466,11 +466,15 @@
 
         .map-control-stack {
             position: absolute;
-            top: 18px;
+            top: 82px;
             right: 18px;
             z-index: 35;
             display: flex;
             gap: 8px;
+        }
+
+        body.route-map-fullscreen .map-control-stack {
+            top: 18px;
         }
 
         .map-route-legend {
@@ -505,7 +509,7 @@
             background: repeating-linear-gradient(90deg, var(--route-color) 0 6px, transparent 6px 10px);
         }
 
-        .map-route-legend .ballast { --route-color: #b8a06a; }
+        .map-route-legend .ballast { --route-color: #F59E0B; }
         .map-route-legend .laden { --route-color: #20d69b; }
 
         .map-icon-button {
@@ -910,6 +914,9 @@
                 top: auto;
                 bottom: 98px;
                 right: 12px;
+            }
+            body.route-map-fullscreen .map-control-stack {
+                top: auto;
             }
             .map-route-legend {
                 display: none;
