@@ -12,6 +12,7 @@
     const POINT_HOVER_ALTITUDE = 0.016;
     const POINT_HOVER_RADIUS_FACTOR = 1.45;
     const PATH_STYLE = Object.freeze({ color: '#00FFFF', width: 2, simplify: true });
+    const BALLAST_PATH_COLOR = '#F59E0B';
     const EARTH_IMAGE_URL = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
     const EARTH_TOPOLOGY_URL = 'https://unpkg.com/three-globe/example/img/earth-topology.png';
     const NESTED_KEYS = ['vesselData', 'vessel_data', 'source_payload', 'sourcePayload', 'ais', 'AIS', 'radar', 'radarData', 'radar_data', 'response', 'results', 'records', 'items', 'payload', 'data', 'vessel', 'ship', 'position', 'PositionReport', 'details', 'registry', 'staticData', 'static_data', 'metadata', 'MetaData'];
@@ -213,7 +214,7 @@
             .pathPointLat('lat')
             .pathPointLng('lng')
             .pathPointAlt(() => 0.012)
-            .pathColor(() => PATH_STYLE.color)
+            .pathColor((coordinates) => coordinates?.routeType === 'ballast' ? BALLAST_PATH_COLOR : PATH_STYLE.color)
             .pathStroke(() => PATH_STYLE.width)
             .pathTransitionDuration(0)
             .pathsData(view.routePaths)
@@ -223,17 +224,21 @@
     function saveGlobalRouteState(ports, routePaths) {
         if (!window.GlobalStore || !routePaths.length) return;
         window.GlobalStore.globeRouteState = {
-            ports: { pol: ports?.pol || null, pod: ports?.pod || null },
+            ports: { ballast: ports?.ballast || null, pol: ports?.pol || null, pod: ports?.pod || null },
+            routeTypes: routePaths.map((coordinates) => coordinates.routeType || 'laden'),
             paths: routePaths.map((coordinates) => coordinates.map((point) => ({ ...point })))
         };
     }
 
     function restoreGlobalRouteState(view) {
         const state = window.GlobalStore?.globeRouteState;
-        const storedPath = Array.isArray(state?.paths?.[0]) ? state.paths[0].map(normalizeRoutePoint).filter(Boolean) : [];
-        if (storedPath.length < 2) return;
-        view.routePaths = [storedPath];
-        view.portLabels = [createPortLabel('POL', state?.ports?.pol), createPortLabel('POD', state?.ports?.pod)].filter(Boolean);
+        const storedPaths = Array.isArray(state?.paths)
+            ? state.paths.map((path) => Array.isArray(path) ? path.map(normalizeRoutePoint).filter(Boolean) : []).filter((path) => path.length > 1)
+            : [];
+        if (!storedPaths.length) return;
+        storedPaths.forEach((path, index) => { path.routeType = state.routeTypes?.[index] || 'laden'; });
+        view.routePaths = storedPaths;
+        view.portLabels = [createPortLabel('LASTRE', state?.ports?.ballast), createPortLabel('POL', state?.ports?.pol), createPortLabel('POD', state?.ports?.pod)].filter(Boolean);
         applyRoutes(view);
     }
 
@@ -296,11 +301,15 @@
     function setRouteSegments(ports, key = DEFAULT_KEY, options = {}, routes = {}) {
         const view = getView(key);
         if (!view) return [];
+        const ballast = normalizeRoutePoint(ports?.ballast);
         const pol = normalizeRoutePoint(ports?.pol);
         const pod = normalizeRoutePoint(ports?.pod);
+        const ballastPath = ballast && pol ? simplifyMaritimePath(prepareRoutePoints(routes?.ballast, ballast, pol)) : [];
         const maritimePath = pol && pod ? simplifyMaritimePath(prepareRoutePoints(routes?.laden, pol, pod)) : [];
-        view.routePaths = maritimePath.length > 1 ? [maritimePath] : [];
-        view.portLabels = [createPortLabel('POL', ports?.pol), createPortLabel('POD', ports?.pod)].filter(Boolean);
+        if (ballastPath.length > 1) ballastPath.routeType = 'ballast';
+        if (maritimePath.length > 1) maritimePath.routeType = 'laden';
+        view.routePaths = [ballastPath, maritimePath].filter((path) => path.length > 1);
+        view.portLabels = [createPortLabel('LASTRE', ports?.ballast), createPortLabel('POL', ports?.pol), createPortLabel('POD', ports?.pod)].filter(Boolean);
         saveGlobalRouteState(ports, view.routePaths);
         applyRoutes(view);
         if (view.routePaths.length && options.focus !== false) fitRoute(view);
@@ -509,7 +518,7 @@
                 .pathPointLat('lat')
                 .pathPointLng('lng')
                 .pathPointAlt(() => 0.012)
-                .pathColor(() => PATH_STYLE.color)
+                .pathColor((coordinates) => coordinates?.routeType === 'ballast' ? BALLAST_PATH_COLOR : PATH_STYLE.color)
                 .pathStroke(() => PATH_STYLE.width)
                 .pathTransitionDuration(0)
                 .pathsData([])

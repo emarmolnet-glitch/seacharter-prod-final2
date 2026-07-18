@@ -393,19 +393,27 @@ test('Globe exposes an accessible manual Play Pause control', () => {
   assert.match(globeCssSource, /.global-fleet-rotation-toggle:focus-visible/);
 });
 
-test('Globe renders only the cyan maritime POL to POD path', () => {
+test('Globe renders an orange ballast path and preserves the cyan laden path', () => {
   assert.ok(globeSource.includes("PATH_STYLE = Object.freeze({ color: '#00FFFF', width: 2, simplify: true })"));
+  assert.ok(globeSource.includes("BALLAST_PATH_COLOR = '#F59E0B'"));
   assert.ok(globeSource.includes('.arcsData([])'));
   assert.ok(globeSource.includes('.pathsData(view.routePaths)'));
+  assert.ok(globeSource.includes('prepareRoutePoints(routes?.ballast, ballast, pol)'));
   assert.ok(globeSource.includes('prepareRoutePoints(routes?.laden, pol, pod)'));
-  assert.ok(globeSource.includes('.pathColor(() => PATH_STYLE.color)'));
+  assert.ok(globeSource.includes('view.routePaths = [ballastPath, maritimePath].filter((path) => path.length > 1)'));
+  assert.ok(globeSource.includes("coordinates?.routeType === 'ballast' ? BALLAST_PATH_COLOR : PATH_STYLE.color"));
   assert.ok(globeSource.includes('.pathStroke(() => PATH_STYLE.width)'));
-  assert.ok(!globeSource.includes('routes?.ballast'));
-  assert.ok(!globeSource.includes('BALLAST_COLOR'));
+  assert.ok(indexSource.includes('.map-route-legend .ballast { --route-color: #F59E0B; }'));
   assert.ok(!globeSource.includes("type: 'line'"));
 });
 
-test('Globe restores white POL and POD labels', () => {
+test('Main map controls stay below the header and reset in fullscreen mode', () => {
+  assert.match(indexSource, /\.map-control-stack\s*\{[\s\S]*?top:\s*82px;/);
+  assert.match(indexSource, /body\.route-map-fullscreen \.map-control-stack\s*\{[\s\S]*?top:\s*18px;/);
+});
+
+test('Globe renders and restores white LASTRE, POL, and POD labels', () => {
+  assert.ok(globeSource.includes("createPortLabel('LASTRE', ports?.ballast)"));
   assert.ok(globeSource.includes("createPortLabel('POL', ports?.pol)"));
   assert.ok(globeSource.includes("createPortLabel('POD', ports?.pod)"));
   assert.ok(globeSource.includes('.labelsData(view.portLabels)'));
