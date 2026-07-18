@@ -151,6 +151,14 @@ test('parent taxonomies aggregate their real child vessel types without cross-fi
   assert.equal(windowMock.renderFilteredAisCounters(), 1);
   assert.equal(elements.get('ais-density-count').textContent, '1');
 
+  currentFilteredVessels = windowMock.filterVessels(vessels, ['type:general']);
+  assert.deepEqual(currentFilteredVessels.map(vessel => vessel.ship_type), ['General Cargo']);
+  assert.equal(windowMock.renderFilteredAisCounters(), 1);
+  assert.equal(elements.get('buques-count').textContent, '1');
+
+  currentFilteredVessels = windowMock.filterVessels(vessels, ['type:general', 'type:container']);
+  assert.deepEqual(currentFilteredVessels.map(vessel => vessel.ship_type), ['General Cargo', 'Container Ship']);
+
   currentFilteredVessels = windowMock.filterVessels(vessels, ['ALL CARGO']);
   assert.equal(windowMock.renderFilteredAisCounters(), 5);
   assert.equal(elements.get('buques-count').textContent, '5');
