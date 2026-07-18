@@ -3,6 +3,7 @@ const OVERLAY_STYLE_ID = 'dual-mode-overlay-styles';
 
 let previouslyFocusedElement = null;
 let previousBodyOverflow = '';
+let dualModeReadOnlyUnsubscribe = null;
 
 function ensureOverlayStyles() {
     if (document.getElementById(OVERLAY_STYLE_ID)) return;
@@ -154,6 +155,10 @@ function closeDualModeOverlay() {
     const overlay = document.getElementById(OVERLAY_ID);
     if (!overlay) return;
 
+    if (typeof dualModeReadOnlyUnsubscribe === 'function') {
+        dualModeReadOnlyUnsubscribe();
+        dualModeReadOnlyUnsubscribe = null;
+    }
     overlay.remove();
     document.body.style.overflow = previousBodyOverflow;
     document.removeEventListener('keydown', handleOverlayKeydown);
@@ -164,7 +169,7 @@ function closeDualModeOverlay() {
     previouslyFocusedElement = null;
 }
 
-async function openDualModeOverlay(event) {
+async function openDualModeOverlay(event, readOnlyStateSource = null) {
     event?.preventDefault();
 
     const existingOverlay = document.getElementById(OVERLAY_ID);
@@ -221,7 +226,21 @@ async function openDualModeOverlay(event) {
         if (!overlay.isConnected) return;
 
         const panel = overlay.querySelector('.dual-mode-overlay__panel');
-        panel.replaceChildren(document.createElement('dual-trading-chartering-view'));
+        const dualView = document.createElement('dual-trading-chartering-view');
+        const applyReadOnlySnapshot = (snapshot = {}) => {
+            dualView.fleteJustoCalculado = snapshot.fleteJustoCalculado;
+            dualView.toneladasTotales = snapshot.toneladasTotales;
+            dualView.factorDeEstiba = snapshot.factorDeEstiba;
+            dualView.toleranciaCarga = snapshot.toleranciaCarga;
+        };
+        const initialSnapshot = typeof readOnlyStateSource?.getSnapshot === 'function'
+            ? readOnlyStateSource.getSnapshot()
+            : {};
+        applyReadOnlySnapshot(initialSnapshot);
+        if (typeof readOnlyStateSource?.subscribe === 'function') {
+            dualModeReadOnlyUnsubscribe = readOnlyStateSource.subscribe(applyReadOnlySnapshot);
+        }
+        panel.replaceChildren(dualView);
     } catch (error) {
         console.error('[Modo Dual] No se pudo cargar el componente aislado.', error);
         if (!overlay.isConnected) return;

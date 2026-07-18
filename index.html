@@ -7565,6 +7565,10 @@
                                 <input type="number" id="cargo-sf" class="input-gc text-indigo-300" value="1.20" step="0.01" oninput="runEngine()">
                             </div>
                             <div class="input-group">
+                                <label id="label-cargo-tolerance">Tolerancia de Carga · MOLOO / MOLCO (%)</label>
+                                <input type="number" id="cargo-tolerance" class="input-gc text-indigo-300" value="0" min="0" max="100" step="0.1" oninput="runEngine()">
+                            </div>
+                            <div class="input-group">
                                 <label id="label-vessel-net-tonnage" class="text-blue-400">SCNT / PCUMS</label>
                                 <input type="number" id="vessel-net-tonnage" class="input-gc font-bold text-blue-300" value="0" step="1" oninput="runEngine()">
                             </div>
@@ -12759,7 +12763,7 @@
             nplDataOrigin: "Externo",
             portBallast: "", pol: "", pod: "",
             distBallast: 0, distLaden: 0, totalDays: 0,
-            cargo: 0, loadRate: 0, dischRate: 0,
+            cargo: 0, stowageFactor: 1.20, cargoTolerance: 0, loadRate: 0, dischRate: 0,
             cargoType: "Granel Sólido (Dry Bulk)",
             cargoTypeManual: "",
             charterPartyStandard: "GENCON",
@@ -17983,7 +17987,19 @@
             dualModeItem.querySelector('#open-dual-mode-btn')?.addEventListener('click', event => {
                 event.preventDefault();
                 closeAdvancedModulesMenu();
-                window.openDualModeOverlay?.(event);
+                const selectDualModeReadOnlyState = (state) => Object.freeze({
+                    fleteJustoCalculado: Number(state.sugOwner) || 0,
+                    toneladasTotales: Number(state.cargo) || 0,
+                    factorDeEstiba: Number(state.stowageFactor) || 0,
+                    toleranciaCarga: Number(state.cargoTolerance) || 0
+                });
+                const dualModeReadOnlyStateSource = Object.freeze({
+                    getSnapshot: () => selectDualModeReadOnlyState(SeaCharterStore.getState()),
+                    subscribe: (listener) => SeaCharterStore.subscribe((state) => {
+                        listener(selectDualModeReadOnlyState(state));
+                    })
+                });
+                window.openDualModeOverlay?.(event, dualModeReadOnlyStateSource);
             });
 
             const preferenceItem = document.createElement('li');
@@ -22396,9 +22412,16 @@
                 window.calcularLumpsum = calcularLumpsum;
             }
 
+            const cargoSnapshot = Math.max(0, parseFloat(document.getElementById('cargo-qty')?.value) || 0);
+            const stowageFactorSnapshot = Math.max(0, parseFloat(document.getElementById('cargo-sf')?.value) || 0);
+            const cargoToleranceSnapshot = Math.min(100, Math.max(0, parseFloat(document.getElementById('cargo-tolerance')?.value) || 0));
+
             if (!hasRequiredCalculationInputs()) {
                 setCalculatorWaitingState();
                 clearCalculatorLocalStorage();
+                State.cargo = cargoSnapshot;
+                State.stowageFactor = stowageFactorSnapshot;
+                State.cargoTolerance = cargoToleranceSnapshot;
                 State.breakEven = 0;
                 State.breakEvenArmador = 0;
                 State.sugOwner = 0;
@@ -22407,6 +22430,12 @@
                 State.precioObjetivoArmador = 0;
                 State.precioObjetivoFletador = 0;
                 State.marketBenchmark = null;
+                SeaCharterStore.set({
+                    cargo: State.cargo,
+                    stowageFactor: State.stowageFactor,
+                    cargoTolerance: State.cargoTolerance,
+                    sugOwner: State.sugOwner
+                });
                 if (typeof validateCoreTradingSafety === 'function') {
                     validateCoreTradingSafety({
                         totalBunkers: 0,
@@ -22436,7 +22465,9 @@
             const spdBal = parseFloat(document.getElementById('spd-ballast').value) || 11;
             const spdLaden = parseFloat(document.getElementById('spd-laden').value) || 11;
             
-            const cargo = parseFloat(document.getElementById('cargo-qty').value) || 0;
+            const cargo = cargoSnapshot;
+            const stowageFactor = stowageFactorSnapshot;
+            const cargoTolerance = cargoToleranceSnapshot;
             const isZeroCalculation = (cargo === 0);
             
             // Volume-based freight policy: If cargo is < 5000 MT, apply Lumpsum (minimum 5000 MT limit), else PMT
@@ -23213,6 +23244,8 @@
             State.pol = document.getElementById('port-pol').value;
             State.pod = document.getElementById('port-pod').value;
             State.cargo = cargo;
+            State.stowageFactor = stowageFactor;
+            State.cargoTolerance = cargoTolerance;
             State.cargoType = document.getElementById('cargo-type').value;
             State.cargoTypeManual = document.getElementById('cargo-type-manual') ? document.getElementById('cargo-type-manual').value.trim() : '';
             State.charterPartyStandard = document.getElementById('charter-party-standard') ? document.getElementById('charter-party-standard').value : (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
@@ -23483,6 +23516,10 @@
                     totalCosts: State.totalCosts,
                     costTotal: State.costTotal,
                     costBreakdown: State.costBreakdown,
+                    cargo: State.cargo,
+                    stowageFactor: State.stowageFactor,
+                    cargoTolerance: State.cargoTolerance,
+                    sugOwner: State.sugOwner,
                     etsCost: State.etsCost,
                     laycanDate: State.laycanDate,
                     laycanTime: State.laycanTime,
