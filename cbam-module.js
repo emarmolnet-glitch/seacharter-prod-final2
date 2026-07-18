@@ -157,7 +157,7 @@ export const EU_CARBON_PRICE = PRICE_2026;
 
 // Objeto de estado global del módulo para garantizar la sincronización.
 export let cbamState = {
-    sector: 'cemento',
+    sector: '',
     origen: '',
     destino: '',
     tonelaje: 0,
@@ -165,7 +165,7 @@ export let cbamState = {
     impuestoOrigen: 0,
     esValido: false,
     calculos: { escenarioA: 0, escenarioB: 0, escenarioC: 0, ahorro: 0 },
-    factores: { escenarioA: CBAM_FACTORS.cemento.alto, escenarioB: CBAM_FACTORS.cemento.medio, escenarioC: CBAM_FACTORS.cemento.bajo },
+    factores: { escenarioA: 0, escenarioB: 0, escenarioC: 0 },
     mensaje: 'Datos insuficientes para el cálculo'
 };
 
@@ -333,8 +333,9 @@ export function updateCBAMState(values = null) {
         impuestoOrigen: document.getElementById('cbam-origin-carbon-paid')?.value || 0
     };
 
-    const factorKey = getSectorFactorKey(fieldValues.sector);
-    const factors = CBAM_FACTORS[factorKey] || CBAM_FACTORS.cemento;
+    const sectorData = getSectorData(fieldValues.sector);
+    const factorKey = sectorData?.factorKey || '';
+    const factors = factorKey ? (CBAM_FACTORS[factorKey] || CBAM_FACTORS.cemento) : { alto: 0, medio: 0, bajo: 0 };
     const tonelaje = Math.max(0, Number(fieldValues.tonelaje) || 0);
     const parsedManualFactor = Number(fieldValues.factorManual);
     const factorManual = String(fieldValues.factorManual ?? '').trim() !== '' && isFinite(parsedManualFactor) && parsedManualFactor > 0
@@ -348,12 +349,13 @@ export function updateCBAMState(values = null) {
     const originInEU = EU_COUNTRY_CODES.has(originCode);
     const destinationInEU = EU_COUNTRY_CODES.has(destinationCode);
     const geographyIsValid = Boolean(originCode && destinationCode && !originInEU && destinationInEU);
+    const cbamIsApplicable = Boolean(factorKey && geographyIsValid);
     const factorA = factors.alto;
     const factorB = factorManual || factors.medio;
     const factorC = factorManual || factors.bajo;
-    const escenarioA = geographyIsValid ? tonelaje * factorA * PRICE_2026 : 0;
-    const escenarioB = geographyIsValid ? tonelaje * factorB * PRICE_2026 : 0;
-    const escenarioC = geographyIsValid ? Math.max(0, (tonelaje * factorC) * (PRICE_2026 - impuestoOrigen)) : 0;
+    const escenarioA = cbamIsApplicable ? tonelaje * factorA * PRICE_2026 : 0;
+    const escenarioB = cbamIsApplicable ? tonelaje * factorB * PRICE_2026 : 0;
+    const escenarioC = cbamIsApplicable ? Math.max(0, (tonelaje * factorC) * (PRICE_2026 - impuestoOrigen)) : 0;
 
     cbamState = {
         sector: factorKey,
@@ -362,7 +364,7 @@ export function updateCBAMState(values = null) {
         tonelaje,
         factorManual,
         impuestoOrigen,
-        esValido: geographyIsValid && tonelaje > 0,
+        esValido: cbamIsApplicable && tonelaje > 0,
         calculos: {
             escenarioA,
             escenarioB,
@@ -370,7 +372,7 @@ export function updateCBAMState(values = null) {
             ahorro: Math.max(0, escenarioA - escenarioC)
         },
         factores: { escenarioA: factorA, escenarioB: factorB, escenarioC: factorC },
-        mensaje: geographyIsValid ? 'Operación sujeta a CBAM' : 'No sujeto a CBAM'
+        mensaje: cbamIsApplicable ? 'Operación sujeta a CBAM' : 'No sujeto a CBAM'
     };
 
     return cbamState;

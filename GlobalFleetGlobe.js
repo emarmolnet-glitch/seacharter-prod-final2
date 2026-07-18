@@ -200,10 +200,12 @@
         return simplified;
     }
 
-    function createPortLabel(role, port) {
+    function createPortLabel(role, port, explicitName = '') {
         const coordinates = normalizeRoutePoint(port);
         if (!coordinates) return null;
-        const name = String(port?.name || port?.portName || (role === 'POL' ? 'ORIGEN' : 'DESTINO')).trim();
+        const rawName = String(explicitName || port?.name || port?.portName || '').trim();
+        if (role === 'LASTRE' && (!rawName || rawName.toUpperCase().includes('TBA') || (coordinates.lat === 0 && coordinates.lng === 0))) return null;
+        const name = rawName || (role === 'POL' ? 'ORIGEN' : 'DESTINO');
         return { ...coordinates, role, text: role + ' · ' + name };
     }
 
@@ -230,10 +232,11 @@
             .labelsData(view.portLabels);
     }
 
-    function saveGlobalRouteState(ports, routePaths) {
+    function saveGlobalRouteState(ports, routePaths, ballastPortName = '') {
         if (!window.GlobalStore || !routePaths.length) return;
         window.GlobalStore.globeRouteState = {
             ports: { ballast: ports?.ballast || null, pol: ports?.pol || null, pod: ports?.pod || null },
+            ballastPortName: String(ballastPortName || ports?.ballast?.name || '').trim(),
             routeTypes: routePaths.map((coordinates) => coordinates.routeType || 'laden'),
             paths: routePaths.map((coordinates) => coordinates.map((point) => ({ ...point })))
         };
@@ -247,10 +250,10 @@
         if (!storedPaths.length) return;
         storedPaths.forEach((path, index) => {
             path.routeType = state.routeTypes?.[index] || 'laden';
-            if (path.routeType === 'ballast') path.ballastPortName = String(state?.ports?.ballast?.name || '').trim();
+            if (path.routeType === 'ballast') path.ballastPortName = String(state?.ballastPortName || state?.ports?.ballast?.name || '').trim();
         });
         view.routePaths = storedPaths;
-        view.portLabels = [createPortLabel('LASTRE', state?.ports?.ballast), createPortLabel('POL', state?.ports?.pol), createPortLabel('POD', state?.ports?.pod)].filter(Boolean);
+        view.portLabels = [createPortLabel('LASTRE', state?.ports?.ballast, state?.ballastPortName), createPortLabel('POL', state?.ports?.pol), createPortLabel('POD', state?.ports?.pod)].filter(Boolean);
         applyRoutes(view);
     }
 
@@ -324,8 +327,8 @@
         }
         if (maritimePath.length > 1) maritimePath.routeType = 'laden';
         view.routePaths = [ballastPath, maritimePath].filter((path) => path.length > 1);
-        view.portLabels = [createPortLabel('LASTRE', ports?.ballast), createPortLabel('POL', ports?.pol), createPortLabel('POD', ports?.pod)].filter(Boolean);
-        saveGlobalRouteState(ports, view.routePaths);
+        view.portLabels = [createPortLabel('LASTRE', ports?.ballast, options?.ballastPortName), createPortLabel('POL', ports?.pol), createPortLabel('POD', ports?.pod)].filter(Boolean);
+        saveGlobalRouteState(ports, view.routePaths, options?.ballastPortName);
         applyRoutes(view);
         if (view.routePaths.length && options.focus !== false) fitRoute(view);
         return view.routePaths;

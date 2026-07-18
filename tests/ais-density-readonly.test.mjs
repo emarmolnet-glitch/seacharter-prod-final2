@@ -32,11 +32,12 @@ test('database ingestion summary groups the raw payload taxonomy before normaliz
   const helperEnd = indexSource.indexOf('window.groupAisVesselsByTaxonomy', helperStart);
   const helperSource = indexSource.slice(helperStart, helperEnd);
   const windowMock = {};
-  new Function('window', helperSource)(windowMock);
+  const readAisVesselDeclaredTaxonomyType = vessel => vessel?.ship_type || vessel?.vessel_type || vessel?.shipType || vessel?.ShipType || vessel?.vesselType || vessel?.type || 'Unknown';
+  new Function('window', 'readAisVesselDeclaredTaxonomyType', helperSource)(windowMock, readAisVesselDeclaredTaxonomyType);
 
   const summary = windowMock.buildAisIngestionTaxonomySummary([
     { ship_type: 'Bulk Carrier' },
-    { cargoType: 'General Cargo' },
+    { shipType: 'General Cargo' },
     { ship_type: 'Bulk Carrier' },
   ]);
 
@@ -56,10 +57,11 @@ test('ingestion summary catches taxonomy failures without interrupting the UI fl
   const helperEnd = indexSource.indexOf('window.groupAisVesselsByTaxonomy', helperStart);
   const helperSource = indexSource.slice(helperStart, helperEnd);
   const windowMock = {};
+  const readAisVesselDeclaredTaxonomyType = vessel => vessel.ship_type || 'Unknown';
   const originalWarn = console.warn;
   console.warn = () => {};
   try {
-    new Function('window', helperSource)(windowMock);
+    new Function('window', 'readAisVesselDeclaredTaxonomyType', helperSource)(windowMock, readAisVesselDeclaredTaxonomyType);
     const brokenVessel = {};
     Object.defineProperty(brokenVessel, 'ship_type', {
       get() { throw new Error('taxonomy getter failed'); },
@@ -75,7 +77,7 @@ test('ingestion summary catches taxonomy failures without interrupting the UI fl
   }
 });
 
-test('All Cargo bypasses type matching and strict checkboxes update the derived counter', () => {
+test('parent taxonomies aggregate their real child vessel types without cross-field contamination', () => {
   const filterStart = indexSource.indexOf('function getAisVesselDeclaredTaxonomyType');
   const filterEnd = indexSource.indexOf('function isStrictFleetMode', filterStart);
   const filterSource = indexSource.slice(filterStart, filterEnd);
@@ -86,12 +88,43 @@ test('All Cargo bypasses type matching and strict checkboxes update the derived 
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
-  new Function('window', 'normalizeFleetTaxonomyText', filterSource)(windowMock, normalizeFleetTaxonomyText);
+  const getAisShipTypeCode = value => {
+    const match = String(value || '').match(/\b(\d{2})\b/);
+    return match ? Number(match[1]) : null;
+  };
+  const fleetTaxonomy = {
+    bulk: ['bulk carrier', 'bulker'],
+    general: ['general cargo'],
+    container: ['container ship'],
+    cement: ['cement carrier', 'cement'],
+    mpv: ['multipurpose', 'mpp'],
+    heavy_lift: ['heavy lift'],
+    crude_tanker: ['crude tanker'],
+    lng_tanker: ['lng tanker'],
+    chemical_tanker: ['chemical tanker'],
+    product_tanker: ['product tanker'],
+    lpg_tanker: ['lpg tanker'],
+    passenger: ['passenger'],
+    cruise: ['cruise'],
+    ferry: ['ferry'],
+    offshore: ['offshore'],
+    tug: ['tug'],
+    fishing: ['fishing'],
+  };
+  new Function('window', 'normalizeFleetTaxonomyText', 'getAisShipTypeCode', 'FLEET_INTEL_TAXONOMY', filterSource)(
+    windowMock,
+    normalizeFleetTaxonomyText,
+    getAisShipTypeCode,
+    fleetTaxonomy,
+  );
 
   const vessels = [
     { ship_type: 'Bulk Carrier', cargoType: 'Cement Carrier' },
     { ship_type: 'Bulk Carrier' },
     { ship_type: 'Cement Carrier', cargoType: 'Bulk Carrier' },
+    { ship_type: 'General Cargo' },
+    { ship_type: 'Container Ship' },
+    { ship_type: 'LNG Tanker' },
   ];
   const elements = new Map([
     ['ais-density-count', { textContent: '0' }],
@@ -119,8 +152,36 @@ test('All Cargo bypasses type matching and strict checkboxes update the derived 
   assert.equal(elements.get('ais-density-count').textContent, '1');
 
   currentFilteredVessels = windowMock.filterVessels(vessels, ['ALL CARGO']);
-  assert.equal(windowMock.renderFilteredAisCounters(), 3);
-  assert.equal(elements.get('buques-count').textContent, '3');
+  assert.equal(windowMock.renderFilteredAisCounters(), 5);
+  assert.equal(elements.get('buques-count').textContent, '5');
+  assert.deepEqual(currentFilteredVessels.map(vessel => vessel.ship_type), [
+    'Bulk Carrier',
+    'Bulk Carrier',
+    'Cement Carrier',
+    'General Cargo',
+    'Container Ship',
+  ]);
+
+  currentFilteredVessels = windowMock.filterVessels(vessels, ['category:tanker']);
+  assert.deepEqual(currentFilteredVessels.map(vessel => vessel.ship_type), ['LNG Tanker']);
+});
+
+test('calculator cargo state does not overwrite AIS taxonomy selection or vessel types', () => {
+  const manualInputStart = indexSource.indexOf('function handleCargoManualInput()');
+  const manualInputEnd = indexSource.indexOf('function syncCBAMModuleFromCalculator()', manualInputStart);
+  const manualInputSource = indexSource.slice(manualInputStart, manualInputEnd);
+  assert.match(manualInputSource, /window\.inferFleetCargoTaxonomy\(cargoValue\)/);
+  assert.doesNotMatch(manualInputSource, /applyFleetCargoTaxonomy|reapplyCentralFiltersAndRedraw/);
+  assert.match(indexSource, /const storedRecord = findFleetIntelRecord\(vessel\);[\s\S]*record = storedRecord && storedRecord\.source !== 'calculator'/);
+  assert.doesNotMatch(indexSource, /findFleetIntelRecord\(vessel\) \|\| syncCalculatorCargoRecordForVessel\(vessel\)/);
+  assert.match(indexSource, /const vesselTypeLabel = getAisTaxonomyBreakdownLabel\(v\);[\s\S]*btn\.innerHTML = `[\s\S]*\$\{vesselTypeLabel\}/);
+});
+
+test('taxonomy view resolves the declared AIS type across script scopes', () => {
+  assert.match(indexSource, /window\.getAisVesselDeclaredTaxonomyType = getAisVesselDeclaredTaxonomyType/);
+  assert.match(indexSource, /function readAisVesselDeclaredTaxonomyType\(vessel\)[\s\S]*window\.getAisVesselDeclaredTaxonomyType\(vessel\)/);
+  assert.match(indexSource, /function getAisTaxonomyBreakdownLabel\(vessel\)[\s\S]*const declaredType = readAisVesselDeclaredTaxonomyType\(vessel\)/);
+  assert.match(indexSource, /window\.buildAisIngestionTaxonomySummary[\s\S]*const type = readAisVesselDeclaredTaxonomyType\(vessel\)/);
 });
 
 test('ingestion reduce groups by each vessel declared type without cross-field contamination', () => {
@@ -128,7 +189,14 @@ test('ingestion reduce groups by each vessel declared type without cross-field c
   const helperEnd = indexSource.indexOf('window.groupAisVesselsByTaxonomy', helperStart);
   const helperSource = indexSource.slice(helperStart, helperEnd);
   const windowMock = {};
-  new Function('window', helperSource)(windowMock);
+  const readAisVesselDeclaredTaxonomyType = vessel => vessel?.ship_type
+    || vessel?.vessel_type
+    || vessel?.shipType
+    || vessel?.ShipType
+    || vessel?.vesselType
+    || vessel?.type
+    || 'Unknown';
+  new Function('window', 'readAisVesselDeclaredTaxonomyType', helperSource)(windowMock, readAisVesselDeclaredTaxonomyType);
 
   const summary = windowMock.buildAisIngestionTaxonomySummary([
     { ship_type: 'Bulk Carrier', cargoType: 'Cement Carrier' },
@@ -450,7 +518,8 @@ test('Main map controls stay below the header and reset in fullscreen mode', () 
 });
 
 test('Globe renders and restores white LASTRE, POL, and POD labels', () => {
-  assert.ok(globeSource.includes("createPortLabel('LASTRE', ports?.ballast)"));
+  assert.ok(globeSource.includes("createPortLabel('LASTRE', ports?.ballast, options?.ballastPortName)"));
+  assert.ok(globeSource.includes("createPortLabel('LASTRE', state?.ports?.ballast, state?.ballastPortName)"));
   assert.ok(globeSource.includes("createPortLabel('POL', ports?.pol)"));
   assert.ok(globeSource.includes("createPortLabel('POD', ports?.pod)"));
   assert.ok(globeSource.includes('.labelsData(view.portLabels)'));
@@ -459,7 +528,8 @@ test('Globe renders and restores white LASTRE, POL, and POD labels', () => {
 
 test('GlobalStore retains normalized port and maritime path state', () => {
   assert.ok(globeSource.includes('window.GlobalStore.globeRouteState'));
-  assert.ok(globeSource.includes('saveGlobalRouteState(ports, view.routePaths)'));
+  assert.ok(globeSource.includes('saveGlobalRouteState(ports, view.routePaths, options?.ballastPortName)'));
+  assert.ok(globeSource.includes('ballastPortName: String(ballastPortName'));
   assert.ok(globeSource.includes('restoreGlobalRouteState(view)'));
   assert.ok(globeSource.includes('.pointsData(view.vessels)'));
 });
@@ -546,7 +616,7 @@ test('fleet density and POL counters render positive ship type breakdowns from t
 });
 
 test('taxonomy breakdown renderer produces visible totals for simulated fleet and POL arrays', () => {
-  const blockStart = indexSource.indexOf('const AIS_TAXONOMY_BREAKDOWN_ORDER');
+  const blockStart = indexSource.indexOf('function readAisVesselDeclaredTaxonomyType');
   const blockEnd = indexSource.indexOf('function classifyBulkCarrierRealTime', blockStart);
   const breakdownSource = indexSource.slice(blockStart, blockEnd);
   class FakeNode {
