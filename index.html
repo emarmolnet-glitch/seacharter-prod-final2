@@ -61,6 +61,7 @@
     <script type="module" src="./public/ConnectionStatusBar.js"></script>
     <script type="module" src="./voyage-cost-engine.js"></script>
     <script type="module" src="./stress-test-engine.js"></script>
+    <script src="./session-draft.js"></script>
     <script type="module" src="./dual-mode-overlay.js"></script>
 
     <style>
@@ -77,6 +78,88 @@
             --muted: #64748B;
             --panel-shadow: 0 4px 10px -6px rgba(15, 23, 42, 0.22);
             --floating-panel-shadow: 0 18px 42px rgba(0, 35, 48, 0.24), 0 3px 10px rgba(0, 35, 48, 0.16);
+        }
+
+        .session-recovery-banner {
+            position: relative;
+            z-index: 2147482000;
+            display: grid;
+            grid-template-columns: 5px minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 16px;
+            width: min(1180px, calc(100% - 24px));
+            margin: 12px auto 0;
+            overflow: hidden;
+            border: 1px solid #1e3a5f;
+            border-radius: 6px;
+            color: #e6f4f1;
+            background: linear-gradient(100deg, #071827 0%, #0b2b3a 72%, #123849 100%);
+            box-shadow: 0 14px 30px rgba(2, 18, 29, 0.28);
+            font-family: Inter, system-ui, sans-serif;
+        }
+
+        .session-recovery-banner__signal {
+            align-self: stretch;
+            background: #f4b942;
+            box-shadow: 0 0 18px rgba(244, 185, 66, 0.55);
+        }
+
+        .session-recovery-banner__content {
+            display: grid;
+            gap: 3px;
+            padding: 12px 0;
+            font-size: 0.82rem;
+        }
+
+        .session-recovery-banner__eyebrow {
+            color: #8fd5c8;
+            font-size: 0.62rem;
+            font-weight: 900;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+        }
+
+        .session-recovery-banner__actions {
+            display: flex;
+            gap: 8px;
+            padding-right: 12px;
+        }
+
+        .session-recovery-banner button {
+            min-height: 36px;
+            padding: 0 13px;
+            border: 1px solid #3f7180;
+            border-radius: 4px;
+            color: #f8fafc;
+            background: #164e63;
+            font-size: 0.68rem;
+            font-weight: 900;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        .session-recovery-banner button:hover,
+        .session-recovery-banner button:focus-visible {
+            border-color: #70d6c5;
+            background: #0f766e;
+            outline: none;
+        }
+
+        .session-recovery-banner button[data-session-action="discard"] {
+            color: #cbd5e1;
+            background: transparent;
+        }
+
+        @media (max-width: 720px) {
+            .session-recovery-banner {
+                grid-template-columns: 5px minmax(0, 1fr);
+            }
+
+            .session-recovery-banner__actions {
+                grid-column: 2;
+                padding: 0 12px 12px 0;
+            }
         }
 
         html,
@@ -12771,6 +12854,7 @@
             breakEven: 0, sugOwner: 0, sugCharterer: 0,
             freightRate: 0, freightSell: 0,
             netProfitOwner: 0, netProfitCharterer: 0, demurrage: 0,
+            dualPrecioFOB: "", dualPrecioCIF: "", dualMargenBruto: 0, dualMargenNeto: 0,
             spdBallast: 11, spdLaden: 11,
             daysMargin: 0,
             consSea: 0, priceSea: 0,
@@ -12810,6 +12894,13 @@
             }
         };
         window.SeaCharterStore = SeaCharterStore;
+        window.SeaCharterSessionDraftController = window.SeaCharterSessionDraft?.initialize({
+            store: SeaCharterStore,
+            hydrate: (sessionState) => {
+                SeaCharterStore.set(sessionState);
+                syncGlobalStateToForms();
+            }
+        });
 
         const CALCULATOR_LOCAL_STORAGE_KEYS = [
             'calculator_break_even',
@@ -17991,12 +18082,24 @@
                     fleteJustoCalculado: Number(state.sugOwner) || 0,
                     toneladasTotales: Number(state.cargo) || 0,
                     factorDeEstiba: Number(state.stowageFactor) || 0,
-                    toleranciaCarga: Number(state.cargoTolerance) || 0
+                    toleranciaCarga: Number(state.cargoTolerance) || 0,
+                    sessionDraft: Object.freeze({
+                        precioFOB: state.dualPrecioFOB,
+                        precioCIF: state.dualPrecioCIF,
+                        margenBruto: Number(state.dualMargenBruto) || 0,
+                        margenNeto: Number(state.dualMargenNeto) || 0
+                    })
                 });
                 const dualModeReadOnlyStateSource = Object.freeze({
                     getSnapshot: () => selectDualModeReadOnlyState(SeaCharterStore.getState()),
                     subscribe: (listener) => SeaCharterStore.subscribe((state) => {
                         listener(selectDualModeReadOnlyState(state));
+                    }),
+                    updateDualState: (dualState) => SeaCharterStore.set({
+                        dualPrecioFOB: dualState.precioFOB,
+                        dualPrecioCIF: dualState.precioCIF,
+                        dualMargenBruto: dualState.margenBruto,
+                        dualMargenNeto: dualState.margenNeto
                     })
                 });
                 window.openDualModeOverlay?.(event, dualModeReadOnlyStateSource);

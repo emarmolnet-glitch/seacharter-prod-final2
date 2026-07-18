@@ -58,14 +58,43 @@ class DualTradingCharteringView extends HTMLElement {
         return this.#toleranciaCarga;
     }
 
+    set sessionDraft(value) {
+        const draft = value && typeof value === 'object' ? value : {};
+        this.#draft.fobPrice = draft.precioFOB === undefined || draft.precioFOB === null
+            ? ''
+            : String(draft.precioFOB);
+        this.#draft.cifPrice = draft.precioCIF === undefined || draft.precioCIF === null
+            ? ''
+            : String(draft.precioCIF);
+        this.#renderEditableInputs();
+        this.#renderResults();
+    }
+
+    get sessionDraft() {
+        const fobPrice = Number(this.#draft.fobPrice || 0);
+        const cifPrice = Number(this.#draft.cifPrice || 0);
+        const margenBruto = Number.isFinite(cifPrice - fobPrice) ? cifPrice - fobPrice : 0;
+        const margenNeto = this.#fleteJustoCalculado > 0 ? margenBruto - this.#fleteJustoCalculado : 0;
+        return Object.freeze({
+            precioFOB: this.#draft.fobPrice,
+            precioCIF: this.#draft.cifPrice,
+            margenBruto,
+            margenNeto
+        });
+    }
+
     connectedCallback() {
         this.render();
         this.shadowRoot.querySelectorAll('[data-dual-input]').forEach((input) => {
             input.addEventListener('input', (event) => {
                 this.#draft[event.currentTarget.name] = event.currentTarget.value;
                 this.#renderResults();
+                if (typeof this.onSessionDraftChange === 'function') {
+                    this.onSessionDraftChange(this.sessionDraft);
+                }
             });
         });
+        this.#renderEditableInputs();
         this.#renderReadOnlyCargoInputs();
         this.#renderResults();
     }
@@ -85,6 +114,17 @@ class DualTradingCharteringView extends HTMLElement {
         Object.entries(values).forEach(([id, value]) => {
             const input = this.shadowRoot.getElementById(id);
             if (input) input.value = value;
+        });
+    }
+
+    #renderEditableInputs() {
+        const values = {
+            'dual-fob-price': this.#draft.fobPrice,
+            'dual-cif-price': this.#draft.cifPrice,
+        };
+        Object.entries(values).forEach(([id, value]) => {
+            const input = this.shadowRoot.getElementById(id);
+            if (input && input.value !== value) input.value = value;
         });
     }
 
@@ -689,7 +729,7 @@ class DualTradingCharteringView extends HTMLElement {
                             <label>
                                 Precio FOB · Compra mercancía
                                 <span class="input-wrap">
-                                    <input data-dual-input name="fobPrice" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" aria-label="Precio FOB de compra de mercancía">
+                                    <input id="dual-fob-price" data-dual-input name="fobPrice" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" aria-label="Precio FOB de compra de mercancía">
                                     <span class="unit">USD / TM</span>
                                 </span>
                             </label>
@@ -697,7 +737,7 @@ class DualTradingCharteringView extends HTMLElement {
                             <label>
                                 Precio CIF · Venta mercancía
                                 <span class="input-wrap">
-                                    <input data-dual-input name="cifPrice" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" aria-label="Precio CIF de venta de mercancía">
+                                    <input id="dual-cif-price" data-dual-input name="cifPrice" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" aria-label="Precio CIF de venta de mercancía">
                                     <span class="unit">USD / TM</span>
                                 </span>
                             </label>

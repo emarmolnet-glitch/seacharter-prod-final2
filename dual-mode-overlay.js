@@ -232,6 +232,10 @@ async function openDualModeOverlay(event, readOnlyStateSource = null) {
             dualView.toneladasTotales = snapshot.toneladasTotales;
             dualView.factorDeEstiba = snapshot.factorDeEstiba;
             dualView.toleranciaCarga = snapshot.toleranciaCarga;
+            dualView.sessionDraft = snapshot.sessionDraft;
+        };
+        dualView.onSessionDraftChange = (dualState) => {
+            readOnlyStateSource?.updateDualState?.(dualState);
         };
         const initialSnapshot = typeof readOnlyStateSource?.getSnapshot === 'function'
             ? readOnlyStateSource.getSnapshot()
