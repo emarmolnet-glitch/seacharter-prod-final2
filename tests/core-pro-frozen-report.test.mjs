@@ -70,8 +70,8 @@ test("the globe suppresses invalid ballast destination labels", () => {
 
 test("the matching engine completes local validation without transmitting the fleet", () => {
   assert.match(coreProSource, /const matches = deduplicatedMatches;[\s\S]*window\.lastMatchingEngineResults = matches;/);
-  assert.match(coreProSource, /Validación visual local completada para \$\{arrayDeBuquesEncontrados\.length\} buques; no se transmitió la flota a Data Bridge/);
-  assert.match(coreProSource, /dataBridgeSynced: false/);
+  assert.match(coreProSource, /Validación local completada para \$\{arrayDeBuquesEncontrados\.length\} buques desde vessels_master/);
+  assert.doesNotMatch(coreProSource, /dataBridgeSynced: false/);
   assert.match(coreProSource, /pol: \{ lat: pol\.lat, lon: pol\.lon \}/);
   assert.match(coreProSource, /pod: \{ lat: pod\.lat, lon: pod\.lon \}/);
   assert.match(coreProSource, /const laycan = coreProMatchingRouteContext\?\.laycan \|\| routeReadiness\.laycan/);
@@ -79,8 +79,8 @@ test("the matching engine completes local validation without transmitting the fl
   assert.match(coreProSource, /window\.addEventListener\('SEA_ROUTE_DEFINED'/);
   assert.match(coreProSource, /function parseStrictRouteCoordinate\(value\)[\s\S]*typeof value === 'string' && value\.trim\(\) === ''[\s\S]*coreProMatchingRouteContext = \{[\s\S]*lat: parseStrictRouteCoordinate\(lat\?\.pol\)[\s\S]*lon: parseStrictRouteCoordinate\(lon\?\.pod\)[\s\S]*window\.coreProMatchingRouteContext = coreProMatchingRouteContext/);
   assert.match(coreProSource, /id="matching-route-sync-panel"/);
-  assert.match(coreProSource, /id="matching-route-status-text"[^>]*>Pendiente ➔ Pendiente/);
-  assert.match(coreProSource, /id="matching-laycan-status-text"[^>]*>Pendiente/);
+  assert.match(coreProSource, /id="matching-route-status-text"[^>]*>Inactivo/);
+  assert.match(coreProSource, /id="matching-laycan-status-text"[^>]*>Inactivo/);
   assert.match(coreProSource, /<strong>Ruta Sincronizada<\/strong>/);
   assert.match(coreProSource, /<strong>Laycan<\/strong>/);
   assert.match(coreProSource, /updateSequentialTelemetryBlock\([\s\S]*'matching-route-status-block',[\s\S]*`\$\{pol \|\| 'Pendiente'\} ➔ \$\{pod \|\| 'Pendiente'\}`/);
@@ -99,11 +99,11 @@ test("the matching engine completes local validation without transmitting the fl
   assert.match(coreProSource, /coreProMatchingRouteContext\?\.laycan \|\| routeReadiness\.laycan/);
   assert.match(coreProSource, /new CustomEvent\('SEA_ROUTE_DEFINED', \{ detail: \{ pol, pod, laycan, lat, lon \} \}\)/);
 
-  const engineFetchIndex = coreProSource.indexOf('requestAiAisFilter(payload)');
-  const engineStateIndex = coreProSource.indexOf("window.lastMatchingEngineResults = matches", engineFetchIndex);
+  const engineQueryIndex = coreProSource.indexOf("requestMatchingLocal('execute', [], payload)");
+  const engineStateIndex = coreProSource.indexOf("window.lastMatchingEngineResults = matches", engineQueryIndex);
   const completionIndex = coreProSource.indexOf("new CustomEvent('MATCHING_EXECUTION_SUCCESS'", engineStateIndex);
   const matchingFlowSource = coreProSource.slice(engineStateIndex, completionIndex);
-  assert.ok(engineFetchIndex >= 0 && engineStateIndex > engineFetchIndex && completionIndex > engineStateIndex);
+  assert.ok(engineQueryIndex >= 0 && engineStateIndex > engineQueryIndex && completionIndex > engineStateIndex);
   assert.doesNotMatch(matchingFlowSource, /syncCoreProMatchingReport\(|fetch\('/);
 });
 

@@ -316,7 +316,7 @@ test('valid clicks synchronize the complete global fleet before core execution',
   assert.equal(windowMock.GlobalStore.matchingSelection.vessels[0], fleet[0]);
   assert.equal(resultsList.dataset.executionFleetCount, '750');
   assert.equal(integrityBanner.dataset.executionFleetCount, '750');
-  assert.match(source, /los \$\{radarSnapshot\.vessels\.length\} buques visibles en el mapa fueron evaluados por el Motor/);
+  assert.match(source, /Integridad local verificada:[\s\S]*coincidencias calculadas directamente desde vessels_master/);
 });
 
 test('cache hydration remains distinct from a successful matching execution', () => {

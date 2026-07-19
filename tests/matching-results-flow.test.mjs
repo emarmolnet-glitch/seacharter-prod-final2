@@ -4,6 +4,8 @@ import test from 'node:test';
 
 const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const aiFilterSource = readFileSync(new URL('../netlify/functions/ai-ais-filter.ts', import.meta.url), 'utf8');
+const localMatchingSource = readFileSync(new URL('../netlify/functions/matching-local.ts', import.meta.url), 'utf8');
+const vesselsMasterSource = readFileSync(new URL('../db/vessels-master.ts', import.meta.url), 'utf8');
 const frozenReportSource = readFileSync(new URL('../netlify/functions/core-pro-frozen-report.ts', import.meta.url), 'utf8');
 
 test('matching response arrays map directly into component state', () => {
@@ -18,16 +20,17 @@ test('classified fleet remains local after visual validation', () => {
   const badgeIndex = indexSource.indexOf('resultsBadge.innerText = `${matches.length}', stateIndex);
   const completionIndex = indexSource.indexOf("new CustomEvent('MATCHING_EXECUTION_SUCCESS'", stateIndex);
   assert.ok(stateIndex >= 0 && badgeIndex > stateIndex && completionIndex > badgeIndex);
-  assert.match(indexSource, /Validación visual local completada para \$\{arrayDeBuquesEncontrados\.length\} buques; no se transmitió la flota a Data Bridge/);
+  assert.match(indexSource, /Validación local completada para \$\{arrayDeBuquesEncontrados\.length\} buques desde vessels_master/);
   assert.doesNotMatch(indexSource.slice(stateIndex, completionIndex), /syncCoreProMatchingReport\(|fetch\('/);
   assert.doesNotMatch(indexSource, /const aisSearchInput = document\.getElementById\('ais-vessel-search'\)/);
 });
 
-test('matching functions expose both custom and physical compatibility routes', () => {
-  assert.match(indexSource, /const AI_AIS_FILTER_ENDPOINT = '\/api\/ai-ais-filter'/);
-  assert.match(indexSource, /const AI_AIS_FILTER_COMPATIBILITY_ENDPOINT = '\/\.netlify\/functions\/ai-ais-filter'/);
-  assert.match(indexSource, /if \(response\.status !== 404\) return \{ response, endpoint \}/);
-  assert.match(indexSource, /source: matchingRequest\.endpoint/);
+test('matching server imports database and scoring modules without an HTTP scoring hop', () => {
+  assert.match(indexSource, /requestMatchingLocal\('execute', \[\], payload\)/);
+  assert.doesNotMatch(indexSource, /requestAiAisFilter|AI_AIS_FILTER_ENDPOINT|AI_AIS_FILTER_COMPATIBILITY_ENDPOINT/);
+  assert.match(localMatchingSource, /from "\.\.\/\.\.\/db\/vessels-master\.js"/);
+  assert.match(localMatchingSource, /import runAiAisFilter from "\.\/ai-ais-filter\.js"/);
+  assert.match(vesselsMasterSource, /FROM vessels_master/);
   assert.match(aiFilterSource, /path: \["\/api\/ai-ais-filter", "\/\.netlify\/functions\/ai-ais-filter"\]/);
   assert.match(frozenReportSource, /path: \["\/api\/core-pro-frozen-report", "\/\.netlify\/functions\/core-pro-frozen-report"\]/);
 });
