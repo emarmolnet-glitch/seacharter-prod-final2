@@ -2,10 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [coreProSource, endpointSource, dataBridgeNotificationSource, healthCheckSource, iaReportsSource, sessionSyncSource, sessionSyncDatabaseSource, dataBridgeSource, corsSource, mainSource, preloadSource, netlifyConfigSource, globalFleetGlobeSource] = await Promise.all([
+const [coreProSource, endpointSource, healthCheckSource, iaReportsSource, sessionSyncSource, sessionSyncDatabaseSource, dataBridgeSource, corsSource, mainSource, preloadSource, netlifyConfigSource, globalFleetGlobeSource] = await Promise.all([
   readFile(new URL("../index.html", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/core-pro-frozen-report.ts", import.meta.url), "utf8"),
-  readFile(new URL("../netlify/functions/databridge-core-pro-sync.ts", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/verify-connection.ts", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/ia-reports.ts", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/session-sync.ts", import.meta.url), "utf8"),
@@ -69,11 +68,10 @@ test("the globe suppresses invalid ballast destination labels", () => {
   assert.match(globalFleetGlobeSource, /role === 'LASTRE'[\s\S]*!rawName[\s\S]*rawName\.toUpperCase\(\)\.includes\('TBA'\)[\s\S]*coordinates\.lat === 0 && coordinates\.lng === 0[\s\S]*return null/);
 });
 
-test("the matching engine persists evaluated vessels before reporting completion", () => {
+test("the matching engine completes local validation without transmitting the fleet", () => {
   assert.match(coreProSource, /const matches = deduplicatedMatches;[\s\S]*window\.lastMatchingEngineResults = matches;/);
-  assert.match(coreProSource, /const currentSyncId = generateSyncId\(\);[\s\S]*source: 'Core PRO',[\s\S]*syncId: currentSyncId,[\s\S]*format: 'v2',[\s\S]*vessels: matches/);
-  assert.match(coreProSource, /persistedMatchingReport = await syncCoreProMatchingReport\(persistencePayload\);/);
-  assert.match(coreProSource, /window\.currentCoreProSyncId = persistedMatchingReport\.syncId;/);
+  assert.match(coreProSource, /Validación visual local completada para \$\{arrayDeBuquesEncontrados\.length\} buques; no se transmitió la flota a Data Bridge/);
+  assert.match(coreProSource, /dataBridgeSynced: false/);
   assert.match(coreProSource, /pol: \{ lat: pol\.lat, lon: pol\.lon \}/);
   assert.match(coreProSource, /pod: \{ lat: pod\.lat, lon: pod\.lon \}/);
   assert.match(coreProSource, /const laycan = coreProMatchingRouteContext\?\.laycan \|\| routeReadiness\.laycan/);
@@ -103,18 +101,17 @@ test("the matching engine persists evaluated vessels before reporting completion
 
   const engineFetchIndex = coreProSource.indexOf('requestAiAisFilter(payload)');
   const engineStateIndex = coreProSource.indexOf("window.lastMatchingEngineResults = matches", engineFetchIndex);
-  const persistenceIndex = coreProSource.indexOf("persistedMatchingReport = await syncCoreProMatchingReport(persistencePayload)", engineStateIndex);
-  const completionIndex = coreProSource.indexOf("Auditoría completada.", persistenceIndex);
-  assert.ok(engineFetchIndex >= 0 && engineStateIndex > engineFetchIndex && persistenceIndex > engineStateIndex && completionIndex > persistenceIndex);
+  const completionIndex = coreProSource.indexOf("new CustomEvent('MATCHING_EXECUTION_SUCCESS'", engineStateIndex);
+  const matchingFlowSource = coreProSource.slice(engineStateIndex, completionIndex);
+  assert.ok(engineFetchIndex >= 0 && engineStateIndex > engineFetchIndex && completionIndex > engineStateIndex);
+  assert.doesNotMatch(matchingFlowSource, /syncCoreProMatchingReport\(|fetch\('/);
 });
 
-test("Core PRO notifies the configured Data Bridge endpoint only after the frozen report is confirmed", () => {
-  assert.match(coreProSource, /function createFlatDataBridgeFrozenReport\(persistedReport\)/);
-  assert.match(coreProSource, /type: 'fleet',[\s\S]*format: 'v2',[\s\S]*source: 'Core PRO',[\s\S]*syncId,[\s\S]*vessels/);
-  assert.match(coreProSource, /JSON\.parse\(JSON\.stringify\(\{/);
+test("Core PRO reads the configured Data Bridge endpoint after a manual frozen report", () => {
+  assert.match(coreProSource, /async function requestDataBridgeReadSync\(syncId = ''\)/);
   assert.match(coreProSource, /async function notifyDataBridgeFrozenReportCommitted\(persistedReport\)/);
-  assert.match(coreProSource, /fetch\('\/api\/databridge-core-pro-sync', \{[\s\S]*method: 'POST'/);
-  assert.match(coreProSource, /body: JSON\.stringify\(flatReport\)/);
+  assert.match(coreProSource, /fetch\('\/api\/databridge-core-pro-sync', \{[\s\S]*method: 'GET'/);
+  assert.doesNotMatch(coreProSource.slice(coreProSource.indexOf('async function requestDataBridgeReadSync'), coreProSource.indexOf('window.requestDataBridgeReadSync')), /body:|JSON\.stringify|vessels/);
 
   const persistenceFetchIndex = coreProSource.indexOf("fetch('/api/core-pro-frozen-report'");
   const persistenceStatusIndex = coreProSource.indexOf("if (response.status !== 200)", persistenceFetchIndex);
@@ -129,18 +126,7 @@ test("Core PRO notifies the configured Data Bridge endpoint only after the froze
       && localSignalIndex > dataBridgeNotificationIndex,
   );
 
-  assert.match(dataBridgeNotificationSource, /DATA_BRIDGE_CORE_PRO_SYNC_URL/);
-  assert.match(dataBridgeNotificationSource, /DATA_BRIDGE_RECEIVE_CORE_DATA_URL/);
-  assert.match(dataBridgeNotificationSource, /DATA_BRIDGE_API_URL/);
-  assert.match(dataBridgeNotificationSource, /DATA_BRIDGE_CORE_PRO_SYNC_PATH/);
-  assert.match(dataBridgeNotificationSource, /\|\| "\/api\/receive-core-data"/);
-  assert.match(dataBridgeNotificationSource, /headers\.set\("authorization", `Bearer \$\{authorizationToken\}`\)/);
-  assert.match(dataBridgeNotificationSource, /headers\.set\("x-api-key", forwardedApiKey\)/);
-  assert.match(dataBridgeNotificationSource, /headers\.set\("x-session-token", forwardedSessionToken\)/);
-  assert.match(dataBridgeNotificationSource, /const requestBody = JSON\.stringify\(report\)/);
-  assert.match(dataBridgeNotificationSource, /postReportPreservingMethod\(endpoint, requestHeaders, requestBody\)/);
-  assert.match(dataBridgeNotificationSource, /path: \["\/api\/databridge-core-pro-sync", "\/\.netlify\/functions\/databridge-core-pro-sync"\]/);
-  assert.doesNotMatch(dataBridgeNotificationSource, /calm-shortbread|netlify\.app/);
+  assert.match(netlifyConfigSource, /from = "\/api\/databridge-core-pro-sync"[\s\S]*status = 200[\s\S]*force = true/);
 });
 
 test("the backend preserves and returns the complete vessel array", () => {

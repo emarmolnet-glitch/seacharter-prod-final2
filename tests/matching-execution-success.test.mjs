@@ -24,9 +24,12 @@ test('successful matching dispatches the visual event and empty runs clear the s
   assert.match(source, /window\.addEventListener\('MATCHING_EXECUTION_SUCCESS'/);
 });
 
-test('frozen report notification sends a circular-safe flat fleet payload', () => {
-  assert.match(source, /function createFlatDataBridgeFrozenReport\(persistedReport\)/);
-  assert.match(source, /const vessels = cleanDataBridgeVesselsPayload\(flattenedSources\)/);
-  assert.match(source, /return JSON\.parse\(JSON\.stringify\(\{[\s\S]*type: 'fleet',[\s\S]*vessel_count: vessels\.length,[\s\S]*vessels/);
-  assert.match(source, /body: JSON\.stringify\(flatReport\)/);
+test('Data Bridge synchronization performs a payload-free read request', () => {
+  const helperStart = source.indexOf('async function requestDataBridgeReadSync');
+  const helperEnd = source.indexOf('window.requestDataBridgeReadSync', helperStart);
+  const helperSource = source.slice(helperStart, helperEnd);
+  assert.match(helperSource, /fetch\('\/api\/databridge-core-pro-sync', \{/);
+  assert.match(helperSource, /method: 'GET'/);
+  assert.doesNotMatch(helperSource, /body:|JSON\.stringify|vessels/);
+  assert.match(helperSource, /const visualSyncSucceeded = response\.status === 200/);
 });

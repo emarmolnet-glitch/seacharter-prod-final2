@@ -4,10 +4,10 @@ import test from 'node:test';
 
 const schemaSource = readFileSync(new URL('../db/schema.ts', import.meta.url), 'utf8');
 const receiverSource = readFileSync(new URL('../netlify/functions/receive-vessels.ts', import.meta.url), 'utf8');
-const proxySource = readFileSync(new URL('../netlify/functions/databridge-core-pro-sync.ts', import.meta.url), 'utf8');
 const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const netlifyConfigSource = readFileSync(new URL('../netlify.toml', import.meta.url), 'utf8');
 const migrationSource = readFileSync(
-  new URL('../netlify/database/migrations/20260719120000_add_vessels_master_coordinates/migration.sql', import.meta.url),
+  new URL('../netlify/database/migrations/20260719120000_add_vessels_master_latitude_longitude_constraints/migration.sql', import.meta.url),
   'utf8',
 );
 
@@ -49,20 +49,21 @@ test('receiver verifies database columns before executing vessel inserts', () =>
   assert.match(receiverSource, /vessel\.imoNumber, vessel\.vesselName, vessel\.dwt, vessel\.mmsi, vessel\.latitude, vessel\.longitude,[\s\S]*vessel\.vesselType/);
 });
 
-test('flat Data Bridge payload preserves valid coordinates end to end', () => {
+test('local flat report preserves valid coordinates without sending them to Data Bridge', () => {
   assert.match(indexSource, /latitude: ais\.latitude \?\? ais\.lat \?\? source\.latitude \?\? source\.lat/);
   assert.match(indexSource, /longitude: ais\.longitude \?\? ais\.lon \?\? ais\.lng \?\? source\.longitude/);
   assert.match(indexSource, /latitude: getStrictVesselNumber\(source, \['latitude', 'lat', 'Latitude', 'AIS_Live_Lat'\], null\)/);
-  assert.match(proxySource, /const latitude = readNumber\(source, "latitude", Number\.NaN\)/);
-  assert.match(proxySource, /const longitude = readNumber\(source, "longitude", Number\.NaN\)/);
-  assert.match(proxySource, /if \(!Number\.isFinite\(latitude\) \|\| latitude < -90 \|\| latitude > 90\) return null/);
-  assert.match(proxySource, /vessel_name:[\s\S]*dwt:[\s\S]*latitude,[\s\S]*longitude,/);
+  const readSyncStart = indexSource.indexOf('async function requestDataBridgeReadSync');
+  const readSyncEnd = indexSource.indexOf('window.requestDataBridgeReadSync', readSyncStart);
+  assert.doesNotMatch(indexSource.slice(readSyncStart, readSyncEnd), /body:|JSON\.stringify|vessels/);
+  assert.match(netlifyConfigSource, /from = "\/api\/databridge-core-pro-sync"/);
 });
 
-test('matching success event remains bound to the result array after persistence', () => {
-  const persistenceIndex = indexSource.indexOf('persistedMatchingReport = await syncCoreProMatchingReport(persistencePayload)');
-  const successEventIndex = indexSource.indexOf("new CustomEvent('MATCHING_EXECUTION_SUCCESS'", persistenceIndex);
-  assert.ok(persistenceIndex >= 0 && successEventIndex > persistenceIndex);
+test('matching success event remains bound to the local result array', () => {
+  const matchingStateIndex = indexSource.indexOf('window.matchingResultsState =');
+  const successEventIndex = indexSource.indexOf("new CustomEvent('MATCHING_EXECUTION_SUCCESS'", matchingStateIndex);
+  assert.ok(matchingStateIndex >= 0 && successEventIndex > matchingStateIndex);
   assert.match(indexSource, /matches: window\.matchingResultsState\?\.vessels \|\| matches/);
-  assert.match(indexSource, /stick\.classList\.toggle\('hidden', vessels\.length === 0\)/);
+  assert.match(indexSource, /dataBridgeSynced: false/);
+  assert.match(indexSource, /updateSequentialTelemetryBlock\([\s\S]*'matching-execution-success-stick',[\s\S]*vessels\.length > 0 \? 'success' : 'pending'/);
 });

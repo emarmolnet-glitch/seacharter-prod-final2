@@ -13,12 +13,13 @@ test('matching response arrays map directly into component state', () => {
   assert.match(indexSource, /resultsBadge\.innerText = `\$\{matches\.length\} Buque/);
 });
 
-test('classified fleet renders before optional Data Bridge persistence', () => {
+test('classified fleet remains local after visual validation', () => {
   const stateIndex = indexSource.indexOf('window.matchingResultsState =');
   const badgeIndex = indexSource.indexOf('resultsBadge.innerText = `${matches.length}', stateIndex);
-  const persistenceIndex = indexSource.indexOf('persistedMatchingReport = await syncCoreProMatchingReport', stateIndex);
-  assert.ok(stateIndex >= 0 && badgeIndex > stateIndex && persistenceIndex > badgeIndex);
-  assert.match(indexSource, /Resultados renderizados; la persistencia secundaria falló/);
+  const completionIndex = indexSource.indexOf("new CustomEvent('MATCHING_EXECUTION_SUCCESS'", stateIndex);
+  assert.ok(stateIndex >= 0 && badgeIndex > stateIndex && completionIndex > badgeIndex);
+  assert.match(indexSource, /Validación visual local completada para \$\{arrayDeBuquesEncontrados\.length\} buques; no se transmitió la flota a Data Bridge/);
+  assert.doesNotMatch(indexSource.slice(stateIndex, completionIndex), /syncCoreProMatchingReport\(|fetch\('/);
   assert.doesNotMatch(indexSource, /const aisSearchInput = document\.getElementById\('ais-vessel-search'\)/);
 });
 
