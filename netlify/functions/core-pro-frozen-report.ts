@@ -177,5 +177,5 @@ export default async (req: Request) => {
 };
 
 export const config: Config = {
-  path: "/api/core-pro-frozen-report",
+  path: ["/api/core-pro-frozen-report", "/.netlify/functions/core-pro-frozen-report"],
 };

@@ -590,16 +590,19 @@ test('live vessel endpoint rejects unbounded requests and persists only strict t
   assert.match(getVesselsFunctionSource, /forceLive \? acceptedLiveVessels/);
 });
 
-test('radar taxonomy selector supports multiple choices and a saved preset', () => {
+test('radar taxonomy selector exposes only four saved macro-categories', () => {
   assert.match(indexSource, /id="fleet-intel-taxonomy-options"/);
   assert.match(indexSource, /Guardar selección actual/);
   assert.match(indexSource, /ais_taxonomy_preset_v1/);
   assert.match(indexSource, /background: #FFFFFF !important/);
   assert.match(indexSource, /#fleet-intel-taxonomy-menu \{[\s\S]*?z-index: 9999 !important/);
-  assert.match(indexSource, /<optgroup label="CARGO">[\s\S]*?<option value="category:cargo">All Cargo<\/option>[\s\S]*?<option value="type:bulk">Bulk Carrier<\/option>[\s\S]*?<option value="type:general">General Cargo<\/option>[\s\S]*?<option value="type:container">Container Ship<\/option>[\s\S]*?<option value="type:cement">Cement Carrier<\/option>[\s\S]*?<option value="type:mpv">Multipurpose \/ MPP<\/option>[\s\S]*?<option value="type:heavy_lift">Heavy Lift<\/option>[\s\S]*?<\/optgroup>/);
-  assert.match(indexSource, /<optgroup label="TANKERS">[\s\S]*?<option value="category:tanker">All Tankers<\/option>[\s\S]*?<option value="type:crude_tanker">Crude Oil Tanker<\/option>[\s\S]*?<option value="type:lng_tanker">LNG Tanker<\/option>[\s\S]*?<option value="type:chemical_tanker">Chemical Tanker<\/option>[\s\S]*?<option value="type:product_tanker">Product Tanker<\/option>[\s\S]*?<option value="type:lpg_tanker">LPG Tanker<\/option>[\s\S]*?<\/optgroup>/);
-  assert.match(indexSource, /<optgroup label="PASSENGER">[\s\S]*?<option value="category:passenger">All Passenger<\/option>[\s\S]*?<option value="type:passenger">Passenger Ship<\/option>[\s\S]*?<option value="type:cruise">Cruise Ship<\/option>[\s\S]*?<option value="type:ferry">Ferry \/ RoPax<\/option>[\s\S]*?<\/optgroup>/);
-  assert.match(indexSource, /<optgroup label="OTHER">[\s\S]*?<option value="category:other">All Other<\/option>[\s\S]*?<option value="type:offshore">Offshore<\/option>[\s\S]*?<option value="type:tug">Tug \/ Support<\/option>[\s\S]*?<option value="type:fishing">Fishing<\/option>[\s\S]*?<\/optgroup>/);
+
+  const selectorStart = indexSource.indexOf('<select id="fleet-intel-vessel-type"');
+  const selectorEnd = indexSource.indexOf('</select>', selectorStart);
+  const selectorSource = indexSource.slice(selectorStart, selectorEnd);
+  assert.match(selectorSource, /<optgroup label="MACRO-CATEGORÍAS">[\s\S]*?<option value="category:cargo">Cargo<\/option>[\s\S]*?<option value="category:tanker">Tankers<\/option>[\s\S]*?<option value="category:passenger">Passengers<\/option>[\s\S]*?<option value="category:other">Others<\/option>/);
+  assert.equal((selectorSource.match(/<option /g) || []).length, 4);
+  assert.doesNotMatch(selectorSource, /value="type:/);
   assert.match(indexSource, /fleet-taxonomy-section-title/);
   assert.doesNotMatch(indexSource, /id="fleet-intel-listing-url"/);
   assert.doesNotMatch(indexSource, /id="btn-fleet-intel-capture"/);
@@ -608,11 +611,22 @@ test('radar taxonomy selector supports multiple choices and a saved preset', () 
   assert.match(indexSource, /params\.set\('taxonomyMode', 'strict'\)/);
 });
 
+test('macro-categories retain broad in-memory subtype grouping', () => {
+  assert.match(indexSource, /'category:cargo': \['bulk', 'general', 'container', 'cement', 'mpv', 'heavy_lift'\]/);
+  assert.match(indexSource, /'category:tanker': \['crude_tanker', 'lng_tanker', 'chemical_tanker', 'product_tanker', 'lpg_tanker'\]/);
+  assert.match(indexSource, /'category:passenger': \['passenger', 'cruise', 'ferry'\]/);
+  assert.match(indexSource, /'category:other': \['offshore', 'tug', 'fishing'\]/);
+  assert.match(indexSource, /if \(normalizedCategory\.startsWith\('category:'\)\) \{[\s\S]*return source\.filter\(vessel => matchesFleetTaxonomyCategory\(vessel, normalizedCategory\)\)/);
+  assert.match(indexSource, /shipTypeCode >= 70 && shipTypeCode <= 79/);
+  assert.match(indexSource, /shipTypeCode >= 80 && shipTypeCode <= 89/);
+  assert.match(indexSource, /shipTypeCode >= 60 && shipTypeCode <= 69/);
+});
+
 test('fleet density and POL counters render positive ship type breakdowns from their exact arrays', () => {
   assert.match(indexSource, /id="ais-density-taxonomy-breakdown"/);
   assert.match(indexSource, /id="ais-pol-taxonomy-breakdown"/);
   assert.match(indexSource, /window\.groupAisVesselsByTaxonomy = function\(vessels\)/);
-  assert.match(indexSource, /\.filter\(\(\[, count\]\) => count > 0\)/);
+  assert.match(indexSource, /return \[\{ label: selectedLabels\.join\(' \+ '\), count: list\.length \}\]/);
   assert.match(indexSource, /window\.renderFilteredAisCounters\(primaryVisibleVessels\)/);
   assert.match(indexSource, /'ais-pol-taxonomy-breakdown',[\s\S]*?isAisWaitingForHydration \? \[\] : nearbyVessels/);
   assert.match(indexSource, /const breakdownTotal = groups\.reduce\(\(sum, group\) => sum \+ group\.count, 0\)/);
@@ -675,10 +689,12 @@ test('taxonomy breakdown renderer produces visible totals for simulated fleet an
     { shipType: 'Handysize Bulk Carrier' },
     { vessel_type: 'Cement Carrier' },
     { ShipType: 'Multipurpose / MPP' },
-    { ship_type: 'LNG Tanker' },
-    { ship_type: 'Research vessel' }
+    { ship_type: 'General Cargo' },
+    { ship_type: 'Container Ship' }
   ];
   const windowMock = {
+    getSelectedFleetTaxonomies: () => ['category:cargo'],
+    getUnifiedMacroMatchingVessels: vessels => Array.isArray(vessels) ? vessels.filter(Boolean) : [],
     GlobalStore: {
       filteredVesselsInitialized: true,
       getFilteredVessels: () => totalVessels,
@@ -698,14 +714,14 @@ test('taxonomy breakdown renderer produces visible totals for simulated fleet an
     () => {},
   );
   const groups = windowMock.groupAisVesselsByTaxonomy(totalVessels);
-  assert.equal(groups.reduce((sum, group) => sum + group.count, 0), 6);
-  assert.deepEqual(groups.find(group => group.label === 'Bulk Carrier'), { label: 'Bulk Carrier', count: 2 });
+  assert.deepEqual(groups, [{ label: 'Cargo', count: 6 }]);
   windowMock.renderAisTaxonomyBreakdown('ais-density-taxonomy-breakdown', totalVessels);
   windowMock.renderAisTaxonomyBreakdown('ais-pol-taxonomy-breakdown', totalVessels.slice(0, 3), { compact: true });
   assert.equal(densityBreakdown.dataset.total, '6');
   assert.equal(polBreakdown.dataset.total, '3');
-  assert.match(densityBreakdown.textContent, /Bulk Carrier: 2/);
-  assert.match(polBreakdown.textContent, /Bulk: 2/);
+  assert.match(densityBreakdown.textContent, /Cargo: 6/);
+  assert.match(polBreakdown.textContent, /Cargo: 3/);
+  assert.doesNotMatch(densityBreakdown.textContent, /Bulk|Cement|General|Container/);
 });
 
 test('filter endpoint reads the exact vesselType parameter and matches audit response shape', () => {

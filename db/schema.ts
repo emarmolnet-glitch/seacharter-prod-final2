@@ -67,6 +67,8 @@ export const vesselsMaster = pgTable("vessels_master", {
   vesselName: text("vessel_name").notNull(),
   dwt: doublePrecision("dwt"),
   mmsi: text("mmsi"),
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
   vesselType: text("vessel_type"),
   draftMeters: doublePrecision("draft_meters"),
   flag: text("flag"),
