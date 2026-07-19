@@ -10,7 +10,7 @@ const saveHandlerSource = source.slice(saveHandlerStart, saveHandlerEnd);
 
 test('matching button starts locked until taxonomy state is committed', () => {
   assert.match(source, /id="btn-run-matching"[^>]*disabled[^>]*data-matching-ready="false"[^>]*data-ready-vessel-count="0"/);
-  assert.match(source, /matchingSelectionPending \|\| \(count === 0 && !matchingReady\)/);
+  assert.match(source, /matchingSelectionPending \|\| \(count === 0 && !hasLocalTaxonomyQuery\)/);
   assert.match(source, /Guarda los cambios de taxonomía para activar el motor/);
 });
 
@@ -47,24 +47,24 @@ test('taxonomy change redraws the AIS table from the derived filtered array', ()
   assert.match(source, /const tbody = document\.getElementById\('ais-vessels-tbody'\)[\s\S]*primaryVisibleVessels\.forEach/);
 });
 
-test('matching engine listener enables the button and publishes the ready vessel count', () => {
+test('matching engine listener enables a local database query without radar vessels', () => {
   assert.match(source, /window\.addEventListener\('READY_FOR_MATCHING', handleReadyForMatching\)/);
   assert.match(source, /const matchingVessels = Array\.isArray\(store\.matchingSelection\?\.vessels\)/);
   assert.match(source, /button\.dataset\.matchingReady = 'true'/);
   assert.match(source, /button\.dataset\.readyVesselCount = String\(vesselCount\)/);
-  assert.match(source, /resultsBadge\.innerText = `\$\{vesselCount\} Buque/);
+  assert.match(source, /resultsBadge\.innerText = 'Consulta local lista'/);
+  assert.match(source, /Consulta local directa a vessels_master/);
   assert.match(source, /resultsBadge\.dataset\.counterSource = 'ready-for-matching'/);
 });
 
-test('matching execution consumes the unified committed array without taxonomy regrouping', () => {
-  assert.match(source, /window\.GlobalStore\?\.matchingReady === true[\s\S]*window\.GlobalStore\?\.matchingSelectionPending !== true[\s\S]*window\.GlobalStore\.selectedTaxonomies\.slice\(\)/);
-  assert.match(source, /const committedMatchingVessels = window\.GlobalStore\?\.matchingSelection\?\.vessels/);
-  assert.match(source, /vessels: JSON\.parse\(JSON\.stringify\(committedMatchingVessels\)\)/);
-  assert.match(source, /radarSnapshot: radarSnapshot\.vessels/);
-  const captureStart = source.indexOf('const captureRadarSnapshotForFleetMatching');
-  const captureEnd = source.indexOf('const btn = document.getElementById', captureStart);
-  assert.doesNotMatch(source.slice(captureStart, captureEnd), /groupAisVesselsByTaxonomy|getAisMacroTaxonomyLabel/);
-  assert.match(source, /source: 'global_matching_commit'/);
+test('matching execution sends query criteria instead of a committed radar array', () => {
+  const executionStart = source.indexOf('async function executeMatchingEngine');
+  const executionEnd = source.indexOf('function getMatchingExecutionRouteOverride', executionStart);
+  const executionSource = source.slice(executionStart, executionEnd);
+  assert.match(executionSource, /Array\.isArray\(window\.GlobalStore\?\.selectedTaxonomies\)/);
+  assert.match(executionSource, /value: selectedVesselTaxonomy/);
+  assert.match(executionSource, /requestMatchingLocal\('execute', \[\], payload\)/);
+  assert.doesNotMatch(executionSource, /matchingSelection\?\.vessels|radarSnapshot/);
 });
 
 test('successful state commit confirms activation with the requested toast', () => {

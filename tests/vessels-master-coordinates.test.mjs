@@ -64,6 +64,6 @@ test('matching success event remains bound to the local result array', () => {
   const successEventIndex = indexSource.indexOf("new CustomEvent('MATCHING_EXECUTION_SUCCESS'", matchingStateIndex);
   assert.ok(matchingStateIndex >= 0 && successEventIndex > matchingStateIndex);
   assert.match(indexSource, /matches: window\.matchingResultsState\?\.vessels \|\| matches/);
-  assert.match(indexSource, /dataBridgeSynced: false/);
+  assert.match(indexSource, /window\.lastLocalMatchingAuditVessels = arrayDeBuquesEncontrados/);
   assert.match(indexSource, /updateSequentialTelemetryBlock\([\s\S]*'matching-execution-success-stick',[\s\S]*vessels\.length > 0 \? 'success' : 'pending'/);
 });

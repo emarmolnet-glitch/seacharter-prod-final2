@@ -1,11 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from "https://esm.sh/react@18.3.1";
+import React from "https://esm.sh/react@18.3.1";
 import { createRoot } from "https://esm.sh/react-dom@18.3.1/client";
 
-const VERIFY_ENDPOINT = "/api/verify-connection";
-const POLLING_INTERVAL_MS = 30000;
-const REQUEST_TIMEOUT_MS = 8000;
-
 const STATUS_CONFIG = {
+  inactive: {
+    label: "Inactivo",
+    state: "inactive",
+    icon: "fa-solid fa-circle-pause",
+    bridgeTitle: "Data Bridge inactivo",
+  },
   secure: {
     label: "Secure Connection",
     state: "secure",
@@ -27,48 +29,7 @@ const STATUS_CONFIG = {
 };
 
 export function ConnectionStatusBar() {
-  const [status, setStatus] = useState("disconnected");
-
-  const config = useMemo(() => STATUS_CONFIG[status] || STATUS_CONFIG.disconnected, [status]);
-
-  const verifyConnection = useCallback(async () => {
-    const token = String(
-      import.meta.env?.VITE_DATA_BRIDGE_API_SECRET ||
-        window.localStorage?.getItem("seacharter_databridge_api_secret") ||
-        "",
-    ).trim();
-    const requestHeaders = { Accept: "application/json" };
-    if (token) requestHeaders.Authorization = `Bearer ${token}`;
-
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-    try {
-      const response = await fetch(VERIFY_ENDPOINT, {
-        method: "POST",
-        headers: requestHeaders,
-        signal: controller.signal,
-      });
-
-      if (response.status === 200) {
-        setStatus("secure");
-      } else if (response.status === 401) {
-        setStatus("unauthorized");
-      } else {
-        setStatus("disconnected");
-      }
-    } catch {
-      setStatus("disconnected");
-    } finally {
-      window.clearTimeout(timeoutId);
-    }
-  }, []);
-
-  useEffect(() => {
-    verifyConnection();
-    const intervalId = window.setInterval(verifyConnection, POLLING_INTERVAL_MS);
-    return () => window.clearInterval(intervalId);
-  }, [verifyConnection]);
+  const config = STATUS_CONFIG.inactive;
 
   return (
     React.createElement(

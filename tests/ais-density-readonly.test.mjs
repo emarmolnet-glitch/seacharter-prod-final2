@@ -257,11 +257,14 @@ test('audit endpoint returns the database error message for diagnostics', () => 
   assert.match(auditFunctionSource, /error: errorMessage/);
 });
 
-test('read-only refresh button performs a GET instead of blocking the click', () => {
-  assert.match(indexSource, /if \(window\.aisDensityReadOnly \|\| window\.matchingAuditModeState\?\.enabled\) \{[\s\S]*?return window\.executeReadOnlyAisRefresh\(\)/);
-  assert.match(indexSource, /loadValidatedAisDensityVessels\(\{[\s\S]*?throwOnError: true,[\s\S]*?selectedTaxonomy[\s\S]*?\}\)/);
-  assert.doesNotMatch(indexSource, /Mapa de Densidad está bloqueado en modo de solo lectura/);
-  assert.doesNotMatch(indexSource, /querySelectorAll\('#btn-refresh-ais, #btn-search-closest-vessels, #btn-freeze-radar'\)/);
+test('external radar sweep only runs from the explicit manual command', () => {
+  assert.match(indexSource, /const MANUAL_EXTERNAL_RADAR_SWEEP_TOKEN = Symbol\('manual-external-radar-sweep'\)/);
+  assert.match(indexSource, /if \(executionToken !== MANUAL_EXTERNAL_RADAR_SWEEP_TOKEN\) return false/);
+  assert.match(indexSource, /window\.ejecutarBarridoManual = async function\(event = null\)/);
+  assert.match(indexSource, /return window\.executeSweepAIS\(MANUAL_EXTERNAL_RADAR_SWEEP_TOKEN\)/);
+  assert.match(indexSource, /refreshAisBtn\.addEventListener\('click', window\.ejecutarBarridoManual\)/);
+  assert.match(indexSource, /window\.externalRadarSweepState\.activated = true/);
+  assert.doesNotMatch(indexSource, /if \(window\.aisDensityReadOnly \|\| window\.matchingAuditModeState\?\.enabled\) \{[\s\S]*?return window\.executeReadOnlyAisRefresh\(\)/);
 });
 
 test('read-only response feeds rendering, counters, and freight calculation', () => {
@@ -573,12 +576,15 @@ test('taxonomy changes reapply filters without clearing the global fleet', () =>
   assert.doesNotMatch(filterHandler, /resetAisDensityResults\(\)/);
 });
 
-test('matching consumes the exact global filtered array and reports exclusions', () => {
-  assert.match(indexSource, /source: 'global_filtered_vessels'/);
-  assert.match(indexSource, /vessels: JSON\.parse\(JSON\.stringify\(filteredStoreVessels\)\)/);
-  assert.match(indexSource, /value: 'All'/);
+test('matching queries the local master independently from the radar array', () => {
+  const executionStart = indexSource.indexOf('async function executeMatchingEngine');
+  const executionEnd = indexSource.indexOf('window.runMatchingEngine = runMatchingEngine', executionStart);
+  const executionSource = indexSource.slice(executionStart, executionEnd);
+  assert.match(executionSource, /requestMatchingLocal\('execute', \[\], payload\)/);
+  assert.match(executionSource, /value: selectedVesselTaxonomy/);
+  assert.doesNotMatch(executionSource, /captureRadarSnapshotForFleetMatching\(\)/);
   assert.match(indexSource, /matching-source-integrity/);
-  assert.match(indexSource, /Integridad de flota verificada/);
+  assert.match(indexSource, /Integridad local verificada/);
 });
 
 test('live vessel endpoint rejects unbounded requests and persists only strict taxonomy matches', () => {
