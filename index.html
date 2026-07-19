@@ -16,6 +16,7 @@
             MANUAL_RADAR: 'MANUAL-RADAR'
         });
         window.coreProOperationMode = window.CORE_PRO_OPERATION_MODES.INACTIVE;
+        window.coreProAuditNetworkLock = false;
         window.setCoreProOperationMode = function(mode) {
             const modes = window.CORE_PRO_OPERATION_MODES;
             const nextMode = Object.values(modes).includes(mode) ? mode : modes.INACTIVE;
@@ -32,10 +33,15 @@
             return nextMode;
         };
         window.isCoreProBlockedNetworkRequest = function(input) {
-            if (window.coreProOperationMode !== window.CORE_PRO_OPERATION_MODES.LOCAL_ONLY) return false;
             try {
                 const requestUrl = typeof input === 'string' ? input : input?.url;
                 const url = new URL(requestUrl, window.location.href);
+                if (window.coreProAuditNetworkLock) {
+                    const isNeonAuditQuery = url.origin === window.location.origin
+                        && /^\/(?:api\/matching-local|\.netlify\/functions\/matching-local)\/?$/i.test(url.pathname);
+                    return !isNeonAuditQuery;
+                }
+                if (window.coreProOperationMode !== window.CORE_PRO_OPERATION_MODES.LOCAL_ONLY) return false;
                 return /^\/(?:api|\.netlify\/functions)\/databridge-/i.test(url.pathname)
                     || /^\/api\/verify-connection\/?$/i.test(url.pathname)
                     || /^\/(?:api|\.netlify\/functions)\/trigger-ais-sweep\/?$/i.test(url.pathname);
@@ -16598,7 +16604,7 @@
             loading: false,
             vessels: [],
             loadedAt: null,
-            suggestions: []
+            previousOperationMode: null
         }, window.matchingAuditModeState || {});
 
         window.matchingLocalState = Object.assign({
@@ -16635,36 +16641,34 @@
                 .replace(/'/g, '&#039;');
         }
 
-        function renderMatchingAuditSuggestions(groups) {
+        function renderMatchingAuditVessels(vessels) {
             const container = document.getElementById('matching-audit-suggestions');
             if (!container) return;
-            const suggestionGroups = Array.isArray(groups) ? groups : [];
-            if (suggestionGroups.length === 0) {
+            const auditVessels = Array.isArray(vessels) ? vessels : [];
+            if (auditVessels.length === 0) {
                 container.classList.remove('hidden');
                 container.innerHTML = '<div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-500">No hay registros Desconocidos pendientes de auditoría.</div>';
                 return;
             }
             container.classList.remove('hidden');
-            container.innerHTML = suggestionGroups.map((group) => {
-                const candidate = group?.candidate || {};
-                const suggestions = Array.isArray(group?.suggestions) ? group.suggestions : [];
-                const suggestionHtml = suggestions.length > 0
-                    ? suggestions.map((suggestion) => {
-                        const vessel = suggestion?.vessel || {};
-                        return `<li class="rounded border border-amber-200 bg-white px-2 py-1.5">
-                            <div class="flex items-center justify-between gap-2">
-                                <strong class="text-slate-700">${escapeLocalAuditHtml(vessel.vesselName || 'Sin nombre')}</strong>
-                                <span class="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-black text-amber-800">${Number(suggestion.score) || 0}%</span>
-                            </div>
-                            <p class="mt-1 text-[10px] text-slate-500">IMO ${escapeLocalAuditHtml(vessel.imo || 'N/A')} · DWT ${escapeLocalAuditHtml(vessel.dwt || 'N/A')} · ${escapeLocalAuditHtml(vessel.vesselType || 'Sin tipo')}</p>
-                            <p class="mt-1 text-[10px] font-semibold text-amber-800">Sugerencia de solo lectura · requiere confirmación fuera de este flujo para cualquier escritura.</p>
-                        </li>`;
-                    }).join('')
-                    : '<li class="rounded border border-slate-200 bg-white px-2 py-1.5 text-[10px] text-slate-500">Sin sugerencias compatibles por DWT o tipo.</li>';
+            container.innerHTML = auditVessels.map((vessel) => {
+                const auditStatus = vessel?.audit_status || vessel?.status || 'PENDING';
+                const vesselName = vessel?.vessel_name == null || String(vessel.vessel_name).trim() === ''
+                    ? 'Buque sin identificar'
+                    : vessel.vessel_name;
+                const imoDisplay = vessel?.imo_number == null || String(vessel.imo_number).trim() === ''
+                    ? 'IMO Pendiente'
+                    : `IMO ${vessel.imo_number}`;
+                const dwtDisplay = vessel?.dwt == null || String(vessel.dwt).trim() === ''
+                    ? 'DWT Desconocido'
+                    : `DWT ${vessel.dwt}`;
                 return `<section class="rounded-lg border border-amber-300 bg-amber-50 p-2.5">
-                    <h5 class="text-[11px] font-black text-amber-900">Desconocido: ${escapeLocalAuditHtml(candidate.vesselName || candidate.candidateId || 'Buque')}</h5>
-                    <p class="mt-0.5 text-[10px] text-amber-800">DWT ${escapeLocalAuditHtml(candidate.dwt || 'N/A')} · ${escapeLocalAuditHtml(candidate.vesselType || 'Tipo no informado')}</p>
-                    <ul class="mt-2 space-y-1.5">${suggestionHtml}</ul>
+                    <div class="flex items-center justify-between gap-2">
+                        <h5 class="text-[11px] font-black text-amber-900">${escapeLocalAuditHtml(vesselName)}</h5>
+                        <span class="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-black text-amber-800">${escapeLocalAuditHtml(auditStatus)}</span>
+                    </div>
+                    <p class="mt-1 text-[10px] text-amber-800">${escapeLocalAuditHtml(imoDisplay)} · ${escapeLocalAuditHtml(dwtDisplay)}</p>
+                    <p class="mt-1 text-[10px] font-semibold text-amber-800">Registro cargado directamente desde vessels_master · solo lectura.</p>
                 </section>`;
             }).join('');
         }
@@ -16683,12 +16687,12 @@
             }
             if (status) {
                 status.textContent = state.loading
-                    ? 'Auditando Desconocidos en vessels_master (solo lectura)…'
-                    : state.suggestions.length > 0
-                        ? `${state.suggestions.length} registro(s) Desconocido(s) auditado(s) · sin escrituras`
-                        : 'Fuente local: vessels_master · auditoría disponible solo para Desconocidos';
-                status.classList.toggle('text-amber-700', state.suggestions.length > 0);
-                status.classList.toggle('text-slate-500', state.suggestions.length === 0);
+                    ? 'Consultando estados pendientes en vessels_master (solo lectura)…'
+                    : state.enabled
+                        ? `${state.vessels.length} registro(s) pendiente(s) cargado(s) desde vessels_master`
+                        : 'Fuente local: vessels_master · auditoría disponible para Desconocidos y Pendientes';
+                status.classList.toggle('text-amber-700', state.enabled && state.vessels.length > 0);
+                status.classList.toggle('text-slate-500', !state.enabled || state.vessels.length === 0);
             }
             captureControls.forEach((control) => {
                 control.disabled = state.enabled || state.loading;
@@ -16704,26 +16708,41 @@
         async function toggleMatchingAuditMode() {
             const state = window.matchingAuditModeState;
             if (state.loading) return;
+
+            if (state.enabled) {
+                state.enabled = false;
+                state.vessels = [];
+                state.loadedAt = null;
+                window.coreProAuditNetworkLock = false;
+                window.setCoreProOperationMode?.(state.previousOperationMode || window.CORE_PRO_OPERATION_MODES?.INACTIVE || 'INACTIVE');
+                state.previousOperationMode = null;
+                renderMatchingAuditVessels([]);
+                updateMatchingAuditModeUi();
+                return;
+            }
+
+            state.previousOperationMode = window.coreProOperationMode;
+            state.enabled = true;
             state.loading = true;
+            state.vessels = [];
+            window.coreProAuditNetworkLock = true;
+            enforceLocalOnlyMatchingMode();
             updateMatchingAuditModeUi();
 
             try {
-                const unknown = Array.isArray(window.matchingLocalState?.unknown)
-                    ? window.matchingLocalState.unknown
-                    : [];
-                if (unknown.length === 0) throw new Error('No hay registros Desconocidos para auditar.');
-                const payload = await requestMatchingLocal('audit', unknown);
-                state.enabled = false;
-                state.vessels = [];
-                state.suggestions = Array.isArray(payload.suggestions) ? payload.suggestions : [];
+                const payload = await requestMatchingLocal('audit', []);
+                state.vessels = Array.isArray(payload.vessels) ? payload.vessels : [];
                 state.loadedAt = new Date().toISOString();
-                renderMatchingAuditSuggestions(state.suggestions);
-                showToast(`${state.suggestions.length} registro(s) auditado(s) en modo de solo lectura.`);
+                renderMatchingAuditVessels(state.vessels);
+                showToast(`${state.vessels.length} registro(s) pendiente(s) cargado(s) desde vessels_master.`);
             } catch (error) {
                 state.enabled = false;
                 state.vessels = [];
-                state.suggestions = [];
-                renderMatchingAuditSuggestions([]);
+                state.loadedAt = null;
+                window.coreProAuditNetworkLock = false;
+                window.setCoreProOperationMode?.(state.previousOperationMode || window.CORE_PRO_OPERATION_MODES?.INACTIVE || 'INACTIVE');
+                state.previousOperationMode = null;
+                renderMatchingAuditVessels([]);
                 showToast(`❌ ${error instanceof Error ? error.message : 'No se pudo completar la auditoría local.'}`);
             } finally {
                 state.loading = false;
@@ -17129,7 +17148,9 @@
                     unknown: [],
                     checkedAt: new Date().toISOString()
                 };
-                window.matchingAuditModeState.suggestions = [];
+                if (!window.matchingAuditModeState.enabled) {
+                    window.matchingAuditModeState.vessels = [];
+                }
                 updateMatchingAuditModeUi();
 
                 if (rawMatches.length === 0) {

@@ -18,15 +18,26 @@ export type VesselMasterRow = QueryResultRow & {
   owner_manager: string | null;
   has_gears: boolean;
   process_status: string | null;
-  source: string | null;
   source_payload: unknown;
   updated_at: Date | string;
+};
+
+export type VesselMasterAuditRow = QueryResultRow & {
+  id: unknown;
+  vessel_name: string | null;
+  imo_number: string | null;
+  vessel_type: string | null;
+  dwt: number | null;
+  status: string | null;
+  audit_status: string | null;
+  origen: string | null;
+  fecha_ultima_actualizacion: Date | string | null;
 };
 
 const VESSEL_MASTER_COLUMNS = `
   imo_number, vessel_name, dwt, mmsi, latitude, longitude, vessel_type,
   draft_meters, flag, eta, last_port, current_destination, year_built,
-  owner_manager, has_gears, process_status, source, source_payload, updated_at
+  owner_manager, has_gears, process_status, source_payload, updated_at
 `;
 
 export async function findExactVesselsMasterRows(
@@ -64,14 +75,25 @@ export async function listLocalVesselsMaster(limit = 2000) {
   return result.rows;
 }
 
-export async function listVesselsMasterAuditPool(limit = 5000) {
+export async function listVesselsMasterPendingAudit(limit = 5000) {
   const safeLimit = Math.min(5000, Math.max(1, Math.trunc(limit)));
-  const result = await getPool().query<VesselMasterRow>(
+  const result = await getPool().query<VesselMasterAuditRow>(
     `
-      SELECT ${VESSEL_MASTER_COLUMNS}
+      SELECT
+        id,
+        vessel_name,
+        imo_number,
+        vessel_type,
+        dwt,
+        status,
+        audit_status,
+        origen,
+        fecha_ultima_actualizacion
       FROM vessels_master
-      WHERE dwt IS NOT NULL OR vessel_type IS NOT NULL
-      ORDER BY updated_at DESC
+      WHERE audit_status = 'PENDING'
+        OR status = 'PENDING'
+        OR audit_status IS NULL
+      ORDER BY fecha_ultima_actualizacion DESC NULLS LAST
       LIMIT $1
     `,
     [safeLimit],

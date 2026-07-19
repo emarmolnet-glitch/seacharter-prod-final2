@@ -2,7 +2,7 @@ import type { Config } from "@netlify/functions";
 import {
   findExactVesselsMasterRows,
   listLocalVesselsMaster,
-  listVesselsMasterAuditPool,
+  listVesselsMasterPendingAudit,
   type VesselMasterRow,
 } from "../../db/vessels-master.js";
 import runAiAisFilter from "./ai-ais-filter.js";
@@ -82,7 +82,6 @@ function serializeMasterVessel(row: VesselMasterRow) {
     ownerManager: row.owner_manager,
     hasGears: row.has_gears,
     processStatus: row.process_status,
-    source: row.source || "vessels_master",
     cacheStatus: "Caché Validada",
     cacheValidated: true,
     masterUpdatedAt: new Date(row.updated_at).toISOString(),
@@ -97,39 +96,6 @@ function findExactMasterRow(candidate: ReturnType<typeof normalizeCandidate>, ro
     || null;
 }
 
-function typeSimilarity(candidateType: string, masterType: string | null) {
-  const candidateTerms = new Set(normalizeText(candidateType).split(" ").filter(Boolean));
-  const masterTerms = normalizeText(masterType).split(" ").filter(Boolean);
-  if (candidateTerms.size === 0 || masterTerms.length === 0) return 0;
-  const shared = masterTerms.filter((term) => candidateTerms.has(term)).length;
-  return shared / Math.max(candidateTerms.size, masterTerms.length);
-}
-
-function createAuditSuggestions(candidate: ReturnType<typeof normalizeCandidate>, rows: VesselMasterRow[]) {
-  return rows
-    .map((row) => {
-      const candidateDwt = candidate.dwt;
-      const masterDwt = numericValue(row.dwt);
-      const dwtDeltaPercent = candidateDwt && masterDwt
-        ? Math.abs(masterDwt - candidateDwt) / candidateDwt * 100
-        : null;
-      const vesselTypeScore = typeSimilarity(candidate.vesselType, row.vessel_type);
-      const dwtScore = dwtDeltaPercent === null ? 0 : Math.max(0, 1 - dwtDeltaPercent / 50);
-      const score = Math.round((vesselTypeScore * 0.55 + dwtScore * 0.45) * 100);
-      return {
-        score,
-        matchReasons: [
-          vesselTypeScore > 0 ? `Tipo compatible: ${row.vessel_type || "sin tipo"}` : null,
-          dwtDeltaPercent !== null ? `DWT con diferencia de ${dwtDeltaPercent.toFixed(1)}%` : null,
-        ].filter(Boolean),
-        vessel: serializeMasterVessel(row),
-      };
-    })
-    .filter((suggestion) => suggestion.score > 0)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, 3);
-}
-
 async function loadExactCandidates(candidates: ReturnType<typeof normalizeCandidate>[]) {
   const imoNumbers = [...new Set(candidates.map((candidate) => candidate.imo).filter(Boolean))];
   const mmsiNumbers = [...new Set(candidates.map((candidate) => candidate.mmsi).filter(Boolean))];
@@ -137,10 +103,6 @@ async function loadExactCandidates(candidates: ReturnType<typeof normalizeCandid
   if (imoNumbers.length === 0 && mmsiNumbers.length === 0 && vesselNames.length === 0) return [];
 
   return findExactVesselsMasterRows(imoNumbers, mmsiNumbers, vesselNames);
-}
-
-async function loadAuditPool() {
-  return listVesselsMasterAuditPool();
 }
 
 export default async (req: Request) => {
@@ -201,16 +163,13 @@ export default async (req: Request) => {
     }
 
     if (operation === "audit") {
-      const unknownCandidates = candidates.slice(0, 100);
-      const auditRows = await loadAuditPool();
+      const auditRows = await listVesselsMasterPendingAudit();
       return Response.json({
         success: true,
         operation: "audit",
         readOnly: true,
-        suggestions: unknownCandidates.map((candidate) => ({
-          candidate,
-          suggestions: createAuditSuggestions(candidate, auditRows),
-        })),
+        count: auditRows.length,
+        vessels: auditRows,
       }, { headers });
     }
 
