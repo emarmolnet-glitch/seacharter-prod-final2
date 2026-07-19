@@ -7086,6 +7086,41 @@
             background: rgba(248, 250, 252, 0.92);
         }
 
+        @media (max-width: 1024px) {
+            .collapsible-section .collapsible-section__header {
+                align-items: flex-start;
+                flex-wrap: wrap;
+            }
+
+            .collapsible-section__toggle {
+                width: 100%;
+            }
+
+            .collapsible-section__title {
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+
+            #vessel-header-title {
+                display: block;
+                max-width: 100%;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .collapsible-section__actions {
+                flex: 1 1 100%;
+                flex-wrap: wrap;
+                justify-content: flex-start;
+                max-width: 100%;
+            }
+
+            .collapsible-section__actions > * {
+                max-width: 100%;
+            }
+        }
+
     </style>
     <link href="./calculator_view.css" rel="stylesheet">
 </head>
