@@ -56,12 +56,12 @@ test('Data Bridge send control stays disabled until matching has results', () =>
 
 test('Data Bridge telemetry exposes processing, success and network error states', () => {
   assert.match(source, /new CustomEvent\('DATABRIDGE_SYNC_STATUS', \{[\s\S]*state: 'processing'/);
-  assert.match(source, /const visualSyncSucceeded = \[200, 201\]\.includes\(response\.status\)/);
+  assert.match(source, /const visualSyncSucceeded = response\.status === 200/);
   assert.match(source, /state: visualSyncSucceeded \? 'success' : 'error'/);
-  assert.match(source, /state === 'processing'[\s\S]*'Enviando\.\.\.'/);
+  assert.match(source, /state === 'processing'[\s\S]*'Sincronizando\.\.\.'/);
   assert.match(source, /state === 'success'[\s\S]*'Sincronizado'/);
   assert.match(source, /`Error de Red\$\{httpStatus \? ` \/ \$\{httpStatus\}` : ''\}`/);
-  assert.match(source, /if \(response\.status !== 200 \|\| responsePayload\?\.success !== true/);
+  assert.match(source, /if \(!visualSyncSucceeded\)/);
 });
 
 test('telemetry implementation adds no toast notifications', () => {

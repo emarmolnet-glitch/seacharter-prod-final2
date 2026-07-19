@@ -15622,7 +15622,7 @@
             const state = String(event?.detail?.state || 'pending');
             const httpStatus = Number(event?.detail?.httpStatus) || 0;
             const value = state === 'processing'
-                ? 'Enviando...'
+                ? 'Sincronizando...'
                 : state === 'success'
                     ? 'Sincronizado'
                     : state === 'error'
@@ -15747,29 +15747,18 @@
         }
         window.createFlatDataBridgeFrozenReport = createFlatDataBridgeFrozenReport;
 
-        async function notifyDataBridgeFrozenReportCommitted(persistedReport) {
-            const flatReport = createFlatDataBridgeFrozenReport(persistedReport);
-            const syncId = flatReport.syncId;
-            if (!syncId) {
-                throw new Error('El reporte persistido no incluye un syncId válido para Data Bridge.');
-            }
-            if (flatReport.vessels.length === 0) {
-                throw new Error('El reporte congelado no contiene buques con un IMO válido para Data Bridge.');
-            }
-
+        async function requestDataBridgeReadSync(syncId = '') {
             window.dispatchEvent(new CustomEvent('DATABRIDGE_SYNC_STATUS', {
                 detail: { state: 'processing', syncId }
             }));
             let response;
             try {
                 response = await fetch('/api/databridge-core-pro-sync', {
-                    method: 'POST',
+                    method: 'GET',
                     headers: {
                         'Accept': 'application/json',
-                        'Content-Type': 'application/json',
                         'Cache-Control': 'no-cache, no-store, must-revalidate'
                     },
-                    body: JSON.stringify(flatReport),
                     cache: 'no-store'
                 });
             } catch (error) {
@@ -15780,9 +15769,7 @@
             }
 
             const responsePayload = await response.json().catch(() => null);
-            const visualSyncSucceeded = [200, 201].includes(response.status)
-                && responsePayload?.success === true
-                && responsePayload?.syncId === syncId;
+            const visualSyncSucceeded = response.status === 200;
             window.dispatchEvent(new CustomEvent('DATABRIDGE_SYNC_STATUS', {
                 detail: {
                     state: visualSyncSucceeded ? 'success' : 'error',
@@ -15790,11 +15777,16 @@
                     httpStatus: response.status
                 }
             }));
-            if (response.status !== 200 || responsePayload?.success !== true || responsePayload?.syncId !== syncId) {
-                throw new Error(responsePayload?.error || `Data Bridge no confirmó la señal (${response.status}).`);
+            if (!visualSyncSucceeded) {
+                throw new Error(responsePayload?.error || responsePayload?.message || `Data Bridge no respondió correctamente (${response.status}).`);
             }
 
-            return responsePayload;
+            return responsePayload || { success: true, syncId };
+        }
+        window.requestDataBridgeReadSync = requestDataBridgeReadSync;
+
+        async function notifyDataBridgeFrozenReportCommitted(persistedReport) {
+            return requestDataBridgeReadSync(persistedReport?.syncId || '');
         }
         window.notifyDataBridgeFrozenReportCommitted = notifyDataBridgeFrozenReportCommitted;
 
@@ -15806,7 +15798,7 @@
                 control.setAttribute('aria-disabled', enabled ? 'false' : 'true');
                 control.dataset.matchingExecutionReady = enabled ? 'true' : 'false';
                 control.title = enabled
-                    ? 'Enviar resultados ejecutados a Data Bridge'
+                    ? 'Sincronizar estado desde Data Bridge'
                     : 'Ejecuta coincidencias antes de enviar a Data Bridge';
             });
             return enabled;
@@ -17205,8 +17197,6 @@
                     source: matchingRequest.endpoint
                 };
 
-                let persistedMatchingReport = null;
-
                 const deduplicatedCount = Math.max(0, rawMatches.length - matches.length);
                 if (sourceIntegrity && deduplicatedCount > 0) {
                     sourceIntegrity.className = 'mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900';
@@ -17672,28 +17662,6 @@
                 resultsList.dataset.matchingHydrated = 'true';
                 syncMatchingButtonWithCachedResults(matches.length);
 
-                if (matches.length > 0) {
-                    try {
-                        const currentSyncId = generateSyncId();
-                        const persistencePayload = {
-                            source: 'Core PRO',
-                            syncId: currentSyncId,
-                            format: 'v2',
-                            vessels: matches
-                        };
-
-                        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando auditoría...';
-                        persistedMatchingReport = await syncCoreProMatchingReport(persistencePayload);
-                        window.currentCoreProSyncId = persistedMatchingReport.syncId;
-                    } catch (persistenceError) {
-                        console.warn('[AIS Matching] Resultados renderizados; la persistencia secundaria falló.', persistenceError);
-                        if (sourceIntegrity) {
-                            sourceIntegrity.className = 'mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900';
-                            sourceIntegrity.innerHTML += ' Los resultados se muestran correctamente, pero no se pudo completar la persistencia para Data Bridge.';
-                        }
-                    }
-                }
-
                 const coreProState = typeof State !== 'undefined' ? State : {};
                 const coreProAuditInput = {
                     vesselName: document.getElementById('vessel-name')?.value || coreProState.vessel || '',
@@ -17757,18 +17725,15 @@
 
                 if (arrayDeBuquesEncontrados.length === 0) {
                     console.log("Data Bridge no recibió datos porque el Motor de Coincidencia no produjo resultados.");
-                } else if (persistedMatchingReport) {
-                    const persistedCount = Number(persistedMatchingReport.vessel_count) || 0;
-                    if (typeof showToast === 'function') {
-                        showToast(`✅ Auditoría completada. ${persistedCount} buque${persistedCount === 1 ? '' : 's'} persistido${persistedCount === 1 ? '' : 's'} y disponible${persistedCount === 1 ? '' : 's'} para Data Bridge.`);
-                    }
+                } else {
+                    console.log(`[Core PRO] Validación visual local completada para ${arrayDeBuquesEncontrados.length} buques; no se transmitió la flota a Data Bridge.`);
                 }
 
                 window.dispatchEvent(new CustomEvent('MATCHING_EXECUTION_SUCCESS', {
                     detail: {
                         matches: window.matchingResultsState?.vessels || matches,
                         count: window.matchingResultsState?.count || matches.length,
-                        dataBridgeSynced: Boolean(persistedMatchingReport)
+                        dataBridgeSynced: false
                     }
                 }));
                 
@@ -33178,7 +33143,6 @@ ADDITIONAL NOTES:
         }
 
         async function sendCommercialNlpToDataBridge() {
-            const currentPayload = window.lastCommercialNplPayload;
             const sendBtn = document.getElementById('commercial-nlp-send-btn');
             const matchingResultCount = Number(document.getElementById('matching-execution-success-stick')?.dataset.matchingResultCount) || 0;
             if (matchingResultCount === 0) {
@@ -33186,65 +33150,23 @@ ADDITIONAL NOTES:
                 setCommercialNlpSendStatus('Ejecuta coincidencias antes de enviar a Data Bridge.', 'error');
                 return;
             }
-            if (!currentPayload) {
-                setCommercialNlpSendStatus('Primero analiza una imagen o texto para generar el JSON.', 'error');
-                return;
-            }
-
-            const directPayload = buildNplDirectDataBridgeJson(currentPayload);
-            const validation = validateNplDirectPayload(directPayload);
-            if (!validation.valid) {
-                setCommercialNlpSendStatus(validation.message, 'error');
-                if (typeof showToast === 'function') showToast(validation.message);
-                return;
-            }
-            if (validation.rejectedCount > 0 && typeof showToast === 'function') {
-                showToast(`${validation.rejectedCount} buque${validation.rejectedCount === 1 ? '' : 's'} descartado${validation.rejectedCount === 1 ? '' : 's'} por IMO inválido.`, false, 'warning');
-            }
-
-            const requestPayload = {
-                ...directPayload,
-                vessels: validation.validVessels.map((vessel) => ({
-                    ...vessel,
-                    origen_datos: directPayload.origen_datos
-                }))
-            };
 
             const originalButtonHtml = sendBtn?.innerHTML || '';
             if (sendBtn) {
                 sendBtn.disabled = true;
                 sendBtn.classList.add('opacity-60', 'cursor-not-allowed');
-                sendBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
+                sendBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sincronizando...';
             }
-            setCommercialNlpSendStatus('Enviando JSON directamente a Data Bridge...', 'loading');
+            setCommercialNlpSendStatus('Consultando Data Bridge...', 'loading');
 
             try {
-                const response = await postDataBridgeReceiveVessels({
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestPayload)
-                });
-                const responseText = await response.text();
-                let responsePayload = null;
-                try {
-                    responsePayload = responseText ? JSON.parse(responseText) : null;
-                } catch (error) {
-                    responsePayload = null;
-                }
-                if (!response.ok) {
-                    throw new Error(responsePayload?.error || responsePayload?.message || responseText || `Data Bridge respondió ${response.status}`);
-                }
-                if (responsePayload?.syncId) {
-                    localStorage.setItem('databridge_last_sync_id', String(responsePayload.syncId));
-                    localStorage.setItem('databridge_last_persisted_imos', JSON.stringify(responsePayload.persistedImoNumbers || []));
-                }
-                const acceptedCount = Number(responsePayload?.acceptedCount) || requestPayload.vessels.length;
-                const resultMessage = responsePayload?.message || `${acceptedCount} buque${acceptedCount === 1 ? '' : 's'} enviado${acceptedCount === 1 ? '' : 's'} correctamente a Data Bridge.`;
+                const responsePayload = await requestDataBridgeReadSync();
+                const resultMessage = responsePayload?.message || 'Data Bridge sincronizado correctamente.';
                 setCommercialNlpSendStatus(resultMessage, 'success');
-                if (typeof showToast === 'function') showToast(resultMessage, false, Number(responsePayload?.rejectedCount) > 0 ? 'warning' : 'success');
+                if (typeof showToast === 'function') showToast(resultMessage, false, 'success');
             } catch (error) {
-                console.error('Error en el envío directo NPL a Data Bridge:', error);
-                setCommercialNlpSendStatus(`No se pudo enviar el JSON: ${error.message}`, 'error');
+                console.error('Error al consultar Data Bridge:', error);
+                setCommercialNlpSendStatus(`No se pudo sincronizar: ${error.message}`, 'error');
             } finally {
                 if (sendBtn) {
                     const currentMatchingResultCount = Number(document.getElementById('matching-execution-success-stick')?.dataset.matchingResultCount) || 0;
