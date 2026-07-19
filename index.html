@@ -15553,6 +15553,37 @@
         }
         window.emitCoreProLiveSync = emitCoreProLiveSync;
 
+        async function notifyDataBridgeFrozenReportCommitted(persistedReport) {
+            const syncId = typeof persistedReport?.syncId === 'string' ? persistedReport.syncId.trim() : '';
+            if (!syncId) {
+                throw new Error('El reporte persistido no incluye un syncId válido para Data Bridge.');
+            }
+
+            const response = await fetch('/api/databridge-core-pro-sync', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache, no-store, must-revalidate'
+                },
+                body: JSON.stringify({
+                    type: 'CORE_PRO_FROZEN_REPORT_COMMITTED',
+                    syncId,
+                    vessel_count: Number(persistedReport?.vessel_count) || 0,
+                    updated_at: persistedReport?.updated_at || new Date().toISOString()
+                }),
+                cache: 'no-store'
+            });
+
+            const responsePayload = await response.json().catch(() => null);
+            if (response.status !== 200 || responsePayload?.success !== true || responsePayload?.syncId !== syncId) {
+                throw new Error(responsePayload?.error || `Data Bridge no confirmó la señal (${response.status}).`);
+            }
+
+            return responsePayload;
+        }
+        window.notifyDataBridgeFrozenReportCommitted = notifyDataBridgeFrozenReportCommitted;
+
         async function syncCoreProMatchingReport(reportData) {
             const vesselsArray = Array.isArray(reportData?.vessels) ? reportData.vessels : [];
             if (vesselsArray.length === 0) {
@@ -15613,8 +15644,9 @@
             }
 
             window.currentCoreProSyncId = responsePayload.syncId;
+            await notifyDataBridgeFrozenReportCommitted(responsePayload);
             emitCoreProLiveSync(responsePayload);
-            console.log(`[Core PRO] Reporte congelado persistido con ${persistedVessels.length} buques. Señal Live Sync emitida después del commit.`, responsePayload);
+            console.log(`[Core PRO] Reporte congelado persistido con ${persistedVessels.length} buques. Data Bridge confirmó la señal después del commit.`, responsePayload);
 
             return responsePayload;
         }
