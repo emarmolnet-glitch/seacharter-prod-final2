@@ -1,3 +1,15 @@
+ [[redirects]]
+  from = "/api/databridge-core-pro-sync"
+  to = "https://calm-shortbread-55bcfc.netlify.app/api/databridge-core-pro-sync"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/databridge-port-tariff"
+  to = "https://calm-shortbread-55bcfc.netlify.app/api/databridge-port-tariff"
+  status = 200
+  force = true
+
 [build]
   # Compile the application only; database lifecycle is managed externally.
   command = "npm run build"
@@ -38,14 +50,4 @@
   to = "/public/databridge.html"
   status = 200
 
-  [[redirects]]
-  from = "/api/databridge-core-pro-sync"
-  to = "https://calm-shortbread-55bcfc.netlify.app/api/databridge-core-pro-sync"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/databridge-port-tariff"
-  to = "https://calm-shortbread-55bcfc.netlify.app/api/databridge-port-tariff"
-  status = 200
-  force = true
+ 
