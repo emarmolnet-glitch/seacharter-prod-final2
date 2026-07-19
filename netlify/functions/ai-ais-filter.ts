@@ -417,5 +417,5 @@ export default async (req: Request) => {
 };
 
 export const config: Config = {
-  path: "/api/ai-ais-filter",
+  path: ["/api/ai-ais-filter", "/.netlify/functions/ai-ais-filter"],
 };

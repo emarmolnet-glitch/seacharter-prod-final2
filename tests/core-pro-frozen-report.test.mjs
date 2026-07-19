@@ -79,27 +79,29 @@ test("the matching engine persists evaluated vessels before reporting completion
   assert.match(coreProSource, /const laycan = coreProMatchingRouteContext\?\.laycan \|\| routeReadiness\.laycan/);
   assert.match(coreProSource, /window\.currentCoreProSyncId = responsePayload\.syncId;/);
   assert.match(coreProSource, /window\.addEventListener\('SEA_ROUTE_DEFINED'/);
-  assert.match(coreProSource, /coreProMatchingRouteContext = \{[\s\S]*pol: \{ lat: Number\(lat\?\.pol\), lon: Number\(lon\?\.pol\) \}[\s\S]*pod: \{ lat: Number\(lat\?\.pod\), lon: Number\(lon\?\.pod\) \}[\s\S]*laycan: String\(laycan \|\| ''\)\.trim\(\)/);
+  assert.match(coreProSource, /function parseStrictRouteCoordinate\(value\)[\s\S]*typeof value === 'string' && value\.trim\(\) === ''[\s\S]*coreProMatchingRouteContext = \{[\s\S]*lat: parseStrictRouteCoordinate\(lat\?\.pol\)[\s\S]*lon: parseStrictRouteCoordinate\(lon\?\.pod\)[\s\S]*window\.coreProMatchingRouteContext = coreProMatchingRouteContext/);
   assert.match(coreProSource, /id="matching-route-sync-panel"/);
-  assert.match(coreProSource, /id="matching-route-status-text">Pendiente ➔ Pendiente/);
-  assert.match(coreProSource, /id="matching-laycan-status-text">Pendiente/);
-  assert.match(coreProSource, /📍 Ruta Sincronizada:/);
-  assert.match(coreProSource, /📅 Laycan:/);
-  assert.match(coreProSource, /routeStatusText\.textContent = `\$\{pol \|\| 'Pendiente'\} ➔ \$\{pod \|\| 'Pendiente'\}`/);
+  assert.match(coreProSource, /id="matching-route-status-text"[^>]*>Pendiente ➔ Pendiente/);
+  assert.match(coreProSource, /id="matching-laycan-status-text"[^>]*>Pendiente/);
+  assert.match(coreProSource, /<strong>Ruta Sincronizada<\/strong>/);
+  assert.match(coreProSource, /<strong>Laycan<\/strong>/);
+  assert.match(coreProSource, /updateSequentialTelemetryBlock\([\s\S]*'matching-route-status-block',[\s\S]*`\$\{pol \|\| 'Pendiente'\} ➔ \$\{pod \|\| 'Pendiente'\}`/);
   assert.doesNotMatch(coreProSource, /routeSyncNotice/);
   assert.match(coreProSource, /SeaCharterStore\.set\(\{ pol, pod, laycanDate: laycan \}\)/);
   assert.match(coreProSource, /syncGlobalStateToForms\(\);[\s\S]*syncCalculatorAndMatching\('calculator'\)/);
   assert.match(coreProSource, /setInputValue\('match-load-lat', lat\?\.pol\)/);
   assert.match(coreProSource, /setInputValue\('match-unload-lon', lon\?\.pod\)/);
-  assert.match(coreProSource, /await window\.runMatchingEngine\(\{ pol, pod, laycan, lat, lon \}\)/);
-  assert.match(coreProSource, /async function executeMatchingEngine\(routeOverride = null\)/);
+  assert.doesNotMatch(coreProSource, /await window\.runMatchingEngine\(\{ pol, pod, laycan, lat, lon \}\)/);
+  assert.match(coreProSource, /onclick="handleMatchingExecutionClick\(event\)"/);
+  assert.match(coreProSource, /return runMatchingEngine\(hydratedRoute, \{ manual: true \}\)/);
+  assert.match(coreProSource, /async function executeMatchingEngine\(routeOverride = null, executionToken = null\)/);
   assert.match(coreProSource, /routeOverride\?\.pol \|\| loadSelect\.options/);
-  assert.match(coreProSource, /routeOverride\?\.lat\?\.pol \?\? document\.getElementById\('match-load-lat'\)\.value/);
+  assert.match(coreProSource, /readCoordinate\(routeContext\?\.pol\?\.lat, routeOverride\?\.lat\?\.pol, document\.getElementById\('match-load-lat'\)\?\.value\)/);
   assert.match(coreProSource, /const laycanStart = String\(routeOverride\?\.laycan \|\| document\.getElementById\('match-laycan-start'\)\.value \|\| todayIso\)/);
   assert.match(coreProSource, /coreProMatchingRouteContext\?\.laycan \|\| routeReadiness\.laycan/);
   assert.match(coreProSource, /new CustomEvent\('SEA_ROUTE_DEFINED', \{ detail: \{ pol, pod, laycan, lat, lon \} \}\)/);
 
-  const engineFetchIndex = coreProSource.indexOf("fetch('/api/ai-ais-filter'");
+  const engineFetchIndex = coreProSource.indexOf('requestAiAisFilter(payload)');
   const engineStateIndex = coreProSource.indexOf("window.lastMatchingEngineResults = matches", engineFetchIndex);
   const persistenceIndex = coreProSource.indexOf("persistedMatchingReport = await syncCoreProMatchingReport(persistencePayload)", engineStateIndex);
   const completionIndex = coreProSource.indexOf("Auditoría completada.", persistenceIndex);
@@ -107,9 +109,12 @@ test("the matching engine persists evaluated vessels before reporting completion
 });
 
 test("Core PRO notifies the configured Data Bridge endpoint only after the frozen report is confirmed", () => {
+  assert.match(coreProSource, /function createFlatDataBridgeFrozenReport\(persistedReport\)/);
+  assert.match(coreProSource, /type: 'fleet',[\s\S]*format: 'v2',[\s\S]*source: 'Core PRO',[\s\S]*syncId,[\s\S]*vessels/);
+  assert.match(coreProSource, /JSON\.parse\(JSON\.stringify\(\{/);
   assert.match(coreProSource, /async function notifyDataBridgeFrozenReportCommitted\(persistedReport\)/);
   assert.match(coreProSource, /fetch\('\/api\/databridge-core-pro-sync', \{[\s\S]*method: 'POST'/);
-  assert.match(coreProSource, /body: JSON\.stringify\(\{[\s\S]*syncId,[\s\S]*vessel_count:/);
+  assert.match(coreProSource, /body: JSON\.stringify\(flatReport\)/);
 
   const persistenceFetchIndex = coreProSource.indexOf("fetch('/api/core-pro-frozen-report'");
   const persistenceStatusIndex = coreProSource.indexOf("if (response.status !== 200)", persistenceFetchIndex);
@@ -125,16 +130,21 @@ test("Core PRO notifies the configured Data Bridge endpoint only after the froze
   );
 
   assert.match(dataBridgeNotificationSource, /DATA_BRIDGE_CORE_PRO_SYNC_URL/);
+  assert.match(dataBridgeNotificationSource, /DATA_BRIDGE_RECEIVE_CORE_DATA_URL/);
   assert.match(dataBridgeNotificationSource, /DATA_BRIDGE_API_URL/);
   assert.match(dataBridgeNotificationSource, /DATA_BRIDGE_CORE_PRO_SYNC_PATH/);
-  assert.match(dataBridgeNotificationSource, /Authorization: `Bearer \$\{apiSecret\}`/);
-  assert.match(dataBridgeNotificationSource, /body: JSON\.stringify\(signal\)/);
-  assert.match(dataBridgeNotificationSource, /path: "\/api\/databridge-core-pro-sync"/);
+  assert.match(dataBridgeNotificationSource, /\|\| "\/api\/receive-core-data"/);
+  assert.match(dataBridgeNotificationSource, /headers\.set\("authorization", `Bearer \$\{authorizationToken\}`\)/);
+  assert.match(dataBridgeNotificationSource, /headers\.set\("x-api-key", forwardedApiKey\)/);
+  assert.match(dataBridgeNotificationSource, /headers\.set\("x-session-token", forwardedSessionToken\)/);
+  assert.match(dataBridgeNotificationSource, /const requestBody = JSON\.stringify\(report\)/);
+  assert.match(dataBridgeNotificationSource, /postReportPreservingMethod\(endpoint, requestHeaders, requestBody\)/);
+  assert.match(dataBridgeNotificationSource, /path: \["\/api\/databridge-core-pro-sync", "\/\.netlify\/functions\/databridge-core-pro-sync"\]/);
   assert.doesNotMatch(dataBridgeNotificationSource, /calm-shortbread|netlify\.app/);
 });
 
 test("the backend preserves and returns the complete vessel array", () => {
-  assert.match(endpointSource, /path:\s*"\/api\/core-pro-frozen-report"/);
+  assert.match(endpointSource, /path:\s*\["\/api\/core-pro-frozen-report", "\/\.netlify\/functions\/core-pro-frozen-report"\]/);
   assert.match(endpointSource, /normalizeSessionSyncVessels\(payload\.vessels\)/);
   assert.match(endpointSource, /format:\s*"v2"/);
   assert.match(endpointSource, /source:\s*"Core PRO"/);

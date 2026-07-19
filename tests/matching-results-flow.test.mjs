@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+
+const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const aiFilterSource = readFileSync(new URL('../netlify/functions/ai-ais-filter.ts', import.meta.url), 'utf8');
+const frozenReportSource = readFileSync(new URL('../netlify/functions/core-pro-frozen-report.ts', import.meta.url), 'utf8');
+
+test('matching response arrays map directly into component state', () => {
+  assert.match(indexSource, /payload\.data,[\s\S]*payload\.matches,[\s\S]*payload\.vessels,[\s\S]*payload\.results/);
+  assert.match(indexSource, /const responseMatches = resultCandidates\.find\(Array\.isArray\) \|\| \[\]/);
+  assert.match(indexSource, /window\.matchingResultsState = \{[\s\S]*vessels: matches,[\s\S]*count: matches\.length/);
+  assert.match(indexSource, /resultsBadge\.innerText = `\$\{matches\.length\} Buque/);
+});
+
+test('classified fleet renders before optional Data Bridge persistence', () => {
+  const stateIndex = indexSource.indexOf('window.matchingResultsState =');
+  const badgeIndex = indexSource.indexOf('resultsBadge.innerText = `${matches.length}', stateIndex);
+  const persistenceIndex = indexSource.indexOf('persistedMatchingReport = await syncCoreProMatchingReport', stateIndex);
+  assert.ok(stateIndex >= 0 && badgeIndex > stateIndex && persistenceIndex > badgeIndex);
+  assert.match(indexSource, /Resultados renderizados; la persistencia secundaria falló/);
+  assert.doesNotMatch(indexSource, /const aisSearchInput = document\.getElementById\('ais-vessel-search'\)/);
+});
+
+test('matching functions expose both custom and physical compatibility routes', () => {
+  assert.match(indexSource, /const AI_AIS_FILTER_ENDPOINT = '\/api\/ai-ais-filter'/);
+  assert.match(indexSource, /const AI_AIS_FILTER_COMPATIBILITY_ENDPOINT = '\/\.netlify\/functions\/ai-ais-filter'/);
+  assert.match(indexSource, /if \(response\.status !== 404\) return \{ response, endpoint \}/);
+  assert.match(indexSource, /source: matchingRequest\.endpoint/);
+  assert.match(aiFilterSource, /path: \["\/api\/ai-ais-filter", "\/\.netlify\/functions\/ai-ais-filter"\]/);
+  assert.match(frozenReportSource, /path: \["\/api\/core-pro-frozen-report", "\/\.netlify\/functions\/core-pro-frozen-report"\]/);
+});
