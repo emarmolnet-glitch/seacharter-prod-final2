@@ -22,25 +22,74 @@ test('matching execution queries vessels_master without automatic radar fallback
   assert.doesNotMatch(executionSource, /await window\.executeAISSweep/);
 });
 
-test('local matching endpoint performs read-only exact lookup and audit suggestions', () => {
+test('local matching endpoint performs read-only exact lookup and pending audit reads', () => {
   assert.match(vesselsMasterSource, /FROM vessels_master/);
   assert.match(localMatchingSource, /listLocalVesselsMaster/);
   assert.match(localMatchingSource, /runAiAisFilter\(scoringRequest\)/);
   assert.match(localMatchingSource, /operation === "audit"/);
-  assert.match(localMatchingSource, /createAuditSuggestions/);
+  assert.match(localMatchingSource, /listVesselsMasterPendingAudit/);
+  assert.match(vesselsMasterSource, /SELECT[\s\S]*id,[\s\S]*vessel_name,[\s\S]*imo_number,[\s\S]*vessel_type,[\s\S]*dwt,[\s\S]*status,[\s\S]*audit_status,[\s\S]*origen,[\s\S]*fecha_ultima_actualizacion[\s\S]*FROM vessels_master/);
+  assert.match(vesselsMasterSource, /ORDER BY fecha_ultima_actualizacion DESC NULLS LAST/);
+  assert.doesNotMatch(vesselsMasterSource, /process_status, source, source_payload/);
+  assert.doesNotMatch(vesselsMasterSource, /source: string \| null/);
+  assert.doesNotMatch(localMatchingSource, /source: row\.source/);
   assert.match(localMatchingSource, /readOnly: true/);
   assert.doesNotMatch(localMatchingSource, /\bINSERT\b|\bUPDATE\b|\bDELETE\b/i);
   assert.doesNotMatch(vesselsMasterSource, /\bINSERT\b|\bUPDATE\b|\bDELETE\b/i);
 });
 
-test('audit mode only processes unknown records and never replaces the fleet', () => {
+test('audit endpoint branch does not invoke AI scoring or candidate matching', () => {
+  const auditStart = localMatchingSource.indexOf('if (operation === "audit")');
+  const auditEnd = localMatchingSource.indexOf('const rows = await loadExactCandidates', auditStart);
+  const auditSource = localMatchingSource.slice(auditStart, auditEnd);
+
+  assert.match(auditSource, /listVesselsMasterPendingAudit\(\)/);
+  assert.match(auditSource, /vessels: auditRows/);
+  assert.doesNotMatch(auditSource, /\.map\(|serializeMasterVessel/);
+  assert.doesNotMatch(auditSource, /runAiAisFilter|scoringRequest|createAuditSuggestions|unknownCandidates/);
+});
+
+test('audit SQL uses only the Neon-verified columns and timestamp', () => {
+  const queryStart = vesselsMasterSource.indexOf('export async function listVesselsMasterPendingAudit');
+  const auditQuerySource = vesselsMasterSource.slice(queryStart);
+
+  assert.match(auditQuerySource, /SELECT\s+id,\s+vessel_name,\s+imo_number,\s+vessel_type,\s+dwt,\s+status,\s+audit_status,\s+origen,\s+fecha_ultima_actualizacion\s+FROM vessels_master/);
+  assert.match(auditQuerySource, /WHERE audit_status = 'PENDING'\s+OR status = 'PENDING'\s+OR audit_status IS NULL/);
+  assert.match(auditQuerySource, /ORDER BY fecha_ultima_actualizacion DESC NULLS LAST/);
+  assert.doesNotMatch(auditQuerySource, /\bupdated_at\b|\bcreated_at\b/);
+  assert.doesNotMatch(auditQuerySource, /PENDIENTE|DESCONOCIDO/i);
+});
+
+test('audit cards read the raw snake_case database fields', () => {
+  const renderStart = indexSource.indexOf('function renderMatchingAuditVessels');
+  const renderEnd = indexSource.indexOf('function updateMatchingAuditModeUi', renderStart);
+  const renderSource = indexSource.slice(renderStart, renderEnd);
+
+  assert.match(renderSource, /vessel\?\.vessel_name/);
+  assert.match(renderSource, /vessel\?\.imo_number/);
+  assert.match(renderSource, /vessel\?\.dwt/);
+  assert.match(renderSource, /vessel\?\.audit_status/);
+  assert.match(renderSource, /vessel\?\.status/);
+  assert.match(renderSource, /'Buque sin identificar'/);
+  assert.match(renderSource, /'IMO Pendiente'/);
+  assert.match(renderSource, /'DWT Desconocido'/);
+  assert.doesNotMatch(renderSource, /'N\/A'|'Buque sin nombre'/);
+  assert.doesNotMatch(renderSource, /vessel\?\.vesselName|vessel\?\.imo\b|vessel\?\.processStatus|vessel\?\.vesselType/);
+});
+
+test('audit mode only loads pending vessels_master records without side effects', () => {
   const auditStart = indexSource.indexOf('async function toggleMatchingAuditMode');
   const auditEnd = indexSource.indexOf('window.toggleMatchingAuditMode = toggleMatchingAuditMode', auditStart);
   const auditSource = indexSource.slice(auditStart, auditEnd);
 
-  assert.match(auditSource, /window\.matchingLocalState\?\.unknown/);
-  assert.match(auditSource, /requestMatchingLocal\('audit', unknown\)/);
-  assert.match(auditSource, /renderMatchingAuditSuggestions/);
+  assert.match(auditSource, /window\.coreProAuditNetworkLock = true/);
+  assert.match(auditSource, /enforceLocalOnlyMatchingMode\(\)/);
+  assert.match(auditSource, /requestMatchingLocal\('audit', \[\]\)/);
+  assert.match(auditSource, /payload\.vessels/);
+  assert.match(auditSource, /renderMatchingAuditVessels/);
+  assert.doesNotMatch(auditSource, /runMatchingEngine|executeMatchingEngine|runAiAisFilter/);
+  assert.doesNotMatch(auditSource, /trigger-ais-sweep|fetchAisData|executeAISSweep|ejecutarBarridoAIS/);
+  assert.doesNotMatch(auditSource, /databridge-/i);
   assert.doesNotMatch(auditSource, /GlobalStore\.(rawVessels|vessels|matchingVessels)\s*=/);
 });
 
@@ -67,6 +116,9 @@ test('LOCAL-ONLY interceptor blocks DataBridge and connection verification route
   assert.match(indexSource, /verify-connection/);
   assert.match(indexSource, /trigger-ais-sweep/);
   assert.match(indexSource, /LOCAL_ONLY_NETWORK_BLOCKED/);
+  assert.match(indexSource, /coreProAuditNetworkLock/);
+  assert.match(indexSource, /isNeonAuditQuery/);
+  assert.match(indexSource, /return !isNeonAuditQuery/);
 
   const clickStart = indexSource.indexOf('async function handleMatchingExecutionClick');
   const clickEnd = indexSource.indexOf('window.handleMatchingExecutionClick', clickStart);
