@@ -15596,6 +15596,7 @@
             const style = SEQUENTIAL_TELEMETRY_STYLES[state] || SEQUENTIAL_TELEMETRY_STYLES.pending;
             if (!block) return false;
             block.className = `min-h-[78px] rounded-lg border px-3 py-2 transition-colors duration-200 ${style.block}`;
+            block.classList.toggle('status-green', state === 'success');
             block.dataset.telemetryState = state;
             const icon = block.querySelector('[data-telemetry-icon]');
             const title = block.querySelector('strong');
@@ -15609,6 +15610,87 @@
             return true;
         }
         window.updateSequentialTelemetryBlock = updateSequentialTelemetryBlock;
+
+        window.FormState = Object.assign({ POL: '', POD: '', Laycan: '' }, window.FormState || {});
+        window.aesMatchingState = Object.assign({ positive: false, matches: [] }, window.aesMatchingState || {});
+        window.sync_status = window.sync_status === true;
+
+        function readReactiveFormState() {
+            const state = window.SeaCharterStore?.getState?.() || {};
+            const routeContext = window.coreProMatchingRouteContext || coreProMatchingRouteContext || {};
+            const nextFormState = {
+                POL: String(state.pol || document.getElementById('port-pol')?.value || document.getElementById('map-port-pol')?.value || '').trim(),
+                POD: String(state.pod || document.getElementById('port-pod')?.value || document.getElementById('map-port-pod')?.value || '').trim(),
+                Laycan: String(state.laycanDate || routeContext.laycan || document.getElementById('gc-laycan-date')?.value || document.getElementById('map-laycan-date')?.value || '').trim()
+            };
+            Object.assign(window.FormState, nextFormState);
+            return window.FormState;
+        }
+        window.readReactiveFormState = readReactiveFormState;
+
+        function updateSyncStatus(isSynchronized, metadata = {}) {
+            const synchronized = isSynchronized === true;
+            const formState = readReactiveFormState();
+            const matches = Array.isArray(window.aesMatchingState?.matches) ? window.aesMatchingState.matches : [];
+            window.sync_status = synchronized;
+            document.documentElement.dataset.syncStatus = synchronized ? 'synced' : 'local-only';
+
+            if (synchronized) {
+                updateSequentialTelemetryBlock('matching-route-status-block', 'success', `${formState.POL} ➔ ${formState.POD}`);
+                updateSequentialTelemetryBlock('matching-laycan-status-block', 'success', formState.Laycan);
+                updateSequentialTelemetryBlock(
+                    'matching-fleet-status-block',
+                    'success',
+                    `${matches.length} buque${matches.length === 1 ? '' : 's'} compatible${matches.length === 1 ? '' : 's'}`,
+                    { vesselCount: matches.length }
+                );
+                const syncBadge = document.getElementById('matching-route-sync-badge');
+                if (syncBadge) {
+                    syncBadge.textContent = metadata.dataBridgeConfirmed === true ? 'Data Bridge OK' : 'Sincronizado';
+                    syncBadge.className = 'status-green rounded-full border px-2.5 py-1 text-[10px] font-black uppercase';
+                }
+            }
+
+            if (metadata.dataBridgeConfirmed === true) {
+                window.lastDataBridgeConfirmation = { ...metadata, sync_status: true };
+                window.setCoreProOperationMode?.(window.CORE_PRO_OPERATION_MODES?.INACTIVE || 'INACTIVE');
+            }
+
+            window.dispatchEvent(new CustomEvent('SYNC_STATUS_CHANGED', {
+                detail: { synchronized, sync_status: window.sync_status, formState: { ...formState }, ...metadata }
+            }));
+            return window.sync_status;
+        }
+        window.updateSyncStatus = updateSyncStatus;
+
+        function evaluateReactiveSyncStatus(metadata = {}) {
+            const formState = readReactiveFormState();
+            const formComplete = Boolean(formState.POL && formState.POD && formState.Laycan);
+            const matchingPositive = window.aesMatchingState?.positive === true
+                && Array.isArray(window.aesMatchingState?.matches)
+                && window.aesMatchingState.matches.length > 0;
+            if (formComplete && matchingPositive) {
+                return updateSyncStatus(true, { source: 'form-state-aes-matching', ...metadata });
+            }
+            if (window.lastDataBridgeConfirmation?.sync_status !== true) {
+                window.sync_status = false;
+                document.documentElement.dataset.syncStatus = 'local-only';
+            }
+            return false;
+        }
+        window.evaluateReactiveSyncStatus = evaluateReactiveSyncStatus;
+
+        window.SeaCharterStore?.subscribe?.(() => evaluateReactiveSyncStatus());
+        window.addEventListener('DOMContentLoaded', () => {
+            ['port-pol', 'map-port-pol', 'port-pod', 'map-port-pod', 'gc-laycan-date', 'map-laycan-date'].forEach((id) => {
+                const input = document.getElementById(id);
+                if (!input || input.dataset.reactiveSyncBound === 'true') return;
+                input.addEventListener('input', () => evaluateReactiveSyncStatus());
+                input.addEventListener('change', () => evaluateReactiveSyncStatus());
+                input.dataset.reactiveSyncBound = 'true';
+            });
+            evaluateReactiveSyncStatus();
+        });
 
         window.externalRadarSweepState = Object.assign({
             activated: false,
@@ -15665,10 +15747,6 @@
             const routeReady = Boolean(pol && pod);
             const laycanReady = Boolean(laycan);
             const syncBadge = document.getElementById('matching-route-sync-badge');
-            if (!isExternalRadarSweepActivated()) {
-                keepRadarSynchronizationPending();
-                return;
-            }
             updateSequentialTelemetryBlock(
                 'matching-route-status-block',
                 routeReady ? 'success' : 'pending',
@@ -15717,10 +15795,6 @@
         }
 
         function updateFleetTelemetryFromDerivedVessels(detail = {}) {
-            if (!isExternalRadarSweepActivated()) {
-                keepRadarSynchronizationPending();
-                return 0;
-            }
             const detailHasVessels = Array.isArray(detail.vessels);
             const committedVessels = Array.isArray(window.GlobalStore?.matchingSelection?.vessels)
                 ? window.GlobalStore.matchingSelection.vessels
@@ -15779,6 +15853,17 @@
                 value,
                 { httpStatus: httpStatus || '' }
             );
+            if (state === 'success') {
+                updateSyncStatus(true, {
+                    source: 'databridge-confirmation',
+                    dataBridgeConfirmed: true,
+                    syncId: event?.detail?.syncId || '',
+                    confirmation: event?.detail?.confirmation || null
+                });
+            } else if (state === 'error') {
+                window.sync_status = false;
+                document.documentElement.dataset.syncStatus = 'local-only';
+            }
         });
 
         function getCoreProMatchingRequestContext() {
@@ -15892,13 +15977,26 @@
         }
         window.createFlatDataBridgeFrozenReport = createFlatDataBridgeFrozenReport;
 
-        async function requestDataBridgeReadSync(syncId = '') {
+        async function requestDataBridgeReadSync(syncId = '', confirmedPayload = null) {
             window.dispatchEvent(new CustomEvent('DATABRIDGE_SYNC_STATUS', {
                 detail: { state: 'processing', syncId }
             }));
+            if (confirmedPayload?.success === true) {
+                window.dispatchEvent(new CustomEvent('DATABRIDGE_SYNC_STATUS', {
+                    detail: {
+                        state: 'success',
+                        syncId: confirmedPayload.syncId || confirmedPayload.sync_id || syncId,
+                        httpStatus: 200,
+                        confirmation: confirmedPayload
+                    }
+                }));
+                return confirmedPayload;
+            }
             let response;
             try {
-                response = await fetch('/api/databridge-core-pro-sync', {
+                const statusUrl = new URL('/api/core-pro-frozen-report', window.location.origin);
+                if (syncId) statusUrl.searchParams.set('syncId', syncId);
+                response = await fetch(statusUrl, {
                     method: 'GET',
                     headers: {
                         'Accept': 'application/json',
@@ -15914,7 +16012,9 @@
             }
 
             const responsePayload = await response.json().catch(() => null);
-            const visualSyncSucceeded = response.status === 200;
+            const visualSyncSucceeded = response.status === 200
+                && responsePayload?.success === true
+                && responsePayload?.available === true;
             window.dispatchEvent(new CustomEvent('DATABRIDGE_SYNC_STATUS', {
                 detail: {
                     state: visualSyncSucceeded ? 'success' : 'error',
@@ -15930,8 +16030,8 @@
         }
         window.requestDataBridgeReadSync = requestDataBridgeReadSync;
 
-        async function notifyDataBridgeFrozenReportCommitted(persistedReport) {
-            return requestDataBridgeReadSync(persistedReport?.syncId || '');
+        async function notifyDataBridgeFrozenReportCommitted(persistedReport, confirmedPayload) {
+            return requestDataBridgeReadSync(persistedReport?.syncId || '', confirmedPayload);
         }
         window.notifyDataBridgeFrozenReportCommitted = notifyDataBridgeFrozenReportCommitted;
 
@@ -15971,9 +16071,16 @@
             const matches = Array.isArray(event?.detail?.matches)
                 ? event.detail.matches
                 : (window.matchingResultsState?.vessels || []);
+            window.aesMatchingState = {
+                positive: matches.length > 0,
+                matches: [...matches],
+                count: Number(event?.detail?.count) || matches.length,
+                updatedAt: new Date().toISOString()
+            };
             const resultsList = document.getElementById('matching-results-list');
             if (resultsList) resultsList.dataset.matchingExecutionState = 'success';
             updateMatchingExecutionSuccessStick(matches);
+            evaluateReactiveSyncStatus({ matchingCount: matches.length });
         });
 
         async function syncCoreProMatchingReport(reportData) {
@@ -16036,7 +16143,17 @@
             }
 
             window.currentCoreProSyncId = responsePayload.syncId;
-            await notifyDataBridgeFrozenReportCommitted(responsePayload);
+            const dataBridgePayload = createFlatDataBridgeFrozenReport(responsePayload);
+            const dataBridgeResponse = await postDataBridgeReceiveVessels({
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dataBridgePayload)
+            }, { type: 'fleet', syncId: responsePayload.syncId });
+            const dataBridgeConfirmation = await dataBridgeResponse.json().catch(() => ({}));
+            if (dataBridgeResponse.status !== 200 || dataBridgeConfirmation?.success !== true) {
+                throw new Error(dataBridgeConfirmation?.error || dataBridgeConfirmation?.message || `Data Bridge respondió ${dataBridgeResponse.status}.`);
+            }
+            await notifyDataBridgeFrozenReportCommitted(responsePayload, dataBridgeConfirmation);
             emitCoreProLiveSync(responsePayload);
             console.log(`[Core PRO] Reporte congelado persistido con ${persistedVessels.length} buques. Data Bridge confirmó la señal después del commit.`, responsePayload);
 

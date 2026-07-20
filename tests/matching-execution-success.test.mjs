@@ -24,12 +24,12 @@ test('successful matching dispatches the visual event and empty runs clear the s
   assert.match(source, /window\.addEventListener\('MATCHING_EXECUTION_SUCCESS'/);
 });
 
-test('Data Bridge synchronization performs a payload-free read request', () => {
+test('Data Bridge synchronization consumes a confirmed POST response', () => {
   const helperStart = source.indexOf('async function requestDataBridgeReadSync');
   const helperEnd = source.indexOf('window.requestDataBridgeReadSync', helperStart);
   const helperSource = source.slice(helperStart, helperEnd);
-  assert.match(helperSource, /fetch\('\/api\/databridge-core-pro-sync', \{/);
-  assert.match(helperSource, /method: 'GET'/);
-  assert.doesNotMatch(helperSource, /body:|JSON\.stringify|vessels/);
-  assert.match(helperSource, /const visualSyncSucceeded = response\.status === 200/);
+  assert.match(helperSource, /confirmedPayload\?\.success === true/);
+  assert.match(helperSource, /confirmation: confirmedPayload/);
+  assert.match(helperSource, /new URL\('\/api\/core-pro-frozen-report'/);
+  assert.doesNotMatch(helperSource, /databridge-core-pro-sync/);
 });

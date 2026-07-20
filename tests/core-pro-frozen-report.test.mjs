@@ -107,26 +107,28 @@ test("the matching engine completes local validation without transmitting the fl
   assert.doesNotMatch(matchingFlowSource, /syncCoreProMatchingReport\(|fetch\('/);
 });
 
-test("Core PRO reads the configured Data Bridge endpoint after a manual frozen report", () => {
-  assert.match(coreProSource, /async function requestDataBridgeReadSync\(syncId = ''\)/);
-  assert.match(coreProSource, /async function notifyDataBridgeFrozenReportCommitted\(persistedReport\)/);
-  assert.match(coreProSource, /fetch\('\/api\/databridge-core-pro-sync', \{[\s\S]*method: 'GET'/);
-  assert.doesNotMatch(coreProSource.slice(coreProSource.indexOf('async function requestDataBridgeReadSync'), coreProSource.indexOf('window.requestDataBridgeReadSync')), /body:|JSON\.stringify|vessels/);
+test("Core PRO consumes the Data Bridge POST confirmation after a manual frozen report", () => {
+  assert.match(coreProSource, /async function requestDataBridgeReadSync\(syncId = '', confirmedPayload = null\)/);
+  assert.match(coreProSource, /async function notifyDataBridgeFrozenReportCommitted\(persistedReport, confirmedPayload\)/);
+  assert.match(coreProSource, /const dataBridgeResponse = await postDataBridgeReceiveVessels\(\{/);
+  assert.match(coreProSource, /dataBridgeConfirmation\?\.success !== true/);
 
   const persistenceFetchIndex = coreProSource.indexOf("fetch('/api/core-pro-frozen-report'");
   const persistenceStatusIndex = coreProSource.indexOf("if (response.status !== 200)", persistenceFetchIndex);
   const persistenceValidationIndex = coreProSource.indexOf("responsePayload?.success !== true", persistenceStatusIndex);
-  const dataBridgeNotificationIndex = coreProSource.indexOf("await notifyDataBridgeFrozenReportCommitted(responsePayload)", persistenceValidationIndex);
+  const dataBridgePostIndex = coreProSource.indexOf("const dataBridgeResponse = await postDataBridgeReceiveVessels", persistenceValidationIndex);
+  const dataBridgeNotificationIndex = coreProSource.indexOf("await notifyDataBridgeFrozenReportCommitted(responsePayload, dataBridgeConfirmation)", dataBridgePostIndex);
   const localSignalIndex = coreProSource.indexOf("emitCoreProLiveSync(responsePayload)", dataBridgeNotificationIndex);
   assert.ok(
     persistenceFetchIndex >= 0
       && persistenceStatusIndex > persistenceFetchIndex
       && persistenceValidationIndex > persistenceStatusIndex
+      && dataBridgePostIndex > persistenceValidationIndex
       && dataBridgeNotificationIndex > persistenceValidationIndex
       && localSignalIndex > dataBridgeNotificationIndex,
   );
 
-  assert.match(netlifyConfigSource, /from = "\/api\/databridge-core-pro-sync"[\s\S]*status = 200[\s\S]*force = true/);
+  assert.doesNotMatch(netlifyConfigSource, /from = "\/api\/databridge-core-pro-sync"/);
 });
 
 test("committed Core PRO reports are reconciled into vessels_master", () => {

@@ -181,3 +181,9 @@
         transition: none;
     }
 }
+
+.status-green {
+    border-color: #86efac !important;
+    background-color: #f0fdf4 !important;
+    color: #166534 !important;
+}

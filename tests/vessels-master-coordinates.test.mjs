@@ -57,14 +57,13 @@ test('receiver verifies database columns before executing vessel inserts', () =>
   assert.match(receiverSource, /vessel\.imoNumber, vessel\.vesselName, vessel\.dwt, vessel\.mmsi, vessel\.latitude, vessel\.longitude,[\s\S]*vessel\.vesselType/);
 });
 
-test('local flat report preserves valid coordinates without sending them to Data Bridge', () => {
+test('local flat report preserves valid coordinates for the Data Bridge POST', () => {
   assert.match(indexSource, /latitude: ais\.latitude \?\? ais\.lat \?\? source\.latitude \?\? source\.lat/);
   assert.match(indexSource, /longitude: ais\.longitude \?\? ais\.lon \?\? ais\.lng \?\? source\.longitude/);
   assert.match(indexSource, /latitude: getStrictVesselNumber\(source, \['latitude', 'lat', 'Latitude', 'AIS_Live_Lat'\], null\)/);
-  const readSyncStart = indexSource.indexOf('async function requestDataBridgeReadSync');
-  const readSyncEnd = indexSource.indexOf('window.requestDataBridgeReadSync', readSyncStart);
-  assert.doesNotMatch(indexSource.slice(readSyncStart, readSyncEnd), /body:|JSON\.stringify|vessels/);
-  assert.match(netlifyConfigSource, /from = "\/api\/databridge-core-pro-sync"/);
+  assert.match(indexSource, /const dataBridgePayload = createFlatDataBridgeFrozenReport\(responsePayload\)/);
+  assert.match(indexSource, /body: JSON\.stringify\(dataBridgePayload\)/);
+  assert.doesNotMatch(netlifyConfigSource, /from = "\/api\/databridge-core-pro-sync"/);
 });
 
 test('matching success event remains bound to the local result array', () => {
