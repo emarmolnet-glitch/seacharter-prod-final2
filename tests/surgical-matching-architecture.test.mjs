@@ -99,11 +99,11 @@ test('audit mode only loads pending vessels_master records without side effects'
   assert.doesNotMatch(auditSource, /GlobalStore\.(rawVessels|vessels|matchingVessels)\s*=/);
 });
 
-test('route laycan and fleet telemetry stay pending before manual radar activation', () => {
-  assert.match(indexSource, /function isExternalRadarSweepActivated\(\)/);
-  assert.match(indexSource, /if \(!isExternalRadarSweepActivated\(\)\) \{[\s\S]*keepRadarSynchronizationPending\(\);[\s\S]*return;/);
-  assert.match(indexSource, /Inactivo · requiere Barrido de Radar/);
-  assert.match(indexSource, /manual-radar-sweep-required/);
+test('route laycan and fleet telemetry react to completed form and matching state', () => {
+  assert.match(indexSource, /function evaluateReactiveSyncStatus\(metadata = \{\}\)/);
+  assert.match(indexSource, /Boolean\(formState\.POL && formState\.POD && formState\.Laycan\)/);
+  assert.match(indexSource, /window\.aesMatchingState\?\.positive === true/);
+  assert.match(indexSource, /updateSyncStatus\(true/);
 });
 
 test('continuous scan cannot initiate an external request', () => {

@@ -1,9 +1,3 @@
- [[redirects]]
-  from = "/api/databridge-core-pro-sync"
-  to = "https://calm-shortbread-55bcfc.netlify.app/api/databridge-core-pro-sync"
-  status = 200
-  force = true
-
 [[redirects]]
   from = "/api/databridge-port-tariff"
   to = "https://calm-shortbread-55bcfc.netlify.app/api/databridge-port-tariff"

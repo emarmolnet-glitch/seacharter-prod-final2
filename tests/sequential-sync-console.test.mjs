@@ -56,12 +56,28 @@ test('Data Bridge send control stays disabled until matching has results', () =>
 
 test('Data Bridge telemetry exposes processing, success and network error states', () => {
   assert.match(source, /new CustomEvent\('DATABRIDGE_SYNC_STATUS', \{[\s\S]*state: 'processing'/);
-  assert.match(source, /const visualSyncSucceeded = response\.status === 200/);
+  assert.match(source, /const visualSyncSucceeded = response\.status === 200[\s\S]*responsePayload\?\.available === true/);
   assert.match(source, /state: visualSyncSucceeded \? 'success' : 'error'/);
   assert.match(source, /state === 'processing'[\s\S]*'Sincronizando\.\.\.'/);
   assert.match(source, /state === 'success'[\s\S]*'Sincronizado'/);
   assert.match(source, /`Error de Red\$\{httpStatus \? ` \/ \$\{httpStatus\}` : ''\}`/);
   assert.match(source, /if \(!visualSyncSucceeded\)/);
+});
+
+test('reactive sync combines FormState and positive AES matching', () => {
+  assert.match(source, /window\.FormState = Object\.assign\(\{ POL: '', POD: '', Laycan: '' \}/);
+  assert.match(source, /function evaluateReactiveSyncStatus\(metadata = \{\}\)/);
+  assert.match(source, /formComplete && matchingPositive/);
+  assert.match(source, /return updateSyncStatus\(true, \{ source: 'form-state-aes-matching'/);
+  assert.match(source, /window\.sync_status = synchronized/);
+  assert.match(source, /block\.classList\.toggle\('status-green', state === 'success'\)/);
+});
+
+test('Data Bridge confirmation uses the POST response instead of the removed status endpoint', () => {
+  assert.doesNotMatch(source, /fetch\('\/api\/databridge-core-pro-sync'/);
+  assert.match(source, /const dataBridgeResponse = await postDataBridgeReceiveVessels\(\{/);
+  assert.match(source, /notifyDataBridgeFrozenReportCommitted\(responsePayload, dataBridgeConfirmation\)/);
+  assert.match(source, /dataBridgeConfirmed: true/);
 });
 
 test('telemetry implementation adds no toast notifications', () => {
