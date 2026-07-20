@@ -9,6 +9,17 @@ const DEFAULT_LIMIT = 250;
 
 declare const process: { env: Record<string, string | undefined> };
 
+type PostgreSqlError = Error & {
+  code?: string;
+  severity?: string;
+  detail?: string;
+  hint?: string;
+  schema?: string;
+  table?: string;
+  column?: string;
+  constraint?: string;
+};
+
 type EtaTarget = {
   lat: number;
   lon: number;
@@ -112,6 +123,28 @@ function mergeDefined(current: Record<string, unknown> | undefined, incoming: Re
     merged[key] = value;
   });
   return merged;
+}
+
+async function insertAisRows(rows: VesselRecord[]) {
+  try {
+    await upsertVessels(rows);
+  } catch (error) {
+    const databaseError = error as PostgreSqlError;
+    console.error("[ais-ingest] AISStream database insertion failed.", {
+      message: databaseError instanceof Error ? databaseError.message : "Unknown database insertion error",
+      code: databaseError.code || null,
+      severity: databaseError.severity || null,
+      detail: databaseError.detail || null,
+      hint: databaseError.hint || null,
+      schema: databaseError.schema || null,
+      table: databaseError.table || null,
+      column: databaseError.column || null,
+      constraint: databaseError.constraint || null,
+      expectedBuffer: "vessel_radar_feed",
+      rowCount: rows.length,
+    });
+    throw error;
+  }
 }
 
 function normalizeVessel(item: unknown, etaTarget: EtaTarget | null): VesselRecord | null {
@@ -245,7 +278,7 @@ export default async (req: Request) => {
       : rows;
 
     if (acceptedRows.length > 0) {
-      await upsertVessels(acceptedRows);
+      await insertAisRows(acceptedRows);
     }
 
     return Response.json({
