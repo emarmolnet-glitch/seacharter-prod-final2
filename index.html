@@ -13104,7 +13104,7 @@
         function hasRequiredCalculationInputs() {
             const read = (id) => String(document.getElementById(id)?.value || '').trim();
             const num = (id) => Number(read(id));
-            const cargoSpecification = read('cargo-type-manual');
+            const cargoSpecification = read('cargo-type-manual') || read('cargo-type');
             const cargoSpecificationInput = document.getElementById('cargo-type-manual');
             if (cargoSpecificationInput) cargoSpecificationInput.setAttribute('aria-invalid', String(!cargoSpecification));
             return Boolean(
@@ -37913,38 +37913,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
                         body: JSON.stringify({ query })
                     });
-                    const vessels = typeof window.parseAisVesselsResponse === 'function'
-                        ? await window.parseAisVesselsResponse(response, 'trigger-ais-sweep')
-                        : [];
-
-                    if (typeof window.reiniciarMemoriaBarridoAIS === 'function') {
-                        window.reiniciarMemoriaBarridoAIS();
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        throw new Error(payload.error || `El barrido AIS no pudo iniciarse (HTTP ${response.status}).`);
                     }
-                    vessels.forEach((vessel) => {
-                        if (typeof window.procesarMensajeAIS === 'function') {
-                            window.procesarMensajeAIS(vessel);
-                        }
-                    });
-                    window.listaBarcos = vessels;
-                    if (typeof window.reapplyCentralFiltersAndRedraw === 'function') {
-                        window.reapplyCentralFiltersAndRedraw();
+                    if (response.status !== 202 || payload.accepted !== true) {
+                        throw new Error('El backend no confirmó la ejecución asíncrona del barrido AIS.');
                     }
 
                     window.aisAvailabilitySweepUi.status = 'sent';
-                    window.aisAvailabilitySweepUi.requestedAt = new Date().toISOString();
-                    window.aisAvailabilitySweepUi.vesselCount = Number.isFinite(Number(window.aisPersistedVesselCount))
-                        ? Number(window.aisPersistedVesselCount)
-                        : vessels.length;
-                    window.aisAvailabilitySweepUi.databaseVesselCount = Number.isFinite(Number(window.aisDatabaseVesselCount))
-                        ? Number(window.aisDatabaseVesselCount)
-                        : null;
-                    const routeContext = window.coreProMatchingRouteContext || {};
-                    const routePol = document.getElementById('match-load-port')?.value || 'POL';
-                    const routePod = document.getElementById('match-unload-port')?.value || 'POD';
-                    const routeLaycan = routeContext.laycan || document.getElementById('match-laycan-start')?.value || 'Laycan cargado';
-                    updateSequentialTelemetryBlock('matching-route-status-block', 'success', `${routePol} ➔ ${routePod}`);
-                    updateSequentialTelemetryBlock('matching-laycan-status-block', 'success', routeLaycan);
-                    updateFleetTelemetryFromDerivedVessels({ vessels });
+                    window.aisAvailabilitySweepUi.requestedAt = payload.requestedAt || new Date().toISOString();
                     completedSuccessfully = true;
                 } catch (error) {
                     console.error('Error durante la captura AIS de servidor:', error);
@@ -37956,7 +37934,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     if (typeof showToast === 'function') {
                         const state = window.aisAvailabilitySweepUi;
                         if (completedSuccessfully) {
-                            showToast(`Captura AIS completada: ${Number(state.vesselCount) || 0} buques actualizados.`, false, 'success');
+                            showToast('Barrido AIS aceptado y ejecutándose en segundo plano.', false, 'success');
                         } else {
                             showToast(finalErrorMessage || 'No se pudo completar la captura AIS.', false, 'error');
                         }
