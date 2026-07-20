@@ -1,4 +1,6 @@
 import type { Config } from "@netlify/functions";
+import { db } from "../../db/index.js";
+import { appConfig } from "../../db/schema.js";
 import { createCorsHeaders } from "./_shared/cors.js";
 
 declare const process: { env: Record<string, string | undefined> };
@@ -8,6 +10,23 @@ const baseHeaders = {
   "cache-control": "no-store",
 };
 const DEFAULT_DATA_BRIDGE_ORIGIN = "https://calm-shortbread-55bcfc.netlify.app";
+const DATA_BRIDGE_CONNECTION_CONFIG_KEY = "databridge_connection_state";
+
+async function persistDataBridgeConnectionState(connected: boolean) {
+  const timestamp = new Date().toISOString();
+  const value = JSON.stringify({
+    connected,
+    verifiedAt: connected ? timestamp : null,
+    lastCheckedAt: timestamp,
+  });
+  await db
+    .insert(appConfig)
+    .values({ key: DATA_BRIDGE_CONNECTION_CONFIG_KEY, value, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: appConfig.key,
+      set: { value, updatedAt: new Date() },
+    });
+}
 
 function getDataBridgeApiUrl() {
   return String(
@@ -90,6 +109,7 @@ export default async (req: Request) => {
       return Response.json({ success: false, error: message }, { status: response.status, headers });
     }
 
+    await persistDataBridgeConnectionState(true).catch(() => undefined);
     return Response.json(payload && typeof payload === "object" ? payload : { success: true }, { headers });
   } catch {
     return Response.json(

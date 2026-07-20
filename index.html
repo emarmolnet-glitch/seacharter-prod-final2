@@ -3906,6 +3906,17 @@
             white-space: nowrap;
         }
 
+        .radar-global-control { display: inline-flex; align-items: center; gap: 0.5rem; flex: 0 0 auto; }
+        .radar-global-control__timestamp { display: none; padding: 0.25rem 0.625rem; border: 1px solid rgba(71, 85, 105, 0.28); border-radius: 6px; background: rgba(15, 23, 42, 0.88); color: #cbd5e1; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+        .radar-global-control__button { display: inline-flex; align-items: center; justify-content: center; gap: 0.25rem; min-height: 2.25rem; padding: 0.375rem 0.75rem; border: 1px solid #334155; border-radius: 6px; background: #475569; color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.3); font-size: 0.6875rem; font-weight: 800; line-height: 1.15; white-space: nowrap; cursor: pointer; transition: transform 160ms ease, background-color 160ms ease, box-shadow 160ms ease; }
+        .radar-global-control__button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 9px rgba(15,23,42,0.28); }
+        .radar-global-control__button:disabled { cursor: wait; opacity: 0.78; }
+        .radar-global-control[data-radar-state="live"] .radar-global-control__button { border-color: #059669; background: #10b981; }
+        .radar-global-control[data-radar-state="loading"] .radar-global-control__button { border-color: #0369a1; background: #0284c7; }
+        .radar-global-control[data-radar-state="error"] .radar-global-control__button { border-color: #e11d48; background: #f43f5e; }
+        .radar-global-control[data-radar-state="frozen"] .radar-global-control__timestamp { display: inline-flex; }
+        #matching-action-dock .radar-global-control__button { padding: 0.5rem 1rem; border-radius: 7px; font-size: 0.6rem; letter-spacing: 0.05em; text-transform: uppercase; }
+
         #matching-action-dock #btn-run-matching {
             width: auto !important;
             background: #fbd38d !important;
@@ -8644,7 +8655,7 @@
                                 <label id="label-buying-freight" class="text-[10px] font-bold text-indigo-400 uppercase block mb-1">Flete Compra Armador ($)</label>
                                 <div class="flex">
                                     <input type="number" id="freight-rate" class="input-gc bg-slate-950 border-indigo-500/50 text-white font-bold text-lg h-9 rounded-r-none" value="32.50" step="any" oninput="runEngine()">
-                                    <button id="btn-calc-owner-freight" onclick="useAlgorithmicFreight('owner')" class="bg-indigo-600/30 border-y border-indigo-500/50 hover:bg-indigo-500/50 px-2 text-indigo-300" title="Calculadora Básica (Break-Even + Margen)"><i class="fa-solid fa-calculator"></i></button>
+                                    <button type="button" id="btn-calc-owner-freight" onclick="handleFreightMasterTrigger('owner', event)" class="bg-indigo-600/30 border-y border-indigo-500/50 hover:bg-indigo-500/50 px-2 text-indigo-300" title="Calcular e iniciar Auto-Flow"><i class="fa-solid fa-calculator"></i></button>
                                     <button id="btn-spot-owner-freight" onclick="predictSpotMarketLocal()" class="bg-blue-600/30 border border-blue-500/50 hover:bg-blue-500/50 px-2 rounded-r-md text-blue-300" title="Estimación Algorítmica Spot Real (PMT)"><i class="fa-solid fa-chart-line"></i></button>
                                 </div>
                             </div>
@@ -8653,7 +8664,7 @@
                                 <label id="label-selling-freight" class="text-[10px] font-bold text-emerald-400 uppercase block mb-1">Flete Venta Fletador ($)</label>
                                 <div class="flex">
                                     <input type="number" id="freight-sell" class="input-gc bg-slate-950 border-emerald-500/50 text-white font-bold text-lg h-9 rounded-r-none" value="35.00" step="any" oninput="runEngine()">
-                                    <button id="btn-calc-charter-freight" onclick="useAlgorithmicFreight('charterer')" class="bg-emerald-600/30 border-y border-emerald-500/50 hover:bg-emerald-500/50 px-2 text-emerald-300" title="Calculadora Básica (Break-Even + Margen)"><i class="fa-solid fa-calculator"></i></button>
+                                    <button type="button" id="btn-calc-charter-freight" onclick="handleFreightMasterTrigger('charterer', event)" class="bg-emerald-600/30 border-y border-emerald-500/50 hover:bg-emerald-500/50 px-2 text-emerald-300" title="Calcular e iniciar Auto-Flow"><i class="fa-solid fa-calculator"></i></button>
                                     <button id="btn-spot-charter-freight" onclick="predictSpotMarketLocal()" class="bg-teal-600/30 border border-teal-500/50 hover:bg-teal-500/50 px-2 rounded-r-md text-teal-300" title="Estimación Algorítmica Spot Real (PMT)"><i class="fa-solid fa-chart-line"></i></button>
                                 </div>
                             </div>
@@ -11001,13 +11012,10 @@
                             </aside>
                             <!-- Floating button on map -->
                             <div style="position: absolute; top: 10px; right: 10px; z-index: 1000; display: flex; align-items: center; gap: 8px;">
-                                <span id="radar-frozen-timestamp" class="text-xs font-bold text-rose-400 bg-slate-950/80 border border-rose-500/20 px-2.5 py-1 rounded-md" style="display: none;"></span>
                                 <button id="btn-center-map" onclick="window.centrarEnZonaDeCarga()" style="background-color: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 4px; transition: background-color 0.2s;">
                                     <i class="fa-solid fa-crosshairs"></i> Centrar en zona de carga
                                 </button>
-                                <button id="btn-freeze-radar" onclick="window.toggleLiveTracking()" style="background-color: #f43f5e; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 4px; transition: background-color 0.2s;">
-                                    <i class="fa-solid fa-snowflake mr-1 text-[10px]"></i>Radar: FROZEN
-                                </button>
+                                <div data-radar-global-control data-radar-context="map"></div>
                                 <button id="btn-clear-ais-map" onclick="window.clearAisMapSearch()" style="background-color: #0f172a; color: white; border: 1px solid rgba(255,255,255,0.18); padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 4px; transition: background-color 0.2s;">
                                     <i class="fa-solid fa-broom"></i> Limpiar Mapa
                                 </button>
@@ -11929,6 +11937,18 @@
                             </div>
                             <span id="matching-route-sync-badge" class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase text-slate-500">Inactivo</span>
                         </div>
+                        <div class="mt-3 grid gap-2 rounded-lg border border-teal-100 bg-teal-50/60 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.6fr)] sm:items-center">
+                            <div>
+                                <label for="matching-global-taxonomy-select" class="text-[10px] font-black uppercase tracking-[0.14em] text-teal-800">Taxonomía Global</label>
+                                <p id="matching-global-taxonomy-status" class="mt-1 text-[10px] font-bold text-amber-700" aria-live="polite">Cargando última configuración…</p>
+                            </div>
+                            <select id="matching-global-taxonomy-select" class="w-full rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200" aria-describedby="matching-global-taxonomy-status">
+                                <option value="category:cargo">Cargo</option>
+                                <option value="category:tanker">Tankers</option>
+                                <option value="category:passenger">Passengers</option>
+                                <option value="category:other">Others</option>
+                            </select>
+                        </div>
                         <div class="mt-3 overflow-x-auto pb-1" aria-label="Consola secuencial de estados">
                             <div id="matching-sequential-status-console" class="grid min-w-[980px] grid-cols-5 gap-2 text-xs">
                                 <div id="matching-route-status-block" class="min-h-[78px] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600 transition-colors duration-200" data-telemetry-state="pending">
@@ -11984,10 +12004,7 @@
                                         <i class="fa-solid fa-play"></i>
                                         Coincidencia Local / Local Match
                                     </button>
-                                    <button id="btn-manual-radar-sweep" type="button" onclick="ejecutarBarridoManual(event)" class="matching-action-button whitespace-nowrap px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs uppercase rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-amber-500">
-                                        <i class="fa-solid fa-satellite-dish"></i>
-                                        Barrido de Radar Manual
-                                    </button>
+                                    <div data-radar-global-control data-radar-context="matching"></div>
                                     <button id="btnGenerateReport" type="button" onclick="toggleMatchingAuditMode()" aria-pressed="false" class="matching-action-button whitespace-nowrap px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-black text-xs uppercase rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-slate-600 focus:outline-none cursor-pointer">
                                         <i class="fa-solid fa-database"></i>
                                         <span>MODO AUDITORÍA</span>
@@ -15703,6 +15720,22 @@
         window.isExternalRadarSweepActivated = isExternalRadarSweepActivated;
 
         function keepRadarSynchronizationPending() {
+            const hasSessionCache = typeof window.hasCurrentSessionMatchingCache === 'function'
+                && window.hasCurrentSessionMatchingCache();
+            const hasCalculatedState = typeof window.isCalculatedStateCurrent === 'function'
+                && window.isCalculatedStateCurrent(window.GlobalStore?.calculatedState || window.CalculatedState);
+            const matchingRequest = typeof window.fetchMatchingRequestFromGlobalStore === 'function'
+                ? window.fetchMatchingRequestFromGlobalStore(window.GlobalStore?.calculatedState || window.CalculatedState)
+                : null;
+            if (matchingRequest) {
+                updateSequentialTelemetryBlock('matching-route-status-block', 'ready', 'Contexto cargado desde Calculadora');
+                updateSequentialTelemetryBlock('matching-laycan-status-block', 'ready', matchingRequest.laycan?.start || matchingRequest.route?.laycan || 'Laycan cargado');
+                updateSequentialTelemetryBlock('matching-fleet-status-block', 'ready', 'Consulta local disponible');
+                return true;
+            }
+            if (hasSessionCache && hasCalculatedState) {
+                return restoreMatchingSynchronizationFromCache();
+            }
             updateSequentialTelemetryBlock('matching-route-status-block', 'pending', 'Inactivo · requiere Barrido de Radar');
             updateSequentialTelemetryBlock('matching-laycan-status-block', 'pending', 'Inactivo · requiere Barrido de Radar');
             updateSequentialTelemetryBlock('matching-fleet-status-block', 'pending', 'Inactivo · requiere Barrido de Radar');
@@ -15713,6 +15746,26 @@
             }
         }
         window.keepRadarSynchronizationPending = keepRadarSynchronizationPending;
+
+        function restoreMatchingSynchronizationFromCache() {
+            const cacheCount = Math.max(
+                Number(window.matchingResultsState?.count) || 0,
+                Array.isArray(window.lastMatchingEngineResults) ? window.lastMatchingEngineResults.length : 0,
+                Array.isArray(window.GlobalStore?.matchingVessels) ? window.GlobalStore.matchingVessels.length : 0
+            );
+            const calculatedState = window.GlobalStore?.calculatedState || window.CalculatedState || {};
+            const route = calculatedState.route || {};
+            updateSequentialTelemetryBlock('matching-route-status-block', 'success', `${route.pol || 'POL'} ➔ ${route.pod || 'POD'}`);
+            updateSequentialTelemetryBlock('matching-laycan-status-block', 'success', route.laycan || 'Contexto rehidratado');
+            updateSequentialTelemetryBlock('matching-fleet-status-block', 'success', `${cacheCount} buque${cacheCount === 1 ? '' : 's'} en caché de sesión`);
+            const syncBadge = document.getElementById('matching-route-sync-badge');
+            if (syncBadge) {
+                syncBadge.textContent = 'Sesión rehidratada';
+                syncBadge.className = 'rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-700';
+            }
+            return true;
+        }
+        window.restoreMatchingSynchronizationFromCache = restoreMatchingSynchronizationFromCache;
 
         function parseStrictRouteCoordinate(value) {
             if (value === null || value === undefined) return null;
@@ -16800,7 +16853,7 @@
             const state = window.matchingAuditModeState;
             const button = document.getElementById('btnGenerateReport');
             const status = document.getElementById('matching-audit-mode-status');
-            const captureControls = document.querySelectorAll('#btn-search-closest-vessels, #btn-freeze-radar');
+            const captureControls = document.querySelectorAll('#btn-search-closest-vessels, [data-radar-global-button]');
             if (button) {
                 button.disabled = state.loading;
                 button.setAttribute('aria-pressed', state.enabled ? 'true' : 'false');
@@ -17039,21 +17092,281 @@
             return normalized;
         }
 
+        const MATCHING_TAXONOMY_SELECTION_STORAGE_KEY = 'taxonomy_selection';
+
+        function normalizeMatchingTaxonomySelection(rawSelection) {
+            let selection = rawSelection;
+            if (typeof selection === 'string') {
+                const trimmedSelection = selection.trim();
+                if (!trimmedSelection) return [];
+                try {
+                    selection = JSON.parse(trimmedSelection);
+                } catch (_) {
+                    selection = trimmedSelection;
+                }
+            }
+            if (selection === true) selection = 'category:cargo';
+            if (!selection || selection === false) return [];
+            if (!Array.isArray(selection) && typeof selection === 'object') {
+                if (selection.selected === false || selection.enabled === false) return [];
+                selection = selection.values
+                    || selection.taxonomies
+                    || selection.selectedTaxonomies
+                    || selection.value
+                    || selection.taxonomy
+                    || selection.selection
+                    || (selection.selected === true ? 'category:cargo' : []);
+            }
+            const aliases = {
+                cargo: 'category:cargo',
+                tanker: 'category:tanker',
+                tankers: 'category:tanker',
+                passenger: 'category:passenger',
+                passengers: 'category:passenger',
+                other: 'category:other',
+                others: 'category:other',
+                true: 'category:cargo'
+            };
+            const values = (Array.isArray(selection) ? selection : [selection])
+                .map(value => String(value || '').trim())
+                .filter(Boolean)
+                .map(value => aliases[value.toLowerCase()] || value);
+            const select = document.getElementById('fleet-intel-vessel-type');
+            const allowedValues = new Set(Array.from(select?.options || []).map(option => option.value));
+            return Array.from(new Set(values.filter(value => allowedValues.size === 0
+                ? /^category:(cargo|tanker|passenger|other)$/.test(value)
+                : allowedValues.has(value))));
+        }
+        window.normalizeMatchingTaxonomySelection = normalizeMatchingTaxonomySelection;
+
+        function readStoredMatchingTaxonomySelection() {
+            const candidates = [];
+            try {
+                candidates.push(window.sessionStorage?.getItem(MATCHING_TAXONOMY_SELECTION_STORAGE_KEY));
+            } catch (_) {}
+            try {
+                candidates.push(window.localStorage?.getItem(MATCHING_TAXONOMY_SELECTION_STORAGE_KEY));
+                candidates.push(window.localStorage?.getItem('ais_taxonomy_preset_v1'));
+            } catch (_) {}
+            for (const candidate of candidates) {
+                const values = normalizeMatchingTaxonomySelection(candidate);
+                if (values.length > 0) return values;
+            }
+            return [];
+        }
+        window.readStoredMatchingTaxonomySelection = readStoredMatchingTaxonomySelection;
+
+        function persistMatchingTaxonomySelection(taxonomies) {
+            const values = normalizeMatchingTaxonomySelection(taxonomies);
+            if (values.length === 0) return [];
+            const payload = JSON.stringify({
+                selected: true,
+                value: values[0],
+                values,
+                savedAt: new Date().toISOString()
+            });
+            try {
+                window.sessionStorage?.setItem(MATCHING_TAXONOMY_SELECTION_STORAGE_KEY, payload);
+            } catch (_) {}
+            try {
+                window.localStorage?.setItem(MATCHING_TAXONOMY_SELECTION_STORAGE_KEY, payload);
+            } catch (_) {}
+            return values;
+        }
+        window.persistMatchingTaxonomySelection = persistMatchingTaxonomySelection;
+
+        const GLOBAL_TAXONOMY_FALLBACK = 'category:cargo';
+        const GLOBAL_TAXONOMY_LABELS = Object.freeze({
+            'category:cargo': 'Cargo',
+            'category:tanker': 'Tankers',
+            'category:passenger': 'Passengers',
+            'category:other': 'Others'
+        });
+
+        function syncGlobalTaxonomyControls(taxonomies, options = {}) {
+            const values = normalizeMatchingTaxonomySelection(taxonomies);
+            const primaryValue = values[0] || '';
+            const matchingSelect = document.getElementById('matching-global-taxonomy-select');
+            const matchingStatus = document.getElementById('matching-global-taxonomy-status');
+            if (matchingSelect && matchingSelect.value !== primaryValue) matchingSelect.value = primaryValue;
+            if (matchingStatus) {
+                matchingStatus.textContent = primaryValue
+                    ? `Taxonomía global activa: ${GLOBAL_TAXONOMY_LABELS[primaryValue] || primaryValue}`
+                    : 'Sin taxonomía global activa';
+                matchingStatus.className = primaryValue
+                    ? 'mt-1 text-[10px] font-bold text-emerald-700'
+                    : 'mt-1 text-[10px] font-bold text-amber-700';
+            }
+            if (options.syncDensity !== false && typeof window.setSelectedFleetTaxonomies === 'function') {
+                const densityValues = typeof window.getSelectedFleetTaxonomies === 'function'
+                    ? window.getSelectedFleetTaxonomies()
+                    : [];
+                if (densityValues.length !== values.length || values.some(value => !densityValues.includes(value))) {
+                    window.setSelectedFleetTaxonomies(values, { dispatch: false, persist: false, markPending: false });
+                }
+            }
+            return values;
+        }
+
+        window.GlobalTaxonomyProvider = {
+            labels: GLOBAL_TAXONOMY_LABELS,
+            get() {
+                const storeValues = normalizeMatchingTaxonomySelection(window.GlobalStore?.selectedTaxonomies || []);
+                if (storeValues.length > 0 && window.GlobalStore?.matchingSelectionPending !== true) return storeValues;
+                return readStoredMatchingTaxonomySelection();
+            },
+            set(taxonomies, options = {}) {
+                const values = normalizeMatchingTaxonomySelection(taxonomies);
+                if (values.length === 0) return [];
+                const previousValues = this.get();
+                const changed = previousValues.length !== values.length
+                    || values.some(value => !previousValues.includes(value));
+                const persistedValues = options.persist === false
+                    ? values
+                    : persistMatchingTaxonomySelection(values);
+                const store = window.GlobalStore;
+                const storeIsCurrent = Array.isArray(store?.selectedTaxonomies)
+                    && store.selectedTaxonomies.length === persistedValues.length
+                    && persistedValues.every(value => store.selectedTaxonomies.includes(value))
+                    && store.matchingSelectionPending !== true;
+                if (store && !storeIsCurrent) {
+                    const filteredVessels = Array.isArray(options.vessels)
+                        ? options.vessels
+                        : (typeof store.getFilteredVessels === 'function' ? store.getFilteredVessels() : []);
+                    if (typeof store.commitMatchingSelection === 'function') {
+                        store.commitMatchingSelection(persistedValues, filteredVessels);
+                    } else {
+                        store.selectedTaxonomies = persistedValues.slice();
+                        store.selectedTaxonomy = persistedValues[0] || '';
+                        store.matchingSelectionPending = false;
+                        store.matchingReady = persistedValues.length > 0;
+                    }
+                }
+                syncGlobalTaxonomyControls(persistedValues, options);
+                if (options.dispatch !== false && changed) {
+                    const detail = {
+                        selected: true,
+                        taxonomy_selection: true,
+                        taxonomies: persistedValues.slice(),
+                        source: options.source || 'global-taxonomy-provider',
+                        fallback: options.fallback === true,
+                        savedAt: new Date().toISOString()
+                    };
+                    window.dispatchEvent(new CustomEvent('GLOBAL_TAXONOMY_CHANGED', { detail }));
+                    window.dispatchEvent(new CustomEvent('TAXONOMY_SELECTION_SAVED', { detail }));
+                }
+                return persistedValues;
+            },
+            ensure(options = {}) {
+                const currentValues = this.get();
+                const fallbackUsed = currentValues.length === 0;
+                const values = fallbackUsed ? [GLOBAL_TAXONOMY_FALLBACK] : currentValues;
+                const ensuredValues = this.set(values, {
+                    ...options,
+                    fallback: fallbackUsed,
+                    source: options.source || (fallbackUsed ? 'global-taxonomy-fallback' : 'global-taxonomy-autoload')
+                });
+                if (fallbackUsed && options.notify !== false && typeof showToast === 'function') {
+                    showToast('Taxonomía Cargo cargada automáticamente como última configuración disponible');
+                }
+                return ensuredValues;
+            },
+            syncControls(taxonomies = this.get()) {
+                return syncGlobalTaxonomyControls(taxonomies);
+            }
+        };
+
+        function initializeMatchingGlobalTaxonomyControl() {
+            const select = document.getElementById('matching-global-taxonomy-select');
+            if (!select || select.dataset.globalTaxonomyReady === 'true') return;
+            select.dataset.globalTaxonomyReady = 'true';
+            select.addEventListener('change', event => {
+                const values = window.GlobalTaxonomyProvider.set([event.target.value], {
+                    source: 'matching-engine-selector',
+                    notify: false
+                });
+                if (values.length > 0) {
+                    const currentResultCount = Number(document.getElementById('btn-run-matching')?.dataset.matchingResultCount) || 0;
+                    syncMatchingButtonWithCachedResults(currentResultCount);
+                    window.renderMatchingExecutionValidation?.();
+                }
+            });
+            window.GlobalTaxonomyProvider.ensure({ notify: false, source: 'matching-engine-init' });
+        }
+        window.initializeMatchingGlobalTaxonomyControl = initializeMatchingGlobalTaxonomyControl;
+
+        function refreshMatchingTaxonomySelectionState(options = {}) {
+            const explicitValues = normalizeMatchingTaxonomySelection(options.taxonomies || []);
+            const providerValues = explicitValues.length > 0
+                ? window.GlobalTaxonomyProvider.set(explicitValues, { dispatch: false, source: 'matching-state-refresh' })
+                : window.GlobalTaxonomyProvider.ensure({ dispatch: false, notify: options.notify === true, source: 'matching-state-refresh' });
+            const store = window.GlobalStore;
+            if (store?.matchingSelectionPending === true && explicitValues.length === 0 && options.force !== true) {
+                return [];
+            }
+            const storedValues = providerValues.length > 0 ? providerValues : readStoredMatchingTaxonomySelection();
+            const committedValues = normalizeMatchingTaxonomySelection(window.GlobalStore?.matchingSelection?.taxonomies || []);
+            const stateValues = normalizeMatchingTaxonomySelection(window.GlobalStore?.selectedTaxonomies || []);
+            const values = storedValues.length > 0
+                ? storedValues
+                : (committedValues.length > 0 ? committedValues : stateValues);
+            if (values.length === 0) return [];
+
+            if (options.syncControl !== false && typeof window.setSelectedFleetTaxonomies === 'function') {
+                const controlValues = typeof window.getSelectedFleetTaxonomies === 'function'
+                    ? window.getSelectedFleetTaxonomies()
+                    : [];
+                if (controlValues.length !== values.length || values.some(value => !controlValues.includes(value))) {
+                    window.setSelectedFleetTaxonomies(values, { dispatch: false, persist: false });
+                }
+            }
+
+            const storeIsCurrent = Array.isArray(store?.selectedTaxonomies)
+                && store.selectedTaxonomies.length === values.length
+                && values.every(value => store.selectedTaxonomies.includes(value))
+                && store.matchingSelectionPending !== true;
+            if (store && !storeIsCurrent) {
+                const filteredVessels = typeof store.getFilteredVessels === 'function'
+                    ? store.getFilteredVessels()
+                    : [];
+                if (typeof store.commitMatchingSelection === 'function') {
+                    store.commitMatchingSelection(values, filteredVessels);
+                } else {
+                    store.selectedTaxonomies = values.slice();
+                    store.selectedTaxonomy = values[0] || '';
+                    store.matchingSelectionPending = false;
+                    store.matchingReady = true;
+                }
+            }
+            return values;
+        }
+        window.refreshMatchingTaxonomySelectionState = refreshMatchingTaxonomySelectionState;
+
         const MATCHING_MANUAL_EXECUTION_TOKEN = Symbol('matching-manual-execution');
+        const MATCHING_AUTO_EXECUTION_TOKEN = Symbol('matching-auto-execution');
 
         async function executeMatchingEngine(routeOverride = null, executionToken = null) {
-            if (executionToken !== MATCHING_MANUAL_EXECUTION_TOKEN) return false;
+            if (executionToken !== MATCHING_MANUAL_EXECUTION_TOKEN && executionToken !== MATCHING_AUTO_EXECUTION_TOKEN) return false;
+            const matchingRequest = typeof window.fetchMatchingRequestFromGlobalStore === 'function'
+                ? window.fetchMatchingRequestFromGlobalStore(window.GlobalStore?.calculatedState || window.CalculatedState)
+                : (window.GlobalStore?.matchingRequest || window.matchingRequest || null);
+            const effectiveRouteOverride = routeOverride || matchingRequest?.route || null;
             if (typeof window.enforceLocalOnlyMatchingMode === 'function') {
                 window.enforceLocalOnlyMatchingMode();
             }
-            const selectedVesselTaxonomies = Array.isArray(window.GlobalStore?.selectedTaxonomies)
+            const synchronizedTaxonomies = typeof window.refreshMatchingTaxonomySelectionState === 'function'
+                ? window.refreshMatchingTaxonomySelectionState({ force: true })
+                : [];
+            const selectedVesselTaxonomies = synchronizedTaxonomies.length > 0
+                ? synchronizedTaxonomies
+                : Array.isArray(window.GlobalStore?.selectedTaxonomies)
                 ? window.GlobalStore.selectedTaxonomies.slice()
                 : (typeof getSelectedFleetTaxonomies === 'function' ? getSelectedFleetTaxonomies() : []);
-            const matchingCargoType = String(document.getElementById('match-cargo-type')?.value || '').trim();
-            const matchingQuantity = Number(document.getElementById('match-quantity')?.value);
-            const matchingLoadPort = String(routeOverride?.pol || document.getElementById('match-load-port')?.value || '').trim();
-            const matchingUnloadPort = String(routeOverride?.pod || document.getElementById('match-unload-port')?.value || '').trim();
-            const matchingLaycan = String(routeOverride?.laycan || document.getElementById('match-laycan-start')?.value || '').trim();
+            const matchingCargoType = String(document.getElementById('match-cargo-type')?.value || matchingRequest?.cargo?.type || '').trim();
+            const matchingQuantity = Number(document.getElementById('match-quantity')?.value || matchingRequest?.cargo?.quantity);
+            const matchingLoadPort = String(effectiveRouteOverride?.pol || document.getElementById('match-load-port')?.value || '').trim();
+            const matchingUnloadPort = String(effectiveRouteOverride?.pod || document.getElementById('match-unload-port')?.value || '').trim();
+            const matchingLaycan = String(effectiveRouteOverride?.laycan || document.getElementById('match-laycan-start')?.value || '').trim();
             if (
                 selectedVesselTaxonomies.length === 0
                 || !matchingCargoType
@@ -17202,28 +17515,32 @@
             try {
                 // Determine ports and coordinates
                 const loadSelect = document.getElementById('match-load-port');
-                let loadingPortName = String(routeOverride?.pol || loadSelect.options[loadSelect.selectedIndex].text.split(' - ')[0]);
-                let loadingPortLat = Number(routeOverride?.lat?.pol ?? document.getElementById('match-load-lat').value);
-                let loadingPortLon = Number(routeOverride?.lon?.pol ?? document.getElementById('match-load-lon').value);
+                let loadingPortName = String(effectiveRouteOverride?.pol || loadSelect.options[loadSelect.selectedIndex].text.split(' - ')[0]);
+                let loadingPortLat = Number(effectiveRouteOverride?.lat?.pol ?? document.getElementById('match-load-lat').value);
+                let loadingPortLon = Number(effectiveRouteOverride?.lon?.pol ?? document.getElementById('match-load-lon').value);
 
                 const unloadSelect = document.getElementById('match-unload-port');
-                let unloadingPortName = String(routeOverride?.pod || unloadSelect.options[unloadSelect.selectedIndex].text.split(' - ')[0]);
-                let unloadingPortLat = Number(routeOverride?.lat?.pod ?? document.getElementById('match-unload-lat').value);
-                let unloadingPortLon = Number(routeOverride?.lon?.pod ?? document.getElementById('match-unload-lon').value);
+                let unloadingPortName = String(effectiveRouteOverride?.pod || unloadSelect.options[unloadSelect.selectedIndex].text.split(' - ')[0]);
+                let unloadingPortLat = Number(effectiveRouteOverride?.lat?.pod ?? document.getElementById('match-unload-lat').value);
+                let unloadingPortLon = Number(effectiveRouteOverride?.lon?.pod ?? document.getElementById('match-unload-lon').value);
 
                 const quantity = matchingQuantity;
                 const cargoType = matchingCargoType;
                 const todayIso = new Date().toISOString().slice(0, 10);
                 const fallbackLaycanEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-                const laycanStart = String(routeOverride?.laycan || document.getElementById('match-laycan-start').value || todayIso);
+                const laycanStart = String(effectiveRouteOverride?.laycan || document.getElementById('match-laycan-start').value || todayIso);
                 const laycanEnd = document.getElementById('match-laycan-end').value || fallbackLaycanEnd;
                 const maxDraft = parseFloat(document.getElementById('match-max-draft').value) || 12.5;
                 const maxLoa = parseFloat(document.getElementById('match-max-loa').value) || 200;
                 const gearedRequired = document.getElementById('match-geared-required').checked;
 
-                const freightRate = parseFloat(document.getElementById('match-freight-rate').value) || 32.5;
+                const freightRate = parseFloat(document.getElementById('match-freight-rate').value)
+                    || Number(matchingRequest?.freight?.owner)
+                    || 32.5;
                 const lumpsumVal = document.getElementById('match-lumpsum').value.trim();
-                const lumpsumFreight = lumpsumVal ? parseFloat(lumpsumVal) : null;
+                const lumpsumFreight = lumpsumVal
+                    ? parseFloat(lumpsumVal)
+                    : (Number(matchingRequest?.freight?.lumpsum) || null);
 
                 const fuelPrice = parseFloat(document.getElementById('price-sea')?.value) || 650;
                 const dailyOpex = parseFloat(document.getElementById('match-daily-opex').value) || 6500;
@@ -17258,7 +17575,12 @@
                         sourceTaxonomy: selectedVesselTaxonomy
                     },
                     searchMode: 'local_database',
-                    matchRadiusNm: (window.AIS_PROSPECTION_RADII_NM && Number(window.AIS_PROSPECTION_RADII_NM.POL)) || 2000
+                    matchRadiusNm: (window.AIS_PROSPECTION_RADII_NM && Number(window.AIS_PROSPECTION_RADII_NM.POL)) || 2000,
+                    matchingRequest: matchingRequest ? {
+                        requestId: matchingRequest.requestId,
+                        calculationId: matchingRequest.calculationId,
+                        dwt: Number(matchingRequest.dwt) || 0
+                    } : null
                 };
                 const data = await requestMatchingLocal('execute', [], payload);
                 if (!data.success) throw new Error(data.error || 'No se pudo consultar vessels_master.');
@@ -17277,6 +17599,34 @@
                 updateMatchingAuditModeUi();
 
                 if (rawMatches.length === 0) {
+                    const sessionCacheCandidates = [
+                        window.matchingResultsState?.vessels,
+                        window.lastMatchingEngineResults,
+                        window.GlobalStore?.matchingVessels
+                    ];
+                    const preservedSessionMatches = typeof window.hasCurrentSessionMatchingCache === 'function'
+                        && window.hasCurrentSessionMatchingCache()
+                        ? (sessionCacheCandidates.find(candidate => Array.isArray(candidate) && candidate.length > 0) || [])
+                        : [];
+                    if (preservedSessionMatches.length > 0) {
+                        window.matchingLocalState.status = 'cache-preserved';
+                        window.matchingLocalState.validated = preservedSessionMatches.slice();
+                        window.lastMatchingEngineResults = preservedSessionMatches.slice();
+                        window.matchingResultsState = {
+                            ...(window.matchingResultsState || {}),
+                            vessels: preservedSessionMatches.slice(),
+                            count: preservedSessionMatches.length,
+                            cachedAt: window.matchingResultsState?.cachedAt || new Date().toISOString(),
+                            preservedAfterEmptyQuery: true
+                        };
+                        if (typeof renderCachedMatchingResults === 'function') {
+                            renderCachedMatchingResults(preservedSessionMatches);
+                        }
+                        if (typeof window.restoreMatchingSynchronizationFromCache === 'function') {
+                            window.restoreMatchingSynchronizationFromCache();
+                        }
+                        return preservedSessionMatches;
+                    }
                     const emptyMessage = 'No se encontraron coincidencias locales';
                     updateSequentialTelemetryBlock(
                         'matching-execution-success-stick',
@@ -17454,12 +17804,18 @@
                 });
 
                 const matches = deduplicatedMatches;
+                const pipelineSession = typeof window.getPipelineSessionContext === 'function'
+                    ? window.getPipelineSessionContext()
+                    : { sessionId: '' };
                 window.lastMatchingEngineResults = matches;
                 window.matchingResultsState = {
                     vessels: matches,
                     count: matches.length,
                     receivedAt: new Date().toISOString(),
-                    source: matchingRequest.endpoint
+                    cachedAt: new Date().toISOString(),
+                    sessionId: pipelineSession.sessionId,
+                    calculationId: window.GlobalStore?.calculatedState?.calculationId || '',
+                    source: matchingRequest?.endpoint || '/api/matching-local'
                 };
 
                 const deduplicatedCount = Math.max(0, rawMatches.length - matches.length);
@@ -17470,6 +17826,7 @@
 
                 // Store compatible vessels in GlobalStore for AIS map highlighting
                 if (window.GlobalStore) {
+                    window.GlobalStore.matchingCacheSessionId = pipelineSession.sessionId;
                     window.GlobalStore.compatibleVessels = matches
                         .filter(m => m.scores.overall > 0)
                         .map(m => ({
@@ -18058,7 +18415,12 @@
 
         function getMatchingExecutionValidation(routeOverride = null) {
             const hydratedRoute = getMatchingExecutionRouteOverride(routeOverride);
-            const selectedTaxonomies = window.GlobalStore?.matchingSelectionPending !== true
+            const refreshedTaxonomies = typeof window.refreshMatchingTaxonomySelectionState === 'function'
+                ? window.refreshMatchingTaxonomySelectionState({ force: true })
+                : [];
+            const selectedTaxonomies = refreshedTaxonomies.length > 0
+                ? refreshedTaxonomies
+                : window.GlobalStore?.matchingSelectionPending !== true
                 && Array.isArray(window.GlobalStore?.selectedTaxonomies)
                 ? window.GlobalStore.selectedTaxonomies
                 : (typeof getSelectedFleetTaxonomies === 'function' ? getSelectedFleetTaxonomies() : []);
@@ -18167,22 +18529,33 @@
         }
         window.syncGlobalMatchingExecutionFleet = syncGlobalMatchingExecutionFleet;
 
-        function enforceLocalOnlyMatchingMode() {
+        function enforceLocalOnlyMatchingMode(options = {}) {
+            const preserveSynchronization = options.preserveSynchronization === true
+                || (typeof window.hasCurrentSessionMatchingCache === 'function'
+                    && window.hasCurrentSessionMatchingCache()
+                    && typeof window.isCalculatedStateCurrent === 'function'
+                    && window.isCalculatedStateCurrent(window.GlobalStore?.calculatedState || window.CalculatedState));
             window.setCoreProOperationMode?.(window.CORE_PRO_OPERATION_MODES?.LOCAL_ONLY || 'LOCAL-ONLY');
             window.externalRadarSweepState = Object.assign({}, window.externalRadarSweepState || {}, {
                 activated: false,
                 requestedAt: null
             });
             window.aisRadarUserActivated = false;
-            window.isLiveTrackingEnabled = false;
+            if (window.RadarGlobalControl) {
+                window.RadarGlobalControl.setState({ mode: 'frozen', status: 'idle', frozenAt: new Date().toISOString(), source: 'local-only-matching' });
+            } else {
+                window.isLiveTrackingEnabled = false;
+            }
             window.AIS_PROXY_POLLING_ACTIVE = false;
             clearTimeout(window.contextualAisRadarTimer);
             if (typeof window.stopAisRadarPolling === 'function') window.stopAisRadarPolling();
             if (window.MapLoader && typeof window.MapLoader.stopAisProxyPolling === 'function') {
                 window.MapLoader.stopAisProxyPolling();
             }
-            if (typeof window.keepRadarSynchronizationPending === 'function') {
+            if (!preserveSynchronization && typeof window.keepRadarSynchronizationPending === 'function') {
                 window.keepRadarSynchronizationPending();
+            } else if (preserveSynchronization && typeof window.restoreMatchingSynchronizationFromCache === 'function') {
+                window.restoreMatchingSynchronizationFromCache();
             }
             return true;
         }
@@ -18190,8 +18563,16 @@
 
         async function handleMatchingExecutionClick(event, routeOverride = null) {
             event?.preventDefault?.();
-            enforceLocalOnlyMatchingMode();
-            const hydratedRoute = getMatchingExecutionRouteOverride(routeOverride);
+            const calculatedState = typeof window.rehydrateCalculatedState === 'function'
+                ? await window.rehydrateCalculatedState()
+                : null;
+            const matchingRequest = typeof window.fetchMatchingRequestFromGlobalStore === 'function'
+                ? window.fetchMatchingRequestFromGlobalStore(calculatedState)
+                : (window.GlobalStore?.matchingRequest || window.matchingRequest || null);
+            const hasSessionCache = typeof window.hasCurrentSessionMatchingCache === 'function'
+                && window.hasCurrentSessionMatchingCache();
+            enforceLocalOnlyMatchingMode({ preserveSynchronization: Boolean(matchingRequest || (calculatedState && hasSessionCache)) });
+            const hydratedRoute = getMatchingExecutionRouteOverride(routeOverride || matchingRequest?.route || null);
             const validation = getMatchingExecutionValidation(hydratedRoute);
             if (!renderMatchingExecutionValidation(validation)) return false;
             syncGlobalMatchingExecutionFleet();
@@ -18200,10 +18581,472 @@
         window.handleMatchingExecutionClick = handleMatchingExecutionClick;
 
         async function runMatchingEngine(routeOverride = null, options = {}) {
-            if (options.manual !== true) return false;
-            return executeMatchingEngine(routeOverride, MATCHING_MANUAL_EXECUTION_TOKEN);
+            if (options.manual !== true && options.auto !== true) return false;
+            const executionToken = options.auto === true
+                ? MATCHING_AUTO_EXECUTION_TOKEN
+                : MATCHING_MANUAL_EXECUTION_TOKEN;
+            return executeMatchingEngine(routeOverride, executionToken);
         }
         window.runMatchingEngine = runMatchingEngine;
+
+        const AUTO_FLOW_RADAR_BATCH_SIZE = 500;
+        const PIPELINE_SESSION_ID_STORAGE_KEY = 'seacharter_pipeline_session_id';
+        const PIPELINE_SESSION_STARTED_AT_STORAGE_KEY = 'seacharter_pipeline_session_started_at';
+        const CALCULATED_STATE_STORAGE_KEY = 'seacharter_calculated_state_v1';
+        const MATCHING_REQUEST_STORAGE_KEY = 'seacharter_matching_request_v1';
+
+        function persistMatchingRequest(request) {
+            if (!request || typeof request !== 'object') return null;
+            const session = getPipelineSessionContext();
+            const matchingRequest = {
+                ...request,
+                endpoint: String(request.endpoint || '/api/matching-local'),
+                sessionId: session.sessionId,
+                sessionStartedAt: session.startedAt,
+                cachedAt: new Date().toISOString()
+            };
+            window.matchingRequest = matchingRequest;
+            if (window.GlobalStore) window.GlobalStore.matchingRequest = matchingRequest;
+            try {
+                window.sessionStorage.setItem(MATCHING_REQUEST_STORAGE_KEY, JSON.stringify(matchingRequest));
+            } catch (_) {}
+            return matchingRequest;
+        }
+        window.persistMatchingRequest = persistMatchingRequest;
+
+        function isMatchingRequestCurrent(request) {
+            if (!request || typeof request !== 'object') return false;
+            const session = getPipelineSessionContext();
+            const cachedAt = Date.parse(request.cachedAt || request.createdAt || '');
+            return request.sessionId === session.sessionId
+                && Number.isFinite(cachedAt)
+                && cachedAt >= Date.parse(session.startedAt || '');
+        }
+        window.isMatchingRequestCurrent = isMatchingRequestCurrent;
+
+        function applyMatchingRequestToContext(request) {
+            if (!request || typeof request !== 'object') return null;
+            const route = request.route || {};
+            setInputValue('match-load-port', route.pol);
+            setInputValue('match-unload-port', route.pod);
+            setInputValue('match-laycan-start', request.laycan?.start || route.laycan);
+            setInputValue('match-laycan-end', request.laycan?.end);
+            setInputValue('match-load-lat', route.lat?.pol);
+            setInputValue('match-load-lon', route.lon?.pol);
+            setInputValue('match-unload-lat', route.lat?.pod);
+            setInputValue('match-unload-lon', route.lon?.pod);
+            setInputValue('match-cargo-type', request.cargo?.type);
+            setInputValue('match-quantity', request.cargo?.quantity);
+            setInputValue('match-freight-rate', request.freight?.owner);
+            setInputValue('match-lumpsum', request.freight?.lumpsum);
+            window.coreProMatchingRouteContext = {
+                pol: { lat: route.lat?.pol ?? null, lon: route.lon?.pol ?? null },
+                pod: { lat: route.lat?.pod ?? null, lon: route.lon?.pod ?? null },
+                laycan: request.laycan?.start || route.laycan || ''
+            };
+            return request;
+        }
+        window.applyMatchingRequestToContext = applyMatchingRequestToContext;
+
+        function fetchMatchingRequestFromGlobalStore(calculatedState = null) {
+            const candidates = [
+                window.GlobalStore?.matchingRequest,
+                window.matchingRequest,
+                calculatedState?.matchingRequest,
+                window.GlobalStore?.calculatedState?.matchingRequest
+            ];
+            try {
+                candidates.push(JSON.parse(window.sessionStorage.getItem(MATCHING_REQUEST_STORAGE_KEY) || 'null'));
+            } catch (_) {}
+            const currentRequest = candidates.find(isMatchingRequestCurrent);
+            if (currentRequest) return applyMatchingRequestToContext(persistMatchingRequest(currentRequest));
+            if (calculatedState && typeof window.buildMatchingRequest === 'function') {
+                return applyMatchingRequestToContext(persistMatchingRequest(window.buildMatchingRequest(calculatedState)));
+            }
+            return null;
+        }
+        window.fetchMatchingRequestFromGlobalStore = fetchMatchingRequestFromGlobalStore;
+
+        function getPipelineSessionContext() {
+            let sessionId = '';
+            let startedAt = '';
+            try {
+                sessionId = String(window.sessionStorage.getItem(PIPELINE_SESSION_ID_STORAGE_KEY) || '').trim();
+                startedAt = String(window.sessionStorage.getItem(PIPELINE_SESSION_STARTED_AT_STORAGE_KEY) || '').trim();
+                if (!sessionId) {
+                    sessionId = window.crypto?.randomUUID?.() || `pipeline-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+                    window.sessionStorage.setItem(PIPELINE_SESSION_ID_STORAGE_KEY, sessionId);
+                }
+                if (!Number.isFinite(Date.parse(startedAt))) {
+                    startedAt = new Date().toISOString();
+                    window.sessionStorage.setItem(PIPELINE_SESSION_STARTED_AT_STORAGE_KEY, startedAt);
+                }
+            } catch (_) {
+                sessionId = window.pipelineSessionContext?.sessionId
+                    || window.crypto?.randomUUID?.()
+                    || `pipeline-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+                startedAt = window.pipelineSessionContext?.startedAt || new Date().toISOString();
+            }
+            window.pipelineSessionContext = { sessionId, startedAt };
+            return window.pipelineSessionContext;
+        }
+        window.getPipelineSessionContext = getPipelineSessionContext;
+
+        function isCalculatedStateCurrent(calculatedState) {
+            if (!calculatedState || typeof calculatedState !== 'object') return false;
+            const session = getPipelineSessionContext();
+            const cachedAt = Date.parse(calculatedState.cachedAt || calculatedState.calculatedAt || '');
+            const sessionStartedAt = Date.parse(session.startedAt || '');
+            return calculatedState.sessionId === session.sessionId
+                && Number.isFinite(cachedAt)
+                && Number.isFinite(sessionStartedAt)
+                && cachedAt >= sessionStartedAt;
+        }
+        window.isCalculatedStateCurrent = isCalculatedStateCurrent;
+
+        function injectCalculatedState(calculation) {
+            const session = getPipelineSessionContext();
+            const calculatedState = {
+                ...(calculation || {}),
+                sessionId: session.sessionId,
+                sessionStartedAt: session.startedAt,
+                cachedAt: new Date().toISOString()
+            };
+            window.CalculatedState = calculatedState;
+            if (window.GlobalStore) {
+                window.GlobalStore.calculatedState = calculatedState;
+                window.GlobalStore.calculationSessionId = session.sessionId;
+            }
+            if (calculatedState.matchingRequest) {
+                calculatedState.matchingRequest = persistMatchingRequest(calculatedState.matchingRequest);
+            }
+            try {
+                window.sessionStorage.setItem(CALCULATED_STATE_STORAGE_KEY, JSON.stringify(calculatedState));
+            } catch (_) {}
+            return calculatedState;
+        }
+        window.injectCalculatedState = injectCalculatedState;
+
+        function applyCalculatedStateToMatchingContext(calculatedState) {
+            if (!isCalculatedStateCurrent(calculatedState)) return false;
+            const route = calculatedState.route || {};
+            if (route.pol || route.pod || route.laycan) {
+                window.SeaCharterStore?.set?.({ pol: route.pol, pod: route.pod, laycanDate: route.laycan });
+                window.coreProMatchingRouteContext = {
+                    pol: { lat: route.lat?.pol ?? null, lon: route.lon?.pol ?? null },
+                    pod: { lat: route.lat?.pod ?? null, lon: route.lon?.pod ?? null },
+                    laycan: route.laycan || ''
+                };
+            }
+            setInputValue('match-load-port', route.pol);
+            setInputValue('match-unload-port', route.pod);
+            setInputValue('match-laycan-start', route.laycan);
+            setInputValue('match-load-lat', route.lat?.pol);
+            setInputValue('match-load-lon', route.lon?.pol);
+            setInputValue('match-unload-lat', route.lat?.pod);
+            setInputValue('match-unload-lon', route.lon?.pod);
+            setInputValue('match-cargo-type', calculatedState.cargo?.type);
+            setInputValue('match-quantity', calculatedState.cargo?.quantity);
+            setInputValue('match-freight-rate', calculatedState.freight?.owner);
+            if (calculatedState.matchingRequest) persistMatchingRequest(calculatedState.matchingRequest);
+            if (window.GlobalStore) {
+                window.GlobalStore.calculatedState = calculatedState;
+                window.GlobalStore.calculationSessionId = calculatedState.sessionId;
+            }
+            return true;
+        }
+        window.applyCalculatedStateToMatchingContext = applyCalculatedStateToMatchingContext;
+
+        async function rehydrateCalculatedState() {
+            const storeState = window.GlobalStore?.calculatedState;
+            if (isCalculatedStateCurrent(storeState)) {
+                applyCalculatedStateToMatchingContext(storeState);
+                return storeState;
+            }
+            if (isCalculatedStateCurrent(window.CalculatedState)) {
+                applyCalculatedStateToMatchingContext(window.CalculatedState);
+                return window.CalculatedState;
+            }
+            try {
+                const storedState = JSON.parse(window.sessionStorage.getItem(CALCULATED_STATE_STORAGE_KEY) || 'null');
+                if (isCalculatedStateCurrent(storedState)) {
+                    window.CalculatedState = storedState;
+                    applyCalculatedStateToMatchingContext(storedState);
+                    return storedState;
+                }
+            } catch (_) {}
+            try {
+                const response = await fetch('/api/calculation-state', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+                const payload = await response.json().catch(() => ({}));
+                if (response.ok && isCalculatedStateCurrent(payload?.calculation)) {
+                    window.CalculatedState = payload.calculation;
+                    applyCalculatedStateToMatchingContext(payload.calculation);
+                    return payload.calculation;
+                }
+            } catch (_) {}
+            return null;
+        }
+        window.rehydrateCalculatedState = rehydrateCalculatedState;
+
+        function hasCurrentSessionMatchingCache() {
+            const session = getPipelineSessionContext();
+            const cacheState = window.matchingResultsState || {};
+            const candidates = [
+                cacheState.vessels,
+                window.lastMatchingEngineResults,
+                window.GlobalStore?.matchingVessels,
+                window.GlobalStore?.compatibleVessels
+            ];
+            const hasCachedVessels = candidates.some(candidate => Array.isArray(candidate) && candidate.length > 0);
+            if (!hasCachedVessels) return false;
+            if (cacheState.sessionId === session.sessionId || window.GlobalStore?.matchingCacheSessionId === session.sessionId) {
+                return true;
+            }
+            const receivedAt = Date.parse(cacheState.cachedAt || cacheState.receivedAt || '');
+            const sessionStartedAt = Date.parse(session.startedAt || '');
+            if (Number.isFinite(receivedAt) && Number.isFinite(sessionStartedAt) && receivedAt >= sessionStartedAt) {
+                cacheState.sessionId = session.sessionId;
+                cacheState.cachedAt = cacheState.cachedAt || cacheState.receivedAt || new Date().toISOString();
+                if (window.GlobalStore) window.GlobalStore.matchingCacheSessionId = session.sessionId;
+                return true;
+            }
+            return false;
+        }
+        window.hasCurrentSessionMatchingCache = hasCurrentSessionMatchingCache;
+
+        window.autoFlowState = window.autoFlowState || {
+            phase: 'idle',
+            data_ready: false,
+            routeSignature: '',
+            completedRouteSignature: '',
+            radarPromise: null,
+            matchingPromise: null,
+            lastRadarLoadedAt: '',
+            lastCalculationId: '',
+            calculationPersisted: false,
+            pendingRoute: null,
+            pendingCalculation: null,
+            lastError: null
+        };
+
+        function getAutoFlowRouteSignature(route) {
+            return [
+                route?.pol,
+                route?.pod,
+                route?.laycan,
+                route?.lat?.pol,
+                route?.lon?.pol,
+                route?.lat?.pod,
+                route?.lon?.pod,
+                document.getElementById('match-cargo-type')?.value,
+                document.getElementById('match-quantity')?.value
+            ]
+                .map(value => String(value ?? '').trim())
+                .join('|');
+        }
+
+        function clearAutoFlowBlockingFeedback() {
+            const feedback = document.getElementById('matching-execution-validation');
+            const button = document.getElementById('btn-run-matching');
+            if (feedback) {
+                feedback.textContent = '';
+                feedback.dataset.missingFields = '';
+                feedback.classList.add('hidden');
+            }
+            if (button) {
+                button.setAttribute('aria-invalid', 'false');
+                button.classList.remove('ring-2', 'ring-red-300');
+            }
+        }
+
+        function setAutoFlowDataReady(isReady, detail = {}) {
+            const ready = isReady === true;
+            window.autoFlowState.data_ready = ready;
+            document.documentElement.dataset.autoFlowDataReady = ready ? 'true' : 'false';
+            window.dispatchEvent(new CustomEvent('PIPELINE_STATE_CHANGED', {
+                detail: { ...detail, data_ready: ready, phase: window.autoFlowState.phase }
+            }));
+            return ready;
+        }
+        window.setAutoFlowDataReady = setAutoFlowDataReady;
+
+        async function persistCalculationEvent(calculation) {
+            let lastError = null;
+            for (let attempt = 1; attempt <= 3; attempt += 1) {
+                try {
+                    const response = await fetch('/api/calculation-state', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                        body: JSON.stringify({ calculation })
+                    });
+                    const payload = await response.json().catch(() => ({}));
+                    if (response.ok && payload?.success === true) return payload;
+                    lastError = new Error(payload?.error || `No se pudo persistir el cálculo (HTTP ${response.status}).`);
+                } catch (error) {
+                    lastError = error;
+                }
+                if (attempt < 3) {
+                    await new Promise(resolve => setTimeout(resolve, attempt * 250));
+                }
+            }
+            throw lastError || new Error('No se pudo persistir el cálculo.');
+        }
+        window.persistCalculationEvent = persistCalculationEvent;
+
+        function getAutoFlowReadiness(routeOverride = null) {
+            const taxonomies = typeof window.refreshMatchingTaxonomySelectionState === 'function'
+                ? window.refreshMatchingTaxonomySelectionState({ force: true })
+                : [];
+            const route = getMatchingExecutionRouteOverride(routeOverride);
+            const validation = getMatchingExecutionValidation(route);
+            return {
+                ready: taxonomies.length > 0 && validation.valid,
+                taxonomies,
+                route,
+                validation
+            };
+        }
+
+        async function queueAutoFlowFromTrip(routeOverride = null) {
+            const state = window.autoFlowState;
+            const readiness = getAutoFlowReadiness(routeOverride);
+            clearAutoFlowBlockingFeedback();
+            setAutoFlowDataReady(false, { source: 'auto-flow-radar-start' });
+            if (!readiness.ready) {
+                state.phase = 'waiting-for-trip-data';
+                state.lastError = null;
+                window.dispatchEvent(new CustomEvent('AUTO_FLOW_WAITING', {
+                    detail: { missingFields: readiness.validation.missingFields, coordinateError: readiness.validation.coordinateError }
+                }));
+                return false;
+            }
+
+            const routeSignature = getAutoFlowRouteSignature(readiness.route);
+            if (state.radarPromise || state.matchingPromise) {
+                return state.radarPromise || state.matchingPromise;
+            }
+            state.phase = 'loading-radar';
+            state.routeSignature = routeSignature;
+            state.lastError = null;
+            window.dispatchEvent(new CustomEvent('AUTO_FLOW_TRIP_READY', {
+                detail: { route: readiness.route, taxonomies: readiness.taxonomies }
+            }));
+
+            if (typeof window.startRadarLive !== 'function') {
+                state.phase = 'waiting-for-radar';
+                return false;
+            }
+            state.radarPromise = Promise.resolve(window.startRadarLive({ source: 'auto-flow', refresh: true }))
+                .catch(error => {
+                    state.phase = 'error';
+                    state.lastError = error?.message || 'Radar LIVE no pudo iniciarse.';
+                    return [];
+                })
+                .finally(() => {
+                    state.radarPromise = null;
+                });
+            return state.radarPromise;
+        }
+        window.queueAutoFlowFromTrip = queueAutoFlowFromTrip;
+
+        async function executeAutoFlowMatching(event) {
+            const state = window.autoFlowState;
+            const readiness = getAutoFlowReadiness(event?.detail?.route || null);
+            clearAutoFlowBlockingFeedback();
+            if (!readiness.ready || state.matchingPromise) return false;
+            const radarLoadedAt = String(event?.detail?.loadedAt || '').trim();
+            if (radarLoadedAt && state.lastRadarLoadedAt === radarLoadedAt) return true;
+            const routeSignature = getAutoFlowRouteSignature(readiness.route);
+            state.lastRadarLoadedAt = radarLoadedAt;
+
+            state.phase = 'matching';
+            syncGlobalMatchingExecutionFleet();
+            state.matchingPromise = Promise.resolve(runMatchingEngine(readiness.route, { auto: true }))
+                .then(result => {
+                    if (result !== false) {
+                        state.phase = 'completed';
+                        state.completedRouteSignature = routeSignature;
+                        window.dispatchEvent(new CustomEvent('AUTO_FLOW_COMPLETED', {
+                            detail: {
+                                route: readiness.route,
+                                radarVesselCount: Number(event?.detail?.totalCount) || 0,
+                                matchingResultCount: Number(window.matchingResultsState?.count) || 0
+                            }
+                        }));
+                    } else {
+                        state.phase = 'waiting-for-trip-data';
+                    }
+                    return result;
+                })
+                .catch(error => {
+                    state.phase = 'error';
+                    state.lastError = error?.message || 'El Motor de Coincidencia no pudo ejecutarse.';
+                    return false;
+                })
+                .finally(() => {
+                    state.matchingPromise = null;
+                });
+            return state.matchingPromise;
+        }
+        window.executeAutoFlowMatching = executeAutoFlowMatching;
+
+        window.addEventListener('SEA_ROUTE_DEFINED', event => {
+            window.autoFlowState.pendingRoute = event?.detail || null;
+        });
+        window.addEventListener('AUTO_FLOW_CALCULATIONS_READY', event => {
+            window.autoFlowState.pendingCalculation = event?.detail || null;
+        });
+        window.addEventListener('CALCULATION_EVENT', async event => {
+            console.log('DEBUG: Evento recibido en Pipeline. Payload:', event.detail);
+            const state = window.autoFlowState;
+            const calculation = injectCalculatedState(event?.detail || {});
+            state.phase = 'persisting-calculation';
+            state.lastCalculationId = String(calculation.calculationId || '');
+            state.calculationPersisted = false;
+            state.lastError = null;
+            setAutoFlowDataReady(false, { source: 'calculation-event', calculationId: state.lastCalculationId });
+
+            try {
+                await persistCalculationEvent(calculation);
+                state.calculationPersisted = true;
+                window.dispatchEvent(new CustomEvent('CALCULATION_PERSISTED', { detail: calculation }));
+            } catch (error) {
+                state.phase = 'persistence-error';
+                state.lastError = error?.message || 'No se pudo persistir el cálculo.';
+                window.dispatchEvent(new CustomEvent('CALCULATION_PERSISTENCE_FAILED', {
+                    detail: { calculationId: state.lastCalculationId, error: state.lastError }
+                }));
+                return false;
+            }
+
+            const taxonomies = typeof window.refreshMatchingTaxonomySelectionState === 'function'
+                ? window.refreshMatchingTaxonomySelectionState({ force: true })
+                : [];
+            if (taxonomies.length === 0) {
+                state.phase = 'waiting-for-taxonomy';
+                return false;
+            }
+            if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
+            const route = calculation.route || state.pendingRoute || state.pendingCalculation?.route || null;
+            return queueAutoFlowFromTrip(route);
+        });
+        window.addEventListener('RADAR_LIVE_BATCH_READY', event => {
+            setAutoFlowDataReady(true, event?.detail || {});
+        });
+        window.addEventListener('PIPELINE_STATE_CHANGED', event => {
+            const button = document.getElementById('btn-run-matching');
+            const dataReady = event?.detail?.data_ready === true;
+            const hasMatchingRequest = Boolean(window.fetchMatchingRequestFromGlobalStore?.(window.GlobalStore?.calculatedState || window.CalculatedState));
+            const executionReady = dataReady || hasMatchingRequest;
+            if (button) {
+                button.disabled = !executionReady;
+                button.setAttribute('aria-disabled', String(!executionReady));
+                button.dataset.pipelineReady = executionReady ? 'true' : 'false';
+                if (executionReady) button.dataset.matchingReady = 'true';
+            }
+            if (!dataReady) return;
+            executeAutoFlowMatching(event);
+        });
 
         function applyMatchingVesselToCalculator(vesselJsonEscaped, loadPortLat, loadPortLon, unloadPortLat, unloadPortLon, quantity, freightRate, cargoType, loadName, unloadName) {
             try {
@@ -18768,6 +19611,14 @@
                     if (document.getElementById('match-ais-density-count')) document.getElementById('match-ais-density-count').innerText = aisDensityText;
                     if (document.getElementById('match-ais-supply-coefficient')) document.getElementById('match-ais-supply-coefficient').innerText = aisSupplyText;
                     if (document.getElementById('match-ais-competition-status')) document.getElementById('match-ais-competition-status').innerText = aisCompetitionText;
+                    window.dispatchEvent(new CustomEvent('AUTO_FLOW_CALCULATIONS_READY', {
+                        detail: {
+                            route: getMatchingExecutionRouteOverride(),
+                            cargoType: matchCargoType?.value || '',
+                            quantity: cargoQty,
+                            calculatedAt: new Date().toISOString()
+                        }
+                    }));
                 }
             } catch (err) {
                 console.error("Error synchronizing fields:", err);
@@ -19349,13 +20200,18 @@
             const button = document.getElementById('btn-run-matching');
             if (!button) return;
             const count = Math.max(0, Number(resultCount) || 0);
+            const refreshedTaxonomies = typeof window.refreshMatchingTaxonomySelectionState === 'function'
+                ? window.refreshMatchingTaxonomySelectionState({ syncControl: false })
+                : [];
             const matchingReady = window.GlobalStore?.matchingReady === true;
             const matchingSelectionPending = window.GlobalStore?.matchingSelectionPending === true;
-            const hasLocalTaxonomyQuery = Array.isArray(window.GlobalStore?.selectedTaxonomies)
-                && window.GlobalStore.selectedTaxonomies.length > 0
+            const hasMatchingRequest = Boolean(window.fetchMatchingRequestFromGlobalStore?.(window.GlobalStore?.calculatedState || window.CalculatedState));
+            const hasLocalTaxonomyQuery = (refreshedTaxonomies.length > 0
+                || (Array.isArray(window.GlobalStore?.selectedTaxonomies)
+                    && window.GlobalStore.selectedTaxonomies.length > 0))
                 && !matchingSelectionPending;
             const readyVesselCount = Math.max(0, Number(window.GlobalStore?.matchingSelection?.vesselCount) || 0);
-            button.disabled = matchingSelectionPending || (count === 0 && !hasLocalTaxonomyQuery);
+            button.disabled = matchingSelectionPending || (!hasMatchingRequest && count === 0 && !hasLocalTaxonomyQuery);
             button.setAttribute('aria-disabled', String(button.disabled));
             button.dataset.matchingReady = matchingReady ? 'true' : 'false';
             button.dataset.readyVesselCount = String(readyVesselCount);
@@ -19372,6 +20228,12 @@
 
         function handleReadyForMatching(event) {
             const store = window.GlobalStore;
+            if (typeof window.refreshMatchingTaxonomySelectionState === 'function') {
+                window.refreshMatchingTaxonomySelectionState({
+                    taxonomies: event?.detail?.taxonomies || [],
+                    syncControl: true
+                });
+            }
             const taxonomies = Array.isArray(store?.selectedTaxonomies) ? store.selectedTaxonomies : [];
             if (store?.matchingSelectionPending || taxonomies.length === 0) return false;
 
@@ -19396,6 +20258,27 @@
             return event?.detail?.commitId || true;
         }
         window.addEventListener('READY_FOR_MATCHING', handleReadyForMatching);
+
+        function handleMatchingTaxonomySelectionSaved(event) {
+            const taxonomies = typeof window.refreshMatchingTaxonomySelectionState === 'function'
+                ? window.refreshMatchingTaxonomySelectionState({
+                    taxonomies: event?.detail?.taxonomies || [],
+                    syncControl: true
+                })
+                : [];
+            if (taxonomies.length === 0) return false;
+            const currentResultCount = Number(document.getElementById('btn-run-matching')?.dataset.matchingResultCount) || 0;
+            syncMatchingButtonWithCachedResults(currentResultCount);
+            if (typeof window.renderMatchingExecutionValidation === 'function') {
+                window.renderMatchingExecutionValidation();
+            }
+            return true;
+        }
+        window.addEventListener('TAXONOMY_SELECTION_SAVED', handleMatchingTaxonomySelectionSaved);
+        window.addEventListener('storage', (event) => {
+            if (event?.key !== MATCHING_TAXONOMY_SELECTION_STORAGE_KEY || !event.newValue) return;
+            handleMatchingTaxonomySelectionSaved({ detail: { taxonomies: normalizeMatchingTaxonomySelection(event.newValue) } });
+        });
 
         function renderCachedMatchingResults(cachedMatches) {
             const resultsList = document.getElementById('matching-results-list');
@@ -19455,13 +20338,25 @@
                 window.GlobalStore.matchingVessels = matches.slice();
                 window.GlobalStore.compatibleVessels = matches.filter(match => match.compatibility?.compatible !== false);
             }
+            const pipelineSession = typeof window.getPipelineSessionContext === 'function'
+                ? window.getPipelineSessionContext()
+                : { sessionId: '' };
+            const existingCacheTimestamp = window.matchingResultsState?.cachedAt
+                || window.matchingResultsState?.receivedAt
+                || new Date().toISOString();
             window.matchingResultsState = {
                 vessels: matches,
                 count: cachedCount,
                 receivedAt: window.matchingResultsState?.receivedAt || new Date().toISOString(),
+                cachedAt: existingCacheTimestamp,
+                sessionId: window.matchingResultsState?.sessionId || pipelineSession.sessionId,
+                calculationId: window.matchingResultsState?.calculationId || window.GlobalStore?.calculatedState?.calculationId || '',
                 source: window.matchingResultsState?.source || 'ais-matching-cache',
                 hydratedBy: 'density-map-preflight'
             };
+            if (window.GlobalStore && window.matchingResultsState.sessionId === pipelineSession.sessionId) {
+                window.GlobalStore.matchingCacheSessionId = pipelineSession.sessionId;
+            }
             window.lastClassifiedVessels = matches.map(match => ({
                 imo: match.vessel?.imo || match.ais?.imo || 0,
                 vesselName: match.vessel?.vesselName || match.vessel?.vessel_name || 'Unknown',
@@ -19485,20 +20380,8 @@
             const openingReadOnlyDensityMap = tabId === 'ais';
             const leavingReadOnlyDensityMap = window.aisDensityReadOnly === true && !openingReadOnlyDensityMap;
             window.aisDensityReadOnly = openingReadOnlyDensityMap;
-            if (leavingReadOnlyDensityMap) {
-                window.isLiveTrackingEnabled = true;
-            }
             if (openingReadOnlyDensityMap) {
-                window.aisRadarUserActivated = false;
-                window.isLiveTrackingEnabled = false;
-                clearTimeout(window.contextualAisRadarTimer);
-                window.contextualAisRadarTimer = null;
-                if (typeof window.stopAisRadarPolling === 'function') {
-                    window.stopAisRadarPolling();
-                }
-                if (window.MapLoader && typeof window.MapLoader.stopAisProxyPolling === 'function') {
-                    window.MapLoader.stopAisProxyPolling();
-                }
+                window.aisRadarUserActivated = window.RadarGlobalControl?.getState().mode === 'live';
             }
             SeaCharterStore.set(readRouteStateFromCalculator());
             syncGlobalStateToForms();
@@ -19525,6 +20408,8 @@
             closeAdvancedModulesMenu();
 
             if (tabId === 'matching') {
+                window.initializeMatchingGlobalTaxonomyControl?.();
+                window.GlobalTaxonomyProvider?.ensure({ notify: true, source: 'matching-tab-entry' });
                 syncCalculatorAndMatching('calculator');
                 // Auto-redacta la orden de fletamento en el Traductor NLP a partir
                 // del estado global del Estimador (Pestaña 1).
@@ -22660,6 +23545,94 @@
             }
             runEngine();
         }
+
+        function buildMatchingRequest(calculation = {}) {
+            const route = calculation.route || (typeof window.getMatchingExecutionRouteOverride === 'function'
+                ? window.getMatchingExecutionRouteOverride()
+                : {});
+            const state = typeof State !== 'undefined' && State ? State : {};
+            const readNumber = id => {
+                const value = Number(document.getElementById(id)?.value);
+                return Number.isFinite(value) ? value : 0;
+            };
+            return {
+                requestId: window.crypto?.randomUUID?.() || `matching-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                calculationId: String(calculation.calculationId || ''),
+                endpoint: '/api/matching-local',
+                operation: 'execute',
+                createdAt: new Date().toISOString(),
+                route: {
+                    pol: String(route?.pol || '').trim(),
+                    pod: String(route?.pod || '').trim(),
+                    laycan: String(route?.laycan || '').trim(),
+                    lat: route?.lat || {},
+                    lon: route?.lon || {}
+                },
+                laycan: {
+                    start: String(route?.laycan || document.getElementById('gc-laycan-date')?.value || '').trim(),
+                    end: String(document.getElementById('gc-cancel-date')?.value || document.getElementById('match-laycan-end')?.value || '').trim()
+                },
+                cargo: {
+                    type: String(calculation.cargo?.type || document.getElementById('cargo-type')?.value || '').trim(),
+                    quantity: Number(calculation.cargo?.quantity) || readNumber('cargo-qty')
+                },
+                freight: {
+                    owner: Number(calculation.freight?.owner) || readNumber('freight-rate'),
+                    charterer: Number(calculation.freight?.charterer) || readNumber('freight-sell'),
+                    lumpsum: Number(calculation.freight?.lumpsum) || readNumber('lumpsum-override')
+                },
+                dwt: Number(state.dwt) || readNumber('vessel-dwt')
+            };
+        }
+        window.buildMatchingRequest = buildMatchingRequest;
+
+        function buildCalculationEventPayload(role) {
+            const route = typeof window.getMatchingExecutionRouteOverride === 'function'
+                ? window.getMatchingExecutionRouteOverride()
+                : null;
+            const readNumber = id => {
+                const value = Number(document.getElementById(id)?.value);
+                return Number.isFinite(value) ? value : 0;
+            };
+            const state = typeof State !== 'undefined' && State ? State : {};
+            const calculationId = window.crypto?.randomUUID?.()
+                || `calculation-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            return {
+                calculationId,
+                trigger: role === 'owner' ? 'owner-freight' : 'charterer-freight',
+                calculatedAt: new Date().toISOString(),
+                route,
+                cargo: {
+                    type: String(document.getElementById('match-cargo-type')?.value || document.getElementById('cargo-type')?.value || '').trim(),
+                    quantity: readNumber('cargo-qty')
+                },
+                freight: {
+                    owner: readNumber('freight-rate'),
+                    charterer: readNumber('freight-sell'),
+                    lumpsum: readNumber('lumpsum-override')
+                },
+                economics: {
+                    breakEven: Number(state.breakEvenArmador ?? state.breakEven) || 0,
+                    suggestedOwner: Number(state.sugOwner) || 0,
+                    suggestedCharterer: Number(state.sugCharterer) || 0,
+                    tce: Number(state.tce) || 0,
+                    voyageCost: Number(state.totalCost ?? state.costoTotalViaje) || 0
+                }
+            };
+        }
+        window.buildCalculationEventPayload = buildCalculationEventPayload;
+
+        function handleFreightMasterTrigger(role, event = null) {
+            event?.preventDefault?.();
+            console.log('DEBUG: Botón clicado, disparando evento...');
+            useAlgorithmicFreight(role);
+            const calculation = buildCalculationEventPayload(role);
+            calculation.matchingRequest = buildMatchingRequest(calculation);
+            calculation.matchingRequest = window.persistMatchingRequest(calculation.matchingRequest);
+            window.dispatchEvent(new CustomEvent('CALCULATION_EVENT', { detail: calculation }));
+            return calculation;
+        }
+        window.handleFreightMasterTrigger = handleFreightMasterTrigger;
 
         // --- ALGORITMO LOCAL DE FLETE SPOT REAL (SIN IA) ---
         function predictSpotMarketLocal() {
@@ -34361,6 +35334,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             filteredVesselsInitialized: false,
             selectedTaxonomy: '',
             selectedTaxonomies: [],
+            calculatedState: null,
+            matchingRequest: null,
+            radarState: null,
+            calculationSessionId: '',
+            matchingCacheSessionId: '',
             matchingVessels: [],
             matchingReady: false,
             matchingSelectionPending: false,
@@ -35010,70 +35988,142 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return window.stopAisRadarPolling();
         };
 
+        const RADAR_GLOBAL_STATE_STORAGE_KEY = 'seacharter_radar_global_state_v1';
         window.isLiveTrackingEnabled = false;
-        window.toggleLiveTracking = async function() {
-            if (window.matchingAuditModeState?.enabled) return;
-            const btn = document.getElementById('btn-freeze-radar');
-            const timestampEl = document.getElementById('radar-frozen-timestamp');
-            const activatingLive = window.isLiveTrackingEnabled !== true;
 
-            if (!activatingLive) {
-                window.isLiveTrackingEnabled = false;
-                const now = new Date();
-                const hrs = String(now.getHours()).padStart(2, '0');
-                const mins = String(now.getMinutes()).padStart(2, '0');
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fa-solid fa-snowflake mr-1 text-[10px] animate-pulse"></i>Radar: FROZEN';
-                    btn.style.backgroundColor = '#f43f5e';
-                }
-                if (timestampEl) {
-                    timestampEl.innerText = `Frozen at ${hrs}:${mins}`;
-                    timestampEl.style.display = 'inline-block';
-                }
+        window.RadarGlobalControl = (() => {
+            const readInitialState = () => {
+                try {
+                    const storedState = JSON.parse(window.sessionStorage.getItem(RADAR_GLOBAL_STATE_STORAGE_KEY) || 'null');
+                    if (storedState && ['live', 'frozen'].includes(storedState.mode)) return storedState;
+                } catch (_) {}
+                return { mode: 'frozen', status: 'idle', frozenAt: new Date().toISOString(), source: 'initial' };
+            };
+            let state = readInitialState();
+            const getButtonMarkup = currentState => {
+                if (currentState.status === 'loading') return '<i class="fa-solid fa-spinner fa-spin text-[10px]"></i><span>Radar: LOADING</span>';
+                if (currentState.status === 'error') return '<i class="fa-solid fa-triangle-exclamation text-[10px]"></i><span>Radar: ERROR</span>';
+                if (currentState.mode === 'live') return '<i class="fa-solid fa-circle text-[8px] animate-pulse text-emerald-200"></i><span>Radar: LIVE</span>';
+                return '<i class="fa-solid fa-snowflake text-[10px]"></i><span>Radar: FROZEN</span>';
+            };
+            const render = () => {
+                document.querySelectorAll('[data-radar-global-control]').forEach(host => {
+                    if (host.dataset.radarMounted !== 'true') {
+                        host.className = 'radar-global-control';
+                        host.innerHTML = '<span class="radar-global-control__timestamp" data-radar-frozen-timestamp></span><button type="button" class="radar-global-control__button" data-radar-global-button aria-live="polite"></button>';
+                        host.querySelector('[data-radar-global-button]')?.addEventListener('click', () => window.RadarGlobalControl.toggle(host.dataset.radarContext || 'global'));
+                        host.dataset.radarMounted = 'true';
+                    }
+                    const visualState = state.status === 'loading' || state.status === 'error' ? state.status : state.mode;
+                    host.dataset.radarState = visualState;
+                    const button = host.querySelector('[data-radar-global-button]');
+                    const timestamp = host.querySelector('[data-radar-frozen-timestamp]');
+                    if (button) {
+                        button.disabled = state.status === 'loading';
+                        button.innerHTML = getButtonMarkup(state);
+                        button.setAttribute('aria-pressed', String(state.mode === 'live'));
+                    }
+                    if (timestamp) {
+                        const frozenDate = new Date(state.frozenAt || Date.now());
+                        timestamp.textContent = Number.isFinite(frozenDate.getTime())
+                            ? `Frozen at ${String(frozenDate.getHours()).padStart(2, '0')}:${String(frozenDate.getMinutes()).padStart(2, '0')}`
+                            : 'Radar congelado';
+                    }
+                });
+            };
+            const setState = (nextState, options = {}) => {
+                const previousState = state;
+                state = { ...state, ...nextState, updatedAt: new Date().toISOString() };
+                window.isLiveTrackingEnabled = state.mode === 'live' && state.status !== 'error';
+                if (window.GlobalStore) window.GlobalStore.radarState = { ...state };
+                try { window.sessionStorage.setItem(RADAR_GLOBAL_STATE_STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+                render();
+                if (options.dispatch !== false) window.dispatchEvent(new CustomEvent('RADAR_GLOBAL_STATE_CHANGED', { detail: { ...state, previousMode: previousState.mode } }));
+                return { ...state };
+            };
+            const freeze = source => {
+                window.stopAisRadarPolling?.();
+                window.MapLoader?.stopAisProxyPolling?.();
+                const frozenAt = new Date().toISOString();
+                setState({ mode: 'frozen', status: 'idle', frozenAt, source });
                 if (typeof calculateAndDisplayAisFreight === 'function') calculateAndDisplayAisFreight();
                 return window.GlobalStore?.getRawVessels?.() || [];
-            }
+            };
+            const activate = async source => {
+                let matchingRequest = window.fetchMatchingRequestFromGlobalStore?.(window.GlobalStore?.calculatedState || window.CalculatedState) || null;
+                if (!matchingRequest && typeof window.rehydrateCalculatedState === 'function') {
+                    const calculatedState = await window.rehydrateCalculatedState();
+                    matchingRequest = window.fetchMatchingRequestFromGlobalStore?.(calculatedState) || null;
+                }
+                setState({ mode: 'live', status: 'loading', source });
+                return window.startRadarLive({ source: `${source}-global-control`, refresh: true, matchingRequest });
+            };
+            const toggle = async source => {
+                if (window.matchingAuditModeState?.enabled || state.status === 'loading') return false;
+                const activatingLive = state.mode !== 'live';
+                return activatingLive ? activate(source) : freeze(source);
+            };
+            const mountAll = () => {
+                if (window.GlobalStore) window.GlobalStore.radarState = { ...state };
+                window.isLiveTrackingEnabled = state.mode === 'live';
+                render();
+            };
+            return { getState: () => ({ ...state }), setState, render, mountAll, toggle, activate, freeze };
+        })();
 
-            window.isLiveTrackingEnabled = true;
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1 text-[10px]"></i>Radar: LOADING';
-                btn.style.backgroundColor = '#0284c7';
-            }
-            if (timestampEl) {
-                timestampEl.innerText = '';
-                timestampEl.style.display = 'none';
-            }
+        window.toggleLiveTracking = async function(options = {}) {
+            const source = typeof options === 'string' ? options : (options.source || 'legacy-control');
+            return window.RadarGlobalControl.toggle(source);
+        };
+
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.RadarGlobalControl.mountAll, { once: true });
+        else window.RadarGlobalControl.mountAll();
+
+        window.startRadarLive = async function(options = {}) {
+            if (window.matchingAuditModeState?.enabled) return [];
+            if (window.radarLiveLoadPromise) return window.radarLiveLoadPromise;
+            window.RadarGlobalControl.setState({ mode: 'live', status: 'loading', source: options.source || 'radar-live' });
             if (typeof window.setAisRadarStatus === 'function') window.setAisRadarStatus('updating');
 
-            try {
+            window.radarLiveLoadPromise = (async () => {
+                const selectedTaxonomy = typeof window.getSelectedAisVesselTypeFilter === 'function'
+                    ? window.getSelectedAisVesselTypeFilter()
+                    : '';
                 const vessels = await window.loadValidatedAisDensityVessels({
                     throwOnError: true,
                     liveMode: true,
-                    selectedTaxonomy: 'All Cargo'
+                    selectedTaxonomy: selectedTaxonomy || 'All Cargo'
                 });
-                window.isLiveTrackingEnabled = true;
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fa-solid fa-circle text-[8px] animate-pulse mr-1 text-emerald-300"></i>Radar: LIVE';
-                    btn.style.backgroundColor = '#10b981';
-                }
+                window.RadarGlobalControl.setState({ mode: 'live', status: 'idle', source: options.source || 'radar-live', liveAt: new Date().toISOString() });
                 if (typeof showToast === 'function') {
                     showToast(`Radar LIVE actualizado con ${vessels.length} buques auditados.`, false, 'success');
                 }
+                const firstBatch = vessels.slice(0, AUTO_FLOW_RADAR_BATCH_SIZE);
+                window.dispatchEvent(new CustomEvent('RADAR_LIVE_BATCH_READY', {
+                    detail: {
+                        source: options.source || 'manual',
+                        vessels: firstBatch,
+                        batchSize: firstBatch.length,
+                        totalCount: vessels.length,
+                        route: typeof window.getMatchingExecutionRouteOverride === 'function'
+                            ? window.getMatchingExecutionRouteOverride()
+                            : null,
+                        loadedAt: new Date().toISOString()
+                    }
+                }));
+                window.dispatchEvent(new CustomEvent('RADAR_LIVE_COMPLETE', {
+                    detail: { source: options.source || 'manual', vessels, totalCount: vessels.length }
+                }));
                 return vessels;
-            } catch (error) {
-                window.isLiveTrackingEnabled = false;
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1 text-[10px]"></i>Radar: ERROR';
-                    btn.style.backgroundColor = '#dc2626';
-                }
+            })().catch(error => {
+                window.RadarGlobalControl.setState({ mode: 'frozen', status: 'error', frozenAt: new Date().toISOString(), source: options.source || 'radar-live' });
                 const message = error && error.message ? error.message : 'No se pudieron cargar los datos AIS auditados.';
                 if (typeof showToast === 'function') showToast(message, false, 'error');
                 return [];
-            }
+            }).finally(() => {
+                window.radarLiveLoadPromise = null;
+            });
+            return window.radarLiveLoadPromise;
         };
 
         window.isFirstLoad = true;
@@ -35085,7 +36135,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return String(select?.selectedOptions?.[0]?.textContent || '').trim();
         };
 
-        window.resetAisDensityResults = function() {
+        window.resetAisDensityResults = function(options = {}) {
+            const manualReset = options.force === true || options.source === 'manual-refresh';
+            const hasSessionCache = typeof window.hasCurrentSessionMatchingCache === 'function'
+                && window.hasCurrentSessionMatchingCache();
+            if (!manualReset && hasSessionCache) {
+                console.info('[Session Cache] Reset AIS omitido: existe caché vigente para la sesión actual.');
+                return false;
+            }
             window.buquesAlmacenados = new Map();
             window.buquesEncontrados = {};
             window.listaBarcos = [];
@@ -35118,27 +36175,20 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (typeof window.setAisRadarStatus === 'function') {
                 window.setAisRadarStatus('inactive', 0);
             }
+            return true;
+        };
+        window.forceResetAisDensityResults = function() {
+            return window.resetAisDensityResults({ force: true, source: 'manual-refresh' });
         };
 
         window.loadValidatedAisDensityVessels = async function(options = {}) {
             const liveMode = options.liveMode === true;
             window.aisRadarUserActivated = liveMode;
-            if (!liveMode) window.isLiveTrackingEnabled = false;
             clearTimeout(window.contextualAisRadarTimer);
             window.contextualAisRadarTimer = null;
             if (typeof window.stopAisRadarPolling === 'function') window.stopAisRadarPolling();
             if (window.MapLoader && typeof window.MapLoader.stopAisProxyPolling === 'function') {
                 window.MapLoader.stopAisProxyPolling();
-            }
-
-            const readOnlyButton = document.getElementById('btn-freeze-radar');
-            if (readOnlyButton) {
-                readOnlyButton.disabled = liveMode;
-                readOnlyButton.innerHTML = liveMode
-                    ? '<i class="fa-solid fa-spinner fa-spin text-[10px] mr-1"></i>Radar: LOADING'
-                    : '<i class="fa-solid fa-snowflake text-[10px] mr-1"></i>Radar: FROZEN';
-                readOnlyButton.style.backgroundColor = liveMode ? '#0284c7' : '#f43f5e';
-                readOnlyButton.title = 'Carga validada desde ais_vessels mediante /api/audit-vessels';
             }
 
             try {
@@ -35212,7 +36262,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (typeof window.setAisRadarStatus === 'function') {
                     window.setAisRadarStatus('frozen', validatedVessels.length);
                 }
-                if (liveMode) window.isLiveTrackingEnabled = true;
                 return validatedVessels;
             } catch (error) {
                 console.error('[Density Map] No se pudieron cargar los buques validados en modo de solo lectura.', error);
@@ -36313,7 +37362,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     }
                 }
                 updateFleetTaxonomyMultiSelectUi();
-                if (window.GlobalStore?.markMatchingSelectionPending?.(normalizedValues)) {
+                if (options.markPending !== false && window.GlobalStore?.markMatchingSelectionPending?.(normalizedValues)) {
                     const currentResultCount = Number(document.getElementById('btn-run-matching')?.dataset.matchingResultCount) || 0;
                     syncMatchingButtonWithCachedResults(currentResultCount);
                 }
@@ -36376,12 +37425,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const filteredVessels = typeof window.reapplyCentralFiltersAndRedraw === 'function'
                         ? window.reapplyCentralFiltersAndRedraw()
                         : (window.GlobalStore?.getFilteredVessels?.() || []);
-                    const matchingCommit = window.GlobalStore?.commitMatchingSelection?.(values, filteredVessels);
                     localStorage.setItem(FLEET_INTEL_TAXONOMY_PRESET_KEY, JSON.stringify({
                         version: FLEET_INTEL_TAXONOMY_PRESET_VERSION,
                         savedAt: new Date().toISOString(),
                         values
                     }));
+                    const persistedTaxonomies = window.GlobalTaxonomyProvider?.set(values, {
+                        source: 'density-map-save',
+                        syncDensity: false,
+                        vessels: filteredVessels
+                    }) || values;
+                    const matchingCommit = window.GlobalStore?.matchingSelection;
                     if (matchingCommit) {
                         window.dispatchEvent(new CustomEvent('READY_FOR_MATCHING', {
                             detail: {
@@ -36402,10 +37456,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     }
                     closeMenu();
                 });
-                getStoredFleetTaxonomyPreset();
-                localStorage.removeItem('ais_filter_vessel_types');
-                localStorage.removeItem(FLEET_INTEL_FILTER_KEY);
-                setSelectedFleetTaxonomies([], { dispatch: false, persist: false });
+                const initialTaxonomies = window.GlobalTaxonomyProvider?.ensure({
+                    dispatch: false,
+                    notify: false,
+                    source: 'density-map-init',
+                    syncDensity: false
+                }) || getStoredFleetTaxonomyPreset();
+                setSelectedFleetTaxonomies(initialTaxonomies, { dispatch: false, persist: false, markPending: false });
             }
 
             window.getSelectedFleetTaxonomies = getSelectedFleetTaxonomies;
@@ -38176,7 +39233,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.ejecutarBarridoManual = async function(event = null) {
                 event?.preventDefault?.();
                 window.setCoreProOperationMode?.(window.CORE_PRO_OPERATION_MODES?.MANUAL_RADAR || 'MANUAL-RADAR');
-                window.isLiveTrackingEnabled = true;
+                window.RadarGlobalControl?.setState({ mode: 'live', status: 'idle', source: 'manual-external-sweep' });
                 return window.executeSweepAIS(MANUAL_EXTERNAL_RADAR_SWEEP_TOKEN);
             };
 
@@ -41620,7 +42677,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         const DATA_BRIDGE_API_SECRET = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_API_SECRET, '');
         const HAS_VALID_DATA_BRIDGE_API_URL = isValidDataBridgeApiUrl(DATA_BRIDGE_API_URL);
         const DATA_BRIDGE_VERIFY_ENDPOINT = '/api/verify-connection';
+        const DATA_BRIDGE_CONNECTION_STATE_ENDPOINT = '/api/databridge-connection-state';
         const DATA_BRIDGE_VERIFIED_SESSION_KEY = 'seacharter_databridge_verified_at';
+        window.dataBridgePersistentConnectionState = window.dataBridgePersistentConnectionState || null;
         const DATA_BRIDGE_STATUS_LABELS = {
             inactive: 'Inactivo',
             secure: 'Secure Connection',
@@ -41632,6 +42691,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const btn = document.getElementById('btn-toggle-databridge');
             bindDataBridgeLinkForm();
             updateDataBridgeConnectionIndicator();
+            restorePersistentDataBridgeConnection();
             
             // Check if we are running in an Electron environment with our API exposed
             if (window.dataBridgeAPI) {
@@ -41730,10 +42790,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function getVerifiedDataBridgeTimestamp() {
             try {
                 const timestamp = Number(window.sessionStorage.getItem(DATA_BRIDGE_VERIFIED_SESSION_KEY));
-                return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : 0;
+                if (Number.isFinite(timestamp) && timestamp > 0) return timestamp;
             } catch (error) {
-                return 0;
+                // Persistent state remains available when session storage is restricted.
             }
+            const persistedTimestamp = Date.parse(window.dataBridgePersistentConnectionState?.verifiedAt || '');
+            return window.dataBridgePersistentConnectionState?.connected === true && Number.isFinite(persistedTimestamp)
+                ? persistedTimestamp
+                : 0;
         }
 
         function setDataBridgeVerifiedConnection(isVerified) {
@@ -41744,8 +42808,41 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     window.sessionStorage.removeItem(DATA_BRIDGE_VERIFIED_SESSION_KEY);
                 }
             } catch (error) {}
+            window.dataBridgePersistentConnectionState = {
+                ...(window.dataBridgePersistentConnectionState || {}),
+                connected: isVerified === true,
+                verifiedAt: isVerified === true ? new Date().toISOString() : null,
+                lastCheckedAt: new Date().toISOString()
+            };
             return isVerified;
         }
+
+        async function restorePersistentDataBridgeConnection() {
+            try {
+                const dataBridgeFetch = window.__coreProNativeFetch || window.fetch;
+                const response = await dataBridgeFetch(DATA_BRIDGE_CONNECTION_STATE_ENDPOINT, {
+                    method: 'GET',
+                    headers: { Accept: 'application/json' },
+                    cache: 'no-store'
+                });
+                const payload = await response.json().catch(() => ({}));
+                const connection = payload?.connection || {};
+                window.dataBridgePersistentConnectionState = {
+                    connected: response.ok && connection.connected === true,
+                    verifiedAt: connection.verifiedAt || null,
+                    lastCheckedAt: connection.lastCheckedAt || null
+                };
+                updateDataBridgeConnectionIndicator();
+                if (window.dataBridgePersistentConnectionState.connected) {
+                    await verifyDataBridgeConnection(null, { silent: true, restoring: true });
+                }
+                return window.dataBridgePersistentConnectionState.connected;
+            } catch (error) {
+                updateDataBridgeConnectionIndicator();
+                return false;
+            }
+        }
+        window.restorePersistentDataBridgeConnection = restorePersistentDataBridgeConnection;
 
         function updateDataBridgeConnectionIndicator() {
             const isConnected = getVerifiedDataBridgeTimestamp() > 0;
@@ -41820,8 +42917,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 : '<i class="fa-solid fa-shield-halved"></i><span>Verificar e Iniciar Sincronización</span>';
         }
 
-        async function verifyDataBridgeConnection(event) {
-            event.preventDefault();
+        async function verifyDataBridgeConnection(event = null, options = {}) {
+            event?.preventDefault?.();
             const error = document.getElementById('databridge-link-error');
             setDataBridgeLinkPending(true);
             if (error) error.classList.add('hidden');
@@ -41850,16 +42947,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 setDataBridgeVerifiedConnection(true);
                 updateDataBridgeConnectionIndicator();
                 closeDataBridgeLinkModal();
-                if (typeof showToast === 'function') showToast('Enlace establecido correctamente');
+                if (options.silent !== true && typeof showToast === 'function') showToast('Enlace establecido correctamente');
             } catch (requestError) {
                 setDataBridgeVerifiedConnection(false);
                 updateDataBridgeConnectionIndicator();
                 const message = requestError?.message || 'No se pudo verificar la conexión con Data Bridge.';
-                if (error) {
+                if (error && options.silent !== true) {
                     error.textContent = message;
                     error.classList.remove('hidden');
                 }
-                if (typeof showToast === 'function') showToast(`⚠️ ${message}`);
+                if (options.silent !== true && typeof showToast === 'function') showToast(`⚠️ ${message}`);
             } finally {
                 setDataBridgeLinkPending(false);
             }
