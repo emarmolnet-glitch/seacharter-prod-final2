@@ -6,9 +6,10 @@ const indexSource = await readFile(new URL('../index.html', import.meta.url), 'u
 const cbamModuleSource = await readFile(new URL('../cbam-module.js', import.meta.url), 'utf8');
 const cbamModule = await import(`data:text/javascript;base64,${Buffer.from(cbamModuleSource).toString('base64')}`);
 
-test('cargo specification is visually required and blocks voyage calculation when empty', () => {
+test('cargo specification uses the standardized selector and defaults to Otros', () => {
   assert.match(indexSource, /id="label-cargo-type-manual" class="text-action-required/);
-  assert.match(indexSource, /id="cargo-type-manual" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="" required aria-required="true"/);
+  assert.match(indexSource, /<select id="cargo-type-manual" data-cargo-type-selector="calculator"[^>]*required aria-required="true"/);
+  assert.match(indexSource, /<option value="100" selected>100 · Otros \(N\/A\)<\/option>/);
   assert.match(indexSource, /#cargo-type-manual\.required-use-highlight/);
 
   const helperStart = indexSource.indexOf('function hasRequiredCalculationInputs()');
@@ -17,7 +18,7 @@ test('cargo specification is visually required and blocks voyage calculation whe
   const values = new Map([
     ['port-pol', 'Casablanca'],
     ['port-pod', 'Valencia'],
-    ['cargo-type-manual', ''],
+    ['cargo-type-manual', '100'],
     ['vessel-dwt', '25000'],
     ['cargo-qty', '10000'],
     ['cons-sea', '20'],
@@ -37,11 +38,11 @@ test('cargo specification is visually required and blocks voyage calculation whe
     { getElementById: id => elements.get(id) || null },
   );
 
-  assert.equal(hasRequiredCalculationInputs(), false);
-  assert.equal(elements.get('cargo-type-manual').attributes.get('aria-invalid'), 'true');
-  elements.get('cargo-type-manual').value = 'Steel coils';
   assert.equal(hasRequiredCalculationInputs(), true);
   assert.equal(elements.get('cargo-type-manual').attributes.get('aria-invalid'), 'false');
+  elements.get('cargo-type-manual').value = '';
+  assert.equal(hasRequiredCalculationInputs(), false);
+  assert.equal(elements.get('cargo-type-manual').attributes.get('aria-invalid'), 'true');
 });
 
 test('cargo classification enables CBAM only for regulated sectors', () => {

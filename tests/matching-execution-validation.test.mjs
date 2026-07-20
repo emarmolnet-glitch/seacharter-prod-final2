@@ -175,11 +175,81 @@ test('global route hydration supplies POL and POD to validation and core executi
     pol: 'ORAN (DZ)',
     pod: 'BANJUL (GM)',
     laycan: '2026-07-20',
+    pol_coordinates: { lat: 35.6971, lon: -0.6308 },
+    pod_coordinates: { lat: 13.4549, lon: -16.579 },
     lat: { pol: 35.6971, pod: 13.4549 },
     lon: { pol: -0.6308, pod: -16.579 },
   });
   assert.equal(feedback.dataset.missingFields, '');
   assert.equal(feedback.classList.contains('hidden'), true);
+});
+
+test('Null Island route context recovers the matching coordinates from session storage', async () => {
+  const blockStart = source.indexOf('function getMatchingExecutionRouteOverride');
+  const blockEnd = source.indexOf('window.runMatchingEngine = runMatchingEngine;', blockStart)
+    + 'window.runMatchingEngine = runMatchingEngine;'.length;
+  const blockSource = source.slice(blockStart, blockEnd);
+  const elements = new Map();
+  const addElement = (id, value = '') => {
+    const element = {
+      value,
+      textContent: '',
+      dataset: {},
+      classList: createClassList(id === 'matching-execution-validation' ? ['hidden'] : []),
+      setAttribute() {},
+    };
+    elements.set(id, element);
+    return element;
+  };
+
+  addElement('btn-run-matching');
+  addElement('matching-execution-validation');
+  addElement('match-cargo-type', '60');
+  addElement('match-quantity', '25000');
+  addElement('match-load-port', 'ORAN (DZ)');
+  addElement('match-unload-port', 'BANJUL (GM)');
+  addElement('match-laycan-start', '2026-07-20');
+  addElement('match-load-lat', '0');
+  addElement('match-load-lon', '0');
+  addElement('match-unload-lat', '0');
+  addElement('match-unload-lon', '0');
+
+  const storedRoute = {
+    pol: 'ORAN (DZ)',
+    pod: 'BANJUL (GM)',
+    laycan: '2026-07-20',
+    pol_coordinates: { lat: 35.6971, lon: -0.6308 },
+    pod_coordinates: { lat: 13.4549, lon: -16.579 },
+  };
+  let receivedRoute = null;
+  const windowMock = {
+    coreProMatchingRouteContext: {
+      pol: { lat: 0, lon: 0 },
+      pod: { lat: 0, lon: 0 },
+      laycan: '2026-07-20',
+    },
+    sessionStorage: {
+      getItem: key => key === 'seacharter_last_valid_matching_route_v1' ? JSON.stringify(storedRoute) : null,
+    },
+    SeaCharterStore: { getState: () => ({ pol: 'ORAN (DZ)', pod: 'BANJUL (GM)', laycanDate: '2026-07-20' }) },
+    GlobalStore: {
+      matchingReady: true,
+      matchingSelectionPending: false,
+      selectedTaxonomies: ['category:cargo'],
+    },
+  };
+  const documentMock = { getElementById: id => elements.get(id) || null };
+  new Function('window', 'document', 'executeMatchingEngine', 'MATCHING_MANUAL_EXECUTION_TOKEN', blockSource)(
+    windowMock,
+    documentMock,
+    async routeOverride => { receivedRoute = routeOverride; return true; },
+    Symbol('manual'),
+  );
+
+  const result = await windowMock.handleMatchingExecutionClick({ preventDefault() {} });
+  assert.equal(result, true);
+  assert.deepEqual(receivedRoute.pol_coordinates, storedRoute.pol_coordinates);
+  assert.deepEqual(receivedRoute.pod_coordinates, storedRoute.pod_coordinates);
 });
 
 test('empty and Null Island coordinates stop execution with actionable feedback', async () => {
@@ -316,7 +386,7 @@ test('valid clicks synchronize the complete global fleet before core execution',
   assert.equal(windowMock.GlobalStore.matchingSelection.vessels[0], fleet[0]);
   assert.equal(resultsList.dataset.executionFleetCount, '750');
   assert.equal(integrityBanner.dataset.executionFleetCount, '750');
-  assert.match(source, /Integridad local verificada:[\s\S]*coincidencias calculadas directamente desde vessels_master/);
+  assert.match(source, /Integridad local verificada:[\s\S]*candidatos idóneos[\s\S]*advertencias técnicas calculados desde vessels_master/);
 });
 
 test('cache hydration remains distinct from a successful matching execution', () => {
