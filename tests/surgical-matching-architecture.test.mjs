@@ -129,13 +129,14 @@ test('LOCAL-ONLY interceptor blocks DataBridge and connection verification route
   const clickStart = indexSource.indexOf('async function handleMatchingExecutionClick');
   const clickEnd = indexSource.indexOf('window.handleMatchingExecutionClick', clickStart);
   const clickSource = indexSource.slice(clickStart, clickEnd);
-  assert.ok(clickSource.indexOf('enforceLocalOnlyMatchingMode();') < clickSource.indexOf('getMatchingExecutionRouteOverride'));
+  assert.ok(clickSource.indexOf('rehydrateCalculatedState') < clickSource.indexOf('enforceLocalOnlyMatchingMode'));
+  assert.ok(clickSource.indexOf('enforceLocalOnlyMatchingMode({ preserveSynchronization:') < clickSource.indexOf('getMatchingExecutionRouteOverride'));
 });
 
-test('manual radar sweep remains isolated behind an explicit button', () => {
-  assert.match(indexSource, /id="btn-manual-radar-sweep"[^>]*onclick="ejecutarBarridoManual\(event\)"/);
+test('global radar control replaces the matching manual sweep button', () => {
+  assert.match(indexSource, /data-radar-global-control data-radar-context="matching"/);
+  assert.doesNotMatch(indexSource, /id="btn-manual-radar-sweep"/);
   assert.match(indexSource, /window\.ejecutarBarridoManual = async function\(event = null\)/);
-  assert.match(indexSource, /MANUAL_RADAR \|\| 'MANUAL-RADAR'/);
   assert.match(indexSource, /return window\.executeSweepAIS\(MANUAL_EXTERNAL_RADAR_SWEEP_TOKEN\)/);
 });
 
@@ -152,10 +153,10 @@ test('connection status and contextual radar have no automatic network startup',
 
 test('matching action dock groups the four primary controls on the left', () => {
   const dockStart = indexSource.indexOf('<div id="matching-action-dock"');
-  const dockEnd = indexSource.indexOf('</div>', dockStart);
+  const dockEnd = indexSource.indexOf('<div id="matching-action-feedback"', dockStart);
   const dockSource = indexSource.slice(dockStart, dockEnd);
   assert.match(dockSource, /id="btn-run-matching"/);
-  assert.match(dockSource, /id="btn-manual-radar-sweep"/);
+  assert.match(dockSource, /data-radar-global-control data-radar-context="matching"/);
   assert.match(dockSource, /id="btnGenerateReport"/);
   assert.match(dockSource, /id="commercial-nlp-send-btn"/);
   assert.equal((indexSource.match(/id="commercial-nlp-send-btn"/g) || []).length, 1);

@@ -6,6 +6,7 @@ const indexSource = await readFile(new URL('../index.html', import.meta.url), 'u
 const redirectsSource = await readFile(new URL('../_redirects', import.meta.url), 'utf8');
 const verifySource = await readFile(new URL('../netlify/functions/verify-connection.ts', import.meta.url), 'utf8');
 const dedicatedVerifySource = await readFile(new URL('../netlify/functions/databridge-verify-connection.ts', import.meta.url), 'utf8');
+const persistedStateSource = await readFile(new URL('../netlify/functions/databridge-connection-state.ts', import.meta.url), 'utf8');
 
 test('server-side verification falls back to the deployed Data Bridge origin', () => {
   for (const source of [verifySource, dedicatedVerifySource]) {
@@ -30,13 +31,28 @@ test('explicit Data Bridge actions bypass only the local network interceptor wra
   assert.match(frontendVerifySource, /payload\?\.status === 'connected' \|\| payload\?\.success === true/);
 });
 
-test('connection indicator is based on a verified session instead of a missing browser secret', () => {
+test('connection indicator restores the persisted verified state without exposing browser secrets', () => {
   assert.match(indexSource, /DATA_BRIDGE_VERIFIED_SESSION_KEY/);
+  assert.match(indexSource, /DATA_BRIDGE_CONNECTION_STATE_ENDPOINT = '\/api\/databridge-connection-state'/);
+  assert.match(indexSource, /function restorePersistentDataBridgeConnection\(\)/);
+  assert.match(indexSource, /await verifyDataBridgeConnection\(null, \{ silent: true, restoring: true \}\)/);
   assert.match(indexSource, /function setDataBridgeVerifiedConnection\(isVerified\)/);
   assert.match(indexSource, /setDataBridgeVerifiedConnection\(true\)/);
   assert.match(indexSource, /setDataBridgeVerifiedConnection\(false\)/);
   assert.match(indexSource, /const isConnected = getVerifiedDataBridgeTimestamp\(\) > 0/);
   assert.doesNotMatch(indexSource, /const isConnected = manualExternalMode && Boolean\(getStoredDataBridgeToken\(\)\)/);
+});
+
+test('verified Data Bridge state is persisted in Netlify Database AppConfig', () => {
+  assert.match(verifySource, /appConfig/);
+  assert.match(verifySource, /DATA_BRIDGE_CONNECTION_CONFIG_KEY = "databridge_connection_state"/);
+  assert.match(verifySource, /onConflictDoUpdate/);
+  assert.match(verifySource, /persistDataBridgeConnectionState\(true\)/);
+  assert.doesNotMatch(verifySource, /persistDataBridgeConnectionState\(false\)/);
+  assert.match(persistedStateSource, /ensureApplicationSchema\(\)/);
+  assert.match(persistedStateSource, /\.from\(appConfig\)/);
+  assert.match(persistedStateSource, /path: "\/api\/databridge-connection-state"/);
+  assert.doesNotMatch(persistedStateSource, /secret|token|authorization/i);
 });
 
 test('connected Data Bridge menu action opens the deployment root', () => {

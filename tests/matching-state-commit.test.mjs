@@ -5,12 +5,12 @@ import test from 'node:test';
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 const saveHandlerStart = source.indexOf("document.getElementById('btn-save-taxonomy-preset')?.addEventListener('click'");
-const saveHandlerEnd = source.indexOf('getStoredFleetTaxonomyPreset();', saveHandlerStart);
+const saveHandlerEnd = source.indexOf('const initialTaxonomies =', saveHandlerStart);
 const saveHandlerSource = source.slice(saveHandlerStart, saveHandlerEnd);
 
-test('matching button starts locked until taxonomy state is committed', () => {
+test('matching button starts locked until taxonomy or calculator context is available', () => {
   assert.match(source, /id="btn-run-matching"[^>]*disabled[^>]*data-matching-ready="false"[^>]*data-ready-vessel-count="0"/);
-  assert.match(source, /matchingSelectionPending \|\| \(count === 0 && !hasLocalTaxonomyQuery\)/);
+  assert.match(source, /matchingSelectionPending \|\| \(!hasMatchingRequest && count === 0 && !hasLocalTaxonomyQuery\)/);
   assert.match(source, /Guarda los cambios de taxonomía para activar el motor/);
 });
 
@@ -34,11 +34,12 @@ test('save action commits the exact array returned by the table redraw', () => {
   assert.ok(saveHandlerStart >= 0 && saveHandlerEnd > saveHandlerStart);
   const filteredArrayIndex = saveHandlerSource.indexOf('const filteredVessels = typeof window.reapplyCentralFiltersAndRedraw');
   const redrawIndex = saveHandlerSource.indexOf('window.reapplyCentralFiltersAndRedraw()');
-  const commitIndex = saveHandlerSource.indexOf('commitMatchingSelection?.(values, filteredVessels)');
+  const providerIndex = saveHandlerSource.indexOf('window.GlobalTaxonomyProvider?.set(values');
+  const snapshotIndex = saveHandlerSource.indexOf('vessels: filteredVessels');
   const dispatchIndex = saveHandlerSource.indexOf("new CustomEvent('READY_FOR_MATCHING'");
 
   assert.ok(filteredArrayIndex >= 0 && redrawIndex > filteredArrayIndex);
-  assert.ok(commitIndex > redrawIndex && dispatchIndex > commitIndex);
+  assert.ok(providerIndex > redrawIndex && snapshotIndex > providerIndex && dispatchIndex > snapshotIndex);
   assert.doesNotMatch(saveHandlerSource, /runMatchingEngine|executeMatchingEngine|fetch\s*\(/);
 });
 

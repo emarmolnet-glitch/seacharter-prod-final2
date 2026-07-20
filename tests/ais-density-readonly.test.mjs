@@ -26,10 +26,11 @@ test('Radar LIVE activation loads audited ais_vessels and refreshes the shared m
   const loaderEnd = indexSource.indexOf('window.runInitialAisRadarLoad', loaderStart);
   const loaderSource = indexSource.slice(loaderStart, loaderEnd);
 
-  assert.match(toggleSource, /activatingLive/);
+  assert.match(indexSource, /window\.RadarGlobalControl = \(\(\) => \{/);
+  assert.match(indexSource, /const activatingLive = state\.mode !== 'live'/);
   assert.match(toggleSource, /window\.loadValidatedAisDensityVessels\(\{/);
   assert.match(toggleSource, /liveMode: true/);
-  assert.match(toggleSource, /selectedTaxonomy: 'All Cargo'/);
+  assert.match(toggleSource, /selectedTaxonomy: selectedTaxonomy \|\| 'All Cargo'/);
   assert.match(toggleSource, /Radar LIVE actualizado con/);
   assert.match(loaderSource, /window\.getAuditAisEndpoint\(selectedTaxonomy\)/);
   assert.match(loaderSource, /await fetch\(endpoint/);
@@ -263,10 +264,13 @@ test('density map restores globally filtered vessels without refetching', () => 
   assert.doesNotMatch(tabInitialization, /loadValidatedAisDensityVessels\(\)/);
 });
 
-test('density map disables live capture and pending polling on open', () => {
-  assert.match(indexSource, /window\.aisDensityReadOnly = openingReadOnlyDensityMap/);
-  assert.match(indexSource, /window\.MapLoader\.stopAisProxyPolling\(\)/);
-  assert.match(indexSource, /reason: 'density-map-read-only'/);
+test('density map navigation preserves the global background radar state', () => {
+  const switchStart = indexSource.indexOf('function switchTab(tabId)');
+  const switchEnd = indexSource.indexOf("if (tabId === 'auditor')", switchStart);
+  const switchSource = indexSource.slice(switchStart, switchEnd);
+  assert.match(switchSource, /window\.aisDensityReadOnly = openingReadOnlyDensityMap/);
+  assert.match(switchSource, /window\.RadarGlobalControl\?\.getState\(\)\.mode === 'live'/);
+  assert.doesNotMatch(switchSource, /stopAisRadarPolling|stopAisProxyPolling|isLiveTrackingEnabled = false/);
 });
 
 test('map loader defaults to the audit read endpoint', () => {

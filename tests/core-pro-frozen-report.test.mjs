@@ -93,9 +93,9 @@ test("the matching engine completes local validation without transmitting the fl
   assert.match(coreProSource, /onclick="handleMatchingExecutionClick\(event\)"/);
   assert.match(coreProSource, /return runMatchingEngine\(hydratedRoute, \{ manual: true \}\)/);
   assert.match(coreProSource, /async function executeMatchingEngine\(routeOverride = null, executionToken = null\)/);
-  assert.match(coreProSource, /routeOverride\?\.pol \|\| loadSelect\.options/);
+  assert.match(coreProSource, /effectiveRouteOverride\?\.pol \|\| loadSelect\.options/);
   assert.match(coreProSource, /readCoordinate\(routeContext\?\.pol\?\.lat, routeOverride\?\.lat\?\.pol, document\.getElementById\('match-load-lat'\)\?\.value\)/);
-  assert.match(coreProSource, /const laycanStart = String\(routeOverride\?\.laycan \|\| document\.getElementById\('match-laycan-start'\)\.value \|\| todayIso\)/);
+  assert.match(coreProSource, /const laycanStart = String\(effectiveRouteOverride\?\.laycan \|\| document\.getElementById\('match-laycan-start'\)\.value \|\| todayIso\)/);
   assert.match(coreProSource, /coreProMatchingRouteContext\?\.laycan \|\| routeReadiness\.laycan/);
   assert.match(coreProSource, /new CustomEvent\('SEA_ROUTE_DEFINED', \{ detail: \{ pol, pod, laycan, lat, lon \} \}\)/);
 
