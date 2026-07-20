@@ -2,6 +2,7 @@ import type { Config } from "@netlify/functions";
 import WebSocket from "ws";
 import { countVessels, isCargoShipType, readVessels, readVesselsNearPoint, upsertVessels, type VesselRecord } from "./vessel-store.js";
 import { filterVesselsByTaxonomies, parseRequestedTaxonomies } from "./ais-taxonomy.js";
+import { upsertRadarVesselsMaster } from "../../db/vessels-master-sync.js";
 
 type VesselMessage = Record<string, unknown>;
 type LiveCollectionResult = {
@@ -830,9 +831,10 @@ async function readStoredVesselMessages(limit: number, url?: URL) {
 
 async function persistVesselMessages(vessels: VesselMessage[]) {
   const rows = vessels.map(toVesselRecord).filter((row): row is VesselRecord => row !== null);
-  if (rows.length === 0) return { persistedCount: 0, databaseVesselCount: await countVessels() };
+  if (rows.length === 0) return { persistedCount: 0, masterPersistedCount: 0, databaseVesselCount: await countVessels() };
   await upsertVessels(rows);
-  return { persistedCount: rows.length, databaseVesselCount: await countVessels() };
+  const masterPersistedCount = await upsertRadarVesselsMaster(rows);
+  return { persistedCount: rows.length, masterPersistedCount, databaseVesselCount: await countVessels() };
 }
 
 function mergeVesselMessageLists(baseVessels: VesselMessage[], incomingVessels: VesselMessage[]) {
@@ -903,7 +905,11 @@ function collectVessels(url: URL, apiKey: string): Promise<LiveCollectionResult>
 
   return new Promise<LiveCollectionResult>((resolve, reject) => {
     const vesselsByKey = new Map<string, VesselMessage>();
-    const ws = new WebSocket(AIS_STREAM_URL);
+    const ws = new WebSocket(AIS_STREAM_URL, {
+      handshakeTimeout: Math.min(timeoutMs, 5000),
+      perMessageDeflate: false,
+      family: 4,
+    });
     let settled = false;
     let timer: ReturnType<typeof setTimeout>;
 
@@ -958,9 +964,13 @@ function collectVessels(url: URL, apiKey: string): Promise<LiveCollectionResult>
       } catch (_) {}
     });
 
-    ws.on("error", (error: Error) => {
-      console.error("AIS stream websocket error:", error.message);
-      finish("error", new Error("AIS stream connection failed."));
+    ws.on("error", (error: Error & { code?: string }) => {
+      console.error("AIS stream websocket error:", {
+        code: error.code || null,
+        message: error.message,
+      });
+      const diagnosticCode = error.code ? ` (${error.code})` : "";
+      finish("error", new Error(`AIS stream connection failed${diagnosticCode}.`));
     });
 
     ws.on("close", (code: number, reason: Buffer) => {
@@ -1066,7 +1076,7 @@ export async function handleGetVessels(req: Request) {
     const vessels = completedLiveVessels.length > 0
       ? mergeVesselMessageLists(storedVessels, liveVessels)
       : [];
-    let persistenceResult = { persistedCount: 0, databaseVesselCount: await countVessels() };
+    let persistenceResult = { persistedCount: 0, masterPersistedCount: 0, databaseVesselCount: await countVessels() };
 
     if (acceptedLiveVessels.length > 0) {
       vesselCache = vessels;
@@ -1110,31 +1120,39 @@ export async function handleGetVessels(req: Request) {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "AIS stream request failed.";
-    if (forceLive) {
-      return vesselsResponse(
-        {
-          vessels: [],
-          message: "La captura AIS no pudo persistirse o completarse.",
-          error: message,
-          updatedAt: cacheUpdatedAt,
-          source: "live-error-empty",
-        },
-        { status: 502 },
-      );
+    const storedVessels = await readStoredVesselMessages(Math.max(requestedQuantity, STORED_LOOKUP_LIMIT), url);
+    const acceptedStoredVessels = strictTaxonomyMode
+      ? filterVesselsByTaxonomies(storedVessels, requestedTaxonomies)
+      : storedVessels;
+    if (storedVessels.length > 0) {
+      vesselCache = storedVessels;
+      cacheUpdatedAt = Date.now();
     }
+    const filtered = filterSelectiveVessels(url, acceptedStoredVessels);
+    const databaseVesselCount = await countVessels();
 
-    if (vesselCache.length === 0) {
-      vesselCache = await readStoredVesselMessages(requestedQuantity);
-      if (vesselCache.length > 0) cacheUpdatedAt = Date.now();
-    }
-
-    const filtered = vesselCache;
     return vesselsResponse({
+      ok: true,
       vessels: filtered,
-      message: `Data recolectada: ${filtered.length} buques filtrados con éxito`,
+      message: filtered.length > 0
+        ? `AISStream no está disponible; se cargaron ${filtered.length} buques validados desde la base de datos.`
+        : "AISStream no está disponible y no hay buques validados para los filtros y la zona solicitados.",
       warning: message,
+      degraded: true,
+      liveConnection: false,
+      availableVesselCount: filtered.length,
+      persistedCount: 0,
+      masterPersistedCount: 0,
+      databaseVesselCount,
+      selectedTaxonomies: strictTaxonomyMode ? requestedTaxonomies : undefined,
       updatedAt: cacheUpdatedAt,
-      source: vesselCache.length ? "stored-cache" : "empty-fallback",
+      source: filtered.length > 0 ? "stored-fallback" : "stored-fallback-empty",
+    }, {
+      headers: {
+        "x-ais-persisted-count": "0",
+        "x-ais-target-count": String(requestedQuantity),
+        "x-ais-degraded": "true",
+      },
     });
   }
 }

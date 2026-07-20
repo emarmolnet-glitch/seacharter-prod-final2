@@ -7,9 +7,15 @@ const baseHeaders = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store",
 };
+const DEFAULT_DATA_BRIDGE_ORIGIN = "https://calm-shortbread-55bcfc.netlify.app";
 
 function getDataBridgeApiUrl() {
-  return String(process.env.DATA_BRIDGE_API_URL || process.env.VITE_DATA_BRIDGE_API_URL || "").trim();
+  return String(
+    process.env.DATA_BRIDGE_API_URL
+      || process.env.DATA_BRIDGE_PROXY_ORIGIN
+      || process.env.VITE_DATA_BRIDGE_API_URL
+      || DEFAULT_DATA_BRIDGE_ORIGIN,
+  ).trim();
 }
 
 function isValidHttpUrl(value: string) {
@@ -51,22 +57,16 @@ export default async (req: Request) => {
     );
   }
 
-  if (!apiSecret) {
-    return Response.json(
-      { success: false, error: "Data Bridge API secret is not configured." },
-      { status: 500, headers },
-    );
-  }
-
   const endpoint = `${apiUrl.replace(/\/+$/, "")}/api/verify-connection`;
 
   try {
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiSecret}`,
+        ...(apiSecret ? { Authorization: `Bearer ${apiSecret}` } : {}),
         Accept: "application/json",
       },
+      signal: AbortSignal.timeout(15_000),
     });
 
     let payload: unknown = null;

@@ -119,7 +119,7 @@ export default async (req: Request) => {
 
     if (operation === "execute") {
       const matchingPayload = asRecord(body.matchingPayload);
-      const localRows = await listLocalVesselsMaster(2000);
+      const localRows = await listLocalVesselsMaster(6000);
       const localVessels = localRows.map(serializeMasterVessel);
       if (localVessels.length === 0) {
         return Response.json({

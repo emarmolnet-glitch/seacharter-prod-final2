@@ -39,5 +39,9 @@
     "@types/pg": "^8.20.0",
     "@types/ws": "^8.18.1",
     "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": "20.x",
+    "npm": "10.x"
   }
 }

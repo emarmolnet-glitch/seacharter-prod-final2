@@ -7,6 +7,12 @@ const localMatchingSource = await readFile(new URL('../netlify/functions/matchin
 const vesselsMasterSource = await readFile(new URL('../db/vessels-master.ts', import.meta.url), 'utf8');
 const connectionStatusSource = await readFile(new URL('../public/ConnectionStatusBar.js', import.meta.url), 'utf8');
 
+test('matching execution loads the complete synchronized AIS fleet capacity', () => {
+  assert.match(localMatchingSource, /listLocalVesselsMaster\(6000\)/);
+  assert.match(vesselsMasterSource, /listLocalVesselsMaster\(limit = 6000\)/);
+  assert.match(vesselsMasterSource, /Math\.min\(10000, Math\.max\(1, Math\.trunc\(limit\)\)\)/);
+});
+
 test('matching execution queries vessels_master without automatic radar fallback', () => {
   const executionStart = indexSource.indexOf('async function executeMatchingEngine');
   const executionEnd = indexSource.indexOf('window.runMatchingEngine = runMatchingEngine', executionStart);

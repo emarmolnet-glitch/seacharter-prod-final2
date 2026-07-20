@@ -11005,8 +11005,8 @@
                                 <button id="btn-center-map" onclick="window.centrarEnZonaDeCarga()" style="background-color: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 4px; transition: background-color 0.2s;">
                                     <i class="fa-solid fa-crosshairs"></i> Centrar en zona de carga
                                 </button>
-                                <button id="btn-freeze-radar" onclick="window.toggleLiveTracking()" style="background-color: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 4px; transition: background-color 0.2s;">
-                                    <i class="fa-solid fa-circle text-[8px] animate-pulse mr-1 text-emerald-300"></i>Radar: LIVE
+                                <button id="btn-freeze-radar" onclick="window.toggleLiveTracking()" style="background-color: #f43f5e; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 4px; transition: background-color 0.2s;">
+                                    <i class="fa-solid fa-snowflake mr-1 text-[10px]"></i>Radar: FROZEN
                                 </button>
                                 <button id="btn-clear-ais-map" onclick="window.clearAisMapSearch()" style="background-color: #0f172a; color: white; border: 1px solid rgba(255,255,255,0.18); padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 4px; transition: background-color 0.2s;">
                                     <i class="fa-solid fa-broom"></i> Limpiar Mapa
@@ -15579,6 +15579,11 @@
                 title: 'text-amber-800',
                 icon: 'fa-solid fa-spinner fa-spin text-amber-600'
             },
+            warning: {
+                block: 'border-amber-200 bg-amber-50 text-amber-800',
+                title: 'text-amber-800',
+                icon: 'fa-solid fa-triangle-exclamation text-amber-600'
+            },
             error: {
                 block: 'border-red-200 bg-red-50 text-red-800',
                 title: 'text-red-800',
@@ -16299,7 +16304,8 @@
 
             for (let attempt = 0; attempt < DATA_BRIDGE_MAX_ATTEMPTS; attempt += 1) {
                 try {
-                    const response = await fetch(DATA_BRIDGE_RECEIVE_CORE_DATA_URL, {
+                    const dataBridgeFetch = window.__coreProNativeFetch || fetch;
+                    const response = await dataBridgeFetch(DATA_BRIDGE_RECEIVE_CORE_DATA_URL, {
                         ...nextOptions,
                         method: 'POST',
                         headers,
@@ -34887,41 +34893,69 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return window.stopAisRadarPolling();
         };
 
-        window.isLiveTrackingEnabled = true;
-        window.toggleLiveTracking = function() {
-            if (window.aisDensityReadOnly) {
-                if (typeof showToast === 'function') {
-                    showToast('El Mapa de Densidad usa exclusivamente buques auditados en modo de solo lectura.');
-                }
-                return;
-            }
+        window.isLiveTrackingEnabled = false;
+        window.toggleLiveTracking = async function() {
             if (window.matchingAuditModeState?.enabled) return;
-            window.isLiveTrackingEnabled = !window.isLiveTrackingEnabled;
             const btn = document.getElementById('btn-freeze-radar');
             const timestampEl = document.getElementById('radar-frozen-timestamp');
-            if (btn) {
-                if (!window.isLiveTrackingEnabled) {
-                    const now = new Date();
-                    const hrs = String(now.getHours()).padStart(2, '0');
-                    const mins = String(now.getMinutes()).padStart(2, '0');
-                    const frozenTime = `${hrs}:${mins}`;
+            const activatingLive = window.isLiveTrackingEnabled !== true;
+
+            if (!activatingLive) {
+                window.isLiveTrackingEnabled = false;
+                const now = new Date();
+                const hrs = String(now.getHours()).padStart(2, '0');
+                const mins = String(now.getMinutes()).padStart(2, '0');
+                if (btn) {
+                    btn.disabled = false;
                     btn.innerHTML = '<i class="fa-solid fa-snowflake mr-1 text-[10px] animate-pulse"></i>Radar: FROZEN';
-                    btn.style.backgroundColor = '#f43f5e'; // Red/orange (rose-500)
-                    if (timestampEl) {
-                        timestampEl.innerText = `Frozen at ${frozenTime}`;
-                        timestampEl.style.display = 'inline-block';
-                    }
-                } else {
-                    btn.innerHTML = '<i class="fa-solid fa-circle text-[8px] animate-pulse mr-1 text-emerald-300"></i>Radar: LIVE';
-                    btn.style.backgroundColor = '#10b981'; // Green (emerald-500)
-                    if (timestampEl) {
-                        timestampEl.innerText = '';
-                        timestampEl.style.display = 'none';
-                    }
+                    btn.style.backgroundColor = '#f43f5e';
                 }
+                if (timestampEl) {
+                    timestampEl.innerText = `Frozen at ${hrs}:${mins}`;
+                    timestampEl.style.display = 'inline-block';
+                }
+                if (typeof calculateAndDisplayAisFreight === 'function') calculateAndDisplayAisFreight();
+                return window.GlobalStore?.getRawVessels?.() || [];
             }
-            if (typeof calculateAndDisplayAisFreight === 'function') {
-                calculateAndDisplayAisFreight();
+
+            window.isLiveTrackingEnabled = true;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1 text-[10px]"></i>Radar: LOADING';
+                btn.style.backgroundColor = '#0284c7';
+            }
+            if (timestampEl) {
+                timestampEl.innerText = '';
+                timestampEl.style.display = 'none';
+            }
+            if (typeof window.setAisRadarStatus === 'function') window.setAisRadarStatus('updating');
+
+            try {
+                const vessels = await window.loadValidatedAisDensityVessels({
+                    throwOnError: true,
+                    liveMode: true,
+                    selectedTaxonomy: 'All Cargo'
+                });
+                window.isLiveTrackingEnabled = true;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-circle text-[8px] animate-pulse mr-1 text-emerald-300"></i>Radar: LIVE';
+                    btn.style.backgroundColor = '#10b981';
+                }
+                if (typeof showToast === 'function') {
+                    showToast(`Radar LIVE actualizado con ${vessels.length} buques auditados.`, false, 'success');
+                }
+                return vessels;
+            } catch (error) {
+                window.isLiveTrackingEnabled = false;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1 text-[10px]"></i>Radar: ERROR';
+                    btn.style.backgroundColor = '#dc2626';
+                }
+                const message = error && error.message ? error.message : 'No se pudieron cargar los datos AIS auditados.';
+                if (typeof showToast === 'function') showToast(message, false, 'error');
+                return [];
             }
         };
 
@@ -34970,8 +35004,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         };
 
         window.loadValidatedAisDensityVessels = async function(options = {}) {
-            window.aisRadarUserActivated = false;
-            window.isLiveTrackingEnabled = false;
+            const liveMode = options.liveMode === true;
+            window.aisRadarUserActivated = liveMode;
+            if (!liveMode) window.isLiveTrackingEnabled = false;
             clearTimeout(window.contextualAisRadarTimer);
             window.contextualAisRadarTimer = null;
             if (typeof window.stopAisRadarPolling === 'function') window.stopAisRadarPolling();
@@ -34981,10 +35016,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const readOnlyButton = document.getElementById('btn-freeze-radar');
             if (readOnlyButton) {
-                readOnlyButton.disabled = true;
-                readOnlyButton.innerHTML = '<i class="fa-solid fa-database text-[10px] mr-1"></i>Radar: READ ONLY';
-                readOnlyButton.style.backgroundColor = '#475569';
-                readOnlyButton.title = 'Vista de solo lectura: ais_vessels con audit_status VALIDATED';
+                readOnlyButton.disabled = liveMode;
+                readOnlyButton.innerHTML = liveMode
+                    ? '<i class="fa-solid fa-spinner fa-spin text-[10px] mr-1"></i>Radar: LOADING'
+                    : '<i class="fa-solid fa-snowflake text-[10px] mr-1"></i>Radar: FROZEN';
+                readOnlyButton.style.backgroundColor = liveMode ? '#0284c7' : '#f43f5e';
+                readOnlyButton.title = 'Carga validada desde ais_vessels mediante /api/audit-vessels';
             }
 
             try {
@@ -35058,6 +35095,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (typeof window.setAisRadarStatus === 'function') {
                     window.setAisRadarStatus('frozen', validatedVessels.length);
                 }
+                if (liveMode) window.isLiveTrackingEnabled = true;
                 return validatedVessels;
             } catch (error) {
                 console.error('[Density Map] No se pudieron cargar los buques validados en modo de solo lectura.', error);
@@ -37448,12 +37486,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const AIS_RAW_FLEET_DIAGNOSTIC_MODE = false;
                 
                 const { vesselTypes } = window.getCentralFilters();
-                if (!Array.isArray(vesselTypes) || vesselTypes.length === 0) {
-                    if (window.GlobalStore) window.GlobalStore.resetFilteredVessels({ taxonomy: '' });
-                    window.lastVesselsInArea = [];
-                    if (typeof updateAisMarkers === 'function') updateAisMarkers([]);
-                    return [];
-                }
+                const hasSelectedVesselTypes = Array.isArray(vesselTypes) && vesselTypes.length > 0;
 
                 if (AIS_RAW_FLEET_DIAGNOSTIC_MODE) {
                     const firstRaw = rawVessels[0] || null;
@@ -37476,7 +37509,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                             ? bindRadarVesselTipo({ ...aisMatch, fleetIntelMatch: true, isTarget: true, fleetIntelRecord: record })
                             : buildFleetNoSignalVessel(record);
                     })
-                    : (AIS_RAW_FLEET_DIAGNOSTIC_MODE
+                    : (!hasSelectedVesselTypes || AIS_RAW_FLEET_DIAGNOSTIC_MODE
                         ? hydratedRawVessels
                         : filterVessels(hydratedRawVessels, selectedCategory));
 
@@ -37755,6 +37788,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 vesselCount: 0,
                 databaseVesselCount: null,
                 taxonomySummary: null,
+                pollingWarning: null,
                 error: null
             }, window.aisAvailabilitySweepUi || {});
 
@@ -37792,29 +37826,32 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const label = document.getElementById('ais-refresh-label');
                 const monitor = document.getElementById('ais-availability-monitor');
                 const status = document.getElementById('ais-availability-status');
-                const isRequesting = state.isLoading === true;
-                const isSent = state.status === 'sent';
-                const hasError = state.status === 'error';
+	                const isRequesting = state.isLoading === true;
+	                const isSent = state.status === 'sent';
+	                const isProcessing = state.status === 'processing';
+	                const hasError = state.status === 'error';
 
                 const auditMode = !!window.matchingAuditModeState?.enabled;
                 const readOnlyMode = window.aisDensityReadOnly === true || auditMode;
                 if (btn) btn.disabled = isRequesting;
                 if (icon) icon.classList.toggle('fa-spin', isRequesting);
                 if (label) {
-                    label.textContent = isRequesting
-                        ? (readOnlyMode ? 'Consultando base de datos...' : 'Enviando solicitud...')
-                        : (isSent ? 'Datos actualizados' : AIS_SWEEP_IDLE_LABEL);
+	                    label.textContent = isRequesting
+	                        ? (isProcessing ? 'Sincronizando Core PRO...' : (readOnlyMode ? 'Consultando base de datos...' : 'Enviando solicitud...'))
+	                        : (isSent ? 'Datos actualizados' : AIS_SWEEP_IDLE_LABEL);
                 }
                 if (monitor) {
-                    monitor.classList.toggle('active', isRequesting || isSent || hasError);
+	                    monitor.classList.toggle('active', isRequesting || isProcessing || isSent || hasError);
                     monitor.classList.toggle('done', isSent);
                 }
                 if (status) {
-                    status.textContent = isRequesting
-                        ? (readOnlyMode
-                            ? 'Consultando registros AIS mediante GET, sin modificar la base de datos...'
-                            : 'El backend está capturando AISStream y guardando buques en Neon...')
-                        : (isSent
+	                    status.textContent = isRequesting
+	                        ? (isProcessing
+	                            ? (state.pollingWarning || 'Barrido en curso: guardando AIS y sincronizando buques válidos con vessels_master...')
+	                            : (readOnlyMode
+	                                ? 'Consultando registros AIS mediante GET, sin modificar la base de datos...'
+	                                : 'El backend está capturando AISStream y guardando buques en Neon...'))
+	                        : (isSent
                             ? (readOnlyMode
                                 ? (state.taxonomySummary?.message || `Consulta completada: ${Number(state.vesselCount) || 0} buques cargados desde la base de datos.`)
                                 : `Captura completada: ${Number(state.vesselCount) || 0} buques actualizados en Neon${Number.isFinite(Number(state.databaseVesselCount)) ? `; ${Number(state.databaseVesselCount)} buques almacenados en total.` : '.'}`)
@@ -37869,9 +37906,52 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
             };
 
-            const MANUAL_EXTERNAL_RADAR_SWEEP_TOKEN = Symbol('manual-external-radar-sweep');
+	            const MANUAL_EXTERNAL_RADAR_SWEEP_TOKEN = Symbol('manual-external-radar-sweep');
 
-            window.executeSweepAIS = async function(executionToken = null) {
+	            window.waitForManualAisSweepCompletion = async function(scanId) {
+	                const completedStatuses = new Set(['COMPLETE', 'COMPLETED']);
+	                const failedStatuses = new Set(['ERROR', 'FAILED']);
+	                while (true) {
+	                    const statusUrl = new URL('/api/trigger-ais-sweep', window.location.origin);
+	                    statusUrl.searchParams.set('scanId', scanId);
+	                    try {
+	                        const response = await fetch(statusUrl, {
+	                            method: 'GET',
+	                            headers: { Accept: 'application/json' },
+	                            cache: 'no-store'
+	                        });
+	                        const payload = await response.json().catch(() => ({}));
+	                        if (response.ok && payload.matchesRequestedScan !== false) {
+	                            const scanStatus = String(payload.scanStatus || '').toUpperCase();
+	                            if (completedStatuses.has(scanStatus)) return payload;
+	                            if (failedStatuses.has(scanStatus)) {
+	                                const terminalError = new Error(payload.error || 'El barrido AIS terminó con error.');
+	                                terminalError.name = 'AisSweepFailedError';
+	                                throw terminalError;
+	                            }
+	                            window.aisAvailabilitySweepUi.status = 'processing';
+	                            window.aisAvailabilitySweepUi.pollingWarning = null;
+	                            window.aisAvailabilitySweepUi.vesselCount = Number(payload.masterPersistedCount ?? payload.persistedCount) || 0;
+	                            window.aisAvailabilitySweepUi.databaseVesselCount = Number.isFinite(Number(payload.databaseVesselCount))
+	                                ? Number(payload.databaseVesselCount)
+	                                : null;
+	                            window.updateAisAvailabilitySweepFeedback();
+	                        } else {
+	                            window.aisAvailabilitySweepUi.status = 'processing';
+	                            window.aisAvailabilitySweepUi.pollingWarning = 'Esperando confirmación del backend; el barrido sigue activo.';
+	                            window.updateAisAvailabilitySweepFeedback();
+	                        }
+	                    } catch (error) {
+	                        if (error instanceof Error && error.name === 'AisSweepFailedError') throw error;
+	                        window.aisAvailabilitySweepUi.status = 'processing';
+	                        window.aisAvailabilitySweepUi.pollingWarning = 'Conexión temporalmente interrumpida; se sigue consultando el mismo barrido.';
+	                        window.updateAisAvailabilitySweepFeedback();
+	                    }
+	                    await new Promise(resolve => setTimeout(resolve, 1500));
+	                }
+	            };
+
+	            window.executeSweepAIS = async function(executionToken = null) {
                 if (executionToken !== MANUAL_EXTERNAL_RADAR_SWEEP_TOKEN) return false;
                 const btn = document.getElementById('btn-refresh-ais');
                 if (!btn) return;
@@ -37884,6 +37964,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 window.aisAvailabilitySweepUi.status = 'requesting';
                 window.aisAvailabilitySweepUi.isLoading = true;
                 window.aisAvailabilitySweepUi.error = null;
+                window.aisAvailabilitySweepUi.pollingWarning = null;
                 window.updateAisAvailabilitySweepFeedback();
                 window.aisRadarUserActivated = true;
                 let completedSuccessfully = false;
@@ -37921,20 +38002,53 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         throw new Error('El backend no confirmó la ejecución asíncrona del barrido AIS.');
                     }
 
-                    window.aisAvailabilitySweepUi.status = 'sent';
-                    window.aisAvailabilitySweepUi.requestedAt = payload.requestedAt || new Date().toISOString();
-                    completedSuccessfully = true;
+	                    const scanId = String(payload.scanId || payload.requestId || '').trim();
+	                    if (!scanId) throw new Error('El backend no devolvió el identificador del barrido AIS.');
+	                    window.aisAvailabilitySweepUi.status = 'processing';
+	                    window.aisAvailabilitySweepUi.requestedAt = payload.requestedAt || new Date().toISOString();
+	                    window.updateAisAvailabilitySweepFeedback();
+
+	                    const completion = await window.waitForManualAisSweepCompletion(scanId);
+	                    window.aisAvailabilitySweepUi.status = 'sent';
+	                    window.aisAvailabilitySweepUi.vesselCount = Number(completion.availableVesselCount ?? completion.masterPersistedCount ?? completion.persistedCount) || 0;
+	                    window.aisAvailabilitySweepUi.databaseVesselCount = Number.isFinite(Number(completion.databaseVesselCount))
+	                        ? Number(completion.databaseVesselCount)
+	                        : null;
+	                    window.aisAvailabilitySweepUi.requestedAt = completion.requestedAt || window.aisAvailabilitySweepUi.requestedAt;
+	                    window.aisAvailabilitySweepUi.lastCompletion = completion;
+	                    const degradedSweep = completion.degraded === true || completion.liveConnection === false;
+	                    const completionLabel = degradedSweep ? 'AISStream no disponible · usando base local' : 'Barrido externo completado';
+	                    updateSequentialTelemetryBlock('matching-route-status-block', degradedSweep ? 'warning' : 'success', completionLabel);
+	                    updateSequentialTelemetryBlock('matching-laycan-status-block', degradedSweep ? 'warning' : 'success', completionLabel);
+	                    updateSequentialTelemetryBlock('matching-fleet-status-block', degradedSweep ? 'warning' : 'success', `${window.aisAvailabilitySweepUi.vesselCount} buques disponibles`);
+	                    window.dispatchEvent(new CustomEvent('AIS_SWEEP_COMPLETE', { detail: completion }));
+	                    completedSuccessfully = true;
                 } catch (error) {
                     console.error('Error durante la captura AIS de servidor:', error);
-                    finalErrorMessage = error && error.message
-                        ? error.message
-                        : 'No se pudo completar la captura AIS.';
-                } finally {
-                    resetAisAvailabilitySweepFeedback(finalErrorMessage);
-                    if (typeof showToast === 'function') {
-                        const state = window.aisAvailabilitySweepUi;
-                        if (completedSuccessfully) {
-                            showToast('Barrido AIS aceptado y ejecutándose en segundo plano.', false, 'success');
+	                    finalErrorMessage = error && error.message
+	                        ? error.message
+	                        : 'No se pudo completar la captura AIS.';
+	                    updateSequentialTelemetryBlock('matching-route-status-block', 'error', finalErrorMessage);
+	                    updateSequentialTelemetryBlock('matching-laycan-status-block', 'error', finalErrorMessage);
+	                    updateSequentialTelemetryBlock('matching-fleet-status-block', 'error', finalErrorMessage);
+	                } finally {
+	                    window.aisAvailabilitySweepUi.isLoading = false;
+	                    if (completedSuccessfully) {
+	                        window.updateAisAvailabilitySweepFeedback();
+	                    } else {
+	                        resetAisAvailabilitySweepFeedback(finalErrorMessage);
+	                    }
+	                    if (typeof showToast === 'function') {
+	                        const state = window.aisAvailabilitySweepUi;
+	                        if (completedSuccessfully) {
+	                            const degradedSweep = window.aisAvailabilitySweepUi?.lastCompletion?.degraded === true;
+                            showToast(
+                                degradedSweep
+                                    ? `AISStream no disponible: ${Number(state.vesselCount) || 0} buques cargados desde la base local.`
+                                    : `Barrido AIS completado: ${Number(state.vesselCount) || 0} buques sincronizados con Core PRO.`,
+                                false,
+                                degradedSweep ? 'warning' : 'success'
+                            );
                         } else {
                             showToast(finalErrorMessage || 'No se pudo completar la captura AIS.', false, 'error');
                         }
@@ -41389,6 +41503,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         const DATA_BRIDGE_API_SECRET = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_API_SECRET, '');
         const HAS_VALID_DATA_BRIDGE_API_URL = isValidDataBridgeApiUrl(DATA_BRIDGE_API_URL);
         const DATA_BRIDGE_VERIFY_ENDPOINT = '/api/verify-connection';
+        const DATA_BRIDGE_VERIFIED_SESSION_KEY = 'seacharter_databridge_verified_at';
         const DATA_BRIDGE_STATUS_LABELS = {
             inactive: 'Inactivo',
             secure: 'Secure Connection',
@@ -41495,9 +41610,28 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return true;
         }
 
+        function getVerifiedDataBridgeTimestamp() {
+            try {
+                const timestamp = Number(window.sessionStorage.getItem(DATA_BRIDGE_VERIFIED_SESSION_KEY));
+                return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : 0;
+            } catch (error) {
+                return 0;
+            }
+        }
+
+        function setDataBridgeVerifiedConnection(isVerified) {
+            try {
+                if (isVerified) {
+                    window.sessionStorage.setItem(DATA_BRIDGE_VERIFIED_SESSION_KEY, String(Date.now()));
+                } else {
+                    window.sessionStorage.removeItem(DATA_BRIDGE_VERIFIED_SESSION_KEY);
+                }
+            } catch (error) {}
+            return isVerified;
+        }
+
         function updateDataBridgeConnectionIndicator() {
-            const manualExternalMode = window.coreProOperationMode === window.CORE_PRO_OPERATION_MODES?.MANUAL_RADAR;
-            const isConnected = manualExternalMode && Boolean(getStoredDataBridgeToken());
+            const isConnected = getVerifiedDataBridgeTimestamp() > 0;
             const dot = document.getElementById('databridge-connection-dot');
             const linkBtn = document.getElementById('btn-open-databridge-direct');
             if (dot) dot.classList.toggle('hidden', !isConnected);
@@ -41558,7 +41692,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function setDataBridgeLinkPending(isPending) {
             const submit = document.getElementById('databridge-link-submit');
-            updateConnectionStatusBar(isPending ? 'secure' : (Boolean(getStoredDataBridgeToken()) ? 'secure' : 'disconnected'));
+            updateConnectionStatusBar(isPending ? 'secure' : (getVerifiedDataBridgeTimestamp() > 0 ? 'secure' : 'disconnected'));
             if (!submit) return;
             const isDisabled = isPending;
             submit.disabled = isDisabled;
@@ -41580,7 +41714,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     Accept: 'application/json'
                 };
                 if (dataBridgeToken) headers.Authorization = 'Bearer ' + dataBridgeToken;
-                const response = await fetch(DATA_BRIDGE_VERIFY_ENDPOINT, {
+                const dataBridgeFetch = window.__coreProNativeFetch || window.fetch;
+                const response = await dataBridgeFetch(DATA_BRIDGE_VERIFY_ENDPOINT, {
                     method: 'POST',
                     headers
                 });
@@ -41593,10 +41728,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (!response.ok) {
                     throw new Error(payload?.error || payload?.message || `Error de conexión (${response.status})`);
                 }
+                const connected = payload?.status === 'connected' || payload?.success === true;
+                if (!connected) throw new Error('Data Bridge no confirmó el estado conectado.');
+                setDataBridgeVerifiedConnection(true);
                 updateDataBridgeConnectionIndicator();
                 closeDataBridgeLinkModal();
                 if (typeof showToast === 'function') showToast('Enlace establecido correctamente');
             } catch (requestError) {
+                setDataBridgeVerifiedConnection(false);
+                updateDataBridgeConnectionIndicator();
                 const message = requestError?.message || 'No se pudo verificar la conexión con Data Bridge.';
                 if (error) {
                     error.textContent = message;
@@ -41660,7 +41800,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (launcher) launcher.classList.remove('hidden');
             if (launcher) launcher.classList.add('flex');
             updateDataBridgeButtonState(false);
-            updateConnectionStatusBar(Boolean(getStoredDataBridgeToken()) ? 'secure' : 'disconnected');
+            updateConnectionStatusBar(getVerifiedDataBridgeTimestamp() > 0 ? 'secure' : 'disconnected');
         }
 
         function setWebDataBridgeFullScreen(isFullScreen) {

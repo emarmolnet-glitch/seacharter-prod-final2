@@ -1,4 +1,5 @@
 import type { Config } from "@netlify/functions";
+import { upsertRadarVesselsMaster, type RadarVesselMasterInput } from "../../db/vessels-master-sync.js";
 import {
   getFleetRow,
   getFleetRowBySyncId,
@@ -25,6 +26,56 @@ function isObject(value: unknown): value is Record<string, unknown> {
 function readContentLength(req: Request) {
   const contentLength = Number(req.headers.get("content-length"));
   return Number.isFinite(contentLength) && contentLength >= 0 ? contentLength : null;
+}
+
+function firstValue(...values: unknown[]) {
+  return values.find((value) => value !== undefined && value !== null && String(value).trim() !== "");
+}
+
+function textValue(...values: unknown[]) {
+  const value = firstValue(...values);
+  return value === undefined ? null : String(value).trim() || null;
+}
+
+function numberValue(...values: unknown[]) {
+  for (const value of values) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+  }
+  return null;
+}
+
+function toMasterVessel(value: unknown): RadarVesselMasterInput | null {
+  if (!isObject(value)) return null;
+  const vessel = isObject(value.vessel) ? value.vessel : {};
+  const ais = isObject(value.ais) ? value.ais : {};
+  const routing = isObject(value.routing) ? value.routing : {};
+  const metadata = isObject(value.MetaData) ? value.MetaData : {};
+  const latitude = numberValue(value.latitude, value.lat, ais.latitude, ais.lat, metadata.latitude, metadata.AIS_Live_Lat);
+  const longitude = numberValue(value.longitude, value.lon, value.lng, ais.longitude, ais.lon, ais.lng, metadata.longitude, metadata.AIS_Live_Lon);
+  if (latitude === null || longitude === null) return null;
+
+  return {
+    imoNumber: textValue(vessel.imo, vessel.IMO, value.imo, value.IMO, value.imo_number, ais.imo, metadata.IMO),
+    mmsi: textValue(vessel.mmsi, value.mmsi, value.MMSI, ais.mmsi, metadata.MMSI),
+    vesselName: textValue(vessel.vesselName, vessel.vessel_name, value.vesselName, value.vessel_name, value.ShipName, value.name, metadata.ShipName),
+    shipType: textValue(vessel.vesselClass, vessel.specialtyType, vessel.shipType, value.vessel_type, value.shipType, value.ShipType, metadata.ShipType),
+    draught: numberValue(vessel.draft, vessel.draught, value.draft, value.draught, ais.draft),
+    dwt: numberValue(vessel.dwt, value.dwt, ais.dwt),
+    latitude,
+    longitude,
+    destination: textValue(vessel.destination, value.destination, value.Destination, ais.destination, ais.plannedDestination),
+    lastPortOfCall: textValue(value.lastPortOfCall, value.last_port_of_call, ais.lastPortOfCall, ais.ultimo_puerto),
+    eta: textValue(routing.eta, value.eta, ais.eta, ais.eta_puerto_carga),
+    source: "Core PRO / Data Bridge",
+    rawData: value,
+    flag: textValue(vessel.flag, value.flag, ais.flag),
+    yearBuilt: numberValue(vessel.builtYear, vessel.built_year, value.year_built),
+    ownerManager: textValue(vessel.owner, vessel.manager, vessel.operator, value.owner_manager),
+    hasGears: typeof vessel.hasCranes === "boolean" ? vessel.hasCranes : null,
+    processStatus: "SYNCED",
+    systemIdentity: textValue(value.candidateId, value.storageKey, value.id, vessel.vesselName, vessel.vessel_name, value.vesselName, value.vessel_name, value.name),
+  };
 }
 
 function generateSyncId() {
@@ -157,11 +208,15 @@ export default async (req: Request) => {
       throw new Error("The persisted vessel array does not match the uploaded report.");
     }
 
+    const masterRows = savedVessels.map(toMasterVessel).filter((vessel): vessel is RadarVesselMasterInput => vessel !== null);
+    const masterPersistedCount = await upsertRadarVesselsMaster(masterRows);
+
     return Response.json({
       ...committedSync!.lastSyncData,
       success: true,
       available: true,
       vessel_count: savedVessels.length,
+      masterPersistedCount,
     }, { status: 200, headers });
   } catch (error) {
     if (error instanceof SyntaxError) {

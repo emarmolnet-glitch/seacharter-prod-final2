@@ -22,13 +22,17 @@ test('stored taxonomy is validated but never auto-selected on mount', () => {
   assert.match(source, /localStorage\.removeItem\(FLEET_INTEL_FILTER_KEY\)/);
 });
 
-test('density map aborts without taxonomy before requesting vessels', () => {
+test('density map waits for an explicit taxonomy but preserves loaded vessels when filters are empty', () => {
   const loaderStart = source.indexOf('window.loadValidatedAisDensityVessels = async function');
   const loaderEnd = source.indexOf('window.runInitialAisRadarLoad', loaderStart);
   const loader = source.slice(loaderStart, loaderEnd);
+  const redrawStart = source.indexOf('window.reapplyCentralFiltersAndRedraw = function');
+  const redrawEnd = source.indexOf("window.addEventListener('ais:vessels-updated'", redrawStart);
+  const redraw = source.slice(redrawStart, redrawEnd);
   assert.ok(loader.indexOf('if (!selectedTaxonomy)') >= 0);
   assert.ok(loader.indexOf('if (!selectedTaxonomy)') < loader.indexOf('await fetch(endpoint'));
-  assert.match(source, /if \(!Array\.isArray\(vesselTypes\) \|\| vesselTypes\.length === 0\) \{[\s\S]*?updateAisMarkers\(\[\]\);[\s\S]*?return \[\];/);
+  assert.match(redraw, /const hasSelectedVesselTypes = Array\.isArray\(vesselTypes\) && vesselTypes\.length > 0/);
+  assert.doesNotMatch(redraw, /vesselTypes\.length === 0[\s\S]{0,300}updateAisMarkers\(\[\]\)/);
 });
 
 test('matching and Data Bridge flow require the explicit Execute action', () => {

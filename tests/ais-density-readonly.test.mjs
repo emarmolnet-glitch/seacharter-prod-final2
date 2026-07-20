@@ -18,6 +18,34 @@ test('density map loads validated vessels through the read-only endpoint', () =>
   assert.match(indexSource, /audit-database-readonly/);
 });
 
+test('Radar LIVE activation loads audited ais_vessels and refreshes the shared map store', () => {
+  const toggleStart = indexSource.indexOf('window.toggleLiveTracking = async function');
+  const toggleEnd = indexSource.indexOf('window.isFirstLoad', toggleStart);
+  const toggleSource = indexSource.slice(toggleStart, toggleEnd);
+  const loaderStart = indexSource.indexOf('window.loadValidatedAisDensityVessels = async function');
+  const loaderEnd = indexSource.indexOf('window.runInitialAisRadarLoad', loaderStart);
+  const loaderSource = indexSource.slice(loaderStart, loaderEnd);
+
+  assert.match(toggleSource, /activatingLive/);
+  assert.match(toggleSource, /window\.loadValidatedAisDensityVessels\(\{/);
+  assert.match(toggleSource, /liveMode: true/);
+  assert.match(toggleSource, /selectedTaxonomy: 'All Cargo'/);
+  assert.match(toggleSource, /Radar LIVE actualizado con/);
+  assert.match(loaderSource, /window\.getAuditAisEndpoint\(selectedTaxonomy\)/);
+  assert.match(loaderSource, /await fetch\(endpoint/);
+  assert.match(loaderSource, /window\.GlobalStore\.rawVessels = validatedVessels\.slice\(\)/);
+  assert.match(loaderSource, /new CustomEvent\('ais:vessels-updated'/);
+});
+
+test('density endpoints query ais_vessels directly without a compatibility view', () => {
+  assert.match(auditFunctionSource, /FROM ais_vessels/);
+  assert.match(filterFunctionSource, /FROM ais_vessels/);
+  assert.match(auditFunctionSource, /source: "ais_vessels"/);
+  assert.match(filterFunctionSource, /source: "ais_vessels"/);
+  assert.doesNotMatch(auditFunctionSource, /FROM vessels_master/);
+  assert.doesNotMatch(filterFunctionSource, /FROM vessels_master/);
+});
+
 test('database ingestion summary groups the raw payload taxonomy before normalization', () => {
   const loaderStart = indexSource.indexOf('window.loadValidatedAisDensityVessels = async function');
   const loaderEnd = indexSource.indexOf('window.runInitialAisRadarLoad', loaderStart);
@@ -316,6 +344,16 @@ test('empty taxonomy selection stays empty instead of falling back to All Cargo'
   const filterLabelSource = indexSource.slice(filterLabelStart, filterLabelEnd);
   assert.match(filterLabelSource, /return getSelectedFleetTaxonomies\(\)/);
   assert.doesNotMatch(filterLabelSource, /category:cargo/);
+});
+
+test('empty taxonomy selection keeps audited POL vessels visible', () => {
+  const redrawStart = indexSource.indexOf('window.reapplyCentralFiltersAndRedraw = function');
+  const redrawEnd = indexSource.indexOf("window.addEventListener('ais:vessels-updated'", redrawStart);
+  const redrawSource = indexSource.slice(redrawStart, redrawEnd);
+
+  assert.match(redrawSource, /const hasSelectedVesselTypes = Array\.isArray\(vesselTypes\) && vesselTypes\.length > 0/);
+  assert.match(redrawSource, /!hasSelectedVesselTypes \|\| AIS_RAW_FLEET_DIAGNOSTIC_MODE[\s\S]*\? hydratedRawVessels/);
+  assert.doesNotMatch(redrawSource, /vesselTypes\.length === 0[\s\S]{0,300}updateAisMarkers\(\[\]\)/);
 });
 
 test('POL matching cache invalidates when filtered taxonomy composition changes', () => {
