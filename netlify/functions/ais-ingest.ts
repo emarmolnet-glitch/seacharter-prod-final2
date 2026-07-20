@@ -1,4 +1,5 @@
 import WebSocket from "ws";
+import { upsertRadarVesselsMaster } from "../../db/vessels-master-sync.js";
 import { upsertVessels, type VesselRecord } from "./vessel-store.js";
 import { filterVesselsByTaxonomies, parseRequestedTaxonomies } from "./ais-taxonomy.js";
 
@@ -128,6 +129,7 @@ function mergeDefined(current: Record<string, unknown> | undefined, incoming: Re
 async function insertAisRows(rows: VesselRecord[]) {
   try {
     await upsertVessels(rows);
+    return await upsertRadarVesselsMaster(rows);
   } catch (error) {
     const databaseError = error as PostgreSqlError;
     console.error("[ais-ingest] AISStream database insertion failed.", {
@@ -192,7 +194,11 @@ function normalizeVessel(item: unknown, etaTarget: EtaTarget | null): VesselReco
 function collectVessels(apiKey: string, boundingBoxes: unknown[], timeoutMs: number, limit: number, etaTarget: EtaTarget | null) {
   return new Promise<VesselRecord[]>((resolve, reject) => {
     const messagesByMmsi = new Map<string, Record<string, unknown>>();
-    const ws = new WebSocket(AISSTREAM_ENDPOINT);
+    const ws = new WebSocket(AISSTREAM_ENDPOINT, {
+      handshakeTimeout: Math.min(timeoutMs, 5000),
+      perMessageDeflate: false,
+      family: 4,
+    });
     let settled = false;
 
     const finish = (error?: Error) => {
@@ -246,7 +252,14 @@ function collectVessels(apiKey: string, boundingBoxes: unknown[], timeoutMs: num
       } catch (_) {}
     });
 
-    ws.on("error", () => finish(new Error("AISStream WebSocket connection failed.")));
+    ws.on("error", (error: Error & { code?: string }) => {
+      console.error("[ais-ingest] AISStream websocket error.", {
+        code: error.code || null,
+        message: error.message,
+      });
+      const diagnosticCode = error.code ? ` (${error.code})` : "";
+      finish(new Error(`AISStream WebSocket connection failed${diagnosticCode}.`));
+    });
     ws.on("close", () => finish());
   });
 }
@@ -277,13 +290,14 @@ export default async (req: Request) => {
       ? filterVesselsByTaxonomies(rows as unknown as Record<string, unknown>[], selectedTaxonomies) as unknown as VesselRecord[]
       : rows;
 
-    if (acceptedRows.length > 0) {
-      await insertAisRows(acceptedRows);
-    }
+    const masterPersistedCount = acceptedRows.length > 0
+      ? await insertAisRows(acceptedRows)
+      : 0;
 
     return Response.json({
       ok: true,
       inserted: acceptedRows.length,
+      masterPersistedCount,
       discardedByTaxonomy: strictTaxonomyMode ? Math.max(0, rows.length - acceptedRows.length) : 0,
       selectedTaxonomies: strictTaxonomyMode ? selectedTaxonomies : undefined,
       etaTarget: etaTarget ? etaTarget.label : null,

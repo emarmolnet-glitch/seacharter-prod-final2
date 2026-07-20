@@ -35,7 +35,7 @@ type VesselRow = {
   eta: string | null;
   lastPort: string | null;
   currentDestination: string | null;
-  yearBuilt: string | null;
+  yearBuilt: number | null;
   ownerManager: string | null;
   hasGears: boolean;
   processStatus: string | null;
@@ -57,7 +57,9 @@ const REQUIRED_VESSELS_MASTER_COLUMNS = [
   "vessel_name",
   "latitude",
   "longitude",
+  "origen",
   "source_payload",
+  "fecha_ultima_actualizacion",
 ] as const;
 
 function cleanText(value: unknown) {
@@ -101,6 +103,18 @@ function cleanBoolean(value: unknown) {
   return ["1", "true", "yes", "si", "sí", "geared"].includes(String(value ?? "").trim().toLowerCase());
 }
 
+function cleanInteger(value: unknown) {
+  const numeric = cleanNumber(value);
+  return numeric === null ? null : Math.trunc(numeric);
+}
+
+function cleanIsoDate(value: unknown) {
+  const text = cleanText(value);
+  if (!text) return null;
+  const timestamp = Date.parse(text);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+}
+
 function getVessels(payload: unknown) {
   if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== "object") return [];
@@ -112,9 +126,19 @@ function getVessels(payload: unknown) {
 }
 
 function normalizeVessel(value: unknown, index: number) {
-  const source = value && typeof value === "object" && !Array.isArray(value)
+  const rawSource = value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+  const nestedVessel = rawSource.vessel && typeof rawSource.vessel === "object" && !Array.isArray(rawSource.vessel)
+    ? rawSource.vessel as Record<string, unknown>
+    : {};
+  const nestedAis = rawSource.ais && typeof rawSource.ais === "object" && !Array.isArray(rawSource.ais)
+    ? rawSource.ais as Record<string, unknown>
+    : {};
+  const nestedRouting = rawSource.routing && typeof rawSource.routing === "object" && !Array.isArray(rawSource.routing)
+    ? rawSource.routing as Record<string, unknown>
+    : {};
+  const source = { ...rawSource, ...nestedRouting, ...nestedAis, ...nestedVessel };
   const name = cleanText(readFirst(source, ["vessel_name", "vesselName", "nombre", "name", "ShipName", "ship"]));
   const imoKeys = ["imo_number", "IMO_NUMBER", "IMO", "imo", "numero_imo", "imoNumber", "numeroIMO"];
   const rawImo = readFirst(source, imoKeys);
@@ -124,7 +148,7 @@ function normalizeVessel(value: unknown, index: number) {
   const rawDraft = readFirst(source, ["draft_meters", "draft", "Draft", "calado"]);
   const rawLatitude = readFirst(source, ["latitude", "lat", "Latitude", "AIS_Live_Lat", "LAT"]);
   const rawLongitude = readFirst(source, ["longitude", "lon", "lng", "long", "Longitude", "AIS_Live_Lon", "LON", "LONG"]);
-  const dwt = cleanNumber(rawDwt);
+  const dwt = cleanInteger(rawDwt);
   const draftMeters = cleanNumber(rawDraft);
   const latitude = cleanNumber(rawLatitude);
   const longitude = cleanNumber(rawLongitude);
@@ -161,65 +185,31 @@ function normalizeVessel(value: unknown, index: number) {
     vesselType: cleanText(readFirst(source, ["vessel_type", "type", "tipo", "tipo_buque"])),
     draftMeters,
     flag: cleanText(readFirst(source, ["flag", "Flag", "bandera"])),
-    eta: cleanText(readFirst(source, ["eta", "ETA", "eta_puerto_carga", "estimatedEta", "etaEstimated"])),
+    eta: cleanIsoDate(readFirst(source, ["eta", "ETA", "eta_puerto_carga", "estimatedEta", "etaEstimated"])),
     lastPort: cleanText(readFirst(source, ["last_port", "lastPort", "ultimo_puerto", "lastPortOfCall"])),
     currentDestination: cleanText(readFirst(source, ["current_destination", "destino_actual", "destination", "plannedDestination"])),
-    yearBuilt: cleanText(readFirst(source, ["year_built", "yearBuilt", "ano_construccion", "anio_construccion", "builtYear"])),
+    yearBuilt: cleanInteger(readFirst(source, ["year_built", "yearBuilt", "ano_construccion", "anio_construccion", "builtYear"])),
     ownerManager: cleanText(readFirst(source, ["owner_manager", "armador_manager", "owner", "manager", "operator"])),
     hasGears: cleanBoolean(readFirst(source, ["has_gears", "gruas_geared", "hasCranes", "gruas"])),
     processStatus: cleanText(readFirst(source, ["process_status", "estadoProcesos", "status", "audit_status", "auditStatus"])),
     source: cleanText(readFirst(source, ["source", "origen_datos", "provider"])),
-    sourcePayload: source,
+    sourcePayload: rawSource,
   } : null;
 
   return { vessel, issues };
 }
 
 async function ensureVesselsMasterSchema() {
-  vesselsMasterSchemaReady ??= getPool().query(`
-    CREATE TABLE IF NOT EXISTS vessels_master (
-      imo_number TEXT PRIMARY KEY,
-      vessel_name TEXT NOT NULL,
-      dwt DOUBLE PRECISION,
-      mmsi TEXT,
-      latitude DOUBLE PRECISION,
-      longitude DOUBLE PRECISION,
-      vessel_type TEXT,
-      draft_meters DOUBLE PRECISION,
-      flag TEXT,
-      eta TEXT,
-      last_port TEXT,
-      current_destination TEXT,
-      year_built TEXT,
-      owner_manager TEXT,
-      has_gears BOOLEAN NOT NULL DEFAULT FALSE,
-      process_status TEXT,
-      source TEXT,
-      source_payload JSONB NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-
-    ALTER TABLE vessels_master ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
-    ALTER TABLE vessels_master ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
-
-    CREATE TABLE IF NOT EXISTS databridge_vessel_syncs (
-      sync_id UUID PRIMARY KEY,
-      persisted_imo_numbers JSONB NOT NULL DEFAULT '[]'::jsonb,
-      rejected_count INTEGER NOT NULL DEFAULT 0,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `).then(async () => {
-    const schemaResult = await getPool().query<{ column_name: string }>(
-      `
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_schema = current_schema()
-          AND table_name = 'vessels_master'
-          AND column_name = ANY($1::text[])
-      `,
-      [REQUIRED_VESSELS_MASTER_COLUMNS],
-    );
+  vesselsMasterSchemaReady ??= getPool().query<{ column_name: string }>(
+    `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND table_name = 'vessels_master'
+        AND column_name = ANY($1::text[])
+    `,
+    [REQUIRED_VESSELS_MASTER_COLUMNS],
+  ).then((schemaResult) => {
     const availableColumns = new Set(schemaResult.rows.map((row) => row.column_name));
     const missingColumns = REQUIRED_VESSELS_MASTER_COLUMNS.filter((column) => !availableColumns.has(column));
     if (missingColumns.length > 0) {
@@ -256,8 +246,11 @@ function validateVesselsBeforePersistence(vessels: VesselRow[]) {
     if (!vessel.sourcePayload || typeof vessel.sourcePayload !== "object" || Array.isArray(vessel.sourcePayload)) {
       issues.push({ index, vessel: vessel.vesselName || vessel.imoNumber, field: "source_payload", message: "source_payload debe ser un objeto JSON." });
     }
-    if ((vessel.latitude === null) !== (vessel.longitude === null)) {
-      issues.push({ index, vessel: vessel.vesselName || vessel.imoNumber, field: "coordinates", message: "latitude y longitude deben persistirse juntas." });
+    if (vessel.latitude === null || vessel.longitude === null) {
+      issues.push({ index, vessel: vessel.vesselName || vessel.imoNumber, field: "coordinates", message: "latitude y longitude válidas son obligatorias para sincronizar el buque." });
+    }
+    if (vessel.latitude === 0 && vessel.longitude === 0) {
+      issues.push({ index, vessel: vessel.vesselName || vessel.imoNumber, field: "coordinates", message: "latitude y longitude no pueden ser simultáneamente 0." });
     }
     if (vessel.latitude !== null && (vessel.latitude < -90 || vessel.latitude > 90)) {
       issues.push({ index, vessel: vessel.vesselName || vessel.imoNumber, field: "latitude", message: "latitude está fuera de rango." });
@@ -282,33 +275,35 @@ async function upsertVesselBatch(vessels: VesselRow[]) {
             INSERT INTO vessels_master (
               imo_number, vessel_name, dwt, mmsi, latitude, longitude, vessel_type, draft_meters, flag, eta,
               last_port, current_destination, year_built, owner_manager, has_gears,
-              process_status, source, source_payload, updated_at
+              process_status, origen, audit_source, source_payload, system_identity, fecha_ultima_actualizacion
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18::jsonb, NOW())
-            ON CONFLICT (imo_number) DO UPDATE SET
+            VALUES ($1::integer, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $17, $18::jsonb, 'DATABRIDGE:IMO:' || $1, NOW())
+            ON CONFLICT (imo_number) WHERE imo_number IS NOT NULL AND imo_number <> 0 DO UPDATE SET
               vessel_name = EXCLUDED.vessel_name,
-              dwt = EXCLUDED.dwt,
-              mmsi = EXCLUDED.mmsi,
+              dwt = COALESCE(EXCLUDED.dwt, vessels_master.dwt),
+              mmsi = COALESCE(EXCLUDED.mmsi, vessels_master.mmsi),
               latitude = EXCLUDED.latitude,
               longitude = EXCLUDED.longitude,
-              vessel_type = EXCLUDED.vessel_type,
-              draft_meters = EXCLUDED.draft_meters,
-              flag = EXCLUDED.flag,
-              eta = EXCLUDED.eta,
-              last_port = EXCLUDED.last_port,
-              current_destination = EXCLUDED.current_destination,
-              year_built = EXCLUDED.year_built,
-              owner_manager = EXCLUDED.owner_manager,
-              has_gears = EXCLUDED.has_gears,
-              process_status = EXCLUDED.process_status,
-              source = EXCLUDED.source,
+              vessel_type = COALESCE(EXCLUDED.vessel_type, vessels_master.vessel_type),
+              draft_meters = COALESCE(EXCLUDED.draft_meters, vessels_master.draft_meters),
+              flag = COALESCE(EXCLUDED.flag, vessels_master.flag),
+              eta = COALESCE(EXCLUDED.eta, vessels_master.eta),
+              last_port = COALESCE(EXCLUDED.last_port, vessels_master.last_port),
+              current_destination = COALESCE(EXCLUDED.current_destination, vessels_master.current_destination),
+              year_built = COALESCE(EXCLUDED.year_built, vessels_master.year_built),
+              owner_manager = COALESCE(EXCLUDED.owner_manager, vessels_master.owner_manager),
+              has_gears = COALESCE(EXCLUDED.has_gears, vessels_master.has_gears),
+              process_status = COALESCE(EXCLUDED.process_status, 'SYNCED'),
+              origen = EXCLUDED.origen,
+              audit_source = EXCLUDED.audit_source,
               source_payload = EXCLUDED.source_payload,
-              updated_at = NOW()
+              system_identity = COALESCE(vessels_master.system_identity, EXCLUDED.system_identity),
+              fecha_ultima_actualizacion = NOW()
           `,
           [
             vessel.imoNumber, vessel.vesselName, vessel.dwt, vessel.mmsi, vessel.latitude, vessel.longitude,
             vessel.vesselType, vessel.draftMeters, vessel.flag, vessel.eta,
-            vessel.lastPort, vessel.currentDestination, vessel.yearBuilt, vessel.ownerManager, vessel.hasGears, vessel.processStatus, vessel.source,
+            vessel.lastPort, vessel.currentDestination, vessel.yearBuilt, vessel.ownerManager, vessel.hasGears, vessel.processStatus || 'SYNCED', vessel.source || 'Data Bridge',
             JSON.stringify(vessel.sourcePayload),
           ],
         );

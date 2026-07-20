@@ -129,6 +129,15 @@ test("Core PRO reads the configured Data Bridge endpoint after a manual frozen r
   assert.match(netlifyConfigSource, /from = "\/api\/databridge-core-pro-sync"[\s\S]*status = 200[\s\S]*force = true/);
 });
 
+test("committed Core PRO reports are reconciled into vessels_master", () => {
+  assert.match(endpointSource, /upsertRadarVesselsMaster\(masterRows\)/);
+  assert.match(endpointSource, /masterPersistedCount/);
+  assert.match(endpointSource, /source: "Core PRO \/ Data Bridge"/);
+  assert.match(endpointSource, /const vessel = isObject\(value\.vessel\)/);
+  assert.match(endpointSource, /const ais = isObject\(value\.ais\)/);
+  assert.match(endpointSource, /systemIdentity: textValue\(value\.candidateId, value\.storageKey/);
+});
+
 test("the backend preserves and returns the complete vessel array", () => {
   assert.match(endpointSource, /path:\s*\["\/api\/core-pro-frozen-report", "\/\.netlify\/functions\/core-pro-frozen-report"\]/);
   assert.match(endpointSource, /normalizeSessionSyncVessels\(payload\.vessels\)/);

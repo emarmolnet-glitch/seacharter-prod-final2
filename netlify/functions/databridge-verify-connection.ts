@@ -7,6 +7,7 @@ const baseHeaders = {
   "access-control-allow-headers": "Content-Type, Authorization, Accept",
   "vary": "Origin",
 };
+const DEFAULT_DATA_BRIDGE_ORIGIN = "https://calm-shortbread-55bcfc.netlify.app";
 
 function getAllowedOrigins() {
   return String(process.env.CORE_PRO_ALLOWED_ORIGINS || process.env.ALLOWED_ORIGINS || "")
@@ -36,7 +37,12 @@ function getCorsHeaders(req: Request) {
 }
 
 function getDataBridgeApiUrl() {
-  return String(process.env.DATA_BRIDGE_API_URL || process.env.VITE_DATA_BRIDGE_API_URL || "").trim();
+  return String(
+    process.env.DATA_BRIDGE_API_URL
+      || process.env.DATA_BRIDGE_PROXY_ORIGIN
+      || process.env.VITE_DATA_BRIDGE_API_URL
+      || DEFAULT_DATA_BRIDGE_ORIGIN,
+  ).trim();
 }
 
 function isValidHttpUrl(value: string) {
@@ -74,18 +80,15 @@ export default async (req: Request) => {
   }
 
   const token = getBearerToken(req);
-  if (!token) {
-    return Response.json({ success: false, error: "Introduce el API Secret para continuar." }, { status: 400, headers });
-  }
-
   const endpoint = `${apiUrl.replace(/\/+$/, "")}/api/verify-connection`;
   try {
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         Accept: "application/json",
       },
+      signal: AbortSignal.timeout(15_000),
     });
 
     let payload: unknown = null;
@@ -112,4 +115,9 @@ export default async (req: Request) => {
       { status: 502, headers },
     );
   }
+};
+
+export const config = {
+  path: "/api/databridge-verify-connection",
+  method: ["POST", "OPTIONS"],
 };

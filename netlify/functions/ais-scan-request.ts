@@ -35,18 +35,27 @@ const ALLOWED_QUERY_PARAMETERS = new Set([
 
 type ScanRequestBody = {
   query?: Record<string, unknown>;
+  scanId?: unknown;
 };
 
-async function setScanStatus(value: string, updatedAt = new Date()) {
+async function setAppConfigValue(key: string, value: string, updatedAt = new Date()) {
   const [updatedConfig] = await db
     .insert(appConfig)
-    .values({ key: SCAN_STATUS_KEY, value, updatedAt })
+    .values({ key, value, updatedAt })
     .onConflictDoUpdate({
       target: appConfig.key,
       set: { value, updatedAt },
     })
     .returning();
   return updatedConfig;
+}
+
+async function setScanStatus(value: string, details: Record<string, unknown>, updatedAt = new Date()) {
+  const [status] = await Promise.all([
+    setAppConfigValue(SCAN_STATUS_KEY, value, updatedAt),
+    setAppConfigValue("scan_result", JSON.stringify({ ...details, scanStatus: value }), updatedAt),
+  ]);
+  return status;
 }
 
 async function readScanRequestBody(req: Request): Promise<ScanRequestBody> {
@@ -91,8 +100,10 @@ export default async (req: Request) => {
   }
 
   const requestedAt = new Date();
+  let scanId = "";
   try {
     const body = await readScanRequestBody(req);
+    scanId = typeof body.scanId === "string" && body.scanId.trim() ? body.scanId.trim() : crypto.randomUUID();
     const captureUrl = buildCaptureUrl(req, body);
     if (!captureUrl.searchParams.has("boxes")
       && !captureUrl.searchParams.has("coords_pol")
@@ -110,7 +121,12 @@ export default async (req: Request) => {
       );
     }
 
-    await setScanStatus(SCAN_STATUS_RUNNING, requestedAt);
+    await setScanStatus(SCAN_STATUS_RUNNING, {
+      scanId,
+      requestedAt: requestedAt.toISOString(),
+      persistedCount: 0,
+      databaseVesselCount: null,
+    }, requestedAt);
     const captureResponse = await handleGetVessels(new Request(captureUrl, {
       method: "GET",
       headers: { accept: "application/json" },
@@ -118,7 +134,12 @@ export default async (req: Request) => {
     const capturePayload = await captureResponse.json() as Record<string, unknown>;
 
     if (!captureResponse.ok) {
-      await setScanStatus(SCAN_STATUS_ERROR);
+      await setScanStatus(SCAN_STATUS_ERROR, {
+        scanId,
+        requestedAt: requestedAt.toISOString(),
+        completedAt: new Date().toISOString(),
+        error: capturePayload.error || capturePayload.warning || "AIS server capture failed",
+      });
       return Response.json({
         ...capturePayload,
         success: false,
@@ -129,9 +150,24 @@ export default async (req: Request) => {
     }
 
     const completedAt = new Date();
-    const status = await setScanStatus(SCAN_STATUS_COMPLETE, completedAt);
     const vessels = Array.isArray(capturePayload.vessels) ? capturePayload.vessels : [];
     const persistedCount = Number(capturePayload.persistedCount);
+    const databaseVesselCount = Number(capturePayload.databaseVesselCount);
+    const masterPersistedCount = Number(capturePayload.masterPersistedCount);
+    const availableVesselCount = Number(capturePayload.availableVesselCount);
+    const status = await setScanStatus(SCAN_STATUS_COMPLETE, {
+      scanId,
+      requestedAt: requestedAt.toISOString(),
+      completedAt: completedAt.toISOString(),
+      persistedCount: Number.isFinite(persistedCount) ? persistedCount : vessels.length,
+      databaseVesselCount: Number.isFinite(databaseVesselCount) ? databaseVesselCount : null,
+      masterPersistedCount: Number.isFinite(masterPersistedCount) ? masterPersistedCount : 0,
+      availableVesselCount: Number.isFinite(availableVesselCount) ? availableVesselCount : vessels.length,
+      degraded: capturePayload.degraded === true,
+      liveConnection: capturePayload.liveConnection !== false,
+      warning: typeof capturePayload.warning === "string" ? capturePayload.warning : null,
+      source: typeof capturePayload.source === "string" ? capturePayload.source : "aisstream-live",
+    }, completedAt);
     const targetCount = captureResponse.headers.get("x-ais-target-count")
       || captureUrl.searchParams.get("quantity")
       || "1000";
@@ -139,6 +175,7 @@ export default async (req: Request) => {
       ...capturePayload,
       success: true,
       scanStatus: status.value,
+      scanId,
       requestedAt: requestedAt.toISOString(),
       completedAt: status.updatedAt.toISOString(),
       persistedCount: Number.isFinite(persistedCount) ? persistedCount : vessels.length,
@@ -152,7 +189,12 @@ export default async (req: Request) => {
   } catch (error) {
     console.error("[ais-scan-request] AIS server capture failed.", error);
     try {
-      await setScanStatus(SCAN_STATUS_ERROR);
+      await setScanStatus(SCAN_STATUS_ERROR, {
+        scanId,
+        requestedAt: requestedAt.toISOString(),
+        completedAt: new Date().toISOString(),
+        error: error instanceof Error ? error.message : "Unable to complete the AIS server capture",
+      });
     } catch (statusError) {
       console.error("[ais-scan-request] Failed to persist error status.", statusError);
     }

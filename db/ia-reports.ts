@@ -111,15 +111,19 @@ export async function getVesselSyncContext(syncId: string): Promise<VesselSyncCo
     return { syncId: syncRow.syncId, persistedImoNumbers, existingImoNumbers: [] };
   }
 
+  const persistedImoValues = persistedImoNumbers
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value > 0);
+
   const vesselRows = await db
     .select({ imoNumber: vesselsMaster.imoNumber })
     .from(vesselsMaster)
-    .where(inArray(vesselsMaster.imoNumber, persistedImoNumbers));
+    .where(inArray(vesselsMaster.imoNumber, persistedImoValues));
 
   return {
     syncId: syncRow.syncId,
     persistedImoNumbers,
-    existingImoNumbers: vesselRows.map((row) => row.imoNumber),
+    existingImoNumbers: vesselRows.map((row) => String(row.imoNumber)),
   };
 }
 

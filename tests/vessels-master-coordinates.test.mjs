@@ -27,6 +27,14 @@ test('Drizzle schema maps latitude and longitude to vessels_master', () => {
   assert.match(tableSource, /longitude: doublePrecision\("longitude"\)/);
 });
 
+test('receiver flattens nested Core PRO vessel, AIS, and routing records', () => {
+  assert.match(receiverSource, /const nestedVessel = rawSource\.vessel/);
+  assert.match(receiverSource, /const nestedAis = rawSource\.ais/);
+  assert.match(receiverSource, /const nestedRouting = rawSource\.routing/);
+  assert.match(receiverSource, /const source = \{ \.\.\.rawSource, \.\.\.nestedRouting, \.\.\.nestedAis, \.\.\.nestedVessel \}/);
+  assert.match(receiverSource, /sourcePayload: rawSource/);
+});
+
 test('receiver validates coordinate aliases and ranges before persistence', () => {
   assert.match(receiverSource, /const rawLatitude = readFirst\(source, \["latitude", "lat", "Latitude", "AIS_Live_Lat", "LAT"\]\)/);
   assert.match(receiverSource, /const rawLongitude = readFirst\(source, \["longitude", "lon", "lng", "long", "Longitude", "AIS_Live_Lon", "LON", "LONG"\]\)/);

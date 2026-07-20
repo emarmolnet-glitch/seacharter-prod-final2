@@ -63,9 +63,10 @@ export const dataBridgeVesselIngestions = pgTable("data_bridge_vessel_ingestions
 });
 
 export const vesselsMaster = pgTable("vessels_master", {
-  imoNumber: text("imo_number").primaryKey(),
-  vesselName: text("vessel_name").notNull(),
-  dwt: doublePrecision("dwt"),
+  id: serial("id").primaryKey(),
+  imoNumber: integer("imo_number"),
+  vesselName: text("vessel_name"),
+  dwt: integer("dwt"),
   mmsi: text("mmsi"),
   latitude: doublePrecision("latitude"),
   longitude: doublePrecision("longitude"),
@@ -75,12 +76,12 @@ export const vesselsMaster = pgTable("vessels_master", {
   eta: text("eta"),
   lastPort: text("last_port"),
   currentDestination: text("current_destination"),
-  yearBuilt: text("year_built"),
+  yearBuilt: integer("year_built"),
   ownerManager: text("owner_manager"),
-  hasGears: boolean("has_gears").default(false).notNull(),
+  hasGears: boolean("has_gears"),
   processStatus: text("process_status"),
   source: text("source"),
-  sourcePayload: jsonb("source_payload").notNull(),
+  sourcePayload: jsonb("source_payload"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

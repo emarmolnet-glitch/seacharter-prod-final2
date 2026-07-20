@@ -19,7 +19,7 @@ export type VesselMasterRow = QueryResultRow & {
   has_gears: boolean;
   process_status: string | null;
   source_payload: unknown;
-  updated_at: Date | string;
+  updated_at: Date | string | null;
 };
 
 export type VesselMasterAuditRow = QueryResultRow & {
@@ -37,7 +37,8 @@ export type VesselMasterAuditRow = QueryResultRow & {
 const VESSEL_MASTER_COLUMNS = `
   imo_number, vessel_name, dwt, mmsi, latitude, longitude, vessel_type,
   draft_meters, flag, eta, last_port, current_destination, year_built,
-  owner_manager, has_gears, process_status, source_payload, updated_at
+  owner_manager, has_gears, process_status, source_payload,
+  fecha_ultima_actualizacion AS updated_at
 `;
 
 export async function findExactVesselsMasterRows(
@@ -50,8 +51,8 @@ export async function findExactVesselsMasterRows(
     `
       SELECT ${VESSEL_MASTER_COLUMNS}
       FROM vessels_master
-      WHERE imo_number = ANY($1::text[])
-        OR mmsi = ANY($2::text[])
+      WHERE imo_number::text = ANY($1::text[])
+        OR mmsi::text = ANY($2::text[])
         OR LOWER(REGEXP_REPLACE(vessel_name, '[^a-zA-Z0-9]+', ' ', 'g')) = ANY($3::text[])
     `,
     [imoNumbers, mmsiNumbers, vesselNames],
@@ -59,15 +60,15 @@ export async function findExactVesselsMasterRows(
   return result.rows;
 }
 
-export async function listLocalVesselsMaster(limit = 2000) {
-  const safeLimit = Math.min(5000, Math.max(1, Math.trunc(limit)));
+export async function listLocalVesselsMaster(limit = 6000) {
+  const safeLimit = Math.min(10000, Math.max(1, Math.trunc(limit)));
   const result = await getPool().query<VesselMasterRow>(
     `
       SELECT ${VESSEL_MASTER_COLUMNS}
       FROM vessels_master
       WHERE latitude IS NOT NULL
         AND longitude IS NOT NULL
-      ORDER BY updated_at DESC
+      ORDER BY fecha_ultima_actualizacion DESC NULLS LAST
       LIMIT $1
     `,
     [safeLimit],
