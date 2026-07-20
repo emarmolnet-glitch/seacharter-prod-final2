@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+const redirectsSource = await readFile(new URL('../_redirects', import.meta.url), 'utf8');
 const verifySource = await readFile(new URL('../netlify/functions/verify-connection.ts', import.meta.url), 'utf8');
 const dedicatedVerifySource = await readFile(new URL('../netlify/functions/databridge-verify-connection.ts', import.meta.url), 'utf8');
 
@@ -36,4 +37,16 @@ test('connection indicator is based on a verified session instead of a missing b
   assert.match(indexSource, /setDataBridgeVerifiedConnection\(false\)/);
   assert.match(indexSource, /const isConnected = getVerifiedDataBridgeTimestamp\(\) > 0/);
   assert.doesNotMatch(indexSource, /const isConnected = manualExternalMode && Boolean\(getStoredDataBridgeToken\(\)\)/);
+});
+
+test('connected Data Bridge menu action opens the deployment root', () => {
+  assert.match(indexSource, /resolveViteEnvValue\(VITE_ENV\.VITE_DATA_BRIDGE_FRONTEND_URL, VITE_ENV\.VITE_DATA_BRIDGE_URL\)/);
+  assert.match(indexSource, /return `\$\{url\.origin\}\/`/);
+  assert.match(indexSource, /function openDataBridgeDashboard\(\) \{\s*window\.open\(DATA_BRIDGE_FRONTEND_URL, '_blank', 'noopener'\);\s*\}/);
+  assert.match(indexSource, /id="btn-toggle-databridge"[^>]+onclick="openDataBridgeDashboard\(\)/);
+  assert.match(indexSource, /id="databridge-connection-dot"/);
+});
+
+test('Netlify serves the SPA shell for internal browser routes', () => {
+  assert.match(redirectsSource, /^\/\* \/index\.html 200\s*$/m);
 });
