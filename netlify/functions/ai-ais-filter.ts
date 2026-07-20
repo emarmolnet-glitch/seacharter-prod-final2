@@ -1,4 +1,5 @@
 import type { Config } from "@netlify/functions";
+import { calculateCargoIntelligenceBoost, evaluateCargoVesselEligibility } from "../../cargo-taxonomy.mjs";
 import { calculateTaxonomyTechnicalScore } from "./_shared/taxonomy-compatibility.mjs";
 
 type AnyRecord = Record<string, unknown>;
@@ -177,7 +178,7 @@ function normalizeVessel(value: unknown) {
     meta.tipo,
     meta.ShipType,
     meta.shipType,
-  ) || "Bulk Carrier";
+  ) || "Unknown";
   const dwt = numberValue(source.dwt, source.DWT, meta.dwt, meta.DWT);
   const draft = numberValue(source.draft, source.Draft, meta.draft, meta.Draft);
   const loa = numberValue(source.loa, source.LOA, meta.loa, meta.LOA);
@@ -250,6 +251,12 @@ export default async (req: Request) => {
     const laycanEnd = parseLaycanEnd(cargo.laycanEnd);
     const quantity = numberValue(cargo.quantity);
     const cargoSpecification = textValue(cargo.cargoSpecification, cargo.cargoType, cargo.tipoCarga, cargo.tipo_carga);
+    const cargoTypeId = textValue(cargo.cargoTypeId, cargo.typeId, body.cargoTypeId) || "100";
+    const gearedRequired = cargo.gearedRequired === true;
+    const grabRequired = cargo.grabRequired === true
+      || [cargo.loadMethod, cargo.dischargeMethod].some((value) => textValue(value) === "cuchara_grab");
+    const requiredGrabCapacityCbm = numberValue(cargo.requiredGrabCapacityCbm, cargo.grabCapacityCbm);
+    const requiredCraneSwlMt = numberValue(cargo.requiredCraneSwlMt, cargo.craneSwlMt);
     const maxDraft = numberValue(cargo.maxDraft) || Number.POSITIVE_INFINITY;
     const maxLoa = numberValue(cargo.maxLoa) || Number.POSITIVE_INFINITY;
     const freightRate = numberValue(cargo.freightRate);
@@ -269,7 +276,7 @@ export default async (req: Request) => {
       .filter((vessel): vessel is NonNullable<ReturnType<typeof normalizeVessel>> => Boolean(vessel))
       .filter((vessel) => vesselMatchesTaxonomy(vessel, vesselClassValue));
 
-    const matches = vessels_buffer
+    const evaluatedMatches = vessels_buffer
       .map((vessel) => {
         const cementSignal = classifyCementCarrierCandidate(vessel);
         const distance = haversineNm(loadingPortLat, loadingPortLon, vessel.latitude, vessel.longitude);
@@ -283,21 +290,44 @@ export default async (req: Request) => {
           : null;
         const loadState = inferLoadState(vessel.draft, vessel.designDraft, maxDraft);
         const laycan = windowScore(etaDate, laycanStart, laycanEnd);
-        const capacityOk = vessel.dwt <= 0 || quantity <= 0 || vessel.dwt >= quantity * 0.85;
         const draftOk = vessel.draft <= 0 || vessel.draft <= maxDraft;
         const loaOk = vessel.loa <= 0 || vessel.loa <= maxLoa;
         const dateOk = laycan.ok;
+        const technicalEligibility = evaluateCargoVesselEligibility({
+          cargoTypeId,
+          vessel: vessel.source,
+          shipType: vessel.shipType,
+          dwt: vessel.dwt,
+          quantity,
+          gearedRequired,
+          grabRequired,
+          requiredGrabCapacityCbm,
+          requiredCraneSwlMt,
+          draftOk,
+          loaOk,
+          dateOk,
+        });
+        const capacityOk = technicalEligibility.dwt.vessel !== null
+          && technicalEligibility.dwt.vessel >= technicalEligibility.dwt.required
+          && (technicalEligibility.dwt.maximumSuitable === null || technicalEligibility.dwt.vessel <= technicalEligibility.dwt.maximumSuitable);
         const etaConsistencyScore = etaDriftHours === null ? 8 : etaDriftHours <= 12 ? 10 : etaDriftHours <= 36 ? 6 : 2;
         const calculatedTechnical = (capacityOk ? 20 : 6) + (draftOk ? 10 : 0) + (loaOk ? 10 : 0) + loadState.score + laycan.score + etaConsistencyScore;
         const taxonomyScoring = calculateTaxonomyTechnicalScore(cargoSpecification, vessel.source, calculatedTechnical);
         const taxonomyCompatibility = taxonomyScoring.compatibility;
+        const cargoIntelligence = calculateCargoIntelligenceBoost(cargoTypeId, vessel.source);
         const technical = taxonomyScoring.technicalScore;
+        const boostedTechnicalBeforeEligibility = taxonomyCompatibility.compatible
+          ? Math.min(100, technical + cargoIntelligence.boost)
+          : technical;
+        const boostedTechnical = technicalEligibility.eligible
+          ? boostedTechnicalBeforeEligibility
+          : Math.min(20, boostedTechnicalBeforeEligibility);
         const economic = Math.max(0, 100 - distance / 35);
         const risk = Math.max(0, 100 - Math.max(0, daysToLoadPort - 7) * 8 * riskCoefficient);
-        const overall = Math.round(Math.min(100, technical * 0.55 + economic * 0.30 + risk * 0.15));
+        const overall = Math.round(Math.min(100, boostedTechnical * 0.55 + economic * 0.30 + risk * 0.15));
         const ballastFuelCost = distance * (fuelPrice / 100);
         const suggestedFreightRate = freightRate > 0 ? freightRate : Math.max(0, (ballastFuelCost + portExpenses + dailyOpex) / Math.max(quantity, 1));
-        const idealVessel = taxonomyCompatibility.compatible && loadState.ballastReady && capacityOk && draftOk && loaOk && dateOk;
+        const idealVessel = technicalEligibility.eligible && taxonomyCompatibility.compatible && loadState.ballastReady;
 
         return {
           vessel: {
@@ -311,6 +341,8 @@ export default async (req: Request) => {
             loadState: loadState.state,
             estado_carga: loadState.state,
             loa: vessel.loa,
+            hasCranes: technicalEligibility.equipment.hasGears === true,
+            gruas_geared: technicalEligibility.equipment.hasGears === true,
             vesselClass: vessel.shipType,
             specialtyType: cementSignal.level === "confirmed" ? "Cement Carrier" : cementSignal.level === "possible" ? "Possible Cement Carrier" : vessel.shipType,
             cargoClass: cementSignal.level === "confirmed" ? "Cement Carrier" : cementSignal.level === "possible" ? "Possible Cement Carrier" : vessel.shipType,
@@ -364,6 +396,8 @@ export default async (req: Request) => {
             draftOk,
             loaOk,
             cranesOk: true,
+            gearOk: !gearedRequired || technicalEligibility.equipment.hasGears === true,
+            grabOk: !grabRequired || technicalEligibility.equipment.hasGrab === true,
             holdOk: true,
             dateOk,
             taxonomyCompatible: taxonomyCompatibility.compatible,
@@ -389,10 +423,15 @@ export default async (req: Request) => {
               taxonomy: taxonomyCompatibility.compatible
                 ? "Taxonomía carga-buque compatible"
                 : `Taxonomía incompatible: ${cargoSpecification || "carga no especificada"} no admite ${taxonomyCompatibility.declaredVesselType}`,
+              technicalEligibility: technicalEligibility.eligible
+                ? "Elegibilidad técnica estricta superada"
+                : technicalEligibility.criticalReasons.join("; "),
             },
           },
-          scores: { technical, economic, risk, overall },
-          aiStatus: !taxonomyCompatibility.compatible ? "INCOMPATIBLE" : idealVessel && overall > 55 && cementSignal.level !== "possible" ? "IDEAL" : overall > 50 ? "MATCH" : "REVIEW",
+          scores: { technical: boostedTechnical, economic, risk, overall, cargoBoost: cargoIntelligence.boost },
+          cargoIntelligence,
+          technicalEligibility,
+          aiStatus: !technicalEligibility.eligible || !taxonomyCompatibility.compatible ? "INCOMPATIBLE" : idealVessel && overall > 55 && cementSignal.level !== "possible" ? "IDEAL" : overall > 50 ? "MATCH" : "REVIEW",
           idealVessel,
           cementCarrierClassification: cementSignal,
           eta_puerto_carga: etaDate.toISOString(),
@@ -401,14 +440,22 @@ export default async (req: Request) => {
           timestamp: Date.now(),
         };
       })
-      .filter((match) => match.scores.overall > 0 && match.ais.currentDistanceToLoadPort <= matchRadiusNm)
-      .sort((a, b) => b.scores.overall - a.scores.overall || a.ais.currentDistanceToLoadPort - b.ais.currentDistanceToLoadPort);
+      .filter((match) => match.ais.currentDistanceToLoadPort <= matchRadiusNm)
+      .sort((a, b) => Number(b.technicalEligibility.eligible) - Number(a.technicalEligibility.eligible)
+        || b.scores.overall - a.scores.overall
+        || a.ais.currentDistanceToLoadPort - b.ais.currentDistanceToLoadPort);
+    const matches = evaluatedMatches.filter((match) => match.technicalEligibility.eligible);
+    const technicalWarnings = evaluatedMatches.filter((match) => !match.technicalEligibility.eligible);
 
     return Response.json({
       success: true,
       data: matches,
+      technicalWarnings,
+      eligibleCount: matches.length,
+      technicalWarningCount: technicalWarnings.length,
+      evaluatedCount: evaluatedMatches.length,
       snapshot: { frozenAt: body.frozenAt || new Date().toISOString(), vesselCount: vessels_buffer.length },
-      memory: { knownVesselsSaved: matches.length },
+      memory: { knownVesselsSaved: evaluatedMatches.length },
     }, { headers: jsonHeaders });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Matching engine failed";

@@ -12,12 +12,14 @@ test('matching response arrays map directly into component state', () => {
   assert.match(indexSource, /payload\.data,[\s\S]*payload\.matches,[\s\S]*payload\.vessels,[\s\S]*payload\.results/);
   assert.match(indexSource, /const responseMatches = resultCandidates\.find\(Array\.isArray\) \|\| \[\]/);
   assert.match(indexSource, /window\.matchingResultsState = \{[\s\S]*vessels: matches,[\s\S]*count: matches\.length/);
-  assert.match(indexSource, /resultsBadge\.innerText = `\$\{matches\.length\} Buque/);
+  assert.match(indexSource, /const technicalWarningMatches = Array\.isArray\(data\.technicalWarnings\)/);
+  assert.match(indexSource, /eligibleCount: viableMatches\.length/);
+  assert.match(indexSource, /resultsBadge\.innerText = `\$\{viableMatches\.length\} candidato/);
 });
 
 test('classified fleet remains local after visual validation', () => {
   const stateIndex = indexSource.indexOf('window.matchingResultsState =');
-  const badgeIndex = indexSource.indexOf('resultsBadge.innerText = `${matches.length}', stateIndex);
+  const badgeIndex = indexSource.indexOf('resultsBadge.innerText = `${viableMatches.length}', stateIndex);
   const completionIndex = indexSource.indexOf("new CustomEvent('MATCHING_EXECUTION_SUCCESS'", stateIndex);
   assert.ok(stateIndex >= 0 && badgeIndex > stateIndex && completionIndex > badgeIndex);
   assert.match(indexSource, /Validación local completada para \$\{arrayDeBuquesEncontrados\.length\} buques desde vessels_master/);

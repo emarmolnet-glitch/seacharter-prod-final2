@@ -59,7 +59,7 @@ test("Core PRO reads matching engine coordinates from the nested AIS object", ()
 
 test("matching export snapshots keep AIS coordinates at the vessel root", () => {
   assert.match(coreProSource, /renderedVesselsForReport\.push\(\{[\s\S]*latitude:\s*Number\(m\.ais\?\.latitude[\s\S]*longitude:\s*Number\(m\.ais\?\.longitude/);
-  assert.match(coreProSource, /const arrayDeBuquesEncontrados = matches\.map[\s\S]*latitude:\s*Number\(ais\.latitude[\s\S]*longitude:\s*Number\(ais\.longitude/);
+  assert.match(coreProSource, /const arrayDeBuquesEncontrados = viableMatches\.map[\s\S]*latitude:\s*Number\(ais\.latitude[\s\S]*longitude:\s*Number\(ais\.longitude/);
   assert.match(coreProSource, /const latitude = Number\(\s*vessel\?\.latitude/);
   assert.match(coreProSource, /const longitude = Number\(\s*vessel\?\.longitude/);
 });

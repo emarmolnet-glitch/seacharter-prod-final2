@@ -15,6 +15,8 @@ test('calculator builds a complete matchingRequest before publishing CALCULATION
   assert.match(builderSource, /route: \{/);
   assert.match(builderSource, /laycan: \{/);
   assert.match(builderSource, /cargo: \{/);
+  assert.match(builderSource, /pol_coordinates: \{ lat: Number\(polCoordinates\.lat\), lon: Number\(polCoordinates\.lon\) \}/);
+  assert.match(builderSource, /pod_coordinates: \{ lat: Number\(podCoordinates\.lat\), lon: Number\(podCoordinates\.lon\) \}/);
   assert.match(builderSource, /freight: \{/);
   assert.match(builderSource, /dwt: Number\(state\.dwt\)/);
   assert.match(builderSource, /endpoint: '\/api\/matching-local'/);
