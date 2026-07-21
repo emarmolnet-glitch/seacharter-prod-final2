@@ -19,14 +19,20 @@ declare global {
     interface Window {
         aisMarketFreightRates?: AisMarketRates;
         syncChartererFreightFromOwner?: (ownerFreight: number) => number | null;
+        GlobalStore?: {
+            hasAisData?: boolean;
+            nearbyCount?: number;
+        };
     }
 
     interface WindowEventMap {
         AIS_MARKET_RATES_UPDATED: CustomEvent<AisMarketRates>;
+        AIS_MARKET_AVAILABILITY_CHANGED: CustomEvent<{ hasAisData: boolean }>;
     }
 }
 
 const AIS_MARKET_RATES_UPDATED_EVENT = 'AIS_MARKET_RATES_UPDATED' as const;
+const AIS_MARKET_AVAILABILITY_CHANGED_EVENT = 'AIS_MARKET_AVAILABILITY_CHANGED' as const;
 const AIS_MARKET_SCENARIOS: readonly AisMarketScenario[] = Object.freeze([
     Object.freeze({
         id: 'fair',
@@ -84,6 +90,11 @@ function readAisMarketRatesFromEngine(): AisMarketRates | null {
     });
 }
 
+function hasConfirmedAisData(): boolean {
+    return window.GlobalStore?.hasAisData === true
+        && Number(window.GlobalStore?.nearbyCount) > 0;
+}
+
 export function handleApplyAisRate(rate: AisMarketRate): boolean {
     const ownerFreightInput = document.getElementById(OWNER_FREIGHT_INPUT_ID);
     const chartererFreightInput = document.getElementById(CHARTERER_FREIGHT_INPUT_ID);
@@ -124,10 +135,26 @@ export class AisMarketReferenceWidget {
         this.#host.setAttribute('aria-label', 'Referencia de Mercado AIS');
         this.#host.replaceChildren(this.#buildHeader(), this.#buildScenarioList(), this.#buildStatus());
         window.addEventListener(AIS_MARKET_RATES_UPDATED_EVENT, (event) => {
+            if (!hasConfirmedAisData()) {
+                this.#renderPending();
+                return;
+            }
             const rates = normalizeAisMarketRates(event.detail);
             if (rates) this.#renderRates(rates);
         }, { signal: this.#eventController.signal });
+        window.addEventListener(AIS_MARKET_AVAILABILITY_CHANGED_EVENT, (event) => {
+            if (event.detail?.hasAisData !== true) {
+                this.#renderPending();
+                return;
+            }
+            const rates = readAisMarketRatesFromEngine();
+            if (rates) this.#renderRates(rates);
+        }, { signal: this.#eventController.signal });
 
+        if (!hasConfirmedAisData()) {
+            this.#renderPending();
+            return;
+        }
         const engineRates = readAisMarketRatesFromEngine();
         if (engineRates) this.#renderRates(engineRates);
     }
@@ -177,7 +204,7 @@ export class AisMarketReferenceWidget {
         const rate = document.createElement('strong');
         rate.className = 'ais-market-reference-widget__rate';
         rate.dataset.aisRate = scenario.id;
-        rate.textContent = '--';
+        rate.textContent = '--.--$';
 
         const unit = document.createElement('span');
         unit.className = 'ais-market-reference-widget__unit';
@@ -203,12 +230,34 @@ export class AisMarketReferenceWidget {
         status.dataset.aisMarketStatus = '';
         status.setAttribute('role', 'status');
         status.setAttribute('aria-live', 'polite');
-        status.textContent = 'Esperando el cálculo del motor AIS.';
+        status.textContent = 'Pendiente: ejecuta el barrido radar para habilitar el mercado AIS.';
         return status;
     }
 
+    #renderPending(): void {
+        this.#rates = null;
+        this.#host.dataset.aisMarketState = 'pending';
+        AIS_MARKET_SCENARIOS.forEach((scenario) => {
+            const rateElement = this.#host.querySelector<HTMLElement>(`[data-ais-rate="${scenario.id}"]`);
+            const applyButton = this.#host.querySelector<HTMLButtonElement>(`[data-ais-apply="${scenario.id}"]`);
+            if (rateElement) rateElement.textContent = '--.--$';
+            if (applyButton) applyButton.disabled = true;
+        });
+
+        const status = this.#getStatus();
+        if (status) {
+            status.dataset.state = 'pending';
+            status.textContent = 'Pendiente: ejecuta el barrido radar para habilitar el mercado AIS.';
+        }
+    }
+
     #renderRates(rates: AisMarketRates): void {
+        if (!hasConfirmedAisData()) {
+            this.#renderPending();
+            return;
+        }
         this.#rates = rates;
+        this.#host.dataset.aisMarketState = 'ready';
         AIS_MARKET_SCENARIOS.forEach((scenario) => {
             const rateElement = this.#host.querySelector<HTMLElement>(`[data-ais-rate="${scenario.id}"]`);
             const applyButton = this.#host.querySelector<HTMLButtonElement>(`[data-ais-apply="${scenario.id}"]`);
@@ -224,6 +273,10 @@ export class AisMarketReferenceWidget {
     }
 
     #applyScenario(scenario: AisMarketScenario): void {
+        if (!hasConfirmedAisData()) {
+            this.#renderPending();
+            return;
+        }
         const rate = this.#rates?.[scenario.id];
         const status = this.#getStatus();
         if (!rate || !status) return;

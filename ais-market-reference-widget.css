@@ -61,6 +61,21 @@
     padding: 0.58rem;
 }
 
+.ais-market-reference-widget[data-ais-market-state='pending'] .ais-market-reference-widget__scenarios {
+    position: relative;
+}
+
+.ais-market-reference-widget[data-ais-market-state='pending'] .ais-market-reference-widget__scenario {
+    filter: saturate(0.35);
+    opacity: 0.62;
+}
+
+.ais-market-reference-widget[data-ais-market-state='pending'] .ais-market-reference-widget__eyebrow {
+    border-color: #cbd5e1;
+    background: #e2e8f0;
+    color: #64748b;
+}
+
 .ais-market-reference-widget__scenario {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -199,6 +214,12 @@
 
 .ais-market-reference-widget__status[data-state='error'] {
     color: #b91c1c;
+}
+
+.ais-market-reference-widget__status[data-state='pending'] {
+    background: #fff7ed;
+    color: #9a3412;
+    font-weight: 700;
 }
 
 @media (min-width: 1280px) {
