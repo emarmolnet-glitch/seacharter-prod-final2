@@ -91,6 +91,7 @@
     <script type="module" src="./AisMarketReferenceWidget.ts"></script>
     <script src="./GlobalFleetGlobe.js"></script>
     <script type="module" src="./map_loader.js"></script>
+    <script defer src="/aisstream-draft.js"></script>
     <!-- Maritime Routing Library -->
     <script type="module">
         window.seaRouteReady = import('https://cdn.jsdelivr.net/npm/searoute-ts@2.0.0/+esm')
@@ -258,6 +259,63 @@
         .input-gc:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         .input-gc:disabled { background-color: #0f172a; color: #64748b; cursor: not-allowed; }
         .input-gc.bg-gray-100 { background-color: #f3f4f6; color: #0f172a; border-color: #cbd5e1; cursor: not-allowed; }
+        .port-autocomplete-anchor { position: relative; width: 100%; }
+        .port-autocomplete-menu {
+            position: absolute;
+            z-index: 120;
+            top: calc(100% + 0.35rem);
+            left: 0;
+            right: 0;
+            max-height: 18rem;
+            overflow-y: auto;
+            border: 1px solid rgba(51, 65, 85, 0.95);
+            border-radius: 0.65rem;
+            background: rgba(15, 23, 42, 0.98);
+            box-shadow: 0 18px 45px rgba(2, 6, 23, 0.45);
+            backdrop-filter: blur(14px);
+        }
+        .port-autocomplete-menu[hidden] { display: none; }
+        .port-autocomplete-option {
+            display: grid;
+            width: 100%;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 0.75rem;
+            align-items: center;
+            padding: 0.65rem 0.75rem;
+            border: 0;
+            border-bottom: 1px solid rgba(51, 65, 85, 0.55);
+            background: transparent;
+            color: #e2e8f0;
+            text-align: left;
+            cursor: pointer;
+        }
+        .port-autocomplete-option:last-child { border-bottom: 0; }
+        .port-autocomplete-option:hover,
+        .port-autocomplete-option[aria-selected="true"] { background: rgba(14, 165, 233, 0.14); }
+        .port-autocomplete-place { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem; font-weight: 800; }
+        .port-autocomplete-meta { display: flex; align-items: center; gap: 0.4rem; color: #94a3b8; font-size: 0.62rem; font-weight: 800; text-transform: uppercase; }
+        .port-autocomplete-country { border-radius: 999px; background: rgba(16, 185, 129, 0.16); padding: 0.14rem 0.42rem; color: #6ee7b7; letter-spacing: 0.08em; }
+        .port-autocomplete-status { padding: 0.7rem 0.75rem; color: #94a3b8; font-size: 0.72rem; }
+        .port-search-loading {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            min-height: 1rem;
+            margin-top: 0.3rem;
+            color: #38bdf8;
+            font-size: 0.66rem;
+            font-weight: 800;
+        }
+        .port-search-loading[hidden] { display: none; }
+        .port-search-spinner {
+            width: 0.7rem;
+            height: 0.7rem;
+            border: 2px solid rgba(56, 189, 248, 0.25);
+            border-top-color: #38bdf8;
+            border-radius: 999px;
+            animation: port-search-spin 0.7s linear infinite;
+        }
+        @keyframes port-search-spin { to { transform: rotate(360deg); } }
         .required-use-highlight,
         .input-gc.required-use-highlight {
             background-color: #DCFCE7 !important;
@@ -7349,7 +7407,6 @@
     </aside>
 
     <!-- DATALIST DE PUERTOS -->
-    <datalist id="ports-list"></datalist>
 
     <!-- MAIN CONTENT CONTAINER -->
     <main class="app-main flex-1 overflow-hidden relative">
@@ -7387,15 +7444,15 @@
                     <div class="space-y-3">
                         <div class="input-group">
                             <label>Puerto previo (Lastre)</label>
-                            <input type="text" id="map-port-ballast" list="ports-list" class="input-gc" placeholder="Ej: Barcelona, España">
+                            <input type="text" id="map-port-ballast" class="input-gc" placeholder="Ej: Puerto Rico" autocomplete="off" inputmode="text" spellcheck="false">
                         </div>
                         <div class="input-group">
                             <label>Puerto de carga (POL)</label>
-                            <input type="text" id="map-port-pol" list="ports-list" class="input-gc" placeholder="Ej: Skikda, Argelia">
+                            <input type="text" id="map-port-pol" class="input-gc" placeholder="Ej: Buenos Aires" autocomplete="off" inputmode="text" spellcheck="false">
                         </div>
                         <div class="input-group">
                             <label>Puerto de descarga (POD)</label>
-                            <input type="text" id="map-port-pod" list="ports-list" class="input-gc" placeholder="Ej: Monopoli, Italia">
+                            <input type="text" id="map-port-pod" class="input-gc" placeholder="Ej: Monopoli" autocomplete="off" inputmode="text" spellcheck="false">
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div class="input-group">
@@ -7448,7 +7505,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <div class="space-y-1">
                                 <label id="label-port-ballast" class="text-[10px] font-bold text-emerald-400 uppercase flex items-center min-h-[28px]">Puerto Previo (Lastre)</label>
-                                <input type="text" id="port-ballast" list="ports-list" class="input-gc text-emerald-300 font-bold" value="" placeholder="Ej: Barcelona, España" oninput="autoCalculateDistances()" onchange="autoCalculateDistances()">
+                                <input type="text" id="port-ballast" class="input-gc text-emerald-300 font-bold" value="" placeholder="Ej: Puerto Rico" autocomplete="off" inputmode="text" spellcheck="false">
                                 <div id="port-ballast-limits" class="text-[10px] text-emerald-500/80 font-medium mt-1"></div>
                                 <div class="grid grid-cols-2 gap-2 mt-1.5 hidden">
                                     <div>
@@ -7468,7 +7525,7 @@
                                         <i class="fa-solid fa-robot mr-0.5"></i> Port Info
                                     </button>
                                 </div>
-                                <input type="text" id="port-pol" list="ports-list" class="input-gc text-emerald-300 font-bold" value="" placeholder="Ej: Skikda, Argelia" oninput="autoCalculateDistances(); syncCalculatorAndMatching('calculator');" onchange="autoCalculateDistances(); syncCalculatorAndMatching('calculator');">
+                                <input type="text" id="port-pol" class="input-gc text-emerald-300 font-bold" value="" placeholder="Ej: Buenos Aires" autocomplete="off" inputmode="text" spellcheck="false">
                                 <div id="port-pol-limits" class="text-[10px] text-emerald-500/80 font-medium mt-1"></div>
                                 <div class="grid grid-cols-2 gap-2 mt-1.5 hidden">
                                     <div>
@@ -7488,7 +7545,7 @@
                                         <i class="fa-solid fa-robot mr-0.5"></i> Port Info
                                     </button>
                                 </div>
-                                <input type="text" id="port-pod" list="ports-list" class="input-gc text-emerald-300 font-bold" value="" placeholder="Ej: Monopoli, Italia" oninput="autoCalculateDistances(); syncCalculatorAndMatching('calculator');" onchange="autoCalculateDistances(); syncCalculatorAndMatching('calculator');">
+                                <input type="text" id="port-pod" class="input-gc text-emerald-300 font-bold" value="" placeholder="Ej: Monopoli" autocomplete="off" inputmode="text" spellcheck="false">
                                 <div id="port-pod-limits" class="text-[10px] text-emerald-500/80 font-medium mt-1"></div>
                                 <div class="grid grid-cols-2 gap-2 mt-1.5 hidden">
                                     <div>
@@ -10879,7 +10936,7 @@
                             <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
                                 <div class="flex justify-between items-center mb-1">
                                     <span class="text-[10px] font-bold text-slate-400 uppercase">Buques Cercanos en POL</span>
-                                    <span id="ais-nearby-vessels-badge" style="color: #FFFFFF !important;" class="text-xs font-bold text-blue-400 mono">--</span>
+                                    <span id="ais-nearby-vessels-badge" style="color: #FFFFFF !important;" class="text-xs font-bold text-red-400 mono">0 buques</span>
                                 </div>
                                 <div id="ais-pol-taxonomy-breakdown" class="ais-taxonomy-breakdown ais-taxonomy-breakdown--compact mt-2" aria-live="polite" aria-label="Total de buques cercanos en POL por macro-categoría"></div>
                                 <div id="ais-nearby-vessels-list" class="mt-2 flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-1"></div>
@@ -12579,9 +12636,9 @@
 
         // --- BASE DE DATOS LOCAL DE PUERTOS (Será sobreescrita por el WPI.csv) ---
         let PORT_DB = {
-            "Valencia, España": { lat: 39.4699, lon: -0.3774 },
-            "Barcelona, España": { lat: 41.3851, lon: 2.1734 },
-            "Algeciras, España": { lat: 36.1268, lon: -5.4385 }
+            "Valencia (ES)": { lat: 39.4699, lon: -0.3774, countryCode: 'ES', source: 'WPI' },
+            "Barcelona (ES)": { lat: 41.3851, lon: 2.1734, countryCode: 'ES', source: 'WPI' },
+            "Algeciras (ES)": { lat: 36.1268, lon: -5.4385, countryCode: 'ES', source: 'WPI' }
         };
 
         const PORT_INTELLIGENCE_DB = {
@@ -13009,7 +13066,7 @@
             userHasEditedSpecialty: false,
             uploadedFile: null,
             nplDataOrigin: "Externo",
-            portBallast: "", pol: "", pod: "",
+            portBallast: "", pol: "", pod: "", portBallastCoordinates: null, polCoordinates: null, podCoordinates: null,
             distBallast: 0, distLaden: 0, totalDays: 0,
             cargo: 0, stowageFactor: 1.20, cargoTolerance: 0, loadRate: 0, dischRate: 0,
             cargoType: "",
@@ -13044,6 +13101,97 @@
                 tugTotalCost: 0
             }
         };
+
+        function normalizeRoutePortCoordinates(value) {
+            if (!value) return null;
+            const lat = Number(value.lat ?? value.latitude ?? value.Latitude);
+            const lon = Number(value.lon ?? value.lng ?? value.longitude ?? value.Longitude);
+            return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
+                ? { lat, lon }
+                : null;
+        }
+
+        function syncSelectedRoutePort(role, portName) {
+            const normalizedRole = String(role || 'POL').toUpperCase();
+            const isPod = normalizedRole === 'POD';
+            const stateKey = isPod ? 'pod' : 'pol';
+            const coordinateKey = isPod ? 'podCoordinates' : 'polCoordinates';
+            const legacyCoordinateKey = isPod ? 'pod_coordinates' : 'pol_coordinates';
+            const normalizedPortName = String(portName || '').trim();
+            const previousPortName = String(State[stateKey] || '').trim();
+            const previousCoordinates = normalizeRoutePortCoordinates(State[coordinateKey]);
+            const portData = normalizedPortName && typeof findPortData === 'function'
+                ? findPortData(normalizedPortName)
+                : null;
+            const coordinates = normalizeRoutePortCoordinates(portData);
+            const nextState = {
+                [stateKey]: normalizedPortName,
+                [coordinateKey]: coordinates,
+                [legacyCoordinateKey]: coordinates
+            };
+            const currentRoute = State.geopoliticalRoute && typeof State.geopoliticalRoute === 'object'
+                ? State.geopoliticalRoute
+                : {};
+            nextState.geopoliticalRoute = {
+                ...currentRoute,
+                [stateKey]: normalizedPortName,
+                [legacyCoordinateKey]: coordinates,
+                lat: { ...(currentRoute.lat || {}), [stateKey]: coordinates?.lat ?? null },
+                lon: { ...(currentRoute.lon || {}), [stateKey]: coordinates?.lon ?? null }
+            };
+            SeaCharterStore.set(nextState);
+
+            if (window.GlobalStore) {
+                window.GlobalStore[stateKey] = normalizedPortName;
+                window.GlobalStore[coordinateKey] = coordinates;
+                window.GlobalStore[legacyCoordinateKey] = coordinates;
+                window.GlobalStore.geopoliticalRoute = nextState.geopoliticalRoute;
+                const coordinatesChanged = previousPortName !== normalizedPortName
+                    || previousCoordinates?.lat !== coordinates?.lat
+                    || previousCoordinates?.lon !== coordinates?.lon;
+                if (!isPod && coordinatesChanged) {
+                    if (typeof window.GlobalStore.setAisMatchingState === 'function') {
+                        window.GlobalStore.setAisMatchingState([], [], { nearbyCount: 0, polCoordinates: coordinates });
+                    } else {
+                        window.GlobalStore.nearbyCount = 0;
+                        window.GlobalStore.nearbyVessels = [];
+                        window.GlobalStore.compatibleVessels = [];
+                    }
+                    if (window.aisMatchingExecutionState) {
+                        window.aisMatchingExecutionState.nearbyVessels = [];
+                        window.aisMatchingExecutionState.compatibleVessels = [];
+                        window.aisMatchingExecutionState.forceNextExecution = true;
+                    }
+                    const nearbyBadge = document.getElementById('ais-nearby-vessels-badge');
+                    if (nearbyBadge) nearbyBadge.textContent = '0 buques';
+                }
+            }
+
+            const currentMatchingContext = window.coreProMatchingRouteContext || {};
+            window.coreProMatchingRouteContext = {
+                ...currentMatchingContext,
+                [stateKey]: coordinates,
+                laycan: currentMatchingContext.laycan || State.laycanDate || ''
+            };
+            setInputValue(isPod ? 'match-unload-lat' : 'match-load-lat', coordinates?.lat ?? '');
+            setInputValue(isPod ? 'match-unload-lon' : 'match-load-lon', coordinates?.lon ?? '');
+
+            if (window.aisProspectionVisualState?.zones?.[normalizedRole]) {
+                window.aisProspectionVisualState.zones[normalizedRole].port = coordinates
+                    ? { ...coordinates, name: normalizedPortName }
+                    : null;
+            }
+            if (window.aisProspectionVisualState?.active && typeof window.renderAisProspectionRadii === 'function') {
+                window.renderAisProspectionRadii({ fit: false });
+            }
+
+            window.dispatchEvent(new CustomEvent('route:port-coordinates-updated', {
+                detail: { role: normalizedRole, portName: normalizedPortName, coordinates }
+            }));
+            return coordinates;
+        }
+        window.normalizeRoutePortCoordinates = normalizeRoutePortCoordinates;
+        window.syncSelectedRoutePort = syncSelectedRoutePort;
 
         const SeaCharterStore = {
             listeners: new Set(),
@@ -13170,6 +13318,9 @@
                 marginCharterer: DEFAULT_CHARTERER_MARGIN_PERCENT,
                 spdBallast: 0,
                 spdLaden: 0,
+                portBallastCoordinates: null,
+                polCoordinates: null,
+                podCoordinates: null,
                 smartAdjustments: {}
             });
 
@@ -15809,11 +15960,21 @@
             };
             SeaCharterStore.set({ pol, pod, laycanDate: laycan });
             SeaCharterStore.set({
+                polCoordinates,
+                podCoordinates,
                 pol_coordinates: polCoordinates,
                 pod_coordinates: podCoordinates,
                 geopoliticalRoute
             });
-            if (window.GlobalStore) window.GlobalStore.geopoliticalRoute = geopoliticalRoute;
+            if (window.GlobalStore) {
+                window.GlobalStore.pol = String(pol || '').trim();
+                window.GlobalStore.pod = String(pod || '').trim();
+                window.GlobalStore.polCoordinates = polCoordinates;
+                window.GlobalStore.podCoordinates = podCoordinates;
+                window.GlobalStore.pol_coordinates = polCoordinates;
+                window.GlobalStore.pod_coordinates = podCoordinates;
+                window.GlobalStore.geopoliticalRoute = geopoliticalRoute;
+            }
             window.persistLastValidMatchingRoute?.(geopoliticalRoute);
             syncGlobalStateToForms();
             syncCalculatorAndMatching('calculator');
@@ -16573,11 +16734,13 @@
             try {
                 const auditVessels = Array.isArray(window.lastLocalMatchingAuditVessels) && window.lastLocalMatchingAuditVessels.length > 0
                     ? window.lastLocalMatchingAuditVessels
+                    : (Array.isArray(window.GlobalStore?.auditVessels) && window.GlobalStore.auditVessels.length > 0
+                        ? window.GlobalStore.auditVessels
                     : (Array.isArray(window.lastClassifiedVessels) && window.lastClassifiedVessels.length > 0
                         ? window.lastClassifiedVessels
                         : ((window.GlobalStore && typeof window.GlobalStore.getRawVessels === 'function')
                             ? (window.GlobalStore.getRawVessels() || [])
-                            : ((window.GlobalStore && window.GlobalStore.rawVessels) || [])));
+                            : ((window.GlobalStore && window.GlobalStore.rawVessels) || []))));
                 if (auditVessels.length === 0) {
                     alert('Error: No hay datos seleccionados para exportar');
                     return;
@@ -17552,6 +17715,12 @@
 
                 const quantity = matchingQuantity;
                 const cargoTypeId = matchingCargoType;
+                const cargoType = cargoTypeId || String(
+                    matchingRequest?.cargo?.cargoCode
+                    || matchingRequest?.cargo?.typeId
+                    || window.SeaCharterStore?.getState?.()?.cargoTypeCode
+                    || '100'
+                ).trim();
                 const cargoTaxonomyItem = window.CARGO_TAXONOMY?.find(item => item.id === cargoTypeId) || null;
                 const cargoDescription = String(
                     matchingRequest?.cargo?.cargoDescription
@@ -18427,6 +18596,12 @@
                         log_correccion: m.log_correccion || null
                     };
                 });
+                const renderedAuditVessels = Array.isArray(window.GlobalStore?.auditVessels)
+                    ? window.GlobalStore.auditVessels
+                    : [];
+                if (arrayDeBuquesEncontrados.length === 0 && renderedAuditVessels.length > 0) {
+                    arrayDeBuquesEncontrados.push(...renderedAuditVessels.map(vessel => ({ ...vessel })));
+                }
                 window.lastLocalMatchingAuditVessels = arrayDeBuquesEncontrados;
 
                 // Al terminar el algoritmo y tener el array final de buques listos:
@@ -19592,7 +19767,8 @@
                                 maxVessel: data[27] || '',
                                 harborSize: data[14] || '',
                                 harborType: data[15] || '',
-                                countryCode: data[3] || ''
+                                countryCode: String(data[3] || '').trim().toUpperCase(),
+                                source: 'WPI'
                             };
                             added++;
                         }
@@ -19658,7 +19834,8 @@
                                 maxVessel: data[27] || '',
                                 harborSize: data[14] || '',
                                 harborType: data[15] || '',
-                                countryCode: data[3] || ''
+                                countryCode: String(data[3] || '').trim().toUpperCase(),
+                                source: 'WPI'
                             };
                             added++;
                         }
@@ -19680,69 +19857,424 @@
             }
         }
 
-        function refreshPortDatalist() {
-            const dataList = document.getElementById('ports-list');
-            if (!dataList) return;
-            dataList.innerHTML = '';
-            
-            // To ensure smooth autocompletion and prevent browser freezing due to thousands of ports,
-            // we dynamically filter and populate the datalist as the user types.
-            const portInputs = ['port-ballast', 'port-pol', 'port-pod', 'map-port-ballast', 'map-port-pol', 'map-port-pod'];
-            portInputs.forEach(id => {
-                const input = document.getElementById(id);
-                if (input) {
-                    input.removeEventListener('input', handlePortAutocomplete);
-                    input.removeEventListener('focus', handlePortAutocomplete);
-                    input.addEventListener('input', handlePortAutocomplete);
-                    input.addEventListener('focus', handlePortAutocomplete);
-                }
-            });
+        const UNIVERSAL_PORT_INPUT_IDS = [
+            'port-ballast', 'port-pol', 'port-pod',
+            'map-port-ballast', 'map-port-pol', 'map-port-pod'
+        ];
+        const NOMINATIM_SEARCH_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
+        const NOMINATIM_DEBOUNCE_MS = 700;
+        const nominatimPortSearchCache = new Map();
+        const portAutocompleteControllers = new WeakMap();
+        const portAutocompleteTimers = new WeakMap();
+        const portAutocompleteOptions = new WeakMap();
+        const portAutocompleteActiveIndexes = new WeakMap();
+        const portSearchStates = new WeakMap();
+        window.geographicSearchState = window.geographicSearchState || {};
 
-            // Initialize datalist with the default empty/short query options
-            populateDatalistForValue('');
+        function normalizePortSearchText(value) {
+            return String(value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function getPortCountryCode(label, port = {}) {
+            const explicitCode = String(port.countryCode || port.country_code || '').trim().toUpperCase();
+            if (/^[A-Z]{2}$/.test(explicitCode)) return explicitCode;
+            const labelMatch = String(label || '').match(/\(([A-Za-z]{2})\)\s*$/);
+            return labelMatch ? labelMatch[1].toUpperCase() : 'XX';
+        }
+
+        function searchLocalWpiPorts(query, limit = 12) {
+            const normalizedQuery = normalizePortSearchText(query);
+            if (normalizedQuery.length < 2) return [];
+            return Object.entries(PORT_DB)
+                .map(([label, port]) => ({
+                    label,
+                    placeName: String(label).replace(/\s*\([A-Za-z]{2,3}\)\s*$/, '').trim(),
+                    countryCode: getPortCountryCode(label, port),
+                    lat: parseFloat(port?.lat),
+                    lon: parseFloat(port?.lon),
+                    source: port?.source || 'WPI',
+                    port
+                }))
+                .filter(result => Number.isFinite(result.lat) && Number.isFinite(result.lon))
+                .filter(result => normalizePortSearchText(result.label).includes(normalizedQuery))
+                .sort((a, b) => {
+                    const aStarts = normalizePortSearchText(a.label).startsWith(normalizedQuery) ? 0 : 1;
+                    const bStarts = normalizePortSearchText(b.label).startsWith(normalizedQuery) ? 0 : 1;
+                    return aStarts - bStarts || a.label.localeCompare(b.label);
+                })
+                .slice(0, limit);
+        }
+
+        async function searchNominatimPortSuggestions(query, options = {}) {
+            const normalizedQuery = normalizePortSearchText(query);
+            if (normalizedQuery.length < 2) return [];
+            const limit = Math.min(10, Math.max(1, Number(options.limit) || 8));
+            const cacheKey = `${normalizedQuery}:${limit}`;
+            if (nominatimPortSearchCache.has(cacheKey)) {
+                return nominatimPortSearchCache.get(cacheKey).map(result => ({ ...result }));
+            }
+
+            const params = new URLSearchParams({
+                q: String(query).trim(),
+                format: 'json',
+                addressdetails: '1',
+                limit: String(limit)
+            });
+            const response = await fetch(`${NOMINATIM_SEARCH_ENDPOINT}?${params.toString()}`, {
+                method: 'GET',
+                headers: { Accept: 'application/json' },
+                signal: options.signal
+            });
+            if (!response.ok) throw new Error(`Nominatim respondió ${response.status}`);
+            const payload = await response.json();
+            const results = (Array.isArray(payload) ? payload : [])
+                .map(item => {
+                    const countryCode = String(item?.address?.country_code || '').trim().toUpperCase();
+                    const lat = parseFloat(item?.lat);
+                    const lon = parseFloat(item?.lon);
+                    const placeName = String(item?.name || item?.display_name || '').split(',')[0].trim();
+                    if (!placeName || !/^[A-Z]{2}$/.test(countryCode) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+                    return {
+                        label: `${placeName} (${countryCode})`,
+                        placeName,
+                        countryCode,
+                        lat,
+                        lon,
+                        source: 'Nominatim',
+                        displayName: String(item.display_name || placeName)
+                    };
+                })
+                .filter(Boolean);
+            nominatimPortSearchCache.set(cacheKey, results.map(result => ({ ...result })));
+            return results;
+        }
+        window.searchLocalWpiPorts = searchLocalWpiPorts;
+        window.searchNominatimPortSuggestions = searchNominatimPortSuggestions;
+
+        function getUniversalPortRole(inputId) {
+            if (String(inputId).includes('ballast')) return 'BALLAST';
+            if (String(inputId).includes('pod')) return 'POD';
+            return 'POL';
+        }
+
+        function getPortAutocompleteMenu(input) {
+            return input?.closest('.port-autocomplete-anchor')?.querySelector('.port-autocomplete-menu') || null;
+        }
+
+        function setPortSearchState(input, isSearching, message = 'Buscando ubicación...') {
+            if (!input) return { isSearching: false, message: '' };
+            const state = { isSearching: isSearching === true, message: isSearching ? message : '' };
+            portSearchStates.set(input, state);
+            window.geographicSearchState[input.id] = state;
+            input.setAttribute('aria-busy', state.isSearching ? 'true' : 'false');
+            const status = input.closest('.port-autocomplete-anchor')?.querySelector('.port-search-loading');
+            if (status) {
+                status.hidden = !state.isSearching;
+                const text = status.querySelector('[data-port-search-text]');
+                if (text) text.textContent = state.message;
+            }
+            window.dispatchEvent(new CustomEvent('port:search-state-changed', {
+                detail: { inputId: input.id, ...state }
+            }));
+            return state;
+        }
+        window.setPortSearchState = setPortSearchState;
+
+        function closePortAutocomplete(input) {
+            const menu = getPortAutocompleteMenu(input);
+            if (menu) menu.hidden = true;
+            portAutocompleteActiveIndexes.set(input, -1);
+        }
+
+        function clearUniversalPortCoordinates(input) {
+            const role = getUniversalPortRole(input.id);
+            if (role === 'BALLAST') {
+                SeaCharterStore.set({
+                    portBallast: input.value,
+                    portBallastCoordinates: null,
+                    ballast_coordinates: null
+                });
+                if (window.GlobalStore) {
+                    window.GlobalStore.portBallast = input.value;
+                    window.GlobalStore.portBallastCoordinates = null;
+                    window.GlobalStore.ballast_coordinates = null;
+                }
+                return;
+            }
+
+            const stateKey = role === 'POD' ? 'pod' : 'pol';
+            const coordinateKey = role === 'POD' ? 'podCoordinates' : 'polCoordinates';
+            const legacyCoordinateKey = role === 'POD' ? 'pod_coordinates' : 'pol_coordinates';
+            const currentRoute = State.geopoliticalRoute && typeof State.geopoliticalRoute === 'object'
+                ? State.geopoliticalRoute
+                : {};
+            const geopoliticalRoute = {
+                ...currentRoute,
+                [stateKey]: input.value,
+                [legacyCoordinateKey]: null,
+                lat: { ...(currentRoute.lat || {}), [stateKey]: null },
+                lon: { ...(currentRoute.lon || {}), [stateKey]: null }
+            };
+            SeaCharterStore.set({
+                [stateKey]: input.value,
+                [coordinateKey]: null,
+                [legacyCoordinateKey]: null,
+                geopoliticalRoute
+            });
+            if (window.GlobalStore) {
+                window.GlobalStore[stateKey] = input.value;
+                window.GlobalStore[coordinateKey] = null;
+                window.GlobalStore[legacyCoordinateKey] = null;
+                window.GlobalStore.geopoliticalRoute = geopoliticalRoute;
+                if (role === 'POL' && typeof window.GlobalStore.setAisMatchingState === 'function') {
+                    window.GlobalStore.setAisMatchingState([], [], { nearbyCount: 0, polCoordinates: null });
+                }
+            }
+            if (window.coreProMatchingRouteContext) window.coreProMatchingRouteContext[stateKey] = null;
+        }
+
+        function renderPortAutocomplete(input, results, statusMessage = '') {
+            const menu = getPortAutocompleteMenu(input);
+            if (!menu) return;
+            menu.replaceChildren();
+            portAutocompleteOptions.set(input, results);
+            portAutocompleteActiveIndexes.set(input, -1);
+
+            if (statusMessage) {
+                const status = document.createElement('div');
+                status.className = 'port-autocomplete-status';
+                status.textContent = statusMessage;
+                menu.appendChild(status);
+                menu.hidden = false;
+                return;
+            }
+            if (!results.length) {
+                menu.hidden = true;
+                return;
+            }
+
+            results.forEach((result, index) => {
+                const option = document.createElement('button');
+                option.type = 'button';
+                option.className = 'port-autocomplete-option';
+                option.setAttribute('role', 'option');
+                option.setAttribute('aria-selected', 'false');
+                option.dataset.index = String(index);
+
+                const place = document.createElement('span');
+                place.className = 'port-autocomplete-place';
+                place.textContent = result.placeName;
+                const meta = document.createElement('span');
+                meta.className = 'port-autocomplete-meta';
+                const source = document.createElement('span');
+                source.textContent = result.source;
+                const country = document.createElement('span');
+                country.className = 'port-autocomplete-country';
+                country.textContent = result.countryCode;
+                meta.append(source, country);
+                option.append(place, meta);
+                option.addEventListener('mousedown', event => event.preventDefault());
+                option.addEventListener('click', () => selectUniversalPortSuggestion(input, result));
+                menu.appendChild(option);
+            });
+            menu.hidden = false;
+        }
+
+        function updatePortAutocompleteActiveOption(input, nextIndex) {
+            const menu = getPortAutocompleteMenu(input);
+            const options = Array.from(menu?.querySelectorAll('.port-autocomplete-option') || []);
+            if (!options.length) return;
+            const normalizedIndex = (nextIndex + options.length) % options.length;
+            options.forEach((option, index) => option.setAttribute('aria-selected', index === normalizedIndex ? 'true' : 'false'));
+            options[normalizedIndex].scrollIntoView({ block: 'nearest' });
+            portAutocompleteActiveIndexes.set(input, normalizedIndex);
+        }
+
+        function commitUniversalPortCoordinates(input, result) {
+            const lat = parseFloat(result?.lat);
+            const lon = parseFloat(result?.lon);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+            const countryCode = String(result.countryCode || 'XX').toUpperCase();
+            const label = String(result.label || `${result.placeName} (${countryCode})`).trim();
+            PORT_DB[label] = {
+                ...(PORT_DB[label] || {}),
+                ...(result.port || {}),
+                lat,
+                lon,
+                countryCode,
+                source: result.source || 'WPI',
+                displayName: result.displayName || label
+            };
+
+            input.value = label;
+            input.dataset.selectedPortLabel = label;
+            input.dataset.selectedLatitude = String(lat);
+            input.dataset.selectedLongitude = String(lon);
+            input.dataset.selectedCountryCode = countryCode;
+
+            const role = getUniversalPortRole(input.id);
+            if (role === 'BALLAST') {
+                const coordinates = { lat: parseFloat(String(lat)), lon: parseFloat(String(lon)) };
+                SeaCharterStore.set({
+                    portBallast: label,
+                    portBallastCoordinates: coordinates,
+                    ballast_coordinates: coordinates
+                });
+                if (window.GlobalStore) {
+                    window.GlobalStore.portBallast = label;
+                    window.GlobalStore.portBallastCoordinates = coordinates;
+                    window.GlobalStore.ballast_coordinates = coordinates;
+                }
+            } else {
+                window.syncSelectedRoutePort?.(role, label);
+            }
+            syncGlobalStateToForms();
+            return true;
+        }
+
+        function selectUniversalPortSuggestion(input, result) {
+            if (!commitUniversalPortCoordinates(input, result)) return false;
+            setPortSearchState(input, false);
+            closePortAutocomplete(input);
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
+            if (typeof autoCalculateDistances === 'function') void autoCalculateDistances();
+            window.dispatchEvent(new CustomEvent('port:suggestion-selected', {
+                detail: {
+                    inputId: input.id,
+                    role: getUniversalPortRole(input.id),
+                    label: input.value,
+                    countryCode: input.dataset.selectedCountryCode,
+                    lat: parseFloat(input.dataset.selectedLatitude),
+                    lon: parseFloat(input.dataset.selectedLongitude)
+                }
+            }));
+            return true;
+        }
+        window.selectUniversalPortSuggestion = selectUniversalPortSuggestion;
+
+        async function runUniversalPortSearch(input) {
+            const query = input.value;
+            if (normalizePortSearchText(query).length < 2) {
+                setPortSearchState(input, false);
+                closePortAutocomplete(input);
+                return;
+            }
+
+            const localResults = searchLocalWpiPorts(query);
+            if (localResults.length > 0) {
+                setPortSearchState(input, false);
+                renderPortAutocomplete(input, localResults);
+                return;
+            }
+
+            portAutocompleteControllers.get(input)?.abort();
+            const controller = new AbortController();
+            portAutocompleteControllers.set(input, controller);
+            setPortSearchState(input, true);
+            renderPortAutocomplete(input, [], 'Buscando ubicación...');
+            try {
+                const remoteResults = await searchNominatimPortSuggestions(query, { signal: controller.signal, limit: 8 });
+                if (input.value !== query) return;
+                setPortSearchState(input, false);
+                renderPortAutocomplete(input, remoteResults, remoteResults.length ? '' : 'Sin resultados para esta búsqueda.');
+            } catch (error) {
+                if (error?.name === 'AbortError') return;
+                console.warn('[Input Geográfico] Nominatim no respondió.', error);
+                setPortSearchState(input, false);
+                renderPortAutocomplete(input, [], 'No se pudo consultar el buscador global.');
+            }
         }
 
         function handlePortAutocomplete(event) {
-            populateDatalistForValue(event.target.value);
-        }
-
-        function populateDatalistForValue(value) {
-            const dataList = document.getElementById('ports-list');
-            if (!dataList) return;
-            
-            dataList.innerHTML = '';
-            const query = (value || '').trim().toLowerCase();
-            
-            // If query is short, show a small list of default/common ports to avoid UI lag and browser freeze
-            if (query.length < 1) {
-                const defaultPorts = ["Valencia, España", "Barcelona, España", "Algeciras, España"];
-                const fragment = document.createDocumentFragment();
-                defaultPorts.forEach(port => {
-                    const option = document.createElement('option');
-                    option.value = port;
-                    fragment.appendChild(option);
-                });
-                dataList.appendChild(fragment);
+            const input = event.currentTarget || event.target;
+            if (!input) return;
+            if (event.type === 'input' && input.value !== input.dataset.selectedPortLabel) {
+                clearUniversalPortCoordinates(input);
+                delete input.dataset.selectedLatitude;
+                delete input.dataset.selectedLongitude;
+                delete input.dataset.selectedCountryCode;
+            }
+            clearTimeout(portAutocompleteTimers.get(input));
+            portAutocompleteControllers.get(input)?.abort();
+            const normalizedQuery = normalizePortSearchText(input.value);
+            if (normalizedQuery.length < 2) {
+                setPortSearchState(input, false);
+                closePortAutocomplete(input);
                 return;
             }
-            
-            const fragment = document.createDocumentFragment();
-            const sortedPorts = Object.keys(PORT_DB).sort();
-            
-            let count = 0;
-            for (let i = 0; i < sortedPorts.length; i++) {
-                const port = sortedPorts[i];
-                if (port.toLowerCase().includes(query)) {
-                    const option = document.createElement('option');
-                    option.value = port;
-                    fragment.appendChild(option);
-                    count++;
-                    if (count >= 50) { // Limit to 50 options to ensure smooth rendering and avoid display errors
-                        break;
-                    }
-                }
+            const localResults = searchLocalWpiPorts(input.value);
+            if (localResults.length > 0) {
+                setPortSearchState(input, false);
+                renderPortAutocomplete(input, localResults);
+                return;
             }
-            dataList.appendChild(fragment);
+            setPortSearchState(input, true);
+            const timer = setTimeout(() => runUniversalPortSearch(input), NOMINATIM_DEBOUNCE_MS);
+            portAutocompleteTimers.set(input, timer);
+        }
+
+        function bindUniversalPortAutocomplete(input) {
+            if (!input || input.dataset.universalPortAutocompleteBound === 'true') return;
+            input.dataset.universalPortAutocompleteBound = 'true';
+            input.removeAttribute('list');
+            input.removeAttribute('pattern');
+            input.setAttribute('autocomplete', 'off');
+            input.setAttribute('inputmode', 'text');
+
+            const anchor = document.createElement('div');
+            anchor.className = 'port-autocomplete-anchor';
+            input.parentNode.insertBefore(anchor, input);
+            anchor.appendChild(input);
+            const menu = document.createElement('div');
+            menu.className = 'port-autocomplete-menu';
+            menu.setAttribute('role', 'listbox');
+            menu.hidden = true;
+            anchor.appendChild(menu);
+            const loadingStatus = document.createElement('div');
+            loadingStatus.className = 'port-search-loading';
+            loadingStatus.setAttribute('aria-live', 'polite');
+            loadingStatus.hidden = true;
+            const spinner = document.createElement('span');
+            spinner.className = 'port-search-spinner';
+            spinner.setAttribute('aria-hidden', 'true');
+            const loadingText = document.createElement('span');
+            loadingText.dataset.portSearchText = 'true';
+            loadingText.textContent = 'Buscando ubicación...';
+            loadingStatus.append(spinner, loadingText);
+            anchor.appendChild(loadingStatus);
+
+            input.addEventListener('input', handlePortAutocomplete);
+            input.addEventListener('focus', handlePortAutocomplete);
+            input.addEventListener('keydown', event => {
+                const options = portAutocompleteOptions.get(input) || [];
+                const menuOpen = !menu.hidden && options.length > 0;
+                if (event.key === 'ArrowDown' && menuOpen) {
+                    event.preventDefault();
+                    updatePortAutocompleteActiveOption(input, (portAutocompleteActiveIndexes.get(input) ?? -1) + 1);
+                } else if (event.key === 'ArrowUp' && menuOpen) {
+                    event.preventDefault();
+                    updatePortAutocompleteActiveOption(input, (portAutocompleteActiveIndexes.get(input) ?? 0) - 1);
+                } else if (event.key === 'Enter' && menuOpen) {
+                    const activeIndex = portAutocompleteActiveIndexes.get(input) ?? -1;
+                    if (activeIndex >= 0 && options[activeIndex]) {
+                        event.preventDefault();
+                        selectUniversalPortSuggestion(input, options[activeIndex]);
+                    }
+                } else if (event.key === 'Escape') {
+                    closePortAutocomplete(input);
+                }
+            });
+            input.addEventListener('blur', () => setTimeout(() => closePortAutocomplete(input), 120));
+        }
+
+        function refreshPortDatalist() {
+            UNIVERSAL_PORT_INPUT_IDS.forEach(id => bindUniversalPortAutocomplete(document.getElementById(id)));
         }
 
         let toastDismissTimer = null;
@@ -21299,24 +21831,34 @@
 
         async function getCoordinates(query) {
             if(!query) return null;
-            if (PORT_DB[query] && PORT_DB[query].lat !== 0) {
-                return { lat: PORT_DB[query].lat, lon: PORT_DB[query].lon, name: query };
+            const localLat = parseFloat(PORT_DB[query]?.lat);
+            const localLon = parseFloat(PORT_DB[query]?.lon);
+            if (Number.isFinite(localLat) && Number.isFinite(localLon)) {
+                return {
+                    lat: localLat,
+                    lon: localLon,
+                    name: query,
+                    countryCode: getPortCountryCode(query, PORT_DB[query])
+                };
             }
 
             try {
-                let res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent('Port ' + query)}&format=json&limit=1`);
-                let data = await res.json();
-                
-                if ((!data || data.length === 0) && query.includes(',')) {
-                    const cityOnly = query.split(',')[0].trim();
-                    res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cityOnly)}&format=json&limit=1`);
-                    data = await res.json();
+                let results = await searchNominatimPortSuggestions(query, { limit: 1 });
+                if (results.length === 0 && query.includes(',')) {
+                    results = await searchNominatimPortSuggestions(query.split(',')[0].trim(), { limit: 1 });
                 }
-
-                if(data && data.length > 0) {
-                    const coords = { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), name: query };
-                    PORT_DB[query] = { lat: coords.lat, lon: coords.lon };
-                    return coords;
+                const result = results[0];
+                if (result) {
+                    const lat = parseFloat(result.lat);
+                    const lon = parseFloat(result.lon);
+                    PORT_DB[result.label] = {
+                        lat,
+                        lon,
+                        countryCode: result.countryCode,
+                        source: 'Nominatim',
+                        displayName: result.displayName
+                    };
+                    return { lat, lon, name: result.label, countryCode: result.countryCode };
                 }
                 return null;
             } catch(e) {
@@ -35733,6 +36275,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (window.GlobalStore) {
                 window.GlobalStore.rawVessels = listaCompleta;
                 window.GlobalStore.vessels = listaNormalizada;
+                if (typeof window.GlobalStore.setRenderedAisVessels === 'function') {
+                    window.GlobalStore.setRenderedAisVessels(listaNormalizada, { source: 'radar-store' });
+                }
             }
 
             if (!window.isAisBatchingRawStore) {
@@ -35745,6 +36290,46 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
         }
 
+        function normalizeRenderedAisVesselForAudit(vessel, index = 0) {
+            if (!vessel || typeof vessel !== 'object') return null;
+            const meta = vessel.MetaData && typeof vessel.MetaData === 'object' ? vessel.MetaData : {};
+            const imo = vessel.imo || vessel.IMO || meta.IMO || '';
+            const mmsi = vessel.mmsi || vessel.MMSI || meta.MMSI || '';
+            const name = vessel.vesselName || vessel.vessel_name || vessel.ShipName || vessel.name || meta.ShipName || 'Unknown';
+            const latitude = Number(vessel.latitude ?? vessel.lat ?? meta.latitude ?? meta.Latitude ?? vessel.PositionReport?.Latitude);
+            const longitude = Number(vessel.longitude ?? vessel.lon ?? vessel.lng ?? meta.longitude ?? meta.Longitude ?? vessel.PositionReport?.Longitude);
+            const auditKeyParts = [imo, mmsi, String(name).trim().toLowerCase()];
+            const auditKey = auditKeyParts.some(Boolean) ? auditKeyParts.join('|') : `rendered-${index}`;
+            return {
+                ...vessel,
+                __auditKey: auditKey,
+                imo: Number(imo) || imo || 0,
+                mmsi: Number(mmsi) || mmsi || 0,
+                name,
+                nombre: name,
+                latitude: Number.isFinite(latitude) ? latitude : null,
+                longitude: Number.isFinite(longitude) ? longitude : null,
+                type: vessel.type || vessel.vesselClass || vessel.vessel_type || vessel.ShipType || 'Unknown',
+                tipo_buque: vessel.tipo_buque || vessel.vesselClass || vessel.vessel_type || vessel.ShipType || 'Unknown',
+                dwt: Number(vessel.dwt || vessel.DWT || meta.dwt || meta.DWT) || 0,
+                draft: Number(vessel.draft || vessel.Draft || meta.draft || meta.Draft) || 0,
+                flag: vessel.flag || vessel.bandera || vessel.country || meta.flag || 'Unknown',
+                bandera: vessel.bandera || vessel.flag || vessel.country || meta.flag || 'Unknown',
+                destino_actual: vessel.destino_actual || vessel.destination || vessel.Destination || meta.Destination || 'N/A',
+                eta: vessel.eta || vessel.etaToPol || vessel.eta_puerto_carga || 'N/A',
+                estadoProcesos: vessel.estadoProcesos || vessel.auditStatus || 'PENDING_AUDIT'
+            };
+        }
+        window.normalizeRenderedAisVesselForAudit = normalizeRenderedAisVesselForAudit;
+
+        function renderAisNearbyCount(nearbyCount = window.GlobalStore?.nearbyCount || 0) {
+            const count = Math.max(0, Number(nearbyCount) || 0);
+            const badge = document.getElementById('ais-nearby-vessels-badge');
+            if (badge) badge.textContent = `${count} buque${count === 1 ? '' : 's'}`;
+            return count;
+        }
+        window.renderAisNearbyCount = renderAisNearbyCount;
+
         // Global Store (Shared Memory) for logical synchronization
         const GlobalStore = {
             vessels: [],
@@ -35753,6 +36338,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             filteredVesselsInitialized: false,
             selectedTaxonomy: '',
             selectedTaxonomies: [],
+            pol: '',
+            pod: '',
+            portBallast: '',
+            portBallastCoordinates: null,
+            polCoordinates: null,
+            podCoordinates: null,
+            nearbyCount: 0,
+            nearbyVessels: [],
+            compatibleVessels: [],
+            renderedAisVessels: [],
+            auditVessels: [],
+            auditVesselsSource: '',
             calculatedState: null,
             matchingRequest: null,
             geopoliticalRoute: null,
@@ -35843,6 +36440,37 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             },
             getFilteredVessels() {
                 return this.filteredVessels;
+            },
+            setRenderedAisVessels(vessels, metadata = {}) {
+                this.renderedAisVessels = Array.isArray(vessels) ? vessels.slice() : [];
+                this.auditVessels = this.renderedAisVessels
+                    .map((vessel, index) => normalizeRenderedAisVesselForAudit(vessel, index))
+                    .filter(Boolean);
+                this.auditVesselsSource = String(metadata.source || 'ais-table');
+                window.lastRenderedAisAuditVessels = this.auditVessels.slice();
+                window.dispatchEvent(new CustomEvent('ais:audit-vessels-updated', {
+                    detail: {
+                        vessels: this.auditVessels.slice(),
+                        vesselCount: this.auditVessels.length,
+                        source: this.auditVesselsSource
+                    }
+                }));
+                return this.auditVessels;
+            },
+            setAisMatchingState(nearbyVessels, compatibleVessels, proximityDebug = null) {
+                this.nearbyVessels = Array.isArray(nearbyVessels) ? nearbyVessels.slice() : [];
+                this.compatibleVessels = Array.isArray(compatibleVessels) ? compatibleVessels.slice() : [];
+                this.nearbyCount = this.nearbyVessels.length;
+                this.aisMatchingProximityDebug = proximityDebug;
+                renderAisNearbyCount(this.nearbyCount);
+                window.dispatchEvent(new CustomEvent('ais:matching-state-updated', {
+                    detail: {
+                        nearbyCount: this.nearbyCount,
+                        nearbyVessels: this.nearbyVessels,
+                        compatibleVessels: this.compatibleVessels
+                    }
+                }));
+                return this.nearbyCount;
             },
             markMatchingSelectionPending(taxonomies) {
                 const selectedTaxonomies = Array.from(new Set((Array.isArray(taxonomies) ? taxonomies : [])
@@ -37506,7 +38134,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const normalizedRole = String(role || 'POL').toUpperCase();
                 const inputId = normalizedRole === 'POD' ? 'port-pod' : 'port-pol';
                 const stateKey = normalizedRole === 'POD' ? 'pod' : 'pol';
-                const portName = (document.getElementById(inputId)?.value || window.State?.[stateKey] || '').trim();
+                const coordinateKey = normalizedRole === 'POD' ? 'podCoordinates' : 'polCoordinates';
+                const routeState = SeaCharterStore.getState();
+                const portName = (document.getElementById(inputId)?.value || routeState?.[stateKey] || '').trim();
+                const reactivePortName = String(window.GlobalStore?.[stateKey] || routeState?.[stateKey] || '').trim();
+                const reactiveCoordinates = normalizeRoutePortCoordinates(
+                    window.GlobalStore?.[coordinateKey]
+                    || routeState?.[coordinateKey]
+                    || routeState?.geopoliticalRoute?.[normalizedRole === 'POD' ? 'pod_coordinates' : 'pol_coordinates']
+                );
+                const namesMatch = !portName || !reactivePortName || portName.toLowerCase() === reactivePortName.toLowerCase();
+                if (reactiveCoordinates && namesMatch) return { ...reactiveCoordinates, name: portName || normalizedRole };
                 const port = getRoutePortData(portName);
                 return port ? { ...port, name: portName } : null;
             }
@@ -37683,6 +38321,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     }
                     if (typeof window.setAisRadarStatus === 'function') {
                         window.setAisRadarStatus('inactive');
+                    }
+                    if (typeof window.startAisClientEngine === 'function') {
+                        window.startAisClientEngine(window.mapaAIS || window.mapAIS || window.aisMap || window.map);
                     }
                 }, 1200);
             }
@@ -39253,6 +39894,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     window.GlobalStore.setFilteredVessels(primaryVisibleVessels, {
                         taxonomy: selectedTaxonomies.join('|')
                     });
+                    window.GlobalStore.setRenderedAisVessels(primaryVisibleVessels, { source: 'density-table' });
                 }
                 window.lastVesselsInArea = primaryVisibleVessels;
                 if (typeof setVesselClassContext === 'function') {
@@ -40466,6 +41108,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 };
             });
 
+            if (window.GlobalStore?.setRenderedAisVessels) {
+                window.GlobalStore.setRenderedAisVessels(aisVesselsData, { source: 'central-ais-table' });
+            }
+
             const tbody = document.getElementById('ais-vessels-tbody');
             if (tbody) {
                 tbody.innerHTML = '';
@@ -40562,7 +41208,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const pol = document.getElementById('port-pol')?.value || "";
             const pod = document.getElementById('port-pod')?.value || "";
-            const polPortData = typeof findPortData === 'function' ? findPortData(pol) : PORT_DB[pol];
+            const polPortData = window.GlobalStore?.polCoordinates
+                || SeaCharterStore.getState()?.polCoordinates
+                || (typeof findPortData === 'function' ? findPortData(pol) : PORT_DB[pol]);
             const normalizeGeoCoordinates = (value) => {
                 if (!value) return null;
                 const lat = Number(value.lat ?? value.latitude ?? value.Latitude ?? value.AIS_Live_Lat ?? value.PositionReport?.Latitude);
@@ -40773,14 +41421,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 });
                 nearbyCount = nearbyVessels.length;
 
-                if (window.GlobalStore) {
-                    window.GlobalStore.compatibleVessels = compatibleVessels;
-                }
             } else if (shouldExecuteAisMatching) {
                 nearbyCount = 0; 
-                if (window.GlobalStore) {
-                    window.GlobalStore.compatibleVessels = [];
-                }
             }
 
             if (shouldExecuteAisMatching) {
@@ -40791,6 +41433,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 aisMatchingExecutionState.compatibleVessels = compatibleVessels;
                 aisMatchingExecutionState.proximityDebug = proximityDebug;
                 aisMatchingExecutionState.forceNextExecution = false;
+                if (window.GlobalStore?.setAisMatchingState) {
+                    nearbyCount = window.GlobalStore.setAisMatchingState(nearbyVessels, compatibleVessels, proximityDebug);
+                } else if (window.GlobalStore) {
+                    window.GlobalStore.nearbyVessels = nearbyVessels.slice();
+                    window.GlobalStore.compatibleVessels = compatibleVessels.slice();
+                    window.GlobalStore.nearbyCount = nearbyVessels.length;
+                    nearbyCount = window.GlobalStore.nearbyCount;
+                }
                 console.info('[AIS Matching] Buques Cercanos en POL', proximityDebug);
                 const densityMapView = document.getElementById('view-ais');
                 if (densityMapView?.classList.contains('active-block')) {
@@ -40800,17 +41450,22 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 nearbyVessels = aisMatchingExecutionState.nearbyVessels;
                 compatibleVessels = aisMatchingExecutionState.compatibleVessels;
                 proximityDebug = aisMatchingExecutionState.proximityDebug || proximityDebug;
-                nearbyCount = nearbyVessels.length;
+                nearbyCount = Number.isFinite(Number(window.GlobalStore?.nearbyCount))
+                    ? Number(window.GlobalStore.nearbyCount)
+                    : nearbyVessels.length;
             }
 
             const badgeEl = document.getElementById('ais-nearby-vessels-badge');
             if (badgeEl) {
+                const reactiveNearbyCount = Number.isFinite(Number(window.GlobalStore?.nearbyCount))
+                    ? Number(window.GlobalStore.nearbyCount)
+                    : nearbyVessels.length;
+                nearbyCount = reactiveNearbyCount;
+                badgeEl.innerText = `${reactiveNearbyCount} buque${reactiveNearbyCount === 1 ? '' : 's'}`;
                 if (isAisWaitingForHydration) {
-                    badgeEl.innerText = "Esperando AIS...";
                     badgeEl.className = "text-xs font-bold text-slate-400 mono";
                     badgeEl.style.backgroundColor = "#6b7280";
                 } else {
-                    badgeEl.innerText = `${nearbyCount} buque${nearbyCount === 1 ? '' : 's'}`;
                     badgeEl.style.backgroundColor = nearbyCount === 0 ? "#6b7280" : "#1d4ed8";
                 }
                 if (isAisWaitingForHydration) {
@@ -41150,18 +41805,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (!portInputEl) return;
             portInputEl.addEventListener('input', () => {
                 window.isFirstLoad = true;
-                window.updateAisDetectedVesselsRoute();
-                if (typeof calculateAndDisplayAisFreight === 'function') {
-                    calculateAndDisplayAisFreight();
-                }
             });
             portInputEl.addEventListener('change', () => {
+                window.syncSelectedRoutePort?.(portInputId === 'port-pod' ? 'POD' : 'POL', portInputEl.value);
                 window.isFirstLoad = true;
                 window.updateAisDetectedVesselsRoute();
                 if (typeof calculateAndDisplayAisFreight === 'function') {
                     calculateAndDisplayAisFreight();
                 }
             });
+            if (portInputEl.value) {
+                window.syncSelectedRoutePort?.(portInputId === 'port-pod' ? 'POD' : 'POL', portInputEl.value);
+            }
         });
 
         // Listeners for laycan/deadline inputs and contract standard dropdown
@@ -44783,6 +45438,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.addEventListener('input', () => {
+                    if (id.startsWith('map-port-')) {
+                        const stateKey = id === 'map-port-ballast' ? 'portBallast' : (id === 'map-port-pod' ? 'pod' : 'pol');
+                        SeaCharterStore.set({ [stateKey]: el.value });
+                        scheduleReactiveEngine();
+                        return;
+                    }
                     captureRouteStateFromMapInputs();
                     scheduleReactiveEngine();
                 });
@@ -44796,6 +45457,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (!el) return;
                 el.addEventListener('input', () => {
                     SeaCharterStore.set(readRouteStateFromCalculator());
+                    if (['port-ballast', 'port-pol', 'port-pod'].includes(id)) {
+                        scheduleReactiveEngine();
+                        return;
+                    }
                     syncGlobalStateToForms();
                     scheduleReactiveEngine();
                 });
@@ -44844,7 +45509,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     if (typeof syncEtsRouteSelectorFromPorts === 'function') syncEtsRouteSelectorFromPorts({ rerun: true });
                     if (typeof autoFillRiskFromPorts === 'function') autoFillRiskFromPorts();
                 };
-                el.addEventListener('input', syncPortDrivenCalculations);
                 el.addEventListener('change', () => {
                     syncPortDrivenCalculations();
                 });
