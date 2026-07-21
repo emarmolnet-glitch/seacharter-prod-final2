@@ -2767,18 +2767,8 @@
             overflow-y: auto;
             overscroll-behavior: contain;
             padding-right: 0.25rem;
-            padding-bottom: 6rem;
+            padding-bottom: 0.25rem;
             scrollbar-gutter: stable;
-        }
-
-        #view-estimator .estimator-actions-sticky {
-            position: sticky;
-            bottom: 0;
-            z-index: 50;
-            background-color: #ffffff;
-            padding: 16px 0;
-            border-top: 1px solid #e0e8f0;
-            box-shadow: 0 -10px 15px -3px rgba(0, 0, 0, 0.05);
         }
 
         #view-estimator .estimator-results-rail.space-y-6 > :not([hidden]) ~ :not([hidden]) {
@@ -8245,6 +8235,30 @@
                         </div>
                     </div>
 
+                    <!-- 5. Acciones de Auditoría y Reportes -->
+                    <div class="collapsible-section bg-white border border-slate-300 rounded-xl p-5 shadow-lg mt-6 text-[#212529]" data-collapsible-section data-default-open="false">
+                        <div class="collapsible-section-header mb-4 border-b border-slate-200 pb-2">
+                            <h2 class="text-sm font-bold text-[#1E3A8A] uppercase">
+                                <i class="fa-solid fa-clipboard-check mr-2"></i> 5. Acciones de Auditoría y Reportes
+                            </h2>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <button id="btn-executive-report" onclick="generateExecutiveReport()" class="w-full min-h-12 bg-white hover:bg-slate-50 border border-slate-300 text-[#1E3A8A] text-xs font-bold px-4 py-3 rounded-lg shadow-sm transition">
+                                <i class="fa-solid fa-eye mr-1"></i> Reporte Ejecutivo
+                            </button>
+                            <button id="btn-list-vessels" onclick="openListVesselsModal()" class="w-full min-h-12 bg-white hover:bg-slate-50 border border-slate-300 text-[#1E3A8A] text-xs font-bold px-4 py-3 rounded-lg shadow-sm transition">
+                                <i class="fa-solid fa-anchor mr-1"></i> Historial de Buques
+                            </button>
+                            <button id="btn-comparison" onclick="openComparisonModal()" class="w-full min-h-12 bg-white hover:bg-slate-50 border border-slate-300 text-[#1E3A8A] text-xs font-bold px-4 py-3 rounded-lg shadow-sm transition">
+                                <i class="fa-solid fa-scale-balanced mr-1"></i> Comparar Buques
+                            </button>
+                            <button id="btn-viability-ai" onclick="analyzeViabilityAI()" class="w-full min-h-12 bg-[#1E3A8A] hover:bg-[#172554] border border-[#1E3A8A] text-white text-xs font-bold px-4 py-3 rounded-lg shadow transition">
+                                <i class="fa-solid fa-brain mr-1"></i> Analizar Viabilidad (IA)
+                            </button>
+                        </div>
+                    </div>
+
                 </div>
 
                 <!-- COLUMNA DERECHA (Finanzas y KPIs) -->
@@ -9189,21 +9203,6 @@
                             </div>
                         </div>
                     </div>
-                    <div class="estimator-actions-sticky grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <button id="btn-executive-report" onclick="generateExecutiveReport()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-xs font-bold py-3 rounded-lg shadow transition">
-                            <i class="fa-solid fa-eye mr-1"></i> Reporte Ejecutivo
-                        </button>
-                        <button id="btn-list-vessels" onclick="openListVesselsModal()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-xs font-bold py-3 rounded-lg shadow transition">
-                            <i class="fa-solid fa-anchor mr-1"></i> Historial de Buques
-                        </button>
-                        <button id="btn-comparison" onclick="openComparisonModal()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-xs font-bold py-3 rounded-lg shadow transition">
-                            <i class="fa-solid fa-scale-balanced mr-1"></i> Comparar Buques
-                        </button>
-                        <button id="btn-viability-ai" onclick="analyzeViabilityAI()" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold py-3 rounded-lg shadow transition">
-                            <i class="fa-solid fa-brain mr-1"></i> Analizar Viabilidad (IA)
-                        </button>
-                    </div>
-
                 </div>
             </div>
         </div>
