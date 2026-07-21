@@ -18,12 +18,16 @@ test('cargo taxonomy exposes the standardized ten-value selector with Otros by d
   assert.match(indexSource, /window\.CargoTypeSelector/);
   assert.match(indexSource, /MATCHING_CARGO_TYPE_STORAGE_KEY/);
   assert.match(indexSource, /data-cargo-type-selector="calculator"/);
+  assert.match(indexSource, /MATCHING_CARGO_TYPE_STORAGE_KEY, JSON\.stringify\(\{[\s\S]*cargoCode: selected\.id,[\s\S]*cargoDescription: selected\.label/);
+  assert.match(indexSource, /cargo: normalizeMatchingCargoPayload\(request\.cargo\)/);
 });
 
 test('master calculator payload maps the selected cargo strictly to its code', () => {
   const builderStart = indexSource.indexOf('function buildMatchingRequest');
   const builderEnd = indexSource.indexOf('window.buildMatchingRequest = buildMatchingRequest;', builderStart);
   const builderSource = indexSource.slice(builderStart, builderEnd);
+  assert.match(builderSource, /cargoCode: String\(document\.getElementById\('cargo-type-manual'\)\?\.value/);
+  assert.match(builderSource, /cargoDescription: String\(window\.getCargoTaxonomyLabel/);
   assert.match(builderSource, /type: String\(document\.getElementById\('cargo-type-manual'\)\?\.value/);
   assert.match(builderSource, /typeId: String\(document\.getElementById\('cargo-type-manual'\)\?\.value/);
   assert.match(builderSource, /specification: String\(window\.getCargoTaxonomyLabel/);
@@ -38,7 +42,7 @@ test('cargo intelligence applies the Rules of Gold signals', () => {
 });
 
 test('matching scoring includes cargo boost and LIVE recalculation preserves radar state', () => {
-  assert.match(aiFilterSource, /calculateCargoIntelligenceBoost\(cargoTypeId, vessel\.source\)/);
+  assert.match(aiFilterSource, /calculateCargoIntelligenceBoost\(cargoCode, vessel\.source\)/);
   assert.match(aiFilterSource, /cargoBoost: cargoIntelligence\.boost/);
   assert.match(indexSource, /preserveRadarLive: true/);
   assert.match(indexSource, /mode !== 'live'/);
@@ -126,7 +130,8 @@ test('strict eligibility enforces required cranes and grab capacity', () => {
 test('technical warnings are hidden by default and remain reviewable', () => {
   assert.match(indexSource, /id="hide-technical-problems-toggle"[^>]*checked/);
   assert.match(indexSource, /Array\.isArray\(data\.technicalWarnings\)/);
-  assert.match(indexSource, /m\.technicalEligibility\?\.eligible === false/);
+  assert.match(indexSource, /m\.audit\?\.operationallyEligible !== true/);
+  assert.match(indexSource, /Array\.isArray\(m\.audit\?\.reasons\)/);
   assert.match(indexSource, /Advertencia técnica/);
   assert.match(indexSource, /technicalProblemsToggle\.addEventListener\('change'/);
 });

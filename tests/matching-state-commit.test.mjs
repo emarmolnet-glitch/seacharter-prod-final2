@@ -44,7 +44,7 @@ test('save action commits the exact array returned by the table redraw', () => {
 });
 
 test('taxonomy change redraws the AIS table from the derived filtered array', () => {
-  assert.match(source, /document\.getElementById\('fleet-intel-vessel-type'\)\?\.addEventListener\('change',[\s\S]*const filteredVessels = typeof window\.reapplyCentralFiltersAndRedraw[\s\S]*setVesselClassContext\(selectedTaxonomy, filteredVessels\)/);
+  assert.match(source, /document\.getElementById\('fleet-intel-vessel-type'\)\?\.addEventListener\('change',[\s\S]*const selectedTaxonomies = getSelectedFleetTaxonomies\(\)[\s\S]*const filteredVessels = typeof window\.reapplyCentralFiltersAndRedraw[\s\S]*setVesselClassContext\(selectedTaxonomies, filteredVessels\)/);
   assert.match(source, /const tbody = document\.getElementById\('ais-vessels-tbody'\)[\s\S]*primaryVisibleVessels\.forEach/);
 });
 
@@ -63,7 +63,8 @@ test('matching execution sends query criteria instead of a committed radar array
   const executionEnd = source.indexOf('function getMatchingExecutionRouteOverride', executionStart);
   const executionSource = source.slice(executionStart, executionEnd);
   assert.match(executionSource, /Array\.isArray\(window\.GlobalStore\?\.selectedTaxonomies\)/);
-  assert.match(executionSource, /value: selectedVesselTaxonomy/);
+  assert.match(executionSource, /value: selectedVesselTaxonomies\.slice\(\)/);
+  assert.match(executionSource, /values: selectedVesselTaxonomies\.slice\(\)/);
   assert.match(executionSource, /requestMatchingLocal\('execute', \[\], payload\)/);
   assert.doesNotMatch(executionSource, /matchingSelection\?\.vessels|radarSnapshot/);
 });

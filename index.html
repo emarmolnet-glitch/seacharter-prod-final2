@@ -17381,7 +17381,7 @@
                 : Array.isArray(window.GlobalStore?.selectedTaxonomies)
                 ? window.GlobalStore.selectedTaxonomies.slice()
                 : (typeof getSelectedFleetTaxonomies === 'function' ? getSelectedFleetTaxonomies() : []);
-            const matchingCargoType = String(document.getElementById('match-cargo-type')?.value || matchingRequest?.cargo?.typeId || '100').trim();
+            const matchingCargoType = String(document.getElementById('match-cargo-type')?.value || matchingRequest?.cargo?.cargoCode || matchingRequest?.cargo?.typeId || '100').trim();
             const matchingQuantity = Number(document.getElementById('match-quantity')?.value || matchingRequest?.cargo?.quantity);
             const matchingLoadPort = String(effectiveRouteOverride?.pol || document.getElementById('match-load-port')?.value || '').trim();
             const matchingUnloadPort = String(effectiveRouteOverride?.pod || document.getElementById('match-unload-port')?.value || '').trim();
@@ -17546,7 +17546,12 @@
                 const quantity = matchingQuantity;
                 const cargoTypeId = matchingCargoType;
                 const cargoTaxonomyItem = window.CARGO_TAXONOMY?.find(item => item.id === cargoTypeId) || null;
-                const cargoType = String(matchingRequest?.cargo?.type || cargoTypeId).trim();
+                const cargoDescription = String(
+                    matchingRequest?.cargo?.cargoDescription
+                    || matchingRequest?.cargo?.specification
+                    || cargoTaxonomyItem?.label
+                    || 'Otros'
+                ).trim();
                 const todayIso = new Date().toISOString().slice(0, 10);
                 const fallbackLaycanEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
                 const laycanStart = String(effectiveRouteOverride?.laycan || document.getElementById('match-laycan-start').value || todayIso);
@@ -17574,16 +17579,19 @@
                 const dailyOpex = parseFloat(document.getElementById('match-daily-opex').value) || 6500;
                 const portExpenses = parseFloat(document.getElementById('match-port-expenses').value) || 40000;
 
-                const selectedVesselTaxonomy = selectedVesselTaxonomies[0];
+                const selectedVesselTaxonomySignature = selectedVesselTaxonomies.join('|');
+                const currentVesselTaxonomySignature = Array.isArray(window.GlobalStore?.selectedTaxonomies)
+                    ? window.GlobalStore.selectedTaxonomies.join('|')
+                    : '';
                 if (typeof window.reapplyCentralFiltersAndRedraw === 'function' && (
                     !window.GlobalStore?.filteredVesselsInitialized ||
-                    window.GlobalStore.selectedTaxonomy !== selectedVesselTaxonomy
+                    currentVesselTaxonomySignature !== selectedVesselTaxonomySignature
                 )) {
                     window.reapplyCentralFiltersAndRedraw();
                 }
                 if (typeof setVesselClassContext === 'function') {
                     setVesselClassContext(
-                        selectedVesselTaxonomy,
+                        selectedVesselTaxonomies,
                         window.GlobalStore?.getFilteredVessels?.() || []
                     );
                 }
@@ -17591,7 +17599,15 @@
                     cargo: {
                         loadingPortName, loadingPortLat, loadingPortLon,
                         unloadingPortName, unloadingPortLat, unloadingPortLon,
-                        quantity, cargoType, cargoTypeId, cargoTypeLabel: cargoTaxonomyItem?.label || '', laycanStart, laycanEnd,
+                        quantity,
+                        cargoCode: cargoTypeId,
+                        cargoDescription,
+                        cargoType: cargoTypeId,
+                        cargoTypeId,
+                        cargoTypeLabel: cargoDescription,
+                        specification: cargoDescription,
+                        laycanStart,
+                        laycanEnd,
                         maxDraft, maxLoa, gearedRequired, grabRequired, loadMethod, dischargeMethod,
                         requiredGrabCapacityCbm, requiredCraneSwlMt, freightRate, lumpsumFreight
                     },
@@ -17600,8 +17616,9 @@
                     },
                     vesselClassContext: {
                         ...(window.vesselClassContext || {}),
-                        value: selectedVesselTaxonomy,
-                        sourceTaxonomy: selectedVesselTaxonomy
+                        value: selectedVesselTaxonomies.slice(),
+                        values: selectedVesselTaxonomies.slice(),
+                        sourceTaxonomies: selectedVesselTaxonomies.slice()
                     },
                     searchMode: 'local_database',
                     matchRadiusNm: (window.AIS_PROSPECTION_RADII_NM && Number(window.AIS_PROSPECTION_RADII_NM.POL)) || 2000,
@@ -17618,7 +17635,7 @@
                 const technicalWarningMatches = Array.isArray(data.technicalWarnings)
                     ? data.technicalWarnings
                     : [];
-                rawMatches.push(...technicalWarningMatches);
+                if (data.dataIncludesWarnings !== true) rawMatches.push(...technicalWarningMatches);
                 const eligibleResponseCount = Math.max(0, Number(data.eligibleCount) || (rawMatches.length - technicalWarningMatches.length));
                 const technicalWarningResponseCount = Math.max(0, Number(data.technicalWarningCount) || technicalWarningMatches.length);
                 const evaluatedResponseCount = Math.max(0, Number(data.evaluatedCount) || rawMatches.length);
@@ -17690,7 +17707,7 @@
                     { matchingResultCount: eligibleResponseCount, technicalWarningCount: technicalWarningResponseCount, cacheSource: 'vessels_master' }
                 );
                 const sourceLabel = document.getElementById('matching-audit-mode-status');
-                if (sourceLabel) sourceLabel.textContent = `Caché Validada: ${eligibleResponseCount} candidatos idóneos · ${technicalWarningResponseCount} advertencias · ${selectedVesselTaxonomy}`;
+                if (sourceLabel) sourceLabel.textContent = `Caché Validada: ${eligibleResponseCount} candidatos idóneos · ${technicalWarningResponseCount} advertencias · ${selectedVesselTaxonomies.join(' + ')}`;
                 const missingDwtCount = rawMatches.filter((match) => {
                     const value = match?.vessel?.dwt ?? match?.ais?.dwt;
                     return !Number.isFinite(Number(value)) || Number(value) <= 0;
@@ -17794,8 +17811,8 @@
                 // Sort the deduplicated results by operational fit:
                 // DWT-compatible vessels first, then closest to POL, then better DWT utilization and score.
                 deduplicatedMatches.sort((a, b) => {
-                    const eligibilityA = a.technicalEligibility?.eligible !== false ? 1 : 0;
-                    const eligibilityB = b.technicalEligibility?.eligible !== false ? 1 : 0;
+                    const eligibilityA = a.audit?.operationallyEligible === true ? 1 : 0;
+                    const eligibilityB = b.audit?.operationallyEligible === true ? 1 : 0;
                     if (eligibilityA !== eligibilityB) return eligibilityB - eligibilityA;
 
                     const getDistanceToPol = (m) => {
@@ -17844,7 +17861,7 @@
                 });
 
                 const matches = deduplicatedMatches;
-                const viableMatches = matches.filter(m => m.technicalEligibility?.eligible !== false);
+                const viableMatches = matches.filter(m => m.audit?.operationallyEligible === true);
                 const technicalWarningCount = Math.max(0, matches.length - viableMatches.length);
                 const pipelineSession = typeof window.getPipelineSessionContext === 'function'
                     ? window.getPipelineSessionContext()
@@ -17872,7 +17889,7 @@
                 if (window.GlobalStore) {
                     window.GlobalStore.matchingCacheSessionId = pipelineSession.sessionId;
                     window.GlobalStore.compatibleVessels = matches
-                        .filter(m => m.technicalEligibility?.eligible !== false && m.scores.overall > 0)
+                        .filter(m => m.audit?.operationallyEligible === true && m.scores.overall > 0)
                         .map(m => ({
                             imo: m.vessel.imo,
                             vesselName: m.vessel.vesselName
@@ -17903,7 +17920,7 @@
                         const fin = m.financials;
                         const comp = m.compatibility;
                         const scores = m.scores;
-                        const hasTechnicalProblem = m.technicalEligibility?.eligible === false
+                        const hasTechnicalProblem = m.audit?.operationallyEligible !== true
                             || !(comp.dateOk && comp.draftOk && comp.capacityOk && comp.gearOk !== false);
                         const hideTechnicalProblems = document.getElementById('hide-technical-problems-toggle')?.checked === true;
                         if (hideTechnicalProblems && hasTechnicalProblem) {
@@ -17916,7 +17933,7 @@
                                           visibleRank === 2 ? 'bg-slate-300 text-slate-900 border-slate-400' :
                                           visibleRank === 3 ? 'bg-amber-700 text-white border-amber-800' : 'bg-slate-100 text-slate-600 border-slate-300';
                         
-                        const isComp = m.technicalEligibility?.eligible !== false && scores.overall > 0;
+                        const isComp = m.audit?.operationallyEligible === true && scores.overall > 0;
                         const compBadge = isComp ? 
                             '<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> Compatible (100%)</span>' :
                             '<span class="bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> Advertencia técnica</span>';
@@ -17931,6 +17948,10 @@
                                 ? m.technicalEligibility.criticalReasons
                                 : [];
                             criticalReasons.forEach(reason => {
+                                reasonHtml += `<div><i class="fa-solid fa-circle-exclamation mr-1"></i> ${reason}</div>`;
+                            });
+                            const auditReasons = Array.isArray(m.audit?.reasons) ? m.audit.reasons : [];
+                            auditReasons.filter(reason => !criticalReasons.includes(reason)).forEach(reason => {
                                 reasonHtml += `<div><i class="fa-solid fa-circle-exclamation mr-1"></i> ${reason}</div>`;
                             });
                             Object.keys(comp.reasons || {}).forEach(k => {
@@ -18745,6 +18766,29 @@
         const MATCHING_CARGO_TYPE_STORAGE_KEY = 'seacharter_matching_cargo_type_v1';
         const LAST_VALID_MATCHING_ROUTE_STORAGE_KEY = 'seacharter_last_valid_matching_route_v1';
 
+        function normalizeMatchingCargoPayload(cargo = {}) {
+            const source = cargo && typeof cargo === 'object' ? cargo : {};
+            const legacyType = String(source.type || '').trim();
+            const storedCode = String(source.cargoCode || source.typeId || source.cargoTypeId || (/^\d+$/.test(legacyType) ? legacyType : '') || '100').trim() || '100';
+            const cargoDescription = String(
+                source.cargoDescription
+                || source.specification
+                || source.typeLabel
+                || window.getCargoTaxonomyLabel?.(storedCode)
+                || 'Otros'
+            ).trim() || 'Otros';
+            return {
+                ...source,
+                cargoCode: storedCode,
+                cargoDescription,
+                type: storedCode,
+                typeId: storedCode,
+                typeLabel: cargoDescription,
+                specification: cargoDescription
+            };
+        }
+        window.normalizeMatchingCargoPayload = normalizeMatchingCargoPayload;
+
         function isValidMatchingCoordinatePair(coordinates) {
             const lat = Number(coordinates?.lat);
             const lon = Number(coordinates?.lon);
@@ -18798,6 +18842,7 @@
             const session = getPipelineSessionContext();
             const matchingRequest = {
                 ...request,
+                cargo: normalizeMatchingCargoPayload(request.cargo),
                 endpoint: String(request.endpoint || '/api/matching-local'),
                 sessionId: session.sessionId,
                 sessionStartedAt: session.startedAt,
@@ -18841,8 +18886,8 @@
             setInputValue('match-load-lon', polCoordinates.lon);
             setInputValue('match-unload-lat', podCoordinates.lat);
             setInputValue('match-unload-lon', podCoordinates.lon);
-            if (!request.cargo?.typeId) setInputValue('match-cargo-type', request.cargo?.type);
-            setInputValue('match-cargo-type', request.cargo?.typeId || '100');
+            const normalizedCargo = normalizeMatchingCargoPayload(request.cargo);
+            setInputValue('match-cargo-type', normalizedCargo.cargoCode);
             setInputValue('match-quantity', request.cargo?.quantity);
             setInputValue('match-freight-rate', request.freight?.owner);
             setInputValue('match-lumpsum', request.freight?.lumpsum);
@@ -18876,13 +18921,22 @@
 
         window.CargoTypeSelector = (() => {
             let recalculateTimer = null;
-            const readSelectedId = () => {
+            const readStoredSelection = () => {
                 try {
-                    const storedValue = String(window.sessionStorage.getItem(MATCHING_CARGO_TYPE_STORAGE_KEY) || '100');
-                    return window.resolveCargoTaxonomyId?.(storedValue) || '100';
+                    const storedValue = window.sessionStorage.getItem(MATCHING_CARGO_TYPE_STORAGE_KEY);
+                    if (!storedValue) return { cargoCode: '100', cargoDescription: window.getCargoTaxonomyLabel?.('100') || 'Otros' };
+                    try {
+                        const parsed = JSON.parse(storedValue);
+                        if (parsed && typeof parsed === 'object') return normalizeMatchingCargoPayload(parsed);
+                    } catch (_) {}
+                    return normalizeMatchingCargoPayload({ cargoCode: storedValue });
                 } catch (_) {
-                    return '100';
+                    return { cargoCode: '100', cargoDescription: window.getCargoTaxonomyLabel?.('100') || 'Otros' };
                 }
+            };
+            const readSelectedId = () => {
+                const storedSelection = readStoredSelection();
+                return window.resolveCargoTaxonomyId?.(storedSelection.cargoCode) || storedSelection.cargoCode || '100';
             };
             const getItem = cargoTypeId => window.CARGO_TAXONOMY?.find(item => item.id === (window.resolveCargoTaxonomyId?.(cargoTypeId) || '100'))
                 || window.CARGO_TAXONOMY?.find(item => item.id === '100')
@@ -18893,7 +18947,10 @@
                     if (select.value !== selected.id) select.value = selected.id;
                 });
                 try {
-                    window.sessionStorage.setItem(MATCHING_CARGO_TYPE_STORAGE_KEY, selected.id);
+                    window.sessionStorage.setItem(MATCHING_CARGO_TYPE_STORAGE_KEY, JSON.stringify({
+                        cargoCode: selected.id,
+                        cargoDescription: selected.label
+                    }));
                 } catch (_) {}
                 const currentRequest = window.GlobalStore?.matchingRequest
                     || window.matchingRequest
@@ -18905,6 +18962,8 @@
                     ...currentRequest,
                     cargo: {
                         ...(currentRequest.cargo || {}),
+                        cargoCode: selected.id,
+                        cargoDescription: selected.label,
                         type: selected.id,
                         typeId: selected.id,
                         typeLabel: selected.label,
@@ -18952,7 +19011,7 @@
                 persistSelection(selectedId);
                 return true;
             };
-            return { mount, persistSelection, readSelectedId, getItem };
+            return { mount, persistSelection, readSelectedId, readStoredSelection, getItem };
         })();
 
         const mountCargoTypeSelector = () => {
@@ -23910,6 +23969,8 @@
                     end: String(document.getElementById('gc-cancel-date')?.value || document.getElementById('match-laycan-end')?.value || '').trim()
                 },
                 cargo: {
+                    cargoCode: String(document.getElementById('cargo-type-manual')?.value || window.CargoTypeSelector?.readSelectedId?.() || '100'),
+                    cargoDescription: String(window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value) || 'Otros'),
                     type: String(document.getElementById('cargo-type-manual')?.value || window.CargoTypeSelector?.readSelectedId?.() || '100'),
                     specification: String(window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value) || 'Otros'),
                     typeId: String(document.getElementById('cargo-type-manual')?.value || window.CargoTypeSelector?.readSelectedId?.() || '100'),
@@ -38407,14 +38468,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.readCalculatorCargoTypeForRadar = readCalculatorCargoTypeForRadar;
             document.getElementById('fleet-intel-vessel-type')?.addEventListener('change', (event) => {
                 const selectedTaxonomies = getSelectedFleetTaxonomies();
-                const selectedTaxonomy = selectedTaxonomies[0] || '';
                 updateFleetTaxonomyMultiSelectUi();
                 const filteredVessels = typeof window.reapplyCentralFiltersAndRedraw === 'function'
                     ? window.reapplyCentralFiltersAndRedraw()
                     : (window.GlobalStore && typeof window.GlobalStore.getFilteredVessels === 'function'
                         ? window.GlobalStore.getFilteredVessels()
                         : []);
-                const context = setVesselClassContext(selectedTaxonomy, filteredVessels);
+                const context = setVesselClassContext(selectedTaxonomies, filteredVessels);
                 dispatchVesselClassContextRecalculation(context);
             });
 
@@ -38503,26 +38563,41 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             };
 
             function getVesselClassProfile(taxonomyValue) {
-                return VESSEL_CLASS_CONTEXT_PROFILES[taxonomyValue] || VESSEL_CLASS_CONTEXT_PROFILES['category:cargo'];
+                const values = (Array.isArray(taxonomyValue) ? taxonomyValue : [taxonomyValue]).filter(Boolean);
+                const profiles = values.map(value => VESSEL_CLASS_CONTEXT_PROFILES[value]).filter(Boolean);
+                if (profiles.length === 0) return VESSEL_CLASS_CONTEXT_PROFILES['category:cargo'];
+                return Object.keys(VESSEL_CLASS_CONTEXT_PROFILES['category:cargo']).reduce((profile, key) => {
+                    profile[key] = profiles.reduce((total, item) => total + Number(item[key] || 1), 0) / profiles.length;
+                    return profile;
+                }, {});
             }
 
             function getVesselClassContextLabel(taxonomyValue) {
                 const select = document.getElementById('fleet-intel-vessel-type');
-                const option = select ? Array.from(select.options || []).find(item => item.value === taxonomyValue) : null;
-                return option ? option.textContent.trim() : String(taxonomyValue || 'Sin selección');
+                const values = Array.isArray(taxonomyValue) ? taxonomyValue : [taxonomyValue];
+                const labels = values.filter(Boolean).map(value => {
+                    const option = select ? Array.from(select.options || []).find(item => item.value === value) : null;
+                    return option ? option.textContent.trim() : String(value);
+                });
+                return labels.length > 0 ? labels.join(' + ') : 'Sin selección';
             }
 
             function setVesselClassContext(taxonomyValue, filteredVessels = null) {
-                const value = taxonomyValue || '';
+                const values = Array.from(new Set((Array.isArray(taxonomyValue) ? taxonomyValue : [taxonomyValue])
+                    .map(value => String(value || '').trim())
+                    .filter(Boolean)));
+                const primaryValue = values[0] || '';
                 const vessels = Array.isArray(filteredVessels)
                     ? filteredVessels
                     : ((window.GlobalStore && typeof window.GlobalStore.getFilteredVessels === 'function' && window.GlobalStore.filteredVesselsInitialized)
                         ? window.GlobalStore.getFilteredVessels()
                         : (Array.isArray(window.lastVesselsInArea) ? window.lastVesselsInArea : []));
                 window.vesselClassContext = {
-                    value,
-                    label: getVesselClassContextLabel(value),
-                    profile: getVesselClassProfile(value),
+                    value: values.slice(),
+                    values: values.slice(),
+                    primaryValue,
+                    label: getVesselClassContextLabel(values),
+                    profile: getVesselClassProfile(values),
                     filteredVessels: vessels,
                     vesselCount: vessels.length,
                     updatedAt: Date.now()
@@ -38530,7 +38605,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (window.GlobalStore) {
                     window.GlobalStore.vesselClassContext = window.vesselClassContext;
                     window.GlobalStore.matchingVessels = vessels.slice();
-                    window.GlobalStore.selectedTaxonomy = value;
+                    window.GlobalStore.selectedTaxonomies = values.slice();
+                    window.GlobalStore.selectedTaxonomy = primaryValue;
                 }
                 return window.vesselClassContext;
             }
@@ -38551,7 +38627,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const baseValue = parseFloat(input.dataset.taxonomyBaseValue) || 0;
                     const nextValue = baseValue * multiplier;
                     input.value = Number.isFinite(nextValue) ? nextValue.toFixed(2) : input.value;
-                    input.dataset.vesselClassContext = context?.value || '';
+                    input.dataset.vesselClassContext = context?.primaryValue || '';
                 });
             }
 
@@ -39165,15 +39241,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
 
                 if (window.GlobalStore) {
+                    const selectedTaxonomies = getSelectedFleetTaxonomies();
                     window.GlobalStore.polPrimaryVessels = primaryVisibleVessels;
                     window.GlobalStore.setFilteredVessels(primaryVisibleVessels, {
-                        taxonomy: getSelectedFleetTaxonomies()[0] || ''
+                        taxonomy: selectedTaxonomies.join('|')
                     });
                 }
                 window.lastVesselsInArea = primaryVisibleVessels;
                 if (typeof setVesselClassContext === 'function') {
-                    const selectedTaxonomy = getSelectedFleetTaxonomies()[0] || '';
-                    setVesselClassContext(selectedTaxonomy, primaryVisibleVessels);
+                    setVesselClassContext(getSelectedFleetTaxonomies(), primaryVisibleVessels);
                 }
 
                 const coefOfertaEl = document.getElementById('coeficiente-oferta');
@@ -40468,7 +40544,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const baseBEText = document.getElementById('res-breakeven')?.innerText || "$0.00";
             const baseBE = parseFloat(baseBEText.replace('$', '')) || State.breakEven || 0;
             const activeVesselClassContext = window.vesselClassContext || (typeof setVesselClassContext === 'function'
-                ? setVesselClassContext(getSelectedFleetTaxonomies()[0] || '')
+                ? setVesselClassContext(getSelectedFleetTaxonomies())
                 : null);
             const activeVesselProfile = activeVesselClassContext?.profile || { bunkerMultiplier: 1, seaConsumptionMultiplier: 1, portConsumptionMultiplier: 1, riskCoefficient: 1 };
             

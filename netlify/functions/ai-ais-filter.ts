@@ -146,6 +146,16 @@ function vesselMatchesTaxonomy(vessel: NonNullable<ReturnType<typeof normalizeVe
   return terms.some((term) => haystack.includes(normalizeTaxonomyText(term)));
 }
 
+function normalizeRequestedTaxonomies(value: unknown) {
+  const candidates = Array.isArray(value) ? value : [value];
+  return Array.from(new Set(candidates.map((item) => textValue(item)).filter(Boolean)));
+}
+
+function vesselMatchesAnyTaxonomy(vessel: NonNullable<ReturnType<typeof normalizeVessel>>, taxonomyValues: string[]) {
+  if (taxonomyValues.length === 0) return true;
+  return taxonomyValues.some((taxonomyValue) => vesselMatchesTaxonomy(vessel, taxonomyValue));
+}
+
 function normalizeVessel(value: unknown) {
   const source = pickObject(value);
   const meta = pickObject(source.MetaData);
@@ -243,15 +253,26 @@ export default async (req: Request) => {
     const params = pickObject(body.params);
     const vesselClassContext = pickObject(body.vesselClassContext);
     const vesselClassProfile = pickObject(vesselClassContext.profile);
-    const vesselClassValue = textValue(vesselClassContext.value) || "category:cargo";
+    const vesselClassValues = normalizeRequestedTaxonomies(
+      Array.isArray(vesselClassContext.values)
+        ? vesselClassContext.values
+        : vesselClassContext.value,
+    );
     const vessels = Array.isArray(body.radarSnapshot) ? body.radarSnapshot : [];
     const loadingPortLat = numberValue(cargo.loadingPortLat);
     const loadingPortLon = numberValue(cargo.loadingPortLon);
     const laycanStart = parseLaycanStart(cargo.laycanStart);
     const laycanEnd = parseLaycanEnd(cargo.laycanEnd);
     const quantity = numberValue(cargo.quantity);
-    const cargoSpecification = textValue(cargo.cargoSpecification, cargo.cargoType, cargo.tipoCarga, cargo.tipo_carga);
-    const cargoTypeId = textValue(cargo.cargoTypeId, cargo.typeId, body.cargoTypeId) || "100";
+    const cargoDescription = textValue(
+      cargo.cargoDescription,
+      cargo.specification,
+      cargo.cargoSpecification,
+      cargo.cargoTypeLabel,
+      cargo.tipoCarga,
+      cargo.tipo_carga,
+    );
+    const cargoCode = textValue(cargo.cargoCode, cargo.cargoTypeId, cargo.typeId, body.cargoCode, body.cargoTypeId) || "100";
     const gearedRequired = cargo.gearedRequired === true;
     const grabRequired = cargo.grabRequired === true
       || [cargo.loadMethod, cargo.dischargeMethod].some((value) => textValue(value) === "cuchara_grab");
@@ -274,7 +295,7 @@ export default async (req: Request) => {
     const vessels_buffer = vessels
       .map(normalizeVessel)
       .filter((vessel): vessel is NonNullable<ReturnType<typeof normalizeVessel>> => Boolean(vessel))
-      .filter((vessel) => vesselMatchesTaxonomy(vessel, vesselClassValue));
+      .filter((vessel) => vesselMatchesAnyTaxonomy(vessel, vesselClassValues));
 
     const evaluatedMatches = vessels_buffer
       .map((vessel) => {
@@ -294,7 +315,7 @@ export default async (req: Request) => {
         const loaOk = vessel.loa <= 0 || vessel.loa <= maxLoa;
         const dateOk = laycan.ok;
         const technicalEligibility = evaluateCargoVesselEligibility({
-          cargoTypeId,
+          cargoTypeId: cargoCode,
           vessel: vessel.source,
           shipType: vessel.shipType,
           dwt: vessel.dwt,
@@ -312,9 +333,9 @@ export default async (req: Request) => {
           && (technicalEligibility.dwt.maximumSuitable === null || technicalEligibility.dwt.vessel <= technicalEligibility.dwt.maximumSuitable);
         const etaConsistencyScore = etaDriftHours === null ? 8 : etaDriftHours <= 12 ? 10 : etaDriftHours <= 36 ? 6 : 2;
         const calculatedTechnical = (capacityOk ? 20 : 6) + (draftOk ? 10 : 0) + (loaOk ? 10 : 0) + loadState.score + laycan.score + etaConsistencyScore;
-        const taxonomyScoring = calculateTaxonomyTechnicalScore(cargoSpecification, vessel.source, calculatedTechnical);
+        const taxonomyScoring = calculateTaxonomyTechnicalScore(cargoDescription, vessel.source, calculatedTechnical);
         const taxonomyCompatibility = taxonomyScoring.compatibility;
-        const cargoIntelligence = calculateCargoIntelligenceBoost(cargoTypeId, vessel.source);
+        const cargoIntelligence = calculateCargoIntelligenceBoost(cargoCode, vessel.source);
         const technical = taxonomyScoring.technicalScore;
         const boostedTechnicalBeforeEligibility = taxonomyCompatibility.compatible
           ? Math.min(100, technical + cargoIntelligence.boost)
@@ -327,7 +348,8 @@ export default async (req: Request) => {
         const overall = Math.round(Math.min(100, boostedTechnical * 0.55 + economic * 0.30 + risk * 0.15));
         const ballastFuelCost = distance * (fuelPrice / 100);
         const suggestedFreightRate = freightRate > 0 ? freightRate : Math.max(0, (ballastFuelCost + portExpenses + dailyOpex) / Math.max(quantity, 1));
-        const idealVessel = technicalEligibility.eligible && taxonomyCompatibility.compatible && loadState.ballastReady;
+        const operationallyEligible = technicalEligibility.eligible && taxonomyCompatibility.compatible;
+        const idealVessel = operationallyEligible && loadState.ballastReady;
 
         return {
           vessel: {
@@ -420,9 +442,7 @@ export default async (req: Request) => {
                 : etaDriftHours <= 12
                   ? "ETA AIS declarado consistente con distancia y velocidad"
                   : `ETA AIS declarado difiere ${etaDriftHours.toFixed(1)} horas del cálculo a POL`,
-              taxonomy: taxonomyCompatibility.compatible
-                ? "Taxonomía carga-buque compatible"
-                : `Taxonomía incompatible: ${cargoSpecification || "carga no especificada"} no admite ${taxonomyCompatibility.declaredVesselType}`,
+              taxonomy: taxonomyCompatibility.reason,
               technicalEligibility: technicalEligibility.eligible
                 ? "Elegibilidad técnica estricta superada"
                 : technicalEligibility.criticalReasons.join("; "),
@@ -431,7 +451,17 @@ export default async (req: Request) => {
           scores: { technical: boostedTechnical, economic, risk, overall, cargoBoost: cargoIntelligence.boost },
           cargoIntelligence,
           technicalEligibility,
-          aiStatus: !technicalEligibility.eligible || !taxonomyCompatibility.compatible ? "INCOMPATIBLE" : idealVessel && overall > 55 && cementSignal.level !== "possible" ? "IDEAL" : overall > 50 ? "MATCH" : "REVIEW",
+          aiStatus: !operationallyEligible ? "INCOMPATIBLE" : idealVessel && overall > 55 && cementSignal.level !== "possible" ? "IDEAL" : overall > 50 ? "MATCH" : "REVIEW",
+          audit: {
+            cargoCode,
+            cargoDescription,
+            selectedVesselTaxonomies: vesselClassValues,
+            operationallyEligible,
+            reasons: [
+              ...technicalEligibility.criticalReasons,
+              ...(taxonomyCompatibility.compatible ? [] : [taxonomyCompatibility.reason]),
+            ],
+          },
           idealVessel,
           cementCarrierClassification: cementSignal,
           eta_puerto_carga: etaDate.toISOString(),
@@ -441,15 +471,17 @@ export default async (req: Request) => {
         };
       })
       .filter((match) => match.ais.currentDistanceToLoadPort <= matchRadiusNm)
-      .sort((a, b) => Number(b.technicalEligibility.eligible) - Number(a.technicalEligibility.eligible)
+      .sort((a, b) => Number(b.audit.operationallyEligible) - Number(a.audit.operationallyEligible)
         || b.scores.overall - a.scores.overall
         || a.ais.currentDistanceToLoadPort - b.ais.currentDistanceToLoadPort);
-    const matches = evaluatedMatches.filter((match) => match.technicalEligibility.eligible);
-    const technicalWarnings = evaluatedMatches.filter((match) => !match.technicalEligibility.eligible);
+    const matches = evaluatedMatches.filter((match) => match.audit.operationallyEligible);
+    const technicalWarnings = evaluatedMatches.filter((match) => !match.audit.operationallyEligible);
 
     return Response.json({
       success: true,
-      data: matches,
+      data: evaluatedMatches,
+      dataIncludesWarnings: true,
+      matches,
       technicalWarnings,
       eligibleCount: matches.length,
       technicalWarningCount: technicalWarnings.length,
