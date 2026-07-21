@@ -16325,19 +16325,44 @@
             const matches = Array.isArray(event?.detail?.matches)
                 ? event.detail.matches
                 : (window.matchingResultsState?.vessels || []);
+            const eligibleMatches = Array.isArray(event?.detail?.eligibleMatches)
+                ? event.detail.eligibleMatches
+                : matches.filter(match => match?.audit?.operationallyEligible === true);
+            const committedEligibleVessels = eligibleMatches.map((match, index) => {
+                const normalizedCoordinates = normalizeCoreProVesselCoordinates(match, index);
+                if (!normalizedCoordinates) return match;
+                const vessel = match?.vessel && typeof match.vessel === 'object' ? match.vessel : {};
+                const ais = match?.ais && typeof match.ais === 'object' ? match.ais : {};
+                return {
+                    ...match,
+                    latitude: normalizedCoordinates.latitude,
+                    longitude: normalizedCoordinates.longitude,
+                    imo: match?.imo ?? vessel.imo,
+                    mmsi: match?.mmsi ?? vessel.mmsi ?? ais.mmsi,
+                    vesselName: match?.vesselName ?? vessel.vesselName ?? vessel.vessel_name ?? vessel.name,
+                    vesselClass: match?.vesselClass ?? vessel.vesselClass ?? vessel.specialtyType,
+                    cargoType: match?.cargoType ?? vessel.cargoType ?? vessel.tipo_carga,
+                    dwt: match?.dwt ?? vessel.dwt,
+                    speed: match?.speed ?? ais.speed ?? ais.speedKts,
+                    destination: match?.destination ?? ais.plannedDestination ?? vessel.destination,
+                    distanceToPol: match?.distanceToPol ?? ais.currentDistanceToLoadPort
+                };
+            });
             window.aesMatchingState = {
-                positive: matches.length > 0,
-                matches: [...matches],
-                count: Number(event?.detail?.count) || matches.length,
+                positive: committedEligibleVessels.length > 0,
+                matches: [...committedEligibleVessels],
+                count: committedEligibleVessels.length,
+                evaluatedMatches: [...matches],
+                evaluatedCount: matches.length,
                 updatedAt: new Date().toISOString()
             };
             const resultsList = document.getElementById('matching-results-list');
             if (resultsList) resultsList.dataset.matchingExecutionState = 'success';
-            window.GlobalStore?.setAisMatchingState?.(matches, matches, null, {
+            window.GlobalStore?.setAisMatchingState?.(committedEligibleVessels, committedEligibleVessels, null, {
                 source: 'matching-validation'
             });
             updateMatchingExecutionSuccessStick(matches);
-            evaluateReactiveSyncStatus({ matchingCount: matches.length });
+            evaluateReactiveSyncStatus({ matchingCount: committedEligibleVessels.length });
         });
 
         async function syncCoreProMatchingReport(reportData) {
@@ -18105,6 +18130,7 @@
                 window.matchingResultsState = {
                     vessels: matches,
                     count: matches.length,
+                    eligibleVessels: viableMatches,
                     eligibleCount: viableMatches.length,
                     technicalWarningCount,
                     receivedAt: new Date().toISOString(),
@@ -18688,7 +18714,9 @@
                 window.dispatchEvent(new CustomEvent('MATCHING_EXECUTION_SUCCESS', {
                     detail: {
                         matches: window.matchingResultsState?.vessels || matches,
-                        count: window.matchingResultsState?.count || matches.length
+                        eligibleMatches: window.matchingResultsState?.eligibleVessels || viableMatches,
+                        count: window.matchingResultsState?.eligibleCount || viableMatches.length,
+                        evaluatedCount: window.matchingResultsState?.count || matches.length
                     }
                 }));
                 
@@ -37551,6 +37579,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         // behave inconsistently in Production.
         let aisMapAnimationFrameId = null;
 
+        function getDensityMapSourceVessels() {
+            const store = window.GlobalStore;
+            const matchingSource = String(store?.aisMatchingStateSource || '');
+            const hasCommittedLocalMatches = matchingSource === 'matching-validation'
+                && Array.isArray(store?.nearbyVessels);
+            return hasCommittedLocalMatches
+                ? store.nearbyVessels.slice()
+                : (store?.getFilteredVessels?.() || []);
+        }
+        window.getDensityMapSourceVessels = getDensityMapSourceVessels;
+
         function cancelAisMapAnimationFrame() {
             if (aisMapAnimationFrameId && typeof cancelAnimationFrame === 'function') {
                 cancelAnimationFrame(aisMapAnimationFrameId);
@@ -37573,7 +37612,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
             mapContainer.dataset.renderKey = 'mounted';
             if (window.GlobalFleetGlobe) {
-                const vessels = window.GlobalStore?.getFilteredVessels?.() || [];
+                const vessels = getDensityMapSourceVessels();
                 aisMap = window.GlobalFleetGlobe.mount({
                     key: 'density',
                     containerId: 'ais-map',
@@ -37643,7 +37682,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (window.aisProspectionVisualState && window.aisProspectionVisualState.active && typeof window.renderAisProspectionRadii === 'function') {
                     window.renderAisProspectionRadii({ fit: false });
                 }
-                if (window.GlobalStore && window.GlobalStore.getRawVessels && window.GlobalStore.getRawVessels().length > 0 && typeof window.reapplyCentralFiltersAndRedraw === 'function') {
+                if (window.GlobalStore?.aisMatchingStateSource === 'matching-validation' && Number(window.GlobalStore?.nearbyCount) > 0) {
+                    updateAisMarkers(getDensityMapSourceVessels());
+                } else if (window.GlobalStore && window.GlobalStore.getRawVessels && window.GlobalStore.getRawVessels().length > 0 && typeof window.reapplyCentralFiltersAndRedraw === 'function') {
                     window.reapplyCentralFiltersAndRedraw();
                 }
             });
@@ -37688,7 +37729,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const renderableVessels = (Array.isArray(vessels)
                 ? vessels
-                : (window.GlobalStore?.getFilteredVessels?.() || []));
+                : getDensityMapSourceVessels());
             const renderableById = new Map();
             renderableVessels.forEach((vessel, index) => {
                 if (!vessel || typeof vessel !== 'object') return;
@@ -41453,7 +41494,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 estimatorBeEl.innerText = `$${baseBE.toFixed(2)}`;
             }
 
-            const hasAisData = window.GlobalStore?.hasAisData === true;
+            const committedMatchingSource = String(window.GlobalStore?.aisMatchingStateSource || '');
+            const hasCommittedMatchingState = ['density-filter', 'matching-validation'].includes(committedMatchingSource)
+                && Number(window.GlobalStore?.nearbyCount) > 0;
+            const hasAisData = window.GlobalStore?.hasAisData === true || hasCommittedMatchingState;
             if (!hasAisData) {
                 renderPendingAisMarketReference();
                 return;
@@ -41534,9 +41578,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const hasRenderableAisVessels = sourceAisVessels.length > 0;
             const isAisWaitingForHydration = !hasRenderableAisVessels && typeof window !== 'undefined' && window.isAisHydrationSyncing === true;
             const hasRealAisData = !isAisWaitingForHydration && pricingSourceVessels.length > 0;
-            const committedMatchingSource = String(window.GlobalStore?.aisMatchingStateSource || '');
-            const shouldUseCommittedMatchingState = ['density-filter', 'matching-validation'].includes(committedMatchingSource)
-                && Number(window.GlobalStore?.nearbyCount) > 0;
+            const shouldUseCommittedMatchingState = hasCommittedMatchingState;
             let nearbyVessels = shouldUseCommittedMatchingState && Array.isArray(window.GlobalStore?.nearbyVessels)
                 ? window.GlobalStore.nearbyVessels.slice()
                 : [];
@@ -41859,6 +41901,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const source = String(event?.detail?.source || '');
                 if (source === 'calculator-proximity') return;
                 calculateAndDisplayAisFreight();
+                if (source === 'matching-validation') {
+                    const densityMapVessels = Array.isArray(event?.detail?.nearbyVessels)
+                        ? event.detail.nearbyVessels
+                        : getDensityMapSourceVessels();
+                    const densityMapView = document.getElementById('view-ais');
+                    if (!aisMap && densityMapView?.classList.contains('active-block')) initAisMap();
+                    updateAisMarkers(densityMapVessels);
+                }
             });
         }
 
