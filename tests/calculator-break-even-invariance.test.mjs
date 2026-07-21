@@ -21,6 +21,9 @@ const baseInputs = {
   'cargo-type-manual': '',
   'rate-load': 5000,
   'rate-disch': 5000,
+  'freight-conditions': 'FIOS',
+  'laytime-load-condition': 'SHINC',
+  'laytime-disch-condition': 'SHINC',
   'turn-time-hours': 24,
   'factor-clima': 0,
   'charter-party-standard': 'GENCON',
@@ -97,12 +100,17 @@ function runCalculator(overrides = {}) {
     },
     getMetodoEstibaActual: () => 'standard',
     getMetodoDescargaActual: () => 'standard',
-    calcularRitmoEfectivo: () => 5000,
+    calcularRitmoEfectivo: (side) => Number(values[side === 'pod' ? 'rate-disch' : 'rate-load']),
     normalizarTipoCarga: () => 'granel',
     costeTrincajeCondicional: () => 0,
     vesselHasScrubber: () => false,
     readNumeroGruasPuerto: () => 1,
     calcularDiasPuertoPorEstiba: (cargo, rate) => Number(rate) > 0 ? Number(cargo) / Number(rate) : 0,
+    getLaytimeCondition: (side) => values[side === 'pod' ? 'laytime-disch-condition' : 'laytime-load-condition'],
+    applyLaytimeCalendarRisk: (days, condition) => ['SHEX', 'SHEX UU', 'SHEX EIU', 'FHEX', 'SSHEX'].includes(condition)
+      ? Number(days) * (7 / 5)
+      : Number(days),
+    getOwnerStevedoringFactor: (condition) => ({ FILO: 0.5, LIFO: 0.5, LINER: 1 }[condition] ?? 0),
     getCountryFromPort: () => '',
     isSecaZone: () => false,
     getManualFuelBreakdown: () => null,
@@ -165,6 +173,52 @@ test('laytime uses cargo divided by both real rates plus turn time hours', () =>
   assert.equal(result.laytimeDays, 7.5);
   assert.equal(result.turnTimeDays, 0.5);
   assert.ok(result.totalOpex > 0);
+});
+
+test('interrupted laytime adds two weekend-risk days per five calculated days', () => {
+  const continuous = runCalculator({
+    'cargo-qty': 10000,
+    'rate-load': 2000,
+    'rate-disch': 2000,
+    'turn-time-hours': 0,
+    'laytime-load-condition': 'SHINC',
+    'laytime-disch-condition': 'CQD',
+  }).result;
+  const interrupted = runCalculator({
+    'cargo-qty': 10000,
+    'rate-load': 2000,
+    'rate-disch': 2000,
+    'turn-time-hours': 0,
+    'laytime-load-condition': 'SHEX UU',
+    'laytime-disch-condition': 'FHEX',
+  }).result;
+
+  assert.equal(continuous.laytimeDays, 10);
+  assert.equal(interrupted.laytimeDays, 14);
+  assert.equal(interrupted.laytimeRiskDays, 4);
+  assert.ok(interrupted.totalOpex > continuous.totalOpex);
+  assert.ok(interrupted.breakEven > continuous.breakEven);
+});
+
+test('conditions allocate stevedoring cost to the owner', () => {
+  const fios = runCalculator({
+    'freight-conditions': 'FIOS',
+    'stevedoring-costs': 20000,
+  }).result;
+  const filo = runCalculator({
+    'freight-conditions': 'FILO',
+    'stevedoring-costs': 20000,
+  }).result;
+  const liner = runCalculator({
+    'freight-conditions': 'LINER',
+    'stevedoring-costs': 20000,
+  }).result;
+
+  assert.equal(fios.stevedoringOwnerCost, 0);
+  assert.equal(filo.stevedoringOwnerCost, 10000);
+  assert.equal(liner.stevedoringOwnerCost, 20000);
+  assert.ok(filo.breakEven > fios.breakEven);
+  assert.ok(liner.breakEven > filo.breakEven);
 });
 
 test('slower real port rates increase voyage days and break-even', () => {

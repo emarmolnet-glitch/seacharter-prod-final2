@@ -19,12 +19,25 @@ test('section two exposes a closed turn time selector beside operational rates',
 test('section two keeps POL and POD operations in a symmetric two-column grid', () => {
   assert.match(
     indexSource,
-    /<div id="port-operations-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 mb-4">[\s\S]*?id="metodo_carga"[\s\S]*?id="rate-load"[\s\S]*?id="metodo_descarga_pod"[\s\S]*?id="rate-disch"[\s\S]*?<\/div>\s*<div id="demurrage-exposure-alert"/,
+    /<div id="port-operations-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 mb-4">[\s\S]*?id="metodo_carga"[\s\S]*?id="metodo_descarga_pod"[\s\S]*?id="rate-load"[\s\S]*?id="rate-disch"[\s\S]*?id="contenedor-gruas-pol"[\s\S]*?id="contenedor-gruas-pod"[\s\S]*?<\/div>\s*<div id="demurrage-exposure-alert"/,
   );
+  assert.doesNotMatch(indexSource, /id="port-operation-(?:pol|pod)"|Bloque de Carga · POL|Bloque de Descarga · POD/);
   assert.match(
     indexSource,
-    /<div id="contractual-parameters-grid" class="grid grid-cols-1 md:grid-cols-4 gap-4">[\s\S]*?id="product-sector"[\s\S]*?id="cargo-sf"[\s\S]*?id="turn-time-hours"/,
+    /<div id="contractual-parameters-grid" class="grid grid-cols-1 md:grid-cols-4 gap-4">[\s\S]*?id="product-sector"[\s\S]*?id="cargo-sf"[\s\S]*?id="turn-time-hours"[\s\S]*?id="freight-conditions"[\s\S]*?id="laytime-load-condition"[\s\S]*?id="laytime-disch-condition"/,
   );
+  assert.equal((indexSource.match(/id="contenedor-gruas-pol"/g) || []).length, 1);
+  assert.equal((indexSource.match(/id="contenedor-gruas-pod"/g) || []).length, 1);
+});
+
+test('section two injects standardized tooltips for contractual and CBAM fields', () => {
+  assert.match(indexSource, /'freight-conditions': 'Define la responsabilidad del pago y gestión de la operativa portuaria \(ej\. FIOS: el fletador asume y organiza los gastos de carga, descarga y estiba\)\.'/);
+  assert.match(indexSource, /'laytime-load-condition': 'Condiciones de tiempo de plancha que definen si los fines de semana y festivos computan como tiempo operativo continuo \(SHINC\) o si se excluyen del cálculo \(SHEX\/FHEX\)\.'/);
+  assert.match(indexSource, /'laytime-disch-condition': 'Condiciones de tiempo de plancha que definen si los fines de semana y festivos computan como tiempo operativo continuo \(SHINC\) o si se excluyen del cálculo \(SHEX\/FHEX\)\.'/);
+  assert.match(indexSource, /'product-sector': 'Clasificación aplicable para el Mecanismo de Ajuste en Frontera por Carbono\.'/);
+  assert.match(indexSource, /'ritmo_nominal_pol': 'Multiplicador operativo\. Afecta directamente al cálculo automático del ritmo real diario\.'/);
+  assert.match(indexSource, /'ritmo_nominal_pod': 'Multiplicador operativo\. Afecta directamente al cálculo automático del ritmo real diario\.'/);
+  assert.match(indexSource, /label\.insertAdjacentHTML\('beforeend', buildFieldTooltip\(text\)\)/);
 });
 
 test('matching payload carries stowage volume and ship gear requirements', () => {

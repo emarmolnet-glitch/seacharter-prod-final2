@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import vm from 'node:vm';
 
 const require = createRequire(import.meta.url);
 const { calculateVoyageCostState } = require('../voyage-cost-engine.js');
@@ -17,6 +18,58 @@ test('section 2 exposes strict turn time and cascading cargo selectors', () => {
   assert.match(indexSource, /id="cargo-product"/);
   assert.match(indexSource, /function populateCargoProducts/);
   assert.match(indexSource, /function applySelectedCargoProduct/);
+});
+
+test('calculator and GENCON share complete conditions and laytime catalogs', () => {
+  assert.match(indexSource, /const GENCON_CONDITION_OPTIONS = Object\.freeze/);
+  assert.match(indexSource, /const GENCON_LAYTIME_OPTIONS = Object\.freeze/);
+  assert.match(indexSource, /id="freight-conditions"/);
+  assert.match(indexSource, /id="laytime-load-condition"/);
+  assert.match(indexSource, /id="laytime-disch-condition"/);
+  ['FIO', 'FIOS', 'FIOT', 'FIOST', 'FILO', 'LIFO', 'LINER'].forEach((term) => {
+    assert.match(indexSource, new RegExp(`value: '${term}'|value="${term}"`));
+  });
+  ['SHINC', 'SHEX', 'SHEX UU', 'SHEX EIU', 'FHINC', 'FHEX', 'SSHEX', 'SSHINC', 'CQD'].forEach((term) => {
+    assert.match(indexSource, new RegExp(`'${term}'|value="${term}"`));
+  });
+});
+
+test('POD crane count multiplies the effective discharge rate', () => {
+  const start = indexSource.indexOf('const methodBaseRates =');
+  const end = indexSource.indexOf('function calculateDemurrageExposure', start);
+  const source = indexSource.slice(start, end);
+  const values = {
+    'metodo_carga': 'cuchara_grab',
+    'metodo_descarga_pod': 'cuchara_grab',
+    'rate-load': '1200',
+    'rate-disch': '1200',
+    'ritmo_nominal_pol': '1',
+    'ritmo_nominal_pod': '2',
+    'cargo-qty': '12000',
+  };
+  const elements = new Map(Object.entries(values).map(([id, value]) => [id, {
+    value,
+    dataset: { manualOverride: 'false' },
+  }]));
+  const context = {
+    Math,
+    parseFloat,
+    document: { getElementById: (id) => elements.get(id) || null },
+    normalizarTipoCarga: () => 'general',
+    window: {},
+  };
+
+  vm.runInNewContext(`${source}; globalThis.podRate = calcularRitmoEfectivo('pod');`, context);
+
+  assert.equal(context.podRate, 3000);
+});
+
+test('method base-rate dictionary drives automatic POL and POD rates', () => {
+  assert.match(indexSource, /const methodBaseRates = Object\.freeze\(\{[\s\S]*?'Cinta Transportadora': 5000[\s\S]*?'Grúa Portuaria 30MT': 2500[\s\S]*?'Cuchara \(Grab\) - Grúa Barco': 1500[\s\S]*?'Big Bags \(con Grúa\)': 1000[\s\S]*?'Paletizado \/ Piezas \(con Grúa\)': 800[\s\S]*?'Hierro\/Acero\/Piezas': 1200[\s\S]*?'Camión Tolva': 'custom'/);
+  assert.match(indexSource, /id="metodo_carga"[^>]*onchange="handlePortMethodChange\('pol'\)"/);
+  assert.match(indexSource, /id="metodo_descarga_pod"[^>]*onchange="handlePortMethodChange\('pod'\)"/);
+  assert.match(indexSource, /function marcarGruasManual[\s\S]*?setRitmoManualIndicator\(side, false\);[\s\S]*?recalcularDiasPuerto\(\)/);
+  assert.match(indexSource, /return metodoPuertoUsaGruas\(metodo\) \? ritmoUnitario \* numeroGruas : ritmoUnitario/);
 });
 
 test('cargo dictionary contains SF and lifting requirements', () => {
