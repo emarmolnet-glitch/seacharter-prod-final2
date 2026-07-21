@@ -1,0 +1,215 @@
+.ais-commercial-layout {
+    position: relative;
+    display: grid;
+    gap: 1rem;
+}
+
+.ais-commercial-layout__calculator {
+    min-width: 0;
+}
+
+.ais-market-reference-widget {
+    align-self: start;
+    overflow: hidden;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.75rem;
+    background: #f8fafc;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+    color: #0f172a;
+}
+
+.ais-market-reference-widget__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem;
+    padding: 0.62rem 0.75rem;
+    border-bottom: 1px solid #dbe3ec;
+    background: #f1f5f9;
+}
+
+.ais-market-reference-widget__eyebrow {
+    flex: 0 0 auto;
+    padding: 0.2rem 0.38rem;
+    border: 1px solid #a7f3d0;
+    border-radius: 999px;
+    background: #ecfdf5;
+    color: #047857;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.48rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+}
+
+.ais-market-reference-widget__title {
+    min-width: 0;
+    margin: 0;
+    color: #0f172a;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    line-height: 1.1;
+    text-orientation: mixed;
+    white-space: nowrap;
+    writing-mode: horizontal-tb;
+}
+
+.ais-market-reference-widget__scenarios {
+    display: grid;
+    gap: 0.45rem;
+    padding: 0.58rem;
+}
+
+.ais-market-reference-widget__scenario {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.25rem 0.75rem;
+    padding: 0.58rem 0.65rem;
+    border: 1px solid #e2e8f0;
+    border-left-width: 3px;
+    border-radius: 0.6rem;
+    background: #ffffff;
+    transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.ais-market-reference-widget__scenario:hover {
+    transform: translateY(-1px);
+    border-color: #cbd5e1;
+    box-shadow: 0 5px 14px rgba(15, 23, 42, 0.08);
+}
+
+.ais-market-reference-widget__scenario--optimal {
+    border-left-color: #10b981;
+    background: #f0fdf4;
+}
+
+.ais-market-reference-widget__scenario--standard {
+    border-left-color: #3b82f6;
+}
+
+.ais-market-reference-widget__scenario--warning {
+    border-left-color: #f59e0b;
+    background: #fffbeb;
+}
+
+.ais-market-reference-widget__scenario-content {
+    min-width: 0;
+}
+
+.ais-market-reference-widget__scenario-label,
+.ais-market-reference-widget__scenario-description {
+    display: block;
+}
+
+.ais-market-reference-widget__scenario-label {
+    color: #1e293b;
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.ais-market-reference-widget__scenario-description {
+    margin-top: 0.12rem;
+    overflow: hidden;
+    color: #64748b;
+    font-size: 0.56rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ais-market-reference-widget__rate {
+    color: #0f172a;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.94rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.04em;
+}
+
+.ais-market-reference-widget__scenario--optimal .ais-market-reference-widget__rate {
+    color: #047857;
+}
+
+.ais-market-reference-widget__unit {
+    grid-column: 1;
+    color: #64748b;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.52rem;
+    letter-spacing: 0.08em;
+}
+
+.ais-market-reference-widget__apply {
+    grid-column: 2;
+    min-width: 4.2rem;
+    padding: 0.38rem 0.68rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.42rem;
+    background: #f8fafc;
+    color: #334155;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.ais-market-reference-widget__apply:hover:not(:disabled) {
+    border-color: #94a3b8;
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.ais-market-reference-widget__apply:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.ais-market-reference-widget__apply:focus-visible {
+    outline: 2px solid #10b981;
+    outline-offset: 2px;
+}
+
+.ais-market-reference-widget__apply:disabled {
+    color: #94a3b8;
+    cursor: not-allowed;
+    opacity: 0.68;
+}
+
+.ais-market-reference-widget__scenario--optimal .ais-market-reference-widget__apply:not(:disabled) {
+    border-color: #6ee7b7;
+    background: #ecfdf5;
+    color: #047857;
+}
+
+.ais-market-reference-widget__status {
+    min-height: 1.9rem;
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    border-top: 1px solid #dbe3ec;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 0.6rem;
+    line-height: 1.35;
+}
+
+.ais-market-reference-widget__status[data-state='synced'],
+.ais-market-reference-widget__status[data-state='success'] {
+    color: #047857;
+}
+
+.ais-market-reference-widget__status[data-state='error'] {
+    color: #b91c1c;
+}
+
+@media (min-width: 1280px) {
+    .ais-commercial-layout {
+        grid-template-columns: minmax(0, 1fr) 19rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ais-market-reference-widget__scenario,
+    .ais-market-reference-widget__apply {
+        transition: none;
+    }
+}

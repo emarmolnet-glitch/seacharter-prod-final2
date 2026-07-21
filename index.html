@@ -86,7 +86,9 @@
     <script src="https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js"></script>
     <link rel="stylesheet" href="./assets/css/density-globe.css?v=20260716-radar-tooltip-visible">
     <link rel="stylesheet" href="./assets/css/contextual-feedback.css?v=20260717-ui-hotfix">
+    <link rel="stylesheet" href="./ais-market-reference-widget.css?v=20260721">
     <script type="module" src="./cargo-taxonomy.mjs"></script>
+    <script type="module" src="./AisMarketReferenceWidget.ts"></script>
     <script src="./GlobalFleetGlobe.js"></script>
     <script type="module" src="./map_loader.js"></script>
     <!-- Maritime Routing Library -->
@@ -8652,6 +8654,8 @@
                         </div>
                         <div class="absolute top-0 right-0 w-16 h-16 bg-emerald-500/10 rounded-bl-full"></div>
                         
+                        <div class="ais-commercial-layout">
+                            <div class="ais-commercial-layout__calculator">
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                             <!-- Flete Armador -->
                             <div class="col-span-2 md:col-span-2">
@@ -8753,6 +8757,9 @@
                                 </details>
                                 <div id="owner-purchase-effectiveness" class="mt-3 rounded-md border border-slate-700 bg-slate-950/40 px-2 py-1.5 text-[10px] font-bold text-slate-400">Efectividad de Compra: -</div>
                             </div>
+                        </div>
+                            </div>
+                            <aside id="ais-market-reference-widget"></aside>
                         </div>
                     </div>
 
@@ -40912,6 +40919,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (rateOffMarketEl) rateOffMarketEl.innerText = `$${rateOffMarket.toFixed(2)}`;
             const pctOffMarketEl = document.getElementById('ais-pct-offmarket');
             if (pctOffMarketEl) pctOffMarketEl.innerText = `${pctOffMarket >= 0 ? '+' : ''}${pctOffMarket}%`;
+
+            const aisMarketFreightRates = Object.freeze({
+                fair: rateJusto,
+                standard: rateStandard,
+                offmarket: rateOffMarket
+            });
+            window.aisMarketFreightRates = aisMarketFreightRates;
+            window.dispatchEvent(new CustomEvent('AIS_MARKET_RATES_UPDATED', {
+                detail: aisMarketFreightRates
+            }));
         }
 
         window.applyAisFreightOptionToEstimator = function(type) {
@@ -41348,6 +41365,23 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const margin = parseFloat(marginPercent) || 0;
             return base * (1 + (margin / 100));
         }
+
+        function syncChartererFreightFromOwner(ownerFreight) {
+            const ownerRate = Math.max(0, parseFloat(ownerFreight) || 0);
+            const chartererFreightInput = document.getElementById('freight-sell');
+            const chartererMarginInput = document.getElementById('margin-charterer');
+            if (!(ownerRate > 0) || !chartererFreightInput || !chartererMarginInput) return null;
+
+            const chartererMarginPercent = Math.max(0, parseFloat(chartererMarginInput.value) || 0);
+            const chartererFreight = calcularPrecioObjetivo(ownerRate, chartererMarginPercent);
+            if (!Number.isFinite(chartererFreight) || chartererFreight <= 0) return null;
+
+            chartererFreightInput.value = chartererFreight.toFixed(2);
+            delete chartererFreightInput.dataset.marginSynced;
+            chartererFreightInput.dataset.aisOwnerPropagated = 'true';
+            return chartererFreight;
+        }
+        window.syncChartererFreightFromOwner = syncChartererFreightFromOwner;
 
         const BUNKER_INDEX_ADJUSTMENT_SHARE = 0.5;
         const BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT = 5;
