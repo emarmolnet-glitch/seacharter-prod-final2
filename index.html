@@ -7690,21 +7690,28 @@
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                             <div class="input-group">
                                 <label id="label-cargo-qty" class="text-action-required flex items-center min-h-[24px]">Carga a Transportar (TM)</label>
                                 <input type="number" id="cargo-qty" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="0" step="any" oninput="autoScaleVesselAndCosts(); syncCalculatorAndMatching('calculator'); recalcularDiasPuerto(); actualizarModuloCamionTolva();" onblur="detectVesselSegmentFromInputs()">
                             </div>
                             <div class="input-group">
-                                <label id="label-cargo-type" class="text-action-required flex items-center min-h-[24px]">Tipo de Carga</label>
-                                <select id="cargo-type" class="input-gc action-required-field required-use-highlight text-action-required" onchange="autoAdjustSF(); autoPopulateRouteLimits(); actualizarCamposTipoCarga(); syncCalculatorAndMatching('calculator');">
-                                    <option value="" selected>Selecciona un tipo de carga</option>
-                                    <option value="Granel Sólido (Dry Bulk)">Granel Sólido (Dry Bulk - Cement, Grain, Coal)</option>
-                                    <option value="Granel Líquido (Liquid Bulk)">Granel Líquido (Liquid Bulk - Benzene, Chemicals, Oil)</option>
-                                    <option value="Hierro/Acero">Hierro/Acero</option>
-                                    <option value="Big Bags (in Big Bag)">Big Bags (in Big Bag)</option>
-                                    <option value="Paletizada (palletized)">Paletizada (palletized)</option>
-                                    <option value="Proyecto">Proyecto / Medidas Especiales</option>
+                                <label id="label-cargo-type" class="text-action-required flex items-center min-h-[24px]">Categoría de Carga</label>
+                                <select id="cargo-type" class="input-gc action-required-field required-use-highlight text-action-required" required aria-required="true" onchange="populateCargoProducts(); autoPopulateRouteLimits(); syncCalculatorAndMatching('calculator');">
+                                    <option value="">Selecciona una categoría</option>
+                                    <option value="Minerales y Construcción" selected>Minerales y Construcción</option>
+                                    <option value="Biomasa y Combustibles Sólidos">Biomasa y Combustibles Sólidos</option>
+                                    <option value="Carga Siderúrgica y Metales">Carga Siderúrgica y Metales</option>
+                                    <option value="Carga Unitizada / Envasada">Carga Unitizada / Envasada</option>
+                                    <option value="Carga de Proyecto (Breakbulk)">Carga de Proyecto (Breakbulk)</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label id="label-cargo-product" class="text-action-required flex items-center min-h-[24px]">Producto Específico</label>
+                                <select id="cargo-product" class="input-gc action-required-field required-use-highlight text-action-required" required aria-required="true" onchange="applySelectedCargoProduct(); syncCalculatorAndMatching('calculator');">
+                                    <option value="Cemento a granel" selected>Cemento a granel</option>
+                                    <option value="Clínker">Clínker</option>
+                                    <option value="Yeso">Yeso</option>
                                 </select>
                             </div>
                             <div class="input-group">
@@ -7842,9 +7849,9 @@
                                 <label id="label-current-draft" class="text-blue-400">Calado Actual (m)</label>
                                 <input type="number" id="current-draft" class="input-gc font-bold text-blue-300" value="0" step="0.01" oninput="runEngine()">
                             </div>
-                            <div class="input-group">
+                            <div id="contenedor-crane-swl" class="input-group hidden" style="display: none;">
                                 <label id="label-crane-swl" class="text-amber-400">Crane SWL (MT)</label>
-                                <input type="number" id="crane-swl-mt" class="input-gc font-bold text-amber-300" value="0" step="0.1" oninput="runEngine()">
+                                <input type="number" id="crane-swl-mt" class="input-gc font-bold text-amber-300" value="0" min="0" step="0.1" disabled oninput="recalcularDiasPuerto()">
                             </div>
                             <div class="input-group">
                                 <label id="label-grab-capacity" class="text-amber-400">Grab Capacity (cbm)</label>
@@ -7852,7 +7859,7 @@
                             </div>
                             <div id="contenedor-peso-pieza" class="input-group hidden">
                                 <label id="label-peso-pieza" class="text-amber-400">Peso por pieza (MT)</label>
-                                <input type="number" id="peso-pieza-mt" class="input-gc font-bold text-amber-300" value="0" step="0.1" oninput="recalcularDiasPuerto()">
+                                <input type="number" id="peso-pieza-mt" class="input-gc font-bold text-amber-300" value="0" min="0" step="0.1" disabled oninput="recalcularDiasPuerto()">
                             </div>
                             <div id="contenedor-ciclos-hora" class="input-group hidden" style="display: none;">
                                 <label id="label-ciclos-hora" class="text-amber-400">Ciclos/Hora Grúa</label>
@@ -13088,6 +13095,7 @@
             distBallast: 0, distLaden: 0, totalDays: 0,
             cargo: 0, stowageFactor: 1.20, cargoTolerance: 0, loadRate: 0, dischRate: 0,
             cargoType: "",
+            cargoProduct: "",
             cargoTypeCode: "100",
             cargoTypeManual: "Otros",
             charterPartyStandard: "GENCON",
@@ -13368,7 +13376,8 @@
                 'asb-cancel-time', 'nombre-buque-calculadora',
                 'vessel-name', 'vessel-flag'
             ].forEach((id) => setInputValue(id, ''));
-            setInputValue('cargo-type', 'Granel Sólido (Dry Bulk)');
+            setInputValue('cargo-type', 'Minerales y Construcción');
+            populateCargoProducts('Cemento a granel');
             setInputValue('cargo-type-manual', '100');
             window.CargoTypeSelector?.persistSelection('100');
             setInputValue('charter-party-standard', 'GENCON');
@@ -23461,7 +23470,110 @@
             updateCargoUnit();
         }
 
-        function autoAdjustSF() {
+        const cargoDictionary = {
+            "Minerales y Construcción": [
+                { nombre: "Cemento a granel", sf: 0.70, requiresPieceWeight: false },
+                { nombre: "Clínker", sf: 0.85, requiresPieceWeight: false },
+                { nombre: "Yeso", sf: 0.90, requiresPieceWeight: false }
+            ],
+            "Biomasa y Combustibles Sólidos": [
+                { nombre: "Biomasa (Grignon, Astillas, Pellets)", sf: 1.85, requiresPieceWeight: false },
+                { nombre: "Carbón mineral", sf: 1.20, requiresPieceWeight: false }
+            ],
+            "Carga Siderúrgica y Metales": [
+                { nombre: "Bobinas de Acero (Steel Coils)", sf: 0.35, requiresPieceWeight: true },
+                { nombre: "Tubos de Acero (Steel Pipes)", sf: 0.60, requiresPieceWeight: true },
+                { nombre: "Hierro / Chatarra", sf: 0.50, requiresPieceWeight: false }
+            ],
+            "Carga Unitizada / Envasada": [
+                { nombre: "Big Bags (Minerales/Cemento)", sf: 0.95, requiresPieceWeight: false },
+                { nombre: "Carga Paletizada", sf: 1.40, requiresPieceWeight: false }
+            ],
+            "Carga de Proyecto (Breakbulk)": [
+                { nombre: "Piezas Especiales / Maquinaria", sf: 2.00, requiresPieceWeight: true }
+            ]
+        };
+
+        const TURN_TIME_OPTIONS = Object.freeze([
+            Object.freeze({ value: 12, label: '12 horas' }),
+            Object.freeze({ value: 24, label: '24 horas' }),
+            Object.freeze({ value: 48, label: '48 horas' })
+        ]);
+
+        function replaceSelectOptions(select, options) {
+            if (!select) return;
+            const fragment = document.createDocumentFragment();
+            options.forEach(({ value, label }) => {
+                const option = document.createElement('option');
+                option.value = String(value);
+                option.textContent = label;
+                fragment.appendChild(option);
+            });
+            select.replaceChildren(fragment);
+        }
+
+        function enforceTurnTimeOptions() {
+            const turnTimeEl = document.getElementById('turn-time-hours');
+            if (!turnTimeEl) return;
+            const currentValue = TURN_TIME_OPTIONS.some(({ value }) => String(value) === turnTimeEl.value)
+                ? turnTimeEl.value
+                : '24';
+            replaceSelectOptions(turnTimeEl, TURN_TIME_OPTIONS);
+            turnTimeEl.value = currentValue;
+        }
+
+        function getSelectedCargoProduct() {
+            const category = document.getElementById('cargo-type')?.value || '';
+            const productName = document.getElementById('cargo-product')?.value || '';
+            return (cargoDictionary[category] || []).find((product) => product.nombre === productName) || null;
+        }
+
+        function populateCargoProducts(preferredProduct = '') {
+            const categoryEl = document.getElementById('cargo-type');
+            const productEl = document.getElementById('cargo-product');
+            if (!categoryEl || !productEl) return;
+            enforceTurnTimeOptions();
+            const products = (cargoDictionary[categoryEl.value] || []).map((product) => ({ ...product }));
+            const selectedProduct = preferredProduct || productEl.value;
+            replaceSelectOptions(productEl, products.map((product) => ({ value: product.nombre, label: product.nombre })));
+            productEl.disabled = products.length === 0;
+            if (products.some((product) => product.nombre === selectedProduct)) productEl.value = selectedProduct;
+            applySelectedCargoProduct();
+        }
+
+        function restoreCargoSelection(category = '', product = '') {
+            const categoryEl = document.getElementById('cargo-type');
+            if (!categoryEl) return;
+            const normalized = String(category || '').toLowerCase();
+            let resolvedCategory = cargoDictionary[category] ? category : 'Minerales y Construcción';
+            let resolvedProduct = product;
+            if (!cargoDictionary[category]) {
+                if (normalized.includes('cemento') || normalized.includes('yeso') || normalized.includes('clinker') || normalized.includes('clínker')) resolvedCategory = 'Minerales y Construcción';
+                if (normalized.includes('combustible') || normalized.includes('carbon') || normalized.includes('carbón') || normalized.includes('biomasa')) resolvedCategory = 'Biomasa y Combustibles Sólidos';
+                if (normalized.includes('acero') || normalized.includes('hierro')) resolvedCategory = 'Carga Siderúrgica y Metales';
+                if (normalized.includes('big bag') || normalized.includes('palet') || normalized.includes('unitizada')) resolvedCategory = 'Carga Unitizada / Envasada';
+                if (normalized.includes('proyecto') || normalized.includes('especial') || normalized.includes('breakbulk')) resolvedCategory = 'Carga de Proyecto (Breakbulk)';
+                if (!resolvedProduct && normalized.includes('big bag')) resolvedProduct = 'Big Bags (Minerales/Cemento)';
+                if (!resolvedProduct && normalized.includes('palet')) resolvedProduct = 'Carga Paletizada';
+                if (!resolvedProduct && normalized.includes('acero')) resolvedProduct = 'Bobinas de Acero (Steel Coils)';
+                if (!resolvedProduct && normalized.includes('proyecto')) resolvedProduct = 'Piezas Especiales / Maquinaria';
+            }
+            if (resolvedProduct === "Grignon d'olive (Biomasa)") resolvedProduct = 'Biomasa (Grignon, Astillas, Pellets)';
+            if (resolvedProduct === 'Big Bags (Jumbo Bags - Minerales/Cemento)') resolvedProduct = 'Big Bags (Minerales/Cemento)';
+            categoryEl.value = resolvedCategory;
+            populateCargoProducts(resolvedProduct);
+        }
+
+        function applySelectedCargoProduct() {
+            const product = getSelectedCargoProduct();
+            const sfInput = document.getElementById('cargo-sf');
+            if (sfInput && product) sfInput.value = product.sf.toFixed(2);
+            autoAdjustSF();
+            actualizarCamposTipoCarga();
+            recalcularDiasPuerto();
+        }
+
+        function autoAdjustSFLegacy() {
             const type = document.getElementById('cargo-type').value;
             let sf = 1.20;
             const surchargeEl = document.getElementById('cargo-surcharge');
@@ -23532,6 +23644,44 @@
 
             updateCargoUnit(true);
             runEngine();
+        }
+
+        function autoAdjustSF() {
+            const category = document.getElementById('cargo-type')?.value || '';
+            const product = getSelectedCargoProduct();
+            const productName = product?.nombre || '';
+            const packingEl = document.getElementById('gc-add-packing');
+            const surchargeEl = document.getElementById('cargo-surcharge');
+            const marginOwnerEl = document.getElementById('margin-owner');
+            const marginChartererEl = document.getElementById('margin-charterer');
+            const selectedProfile = typeof getSelectedCoaClientProfile === 'function' ? getSelectedCoaClientProfile() : null;
+
+            if (packingEl) {
+                packingEl.value = productName.includes('Big Bags')
+                    ? 'bigbag'
+                    : (productName.includes('Paletizada') ? 'pallet' : (category === 'Carga de Proyecto (Breakbulk)' ? 'special' : 'standard'));
+            }
+            if (surchargeEl) {
+                if (category === 'Carga de Proyecto (Breakbulk)' && (parseFloat(surchargeEl.value) === 0 || !surchargeEl.value)) surchargeEl.value = 15000;
+                if (category !== 'Carga de Proyecto (Breakbulk)') surchargeEl.value = 0;
+            }
+            if (marginOwnerEl) marginOwnerEl.value = selectedProfile ? Number(selectedProfile.ownerMarginPercent || 0).toFixed(2) : DEFAULT_OWNER_MARGIN_PERCENT;
+            if (marginChartererEl) marginChartererEl.value = selectedProfile ? Number(selectedProfile.chartererMarginPercent || 0).toFixed(2) : DEFAULT_CHARTERER_MARGIN_PERCENT;
+
+            const cpStandardEl = document.getElementById('charter-party-standard');
+            if (cpStandardEl) cpStandardEl.value = 'GENCON';
+            updateCargoUnit(true);
+            runEngine();
+        }
+
+        if (typeof window !== 'undefined') {
+            window.cargoDictionary = cargoDictionary;
+            window.TURN_TIME_OPTIONS = TURN_TIME_OPTIONS;
+            window.getSelectedCargoProduct = getSelectedCargoProduct;
+            window.populateCargoProducts = populateCargoProducts;
+            window.restoreCargoSelection = restoreCargoSelection;
+            window.applySelectedCargoProduct = applySelectedCargoProduct;
+            window.enforceTurnTimeOptions = enforceTurnTimeOptions;
         }
 
         function updateCharterPartyStandard() {
@@ -26032,7 +26182,7 @@
             // T_sea (Total underway time spent: ballast + laden + weather margin days)
             const T_sea = isZeroCalculation ? 0 : (dBal + dLaden + marginDays);
             // T_port (base port operations plus Smart Adjustments that extend port stay)
-            const T_port = isZeroCalculation ? 0 : adjustedPortDays;
+            const T_port = isZeroCalculation ? 0 : laytimeDays;
             const T_portFuel = isZeroCalculation ? 0 : (dPortTotal + smartDeltaDays);
             const totalDays = isZeroCalculation ? 0 : (T_sea + T_port);
             const smartOperationalDays = totalDays;
@@ -26666,6 +26816,7 @@
             State.stowageFactor = stowageFactor;
             State.cargoTolerance = cargoTolerance;
             State.cargoType = document.getElementById('cargo-type').value;
+            State.cargoProduct = document.getElementById('cargo-product')?.value || '';
             State.cargoTypeCode = document.getElementById('cargo-type-manual')?.value.trim() || '100';
             State.cargoTypeManual = window.getCargoTaxonomyLabel?.(State.cargoTypeCode) || 'Otros';
             State.charterPartyStandard = document.getElementById('charter-party-standard') ? document.getElementById('charter-party-standard').value : (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
@@ -34094,7 +34245,7 @@ Example:
                     setVal('spd-ballast', State.spdBallast !== undefined ? State.spdBallast : 11);
                     setVal('spd-laden', State.spdLaden !== undefined ? State.spdLaden : 11);
                     setVal('cargo-qty', State.cargo);
-                    setVal('cargo-type', State.cargoType);
+                    restoreCargoSelection(State.cargoType, State.cargoProduct);
                     setVal('charter-party-standard', State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON'));
                     setVal('rate-load', State.loadRate !== undefined ? State.loadRate : 1000);
                     setVal('rate-disch', State.dischRate !== undefined ? State.dischRate : 1500);
@@ -35114,7 +35265,7 @@ ADDITIONAL NOTES:
             setVal('spd-ballast', State.spdBallast !== undefined ? State.spdBallast : 11);
             setVal('spd-laden', State.spdLaden !== undefined ? State.spdLaden : 11);
             setVal('cargo-qty', State.cargo);
-            setVal('cargo-type', State.cargoType);
+            restoreCargoSelection(State.cargoType, State.cargoProduct);
             setVal('cargo-type-manual', window.resolveCargoTaxonomyId?.(State.cargoTypeCode || State.cargoTypeManual) || '100');
             setVal('charter-party-standard', State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON'));
             setVal('rate-load', State.loadRate !== undefined ? State.loadRate : 1000);
@@ -42851,7 +43002,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
         }
 
-        function normalizarTipoCarga(value = document.getElementById('cargo-type')?.value) {
+        function normalizarTipoCarga(value = `${document.getElementById('cargo-type')?.value || ''} ${document.getElementById('cargo-product')?.value || ''}`) {
             const normalized = String(value || '')
                 .normalize('NFD')
                 .replace(/[\u0300-\u036f]/g, '')
@@ -42973,18 +43124,19 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function actualizarAdvertenciaSwl() {
             const alert = document.getElementById('crane-validation-alert');
             if (!alert) return;
-            const tipoCarga = normalizarTipoCarga();
+            const requiresPieceWeight = Boolean(getSelectedCargoProduct()?.requiresPieceWeight);
             const pesoPieza = Math.max(0, parseFloat(document.getElementById('peso-pieza-mt')?.value) || 0);
             const ciclosHora = Math.max(0, parseFloat(document.getElementById('ciclos-hora-grua')?.value) || 0);
             const craneSwl = Math.max(0, parseFloat(document.getElementById('crane-swl-mt')?.value) || 0);
-            const missingSteelInputs = tipoCarga === 'acero' && (pesoPieza <= 0 || ciclosHora <= 0);
-            const highRisk = tipoCarga === 'acero' && pesoPieza > 0 && craneSwl > 0 && pesoPieza > craneSwl;
+            const missingPieceInputs = requiresPieceWeight && (pesoPieza <= 0 || craneSwl <= 0);
+            const missingSteelCycles = normalizarTipoCarga() === 'acero' && requiresPieceWeight && ciclosHora <= 0;
+            const highRisk = requiresPieceWeight && pesoPieza > 0 && craneSwl > 0 && pesoPieza > craneSwl;
             ['peso-pieza-mt', 'crane-swl-mt'].forEach((id) => {
                 const input = document.getElementById(id);
                 if (input) input.classList.toggle('border-red-500', highRisk);
             });
             alert.classList.toggle('border-red-500', highRisk);
-            if (!highRisk && !missingSteelInputs) {
+            if (!highRisk && !missingPieceInputs && !missingSteelCycles) {
                 alert.classList.add('hidden');
                 alert.classList.remove('border-red-300', 'border-red-500', 'bg-red-50', 'text-red-800');
                 alert.textContent = '';
@@ -42992,8 +43144,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
             alert.classList.remove('hidden', 'border-emerald-300', 'bg-emerald-50', 'text-emerald-800');
             alert.classList.add('border-red-300', 'border-red-500', 'bg-red-50', 'text-red-800');
-            alert.textContent = missingSteelInputs
-                ? 'RIESGO ALTO: define Peso por pieza y Ciclos/hora para calcular Hierro/Acero.'
+            alert.textContent = missingPieceInputs
+                ? 'RIESGO ALTO: define Peso por pieza y Crane SWL para validar los medios de izado.'
+                : missingSteelCycles
+                    ? 'RIESGO ALTO: define Ciclos/hora para calcular el ritmo de la carga siderúrgica.'
                 : `RIESGO ALTO: Excede SWL. Peso por pieza ${pesoPieza.toFixed(2)} MT > Crane SWL ${craneSwl.toFixed(2)} MT.`;
         }
 
@@ -43001,19 +43155,35 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const tipoCarga = normalizarTipoCarga();
             const isAcero = tipoCarga === 'acero';
             const isProyecto = tipoCarga === 'proyecto';
+            const requiresPieceWeight = Boolean(getSelectedCargoProduct()?.requiresPieceWeight);
             const toggle = (id, show) => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.classList.toggle('hidden', !show);
                 el.style.display = show ? '' : 'none';
             };
-            toggle('contenedor-peso-pieza', isAcero);
-            toggle('contenedor-ciclos-hora', isAcero);
+            toggle('contenedor-peso-pieza', requiresPieceWeight);
+            toggle('contenedor-crane-swl', requiresPieceWeight);
+            toggle('contenedor-ciclos-hora', isAcero && requiresPieceWeight);
             toggle('contenedor-trincaje', isAcero || isProyecto);
             toggle('contenedor-maniobra-especial', isProyecto);
             toggle('contenedor-dias-preparacion', isProyecto);
             const specialInput = document.getElementById('coste-maniobra-especial');
             const prepInput = document.getElementById('dias-preparacion');
+            ['peso-pieza-mt', 'crane-swl-mt'].forEach((id) => {
+                const input = document.getElementById(id);
+                if (!input) return;
+                input.required = requiresPieceWeight;
+                input.disabled = !requiresPieceWeight;
+                input.setAttribute('aria-required', String(requiresPieceWeight));
+                if (!requiresPieceWeight) input.value = '0';
+            });
+            const cyclesInput = document.getElementById('ciclos-hora-grua');
+            if (cyclesInput) {
+                cyclesInput.required = isAcero && requiresPieceWeight;
+                cyclesInput.disabled = !(isAcero && requiresPieceWeight);
+                if (cyclesInput.disabled) cyclesInput.value = '0';
+            }
             if (specialInput) specialInput.readOnly = !isProyecto;
             if (prepInput) prepInput.readOnly = !isProyecto;
             actualizarAdvertenciaSwl();
@@ -43054,7 +43224,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const metodoPol = getMetodoEstibaActual();
             const metodoPod = getMetodoDescargaActual();
             const activeId = document.activeElement?.id || '';
-            const forceAutoGruas = ['cargo-qty', 'cargo-type', 'metodo_carga', 'metodo_descarga_pod'].includes(activeId);
+            const forceAutoGruas = ['cargo-qty', 'cargo-type', 'cargo-product', 'metodo_carga', 'metodo_descarga_pod'].includes(activeId);
             aplicarGruasSugeridasPuerto('pol', { force: forceAutoGruas });
             aplicarGruasSugeridasPuerto('pod', { force: forceAutoGruas });
             const ritmoRealPol = calcularRitmoEfectivo('pol');
@@ -43910,7 +44080,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const adjustedPortDays = isZeroCalculation ? 0 : (dPortTotal + smartAnchorageDays + smartDeltaDays);
 
             const T_sea = isZeroCalculation ? 0 : (dBal + dLaden + marginDays);
-            const T_port = isZeroCalculation ? 0 : adjustedPortDays;
+            const T_port = isZeroCalculation ? 0 : laytimeDays;
             const T_portFuel = isZeroCalculation ? 0 : (dPortTotal + smartDeltaDays);
             const baseOperationalDays = isZeroCalculation ? 0 : (dBal + dLaden + dPortTotal);
             const totalDays = isZeroCalculation ? 0 : (T_sea + T_port);
@@ -44906,7 +45076,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             'port-pod': 'Puerto de origen y destino. El sistema los usa para autodetectar tránsitos por canal.',
             'vessel-dwt': 'Peso muerto del buque (Deadweight). Tonelaje máximo comercial.',
             'cargo-qty': 'Cantidad de mercancía a granel a cargar. Afecta al calado y Break-Even.',
-            'cargo-type': 'Clasificación operativa de la mercancía. Activa factores de estiba, trincaje y riesgos.',
+            'cargo-type': 'Categoría principal usada para filtrar el catálogo de productos y aplicar reglas operativas.',
+            'cargo-product': 'Producto específico que autocompleta el factor de estiba y activa los controles de izado necesarios.',
             'charter-party-standard': 'Formulario contractual base. Ajusta laytime, demoras y supuestos de póliza.',
             'metodo_carga': 'Sistema físico usado en POL. Aplica el factor de productividad sobre el ritmo nominal.',
             'ritmo_nominal_pol': 'Número de grúas operativas que multiplican el ritmo base del método de carga.',
@@ -45861,7 +46032,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 el.value = '0';
             });
 
-            ['cargo-qty', 'cargo-type', 'metodo_carga', 'metodo_descarga_pod', 'ritmo_nominal_pol', 'ritmo_nominal_pod', 'peso-pieza-mt', 'ciclos-hora-grua', 'crane-swl-mt', 'input-trincaje', 'coste-maniobra-especial', 'dias-preparacion', 'coa-num-embarques', 'coa-total-tm', 'target-margin', 'apply-bunkerindex-adjustment', 'price-sea', 'price-ifo', 'price-port', 'cons-sea', 'cons-port', 'cons-anchorage', 'cons-anchorage-aux'].forEach((id) => {
+            ['cargo-qty', 'cargo-type', 'cargo-product', 'turn-time-hours', 'metodo_carga', 'metodo_descarga_pod', 'ritmo_nominal_pol', 'ritmo_nominal_pod', 'peso-pieza-mt', 'ciclos-hora-grua', 'crane-swl-mt', 'input-trincaje', 'coste-maniobra-especial', 'dias-preparacion', 'coa-num-embarques', 'coa-total-tm', 'target-margin', 'apply-bunkerindex-adjustment', 'price-sea', 'price-ifo', 'price-port', 'cons-sea', 'cons-port', 'cons-anchorage', 'cons-anchorage-aux'].forEach((id) => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.addEventListener('input', function() {
@@ -45877,6 +46048,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 vesselDwtInput.addEventListener('change', updateVesselPricingRouter);
             }
             setOperacionModo('SPOT');
+            enforceTurnTimeOptions();
+            restoreCargoSelection(State.cargoType, State.cargoProduct);
             recalcularDiasPuerto();
             actualizarCamposTipoCarga();
             setCalculatorWaitingState();

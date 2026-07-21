@@ -399,12 +399,8 @@
         const fallbackResult = applyTechnicalFallbacks(state);
         const effectiveState = fallbackResult.state;
         effectiveState.turn_time_days = Math.max(0, toNumber(effectiveState.turn_time_hours)) / 24;
-        const cargoKind = normalizeCargoType(effectiveState.tipo_carga);
         effectiveState.dias_puerto_total = toNumber(effectiveState.dias_puerto) +
-            effectiveState.turn_time_days +
-            (cargoKind === 'proyecto' ? toNumber(effectiveState.dias_preparacion) : 0) +
-            toNumber(effectiveState.t_espera_fondeo) +
-            toNumber(effectiveState.delta_historico);
+            effectiveState.turn_time_days;
         const canal = calculateCanalToll(effectiveState);
         const cranes = validateCranes(effectiveState);
         const tugs = inferTugCostByDwt(effectiveState.capacidad_dwt, state.coste_remolcadores_ud);
