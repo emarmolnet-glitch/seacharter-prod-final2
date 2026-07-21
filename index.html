@@ -7723,9 +7723,9 @@
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4 mb-4">
+                        <div id="port-operations-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 mb-4">
                             <div id="contenedor_metodo_carga" class="input-group">
-                                <label id="label-metodo-carga" class="text-action-required">Método Carga POL</label>
+                                <label id="label-metodo-carga" class="text-action-required flex items-center min-h-[24px]">Método Carga POL</label>
                                 <select id="metodo_carga" class="input-gc action-required-field required-use-highlight text-action-required" onchange="recalcularDiasPuerto(); actualizarModuloCamionTolva(); syncCalculatorAndMatching('calculator')">
                                     <option value="cinta_transportadora">Cinta Transportadora</option>
                                     <option value="camion_tolva">Camión Tolva</option>
@@ -7736,22 +7736,27 @@
                                     <option value="hierro_acero_piezas">Hierro/Acero/Piezas</option>
                                 </select>
                             </div>
-                            <div id="contenedor-gruas-pol" class="input-group">
-                                <label id="label-ritmo-nominal-pol" class="text-action-required">Nº Grúas POL</label>
-                                <input type="number" id="ritmo_nominal_pol" class="input-gc action-required-field text-action-required font-bold" value="1" min="1" step="1" required oninput="marcarGruasManual('pol')">
-                            </div>
                             <div class="input-group">
-                                <label id="label-rate-load" class="text-action-required">Ritmo Real POL (TM/d)</label>
+                                <label id="label-rate-load" class="text-action-required flex items-center min-h-[24px]">Ritmo Real POL (TM/d)</label>
                                 <input type="number" id="rate-load" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="2500" step="any" oninput="marcarRitmoManual('pol')">
                                 <p id="rate-load-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
                             </div>
-                            <div class="input-group">
-                                <label id="label-turn-time-hours" class="text-action-required">TURN TIME TOTAL (H)</label>
-                                <select id="turn-time-hours" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="runEngine(); syncCalculatorAndMatching('calculator')">
-                                    <option value="12">12 horas</option>
-                                    <option value="24" selected>24 horas</option>
-                                    <option value="48">48 horas</option>
+                            <div id="contenedor_metodo_descarga" class="input-group">
+                                <label id="label-metodo-descarga" class="text-action-required flex items-center min-h-[24px]">Método Descarga POD</label>
+                                <select id="metodo_descarga_pod" class="input-gc action-required-field required-use-highlight text-action-required" onchange="recalcularDiasPuerto(); syncCalculatorAndMatching('calculator')">
+                                    <option value="cinta_transportadora">Cinta Transportadora</option>
+                                    <option value="camion_tolva">Camión Tolva</option>
+                                    <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
+                                    <option value="grua_portuaria_30mt">Grúa Portuaria 30MT</option>
+                                    <option value="big_bags">Big Bags (con Grúa)</option>
+                                    <option value="paletizado">Paletizado / Piezas (con Grúa)</option>
+                                    <option value="hierro_acero_piezas">Hierro/Acero/Piezas</option>
                                 </select>
+                            </div>
+                            <div class="input-group">
+                                <label id="label-rate-disch" class="text-action-required flex items-center min-h-[24px]">Ritmo Real POD (TM/d)</label>
+                                <input type="number" id="rate-disch" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="2500" step="any" oninput="marcarRitmoManual('pod')">
+                                <p id="rate-disch-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
                             </div>
                         </div>
 
@@ -7791,31 +7796,7 @@
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 mb-4">
-                            <div id="contenedor_metodo_descarga" class="input-group">
-                                <label id="label-metodo-descarga" class="text-action-required">Método Descarga POD</label>
-                                <select id="metodo_descarga_pod" class="input-gc action-required-field required-use-highlight text-action-required" onchange="recalcularDiasPuerto(); syncCalculatorAndMatching('calculator')">
-                                    <option value="cinta_transportadora">Cinta Transportadora</option>
-                                    <option value="camion_tolva">Camión Tolva</option>
-                                    <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
-                                    <option value="grua_portuaria_30mt">Grúa Portuaria 30MT</option>
-                                    <option value="big_bags">Big Bags (con Grúa)</option>
-                                    <option value="paletizado">Paletizado / Piezas (con Grúa)</option>
-                                    <option value="hierro_acero_piezas">Hierro/Acero/Piezas</option>
-                                </select>
-                            </div>
-                            <div id="contenedor-gruas-pod" class="input-group">
-                                <label id="label-ritmo-nominal-pod" class="text-action-required">Nº Grúas POD</label>
-                                <input type="number" id="ritmo_nominal_pod" class="input-gc action-required-field text-action-required font-bold" value="1" min="1" step="1" required oninput="marcarGruasManual('pod')">
-                            </div>
-                            <div class="input-group">
-                                <label id="label-rate-disch" class="text-action-required">Ritmo Real POD (TM/d)</label>
-                                <input type="number" id="rate-disch" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="2500" step="any" oninput="marcarRitmoManual('pod')">
-                                <p id="rate-disch-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div id="contractual-parameters-grid" class="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div class="input-group">
                                 <label id="label-cargo-type-manual" class="text-action-required flex items-center min-h-[24px]">Especificación Carga</label>
                                 <select id="cargo-type-manual" data-cargo-type-selector="calculator" class="input-gc action-required-field required-use-highlight text-action-required font-bold cursor-pointer" required aria-required="true">
@@ -7834,8 +7815,24 @@
                                 </select>
                             </div>
                             <div class="input-group">
-                                <label id="label-cargo-sf">Stowage Factor</label>
+                                <label id="label-cargo-sf" class="flex items-center min-h-[24px]">Stowage Factor</label>
                                 <input type="number" id="cargo-sf" class="input-gc text-indigo-300" value="1.20" min="0" step="0.01" oninput="runEngine(); syncCalculatorAndMatching('calculator')">
+                            </div>
+                            <div class="input-group">
+                                <label id="label-turn-time-hours" class="text-action-required flex items-center min-h-[24px]">TURN TIME TOTAL (H)</label>
+                                <select id="turn-time-hours" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="runEngine(); syncCalculatorAndMatching('calculator')">
+                                    <option value="12">12 horas</option>
+                                    <option value="24" selected>24 horas</option>
+                                    <option value="48">48 horas</option>
+                                </select>
+                            </div>
+                            <div id="contenedor-gruas-pol" class="input-group">
+                                <label id="label-ritmo-nominal-pol" class="text-action-required flex items-center min-h-[24px]">Nº Grúas POL</label>
+                                <input type="number" id="ritmo_nominal_pol" class="input-gc action-required-field text-action-required font-bold" value="1" min="1" step="1" required oninput="marcarGruasManual('pol')">
+                            </div>
+                            <div id="contenedor-gruas-pod" class="input-group">
+                                <label id="label-ritmo-nominal-pod" class="text-action-required flex items-center min-h-[24px]">Nº Grúas POD</label>
+                                <input type="number" id="ritmo_nominal_pod" class="input-gc action-required-field text-action-required font-bold" value="1" min="1" step="1" required oninput="marcarGruasManual('pod')">
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-tolerance">Tolerancia de Carga · MOLOO / MOLCO (%)</label>
