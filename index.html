@@ -7726,7 +7726,19 @@
                         <div id="port-operations-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 mb-4">
                             <div id="contenedor_metodo_carga" class="input-group">
                                 <label id="label-metodo-carga" class="text-action-required flex items-center min-h-[24px]">Método Carga POL</label>
-                                <select id="metodo_carga" class="input-gc action-required-field required-use-highlight text-action-required" onchange="recalcularDiasPuerto(); actualizarModuloCamionTolva(); syncCalculatorAndMatching('calculator')">
+                                <select id="metodo_carga" class="input-gc action-required-field required-use-highlight text-action-required" onchange="handlePortMethodChange('pol')">
+                                    <option value="cinta_transportadora">Cinta Transportadora</option>
+                                    <option value="camion_tolva">Camión Tolva</option>
+                                    <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
+                                    <option value="grua_portuaria_30mt">Grúa Portuaria 30MT</option>
+                                    <option value="big_bags">Big Bags (con Grúa)</option>
+                                    <option value="paletizado">Paletizado / Piezas (con Grúa)</option>
+                                    <option value="hierro_acero_piezas">Hierro/Acero/Piezas</option>
+                                </select>
+                            </div>
+                            <div id="contenedor_metodo_descarga" class="input-group">
+                                <label id="label-metodo-descarga" class="text-action-required flex items-center min-h-[24px]">Método Descarga POD</label>
+                                <select id="metodo_descarga_pod" class="input-gc action-required-field required-use-highlight text-action-required" onchange="handlePortMethodChange('pod')">
                                     <option value="cinta_transportadora">Cinta Transportadora</option>
                                     <option value="camion_tolva">Camión Tolva</option>
                                     <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
@@ -7738,25 +7750,21 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-rate-load" class="text-action-required flex items-center min-h-[24px]">Ritmo Real POL (TM/d)</label>
-                                <input type="number" id="rate-load" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="2500" step="any" oninput="marcarRitmoManual('pol')">
+                                <input type="number" id="rate-load" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="5000" step="any" oninput="marcarRitmoManual('pol')">
                                 <p id="rate-load-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
-                            </div>
-                            <div id="contenedor_metodo_descarga" class="input-group">
-                                <label id="label-metodo-descarga" class="text-action-required flex items-center min-h-[24px]">Método Descarga POD</label>
-                                <select id="metodo_descarga_pod" class="input-gc action-required-field required-use-highlight text-action-required" onchange="recalcularDiasPuerto(); syncCalculatorAndMatching('calculator')">
-                                    <option value="cinta_transportadora">Cinta Transportadora</option>
-                                    <option value="camion_tolva">Camión Tolva</option>
-                                    <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
-                                    <option value="grua_portuaria_30mt">Grúa Portuaria 30MT</option>
-                                    <option value="big_bags">Big Bags (con Grúa)</option>
-                                    <option value="paletizado">Paletizado / Piezas (con Grúa)</option>
-                                    <option value="hierro_acero_piezas">Hierro/Acero/Piezas</option>
-                                </select>
                             </div>
                             <div class="input-group">
                                 <label id="label-rate-disch" class="text-action-required flex items-center min-h-[24px]">Ritmo Real POD (TM/d)</label>
-                                <input type="number" id="rate-disch" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="2500" step="any" oninput="marcarRitmoManual('pod')">
+                                <input type="number" id="rate-disch" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="5000" step="any" oninput="marcarRitmoManual('pod')">
                                 <p id="rate-disch-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
+                            </div>
+                            <div id="contenedor-gruas-pol" class="input-group">
+                                <label id="label-ritmo-nominal-pol" class="text-action-required flex items-center min-h-[24px]">Nº Grúas POL</label>
+                                <input type="number" id="ritmo_nominal_pol" class="input-gc action-required-field text-action-required font-bold" value="1" min="1" step="1" required oninput="marcarGruasManual('pol')">
+                            </div>
+                            <div id="contenedor-gruas-pod" class="input-group">
+                                <label id="label-ritmo-nominal-pod" class="text-action-required flex items-center min-h-[24px]">Nº Grúas POD</label>
+                                <input type="number" id="ritmo_nominal_pod" class="input-gc action-required-field text-action-required font-bold" value="1" min="1" step="1" required oninput="marcarGruasManual('pod')">
                             </div>
                         </div>
 
@@ -7826,13 +7834,45 @@
                                     <option value="48">48 horas</option>
                                 </select>
                             </div>
-                            <div id="contenedor-gruas-pol" class="input-group">
-                                <label id="label-ritmo-nominal-pol" class="text-action-required flex items-center min-h-[24px]">Nº Grúas POL</label>
-                                <input type="number" id="ritmo_nominal_pol" class="input-gc action-required-field text-action-required font-bold" value="1" min="1" step="1" required oninput="marcarGruasManual('pol')">
+                            <div class="input-group">
+                                <label id="label-freight-conditions" class="text-action-required flex items-center min-h-[24px]">Términos (Conditions)</label>
+                                <select id="freight-conditions" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="syncSharedCharterTerm('freight-conditions', ['gc-freight-term']); runEngine()">
+                                    <option value="FIO">FIO (Free In and Out)</option>
+                                    <option value="FIOS" selected>FIOS (Free In and Out Stowed)</option>
+                                    <option value="FIOT">FIOT (Free In and Out Trimmed)</option>
+                                    <option value="FIOST">FIOST (Free In, Out, Stowed and Trimmed)</option>
+                                    <option value="FILO">FILO (Free In, Liner Out)</option>
+                                    <option value="LIFO">LIFO (Liner In, Free Out)</option>
+                                    <option value="LINER">Liner Terms</option>
+                                </select>
                             </div>
-                            <div id="contenedor-gruas-pod" class="input-group">
-                                <label id="label-ritmo-nominal-pod" class="text-action-required flex items-center min-h-[24px]">Nº Grúas POD</label>
-                                <input type="number" id="ritmo_nominal_pod" class="input-gc action-required-field text-action-required font-bold" value="1" min="1" step="1" required oninput="marcarGruasManual('pod')">
+                            <div class="input-group">
+                                <label id="label-laytime-load-condition" class="text-action-required flex items-center min-h-[24px]">Laytime POL</label>
+                                <select id="laytime-load-condition" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="syncSharedCharterTerm('laytime-load-condition', ['gc-laytime-load-cond']); runEngine()">
+                                    <option value="SHINC">SHINC</option>
+                                    <option value="SHEX" selected>SHEX</option>
+                                    <option value="SHEX UU">SHEX UU</option>
+                                    <option value="SHEX EIU">SHEX EIU</option>
+                                    <option value="FHINC">FHINC</option>
+                                    <option value="FHEX">FHEX</option>
+                                    <option value="SSHEX">SSHEX</option>
+                                    <option value="SSHINC">SSHINC</option>
+                                    <option value="CQD">CQD</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label id="label-laytime-disch-condition" class="text-action-required flex items-center min-h-[24px]">Laytime POD</label>
+                                <select id="laytime-disch-condition" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="syncSharedCharterTerm('laytime-disch-condition', ['gc-laytime-disch-cond']); runEngine()">
+                                    <option value="SHINC">SHINC</option>
+                                    <option value="SHEX" selected>SHEX</option>
+                                    <option value="SHEX UU">SHEX UU</option>
+                                    <option value="SHEX EIU">SHEX EIU</option>
+                                    <option value="FHINC">FHINC</option>
+                                    <option value="FHEX">FHEX</option>
+                                    <option value="SSHEX">SSHEX</option>
+                                    <option value="SSHINC">SSHINC</option>
+                                    <option value="CQD">CQD</option>
+                                </select>
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-tolerance">Tolerancia de Carga · MOLOO / MOLCO (%)</label>
@@ -9646,7 +9686,7 @@
                             </div>
                             <div class="space-y-2">
                                 <label class="block text-xs text-slate-500 font-semibold mb-1">Términos (Conditions):</label>
-                                <select id="gc-freight-term" class="w-full border rounded px-2 py-1 text-[10px] font-semibold text-slate-700" onchange="syncGencon()">
+                                <select id="gc-freight-term" class="w-full border rounded px-2 py-1 text-[10px] font-semibold text-slate-700" onchange="syncSharedCharterTerm('gc-freight-term', ['freight-conditions']); syncGencon(); runEngine()">
                                     <option value="FIO">FIO (Free In and Out)</option>
                                     <option value="FIOS" selected>FIOS (Free In and Out Stowed)</option>
                                     <option value="FIOT">FIOT (Free In and Out Trimmed)</option>
@@ -9676,7 +9716,7 @@
                                         <option value="MTS per Day">MTS per Day</option>
                                         <option value="MTS per Hatch/Day">MTS Hatch/Day</option>
                                     </select>
-                                    <select id="gc-laytime-load-cond" class="w-32 border rounded px-2 py-1 text-[10px] font-semibold text-slate-700" onchange="syncGencon()">
+                                    <select id="gc-laytime-load-cond" class="w-32 border rounded px-2 py-1 text-[10px] font-semibold text-slate-700" onchange="syncSharedCharterTerm('gc-laytime-load-cond', ['laytime-load-condition']); syncGencon(); runEngine()">
                                         <option value="SHINC">SHINC</option>
                                         <option value="SHEX" selected>SHEX</option>
                                         <option value="SHEX UU">SHEX UU</option>
@@ -9705,7 +9745,7 @@
                                         <option value="MTS per Day">MTS per Day</option>
                                         <option value="MTS per Hatch/Day">MTS Hatch/Day</option>
                                     </select>
-                                    <select id="gc-laytime-disch-cond" class="w-32 border rounded px-2 py-1 text-[10px] font-semibold text-slate-700" onchange="syncGencon()">
+                                    <select id="gc-laytime-disch-cond" class="w-32 border rounded px-2 py-1 text-[10px] font-semibold text-slate-700" onchange="syncSharedCharterTerm('gc-laytime-disch-cond', ['laytime-disch-condition']); syncGencon(); runEngine()">
                                         <option value="SHINC">SHINC</option>
                                         <option value="SHEX" selected>SHEX</option>
                                         <option value="SHEX UU">SHEX UU</option>
@@ -42394,15 +42434,126 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
         });
 
-        const RITMOS_BASE_PUERTO = {
-            cinta_transportadora: 2500,
-            camion_tolva: 1500,
-            cuchara_grab: 1200,
-            grua_portuaria_30mt: 1200,
-            big_bags: 1100,
-            paletizado: 1000,
-            hierro_acero_piezas: 1000
-        };
+        const GENCON_CONDITION_OPTIONS = Object.freeze([
+            Object.freeze({ value: 'FIO', label: 'FIO (Free In and Out)' }),
+            Object.freeze({ value: 'FIOS', label: 'FIOS (Free In and Out Stowed)' }),
+            Object.freeze({ value: 'FIOT', label: 'FIOT (Free In and Out Trimmed)' }),
+            Object.freeze({ value: 'FIOST', label: 'FIOST (Free In, Out, Stowed and Trimmed)' }),
+            Object.freeze({ value: 'FILO', label: 'FILO (Free In, Liner Out)' }),
+            Object.freeze({ value: 'LIFO', label: 'LIFO (Liner In, Free Out)' }),
+            Object.freeze({ value: 'LINER', label: 'Liner Terms' })
+        ]);
+        const GENCON_LAYTIME_OPTIONS = Object.freeze([
+            'SHINC',
+            'SHEX',
+            'SHEX UU',
+            'SHEX EIU',
+            'FHINC',
+            'FHEX',
+            'SSHEX',
+            'SSHINC',
+            'CQD'
+        ]);
+        const LAYTIME_CONTINUOUS_TERMS = new Set(['SHINC', 'FHINC', 'SSHINC', 'CQD']);
+        const LAYTIME_INTERRUPTED_TERMS = new Set(['SHEX', 'SHEX UU', 'SHEX EIU', 'FHEX', 'SSHEX']);
+        const LAYTIME_WEEKEND_RISK_MULTIPLIER = 7 / 5;
+        const CONDITION_OWNER_STEVEDORING_FACTORS = Object.freeze({
+            FIO: 0,
+            FIOS: 0,
+            FIOT: 0,
+            FIOST: 0,
+            FILO: 0.5,
+            LIFO: 0.5,
+            LINER: 1
+        });
+
+        function replaceSelectOptionsFromCatalog(selectId, options, defaultValue) {
+            const select = document.getElementById(selectId);
+            if (!select) return;
+            const currentValue = String(select.value || '').trim();
+            select.replaceChildren(...options.map((optionDefinition) => {
+                const option = document.createElement('option');
+                if (typeof optionDefinition === 'string') {
+                    option.value = optionDefinition;
+                    option.textContent = optionDefinition;
+                } else {
+                    option.value = optionDefinition.value;
+                    option.textContent = optionDefinition.label;
+                }
+                return option;
+            }));
+            const availableValues = new Set(options.map((optionDefinition) => (
+                typeof optionDefinition === 'string' ? optionDefinition : optionDefinition.value
+            )));
+            select.value = availableValues.has(currentValue) ? currentValue : defaultValue;
+        }
+
+        function initializeSharedGenconSelectors() {
+            ['gc-freight-term', 'freight-conditions'].forEach((id) => {
+                replaceSelectOptionsFromCatalog(id, GENCON_CONDITION_OPTIONS, 'FIOS');
+            });
+            ['gc-laytime-load-cond', 'gc-laytime-disch-cond', 'laytime-load-condition', 'laytime-disch-condition'].forEach((id) => {
+                replaceSelectOptionsFromCatalog(id, GENCON_LAYTIME_OPTIONS, 'SHEX');
+            });
+        }
+
+        function syncSharedCharterTerm(sourceId, targetIds = []) {
+            const source = document.getElementById(sourceId);
+            if (!source) return '';
+            targetIds.forEach((targetId) => {
+                const target = document.getElementById(targetId);
+                if (target && Array.from(target.options).some((option) => option.value === source.value)) {
+                    target.value = source.value;
+                }
+            });
+            return source.value;
+        }
+
+        function getLaytimeCondition(side = 'pol') {
+            const id = side === 'pod' ? 'laytime-disch-condition' : 'laytime-load-condition';
+            return document.getElementById(id)?.value || 'SHEX';
+        }
+
+        function applyLaytimeCalendarRisk(baseDays, condition = 'SHEX') {
+            const normalizedDays = Math.max(0, parseFloat(baseDays) || 0);
+            const normalizedCondition = String(condition || '').trim().toUpperCase();
+            if (LAYTIME_INTERRUPTED_TERMS.has(normalizedCondition)) {
+                return normalizedDays * LAYTIME_WEEKEND_RISK_MULTIPLIER;
+            }
+            return normalizedDays;
+        }
+
+        function getOwnerStevedoringFactor(condition = document.getElementById('freight-conditions')?.value) {
+            const normalizedCondition = String(condition || 'FIOS').trim().toUpperCase();
+            return CONDITION_OWNER_STEVEDORING_FACTORS[normalizedCondition] ?? 0;
+        }
+
+        initializeSharedGenconSelectors();
+
+        const methodBaseRates = Object.freeze({
+            'Cinta Transportadora': 5000,
+            'Grúa Portuaria 30MT': 2500,
+            'Cuchara (Grab) - Grúa Barco': 1500,
+            'Big Bags (con Grúa)': 1000,
+            'Paletizado / Piezas (con Grúa)': 800,
+            'Hierro/Acero/Piezas': 1200,
+            'Camión Tolva': 'custom'
+        });
+        const METHOD_LABEL_BY_VALUE = Object.freeze({
+            cinta_transportadora: 'Cinta Transportadora',
+            grua_portuaria_30mt: 'Grúa Portuaria 30MT',
+            cuchara_grab: 'Cuchara (Grab) - Grúa Barco',
+            big_bags: 'Big Bags (con Grúa)',
+            paletizado: 'Paletizado / Piezas (con Grúa)',
+            hierro_acero_piezas: 'Hierro/Acero/Piezas',
+            camion_tolva: 'Camión Tolva'
+        });
+        const RITMOS_BASE_PUERTO = Object.freeze(Object.fromEntries(
+            Object.entries(METHOD_LABEL_BY_VALUE).map(([methodValue, methodLabel]) => [
+                methodValue,
+                typeof methodBaseRates[methodLabel] === 'number' ? methodBaseRates[methodLabel] : 0
+            ])
+        ));
         const FACTORES_ESTIBA = {
             cinta_transportadora: 1.0,
             camion_tolva: 1.0,
@@ -42420,7 +42571,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             3: 0.85,
             4: 0.80
         };
-        const METODOS_PUERTO_PASIVOS = new Set(['cinta_transportadora', 'camion_tolva']);
+        const METODOS_PUERTO_PASIVOS = new Set(['camion_tolva']);
         const METODOS_GRUA_AUTO = new Set([
             'cuchara_grab',
             'grua_portuaria_30mt',
@@ -42456,7 +42607,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function getRitmoBasePuerto(metodo = getMetodoEstibaActual()) {
-            return RITMOS_BASE_PUERTO[metodo] || RITMOS_BASE_PUERTO.cinta_transportadora;
+            return Math.max(0, Number(RITMOS_BASE_PUERTO[metodo]) || 0);
+        }
+
+        function isCustomPortMethod(metodo) {
+            const methodLabel = METHOD_LABEL_BY_VALUE[metodo];
+            return methodBaseRates[methodLabel] === 'custom';
         }
 
         function readNumeroGruasPuerto(side = 'pol') {
@@ -42478,7 +42634,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const inputId = side === 'pod' ? 'ritmo_nominal_pod' : 'ritmo_nominal_pol';
             const input = document.getElementById(inputId);
             if (input) input.dataset.manualOverride = 'true';
+            setRitmoManualIndicator(side, false);
             if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
+        }
+
+        function handlePortMethodChange(side = 'pol') {
+            setRitmoManualIndicator(side, false);
+            if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
+            if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
         }
 
         function aplicarGruasSugeridasPuerto(side = 'pol', options = {}) {
@@ -43013,6 +43176,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function readRitmoNominalPuerto(side = 'pol') {
             const metodo = side === 'pod' ? getMetodoDescargaActual() : getMetodoEstibaActual();
+            const rateInput = document.getElementById(side === 'pod' ? 'rate-disch' : 'rate-load');
+            const manualRate = Math.max(0, parseFloat(rateInput?.value) || 0);
+            if ((rateInput?.dataset.manualOverride === 'true' || isCustomPortMethod(metodo)) && manualRate > 0) {
+                return manualRate;
+            }
             return getRitmoBasePuerto(metodo);
         }
 
@@ -43032,25 +43200,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function calcularRitmoEfectivo(side = 'pol') {
-            const tipoCarga = normalizarTipoCarga();
-            const cargo = Math.max(0, parseFloat(document.getElementById('cargo-qty')?.value) || 0);
-            const horasTrabajo = 24;
             const metodo = side === 'pod' ? getMetodoDescargaActual() : getMetodoEstibaActual();
-            const ritmoUnitario = getRitmoRealPuerto(metodo, readRitmoNominalPuerto(side));
+            const rateInput = document.getElementById(side === 'pod' ? 'rate-disch' : 'rate-load');
+            const enteredRate = Math.max(0, parseFloat(rateInput?.value) || 0);
+            if (isCustomPortMethod(metodo) || rateInput?.dataset.manualOverride === 'true') {
+                return enteredRate;
+            }
+            const ritmoUnitario = getRitmoBasePuerto(metodo);
             const numeroGruas = readNumeroGruasPuerto(side);
-            if (isSmartLoadingEngineActive(side)) {
-                return calculateRealLoadRate(numeroGruas);
-            }
-            if (tipoCarga === 'acero' && metodo === 'hierro_acero_piezas') {
-                const pesoPieza = Math.max(0, parseFloat(document.getElementById('peso-pieza-mt')?.value) || 0);
-                const ciclosHora = Math.max(0, parseFloat(document.getElementById('ciclos-hora-grua')?.value) || 0);
-                if (cargo <= 0 || pesoPieza <= 0 || ciclosHora <= 0) {
-                    return metodoPuertoUsaGruas(metodo) ? ritmoUnitario * numeroGruas : ritmoUnitario;
-                }
-                const dias = (cargo / pesoPieza) / (ciclosHora * horasTrabajo);
-                const ritmoAceroUnitario = dias > 0 ? cargo / dias : 0;
-                return metodoPuertoUsaGruas(metodo) ? ritmoAceroUnitario * numeroGruas : ritmoAceroUnitario;
-            }
             return metodoPuertoUsaGruas(metodo) ? ritmoUnitario * numeroGruas : ritmoUnitario;
         }
 
@@ -43232,7 +43389,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (inputCarga) {
                 const metodoAnterior = inputCarga.dataset.autoMetodoCarga;
                 if (metodoAnterior && metodoAnterior !== metodoPol) setRitmoManualIndicator('pol', false);
-                if (metodoPuertoUsaGruas(metodoPol) && inputCarga.dataset.manualOverride !== 'true') {
+                if (!isCustomPortMethod(metodoPol) && inputCarga.dataset.manualOverride !== 'true') {
                     inputCarga.value = ritmoRealPol.toFixed(0);
                 }
                 inputCarga.dataset.autoMetodoCarga = metodoPol;
@@ -43240,7 +43397,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (inputDescarga) {
                 const metodoAnterior = inputDescarga.dataset.autoMetodoDescarga;
                 if (metodoAnterior && metodoAnterior !== metodoPod) setRitmoManualIndicator('pod', false);
-                if (metodoPuertoUsaGruas(metodoPod) && inputDescarga.dataset.manualOverride !== 'true') {
+                if (!isCustomPortMethod(metodoPod) && inputDescarga.dataset.manualOverride !== 'true') {
                     inputDescarga.value = ritmoRealPod.toFixed(0);
                 }
                 inputDescarga.dataset.autoMetodoDescarga = metodoPod;
@@ -43259,6 +43416,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         if (typeof window !== 'undefined') {
+            window.methodBaseRates = methodBaseRates;
+            window.GENCON_CONDITION_OPTIONS = GENCON_CONDITION_OPTIONS;
+            window.GENCON_LAYTIME_OPTIONS = GENCON_LAYTIME_OPTIONS;
+            window.LAYTIME_CONTINUOUS_TERMS = LAYTIME_CONTINUOUS_TERMS;
+            window.LAYTIME_INTERRUPTED_TERMS = LAYTIME_INTERRUPTED_TERMS;
+            window.syncSharedCharterTerm = syncSharedCharterTerm;
+            window.getLaytimeCondition = getLaytimeCondition;
+            window.applyLaytimeCalendarRisk = applyLaytimeCalendarRisk;
+            window.getOwnerStevedoringFactor = getOwnerStevedoringFactor;
             window.RITMOS_BASE_PUERTO = RITMOS_BASE_PUERTO;
             window.FACTORES_ESTIBA = FACTORES_ESTIBA;
             window.METODOS_PUERTO_PASIVOS = METODOS_PUERTO_PASIVOS;
@@ -43273,6 +43439,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.updateDemurrageExposureAlert = updateDemurrageExposureAlert;
             window.calcularGruasSugeridasPuerto = calcularGruasSugeridasPuerto;
             window.marcarGruasManual = marcarGruasManual;
+            window.handlePortMethodChange = handlePortMethodChange;
             window.aplicarGruasSugeridasPuerto = aplicarGruasSugeridasPuerto;
             window.marcarRitmoManual = marcarRitmoManual;
             window.actualizarModuloCamionTolva = actualizarModuloCamionTolva;
@@ -43998,8 +44165,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const metodoDescarga = getMetodoDescargaActual();
             const ritmoRealPol = calcularRitmoEfectivo('pol');
             const ritmoRealPod = calcularRitmoEfectivo('pod');
-            const rateLoad = parseFloat(document.getElementById('rate-load')?.value) || ritmoRealPol;
-            const rateDisch = parseFloat(document.getElementById('rate-disch')?.value) || ritmoRealPod;
+            const rateLoad = ritmoRealPol || parseFloat(document.getElementById('rate-load')?.value) || 0;
+            const rateDisch = ritmoRealPod || parseFloat(document.getElementById('rate-disch')?.value) || 0;
             const marginDays = Math.max(0, parseFloat(document.getElementById('factor-clima')?.value) || 0);
             const cpStandard = document.getElementById('charter-party-standard') ? document.getElementById('charter-party-standard').value : (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
             const turnTimeHours = Math.max(0, parseFloat(document.getElementById('turn-time-hours')?.value) || 0);
@@ -44021,9 +44188,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const costeManiobraEspecial = tipoCargaOperativa === 'proyecto' ? (parseFloat(document.getElementById('coste-maniobra-especial')?.value) || 0) : 0;
             const diasPreparacionProyecto = tipoCargaOperativa === 'proyecto' ? Math.max(0, parseFloat(document.getElementById('dias-preparacion')?.value) || 0) : 0;
             const voyageExtras = parseFloat(document.getElementById('cargo-surcharge')?.value) || 0;
+            const freightConditions = document.getElementById('freight-conditions')?.value || 'FIOS';
+            const stevedoringOwnerFactor = getOwnerStevedoringFactor(freightConditions);
+            const stevedoringEnteredCost = Math.max(0, parseFloat(document.getElementById('stevedoring-costs')?.value) || 0);
+            const stevedoringOwnerCost = stevedoringEnteredCost * stevedoringOwnerFactor;
             const pdas = (parseFloat(document.getElementById('pda-pol')?.value) || 0) + 
                          (parseFloat(document.getElementById('pda-pod')?.value) || 0) + 
-                         (parseFloat(document.getElementById('stevedoring-costs')?.value) || 0) +
+                         stevedoringOwnerCost +
                          (parseFloat(document.getElementById('pda-misc')?.value) || 0) +
                          costeTrincaje +
                          costeManiobraEspecial;
@@ -44069,10 +44240,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const dBal = isZeroCalculation ? 0 : (distBal / (spdBal > 0 ? (spdBal * 24) : 24));
             const dLaden = isZeroCalculation ? 0 : (distLaden / (spdLaden > 0 ? (spdLaden * 24) : 24));
-            const dPortLoad = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba, readNumeroGruasPuerto('pol'));
-            const dPortDisch = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga, readNumeroGruasPuerto('pod'));
+            const laytimeLoadCondition = getLaytimeCondition('pol');
+            const laytimeDischargeCondition = getLaytimeCondition('pod');
+            const basePortLoadDays = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba, readNumeroGruasPuerto('pol'));
+            const basePortDischargeDays = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga, readNumeroGruasPuerto('pod'));
+            const dPortLoad = isZeroCalculation ? 0 : applyLaytimeCalendarRisk(basePortLoadDays, laytimeLoadCondition);
+            const dPortDisch = isZeroCalculation ? 0 : applyLaytimeCalendarRisk(basePortDischargeDays, laytimeDischargeCondition);
             const dPort = isZeroCalculation ? 0 : (dPortLoad + dPortDisch);
             const laytimeDays = isZeroCalculation ? 0 : (dPortLoad + dPortDisch + turnTimeDays);
+            const laytimeRiskDays = isZeroCalculation ? 0 : ((dPortLoad - basePortLoadDays) + (dPortDisch - basePortDischargeDays));
             const dPortTotal = isZeroCalculation ? 0 : (laytimeDays + diasPreparacionProyecto);
             const adjustedPortDays = isZeroCalculation ? 0 : (dPortTotal + smartAnchorageDays + smartDeltaDays);
 
@@ -44200,6 +44376,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 turnTimeHours,
                 turnTimeDays,
                 laytimeDays,
+                laytimeRiskDays,
+                laytimeLoadCondition,
+                laytimeDischargeCondition,
+                basePortLoadDays,
+                basePortDischargeDays,
+                freightConditions,
+                stevedoringOwnerFactor,
+                stevedoringEnteredCost,
+                stevedoringOwnerCost,
                 totalBunkers: totalBunkers,
                 fuelBreakdown: {
                     navigation: { tons: T_sea * cSea, cost: routeConsumptionCost + extraEcaCost, days: T_sea },
@@ -45075,15 +45260,21 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             'cargo-qty': 'Cantidad de mercancía a granel a cargar. Afecta al calado y Break-Even.',
             'cargo-type': 'Categoría principal usada para filtrar el catálogo de productos y aplicar reglas operativas.',
             'cargo-product': 'Producto específico que autocompleta el factor de estiba y activa los controles de izado necesarios.',
+            'cargo-type-manual': 'Especificación contractual normalizada de la carga usada en el cálculo y en la documentación del viaje.',
             'charter-party-standard': 'Formulario contractual base. Ajusta laytime, demoras y supuestos de póliza.',
             'metodo_carga': 'Sistema físico usado en POL. Aplica el factor de productividad sobre el ritmo nominal.',
-            'ritmo_nominal_pol': 'Número de grúas operativas que multiplican el ritmo base del método de carga.',
-            'rate-load': 'ℹ️ Rendimiento operativo fijado en 1200 TM/día/grúa. Factor de interferencia aplicado.',
+            'ritmo_nominal_pol': 'Multiplicador operativo. Afecta directamente al cálculo automático del ritmo real diario.',
+            'rate-load': 'Ritmo real calculado automáticamente a partir de la capacidad base del método y el número de grúas POL.',
             'metodo_descarga_pod': 'Sistema físico usado en POD. Aplica el factor de productividad de descarga.',
-            'ritmo_nominal_pod': 'Número de grúas operativas que multiplican el ritmo base del método de descarga.',
-            'rate-disch': 'Ritmo base operativo (TM/día). Se autocompleta por método y puede sobrescribirse manualmente.',
+            'ritmo_nominal_pod': 'Multiplicador operativo. Afecta directamente al cálculo automático del ritmo real diario.',
+            'rate-disch': 'Ritmo real calculado automáticamente a partir de la capacidad base del método y el número de grúas POD.',
             'turn-time-hours': 'Tiempo de cortesía total en horas. Se convierte a días y se suma a carga y descarga para calcular la plancha.',
+            'freight-conditions': 'Define la responsabilidad del pago y gestión de la operativa portuaria (ej. FIOS: el fletador asume y organiza los gastos de carga, descarga y estiba).',
+            'laytime-load-condition': 'Condiciones de tiempo de plancha que definen si los fines de semana y festivos computan como tiempo operativo continuo (SHINC) o si se excluyen del cálculo (SHEX/FHEX).',
+            'laytime-disch-condition': 'Condiciones de tiempo de plancha que definen si los fines de semana y festivos computan como tiempo operativo continuo (SHINC) o si se excluyen del cálculo (SHEX/FHEX).',
+            'product-sector': 'Clasificación aplicable para el Mecanismo de Ajuste en Frontera por Carbono.',
             'cargo-sf': 'Factor de estiba. Volumen que ocupa 1 TM de mercancía.',
+            'cargo-tolerance': 'Margen contractual de variación permitido sobre la cantidad de carga bajo términos MOLOO o MOLCO.',
             'vessel-net-tonnage': 'Arqueo neto volumétrico. Multiplicador oficial para peajes de Suez y Panamá.',
             'crane-swl-mt': 'Carga de Trabajo Segura (Safe Working Load) de las grúas del buque.',
             'peso-pieza-mt': 'Peso unitario de piezas de acero o proyecto. Se valida contra el SWL.',
