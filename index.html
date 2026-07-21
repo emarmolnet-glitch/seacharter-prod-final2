@@ -11292,9 +11292,9 @@
                     <td style="padding: 6px 8px; border: 1px solid #e2e8f0;" id="print-demurrage">-</td>
                 </tr>
                 <tr>
-                    <td style="padding: 6px 8px; font-weight: 700; color: #475569; border: 1px solid #e2e8f0;">Ritmo Carga / Load Rate:</td>
+                    <td style="padding: 6px 8px; font-weight: 700; color: #475569; border: 1px solid #e2e8f0;">Ritmo Real Carga POL / Actual Load Rate:</td>
                     <td style="padding: 6px 8px; border: 1px solid #e2e8f0; font-weight: 600;" id="print-rate-load-info">-</td>
-                    <td style="padding: 6px 8px; font-weight: 700; color: #475569; border: 1px solid #e2e8f0;">Ritmo Descarga / Disch Rate:</td>
+                    <td style="padding: 6px 8px; font-weight: 700; color: #475569; border: 1px solid #e2e8f0;">Ritmo Real Descarga POD / Actual Disch Rate:</td>
                     <td style="padding: 6px 8px; border: 1px solid #e2e8f0; font-weight: 600;" id="print-rate-disch-info">-</td>
                 </tr>
                 <tr>
@@ -11437,6 +11437,16 @@
                     <td style="padding: 6px 8px; border: 1px solid #e2e8f0; font-weight: 600;">Coste de Capital del Buque (CAPEX)</td>
                     <td style="padding: 6px 8px; border: 1px solid #e2e8f0; text-align: center;" id="print-capex-basis">-</td>
                     <td style="padding: 6px 8px; border: 1px solid #e2e8f0; text-align: right; font-weight: 600;" id="print-cost-capex">-</td>
+                </tr>
+                <tr style="background-color: #fffbeb; color: #92400e;">
+                    <td style="padding: 6px 8px; border: 1px solid #fde68a; font-weight: 700;">Impacto OPEX en Puerto / Port OPEX Impact</td>
+                    <td style="padding: 6px 8px; border: 1px solid #fde68a; text-align: center; font-weight: 600;" id="print-port-opex-impact-basis">-</td>
+                    <td style="padding: 6px 8px; border: 1px solid #fde68a; text-align: right; font-weight: 700;" id="print-port-opex-impact">-</td>
+                </tr>
+                <tr style="background-color: #fffbeb; color: #92400e;">
+                    <td style="padding: 6px 8px; border: 1px solid #fde68a; font-weight: 700;">Impacto CAPEX en Puerto / Port CAPEX Impact</td>
+                    <td style="padding: 6px 8px; border: 1px solid #fde68a; text-align: center; font-weight: 600;" id="print-port-capex-impact-basis">-</td>
+                    <td style="padding: 6px 8px; border: 1px solid #fde68a; text-align: right; font-weight: 700;" id="print-port-capex-impact">-</td>
                 </tr>
                 <tr>
                     <td style="padding: 6px 8px; border: 1px solid #e2e8f0; font-weight: 600;">Gastos y Tasas Portuarias (PDAs POL/POD)</td>
@@ -32072,6 +32082,10 @@ Example:
             const polAlternatives = isPolUnsuitable ? findAlternativePorts(State.pol, polPort, vesselDraft, State.cargoType) : [];
             const podAlternatives = isPodUnsuitable ? findAlternativePorts(State.pod, podPort, vesselDraft, State.cargoType) : [];
             const classAnalysis = buildExecutiveShipClassAnalysis();
+            const operationalTerms = getExecutiveOperationalTerms();
+            const portOpexImpact = operationalTerms.totalPortDays * Math.max(0, Number(State.opex) || 0);
+            const executiveCapexDaily = Math.max(0, Number(State.capexDaily || State.ownerNetBreakdown?.capexDaily) || 0);
+            const portCapexImpact = operationalTerms.totalPortDays * executiveCapexDaily;
             const modeNarrative = reportMode === 'COA'
                 ? `Modo COA: se prioriza el Break-Even Promedio del contrato, ahorro acumulado frente a spot y protección de margen ante BunkerIndex. ${classAnalysis.shipClass.focus}`
                 : `Modo SPOT: se prioriza el TCE del viaje individual, riesgo de demurrage inmediato y viabilidad del tramo. ${classAnalysis.shipClass.focus}`;
@@ -32123,6 +32137,18 @@ Example:
                                     <span class="text-slate-400">${r.standard}</span>
                                     <span class="font-bold text-yellow-400">${State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON')}</span>
                                 </li>
+                                <li class="flex justify-between gap-3">
+                                    <span class="text-slate-400">Carga POL (método · ritmo real · grúas):</span>
+                                    <span class="text-right font-semibold text-white">${operationalTerms.loadMethod} · ${Math.round(operationalTerms.loadRate).toLocaleString('en-US')} TM/d · ${operationalTerms.loadCranes} grúa(s)</span>
+                                </li>
+                                <li class="flex justify-between gap-3">
+                                    <span class="text-slate-400">Descarga POD (método · ritmo real · grúas):</span>
+                                    <span class="text-right font-semibold text-white">${operationalTerms.dischargeMethod} · ${Math.round(operationalTerms.dischargeRate).toLocaleString('en-US')} TM/d · ${operationalTerms.dischargeCranes} grúa(s)</span>
+                                </li>
+                                <li class="flex justify-between gap-3">
+                                    <span class="text-slate-400">Estiba / Laytime:</span>
+                                    <span class="text-right font-bold text-yellow-300">${operationalTerms.freightTerms} · POL ${operationalTerms.loadLaytime} · POD ${operationalTerms.dischargeLaytime}</span>
+                                </li>
                             </ul>
                         </div>
                         <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700">
@@ -32172,6 +32198,14 @@ Example:
                                 <li class="flex justify-between">
                                     <span class="text-slate-400">${r.opex}</span>
                                     <span class="font-bold text-white">${getTxt('res-cost-opex')}</span>
+                                </li>
+                                <li class="flex justify-between gap-3 text-[11px] text-amber-300">
+                                    <span>Impacto OPEX puerto:</span>
+                                    <span class="text-right font-semibold">${operationalTerms.totalPortDays.toFixed(2)} días × $${Math.round(State.opex || 0).toLocaleString('en-US')}/día = $${Math.round(portOpexImpact).toLocaleString('en-US')}</span>
+                                </li>
+                                <li class="flex justify-between gap-3 text-[11px] text-amber-300">
+                                    <span>Impacto CAPEX puerto:</span>
+                                    <span class="text-right font-semibold">${operationalTerms.totalPortDays.toFixed(2)} días × $${Math.round(executiveCapexDaily).toLocaleString('en-US')}/día = $${Math.round(portCapexImpact).toLocaleString('en-US')}</span>
                                 </li>
                                 <li class="flex justify-between">
                                     <span class="text-slate-400">${r.pda}</span>
@@ -32505,6 +32539,9 @@ Example:
             const costTotal = State.costTotal || 0;
             const breakEven = State.breakEven || 0;
             const operationalTerms = getExecutiveOperationalTerms();
+            const capexDaily = Math.max(0, Number(State.capexDaily || State.ownerNetBreakdown?.capexDaily) || 0);
+            const portOpexImpact = operationalTerms.totalPortDays * State.opex;
+            const portCapexImpact = operationalTerms.totalPortDays * capexDaily;
 
             const currentLang = document.getElementById('language-selector')?.value || 'es';
 
@@ -32513,7 +32550,9 @@ Example:
             let rateSuffix = " TM/día";
             let directVoyageText = "N/A (Navegación Directa)";
             let opexBasisText = `$${Math.round(State.opex).toLocaleString('en-US')} / día × ${Number(State.totalDays || 0).toFixed(2)} días (${operationalTerms.totalPortDays.toFixed(2)} en puerto)`;
-            let capexBasisText = `$${Math.round(State.capexDaily || 0).toLocaleString('en-US')} / día × ${Number(State.totalDays || 0).toFixed(2)} días`;
+            let capexBasisText = `$${Math.round(capexDaily).toLocaleString('en-US')} / día × ${Number(State.totalDays || 0).toFixed(2)} días`;
+            let portOpexImpactBasisText = `Días Totales de Puerto (${operationalTerms.totalPortDays.toFixed(2)} días) × OPEX Diario ($${Math.round(State.opex).toLocaleString('en-US')})`;
+            let portCapexImpactBasisText = `Días Totales de Puerto (${operationalTerms.totalPortDays.toFixed(2)} días) × CAPEX Diario ($${Math.round(capexDaily).toLocaleString('en-US')})`;
             let pdaBasisText = "POL + POD PDAs + Estiba";
             const printConsSea = parseFloat(getVal('cons-sea')) || 0;
             const printNetConsVal = (printConsSea * 1.05).toFixed(2);
@@ -32525,7 +32564,9 @@ Example:
                 rateSuffix = " MT/day";
                 directVoyageText = "N/A (Direct Voyage)";
                 opexBasisText = `$${Math.round(State.opex).toLocaleString('en-US')} / day × ${Number(State.totalDays || 0).toFixed(2)} days (${operationalTerms.totalPortDays.toFixed(2)} in port)`;
-                capexBasisText = `$${Math.round(State.capexDaily || 0).toLocaleString('en-US')} / day × ${Number(State.totalDays || 0).toFixed(2)} days`;
+                capexBasisText = `$${Math.round(capexDaily).toLocaleString('en-US')} / day × ${Number(State.totalDays || 0).toFixed(2)} days`;
+                portOpexImpactBasisText = `Total Port Days (${operationalTerms.totalPortDays.toFixed(2)} days) × Daily OPEX ($${Math.round(State.opex).toLocaleString('en-US')})`;
+                portCapexImpactBasisText = `Total Port Days (${operationalTerms.totalPortDays.toFixed(2)} days) × Daily CAPEX ($${Math.round(capexDaily).toLocaleString('en-US')})`;
                 pdaBasisText = "POL + POD PDAs + Stevedoring";
                 bunkerBasisText = `${getVal('cons-sea')} t/d sea (Net: ${printNetConsVal} t/d w/5% Weather Margin), ${getVal('cons-port')} t/d port`;
             } else if (currentLang === 'fr') {
@@ -32534,7 +32575,9 @@ Example:
                 rateSuffix = " TM/jour";
                 directVoyageText = "N/A (Voyage Direct)";
                 opexBasisText = `$${Math.round(State.opex).toLocaleString('en-US')} / jour × ${Number(State.totalDays || 0).toFixed(2)} jours (${operationalTerms.totalPortDays.toFixed(2)} au port)`;
-                capexBasisText = `$${Math.round(State.capexDaily || 0).toLocaleString('en-US')} / jour × ${Number(State.totalDays || 0).toFixed(2)} jours`;
+                capexBasisText = `$${Math.round(capexDaily).toLocaleString('en-US')} / jour × ${Number(State.totalDays || 0).toFixed(2)} jours`;
+                portOpexImpactBasisText = `Jours totaux au port (${operationalTerms.totalPortDays.toFixed(2)} jours) × OPEX quotidien ($${Math.round(State.opex).toLocaleString('en-US')})`;
+                portCapexImpactBasisText = `Jours totaux au port (${operationalTerms.totalPortDays.toFixed(2)} jours) × CAPEX quotidien ($${Math.round(capexDaily).toLocaleString('en-US')})`;
                 pdaBasisText = "PDAs POL + POD + Arrimage";
                 bunkerBasisText = `${getVal('cons-sea')} t/j mer (Nette : ${printNetConsVal} t/j avec 5% de marge météo), ${getVal('cons-port')} t/j port`;
             } else {
@@ -32579,8 +32622,8 @@ Example:
             }
 
             // Ritmos de Carga y Descarga en Especificaciones Generales (Sección I)
-            document.getElementById('print-rate-load-info').innerText = `${(parseFloat(getVal('rate-load')) || 1000).toLocaleString('en-US')}${rateSuffix}`;
-            document.getElementById('print-rate-disch-info').innerText = `${(parseFloat(getVal('rate-disch')) || 1500).toLocaleString('en-US')}${rateSuffix}`;
+            document.getElementById('print-rate-load-info').innerText = `${operationalTerms.loadRate.toLocaleString('en-US')}${rateSuffix}`;
+            document.getElementById('print-rate-disch-info').innerText = `${operationalTerms.dischargeRate.toLocaleString('en-US')}${rateSuffix}`;
             document.getElementById('print-load-method').innerText = operationalTerms.loadMethod;
             document.getElementById('print-discharge-method').innerText = operationalTerms.dischargeMethod;
             document.getElementById('print-load-cranes').innerText = String(operationalTerms.loadCranes);
@@ -32602,11 +32645,11 @@ Example:
             document.getElementById('print-days-ballast').innerText = getTxt('res-days-ballast') || "-";
             document.getElementById('print-days-laden').innerText = getTxt('res-days-laden') || "-";
 
-            document.getElementById('print-rate-load').innerText = `${(parseFloat(getVal('rate-load')) || 1000).toLocaleString('en-US')}${rateSuffix}`;
-            document.getElementById('print-days-load').innerText = State.cargo && State.loadRate ? `${(State.cargo / State.loadRate).toFixed(2)}${daysSuffix}` : "-";
+            document.getElementById('print-rate-load').innerText = `${operationalTerms.loadRate.toLocaleString('en-US')}${rateSuffix}`;
+            document.getElementById('print-days-load').innerText = operationalTerms.loadDays > 0 ? `${operationalTerms.loadDays.toFixed(2)}${daysSuffix}` : "-";
 
-            document.getElementById('print-rate-disch').innerText = `${(parseFloat(getVal('rate-disch')) || 1500).toLocaleString('en-US')}${rateSuffix}`;
-            document.getElementById('print-days-disch').innerText = State.cargo && State.dischRate ? `${(State.cargo / State.dischRate).toFixed(2)}${daysSuffix}` : "-";
+            document.getElementById('print-rate-disch').innerText = `${operationalTerms.dischargeRate.toLocaleString('en-US')}${rateSuffix}`;
+            document.getElementById('print-days-disch').innerText = operationalTerms.dischargeDays > 0 ? `${operationalTerms.dischargeDays.toFixed(2)}${daysSuffix}` : "-";
 
             document.getElementById('print-days-margin').innerText = getTxt('res-days-margin') || `0.00 ${currentLang === 'es' ? 'd' : (currentLang === 'en' ? 'd' : 'j')}`;
             document.getElementById('print-days-total').innerText = `${State.totalDays.toFixed(2)}${daysSuffix}`;
@@ -32618,6 +32661,10 @@ Example:
             document.getElementById('print-cost-opex').innerText = `$${Math.round(costOpex).toLocaleString('en-US')}`;
             document.getElementById('print-capex-basis').innerText = capexBasisText;
             document.getElementById('print-cost-capex').innerText = `$${Math.round(costCapex).toLocaleString('en-US')}`;
+            document.getElementById('print-port-opex-impact-basis').innerText = portOpexImpactBasisText;
+            document.getElementById('print-port-opex-impact').innerText = `$${Math.round(portOpexImpact).toLocaleString('en-US')}`;
+            document.getElementById('print-port-capex-impact-basis').innerText = portCapexImpactBasisText;
+            document.getElementById('print-port-capex-impact').innerText = `$${Math.round(portCapexImpact).toLocaleString('en-US')}`;
 
             document.getElementById('print-pda-basis').innerText = pdaBasisText;
             document.getElementById('print-cost-pda').innerText = `$${Math.round(costPda).toLocaleString('en-US')}`;
@@ -33302,6 +33349,11 @@ Example:
                     opex: num(voyage.totalOpex),
                     capex: num(State.costCapex || State.ownerNetBreakdown?.capex),
                     capexDaily: num(State.capexDaily || State.ownerNetBreakdown?.capexDaily),
+                    portOpexImpact: operationalTerms.totalPortDays * num(State.opex || val('opex-daily')),
+                    portCapexImpact: operationalTerms.totalPortDays * num(State.capexDaily || State.ownerNetBreakdown?.capexDaily),
+                    totalPortOperatingCapitalImpact: operationalTerms.totalPortDays * (
+                        num(State.opex || val('opex-daily')) + num(State.capexDaily || State.ownerNetBreakdown?.capexDaily)
+                    ),
                     ownerOperatingCapitalCosts: num(State.ownerNetBreakdown?.operatingCapitalCosts),
                     ownerNetBreakdown: State.ownerNetBreakdown || null,
                     pdas: pdaPol + pdaPod + stevedoring + pdaMisc + cargoSurcharge,
@@ -33961,7 +34013,19 @@ Example:
                     flete_venta: data.financial?.freightSell,
                     break_even: data.financial?.breakEven,
                     beneficio_neto_fletador: data.financial?.netProfitCharterer,
-                    beneficio_neto_armador: data.financial?.netProfitOwner
+                    beneficio_neto_armador: data.financial?.netProfitOwner,
+                    metodo_carga_pol: data.operational?.loadMethod,
+                    ritmo_real_pol_tm_dia: data.operational?.loadRate,
+                    gruas_pol: data.operational?.loadCranes,
+                    metodo_descarga_pod: data.operational?.dischargeMethod,
+                    ritmo_real_pod_tm_dia: data.operational?.dischargeRate,
+                    gruas_pod: data.operational?.dischargeCranes,
+                    terminos_estiba: data.operational?.freightTerms,
+                    laytime_pol: data.operational?.loadLaytime,
+                    laytime_pod: data.operational?.dischargeLaytime,
+                    dias_totales_puerto: data.operational?.totalPortDays,
+                    impacto_opex_puerto: data.financial?.portOpexImpact,
+                    impacto_capex_puerto: data.financial?.portCapexImpact
                 }
             };
         }
@@ -43702,8 +43766,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return select?.selectedOptions?.[0]?.textContent?.trim() || select?.value || 'N/A';
             };
             const cargo = Math.max(0, Number(State.cargo || readValue('cargo-qty')) || 0);
-            const loadRate = Math.max(0, Number(State.loadRate || readValue('rate-load')) || 0);
-            const dischargeRate = Math.max(0, Number(State.dischRate || readValue('rate-disch')) || 0);
+            const loadMethodValue = getMetodoEstibaActual();
+            const dischargeMethodValue = getMetodoDescargaActual();
+            const loadRate = Math.max(0, Number(typeof calcularRitmoEfectivo === 'function' ? calcularRitmoEfectivo('pol') : (State.loadRate || readValue('rate-load'))) || 0);
+            const dischargeRate = Math.max(0, Number(typeof calcularRitmoEfectivo === 'function' ? calcularRitmoEfectivo('pod') : (State.dischRate || readValue('rate-disch'))) || 0);
+            const loadCranes = metodoPuertoUsaGruas(loadMethodValue) ? readNumeroGruasPuerto('pol') : 0;
+            const dischargeCranes = metodoPuertoUsaGruas(dischargeMethodValue) ? readNumeroGruasPuerto('pod') : 0;
             const loadDays = loadRate > 0 ? cargo / loadRate : 0;
             const dischargeDays = dischargeRate > 0 ? cargo / dischargeRate : 0;
             return {
@@ -43711,8 +43779,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 dischargeMethod: readSelectedLabel('metodo_descarga_pod'),
                 loadRate,
                 dischargeRate,
-                loadCranes: Math.max(1, parseInt(readValue('ritmo_nominal_pol'), 10) || 1),
-                dischargeCranes: Math.max(1, parseInt(readValue('ritmo_nominal_pod'), 10) || 1),
+                loadCranes,
+                dischargeCranes,
                 freightTerms: readValue('freight-conditions') || readValue('gc-freight-term') || 'FIOS',
                 loadLaytime: readValue('laytime-load-condition') || readValue('gc-laytime-load-cond') || 'SHEX',
                 dischargeLaytime: readValue('laytime-disch-condition') || readValue('gc-laytime-disch-cond') || 'SHEX',
@@ -43966,8 +44034,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                                 <li class="flex justify-between"><span class="text-slate-400">TM por embarque:</span><span>${Math.round(tmPorViaje).toLocaleString('en-US')} TM</span></li>
                                 <li class="flex justify-between"><span class="text-slate-400">Tipo Carga:</span><span>${m.cargoType}</span></li>
                                 <li class="flex justify-between"><span class="text-slate-400">Póliza Estándar:</span><span class="font-bold text-yellow-400">${m.charterParty}</span></li>
-                                <li class="flex justify-between"><span class="text-slate-400">Carga POL:</span><span>${operationalTerms.loadMethod} · ${Math.round(operationalTerms.loadRate).toLocaleString('en-US')} TM/d · ${operationalTerms.loadCranes} grúa(s)</span></li>
-                                <li class="flex justify-between"><span class="text-slate-400">Descarga POD:</span><span>${operationalTerms.dischargeMethod} · ${Math.round(operationalTerms.dischargeRate).toLocaleString('en-US')} TM/d · ${operationalTerms.dischargeCranes} grúa(s)</span></li>
+                                <li class="flex justify-between"><span class="text-slate-400">Carga POL (método · ritmo real · grúas):</span><span>${operationalTerms.loadMethod} · ${Math.round(operationalTerms.loadRate).toLocaleString('en-US')} TM/d · ${operationalTerms.loadCranes} grúa(s)</span></li>
+                                <li class="flex justify-between"><span class="text-slate-400">Descarga POD (método · ritmo real · grúas):</span><span>${operationalTerms.dischargeMethod} · ${Math.round(operationalTerms.dischargeRate).toLocaleString('en-US')} TM/d · ${operationalTerms.dischargeCranes} grúa(s)</span></li>
                                 <li class="flex justify-between"><span class="text-slate-400">Estiba / Laytime:</span><span class="font-bold text-yellow-300">${operationalTerms.freightTerms} · POL ${operationalTerms.loadLaytime} · POD ${operationalTerms.dischargeLaytime}</span></li>
                             </ul>
                         </div>
@@ -43988,7 +44056,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                             <h5 class="font-bold text-amber-400 uppercase mb-2 border-b border-slate-700/50 pb-1 flex items-center gap-1.5"><i class="fa-solid fa-coins"></i> ESTRUCTURA DE COSTES</h5>
                             <ul class="space-y-1.5">
                                 ${expenses.map(([label, value]) => `<li class="flex justify-between"><span class="text-slate-400">${label}:</span><span class="font-bold text-white">${formatCoaMoney(value, 0)}</span></li>`).join('')}
-                                <li class="flex justify-between text-[11px]"><span class="text-slate-400">Impacto días puerto:</span><span>${operationalTerms.totalPortDays.toFixed(2)} días × OPEX/CAPEX diario</span></li>
+                                <li class="flex justify-between gap-3 text-[11px] text-amber-300"><span>Impacto OPEX puerto:</span><span class="text-right">${operationalTerms.totalPortDays.toFixed(2)} días × ${formatCoaMoney(State.opex || 0, 0)}/día = ${formatCoaMoney(operationalTerms.totalPortDays * (State.opex || 0), 0)}</span></li>
+                                <li class="flex justify-between gap-3 text-[11px] text-amber-300"><span>Impacto CAPEX puerto:</span><span class="text-right">${operationalTerms.totalPortDays.toFixed(2)} días × ${formatCoaMoney(State.capexDaily || State.ownerNetBreakdown?.capexDaily || 0, 0)}/día = ${formatCoaMoney(operationalTerms.totalPortDays * (State.capexDaily || State.ownerNetBreakdown?.capexDaily || 0), 0)}</span></li>
                                 <li class="flex justify-between pt-1 border-t border-slate-700 font-bold"><span class="text-red-400">Total Gastos Contrato:</span><span class="text-red-400 text-sm">${formatCoaMoney((coa.costeTotalContrato || expenses.reduce((sum, item) => sum + item[1], 0)), 0)}</span></li>
                             </ul>
                         </div>

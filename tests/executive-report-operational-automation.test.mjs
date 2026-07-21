@@ -22,21 +22,34 @@ test('laytime defaults use ISO Alpha-2 country codes while preserving manual ove
 test('executive report payload and print view expose precise port operations and contractual terms', () => {
   assert.match(indexSource, /function getExecutiveOperationalTerms\(\)/);
   assert.match(indexSource, /loadMethod: operationalTerms\.loadMethod/);
+  assert.match(indexSource, /calcularRitmoEfectivo\('pol'\)/);
+  assert.match(indexSource, /calcularRitmoEfectivo\('pod'\)/);
   assert.match(indexSource, /loadCranes: operationalTerms\.loadCranes/);
+  assert.match(indexSource, /readNumeroGruasPuerto\('pol'\)/);
+  assert.match(indexSource, /readNumeroGruasPuerto\('pod'\)/);
   assert.match(indexSource, /dischargeMethod: operationalTerms\.dischargeMethod/);
   assert.match(indexSource, /totalPortDays: operationalTerms\.totalPortDays/);
   assert.match(indexSource, /freightTerms: operationalTerms\.freightTerms/);
   assert.match(indexSource, /id="print-load-method"/);
   assert.match(indexSource, /id="print-discharge-method"/);
   assert.match(indexSource, /id="print-laytime-terms"/);
+  assert.match(indexSource, /Carga POL \(método · ritmo real · grúas\):/);
+  assert.match(indexSource, /Descarga POD \(método · ritmo real · grúas\):/);
+  assert.match(indexSource, /Estiba \/ Laytime:/);
 });
 
 test('executive report keeps OPEX and CAPEX visible with port-day impact', () => {
   assert.match(indexSource, /id="print-cost-opex"/);
   assert.match(indexSource, /id="print-cost-capex"/);
+  assert.match(indexSource, /id="print-port-opex-impact"/);
+  assert.match(indexSource, /id="print-port-capex-impact"/);
   assert.match(indexSource, /operationalTerms\.totalPortDays\.toFixed\(2\)/);
   assert.match(indexSource, /Bunkers \+ OPEX \+ CAPEX \+ PDAs \+ ETS/);
-  assert.match(indexSource, /Impacto días puerto:/);
+  assert.match(indexSource, /Días Totales de Puerto/);
+  assert.match(indexSource, /portOpexImpact: operationalTerms\.totalPortDays/);
+  assert.match(indexSource, /portCapexImpact: operationalTerms\.totalPortDays/);
+  assert.match(indexSource, /impacto_opex_puerto: data\.financial\?\.portOpexImpact/);
+  assert.match(indexSource, /impacto_capex_puerto: data\.financial\?\.portCapexImpact/);
 });
 
 test('print mode isolates the report and neutralizes forced blank page breaks', () => {
