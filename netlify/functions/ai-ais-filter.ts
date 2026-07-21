@@ -298,6 +298,8 @@ export default async (req: Request) => {
     const laycanStart = parseLaycanStart(cargo.laycanStart);
     const laycanEnd = parseLaycanEnd(cargo.laycanEnd);
     const quantity = numberValue(cargo.quantity);
+    const stowageFactor = Math.max(0, numberValue(cargo.stowageFactor, cargo.stowage_factor));
+    const requiredVolumeCbm = Math.max(0, numberValue(cargo.requiredVolumeCbm, cargo.required_volume_cbm) || (quantity * stowageFactor));
     const cargoDescription = textValue(
       cargo.cargoDescription,
       cargo.specification,
@@ -307,7 +309,14 @@ export default async (req: Request) => {
       cargo.tipo_carga,
     );
     const cargoCode = textValue(cargo.cargoCode, cargo.cargoTypeId, cargo.typeId, body.cargoCode, body.cargoTypeId) || "100";
-    const gearedRequired = cargo.gearedRequired === true;
+    const methodsRequireShipGear = [cargo.loadMethod, cargo.dischargeMethod].some((value) => {
+      const method = textValue(value).toLowerCase();
+      return method === "cuchara_grab"
+        || method.includes("grua_barco")
+        || method.includes("ship_crane")
+        || method.includes("onboard_crane");
+    });
+    const gearedRequired = cargo.gearedRequired === true || methodsRequireShipGear;
     const grabRequired = cargo.grabRequired === true
       || [cargo.loadMethod, cargo.dischargeMethod].some((value) => textValue(value) === "cuchara_grab");
     const requiredGrabCapacityCbm = numberValue(cargo.requiredGrabCapacityCbm, cargo.grabCapacityCbm);
@@ -354,6 +363,7 @@ export default async (req: Request) => {
           shipType: vessel.shipType,
           dwt: vessel.dwt,
           quantity,
+          requiredVolumeCbm,
           gearedRequired,
           grabRequired,
           requiredGrabCapacityCbm,
@@ -449,6 +459,7 @@ export default async (req: Request) => {
           },
           compatibility: {
             capacityOk,
+            volumeOk: technicalEligibility.volume.compatible,
             draftOk,
             loaOk,
             cranesOk: true,
@@ -518,6 +529,12 @@ export default async (req: Request) => {
       matches,
       technicalWarnings,
       eligibleCount: matches.length,
+      compatibleCount: matches.length,
+      operationalFilters: {
+        gearedRequired,
+        stowageFactor,
+        requiredVolumeCbm,
+      },
       technicalWarningCount: technicalWarnings.length,
       evaluatedCount: evaluatedMatches.length,
       snapshot: { frozenAt: body.frozenAt || new Date().toISOString(), vesselCount: vessels_buffer.length },

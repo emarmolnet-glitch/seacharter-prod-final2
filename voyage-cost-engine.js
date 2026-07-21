@@ -185,7 +185,7 @@
         const cargo = toNumber(cargoTons);
         const rate = toNumber(realRate) || getRealPortRate(method);
         if (cargo <= 0 || rate <= 0) return 0;
-        return Math.ceil(cargo / rate);
+        return cargo / rate;
     }
 
     function calculateRealLoadRate(cranes = 1) {
@@ -398,7 +398,7 @@
     function calculateVoyageCostState(state) {
         const fallbackResult = applyTechnicalFallbacks(state);
         const effectiveState = fallbackResult.state;
-        effectiveState.turn_time_days = calculateTurnTimeDays(effectiveState.charter_party_standard);
+        effectiveState.turn_time_days = Math.max(0, toNumber(effectiveState.turn_time_hours)) / 24;
         const cargoKind = normalizeCargoType(effectiveState.tipo_carga);
         effectiveState.dias_puerto_total = toNumber(effectiveState.dias_puerto) +
             effectiveState.turn_time_days +
@@ -764,6 +764,7 @@
             return {
                 dias_navegacion: seaDays,
                 dias_puerto: portDays,
+                turn_time_hours: this.readNumber('turn-time-hours'),
                 t_espera_fondeo: this.readNumber('t-fondeo'),
                 delta_historico: this.readNumber('delta-historico'),
                 pol_name: toText(this.el('port-pol')?.value),

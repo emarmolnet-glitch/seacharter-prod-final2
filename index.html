@@ -7716,10 +7716,10 @@
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 mb-4">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4 mb-4">
                             <div id="contenedor_metodo_carga" class="input-group">
                                 <label id="label-metodo-carga" class="text-action-required">Método Carga POL</label>
-                                <select id="metodo_carga" class="input-gc action-required-field required-use-highlight text-action-required" onchange="recalcularDiasPuerto(); actualizarModuloCamionTolva()">
+                                <select id="metodo_carga" class="input-gc action-required-field required-use-highlight text-action-required" onchange="recalcularDiasPuerto(); actualizarModuloCamionTolva(); syncCalculatorAndMatching('calculator')">
                                     <option value="cinta_transportadora">Cinta Transportadora</option>
                                     <option value="camion_tolva">Camión Tolva</option>
                                     <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
@@ -7737,6 +7737,14 @@
                                 <label id="label-rate-load" class="text-action-required">Ritmo Real POL (TM/d)</label>
                                 <input type="number" id="rate-load" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="2500" step="any" oninput="marcarRitmoManual('pol')">
                                 <p id="rate-load-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
+                            </div>
+                            <div class="input-group">
+                                <label id="label-turn-time-hours" class="text-action-required">TURN TIME TOTAL (H)</label>
+                                <select id="turn-time-hours" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="runEngine(); syncCalculatorAndMatching('calculator')">
+                                    <option value="12">12 horas</option>
+                                    <option value="24" selected>24 horas</option>
+                                    <option value="48">48 horas</option>
+                                </select>
                             </div>
                         </div>
 
@@ -7779,7 +7787,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 mb-4">
                             <div id="contenedor_metodo_descarga" class="input-group">
                                 <label id="label-metodo-descarga" class="text-action-required">Método Descarga POD</label>
-                                <select id="metodo_descarga_pod" class="input-gc action-required-field required-use-highlight text-action-required" onchange="recalcularDiasPuerto()">
+                                <select id="metodo_descarga_pod" class="input-gc action-required-field required-use-highlight text-action-required" onchange="recalcularDiasPuerto(); syncCalculatorAndMatching('calculator')">
                                     <option value="cinta_transportadora">Cinta Transportadora</option>
                                     <option value="camion_tolva">Camión Tolva</option>
                                     <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
@@ -7820,7 +7828,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-sf">Stowage Factor</label>
-                                <input type="number" id="cargo-sf" class="input-gc text-indigo-300" value="1.20" step="0.01" oninput="runEngine()">
+                                <input type="number" id="cargo-sf" class="input-gc text-indigo-300" value="1.20" min="0" step="0.01" oninput="runEngine(); syncCalculatorAndMatching('calculator')">
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-tolerance">Tolerancia de Carga · MOLOO / MOLCO (%)</label>
@@ -13364,6 +13372,7 @@
             setInputValue('cargo-type-manual', '100');
             window.CargoTypeSelector?.persistSelection('100');
             setInputValue('charter-party-standard', 'GENCON');
+            setInputValue('turn-time-hours', 24);
             setInputValue('apply-ets-surcharge', 'NO');
             setInputValue('ets-route-type', '0');
 
@@ -17823,7 +17832,10 @@
                 const grabRequired = matchingRequest?.cargo?.grabRequired === true || loadMethod === 'cuchara_grab' || dischargeMethod === 'cuchara_grab';
                 const gearedRequired = document.getElementById('match-geared-required').checked
                     || matchingRequest?.cargo?.gearedRequired === true
-                    || grabRequired;
+                    || metodoRequiereGruasBuque(loadMethod)
+                    || metodoRequiereGruasBuque(dischargeMethod);
+                const stowageFactor = Math.max(0, Number(matchingRequest?.cargo?.stowageFactor ?? document.getElementById('cargo-sf')?.value) || 0);
+                const requiredVolumeCbm = Math.max(0, Number(matchingRequest?.cargo?.requiredVolumeCbm) || (quantity * stowageFactor));
                 const requiredGrabCapacityCbm = Number(matchingRequest?.cargo?.requiredGrabCapacityCbm ?? document.getElementById('grab-capacity-cbm')?.value) || 0;
                 const requiredCraneSwlMt = Number(matchingRequest?.cargo?.requiredCraneSwlMt ?? document.getElementById('crane-swl-mt')?.value) || 0;
 
@@ -17866,6 +17878,8 @@
                         cargoTypeId,
                         cargoTypeLabel: cargoDescription,
                         specification: cargoDescription,
+                        stowageFactor,
+                        requiredVolumeCbm,
                         laycanStart,
                         laycanEnd,
                         maxDraft, maxLoa, gearedRequired, grabRequired, loadMethod, dischargeMethod,
@@ -20511,7 +20525,9 @@
                     const loadMethod = document.getElementById('metodo_carga')?.value || '';
                     const dischargeMethod = document.getElementById('metodo_descarga_pod')?.value || loadMethod;
                     const grabRequired = loadMethod === 'cuchara_grab' || dischargeMethod === 'cuchara_grab';
-                    const gearedRequired = document.getElementById('match-geared-required')?.checked === true || grabRequired;
+                    const gearedRequired = document.getElementById('match-geared-required')?.checked === true
+                        || metodoRequiereGruasBuque(loadMethod)
+                        || metodoRequiereGruasBuque(dischargeMethod);
                     const requiredGrabCapacityCbm = Number(document.getElementById('grab-capacity-cbm')?.value) || 0;
                     const requiredCraneSwlMt = Number(document.getElementById('crane-swl-mt')?.value) || 0;
                     const vesselDraft = parseFloat(document.getElementById('vessel-draft')?.value) || 0;
@@ -20675,6 +20691,8 @@
                             typeLabel: window.getCargoTaxonomyLabel?.(cargoTypeId) || 'Otros',
                             specification: window.getCargoTaxonomyLabel?.(cargoTypeId) || 'Otros',
                             quantity: cargoQty,
+                            stowageFactor: Math.max(0, Number(document.getElementById('cargo-sf')?.value) || 0),
+                            requiredVolumeCbm: cargoQty * Math.max(0, Number(document.getElementById('cargo-sf')?.value) || 0),
                             loadMethod,
                             dischargeMethod,
                             gearedRequired,
@@ -24683,9 +24701,11 @@
                     specification: String(window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value) || 'Otros'),
                     typeId: String(document.getElementById('cargo-type-manual')?.value || window.CargoTypeSelector?.readSelectedId?.() || '100'),
                     quantity: Number(calculation.cargo?.quantity) || readNumber('cargo-qty'),
+                    stowageFactor: readNumber('cargo-sf'),
+                    requiredVolumeCbm: (Number(calculation.cargo?.quantity) || readNumber('cargo-qty')) * readNumber('cargo-sf'),
                     loadMethod: String(document.getElementById('metodo_carga')?.value || ''),
                     dischargeMethod: String(document.getElementById('metodo_descarga_pod')?.value || document.getElementById('metodo_carga')?.value || ''),
-                    gearedRequired: document.getElementById('match-geared-required')?.checked === true || document.getElementById('metodo_carga')?.value === 'cuchara_grab' || document.getElementById('metodo_descarga_pod')?.value === 'cuchara_grab',
+                    gearedRequired: document.getElementById('match-geared-required')?.checked === true || metodoRequiereGruasBuque(document.getElementById('metodo_carga')?.value) || metodoRequiereGruasBuque(document.getElementById('metodo_descarga_pod')?.value),
                     grabRequired: document.getElementById('metodo_carga')?.value === 'cuchara_grab' || document.getElementById('metodo_descarga_pod')?.value === 'cuchara_grab',
                     requiredGrabCapacityCbm: readNumber('grab-capacity-cbm'),
                     requiredCraneSwlMt: readNumber('crane-swl-mt')
@@ -25873,7 +25893,8 @@
             const marginInput = document.getElementById('days-margin');
             if (marginInput) marginInput.value = marginDays.toFixed(2);
             const cpStandard = document.getElementById('charter-party-standard') ? document.getElementById('charter-party-standard').value : (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
-            const genconTurnTimeDays = (!isZeroCalculation && cpStandard === 'GENCON') ? 1.0 : 0;
+            const turnTimeHours = Math.max(0, parseFloat(document.getElementById('turn-time-hours')?.value) || 0);
+            const turnTimeDays = isZeroCalculation ? 0 : (turnTimeHours / 24);
 
             const cSea = parseFloat(document.getElementById('cons-sea').value) || 0;
             const netConsVal = (cSea * 1.05).toFixed(2);
@@ -26001,7 +26022,8 @@
             const dPortLoad = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba, readNumeroGruasPuerto('pol'));
             const dPortDisch = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga, readNumeroGruasPuerto('pod'));
             const dPort = isZeroCalculation ? 0 : (dPortLoad + dPortDisch);
-            const dPortTotal = isZeroCalculation ? 0 : (dPort + genconTurnTimeDays + diasPreparacionProyecto);
+            const laytimeDays = isZeroCalculation ? 0 : (dPortLoad + dPortDisch + turnTimeDays);
+            const dPortTotal = isZeroCalculation ? 0 : (laytimeDays + diasPreparacionProyecto);
             const adjustedPortDays = isZeroCalculation ? 0 : (dPortTotal + smartAnchorageDays + smartDeltaDays);
             const seaPortDays = isZeroCalculation ? 0 : (dBal + dLaden + dPortTotal);
             const baseOperationalDays = seaPortDays;
@@ -26702,7 +26724,9 @@
                 capexDaily,
                 ownerOperatingCapitalCosts,
                 ownerShipClass: ownerClassAnalysis?.shipClass?.label || 'Buque estándar',
-                turnTimeDays: genconTurnTimeDays,
+                turnTimeHours,
+                turnTimeDays,
+                laytimeDays,
                 fixedCosts,
                 basicEtsCost,
                 baseVoyageCosts: costTotal,
@@ -41740,7 +41764,34 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const isAvailableStatus = !statusLbl.includes("moored") && !statusLbl.includes("puerto");
                     const radarCategory = normalizeRadarCategory(readRadarCategorySource(v));
                     v.radarCategory = radarCategory;
-                    if (isAvailableStatus && isVesselCompatible(radarCategory, currentClass)) {
+                    const cargoQuantity = Math.max(0, Number(document.getElementById('cargo-qty')?.value) || 0);
+                    const stowageFactor = Math.max(0, Number(document.getElementById('cargo-sf')?.value) || 0);
+                    const requiredVolumeCbm = cargoQuantity * stowageFactor;
+                    const loadMethod = getMetodoEstibaActual();
+                    const dischargeMethod = getMetodoDescargaActual();
+                    const gearedRequired = metodoRequiereGruasBuque(loadMethod) || metodoRequiereGruasBuque(dischargeMethod);
+                    const vesselEvidence = JSON.stringify(v).toLowerCase();
+                    const vesselGearless = /\bgearless\b|without cranes|no cranes/.test(vesselEvidence)
+                        || v.hasGears === false
+                        || v.has_gears === false;
+                    const volumeCandidates = [
+                        v.grainCapacity,
+                        v.grain_capacity,
+                        v.grainCapacityCbm,
+                        v.grain_capacity_cbm,
+                        v.capacityCbm,
+                        v.capacity_cbm,
+                        v.cubicCapacity,
+                        v.cubic_capacity,
+                        v.MetaData?.grainCapacity,
+                        v.MetaData?.grain_capacity,
+                        v.MetaData?.grainCapacityCbm,
+                        v.MetaData?.grain_capacity_cbm
+                    ].map(Number).filter(value => Number.isFinite(value) && value >= 0);
+                    const vesselVolumeCbm = volumeCandidates.length > 0 ? Math.max(...volumeCandidates) : null;
+                    const volumeCompatible = requiredVolumeCbm <= 0 || vesselVolumeCbm === null || vesselVolumeCbm >= requiredVolumeCbm;
+                    const equipmentCompatible = !gearedRequired || !vesselGearless;
+                    if (isAvailableStatus && volumeCompatible && equipmentCompatible && isVesselCompatible(radarCategory, currentClass)) {
                         const dist = v.distanceToPol;
                         const speedKts = v.speed || 12;
                         const hoursToPol = dist / speedKts;
@@ -42229,10 +42280,19 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             'paletizado',
             'hierro_acero_piezas'
         ]);
+        const METODOS_GRUA_BUQUE = new Set(['cuchara_grab', 'grua_barco', 'ship_crane', 'onboard_crane']);
         const TM_POR_GRUA_AUTO = 10000;
 
         function metodoPuertoUsaGruas(metodo) {
             return !METODOS_PUERTO_PASIVOS.has(metodo);
+        }
+
+        function metodoRequiereGruasBuque(metodo) {
+            const normalizedMethod = String(metodo || '').trim().toLowerCase();
+            return METODOS_GRUA_BUQUE.has(normalizedMethod)
+                || normalizedMethod.includes('grua_barco')
+                || normalizedMethod.includes('ship_crane')
+                || normalizedMethod.includes('onboard_crane');
         }
 
         function getMetodoEstibaActual() {
@@ -42901,7 +42961,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const toneladas = Math.max(0, parseFloat(toneladasCarga) || 0);
             const ritmo = Math.max(0, parseFloat(ritmoReal) || 0);
             if (toneladas <= 0 || ritmo <= 0) return 0;
-            return Math.ceil(toneladas / ritmo);
+            return toneladas / ritmo;
         }
 
         function costeTrincajeCondicional() {
@@ -43775,7 +43835,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const rateDisch = parseFloat(document.getElementById('rate-disch')?.value) || ritmoRealPod;
             const marginDays = Math.max(0, parseFloat(document.getElementById('factor-clima')?.value) || 0);
             const cpStandard = document.getElementById('charter-party-standard') ? document.getElementById('charter-party-standard').value : (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
-            const genconTurnTimeDays = (!isZeroCalculation && cpStandard === 'GENCON') ? 1.0 : 0;
+            const turnTimeHours = Math.max(0, parseFloat(document.getElementById('turn-time-hours')?.value) || 0);
+            const turnTimeDays = isZeroCalculation ? 0 : (turnTimeHours / 24);
 
             const cSea = parseFloat(document.getElementById('cons-sea')?.value) || 0;
             const vlsfoPrice = parseFloat(document.getElementById('price-sea')?.value) || 0;
@@ -43844,7 +43905,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const dPortLoad = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba, readNumeroGruasPuerto('pol'));
             const dPortDisch = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga, readNumeroGruasPuerto('pod'));
             const dPort = isZeroCalculation ? 0 : (dPortLoad + dPortDisch);
-            const dPortTotal = isZeroCalculation ? 0 : (dPort + genconTurnTimeDays + diasPreparacionProyecto);
+            const laytimeDays = isZeroCalculation ? 0 : (dPortLoad + dPortDisch + turnTimeDays);
+            const dPortTotal = isZeroCalculation ? 0 : (laytimeDays + diasPreparacionProyecto);
             const adjustedPortDays = isZeroCalculation ? 0 : (dPortTotal + smartAnchorageDays + smartDeltaDays);
 
             const T_sea = isZeroCalculation ? 0 : (dBal + dLaden + marginDays);
@@ -43968,7 +44030,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 tceTotal: tceTotal,
                 netProfitOwnerDaily: netProfitOwnerDaily,
                 totalDays: totalDays,
-                turnTimeDays: genconTurnTimeDays,
+                turnTimeHours,
+                turnTimeDays,
+                laytimeDays,
                 totalBunkers: totalBunkers,
                 fuelBreakdown: {
                     navigation: { tons: T_sea * cSea, cost: routeConsumptionCost + extraEcaCost, days: T_sea },
@@ -44850,6 +44914,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             'metodo_descarga_pod': 'Sistema físico usado en POD. Aplica el factor de productividad de descarga.',
             'ritmo_nominal_pod': 'Número de grúas operativas que multiplican el ritmo base del método de descarga.',
             'rate-disch': 'Ritmo base operativo (TM/día). Se autocompleta por método y puede sobrescribirse manualmente.',
+            'turn-time-hours': 'Tiempo de cortesía total en horas. Se convierte a días y se suma a carga y descarga para calcular la plancha.',
             'cargo-sf': 'Factor de estiba. Volumen que ocupa 1 TM de mercancía.',
             'vessel-net-tonnage': 'Arqueo neto volumétrico. Multiplicador oficial para peajes de Suez y Panamá.',
             'crane-swl-mt': 'Carga de Trabajo Segura (Safe Working Load) de las grúas del buque.',
