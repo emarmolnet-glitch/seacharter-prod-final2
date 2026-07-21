@@ -45,7 +45,8 @@ test('matching engine rehydrates matchingRequest before local validation and exe
   assert.match(clickSource, /fetchMatchingRequestFromGlobalStore\(calculatedState\)/);
   assert.ok(clickSource.indexOf('fetchMatchingRequestFromGlobalStore') < clickSource.indexOf('getMatchingExecutionValidation'));
   assert.match(source, /function applyMatchingRequestToContext\(request\)/);
-  assert.match(source, /setInputValue\('match-cargo-type', request\.cargo\?\.type\)/);
+  assert.match(source, /const normalizedCargo = normalizeMatchingCargoPayload\(request\.cargo\)/);
+  assert.match(source, /setInputValue\('match-cargo-type', normalizedCargo\.cargoCode\)/);
   assert.match(source, /setInputValue\('match-quantity', request\.cargo\?\.quantity\)/);
   assert.match(executionSource, /const matchingRequest = typeof window\.fetchMatchingRequestFromGlobalStore/);
   assert.match(executionSource, /const effectiveRouteOverride = routeOverride \|\| matchingRequest\?\.route \|\| null/);

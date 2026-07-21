@@ -623,7 +623,8 @@ test('matching queries the local master independently from the radar array', () 
   const executionEnd = indexSource.indexOf('window.runMatchingEngine = runMatchingEngine', executionStart);
   const executionSource = indexSource.slice(executionStart, executionEnd);
   assert.match(executionSource, /requestMatchingLocal\('execute', \[\], payload\)/);
-  assert.match(executionSource, /value: selectedVesselTaxonomy/);
+  assert.match(executionSource, /value: selectedVesselTaxonomies\.slice\(\)/);
+  assert.match(executionSource, /values: selectedVesselTaxonomies\.slice\(\)/);
   assert.doesNotMatch(executionSource, /captureRadarSnapshotForFleetMatching\(\)/);
   assert.match(indexSource, /matching-source-integrity/);
   assert.match(indexSource, /Integridad local verificada/);

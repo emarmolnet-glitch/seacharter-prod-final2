@@ -147,18 +147,19 @@ export default async (req: Request) => {
       });
       const scoringResponse = await runAiAisFilter(scoringRequest);
       const scoringResult = asRecord(await scoringResponse.json());
-      const matches = Array.isArray(scoringResult.data) ? scoringResult.data : [];
+      const evaluatedMatches = Array.isArray(scoringResult.data) ? scoringResult.data : [];
+      const eligibleMatches = Array.isArray(scoringResult.matches) ? scoringResult.matches : [];
       return Response.json({
         ...scoringResult,
         success: scoringResponse.ok && scoringResult.success !== false,
         operation: "execute",
         source: "vessels_master",
         readOnly: true,
-        data: matches,
-        matches,
-        count: matches.length,
+        data: evaluatedMatches,
+        matches: eligibleMatches,
+        count: evaluatedMatches.length,
         localVesselCount: localVessels.length,
-        message: matches.length > 0 ? "Coincidencias locales calculadas" : "No se encontraron coincidencias locales",
+        message: evaluatedMatches.length > 0 ? "Coincidencias locales calculadas" : "No se encontraron coincidencias locales",
       }, { status: scoringResponse.status, headers });
     }
 
