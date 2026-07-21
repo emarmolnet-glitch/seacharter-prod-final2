@@ -18,6 +18,25 @@ function asRecord(value: unknown): AnyRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as AnyRecord : {};
 }
 
+function parseRecord(value: unknown): AnyRecord {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value as AnyRecord;
+  if (typeof value !== "string" || !value.trim()) return {};
+  try {
+    return asRecord(JSON.parse(value));
+  } catch {
+    return {};
+  }
+}
+
+function finiteNumberValue(...values: unknown[]) {
+  for (const value of values) {
+    if (value === undefined || value === null || value === "") continue;
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+  }
+  return null;
+}
+
 function textValue(...values: unknown[]) {
   const value = values.find((item) => item !== undefined && item !== null && String(item).trim() !== "");
   return value === undefined || value === null ? "" : String(value).trim();
@@ -55,24 +74,75 @@ function normalizeCandidate(value: unknown, index: number) {
 }
 
 function serializeMasterVessel(row: VesselMasterRow) {
-  const sourcePayload = asRecord(row.source_payload);
+  const sourcePayload = parseRecord(row.source_payload);
+  const message = parseRecord(sourcePayload.Message);
+  const metadata = parseRecord(sourcePayload.MetaData || sourcePayload.metadata || message.MetaData);
+  const positionReport = parseRecord(
+    sourcePayload.PositionReport
+      || message.PositionReport
+      || sourcePayload.StandardClassBPositionReport
+      || message.StandardClassBPositionReport
+      || sourcePayload.ExtendedClassBPositionReport
+      || message.ExtendedClassBPositionReport,
+  );
+  const staticData = parseRecord(sourcePayload.ShipStaticData || message.ShipStaticData);
+  const latitude = finiteNumberValue(
+    row.latitude,
+    sourcePayload.latitude,
+    sourcePayload.lat,
+    metadata.latitude,
+    metadata.Latitude,
+    positionReport.Latitude,
+    positionReport.latitude,
+  );
+  const longitude = finiteNumberValue(
+    row.longitude,
+    sourcePayload.longitude,
+    sourcePayload.lon,
+    sourcePayload.lng,
+    metadata.longitude,
+    metadata.Longitude,
+    positionReport.Longitude,
+    positionReport.longitude,
+  );
+  const vesselName = textValue(row.vessel_name, sourcePayload.vesselName, sourcePayload.vessel_name, sourcePayload.ShipName, metadata.ShipName, staticData.Name) || "Unknown vessel";
+  const imo = textValue(row.imo_number, sourcePayload.imo, sourcePayload.IMO, sourcePayload.imo_number, metadata.IMO, staticData.ImoNumber) || "N/A";
+  const mmsi = textValue(row.mmsi, sourcePayload.mmsi, sourcePayload.MMSI, metadata.MMSI, positionReport.UserID, staticData.UserID) || "N/A";
+  const vesselType = textValue(row.vessel_type, sourcePayload.vesselType, sourcePayload.vessel_type, sourcePayload.shipType, sourcePayload.ShipType, metadata.ShipType, staticData.Type) || "Unknown";
+  const cargoType = textValue(sourcePayload.cargoType, sourcePayload.tipo_carga, metadata.cargoType, metadata.tipo_carga, vesselType) || vesselType;
+  const dwt = numericValue(row.dwt, sourcePayload.dwt, sourcePayload.DWT, metadata.dwt, metadata.DWT);
+  const draft = finiteNumberValue(row.draft_meters, sourcePayload.draft, sourcePayload.Draft, metadata.draft, metadata.Draft, staticData.MaximumStaticDraught);
+  const updatedAt = row.updated_at ? new Date(row.updated_at) : null;
   return {
     ...sourcePayload,
-    imo: row.imo_number,
-    IMO: row.imo_number,
-    imoNumber: row.imo_number,
-    mmsi: row.mmsi,
-    MMSI: row.mmsi,
-    vesselName: row.vessel_name,
-    vessel_name: row.vessel_name,
-    vesselType: row.vessel_type,
-    vessel_type: row.vessel_type,
-    shipType: row.vessel_type,
-    dwt: row.dwt,
-    DWT: row.dwt,
-    latitude: row.latitude,
-    longitude: row.longitude,
-    draft: row.draft_meters,
+    Message: message,
+    MetaData: metadata,
+    PositionReport: positionReport,
+    ShipStaticData: staticData,
+    imo,
+    IMO: imo,
+    imoNumber: imo,
+    imo_number: imo,
+    mmsi,
+    MMSI: mmsi,
+    vesselName,
+    vessel_name: vesselName,
+    ShipName: vesselName,
+    vesselType,
+    vessel_type: vesselType,
+    shipType: vesselType,
+    ShipType: vesselType,
+    cargoType,
+    tipo_carga: cargoType,
+    dwt,
+    DWT: dwt,
+    latitude,
+    lat: latitude,
+    longitude,
+    lon: longitude,
+    lng: longitude,
+    draft,
+    Draft: draft,
     flag: row.flag,
     eta: row.eta,
     lastPortOfCall: row.last_port,
@@ -84,7 +154,7 @@ function serializeMasterVessel(row: VesselMasterRow) {
     processStatus: row.process_status,
     cacheStatus: "Caché Validada",
     cacheValidated: true,
-    masterUpdatedAt: new Date(row.updated_at).toISOString(),
+    masterUpdatedAt: updatedAt && Number.isFinite(updatedAt.getTime()) ? updatedAt.toISOString() : null,
   };
 }
 

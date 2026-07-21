@@ -58,6 +58,19 @@ test('Nominatim searches are debounced and cancel stale work', () => {
   assert.doesNotMatch(handlerSource, /setTimeout\([^,]+,\s*450\)/);
 });
 
+test('Nominatim results persist locally and cached searches bypass the external request', () => {
+  assert.match(autocompleteSource, /NOMINATIM_CACHE_STORAGE_KEY = 'seacharter:nominatim-port-cache:v1'/);
+  assert.match(autocompleteSource, /function readNominatimBrowserCache\(cacheKey\)/);
+  assert.match(autocompleteSource, /function writeNominatimBrowserCache\(cacheKey, results\)/);
+  assert.match(autocompleteSource, /localStorage\.getItem\(NOMINATIM_CACHE_STORAGE_KEY\)/);
+  assert.match(autocompleteSource, /localStorage\.setItem\(NOMINATIM_CACHE_STORAGE_KEY/);
+  assert.ok(
+    autocompleteSource.indexOf('const browserCachedResults = readNominatimBrowserCache(cacheKey);')
+      < autocompleteSource.indexOf('const response = await fetch(`${NOMINATIM_SEARCH_ENDPOINT}'),
+  );
+  assert.match(autocompleteSource, /if \(cachedResults\) \{[\s\S]*renderPortAutocomplete\(input, cachedResults/);
+});
+
 test('geographic autocomplete exposes reactive loading state and visual feedback', () => {
   assert.match(autocompleteSource, /const portSearchStates = new WeakMap\(\)/);
   assert.match(autocompleteSource, /window\.geographicSearchState = window\.geographicSearchState \|\| \{\}/);

@@ -254,33 +254,74 @@
         return (Array.isArray(vessels) ? vessels : []).filter(Boolean);
     }
 
+    function parseAisSourcePayload(value) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+        if (typeof value !== 'string' || !value.trim()) return {};
+        try {
+            const parsed = JSON.parse(value);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+        } catch (_) {
+            return {};
+        }
+    }
+
     function normalizeShipFields(ship) {
-        if (!ship) return ship;
-        const meta = ship.MetaData || {};
+        if (!ship || typeof ship !== 'object') return null;
+        const sourcePayload = parseAisSourcePayload(ship.source_payload || ship.sourcePayload);
+        const meta = ship.MetaData || ship.metadata || sourcePayload.MetaData || sourcePayload.metadata || {};
+        const position = ship.PositionReport || ship.position || sourcePayload.PositionReport || sourcePayload.position || {};
+        const scopes = [ship, sourcePayload, meta, position];
+        const read = (keys) => {
+            for (const scope of scopes) {
+                for (const key of keys) {
+                    if (scope && scope[key] !== undefined && scope[key] !== null && scope[key] !== '') return scope[key];
+                }
+            }
+            return null;
+        };
 
-        const gt = firstDefined(ship.GT, ship.gt, ship.grossTonnage, ship.gross_tonnage, meta.GT, meta.gt, meta.grossTonnage, meta.gross_tonnage);
-        const dwtReal = firstDefined(ship.DWT_real, ship.dwt_real, ship.DWT, ship.dwt, meta.DWT_real, meta.dwt_real, meta.DWT, meta.dwt);
-        const draft = firstDefined(ship.Draft, ship.draft, ship.maxDraft, ship.max_draft, meta.Draft, meta.draft, meta.maxDraft, meta.max_draft);
+        const name = firstDefined(read(['vesselName', 'vessel_name', 'ShipName', 'shipName', 'name']), 'Sin nombre');
+        const imo = firstDefined(read(['imo', 'IMO', 'imoNumber', 'imo_number']), 'N/A');
+        const mmsi = firstDefined(read(['mmsi', 'MMSI']), 'N/A');
+        const latitude = normalizeNumeric(read(['latitude', 'lat', 'Latitude', 'AIS_Live_Lat', 'LAT']));
+        const longitude = normalizeNumeric(read(['longitude', 'lon', 'lng', 'Longitude', 'AIS_Live_Lon', 'LON', 'LONG']));
+        const normalizedGt = normalizeNumeric(read(['GT', 'gt', 'grossTonnage', 'gross_tonnage']));
+        const normalizedDwt = normalizeNumeric(read(['DWT_real', 'dwt_real', 'DWT', 'dwt', 'deadweight', 'deadweight_tonnage']));
+        const normalizedDraft = normalizeNumeric(read(['Draft', 'draft', 'maxDraft', 'max_draft', 'draft_meters']));
+        const speed = normalizeNumeric(read(['speed', 'sog', 'Sog', 'SOG'])) || 0;
+        const destination = firstDefined(read(['destination', 'Destination', 'current_destination', 'plannedDestination']), 'N/A');
+        const shipType = firstDefined(read(['shipType', 'ShipType', 'vesselType', 'vessel_type', 'type']), 'Unknown');
 
-        const normalizedGt = normalizeNumeric(gt);
-        const normalizedDwt = normalizeNumeric(dwtReal);
-        const normalizedDraft = normalizeNumeric(draft);
-
-        if (normalizedGt !== null) {
-            ship.GT = normalizedGt;
-            ship.gt = normalizedGt;
-        }
-        if (normalizedDwt !== null) {
-            ship.DWT_real = normalizedDwt;
-            ship.DWT = normalizedDwt;
-            ship.dwt = normalizedDwt;
-        }
-        if (normalizedDraft !== null) {
-            ship.Draft = normalizedDraft;
-            ship.draft = normalizedDraft;
-        }
-
-        return ship;
+        return {
+            ...ship,
+            source_payload: sourcePayload,
+            MetaData: meta,
+            PositionReport: position,
+            name: String(name),
+            vesselName: String(name),
+            ShipName: String(name),
+            imo: String(imo),
+            IMO: String(imo),
+            imo_number: String(imo),
+            mmsi: String(mmsi),
+            MMSI: String(mmsi),
+            latitude: latitude === null ? undefined : latitude,
+            longitude: longitude === null ? undefined : longitude,
+            lat: latitude === null ? undefined : latitude,
+            lon: longitude === null ? undefined : longitude,
+            GT: normalizedGt === null ? undefined : normalizedGt,
+            gt: normalizedGt === null ? undefined : normalizedGt,
+            DWT_real: normalizedDwt === null ? undefined : normalizedDwt,
+            DWT: normalizedDwt === null ? undefined : normalizedDwt,
+            dwt: normalizedDwt === null ? undefined : normalizedDwt,
+            Draft: normalizedDraft === null ? undefined : normalizedDraft,
+            draft: normalizedDraft === null ? undefined : normalizedDraft,
+            speed,
+            destination: String(destination),
+            shipType: String(shipType),
+            ShipType: String(shipType),
+            vessel_type: String(shipType)
+        };
     }
 
     function shouldUseExclusiveFleetVisibility() {
@@ -320,7 +361,7 @@
         if (typeof window === 'undefined') return;
         if (isEmittingHydrationUpdate) return;
 
-        const list = filterByExclusiveFleetVisibility(vessels).map(normalizeShipFields);
+        const list = filterByExclusiveFleetVisibility(vessels).map(normalizeShipFields).filter(Boolean);
         const store = window.GlobalStore;
 
         isEmittingHydrationUpdate = true;

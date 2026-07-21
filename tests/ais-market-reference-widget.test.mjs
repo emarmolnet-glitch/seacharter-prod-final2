@@ -57,3 +57,36 @@ test('commercial negotiation mounts the isolated AIS widget module', () => {
   assert.match(indexSource, /<script type="module" src="\.\/AisMarketReferenceWidget\.ts"><\/script>/);
   assert.match(indexSource, /<aside id="ais-market-reference-widget"><\/aside>/);
 });
+
+test('AIS market rates remain pending until a successful sweep confirms availability', () => {
+  assert.match(widgetSource, /function hasConfirmedAisData\(\): boolean/);
+  assert.match(widgetSource, /window\.GlobalStore\?\.hasAisData === true/);
+  assert.match(widgetSource, /Number\(window\.GlobalStore\?\.nearbyCount\) > 0/);
+  assert.match(widgetSource, /AIS_MARKET_AVAILABILITY_CHANGED/);
+  assert.match(widgetSource, /rate\.textContent = '--\.--\$'/);
+  assert.match(widgetSource, /#renderPending\(\): void/);
+  assert.match(widgetSource, /applyButton\.disabled = true/);
+  assert.match(indexSource, /hasAisData: false/);
+  assert.match(indexSource, /setAisDataAvailability\?\.\(true,[\s\S]*manual-sweep-complete/);
+  assert.match(indexSource, /const hasAisData = window\.GlobalStore\?\.hasAisData === true;[\s\S]*if \(!hasAisData\) \{[\s\S]*renderPendingAisMarketReference\(\);[\s\S]*return;/);
+  assert.match(indexSource, /if \(nearbyCount <= 0\) \{[\s\S]*renderPendingAisMarketReference\(\);[\s\S]*return;/);
+});
+
+test('validated AIS candidates flow through GlobalStore into the calculator market reference', () => {
+  assert.match(indexSource, /setFilteredVessels\(newFilteredVessels, metadata = \{\}\)[\s\S]*this\.setAisMatchingState\(this\.filteredVessels, this\.filteredVessels, null,[\s\S]*source: 'density-filter'/);
+  assert.match(indexSource, /MATCHING_EXECUTION_SUCCESS[\s\S]*setAisMatchingState\?\.\(matches, matches, null,[\s\S]*source: 'matching-validation'/);
+  assert.match(indexSource, /this\.nearbyCount = this\.nearbyVessels\.length[\s\S]*new CustomEvent\('ais:matching-state-updated'/);
+  assert.match(indexSource, /shouldUseCommittedMatchingState = \['density-filter', 'matching-validation'\]\.includes\(committedMatchingSource\)/);
+  assert.ok(indexSource.indexOf('const shouldUseCommittedMatchingState') < indexSource.indexOf('let nearbyCount = shouldUseCommittedMatchingState'));
+  assert.match(indexSource, /window\.addEventListener\('ais:matching-state-updated',[\s\S]*source === 'calculator-proximity'[\s\S]*calculateAndDisplayAisFreight\(\)/);
+});
+
+test('cost structure exposes an AIS-independent reactive break-even indicator', () => {
+  assert.match(indexSource, /id="base-cost-break-even-card"/);
+  assert.match(indexSource, /id="res-cost-base-break-even"/);
+  assert.match(indexSource, /baseCostBreakEvenEl\.innerText = `\$\$\{breakEvenArmadorDisplay\.toFixed\(2\)\} \/MT`/);
+  assert.ok(
+    indexSource.indexOf("baseCostBreakEvenEl.innerText")
+      < indexSource.indexOf('calculateAndDisplayAisFreight();', indexSource.indexOf("baseCostBreakEvenEl.innerText")),
+  );
+});

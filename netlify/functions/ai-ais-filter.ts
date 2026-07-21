@@ -10,6 +10,16 @@ function pickObject(value: unknown): AnyRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as AnyRecord : {};
 }
 
+function parseObject(value: unknown): AnyRecord {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value as AnyRecord;
+  if (typeof value !== "string" || !value.trim()) return {};
+  try {
+    return pickObject(JSON.parse(value));
+  } catch {
+    return {};
+  }
+}
+
 function textValue(...values: unknown[]) {
   const value = values.find((item) => item !== undefined && item !== null && String(item).trim() !== "");
   return value === undefined || value === null ? "" : String(value).trim();
@@ -17,6 +27,7 @@ function textValue(...values: unknown[]) {
 
 function numberValue(...values: unknown[]) {
   for (const value of values) {
+    if (value === undefined || value === null || value === "") continue;
     const numeric = Number(value);
     if (Number.isFinite(numeric)) return numeric;
   }
@@ -25,6 +36,7 @@ function numberValue(...values: unknown[]) {
 
 function nullableNumberValue(...values: unknown[]) {
   for (const value of values) {
+    if (value === undefined || value === null || value === "") continue;
     const numeric = Number(value);
     if (Number.isFinite(numeric)) return numeric;
   }
@@ -157,18 +169,39 @@ function vesselMatchesAnyTaxonomy(vessel: NonNullable<ReturnType<typeof normaliz
 }
 
 function normalizeVessel(value: unknown) {
-  const source = pickObject(value);
-  const meta = pickObject(source.MetaData);
-  const position = pickObject(source.PositionReport);
+  const input = pickObject(value);
+  const sourcePayload = parseObject(input.source_payload || input.sourcePayload || input.rawData);
+  const message = parseObject(input.Message || sourcePayload.Message);
+  const meta = parseObject(input.MetaData || input.metadata || sourcePayload.MetaData || sourcePayload.metadata || message.MetaData);
+  const position = parseObject(
+    input.PositionReport
+      || message.PositionReport
+      || sourcePayload.PositionReport
+      || input.StandardClassBPositionReport
+      || message.StandardClassBPositionReport
+      || sourcePayload.StandardClassBPositionReport
+      || input.ExtendedClassBPositionReport
+      || message.ExtendedClassBPositionReport
+      || sourcePayload.ExtendedClassBPositionReport,
+  );
+  const staticData = parseObject(input.ShipStaticData || message.ShipStaticData || sourcePayload.ShipStaticData);
+  const source: AnyRecord = {
+    ...sourcePayload,
+    ...input,
+    Message: message,
+    MetaData: meta,
+    PositionReport: position,
+    ShipStaticData: staticData,
+  };
 
-  const latitude = numberValue(source.latitude, source.lat, source.AIS_Live_Lat, meta.latitude, meta.AIS_Live_Lat, position.Latitude);
-  const longitude = numberValue(source.longitude, source.lon, source.lng, source.AIS_Live_Lon, meta.longitude, meta.AIS_Live_Lon, position.Longitude);
+  const latitude = numberValue(source.latitude, source.lat, source.AIS_Live_Lat, sourcePayload.latitude, sourcePayload.lat, meta.latitude, meta.Latitude, meta.AIS_Live_Lat, position.Latitude, position.latitude);
+  const longitude = numberValue(source.longitude, source.lon, source.lng, source.AIS_Live_Lon, sourcePayload.longitude, sourcePayload.lon, sourcePayload.lng, meta.longitude, meta.Longitude, meta.AIS_Live_Lon, position.Longitude, position.longitude);
 
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude === 0 && longitude === 0) return null;
 
-  const mmsi = textValue(source.mmsi, source.MMSI, meta.MMSI);
-  const imo = textValue(source.imo, source.IMO, meta.IMO) || (mmsi ? "PENDING" : "");
-  const vesselName = textValue(source.vesselName, source.vessel_name, source.ShipName, source.name, meta.ShipName) || "Unknown vessel";
+  const mmsi = textValue(source.mmsi, source.MMSI, meta.MMSI, position.UserID, staticData.UserID);
+  const imo = textValue(source.imo, source.IMO, source.imoNumber, source.imo_number, meta.IMO, staticData.ImoNumber) || (mmsi ? "PENDING" : "");
+  const vesselName = textValue(source.vesselName, source.vessel_name, source.ShipName, source.name, meta.ShipName, staticData.Name) || "Unknown vessel";
   const shipType = textValue(
     source.ship_type,
     source.vessel_type,
@@ -188,12 +221,13 @@ function normalizeVessel(value: unknown) {
     meta.tipo,
     meta.ShipType,
     meta.shipType,
+    staticData.Type,
   ) || "Unknown";
-  const dwt = numberValue(source.dwt, source.DWT, meta.dwt, meta.DWT);
-  const draft = numberValue(source.draft, source.Draft, meta.draft, meta.Draft);
+  const dwt = numberValue(source.dwt, source.DWT, meta.dwt, meta.DWT, sourcePayload.dwt, sourcePayload.DWT);
+  const draft = numberValue(source.draft, source.Draft, source.draft_meters, meta.draft, meta.Draft, staticData.MaximumStaticDraught);
   const loa = numberValue(source.loa, source.LOA, meta.loa, meta.LOA);
   const speed = numberValue(source.speed_over_ground, source.speedOverGround, source.sog, source.SOG, source.speed, meta.speed_over_ground, meta.speedOverGround, meta.SOG, meta.speed, position.Sog, position.SOG, 12) || 12;
-  const destination = textValue(source.destination, source.Destination, meta.Destination) || "N/A";
+  const destination = textValue(source.destination, source.Destination, source.current_destination, meta.Destination, staticData.Destination, staticData.PortOfDestination) || "N/A";
   const declaredEta = textValue(source.eta, source.ETA, source.Eta, source.estimatedEta, source.etaEstimated, source.eta_calculado, meta.eta, meta.ETA, meta.Eta, meta.estimatedEta, meta.etaEstimated);
   const lastPortOfCall = textValue(source.lastPortOfCall, source.last_port_of_call, source.ultimo_puerto, source.LastPort, source.LastPortOfCall, source.PreviousPort, source.DeparturePort, meta.lastPortOfCall, meta.ultimo_puerto, meta.LastPort, meta.LastPortOfCall, meta.PreviousPort, meta.DeparturePort) || "N/A";
   const designDraft = nullableNumberValue(source.designDraft, source.maxDraft, source.MaximumStaticDraught, meta.designDraft, meta.maxDraft, meta.MaximumStaticDraught);
