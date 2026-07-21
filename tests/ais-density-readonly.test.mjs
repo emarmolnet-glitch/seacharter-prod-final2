@@ -502,6 +502,15 @@ test('Globe pauses automatic rotation on direct interaction', () => {
   assert.ok(globeSource.includes('view.handleInteractionStart = () => setAutoRotate(false, key)'));
 });
 
+test('Globe stops its camera controller immediately when a route is calculated or drawn', () => {
+  assert.ok(globeSource.includes('view.controls.autoRotate = shouldRotate'));
+  assert.ok(globeSource.includes('view.controls.update?.()'));
+  assert.ok(globeSource.includes('if (view.routePaths.length) setAutoRotate(false, key)'));
+  assert.match(indexSource, /async function applyMapRouteToCalculator[\s\S]*?stopRouteGlobeRotation\(\);[\s\S]*?await [\s\S]*?stopRouteGlobeRotation\(\);/);
+  assert.ok(indexSource.includes("window.GlobalFleetGlobe.setAutoRotate(false, 'main')"));
+  assert.ok(indexSource.includes("window.GlobalFleetGlobe.setAutoRotate(false, 'density')"));
+});
+
 test('Globe exposes an accessible manual Play Pause control', () => {
   assert.ok(globeSource.includes("button.className = 'global-fleet-rotation-toggle'"));
   assert.ok(globeSource.includes('toggleAutoRotate(view.key)'));

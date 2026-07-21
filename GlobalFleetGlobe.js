@@ -330,6 +330,7 @@
         view.portLabels = [createPortLabel('LASTRE', ports?.ballast, options?.ballastPortName), createPortLabel('POL', ports?.pol), createPortLabel('POD', ports?.pod)].filter(Boolean);
         saveGlobalRouteState(ports, view.routePaths, options?.ballastPortName);
         applyRoutes(view);
+        if (view.routePaths.length) setAutoRotate(false, key);
         if (view.routePaths.length && options.focus !== false) fitRoute(view);
         return view.routePaths;
     }
@@ -398,8 +399,10 @@
     function setAutoRotate(enabled, key = DEFAULT_KEY) {
         const view = getView(key);
         if (!view) return false;
-        view.controls.autoRotate = Boolean(enabled);
-        view.autoRotate = Boolean(enabled);
+        const shouldRotate = Boolean(enabled);
+        view.autoRotate = shouldRotate;
+        view.controls.autoRotate = shouldRotate;
+        view.controls.update?.();
         updateAutoRotateControl(view);
         return view.autoRotate;
     }
