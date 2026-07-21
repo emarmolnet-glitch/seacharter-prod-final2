@@ -16,6 +16,17 @@ test('section two exposes a closed turn time selector beside operational rates',
   assert.match(indexSource, /const laytimeDays = isZeroCalculation \? 0 : \(dPortLoad \+ dPortDisch \+ turnTimeDays\)/);
 });
 
+test('section two keeps POL and POD operations in a symmetric two-column grid', () => {
+  assert.match(
+    indexSource,
+    /<div id="port-operations-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 mb-4">[\s\S]*?id="metodo_carga"[\s\S]*?id="rate-load"[\s\S]*?id="metodo_descarga_pod"[\s\S]*?id="rate-disch"[\s\S]*?<\/div>\s*<div id="demurrage-exposure-alert"/,
+  );
+  assert.match(
+    indexSource,
+    /<div id="contractual-parameters-grid" class="grid grid-cols-1 md:grid-cols-4 gap-4">[\s\S]*?id="product-sector"[\s\S]*?id="cargo-sf"[\s\S]*?id="turn-time-hours"/,
+  );
+});
+
 test('matching payload carries stowage volume and ship gear requirements', () => {
   assert.match(indexSource, /stowageFactor: readNumber\('cargo-sf'\)/);
   assert.match(indexSource, /requiredVolumeCbm: \(Number\(calculation\.cargo\?\.quantity\) \|\| readNumber\('cargo-qty'\)\) \* readNumber\('cargo-sf'\)/);
