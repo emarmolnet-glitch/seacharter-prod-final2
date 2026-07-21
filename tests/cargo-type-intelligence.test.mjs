@@ -135,3 +135,43 @@ test('technical warnings are hidden by default and remain reviewable', () => {
   assert.match(indexSource, /Advertencia técnica/);
   assert.match(indexSource, /technicalProblemsToggle\.addEventListener\('change'/);
 });
+
+test('volumetric eligibility rejects vessels below required grain capacity', () => {
+  const insufficient = evaluateCargoVesselEligibility({
+    cargoTypeId: '60',
+    vessel: { vessel_type: 'Bulk Carrier', grainCapacityCbm: 15000 },
+    shipType: 'Bulk Carrier',
+    dwt: 30000,
+    quantity: 20000,
+    requiredVolumeCbm: 24000,
+  });
+  const sufficient = evaluateCargoVesselEligibility({
+    cargoTypeId: '60',
+    vessel: { vessel_type: 'Bulk Carrier', grain_capacity: 30000 },
+    shipType: 'Bulk Carrier',
+    dwt: 30000,
+    quantity: 20000,
+    requiredVolumeCbm: 24000,
+  });
+
+  assert.equal(insufficient.eligible, false);
+  assert.equal(insufficient.volume.compatible, false);
+  assert.match(insufficient.criticalReasons.join(' '), /Grain Capacity/);
+  assert.equal(sufficient.eligible, true);
+  assert.equal(sufficient.volume.compatible, true);
+});
+
+test('ship crane methods reject vessels classified as gearless', () => {
+  const result = evaluateCargoVesselEligibility({
+    cargoTypeId: '60',
+    vessel: { vessel_type: 'Bulk Carrier', equipment: 'Gearless' },
+    shipType: 'Bulk Carrier',
+    dwt: 30000,
+    quantity: 20000,
+    gearedRequired: true,
+  });
+
+  assert.equal(result.eligible, false);
+  assert.equal(result.equipment.hasGears, false);
+  assert.match(result.criticalReasons.join(' '), /sin grúas/);
+});

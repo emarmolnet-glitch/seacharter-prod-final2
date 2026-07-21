@@ -21,6 +21,7 @@ const baseInputs = {
   'cargo-type-manual': '',
   'rate-load': 5000,
   'rate-disch': 5000,
+  'turn-time-hours': 24,
   'factor-clima': 0,
   'charter-party-standard': 'GENCON',
   'cons-sea': 20,
@@ -151,6 +152,38 @@ test('break-even accepts the selected cargo type when the manual description is 
   assert.equal(context.ready, true);
   assertValidBreakEven(3, result);
   assert.ok(result.breakEven > 0);
+});
+
+test('laytime uses cargo divided by both real rates plus turn time hours', () => {
+  const { result } = runCalculator({
+    'cargo-qty': 12000,
+    'rate-load': 3000,
+    'rate-disch': 4000,
+    'turn-time-hours': 12,
+  });
+
+  assert.equal(result.laytimeDays, 7.5);
+  assert.equal(result.turnTimeDays, 0.5);
+  assert.ok(result.totalOpex > 0);
+});
+
+test('slower real port rates increase voyage days and break-even', () => {
+  const fast = runCalculator({ 'rate-load': 6000, 'rate-disch': 6000 }).result;
+  const slow = runCalculator({ 'rate-load': 2000, 'rate-disch': 2000 }).result;
+
+  assert.ok(slow.totalDays > fast.totalDays);
+  assert.ok(slow.totalOpex > fast.totalOpex);
+  assert.ok(slow.breakEven > fast.breakEven);
+});
+
+test('changing turn time from 12 to 48 hours increases billable days and break-even', () => {
+  const twelveHours = runCalculator({ 'turn-time-hours': 12 }).result;
+  const fortyEightHours = runCalculator({ 'turn-time-hours': 48 }).result;
+
+  assert.equal(fortyEightHours.turnTimeDays - twelveHours.turnTimeDays, 1.5);
+  assert.ok(fortyEightHours.totalDays > twelveHours.totalDays);
+  assert.ok(fortyEightHours.totalOpex > twelveHours.totalOpex);
+  assert.ok(fortyEightHours.breakEven > twelveHours.breakEven);
 });
 
 test('break-even safely handles a one-hundred-percent commission', () => {

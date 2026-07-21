@@ -136,6 +136,7 @@ export function evaluateCargoVesselEligibility({
   shipType,
   dwt,
   quantity,
+  requiredVolumeCbm = 0,
   gearedRequired = false,
   grabRequired = false,
   requiredGrabCapacityCbm = 0,
@@ -148,6 +149,7 @@ export function evaluateCargoVesselEligibility({
   const design = classifyVesselDesign(shipType, vessel);
   const vesselDwt = optionalNumber(dwt);
   const cargoQuantity = optionalNumber(quantity) || 0;
+  const requiredCargoVolumeCbm = optionalNumber(requiredVolumeCbm) || 0;
   const maxMultiplier = CARGO_DWT_MAX_MULTIPLIERS[normalizedCargoTypeId] || CARGO_DWT_MAX_MULTIPLIERS[DEFAULT_CARGO_TYPE_ID];
   const maxSuitableDwt = cargoQuantity > 0 ? Math.max(cargoQuantity * maxMultiplier, cargoQuantity + 10_000) : null;
   const textParts = [];
@@ -161,12 +163,27 @@ export function evaluateCargoVesselEligibility({
     || optionalBoolean(findNestedValue(vessel, ["hasGrab", "has_grab", "grabs", "grabFitted"])) === true;
   const grabCapacityCbm = optionalNumber(findNestedValue(vessel, ["grabCapacityCbm", "grab_capacity_cbm", "grabCapacity", "grab_capacity"]));
   const craneSwlMt = optionalNumber(findNestedValue(vessel, ["craneSwlMt", "crane_swl_mt", "craneSwl", "crane_capacity_mt", "craneCapacity"]));
+  const grainCapacityCbm = optionalNumber(findNestedValue(vessel, [
+    "grainCapacity",
+    "grain_capacity",
+    "grainCapacityCbm",
+    "grain_capacity_cbm",
+    "grainCubicCapacity",
+    "grain_cubic_capacity",
+    "capacityCbm",
+    "capacity_cbm",
+    "cubicCapacity",
+    "cubic_capacity",
+  ]));
   const criticalReasons = [];
 
   if (!cargoAllowsDesign(normalizedCargoTypeId, design)) criticalReasons.push(`Diseño de buque incompatible: ${design.declaredType}`);
   if (cargoQuantity > 0 && vesselDwt === null) criticalReasons.push("DWT no disponible para validar capacidad");
   if (cargoQuantity > 0 && vesselDwt !== null && vesselDwt < cargoQuantity) criticalReasons.push(`DWT ${vesselDwt} MT inferior a la carga ${cargoQuantity} MT`);
   if (maxSuitableDwt !== null && vesselDwt !== null && vesselDwt > maxSuitableDwt) criticalReasons.push(`DWT ${vesselDwt} MT sobredimensionado para una operación de ${cargoQuantity} MT`);
+  if (requiredCargoVolumeCbm > 0 && grainCapacityCbm !== null && grainCapacityCbm < requiredCargoVolumeCbm) {
+    criticalReasons.push(`Grain Capacity ${grainCapacityCbm} m³ inferior al volumen requerido ${requiredCargoVolumeCbm} m³`);
+  }
   if (!draftOk) criticalReasons.push("Calado superior al máximo de puerto");
   if (!loaOk) criticalReasons.push("Eslora superior al máximo de puerto");
   if (!dateOk) criticalReasons.push("ETA fuera de la ventana laycan");
@@ -189,6 +206,11 @@ export function evaluateCargoVesselEligibility({
       vessel: vesselDwt,
       required: cargoQuantity,
       maximumSuitable: maxSuitableDwt,
+    },
+    volume: {
+      requiredCbm: requiredCargoVolumeCbm,
+      vesselCbm: grainCapacityCbm,
+      compatible: requiredCargoVolumeCbm <= 0 || grainCapacityCbm === null || grainCapacityCbm >= requiredCargoVolumeCbm,
     },
     equipment: {
       gearedRequired: Boolean(gearedRequired),
