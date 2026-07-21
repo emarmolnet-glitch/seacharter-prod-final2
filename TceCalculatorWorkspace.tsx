@@ -126,9 +126,18 @@ type FleetRegistryRecord = {
 type FleetRegistryInput = FleetRegistryRecord[] | Record<string, FleetRegistryRecord> | null | undefined;
 
 type FearnleysCache = {
-  weekLabel: string;
-  timestamp: number;
-  rates: Record<string, number>;
+  entries: Record<string, FearnleysCacheEntry>;
+};
+
+type FearnleysCacheEntry = {
+  vesselCategory: string;
+  weekId: string;
+  weekNumber: number;
+  year: number;
+  value: number;
+  sourceDate?: string;
+  sourceRoute?: string;
+  cachedAt?: string;
 };
 
 type BunkerIndexCache = {
@@ -234,6 +243,24 @@ const BUNKER_INDEX_ADJUSTMENT_SHARE = 0.5;
 const BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT = 5;
 const FLEET_REGISTRY_KEY = 'fleet_registry';
 const ONLY_SHOW_MY_LIST = true;
+
+function getCurrentIsoWeek() {
+  const now = new Date();
+  const utcDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const weekday = utcDate.getUTCDay() || 7;
+  utcDate.setUTCDate(utcDate.getUTCDate() + 4 - weekday);
+  const year = utcDate.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(year, 0, 1));
+  const weekNumber = Math.ceil((((utcDate.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return { year, weekNumber, weekId: `week-${weekNumber}-${year}` };
+}
+
+function getFearnleysCacheLabel(entry: FearnleysCacheEntry, cacheHit: boolean) {
+  return cacheHit
+    ? `Datos extraídos de Caché: Week ${entry.weekNumber} - Fearnleys`
+    : `Datos extraídos: Week ${entry.weekNumber} - Fearnleys`;
+}
+
 const FLEET_CATEGORY_GROUPS = [
   {
     label: 'Cargo',
@@ -293,17 +320,6 @@ const NAVIGATION_STRATEGIES: Record<NavigationStrategy, {
     daysSeaFactor: 0.92,
   },
 };
-const CURRENT_FEARNLEYS_WEEK_LABEL = 'Week actual - Fearnleys';
-const FEARNLEYS_MARKET_RATES: Record<string, number> = {
-  'Handysize / Small Tanker': 13000,
-  'Supramax / MR': 17125,
-  Ultramax: 18625,
-  'Panamax / Kamsarmax / LR1': 18500,
-  'Baby Cape / Aframax / LR2': 25000,
-  'Capesize / Suezmax': 35000,
-  'VLOC / VLCC': 45000,
-};
-
 export const VESSEL_CATEGORIES: VesselCategory[] = [
   { categoryName: 'Coaster', minDwt: 1000, maxDwt: 4999, type: 'Cost-Plus' },
   { categoryName: 'Mini-Bulker', minDwt: 5000, maxDwt: 14999, type: 'Cost-Plus' },
@@ -1277,26 +1293,56 @@ export function ReverseTceCalculator({
     contractBunkerIndexBase,
   ]);
 
-  const applyMarketRateFromCache = (category: string) => {
+  const readMarketRateFromCache = (category: string) => {
     try {
       const cached = window.localStorage.getItem(FEARNLEYS_MARKET_DATA_KEY);
-      if (!cached) return false;
+      if (!cached) return null;
 
       const parsed = JSON.parse(cached) as Partial<FearnleysCache>;
-      const marketRate = parsed.rates?.[category];
+      const entry = parsed.entries?.[category];
+      const currentWeek = getCurrentIsoWeek();
 
-      if (Number.isFinite(marketRate) && parsed.weekLabel) {
-        setValues((current) => ({
-          ...current,
-          tceTarget: Number(marketRate),
-        }));
-        setIndexWeekLabel(parsed.weekLabel);
-        return true;
+      if (
+        entry?.weekId === currentWeek.weekId
+        && Number.isFinite(Number(entry.value))
+      ) {
+        return entry;
       }
     } catch {
       window.localStorage.removeItem(FEARNLEYS_MARKET_DATA_KEY);
     }
-    return false;
+    return null;
+  };
+
+  const applyMarketRateEntry = (entry: FearnleysCacheEntry, cacheHit: boolean) => {
+    setValues((current) => ({
+      ...current,
+      tceTarget: Number(entry.value),
+    }));
+    setIndexWeekLabel(getFearnleysCacheLabel(entry, cacheHit));
+  };
+
+  const applyMarketRateFromCache = (category: string) => {
+    const entry = readMarketRateFromCache(category);
+    if (!entry) return false;
+    applyMarketRateEntry(entry, true);
+    return true;
+  };
+
+  const writeMarketRateToCache = (entry: FearnleysCacheEntry) => {
+    let entries: Record<string, FearnleysCacheEntry> = {};
+    try {
+      const cached = window.localStorage.getItem(FEARNLEYS_MARKET_DATA_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached) as Partial<FearnleysCache>;
+        entries = parsed.entries && typeof parsed.entries === 'object' ? parsed.entries : {};
+      }
+    } catch {
+      entries = {};
+    }
+    window.localStorage.setItem(FEARNLEYS_MARKET_DATA_KEY, JSON.stringify({
+      entries: { ...entries, [entry.vesselCategory]: entry },
+    } satisfies FearnleysCache));
   };
 
   useEffect(() => {
@@ -1379,28 +1425,38 @@ export function ReverseTceCalculator({
       return;
     }
 
-    setIsFetchingFearnleys(true);
-    await new Promise((resolve) => {
-      window.setTimeout(resolve, 1500);
-    });
-
-    const nextCache: FearnleysCache = {
-      weekLabel: CURRENT_FEARNLEYS_WEEK_LABEL,
-      timestamp: Date.now(),
-      rates: FEARNLEYS_MARKET_RATES,
-    };
-
-    const marketRate = nextCache.rates[vesselCategory];
-    window.localStorage.setItem(FEARNLEYS_MARKET_DATA_KEY, JSON.stringify(nextCache));
     setIsManualOverride(false);
-    if (Number.isFinite(marketRate)) {
-      setValues((current) => ({
-        ...current,
-        tceTarget: marketRate,
-      }));
+    if (applyMarketRateFromCache(vesselCategory)) {
+      return;
     }
-    setIndexWeekLabel(nextCache.weekLabel);
-    setIsFetchingFearnleys(false);
+
+    setIsFetchingFearnleys(true);
+    try {
+      const response = await fetch(`/api/fearnleys-tce?vesselCategory=${encodeURIComponent(vesselCategory)}`, {
+        cache: 'no-store',
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload?.ok || !Number.isFinite(Number(payload.value))) {
+        throw new Error(payload?.error || 'No se pudo obtener el TCE semanal.');
+      }
+
+      const entry: FearnleysCacheEntry = {
+        vesselCategory,
+        weekId: String(payload.weekId),
+        weekNumber: Number(payload.weekNumber),
+        year: Number(payload.year),
+        value: Number(payload.value),
+        sourceDate: payload.sourceDate,
+        sourceRoute: payload.sourceRoute,
+        cachedAt: payload.cachedAt,
+      };
+      writeMarketRateToCache(entry);
+      applyMarketRateEntry(entry, Boolean(payload.cacheHit));
+    } catch {
+      setIndexWeekLabel('No se pudo actualizar el índice de Fearnleys.');
+    } finally {
+      setIsFetchingFearnleys(false);
+    }
   };
 
   const handleFetchBunker = async () => {
@@ -1734,7 +1790,7 @@ export function ReverseTceCalculator({
                             </div>
                             <p className="text-right text-xs italic text-gray-500">
                               {indexWeekLabel
-                                ? `Datos: ${indexWeekLabel}`
+                                ? indexWeekLabel
                                 : 'Esperando datos del índice...'}
                             </p>
                           </div>
