@@ -44863,16 +44863,23 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             full: { seaConsumptionFactor: 1 }
         };
         const FEARNLEYS_MARKET_DATA_KEY = 'fearnleysMarketData';
-        const CURRENT_FEARNLEYS_WEEK_LABEL = 'Week actual - Fearnleys';
-        const FEARNLEYS_MARKET_RATES = {
-            'Handysize / Small Tanker': 13000,
-            'Supramax / MR': 17125,
-            'Ultramax': 18625,
-            'Panamax / Kamsarmax / LR1': 18500,
-            'Baby Cape / Aframax / LR2': 25000,
-            'Capesize / Suezmax': 35000,
-            'VLOC / VLCC': 45000
-        };
+
+        function getCurrentFearnleysIsoWeek() {
+            const now = new Date();
+            const utcDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+            const weekday = utcDate.getUTCDay() || 7;
+            utcDate.setUTCDate(utcDate.getUTCDate() + 4 - weekday);
+            const year = utcDate.getUTCFullYear();
+            const yearStart = new Date(Date.UTC(year, 0, 1));
+            const weekNumber = Math.ceil((((utcDate.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+            return { year, weekNumber, weekId: `week-${weekNumber}-${year}` };
+        }
+
+        function getFearnleysCacheLabel(entry, cacheHit) {
+            return cacheHit
+                ? `Datos extraídos de Caché: Week ${entry.weekNumber} - Fearnleys`
+                : `Datos extraídos: Week ${entry.weekNumber} - Fearnleys`;
+        }
 
         function readInverseTceNumber(id, fallback = 0) {
             const value = parseFloat(document.getElementById(id)?.value);
@@ -45004,31 +45011,48 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const weekEl = document.getElementById('inverse-tce-index-week');
             if (!weekEl) return;
             weekEl.textContent = weekLabel
-                ? `Datos: ${weekLabel}`
+                ? weekLabel
                 : 'Esperando datos del índice...';
         }
 
-        function readFearnleysMarketData() {
+        function readFearnleysMarketData(vesselCategory = currentVesselPricingCategory) {
             if (typeof localStorage === 'undefined') return null;
             try {
                 const rawCache = localStorage.getItem(FEARNLEYS_MARKET_DATA_KEY);
                 if (!rawCache) return null;
                 const cache = JSON.parse(rawCache);
-                if (!cache?.weekLabel || !cache?.rates || typeof cache.rates !== 'object') return null;
-                return cache;
+                const entry = cache?.entries?.[vesselCategory];
+                const currentWeek = getCurrentFearnleysIsoWeek();
+                if (entry?.weekId !== currentWeek.weekId || !Number.isFinite(Number(entry?.value))) return null;
+                return entry;
             } catch (error) {
                 localStorage.removeItem(FEARNLEYS_MARKET_DATA_KEY);
                 return null;
             }
         }
 
-        function applyFearnleysMarketData(cache, vesselCategory = currentVesselPricingCategory) {
+        function writeFearnleysMarketData(entry) {
+            if (typeof localStorage === 'undefined') return;
+            let entries = {};
+            try {
+                const rawCache = localStorage.getItem(FEARNLEYS_MARKET_DATA_KEY);
+                const cache = rawCache ? JSON.parse(rawCache) : null;
+                entries = cache?.entries && typeof cache.entries === 'object' ? cache.entries : {};
+            } catch (error) {
+                entries = {};
+            }
+            localStorage.setItem(FEARNLEYS_MARKET_DATA_KEY, JSON.stringify({
+                entries: { ...entries, [entry.vesselCategory]: entry }
+            }));
+        }
+
+        function applyFearnleysMarketData(entry, cacheHit = true) {
             const tceInput = document.getElementById('inverse-tce-target');
-            const marketRate = cache?.rates?.[vesselCategory];
+            const marketRate = Number(entry?.value);
             if (tceInput && Number.isFinite(marketRate)) {
                 tceInput.value = String(marketRate);
             }
-            updateFearnleysWeekLabel(cache?.weekLabel || '');
+            updateFearnleysWeekLabel(entry ? getFearnleysCacheLabel(entry, cacheHit) : '');
             calculateInverseTce();
         }
 
@@ -45583,8 +45607,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             if (previousCategory !== currentVesselPricingCategory && !isManualFearnleysOverride) {
-                const cache = readFearnleysMarketData();
-                if (cache) applyFearnleysMarketData(cache, currentVesselPricingCategory);
+                const cache = readFearnleysMarketData(currentVesselPricingCategory);
+                if (cache) applyFearnleysMarketData(cache);
             }
             if (previousCategory !== currentVesselPricingCategory) {
                 forceRefreshCalculations(false);
@@ -45597,6 +45621,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         async function handleFetchFearnleysTce() {
             if (isFetchingFearnleysTce) return;
 
+            isManualFearnleysOverride = false;
+            updateManualFearnleysOverrideUi();
+            const localCache = readFearnleysMarketData(currentVesselPricingCategory);
+            if (localCache) {
+                applyFearnleysMarketData(localCache, true);
+                return;
+            }
+
             const button = document.getElementById('btn-fetch-fearnleys-tce');
             const status = document.getElementById('inverse-tce-status');
             isFetchingFearnleysTce = true;
@@ -45606,26 +45638,37 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
             if (status) status.textContent = 'IA';
 
-            await new Promise((resolve) => window.setTimeout(resolve, 1500));
+            try {
+                const response = await fetch(`/api/fearnleys-tce?vesselCategory=${encodeURIComponent(currentVesselPricingCategory)}`, {
+                    cache: 'no-store'
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload?.ok || !Number.isFinite(Number(payload.value))) {
+                    throw new Error(payload?.error || 'No se pudo obtener el TCE semanal.');
+                }
 
-            const nextCache = {
-                weekLabel: CURRENT_FEARNLEYS_WEEK_LABEL,
-                timestamp: Date.now(),
-                rates: FEARNLEYS_MARKET_RATES
-            };
-            if (typeof localStorage !== 'undefined') {
-                localStorage.setItem(FEARNLEYS_MARKET_DATA_KEY, JSON.stringify(nextCache));
+                const nextCacheEntry = {
+                    vesselCategory: currentVesselPricingCategory,
+                    weekId: String(payload.weekId),
+                    weekNumber: Number(payload.weekNumber),
+                    year: Number(payload.year),
+                    value: Number(payload.value),
+                    sourceDate: payload.sourceDate,
+                    sourceRoute: payload.sourceRoute,
+                    cachedAt: payload.cachedAt
+                };
+                writeFearnleysMarketData(nextCacheEntry);
+                applyFearnleysMarketData(nextCacheEntry, Boolean(payload.cacheHit));
+            } catch (error) {
+                updateFearnleysWeekLabel('No se pudo actualizar el índice de Fearnleys.');
+            } finally {
+                isFetchingFearnleysTce = false;
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = '✨ Consultar Fearnleys IA';
+                }
+                if (status) status.textContent = 'Live';
             }
-            isManualFearnleysOverride = false;
-            updateManualFearnleysOverrideUi();
-            applyFearnleysMarketData(nextCache, currentVesselPricingCategory);
-
-            isFetchingFearnleysTce = false;
-            if (button) {
-                button.disabled = false;
-                button.textContent = '✨ Consultar Fearnleys IA';
-            }
-            if (status) status.textContent = 'Live';
         }
 
         function buildMapDataPayload(result) {
