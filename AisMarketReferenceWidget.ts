@@ -22,6 +22,7 @@ declare global {
         GlobalStore?: {
             hasAisData?: boolean;
             nearbyCount?: number;
+            aisMatchingStateSource?: string;
         };
     }
 
@@ -91,8 +92,10 @@ function readAisMarketRatesFromEngine(): AisMarketRates | null {
 }
 
 function hasConfirmedAisData(): boolean {
-    return window.GlobalStore?.hasAisData === true
-        && Number(window.GlobalStore?.nearbyCount) > 0;
+    const matchingSource = String(window.GlobalStore?.aisMatchingStateSource || '');
+    const hasTrustedMatchingState = ['density-filter', 'matching-validation'].includes(matchingSource);
+    return Number(window.GlobalStore?.nearbyCount) > 0
+        && (window.GlobalStore?.hasAisData === true || hasTrustedMatchingState);
 }
 
 export function handleApplyAisRate(rate: AisMarketRate): boolean {

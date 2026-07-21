@@ -20,8 +20,15 @@ test('success stick uses the same matching result array as the vessel counter', 
 
 test('successful matching dispatches the visual event and empty runs clear the stick', () => {
   assert.match(source, /updateMatchingExecutionSuccessStick\(\[\]\);/);
-  assert.match(source, /new CustomEvent\('MATCHING_EXECUTION_SUCCESS', \{[\s\S]*matches: window\.matchingResultsState\?\.vessels \|\| matches,[\s\S]*count: window\.matchingResultsState\?\.count \|\| matches\.length/);
+  assert.match(source, /new CustomEvent\('MATCHING_EXECUTION_SUCCESS', \{[\s\S]*matches: window\.matchingResultsState\?\.vessels \|\| matches,[\s\S]*eligibleMatches: window\.matchingResultsState\?\.eligibleVessels \|\| viableMatches,[\s\S]*count: window\.matchingResultsState\?\.eligibleCount \|\| viableMatches\.length,[\s\S]*evaluatedCount: window\.matchingResultsState\?\.count \|\| matches\.length/);
   assert.match(source, /window\.addEventListener\('MATCHING_EXECUTION_SUCCESS'/);
+});
+
+test('successful matching commits only eligible vessels to the calculator store', () => {
+  assert.match(source, /const eligibleMatches = Array\.isArray\(event\?\.detail\?\.eligibleMatches\)[\s\S]*matches\.filter\(match => match\?\.audit\?\.operationallyEligible === true\)/);
+  assert.match(source, /const committedEligibleVessels = eligibleMatches\.map\(\(match, index\) => \{[\s\S]*normalizeCoreProVesselCoordinates\(match, index\)/);
+  assert.match(source, /setAisMatchingState\?\.\(committedEligibleVessels, committedEligibleVessels, null,[\s\S]*source: 'matching-validation'/);
+  assert.match(source, /evaluateReactiveSyncStatus\(\{ matchingCount: committedEligibleVessels\.length \}\)/);
 });
 
 test('Data Bridge synchronization consumes a confirmed POST response', () => {
