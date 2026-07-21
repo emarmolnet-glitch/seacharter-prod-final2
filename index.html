@@ -41435,6 +41435,39 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         const AIS_MATCHING_DEBOUNCE_MS = 350;
+        /**
+         * @typedef {Object} AisMarketBaseMargins
+         * @property {number} fair
+         * @property {number} standard
+         * @property {number} offmarket
+         */
+        /** @type {Readonly<AisMarketBaseMargins>} */
+        const DEFAULT_AIS_MARKET_BASE_MARGINS = Object.freeze({
+            fair: 1.05,
+            standard: 1.12,
+            offmarket: 1.25
+        });
+
+        function resolveAisMarketBaseMargins() {
+            const configuredMargins = window.aisMarketPricingConfig?.baseMargins;
+            const readMargin = (scenario) => {
+                const configuredValue = Number(configuredMargins?.[scenario]);
+                return Number.isFinite(configuredValue) && configuredValue >= 1
+                    ? configuredValue
+                    : DEFAULT_AIS_MARKET_BASE_MARGINS[scenario];
+            };
+
+            return Object.freeze({
+                fair: readMargin('fair'),
+                standard: readMargin('standard'),
+                offmarket: readMargin('offmarket')
+            });
+        }
+
+        function ensureAisBreakEvenFloor(multiplier) {
+            return Number.isFinite(multiplier) && multiplier > 1 ? multiplier : 1;
+        }
+
         const aisMatchingExecutionState = {
             lastGeoSignature: null,
             lastSourceSignature: null,
@@ -41487,7 +41520,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const activeVesselClassContext = window.vesselClassContext || (typeof setVesselClassContext === 'function'
                 ? setVesselClassContext(getSelectedFleetTaxonomies())
                 : null);
-            const activeVesselProfile = activeVesselClassContext?.profile || { bunkerMultiplier: 1, seaConsumptionMultiplier: 1, portConsumptionMultiplier: 1, riskCoefficient: 1 };
+            const activeVesselProfile = activeVesselClassContext?.profile || { riskCoefficient: 1 };
             
             const estimatorBeEl = document.getElementById('ais-estimator-be');
             if (estimatorBeEl) {
@@ -41848,25 +41881,20 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 supplyFactor = 0.90; 
             }
 
-            const pSea = parseFloat(document.getElementById('price-sea')?.value) || 600;
-            const pPort = parseFloat(document.getElementById('price-port')?.value) || 600;
-            const avgBunkerPrice = (pSea + pPort) / 2;
-            const bunkerPriceRatio = avgBunkerPrice / 600;
-            const bunkerMultiplier = (1.0 + (bunkerPriceRatio - 1.0) * 0.15) * (activeVesselProfile.bunkerMultiplier || 1);
-
             const portRisk = (typeof getPortMultiplier === 'function') ? ((getPortMultiplier(pol) + getPortMultiplier(pod)) / 2) || 1.1 : 1.1;
             const portMultiplier = (1.0 + (portRisk - 1.1) * 0.10) * (activeVesselProfile.riskCoefficient || 1);
+            const baseMargins = resolveAisMarketBaseMargins();
 
-            const coeffJusto = 1.05 * supplyFactor * bunkerMultiplier * portMultiplier;
-            const rateJusto = Math.max(baseBE * 1.01, baseBE * coeffJusto);
+            const coeffJusto = ensureAisBreakEvenFloor(baseMargins.fair * supplyFactor * portMultiplier);
+            const rateJusto = baseBE * coeffJusto;
             const pctJusto = Math.round((rateJusto / (baseBE || 1) - 1) * 100);
 
-            const coeffStandard = 1.15 * supplyFactor * bunkerMultiplier * portMultiplier;
-            const rateStandard = Math.max(baseBE * 1.08, baseBE * coeffStandard);
+            const coeffStandard = ensureAisBreakEvenFloor(baseMargins.standard * supplyFactor * portMultiplier);
+            const rateStandard = baseBE * coeffStandard;
             const pctStandard = Math.round((rateStandard / (baseBE || 1) - 1) * 100);
 
-            const coeffOffMarket = 1.35 * supplyFactor * bunkerMultiplier * portMultiplier;
-            const rateOffMarket = Math.max(baseBE * 1.25, baseBE * coeffOffMarket);
+            const coeffOffMarket = ensureAisBreakEvenFloor(baseMargins.offmarket * supplyFactor * portMultiplier);
+            const rateOffMarket = baseBE * coeffOffMarket;
             const pctOffMarket = Math.round((rateOffMarket / (baseBE || 1) - 1) * 100);
 
             const rateFairEl = document.getElementById('ais-rate-fair');

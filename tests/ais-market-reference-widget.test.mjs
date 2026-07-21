@@ -7,6 +7,10 @@ const [widgetSource, widgetStyles, indexSource] = await Promise.all([
   readFile(new URL('../ais-market-reference-widget.css', import.meta.url), 'utf8'),
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
 ]);
+const aisPricingSource = indexSource.slice(
+  indexSource.indexOf('function calculateAndDisplayAisFreight()'),
+  indexSource.indexOf('window.applyAisFreightOptionToEstimator = function'),
+);
 
 test('AIS market widget consumes strictly validated live engine rates', () => {
   assert.match(widgetSource, /export type AisMarketRate = number &/);
@@ -16,6 +20,21 @@ test('AIS market widget consumes strictly validated live engine rates', () => {
   assert.doesNotMatch(widgetSource, /rate:\s*(?:39\.83|42\.75|50\.18)/);
   assert.match(indexSource, /fair: rateJusto,[\s\S]*?standard: rateStandard,[\s\S]*?offmarket: rateOffMarket/);
   assert.match(indexSource, /new CustomEvent\('AIS_MARKET_RATES_UPDATED'/);
+});
+
+test('AIS market pricing uses configurable margins without bunker double counting', () => {
+  assert.match(indexSource, /const DEFAULT_AIS_MARKET_BASE_MARGINS = Object\.freeze\(\{[\s\S]*?fair: 1\.05,[\s\S]*?standard: 1\.12,[\s\S]*?offmarket: 1\.25/);
+  assert.match(indexSource, /window\.aisMarketPricingConfig\?\.baseMargins/);
+  assert.match(aisPricingSource, /const baseMargins = resolveAisMarketBaseMargins\(\)/);
+  assert.match(aisPricingSource, /ensureAisBreakEvenFloor\(baseMargins\.fair \* supplyFactor \* portMultiplier\)/);
+  assert.match(aisPricingSource, /ensureAisBreakEvenFloor\(baseMargins\.standard \* supplyFactor \* portMultiplier\)/);
+  assert.match(aisPricingSource, /ensureAisBreakEvenFloor\(baseMargins\.offmarket \* supplyFactor \* portMultiplier\)/);
+  assert.match(aisPricingSource, /const rateJusto = baseBE \* coeffJusto/);
+  assert.match(aisPricingSource, /const rateStandard = baseBE \* coeffStandard/);
+  assert.match(aisPricingSource, /const rateOffMarket = baseBE \* coeffOffMarket/);
+  assert.doesNotMatch(aisPricingSource, /bunkerMultiplier|bunkerPriceRatio|avgBunkerPrice/);
+  assert.doesNotMatch(aisPricingSource, /getElementById\('price-(?:sea|port)'\)/);
+  assert.doesNotMatch(aisPricingSource, /Math\.max\(baseBE \*/);
 });
 
 test('AIS rate application starts from owner purchase and propagates through the central margin rule', () => {
