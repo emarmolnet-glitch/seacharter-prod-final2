@@ -854,6 +854,78 @@ test('Cost-Plus projects margins and freight from the exact 291017 global cost',
   assert.equal(elements.get('cost-plus-total-costs').textContent, '$291,017');
 });
 
+test('Cost-Plus Coaster strategy toggle dynamically updates title, price, disabled margin, and projected profit', () => {
+  assert.match(indexSource, /id="cost-plus-strategy-costplus"/);
+  assert.match(indexSource, /id="cost-plus-strategy-market"/);
+  assert.match(indexSource, /id="cost-plus-box-title"/);
+  assert.match(indexSource, /id="cost-plus-target-margin-container"/);
+
+  const calcStart = indexSource.indexOf('function calculateCostPlusFreight()');
+  const calcEnd = indexSource.indexOf('const VESSEL_PRICING_CLASSES', calcStart);
+  const calcCode = indexSource.slice(calcStart, calcEnd).trim();
+
+  const elements = new Map();
+  const getEl = (id) => {
+    if (!elements.has(id)) {
+      elements.set(id, { textContent: '', disabled: false, value: '0', classList: { add() {}, remove() {}, toggle() {} } });
+    }
+    return elements.get(id);
+  };
+  getEl('cost-plus-cargo-volume').value = '8000';
+  getEl('cost-plus-target-margin').value = '15';
+
+  const context = {
+    costPlusMarginType: 'percentage',
+    costPlusStrategy: 'cost-plus',
+    State: {
+      marketBenchmark: { rate: 25.52 }
+    },
+    readInverseTceNumber: (id) => {
+      if (id === 'cost-plus-cargo-volume') return 8000;
+      if (id === 'cost-plus-target-margin') return 15;
+      return 0;
+    },
+    getSharedVoyageCostBasis: () => ({
+      totalCosts: 142240,
+      disclosure: 'Shared cost disclosure',
+    }),
+    roundCalculationMoney: (val) => Number(val.toFixed(2)),
+    formatInverseTceMoney: (val) => `$${val.toFixed(2)}`,
+    document: {
+      getElementById: getEl
+    }
+  };
+
+  const evalFunc = Function(
+    'costPlusMarginType', 'costPlusStrategy', 'State', 'readInverseTceNumber', 'getSharedVoyageCostBasis', 'roundCalculationMoney', 'formatInverseTceMoney', 'document',
+    `${calcCode}; return { calculateCostPlusFreight, setCostPlusStrategy };`
+  )(
+    context.costPlusMarginType, context.costPlusStrategy, context.State, context.readInverseTceNumber, context.getSharedVoyageCostBasis, context.roundCalculationMoney, context.formatInverseTceMoney, context.document
+  );
+
+  // 1. Test Cost-Plus Strategy
+  evalFunc.setCostPlusStrategy('cost-plus');
+  let result = evalFunc.calculateCostPlusFreight();
+
+  assert.equal(getEl('cost-plus-box-title').textContent, 'FLETE MÍNIMO COST-PLUS');
+  assert.equal(getEl('cost-plus-target-margin').disabled, false);
+  // Total costs = 142,240, 15% margin = 21,336 -> target revenue = 163,576. Unit rate = 163,576 / 8000 = 20.45
+  // Projected profit = (20.45 * 8000) - 142,240 = 163,600 - 142,240 = 21,360
+  assert.equal(result.selectedFreightRate, 20.45);
+  assert.equal(result.projectedProfit, 21360);
+
+  // 2. Test Market Strategy
+  evalFunc.setCostPlusStrategy('market');
+  result = evalFunc.calculateCostPlusFreight();
+
+  assert.equal(getEl('cost-plus-box-title').textContent, 'FLETE OBJETIVO MERCADO');
+  assert.equal(getEl('cost-plus-target-margin').disabled, true);
+  assert.equal(result.selectedFreightRate, 25.52);
+  // Net profit = (25.52 * 8000) - 142,240 = 204,160 - 142,240 = 61,920
+  assert.equal(result.projectedProfit, 61920);
+  assert.equal(getEl('cost-plus-calculated-margin').textContent, '$61920.00');
+});
+
 test('voyage reference is moved to the left vessel card and the print backup card is removed', () => {
   const estimatorStart = indexSource.indexOf('<div id="view-estimator"');
   const estimatorEnd = indexSource.indexOf('<!-- MÓDULO 5: CUMPLIMIENTO CBAM', estimatorStart);

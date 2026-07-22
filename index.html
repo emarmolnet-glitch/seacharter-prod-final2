@@ -8657,18 +8657,25 @@
                                 </div>
                                 <div class="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1.25fr)_minmax(14rem,0.75fr)]">
                                     <div>
+                                        <div class="mb-2.5 flex items-center gap-2">
+                                            <span class="text-[10px] font-black uppercase tracking-wide text-slate-500">Estrategia de Precio:</span>
+                                            <div class="inline-flex overflow-hidden rounded-md border border-slate-300 bg-slate-100 p-0.5 shadow-inner">
+                                                <button id="cost-plus-strategy-costplus" type="button" onclick="setCostPlusStrategy('cost-plus')" class="rounded px-2.5 py-1 text-[10px] font-black uppercase transition bg-white text-slate-950 shadow-sm">Usar Cost-Plus</button>
+                                                <button id="cost-plus-strategy-market" type="button" onclick="setCostPlusStrategy('market')" class="rounded px-2.5 py-1 text-[10px] font-black uppercase transition text-slate-500 hover:text-slate-800">Usar Mercado</button>
+                                            </div>
+                                        </div>
                                         <div class="grid grid-cols-2 gap-2">
                                             <div>
                                                 <label for="cost-plus-daily-opex" class="mb-1 block text-[10px] font-black uppercase text-slate-500">OPEX diario</label>
                                                 <input type="number" id="cost-plus-daily-opex" class="input-gc bg-white text-slate-900 border-slate-300 font-bold text-right" value="4500" min="0" step="any" oninput="calculateCostPlusFreight()">
                                             </div>
-                                            <div>
+                                            <div id="cost-plus-target-margin-container" class="transition-opacity">
                                                 <label for="cost-plus-target-margin" class="mb-1 block text-[10px] font-black uppercase text-slate-500">Margen objetivo</label>
                                                 <div class="flex overflow-hidden rounded-md border border-slate-300 bg-white focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20">
-                                                    <input type="number" id="cost-plus-target-margin" class="min-w-0 flex-1 bg-transparent px-2 py-1.5 text-right text-xs font-black text-slate-900 outline-none" value="15" min="0" step="any" oninput="calculateCostPlusFreight()">
+                                                    <input type="number" id="cost-plus-target-margin" class="min-w-0 flex-1 bg-transparent px-2 py-1.5 text-right text-xs font-black text-slate-900 outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400" value="15" min="0" step="any" oninput="calculateCostPlusFreight()">
                                                     <div class="flex border-l border-slate-200 bg-slate-100 p-0.5">
-                                                        <button id="cost-plus-margin-fixed" type="button" onclick="setCostPlusMarginType('fixed')" class="h-7 w-8 rounded text-xs font-black text-slate-500 hover:text-slate-800">$</button>
-                                                        <button id="cost-plus-margin-percentage" type="button" onclick="setCostPlusMarginType('percentage')" class="h-7 w-8 rounded bg-white text-xs font-black text-slate-950 shadow-sm">%</button>
+                                                        <button id="cost-plus-margin-fixed" type="button" onclick="setCostPlusMarginType('fixed')" class="h-7 w-8 rounded text-xs font-black text-slate-500 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50">$</button>
+                                                        <button id="cost-plus-margin-percentage" type="button" onclick="setCostPlusMarginType('percentage')" class="h-7 w-8 rounded bg-white text-xs font-black text-slate-950 shadow-sm disabled:cursor-not-allowed disabled:opacity-50">%</button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -8699,7 +8706,7 @@
                                         </div>
                                     </div>
                                     <div class="rounded-md border border-sky-200 bg-sky-50 p-3 shadow-sm ring-1 ring-sky-100">
-                                        <div class="text-[10px] font-black uppercase text-sky-700">Flete mínimo Cost-Plus</div>
+                                        <div id="cost-plus-box-title" class="text-[10px] font-black uppercase text-sky-700">FLETE MÍNIMO COST-PLUS</div>
                                         <div id="cost-plus-min-freight-rate" class="mono mt-1 text-2xl font-black text-sky-950">$12.65 /MT</div>
                                         <div class="mt-3 space-y-1 border-t border-sky-100 pt-2 text-sm font-semibold text-sky-800">
                                             <div>Coste Total Riesgo: <span id="cost-plus-total-costs">$0</span></div>
@@ -45624,6 +45631,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         let isInverseTceSyncEnabled = true;
         let currentVesselPricingCategory = 'Handysize / Small Tanker';
         let costPlusMarginType = 'percentage';
+        let costPlusStrategy = 'cost-plus';
         let navigationStrategy = 'eco';
         let navigationStrategyMode = 'auto';
         const NAVIGATION_STRATEGIES = {
@@ -46242,8 +46250,34 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 : totalCosts * (targetMargin / 100));
             const targetRevenue = totalCosts + calculatedMargin;
             const minFreightRate = cargoVolume > 0 ? roundCalculationMoney(totalCosts / cargoVolume) : 0;
+            const costPlusFreightRate = cargoVolume > 0 ? roundCalculationMoney(targetRevenue / cargoVolume) : minFreightRate;
             const demurrageRate = roundCalculationMoney(dailyOpex * 1.25);
 
+            let marketBenchmarkRate = Number(State.marketBenchmark?.rate || 0);
+            if (!marketBenchmarkRate && typeof getRouteMarketBenchmark === 'function') {
+                const bm = getRouteMarketBenchmark({
+                    breakEven: minFreightRate,
+                    cargo: cargoVolume,
+                    totalMiles: Number(State.totalMiles || 0) || ((Number(State.distBallast) || 0) + (Number(State.distLaden) || 0)),
+                    bunkerPrice: Number(State.priceSea || 0) || Number(document.getElementById('price-sea')?.value || 0),
+                    pol: State.pol || document.getElementById('port-pol')?.value || '',
+                    pod: State.pod || document.getElementById('port-pod')?.value || '',
+                    routeFactor: Number(State.etsRouteFactor || 0) || (typeof getEtsRouteFactor === 'function' ? getEtsRouteFactor() : 0),
+                    cargoType: State.cargoType || document.getElementById('cargo-type')?.value || ''
+                });
+                if (bm && bm.rate > 0) {
+                    marketBenchmarkRate = roundCalculationMoney(bm.rate);
+                }
+            }
+
+            const currentStrategy = typeof costPlusStrategy !== 'undefined'
+                ? costPlusStrategy
+                : (typeof State !== 'undefined' && State.costPlusStrategy ? State.costPlusStrategy : 'cost-plus');
+            const isMarketStrategy = (currentStrategy === 'market');
+            const selectedFreightRate = isMarketStrategy ? marketBenchmarkRate : costPlusFreightRate;
+            const projectedProfit = roundCalculationMoney((selectedFreightRate * cargoVolume) - totalCosts);
+
+            const titleEl = document.getElementById('cost-plus-box-title');
             const minFreightEl = document.getElementById('cost-plus-min-freight-rate');
             const totalCostsEl = document.getElementById('cost-plus-total-costs');
             const totalCostsBreakdownEl = document.getElementById('cost-plus-total-costs-breakdown');
@@ -46251,7 +46285,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const marginEl = document.getElementById('cost-plus-calculated-margin');
             const demurrageEl = document.getElementById('cost-plus-demurrage-rate');
 
-            if (minFreightEl) minFreightEl.textContent = `${formatInverseTceMoney(minFreightRate, { decimals: 2 })} /MT`;
+            if (titleEl) {
+                titleEl.textContent = isMarketStrategy ? "FLETE OBJETIVO MERCADO" : "FLETE MÍNIMO COST-PLUS";
+            }
+            if (minFreightEl) {
+                minFreightEl.textContent = `${formatInverseTceMoney(selectedFreightRate, { decimals: 2 })} /MT`;
+            }
             if (totalCostsEl) totalCostsEl.textContent = formatInverseTceMoney(totalCosts);
             if (totalCostsBreakdownEl) totalCostsBreakdownEl.textContent = sharedCostBasis.disclosure;
             if (contingencyWarningEl) {
@@ -46261,13 +46300,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     ? `Cálculo estresado: Incluye ${Number.isInteger(contingencyDays) ? contingencyDays : contingencyDays.toFixed(2)} días extra de margen de seguridad`
                     : '';
             }
-            if (marginEl) marginEl.textContent = formatInverseTceMoney(calculatedMargin);
+            if (marginEl) marginEl.textContent = formatInverseTceMoney(projectedProfit);
             if (demurrageEl) demurrageEl.textContent = formatInverseTceMoney(demurrageRate);
+
             State.costPlusMinFreightRate = minFreightRate;
             State.costPlusTotalCosts = totalCosts;
             State.costPlusTargetRevenue = targetRevenue;
             State.costPlusDemurrageRate = demurrageRate;
-            return { minFreightRate, totalCosts, calculatedMargin, targetRevenue, demurrageRate, totalDays };
+            State.costPlusSelectedFreightRate = selectedFreightRate;
+            State.costPlusProjectedProfit = projectedProfit;
+
+            return { minFreightRate, totalCosts, calculatedMargin, targetRevenue, demurrageRate, totalDays, selectedFreightRate, projectedProfit };
         }
 
         function setCostPlusMarginType(type) {
@@ -46288,6 +46331,50 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const inactiveButton = costPlusMarginType === 'fixed' ? percentageButton : fixedButton;
             if (activeButton) activeButton.classList.add(...activeClasses);
             if (inactiveButton) inactiveButton.classList.add(...inactiveClasses);
+
+            calculateCostPlusFreight();
+        }
+
+        function setCostPlusStrategy(strategy) {
+            costPlusStrategy = strategy === 'market' ? 'market' : 'cost-plus';
+            if (typeof State !== 'undefined') {
+                State.costPlusStrategy = costPlusStrategy;
+            }
+
+            const costPlusBtn = document.getElementById('cost-plus-strategy-costplus');
+            const marketBtn = document.getElementById('cost-plus-strategy-market');
+            const activeClasses = ['bg-white', 'text-slate-950', 'shadow-sm'];
+            const inactiveClasses = ['text-slate-500', 'hover:text-slate-800'];
+
+            if (costPlusBtn && marketBtn) {
+                costPlusBtn.classList.remove(...activeClasses, ...inactiveClasses);
+                marketBtn.classList.remove(...activeClasses, ...inactiveClasses);
+                if (costPlusStrategy === 'cost-plus') {
+                    costPlusBtn.classList.add(...activeClasses);
+                    marketBtn.classList.add(...inactiveClasses);
+                } else {
+                    marketBtn.classList.add(...activeClasses);
+                    costPlusBtn.classList.add(...inactiveClasses);
+                }
+            }
+
+            const marginContainer = document.getElementById('cost-plus-target-margin-container');
+            const marginInput = document.getElementById('cost-plus-target-margin');
+            const marginFixedBtn = document.getElementById('cost-plus-margin-fixed');
+            const marginPctBtn = document.getElementById('cost-plus-margin-percentage');
+
+            const isMarket = costPlusStrategy === 'market';
+            if (marginInput) marginInput.disabled = isMarket;
+            if (marginFixedBtn) marginFixedBtn.disabled = isMarket;
+            if (marginPctBtn) marginPctBtn.disabled = isMarket;
+
+            if (marginContainer) {
+                if (isMarket) {
+                    marginContainer.classList.add('opacity-40', 'pointer-events-none');
+                } else {
+                    marginContainer.classList.remove('opacity-40', 'pointer-events-none');
+                }
+            }
 
             calculateCostPlusFreight();
         }

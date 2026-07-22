@@ -437,7 +437,12 @@ export function calculateCoreFreight(
   };
 }
 
-function calculateCostPlusResults(values: CostPlusCalculatorState, sharedTotalCosts: number) {
+function calculateCostPlusResults(
+  values: CostPlusCalculatorState,
+  sharedTotalCosts: number,
+  strategy: 'cost-plus' | 'market' = 'cost-plus',
+  marketRate: number = 0,
+) {
   const dailyOpex = safeNumber(values.dailyOpex);
   const coreFreight = calculateCoreFreight(values);
   const totalCosts = Math.max(0, safeNumber(sharedTotalCosts));
@@ -448,7 +453,13 @@ function calculateCostPlusResults(values: CostPlusCalculatorState, sharedTotalCo
     : totalCosts * (targetMargin / 100));
   const targetRevenue = totalCosts + calculatedMargin;
   const minFreightRate = cargoVolume > 0 ? roundMoney(totalCosts / cargoVolume) : 0;
+  const costPlusFreightRate = cargoVolume > 0 ? roundMoney(targetRevenue / cargoVolume) : minFreightRate;
   const demurrageRate = roundMoney(dailyOpex * 1.25);
+
+  const selectedRate = strategy === 'market'
+    ? (marketRate > 0 ? marketRate : roundMoney(minFreightRate * 1.25))
+    : costPlusFreightRate;
+  const projectedProfit = roundMoney((selectedRate * cargoVolume) - totalCosts);
 
   return {
     ...coreFreight,
@@ -457,6 +468,9 @@ function calculateCostPlusResults(values: CostPlusCalculatorState, sharedTotalCo
     targetRevenue,
     minFreightRate,
     demurrageRate,
+    costPlusFreightRate,
+    selectedRate,
+    projectedProfit,
   };
 }
 
@@ -2077,12 +2091,13 @@ export function CostPlusCalculator({
   refreshSignal = 0,
 }: CostPlusCalculatorProps) {
   const [values, setValues] = useState<CostPlusCalculatorState>(COST_PLUS_DEFAULT_VALUES);
+  const [priceStrategy, setPriceStrategy] = useState<'cost-plus' | 'market'>('cost-plus');
   const [renderRefreshTick, setRenderRefreshTick] = useState(0);
   const sharedTotalCosts = safeNumber(syncedCostData?.totalCosts);
 
   const results = useMemo(
-    () => calculateCostPlusResults(values, sharedTotalCosts),
-    [values, renderRefreshTick, sharedTotalCosts],
+    () => calculateCostPlusResults(values, sharedTotalCosts, priceStrategy),
+    [values, renderRefreshTick, sharedTotalCosts, priceStrategy],
   );
 
   const routeSyncData = useMemo(() => {
@@ -2205,6 +2220,38 @@ export function CostPlusCalculator({
           </div>
         </div>
 
+        <div className="mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
+          <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+            Estrategia de Precio:
+          </span>
+          <div className="inline-flex overflow-hidden rounded-md border border-slate-300 bg-slate-100 p-0.5 shadow-inner">
+            <button
+              id="cost-plus-strategy-costplus"
+              type="button"
+              onClick={() => setPriceStrategy('cost-plus')}
+              className={`rounded px-3 py-1 text-[11px] font-black uppercase transition ${
+                priceStrategy === 'cost-plus'
+                  ? 'bg-white text-slate-950 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Usar Cost-Plus
+            </button>
+            <button
+              id="cost-plus-strategy-market"
+              type="button"
+              onClick={() => setPriceStrategy('market')}
+              className={`rounded px-3 py-1 text-[11px] font-black uppercase transition ${
+                priceStrategy === 'market'
+                  ? 'bg-white text-slate-950 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Usar Mercado
+            </button>
+          </div>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="cost-plus-daily-opex" className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-slate-500">
@@ -2216,20 +2263,29 @@ export function CostPlusCalculator({
             </div>
           </div>
 
-          <div>
+          <div id="cost-plus-target-margin-container" className={priceStrategy === 'market' ? 'opacity-40 pointer-events-none' : ''}>
             <label htmlFor="cost-plus-target-margin" className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-slate-500">
               Margen objetivo
             </label>
             <div className="flex overflow-hidden rounded-lg border border-slate-300 bg-white focus-within:border-amber-600 focus-within:ring-2 focus-within:ring-amber-600/15">
-              <input id="cost-plus-target-margin" type="number" step="any" value={values.targetMargin} onChange={(event) => updateNumber('targetMargin', event.target.value)} className="min-w-0 flex-1 border-0 px-3 py-2.5 text-sm font-bold text-slate-900 outline-none" />
+              <input
+                id="cost-plus-target-margin"
+                type="number"
+                step="any"
+                disabled={priceStrategy === 'market'}
+                value={values.targetMargin}
+                onChange={(event) => updateNumber('targetMargin', event.target.value)}
+                className="min-w-0 flex-1 border-0 px-3 py-2.5 text-sm font-bold text-slate-900 outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+              />
               <div className="flex border-l border-slate-200 bg-slate-100 p-1">
                 {(['fixed', 'percentage'] as const).map((type) => (
                   <button
                     key={type}
                     type="button"
+                    disabled={priceStrategy === 'market'}
                     aria-pressed={values.marginType === type}
                     onClick={() => setValues((current) => ({ ...current, marginType: type }))}
-                    className={`h-8 w-9 rounded-md text-sm font-black transition ${
+                    className={`h-8 w-9 rounded-md text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
                       values.marginType === type ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                     }`}
                   >
@@ -2263,16 +2319,18 @@ export function CostPlusCalculator({
         </div>
 
         <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 shadow-sm ring-1 ring-sky-100">
-          <p className="text-xs font-bold uppercase text-sky-700">Flete mínimo</p>
-          <p className="mt-1 text-4xl font-black tracking-tight text-sky-950">
-            {currencyFormatter.format(results.minFreightRate)}
+          <p id="cost-plus-box-title" className="text-xs font-bold uppercase text-sky-700">
+            {priceStrategy === 'market' ? 'FLETE OBJETIVO MERCADO' : 'FLETE MÍNIMO COST-PLUS'}
+          </p>
+          <p id="cost-plus-min-freight-rate" className="mt-1 text-4xl font-black tracking-tight text-sky-950">
+            {currencyFormatter.format(results.selectedRate)}
           </p>
           <p className="mt-1 text-xs font-bold text-sky-700">USD / MT</p>
           <div className="mt-4 space-y-1 border-t border-sky-100 pt-3 text-sm font-semibold text-sky-800">
-            <p>Coste Total Riesgo: {wholeCurrencyFormatter.format(results.totalCosts)}</p>
+            <p>Coste Total Riesgo: <span id="cost-plus-total-costs">{wholeCurrencyFormatter.format(results.totalCosts)}</span></p>
             <p className="text-xs font-bold text-sky-700">Incluye posicionamiento, ETS y ajustes globales cuando aplican.</p>
-            <p>Beneficio Neto Proyectado: {wholeCurrencyFormatter.format(results.calculatedMargin)}</p>
-            <p>Demurrage ($/d): {wholeCurrencyFormatter.format(results.demurrageRate)}</p>
+            <p>Beneficio Neto Proyectado: <span id="cost-plus-calculated-margin">{wholeCurrencyFormatter.format(results.projectedProfit)}</span></p>
+            <p>Demurrage ($/d): <span id="cost-plus-demurrage-rate">{wholeCurrencyFormatter.format(results.demurrageRate)}</span></p>
           </div>
         </div>
 
