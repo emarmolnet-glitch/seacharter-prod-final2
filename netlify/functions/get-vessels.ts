@@ -956,7 +956,24 @@ function collectVessels(url: URL, apiKey: string): Promise<LiveCollectionResult>
 
     ws.on("message", (data: { toString: () => string }) => {
       try {
-        const message = normalizeVesselMessage(JSON.parse(data.toString()) as VesselMessage);
+        const rawMessage = JSON.parse(data.toString()) as Record<string, unknown>;
+
+        // Interceptación temprana: extracción segura de ShipType (Message.ShipStaticData.Type o MetaData.ShipType)
+        const rawShipType = (rawMessage?.Message as Record<string, unknown> | undefined)?.ShipStaticData
+          ? ((rawMessage.Message as Record<string, unknown>).ShipStaticData as Record<string, unknown>)?.Type
+          : (rawMessage?.MetaData as Record<string, unknown> | undefined)?.ShipType;
+
+        const shipType = rawShipType ?? (rawMessage?.Message as Record<string, unknown> | undefined)?.ShipType ?? (rawMessage?.MetaData as Record<string, unknown> | undefined)?.shipType;
+
+        // Condición estricta de Carga: descartar de inmediato si el código numérico NO está entre 70 y 79 (ambos incluidos)
+        if (shipType !== undefined && shipType !== null) {
+          const numericType = Number(shipType);
+          if (Number.isFinite(numericType) && (numericType < 70 || numericType > 79)) {
+            return;
+          }
+        }
+
+        const message = normalizeVesselMessage(rawMessage as VesselMessage);
         const key = getVesselKey(message);
         if (!key) return;
         vesselsByKey.set(key, mergeDefinedVesselFields(vesselsByKey.get(key), message));
