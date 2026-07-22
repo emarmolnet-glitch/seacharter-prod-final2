@@ -14753,10 +14753,10 @@
             }
             const activeShipType = v.shipType || shipType;
 
-            // Hard filter: only exclude clearly non-commercial AIS numeric classes.
+            // Hard filter: strictly enforce Cargo ship type codes (70-79 inclusive). Exclude all non-cargo vessels (yachts, tugs, passenger, tankers, etc.)
             const numericShipType = Number(activeShipType);
-            if (Number.isFinite(numericShipType) && (numericShipType < 70 || numericShipType > 89)) {
-                return; // Exclude non-cargo/non-tanker vessels (tugs, passenger, yachts etc.)
+            if (Number.isFinite(numericShipType) && (numericShipType < 70 || numericShipType > 79)) {
+                return; // Exclude non-cargo vessels (codes outside 70-79)
             }
 
             // 2. EXTRACT DIMENSIONS (only available in ShipStaticData)

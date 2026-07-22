@@ -234,6 +234,22 @@ function collectVessels(apiKey: string, boundingBoxes: unknown[], timeoutMs: num
     ws.on("message", (data: { toString: () => string }) => {
       try {
         const payload = JSON.parse(data.toString()) as Record<string, unknown>;
+
+        // Interceptación temprana: extracción segura de ShipType (Message.ShipStaticData.Type o MetaData.ShipType)
+        const rawShipType = (payload?.Message as Record<string, unknown> | undefined)?.ShipStaticData
+          ? ((payload.Message as Record<string, unknown>).ShipStaticData as Record<string, unknown>)?.Type
+          : (payload?.MetaData as Record<string, unknown> | undefined)?.ShipType;
+
+        const shipType = rawShipType ?? (payload?.Message as Record<string, unknown> | undefined)?.ShipType ?? (payload?.MetaData as Record<string, unknown> | undefined)?.shipType;
+
+        // Condición estricta de Carga: descartar de inmediato si el código numérico NO está entre 70 y 79 (ambos incluidos)
+        if (shipType !== undefined && shipType !== null) {
+          const numericType = Number(shipType);
+          if (Number.isFinite(numericType) && (numericType < 70 || numericType > 79)) {
+            return;
+          }
+        }
+
         const metadata = pickObject(payload.MetaData);
         const message = pickObject(payload.Message);
         const position = pickObject(
