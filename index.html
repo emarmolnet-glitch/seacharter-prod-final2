@@ -8313,7 +8313,7 @@
                             <input type="hidden" id="cons-anchorage-aux" value="2.0">
                             <div class="flex justify-between"><span id="label-opex-cost-basis" class="font-bold">OPEX Total:</span> <span id="res-cost-opex" class="font-bold text-[#334155]">$0</span></div>
                             <div class="flex justify-between"><span id="label-capex-cost-basis" class="font-bold">CAPEX / Depreciación:</span> <span id="res-cost-capex" class="font-bold text-[#334155]">$0</span></div>
-                            <div class="flex justify-between"><span id="label-pda-cost-basis" class="font-bold">PDAs/Puertos:</span> <span id="res-cost-pda" class="font-bold text-[#334155]">$0</span></div>
+                            <div class="flex justify-between items-center"><span id="label-pda-cost-basis" class="font-bold flex items-center gap-1">PDAs/Puertos <button type="button" onclick="openPdaManualEditModal()" class="inline-flex items-center gap-0.5 text-[10px] font-extrabold text-sky-600 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-1.5 py-0.5 rounded shadow-sm transition" title="Calculado algorítmicamente a partir de GT y LOA. Clic para editar costes">✨ Auto</button>:</span> <span id="res-cost-pda" onclick="openPdaManualEditModal()" class="font-bold text-[#334155] cursor-pointer hover:text-sky-600 transition" title="Clic para modificar costes de puerto">$0</span></div>
                             <div class="flex justify-between"><span id="label-ets-cost-basis" class="font-bold">ETS Estimado:</span> <span id="res-cost-ets" class="font-bold text-[#1E3A8A]">$0</span></div>
 
                             <div class="mt-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 shadow-sm" id="base-cost-break-even-card" aria-live="polite">
@@ -13219,6 +13219,9 @@
             consSea: 0, priceSea: 0,
             consPort: 0, pricePort: 0,
             pdaPol: 0, pdaPod: 0,
+            pdaPolBreakdown: [],
+            pdaPodBreakdown: [],
+            gastos_puerto: { totalPortCost: 0, breakdown: [] },
             stevedoringCosts: 0, pdaMisc: 0,
             cargoSurcharge: 0, marginOwner: DEFAULT_OWNER_MARGIN_PERCENT,
             marginCharterer: DEFAULT_CHARTERER_MARGIN_PERCENT, commPct: 0,
@@ -24509,6 +24512,92 @@
 	            };
 	        }
 
+	        function getPortPdaBreakdown(type, portTotal) {
+	            const existingBreakdown = type === 'pol' ? State.pdaPolBreakdown : State.pdaPodBreakdown;
+	            const normalizedTotal = Math.round(portTotal) || 0;
+	            if (normalizedTotal <= 0) return [];
+
+	            if (Array.isArray(existingBreakdown) && existingBreakdown.length > 0) {
+	                const currentSum = existingBreakdown.reduce((acc, b) => acc + (Number(b.amount) || 0), 0);
+	                if (currentSum > 0 && Math.abs(currentSum - normalizedTotal) > 1) {
+	                    const scaled = existingBreakdown.map(b => ({
+	                        item: b.item,
+	                        amount: Math.round((Number(b.amount) || 0) * (normalizedTotal / currentSum))
+	                    }));
+	                    const scaledSum = scaled.reduce((acc, b) => acc + b.amount, 0);
+	                    const diff = normalizedTotal - scaledSum;
+	                    if (diff !== 0 && scaled.length > 0) scaled[0].amount += diff;
+	                    if (type === 'pol') State.pdaPolBreakdown = scaled;
+	                    else State.pdaPodBreakdown = scaled;
+	                    return scaled;
+	                }
+	                return existingBreakdown;
+	            }
+
+	            const agencia = Math.round(normalizedTotal * 0.12);
+	            const remolcadores = Math.round(normalizedTotal * 0.20);
+	            const practicaje = Math.round(normalizedTotal * 0.15);
+	            const tasas = Math.round(normalizedTotal * 0.35);
+	            const estadia = Math.round(normalizedTotal * 0.18);
+	            const items = [
+	                { item: 'Agencia y Despacho', amount: agencia },
+	                { item: 'Remolcadores', amount: remolcadores },
+	                { item: 'Practicaje y Amarre', amount: practicaje },
+	                { item: 'Tasas de Muelle y Autoridad', amount: tasas },
+	                { item: 'Estadía y Derechos de Puerto', amount: estadia }
+	            ];
+	            const sum = items.reduce((acc, b) => acc + b.amount, 0);
+	            const diff = normalizedTotal - sum;
+	            if (diff !== 0 && items.length > 0) items[0].amount += diff;
+	            if (type === 'pol') State.pdaPolBreakdown = items;
+	            else State.pdaPodBreakdown = items;
+	            return items;
+	        }
+
+	        function openPdaManualEditModal() {
+	            const currentPol = parseFloat(document.getElementById('pda-pol')?.value) || State.pdaPol || 0;
+	            const currentPod = parseFloat(document.getElementById('pda-pod')?.value) || State.pdaPod || 0;
+	            const currentTotal = currentPol + currentPod;
+
+	            const promptVal = prompt(
+	                `Estimación Algorítmica de Gastos Portuarios (PDA) basada en GT (${Math.round((parseFloat(document.getElementById('vessel-dwt')?.value || State.dwt || 0) * 0.60))} GT) y LOA (${document.getElementById('vessel-loa')?.value || '200'} m).\n\n` +
+	                `POL (${document.getElementById('port-pol')?.value || 'Carga'}): $${Math.round(currentPol).toLocaleString('en-US')}\n` +
+	                `POD (${document.getElementById('port-pod')?.value || 'Descarga'}): $${Math.round(currentPod).toLocaleString('en-US')}\n` +
+	                `Total PDAs Actual: $${Math.round(currentTotal).toLocaleString('en-US')}\n\n` +
+	                `Introduce el nuevo montante total de PDAs ($) o pulsa Cancelar para mantener:`,
+	                Math.round(currentTotal)
+	            );
+
+	            if (promptVal !== null && promptVal.trim() !== '') {
+	                const newTotal = parseFloat(promptVal.replace(/[^\d.-]/g, ''));
+	                if (!isNaN(newTotal) && newTotal >= 0) {
+	                    const polRatio = currentTotal > 0 ? (currentPol / currentTotal) : 0.45;
+	                    const newPol = Math.round(newTotal * polRatio);
+	                    const newPod = Math.round(newTotal - newPol);
+
+	                    const pdaPolEl = document.getElementById('pda-pol');
+	                    const pdaPodEl = document.getElementById('pda-pod');
+	                    if (pdaPolEl) pdaPolEl.value = newPol;
+	                    if (pdaPodEl) pdaPodEl.value = newPod;
+
+	                    State.pdaPol = newPol;
+	                    State.pdaPod = newPod;
+
+	                    getPortPdaBreakdown('pol', newPol);
+	                    getPortPdaBreakdown('pod', newPod);
+
+	                    if (typeof runEngine === 'function') runEngine();
+	                    if (typeof showToast === 'function') {
+	                        showToast(`✨ Costes de puerto actualizados manualmente a $${Math.round(newTotal).toLocaleString('en-US')}`);
+	                    }
+	                }
+	            }
+	        }
+	        if (typeof window !== 'undefined') {
+	            window.getPortPdaBreakdown = getPortPdaBreakdown;
+	            window.openPdaManualEditModal = openPdaManualEditModal;
+	        }
+
 	        async function fetchPdaTariffFromDataBridge(type, vesselData) {
 	            const params = new URLSearchParams({
 	                port: vesselData.portName,
@@ -24602,7 +24691,29 @@
             }
 
             const finalPDA = Math.round(totalPDA / 50) * 50;
-	            const pdaInput = document.getElementById(`pda-${type}`);
+            const tugCost = State.smartAdjustments?.tugTotalCost || 0;
+            const tugPort = Math.round(tugCost / 2);
+            const tugShare = Math.min(Math.round(navManiobra * 0.5), Math.max(tugPort, Math.round(navManiobra * 0.3)));
+            const pilotShare = Math.max(0, Math.round(navManiobra) - tugShare);
+
+            const breakdownItems = [
+                { item: 'Agencia y Despacho', amount: Math.round(agenciaVarios) },
+                { item: 'Remolcadores', amount: tugShare },
+                { item: 'Practicaje y Amarre', amount: pilotShare },
+                { item: 'Tasas de Muelle y Autoridad', amount: Math.round(tasasAutoridad) },
+                { item: 'Estadía y Derechos de Puerto', amount: Math.round(muelleEstadia) }
+            ];
+            const itemSum = breakdownItems.reduce((acc, curr) => acc + curr.amount, 0);
+            const diff = finalPDA - itemSum;
+            if (diff !== 0 && breakdownItems.length > 0) breakdownItems[0].amount += diff;
+
+            if (type === 'pol') {
+                State.pdaPolBreakdown = breakdownItems;
+            } else {
+                State.pdaPodBreakdown = breakdownItems;
+            }
+
+            const pdaInput = document.getElementById(`pda-${type}`);
 	            if (!pdaInput) return;
 	            pdaInput.value = finalPDA;
 	            pdaInput.dataset.calculationMode = calculationMode;
@@ -26464,7 +26575,27 @@
                 capexCostEl.innerText = `$${Math.round(totalCapex).toLocaleString()}`;
                 capexCostEl.title = `${ownerClassAnalysis?.shipClass?.label || 'Clase estándar'}: $${Math.round(capexDaily).toLocaleString('en-US')}/día x ${totalDays.toFixed(2)} días`;
             }
-            document.getElementById('res-cost-pda').innerText = `$${Math.round(smartPortExpenses).toLocaleString()}`;
+            const pdaPolVal = parseFloat(document.getElementById('pda-pol')?.value) || State.pdaPol || 0;
+            const pdaPodVal = parseFloat(document.getElementById('pda-pod')?.value) || State.pdaPod || 0;
+            const polBreakdown = getPortPdaBreakdown('pol', pdaPolVal);
+            const podBreakdown = getPortPdaBreakdown('pod', pdaPodVal);
+            const combinedBreakdown = [
+                ...polBreakdown.map(b => ({ item: `POL (${document.getElementById('port-pol')?.value || State.pol || 'Carga'}): ${b.item}`, amount: b.amount })),
+                ...podBreakdown.map(b => ({ item: `POD (${document.getElementById('port-pod')?.value || State.pod || 'Descarga'}): ${b.item}`, amount: b.amount }))
+            ];
+            State.pdaPolBreakdown = polBreakdown;
+            State.pdaPodBreakdown = podBreakdown;
+            State.gastos_puerto = {
+                totalPortCost: smartPortExpenses,
+                breakdown: combinedBreakdown,
+                valueOf() { return this.totalPortCost; },
+                toString() { return String(this.totalPortCost); }
+            };
+
+            const pdaEl = document.getElementById('res-cost-pda');
+            if (pdaEl) {
+                pdaEl.innerText = `$${Math.round(smartPortExpenses).toLocaleString()}`;
+            }
             document.getElementById('res-cost-ets').innerText = `$${Math.round(etsCost).toLocaleString()}`;
             document.getElementById('res-cost-total').innerText = `$${Math.round(adjustedCostTotal).toLocaleString()}`;
 
@@ -32302,7 +32433,6 @@ Example:
                                         <li><strong>${currentLang === 'es' ? 'Congestion/Fondeo' : 'Congestion/Anchorage'}:</strong> ${(State.smartAdjustments?.anchorageDays || 0).toFixed(2)} d</li>
                                         <li><strong>${currentLang === 'es' ? 'Coste Extra OPEX' : 'Extra OPEX Cost'}:</strong> $${Math.round(State.smartAdjustments?.extraOpexCost || 0).toLocaleString()}</li>
                                         <li><strong>${currentLang === 'es' ? 'Bunker Extra Fondeo' : 'Extra Anchorage Bunker'}:</strong> $${Math.round(State.smartAdjustments?.anchorageBunkerCost || 0).toLocaleString()}</li>
-                                        <li><strong>${currentLang === 'es' ? 'Remolcadores' : 'Tugs'}:</strong> ${State.smartAdjustments?.tugUnits || 0} ud x $${Math.round(State.smartAdjustments?.tugUnitCost || 0).toLocaleString()}, $${Math.round(State.smartAdjustments?.tugTotalCost || 0).toLocaleString()}</li>
                                     </ul>
                                     <p class="text-emerald-400 font-bold">=> ${currentLang === 'es' ? 'Incremento por SeaCharter Core PRO' : 'SeaCharter Core PRO uplift'}: $${(State.smartAdjustments?.breakEvenIncrease || 0).toFixed(2)} / ${currentLang === 'es' ? 'TM' : 'MT'}</p>
                                 </div>
@@ -32342,12 +32472,47 @@ Example:
                                     <i class="fa-solid fa-chevron-down text-slate-500 group-open:rotate-180 transition-transform"></i>
                                 </summary>
                                 <div class="mt-3 text-slate-400 pl-4 border-l-2 border-sky-500/30 space-y-2 text-[11px] leading-relaxed">
-                                    <p><strong>${currentLang === 'es' ? 'Desglose PDA Estimado' : 'PDA Estimated Breakdown'}:</strong></p>
-                                    <ul class="list-disc pl-4 space-y-1 font-mono">
-                                        <li class="text-emerald-400 font-bold"><strong>POL (${State.pol || 'N/A'}):</strong> $${Math.round(parseFloat(document.getElementById('pda-pol')?.value) || 0).toLocaleString()}</li>
-                                        <li class="text-emerald-400 font-bold"><strong>POD (${State.pod || 'N/A'}):</strong> $${Math.round(parseFloat(document.getElementById('pda-pod')?.value) || 0).toLocaleString()}</li>
-                                        <li><strong>${currentLang === 'es' ? 'Otros Gastos (Agencia, Muelle, etc.)' : 'Other Expenses'}:</strong> $${Math.round((parseFloat(document.getElementById('stevedoring-costs')?.value) || 0) + (parseFloat(document.getElementById('pda-misc')?.value) || 0)).toLocaleString()}</li>
-                                    </ul>
+                                    <p><strong>${currentLang === 'es' ? 'Desglose PDA Estimado por Puerto' : 'PDA Estimated Breakdown per Port'}:</strong></p>
+                                    <div class="space-y-2">
+                                        <!-- POL Breakdown -->
+                                        <div class="bg-slate-950/60 p-2.5 rounded border border-slate-800">
+                                            <div class="flex justify-between items-center text-emerald-400 font-bold border-b border-slate-800 pb-1 mb-1.5">
+                                                <span>POL (${State.pol || 'POL'}):</span>
+                                                <span class="font-mono text-xs">$${Math.round(parseFloat(document.getElementById('pda-pol')?.value) || State.pdaPol || 0).toLocaleString('en-US')}</span>
+                                            </div>
+                                            <ul class="pl-2 space-y-1 font-mono text-[10px] text-slate-300">
+                                                ${getPortPdaBreakdown('pol', parseFloat(document.getElementById('pda-pol')?.value) || State.pdaPol || 0).map(b => `
+                                                    <li class="flex justify-between">
+                                                        <span class="text-slate-400">• ${b.item}:</span>
+                                                        <span class="font-bold text-slate-200">$${Math.round(b.amount).toLocaleString('en-US')}</span>
+                                                    </li>
+                                                `).join('')}
+                                            </ul>
+                                        </div>
+
+                                        <!-- POD Breakdown -->
+                                        <div class="bg-slate-950/60 p-2.5 rounded border border-slate-800">
+                                            <div class="flex justify-between items-center text-emerald-400 font-bold border-b border-slate-800 pb-1 mb-1.5">
+                                                <span>POD (${State.pod || 'POD'}):</span>
+                                                <span class="font-mono text-xs">$${Math.round(parseFloat(document.getElementById('pda-pod')?.value) || State.pdaPod || 0).toLocaleString('en-US')}</span>
+                                            </div>
+                                            <ul class="pl-2 space-y-1 font-mono text-[10px] text-slate-300">
+                                                ${getPortPdaBreakdown('pod', parseFloat(document.getElementById('pda-pod')?.value) || State.pdaPod || 0).map(b => `
+                                                    <li class="flex justify-between">
+                                                        <span class="text-slate-400">• ${b.item}:</span>
+                                                        <span class="font-bold text-slate-200">$${Math.round(b.amount).toLocaleString('en-US')}</span>
+                                                    </li>
+                                                `).join('')}
+                                            </ul>
+                                        </div>
+
+                                        ${((parseFloat(document.getElementById('stevedoring-costs')?.value) || 0) + (parseFloat(document.getElementById('pda-misc')?.value) || 0)) > 0 ? `
+                                            <div class="flex justify-between font-mono text-[10px] text-slate-300 pt-1 border-t border-slate-800/80">
+                                                <span class="font-bold text-slate-400">${currentLang === 'es' ? 'Otros Gastos (Estiba / Extras / Canal)' : 'Other Expenses'}:</span>
+                                                <span class="font-bold text-slate-200">$${Math.round((parseFloat(document.getElementById('stevedoring-costs')?.value) || 0) + (parseFloat(document.getElementById('pda-misc')?.value) || 0)).toLocaleString('en-US')}</span>
+                                            </div>
+                                        ` : ''}
+                                    </div>
                                     <p><strong>${currentLang === 'es' ? 'Fuentes y Metodología' : 'Methodology & Sources'}:</strong></p>
                                     <p class="italic text-slate-500 font-sans font-medium">
                                         ${currentLang === 'es'
@@ -32944,17 +33109,29 @@ Example:
                         </h4>
                         <div style="font-size: 7.5pt; color: #334155; line-height: 1.3;">
                             <table style="width: 100%; border-collapse: collapse; margin-bottom: 4px;">
-                                <tr style="color: #15803d; font-weight: bold;">
-                                    <td style="font-weight: 600; padding: 2px 0;">POL (${State.pol || 'N/A'}):</td>
+                                <tr style="color: #15803d; font-weight: bold; border-bottom: 1px solid #e2e8f0;">
+                                    <td style="font-weight: 700; padding: 2px 0;">POL (${State.pol || 'N/A'}):</td>
                                     <td style="text-align: right; font-family: monospace;">$${Math.round(parseFloat(getVal('pda-pol')) || 0).toLocaleString('en-US')}</td>
                                 </tr>
-                                <tr style="color: #15803d; font-weight: bold;">
-                                    <td style="font-weight: 600; padding: 2px 0;">POD (${State.pod || 'N/A'}):</td>
-                                    <td style="text-align: right; font-family: monospace;">$${Math.round(parseFloat(getVal('pda-pod')) || 0).toLocaleString('en-US')}</td>
+                                ${getPortPdaBreakdown('pol', parseFloat(getVal('pda-pol')) || 0).map(b => `
+                                    <tr style="color: #475569; font-size: 7pt;">
+                                        <td style="padding-left: 8px;">• ${b.item}:</td>
+                                        <td style="text-align: right; font-family: monospace;">$${Math.round(b.amount).toLocaleString('en-US')}</td>
+                                    </tr>
+                                `).join('')}
+                                <tr style="color: #15803d; font-weight: bold; border-bottom: 1px solid #e2e8f0;">
+                                    <td style="font-weight: 700; padding: 4px 0 2px 0;">POD (${State.pod || 'N/A'}):</td>
+                                    <td style="text-align: right; font-family: monospace; padding-top: 4px;">$${Math.round(parseFloat(getVal('pda-pod')) || 0).toLocaleString('en-US')}</td>
                                 </tr>
+                                ${getPortPdaBreakdown('pod', parseFloat(getVal('pda-pod')) || 0).map(b => `
+                                    <tr style="color: #475569; font-size: 7pt;">
+                                        <td style="padding-left: 8px;">• ${b.item}:</td>
+                                        <td style="text-align: right; font-family: monospace;">$${Math.round(b.amount).toLocaleString('en-US')}</td>
+                                    </tr>
+                                `).join('')}
                                 <tr>
-                                    <td style="font-weight: 600; padding: 2px 0; color: #475569;">Otros / Other (Agency, Misc):</td>
-                                    <td style="text-align: right; font-family: monospace;">$${Math.round((parseFloat(getVal('stevedoring-costs')) || 0) + (parseFloat(getVal('pda-misc')) || 0)).toLocaleString('en-US')}</td>
+                                    <td style="font-weight: 600; padding: 4px 0 2px 0; color: #475569;">Otros / Other (Agency, Misc):</td>
+                                    <td style="text-align: right; font-family: monospace; padding-top: 4px;">$${Math.round((parseFloat(getVal('stevedoring-costs')) || 0) + (parseFloat(getVal('pda-misc')) || 0)).toLocaleString('en-US')}</td>
                                 </tr>
                                 <tr style="border-top: 1px dashed #cbd5e1; font-weight: 700;">
                                     <td style="padding-top: 4px; color: #0f172a;">Total Tasas / Total PDAs:</td>
