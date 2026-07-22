@@ -26390,7 +26390,7 @@
 
             document.getElementById('dist-total').value = Math.round(distBal + distLaden);
             document.getElementById('res-days-total').innerText = totalDays.toFixed(2);
-            document.getElementById('res-days-total').title = `Días Mar + Puerto ajustado + Margen Clima = ${(dBal + dLaden).toFixed(2)} + ${adjustedPortDays.toFixed(2)} + ${marginDays.toFixed(2)} = ${totalDays.toFixed(2)} d`;
+            document.getElementById('res-days-total').title = `Días Mar + Puerto + Margen Clima = ${(dBal + dLaden).toFixed(2)} + ${T_port.toFixed(2)} + ${marginDays.toFixed(2)} = ${totalDays.toFixed(2)} d`;
             
             if (document.getElementById('res-days-ballast')) {
                 document.getElementById('res-days-ballast').innerText = `${dBal.toFixed(2)} d`;
@@ -26399,8 +26399,8 @@
                 document.getElementById('res-days-laden').innerText = `${dLaden.toFixed(2)} d`;
             }
             if (document.getElementById('res-days-port')) {
-                document.getElementById('res-days-port').innerText = `${adjustedPortDays.toFixed(2)} d`;
-                document.getElementById('res-days-port').title = `Base carga/descarga ${dPortTotal.toFixed(2)} d + fondeo ${smartAnchorageDays.toFixed(2)} d + delta histórico ${smartDeltaDays.toFixed(2)} d`;
+                document.getElementById('res-days-port').innerText = `${T_port.toFixed(2)} d`;
+                document.getElementById('res-days-port').title = `Días en Puerto (Port): ${T_port.toFixed(2)} d`;
             }
             if (document.getElementById('res-days-margin')) {
                 const marginEl = document.getElementById('res-days-margin');
