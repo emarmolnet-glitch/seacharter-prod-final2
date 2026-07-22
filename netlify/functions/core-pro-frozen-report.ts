@@ -69,7 +69,7 @@ function toMasterVessel(value: unknown): RadarVesselMasterInput | null {
     eta: textValue(routing.eta, value.eta, ais.eta, ais.eta_puerto_carga),
     source: "Core PRO / Data Bridge",
     rawData: value,
-    flag: textValue(vessel.flag, value.flag, ais.flag),
+    flag: textValue(vessel.flag, value.flag, ais.flag)?.substring(0, 3) || null,
     yearBuilt: numberValue(vessel.builtYear, vessel.built_year, value.year_built),
     ownerManager: textValue(vessel.owner, vessel.manager, vessel.operator, value.owner_manager),
     hasGears: typeof vessel.hasCranes === "boolean" ? vessel.hasCranes : null,
