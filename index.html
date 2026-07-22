@@ -25905,8 +25905,8 @@
             const freshInverseRate = Number(options.inverseTceMinFreightRate || 0);
             const freshCostPlusRate = Number(options.costPlusMinFreightRate || 0);
             const benchmarkBase = isCostPlusMode
-                ? (freshCostPlusRate || Number(State.costPlusMinFreightRate || 0) || Number(State.breakEvenVentaSugerida || 0) || Number(State.breakEven || 0))
-                : (freshInverseRate || Number(State.inverseTceMinFreightRate || 0) || Number(State.breakEvenVentaSugerida || 0) || Number(State.breakEven || 0));
+                ? (freshCostPlusRate || Number(State.costPlusMinFreightRate || 0) || Number(State.breakEvenArmador || 0) || Number(State.breakEven || 0))
+                : (freshInverseRate || Number(State.inverseTceMinFreightRate || 0) || Number(State.breakEvenArmador || 0) || Number(State.breakEven || 0));
             const marginOwner = Number(document.getElementById('margin-owner')?.value || State.marginOwner || 0);
             const marginCharterer = Number(document.getElementById('margin-charterer')?.value || State.marginCharterer || 0);
             const suggestedOwner = calculateSuggestedPriceFromMargin(benchmarkBase, marginOwner);
@@ -26784,26 +26784,37 @@
                 ? costPlusResults.selectedFreightRate
                 : Number(State.marketBenchmark?.rate || 0);
 
-            const costPlusMinimumFreight = isMarketStrategyActive && fleteObjetivoMercado > 0
-                ? fleteObjetivoMercado
-                : (Number.isFinite(costPlusResults?.minFreightRate)
-                    ? costPlusResults.minFreightRate
-                    : Number(State.costPlusMinFreightRate || 0));
+            const costPlusMinimumFreight = Number.isFinite(costPlusResults?.minFreightRate)
+                ? costPlusResults.minFreightRate
+                : Number(State.costPlusMinFreightRate || 0);
             const activePricingMinimumFreight = vesselPricingClass?.type === 'Cost-Plus' && costPlusMinimumFreight > 0
                 ? costPlusMinimumFreight
                 : inverseMinimumFreight;
             const breakEvenParaVentaSugerida = operacionModo === 'COA' && coaScenarioProjection
                 ? coaScenarioProjection.securityScenario.breakEvenAverage
                 : activePricingMinimumFreight;
-            const fleteMinimoBaseVenta = isMarketStrategyActive && fleteObjetivoMercado > 0
-                ? fleteObjetivoMercado
-                : breakEvenParaVentaSugerida;
-            const precioObjetivoArmador = operacionModo === 'COA' && coaScenarioProjection
-                ? coaScenarioProjection.securityScenario.ownerPurchase
-                : calcularPrecioObjetivo(fleteMinimoBaseVenta, marginOwner);
-            const precioObjetivoFletador = operacionModo === 'COA' && coaScenarioProjection
-                ? coaScenarioProjection.securityScenario.targetPrice
-                : calcularPrecioObjetivo(precioObjetivoArmador, marginChart);
+            const fleteMinimoBaseVenta = breakEvenParaVentaSugerida;
+            let precioObjetivoArmador = 0;
+            let precioObjetivoFletador = 0;
+
+            if (operacionModo === 'COA' && coaScenarioProjection) {
+                precioObjetivoArmador = coaScenarioProjection.securityScenario.ownerPurchase;
+                precioObjetivoFletador = coaScenarioProjection.securityScenario.targetPrice;
+            } else if (isMarketStrategyActive && fleteObjetivoMercado > 0) {
+                // Modo USAR MERCADO: La Venta Sugerida se ancla directamente al Benchmark de Mercado ($26.21 /MT).
+                // Queda prohibido aplicar sobrecostes o porcentajes acumulativos ciegos por encima de la referencia de mercado.
+                precioObjetivoFletador = fleteObjetivoMercado;
+                const ownerTargetFromBase = calcularPrecioObjetivo(fleteMinimoBaseVenta, marginOwner);
+                precioObjetivoArmador = (marginOwner > 0 && ownerTargetFromBase > 0 && ownerTargetFromBase <= fleteObjetivoMercado)
+                    ? ownerTargetFromBase
+                    : fleteObjetivoMercado;
+            } else {
+                // Modo USAR COST-PLUS: La Venta Sugerida se calcula multiplicando el Coste Base de Explotación por el porcentaje de margen objetivo configurado.
+                precioObjetivoArmador = calcularPrecioObjetivo(fleteMinimoBaseVenta, marginOwner);
+                precioObjetivoFletador = marginChart > 0
+                    ? calcularPrecioObjetivo(precioObjetivoArmador, marginChart)
+                    : precioObjetivoArmador;
+            }
             const sugOwner = precioObjetivoArmador;
             const sugChart = precioObjetivoFletador;
             const freightSellInput = document.getElementById('freight-sell');
@@ -26846,7 +26857,9 @@
                     ? 'Alerta: Venta por debajo del TCE Objetivo'
                     : (operacionModo === 'COA' && coaScenarioProjection
                         ? `Target protegido por BunkerIndex pesimista +10%${coaScenarioProjection.adjustmentActive ? ` y ajuste compartido ${coaScenarioProjection.sharedAdjustmentPct.toFixed(2)}%` : ''}`
-                        : `Flete mínimo $${fleteMinimoBaseVenta.toFixed(2)} + margen armador ${marginOwner.toFixed(2).replace(/\.00$/, '')}% + margen fletador ${marginChart.toFixed(2).replace(/\.00$/, '')}%`);
+                        : (isMarketStrategyActive && fleteObjetivoMercado > 0
+                            ? `Anclado a Benchmark de Mercado $${fleteObjetivoMercado.toFixed(2)} /MT (Coste Base $${fleteMinimoBaseVenta.toFixed(2)} /MT)`
+                            : `Coste Base $${fleteMinimoBaseVenta.toFixed(2)} + margen armador ${marginOwner.toFixed(2).replace(/\.00$/, '')}%` + (marginChart > 0 ? ` + margen fletador ${marginChart.toFixed(2).replace(/\.00$/, '')}%` : '')));
             }
             [targetPriceCard, suggestedOwnerCard, suggestedChartererCard].forEach((card) => {
                 if (!card) return;
@@ -26864,7 +26877,8 @@
                 margenFletador: marginChart,
                 fleteCompraArmador: precioObjetivoArmador,
                 ventaSugeridaFletador: precioObjetivoFletador,
-                tceTarget: parseFloat(document.getElementById('inverse-tce-target')?.value) || 13000
+                tceTarget: parseFloat(document.getElementById('inverse-tce-target')?.value) || 13000,
+                isMarketStrategy: isMarketStrategyActive
             });
             State.breakEvenVentaSugerida = breakEvenParaVentaSugerida;
             State.breakEvenArmador = breakEvenArmadorDisplay;
@@ -26945,32 +26959,30 @@
             const suggestedSaleNote = suggestedBelowTarget
                 ? 'Alerta: Venta por debajo del TCE Objetivo'
                 : (vesselPricingClass?.type === 'Cost-Plus' ? 'Flete mínimo Cost-Plus sincronizado' : 'Flete mínimo inverso sincronizado');
+            const ownerSubtext = isMarketStrategyActive
+                ? `Tarifa Neta Armador (Base $${fleteMinimoBaseVenta.toFixed(2)} + ${marginOwner.toFixed(2).replace(/\.00$/, '')}%)`
+                : (vesselPricingClass?.type === 'Cost-Plus' ? `Coste Base $${fleteMinimoBaseVenta.toFixed(2)} + Margen ${marginOwner.toFixed(2).replace(/\.00$/, '')}%` : 'Flete mínimo inverso sincronizado');
+            const chartererSubtext = isMarketStrategyActive
+                ? `Flete Total Venta (Anclado a Mercado $${fleteObjetivoMercado.toFixed(2)} /MT)`
+                : (marginChart > 0 ? `Armador + Margen Fletador ${marginChart.toFixed(2).replace(/\.00$/, '')}%` : 'Flete Total Venta (All-in)');
+
             if (isZeroCalculation) {
                 document.getElementById('res-sug-owner').innerHTML = `
-                    <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$0.00</div>
-                    <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">Total Freight (All-in)</div>
+                    <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$0.00 /TM</div>
+                    <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">Tarifa Neta Armador</div>
                 `;
                 document.getElementById('res-sug-charterer').innerHTML = `
-                    <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$0.00</div>
-                    <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">Total Freight (All-in)</div>
-                `;
-            } else if (applySurcharge === 'YES') {
-                document.getElementById('res-sug-owner').innerHTML = `
-                    <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$${sugOwner.toFixed(2)}</div>
-                    <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">${suggestedSaleNote}</div>
-                `;
-                document.getElementById('res-sug-charterer').innerHTML = `
-                    <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$${sugChart.toFixed(2)}</div>
-                    <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">VSA + margen fletador</div>
+                    <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$0.00 /TM</div>
+                    <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">Flete Total Venta</div>
                 `;
             } else {
                 document.getElementById('res-sug-owner').innerHTML = `
-                    <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$${sugOwner.toFixed(2)}</div>
-                    <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">${suggestedSaleNote}</div>
+                    <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$${sugOwner.toFixed(2)} /TM</div>
+                    <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">${ownerSubtext}</div>
                 `;
                 document.getElementById('res-sug-charterer').innerHTML = `
-                    <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$${sugChart.toFixed(2)}</div>
-                    <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">Total Freight (All-in)</div>
+                    <div style="font-size: 18px; font-weight: bold; color: ${suggestedSaleColor}; font-family: monospace;">$${sugChart.toFixed(2)} /TM</div>
+                    <div style="font-size: 9px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 1px;">${chartererSubtext}</div>
                 `;
             }
 
@@ -43457,7 +43469,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             margenFletador,
             fleteCompraArmador,
             ventaSugeridaFletador,
-            tceTarget
+            tceTarget,
+            isMarketStrategy = false
         }) {
             const safeBase = Math.max(0, Number(fleteMinimo) || 0);
             const safeOwner = Math.max(0, Number(fleteCompraArmador) || 0);
@@ -43481,7 +43494,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (chartererEl) chartererEl.innerText = formatRate(safeCharterer);
             if (sourceEl) sourceEl.innerText = `Base TCE $${Math.round(Number(tceTarget) || 0).toLocaleString('en-US')}/día desde Calculadora Inversa`;
             if (ownerFormulaEl) ownerFormulaEl.innerText = `$${safeBase.toFixed(2)} × (1 + ${Number(margenArmador || 0).toFixed(2).replace(/\.00$/, '')}%)`;
-            if (chartererFormulaEl) chartererFormulaEl.innerText = `$${safeOwner.toFixed(2)} × (1 + ${Number(margenFletador || 0).toFixed(2).replace(/\.00$/, '')}%)`;
+            if (chartererFormulaEl) chartererFormulaEl.innerText = isMarketStrategy
+                ? `Anclado directamente a Benchmark de Mercado $${safeCharterer.toFixed(2)} /MT`
+                : `$${safeOwner.toFixed(2)} × (1 + ${Number(margenFletador || 0).toFixed(2).replace(/\.00$/, '')}%)`;
             if (alertEl) alertEl.classList.toggle('hidden', !isCritical);
             if (detailsPanel) {
                 detailsPanel.classList.toggle('border-orange-300', isCritical);
