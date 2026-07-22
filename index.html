@@ -15843,14 +15843,22 @@
                 }
 
                 let vesselsToSend = [];
-                if (window.lastClassifiedVessels && window.lastClassifiedVessels.length > 0) {
-                    vesselsToSend = window.lastClassifiedVessels;
-                    console.log("[CONGELAR_REPORTE] Usando flota clasificada del Motor de Coincidencias: " + vesselsToSend.length + " buques.");
+                if (window.aesMatchingState?.matches && window.aesMatchingState.matches.length > 0) {
+                    vesselsToSend = window.aesMatchingState.matches;
+                    console.log("[CONGELAR_REPORTE] Usando flota compatible de aesMatchingState: " + vesselsToSend.length + " buques.");
+                } else if (window.GlobalStore?.compatibleVessels && window.GlobalStore.compatibleVessels.length > 0) {
+                    vesselsToSend = window.GlobalStore.compatibleVessels;
+                    console.log("[CONGELAR_REPORTE] Usando compatibleVessels de GlobalStore: " + vesselsToSend.length + " buques.");
+                } else if (window.lastClassifiedVessels && window.lastClassifiedVessels.length > 0) {
+                    const compatibleOnly = window.lastClassifiedVessels.filter(v => v.is_compatible !== false && v.operationallyEligible !== false);
+                    vesselsToSend = compatibleOnly.length > 0 ? compatibleOnly : window.lastClassifiedVessels;
+                    console.log("[CONGELAR_REPORTE] Usando flota clasificada compatible: " + vesselsToSend.length + " buques.");
                 } else {
                     const rawVessels = (window.GlobalStore && typeof window.GlobalStore.getRawVessels === 'function')
                         ? (window.GlobalStore.getRawVessels() || [])
                         : ((window.GlobalStore && window.GlobalStore.rawVessels) || []);
-                    vesselsToSend = rawVessels;
+                    vesselsToSend = rawVessels.filter(v => v.is_compatible !== false && v.operationallyEligible !== false);
+                    if (vesselsToSend.length === 0) vesselsToSend = rawVessels;
                     console.log("[CONGELAR_REPORTE] Usando rawVessels (fallback): " + vesselsToSend.length + " buques.");
                 }
                 
@@ -15885,10 +15893,19 @@
         window.generateSyncId = generateSyncId;
 
         function createCoreProDataBridgePayload(vessels, syncId = generateSyncId()) {
+            const routeContext = (function() {
+                try {
+                    return getCoreProMatchingRequestContext();
+                } catch (e) {
+                    return null;
+                }
+            })();
             return {
                 format: 'v2',
                 source: 'Core PRO',
                 syncId,
+                batch_id: syncId,
+                route: routeContext,
                 vessels: Array.isArray(vessels) ? vessels : []
             };
         }
@@ -16524,12 +16541,21 @@
                 console.warn(`[Core PRO] Se sincronizan ${vesselsWithCoordinates.length} de ${vesselsArray.length} buques; los registros sin coordenadas AIS válidas fueron omitidos.`);
             }
             const syncId = reportData?.syncId || reportData?.sync_id || generateSyncId();
+            const routeContext = (function() {
+                try {
+                    return getCoreProMatchingRequestContext();
+                } catch (e) {
+                    return null;
+                }
+            })();
             const payload = {
                 format: 'v2',
                 source: 'Core PRO',
                 syncId,
+                batch_id: syncId,
                 vessels: vesselsWithCoordinates,
-                ...getCoreProMatchingRequestContext()
+                route: routeContext,
+                ...routeContext
             };
             const response = await fetch('/api/core-pro-frozen-report', {
                 method: 'POST',
@@ -16920,13 +16946,15 @@
             try {
                 const auditVessels = Array.isArray(window.lastLocalMatchingAuditVessels) && window.lastLocalMatchingAuditVessels.length > 0
                     ? window.lastLocalMatchingAuditVessels
+                    : (Array.isArray(window.aesMatchingState?.matches) && window.aesMatchingState.matches.length > 0
+                        ? window.aesMatchingState.matches
                     : (Array.isArray(window.GlobalStore?.auditVessels) && window.GlobalStore.auditVessels.length > 0
                         ? window.GlobalStore.auditVessels
                     : (Array.isArray(window.lastClassifiedVessels) && window.lastClassifiedVessels.length > 0
                         ? window.lastClassifiedVessels
                         : ((window.GlobalStore && typeof window.GlobalStore.getRawVessels === 'function')
                             ? (window.GlobalStore.getRawVessels() || [])
-                            : ((window.GlobalStore && window.GlobalStore.rawVessels) || []))));
+                            : ((window.GlobalStore && window.GlobalStore.rawVessels) || [])))));
                 if (auditVessels.length === 0) {
                     alert('Error: No hay datos seleccionados para exportar');
                     return;
@@ -16942,9 +16970,24 @@
                     return;
                 }
 
-                const vesselsToSend = selectedKeys.length > 0
-                    ? selectedKeys.map(key => auditVessels.find(vessel => vessel.__auditKey === key)).filter(Boolean)
-                    : auditVessels;
+                function matchVesselKey(vessel, key) {
+                    if (vessel.__auditKey && vessel.__auditKey === key) return true;
+                    const vImo = vessel.imo || vessel.IMO || vessel.numero_imo || vessel.numeroImo || (vessel.vessel && vessel.vessel.imo) || (vessel.ais && vessel.ais.imo) || '';
+                    const vMmsi = vessel.mmsi || (vessel.vessel && vessel.vessel.mmsi) || (vessel.ais && vessel.ais.mmsi) || '';
+                    const vName = (vessel.vesselName || vessel.vessel_name || vessel.name || (vessel.vessel && vessel.vessel.vesselName) || '').toString().trim().toLowerCase();
+                    const candidateKey = [vImo, vMmsi, vName].join('|');
+                    return candidateKey === key;
+                }
+
+                let vesselsToSend = selectedKeys.length > 0
+                    ? selectedKeys.map(key => auditVessels.find(vessel => matchVesselKey(vessel, key))).filter(Boolean)
+                    : auditVessels.filter(v => v.is_compatible !== false && v.operationallyEligible !== false);
+
+                if (vesselsToSend.length === 0) {
+                    vesselsToSend = Array.isArray(window.aesMatchingState?.matches) && window.aesMatchingState.matches.length > 0
+                        ? window.aesMatchingState.matches
+                        : auditVessels;
+                }
 
                 if (vesselsToSend.length === 0) {
                     showToast("Ejecuta el Motor de Coincidencias antes de exportar a auditoría.");
@@ -18536,6 +18579,9 @@
 
                         // Add vessel to the list of rendered vessels for the frozen report
                         renderedVesselsForReport.push({
+                            __auditKey: matchingAuditKey,
+                            is_compatible: isComp,
+                            operationallyEligible: isComp,
                             imo: v.imo || v.IMO || m.imo || (m.ais && m.ais.imo) || 0,
                             vesselName: v.vesselName || v.vessel_name || v.ShipName || m.name || "Unknown",
                             latitude: Number(m.ais?.latitude ?? m.ais?.lat ?? v.latitude ?? v.lat),
@@ -36137,15 +36183,26 @@ ADDITIONAL NOTES:
                 sendBtn.classList.add('opacity-60', 'cursor-not-allowed');
                 sendBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sincronizando...';
             }
-            setCommercialNlpSendStatus('Consultando Data Bridge...', 'loading');
+            setCommercialNlpSendStatus('Enviando a Data Bridge...', 'loading');
 
             try {
-                const responsePayload = await requestDataBridgeReadSync();
+                let responsePayload = null;
+                if (typeof window.generateFrozenReport === 'function') {
+                    responsePayload = await window.generateFrozenReport();
+                } else if (typeof window.exportSelectedMatchingToAudit === 'function') {
+                    responsePayload = await window.exportSelectedMatchingToAudit();
+                } else {
+                    const compatibleVessels = Array.isArray(window.aesMatchingState?.matches) && window.aesMatchingState.matches.length > 0
+                        ? window.aesMatchingState.matches
+                        : [];
+                    const frozenReport = createCoreProDataBridgePayload(compatibleVessels);
+                    responsePayload = await syncCoreProMatchingReport(frozenReport);
+                }
                 const resultMessage = responsePayload?.message || 'Data Bridge sincronizado correctamente.';
                 setCommercialNlpSendStatus(resultMessage, 'success');
                 if (typeof showToast === 'function') showToast(resultMessage, false, 'success');
             } catch (error) {
-                console.error('Error al consultar Data Bridge:', error);
+                console.error('Error al exportar a Data Bridge:', error);
                 setCommercialNlpSendStatus(`No se pudo sincronizar: ${error.message}`, 'error');
             } finally {
                 if (sendBtn) {
