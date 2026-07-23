@@ -16889,6 +16889,11 @@
 
                     if (response.status === 200 && responsePayload?.success === true) {
                         if (type === 'fleet') confirmedDataBridgeFleetSyncIds.add(syncId);
+                        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+                            window.dispatchEvent(new CustomEvent('DATABRIDGE_SYNC_STATUS', {
+                                detail: { state: 'success', syncId, httpStatus: response.status, confirmation: responsePayload }
+                            }));
+                        }
                         return Response.json({ ...responsePayload, sync_id: syncId, syncId }, { status: 200 });
                     }
 
