@@ -278,7 +278,7 @@ async function upsertVesselBatch(vessels: VesselRow[]) {
               process_status, origen, audit_source, source_payload, system_identity, fecha_ultima_actualizacion
             )
             VALUES ($1::integer, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $17, $18::jsonb, 'DATABRIDGE:IMO:' || $1, NOW())
-            ON CONFLICT (imo_number) WHERE imo_number IS NOT NULL AND imo_number <> 0 DO UPDATE SET
+            ON CONFLICT (imo_number) DO UPDATE SET
               vessel_name = EXCLUDED.vessel_name,
               dwt = COALESCE(EXCLUDED.dwt, vessels_master.dwt),
               mmsi = COALESCE(EXCLUDED.mmsi, vessels_master.mmsi),
