@@ -209,12 +209,35 @@ async function ensureVesselsMasterSchema() {
         AND column_name = ANY($1::text[])
     `,
     [REQUIRED_VESSELS_MASTER_COLUMNS],
-  ).then((schemaResult) => {
+  ).then(async (schemaResult) => {
     const availableColumns = new Set(schemaResult.rows.map((row) => row.column_name));
     const missingColumns = REQUIRED_VESSELS_MASTER_COLUMNS.filter((column) => !availableColumns.has(column));
     if (missingColumns.length > 0) {
       throw new Error(`vessels_master schema is missing required columns: ${missingColumns.join(", ")}`);
     }
+
+    await getPool().query(`
+      DO $migration$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'vessels_master_imo_number_unique'
+            AND conrelid = 'vessels_master'::regclass
+        ) AND NOT EXISTS (
+          SELECT 1
+          FROM pg_index i
+          JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+          WHERE i.indrelid = 'vessels_master'::regclass
+            AND i.indisunique
+            AND a.attname = 'imo_number'
+        ) THEN
+          ALTER TABLE "vessels_master"
+            ADD CONSTRAINT "vessels_master_imo_number_unique" UNIQUE ("imo_number");
+        END IF;
+      END
+      $migration$;
+    `);
   }).catch((error: unknown) => {
     vesselsMasterSchemaReady = null;
     throw error;

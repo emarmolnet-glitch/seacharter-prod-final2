@@ -1,0 +1,1 @@
+ALTER TABLE "vessels_master" ADD CONSTRAINT "vessels_master_imo_number_key" UNIQUE("imo_number");
