@@ -10,6 +10,10 @@ const migrationSource = readFileSync(
   new URL('../netlify/database/migrations/20260719120000_add_vessels_master_latitude_longitude_constraints/migration.sql', import.meta.url),
   'utf8',
 );
+const uniqueMigrationSource = readFileSync(
+  new URL('../netlify/database/migrations/20260723100000_add_vessels_master_imo_number_unique_constraint/migration.sql', import.meta.url),
+  'utf8',
+);
 
 test('new additive migration adds vessels_master coordinates without changing applied migrations', () => {
   assert.match(migrationSource, /ALTER TABLE "vessels_master"[\s\S]*ADD COLUMN IF NOT EXISTS "latitude" double precision/);
@@ -19,10 +23,16 @@ test('new additive migration adds vessels_master coordinates without changing ap
   assert.match(migrationSource, /CREATE INDEX IF NOT EXISTS "vessels_master_coordinates_idx"/);
 });
 
-test('Drizzle schema maps latitude and longitude to vessels_master', () => {
+test('unique constraint migration ensures vessels_master imo_number uniqueness for ON CONFLICT upsert', () => {
+  assert.match(uniqueMigrationSource, /vessels_master_imo_number_unique/);
+  assert.match(uniqueMigrationSource, /UNIQUE \("imo_number"\)/);
+});
+
+test('Drizzle schema maps latitude, longitude, and unique imo_number to vessels_master', () => {
   const tableStart = schemaSource.indexOf('export const vesselsMaster = pgTable("vessels_master"');
   const tableEnd = schemaSource.indexOf('export const aisVessels', tableStart);
   const tableSource = schemaSource.slice(tableStart, tableEnd);
+  assert.match(tableSource, /imoNumber: integer\("imo_number"\)\.unique\(\)/);
   assert.match(tableSource, /latitude: doublePrecision\("latitude"\)/);
   assert.match(tableSource, /longitude: doublePrecision\("longitude"\)/);
 });
