@@ -47,7 +47,7 @@ test('every AIS ingestion path mirrors accepted rows into vessels_master', () =>
 });
 
 test('Data Bridge receiver uses the deployed partial IMO identity and current columns', () => {
-  assert.match(receiverSource, /ON CONFLICT (imo_number) DO UPDATE SET ...
+  assert.match(receiverSource, /ON CONFLICT \(imo_number\) DO UPDATE SET/);
   assert.match(receiverSource, /process_status, origen, audit_source, source_payload, system_identity, fecha_ultima_actualizacion/);
   assert.match(receiverSource, /vessel\.imoNumber, vessel\.vesselName, vessel\.dwt/);
   assert.doesNotMatch(receiverSource, /process_status, source, source_payload, updated_at/);
