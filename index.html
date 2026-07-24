@@ -7323,6 +7323,20 @@
         <div class="header-actions-right">
             <!-- Session Actions Container -->
             <div class="flex items-center gap-2" id="session-actions">
+                <button
+                    id="new-estimation-btn"
+                    type="button"
+                    onclick="resetTotalEstimation(); closeMobileSessionMenu();"
+                    class="bg-teal-700 hover:bg-teal-800 text-white font-medium text-sm px-4 py-2 rounded-md transition-colors shadow-sm flex items-center gap-2"
+                    title="Nueva Estimación"
+                    aria-label="Nueva Estimación"
+                >
+                    <svg class="w-4 h-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 5v14" />
+                        <path d="M5 12h14" />
+                    </svg>
+                    <span>+ Nueva Estimación</span>
+                </button>
                 <div class="tools-dropdown-container">
                     <input
                         type="file"
@@ -7348,15 +7362,6 @@
                         </svg>
                     </button>
                     <ul id="tools-dropdown-menu" class="tools-dropdown-menu" aria-label="Utilidades de sesión" onclick="if (event.target.closest('button')) setTimeout(closeMobileSessionMenu, 0);">
-                        <li class="tools-dropdown-item">
-                            <button id="new-estimation-btn" onclick="resetTotalEstimation(); closeMobileSessionMenu();" class="tools-dropdown-action" title="Nueva Estimación" aria-label="Nueva Estimación">
-                                <svg class="header-utility-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M12 5v14" />
-                                    <path d="M5 12h14" />
-                                </svg>
-                                <span>Nueva Estimación</span>
-                            </button>
-                        </li>
                         <li class="tools-dropdown-item">
                             <button onclick="saveAuditSession(); closeMobileSessionMenu();" class="tools-dropdown-action" title="Guardar Sesión" aria-label="Guardar Sesión">
                                 <svg class="header-utility-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
