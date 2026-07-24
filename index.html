@@ -16268,6 +16268,11 @@
                 { httpStatus: httpStatus || '' }
             );
             if (state === 'success') {
+                const confirmation = event?.detail?.confirmation || {};
+                const carteraMatches = confirmation.carteraMatches || confirmation.cartera_matches;
+                if (Array.isArray(carteraMatches) && carteraMatches.length > 0 && typeof highlightCarteraMatchesInUI === 'function') {
+                    highlightCarteraMatchesInUI(carteraMatches);
+                }
                 updateSyncStatus(true, {
                     source: 'databridge-confirmation',
                     dataBridgeConfirmed: true,
@@ -16604,6 +16609,10 @@
             if (dataBridgeResponse.status !== 200 || dataBridgeConfirmation?.success !== true) {
                 throw new Error(dataBridgeConfirmation?.error || dataBridgeConfirmation?.message || `Data Bridge respondió ${dataBridgeResponse.status}.`);
             }
+            const carteraMatches = dataBridgeConfirmation?.carteraMatches || dataBridgeConfirmation?.cartera_matches;
+            if (Array.isArray(carteraMatches) && carteraMatches.length > 0 && typeof highlightCarteraMatchesInUI === 'function') {
+                highlightCarteraMatchesInUI(carteraMatches);
+            }
             await notifyDataBridgeFrozenReportCommitted(responsePayload, dataBridgeConfirmation);
             emitCoreProLiveSync(responsePayload);
             console.log(`[Core PRO] Reporte congelado persistido con ${persistedVessels.length} buques. Data Bridge confirmó la señal después del commit.`, responsePayload);
@@ -16752,6 +16761,84 @@
         }
         window.mapVesselsForReceiveVessels = mapVesselsForReceiveVessels;
 
+        function highlightCarteraMatchesInUI(carteraMatches) {
+            if (!Array.isArray(carteraMatches) || carteraMatches.length === 0) return;
+            window.__lastCarteraMatches = carteraMatches;
+
+            const targetImos = new Set();
+            carteraMatches.forEach(item => {
+                if (!item) return;
+                let imo = '';
+                if (typeof item === 'number' || typeof item === 'string') {
+                    imo = String(item).trim().replace(/\D/g, '');
+                } else if (typeof item === 'object') {
+                    const raw = item.imo || item.numero_imo || item.IMO || item.numeroImo || item.vessel_imo || item.vesselImo || item.vessel?.imo;
+                    imo = String(raw || '').trim().replace(/\D/g, '');
+                }
+                if (imo && imo.length >= 6) {
+                    targetImos.add(imo);
+                }
+            });
+
+            if (targetImos.size === 0) return;
+
+            const candidateCards = Array.from(document.querySelectorAll(
+                '#matching-results-list [data-matching-result-card="true"], #matching-results-list .matching-vessel-card, [data-vessel-imo], .matching-vessel-card'
+            ));
+
+            candidateCards.forEach(card => {
+                let cardImo = (card.getAttribute('data-vessel-imo') || card.getAttribute('data-imo') || '').trim().replace(/\D/g, '');
+                if (!cardImo || cardImo.length < 6) {
+                    const checkbox = card.querySelector('.matching-audit-select, [data-audit-key]');
+                    if (checkbox) {
+                        const auditKey = checkbox.getAttribute('data-audit-key') || '';
+                        const keyMatch = auditKey.match(/\b\d{7}\b/);
+                        if (keyMatch) cardImo = keyMatch[0];
+                    }
+                }
+                if (!cardImo || cardImo.length < 6) {
+                    const text = card.textContent || '';
+                    const imoMatch = text.match(/IMO[:\s]*(\d{7})/i);
+                    if (imoMatch) cardImo = imoMatch[1];
+                }
+
+                if (cardImo && targetImos.has(cardImo)) {
+                    applyCarteraMatchHighlight(card);
+                }
+            });
+        }
+        window.highlightCarteraMatchesInUI = highlightCarteraMatchesInUI;
+
+        function applyCarteraMatchHighlight(card) {
+            if (!card || card.dataset.carteraMatched === 'true') return;
+            card.dataset.carteraMatched = 'true';
+
+            card.classList.remove('border-slate-200');
+            card.classList.add('border-emerald-500', 'bg-emerald-50/40', 'ring-2', 'ring-emerald-500/30', 'shadow-md');
+
+            const rankRibbon = card.querySelector('.absolute.top-4.right-5') || card.querySelector('.absolute.top-4');
+            
+            const badgeEl = document.createElement('div');
+            badgeEl.className = 'cartera-match-badge inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-600 text-white font-black text-[10px] uppercase tracking-wider shadow-sm z-10';
+            badgeEl.setAttribute('title', 'Idóneo para cálculo definitivo');
+            badgeEl.innerHTML = '<i class="fa-solid fa-shield-halved text-emerald-200"></i><span>EN CARTERA - LISTO PARA CÁLCULO</span>';
+
+            if (rankRibbon) {
+                rankRibbon.insertBefore(badgeEl, rankRibbon.firstChild);
+            } else {
+                const headerContainer = card.querySelector('.flex.items-start') || card.firstElementChild;
+                if (headerContainer) {
+                    const banner = document.createElement('div');
+                    banner.className = 'mb-2 flex items-center justify-between';
+                    banner.appendChild(badgeEl);
+                    card.insertBefore(banner, headerContainer);
+                } else {
+                    card.prepend(badgeEl);
+                }
+            }
+        }
+        window.applyCarteraMatchHighlight = applyCarteraMatchHighlight;
+
         const DATA_BRIDGE_RECEIVE_CORE_DATA_URL = '/api/databridge/receive-core-data';
         const DATA_BRIDGE_MAX_ATTEMPTS = 3;
         const DATA_BRIDGE_RETRY_BASE_DELAY_MS = 300;
@@ -16889,6 +16976,10 @@
 
                     if (response.status === 200 && responsePayload?.success === true) {
                         if (type === 'fleet') confirmedDataBridgeFleetSyncIds.add(syncId);
+                        const carteraMatches = responsePayload?.carteraMatches || responsePayload?.cartera_matches;
+                        if (Array.isArray(carteraMatches) && carteraMatches.length > 0 && typeof highlightCarteraMatchesInUI === 'function') {
+                            highlightCarteraMatchesInUI(carteraMatches);
+                        }
                         if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
                             window.dispatchEvent(new CustomEvent('DATABRIDGE_SYNC_STATUS', {
                                 detail: { state: 'success', syncId, httpStatus: response.status, confirmation: responsePayload }
@@ -18645,7 +18736,7 @@
                              </a>` : '';
 
                         const cardHtml = `
-                            <div class="matching-vessel-card border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : 'border-slate-200 bg-slate-50/50 opacity-75 cursor-pointer'} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-map-focus-id="${mapFocusId}" onclick="toggleMatchingAuditSelection(event)">
+                            <div class="matching-vessel-card border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : 'border-slate-200 bg-slate-50/50 opacity-75 cursor-pointer'} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-vessel-imo="${v.imo || ''}" data-map-focus-id="${mapFocusId}" onclick="toggleMatchingAuditSelection(event)">
                                 <!-- Rank Ribbon -->
                                 <div class="absolute top-4 right-5 flex items-center gap-2">
                                     ${projectionBadge}
@@ -18823,6 +18914,9 @@
                 resultsList.dataset.technicalWarningCount = String(technicalWarningCount);
                 resultsList.dataset.matchingHydrated = 'true';
                 syncMatchingButtonWithCachedResults(viableMatches.length);
+                if (window.__lastCarteraMatches && typeof highlightCarteraMatchesInUI === 'function') {
+                    highlightCarteraMatchesInUI(window.__lastCarteraMatches);
+                }
 
                 const coreProState = typeof State !== 'undefined' ? State : {};
                 const coreProAuditInput = {
