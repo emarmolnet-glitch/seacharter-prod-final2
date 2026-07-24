@@ -936,7 +936,7 @@ test('voyage reference is moved to the left vessel card and the print backup car
   assert.ok(quickReferencePosition > 0 && quickReferencePosition < vesselCardEnd);
   assert.equal((estimatorMarkup.match(/id="quick-ref"/g) || []).length, 1);
   assert.doesNotMatch(estimatorMarkup, /Impresión y Respaldo de Cotizaciones/);
-  assert.match(estimatorMarkup, /5\. Simulador de Negociación y Contraofertas/);
+  assert.match(estimatorMarkup, /10\. SIMULADOR DE NEGOCIACIÓN Y CONTRAOFERTAS/i);
 });
 
 test('charterer negotiation simulator calculates spread, savings, and viability against break-even', () => {
