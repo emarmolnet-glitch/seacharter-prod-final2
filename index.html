@@ -7835,14 +7835,28 @@
                                 </div>
                             </div>
                             <div class="input-group">
-                                <label id="label-rate-load" class="text-action-required flex items-center min-h-[24px]">Ritmo Real POL (TM/d)</label>
+                                <div class="flex justify-between items-center mb-1">
+                                    <label id="label-rate-load" class="text-action-required flex items-center min-h-[24px] mb-0">Ritmo Real POL (TM/d)</label>
+                                    <div class="inline-flex rounded-md shadow-sm text-[10px]" role="group" aria-label="Modo Ritmo POL">
+                                        <button type="button" id="btn-ritmo-auto-pol" onclick="setRitmoMode('auto', 'pol')" class="px-2 py-0.5 rounded-l-md bg-[#1E3A8A] text-white font-bold transition cursor-pointer" aria-pressed="true">Auto</button>
+                                        <button type="button" id="btn-ritmo-manual-pol" onclick="setRitmoMode('manual', 'pol')" class="px-2 py-0.5 rounded-r-md bg-slate-200 text-slate-700 font-bold transition cursor-pointer" aria-pressed="false">Manual</button>
+                                    </div>
+                                </div>
                                 <input type="number" id="rate-load" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="5000" step="any" oninput="marcarRitmoManual('pol')">
                                 <p id="rate-load-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
+                                <div id="delta-dias-badge-pol" class="hidden mt-1 text-[11px] font-bold"></div>
                             </div>
                             <div class="input-group">
-                                <label id="label-rate-disch" class="text-action-required flex items-center min-h-[24px]">Ritmo Real POD (TM/d)</label>
+                                <div class="flex justify-between items-center mb-1">
+                                    <label id="label-rate-disch" class="text-action-required flex items-center min-h-[24px] mb-0">Ritmo Real POD (TM/d)</label>
+                                    <div class="inline-flex rounded-md shadow-sm text-[10px]" role="group" aria-label="Modo Ritmo POD">
+                                        <button type="button" id="btn-ritmo-auto-pod" onclick="setRitmoMode('auto', 'pod')" class="px-2 py-0.5 rounded-l-md bg-[#1E3A8A] text-white font-bold transition cursor-pointer" aria-pressed="true">Auto</button>
+                                        <button type="button" id="btn-ritmo-manual-pod" onclick="setRitmoMode('manual', 'pod')" class="px-2 py-0.5 rounded-r-md bg-slate-200 text-slate-700 font-bold transition cursor-pointer" aria-pressed="false">Manual</button>
+                                    </div>
+                                </div>
                                 <input type="number" id="rate-disch" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="5000" step="any" oninput="marcarRitmoManual('pod')">
                                 <p id="rate-disch-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
+                                <div id="delta-dias-badge-pod" class="hidden mt-1 text-[11px] font-bold"></div>
                             </div>
                             <div id="contenedor-gruas-pol" class="input-group">
                                 <label id="label-ritmo-nominal-pol" class="text-action-required flex items-center min-h-[24px]">Nº Grúas POL</label>
@@ -23902,7 +23916,11 @@
             if (sfInput && product) sfInput.value = product.sf.toFixed(2);
             autoAdjustSF();
             actualizarCamposTipoCarga();
-            recalcularDiasPuerto();
+            if (typeof applyMethodAndProductConditions === 'function') {
+                applyMethodAndProductConditions();
+            } else {
+                recalcularDiasPuerto();
+            }
         }
 
         function autoAdjustSFLegacy() {
@@ -43245,7 +43263,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function isCraneMethod(label = '') {
             const l = String(label || '');
-            return l.includes('Grúa') || l.includes('Big Bags') || l.includes('Paletizado') || l.includes('Hierro/Acero');
+            return l.includes('Grúa')
+                || l.toLowerCase().includes('grúa')
+                || l.toLowerCase().includes('grua')
+                || l.toLowerCase().includes('barco')
+                || l.toLowerCase().includes('portuaria');
         }
 
         function getSwlForMethod(label = '') {
@@ -43417,9 +43439,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 selectEl.value = methodValue;
             }
 
-            const alertId = side === 'pod' ? 'metodo-descarga-incompatible-alert' : 'metodo-carga-incompatible-alert';
-            const alertEl = document.getElementById(alertId);
-            if (alertEl) alertEl.classList.add('hidden');
+            validarCompatibilidadMetodo(side);
 
             if (isCraneMethod(label)) {
                 const swlId = side === 'pod' ? 'gruas-swl-pod' : 'gruas-swl-pol';
@@ -43467,11 +43487,29 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             checkIsGearedVessel();
             actualizarGrabCapacityVisibility();
 
+            const modeKey = `ritmoMode_${side}`;
+            const isManual = (window.State && (window.State[modeKey] === 'manual' || window.State.ritmoMode === 'manual'))
+                || (rateInputEl && rateInputEl.dataset.manualOverride === 'true');
+
             if (isCrane) {
-                if (rateInputEl) rateInputEl.readOnly = true;
-                calcularRitmoGrua(side);
+                if (isManual) {
+                    if (rateInputEl) {
+                        rateInputEl.readOnly = false;
+                        rateInputEl.disabled = false;
+                        rateInputEl.removeAttribute('readonly');
+                        rateInputEl.removeAttribute('disabled');
+                    }
+                } else {
+                    if (rateInputEl) rateInputEl.readOnly = true;
+                    calcularRitmoGrua(side);
+                }
             } else {
-                if (rateInputEl) rateInputEl.readOnly = false;
+                if (rateInputEl) {
+                    rateInputEl.readOnly = false;
+                    rateInputEl.disabled = false;
+                    rateInputEl.removeAttribute('readonly');
+                    rateInputEl.removeAttribute('disabled');
+                }
                 resetEficienciaGrua(side);
             }
         }
@@ -43480,11 +43518,27 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const label = getSelectedMethodLabel(side);
             if (!isCraneMethod(label)) return;
 
+            const rateInputId = side === 'pod' ? 'rate-disch' : 'rate-load';
+            const rateInput = document.getElementById(rateInputId);
+
+            const modeKey = `ritmoMode_${side}`;
+            const isManual = (window.State && (window.State[modeKey] === 'manual' || window.State.ritmoMode === 'manual'))
+                || (rateInput && rateInput.dataset.manualOverride === 'true');
+
+            if (isManual) {
+                if (rateInput) {
+                    rateInput.readOnly = false;
+                    rateInput.disabled = false;
+                    rateInput.removeAttribute('readonly');
+                    rateInput.removeAttribute('disabled');
+                }
+                return;
+            }
+
             const swlId = side === 'pod' ? 'gruas-swl-pod' : 'gruas-swl-pol';
             const taraId = side === 'pod' ? 'gruas-tara-pod' : 'gruas-tara-pol';
             const ciclosId = side === 'pod' ? 'gruas-ciclos-pod' : 'gruas-ciclos-pol';
             const eficienciaId = side === 'pod' ? 'gruas-eficiencia-num-pod' : 'gruas-eficiencia-num-pol';
-            const rateInputId = side === 'pod' ? 'rate-disch' : 'rate-load';
 
             const swl = Math.max(0, parseFloat(document.getElementById(swlId)?.value) || 30);
             const tara = Math.max(0, parseFloat(document.getElementById(taraId)?.value) || 0);
@@ -43495,7 +43549,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             // Formula with friction: Math.round((((SWL - Tara) * Ciclos/Hora * 24) * Nº Grúas) * (Eficiencia / 100))
             const ritmoCalculado = Math.max(0, Math.round((((swl - tara) * ciclosHora * 24) * nGruas) * (eficiencia / 100)));
 
-            const rateInput = document.getElementById(rateInputId);
             if (rateInput) {
                 rateInput.value = String(ritmoCalculado);
                 rateInput.readOnly = true;
@@ -43511,45 +43564,111 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (typeof runEngine === 'function') runEngine();
         }
 
-        function onCargoCategoryChange() {
+        // ==========================================
+        // FASE 1: ALERTA DE COMPATIBILIDAD (CARGA VS. MÉTODO)
+        // ==========================================
+        const cargoCompatibilityMap = Object.freeze({
+            "Minerales y Construcción": ['Cuchara (Grab) - Grúa Barco', 'Cuchara (Grab) - Grúa Portuaria', 'Cinta Transportadora', 'Camión Tolva'],
+            "Biomasa y Combustibles Sólidos": ['Cuchara (Grab) - Grúa Barco', 'Cuchara (Grab) - Grúa Portuaria', 'Cinta Transportadora', 'Camión Tolva'],
+            "Carga Unificada / Sacos": ['Big Bags - Grúa Barco', 'Big Bags - Grúa Portuaria', 'Paletizado - Grúa Barco', 'Paletizado - Grúa Portuaria'],
+            "Carga Unitarizada / Envasada": ['Big Bags - Grúa Barco', 'Big Bags - Grúa Portuaria', 'Paletizado - Grúa Barco', 'Paletizado - Grúa Portuaria'],
+            "Carga Unitizada / Envasada": ['Big Bags - Grúa Barco', 'Big Bags - Grúa Portuaria', 'Paletizado - Grúa Barco', 'Paletizado - Grúa Portuaria'],
+            "Carga General / Proyectos": ['Hierro/Acero - Grúa Barco', 'Hierro/Acero - Grúa Portuaria'],
+            "Carga Siderúrgica y Metales": ['Hierro/Acero - Grúa Barco', 'Hierro/Acero - Grúa Portuaria'],
+            "Carga de Proyecto (Breakbulk)": ['Hierro/Acero - Grúa Barco', 'Hierro/Acero - Grúa Portuaria']
+        });
+
+        let metodoPolInvalido = false;
+        let metodoPodInvalido = false;
+
+        function validarCompatibilidadMetodo(side = 'pol') {
             const category = getActiveCargoCategory();
-            const allowedLabels = equipmentMatrix[category] || Object.values(METHOD_LABEL_BY_VALUE);
-            let isIncompatible = false;
+            const allowed = cargoCompatibilityMap[category] || equipmentMatrix[category] || Object.values(METHOD_LABEL_BY_VALUE);
+            const selectedLabel = getSelectedMethodLabel(side);
 
-            ['pol', 'pod'].forEach((side) => {
-                const selectId = side === 'pod' ? 'metodo_descarga_pod' : 'metodo_carga';
-                const rateInputId = side === 'pod' ? 'rate-disch' : 'rate-load';
-                const alertId = side === 'pod' ? 'metodo-descarga-incompatible-alert' : 'metodo-carga-incompatible-alert';
-                const selectEl = document.getElementById(selectId);
-                const rateInputEl = document.getElementById(rateInputId);
-                const alertEl = document.getElementById(alertId);
+            const isInvalid = Boolean(selectedLabel && !allowed.includes(selectedLabel));
 
-                const currentLabel = getSelectedMethodLabel(side);
+            if (side === 'pol') metodoPolInvalido = isInvalid;
+            else metodoPodInvalido = isInvalid;
 
-                if (currentLabel && !allowedLabels.includes(currentLabel)) {
-                    isIncompatible = true;
-                    if (selectEl) selectEl.value = '';
-                    if (rateInputEl) {
-                        rateInputEl.value = '0';
-                        rateInputEl.readOnly = false;
-                    }
-                    if (alertEl) {
-                        alertEl.textContent = '⚠️ El método de carga anterior es incompatible con la nueva categoría. Por favor, selecciona un equipamiento válido.';
-                        alertEl.classList.remove('hidden');
-                    }
+            const alertId = side === 'pod' ? 'metodo-descarga-incompatible-alert' : 'metodo-carga-incompatible-alert';
+            const alertEl = document.getElementById(alertId);
+
+            if (alertEl) {
+                if (isInvalid) {
+                    alertEl.textContent = '⚠️ Advertencia: El método seleccionado no es idóneo para la categoría de carga.';
+                    alertEl.classList.remove('hidden');
                 } else {
-                    if (alertEl) alertEl.classList.add('hidden');
-                }
-
-                renderMethodPills(side);
-            });
-
-            if (isIncompatible) {
-                const msg = '⚠️ El método de carga anterior es incompatible con la nueva categoría. Por favor, selecciona un equipamiento válido.';
-                if (typeof showToast === 'function') {
-                    showToast(msg);
+                    alertEl.classList.add('hidden');
                 }
             }
+
+            return isInvalid;
+        }
+
+        // ==========================================
+        // FASE 2: ANALÍTICA DE DESVIACIÓN DELTA EN MODO MANUAL
+        // ==========================================
+        function calcularDeltaDias(carga, tpdAuto, tpdManual) {
+            const qty = parseFloat(carga) || 0;
+            const autoRate = parseFloat(tpdAuto) || 0;
+            const manualRate = parseFloat(tpdManual) || 0;
+
+            if (qty <= 0 || autoRate <= 0 || manualRate <= 0) return null;
+
+            const diasBase = qty / autoRate;
+            const diasManuales = qty / manualRate;
+            return diasManuales - diasBase;
+        }
+
+        function actualizarDesviacionDeltaManual(side = 'pol') {
+            const inputId = side === 'pod' ? 'rate-disch' : 'rate-load';
+            const badgeId = side === 'pod' ? 'delta-dias-badge-pod' : 'delta-dias-badge-pol';
+            const input = document.getElementById(inputId);
+            const badgeEl = document.getElementById(badgeId);
+
+            if (!input || !badgeEl) return;
+
+            const modeKey = `ritmoMode_${side}`;
+            const isManual = (window.State && (window.State[modeKey] === 'manual' || window.State.ritmoMode === 'manual'))
+                || input.dataset.manualOverride === 'true';
+
+            if (!isManual) {
+                badgeEl.classList.add('hidden');
+                return;
+            }
+
+            const carga = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
+            const shadowKey = side === 'pol' ? 'tpdAutoSombraPol' : 'tpdAutoSombraPod';
+            const tpdAuto = (window.State && window.State[shadowKey]) ? parseFloat(window.State[shadowKey]) : (parseFloat(input.dataset.tpdAutoSombra) || 0);
+            const tpdManual = parseFloat(input.value) || 0;
+
+            const delta = calcularDeltaDias(carga, tpdAuto, tpdManual);
+
+            if (delta === null) {
+                badgeEl.classList.add('hidden');
+                return;
+            }
+
+            badgeEl.classList.remove('hidden');
+
+            if (Math.abs(delta) < 0.001) {
+                badgeEl.className = 'mt-1 text-[11px] font-bold inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200';
+                badgeEl.textContent = 'Sin desviación vs. Estándar';
+            } else if (delta > 0) {
+                badgeEl.className = 'mt-1 text-[11px] font-bold inline-block px-2 py-0.5 rounded bg-red-100 text-red-800 border border-red-200';
+                badgeEl.textContent = `+ ${delta.toFixed(2)} días (Impacto Negativo en OPEX)`;
+            } else {
+                badgeEl.className = 'mt-1 text-[11px] font-bold inline-block px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200';
+                badgeEl.textContent = `- ${Math.abs(delta).toFixed(2)} días (Ahorro de Tiempo)`;
+            }
+        }
+
+        function onCargoCategoryChange() {
+            ['pol', 'pod'].forEach((side) => {
+                validarCompatibilidadMetodo(side);
+                renderMethodPills(side);
+            });
         }
 
         function handleCargoCategoryChange() {
@@ -43648,7 +43767,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function handlePortMethodChange(side = 'pol') {
             setRitmoManualIndicator(side, false);
             renderMethodPills(side);
-            if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
+            validarCompatibilidadMetodo(side);
+            actualizarDesviacionDeltaManual(side);
+            if (typeof applyMethodAndProductConditions === 'function') {
+                applyMethodAndProductConditions(side);
+            } else if (typeof recalcularDiasPuerto === 'function') {
+                recalcularDiasPuerto();
+            }
             if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
         }
 
@@ -43686,9 +43811,104 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (badge) badge.classList.toggle('hidden', !isManual);
         }
 
+        function setRitmoMode(mode = 'auto', side = null) {
+            const sides = side ? [side] : ['pol', 'pod'];
+
+            sides.forEach(s => {
+                const key = `ritmoMode_${s}`;
+                if (!window.State) window.State = {};
+                window.State[key] = mode;
+                if (!side || side === 'pol') window.State.ritmoMode = mode;
+
+                const inputId = s === 'pod' ? 'rate-disch' : 'rate-load';
+                const input = document.getElementById(inputId);
+
+                const autoBtn = document.getElementById(`btn-ritmo-auto-${s}`) || document.getElementById('btn-mode-auto');
+                const manualBtn = document.getElementById(`btn-ritmo-manual-${s}`) || document.getElementById('btn-mode-manual');
+
+                if (mode === 'manual') {
+                    if (input) {
+                        const shadowKey = s === 'pol' ? 'tpdAutoSombraPol' : 'tpdAutoSombraPod';
+                        if (!window.State[shadowKey] || window.State[shadowKey] <= 0) {
+                            window.State[shadowKey] = parseFloat(input.value) || 5000;
+                        }
+                        input.readOnly = false;
+                        input.disabled = false;
+                        input.removeAttribute('readonly');
+                        input.removeAttribute('disabled');
+                        input.classList.remove('cursor-not-allowed', 'bg-slate-100');
+                        input.dataset.manualOverride = 'true';
+                    }
+                    if (autoBtn) {
+                        autoBtn.className = 'px-2 py-0.5 rounded-l-md bg-slate-200 text-slate-700 font-bold transition cursor-pointer';
+                        autoBtn.setAttribute('aria-pressed', 'false');
+                    }
+                    if (manualBtn) {
+                        manualBtn.className = 'px-2 py-0.5 rounded-r-md bg-[#1E3A8A] text-white font-bold transition cursor-pointer';
+                        manualBtn.setAttribute('aria-pressed', 'true');
+                    }
+                    setRitmoManualIndicator(s, true);
+                } else {
+                    if (input) {
+                        input.dataset.manualOverride = 'false';
+                    }
+                    if (autoBtn) {
+                        autoBtn.className = 'px-2 py-0.5 rounded-l-md bg-[#1E3A8A] text-white font-bold transition cursor-pointer';
+                        autoBtn.setAttribute('aria-pressed', 'true');
+                    }
+                    if (manualBtn) {
+                        manualBtn.className = 'px-2 py-0.5 rounded-r-md bg-slate-200 text-slate-700 font-bold transition cursor-pointer';
+                        manualBtn.setAttribute('aria-pressed', 'false');
+                    }
+                    setRitmoManualIndicator(s, false);
+                    if (typeof actualizarSubmoduloGruas === 'function') {
+                        actualizarSubmoduloGruas(s);
+                    }
+                }
+                actualizarDesviacionDeltaManual(s);
+            });
+
+            if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
+            if (typeof runEngine === 'function') runEngine();
+        }
+        window.setRitmoMode = setRitmoMode;
+
         function marcarRitmoManual(side = 'pol') {
+            const inputId = side === 'pod' ? 'rate-disch' : 'rate-load';
+            const input = document.getElementById(inputId);
+            if (input) {
+                const shadowKey = side === 'pol' ? 'tpdAutoSombraPol' : 'tpdAutoSombraPod';
+                if (!window.State) window.State = {};
+                if (!window.State[shadowKey] || window.State[shadowKey] <= 0) {
+                    window.State[shadowKey] = parseFloat(input.value) || 5000;
+                }
+                input.readOnly = false;
+                input.disabled = false;
+                input.removeAttribute('readonly');
+                input.removeAttribute('disabled');
+                input.classList.remove('cursor-not-allowed', 'bg-slate-100');
+                input.dataset.manualOverride = 'true';
+                const val = parseFloat(input.value) || 0;
+                if (window.State) {
+                    if (side === 'pol') window.State.loadRate = val;
+                    else window.State.dischRate = val;
+                    window.State[`ritmoMode_${side}`] = 'manual';
+                }
+            }
+            const autoBtn = document.getElementById(`btn-ritmo-auto-${side}`);
+            const manualBtn = document.getElementById(`btn-ritmo-manual-${side}`);
+            if (autoBtn) {
+                autoBtn.className = 'px-2 py-0.5 rounded-l-md bg-slate-200 text-slate-700 font-bold transition cursor-pointer';
+                autoBtn.setAttribute('aria-pressed', 'false');
+            }
+            if (manualBtn) {
+                manualBtn.className = 'px-2 py-0.5 rounded-r-md bg-[#1E3A8A] text-white font-bold transition cursor-pointer';
+                manualBtn.setAttribute('aria-pressed', 'true');
+            }
             setRitmoManualIndicator(side, true);
-            updateDemurrageExposureAlert();
+            actualizarDesviacionDeltaManual(side);
+            if (typeof updateDemurrageExposureAlert === 'function') updateDemurrageExposureAlert();
+            if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
             if (typeof runEngine === 'function') runEngine();
         }
 
@@ -44482,6 +44702,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.actualizarAdvertenciaSwl = actualizarAdvertenciaSwl;
             window.recalcularDiasPuerto = recalcularDiasPuerto;
             window.setOperacionModo = setOperacionModo;
+            window.cargoCompatibilityMap = cargoCompatibilityMap;
+            window.validarCompatibilidadMetodo = validarCompatibilidadMetodo;
+            window.calcularDeltaDias = calcularDeltaDias;
+            window.actualizarDesviacionDeltaManual = actualizarDesviacionDeltaManual;
             window.detectEtsRouteFromPorts = detectEtsRouteFromPorts;
             window.syncEtsRouteSelectorFromPorts = syncEtsRouteSelectorFromPorts;
         }
@@ -47345,8 +47569,344 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return payload;
         };
 
+        /**
+         * Conditional Integration Layer (Zero-Touch Core)
+         * Evaluates Method (Grúa Barco vs Grúa Portuaria) & Commodity Product
+         * to dynamically update shore crane costs in local PDA state and operational TPD / Port Days.
+         *
+         * Operational Performance Engine Rules:
+         * A. Cuchara (Dry Bulk): Port Crane = 100% efficiency (45 cycles/h). Ship Crane = 35% efficiency penalty (28 cycles/h).
+         * B. Big Bags / Unified Cargo: Port Crane = 82.5% efficiency (30 cycles/h). Ship Crane = 62.5% efficiency (17.5 cycles/h).
+         * C. Heavy Lift / Breakbulk: Port Crane = predictable rate (no list delay). Ship Crane = 22.5 min ballast/balancing delay per piece.
+         */
+        function applyMethodAndProductConditions(targetSide = null) {
+            const sides = targetSide ? [targetSide] : ['pol', 'pod'];
+            const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || parseFloat(window.State?.cargo) || 0;
+            const category = document.getElementById('cargo-type')?.value || '';
+            const product = typeof window.getSelectedCargoProduct === 'function' ? window.getSelectedCargoProduct() : null;
+
+            if (!window.State) window.State = {};
+
+            sides.forEach(s => {
+                const selectId = s === 'pod' ? 'metodo_descarga_pod' : 'metodo_carga';
+                const methodVal = document.getElementById(selectId)?.value || '';
+                const methodLabel = typeof window.getSelectedMethodLabel === 'function' ? window.getSelectedMethodLabel(s) : '';
+
+                const isShipCrane = methodLabel.includes('Grúa Barco')
+                    || methodVal.includes('barco')
+                    || methodVal === 'cuchara_grab'
+                    || methodVal === 'big_bags_barco'
+                    || methodVal === 'paletizado_barco'
+                    || methodVal === 'hierro_acero_barco';
+
+                const isPortCrane = methodLabel.includes('Grúa Portuaria')
+                    || methodVal.includes('portuaria')
+                    || methodVal === 'grua_portuaria_30mt'
+                    || methodVal === 'big_bags_portuaria'
+                    || methodVal === 'paletizado_portuaria'
+                    || methodVal === 'hierro_acero_portuaria'
+                    || methodVal === 'cuchara_portuaria';
+
+                // 1. Financial Condition (PDA Impact):
+                const breakdownKey = s === 'pol' ? 'pdaPolBreakdown' : 'pdaPodBreakdown';
+                let breakdown = Array.isArray(window.State[breakdownKey]) ? window.State[breakdownKey] : [];
+
+                if (isShipCrane) {
+                    // Force shore crane rental cost to $0 for vessel gear
+                    breakdown.forEach(item => {
+                        if (item && item.item && (item.item.toLowerCase().includes('grúa') || item.item.toLowerCase().includes('crane') || item.item.toLowerCase().includes('alquiler'))) {
+                            item.amount = 0;
+                        }
+                    });
+                } else if (isPortCrane) {
+                    // Ensure standard shore crane cost is active for shore gear
+                    let craneItem = breakdown.find(item => item && item.item && (item.item.toLowerCase().includes('grúa') || item.item.toLowerCase().includes('crane') || item.item.toLowerCase().includes('alquiler')));
+                    if (!craneItem) {
+                        craneItem = { item: 'Alquiler de Grúa Portuaria', amount: 1800 };
+                        breakdown.push(craneItem);
+                    } else if (craneItem.amount === 0) {
+                        craneItem.amount = 1800;
+                    }
+                }
+                window.State[breakdownKey] = breakdown;
+
+                // 2. Operational Condition (TPD Performance Engine):
+                const rateInputId = s === 'pod' ? 'rate-disch' : 'rate-load';
+                const rateInput = document.getElementById(rateInputId);
+                const modeKey = `ritmoMode_${s}`;
+                const isManual = (window.State[modeKey] === 'manual' || window.State.ritmoMode === 'manual')
+                    || (rateInput && rateInput.dataset.manualOverride === 'true');
+
+                if (!isManual && rateInput) {
+                    let estimatedTpd = 0;
+
+                    const numCranes = typeof window.readNumeroGruasPuerto === 'function' ? window.readNumeroGruasPuerto(s) : 1;
+                    const pieceWeightMt = parseFloat(document.getElementById('peso-pieza-mt')?.value) || (category === 'Carga de Proyecto (Breakbulk)' ? 25 : 1);
+
+                    if (methodLabel.includes('Cuchara') || methodVal.includes('cuchara')) {
+                        // A. Cuchara (Dry Bulk): Port Crane = 45 cycles/h (100% eff). Ship Crane = 28 cycles/h (35% penalty).
+                        const cyclesPerHour = isPortCrane ? 45 : 28;
+                        const swl = Math.max(1, parseFloat(document.getElementById(s === 'pod' ? 'gruas-swl-pod' : 'gruas-swl-pol')?.value) || 30);
+                        const tara = Math.max(0, parseFloat(document.getElementById(s === 'pod' ? 'gruas-tara-pod' : 'gruas-tara-pol')?.value) || 12);
+                        const netPayloadPerLift = Math.max(1, swl - tara);
+                        const efficiencyFactor = isPortCrane ? 1.0 : 0.65;
+                        estimatedTpd = Math.round(netPayloadPerLift * cyclesPerHour * 24 * numCranes * efficiencyFactor);
+
+                        const ciclosEl = document.getElementById(s === 'pod' ? 'gruas-ciclos-pod' : 'gruas-ciclos-pol');
+                        if (ciclosEl) ciclosEl.value = String(cyclesPerHour);
+                        setEficienciaGruaValor(s, Math.round(efficiencyFactor * 100));
+                    } else if (methodLabel.includes('Big Bags') || methodLabel.includes('Paletizado') || methodVal.includes('big_bags') || methodVal.includes('paletizado')) {
+                        // B. Big Bags / Unified Cargo: Port Crane = 30 cycles/h, 82.5% eff. Ship Crane = 17.5 cycles/h, 62.5% eff.
+                        const cyclesPerHour = isPortCrane ? 30 : 17.5;
+                        const efficiencyFactor = isPortCrane ? 0.825 : 0.625;
+                        const liftLoadMt = Math.max(0.5, parseFloat(document.getElementById(s === 'pod' ? 'gruas-swl-pod' : 'gruas-swl-pol')?.value) || (methodLabel.includes('Big Bags') ? 8 : 4));
+                        estimatedTpd = Math.round(liftLoadMt * cyclesPerHour * 24 * numCranes * efficiencyFactor);
+
+                        const ciclosEl = document.getElementById(s === 'pod' ? 'gruas-ciclos-pod' : 'gruas-ciclos-pol');
+                        if (ciclosEl) ciclosEl.value = String(cyclesPerHour);
+                        setEficienciaGruaValor(s, Math.round(efficiencyFactor * 100));
+                    } else if (category === 'Carga de Proyecto (Breakbulk)' || methodLabel.includes('Hierro/Acero') || methodVal.includes('hierro_acero')) {
+                        // C. Heavy Lift / Breakbulk:
+                        // Port Crane: constant rate, 0 list delay.
+                        // Ship Crane: add 22.5 min ballast/balancing delay per piece.
+                        const baseCycleMinutes = isPortCrane ? 12 : 12;
+                        const ballastDelayMinutes = isShipCrane ? 22.5 : 0;
+                        const totalMinutesPerPiece = baseCycleMinutes + ballastDelayMinutes;
+                        const piecesPerHourPerCrane = 60 / Math.max(1, totalMinutesPerPiece);
+                        estimatedTpd = Math.round(piecesPerHourPerCrane * 24 * pieceWeightMt * numCranes);
+
+                        const ciclosEl = document.getElementById(s === 'pod' ? 'gruas-ciclos-pod' : 'gruas-ciclos-pol');
+                        if (ciclosEl) ciclosEl.value = String(Math.round(piecesPerHourPerCrane));
+                        setEficienciaGruaValor(s, isShipCrane ? 65 : 100);
+                    } else if (methodVal === 'cinta_transportadora' || methodLabel.includes('Cinta Transportadora')) {
+                        // D. Cinta Transportadora (Continuous Flow Engine):
+                        // Rate = Belt Tasa (t/h) * 24 hours.
+                        // General Cargo / Mini-Bulker (modular/hopper systems) = 250 t/h -> 6,000 TM/D
+                        // Cement Carrier / Specialized Terminal = 600 t/h -> 14,400 TM/D
+                        const vesselTypeStr = String(window.State?.vesselType || document.getElementById('vessel-type')?.value || '').toLowerCase();
+                        const cargoProductStr = String(product?.nombre || product?.name || document.getElementById('cargo-product')?.value || '').toLowerCase();
+
+                        const isCementCarrier = vesselTypeStr.includes('cement')
+                            || vesselTypeStr.includes('cementero')
+                            || cargoProductStr.includes('cemento')
+                            || cargoProductStr.includes('cement');
+
+                        const isMiniBulkerOrGeneral = vesselTypeStr.includes('mini')
+                            || vesselTypeStr.includes('general')
+                            || vesselTypeStr.includes('coaster')
+                            || category === 'General Cargo'
+                            || category === 'Carga General';
+
+                        let beltTasaTonHour = 250; // Base conservadora (250 t/h -> 6000 TM/D)
+                        if (isCementCarrier) {
+                            beltTasaTonHour = 600; // Cementero Especializado / Alta capacidad (600 t/h -> 14400 TM/D)
+                        } else if (isMiniBulkerOrGeneral) {
+                            beltTasaTonHour = 250;
+                        } else if (cargoQty > 20000) {
+                            beltTasaTonHour = 500;
+                        }
+
+                        estimatedTpd = Math.round(beltTasaTonHour * 24);
+                    } else if (typeof window.isCraneMethod === 'function' && window.isCraneMethod(methodLabel)) {
+                        if (typeof window.calcularRitmoEfectivo === 'function') {
+                            estimatedTpd = window.calcularRitmoEfectivo(s);
+                        }
+                    } else if (methodVal) {
+                        estimatedTpd = methodVal === 'camion_tolva' ? (parseFloat(document.getElementById('camion-tolva-ritmo-sugerido')?.value) || 2000) : 2500;
+                    }
+
+                    if (estimatedTpd > 0) {
+                        rateInput.value = String(Math.round(estimatedTpd));
+                        if (s === 'pol') window.State.loadRate = estimatedTpd;
+                        else window.State.dischRate = estimatedTpd;
+                    }
+                }
+
+                // Update Port Days in state
+                const currentRate = parseFloat(rateInput?.value) || (s === 'pol' ? window.State.loadRate : window.State.dischRate) || 1;
+                const portDays = (cargoQty > 0 && currentRate > 0) ? (cargoQty / currentRate) : 0;
+                if (s === 'pol') window.State.portDaysLoad = portDays;
+                else window.State.portDaysDischarge = portDays;
+            });
+
+            // 3. Trigger recalculations cleanly
+            if (typeof window.recalcularDiasPuerto === 'function') {
+                window.recalcularDiasPuerto();
+            } else if (typeof window.runEngine === 'function') {
+                window.runEngine();
+            }
+        }
+        window.applyMethodAndProductConditions = applyMethodAndProductConditions;
+
+        /**
+         * Motor de Ritmos Híbrido - Integration Layer (Zero-Touch Core)
+         * Connects TPD sliders, manual numeric inputs, and mode buttons (Auto/Manual)
+         * to update port days state, inject geared vessel shore crane adjustments,
+         * and trigger the existing core recalculation engine in real time.
+         */
+        function setupHybridRateMotorListeners() {
+            const getRitmoMode = () => {
+                const autoBtn = document.getElementById('btn-mode-auto') || document.getElementById('btn-ritmo-auto') || document.querySelector('[data-ritmo-mode="auto"]');
+                const manualBtn = document.getElementById('btn-mode-manual') || document.getElementById('btn-ritmo-manual') || document.querySelector('[data-ritmo-mode="manual"]');
+                const modeSelect = document.getElementById('ritmo-mode-select') || document.querySelector('input[name="ritmo-mode"]:checked');
+
+                if (manualBtn && (manualBtn.classList.contains('active') || manualBtn.getAttribute('aria-pressed') === 'true')) {
+                    return 'manual';
+                }
+                if (modeSelect && modeSelect.value === 'manual') {
+                    return 'manual';
+                }
+                if (window.State && window.State.ritmoMode) {
+                    return window.State.ritmoMode;
+                }
+                return 'auto';
+            };
+
+            const handleControlInteraction = (event) => {
+                const target = event?.target;
+
+                // 1. Determine active mode
+                let currentMode = getRitmoMode();
+                if (target) {
+                    if (target.id === 'btn-mode-auto' || target.getAttribute('data-ritmo-mode') === 'auto' || (target.id === 'ritmo-mode-select' && target.value === 'auto')) {
+                        currentMode = 'auto';
+                    } else if (target.id === 'btn-mode-manual' || target.getAttribute('data-ritmo-mode') === 'manual' || (target.id === 'ritmo-mode-select' && target.value === 'manual')) {
+                        currentMode = 'manual';
+                    }
+                }
+
+                // 2. Read values & update local state
+                const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || parseFloat(window.State?.cargo) || 0;
+
+                let loadRate = parseFloat(document.getElementById('rate-load')?.value) || 0;
+                let dischRate = parseFloat(document.getElementById('rate-disch')?.value) || 0;
+
+                const sliderEl = document.getElementById('hybrid-rate-slider') || document.getElementById('tpd-slider') || document.getElementById('rate-slider') || document.querySelector('input[type="range"][data-hybrid]');
+                const manualEl = document.getElementById('tpd-manual-input') || document.getElementById('rate-manual-input') || document.getElementById('manual-tpd') || document.querySelector('input[type="number"][data-hybrid]');
+
+                if (target && (target === sliderEl || target.type === 'range')) {
+                    const sliderVal = parseFloat(target.value) || 0;
+                    if (sliderVal > 0) {
+                        if (manualEl) manualEl.value = sliderVal;
+                        const rateLoadEl = document.getElementById('rate-load');
+                        const rateDischEl = document.getElementById('rate-disch');
+                        if (rateLoadEl && document.activeElement !== rateDischEl) {
+                            rateLoadEl.value = sliderVal;
+                            loadRate = sliderVal;
+                        }
+                        if (rateDischEl && document.activeElement !== rateLoadEl) {
+                            rateDischEl.value = sliderVal;
+                            dischRate = sliderVal;
+                        }
+                    }
+                } else if (target && (target === manualEl || (target.type === 'number' && target.hasAttribute('data-hybrid')))) {
+                    const manualVal = parseFloat(target.value) || 0;
+                    if (manualVal > 0) {
+                        if (sliderEl) sliderEl.value = manualVal;
+                        const rateLoadEl = document.getElementById('rate-load');
+                        if (rateLoadEl) {
+                            rateLoadEl.value = manualVal;
+                            loadRate = manualVal;
+                        }
+                    }
+                }
+
+                // Calculate port days
+                const portDaysLoad = (cargoQty > 0 && loadRate > 0) ? (cargoQty / loadRate) : 0;
+                const portDaysDischarge = (cargoQty > 0 && dischRate > 0) ? (cargoQty / dischRate) : 0;
+
+                // Update State Preparation
+                if (window.State) {
+                    window.State.portDaysLoad = portDaysLoad;
+                    window.State.portDaysDischarge = portDaysDischarge;
+                    window.State.loadRate = loadRate;
+                    window.State.dischRate = dischRate;
+                    window.State.ritmoMode = currentMode;
+                }
+
+                // Injection Logic:
+                // If mode === 'auto' and vessel is geared (isGearedVessel: true),
+                // adjust shore crane rental cost in local PDA state to 0
+                const isGeared = typeof window.checkIsGearedVessel === 'function' ? window.checkIsGearedVessel() : Boolean(window.isGearedVessel);
+                if (currentMode === 'auto' && isGeared) {
+                    if (window.State) {
+                        if (Array.isArray(window.State.pdaPolBreakdown)) {
+                            window.State.pdaPolBreakdown.forEach(item => {
+                                if (item && item.item && (item.item.toLowerCase().includes('grúa') || item.item.toLowerCase().includes('crane') || item.item.toLowerCase().includes('alquiler'))) {
+                                    item.amount = 0;
+                                }
+                            });
+                        }
+                        if (Array.isArray(window.State.pdaPodBreakdown)) {
+                            window.State.pdaPodBreakdown.forEach(item => {
+                                if (item && item.item && (item.item.toLowerCase().includes('grúa') || item.item.toLowerCase().includes('crane') || item.item.toLowerCase().includes('alquiler'))) {
+                                    item.amount = 0;
+                                }
+                            });
+                        }
+                        if (window.State.shoreCraneRentalCost !== undefined) window.State.shoreCraneRentalCost = 0;
+                        if (window.State.costeGruaTierra !== undefined) window.State.costeGruaTierra = 0;
+                    }
+                    const shoreCraneInput = document.getElementById('shore-crane-cost') || document.getElementById('coste-grua-tierra') || document.getElementById('pda-shore-crane');
+                    if (shoreCraneInput) shoreCraneInput.value = 0;
+                }
+
+                // Evaluate method and product conditions
+                applyMethodAndProductConditions();
+
+                // Trigger existing core recalculation engine cleanly
+                if (typeof window.recalcularDiasPuerto === 'function') {
+                    window.recalcularDiasPuerto();
+                } else if (typeof window.runEngine === 'function') {
+                    window.runEngine();
+                } else if (typeof window.calculateVoyage === 'function') {
+                    window.calculateVoyage();
+                }
+            };
+
+            const sliderSelectors = [
+                '#hybrid-rate-slider', '#tpd-slider', '#rate-slider',
+                '#gruas-eficiencia-slider-pol', '#gruas-eficiencia-slider-pod',
+                'input[type="range"][data-tpd]', 'input[type="range"][data-rate]', 'input[type="range"][data-hybrid]'
+            ];
+            const manualInputSelectors = [
+                '#rate-load', '#rate-disch', '#tpd-manual-input', '#rate-manual-input', '#manual-tpd',
+                'input[type="number"][data-tpd]', 'input[type="number"][data-rate]', 'input[type="number"][data-hybrid]'
+            ];
+            const modeButtonSelectors = [
+                '#btn-mode-auto', '#btn-mode-manual', '#btn-ritmo-auto', '#btn-ritmo-manual',
+                '[data-ritmo-mode]', 'select#ritmo-mode-select', 'input[name="ritmo-mode"]'
+            ];
+            const methodProductSelectors = [
+                '#metodo_carga', '#metodo_descarga_pod', '#cargo-product', '#cargo-type'
+            ];
+
+            const allSelectors = [...sliderSelectors, ...manualInputSelectors, ...modeButtonSelectors, ...methodProductSelectors];
+
+            allSelectors.forEach(selector => {
+                document.querySelectorAll(selector).forEach(element => {
+                    element.removeEventListener('input', handleControlInteraction);
+                    element.removeEventListener('change', handleControlInteraction);
+                    element.removeEventListener('click', handleControlInteraction);
+
+                    element.addEventListener('input', handleControlInteraction);
+                    element.addEventListener('change', handleControlInteraction);
+                    if (element.tagName === 'BUTTON') {
+                        element.addEventListener('click', handleControlInteraction);
+                    }
+                });
+            });
+
+            window.handleHybridRateControlChange = handleControlInteraction;
+        }
+
+        if (typeof window !== 'undefined') {
+            window.setupHybridRateMotorListeners = setupHybridRateMotorListeners;
+        }
+
         // Initialize defaults on load
         document.addEventListener('DOMContentLoaded', () => {
+            setupHybridRateMotorListeners();
             renderMethodPills('pol');
             renderMethodPills('pod');
             actualizarGrabCapacityVisibility();
