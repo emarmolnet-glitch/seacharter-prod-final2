@@ -7721,7 +7721,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-type" class="text-action-required flex items-center min-h-[24px]">Categoría de Carga</label>
-                                <select id="cargo-type" class="input-gc action-required-field required-use-highlight text-action-required" required aria-required="true" onchange="populateCargoProducts(); autoPopulateRouteLimits(); syncCalculatorAndMatching('calculator');">
+                                <select id="cargo-type" class="input-gc action-required-field required-use-highlight text-action-required" required aria-required="true" onchange="handleCargoCategoryChange(); populateCargoProducts(); autoPopulateRouteLimits(); syncCalculatorAndMatching('calculator');">
                                     <option value="">Selecciona una categoría</option>
                                     <option value="Minerales y Construcción" selected>Minerales y Construcción</option>
                                     <option value="Biomasa y Combustibles Sólidos">Biomasa y Combustibles Sólidos</option>
@@ -7750,27 +7750,89 @@
                         <div id="port-operations-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 mb-4">
                             <div id="contenedor_metodo_carga" class="input-group">
                                 <label id="label-metodo-carga" class="text-action-required flex items-center min-h-[24px]">Método Carga POL</label>
-                                <select id="metodo_carga" class="input-gc action-required-field required-use-highlight text-action-required" onchange="handlePortMethodChange('pol')">
+                                <select id="metodo_carga" class="hidden input-gc action-required-field required-use-highlight text-action-required" onchange="handlePortMethodChange('pol')">
                                     <option value="cinta_transportadora">Cinta Transportadora</option>
                                     <option value="camion_tolva">Camión Tolva</option>
                                     <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
                                     <option value="grua_portuaria_30mt">Grúa Portuaria 30MT</option>
-                                    <option value="big_bags">Big Bags (con Grúa)</option>
-                                    <option value="paletizado">Paletizado / Piezas (con Grúa)</option>
-                                    <option value="hierro_acero_piezas">Hierro/Acero/Piezas</option>
+                                    <option value="big_bags_barco">Big Bags - Grúa Barco</option>
+                                    <option value="big_bags_portuaria">Big Bags - Grúa Portuaria</option>
+                                    <option value="paletizado_barco">Paletizado - Grúa Barco</option>
+                                    <option value="paletizado_portuaria">Paletizado - Grúa Portuaria</option>
+                                    <option value="hierro_acero_barco">Hierro/Acero - Grúa Barco</option>
+                                    <option value="hierro_acero_portuaria">Hierro/Acero - Grúa Portuaria</option>
                                 </select>
+                                <div id="pills_metodo_carga" class="flex flex-wrap gap-1.5 my-1"></div>
+                                <p id="metodo-carga-incompatible-alert" class="hidden text-xs font-bold text-red-600 mt-1">⚠️ El método de carga anterior es incompatible con la nueva categoría. Por favor, selecciona un equipamiento válido.</p>
+                                <div id="submodulo-gruas-pol" class="hidden mt-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg shadow-sm text-xs">
+                                    <div class="font-bold text-[#1E3A8A] mb-2 uppercase text-[11px] tracking-wide flex items-center gap-1">
+                                        <i class="fa-solid fa-calculator text-blue-600"></i> Cálculo de Grúa POL
+                                    </div>
+                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                        <div>
+                                            <label id="label-gruas-swl-pol" for="gruas-swl-pol" class="block text-[10px] font-semibold text-slate-600 mb-0.5">SWL Grúa (MT)</label>
+                                            <input type="number" id="gruas-swl-pol" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="30" min="0" step="0.1" oninput="calcularRitmoGrua('pol')">
+                                        </div>
+                                        <div>
+                                            <label for="gruas-tara-pol" class="block text-[10px] font-semibold text-slate-600 mb-0.5">Tara Accesorio (MT)</label>
+                                            <input type="number" id="gruas-tara-pol" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="12" min="0" step="0.1" oninput="calcularRitmoGrua('pol')">
+                                        </div>
+                                        <div>
+                                            <label for="gruas-ciclos-pol" class="block text-[10px] font-semibold text-slate-600 mb-0.5">Ciclos/Hora</label>
+                                            <input type="number" id="gruas-ciclos-pol" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="15" min="0" step="1" oninput="calcularRitmoGrua('pol')">
+                                        </div>
+                                        <div>
+                                            <div class="flex justify-between items-center mb-0.5">
+                                                <label for="gruas-eficiencia-num-pol" class="block text-[10px] font-semibold text-slate-600">Eficiencia (%)</label>
+                                                <input type="number" id="gruas-eficiencia-num-pol" class="input-gc font-bold text-slate-800 text-[11px] py-0 px-1 w-12 text-right" value="100" min="1" max="100" step="1" oninput="syncEficienciaGrua('pol', 'num')">
+                                            </div>
+                                            <input type="range" id="gruas-eficiencia-slider-pol" class="w-full accent-blue-600 h-1.5 cursor-pointer mt-1" value="100" min="1" max="100" step="1" oninput="syncEficienciaGrua('pol', 'slider')">
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div id="contenedor_metodo_descarga" class="input-group">
                                 <label id="label-metodo-descarga" class="text-action-required flex items-center min-h-[24px]">Método Descarga POD</label>
-                                <select id="metodo_descarga_pod" class="input-gc action-required-field required-use-highlight text-action-required" onchange="handlePortMethodChange('pod')">
+                                <select id="metodo_descarga_pod" class="hidden input-gc action-required-field required-use-highlight text-action-required" onchange="handlePortMethodChange('pod')">
                                     <option value="cinta_transportadora">Cinta Transportadora</option>
                                     <option value="camion_tolva">Camión Tolva</option>
                                     <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
                                     <option value="grua_portuaria_30mt">Grúa Portuaria 30MT</option>
-                                    <option value="big_bags">Big Bags (con Grúa)</option>
-                                    <option value="paletizado">Paletizado / Piezas (con Grúa)</option>
-                                    <option value="hierro_acero_piezas">Hierro/Acero/Piezas</option>
+                                    <option value="big_bags_barco">Big Bags - Grúa Barco</option>
+                                    <option value="big_bags_portuaria">Big Bags - Grúa Portuaria</option>
+                                    <option value="paletizado_barco">Paletizado - Grúa Barco</option>
+                                    <option value="paletizado_portuaria">Paletizado - Grúa Portuaria</option>
+                                    <option value="hierro_acero_barco">Hierro/Acero - Grúa Barco</option>
+                                    <option value="hierro_acero_portuaria">Hierro/Acero - Grúa Portuaria</option>
                                 </select>
+                                <div id="pills_metodo_descarga" class="flex flex-wrap gap-1.5 my-1"></div>
+                                <p id="metodo-descarga-incompatible-alert" class="hidden text-xs font-bold text-red-600 mt-1">⚠️ El método de carga anterior es incompatible con la nueva categoría. Por favor, selecciona un equipamiento válido.</p>
+                                <div id="submodulo-gruas-pod" class="hidden mt-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg shadow-sm text-xs">
+                                    <div class="font-bold text-[#1E3A8A] mb-2 uppercase text-[11px] tracking-wide flex items-center gap-1">
+                                        <i class="fa-solid fa-calculator text-blue-600"></i> Cálculo de Grúa POD
+                                    </div>
+                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                        <div>
+                                            <label id="label-gruas-swl-pod" for="gruas-swl-pod" class="block text-[10px] font-semibold text-slate-600 mb-0.5">SWL Grúa (MT)</label>
+                                            <input type="number" id="gruas-swl-pod" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="30" min="0" step="0.1" oninput="calcularRitmoGrua('pod')">
+                                        </div>
+                                        <div>
+                                            <label for="gruas-tara-pod" class="block text-[10px] font-semibold text-slate-600 mb-0.5">Tara Accesorio (MT)</label>
+                                            <input type="number" id="gruas-tara-pod" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="12" min="0" step="0.1" oninput="calcularRitmoGrua('pod')">
+                                        </div>
+                                        <div>
+                                            <label for="gruas-ciclos-pod" class="block text-[10px] font-semibold text-slate-600 mb-0.5">Ciclos/Hora</label>
+                                            <input type="number" id="gruas-ciclos-pod" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="15" min="0" step="1" oninput="calcularRitmoGrua('pod')">
+                                        </div>
+                                        <div>
+                                            <div class="flex justify-between items-center mb-0.5">
+                                                <label for="gruas-eficiencia-num-pod" class="block text-[10px] font-semibold text-slate-600">Eficiencia (%)</label>
+                                                <input type="number" id="gruas-eficiencia-num-pod" class="input-gc font-bold text-slate-800 text-[11px] py-0 px-1 w-12 text-right" value="100" min="1" max="100" step="1" oninput="syncEficienciaGrua('pod', 'num')">
+                                            </div>
+                                            <input type="range" id="gruas-eficiencia-slider-pod" class="w-full accent-blue-600 h-1.5 cursor-pointer mt-1" value="100" min="1" max="100" step="1" oninput="syncEficienciaGrua('pod', 'slider')">
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="input-group">
                                 <label id="label-rate-load" class="text-action-required flex items-center min-h-[24px]">Ritmo Real POL (TM/d)</label>
@@ -7914,7 +7976,7 @@
                                 <label id="label-crane-swl" class="text-amber-400">Crane SWL (MT)</label>
                                 <input type="number" id="crane-swl-mt" class="input-gc font-bold text-amber-300" value="0" min="0" step="0.1" disabled oninput="recalcularDiasPuerto()">
                             </div>
-                            <div class="input-group">
+                            <div id="contenedor-grab-capacity" class="input-group">
                                 <label id="label-grab-capacity" class="text-amber-400">Grab Capacity (cbm)</label>
                                 <input type="number" id="grab-capacity-cbm" class="input-gc font-bold text-amber-300" value="0" step="0.1" oninput="runEngine()">
                             </div>
@@ -43141,20 +43203,358 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             'Cinta Transportadora': 5000,
             'Grúa Portuaria 30MT': 2500,
             'Cuchara (Grab) - Grúa Barco': 1500,
+            'Cuchara (Grab) - Grúa Portuaria': 2500,
             'Big Bags (con Grúa)': 1000,
+            'Big Bags - Grúa Barco': 1000,
+            'Big Bags - Grúa Portuaria': 1200,
             'Paletizado / Piezas (con Grúa)': 800,
+            'Paletizado - Grúa Barco': 800,
+            'Paletizado - Grúa Portuaria': 1000,
             'Hierro/Acero/Piezas': 1200,
+            'Hierro/Acero - Grúa Barco': 1200,
+            'Hierro/Acero - Grúa Portuaria': 1500,
             'Camión Tolva': 'custom'
         });
         const METHOD_LABEL_BY_VALUE = Object.freeze({
             cinta_transportadora: 'Cinta Transportadora',
             grua_portuaria_30mt: 'Grúa Portuaria 30MT',
             cuchara_grab: 'Cuchara (Grab) - Grúa Barco',
-            big_bags: 'Big Bags (con Grúa)',
-            paletizado: 'Paletizado / Piezas (con Grúa)',
-            hierro_acero_piezas: 'Hierro/Acero/Piezas',
+            cuchara_portuaria: 'Cuchara (Grab) - Grúa Portuaria',
+            big_bags_barco: 'Big Bags - Grúa Barco',
+            big_bags_portuaria: 'Big Bags - Grúa Portuaria',
+            hierro_acero_barco: 'Hierro/Acero - Grúa Barco',
+            hierro_acero_portuaria: 'Hierro/Acero - Grúa Portuaria',
+            paletizado_barco: 'Paletizado - Grúa Barco',
+            paletizado_portuaria: 'Paletizado - Grúa Portuaria',
+            big_bags: 'Big Bags - Grúa Barco',
+            paletizado: 'Paletizado - Grúa Barco',
+            hierro_acero_piezas: 'Hierro/Acero - Grúa Barco',
             camion_tolva: 'Camión Tolva'
         });
+        const METHOD_VALUE_BY_LABEL = Object.freeze(Object.fromEntries(
+            Object.entries(METHOD_LABEL_BY_VALUE).map(([methodValue, methodLabel]) => [methodLabel, methodValue])
+        ));
+        const equipmentMatrix = Object.freeze({
+            "Minerales y Construcción": ["Cuchara (Grab) - Grúa Barco", "Cuchara (Grab) - Grúa Portuaria", "Cinta Transportadora", "Camión Tolva", "Big Bags - Grúa Barco", "Big Bags - Grúa Portuaria"],
+            "Biomasa y Combustibles Sólidos": ["Cuchara (Grab) - Grúa Barco", "Cuchara (Grab) - Grúa Portuaria", "Cinta Transportadora", "Camión Tolva"],
+            "Carga Siderúrgica y Metales": ["Hierro/Acero - Grúa Barco", "Hierro/Acero - Grúa Portuaria", "Cuchara (Grab) - Grúa Barco", "Cuchara (Grab) - Grúa Portuaria"],
+            "Carga Unitarizada / Envasada": ["Paletizado - Grúa Barco", "Paletizado - Grúa Portuaria", "Big Bags - Grúa Barco", "Big Bags - Grúa Portuaria"],
+            "Carga Unitizada / Envasada": ["Paletizado - Grúa Barco", "Paletizado - Grúa Portuaria", "Big Bags - Grúa Barco", "Big Bags - Grúa Portuaria"],
+            "Carga de Proyecto (Breakbulk)": ["Hierro/Acero - Grúa Barco", "Hierro/Acero - Grúa Portuaria", "Cuchara (Grab) - Grúa Barco", "Cuchara (Grab) - Grúa Portuaria"]
+        });
+
+        function isCraneMethod(label = '') {
+            const l = String(label || '');
+            return l.includes('Grúa') || l.includes('Big Bags') || l.includes('Paletizado') || l.includes('Hierro/Acero');
+        }
+
+        function getSwlForMethod(label = '') {
+            const l = String(label || '');
+            if (l.includes('Cuchara')) return 30;
+            if (l.includes('Big Bags')) return 8;
+            if (l.includes('Paletizado')) return 4;
+            if (l.includes('Hierro/Acero')) return 15;
+            return 30;
+        }
+
+        function getTaraForMethod(label = '') {
+            const l = String(label || '');
+            if (l.includes('Cuchara')) return 12;
+            if (l.includes('Big Bags')) return 0.5;
+            if (l.includes('Paletizado')) return 1.0;
+            if (l.includes('Hierro/Acero')) return 0.5;
+            return 0;
+        }
+
+        function getCiclosForMethod(label = '') {
+            const l = String(label || '');
+            if (l.includes('Grúa Barco')) return 15;
+            if (l.includes('Grúa Portuaria')) return 30;
+            return 15;
+        }
+
+        function getAutoEficienciaForMethodAndCategory(label = '', category = getActiveCargoCategory()) {
+            const l = String(label || '');
+            if (!l.includes('Grúa Barco')) return 100;
+            switch (category) {
+                case 'Minerales y Construcción':
+                    return 50;
+                case 'Biomasa y Combustibles Sólidos':
+                    return 40;
+                case 'Carga Unitarizada / Envasada':
+                case 'Carga Unitizada / Envasada':
+                case 'Carga de Proyecto (Breakbulk)':
+                    return 25;
+                case 'Carga Siderúrgica y Metales':
+                    return 15;
+                default:
+                    return 100;
+            }
+        }
+
+        function resetEficienciaGrua(side = 'pol') {
+            const numId = side === 'pod' ? 'gruas-eficiencia-num-pod' : 'gruas-eficiencia-num-pol';
+            const sliderId = side === 'pod' ? 'gruas-eficiencia-slider-pod' : 'gruas-eficiencia-slider-pol';
+            const numEl = document.getElementById(numId);
+            const sliderEl = document.getElementById(sliderId);
+            if (numEl) numEl.value = '100';
+            if (sliderEl) sliderEl.value = '100';
+        }
+
+        function setEficienciaGruaValor(side = 'pol', value = 100) {
+            const numId = side === 'pod' ? 'gruas-eficiencia-num-pod' : 'gruas-eficiencia-num-pol';
+            const sliderId = side === 'pod' ? 'gruas-eficiencia-slider-pod' : 'gruas-eficiencia-slider-pol';
+            const numEl = document.getElementById(numId);
+            const sliderEl = document.getElementById(sliderId);
+            const valStr = String(Math.min(100, Math.max(1, value)));
+            if (numEl) numEl.value = valStr;
+            if (sliderEl) sliderEl.value = valStr;
+        }
+
+        function syncEficienciaGrua(side = 'pol', source = 'num') {
+            const numId = side === 'pod' ? 'gruas-eficiencia-num-pod' : 'gruas-eficiencia-num-pol';
+            const sliderId = side === 'pod' ? 'gruas-eficiencia-slider-pod' : 'gruas-eficiencia-slider-pol';
+            const numEl = document.getElementById(numId);
+            const sliderEl = document.getElementById(sliderId);
+            if (!numEl || !sliderEl) return;
+
+            if (source === 'slider') {
+                numEl.value = sliderEl.value;
+            } else {
+                let val = Math.min(100, Math.max(1, parseFloat(numEl.value) || 100));
+                sliderEl.value = String(val);
+            }
+            calcularRitmoGrua(side);
+        }
+
+        function updateSwlLabelText(side = 'pol', label = '') {
+            const labelId = side === 'pod' ? 'label-gruas-swl-pod' : 'label-gruas-swl-pol';
+            const labelEl = document.getElementById(labelId);
+            if (!labelEl) return;
+
+            const l = String(label || '');
+            if (l.includes('Big Bags') || l.includes('Paletizado')) {
+                labelEl.textContent = 'Carga Bruta por Izada (MT)';
+            } else {
+                labelEl.textContent = 'SWL Grúa (MT)';
+            }
+        }
+
+        function actualizarGrabCapacityVisibility() {
+            const polLabel = getSelectedMethodLabel('pol');
+            const podLabel = getSelectedMethodLabel('pod');
+            const usesCuchara = polLabel.includes('Cuchara') || podLabel.includes('Cuchara');
+
+            const containerEl = document.getElementById('contenedor-grab-capacity');
+            const inputEl = document.getElementById('grab-capacity-cbm');
+
+            if (containerEl) {
+                containerEl.classList.toggle('hidden', !usesCuchara);
+                containerEl.style.display = usesCuchara ? '' : 'none';
+            }
+
+            if (inputEl) {
+                inputEl.disabled = !usesCuchara;
+            }
+        }
+
+        /**
+         * Derived global flag: isGearedVessel
+         * Lógica: true SI Y SOLO SI "MÉTODO CARGA POL" o "MÉTODO DESCARGA POD" contienen el string "Grúa Barco".
+         * 
+         * Impacto Financiero / Sirve como trigger para:
+         * 1. Módulo 5 (Simulador de Negociación) para justificar incremento automático en Break-even / Time Charter Rate por prima Geared (+ $1,000 - $3,000 / día).
+         * 2. Sección PDA para anular (poner a $0) los costes de alquiler de grúas de tierra.
+         */
+        function checkIsGearedVessel() {
+            const polLabel = getSelectedMethodLabel('pol');
+            const podLabel = getSelectedMethodLabel('pod');
+            const isGeared = polLabel.includes('Grúa Barco') || podLabel.includes('Grúa Barco');
+
+            if (typeof window !== 'undefined') {
+                window.isGearedVessel = isGeared;
+            }
+            return isGeared;
+        }
+
+        function getActiveCargoCategory() {
+            return document.getElementById('cargo-type')?.value || '';
+        }
+
+        function getSelectedMethodLabel(side = 'pol') {
+            const selectId = side === 'pod' ? 'metodo_descarga_pod' : 'metodo_carga';
+            const val = document.getElementById(selectId)?.value || '';
+            return METHOD_LABEL_BY_VALUE[val] || '';
+        }
+
+        function renderMethodPills(side = 'pol') {
+            const category = getActiveCargoCategory();
+            const containerId = side === 'pod' ? 'pills_metodo_descarga' : 'pills_metodo_carga';
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            const allowedLabels = equipmentMatrix[category] || Object.values(METHOD_LABEL_BY_VALUE);
+            const currentLabel = getSelectedMethodLabel(side);
+
+            container.innerHTML = allowedLabels.map((label) => {
+                const isActive = label === currentLabel;
+                const btnClass = isActive
+                    ? 'px-3 py-1.5 text-xs font-bold rounded-full bg-[#1E3A8A] text-white shadow-sm border border-[#1E3A8A] transition-all cursor-pointer'
+                    : 'px-3 py-1.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition-all cursor-pointer';
+                const safeLabel = label.replace(/'/g, "\\'");
+                return `<button type="button" class="${btnClass}" onclick="selectMethodPill('${side}', '${safeLabel}')">${label}</button>`;
+            }).join('');
+
+            actualizarSubmoduloGruas(side);
+        }
+
+        function selectMethodPill(side = 'pol', label) {
+            const selectId = side === 'pod' ? 'metodo_descarga_pod' : 'metodo_carga';
+            const selectEl = document.getElementById(selectId);
+            const methodValue = METHOD_VALUE_BY_LABEL[label] || '';
+
+            if (selectEl) {
+                selectEl.value = methodValue;
+            }
+
+            const alertId = side === 'pod' ? 'metodo-descarga-incompatible-alert' : 'metodo-carga-incompatible-alert';
+            const alertEl = document.getElementById(alertId);
+            if (alertEl) alertEl.classList.add('hidden');
+
+            if (isCraneMethod(label)) {
+                const swlId = side === 'pod' ? 'gruas-swl-pod' : 'gruas-swl-pol';
+                const taraId = side === 'pod' ? 'gruas-tara-pod' : 'gruas-tara-pol';
+                const ciclosId = side === 'pod' ? 'gruas-ciclos-pod' : 'gruas-ciclos-pol';
+                const swlEl = document.getElementById(swlId);
+                const taraEl = document.getElementById(taraId);
+                const ciclosEl = document.getElementById(ciclosId);
+
+                if (swlEl) swlEl.value = String(getSwlForMethod(label));
+                if (taraEl) taraEl.value = String(getTaraForMethod(label));
+                if (ciclosEl) ciclosEl.value = String(getCiclosForMethod(label));
+
+                const autoEficiencia = getAutoEficienciaForMethodAndCategory(label, getActiveCargoCategory());
+                setEficienciaGruaValor(side, autoEficiencia);
+            } else {
+                resetEficienciaGrua(side);
+            }
+
+            updateSwlLabelText(side, label);
+            checkIsGearedVessel();
+            renderMethodPills(side);
+            handlePortMethodChange(side);
+            if (isCraneMethod(label)) {
+                calcularRitmoGrua(side);
+            }
+            if (methodValue === 'camion_tolva' && side === 'pol' && typeof actualizarModuloCamionTolva === 'function') {
+                actualizarModuloCamionTolva();
+            }
+        }
+
+        function actualizarSubmoduloGruas(side = 'pol') {
+            const label = getSelectedMethodLabel(side);
+            const isCrane = isCraneMethod(label);
+            const submoduloId = side === 'pod' ? 'submodulo-gruas-pod' : 'submodulo-gruas-pol';
+            const rateInputId = side === 'pod' ? 'rate-disch' : 'rate-load';
+            const submoduloEl = document.getElementById(submoduloId);
+            const rateInputEl = document.getElementById(rateInputId);
+
+            if (submoduloEl) {
+                submoduloEl.classList.toggle('hidden', !isCrane);
+            }
+
+            updateSwlLabelText(side, label);
+            checkIsGearedVessel();
+            actualizarGrabCapacityVisibility();
+
+            if (isCrane) {
+                if (rateInputEl) rateInputEl.readOnly = true;
+                calcularRitmoGrua(side);
+            } else {
+                if (rateInputEl) rateInputEl.readOnly = false;
+                resetEficienciaGrua(side);
+            }
+        }
+
+        function calcularRitmoGrua(side = 'pol') {
+            const label = getSelectedMethodLabel(side);
+            if (!isCraneMethod(label)) return;
+
+            const swlId = side === 'pod' ? 'gruas-swl-pod' : 'gruas-swl-pol';
+            const taraId = side === 'pod' ? 'gruas-tara-pod' : 'gruas-tara-pol';
+            const ciclosId = side === 'pod' ? 'gruas-ciclos-pod' : 'gruas-ciclos-pol';
+            const eficienciaId = side === 'pod' ? 'gruas-eficiencia-num-pod' : 'gruas-eficiencia-num-pol';
+            const rateInputId = side === 'pod' ? 'rate-disch' : 'rate-load';
+
+            const swl = Math.max(0, parseFloat(document.getElementById(swlId)?.value) || 30);
+            const tara = Math.max(0, parseFloat(document.getElementById(taraId)?.value) || 0);
+            const ciclosHora = Math.max(0, parseFloat(document.getElementById(ciclosId)?.value) || 0);
+            const eficiencia = Math.min(100, Math.max(1, parseFloat(document.getElementById(eficienciaId)?.value) || 100));
+            const nGruas = readNumeroGruasPuerto(side);
+
+            // Formula with friction: Math.round((((SWL - Tara) * Ciclos/Hora * 24) * Nº Grúas) * (Eficiencia / 100))
+            const ritmoCalculado = Math.max(0, Math.round((((swl - tara) * ciclosHora * 24) * nGruas) * (eficiencia / 100)));
+
+            const rateInput = document.getElementById(rateInputId);
+            if (rateInput) {
+                rateInput.value = String(ritmoCalculado);
+                rateInput.readOnly = true;
+                setRitmoManualIndicator(side, false);
+            }
+
+            const craneSwlMtEl = document.getElementById('crane-swl-mt');
+            if (craneSwlMtEl && swl > 0) {
+                craneSwlMtEl.value = String(swl);
+            }
+
+            if (typeof updateDemurrageExposureAlert === 'function') updateDemurrageExposureAlert();
+            if (typeof runEngine === 'function') runEngine();
+        }
+
+        function onCargoCategoryChange() {
+            const category = getActiveCargoCategory();
+            const allowedLabels = equipmentMatrix[category] || Object.values(METHOD_LABEL_BY_VALUE);
+            let isIncompatible = false;
+
+            ['pol', 'pod'].forEach((side) => {
+                const selectId = side === 'pod' ? 'metodo_descarga_pod' : 'metodo_carga';
+                const rateInputId = side === 'pod' ? 'rate-disch' : 'rate-load';
+                const alertId = side === 'pod' ? 'metodo-descarga-incompatible-alert' : 'metodo-carga-incompatible-alert';
+                const selectEl = document.getElementById(selectId);
+                const rateInputEl = document.getElementById(rateInputId);
+                const alertEl = document.getElementById(alertId);
+
+                const currentLabel = getSelectedMethodLabel(side);
+
+                if (currentLabel && !allowedLabels.includes(currentLabel)) {
+                    isIncompatible = true;
+                    if (selectEl) selectEl.value = '';
+                    if (rateInputEl) {
+                        rateInputEl.value = '0';
+                        rateInputEl.readOnly = false;
+                    }
+                    if (alertEl) {
+                        alertEl.textContent = '⚠️ El método de carga anterior es incompatible con la nueva categoría. Por favor, selecciona un equipamiento válido.';
+                        alertEl.classList.remove('hidden');
+                    }
+                } else {
+                    if (alertEl) alertEl.classList.add('hidden');
+                }
+
+                renderMethodPills(side);
+            });
+
+            if (isIncompatible) {
+                const msg = '⚠️ El método de carga anterior es incompatible con la nueva categoría. Por favor, selecciona un equipamiento válido.';
+                if (typeof showToast === 'function') {
+                    showToast(msg);
+                }
+            }
+        }
+
+        function handleCargoCategoryChange() {
+            onCargoCategoryChange();
+        }
         const RITMOS_BASE_PUERTO = Object.freeze(Object.fromEntries(
             Object.entries(METHOD_LABEL_BY_VALUE).map(([methodValue, methodLabel]) => [
                 methodValue,
@@ -43247,6 +43647,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function handlePortMethodChange(side = 'pol') {
             setRitmoManualIndicator(side, false);
+            renderMethodPills(side);
             if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
             if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
         }
@@ -44017,6 +44418,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             actualizarCampoGruasPuerto('pol');
             actualizarCampoGruasPuerto('pod');
             actualizarCamposTipoCarga();
+            actualizarGrabCapacityVisibility();
             actualizarModuloCamionTolva();
             updateDemurrageExposureAlert();
 
@@ -44027,6 +44429,23 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         if (typeof window !== 'undefined') {
             window.methodBaseRates = methodBaseRates;
+            window.equipmentMatrix = equipmentMatrix;
+            window.isCraneMethod = isCraneMethod;
+            window.getSwlForMethod = getSwlForMethod;
+            window.getTaraForMethod = getTaraForMethod;
+            window.getCiclosForMethod = getCiclosForMethod;
+            window.getAutoEficienciaForMethodAndCategory = getAutoEficienciaForMethodAndCategory;
+            window.updateSwlLabelText = updateSwlLabelText;
+            window.actualizarGrabCapacityVisibility = actualizarGrabCapacityVisibility;
+            window.checkIsGearedVessel = checkIsGearedVessel;
+            window.resetEficienciaGrua = resetEficienciaGrua;
+            window.syncEficienciaGrua = syncEficienciaGrua;
+            window.renderMethodPills = renderMethodPills;
+            window.selectMethodPill = selectMethodPill;
+            window.actualizarSubmoduloGruas = actualizarSubmoduloGruas;
+            window.calcularRitmoGrua = calcularRitmoGrua;
+            window.onCargoCategoryChange = onCargoCategoryChange;
+            window.handleCargoCategoryChange = handleCargoCategoryChange;
             window.GENCON_CONDITION_OPTIONS = GENCON_CONDITION_OPTIONS;
             window.GENCON_LAYTIME_OPTIONS = GENCON_LAYTIME_OPTIONS;
             window.LAYTIME_CONTINUOUS_TERMS = LAYTIME_CONTINUOUS_TERMS;
@@ -46928,6 +47347,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         // Initialize defaults on load
         document.addEventListener('DOMContentLoaded', () => {
+            renderMethodPills('pol');
+            renderMethodPills('pod');
+            actualizarGrabCapacityVisibility();
             initVoyageEstimatorTooltips();
             hydrateBunkerIndexData();
             loadCoaClientProfiles();
