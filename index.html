@@ -24953,20 +24953,29 @@
             }
 
             const pdaInput = document.getElementById(`pda-${type}`);
-	            if (!pdaInput) return;
-	            pdaInput.value = finalPDA;
-	            pdaInput.dataset.calculationMode = calculationMode;
-	            pdaInput.dispatchEvent(new Event('input', { bubbles: true }));
-	            setPdaCalculationStatus(type, calculationMode);
+            if (!pdaInput) return;
+            pdaInput.dataset.basePda = String(finalPDA);
+            if (window.State) {
+                if (type === 'pol') window.State.basePdaPol = finalPDA;
+                else window.State.basePdaPod = finalPDA;
+            }
+            pdaInput.dataset.calculationMode = calculationMode;
+            pdaInput.dispatchEvent(new Event('input', { bubbles: true }));
+            setPdaCalculationStatus(type, calculationMode);
 
-	            if (showNotification) {
-	                const podTag = type === 'pod' ? ' (+10% POD)' : '';
-	                const extraSurcharges = `${podTag}${liquidSurchargeTag}`;
-	                const sourceTag = calculationMode === 'official' ? ' | Data Bridge' : ' | Curva global DWT';
-	                const sourceLabel = calculationMode === 'official' ? 'Cálculo Oficial' : 'Estimación Algorítmica Global';
-	                showToast(`PDA ${type.toUpperCase()}: $${finalPDA.toLocaleString('en-US')} · ${sourceLabel}${extraSurcharges}<br><span class="text-[10px] text-emerald-300 mt-1 block font-mono">Nav/Maniobra: $${Math.round(navManiobra)} | Tasas: $${Math.round(tasasAutoridad)} | Agencia/Misc: $${Math.round(agenciaVarios)} | Muelle: $${Math.round(muelleEstadia)}${sourceTag}</span>`);
-	            }
-	            runEngine();
+            // Reaplicar modificadores dinámicos (ajuste de días/muellaje y grúas de buque) partiendo de basePda
+            const finalCalculatedPda = typeof actualizarPDADinamica === 'function'
+                ? actualizarPDADinamica(type)
+                : finalPDA;
+
+            if (showNotification) {
+                const podTag = type === 'pod' ? ' (+10% POD)' : '';
+                const extraSurcharges = `${podTag}${liquidSurchargeTag}`;
+                const sourceTag = calculationMode === 'official' ? ' | Data Bridge' : ' | Curva global DWT';
+                const sourceLabel = calculationMode === 'official' ? 'Cálculo Oficial' : 'Estimación Algorítmica Global';
+                showToast(`PDA ${type.toUpperCase()}: $${finalCalculatedPda.toLocaleString('en-US')} · ${sourceLabel}${extraSurcharges}<br><span class="text-[10px] text-emerald-300 mt-1 block font-mono">Nav/Maniobra: $${Math.round(navManiobra)} | Tasas: $${Math.round(tasasAutoridad)} | Agencia/Misc: $${Math.round(agenciaVarios)} | Muelle: $${Math.round(muelleEstadia)}${sourceTag}</span>`);
+            }
+            if (typeof runEngine === 'function') runEngine();
 	        }
 
         async function autoFillVesselSpecs() {
@@ -43607,8 +43616,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         // ==========================================
-        // FASE 2: ANALÍTICA DE DESVIACIÓN DELTA EN MODO MANUAL
+        // FASE 2: ANALÍTICA DE DESVIACIÓN DELTA Y PDA DINÁMICA
         // ==========================================
+        const COSTE_MUELLAJE_DIARIO = 800; // $800/día por estadía/derechos de muelle
+        const COSTE_GRUA_TIERRA_MT = 2.00; // $2.00/MT por uso de grúa portuaria de tierra
+
         function calcularDeltaDias(carga, tpdAuto, tpdManual) {
             const qty = parseFloat(carga) || 0;
             const autoRate = parseFloat(tpdAuto) || 0;
@@ -43621,13 +43633,78 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return diasManuales - diasBase;
         }
 
+        /**
+         * Modificador dinámico para las PDAs (POL y POD) basado en la desviación de ritmos (muellaje)
+         * y en el método operativo seleccionado (grúas de buque vs grúas de tierra).
+         */
+        function actualizarPDADinamica(side = 'pol') {
+            const pdaInputId = side === 'pod' ? 'pda-pod' : 'pda-pol';
+            const pdaInput = document.getElementById(pdaInputId);
+            if (!pdaInput) return 0;
+
+            // 1. Obtener/guardar el valor base de la PDA
+            let basePda = parseFloat(pdaInput.dataset.basePda);
+            if (isNaN(basePda) || basePda <= 0) {
+                basePda = parseFloat(pdaInput.value) || (side === 'pol' ? 8675 : 10675);
+                pdaInput.dataset.basePda = String(basePda);
+            }
+
+            const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || parseFloat(window.State?.cargo) || 0;
+
+            // 2. Ajuste por Días (Muellaje / Estadía)
+            const rateInputId = side === 'pod' ? 'rate-disch' : 'rate-load';
+            const rateInput = document.getElementById(rateInputId);
+            const shadowKey = side === 'pol' ? 'tpdAutoSombraPol' : 'tpdAutoSombraPod';
+            const tpdAuto = (window.State && window.State[shadowKey]) ? parseFloat(window.State[shadowKey]) : (parseFloat(rateInput?.dataset?.tpdAutoSombra) || 0);
+            const tpdManual = parseFloat(rateInput?.value) || 0;
+
+            const deltaDias = typeof calcularDeltaDias === 'function' ? calcularDeltaDias(cargoQty, tpdAuto, tpdManual) : null;
+            const ajusteMuellaje = (deltaDias !== null ? deltaDias : 0) * COSTE_MUELLAJE_DIARIO;
+
+            // 3. Ajuste por Método (Grúas de Barco vs Grúas de Tierra)
+            const selectId = side === 'pod' ? 'metodo_descarga_pod' : 'metodo_carga';
+            const selectEl = document.getElementById(selectId);
+            const selectedOption = selectEl?.options?.[selectEl?.selectedIndex];
+            const methodText = selectedOption ? (selectedOption.textContent || selectedOption.innerText || '') : '';
+            const methodVal = selectEl?.value || '';
+
+            const isShipCrane = methodText.includes('Grúa Barco')
+                || methodVal.includes('barco')
+                || methodVal === 'cuchara_grab'
+                || methodVal === 'ship_crane';
+
+            const ajusteGruas = isShipCrane ? -(cargoQty * COSTE_GRUA_TIERRA_MT) : 0;
+
+            // 4. Actualización del DOM (Inputs de la Sección 3)
+            const pdaModificada = Math.max(0, Math.round(basePda + ajusteMuellaje + ajusteGruas));
+            pdaInput.value = pdaModificada;
+
+            if (window.State) {
+                if (side === 'pol') window.State.pdaPol = pdaModificada;
+                else window.State.pdaPod = pdaModificada;
+            }
+
+            // 5. Propagación Financiera
+            if (typeof window.runEngine === 'function') {
+                window.runEngine();
+            } else if (typeof window.actualizarResumenFinanciero === 'function') {
+                window.actualizarResumenFinanciero();
+            }
+
+            return pdaModificada;
+        }
+        window.actualizarPDADinamica = actualizarPDADinamica;
+
         function actualizarDesviacionDeltaManual(side = 'pol') {
             const inputId = side === 'pod' ? 'rate-disch' : 'rate-load';
             const badgeId = side === 'pod' ? 'delta-dias-badge-pod' : 'delta-dias-badge-pol';
             const input = document.getElementById(inputId);
             const badgeEl = document.getElementById(badgeId);
 
-            if (!input || !badgeEl) return;
+            if (!input || !badgeEl) {
+                actualizarPDADinamica(side);
+                return;
+            }
 
             const modeKey = `ritmoMode_${side}`;
             const isManual = (window.State && (window.State[modeKey] === 'manual' || window.State.ritmoMode === 'manual'))
@@ -43635,6 +43712,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             if (!isManual) {
                 badgeEl.classList.add('hidden');
+                actualizarPDADinamica(side);
                 return;
             }
 
@@ -43647,6 +43725,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             if (delta === null) {
                 badgeEl.classList.add('hidden');
+                actualizarPDADinamica(side);
                 return;
             }
 
@@ -43662,6 +43741,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 badgeEl.className = 'mt-1 text-[11px] font-bold inline-block px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200';
                 badgeEl.textContent = `- ${Math.abs(delta).toFixed(2)} días (Ahorro de Tiempo)`;
             }
+
+            // Aplicar ajuste dinámico a la PDA de la Sección 3
+            actualizarPDADinamica(side);
         }
 
         function onCargoCategoryChange() {
@@ -47739,6 +47821,157 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.applyMethodAndProductConditions = applyMethodAndProductConditions;
 
         /**
+         * Función puente de actualización de costes de PDA según el Método seleccionado
+         * (Grúa Barco: Grúa Tierra = $0; Grúa Portuaria: Grúa Tierra = $1,800; Cinta / Camión Tolva: Costes Terminal)
+         */
+        function actualizarCostesPDAPorMetodo(targetSide = null) {
+            if (!window.State) window.State = {};
+            const sides = targetSide ? [targetSide] : ['pol', 'pod'];
+
+            sides.forEach(s => {
+                const selectId = s === 'pod' ? 'metodo_descarga_pod' : 'metodo_carga';
+                const selectEl = document.getElementById(selectId);
+                if (!selectEl) return;
+
+                const selectedOption = selectEl.options?.[selectEl.selectedIndex];
+                const methodText = selectedOption ? (selectedOption.textContent || selectedOption.innerText || '') : '';
+                const methodVal = selectEl.value || '';
+
+                const isShipCrane = methodText.includes('Grúa Barco')
+                    || methodVal.includes('barco')
+                    || methodVal === 'cuchara_grab'
+                    || methodVal === 'ship_crane';
+
+                const isPortCrane = methodText.includes('Grúa Portuaria')
+                    || methodVal.includes('portuaria')
+                    || methodVal === 'grua_portuaria_30mt';
+
+                const isConveyor = methodText.includes('Cinta Transportadora') || methodVal === 'cinta_transportadora';
+                const isHopper = methodText.includes('Camión Tolva') || methodVal === 'camion_tolva';
+
+                const breakdownKey = s === 'pol' ? 'pdaPolBreakdown' : 'pdaPodBreakdown';
+                let breakdown = Array.isArray(window.State[breakdownKey]) ? [...window.State[breakdownKey]] : [];
+
+                if (isShipCrane) {
+                    // Fuerza el coste de "Alquiler de Grúa de Tierra" a $0
+                    breakdown.forEach(item => {
+                        if (item && item.item && (item.item.toLowerCase().includes('grúa') || item.item.toLowerCase().includes('crane') || item.item.toLowerCase().includes('alquiler'))) {
+                            item.amount = 0;
+                        }
+                    });
+                } else if (isPortCrane) {
+                    // Restaura el coste estándar de la grúa en la PDA ($1,800)
+                    let craneItem = breakdown.find(item => item && item.item && (item.item.toLowerCase().includes('grúa') || item.item.toLowerCase().includes('crane') || item.item.toLowerCase().includes('alquiler')));
+                    if (!craneItem) {
+                        craneItem = { item: 'Alquiler de Grúa Portuaria', amount: 1800 };
+                        breakdown.push(craneItem);
+                    } else if (craneItem.amount === 0) {
+                        craneItem.amount = 1800;
+                    }
+                } else if (isConveyor || isHopper) {
+                    // Para Cinta Transportadora o Camión Tolva, anula grúas de tierra y evalúa costes terminales
+                    breakdown.forEach(item => {
+                        if (item && item.item && (item.item.toLowerCase().includes('grúa') || item.item.toLowerCase().includes('crane') || item.item.toLowerCase().includes('alquiler'))) {
+                            item.amount = 0;
+                        }
+                    });
+                }
+
+                window.State[breakdownKey] = breakdown;
+
+                // Sincronizar input visual de PDA si aplica
+                const newTotalPda = breakdown.reduce((sum, item) => sum + (Number(item?.amount) || 0), 0);
+                const pdaInputId = s === 'pol' ? 'pda-pol' : 'pda-pod';
+                const pdaInput = document.getElementById(pdaInputId);
+                if (pdaInput && newTotalPda > 0) {
+                    pdaInput.value = newTotalPda;
+                    if (s === 'pol') window.State.pdaPol = newTotalPda;
+                    else window.State.pdaPod = newTotalPda;
+                }
+            });
+
+            // Disparar actualización financiera principal inmediatamente después del ajuste
+            if (typeof window.runEngine === 'function') {
+                window.runEngine();
+            } else if (typeof window.actualizarResumenFinanciero === 'function') {
+                window.actualizarResumenFinanciero();
+            }
+        }
+        window.actualizarCostesPDAPorMetodo = actualizarCostesPDAPorMetodo;
+
+        /**
+         * Event Listeners para Conectar el Motor de Ritmos con PDA y Finanzas
+         */
+        function initMotorRitmosYFinanzas() {
+            const rateLoadInput = document.getElementById('rate-load');
+            const rateDischInput = document.getElementById('rate-disch');
+            const metodoPolSelect = document.getElementById('metodo_carga');
+            const metodoPodSelect = document.getElementById('metodo_descarga_pod');
+
+            const handleRateInputChange = (side) => {
+                if (typeof window.recalcularDiasPuerto === 'function') {
+                    window.recalcularDiasPuerto();
+                }
+
+                const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || parseFloat(window.State?.cargo) || 0;
+                const loadRate = parseFloat(document.getElementById('rate-load')?.value) || parseFloat(window.State?.loadRate) || 0;
+                const dischRate = parseFloat(document.getElementById('rate-disch')?.value) || parseFloat(window.State?.dischRate) || 0;
+
+                const portDaysLoad = (cargoQty > 0 && loadRate > 0) ? (cargoQty / loadRate) : 0;
+                const portDaysDischarge = (cargoQty > 0 && dischRate > 0) ? (cargoQty / dischRate) : 0;
+                const totalPortDays = portDaysLoad + portDaysDischarge;
+
+                if (window.State) {
+                    window.State.portDaysLoad = portDaysLoad;
+                    window.State.portDaysDischarge = portDaysDischarge;
+                    window.State.daysPort = totalPortDays;
+                    window.State.totalPortDays = totalPortDays;
+                    if (side === 'pol') window.State.loadRate = loadRate;
+                    if (side === 'pod') window.State.dischRate = dischRate;
+                    window.State[`ritmoMode_${side}`] = 'manual';
+                }
+
+                if (typeof window.actualizarPDADinamica === 'function') {
+                    window.actualizarPDADinamica(side);
+                }
+
+                if (typeof window.runEngine === 'function') {
+                    window.runEngine();
+                } else if (typeof window.actualizarResumenFinanciero === 'function') {
+                    window.actualizarResumenFinanciero();
+                }
+            };
+
+            if (rateLoadInput) {
+                rateLoadInput.addEventListener('input', () => handleRateInputChange('pol'));
+            }
+            if (rateDischInput) {
+                rateDischInput.addEventListener('input', () => handleRateInputChange('pod'));
+            }
+
+            if (metodoPolSelect) {
+                metodoPolSelect.addEventListener('change', () => {
+                    actualizarCostesPDAPorMetodo('pol');
+                    if (typeof window.actualizarPDADinamica === 'function') window.actualizarPDADinamica('pol');
+                    if (typeof window.recalcularDiasPuerto === 'function') window.recalcularDiasPuerto();
+                    if (typeof window.runEngine === 'function') window.runEngine();
+                    else if (typeof window.actualizarResumenFinanciero === 'function') window.actualizarResumenFinanciero();
+                });
+            }
+
+            if (metodoPodSelect) {
+                metodoPodSelect.addEventListener('change', () => {
+                    actualizarCostesPDAPorMetodo('pod');
+                    if (typeof window.actualizarPDADinamica === 'function') window.actualizarPDADinamica('pod');
+                    if (typeof window.recalcularDiasPuerto === 'function') window.recalcularDiasPuerto();
+                    if (typeof window.runEngine === 'function') window.runEngine();
+                    else if (typeof window.actualizarResumenFinanciero === 'function') window.actualizarResumenFinanciero();
+                });
+            }
+        }
+        window.initMotorRitmosYFinanzas = initMotorRitmosYFinanzas;
+
+        /**
          * Motor de Ritmos Híbrido - Integration Layer (Zero-Touch Core)
          * Connects TPD sliders, manual numeric inputs, and mode buttons (Auto/Manual)
          * to update port days state, inject geared vessel shore crane adjustments,
@@ -47907,6 +48140,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         // Initialize defaults on load
         document.addEventListener('DOMContentLoaded', () => {
             setupHybridRateMotorListeners();
+            initMotorRitmosYFinanzas();
             renderMethodPills('pol');
             renderMethodPills('pod');
             actualizarGrabCapacityVisibility();
