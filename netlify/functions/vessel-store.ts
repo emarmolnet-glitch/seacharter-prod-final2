@@ -258,10 +258,24 @@ export function isCargoShipType(value: unknown): boolean {
 function estimateDwt(row: VesselRecord): number | null {
   const raw = asRecord(row.rawData);
   const metadata = asRecord(raw.MetaData);
+  const staticData = asRecord(raw.ShipStaticData);
   const direct = toNumber(firstDefined(row.dwt, raw.DWT, raw.dwt, raw.deadweight, metadata.DWT, metadata.dwt, metadata.deadweight));
   if (direct && direct > 0) return Math.round(direct);
 
   if (!isCargoShipType(row.shipType)) return null;
+
+  const dimA = toNumber(firstDefined(staticData.DimensionA, raw.DimensionA));
+  const dimB = toNumber(firstDefined(staticData.DimensionB, raw.DimensionB));
+  const dimC = toNumber(firstDefined(staticData.DimensionC, raw.DimensionC));
+  const dimD = toNumber(firstDefined(staticData.DimensionD, raw.DimensionD));
+
+  const loa = toNumber(firstDefined(row.loa, raw.loa, raw.LOA, metadata.loa, metadata.LOA)) ?? (dimA && dimB ? dimA + dimB : 0);
+  const beam = toNumber(firstDefined(row.beam, raw.beam, raw.Beam, metadata.beam, metadata.Beam)) ?? (dimC && dimD ? dimC + dimD : 0);
+  const draft = toNumber(firstDefined(row.draft, raw.draft, raw.Draft, metadata.draft, metadata.Draft, staticData.MaximumStaticDraught)) ?? 0;
+
+  if (loa && beam && draft && loa > 0 && beam > 0 && draft > 0) {
+    return Math.round(loa * beam * draft * 0.70 * 1.025);
+  }
 
   const seed = String(firstDefined(row.imoNumber, row.mmsi, row.vesselName, "") || "");
   let hash = 0;
