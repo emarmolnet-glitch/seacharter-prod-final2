@@ -687,9 +687,14 @@
                 }
             }
 
-            const requiredMin = minDwt > 0 ? minDwt : (cargoQty > 0 ? cargoQty * 0.85 : 0);
+            const maxDwtTolerance = 1.30;
+            const requiredCargo = cargoQty;
+            const requiredMin = minDwt > 0 ? minDwt : requiredCargo;
             const effectiveDwt = dwt || (typeof window.classifyVessel === 'function' ? parseFloat(vessel.dwt || 0) : 0);
             if (requiredMin > 0 && effectiveDwt > 0 && effectiveDwt < requiredMin) {
+                return false;
+            }
+            if (requiredCargo > 0 && effectiveDwt > 0 && effectiveDwt > requiredCargo * maxDwtTolerance) {
                 return false;
             }
             if (maxDwt > 0 && effectiveDwt > 0 && effectiveDwt > maxDwt) {

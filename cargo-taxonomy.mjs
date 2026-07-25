@@ -150,8 +150,8 @@ export function evaluateCargoVesselEligibility({
   const vesselDwt = optionalNumber(dwt);
   const cargoQuantity = optionalNumber(quantity) || 0;
   const requiredCargoVolumeCbm = optionalNumber(requiredVolumeCbm) || 0;
-  const maxMultiplier = CARGO_DWT_MAX_MULTIPLIERS[normalizedCargoTypeId] || CARGO_DWT_MAX_MULTIPLIERS[DEFAULT_CARGO_TYPE_ID];
-  const maxSuitableDwt = cargoQuantity > 0 ? Math.max(cargoQuantity * maxMultiplier, cargoQuantity + 10_000) : null;
+  const maxDwtTolerance = 1.30; // 30% por encima de la carga solicitada
+  const maxSuitableDwt = cargoQuantity > 0 ? cargoQuantity * maxDwtTolerance : null;
   const textParts = [];
   collectText(vessel, textParts);
   const evidenceText = normalizeText(textParts.join(" "));
@@ -180,7 +180,7 @@ export function evaluateCargoVesselEligibility({
   if (!cargoAllowsDesign(normalizedCargoTypeId, design)) criticalReasons.push(`Diseño de buque incompatible: ${design.declaredType}`);
   if (cargoQuantity > 0 && vesselDwt === null) criticalReasons.push("DWT no disponible para validar capacidad");
   if (cargoQuantity > 0 && vesselDwt !== null && vesselDwt < cargoQuantity) criticalReasons.push(`DWT ${vesselDwt} MT inferior a la carga ${cargoQuantity} MT`);
-  if (maxSuitableDwt !== null && vesselDwt !== null && vesselDwt > maxSuitableDwt) criticalReasons.push(`DWT ${vesselDwt} MT sobredimensionado para una operación de ${cargoQuantity} MT`);
+  if (maxSuitableDwt !== null && vesselDwt !== null && vesselDwt > maxSuitableDwt) criticalReasons.push(`DWT ${vesselDwt} MT sobredimensionado para una operación de ${cargoQuantity} MT (MÁX 30% DE TOLERANCIA)`);
   if (requiredCargoVolumeCbm > 0 && grainCapacityCbm !== null && grainCapacityCbm < requiredCargoVolumeCbm) {
     criticalReasons.push(`Grain Capacity ${grainCapacityCbm} m³ inferior al volumen requerido ${requiredCargoVolumeCbm} m³`);
   }
