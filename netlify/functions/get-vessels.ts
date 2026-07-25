@@ -239,10 +239,30 @@ function routeCorridorMatch(
   };
 }
 
+function estimateDwtFromDimensions(loa: number, beam: number, draft: number): number {
+  if (loa > 0 && beam > 0 && draft > 0) {
+    return Math.round(loa * beam * draft * 0.70 * 1.025);
+  }
+  return 0;
+}
+
 function estimateDwt(message: VesselMessage) {
   const metadata = asRecord(message.MetaData);
+  const staticData = asRecord(message.ShipStaticData);
   const direct = normalizeNumber(firstDefined(message.DWT, message.dwt, message.DWT_real, message.deadweight, metadata.DWT, metadata.dwt, metadata.DWT_real, metadata.deadweight));
   if (direct && direct > 0) return direct;
+
+  const dimA = normalizeNumber(firstDefined(staticData.DimensionA, message.DimensionA));
+  const dimB = normalizeNumber(firstDefined(staticData.DimensionB, message.DimensionB));
+  const dimC = normalizeNumber(firstDefined(staticData.DimensionC, message.DimensionC));
+  const dimD = normalizeNumber(firstDefined(staticData.DimensionD, message.DimensionD));
+
+  const loa = normalizeNumber(firstDefined(message.loa, message.LOA, metadata.loa, metadata.LOA)) ?? (dimA && dimB ? dimA + dimB : 0);
+  const beam = normalizeNumber(firstDefined(message.beam, message.Beam, metadata.beam, metadata.Beam)) ?? (dimC && dimD ? dimC + dimD : 0);
+  const draft = normalizeNumber(firstDefined(message.draft, message.Draft, metadata.draft, metadata.Draft, staticData.MaximumStaticDraught)) ?? 0;
+
+  const dimensionEstimated = estimateDwtFromDimensions(loa, beam, draft);
+  if (dimensionEstimated > 0) return dimensionEstimated;
 
   const seed = String(firstDefined(message.IMO, message.imo, metadata.IMO, message.MMSI, message.mmsi, metadata.MMSI, message.ShipName, metadata.ShipName, "") || "");
   let hash = 0;
