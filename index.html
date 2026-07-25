@@ -7250,6 +7250,33 @@
             }
         }
 
+        /* Mobile and Tablet responsive overrides (@media max-width: 768px) */
+        @media (max-width: 768px) {
+            /* Compact + Nueva Estimación button on touch / mobile screens */
+            #new-estimation-btn {
+                padding-left: 0.5rem !important;
+                padding-right: 0.5rem !important;
+            }
+            #new-estimation-btn span {
+                display: none !important;
+            }
+
+            /* Checklist Flotante (Validation Stepper HUD) mobile positioning */
+            #validation-stepper-hud {
+                bottom: 12px !important;
+                right: 12px !important;
+                top: auto !important;
+                left: auto !important;
+                width: min(260px, calc(100vw - 24px)) !important;
+                max-height: 45vh !important;
+                z-index: 40 !important;
+            }
+            #validation-stepper-hud #hud-body {
+                max-height: 35vh !important;
+                overflow-y: auto !important;
+            }
+        }
+
     </style>
     <link href="./calculator_view.css" rel="stylesheet">
 </head>

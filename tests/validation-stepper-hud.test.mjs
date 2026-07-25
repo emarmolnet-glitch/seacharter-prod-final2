@@ -57,3 +57,10 @@ test('invokes validarProgresoViaje inside runEngine and binds blur event listene
   assert.match(indexSource, /if \(typeof validarProgresoViaje === 'function'\) \{\s*validarProgresoViaje\(\);\s*\}/);
   assert.match(indexSource, /el\.addEventListener\('blur', \(\) => validarProgresoViaje\(\)\)/);
 });
+
+test('defines mobile responsive @media (max-width: 768px) rules for compact new estimation button and floating checklist HUD', () => {
+  assert.match(indexSource, /@media\s*\(max-width:\s*768px\)/);
+  assert.match(indexSource, /#new-estimation-btn\s*span\s*\{\s*display:\s*none\s*!important;\s*\}/);
+  assert.match(indexSource, /#validation-stepper-hud\s*\{[^}]*bottom:\s*12px\s*!important/);
+});
+
