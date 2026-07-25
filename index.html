@@ -1872,6 +1872,20 @@
             border-color: #94A3B8 !important;
         }
 
+        
+        /* Performance optimizations for vessel list rendering & scrolling */
+        #view-matching {
+            contain: layout style;
+        }
+        #matching-results-list {
+            contain: layout style;
+        }
+        .matching-vessel-card {
+            content-visibility: auto;
+            contain-intrinsic-size: 1px 320px;
+            will-change: transform, opacity;
+        }
+
         /* Scrollbar styling for Light Theme */
         ::-webkit-scrollbar-track { background: #F1F5F9 !important; }
         ::-webkit-scrollbar-thumb { background: #CBD5E1 !important; border-radius: 4px !important; }
@@ -16903,6 +16917,78 @@
         }
         window.highlightCarteraMatchesInUI = highlightCarteraMatchesInUI;
 
+        /* ==========================================================================
+           SCROLL & CARD PERFORMANCE OPTIMIZATION (SCROLL JANK ELIMINATION)
+           ========================================================================== */
+        (function initMatchingScrollOptimization() {
+            let matchingScrollFrame = null;
+            let lastScrollTime = 0;
+            const THROTTLE_MS = 150; // 100-200ms throttle boundary
+
+            function handleViewMatchingScroll(event) {
+                const now = Date.now();
+                if (now - lastScrollTime < THROTTLE_MS) {
+                    if (!matchingScrollFrame) {
+                        matchingScrollFrame = requestAnimationFrame(() => {
+                            matchingScrollFrame = null;
+                            lastScrollTime = Date.now();
+                        });
+                    }
+                    return;
+                }
+                lastScrollTime = now;
+            }
+
+            function bindMatchingScrollListener() {
+                if (typeof document === "undefined" || typeof document.getElementById !== "function") return;
+                const viewMatching = document.getElementById("view-matching");
+                if (!viewMatching) return;
+
+                viewMatching.removeEventListener("scroll", handleViewMatchingScroll);
+                viewMatching.addEventListener("scroll", handleViewMatchingScroll, { passive: true });
+            }
+
+            // IntersectionObserver for lazy visual card updates & suspension
+            let matchingCardObserver = null;
+
+            function initMatchingCardObserver() {
+                if (typeof IntersectionObserver === "undefined") return;
+
+                if (matchingCardObserver) {
+                    matchingCardObserver.disconnect();
+                }
+
+                matchingCardObserver = new IntersectionObserver((entries) => {
+                    entries.forEach((entry) => {
+                        const card = entry.target;
+                        if (entry.isIntersecting) {
+                            card.classList.remove("paused-offscreen");
+                            card.style.willChange = "transform, opacity";
+                        } else {
+                            card.classList.add("paused-offscreen");
+                            card.style.willChange = "auto";
+                        }
+                    });
+                }, {
+                    root: document.getElementById("view-matching") || null,
+                    rootMargin: "300px 0px 300px 0px",
+                    threshold: 0.01
+                });
+
+                const cards = document.querySelectorAll("#matching-results-list .matching-vessel-card");
+                cards.forEach((card) => matchingCardObserver.observe(card));
+            }
+
+            window.initMatchingCardObserver = initMatchingCardObserver;
+
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", bindMatchingScrollListener);
+            } else {
+                bindMatchingScrollListener();
+            }
+        })();
+
+
         function applyCarteraMatchHighlight(card) {
             if (!card || card.dataset.carteraMatched === 'true') return;
             card.dataset.carteraMatched = 'true';
@@ -18084,6 +18170,33 @@
             }
             window.getVesselTypeVisual = getVesselTypeVisual;
 
+            function getSafetyBadge(pscStatus) {
+                const status = String(pscStatus || "").toUpperCase().trim();
+
+                if (status.includes("HIGH RISK") || status.includes("HIGH") || status.includes("DETAINED") || status.includes("CRITICAL") || status.includes("FREQUENT")) {
+                    const text = status.includes("DETAINED") ? "DETAINED" : "HIGH RISK";
+                    return `<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold shadow-sm bg-red-50 text-red-700 border-red-200 animate-pulse">
+                        <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 20 20" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+                        <span>${text}</span>
+                    </div>`;
+                }
+
+                if (status.includes("MODERATE") || status.includes("MEDIUM") || (status.includes("DEFICIENCIES") && !status.includes("NO DEFICIENCIES"))) {
+                    return `<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold shadow-sm bg-orange-50 text-orange-700 border-orange-200">
+                        <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 20 20" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+                        <span>MODERATE DEFICIENCIES</span>
+                    </div>`;
+                }
+
+                const text = status.includes("NO DEFICIENCIES") ? "NO DEFICIENCIES" : "CLEAR";
+                return `<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold shadow-sm bg-emerald-50 text-emerald-700 border-emerald-200">
+                    <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 20 20" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>
+                    <span>${text}</span>
+                </div>`;
+            }
+            if (typeof window !== "undefined") { window.getSafetyBadge = getSafetyBadge; }
+
+
             function escapeMatchingAuditHtml(value) {
                 return (value === undefined || value === null ? 'N/A' : value.toString())
                     .replace(/&/g, '&amp;')
@@ -18690,7 +18803,7 @@
                         const currentYear = new Date().getFullYear();
                         const isYearValid = yearBuiltValue !== null && yearBuiltValue !== undefined && yearBuiltValue !== '' && yearBuiltValue !== 'N/A' && yearBuiltValue !== 'Unknown';
                         const vesselAge = isYearValid ? (currentYear - parseInt(yearBuiltValue, 10)) : 'N/A';
-                        const pscDeficiencies = m.vessel.hasCranes ? "low" : "moderate"; // dynamic illustrative mapping
+                        const pscStatus = m.vessel?.pscStatus || m.vessel?.psc_status || v.pscStatus || v.psc_status || m.vessel?.pscDeficiencies || v.pscDeficiencies || m.vessel?.psc_deficiencies || v.psc_deficiencies || (m.vessel?.hasCranes ? "CLEAR" : "MODERATE DEFICIENCIES");
 
                         // Determine laycan translation and open/committed status
                         const currentLang = document.getElementById('language-selector')?.value || 'es';
@@ -18945,9 +19058,9 @@
                                                         <span class="text-slate-500">Antigüedad del Buque:</span>
                                                         <span class="font-bold text-slate-600">${vesselAge !== 'N/A' ? `${vesselAge} años / years` : 'N/A'}</span>
                                                     </div>
-                                                    <div class="flex items-center justify-between text-xs">
+                                                    <div class="flex items-center justify-between text-xs mt-2">
                                                         <span class="text-slate-500">Historial PSC (MoU):</span>
-                                                        <span class="font-bold text-slate-600 uppercase text-[10px]">${pscDeficiencies} deficiencies</span>
+                                                        ${getSafetyBadge(pscStatus)}
                                                     </div>
                                                 </div>
 

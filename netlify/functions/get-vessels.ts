@@ -335,6 +335,43 @@ function getShipTypeValue(message: VesselMessage) {
   );
 }
 
+function evaluateCommercialCompatibility(vessel: VesselMessage, url: URL): boolean {
+  const metadata = asRecord(vessel.MetaData);
+  const dwt = normalizeNumber(firstDefined(vessel.dwt, vessel.DWT, metadata.dwt, metadata.DWT)) ?? estimateDwt(vessel);
+  const draft = normalizeNumber(firstDefined(vessel.draft, vessel.draught, vessel.draft_meters, metadata.draft, metadata.draught, metadata.Draft, metadata.Draught));
+  const shipType = getShipTypeValue(vessel);
+
+  const cargoQty = numberParam(url, ["cargoQty", "cargo_qty", "quantity"], 0);
+  const minDwt = numberParam(url, ["minDwt", "min_dwt"], 0);
+  const maxDwt = numberParam(url, ["maxDwt", "max_dwt"], 0);
+  const portMaxDwt = numberParam(url, ["portMaxDwt", "port_max_dwt"], 0);
+  const maxDraft = numberParam(url, ["maxDraft", "max_draft", "draftLimit"], 0);
+
+  if (shipType !== undefined && shipType !== null) {
+    const numericType = Number(shipType);
+    if (Number.isFinite(numericType) && (numericType < 70 || numericType > 79)) {
+      return false;
+    }
+  }
+
+  const requiredMinDwt = minDwt > 0 ? minDwt : (cargoQty > 0 ? cargoQty * 0.85 : 0);
+  if (requiredMinDwt > 0 && dwt > 0 && dwt < requiredMinDwt) {
+    return false;
+  }
+  if (maxDwt > 0 && dwt > 0 && dwt > maxDwt) {
+    return false;
+  }
+  if (portMaxDwt > 0 && dwt > 0 && dwt > portMaxDwt) {
+    return false;
+  }
+
+  if (maxDraft > 0 && draft !== undefined && draft > 0 && draft > maxDraft) {
+    return false;
+  }
+
+  return true;
+}
+
 function buildProjection(message: VesselMessage, target?: { role: string; lat: number; lon: number; radiusNm: number }) {
   const metadata = asRecord(message.MetaData);
   const lat = normalizeNumber(firstDefined(message.latitude, message.AIS_Live_Lat, metadata.latitude));
@@ -504,6 +541,8 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
       const lastPort = String(firstDefined(vessel.lastPortOfCall, vessel.last_port_of_call, vessel.ultimo_puerto, metadata.lastPortOfCall, metadata.ultimo_puerto, "") || "").trim() || "N/A";
       const aisEta = normalizeEta(vessel, nearest);
       const driftHours = etaDriftHours(aisEta, projection?.etaProjected);
+      const isCompatible = evaluateCommercialCompatibility(vessel, url);
+
       const enriched: VesselMessage & { distanceNm: number | null } = {
         ...vessel,
         IMO: imo || "N/A",
@@ -530,6 +569,7 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
         distanceToPodNm: distanceToPod !== null ? Math.round(distanceToPod) : null,
         destinationAvailability: isPodOperationalMatch,
         matchAlert: isPodOperationalMatch ? "Disponibilidad Destino" : null,
+        isCompatible,
         MetaData: {
           ...metadata,
           IMO: imo || "N/A",
@@ -553,6 +593,7 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
           distanceToPodNm: distanceToPod !== null ? Math.round(distanceToPod) : null,
           destinationAvailability: isPodOperationalMatch,
           matchAlert: isPodOperationalMatch ? "Disponibilidad Destino" : null,
+          isCompatible,
         },
       };
       return enriched;
@@ -613,6 +654,7 @@ function normalizeVesselMessage(message: VesselMessage): VesselMessage {
   const course = normalizeNumber(firstDefined(message.course, message.COG, message.cog, metadata.course, metadata.COG, metadata.cog, positionReport.Cog, positionReport.COG, positionReport.Course));
   const navigationalStatus = firstDefined(message.NavigationalStatus, metadata.NavigationalStatus, positionReport.NavigationalStatus);
   const destination = normalizeDestination(firstDefined(message.destination, message.Destination, message.destino_actual, metadata.Destination, metadata.destination, staticData.Destination, staticData.PortOfDestination));
+  const isCompatible = message.isCompatible !== undefined ? Boolean(message.isCompatible) : (metadata.isCompatible !== undefined ? Boolean(metadata.isCompatible) : undefined);
   const lastPortOfCall = firstDefined(
     message.lastPortOfCall,
     message.last_port_of_call,
@@ -664,6 +706,7 @@ function normalizeVesselMessage(message: VesselMessage): VesselMessage {
     lastPortOfCall,
     last_port_of_call: lastPortOfCall,
     ultimo_puerto: lastPortOfCall,
+    isCompatible,
     MetaData: {
       ...metadata,
       MMSI: firstDefined(metadata.MMSI, mmsi),
@@ -681,6 +724,7 @@ function normalizeVesselMessage(message: VesselMessage): VesselMessage {
       Destination: destination,
       lastPortOfCall: firstDefined(metadata.lastPortOfCall, lastPortOfCall),
       ultimo_puerto: firstDefined(metadata.ultimo_puerto, lastPortOfCall),
+      isCompatible,
     },
   };
 }
@@ -857,7 +901,7 @@ function mergeVesselMessageLists(baseVessels: VesselMessage[], incomingVessels: 
   return Array.from(byKey.values());
 }
 
-function completeIncomingVesselsFromStore(storedVessels: VesselMessage[], incomingVessels: VesselMessage[]) {
+function completeIncomingVesselsFromStore(storedVessels: VesselMessage[], incomingVessels: VesselMessage[], url?: URL) {
   const storedByKey = new Map<string, VesselMessage>();
 
   for (const vessel of storedVessels) {
@@ -872,7 +916,15 @@ function completeIncomingVesselsFromStore(storedVessels: VesselMessage[], incomi
       const normalized = normalizeVesselMessage(vessel);
       const key = getVesselKey(normalized);
       if (!key) return null;
-      return mergeDefinedVesselFields(storedByKey.get(key), normalized);
+      const merged = mergeDefinedVesselFields(storedByKey.get(key), normalized);
+      if (url) {
+        const isCompatible = evaluateCommercialCompatibility(merged, url);
+        merged.isCompatible = isCompatible;
+        if (merged.MetaData && typeof merged.MetaData === "object") {
+          (merged.MetaData as Record<string, unknown>).isCompatible = isCompatible;
+        }
+      }
+      return merged;
     })
     .filter((vessel): vessel is VesselMessage => Boolean(vessel));
 }
@@ -958,14 +1010,12 @@ function collectVessels(url: URL, apiKey: string): Promise<LiveCollectionResult>
       try {
         const rawMessage = JSON.parse(data.toString()) as Record<string, unknown>;
 
-        // Interceptación temprana: extracción segura de ShipType (Message.ShipStaticData.Type o MetaData.ShipType)
         const rawShipType = (rawMessage?.Message as Record<string, unknown> | undefined)?.ShipStaticData
           ? ((rawMessage.Message as Record<string, unknown>).ShipStaticData as Record<string, unknown>)?.Type
           : (rawMessage?.MetaData as Record<string, unknown> | undefined)?.ShipType;
 
         const shipType = rawShipType ?? (rawMessage?.Message as Record<string, unknown> | undefined)?.ShipType ?? (rawMessage?.MetaData as Record<string, unknown> | undefined)?.shipType;
 
-        // Condición estricta de Carga: descartar de inmediato si el código numérico NO está entre 70 y 79 (ambos incluidos)
         if (shipType !== undefined && shipType !== null) {
           const numericType = Number(shipType);
           if (Number.isFinite(numericType) && (numericType < 70 || numericType > 79)) {
@@ -1086,7 +1136,7 @@ export async function handleGetVessels(req: Request) {
     const liveResult = await collectVessels(url, apiKey);
     const liveVessels = liveResult.vessels;
     const storedVessels = await readStoredVesselMessages(Math.max(requestedQuantity, STORED_LOOKUP_LIMIT), url);
-    const completedLiveVessels = completeIncomingVesselsFromStore(storedVessels, liveVessels);
+    const completedLiveVessels = completeIncomingVesselsFromStore(storedVessels, liveVessels, url);
     const acceptedLiveVessels = strictTaxonomyMode
       ? filterVesselsByTaxonomies(completedLiveVessels, requestedTaxonomies)
       : completedLiveVessels;

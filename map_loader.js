@@ -291,11 +291,16 @@
         const speed = normalizeNumeric(read(['speed', 'sog', 'Sog', 'SOG'])) || 0;
         const destination = firstDefined(read(['destination', 'Destination', 'current_destination', 'plannedDestination']), 'N/A');
         const shipType = firstDefined(read(['shipType', 'ShipType', 'vesselType', 'vessel_type', 'type']), 'Unknown');
+        const rawIsCompatible = read(['isCompatible']);
+        const isCompatible = rawIsCompatible !== null ? Boolean(rawIsCompatible) : (meta.isCompatible !== undefined ? Boolean(meta.isCompatible) : undefined);
 
         return {
             ...ship,
             source_payload: sourcePayload,
-            MetaData: meta,
+            MetaData: {
+                ...meta,
+                isCompatible
+            },
             PositionReport: position,
             name: String(name),
             vesselName: String(name),
@@ -320,7 +325,8 @@
             destination: String(destination),
             shipType: String(shipType),
             ShipType: String(shipType),
-            vessel_type: String(shipType)
+            vessel_type: String(shipType),
+            isCompatible
         };
     }
 
@@ -407,19 +413,10 @@
         }
     }
 
-    /**
-     * Coordinate Normalization: Normalizes latitude and longitude coordinates.
-     * Change reading from Port_Registro_Lat/Lon to AIS_Live_Lat/Lon.
-     * Ensures correct [Lat, Lon] format order to prevent land inversion.
-     * 
-     * @param {Object} ship The vessel data object
-     * @returns {Array|null} Normalized coordinate array [Lat, Lon] or null if invalid
-     */
     function normalizeCoordinates(ship) {
         if (!ship) return null;
         normalizeShipFields(ship);
 
-        // Try reading AIS_Live_Lat/Lon, falling back to Port_Registro_Lat/Lon, and then standard fields
         let lat = ship.AIS_Live_Lat !== undefined ? ship.AIS_Live_Lat : 
                   (ship.MetaData && ship.MetaData.AIS_Live_Lat !== undefined ? ship.MetaData.AIS_Live_Lat : 
                   (ship.Port_Registro_Lat !== undefined ? ship.Port_Registro_Lat : 
@@ -441,11 +438,6 @@
 
         if (isNaN(parsedLat) || isNaN(parsedLon)) return null;
 
-        // Prevent Land Inversion check:
-        // Leaflet expects [latitude, longitude]. In our geographic scope (Mediterranean / North Africa),
-        // Latitude is generally between 30 and 46, and Longitude is between -6 and 36.
-        // If they are swapped (e.g. parsedLat is negative/low and parsedLon is high), 
-        // we detect and auto-correct it to avoid projecting ships onto the land.
         if (Math.abs(parsedLat) < 15 && Math.abs(parsedLon) > 25) {
             const temp = parsedLat;
             parsedLat = parsedLon;
@@ -455,13 +447,6 @@
         return [parsedLat, parsedLon];
     }
 
-    /**
-     * Coordinate validation without coastline or port exclusions.
-     *
-     * @param {number} lat Latitude
-     * @param {number} lon Longitude
-     * @returns {boolean} True when the coordinates are finite and in range
-     */
     function isValidWaterPosition(lat, lon) {
         const latitude = Number(lat);
         const longitude = Number(lon);
@@ -473,13 +458,6 @@
             && longitude <= 180;
     }
 
-    /**
-     * Bypasses the local restriction in the frontend and forms a viewport query URL.
-     * 
-     * @param {Object} map Leaflet map object
-     * @param {string} mode Operation mode
-     * @returns {string} Dynamic URL with viewport bounds
-     */
     function getViewportQueryUrl(map, mode) {
         let url = `/.netlify/functions/get-vessels?mode=${mode}`;
         const currentBounds = getLeafletBoundsForProxy(map);
@@ -688,13 +666,11 @@
             return null;
         }
 
-        // 1. Extraer los ejes puros del Viewport actual del usuario
         const west = bounds.getWest();
         const south = bounds.getSouth();
         const east = bounds.getEast();
         const north = bounds.getNorth();
 
-        // Guardar en el estado interno para los fallbacks
         setAisStreamBounds({
             latMin: south,
             latMax: north,
@@ -702,12 +678,10 @@
             lonMax: east
         });
 
-        // 2. RETORNAR EL FORMATO GEOJSON REQUERIDO POR AISSTREAM:
-        // Un array de cajas donde cada caja contiene el punto Suroeste [Lng, Lat] y Nordeste [Lng, Lat]
         return [
             [
-                [west, south], // Esquina inferior izquierda (Longitud, Latitud)
-                [east, north]  // Esquina superior derecha (Longitud, Latitud)
+                [west, south],
+                [east, north]
             ]
         ];
     }
@@ -715,7 +689,6 @@
     function getAisStreamSubscriptionPayload(apiKey) {
         if (!apiKey || !aisStreamState.currentBounds) return null;
         
-        // Unificamos para que use la misma estructura GeoJSON exacta de la pantalla
         return {
             "APIKey": apiKey,
             "BoundingBoxes": [
@@ -996,22 +969,16 @@
         const mmsi = options.mmsi || options.MMSI;
         if (!mmsi) return;
 
-        // Store the marker by mmsi so we can retrieve it in manual registration
         activeMarkers[mmsi] = marker;
 
         const isEstimated = !!(options.isEstimated || options.is_estimated);
         const name = options.name || options.vessel_name || options.ShipName || "Unknown";
         const statusLabel = options.statusLabel || options.status || "N/A";
-        const classCat = options.vesselClass || options.class || options.category || "Bulk Carrier";
-        const dwt = options.dwt || options.DWT || "N/A";
 
         if (isEstimated) {
-            // "When receiving a click event on a pin with incomplete data ('Estimated Position'), it doesn't attempt to display 'N/A' directly from the raw AIS response."
-            // Initialize the popup content without "N/A", instead show "Hydrating..." or "Loading..."
             const initialContent = `<div class="seacharter-map-popup"><strong>${name}</strong><span>IMO: <em class="hydrate-placeholder">Hydrating...</em></span><span>MMSI: ${mmsi}</span><span>Destino: <em class="hydrate-placeholder">Hydrating...</em></span><span>Ubicación: ${statusLabel}</span><small>Estimated Position / Terrestrial Coverage Gap</small></div>`;
             marker.bindPopup(initialContent);
 
-            // Listen to click / popupopen
             const popupOpenHandler = async function () {
                 if (marker._isHydrated || marker._isHydrating) return;
                 marker._isHydrating = true;
@@ -1031,7 +998,6 @@
                         marker.setPopupContent(updatedContent);
                         marker._isHydrated = true;
                     } else {
-                        // "If the vessel doesn't exist in the internal database, display a 'Data not available' message but allow the user to 'Register vessel manually' with the missing data."
                         const errorContent = `<div class="seacharter-map-popup"><strong>${name}</strong><span>IMO: <b class="popup-danger">Data not available</b></span><span>MMSI: ${mmsi}</span><span>Destino: <b class="popup-danger">Data not available</b></span><span>Ubicación: ${statusLabel}</span><small>Estimated Position / Terrestrial Coverage Gap</small><button onclick="window.MapLoader.registerVesselManually('${mmsi}', '${name.replace(/'/g, "\\'")}', '${statusLabel.replace(/'/g, "\\'")}')">Register vessel manually</button></div>`;
                         marker.setPopupContent(errorContent);
                     }
@@ -1048,7 +1014,6 @@
             marker._aisPopupHydrationHandler = popupOpenHandler;
             marker.on('popupopen', popupOpenHandler);
         } else {
-            // Live position - render normal popup
             const imo = options.imo || "N/A";
             const destination = options.destination || "N/A";
             const lastPortOfCall = options.lastPortOfCall || options.last_port_of_call || options.ultimo_puerto || "N/A";
@@ -1093,6 +1058,7 @@
             (normalizedPol && destination.includes(normalizedPol)) ||
             (normalizedPod && destination.includes(normalizedPod))
         );
+        const isCompatible = vessel.isCompatible === true || (vessel.MetaData && vessel.MetaData.isCompatible === true);
 
         let iconClass = "fa-ship";
         let iconColor = radarColor || "#3b82f6";
@@ -1132,10 +1098,10 @@
 
         const isNeighborNode = radarZone === "NODE_POL" || radarZone === "NODE_POD";
         const iconConfig = {
-            className: "custom-ais-icon",
+            className: `custom-ais-icon${isCompatible ? ' compatible-vessel' : ''}`,
             html: imageIcon
-                ? `<div class="seacharter-ais-icon${isProjectionCandidate ? ' ghost-ship' : ''}${isNeighborNode ? ' neighbor-node' : ''}" data-icon-class="${iconClass}" style="--marker-color: ${iconColor}; color: ${iconColor};"><img src="${imageIcon}" alt="" width="24" height="24"></div>`
-                : `<div class="seacharter-ais-icon${isProjectionCandidate ? ' ghost-ship' : ''}${vessel.isTarget ? ' fleet-intel-match' : ''}${isNeighborNode ? ' neighbor-node' : ''}" style="--marker-color: ${iconColor};"><i class="fa-solid fas ${iconClass}"></i></div>`,
+                ? `<div class="seacharter-ais-icon${isCompatible ? ' compatible-vessel' : ''}${isProjectionCandidate ? ' ghost-ship' : ''}${isNeighborNode ? ' neighbor-node' : ''}" data-icon-class="${iconClass}" style="--marker-color: ${iconColor}; color: ${iconColor};"><img src="${imageIcon}" alt="" width="24" height="24"></div>`
+                : `<div class="seacharter-ais-icon${isCompatible ? ' compatible-vessel' : ''}${isProjectionCandidate ? ' ghost-ship' : ''}${vessel.isTarget ? ' fleet-intel-match' : ''}${isNeighborNode ? ' neighbor-node' : ''}" style="--marker-color: ${iconColor};"><i class="fa-solid fas ${iconClass}"></i></div>`,
             iconSize: [24, 24],
             iconAnchor: [12, 12]
         };
@@ -1151,11 +1117,11 @@
         if (!marker) return;
 
         const imoInput = prompt(`Register Vessel "${name}" (MMSI: ${mmsi})\nEnter IMO Number:`);
-        if (imoInput === null) return; // User cancelled
+        if (imoInput === null) return;
         const imo = imoInput.trim();
 
         const destInput = prompt(`Register Vessel "${name}" (MMSI: ${mmsi})\nEnter Destination:`);
-        if (destInput === null) return; // User cancelled
+        if (destInput === null) return;
         const destination = destInput.trim();
 
         try {
@@ -1188,7 +1154,6 @@
                     alert(`⚓ Vessel "${name}" registered successfully!`);
                 }
 
-                // Update popup to show newly registered details
                 const registeredContent = `<b>${name}</b><br>IMO: ${imo || 'N/A'}<br>MMSI: ${mmsi}<br>Destino: ${destination || 'N/A'}<br>Ubicación: ${statusLabel}<br><span style="color: #f59e0b; font-weight: bold;">⚠️ Estimated Position / Terrestrial Coverage Gap</span>`;
                 marker.setPopupContent(registeredContent);
                 marker._isHydrated = true;
@@ -1207,7 +1172,6 @@
         }
     }
 
-    // Expose the module
     const exportsObj = {
         normalizeCoordinates,
         getMapStyleConfig,
@@ -1255,17 +1219,16 @@
         window.styleConfig = MAP_STYLE_CONFIG;
         window.SEA_MAP_STYLE_CONFIG = MAP_STYLE_CONFIG;
 
-        // Sandbox QA entrypoint for injecting controlled AIS traffic into the hydration pipeline.
         window.ejecutarSimulacionRadarTest = function () {
             console.log("🧪 Iniciando entorno de pruebas: Inyectando 5 buques mercantes...");
             window.simulacionRadarActiva = true;
 
             const buquesTest = [
-                { MMSI: 247324000, ShipName: "RODAHMAR CARRIER", AIS_Live_Lat: 36.14, AIS_Live_Lon: -5.35, DWT: 35000, GT: 22000, Draft: 9.5, statusLabel: "En navegación", destination: "ALBARRACÍN", is_estimated: false },
-                { MMSI: 224412000, ShipName: "TMM IBERIA TRADER", AIS_Live_Lat: 37.95, AIS_Live_Lon: 12.50, DWT: 42000, GT: 26000, Draft: 10.2, statusLabel: "En navegación", destination: "TAMPA", is_estimated: false },
-                { MMSI: 311000123, ShipName: "MED BULKER I", AIS_Live_Lat: 36.50, AIS_Live_Lon: 2.50, DWT: 55000, GT: 31000, Draft: 11.8, statusLabel: "En navegación", destination: "ARGELIA", is_estimated: false },
-                { MMSI: 477123400, ShipName: "ATLANTIC GYPSUM", AIS_Live_Lat: 39.50, AIS_Live_Lon: -9.50, DWT: 38000, GT: 24000, Draft: 8.9, statusLabel: "En navegación", destination: "AVEIRO", is_estimated: false },
-                { MMSI: 211987600, ShipName: "CEMENT QUEEN", AIS_Live_Lat: 41.35, AIS_Live_Lon: 2.20, DWT: 12000, GT: 85000, Draft: 6.5, statusLabel: "Fondeado", destination: "BARCELONA", is_estimated: false }
+                { MMSI: 247324000, ShipName: "RODAHMAR CARRIER", AIS_Live_Lat: 36.14, AIS_Live_Lon: -5.35, DWT: 35000, GT: 22000, Draft: 9.5, statusLabel: "En navegación", destination: "ALBARRACÍN", is_estimated: false, isCompatible: true },
+                { MMSI: 224412000, ShipName: "TMM IBERIA TRADER", AIS_Live_Lat: 37.95, AIS_Live_Lon: 12.50, DWT: 42000, GT: 26000, Draft: 10.2, statusLabel: "En navegación", destination: "TAMPA", is_estimated: false, isCompatible: true },
+                { MMSI: 311000123, ShipName: "MED BULKER I", AIS_Live_Lat: 36.50, AIS_Live_Lon: 2.50, DWT: 55000, GT: 31000, Draft: 11.8, statusLabel: "En navegación", destination: "ARGELIA", is_estimated: false, isCompatible: true },
+                { MMSI: 477123400, ShipName: "ATLANTIC GYPSUM", AIS_Live_Lat: 39.50, AIS_Live_Lon: -9.50, DWT: 38000, GT: 24000, Draft: 8.9, statusLabel: "En navegación", destination: "AVEIRO", is_estimated: false, isCompatible: true },
+                { MMSI: 211987600, ShipName: "CEMENT QUEEN", AIS_Live_Lat: 41.35, AIS_Live_Lon: 2.20, DWT: 12000, GT: 85000, Draft: 6.5, statusLabel: "Fondeado", destination: "BARCELONA", is_estimated: false, isCompatible: false }
             ];
 
             if (typeof window.MapLoader && typeof window.MapLoader.emitHydrationUpdate === 'function') {
