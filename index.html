@@ -23,11 +23,16 @@
             window.coreProOperationMode = nextMode;
             const status = document.getElementById('core-pro-operation-mode-status');
             if (status) {
-                status.textContent = nextMode === modes.LOCAL_ONLY
-                    ? 'LOCAL-ONLY · Consulta exclusiva a vessels_master'
-                    : nextMode === modes.MANUAL_RADAR
-                        ? 'BARRIDO MANUAL · Acceso externo autorizado por el usuario'
-                        : 'Inactivo · Selecciona Coincidencia Local o Barrido Manual';
+                const currentLang = (typeof localStorage !== 'undefined' && localStorage.getItem('seacharter_lang')) || document.getElementById('language-selector')?.value || 'es';
+                let msg = '';
+                if (nextMode === modes.LOCAL_ONLY) {
+                    msg = currentLang === 'en' ? 'LOCAL-ONLY · Exclusive query to vessels_master' : currentLang === 'fr' ? 'LOCAL-ONLY · Requête exclusive à vessels_master' : 'LOCAL-ONLY · Consulta exclusiva a vessels_master';
+                } else if (nextMode === modes.MANUAL_RADAR) {
+                    msg = currentLang === 'en' ? 'MANUAL SWEEP · External access authorized by user' : currentLang === 'fr' ? 'BALAYAGE MANUEL · Accès externe autorisé par l\'utilisateur' : 'BARRIDO MANUAL · Acceso externo autorizado por el usuario';
+                } else {
+                    msg = currentLang === 'en' ? 'Inactive · Select Local Matching or Manual Sweep' : currentLang === 'fr' ? 'Inactif · Sélectionnez Correspondance Locale ou Balayage Manuel' : 'Inactivo · Selecciona Coincidencia Local o Barrido Manual';
+                }
+                status.textContent = msg;
             }
             window.dispatchEvent(new CustomEvent('CORE_PRO_OPERATION_MODE_CHANGED', { detail: { mode: nextMode } }));
             return nextMode;
@@ -13024,6 +13029,20 @@
         };
 
         const UI_TRANSLATIONS = {
+            "POL": { en: "POL", fr: "POL" },
+            "POD": { en: "POD", fr: "POD" },
+            "Laydays": { en: "Laydays", fr: "Jours de planche" },
+            "Freight Rate": { en: "Freight Rate", fr: "Taux de Fret" },
+            "Demurrage": { en: "Demurrage", fr: "Surestaries" },
+            "Break-Even": { en: "Break-Even", fr: "Seuil de Rentabilité" },
+            "Bulk Carrier": { en: "Bulk Carrier", fr: "Navire Vraquier" },
+            "Port de Chargement": { en: "Port of Loading (POL)", fr: "Port de Chargement" },
+            "Port de Déchargement": { en: "Port of Discharge (POD)", fr: "Port de Déchargement" },
+            "Jours de planche": { en: "Laydays", fr: "Jours de planche" },
+            "Taux de Fret": { en: "Freight Rate", fr: "Taux de Fret" },
+            "Surestaries": { en: "Demurrage", fr: "Surestaries" },
+            "Seuil de Rentabilité": { en: "Break-Even", fr: "Seuil de Rentabilité" },
+            "Navire Vraquier": { en: "Bulk Carrier", fr: "Navire Vraquier" },
             "Búsqueda jerárquica y ordenamiento inteligente de buques según disponibilidad, especificaciones técnicas, rentabilidad y riesgos.": { en: "Hierarchical search and intelligent sorting of vessels according to availability, technical specifications, profitability and risks", fr: "Recherche hiérarchique et tri intelligent des navires en fonction de la disponibilité, des spécifications techniques, de la rentabilité et des risques" },
             "Mapa de Densidad": { en: "Density Map", fr: "Carte de densité" },
             "1. Calculadora": { en: "1. Calculator", fr: "1. Calculateur" },
@@ -13243,69 +13262,159 @@
         }
 
         function translatePage(lang) {
-            if (!lang) lang = 'es';
+            if (!lang) lang = (typeof localStorage !== 'undefined' && localStorage.getItem('seacharter_lang')) || 'es';
             
-            function saveAndTranslate(el, text) {
+            // 1. Explicit [data-i18n] text translation
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (!key) return;
                 if (!el.__originalText) {
-                    el.__originalText = text;
+                    el.__originalText = el.textContent;
                 }
-                
-                if (lang === 'es') {
-                    return el.__originalText;
-                }
-                
-                const key = normalizeKey(el.__originalText);
-                if (UI_TRANSLATIONS[key] && UI_TRANSLATIONS[key][lang]) {
-                    return UI_TRANSLATIONS[key][lang];
-                }
-                
-                // Fallback direct check
-                for (const [sKey, sVal] of Object.entries(UI_TRANSLATIONS)) {
-                    if (normalizeKey(sKey) === key) {
-                        return sVal[lang];
+                const trans = (lang === 'es') 
+                    ? (UI_TRANSLATIONS[key]?.es || el.__originalText) 
+                    : (UI_TRANSLATIONS[key]?.[lang] || UI_TRANSLATIONS[key]?.en || null);
+                if (trans) {
+                    if (el.children.length === 0) {
+                        el.textContent = trans;
+                    } else {
+                        let textNode = null;
+                        for (let child of el.childNodes) {
+                            if (child.nodeType === Node.TEXT_NODE && child.textContent.trim().length > 0) {
+                                textNode = child;
+                                break;
+                            }
+                        }
+                        if (textNode) textNode.textContent = trans;
+                        else el.textContent = trans;
                     }
                 }
-                return null;
+            });
+
+            // 2. Explicit [data-i18n-ph] or [data-i18n-placeholder] translation
+            document.querySelectorAll('[data-i18n-ph], [data-i18n-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-i18n-ph') || el.getAttribute('data-i18n-placeholder');
+                if (!key) return;
+                if (!el.__originalPlaceholder) {
+                    el.__originalPlaceholder = el.getAttribute('placeholder') || '';
+                }
+                const trans = (lang === 'es') 
+                    ? (UI_TRANSLATIONS[key]?.es || el.__originalPlaceholder) 
+                    : (UI_TRANSLATIONS[key]?.[lang] || UI_TRANSLATIONS[key]?.en || null);
+                if (trans) el.setAttribute('placeholder', trans);
+            });
+
+            // 3. Explicit [data-i18n-title] translation
+            document.querySelectorAll('[data-i18n-title]').forEach(el => {
+                const key = el.getAttribute('data-i18n-title');
+                if (!key) return;
+                if (!el.__originalTitle) {
+                    el.__originalTitle = el.getAttribute('title') || '';
+                }
+                const trans = (lang === 'es') 
+                    ? (UI_TRANSLATIONS[key]?.es || el.__originalTitle) 
+                    : (UI_TRANSLATIONS[key]?.[lang] || UI_TRANSLATIONS[key]?.en || null);
+                if (trans) el.setAttribute('title', trans);
+            });
+
+            // 4. Global DOM Text-Node Walker over all elements in document.body
+            if (typeof document !== 'undefined' && document.body) {
+                const walker = document.createTreeWalker(
+                    document.body,
+                    NodeFilter.SHOW_TEXT,
+                    {
+                        acceptNode: function(node) {
+                            if (!node || !node.nodeValue) return NodeFilter.FILTER_REJECT;
+                            const parent = node.parentElement;
+                            if (!parent) return NodeFilter.FILTER_REJECT;
+                            const tag = parent.tagName;
+                            if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'TEXTAREA' || tag === 'CODE') {
+                                return NodeFilter.FILTER_REJECT;
+                            }
+                            if (parent.hasAttribute('data-i18n')) return NodeFilter.FILTER_REJECT;
+                            const txt = node.nodeValue.trim();
+                            if (txt.length === 0) return NodeFilter.FILTER_REJECT;
+                            return NodeFilter.FILTER_ACCEPT;
+                        }
+                    }
+                );
+
+                const textNodes = [];
+                while (walker.nextNode()) {
+                    textNodes.push(walker.currentNode);
+                }
+
+                textNodes.forEach(node => {
+                    if (!node.__originalText) {
+                        node.__originalText = node.nodeValue;
+                    }
+                    if (lang === 'es') {
+                        node.nodeValue = node.__originalText;
+                        return;
+                    }
+                    const trimmed = node.__originalText.trim();
+                    const key = normalizeKey(trimmed);
+                    
+                    let trans = null;
+                    if (UI_TRANSLATIONS[key] && UI_TRANSLATIONS[key][lang]) {
+                        trans = UI_TRANSLATIONS[key][lang];
+                    } else {
+                        for (const [sKey, sVal] of Object.entries(UI_TRANSLATIONS)) {
+                            if (normalizeKey(sKey) === key && sVal && sVal[lang]) {
+                                trans = sVal[lang];
+                                break;
+                            }
+                        }
+                    }
+                    if (trans !== null) {
+                        node.nodeValue = node.__originalText.replace(trimmed, trans);
+                    }
+                });
             }
 
-            // Translate elements that don't have children
-            const elementsToTranslate = document.querySelectorAll('h1, h2, h3, h4, h5, label, button, span, p, th, td, option');
-            elementsToTranslate.forEach(el => {
-                if (el.children.length === 0) {
-                    const txt = el.textContent.trim();
-                    if (txt) {
-                        const trans = saveAndTranslate(el, el.textContent);
-                        if (trans !== null) {
-                            el.textContent = trans;
+            // 5. Global Scanner for placeholders & titles on input, textarea, select, [title]
+            document.querySelectorAll('input, textarea, select, [title]').forEach(el => {
+                if (!el.hasAttribute('data-i18n-ph') && !el.hasAttribute('data-i18n-placeholder')) {
+                    const ph = el.getAttribute('placeholder');
+                    if (ph) {
+                        if (!el.__originalPlaceholder) {
+                            el.__originalPlaceholder = ph;
                         }
-                    }
-                } else if (el.children.length === 1 && el.firstElementChild.tagName === 'I') {
-                    // Elements with exactly one icon inside (like buttons or headings)
-                    let textNode = null;
-                    for (let child of el.childNodes) {
-                        if (child.nodeType === Node.TEXT_NODE) {
-                            textNode = child;
-                            break;
-                        }
-                    }
-                    if (textNode) {
-                        const txt = textNode.textContent.trim();
-                        if (txt) {
-                            if (!el.__originalText) {
-                                el.__originalText = textNode.textContent;
-                            }
-                            if (lang === 'es') {
-                                textNode.textContent = el.__originalText;
+                        if (lang === 'es') {
+                            el.setAttribute('placeholder', el.__originalPlaceholder);
+                        } else {
+                            const key = normalizeKey(el.__originalPlaceholder);
+                            if (UI_TRANSLATIONS[key] && UI_TRANSLATIONS[key][lang]) {
+                                el.setAttribute('placeholder', UI_TRANSLATIONS[key][lang]);
                             } else {
-                                const key = normalizeKey(el.__originalText);
-                                if (UI_TRANSLATIONS[key] && UI_TRANSLATIONS[key][lang]) {
-                                    textNode.textContent = el.__originalText.replace(el.__originalText.trim(), UI_TRANSLATIONS[key][lang]);
-                                } else {
-                                    for (const [sKey, sVal] of Object.entries(UI_TRANSLATIONS)) {
-                                        if (normalizeKey(sKey) === key) {
-                                            textNode.textContent = el.__originalText.replace(el.__originalText.trim(), sVal[lang]);
-                                            break;
-                                        }
+                                for (const [sKey, sVal] of Object.entries(UI_TRANSLATIONS)) {
+                                    if (normalizeKey(sKey) === key && sVal && sVal[lang]) {
+                                        el.setAttribute('placeholder', sVal[lang]);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!el.hasAttribute('data-i18n-title')) {
+                    const title = el.getAttribute('title');
+                    if (title) {
+                        if (!el.__originalTitle) {
+                            el.__originalTitle = title;
+                        }
+                        if (lang === 'es') {
+                            el.setAttribute('title', el.__originalTitle);
+                        } else {
+                            const key = normalizeKey(el.__originalTitle);
+                            if (UI_TRANSLATIONS[key] && UI_TRANSLATIONS[key][lang]) {
+                                el.setAttribute('title', UI_TRANSLATIONS[key][lang]);
+                            } else {
+                                for (const [sKey, sVal] of Object.entries(UI_TRANSLATIONS)) {
+                                    if (normalizeKey(sKey) === key && sVal && sVal[lang]) {
+                                        el.setAttribute('title', sVal[lang]);
+                                        break;
                                     }
                                 }
                             }
@@ -13314,48 +13423,22 @@
                 }
             });
 
-            // Translate placeholders & titles
-            const inputsWithPlaceholders = document.querySelectorAll('input, textarea, select');
-            inputsWithPlaceholders.forEach(el => {
-                const ph = el.getAttribute('placeholder');
-                if (ph) {
-                    if (!el.__originalPlaceholder) {
-                        el.__originalPlaceholder = ph;
-                    }
-                    if (lang === 'es') {
-                        el.setAttribute('placeholder', el.__originalPlaceholder);
-                    } else {
-                        const key = normalizeKey(el.__originalPlaceholder);
-                        if (UI_TRANSLATIONS[key] && UI_TRANSLATIONS[key][lang]) {
-                            el.setAttribute('placeholder', UI_TRANSLATIONS[key][lang]);
-                        } else {
-                            for (const [sKey, sVal] of Object.entries(UI_TRANSLATIONS)) {
-                                if (normalizeKey(sKey) === key) {
-                                    el.setAttribute('placeholder', sVal[lang]);
-                                    break;
-                                }
-                            }
-                        }
-                    }
+            // 6. Global Scanner for <option> elements in <select>
+            document.querySelectorAll('select option').forEach(opt => {
+                if (!opt.__originalText) {
+                    opt.__originalText = opt.textContent;
                 }
-
-                const title = el.getAttribute('title');
-                if (title) {
-                    if (!el.__originalTitle) {
-                        el.__originalTitle = title;
-                    }
-                    if (lang === 'es') {
-                        el.setAttribute('title', el.__originalTitle);
+                if (lang === 'es') {
+                    opt.textContent = opt.__originalText;
+                } else {
+                    const key = normalizeKey(opt.__originalText);
+                    if (UI_TRANSLATIONS[key] && UI_TRANSLATIONS[key][lang]) {
+                        opt.textContent = UI_TRANSLATIONS[key][lang];
                     } else {
-                        const key = normalizeKey(el.__originalTitle);
-                        if (UI_TRANSLATIONS[key] && UI_TRANSLATIONS[key][lang]) {
-                            el.setAttribute('title', UI_TRANSLATIONS[key][lang]);
-                        } else {
-                            for (const [sKey, sVal] of Object.entries(UI_TRANSLATIONS)) {
-                                if (normalizeKey(sKey) === key) {
-                                    el.setAttribute('title', sVal[lang]);
-                                    break;
-                                }
+                        for (const [sKey, sVal] of Object.entries(UI_TRANSLATIONS)) {
+                            if (normalizeKey(sKey) === key && sVal && sVal[lang]) {
+                                opt.textContent = sVal[lang];
+                                break;
                             }
                         }
                     }
@@ -13364,9 +13447,45 @@
         }
 
         function changeLanguage(lang) {
+            if (!lang) lang = 'es';
+            try {
+                localStorage.setItem('seacharter_lang', lang);
+            } catch (e) {}
+            if (typeof document !== 'undefined' && document.documentElement) {
+                document.documentElement.lang = lang;
+            }
+            const selector = document.getElementById('language-selector');
+            if (selector && selector.value !== lang) {
+                selector.value = lang;
+            }
             translatePage(lang);
-            autoPopulateRouteLimits();
-            runEngine();
+            if (typeof autoPopulateRouteLimits === 'function') autoPopulateRouteLimits();
+            if (typeof runEngine === 'function') runEngine();
+            if (typeof validarProgresoViaje === 'function') validarProgresoViaje();
+        }
+
+        function initLanguage() {
+            let savedLang = 'es';
+            try {
+                savedLang = localStorage.getItem('seacharter_lang') || 'es';
+            } catch (e) {}
+            if (typeof document !== 'undefined' && document.documentElement) {
+                document.documentElement.lang = savedLang;
+            }
+            const selector = document.getElementById('language-selector');
+            if (selector) selector.value = savedLang;
+            translatePage(savedLang);
+        }
+
+        window.changeLanguage = changeLanguage;
+        window.translatePage = translatePage;
+
+        if (typeof document !== 'undefined') {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initLanguage, { once: true });
+            } else {
+                initLanguage();
+            }
         }
 
         // --- BASE DE DATOS LOCAL DE PUERTOS (Será sobreescrita por el WPI.csv) ---
@@ -22048,6 +22167,16 @@
             }
         }
 
+        function getLocalizedModuleLabel(label) {
+            const currentLang = (typeof localStorage !== 'undefined' && localStorage.getItem('seacharter_lang')) || document.getElementById('language-selector')?.value || 'es';
+            if (currentLang === 'es') return label;
+            const key = normalizeKey(label);
+            if (UI_TRANSLATIONS[key] && UI_TRANSLATIONS[key][currentLang]) {
+                return UI_TRANSLATIONS[key][currentLang];
+            }
+            return label;
+        }
+
         function createModuleButton(moduleConfig, variant = 'primary') {
             const button = document.createElement('button');
             button.type = 'button';
@@ -22060,8 +22189,9 @@
             button.className = variant === 'primary'
                 ? 'tab-btn px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold uppercase rounded-lg transition-all text-[#002060] hover:text-[#002060] whitespace-nowrap'
                 : 'tools-dropdown-action';
-            button.textContent = moduleConfig.label;
-            button.setAttribute('aria-label', moduleConfig.label);
+            const localizedLabel = getLocalizedModuleLabel(moduleConfig.label);
+            button.textContent = localizedLabel;
+            button.setAttribute('aria-label', localizedLabel);
             button.addEventListener('click', () => {
                 switchTab(moduleConfig.id);
                 if (variant !== 'primary') closeAdvancedModulesMenu();
@@ -22103,7 +22233,8 @@
             const currentLabel = document.getElementById('mobile-module-nav-current');
             if (!currentLabel) return;
             const currentModule = [...PRIMARY_MODULES, ...OPTIONAL_MODULES].find(moduleConfig => moduleConfig.id === tabId);
-            currentLabel.textContent = currentModule?.label || 'Mapa';
+            const rawLabel = currentModule?.label || 'Mapa';
+            currentLabel.textContent = getLocalizedModuleLabel(rawLabel);
         }
 
         function closeMobileModuleNav() {
@@ -30087,6 +30218,10 @@
         function openFaqModal() {
             const modal = document.getElementById('faq-modal');
             if (modal) {
+                const currentLang = (typeof localStorage !== 'undefined' && localStorage.getItem('seacharter_lang')) || document.getElementById('language-selector')?.value || 'es';
+                if (typeof translatePage === 'function') {
+                    translatePage(currentLang);
+                }
                 modal.classList.remove('hidden');
                 document.body.classList.add('overflow-hidden');
             }
@@ -50785,7 +50920,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     hudContainer.classList.remove('border-slate-200');
                 }
                 if (statusText) {
-                    statusText.textContent = '✨ ¡Listo para Cotizar!';
+                    const currentLang = (typeof localStorage !== 'undefined' && localStorage.getItem('seacharter_lang')) || document.getElementById('language-selector')?.value || 'es';
+                    const msgReady = currentLang === 'en' ? '✨ Ready to Quote!' : currentLang === 'fr' ? '✨ Prêt à coter !' : '✨ ¡Listo para Cotizar!';
+                    statusText.textContent = msgReady;
                     statusText.className = 'text-[11px] font-black text-emerald-600 uppercase tracking-wide';
                 }
                 if (badge) {
@@ -50800,7 +50937,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     hudContainer.classList.add('border-slate-200');
                 }
                 if (statusText) {
-                    statusText.textContent = 'Pendiente de datos';
+                    const currentLang = (typeof localStorage !== 'undefined' && localStorage.getItem('seacharter_lang')) || document.getElementById('language-selector')?.value || 'es';
+                    const msgPending = currentLang === 'en' ? 'Pending Data' : currentLang === 'fr' ? 'En attente de données' : 'Pendiente de datos';
+                    statusText.textContent = msgPending;
                     statusText.className = 'text-[10px] font-bold text-slate-500 uppercase tracking-wide';
                 }
                 if (badge) {
