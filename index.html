@@ -18877,6 +18877,14 @@
                             `;
                         }
 
+                        // Pre-calculate geofenced port display once per vessel
+                        const geoDisplay = (typeof getGeofencedPortDisplay === 'function')
+                            ? getGeofencedPortDisplay(m.ais || m.vessel, { polName: loadingPortName, polLat: loadingPortLat, polLon: loadingPortLon })
+                            : {
+                                lastPortDisplay: m.ais?.lastPortDisplay || m.ais?.lastPortOfCall || 'Desconocido / En Navegación',
+                                destinationDisplay: m.ais?.destinationDisplay || m.ais?.plannedDestination || 'Desconocido / En Navegación'
+                            };
+
                         const correctionAuditHtml = renderCorrectionAuditTable(m.log_correccion);
                         const visual = getVesselTypeVisual(v.specialtyType || v.vesselClass || 'Bulk Carrier');
 
@@ -18895,8 +18903,8 @@
                             flag: flag,
                             eta: route.eta || (m.ais && m.ais.eta) || new Date().toISOString().split('T')[0],
                             // Enriched fields:
-                            ultimo_puerto: m.ultimo_puerto || m.vessel?.ultimo_puerto || m.ais?.ultimo_puerto || m.ais?.lastPortOfCall || "N/A",
-                            destino_actual: m.destino_actual || m.vessel?.destino_actual || m.ais?.destino_actual || m.ais?.plannedDestination || "N/A",
+                            ultimo_puerto: geoDisplay.lastPortDisplay,
+                            destino_actual: geoDisplay.destinationDisplay,
                             eta_puerto_carga: m.eta_puerto_carga || m.vessel?.eta_puerto_carga || m.ais?.eta_puerto_carga || route.eta || "N/A",
                             eta_delta: m.eta_delta || m.vessel?.eta_delta || m.ais?.eta_delta || "N/A",
                             
@@ -19017,11 +19025,11 @@
                                                 <div class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Sección C: Puertos / Ports of Call</div>
                                                 <div class="flex items-center justify-between text-xs">
                                                     <span class="text-slate-500">Último Puerto / Last Port:</span>
-                                                    <span class="font-bold text-slate-700 truncate max-w-[120px]" title="${m.ais.lastPortOfCall || 'N/A'}">${m.ais.lastPortOfCall || 'N/A'}</span>
+                                                    <span class="font-bold text-slate-700 truncate max-w-[160px] sm:max-w-[200px]" title="${geoDisplay.lastPortDisplay}">${geoDisplay.lastPortDisplay}</span>
                                                 </div>
                                                 <div class="flex items-center justify-between text-xs">
                                                     <span class="text-slate-500">Destino / Destination:</span>
-                                                    <span class="font-bold text-slate-700 truncate max-w-[120px]" title="${m.ais.plannedDestination || 'N/A'}">${m.ais.plannedDestination || 'N/A'}</span>
+                                                    <span class="font-bold text-slate-700 truncate max-w-[160px] sm:max-w-[200px]" title="${geoDisplay.destinationDisplay}">${geoDisplay.destinationDisplay}</span>
                                                 </div>
                                                 <div class="text-[10px] text-slate-400 mt-1 border-t border-slate-100/60 pt-1 font-mono">
                                                     <div>Coord Actual: ${m.ais.latitude.toFixed(3)}, ${m.ais.longitude.toFixed(3)}</div>
@@ -19153,6 +19161,12 @@
                         v.mmsi || v.MMSI || ais.mmsi || source.mmsi || source.MMSI || '',
                         (v.vesselName || v.vessel_name || '').toString().trim().toLowerCase()
                     ].join('|');
+                    const vesselGeo = (typeof getGeofencedPortDisplay === 'function')
+                        ? getGeofencedPortDisplay(ais.latitude ? ais : v, coreProAuditInput)
+                        : {
+                            lastPortDisplay: ais.lastPortDisplay || ais.lastPortOfCall || "Desconocido / En Navegación",
+                            destinationDisplay: ais.destinationDisplay || ais.plannedDestination || "Desconocido / En Navegación"
+                        };
                     return {
                         __auditKey: auditKey,
                         imo: Number(v.imo || v.IMO || ais.imo || source.imo || source.IMO || source.imo_number) || 0,
@@ -19171,8 +19185,8 @@
                         dwt: Number(v.dwt ?? ais.dwt ?? source.dwt ?? source.DWT) || 0,
                         flag: v.flag || v.bandera || ais.flag || "Unknown",
                         eta: vesselEta,
-                        ultimo_puerto: ais.lastPortOfCall || ais.ultimo_puerto || m.ultimo_puerto || "N/A",
-                        destino_actual: ais.plannedDestination || ais.destination || m.destino_actual || "N/A",
+                        ultimo_puerto: vesselGeo.lastPortDisplay,
+                        destino_actual: vesselGeo.destinationDisplay,
                         eta_puerto_carga: ais.eta_puerto_carga || route.eta || "N/A",
                         eta_delta: ais.eta_delta || m.eta_delta || "0.0 días (En ventana)",
                         numero_imo: v.imo || v.IMO || source.imo || source.IMO || source.imo_number || null,
