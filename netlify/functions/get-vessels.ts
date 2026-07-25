@@ -354,10 +354,18 @@ function evaluateCommercialCompatibility(vessel: VesselMessage, url: URL): boole
     }
   }
 
-  const requiredMinDwt = minDwt > 0 ? minDwt : (cargoQty > 0 ? cargoQty * 0.85 : 0);
+  const maxDwtTolerance = 1.30; // 30% por encima de la carga solicitada
+  const requiredCargo = cargoQty;
+
+  const requiredMinDwt = minDwt > 0 ? minDwt : (requiredCargo > 0 ? requiredCargo : 0);
   if (requiredMinDwt > 0 && dwt > 0 && dwt < requiredMinDwt) {
     return false;
   }
+
+  if (requiredCargo > 0 && dwt > 0 && dwt > requiredCargo * maxDwtTolerance) {
+    return false;
+  }
+
   if (maxDwt > 0 && dwt > 0 && dwt > maxDwt) {
     return false;
   }
