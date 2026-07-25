@@ -374,7 +374,7 @@ function evaluateCommercialCompatibility(vessel: VesselMessage, url: URL): boole
     }
   }
 
-  const maxDwtTolerance = 1.30; // 30% por encima de la carga solicitada
+  const maxDwtTolerance = 1.15; // 15% por encima de la carga solicitada
   const requiredCargo = cargoQty;
 
   const requiredMinDwt = minDwt > 0 ? minDwt : (requiredCargo > 0 ? requiredCargo : 0);
