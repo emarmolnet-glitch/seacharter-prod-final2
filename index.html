@@ -11284,6 +11284,60 @@
                             <span>Lista Blanca:</span>
                             <span id="fleet-intel-count" class="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-amber-300">0 buques</span>
                         </div>
+
+                        <!-- BARRIDO EXPLORATORIO EXCEPCIONAL -->
+                        <div id="exceptional-exploratory-sweep-panel" class="mt-4 pt-4 border-t border-slate-800/80">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                                <label id="label-exceptional-vessel-category" class="text-[11px] font-extrabold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-compass text-amber-400"></i>
+                                    Barrido Exploratorio Excepcional (Sondear Zona)
+                                </label>
+                                <span class="text-[9px] text-slate-500 font-semibold">Herramienta de visibilidad de mercado puro (Bypass de carga)</span>
+                            </div>
+                            
+                            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                                <div class="flex-1">
+                                    <select id="exceptional-vessel-category-select" aria-label="Categoría de buque para barrido exploratorio" class="w-full bg-slate-950 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-amber-500 font-medium">
+                                        <option value="Coaster">Coaster (&lt; 5.000 DWT)</option>
+                                        <option value="Mini Bulker">Mini Bulker (5.000 - 15.000 DWT)</option>
+                                        <option value="Handysize" selected>Handysize (15.000 - 35.000 DWT)</option>
+                                        <option value="Handymax">Handymax (35.000 - 50.000 DWT)</option>
+                                        <option value="Supramax">Supramax (50.000 - 60.000 DWT)</option>
+                                        <option value="Ultramax">Ultramax (60.000 - 65.000 DWT)</option>
+                                        <option value="Panamax">Panamax (65.000 - 85.000 DWT)</option>
+                                    </select>
+                                </div>
+                                <button type="button" id="btn-explorar-categoria" onclick="window.ejecutarBarridoExploratorioExcepcional()" class="bg-amber-600 hover:bg-amber-500 text-slate-950 font-black px-4 py-2 rounded-lg text-xs transition-all flex items-center justify-center gap-2 shadow-md shrink-0 cursor-pointer">
+                                    <i class="fa-solid fa-radar text-sm"></i>
+                                    <span>Explorar Categoría</span>
+                                </button>
+                            </div>
+
+                            <div id="exceptional-category-pills" class="flex flex-wrap gap-1.5 mt-2.5">
+                                <button type="button" onclick="window.selectExceptionalCategoryPill('Coaster')" class="exceptional-pill px-2.5 py-1 text-[10px] font-bold rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-500/60 hover:text-amber-300 transition">Coaster</button>
+                                <button type="button" onclick="window.selectExceptionalCategoryPill('Mini Bulker')" class="exceptional-pill px-2.5 py-1 text-[10px] font-bold rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-500/60 hover:text-amber-300 transition">Mini Bulker</button>
+                                <button type="button" onclick="window.selectExceptionalCategoryPill('Handysize')" class="exceptional-pill px-2.5 py-1 text-[10px] font-bold rounded-full border border-amber-500/80 bg-amber-500/10 text-amber-300 transition font-black">Handysize</button>
+                                <button type="button" onclick="window.selectExceptionalCategoryPill('Handymax')" class="exceptional-pill px-2.5 py-1 text-[10px] font-bold rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-500/60 hover:text-amber-300 transition">Handymax</button>
+                                <button type="button" onclick="window.selectExceptionalCategoryPill('Supramax')" class="exceptional-pill px-2.5 py-1 text-[10px] font-bold rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-500/60 hover:text-amber-300 transition">Supramax</button>
+                                <button type="button" onclick="window.selectExceptionalCategoryPill('Ultramax')" class="exceptional-pill px-2.5 py-1 text-[10px] font-bold rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-500/60 hover:text-amber-300 transition">Ultramax</button>
+                                <button type="button" onclick="window.selectExceptionalCategoryPill('Panamax')" class="exceptional-pill px-2.5 py-1 text-[10px] font-bold rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-500/60 hover:text-amber-300 transition">Panamax</button>
+                            </div>
+
+                            <div id="exceptional-sweep-result" class="mt-3 hidden p-3 bg-blue-50 border border-blue-200 border-l-4 border-l-blue-500 rounded-lg text-xs text-slate-800 shadow-sm flex items-center justify-between transition-all" aria-live="polite">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="p-2 rounded-md bg-blue-100 text-blue-600">
+                                        <i class="fa-solid fa-binoculars text-base"></i>
+                                    </div>
+                                    <div>
+                                        <span id="exceptional-sweep-message" class="font-medium text-slate-800 block"></span>
+                                        <span id="exceptional-sweep-subtext" class="text-[10px] text-blue-700 block mt-0.5">Visibilidad de mercado puro (aislado de Coincidencia / Data Bridge)</span>
+                                    </div>
+                                </div>
+                                <button type="button" onclick="document.getElementById('exceptional-sweep-result').classList.add('hidden')" class="text-slate-400 hover:text-slate-700 p-1 text-xs" title="Cerrar resultado">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                     <!-- Map Card -->
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="false">
@@ -39569,6 +39623,235 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
                 return R * c * 0.539957;
             }
+
+            // --- BARRIDO EXPLORATORIO EXCEPCIONAL (SONDEO RÁPIDO Y MANUAL) ---
+            function matchExceptionalCategory(vessel, targetCategory) {
+                if (!vessel || !targetCategory) return false;
+                const cat = String(targetCategory).toLowerCase().trim();
+                
+                // Read DWT from any standard field
+                const dwt = Number(vessel.dwt || vessel.DWT || vessel.dwt_ajustado || vessel.capacity) || 0;
+                
+                // Read Class / Type strings
+                const vClass = String(
+                    vessel.vesselClass || vessel.vessel_class || vessel.ship_type || vessel.shipType || 
+                    vessel.type || vessel.radarCategory || vessel.declaredType || vessel.shipTypeLabel || ''
+                ).toLowerCase();
+
+                // 1. Direct Keyword Check in vessel class/type string
+                if (cat === 'coaster' && (vClass.includes('coaster') || vClass.includes('cabotage'))) return true;
+                if ((cat === 'mini bulker' || cat === 'mini-bulker') && (vClass.includes('mini') || vClass.includes('minibulker'))) return true;
+                if (cat === 'handysize' && vClass.includes('handysize')) return true;
+                if (cat === 'handymax' && vClass.includes('handymax')) return true;
+                if (cat === 'supramax' && vClass.includes('supramax')) return true;
+                if (cat === 'ultramax' && vClass.includes('ultramax')) return true;
+                if (cat === 'panamax' && (vClass.includes('panamax') || vClass.includes('kamsarmax'))) return true;
+
+                // 2. DWT Range Fallback (when DWT is explicitly known)
+                if (dwt > 0) {
+                    if (cat === 'coaster') return dwt < 5000;
+                    if (cat === 'mini bulker' || cat === 'mini-bulker') return dwt >= 5000 && dwt < 15000;
+                    if (cat === 'handysize') return dwt >= 15000 && dwt < 35000;
+                    if (cat === 'handymax') return dwt >= 35000 && dwt < 50000;
+                    if (cat === 'supramax') return dwt >= 50000 && dwt < 60000;
+                    if (cat === 'ultramax') return dwt >= 60000 && dwt < 65000;
+                    if (cat === 'panamax') return dwt >= 65000 && dwt < 85000;
+                }
+
+                // 3. Eslora / LOA Fallback if DWT and keywords are missing
+                const loa = Number(vessel.eslora || vessel.length || vessel.loa) || 0;
+                if (loa > 0) {
+                    if (cat === 'coaster') return loa < 100;
+                    if (cat === 'mini bulker' || cat === 'mini-bulker') return loa >= 100 && loa < 140;
+                    if (cat === 'handysize') return loa >= 140 && loa < 180;
+                    if (cat === 'handymax' || cat === 'supramax') return loa >= 180 && loa < 200;
+                    if (cat === 'ultramax' || cat === 'panamax') return loa >= 200 && loa < 240;
+                }
+
+                return false;
+            }
+            window.matchExceptionalCategory = matchExceptionalCategory;
+
+            window.selectExceptionalCategoryPill = function(categoryName) {
+                const selectEl = document.getElementById('exceptional-vessel-category-select');
+                if (selectEl) {
+                    selectEl.value = categoryName;
+                }
+                const pills = document.querySelectorAll('#exceptional-category-pills .exceptional-pill');
+                pills.forEach(pill => {
+                    if (pill.textContent.trim().toLowerCase() === categoryName.toLowerCase()) {
+                        pill.className = "exceptional-pill px-2.5 py-1 text-[10px] font-bold rounded-full border border-amber-500/80 bg-amber-500/10 text-amber-300 transition font-black";
+                    } else {
+                        pill.className = "exceptional-pill px-2.5 py-1 text-[10px] font-bold rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-500/60 hover:text-amber-300 transition";
+                    }
+                });
+            };
+
+            window.exploratoryVesselsCache = window.exploratoryVesselsCache || [];
+
+            window.ejecutarBarridoExploratorioExcepcional = function() {
+                const categorySelect = document.getElementById('exceptional-vessel-category-select');
+                const selectedCategory = categorySelect ? categorySelect.value : 'Handysize';
+
+                const btn = document.getElementById('btn-explorar-categoria');
+                const resultBox = document.getElementById('exceptional-sweep-result');
+                const resultMsg = document.getElementById('exceptional-sweep-message');
+
+                const originalBtnHtml = '<i class="fa-solid fa-radar text-sm"></i><span>Explorar Categoría</span>';
+
+                const resetBtn = () => {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = originalBtnHtml;
+                    }
+                };
+
+                // 1. Feedback Visual (Simulación de Sondeo)
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-sm"></i><span>Sondeando radar...</span>';
+                }
+
+                const doSweepCalculation = async () => {
+                    try {
+                        // 1. Anclaje Geográfico Obligatorio (El POL)
+                        const pol = typeof getAisOperationalPort === 'function' ? getAisOperationalPort('POL') : null;
+                        const polLat = Number(pol?.lat);
+                        const polLon = Number(pol?.lon);
+                        const hasValidPol = pol && Number.isFinite(polLat) && Number.isFinite(polLon);
+
+                        if (!hasValidPol) {
+                            if (resultBox && resultMsg) {
+                                resultBox.className = "mt-3 p-3 bg-yellow-50 border border-yellow-200 border-l-4 border-l-yellow-500 rounded-lg text-xs text-yellow-800 shadow-sm flex items-center justify-between transition-all";
+                                resultMsg.innerHTML = '⚠️ Define primero un Puerto de Carga (POL) en el Mapa para establecer el centro del barrido exploratorio.';
+                                resultBox.classList.remove('hidden');
+                            }
+                            if (typeof showToast === 'function') {
+                                showToast('⚠️ Define primero un Puerto de Carga (POL) en el Mapa para establecer el centro del barrido exploratorio.', false, 'warning');
+                            }
+                            return { category: selectedCategory, count: 0, vessels: [], error: 'POL no definido' };
+                        }
+
+                        // 2. Radio de Búsqueda por Defecto (Fallback útil de 1000 NM si no existe uno configurado)
+                        const radiusNm = (window.AIS_PROSPECTION_RADII_NM && Number.isFinite(Number(window.AIS_PROSPECTION_RADII_NM.POL)) && Number(window.AIS_PROSPECTION_RADII_NM.POL) > 0)
+                            ? Number(window.AIS_PROSPECTION_RADII_NM.POL)
+                            : 1000;
+
+                        // 3. Lógica de Lectura Segura y Lazy Loading Aislado
+                        window.exploratoryVesselsCache = Array.isArray(window.exploratoryVesselsCache) ? window.exploratoryVesselsCache : [];
+                        let radarData = [];
+
+                        // Paso A: Leer primero del almacén principal (solo lectura)
+                        if (window.GlobalStore && typeof window.GlobalStore.getRawVessels === 'function' && Array.isArray(window.GlobalStore.getRawVessels()) && window.GlobalStore.getRawVessels().length > 0) {
+                            radarData = window.GlobalStore.getRawVessels();
+                        } else if (window.GlobalStore && Array.isArray(window.GlobalStore.rawVessels) && window.GlobalStore.rawVessels.length > 0) {
+                            radarData = window.GlobalStore.rawVessels;
+                        } else if (Array.isArray(window.listaBarcos) && window.listaBarcos.length > 0) {
+                            radarData = window.listaBarcos;
+                        } else if (window.buquesAlmacenados instanceof Map && window.buquesAlmacenados.size > 0) {
+                            radarData = Array.from(window.buquesAlmacenados.values());
+                        }
+
+                        // Paso B: Si el almacén principal está vacío, mirar en la caché aislada
+                        if ((!radarData || radarData.length === 0) && window.exploratoryVesselsCache.length > 0) {
+                            radarData = window.exploratoryVesselsCache;
+                        }
+
+                        // Paso C: Si ambas están vacías, realiza el fetch al endpoint maestro de la flota
+                        if (!radarData || radarData.length === 0) {
+                            try {
+                                const endpoint = (typeof window.getAuditAisEndpoint === 'function' ? window.getAuditAisEndpoint('All Cargo') : '')
+                                    || `/api/audit-vessels?polLat=${encodeURIComponent(polLat)}&polLon=${encodeURIComponent(polLon)}&radiusNm=${encodeURIComponent(radiusNm)}&limit=1000`;
+                                const res = await fetch(endpoint, { cache: 'no-store', headers: { Accept: 'application/json' } });
+                                const payload = await res.json();
+                                if (res.ok && Array.isArray(payload.vessels)) {
+                                    // Paso D (CRÍTICO): Guardar EXCLUSIVAMENTE en window.exploratoryVesselsCache (sin tocar GlobalStore ni Coincidencia)
+                                    window.exploratoryVesselsCache = payload.vessels;
+                                    radarData = window.exploratoryVesselsCache;
+                                }
+                            } catch (fetchErr) {
+                                console.warn('[Barrido Excepcional] Error en fetch aislado:', fetchErr);
+                            }
+                        }
+
+                        // Inicialización de Datos Crudos (Fall-back de seguridad)
+                        if (!Array.isArray(radarData) || radarData.length === 0) {
+                            console.warn('[Barrido Excepcional] Base de datos de la flota en memoria vacía o no inicializada.');
+                            if (resultBox && resultMsg) {
+                                resultBox.className = "mt-3 p-3 bg-yellow-50 border border-yellow-200 border-l-4 border-l-yellow-500 rounded-lg text-xs text-yellow-800 shadow-sm flex items-center justify-between transition-all";
+                                resultMsg.innerHTML = '⚠️ La base de datos de la flota aún no está inicializada en memoria. Ejecuta un cálculo inicial para cargar el radar.';
+                                resultBox.classList.remove('hidden');
+                            }
+                            if (typeof showToast === 'function') {
+                                showToast('⚠️ La base de datos de la flota aún no está inicializada en memoria. Ejecuta un cálculo inicial para cargar el radar.', false, 'warning');
+                            }
+                            return { category: selectedCategory, count: 0, vessels: [], error: 'Base de datos no inicializada' };
+                        }
+
+                        // Console log de depuración antes del cálculo de distancia
+                        console.log('Buques crudos evaluados:', radarData.length, 'Radio usado:', radiusNm);
+
+                        // 4. Lógica de Filtrado Estricto: Distancia al POL y Categoría DWT
+                        const matchingVessels = radarData.filter(vessel => {
+                            if (!vessel) return false;
+
+                            const isCategoryMatch = matchExceptionalCategory(vessel, selectedCategory);
+                            if (!isCategoryMatch) return false;
+
+                            const vLat = Number(vessel.latitude ?? vessel.lat ?? vessel.MetaData?.latitude);
+                            const vLon = Number(vessel.longitude ?? vessel.lon ?? vessel.MetaData?.longitude);
+                            if (!Number.isFinite(vLat) || !Number.isFinite(vLon)) return false;
+
+                            const dist = calculateAisDistanceNm(polLat, polLon, vLat, vLon);
+                            return dist <= radiusNm;
+                        });
+
+                        const count = matchingVessels.length;
+
+                        // Aislamiento de Estado (Crítico): No guardar en GlobalStore, filteredVessels ni Data Bridge.
+                        if (resultBox && resultMsg) {
+                            resultBox.className = "mt-3 p-3 bg-blue-50 border border-blue-200 border-l-4 border-l-blue-500 rounded-lg text-xs text-slate-800 shadow-sm flex items-center justify-between transition-all";
+                            const shipLabel = count === 1 ? 'buque' : 'buques';
+                            const safeCategory = typeof escapeLocalAuditHtml === 'function' ? escapeLocalAuditHtml(selectedCategory) : selectedCategory;
+                            resultMsg.innerHTML = `Se han detectado <strong class="text-blue-700 font-mono text-sm">${count}</strong> ${shipLabel} <strong class="text-slate-900">${safeCategory}</strong> en el radio seleccionado (${radiusNm} NM).`;
+                            resultBox.classList.remove('hidden');
+                        }
+
+                        if (typeof showToast === 'function') {
+                            showToast(`Sondeo Excepcional: ${count} buques ${selectedCategory} detectados en la zona (${radiusNm} NM).`, false, 'info');
+                        }
+
+                        return { category: selectedCategory, count, vessels: matchingVessels };
+
+                    } catch (error) {
+                        console.error('[Barrido Excepcional] Error:', error);
+                        if (resultBox && resultMsg) {
+                            resultBox.className = "mt-3 p-3 bg-red-50 border border-red-200 border-l-4 border-l-red-500 rounded-lg text-xs text-red-800 shadow-sm flex items-center justify-between transition-all";
+                            const safeErr = typeof escapeLocalAuditHtml === 'function' ? escapeLocalAuditHtml(error.message || 'Error desconocido') : (error.message || 'Error desconocido');
+                            resultMsg.innerHTML = `<span class="text-red-600 font-medium">Error al ejecutar el barrido exploratorio: ${safeErr}</span>`;
+                            resultBox.classList.remove('hidden');
+                        }
+                        return { category: selectedCategory, count: 0, vessels: [], error: error.message };
+                    } finally {
+                        resetBtn();
+                    }
+                };
+
+                // Envolver la lógica en un timeout para brindar feedback visual de escaneo
+                setTimeout(doSweepCalculation, 900);
+            };
+
+            // Bind click event listener directly to ensure reliable execution
+            document.addEventListener('DOMContentLoaded', () => {
+                const btnExplorar = document.getElementById('btn-explorar-categoria');
+                if (btnExplorar && !btnExplorar.dataset.boundExplorar) {
+                    btnExplorar.dataset.boundExplorar = 'true';
+                    btnExplorar.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        window.ejecutarBarridoExploratorioExcepcional();
+                    });
+                }
+            });
 
             function assignAisProspectionZone(vessel, polPort = getAisOperationalPort('POL')) {
                 const coords = (window.MapLoader && typeof window.MapLoader.normalizeCoordinates === 'function')
