@@ -687,7 +687,7 @@
                 }
             }
 
-            const maxDwtTolerance = 1.30;
+            const maxDwtTolerance = 1.15;
             const requiredCargo = cargoQty;
             const requiredMin = minDwt > 0 ? minDwt : requiredCargo;
             const effectiveDwt = dwt || (typeof window.classifyVessel === 'function' ? parseFloat(vessel.dwt || 0) : 0);

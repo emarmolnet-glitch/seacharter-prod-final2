@@ -410,12 +410,12 @@ export default async (req: Request) => {
           const ballastFuelCost = distance * (fuelPrice / 100);
           const suggestedFreightRate = freightRate > 0 ? freightRate : Math.max(0, (ballastFuelCost + portExpenses + dailyOpex) / Math.max(quantity, 1));
           
-          const isOversizedUnderStandard = quantity > 0 && vessel.dwt !== null && vessel.dwt > quantity * 1.30;
-          const isOversizedFallback = isFallbackPass && isOversizedUnderStandard && technicalEligibility.eligible && taxonomyCompatibility.compatible;
-          const activeDwtStatus = isOversizedFallback ? "OVERSIZED_FALLBACK" : vessel.dwtStatus;
+          const isOversizedUnderStandard = quantity > 0 && vessel.dwt !== null && vessel.dwt > quantity * 1.15;
+          const isOversizedFallback = false;
+          const activeDwtStatus = vessel.dwtStatus;
 
-          const operationallyEligible = (technicalEligibility.eligible && taxonomyCompatibility.compatible) || isOversizedFallback;
-          const idealVessel = operationallyEligible && loadState.ballastReady && !isOversizedFallback;
+          const operationallyEligible = technicalEligibility.eligible && taxonomyCompatibility.compatible;
+          const idealVessel = operationallyEligible && loadState.ballastReady;
 
           return {
             dwtStatus: activeDwtStatus,
@@ -486,7 +486,7 @@ export default async (req: Request) => {
               suggestedFreightRate,
             },
             compatibility: {
-              capacityOk: capacityOk || isOversizedFallback,
+              capacityOk,
               isOversizedFallback,
               volumeOk: technicalEligibility.volume.compatible,
               draftOk,
@@ -509,7 +509,7 @@ export default async (req: Request) => {
               laycanEnd: laycanEnd.toISOString(),
               etaDriftHours,
               reasons: {
-                loadState: isOversizedFallback ? "ADVERTENCIA: BUQUE SOBREDIMENSIONADO (MOSTRADO POR ESCASEZ DE MERCADO)" : loadState.reason,
+                loadState: loadState.reason,
                 laycan: laycan.reason,
                 etaConsistency: etaDriftHours === null
                   ? "Sin ETA AIS declarado para comparar"
@@ -517,28 +517,24 @@ export default async (req: Request) => {
                     ? "ETA AIS declarado consistente con distancia y velocidad"
                     : `ETA AIS declarado difiere ${etaDriftHours.toFixed(1)} horas del cálculo a POL`,
                 taxonomy: taxonomyCompatibility.reason,
-                technicalEligibility: isOversizedFallback
-                  ? "Aceptado bajo Respaldo Elástico por Escasez de Mercado (Tolerancia DWT expandida a 500%)"
-                  : (technicalEligibility.eligible
-                    ? "Elegibilidad técnica estricta superada"
-                    : technicalEligibility.criticalReasons.join("; ")),
+                technicalEligibility: technicalEligibility.eligible
+                  ? "Elegibilidad técnica estricta superada"
+                  : technicalEligibility.criticalReasons.join("; "),
               },
             },
             scores: { technical: boostedTechnical, economic, risk, overall, cargoBoost: cargoIntelligence.boost },
             cargoIntelligence,
             technicalEligibility,
-            aiStatus: isOversizedFallback ? "OVERSIZED_FALLBACK" : (!operationallyEligible ? "INCOMPATIBLE" : idealVessel && overall > 55 && cementSignal.level !== "possible" ? "IDEAL" : overall > 50 ? "MATCH" : "REVIEW"),
+            aiStatus: !operationallyEligible ? "INCOMPATIBLE" : idealVessel && overall > 55 && cementSignal.level !== "possible" ? "IDEAL" : overall > 50 ? "MATCH" : "REVIEW",
             audit: {
               cargoCode,
               cargoDescription,
               selectedVesselTaxonomies: vesselClassValues,
               operationallyEligible,
-              reasons: isOversizedFallback
-                ? ["Aceptado bajo Respaldo Elástico por Escasez de Mercado (Tolerancia DWT expandida a 500%)"]
-                : [
-                  ...technicalEligibility.criticalReasons,
-                  ...(taxonomyCompatibility.compatible ? [] : [taxonomyCompatibility.reason]),
-                ],
+              reasons: [
+                ...technicalEligibility.criticalReasons,
+                ...(taxonomyCompatibility.compatible ? [] : [taxonomyCompatibility.reason]),
+              ],
             },
             idealVessel,
             cementCarrierClassification: cementSignal,
@@ -554,14 +550,8 @@ export default async (req: Request) => {
           || a.ais.currentDistanceToLoadPort - b.ais.currentDistanceToLoadPort);
     };
 
-    let evaluatedMatches = evaluateVessels(1.30, false);
-    let matches = evaluatedMatches.filter((match) => match.audit.operationallyEligible);
-
-    // Pass 2: Elastic Fallback for Market Scarcity (up to 500% capacity tolerance when Pass 1 returns 0 vessels)
-    if (matches.length === 0) {
-      evaluatedMatches = evaluateVessels(5.00, true);
-      matches = evaluatedMatches.filter((match) => match.audit.operationallyEligible);
-    }
+    const evaluatedMatches = evaluateVessels(1.15, false);
+    const matches = evaluatedMatches.filter((match) => match.audit.operationallyEligible);
     const technicalWarnings = evaluatedMatches.filter((match) => !match.audit.operationallyEligible);
 
     return Response.json({

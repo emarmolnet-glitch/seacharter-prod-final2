@@ -18676,7 +18676,7 @@
                         const comp = m.compatibility;
                         const scores = m.scores;
 
-                        const maxDwtTolerance = 1.30;
+                        const maxDwtTolerance = 1.15;
                         const requiredCargo = quantity;
                         const isOversized = requiredCargo > 0 && v.dwt > requiredCargo * maxDwtTolerance;
                         const isUndersized = requiredCargo > 0 && v.dwt < requiredCargo;
@@ -18706,7 +18706,7 @@
                         } else if (isComp) {
                             compBadge = '<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> Compatible (100%)</span>';
                         } else if (isOversized) {
-                            compBadge = '<span class="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1" title="El DWT del buque excede la tolerancia del 30% sobre la carga requerida"><i class="fa-solid fa-up-right-and-down-left-from-center"></i> OVERSIZED (Sobredimensionado)</span>';
+                            compBadge = '<span class="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1" title="El DWT del buque excede la tolerancia del 15% sobre la carga requerida"><i class="fa-solid fa-up-right-and-down-left-from-center"></i> OVERSIZED (Sobredimensionado)</span>';
                         } else {
                             compBadge = '<span class="bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> Advertencia técnica</span>';
                         }
@@ -27750,7 +27750,7 @@
             
             if (document.getElementById('gc-add-dwt-req') && cargo > 0) {
                 const minDwtReq = Math.round(cargo * 1.05);
-                const maxDwtReq = Math.round(cargo * 1.30);
+                const maxDwtReq = Math.round(cargo * 1.15);
                 document.getElementById('gc-add-dwt-req').value = `${minDwtReq.toLocaleString('en-US')} / ${maxDwtReq.toLocaleString('en-US')} mt`;
             }
 
@@ -27763,8 +27763,8 @@
                 if (vesselDwtVal > 0 && cargo > 0 && vesselDwtVal < cargo) {
                     warningEl.innerText = "NOTICE: THIS VESSEL IS NOT COMPATIBLE DUE TO EXCESS WEIGHT.";
                     warningEl.classList.remove('hidden');
-                } else if (vesselDwtVal > 0 && cargo > 0 && vesselDwtVal > cargo * 1.30) {
-                    warningEl.innerText = "AVISO: EL BUQUE ESTÁ SOBREDIMENSIONADO (OVERSIZED) PARA ESTA CARGA (MÁX 30% DE TOLERANCIA).";
+                } else if (vesselDwtVal > 0 && cargo > 0 && vesselDwtVal > cargo * 1.15) {
+                    warningEl.innerText = "AVISO: EL BUQUE ESTÁ SOBREDIMENSIONADO (OVERSIZED) PARA ESTA CARGA (MÁX 15% DE TOLERANCIA).";
                     warningEl.classList.remove('hidden');
                 } else if (currentCargoType === 'Granel Líquido (Liquid Bulk)' && (vesselPurpose.includes('bulker') || vesselPurpose.includes('bulk carrier') || vesselPurpose.includes('general cargo'))) {
                     warningEl.innerText = "NOTICE: THIS VESSEL TYPE IS NOT COMPATIBLE WITH LIQUID BULK CARGO (REQUIRES TANKER).";

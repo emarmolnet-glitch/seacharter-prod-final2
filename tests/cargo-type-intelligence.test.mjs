@@ -53,7 +53,7 @@ test('strict eligibility accepts a correctly sized bulk carrier for grain', () =
     cargoTypeId: '60',
     shipType: 'Bulk Carrier',
     vessel: { vesselType: 'Bulk Carrier' },
-    dwt: 24_000,
+    dwt: 22_000,
     quantity: 20_000,
   });
 
@@ -66,7 +66,7 @@ test('strict eligibility rejects incompatible designs and unrealistic DWT', () =
     cargoTypeId: '60',
     shipType: 'Oil Tanker',
     vessel: { vesselType: 'Oil Tanker' },
-    dwt: 24_000,
+    dwt: 22_000,
     quantity: 20_000,
   });
   const undersized = evaluateCargoVesselEligibility({
@@ -97,7 +97,7 @@ test('strict eligibility enforces required cranes and grab capacity', () => {
     cargoTypeId: '60',
     shipType: 'Bulk Carrier',
     vessel: { vesselType: 'Bulk Carrier', hasCranes: false },
-    dwt: 24_000,
+    dwt: 22_000,
     quantity: 20_000,
     gearedRequired: true,
     grabRequired: true,
@@ -114,7 +114,7 @@ test('strict eligibility enforces required cranes and grab capacity', () => {
       grabCapacityCbm: 12,
       craneSwlMt: 30,
     },
-    dwt: 24_000,
+    dwt: 22_000,
     quantity: 20_000,
     gearedRequired: true,
     grabRequired: true,
@@ -141,7 +141,7 @@ test('volumetric eligibility rejects vessels below required grain capacity', () 
     cargoTypeId: '60',
     vessel: { vessel_type: 'Bulk Carrier', grainCapacityCbm: 15000 },
     shipType: 'Bulk Carrier',
-    dwt: 24000,
+    dwt: 22000,
     quantity: 20000,
     requiredVolumeCbm: 24000,
   });
@@ -149,7 +149,7 @@ test('volumetric eligibility rejects vessels below required grain capacity', () 
     cargoTypeId: '60',
     vessel: { vessel_type: 'Bulk Carrier', grain_capacity: 30000 },
     shipType: 'Bulk Carrier',
-    dwt: 24000,
+    dwt: 22000,
     quantity: 20000,
     requiredVolumeCbm: 24000,
   });
@@ -176,8 +176,8 @@ test('ship crane methods reject vessels classified as gearless', () => {
   assert.match(result.criticalReasons.join(' '), /sin grúas/);
 });
 
-test('capacity compatibility enforces 30% max DWT tolerance and rejects oversized vessels', () => {
-  // Handysize (32k DWT) for 10k MT cargo -> 32,000 > 10,000 * 1.30 (13,000) -> OVERSIZED
+test('capacity compatibility enforces 15% max DWT tolerance and rejects oversized vessels', () => {
+  // Handysize (32k DWT) for 10k MT cargo -> 32,000 > 10,000 * 1.15 (11,500) -> OVERSIZED
   const oversizedHandysize = evaluateCargoVesselEligibility({
     cargoTypeId: '60',
     shipType: 'Bulk Carrier',
@@ -189,12 +189,12 @@ test('capacity compatibility enforces 30% max DWT tolerance and rejects oversize
   assert.equal(oversizedHandysize.eligible, false);
   assert.match(oversizedHandysize.criticalReasons.join(' '), /sobredimensionado/i);
 
-  // Mini Bulker / Coaster (12k DWT) for 10k MT cargo -> 12,000 in [10,000, 13,000] -> VALID
+  // Mini Bulker / Coaster (11k DWT) for 10k MT cargo -> 11,000 <= 10,000 * 1.15 (11,500) -> VALID
   const validCoaster = evaluateCargoVesselEligibility({
     cargoTypeId: '60',
     shipType: 'Bulk Carrier',
     vessel: { vesselType: 'Bulk Carrier' },
-    dwt: 12_000,
+    dwt: 11_000,
     quantity: 10_000,
   });
 
