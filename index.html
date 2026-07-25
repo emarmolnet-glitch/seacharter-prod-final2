@@ -13640,6 +13640,98 @@
             const source = document.getElementById('historical-risk-source');
             if (source) source.innerText = 'Selecciona POL/POD y pulsa Cargar desde Histórico para aplicar promedios internos.';
             setCalculatorWaitingState();
+
+            if (typeof window.forceResetAisDensityResults === 'function') {
+                window.forceResetAisDensityResults();
+            } else if (typeof window.resetAisDensityResults === 'function') {
+                window.resetAisDensityResults({ force: true, source: 'new-estimation' });
+            }
+
+            if (window.GlobalStore) {
+                window.GlobalStore.matchingVessels = [];
+                window.GlobalStore.compatibleVessels = [];
+                window.GlobalStore.nearbyVessels = [];
+                window.GlobalStore.nearbyCount = 0;
+                window.GlobalStore.filteredVessels = [];
+                window.GlobalStore.filteredVesselsInitialized = false;
+                window.GlobalStore.selectedTaxonomies = [];
+                window.GlobalStore.selectedTaxonomy = '';
+                window.GlobalStore.matchingReady = false;
+                window.GlobalStore.matchingSelectionPending = false;
+                window.GlobalStore.matchingSelection = null;
+                window.GlobalStore.matchingCacheSessionId = '';
+                window.GlobalStore.vessels = [];
+                window.GlobalStore.rawVessels = [];
+                window.GlobalStore.renderedAisVessels = [];
+                window.GlobalStore.auditVessels = [];
+                if (typeof window.GlobalStore.setAisMatchingState === 'function') {
+                    window.GlobalStore.setAisMatchingState([], [], null, { source: 'reset-estimation' });
+                }
+            }
+
+            window['matchingResultsState'] = null;
+            window.lastMatchingEngineResults = [];
+            window.lastClassifiedVessels = [];
+            window.lastRenderedAisAuditVessels = [];
+            window.aisMatchingCache = [];
+            window.matchingLocalState = { status: 'idle', validated: [] };
+            if (window.buquesAlmacenados instanceof Map) {
+                window.buquesAlmacenados.clear();
+            }
+            window.buquesEncontrados = {};
+            window.listaBarcos = [];
+
+            if (typeof window.renderFilteredAisCounters === 'function') {
+                window.renderFilteredAisCounters([]);
+            }
+            if (typeof window.renderAisNearbyCount === 'function') {
+                window.renderAisNearbyCount(0);
+            }
+            if (typeof window.updateSequentialTelemetryBlock === 'function') {
+                window.updateSequentialTelemetryBlock('matching-fleet-status-block', 'pending', 'Inactivo · requiere Barrido de Radar');
+                window.updateSequentialTelemetryBlock('matching-execution-success-stick', 'pending', 'Sin ejecuciones activas');
+            }
+
+            const resultsList = document.getElementById('matching-results-list');
+            if (resultsList) {
+                resultsList.innerHTML = '';
+                resultsList.dataset.matchingResultCount = '0';
+                resultsList.dataset.matchingHydrated = 'false';
+                resultsList.dataset.matchingExecutionState = 'idle';
+                resultsList.dataset.technicalWarningCount = '0';
+                resultsList.classList.add('hidden');
+            }
+
+            const emptyState = document.getElementById('matching-empty-state');
+            if (emptyState) emptyState.classList.remove('hidden');
+
+            const loadingState = document.getElementById('matching-loading-state');
+            if (loadingState) loadingState.classList.add('hidden');
+
+            const resultsBadge = document.getElementById('match-results-badge');
+            if (resultsBadge) {
+                resultsBadge.innerText = '0 Buques';
+                resultsBadge.classList.add('hidden');
+            }
+
+            const btnRunMatching = document.getElementById('btn-run-matching');
+            if (btnRunMatching) {
+                btnRunMatching.disabled = true;
+                btnRunMatching.setAttribute('aria-disabled', 'true');
+                btnRunMatching.dataset.matchingReady = 'false';
+                btnRunMatching.dataset.readyVesselCount = '0';
+                btnRunMatching.dataset.matchingResultCount = '0';
+                btnRunMatching.dataset.hasCachedResults = 'false';
+            }
+            if (typeof window.syncMatchingButtonWithCachedResults === 'function') {
+                window.syncMatchingButtonWithCachedResults(0);
+            }
+
+            const technicalToggleStatus = document.getElementById('technical-toggle-status');
+            if (technicalToggleStatus) {
+                technicalToggleStatus.textContent = '0 advertencias técnicas';
+            }
+
             SeaCharterStore.set(readRouteStateFromCalculator());
             syncGlobalStateToForms();
             if (typeof calculateAdjustedEtaAndDays === 'function') calculateAdjustedEtaAndDays();
