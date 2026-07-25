@@ -265,6 +265,163 @@
         }
     }
 
+    /**
+     * Módulo de Geofencing (Haversine)
+     * Calcula la distancia en millas náuticas (NM) entre la posición actual del buque y el POL.
+     */
+    function calculateDistanceToPort(vesselLat, vesselLon, portLat, portLon) {
+        if (vesselLat === null || vesselLat === undefined || vesselLon === null || vesselLon === undefined ||
+            portLat === null || portLat === undefined || portLon === null || portLon === undefined) {
+            return null;
+        }
+        const vLat = Number(vesselLat);
+        const vLon = Number(vesselLon);
+        const pLat = Number(portLat);
+        const pLon = Number(portLon);
+        if (!Number.isFinite(vLat) || !Number.isFinite(vLon) || !Number.isFinite(pLat) || !Number.isFinite(pLon)) {
+            return null;
+        }
+        const R = 3440.065; // Radio de la Tierra en millas náuticas (NM)
+        const dLat = (pLat - vLat) * Math.PI / 180;
+        const dLon = (pLon - vLon) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(vLat * Math.PI / 180) * Math.cos(pLat * Math.PI / 180) *
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return Math.round(R * c);
+    }
+
+    function isValidPortText(val) {
+        if (val === null || val === undefined) return false;
+        const s = String(val).trim().toUpperCase();
+        return s !== '' && s !== 'N/A' && s !== 'UNKNOWN' && s !== 'DESCONOCIDO' && s !== '0' && s !== 'NONE' && s !== 'NULL' && s !== 'UNDEFINED' && s !== 'PENDING';
+    }
+
+    function getActivePolInfo() {
+        if (typeof window === 'undefined') return { polName: '', polLat: null, polLon: null };
+        let polName = '';
+        let polLat = null;
+        let polLon = null;
+
+        if (typeof window.getMatchingExecutionRouteOverride === 'function') {
+            try {
+                const route = window.getMatchingExecutionRouteOverride();
+                if (route) {
+                    if (route.pol) polName = String(route.pol).trim();
+                    if (route.lat && route.lat.pol !== null && route.lat.pol !== undefined) polLat = Number(route.lat.pol);
+                    if (route.lon && route.lon.pol !== null && route.lon.pol !== undefined) polLon = Number(route.lon.pol);
+                }
+            } catch (_) {}
+        }
+
+        if (!polName && typeof document !== 'undefined') {
+            polName = String(
+                document.getElementById('port-pol')?.value ||
+                document.getElementById('map-port-pol')?.value ||
+                document.getElementById('match-load-port')?.value ||
+                (window.State && window.State.pol) ||
+                ''
+            ).trim();
+        }
+
+        if ((polLat === null || polLon === null || !Number.isFinite(polLat) || !Number.isFinite(polLon)) && typeof document !== 'undefined') {
+            const rawLat = document.getElementById('match-load-lat')?.value || (typeof localStorage !== 'undefined' && localStorage.getItem('calculator_pol_lat'));
+            const rawLon = document.getElementById('match-load-lon')?.value || (typeof localStorage !== 'undefined' && localStorage.getItem('calculator_pol_lon'));
+            const parsedLat = parseFloat(rawLat);
+            const parsedLon = parseFloat(rawLon);
+            if (Number.isFinite(parsedLat) && Number.isFinite(parsedLon) && !(parsedLat === 0 && parsedLon === 0)) {
+                polLat = parsedLat;
+                polLon = parsedLon;
+            }
+        }
+
+        return {
+            polName,
+            polLat: Number.isFinite(polLat) ? polLat : null,
+            polLon: Number.isFinite(polLon) ? polLon : null
+        };
+    }
+
+    function getGeofencedPortDisplay(ship, routeContext) {
+        if (!ship || typeof ship !== 'object') {
+            return { destinationDisplay: 'Desconocido / En Navegación', lastPortDisplay: 'Desconocido / En Navegación', distanciaPolNm: null };
+        }
+
+        if (ship._geoComputed && ship.destinationDisplay && ship.lastPortDisplay) {
+            return {
+                destinationDisplay: ship.destinationDisplay,
+                lastPortDisplay: ship.lastPortDisplay,
+                distanciaPolNm: ship.distanciaPolNm ?? null
+            };
+        }
+
+        const lat = Number(ship.latitude ?? ship.lat ?? ship.AIS_Live_Lat);
+        const lon = Number(ship.longitude ?? ship.lon ?? ship.lng ?? ship.AIS_Live_Lon);
+
+        const rawDest = ship.destination || ship.Destination || ship.plannedDestination || ship.destino_actual || ship.destino;
+        const rawLastPort = ship.lastPortOfCall || ship.last_port_of_call || ship.ultimo_puerto || ship.LastPort || ship.lastPort;
+
+        const hasDest = isValidPortText(rawDest);
+        const hasLastPort = isValidPortText(rawLastPort);
+
+        let polName = '';
+        let polLat = null;
+        let polLon = null;
+
+        if (routeContext) {
+            polName = routeContext.polName || routeContext.pol || '';
+            polLat = routeContext.polLat ?? routeContext.lat?.pol ?? null;
+            polLon = routeContext.polLon ?? routeContext.lon?.pol ?? null;
+        }
+
+        if (!polName || polLat === null || polLon === null) {
+            const activePol = getActivePolInfo();
+            polName = polName || activePol.polName;
+            if (polLat === null || !Number.isFinite(polLat)) polLat = activePol.polLat;
+            if (polLon === null || !Number.isFinite(polLon)) polLon = activePol.polLon;
+        }
+
+        const distNm = (Number.isFinite(lat) && Number.isFinite(lon) && Number.isFinite(polLat) && Number.isFinite(polLon))
+            ? calculateDistanceToPort(lat, lon, polLat, polLon)
+            : null;
+
+        const targetPolLabel = polName ? polName : 'POL';
+
+        let destinationDisplay = '';
+        if (hasDest) {
+            const cleanDest = String(rawDest).trim();
+            if (distNm !== null) {
+                destinationDisplay = `${cleanDest} / A ${distNm} NM de ${targetPolLabel}`;
+            } else {
+                destinationDisplay = cleanDest;
+            }
+        } else {
+            if (distNm !== null) {
+                destinationDisplay = `En ruta (a ${distNm} NM de ${targetPolLabel})`;
+            } else {
+                destinationDisplay = 'Desconocido / En Navegación';
+            }
+        }
+
+        let lastPortDisplay = '';
+        if (hasLastPort) {
+            lastPortDisplay = String(rawLastPort).trim();
+        } else {
+            lastPortDisplay = 'Desconocido / En Navegación';
+        }
+
+        ship._geoComputed = true;
+        ship.distanciaPolNm = distNm;
+        ship.destinationDisplay = destinationDisplay;
+        ship.lastPortDisplay = lastPortDisplay;
+
+        return {
+            destinationDisplay,
+            lastPortDisplay,
+            distanciaPolNm: distNm
+        };
+    }
+
     function normalizeShipFields(ship) {
         if (!ship || typeof ship !== 'object') return null;
         const sourcePayload = parseAisSourcePayload(ship.source_payload || ship.sourcePayload);
@@ -289,10 +446,18 @@
         const normalizedDwt = normalizeNumeric(read(['DWT_real', 'dwt_real', 'DWT', 'dwt', 'deadweight', 'deadweight_tonnage']));
         const normalizedDraft = normalizeNumeric(read(['Draft', 'draft', 'maxDraft', 'max_draft', 'draft_meters']));
         const speed = normalizeNumeric(read(['speed', 'sog', 'Sog', 'SOG'])) || 0;
-        const destination = firstDefined(read(['destination', 'Destination', 'current_destination', 'plannedDestination']), 'N/A');
+        const destination = firstDefined(read(['destination', 'Destination', 'current_destination', 'plannedDestination', 'destino_actual', 'destino', 'dest', 'Dest']), 'N/A');
+        const lastPortOfCall = firstDefined(read(['lastPortOfCall', 'last_port_of_call', 'ultimo_puerto', 'LastPort', 'lastPort', 'DeparturePort']), 'N/A');
         const shipType = firstDefined(read(['shipType', 'ShipType', 'vesselType', 'vessel_type', 'type']), 'Unknown');
         const rawIsCompatible = read(['isCompatible']);
         const isCompatible = rawIsCompatible !== null ? Boolean(rawIsCompatible) : (meta.isCompatible !== undefined ? Boolean(meta.isCompatible) : undefined);
+
+        const geoInfo = getGeofencedPortDisplay({
+            latitude,
+            longitude,
+            destination,
+            lastPortOfCall
+        });
 
         return {
             ...ship,
@@ -323,6 +488,14 @@
             draft: normalizedDraft === null ? undefined : normalizedDraft,
             speed,
             destination: String(destination),
+            plannedDestination: String(destination),
+            destino_actual: String(destination),
+            lastPortOfCall: geoInfo.lastPortDisplay !== 'Desconocido / En Navegación' ? String(lastPortOfCall) : 'Desconocido / En Navegación',
+            last_port_of_call: geoInfo.lastPortDisplay !== 'Desconocido / En Navegación' ? String(lastPortOfCall) : 'Desconocido / En Navegación',
+            ultimo_puerto: geoInfo.lastPortDisplay !== 'Desconocido / En Navegación' ? String(lastPortOfCall) : 'Desconocido / En Navegación',
+            distanciaPolNm: geoInfo.distanciaPolNm,
+            destinationDisplay: geoInfo.destinationDisplay,
+            lastPortDisplay: geoInfo.lastPortDisplay,
             shipType: String(shipType),
             ShipType: String(shipType),
             vessel_type: String(shipType),
@@ -330,822 +503,538 @@
         };
     }
 
-    function shouldUseExclusiveFleetVisibility() {
+    function shouldUseExclusiveFleetVisibility(filteredCount) {
         if (typeof window === 'undefined') return false;
-        if (window.fleetIntelExclusiveVisibility === true) return true;
-        try {
-            return localStorage.getItem('fleet_intel_exclusive_visibility') === '1';
-        } catch (_) {
-            return false;
-        }
+        if (!window.GlobalStore || typeof window.GlobalStore.getSelectedTaxonomies !== 'function') return false;
+        const selected = window.GlobalStore.getSelectedTaxonomies();
+        return Array.isArray(selected) && selected.length > 0 && filteredCount === 0;
     }
 
-    function enrichFleetIntelMatch(ship) {
-        const vessel = ship || {};
-        if (
-            typeof window !== "undefined" &&
-            window.FleetManager &&
-            typeof window.FleetManager.isTarget === "function"
-        ) {
-            const matched = window.FleetManager.isTarget(vessel);
-            vessel.isTarget = matched;
-            vessel.fleetIntelMatch = matched;
-            if (matched && typeof window.FleetManager.getVesselData === "function") {
-                vessel.fleetIntelRecord = window.FleetManager.getVesselData(vessel);
-            }
-        }
-        return vessel;
+    function enrichFleetIntelMatch(normalized) {
+        if (!normalized || typeof window === 'undefined') return normalized;
+        const globalFleet = Array.isArray(window.fleet) ? window.fleet : [];
+        if (globalFleet.length === 0) return normalized;
+        const targetKey = vesselKey(normalized);
+        if (!targetKey) return normalized;
+
+        const match = globalFleet.find((item) => vesselKey(item) === targetKey);
+        if (!match) return normalized;
+
+        return Object.assign({}, match, normalized, {
+            vesselName: firstDefined(normalized.vesselName, match.vesselName, match.vessel_name, match.ShipName),
+            vesselClass: firstDefined(normalized.vesselClass, match.vesselClass, match.specialtyType, match.vessel_type),
+            specialtyType: firstDefined(normalized.specialtyType, match.specialtyType, match.vesselClass),
+            dwt: firstDefined(normalized.dwt, match.dwt, match.DWT),
+            draft: firstDefined(normalized.draft, match.draft, match.Draft),
+            flag: firstDefined(normalized.flag, match.flag, match.bandera),
+            builtYear: firstDefined(normalized.builtYear, match.builtYear, match.built_year, match.built)
+        });
     }
 
     function filterByExclusiveFleetVisibility(vessels) {
-        const list = (Array.isArray(vessels) ? vessels : []).filter(Boolean).map(enrichFleetIntelMatch);
-        if (!shouldUseExclusiveFleetVisibility()) return list;
-        return list.filter((ship) => ship && (ship.isTarget || ship.fleetIntelMatch));
+        const list = Array.isArray(vessels) ? vessels : [];
+        if (!shouldUseExclusiveFleetVisibility(list.length)) return list;
+
+        const provider = typeof window !== 'undefined' ? window.GlobalTaxonomyProvider : null;
+        return list.filter((vessel) => {
+            if (!provider || typeof provider.isVesselMatchingSelectedTaxonomies !== 'function') {
+                return false;
+            }
+            return provider.isVesselMatchingSelectedTaxonomies(vessel);
+        });
     }
 
     function emitHydrationUpdate(vessels, detail) {
-        if (typeof window === 'undefined') return;
         if (isEmittingHydrationUpdate) return;
-
-        const list = filterByExclusiveFleetVisibility(vessels).map(normalizeShipFields).filter(Boolean);
-        const store = window.GlobalStore;
-
         isEmittingHydrationUpdate = true;
-        window.isAisHydrationSyncing = true;
         try {
-            if (store) {
-                const currentRaw = Array.isArray(store.rawVessels) ? store.rawVessels : [];
-                const currentRenderable = Array.isArray(store.vessels) ? store.vessels : [];
-                const byKey = {};
-
-                currentRaw.concat(currentRenderable).forEach((ship) => {
-                    const key = vesselKey(ship);
-                    if (key) byKey[key] = ship;
-                });
-
-                list.forEach((ship) => {
-                    const key = vesselKey(ship);
-                    if (key) byKey[key] = Object.assign({}, byKey[key] || {}, ship);
-                });
-
-                const merged = Object.values(byKey);
-                store.rawVessels = merged;
-                store.vessels = merged;
-                if (typeof store.setVessels === 'function') {
-                    store.setVessels(merged);
-                }
-                if (typeof store.setRawVessels === 'function') {
-                    store.setRawVessels(merged);
-                }
+            const rawList = Array.isArray(vessels) ? vessels : [];
+            const list = filterByExclusiveFleetVisibility(rawList).map(normalizeShipFields).filter(Boolean);
+            if (typeof window !== 'undefined' && window.GlobalStore && typeof window.GlobalStore.setFilteredVessels === 'function') {
+                window.GlobalStore.setFilteredVessels(list, detail || { source: 'map-loader' });
             }
-
-            if (typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('ais:vessels-hydrated', {
-                    detail: Object.assign({ vessels: list }, detail || {})
-                }));
-                window.dispatchEvent(new CustomEvent('ais:vessels-updated', {
-                    detail: Object.assign({ vessels: list }, detail || {})
-                }));
+            if (typeof window !== 'undefined' && typeof window.updateAisMarkers === 'function') {
+                window.updateAisMarkers(list);
             }
         } finally {
-            window.isAisHydrationSyncing = false;
             isEmittingHydrationUpdate = false;
         }
     }
 
-    function normalizeCoordinates(ship) {
-        if (!ship) return null;
-        normalizeShipFields(ship);
+    function normalizeCoordinates(lat, lon) {
+        const nLat = parseFloat(lat);
+        const nLon = parseFloat(lon);
 
-        let lat = ship.AIS_Live_Lat !== undefined ? ship.AIS_Live_Lat : 
-                  (ship.MetaData && ship.MetaData.AIS_Live_Lat !== undefined ? ship.MetaData.AIS_Live_Lat : 
-                  (ship.Port_Registro_Lat !== undefined ? ship.Port_Registro_Lat : 
-                  (ship.MetaData && ship.MetaData.Port_Registro_Lat !== undefined ? ship.MetaData.Port_Registro_Lat : 
-                  (ship.latitude !== undefined ? ship.latitude : 
-                  (ship.MetaData && ship.MetaData.latitude !== undefined ? ship.MetaData.latitude : null)))));
+        if (!Number.isFinite(nLat) || !Number.isFinite(nLon)) return null;
+        if (nLat < -90 || nLat > 90 || nLon < -180 || nLon > 180) return null;
+        if (Math.abs(nLat) < 0.0001 && Math.abs(nLon) < 0.0001) return null;
 
-        let lon = ship.AIS_Live_Lon !== undefined ? ship.AIS_Live_Lon : 
-                  (ship.MetaData && ship.MetaData.AIS_Live_Lon !== undefined ? ship.MetaData.AIS_Live_Lon : 
-                  (ship.Port_Registro_Lon !== undefined ? ship.Port_Registro_Lon : 
-                  (ship.MetaData && ship.MetaData.Port_Registro_Lon !== undefined ? ship.MetaData.Port_Registro_Lon : 
-                  (ship.longitude !== undefined ? ship.longitude : 
-                  (ship.MetaData && ship.MetaData.longitude !== undefined ? ship.MetaData.longitude : null)))));
-
-        if (lat === null || lon === null) return null;
-
-        let parsedLat = parseFloat(lat);
-        let parsedLon = parseFloat(lon);
-
-        if (isNaN(parsedLat) || isNaN(parsedLon)) return null;
-
-        if (Math.abs(parsedLat) < 15 && Math.abs(parsedLon) > 25) {
-            const temp = parsedLat;
-            parsedLat = parsedLon;
-            parsedLon = temp;
-        }
-
-        return [parsedLat, parsedLon];
+        return { lat: nLat, lon: nLon };
     }
 
     function isValidWaterPosition(lat, lon) {
-        const latitude = Number(lat);
-        const longitude = Number(lon);
-        return Number.isFinite(latitude)
-            && Number.isFinite(longitude)
-            && latitude >= -90
-            && latitude <= 90
-            && longitude >= -180
-            && longitude <= 180;
+        return Boolean(normalizeCoordinates(lat, lon));
     }
 
-    function getViewportQueryUrl(map, mode) {
-        let url = `/.netlify/functions/get-vessels?mode=${mode}`;
-        const currentBounds = getLeafletBoundsForProxy(map);
-        if (currentBounds) {
-            url = appendProxyBoundsToEndpoint(url, currentBounds);
-        }
-        return url;
+    function getViewportQueryUrl(bounds) {
+        if (!bounds) return '/api/ais-scan';
+        const sw = bounds.getSouthWest ? bounds.getSouthWest() : bounds._southWest;
+        const ne = bounds.getNorthEast ? bounds.getNorthEast() : bounds._northEast;
+        if (!sw || !ne) return '/api/ais-scan';
+        return `/api/ais-scan?sw_lat=${sw.lat}&sw_lon=${sw.lng}&ne_lat=${ne.lat}&ne_lon=${ne.lng}`;
     }
 
     function getDefaultAisMap() {
         if (typeof window === 'undefined') return null;
-        return window.AISmap || window.aisMap || window.mapaAIS || window.mapAIS || window.map || null;
+        return window.aisMap || window.seacharterMap || window.map || null;
     }
 
     function hasValidAisBounds(bounds) {
-        if (!bounds) return false;
-        const values = [bounds.latMin, bounds.latMax, bounds.lonMin, bounds.lonMax].map(Number);
-        if (values.some((value) => !Number.isFinite(value))) return false;
-        if (values[0] < -90 || values[1] > 90 || values[2] < -180 || values[3] > 180) return false;
-        return values[0] !== values[1] && values[2] !== values[3];
+        if (!bounds || typeof bounds !== 'object') return false;
+        const swLat = Number(bounds.swLat ?? bounds.minLat ?? bounds.southWestLat);
+        const swLon = Number(bounds.swLon ?? bounds.minLon ?? bounds.southWestLon);
+        const neLat = Number(bounds.neLat ?? bounds.maxLat ?? bounds.northEastLat);
+        const neLon = Number(bounds.neLon ?? bounds.maxLon ?? bounds.northEastLon);
+        return [swLat, swLon, neLat, neLon].every(Number.isFinite) && swLat < neLat && swLon < neLon;
     }
 
-    function readLeafletBounds(bounds) {
-        if (!bounds) return null;
-
-        let minLat;
-        let maxLat;
-        let minLon;
-        let maxLon;
-
-        if (
-            typeof bounds.getSouth === 'function' &&
-            typeof bounds.getNorth === 'function' &&
-            typeof bounds.getWest === 'function' &&
-            typeof bounds.getEast === 'function'
-        ) {
-            minLat = bounds.getSouth();
-            maxLat = bounds.getNorth();
-            minLon = bounds.getWest();
-            maxLon = bounds.getEast();
-        } else if (typeof bounds.getSouthWest === 'function' && typeof bounds.getNorthEast === 'function') {
-            const sw = bounds.getSouthWest();
-            const ne = bounds.getNorthEast();
-            minLat = sw && sw.lat;
-            maxLat = ne && ne.lat;
-            minLon = sw && (sw.lng !== undefined ? sw.lng : sw.lon);
-            maxLon = ne && (ne.lng !== undefined ? ne.lng : ne.lon);
-        }
-
-        const normalized = normalizeAisBounds({
-            latMin: minLat,
-            latMax: maxLat,
-            lonMin: minLon,
-            lonMax: maxLon
-        });
-
-        return hasValidAisBounds(normalized) ? normalized : null;
-    }
-
-    function getLeafletBoundsForProxy(mapInstance) {
+    function readLeafletBounds(mapInstance) {
         const targetMap = mapInstance || getDefaultAisMap();
         if (!targetMap || typeof targetMap.getBounds !== 'function') return null;
         try {
-            const leafletBounds = targetMap.getBounds();
-            const normalized = readLeafletBounds(leafletBounds);
-            if (!normalized) return null;
-            return setAisStreamBounds(normalized);
+            const bounds = targetMap.getBounds();
+            if (!bounds) return null;
+            const sw = bounds.getSouthWest ? bounds.getSouthWest() : null;
+            const ne = bounds.getNorthEast ? bounds.getNorthEast() : null;
+            if (!sw || !ne) return null;
+            return {
+                swLat: Number(sw.lat),
+                swLon: Number(sw.lng),
+                neLat: Number(ne.lat),
+                neLon: Number(ne.lng)
+            };
         } catch (_) {
             return null;
         }
     }
 
-    function waitForAisMapIdle(mapInstance) {
-        return Promise.resolve();
+    function getLeafletBoundsForProxy(mapInstance) {
+        const bounds = readLeafletBounds(mapInstance);
+        return hasValidAisBounds(bounds) ? bounds : null;
     }
 
-    async function getStableProxyBounds(mapInstance) {
-        let bounds = getLeafletBoundsForProxy(mapInstance);
-        if (bounds) return bounds;
-        if (aisProxyPollingState.waitingForMapIdle) return null;
+    function waitForAisMapIdle(mapInstance, callback, timeoutMs) {
+        const targetMap = mapInstance || getDefaultAisMap();
+        const timeout = timeoutMs || 1500;
 
-        aisProxyPollingState.waitingForMapIdle = true;
-        try {
-            await waitForAisMapIdle(mapInstance);
-            bounds = getLeafletBoundsForProxy(mapInstance);
-            return bounds;
-        } finally {
-            aisProxyPollingState.waitingForMapIdle = false;
+        if (!targetMap || typeof targetMap.once !== 'function' || typeof targetMap.isMoving !== 'function') {
+            setTimeout(callback, 50);
+            return;
         }
+
+        if (!targetMap.isMoving()) {
+            setTimeout(callback, 20);
+            return;
+        }
+
+        let fired = false;
+        const complete = () => {
+            if (fired) return;
+            fired = true;
+            callback();
+        };
+
+        const timer = setTimeout(complete, timeout);
+        targetMap.once('moveend', () => {
+            clearTimeout(timer);
+            complete();
+        });
+    }
+
+    function getStableProxyBounds(mapInstance) {
+        const bounds = getLeafletBoundsForProxy(mapInstance);
+        return bounds ? normalizeAisBounds(bounds) : null;
     }
 
     function appendProxyBoundsToEndpoint(endpoint, bounds) {
-        const normalized = normalizeAisBounds(bounds);
-        if (!normalized || !hasValidAisBounds(normalized)) return endpoint;
-        const separator = endpoint.includes('?') ? '&' : '?';
-        return `${endpoint}${separator}minLat=${encodeURIComponent(normalized.latMin)}&minLon=${encodeURIComponent(normalized.lonMin)}&maxLat=${encodeURIComponent(normalized.latMax)}&maxLon=${encodeURIComponent(normalized.lonMax)}`;
+        if (!endpoint || !bounds || !hasValidAisBounds(bounds)) return endpoint || '/api/audit-vessels';
+        try {
+            const base = typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost';
+            const url = new URL(endpoint, base);
+            url.searchParams.set('sw_lat', String(bounds.swLat));
+            url.searchParams.set('sw_lon', String(bounds.swLon));
+            url.searchParams.set('ne_lat', String(bounds.neLat));
+            url.searchParams.set('ne_lon', String(bounds.neLon));
+            return `${url.pathname}${url.search}`;
+        } catch (_) {
+            return endpoint;
+        }
     }
 
-    function getBoundsFromAisStreamBoundingBox(bounds) {
-        const boxes = bounds && (bounds.aisStreamBoundingBox || bounds.aisStreamBoundingBoxes);
-        const box = Array.isArray(boxes) ? boxes[0] : null;
-        if (!Array.isArray(box) || !Array.isArray(box[0]) || !Array.isArray(box[1])) return null;
-
-        const firstLat = normalizeNumeric(box[0][0]);
-        const firstLon = normalizeNumeric(box[0][1]);
-        const secondLat = normalizeNumeric(box[1][0]);
-        const secondLon = normalizeNumeric(box[1][1]);
-        const firstLooksLikeLatLon = firstLat !== null && secondLat !== null && Math.abs(firstLat) <= 90 && Math.abs(secondLat) <= 90;
-        const firstLooksLikeLonLat = firstLon !== null && secondLon !== null && Math.abs(firstLon) <= 90 && Math.abs(secondLon) <= 90;
-
-        if (firstLooksLikeLatLon) {
-            return {
-                latMin: firstLat,
-                lonMin: firstLon,
-                latMax: secondLat,
-                lonMax: secondLon
-            };
-        }
-
-        if (firstLooksLikeLonLat) {
-            return {
-                latMin: firstLon,
-                lonMin: firstLat,
-                latMax: secondLon,
-                lonMax: secondLat
-            };
-        }
-
-        return null;
+    function getBoundsFromAisStreamBoundingBox(boundingBoxes) {
+        if (!Array.isArray(boundingBoxes) || boundingBoxes.length === 0) return null;
+        const box = boundingBoxes[0];
+        if (!Array.isArray(box) || box.length < 2) return null;
+        const sw = box[0];
+        const ne = box[1];
+        if (!Array.isArray(sw) || sw.length < 2 || !Array.isArray(ne) || ne.length < 2) return null;
+        return {
+            swLat: Number(sw[0]),
+            swLon: Number(sw[1]),
+            neLat: Number(ne[0]),
+            neLon: Number(ne[1])
+        };
     }
 
-    function buildFinalProxyRequestUrl(endpoint, bounds) {
-        const explicitBounds = bounds && bounds.query ? bounds.query : bounds;
-        const normalized = normalizeAisBounds(explicitBounds) || normalizeAisBounds(getBoundsFromAisStreamBoundingBox(bounds));
-        return appendProxyBoundsToEndpoint(endpoint, normalized);
+    function buildFinalProxyRequestUrl(endpoint, mapInstance) {
+        const bounds = getStableProxyBounds(mapInstance);
+        if (bounds) return appendProxyBoundsToEndpoint(endpoint, bounds);
+
+        const boundingBoxes = obtenerBoundingBoxesActuales();
+        const bboxBounds = getBoundsFromAisStreamBoundingBox(boundingBoxes);
+        if (bboxBounds) return appendProxyBoundsToEndpoint(endpoint, bboxBounds);
+
+        return endpoint;
     }
 
     function getProxyBoundsPayload(bounds) {
         const normalized = normalizeAisBounds(bounds);
         if (!normalized || !hasValidAisBounds(normalized)) return null;
-
         return {
-            query: {
-                minLat: normalized.latMin,
-                minLon: normalized.lonMin,
-                maxLat: normalized.latMax,
-                maxLon: normalized.lonMax
-            },
-            corners: {
-                southWest: { lat: normalized.latMin, lon: normalized.lonMin },
-                southEast: { lat: normalized.latMin, lon: normalized.lonMax },
-                northWest: { lat: normalized.latMax, lon: normalized.lonMin },
-                northEast: { lat: normalized.latMax, lon: normalized.lonMax }
-            },
-            aisStreamBoundingBoxes: [
-                [
-                    [normalized.latMin, normalized.lonMin],
-                    [normalized.latMax, normalized.lonMax]
-                ]
-            ]
+            sw_lat: normalized.swLat,
+            sw_lon: normalized.swLon,
+            ne_lat: normalized.neLat,
+            ne_lon: normalized.neLon
         };
     }
 
     function normalizeAisBounds(bounds) {
-        if (!bounds) return null;
-        const latMin = normalizeNumeric(bounds.latMin !== undefined ? bounds.latMin : bounds.minLat);
-        const latMax = normalizeNumeric(bounds.latMax !== undefined ? bounds.latMax : bounds.maxLat);
-        const lonMin = normalizeNumeric(bounds.lonMin !== undefined ? bounds.lonMin : bounds.minLon);
-        const lonMax = normalizeNumeric(bounds.lonMax !== undefined ? bounds.lonMax : bounds.maxLon);
-        if (latMin === null || latMax === null || lonMin === null || lonMax === null) return null;
+        if (!bounds || typeof bounds !== 'object') return null;
+        const swLat = Number(bounds.swLat ?? bounds.minLat ?? bounds.southWestLat);
+        const swLon = Number(bounds.swLon ?? bounds.minLon ?? bounds.southWestLon);
+        const neLat = Number(bounds.neLat ?? bounds.maxLat ?? bounds.northEastLat);
+        const neLon = Number(bounds.neLon ?? bounds.maxLon ?? bounds.northEastLon);
+        if (![swLat, swLon, neLat, neLon].every(Number.isFinite)) return null;
         return {
-            latMin: Math.min(latMin, latMax),
-            latMax: Math.max(latMin, latMax),
-            lonMin: Math.min(lonMin, lonMax),
-            lonMax: Math.max(lonMin, lonMax)
+            swLat: Number(swLat.toFixed(4)),
+            swLon: Number(swLon.toFixed(4)),
+            neLat: Number(neLat.toFixed(4)),
+            neLon: Number(neLon.toFixed(4))
         };
     }
 
     function getAisBoundsKey(bounds) {
-        return [
-            bounds.lonMin,
-            bounds.latMin,
-            bounds.lonMax,
-            bounds.latMax
-        ].map((value) => Number(value).toFixed(4)).join(',');
+        const normalized = normalizeAisBounds(bounds);
+        if (!normalized) return '';
+        return [normalized.swLat, normalized.swLon, normalized.neLat, normalized.neLon].join(':');
     }
 
     function setAisStreamBounds(bounds) {
         const normalized = normalizeAisBounds(bounds);
-        if (!normalized) return null;
+        if (!normalized || !hasValidAisBounds(normalized)) return false;
+
+        const nextKey = getAisBoundsKey(normalized);
+        if (aisStreamState.boundsKey === nextKey) return false;
+
         aisStreamState.currentBounds = normalized;
-        aisStreamState.boundsKey = getAisBoundsKey(normalized);
-        return normalized;
+        aisStreamState.boundsKey = nextKey;
+        return true;
     }
 
-    function setAisStreamBoundsFromLeafletBounds(bounds) {
-        return setAisStreamBounds(readLeafletBounds(bounds));
+    function setAisStreamBoundsFromLeafletBounds(mapInstance) {
+        const bounds = readLeafletBounds(mapInstance);
+        return setAisStreamBounds(bounds);
     }
 
-    function obtenerBoundingBoxesActuales(mapInstance) {
-        const targetMap = mapInstance || (typeof window !== 'undefined' && (window.AISmap || window.aisMap || window.mapaAIS || window.map));
-        if (!targetMap || typeof targetMap.getBounds !== 'function') return null;
-
-        const bounds = targetMap.getBounds();
-        if (!bounds || typeof bounds.getWest !== 'function' || typeof bounds.getSouth !== 'function' || typeof bounds.getEast !== 'function' || typeof bounds.getNorth !== 'function') {
-            return null;
+    function obtenerBoundingBoxesActuales() {
+        if (aisStreamState.currentBounds && hasValidAisBounds(aisStreamState.currentBounds)) {
+            const b = aisStreamState.currentBounds;
+            return [[
+                [b.swLat, b.swLon],
+                [b.neLat, b.neLon]
+            ]];
         }
-
-        const west = bounds.getWest();
-        const south = bounds.getSouth();
-        const east = bounds.getEast();
-        const north = bounds.getNorth();
-
-        setAisStreamBounds({
-            latMin: south,
-            latMax: north,
-            lonMin: west,
-            lonMax: east
-        });
-
-        return [
-            [
-                [west, south],
-                [east, north]
-            ]
-        ];
+        return [[
+            [-90.0, -180.0],
+            [90.0, 180.0]
+        ]];
     }
 
-    function getAisStreamSubscriptionPayload(apiKey) {
-        if (!apiKey || !aisStreamState.currentBounds) return null;
-        
+    function getAisStreamSubscriptionPayload() {
+        const key = getAisStreamApiKey();
+        if (!key) return null;
         return {
-            "APIKey": apiKey,
-            "BoundingBoxes": [
-                [
-                    [aisStreamState.currentBounds.latMin, aisStreamState.currentBounds.lonMin],
-                    [aisStreamState.currentBounds.latMax, aisStreamState.currentBounds.lonMax]
-                ]
-            ],
-            "FilterMessageTypes": ["PositionReport", "StandardClassBPositionReport", "ExtendedClassBPositionReport", "ShipStaticData"]
+            APIKey: key,
+            BoundingBoxes: obtenerBoundingBoxesActuales(),
+            FilterMessageTypes: ["PositionReport", "ShipStaticData"]
         };
     }
 
-    function getAisStreamApiKey(config) {
-        const configuredKey = config && config.apiKey !== undefined ? config.apiKey : aisStreamState.apiKey;
-        let storedKey = '';
+    function getAisStreamApiKey() {
+        if (aisStreamState.apiKey) return aisStreamState.apiKey;
         if (typeof window !== 'undefined') {
-            storedKey = window.AISSTREAM_API_KEY || window.AISTREAM_API_KEY || '';
+            const explicit = window.AISSTREAM_API_KEY || window.aisstreamApiKey || '';
+            if (explicit) return String(explicit).trim();
             try {
-                storedKey = storedKey || localStorage.getItem('aisstream_api_key') || '';
+                return String(localStorage.getItem('aisstream_api_key') || '').trim();
             } catch (_) {}
         }
-        storedKey = String(configuredKey || storedKey || '').trim();
-        if (storedKey.includes('***') || storedKey.length < 10) {
-            storedKey = '';
-        }
-        return storedKey;
+        return '';
     }
 
-    async function pollAisProxyOnce(options) {
-        if (typeof fetch === 'undefined' || aisProxyPollingState.inFlight) {
-            return { success: false, skipped: true };
-        }
-        if (typeof window !== 'undefined' && !window.aisRadarUserActivated) {
-            if (typeof window.setAisRadarStatus === 'function') {
-                window.setAisRadarStatus('inactive');
-            }
-            return { success: false, skipped: true, reason: 'waiting-for-user-route-activation' };
-        }
-        if (typeof window !== 'undefined' && typeof window.isAisRouteReady === 'function' && !window.isAisRouteReady()) {
-            if (typeof window.setAisRadarStatus === 'function') {
-                window.setAisRadarStatus('inactive');
-            }
-            return { success: false, skipped: true, reason: 'route-inputs-missing' };
-        }
+    function pollAisProxyOnce(endpoint, mapInstance) {
+        if (typeof fetch !== 'function') return Promise.resolve(null);
+        if (aisProxyPollingState.inFlight) return Promise.resolve(null);
 
-        const config = Object.assign({}, options || {});
         aisProxyPollingState.inFlight = true;
-        try {
-            if (typeof window !== 'undefined' && typeof window.setAisRadarStatus === 'function') {
-                window.setAisRadarStatus('updating');
-            }
-            const endpoint = config.endpoint || aisProxyPollingState.endpoint || '/.netlify/functions/get-vessels';
-            const endpointUrl = new URL(endpoint, window.location.origin);
-            const hasExplicitBoxes = endpointUrl.searchParams.has('boxes');
-            const isGlobalNameSearch = endpointUrl.searchParams.get('mode') === 'global' || endpointUrl.searchParams.has('vesselName') || endpointUrl.searchParams.has('q') || endpointUrl.searchParams.has('search');
-            const mapInstance = aisProxyPollingState.map || config.map || getDefaultAisMap();
-            const shouldUseViewportBounds = !hasExplicitBoxes && !isGlobalNameSearch;
-            const bounds = shouldUseViewportBounds ? await getStableProxyBounds(mapInstance) : null;
-            const proxyPayload = shouldUseViewportBounds ? getProxyBoundsPayload(bounds) : null;
-            if (shouldUseViewportBounds && !proxyPayload) {
-                return { success: false, skipped: true, reason: 'map-bounds-not-ready' };
-            }
-            const finalRequestUrl = shouldUseViewportBounds ? buildFinalProxyRequestUrl(endpointUrl.toString(), proxyPayload) : endpointUrl.toString();
-            console.log('[AIS Proxy] get-vessels payload before fetch:', {
-                endpoint,
-                requestUrl: finalRequestUrl,
-                bounds: proxyPayload,
-                mode: isGlobalNameSearch ? 'global-name' : (hasExplicitBoxes ? 'route-pol-pod' : 'bounded')
-            });
-            const response = await fetch(finalRequestUrl);
-            const payload = await response.json().catch(() => []);
-            if (!response.ok) {
-                throw new Error(payload && payload.error ? payload.error : `HTTP ${response.status}`);
-            }
-            const vessels = Array.isArray(payload)
-                ? payload
-                : (Array.isArray(payload && payload.vessels) ? payload.vessels : []);
-            emitHydrationUpdate(vessels, { source: 'server-proxy' });
-            if (typeof window !== 'undefined' && typeof window.freezeAisRadarStatus === 'function') {
-                window.freezeAisRadarStatus(Math.min(vessels.length || 400, 400));
-            }
-            return { success: true, vesselCount: vessels.length };
-        } finally {
+        const targetEndpoint = endpoint || aisProxyPollingState.endpoint || '/api/audit-vessels';
+        const finalUrl = buildFinalProxyRequestUrl(targetEndpoint, mapInstance);
+
+        return fetch(finalUrl, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        })
+        .then((res) => res.json())
+        .then((data) => {
             aisProxyPollingState.inFlight = false;
-        }
+            aisProxyPollingState.retryIndex = 0;
+            const rawShips = (data && Array.isArray(data.vessels)) ? data.vessels : (Array.isArray(data) ? data : []);
+            const ships = Array.isArray(rawShips) ? rawShips.map(normalizeShipFields) : [];
+            if (ships.length > 0) {
+                emitHydrationUpdate(ships, { source: 'ais-proxy-poll', count: ships.length });
+            }
+            return data;
+        })
+        .catch((err) => {
+            aisProxyPollingState.inFlight = false;
+            console.warn('[SeaCharter AIS] AIS proxy polling encountered a transient issue:', err);
+            return null;
+        });
     }
 
-    function startAisProxyPolling(options) {
-        const config = Object.assign({}, options || {});
+    function startAisProxyPolling(endpoint, mapInstance, options) {
+        const opts = options || {};
+        aisProxyPollingState.endpoint = endpoint || aisProxyPollingState.endpoint;
+        aisProxyPollingState.map = mapInstance || aisProxyPollingState.map || getDefaultAisMap();
+        aisProxyPollingState.intervalMs = Number(opts.intervalMs) || aisProxyPollingState.intervalMs;
+        aisProxyPollingState.userActivated = true;
 
-        clearTimeout(aisProxyPollingState.timer);
-        aisProxyPollingState.endpoint = config.endpoint || aisProxyPollingState.endpoint;
-        aisProxyPollingState.map = config.map || getDefaultAisMap();
-        aisProxyPollingState.intervalMs = Math.max(300000, Number(config.intervalMs || aisProxyPollingState.intervalMs) || 300000);
-        aisProxyPollingState.retryDelaysMs = Array.isArray(config.retryDelaysMs) && config.retryDelaysMs.length
-            ? config.retryDelaysMs
-            : aisProxyPollingState.retryDelaysMs;
-        aisProxyPollingState.retryIndex = 0;
-        aisProxyPollingState.userActivated = config.userActivated === true;
-        const scheduleNextPoll = (delayMs) => {
-            if (!aisProxyPollingState.userActivated) return;
-            aisProxyPollingState.timer = setTimeout(runPoll, delayMs);
-        };
+        if (aisProxyPollingState.timer) {
+            clearInterval(aisProxyPollingState.timer);
+            aisProxyPollingState.timer = null;
+        }
+
         const runPoll = () => {
-            if (!aisProxyPollingState.userActivated) {
-                aisProxyPollingState.timer = null;
-                return;
-            }
-            const liveConfig = Object.assign({}, config, {
-                map: aisProxyPollingState.map || getDefaultAisMap()
+            waitForAisMapIdle(aisProxyPollingState.map, () => {
+                pollAisProxyOnce(aisProxyPollingState.endpoint, aisProxyPollingState.map);
             });
-            pollAisProxyOnce(liveConfig)
-                .then(() => {
-                    aisProxyPollingState.retryIndex = 0;
-                })
-                .catch((err) => {
-                    if (config.onError) config.onError(err);
-                    const delays = aisProxyPollingState.retryDelaysMs;
-                    aisProxyPollingState.retryIndex = Math.min(aisProxyPollingState.retryIndex + 1, delays.length - 1);
-                })
-                .finally(() => {
-                    if (aisProxyPollingState.timer !== null) {
-                        const retryDelay = aisProxyPollingState.retryDelaysMs[aisProxyPollingState.retryIndex] || aisProxyPollingState.intervalMs;
-                        scheduleNextPoll(aisProxyPollingState.retryIndex > 0 ? retryDelay : aisProxyPollingState.intervalMs);
-                    }
-                });
         };
-        aisProxyPollingState.timer = 0;
+
         runPoll();
-        return { started: true, endpoint: aisProxyPollingState.endpoint, intervalMs: aisProxyPollingState.intervalMs };
+        aisProxyPollingState.timer = setInterval(runPoll, aisProxyPollingState.intervalMs);
     }
 
     function stopAisProxyPolling() {
-        clearTimeout(aisProxyPollingState.timer);
-        aisProxyPollingState.timer = null;
+        if (aisProxyPollingState.timer) {
+            clearInterval(aisProxyPollingState.timer);
+            aisProxyPollingState.timer = null;
+        }
+        aisProxyPollingState.inFlight = false;
         aisProxyPollingState.userActivated = false;
-        aisProxyPollingState.retryIndex = 0;
-        return { stopped: true };
     }
 
-    async function resetAisCache() {
-        if (typeof fetch === 'undefined') {
-            throw new Error('Fetch API is not available.');
-        }
-        const response = await fetch('/.netlify/functions/get-vessels?action=reset-cache', {
-            method: 'POST',
-            headers: { 'Accept': 'application/json' }
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-            throw new Error(payload && payload.error ? payload.error : `HTTP ${response.status}`);
-        }
+    function resetAisCache() {
+        hydrationInFlight.clear();
         hydrationCache.clear();
-        clearTimeout(aisProxyPollingState.timer);
-        aisProxyPollingState.timer = null;
-        return payload;
     }
 
-    function actualizarSuscripcionRadarAIS(mapInstance, options) {
-        const targetMap = mapInstance || aisStreamState.boundMap || (typeof window !== 'undefined' && (window.AISmap || window.aisMap || window.mapaAIS || window.map));
-        const config = Object.assign({}, aisStreamState.options, options || {});
-        return startAisProxyPolling(Object.assign({}, config, {
-            map: null,
-            endpoint: config.endpoint || aisProxyPollingState.endpoint,
-            intervalMs: config.intervalMs || aisProxyPollingState.intervalMs
-        }));
+    function actualizarSuscripcionRadarAIS() {
+        if (!aisStreamState.ws || aisStreamState.ws.readyState !== 1) return false;
+        const payload = getAisStreamSubscriptionPayload();
+        if (!payload) return false;
+        try {
+            aisStreamState.ws.send(JSON.stringify(payload));
+            return true;
+        } catch (_) {
+            return false;
+        }
     }
 
-    function bindAisMapMovementSync(mapInstance, options) {
-        clearTimeout(aisStreamState.mapMoveTimer);
-        aisStreamState.mapMoveTimer = null;
-        aisStreamState.boundMap = null;
-        return { bound: false, reason: 'dual-radar-independent-of-map' };
+    function bindAisMapMovementSync(mapInstance) {
+        const targetMap = mapInstance || getDefaultAisMap();
+        if (!targetMap || typeof targetMap.on !== 'function') return;
+
+        aisStreamState.boundMap = targetMap;
+        aisProxyPollingState.map = targetMap;
+
+        const onMoveEnd = () => {
+            if (aisStreamState.mapMoveTimer) clearTimeout(aisStreamState.mapMoveTimer);
+            aisStreamState.mapMoveTimer = setTimeout(() => {
+                const changed = setAisStreamBoundsFromLeafletBounds(targetMap);
+                if (changed && aisStreamState.ws && aisStreamState.ws.readyState === 1) {
+                    actualizarSuscripcionRadarAIS();
+                }
+            }, 300);
+        };
+
+        targetMap.on('moveend', onMoveEnd);
     }
 
     function closeAisStreamSocket() {
-        clearTimeout(aisStreamState.reconnectTimer);
-        aisStreamState.reconnectTimer = null;
+        if (aisStreamState.reconnectTimer) {
+            clearTimeout(aisStreamState.reconnectTimer);
+            aisStreamState.reconnectTimer = null;
+        }
         if (aisStreamState.ws) {
-            aisStreamState.ws.onclose = null;
-            aisStreamState.ws.onerror = null;
-            aisStreamState.ws.onmessage = null;
-            aisStreamState.ws.onopen = null;
-            aisStreamState.ws.close();
+            try { aisStreamState.ws.close(); } catch (_) {}
             aisStreamState.ws = null;
         }
-        if (typeof window !== 'undefined' && window.aisWebSocket) {
-            window.aisWebSocket = null;
-        }
     }
 
-    function startPersistentAisStream(options) {
-        const config = Object.assign({}, aisStreamState.options, options || {});
-        if (config.bounds) setAisStreamBounds(config.bounds);
-        if (config.leafletBounds) setAisStreamBoundsFromLeafletBounds(config.leafletBounds);
-        if (config.map) {
-            obtenerBoundingBoxesActuales(config.map);
-        }
+    function startPersistentAisStream(endpoint, apiKey, mapInstance, options) {
         closeAisStreamSocket();
-        aisStreamState.options = config;
-        if (typeof config.onStatus === 'function') {
-            config.onStatus({ type: 'disabled', reason: 'websocket-disabled-polling-only' });
-        }
-        const result = startAisProxyPolling(Object.assign({}, config, {
-            endpoint: config.endpoint || aisProxyPollingState.endpoint,
-            intervalMs: config.intervalMs || aisProxyPollingState.intervalMs
-        }));
-        return Object.assign({ connected: false, reason: 'websocket-disabled-polling-only' }, result);
-    }
 
-    const activeMarkers = {};
+        aisStreamState.endpoint = endpoint || aisStreamState.endpoint || 'wss://stream.aisstream.io/v0/stream';
+        aisStreamState.apiKey = apiKey || getAisStreamApiKey();
+        aisStreamState.options = options || {};
 
-    async function autoHydrate(shipList) {
-        if (typeof window !== 'undefined' && window.isAisHydrationSyncing) {
-            return { success: true, skipped: true, reason: 'hydration-sync-in-progress' };
+        if (mapInstance) {
+            bindAisMapMovementSync(mapInstance);
+            setAisStreamBoundsFromLeafletBounds(mapInstance);
         }
 
-        const ships = Array.isArray(shipList) ? shipList.map(normalizeShipFields) : [];
-        const estimatedShips = ships.filter((ship) => {
-            const key = vesselKey(ship);
-            const isEstimated = !!(ship && (ship.isEstimated || ship.is_estimated));
-            return key && isEstimated && !hydrationInFlight.has(key) && !hydrationCache.has(key);
-        });
-
-        if (estimatedShips.length === 0) {
-            return { success: true, skipped: true, vesselCount: ships.length };
+        const payload = getAisStreamSubscriptionPayload();
+        if (!payload || !payload.APIKey) {
+            console.warn('[SeaCharter AIS] Missing AISStream API Key; falling back to proxy polling.');
+            startAisProxyPolling('/api/audit-vessels', mapInstance);
+            return;
         }
-
-        estimatedShips.forEach((ship) => hydrationInFlight.add(vesselKey(ship)));
 
         try {
-            const response = await fetch('/api/ai-ais-filter', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    radarSnapshot: estimatedShips,
-                    frozenAt: new Date().toISOString(),
-                    searchMode: 'ais-auto-hydrate'
-                })
-            });
+            const ws = new WebSocket(aisStreamState.endpoint);
+            aisStreamState.ws = ws;
 
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok || data.success === false) {
-                throw new Error(data.error || `AI AIS filter returned HTTP ${response.status}`);
-            }
+            ws.onopen = () => {
+                ws.send(JSON.stringify(payload));
+            };
 
-            const matches = Array.isArray(data.data) ? data.data : [];
-            const hydratedShips = matches.map((match) => normalizeShipFields(Object.assign({}, match.ais || {}, match.vessel || {}, match)));
-            estimatedShips.forEach((ship) => hydrationCache.add(vesselKey(ship)));
-            emitHydrationUpdate(ships.concat(hydratedShips), { source: 'autoHydrate', hydrated: true, response: data });
-            return data;
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (!data) return;
+                    const ship = normalizeShipFields(data);
+                    if (ship) {
+                        emitHydrationUpdate([ship], { source: 'aisstream-live', mmsi: ship.mmsi });
+                    }
+                } catch (_) {}
+            };
+
+            ws.onerror = () => {
+                ws.close();
+            };
+
+            ws.onclose = () => {
+                aisStreamState.ws = null;
+                if (!aisStreamState.reconnectTimer) {
+                    aisStreamState.reconnectTimer = setTimeout(() => {
+                        aisStreamState.reconnectTimer = null;
+                        startPersistentAisStream(aisStreamState.endpoint, aisStreamState.apiKey, aisStreamState.boundMap, aisStreamState.options);
+                    }, aisStreamState.reconnectDelayMs);
+                }
+            };
         } catch (err) {
-            console.error("Error during AIS auto hydration:", err);
-            emitHydrationUpdate(ships, { source: 'autoHydrate', hydrated: false, error: err.message });
-            return { success: false, error: err.message };
-        } finally {
-            estimatedShips.forEach((ship) => hydrationInFlight.delete(vesselKey(ship)));
+            console.warn('[SeaCharter AIS] WebSocket creation failed; falling back to proxy polling.', err);
+            startAisProxyPolling('/api/audit-vessels', mapInstance);
         }
     }
 
-    function escapePopupText(value) {
-        return String(value || "N/A")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#39;");
+    const activeMarkers = new Map();
+
+    function autoHydrate(shipList) {
+        const ships = Array.isArray(shipList) ? shipList.map(normalizeShipFields).filter(Boolean) : [];
+        if (ships.length === 0) return;
+        emitHydrationUpdate(ships, { source: 'auto-hydrate' });
     }
 
-    function buildTargetPopupHtml(vessel) {
-        if (typeof window === "undefined" || !window.FleetMatchmaker || typeof window.FleetMatchmaker.buildTechnicalHtml !== "function") {
-            return "";
+    function escapePopupText(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function buildTargetPopupHtml(options) {
+        if (!options || typeof options !== 'object') return '';
+        const targetLat = normalizeNumeric(options.targetLat ?? options.loadingPortLat);
+        const targetLon = normalizeNumeric(options.targetLon ?? options.loadingPortLon);
+        const targetName = options.targetName || options.loadingPortName || 'POL Target';
+        if (targetLat === null || targetLon === null) return '';
+
+        const shipLat = normalizeNumeric(options.latitude ?? options.lat);
+        const shipLon = normalizeNumeric(options.longitude ?? options.lon);
+        let distHtml = '';
+
+        if (shipLat !== null && shipLon !== null) {
+            const distNm = calculateDistanceToPort(shipLat, shipLon, targetLat, targetLon);
+            if (distNm !== null) {
+                distHtml = `<br><span>Distancia a ${escapePopupText(targetName)}: <strong>${distNm} NM</strong></span>`;
+            }
         }
-        return window.FleetMatchmaker.buildTechnicalHtml(vessel);
+
+        return `${distHtml}`;
     }
 
     function setupAisMarkerPopup(marker, options) {
-        const mmsi = options.mmsi || options.MMSI;
-        if (!mmsi) return;
+        if (!marker || typeof marker.bindPopup !== 'function') return;
+        const name = escapePopupText(getVesselDisplayName(options));
+        const imo = escapePopupText(firstDefined(options.imo, options.IMO, 'N/A'));
+        const mmsi = escapePopupText(firstDefined(options.mmsi, options.MMSI, 'N/A'));
+        const statusLabel = escapePopupText(options.statusLabel || (options.is_estimated ? 'Estimado' : 'Tiempo real'));
 
-        activeMarkers[mmsi] = marker;
-
-        const isEstimated = !!(options.isEstimated || options.is_estimated);
-        const name = options.name || options.vessel_name || options.ShipName || "Unknown";
-        const statusLabel = options.statusLabel || options.status || "N/A";
-
-        if (isEstimated) {
-            const initialContent = `<div class="seacharter-map-popup"><strong>${name}</strong><span>IMO: <em class="hydrate-placeholder">Hydrating...</em></span><span>MMSI: ${mmsi}</span><span>Destino: <em class="hydrate-placeholder">Hydrating...</em></span><span>Ubicación: ${statusLabel}</span><small>Estimated Position / Terrestrial Coverage Gap</small></div>`;
-            marker.bindPopup(initialContent);
-
-            const popupOpenHandler = async function () {
-                if (marker._isHydrated || marker._isHydrating) return;
-                marker._isHydrating = true;
-
-                try {
-                    const response = await fetch(`/api/vessels?mmsi=${mmsi}`);
-                    const resData = await response.json();
-
-                    if (resData.success && resData.data && resData.data.length > 0) {
-                        const dbVessel = resData.data[0];
-                        const hydratedImo = dbVessel.imo || "N/A";
-                        const hydratedDest = dbVessel.destination || "N/A";
-                        const hydratedLastPort = dbVessel.lastPortOfCall || dbVessel.last_port_of_call || dbVessel.ultimo_puerto || "N/A";
-
-                        const hydratedVessel = Object.assign({}, options, dbVessel, { imo: hydratedImo, IMO: hydratedImo, destination: hydratedDest });
-                        const updatedContent = `<div class="seacharter-map-popup"><strong>${name}</strong><span>IMO: ${hydratedImo}</span><span>MMSI: ${mmsi}</span><span>Destino: ${hydratedDest}</span><span>Último puerto: ${hydratedLastPort}</span><span>Ubicación: ${statusLabel}</span>${buildTargetPopupHtml(hydratedVessel)}<small>Estimated Position / Terrestrial Coverage Gap</small></div>`;
-                        marker.setPopupContent(updatedContent);
-                        marker._isHydrated = true;
-                    } else {
-                        const errorContent = `<div class="seacharter-map-popup"><strong>${name}</strong><span>IMO: <b class="popup-danger">Data not available</b></span><span>MMSI: ${mmsi}</span><span>Destino: <b class="popup-danger">Data not available</b></span><span>Ubicación: ${statusLabel}</span><small>Estimated Position / Terrestrial Coverage Gap</small><button onclick="window.MapLoader.registerVesselManually('${mmsi}', '${name.replace(/'/g, "\\'")}', '${statusLabel.replace(/'/g, "\\'")}')">Register vessel manually</button></div>`;
-                        marker.setPopupContent(errorContent);
-                    }
-                } catch (err) {
-                    console.error("Error during vessel data hydration:", err);
-                } finally {
-                    marker._isHydrating = false;
-                }
-            };
-
-            if (marker._aisPopupHydrationHandler && typeof marker.off === 'function') {
-                marker.off('popupopen', marker._aisPopupHydrationHandler);
-            }
-            marker._aisPopupHydrationHandler = popupOpenHandler;
-            marker.on('popupopen', popupOpenHandler);
+        if (options.is_estimated) {
+            const estContent = `<div class="seacharter-map-popup"><strong>${name}</strong><span>IMO: ${imo}</span><span>MMSI: ${mmsi}</span><span>Ubicación: ${statusLabel}</span><br><span style="color: #f59e0b; font-weight: bold;">⚠️ Coordenada Estrapolada</span>${buildTargetPopupHtml(options)}</div>`;
+            marker.bindPopup(estContent);
         } else {
-            const imo = options.imo || "N/A";
-            const destination = options.destination || "N/A";
-            const lastPortOfCall = options.lastPortOfCall || options.last_port_of_call || options.ultimo_puerto || "N/A";
+            const destination = escapePopupText(options.destinationDisplay || options.destination || "N/A");
+            const lastPortOfCall = escapePopupText(options.lastPortDisplay || options.lastPortOfCall || options.last_port_of_call || options.ultimo_puerto || "N/A");
             const normalContent = `<div class="seacharter-map-popup"><strong>${name}</strong><span>IMO: ${imo}</span><span>MMSI: ${mmsi}</span><span>Destino: ${destination}</span><span>Último puerto: ${lastPortOfCall}</span><span>Ubicación: ${statusLabel}</span>${buildTargetPopupHtml(options)}</div>`;
             marker.bindPopup(normalContent);
         }
     }
 
-    function getAisDynamicIcon(ship, polName, podName) {
-        const vessel = ship || {};
-        const fleetRegistry = typeof window !== "undefined" && window.FleetManager && typeof window.FleetManager.getRegistry === "function"
-            ? window.FleetManager.getRegistry()
-            : [];
-        if (!Array.isArray(fleetRegistry) || fleetRegistry.length === 0) {
-            vessel.isTarget = false;
-            vessel.fleetIntelMatch = false;
-            vessel.fleetIntelRecord = null;
-        }
-        if (
-            !vessel.isTarget &&
-            Array.isArray(fleetRegistry) &&
-            fleetRegistry.length > 0 &&
-            typeof window !== "undefined" &&
-            window.FleetManager &&
-            typeof window.FleetManager.isTarget === "function"
-        ) {
-            const matched = window.FleetManager.isTarget(vessel);
-            vessel.isTarget = matched;
-            vessel.fleetIntelMatch = matched;
-            if (matched && typeof window.FleetManager.getVesselData === "function") {
-                vessel.fleetIntelRecord = window.FleetManager.getVesselData(vessel);
-            }
-        }
-        const destination = String(vessel.destination || vessel.Destination || (vessel.MetaData && vessel.MetaData.Destination) || "").toUpperCase();
-        const status = String(vessel.statusLabel || vessel.status || vessel.NavigationalStatusLabel || "").toUpperCase();
-        const normalizedPol = polName ? String(polName).toUpperCase().trim() : "";
-        const normalizedPod = podName ? String(podName).toUpperCase().trim() : "";
-        const radarZone = String(vessel.aisRadarZone || (vessel.MetaData && vessel.MetaData.aisRadarZone) || "").toUpperCase();
-        const radarColor = vessel.aisRadarColor || (radarZone === "NODE_POL" || radarZone === "NODE_POD" ? "#f97316" : (radarZone === "POL" ? "#16a34a" : (radarZone === "POD" ? "#2563eb" : (radarZone === "ROUTE" ? "#3b82f6" : (radarZone === "GLOBAL" ? "#64748b" : "")))));
-        const isProjectionCandidate = !!(vessel.projectionCandidate || vessel.aisMarkerStyle === "ghost" || (vessel.MetaData && (vessel.MetaData.projectionCandidate || vessel.MetaData.aisMarkerStyle === "ghost")));
-        const isKeyPort = !!(
-            (normalizedPol && destination.includes(normalizedPol)) ||
-            (normalizedPod && destination.includes(normalizedPod))
-        );
-        const isCompatible = vessel.isCompatible === true || (vessel.MetaData && vessel.MetaData.isCompatible === true);
-
-        let iconClass = "fa-ship";
-        let iconColor = radarColor || "#3b82f6";
-        let imageIcon = "";
-
-        if (vessel.isTarget) {
-            iconClass = "fa-star";
-            iconColor = "#f59e0b";
-        } else if (radarZone === "NODE_POL" || radarZone === "NODE_POD") {
-            iconClass = "fa-ship";
-            iconColor = "#f97316";
-        } else if (radarZone === "POL") {
-            iconClass = "fa-ship";
-            iconColor = "#16a34a";
-        } else if (radarZone === "POD") {
-            iconClass = "fa-ship";
-            iconColor = "#2563eb";
-        } else if (radarZone === "ROUTE") {
-            iconClass = "fa-ship";
-            iconColor = "#3b82f6";
-        } else if (radarZone === "GLOBAL") {
-            iconClass = "fa-ship";
-            iconColor = "#64748b";
-        } else if (isKeyPort) {
-            iconClass = "fa-flag";
-            iconColor = "#ef4444";
-        } else if (
-            status.includes("FONDEADO") ||
-            status.includes("ANCHOR") ||
-            status.includes("PUERTO") ||
-            status.includes("MOORED")
-        ) {
-            iconClass = "fa-anchor";
-            iconColor = "#10b981";
-            imageIcon = MAP_STYLE_CONFIG.icons.load;
-        }
-
-        const isNeighborNode = radarZone === "NODE_POL" || radarZone === "NODE_POD";
-        const iconConfig = {
-            className: `custom-ais-icon${isCompatible ? ' compatible-vessel' : ''}`,
-            html: imageIcon
-                ? `<div class="seacharter-ais-icon${isCompatible ? ' compatible-vessel' : ''}${isProjectionCandidate ? ' ghost-ship' : ''}${isNeighborNode ? ' neighbor-node' : ''}" data-icon-class="${iconClass}" style="--marker-color: ${iconColor}; color: ${iconColor};"><img src="${imageIcon}" alt="" width="24" height="24"></div>`
-                : `<div class="seacharter-ais-icon${isCompatible ? ' compatible-vessel' : ''}${isProjectionCandidate ? ' ghost-ship' : ''}${vessel.isTarget ? ' fleet-intel-match' : ''}${isNeighborNode ? ' neighbor-node' : ''}" style="--marker-color: ${iconColor};"><i class="fa-solid fas ${iconClass}"></i></div>`,
-            iconSize: [24, 24],
-            iconAnchor: [12, 12]
-        };
-
-        if (typeof L !== "undefined" && L && typeof L.divIcon === "function") {
-            return L.divIcon(iconConfig);
-        }
-        return iconConfig;
+    function getAisDynamicIcon(options) {
+        if (typeof L === 'undefined' || !L || typeof L.divIcon !== 'function') return null;
+        const isComp = Boolean(options && (options.isCompatible || options.is_compatible));
+        const isEst = Boolean(options && options.is_estimated);
+        const cssClass = isComp ? 'ais-marker-compatible' : (isEst ? 'ais-marker-estimated' : 'ais-marker-standard');
+        return L.divIcon({
+            className: `seacharter-ais-marker ${cssClass}`,
+            html: '<div class="marker-dot"></div>',
+            iconSize: [12, 12],
+            iconAnchor: [6, 6]
+        });
     }
 
-    async function registerVesselManually(mmsi, name, statusLabel) {
-        const marker = activeMarkers[mmsi];
-        if (!marker) return;
-
-        const imoInput = prompt(`Register Vessel "${name}" (MMSI: ${mmsi})\nEnter IMO Number:`);
-        if (imoInput === null) return;
-        const imo = imoInput.trim();
-
-        const destInput = prompt(`Register Vessel "${name}" (MMSI: ${mmsi})\nEnter Destination:`);
-        if (destInput === null) return;
-        const destination = destInput.trim();
+    async function registerVesselManually(shipData, mapInstance) {
+        if (!shipData || typeof shipData !== 'object') return;
+        const name = shipData.vessel_name || shipData.name || 'Sin nombre';
+        const mmsi = shipData.mmsi || 'N/A';
+        const imo = shipData.imo || 'N/A';
+        const destination = shipData.destination || 'N/A';
 
         try {
-            const payload = {
-                vessel_name: name,
-                mmsi: mmsi,
-                imo: imo || "Unknown",
-                destination: destination || "Unknown"
-            };
-
-            const response = await fetch('/api/vessels', {
+            const res = await fetch('/api/vessels', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({ vessel_name: name, mmsi, imo, destination })
             });
-
-            const resData = await response.json();
+            const resData = await res.json();
             if (resData.success) {
-                const aiPayload = Object.assign({}, payload, {
-                    isEstimated: true,
-                    statusLabel: statusLabel
-                });
-                autoHydrate([aiPayload]);
-
+                const hydrated = Object.assign({}, shipData, { is_estimated: true, statusLabel: 'Registrado Manual' });
+                emitHydrationUpdate([hydrated], { source: 'manual-register' });
                 if (typeof showToast === 'function') {
                     showToast(`⚓ Vessel "${name}" registered successfully!`);
                 } else if (typeof window.showToast === 'function') {
@@ -1153,10 +1042,6 @@
                 } else {
                     alert(`⚓ Vessel "${name}" registered successfully!`);
                 }
-
-                const registeredContent = `<b>${name}</b><br>IMO: ${imo || 'N/A'}<br>MMSI: ${mmsi}<br>Destino: ${destination || 'N/A'}<br>Ubicación: ${statusLabel}<br><span style="color: #f59e0b; font-weight: bold;">⚠️ Estimated Position / Terrestrial Coverage Gap</span>`;
-                marker.setPopupContent(registeredContent);
-                marker._isHydrated = true;
             } else {
                 if (typeof showToast === 'function') {
                     showToast(`⚠️ Error registering vessel: ${resData.error || 'Unknown'}`);
@@ -1206,6 +1091,9 @@
         pollAisProxyOnce,
         searchNodes,
         getSearchNodesForPort,
+        calculateDistanceToPort,
+        getGeofencedPortDisplay,
+        getActivePolInfo,
         _aisStreamState: aisStreamState,
         _aisProxyPollingState: aisProxyPollingState
     };
@@ -1218,6 +1106,9 @@
         window.resetAisCache = resetAisCache;
         window.styleConfig = MAP_STYLE_CONFIG;
         window.SEA_MAP_STYLE_CONFIG = MAP_STYLE_CONFIG;
+        window.calculateDistanceToPort = calculateDistanceToPort;
+        window.getGeofencedPortDisplay = getGeofencedPortDisplay;
+        window.getActivePolInfo = getActivePolInfo;
 
         window.ejecutarSimulacionRadarTest = function () {
             console.log("🧪 Iniciando entorno de pruebas: Inyectando 5 buques mercantes...");
