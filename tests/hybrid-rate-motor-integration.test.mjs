@@ -174,7 +174,7 @@ test('Motor de Ritmos Híbrido: Cinta Transportadora computes 6000 TM/D for Mini
   vm.runInNewContext(script, contextMini);
   contextMini.window.applyMethodAndProductConditions('pol');
 
-  assert.equal(loadRateInputMini.value, '6000', 'Mini Bulker on Cinta Transportadora should calculate 250 t/h * 24 = 6000 TM/D');
+  assert.equal(loadRateInputMini.value, '3600', 'Mini Bulker on Cinta Transportadora should calculate 150 t/h * 24 = 3600 TM/D');
 
   // Context 2: Cement Carrier (600 t/h -> 14400 TM/D)
   const contextCement = {

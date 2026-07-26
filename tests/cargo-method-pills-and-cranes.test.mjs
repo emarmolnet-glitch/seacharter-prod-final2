@@ -7,8 +7,8 @@ const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf
 
 test('Fase 1: equipmentMatrix uses exact refactored categories without generic 30MT port crane', () => {
   assert.match(indexSource, /const equipmentMatrix = Object\.freeze\(\{/);
-  assert.match(indexSource, /"Minerales y Construcción": \["Cuchara \(Grab\) - Grúa Barco", "Cuchara \(Grab\) - Grúa Portuaria", "Cinta Transportadora", "Camión Tolva", "Big Bags - Grúa Barco", "Big Bags - Grúa Portuaria"\]/);
-  assert.match(indexSource, /"Biomasa y Combustibles Sólidos": \["Cuchara \(Grab\) - Grúa Barco", "Cuchara \(Grab\) - Grúa Portuaria", "Cinta Transportadora", "Camión Tolva"\]/);
+  assert.match(indexSource, /"Minerales y Construcción": \["Cuchara \(Grab\) - Grúa Barco", "Cuchara \(Grab\) - Grúa Portuaria", "Cinta Transportadora", "Bombas Neumáticas", "Camión Tolva", "Big Bags - Grúa Barco", "Big Bags - Grúa Portuaria"\]/);
+  assert.match(indexSource, /"Biomasa y Combustibles Sólidos": \["Cuchara \(Grab\) - Grúa Barco", "Cuchara \(Grab\) - Grúa Portuaria", "Cinta Transportadora", "Bombas Neumáticas", "Camión Tolva"\]/);
   assert.match(indexSource, /"Carga Siderúrgica y Metales": \["Hierro\/Acero - Grúa Barco", "Hierro\/Acero - Grúa Portuaria", "Cuchara \(Grab\) - Grúa Barco", "Cuchara \(Grab\) - Grúa Portuaria"\]/);
   assert.match(indexSource, /"Carga Unitarizada \/ Envasada": \["Paletizado - Grúa Barco", "Paletizado - Grúa Portuaria", "Big Bags - Grúa Barco", "Big Bags - Grúa Portuaria"\]/);
   assert.match(indexSource, /"Carga de Proyecto \(Breakbulk\)": \["Hierro\/Acero - Grúa Barco", "Hierro\/Acero - Grúa Portuaria", "Cuchara \(Grab\) - Grúa Barco", "Cuchara \(Grab\) - Grúa Portuaria"\]/);
