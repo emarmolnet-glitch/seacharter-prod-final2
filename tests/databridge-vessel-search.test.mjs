@@ -24,7 +24,7 @@ test('index.html preserves Specs (IA) button connected to autoFillVesselSpecs', 
 
 test('searchLocalVesselDataBridge queries local backend endpoint and handles not-found locally', () => {
   assert.match(indexSource, /async function searchLocalVesselDataBridge\(\)/);
-  assert.match(indexSource, /\/api\/databridge-vessel-search\?q=/);
+  assert.match(indexSource, /\/api\/databridge-vessel-search/);
   assert.match(indexSource, /showToast\("Buque no encontrado en Data Bridge"\)/);
 });
 

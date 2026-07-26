@@ -166,15 +166,41 @@
         return 0.075 + (0.032 - 0.075) * progress;
     }
 
+    const DATABRIDGE_POINT_COLOR = '#00D2FF';
+    const RADAR_LIVE_POINT_COLOR = '#10B981';
+
+    function getVesselPointColor(vessel, hoveredVessel) {
+        if (vessel === hoveredVessel) return POINT_HOVER_COLOR;
+        const source = String(vessel?.data_source || vessel?.data_source_type || vessel?.source || '').toLowerCase();
+        if (source === 'databridge' || source === 'cartera' || source === 'en_cartera') {
+            return DATABRIDGE_POINT_COLOR;
+        }
+        if (source === 'radar_live' || source === 'radar' || source === 'live') {
+            return RADAR_LIVE_POINT_COLOR;
+        }
+        return POINT_COLOR;
+    }
+
     function formatDwt(value) {
         const dwt = toFiniteNumber(value);
         return Number.isFinite(dwt) && dwt > 0 ? `${Math.round(dwt).toLocaleString('es-ES')} DWT` : 'DWT no disponible';
     }
 
     function getTooltip(vessel) {
-        const name = String(vessel?.name || 'Buque sin nombre').trim() || 'Buque sin nombre';
+        const name = String(vessel?.name || vessel?.vesselName || 'Buque sin nombre').trim() || 'Buque sin nombre';
         const imo = String(vessel?.imo || '').trim();
-        return `<div class="global-fleet-tooltip"><strong>${escapeHtml(name)}</strong><span>DWT · ${escapeHtml(formatDwt(vessel?.dwt))}</span><span>IMO · ${escapeHtml(imo && imo !== 'N/A' ? imo : 'IMO no disponible')}</span></div>`;
+        const source = String(vessel?.data_source || vessel?.data_source_type || vessel?.source || '').toLowerCase();
+        const isDataBridge = source === 'databridge' || source === 'cartera' || source === 'en_cartera';
+        const isRadarLive = source === 'radar_live' || source === 'radar' || source === 'live';
+        const sourceLabel = isDataBridge
+            ? '🏷️ En Cartera (Data Bridge)'
+            : isRadarLive
+            ? '📡 Descubrimiento en Vivo (Radar)'
+            : '';
+        const sourceBadge = sourceLabel
+            ? `<span class="fleet-source-badge" style="display:block;margin-top:3px;font-size:10px;font-weight:800;color:${isDataBridge ? '#38bdf8' : '#34d399'};">${escapeHtml(sourceLabel)}</span>`
+            : '';
+        return `<div class="global-fleet-tooltip"><strong>${escapeHtml(name)}</strong>${sourceBadge}<span>DWT · ${escapeHtml(formatDwt(vessel?.dwt))}</span><span>IMO · ${escapeHtml(imo && imo !== 'N/A' ? imo : 'IMO no disponible')}</span></div>`;
     }
 
     function schedulePointInteractionStyle(view) {
@@ -327,7 +353,7 @@
     function applyPointInteractionStyle(view) {
         if (!view?.globe) return;
         view.globe
-            .pointColor((vessel) => vessel === view.hoveredVessel ? POINT_HOVER_COLOR : POINT_COLOR)
+            .pointColor((vessel) => getVesselPointColor(vessel, view.hoveredVessel))
             .pointAltitude((vessel) => vessel === view.hoveredVessel ? POINT_HOVER_ALTITUDE : POINT_ALTITUDE)
             .pointRadius((vessel) => vessel === view.hoveredVessel ? view.pointRadius * POINT_HOVER_RADIUS_FACTOR : view.pointRadius);
     }
@@ -581,7 +607,7 @@
                 .atmosphereAltitude(0.16)
                 .pointLat('lat')
                 .pointLng('lng')
-                .pointColor((vessel) => vessel === view.hoveredVessel ? POINT_HOVER_COLOR : POINT_COLOR)
+                .pointColor((vessel) => getVesselPointColor(vessel, view.hoveredVessel))
                 .pointAltitude((vessel) => vessel === view.hoveredVessel ? POINT_HOVER_ALTITUDE : POINT_ALTITUDE)
                 .pointRadius((vessel) => vessel === view.hoveredVessel ? view.pointRadius * POINT_HOVER_RADIUS_FACTOR : view.pointRadius)
                 .pointLabel(getTooltip)
