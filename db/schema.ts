@@ -109,3 +109,17 @@ export const dataBridgeVesselSyncs = pgTable("databridge_vessel_syncs", {
   rejectedCount: integer("rejected_count").default(0).notNull(),
   createdAt: createdAt(),
 });
+
+export const pipelineInbox = pgTable("pipeline_inbox", {
+  id: serial("id").primaryKey(),
+  syncId: text("sync_id"),
+  imoNumber: text("imo_number"),
+  vesselName: text("vessel_name"),
+  source: text("source").default("CORE_PRO").notNull(),
+  status: text("status").default("PENDING").notNull(),
+  payload: jsonb("payload").notNull(),
+  errorMessage: text("error_message"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+

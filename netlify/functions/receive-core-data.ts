@@ -1,5 +1,6 @@
 import type { Config, Handler } from "@netlify/functions";
 import { upsertRadarVesselsMaster, type RadarVesselMasterInput } from "../../db/vessels-master-sync.js";
+import { insertPipelineInboxBatches } from "./pipeline-inbox.js";
 
 const jsonHeaders = {
   "Content-Type": "application/json; charset=utf-8",
@@ -241,13 +242,22 @@ export const handler: Handler = async (eventOrReq: unknown) => {
       console.warn("[receive-core-data] Advertencia: No se pudo persistir en base de datos:", dbError);
     }
 
+    let inboxCount = 0;
+    const activeSyncId = syncId || crypto.randomUUID();
+    try {
+      inboxCount = await insertPipelineInboxBatches(activeSyncId, rawVessels as Record<string, unknown>[], "CORE_PRO");
+    } catch (inboxErr) {
+      console.warn("[receive-core-data] Advertencia: No se pudo persistir en pipeline_inbox:", inboxErr);
+    }
+
     return createResponse(200, {
       success: true,
       message: `Se procesaron ${normalizedVessels.length} buques de la flota correctamente.`,
-      syncId: syncId || crypto.randomUUID(),
+      syncId: activeSyncId,
       receivedCount: rawVessels.length,
       processedCount: normalizedVessels.length,
       persistedCount,
+      inboxCount,
       vessels: normalizedVessels.map((v) => ({
         imo: v.imo,
         nombre: v.name,
