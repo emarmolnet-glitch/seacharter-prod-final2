@@ -7295,7 +7295,7 @@
             </div>
             <div>
                 <h1 class="text-sm md:text-base font-bold text-white tracking-tight">SeaCharter Core PRO <span class="text-[9px] md:text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/30 ml-1 md:ml-2">RODAHMAR ENGINE</span></h1>
-                <p class="text-xs text-slate-400 hidden sm:block">Definir Ruta en Mapa ➔ Calcular Costes ➔ Redactar Contrato ➔ Auditar Riesgo</p>
+                <p class="text-xs text-slate-400 hidden sm:block" data-i18n="global_subtitle">Definir Ruta en Mapa ➔ Calcular Costes ➔ Redactar Contrato ➔ Auditar Riesgo</p>
             </div>
         </div>
 
@@ -7535,7 +7535,7 @@
                 <section id="map-input-overlay" class="map-floating-panel route-sync-card ecosystem-panel space-y-4">
                     <div>
                         <div class="flex items-center justify-between gap-3">
-                            <h2 class="text-sm font-bold uppercase text-[#002060]"><i class="fa-solid fa-map-location-dot mr-2"></i> Input geográfico</h2>
+                            <h2 class="text-sm font-bold uppercase text-[#002060]" data-i18n="map_input_header"><i class="fa-solid fa-map-location-dot mr-2"></i> Input geográfico</h2>
                             <button onclick="toggleRouteInputPanel(true)" class="map-icon-button !w-8 !h-8 !shadow-none" title="Colapsar panel" aria-label="Colapsar panel">
                                 <i class="fa-solid fa-chevron-left text-xs"></i>
                             </button>
@@ -7544,15 +7544,15 @@
                     </div>
                     <div class="space-y-3">
                         <div class="input-group">
-                            <label>Puerto previo (Lastre)</label>
+                            <label data-i18n="map_label_ballast">Puerto previo (Lastre)</label>
                             <input type="text" id="map-port-ballast" class="input-gc" placeholder="Ej: Puerto Rico" autocomplete="off" inputmode="text" spellcheck="false">
                         </div>
                         <div class="input-group">
-                            <label>Puerto de carga (POL)</label>
+                            <label data-i18n="map_label_pol">Puerto de carga (POL)</label>
                             <input type="text" id="map-port-pol" class="input-gc" placeholder="Ej: Buenos Aires" autocomplete="off" inputmode="text" spellcheck="false">
                         </div>
                         <div class="input-group">
-                            <label>Puerto de descarga (POD)</label>
+                            <label data-i18n="map_label_pod">Puerto de descarga (POD)</label>
                             <input type="text" id="map-port-pod" class="input-gc" placeholder="Ej: Monopoli" autocomplete="off" inputmode="text" spellcheck="false">
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -7605,7 +7605,7 @@
                         
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <div class="space-y-1">
-                                <label id="label-port-ballast" class="text-[10px] font-bold text-emerald-400 uppercase flex items-center min-h-[28px]">Puerto Previo (Lastre)</label>
+                                <label id="label-port-ballast" data-i18n="label_port_ballast" class="text-[10px] font-bold text-emerald-400 uppercase flex items-center min-h-[28px]">Puerto Previo (Lastre)</label>
                                 <input type="text" id="port-ballast" class="input-gc text-emerald-300 font-bold" value="" placeholder="Ej: Puerto Rico" autocomplete="off" inputmode="text" spellcheck="false">
                                 <div id="port-ballast-limits" class="text-[10px] text-emerald-500/80 font-medium mt-1"></div>
                                 <div class="grid grid-cols-2 gap-2 mt-1.5 hidden">
@@ -7621,7 +7621,7 @@
                             </div>
                             <div class="space-y-1">
                                 <div class="flex justify-between items-center w-full min-h-[28px]">
-                                    <label id="label-port-pol" class="text-[10px] font-bold text-emerald-400 uppercase flex items-center">Puerto de Carga (POL)</label>
+                                    <label id="label-port-pol" data-i18n="label_port_pol" class="text-[10px] font-bold text-emerald-400 uppercase flex items-center">Puerto de Carga (POL)</label>
                                     <button onclick="getAIPortInfo('port-pol')" class="badge-ai text-[10px] text-sky-400 hover:text-sky-300 transition" title="Info IA del Puerto">
                                         <i class="fa-solid fa-robot mr-0.5"></i> Port Info
                                     </button>
@@ -7641,7 +7641,7 @@
                             </div>
                             <div class="space-y-1">
                                 <div class="flex justify-between items-center w-full min-h-[28px]">
-                                    <label id="label-port-pod" class="text-[10px] font-bold text-emerald-400 uppercase flex items-center">Puerto de Descarga (POD)</label>
+                                    <label id="label-port-pod" data-i18n="label_port_pod" class="text-[10px] font-bold text-emerald-400 uppercase flex items-center">Puerto de Descarga (POD)</label>
                                     <button onclick="getAIPortInfo('port-pod')" class="badge-ai text-[10px] text-sky-400 hover:text-sky-300 transition" title="Info IA del Puerto">
                                         <i class="fa-solid fa-robot mr-0.5"></i> Port Info
                                     </button>
@@ -8420,7 +8420,7 @@
                     <!-- Resumen de Costes y Tiempos -->
                     <div class="collapsible-section bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg" data-collapsible-section data-default-open="false">
                         <div class="collapsible-section-header mb-3 border-b border-slate-800 pb-2">
-                            <h2 id="summary-header-title" class="text-sm font-bold text-slate-300 uppercase"><i class="fa-solid fa-chart-pie mr-2"></i> 6. RESUMEN DE OPERACIÓN</h2>
+                            <h2 id="summary-header-title" data-i18n="calc_summary_title" class="text-sm font-bold text-slate-300 uppercase"><i class="fa-solid fa-chart-pie mr-2"></i> 6. RESUMEN DE OPERACIÓN</h2>
                         </div>
 
                         <div class="flex justify-between items-center mb-1 text-sm mono">
@@ -8492,7 +8492,7 @@
                     <!-- ANÁLISIS DE FLETES (Break Even y Sugeridos) -->
                     <div class="collapsible-section bg-white border border-slate-300 rounded-xl p-5 shadow-xl ring-2 ring-indigo-500/20 text-[#212529]" data-collapsible-section data-default-open="false">
                         <div class="collapsible-section-header flex justify-between items-center mb-3 border-b border-slate-200 pb-2">
-                            <h2 id="freight-analysis-title" class="text-sm font-bold text-[#212529] uppercase"><i class="fa-solid fa-scale-unbalanced mr-2"></i> 7. ANÁLISIS DE FLETES</h2>
+                            <h2 id="freight-analysis-title" data-i18n="calc_freight_title" class="text-sm font-bold text-[#212529] uppercase"><i class="fa-solid fa-scale-unbalanced mr-2"></i> 7. ANÁLISIS DE FLETES</h2>
                             <div class="collapsible-section-actions">
                                 <button id="btn-baf-analysis" onclick="analyzeBAFScenarios()" class="text-[10px] bg-white hover:bg-slate-50 text-[#212529] px-2 py-1 rounded transition border border-slate-300 shadow" title="Escenarios de Volatilidad y Fórmula BAF"><i class="fa-solid fa-fire-flame-curved mr-1"></i> Análisis Riesgo BAF</button>
                             </div>
@@ -8975,7 +8975,7 @@
                     <!-- FLETE REAL Y BENEFICIO NETO DESGLOSADO -->
                     <div class="collapsible-section bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg relative overflow-hidden" data-collapsible-section data-default-open="false">
                         <div class="collapsible-section-header flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
-                            <h2 class="text-sm font-bold text-blue-400 uppercase">
+                            <h2 data-i18n="calc_negotiation_title" class="text-sm font-bold text-blue-400 uppercase">
                                 <i class="fa-solid fa-handshake mr-2"></i> 8. NEGOCIACIÓN COMERCIAL
                             </h2>
                         </div>
@@ -9093,7 +9093,7 @@
                     <div id="stress-test-panel" class="collapsible-section bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg no-print" data-collapsible-section data-default-open="false">
                         <div class="collapsible-section-header mb-4 flex items-center justify-between gap-3 border-b border-slate-800 pb-2">
                             <div data-collapsible-title>
-                                <h2 class="text-sm font-bold text-amber-300 uppercase">
+                                <h2 data-i18n="calc_risk_title" class="text-sm font-bold text-amber-300 uppercase">
                                     <i class="fa-solid fa-triangle-exclamation mr-2"></i> 9. MATRIZ DE RIESGO
                                 </h2>
                                 <div class="mt-0.5 text-[10px] text-slate-500">Analisis automatico de sensibilidad sobre el escenario base calculado</div>
@@ -9812,7 +9812,7 @@
                     <div class="gencon-fullscreen-workspace">
                         <div class="gencon-left-column" data-collapsible-section data-default-open="false">
                     <div class="collapsible-section-header">
-                        <h3 data-collapsible-title><i class="fa-solid fa-file-signature mr-2 text-blue-700"></i>CONDICIONES PRINCIPALES DE LA PÓLIZA (MAIN TERMS)</h3>
+                        <h3 data-collapsible-title data-i18n="editor_main_terms"><i class="fa-solid fa-file-signature mr-2 text-blue-700"></i>CONDICIONES PRINCIPALES DE LA PÓLIZA (MAIN TERMS)</h3>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         <div>
@@ -10149,7 +10149,7 @@
                         <div class="gencon-right-column">
                             <div class="audit-panel-container" data-collapsible-section data-default-open="false">
                                 <div class="collapsible-section-header audit-title">
-                                    <h3 data-collapsible-title><i class="fa-solid fa-bolt mr-2 text-amber-500"></i>Auditoría de Riesgo en Tiempo Real</h3>
+                                    <h3 data-collapsible-title data-i18n="editor_realtime_risk_audit"><i class="fa-solid fa-bolt mr-2 text-amber-500"></i>Auditoría de Riesgo en Tiempo Real</h3>
                                 </div>
 
                                 <div class="risk-card card-owner">
@@ -10167,7 +10167,7 @@
 
                             <div class="audit-panel-container" data-collapsible-section data-default-open="false">
                                 <div class="collapsible-section-header audit-title">
-                                    <h3 data-collapsible-title><i class="fa-solid fa-book-open mr-2 text-violet-600"></i>Diccionario Marítimo</h3>
+                                    <h3 data-collapsible-title data-i18n="editor_maritime_dictionary"><i class="fa-solid fa-book-open mr-2 text-violet-600"></i>Diccionario Marítimo</h3>
                                 </div>
 
                                 <div class="dictionary-card">
@@ -10187,7 +10187,7 @@
                             </div>
                             <div class="audit-panel-container" data-collapsible-section data-default-open="false">
                                 <div class="collapsible-section-header audit-title">
-                                    <h3 data-collapsible-title><i class="fa-solid fa-scale-balanced mr-2 text-slate-600"></i>Comparativa Estratégica</h3>
+                                    <h3 data-collapsible-title data-i18n="editor_strategic_comparison"><i class="fa-solid fa-scale-balanced mr-2 text-slate-600"></i>Comparativa Estratégica</h3>
                                 </div>
                                 <table class="strategic-comparison-table">
                                     <thead>
@@ -10646,15 +10646,15 @@
                         <!-- COLUMNA DERECHA: Auditoría, Diccionario y Comparativa -->
                         <div id="col-derecha" class="asbatankvoy-side-column col-span-6 right-col flex flex-col gap-6">
                             <div id="risk-audit-output" class="panel-fixed bg-white p-6 rounded-lg border border-gray-300 shadow-sm">
-                                <h3 class="font-bold text-gray-700 mb-4 flex items-center gap-2">⚡ Auditoría de Riesgo en Tiempo Real</h3>
+                                <h3 data-i18n="editor_realtime_risk_audit" class="font-bold text-gray-700 mb-4 flex items-center gap-2">⚡ Auditoría de Riesgo en Tiempo Real</h3>
                             </div>
 
                             <div id="dictionary-output" class="panel-fixed bg-white p-6 rounded-lg border border-gray-300 shadow-sm">
-                                <h3 class="font-bold text-gray-700 mb-4">📖 Diccionario Marítimo</h3>
+                                <h3 data-i18n="editor_maritime_dictionary" class="font-bold text-gray-700 mb-4">📖 Diccionario Marítimo</h3>
                             </div>
 
                             <div id="strategic-comparison" class="panel-fixed bg-white p-6 rounded-lg border border-gray-300 shadow-sm">
-                                <h3 class="font-bold text-gray-700 mb-4">⚖️ Comparativa Estratégica</h3>
+                                <h3 data-i18n="editor_strategic_comparison" class="font-bold text-gray-700 mb-4">⚖️ Comparativa Estratégica</h3>
                                 <div class="border rounded p-4">
                                 </div>
                             </div>
@@ -10863,7 +10863,7 @@
                 <div class="w-full md:w-1/3 h-1/2 md:h-full shrink-0 flex flex-col gap-4 overflow-y-auto">
                 <div class="audit-collapsible-panel ai-work-card p-4 md:p-6 flex-1 flex flex-col" data-collapsible-section data-default-open="false">
                     <div class="collapsible-section-header">
-                        <h2 data-collapsible-title class="text-sm font-bold uppercase flex items-center text-slate-800">
+                        <h2 data-collapsible-title data-i18n="audit_doc_input_title" class="text-sm font-bold uppercase flex items-center text-slate-800">
                             <i class="fa-solid fa-scale-balanced text-slate-500 mr-2"></i>
                             5. AUDITORÍA IA - ENTRADA DE DOCUMENTO
                         </h2>
@@ -10918,7 +10918,7 @@
             <!-- Right Panel: Results -->
             <div class="audit-collapsible-panel audit-results-panel w-full md:w-2/3 self-start" data-collapsible-section data-default-open="false">
                 <div class="collapsible-section-header">
-                    <h2 data-collapsible-title class="text-sm font-bold uppercase flex items-center text-slate-800">
+                    <h2 data-collapsible-title data-i18n="audit_viewer_results_title" class="text-sm font-bold uppercase flex items-center text-slate-800">
                         <i class="fa-solid fa-file-shield text-slate-500 mr-2"></i>
                         VISOR DE AUDITORÍA Y RESULTADOS
                     </h2>
@@ -11122,7 +11122,7 @@
                     <!-- Card: KPI Metrics -->
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="false">
                         <div class="collapsible-section-header">
-                        <h3 data-collapsible-title class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <h3 data-collapsible-title data-i18n="density_fleet_analysis_title" class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                             <i class="fa-solid fa-calculator text-blue-400"></i>
                             ANÁLISIS DE DENSIDAD DE FLOTA
                         </h3>
@@ -11259,7 +11259,7 @@
                 <div class="lg:col-span-2 flex flex-col gap-6">
                     <div id="density-map-center-panel" class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="false">
                         <div class="collapsible-section-header">
-                        <h3 data-collapsible-title class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <h3 data-collapsible-title data-i18n="density_map_center_title" class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                             <i class="fa-solid fa-satellite-dish text-amber-400"></i>
                             CENTRO DE MAPA DENSIDAD
                         </h3>
@@ -11360,7 +11360,7 @@
                     <!-- Map Card -->
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="false">
                         <div class="collapsible-section-header flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <h3 data-collapsible-title class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                            <h3 data-collapsible-title data-i18n="density_map_title" class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                                 <i class="fa-solid fa-map-location-dot text-indigo-400"></i>
                                 MAPA DE DENSIDAD
                             </h3>
@@ -11402,7 +11402,7 @@
                     <!-- Vessels List -->
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="false">
                         <div class="collapsible-section-header flex items-center justify-between">
-                            <h3 data-collapsible-title class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                            <h3 data-collapsible-title data-i18n="density_live_vessels_title" class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                                 <i class="fa-solid fa-list text-emerald-400"></i>
                                 BUQUES DETECTADOS EN TIEMPO REAL (AIS LIVE)
                             </h3>
@@ -12733,14 +12733,14 @@
                     <div id="matching-route-sync-panel" class="rounded-xl border border-teal-200 bg-white p-4 shadow-sm">
                         <div class="flex flex-wrap items-center justify-between gap-3">
                             <div>
-                                <p class="text-[10px] font-black uppercase tracking-[0.18em] text-teal-700">Estado de Sincronización</p>
+                                <p class="text-[10px] font-black uppercase tracking-[0.18em] text-teal-700" data-i18n="databridge_sync_status">Estado de Sincronización</p>
                                 <p class="mt-1 text-xs font-semibold text-slate-600">Datos operativos recibidos desde el mapa</p>
                             </div>
                             <span id="matching-route-sync-badge" class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase text-slate-500">Inactivo</span>
                         </div>
                         <div class="mt-3 grid gap-2 rounded-lg border border-teal-100 bg-teal-50/60 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.6fr)] sm:items-center">
                             <div>
-                                <label for="matching-global-taxonomy-select" class="text-[10px] font-black uppercase tracking-[0.14em] text-teal-800">Taxonomía Global</label>
+                                <label for="matching-global-taxonomy-select" class="text-[10px] font-black uppercase tracking-[0.14em] text-teal-800" data-i18n="databridge_global_taxonomy">Taxonomía Global</label>
                                 <p id="matching-global-taxonomy-status" class="mt-1 text-[10px] font-bold text-amber-700" aria-live="polite">Cargando última configuración…</p>
                             </div>
                             <select id="matching-global-taxonomy-select" class="w-full rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200" aria-describedby="matching-global-taxonomy-status">
@@ -13029,6 +13029,76 @@
         };
 
         const UI_TRANSLATIONS = {
+            // Structural i18n Keys & Literals
+            "global_subtitle": { es: "Definir Ruta en Mapa ➔ Calcular Costes ➔ Redactar Contrato ➔ Auditar Riesgo", en: "Define Route on Map ➔ Calculate Costs ➔ Draft Contract ➔ Audit Risk", fr: "Définir l'itinéraire sur la carte ➔ Calculer les coûts ➔ Rédiger le contrat ➔ Auditer le risque" },
+            "Definir Ruta en Mapa ➔ Calcular Costes ➔ Redactar Contrato ➔ Auditar Riesgo": { es: "Definir Ruta en Mapa ➔ Calcular Costes ➔ Redactar Contrato ➔ Auditar Riesgo", en: "Define Route on Map ➔ Calculate Costs ➔ Draft Contract ➔ Audit Risk", fr: "Définir l'itinéraire sur la carte ➔ Calculer les coûts ➔ Rédiger le contrat ➔ Auditer le risque" },
+
+            "map_input_header": { es: "Input geográfico", en: "Geographic Input", fr: "Saisie Géographique" },
+            "Input geográfico": { es: "Input geográfico", en: "Geographic Input", fr: "Saisie Géographique" },
+
+            "map_label_ballast": { es: "Puerto previo (Lastre)", en: "Previous Port (Ballast)", fr: "Port précédent (Ballast)" },
+            "Puerto previo (Lastre)": { es: "Puerto previo (Lastre)", en: "Previous Port (Ballast)", fr: "Port précédent (Ballast)" },
+
+            "map_label_pol": { es: "Puerto de carga (POL)", en: "Port of Loading (POL)", fr: "Port de chargement (POL)" },
+            "Puerto de carga (POL)": { es: "Puerto de carga (POL)", en: "Port of Loading (POL)", fr: "Port de chargement (POL)" },
+
+            "map_label_pod": { es: "Puerto de descarga (POD)", en: "Port of Discharge (POD)", fr: "Port de déchargement (POD)" },
+            "Puerto de descarga (POD)": { es: "Puerto de descarga (POD)", en: "Port of Discharge (POD)", fr: "Port de déchargement (POD)" },
+
+            "label_port_ballast": { es: "Puerto Previo (Lastre)", en: "Previous Port (Ballast)", fr: "Port précédent (Ballast)" },
+            "label_port_pol": { es: "Puerto de Carga (POL)", en: "Port of Loading (POL)", fr: "Port de chargement (POL)" },
+            "label_port_pod": { es: "Puerto de Descarga (POD)", en: "Port of Discharge (POD)", fr: "Port de déchargement (POD)" },
+
+            "voyage_checklist_title": { es: "Checklist de Viaje", en: "Voyage Checklist", fr: "Liste de contrôle de voyage" },
+            "Checklist de Viaje": { es: "Checklist de Viaje", en: "Voyage Checklist", fr: "Liste de contrôle de voyage" },
+
+            "calc_summary_title": { es: "6. RESUMEN DE OPERACIÓN", en: "6. OPERATION SUMMARY", fr: "6. RÉSUMÉ D'OPÉRATION" },
+            "6. RESUMEN DE OPERACIÓN": { es: "6. RESUMEN DE OPERACIÓN", en: "6. OPERATION SUMMARY", fr: "6. RÉSUMÉ D'OPÉRATION" },
+
+            "calc_freight_title": { es: "7. ANÁLISIS DE FLETES", en: "7. FREIGHT ANALYSIS", fr: "7. ANALYSE DU FRET" },
+            "7. ANÁLISIS DE FLETES": { es: "7. ANÁLISIS DE FLETES", en: "7. FREIGHT ANALYSIS", fr: "7. ANALYSE DU FRET" },
+
+            "calc_negotiation_title": { es: "8. NEGOCIACIÓN COMERCIAL", en: "8. COMMERCIAL NEGOTIATION", fr: "8. NÉGOCIATION COMMERCIALE" },
+            "8. NEGOCIACIÓN COMERCIAL": { es: "8. NEGOCIACIÓN COMERCIAL", en: "8. COMMERCIAL NEGOTIATION", fr: "8. NÉGOCIATION COMMERCIALE" },
+
+            "calc_risk_title": { es: "9. MATRIZ DE RIESGO", en: "9. RISK MATRIX", fr: "9. MATRICE DE RISQUE" },
+            "9. MATRIZ DE RIESGO": { es: "9. MATRIZ DE RIESGO", en: "9. RISK MATRIX", fr: "9. MATRICE DE RISQUE" },
+
+            "density_fleet_analysis_title": { es: "ANÁLISIS DE DENSIDAD DE FLOTA", en: "FLEET DENSITY ANALYSIS", fr: "ANALYSE DE DENSITÉ DE LA FLOTTE" },
+            "ANÁLISIS DE DENSIDAD DE FLOTA": { es: "ANÁLISIS DE DENSIDAD DE FLOTA", en: "FLEET DENSITY ANALYSIS", fr: "ANALYSE DE DENSITÉ DE LA FLOTTE" },
+
+            "density_map_center_title": { es: "CENTRO DE MAPA DENSIDAD", en: "DENSITY MAP CENTER", fr: "CENTRE DE CARTE DE DENSITÉ" },
+            "CENTRO DE MAPA DENSIDAD": { es: "CENTRO DE MAPA DENSIDAD", en: "DENSITY MAP CENTER", fr: "CENTRE DE CARTE DE DENSITÉ" },
+
+            "density_map_title": { es: "MAPA DE DENSIDAD", en: "DENSITY MAP", fr: "CARTE DE DENSITÉ" },
+            "MAPA DE DENSIDAD": { es: "MAPA DE DENSIDAD", en: "DENSITY MAP", fr: "CARTE DE DENSITÉ" },
+
+            "density_live_vessels_title": { es: "BUQUES DETECTADOS EN TIEMPO REAL (AIS LIVE)", en: "REAL-TIME DETECTED VESSELS (AIS LIVE)", fr: "NAVIRES DÉTECTÉS EN TEMPS RÉEL (AIS LIVE)" },
+            "BUQUES DETECTADOS EN TIEMPO REAL (AIS LIVE)": { es: "BUQUES DETECTADOS EN TIEMPO REAL (AIS LIVE)", en: "REAL-TIME DETECTED VESSELS (AIS LIVE)", fr: "NAVIRES DÉTECTÉS EN TEMPS RÉEL (AIS LIVE)" },
+
+            "databridge_sync_status": { es: "Estado de Sincronización", en: "Synchronization Status", fr: "Statut de Synchronisation" },
+            "Estado de Sincronización": { es: "Estado de Sincronización", en: "Synchronization Status", fr: "Statut de Synchronisation" },
+
+            "databridge_global_taxonomy": { es: "Taxonomía Global", en: "Global Taxonomy", fr: "Taxonomie Globale" },
+            "Taxonomía Global": { es: "Taxonomía Global", en: "Global Taxonomy", fr: "Taxonomie Globale" },
+
+            "editor_main_terms": { es: "CONDICIONES PRINCIPALES DE LA PÓLIZA (MAIN TERMS)", en: "MAIN POLICY CONDITIONS (MAIN TERMS)", fr: "CONDITIONS PRINCIPALES DE LA POLICE (MAIN TERMS)" },
+            "CONDICIONES PRINCIPALES DE LA PÓLIZA (MAIN TERMS)": { es: "CONDICIONES PRINCIPALES DE LA PÓLIZA (MAIN TERMS)", en: "MAIN POLICY CONDITIONS (MAIN TERMS)", fr: "CONDITIONS PRINCIPALES DE LA POLICE (MAIN TERMS)" },
+
+            "editor_realtime_risk_audit": { es: "Auditoría de Riesgo en Tiempo Real", en: "Real-Time Risk Audit", fr: "Audit de Risque en Temps Réel" },
+            "Auditoría de Riesgo en Tiempo Real": { es: "Auditoría de Riesgo en Tiempo Real", en: "Real-Time Risk Audit", fr: "Audit de Risque en Temps Réel" },
+
+            "editor_maritime_dictionary": { es: "Diccionario Marítimo", en: "Maritime Dictionary", fr: "Dictionnaire Maritime" },
+            "Diccionario Marítimo": { es: "Diccionario Marítimo", en: "Maritime Dictionary", fr: "Dictionnaire Maritime" },
+
+            "editor_strategic_comparison": { es: "Comparativa Estratégica", en: "Strategic Comparison", fr: "Comparaison Stratégique" },
+            "Comparativa Estratégica": { es: "Comparativa Estratégica", en: "Strategic Comparison", fr: "Comparaison Stratégique" },
+
+            "audit_doc_input_title": { es: "5. AUDITORÍA IA - ENTRADA DE DOCUMENTO", en: "5. AI AUDIT - DOCUMENT INPUT", fr: "5. AUDIT IA - ENTRÉE DE DOCUMENT" },
+            "5. AUDITORÍA IA - ENTRADA DE DOCUMENTO": { es: "5. AUDITORÍA IA - ENTRADA DE DOCUMENTO", en: "5. AI AUDIT - DOCUMENT INPUT", fr: "5. AUDIT IA - ENTRÉE DE DOCUMENT" },
+
+            "audit_viewer_results_title": { es: "VISOR DE AUDITORÍA Y RESULTADOS", en: "AUDIT AND RESULTS VIEWER", fr: "VISIONNEUSE D'AUDIT ET RÉSULTATS" },
+            "VISOR DE AUDITORÍA Y RESULTADOS": { es: "VISOR DE AUDITORÍA Y RESULTADOS", en: "AUDIT AND RESULTS VIEWER", fr: "VISIONNEUSE D'AUDIT ET RÉSULTATS" },
             "POL": { en: "POL", fr: "POL" },
             "POD": { en: "POD", fr: "POD" },
             "Laydays": { en: "Laydays", fr: "Jours de planche" },
@@ -13246,19 +13316,47 @@
 
         function normalizeKey(str) {
             if (!str) return '';
-            return str.trim().replace(/\s+/g, ' ');
+            try {
+                return String(str).trim().replace(/\s+/g, ' ');
+            } catch (e) {
+                return '';
+            }
         }
 
         function translateToastMessage(msg, lang) {
-            if (lang === 'es') return msg;
-            const trans = toastTranslations[lang];
-            if (!trans) return msg;
-            
-            let translated = msg;
-            for (const [key, val] of Object.entries(trans)) {
-                translated = translated.replaceAll(key, val);
+            try {
+                if (msg === null || msg === undefined) return '';
+                const strMsg = typeof msg === 'string' ? msg : String(msg);
+                if (!lang || lang === 'es') return strMsg;
+
+                const tMap = (typeof toastTranslations !== 'undefined' ? toastTranslations[lang] : (typeof window !== 'undefined' && window.toastTranslations ? window.toastTranslations[lang] : null));
+                if (!tMap) return strMsg;
+
+                let translated = strMsg;
+                for (const [key, val] of Object.entries(tMap)) {
+                    if (key && val) {
+                        translated = translated.replaceAll(key, val);
+                    }
+                }
+                return translated;
+            } catch (err) {
+                console.warn('translateToastMessage defensive fallback:', err);
+                return typeof msg === 'string' ? msg : (msg ? String(msg) : '');
             }
-            return translated;
+        }
+
+        // Global exposure of i18n helpers
+        if (typeof window !== 'undefined') {
+            window.toastTranslations = toastTranslations;
+            window.UI_TRANSLATIONS = UI_TRANSLATIONS;
+            window.normalizeKey = normalizeKey;
+            window.translateToastMessage = translateToastMessage;
+        }
+        if (typeof globalThis !== 'undefined') {
+            globalThis.toastTranslations = toastTranslations;
+            globalThis.UI_TRANSLATIONS = UI_TRANSLATIONS;
+            globalThis.normalizeKey = normalizeKey;
+            globalThis.translateToastMessage = translateToastMessage;
         }
 
         function translatePage(lang) {
@@ -13477,8 +13575,16 @@
             translatePage(savedLang);
         }
 
-        window.changeLanguage = changeLanguage;
-        window.translatePage = translatePage;
+        if (typeof window !== 'undefined') {
+            window.changeLanguage = changeLanguage;
+            window.translatePage = translatePage;
+            window.initLanguage = initLanguage;
+        }
+        if (typeof globalThis !== 'undefined') {
+            globalThis.changeLanguage = changeLanguage;
+            globalThis.translatePage = translatePage;
+            globalThis.initLanguage = initLanguage;
+        }
 
         if (typeof document !== 'undefined') {
             if (document.readyState === 'loading') {
@@ -15967,7 +16073,7 @@
                         <div class="mt-3 text-xs font-black text-slate-700 uppercase">${escapePanelHtml(auditoria.posicion_riesgo || 'Riesgo no clasificado')}</div>
                     `;
                     riskAudit.innerHTML = `
-                        <h3 class="font-bold text-gray-700 mb-4 flex items-center gap-2">⚡ Auditoría de Riesgo en Tiempo Real</h3>
+                        <h3 data-i18n="editor_realtime_risk_audit" class="font-bold text-gray-700 mb-4 flex items-center gap-2">⚡ Auditoría de Riesgo en Tiempo Real</h3>
                         ${riskAuditBody}
                     `;
                 }
@@ -15977,7 +16083,7 @@
                         ? dictionary.map((d) => `<p class="text-sm mb-1"><strong>${escapePanelHtml(d.termino)}:</strong> ${escapePanelHtml(d.definicion)}</p>`).join('')
                         : '<p>Sin términos técnicos disponibles.</p>');
                     dictionaryOutput.innerHTML = `
-                        <h3 class="font-bold text-gray-700 mb-4">📖 Diccionario Marítimo</h3>
+                        <h3 data-i18n="editor_maritime_dictionary" class="font-bold text-gray-700 mb-4">📖 Diccionario Marítimo</h3>
                         ${dictionaryBody}
                     `;
                 }
@@ -15988,7 +16094,7 @@
                         <p class="mt-2"><strong>Fletador:</strong> ${escapePanelHtml(comparativa.fletador || data?.estrategia_justa?.recomendacion || 'Sin propuesta para fletador disponible.')}</p>
                     `;
                     strategicComparison.innerHTML = `
-                        <h3 class="font-bold text-gray-700 mb-4">⚖️ Comparativa Estratégica</h3>
+                        <h3 data-i18n="editor_strategic_comparison" class="font-bold text-gray-700 mb-4">⚖️ Comparativa Estratégica</h3>
                         <div class="border rounded p-4">
                             ${strategicComparisonBody}
                         </div>
@@ -21685,40 +21791,75 @@
         }
 
         function dismissToast() {
-            const toast = document.getElementById('toast');
-            if (!toast) return;
-            if (toastDismissTimer) {
-                clearTimeout(toastDismissTimer);
-                toastDismissTimer = null;
+            try {
+                const toast = document.getElementById('toast');
+                if (!toast) return;
+                if (typeof toastDismissTimer !== 'undefined' && toastDismissTimer) {
+                    clearTimeout(toastDismissTimer);
+                    toastDismissTimer = null;
+                }
+                toast.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
+                toast.classList.remove('pointer-events-auto');
+            } catch (e) {
+                console.warn('dismissToast fallback:', e);
             }
-            toast.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
-            toast.classList.remove('pointer-events-auto');
         }
 
         function showToast(message, isSpinner = false, variant = 'success') {
-            const currentLang = document.getElementById('language-selector')?.value || 'es';
-            const translatedMessage = translateToastMessage(message, currentLang);
-            const toast = document.getElementById('toast');
-            const toastIcon = document.getElementById('toast-icon');
-            const toastMessage = document.getElementById('toast-message');
-            const iconClass = isSpinner
-                ? 'fa-solid fa-spinner fa-spin text-indigo-400 mt-0.5 shrink-0'
-                : variant === 'warning'
-                    ? 'fa-solid fa-triangle-exclamation text-amber-400 mt-0.5 shrink-0'
-                    : variant === 'error'
-                        ? 'fa-solid fa-circle-exclamation text-red-400 mt-0.5 shrink-0'
-                        : 'fa-solid fa-check-circle text-green-400 mt-0.5 shrink-0';
-            if (!toast || !toastIcon || !toastMessage) return;
-            toast.classList.toggle('border-amber-500', variant === 'warning');
-            toast.classList.toggle('border-red-500', variant === 'error');
-            toast.classList.toggle('bg-red-950', variant === 'error');
-            toastIcon.className = iconClass;
-            toastMessage.textContent = translatedMessage;
-            updateToastPosition();
-            toast.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
-            toast.classList.add('pointer-events-auto');
-            if (toastDismissTimer) clearTimeout(toastDismissTimer);
-            toastDismissTimer = setTimeout(dismissToast, isSpinner ? 4000 : 3000);
+            try {
+                const selector = typeof document !== 'undefined' ? document.getElementById('language-selector') : null;
+                const currentLang = (selector && selector.value) || (typeof localStorage !== 'undefined' && localStorage.getItem('seacharter_lang')) || 'es';
+
+                let translatedMessage = message;
+                try {
+                    const fn = typeof translateToastMessage === 'function'
+                        ? translateToastMessage
+                        : (typeof window !== 'undefined' && typeof window.translateToastMessage === 'function' ? window.translateToastMessage : null);
+                    if (typeof fn === 'function') {
+                        translatedMessage = fn(message, currentLang);
+                    }
+                } catch (e) {
+                    translatedMessage = message;
+                }
+
+                const toast = document.getElementById('toast');
+                const toastIcon = document.getElementById('toast-icon');
+                const toastMessage = document.getElementById('toast-message');
+                if (!toast || !toastIcon || !toastMessage) return;
+
+                const iconClass = isSpinner
+                    ? 'fa-solid fa-spinner fa-spin text-indigo-400 mt-0.5 shrink-0'
+                    : variant === 'warning'
+                        ? 'fa-solid fa-triangle-exclamation text-amber-400 mt-0.5 shrink-0'
+                        : variant === 'error'
+                            ? 'fa-solid fa-circle-exclamation text-red-400 mt-0.5 shrink-0'
+                            : 'fa-solid fa-check-circle text-green-400 mt-0.5 shrink-0';
+
+                toast.classList.toggle('border-amber-500', variant === 'warning');
+                toast.classList.toggle('border-red-500', variant === 'error');
+                toast.classList.toggle('bg-red-950', variant === 'error');
+                toastIcon.className = iconClass;
+                toastMessage.innerHTML = typeof translatedMessage === 'string' ? translatedMessage : String(translatedMessage || '');
+                if (typeof updateToastPosition === 'function') updateToastPosition();
+                toast.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
+                toast.classList.add('pointer-events-auto');
+                if (typeof toastDismissTimer !== 'undefined' && toastDismissTimer) clearTimeout(toastDismissTimer);
+                const dismissFn = typeof dismissToast === 'function' ? dismissToast : (typeof window !== 'undefined' && window.dismissToast);
+                if (dismissFn) {
+                    toastDismissTimer = setTimeout(dismissFn, isSpinner ? 4000 : 3000);
+                }
+            } catch (toastErr) {
+                console.warn('showToast error:', toastErr);
+            }
+        }
+
+        if (typeof window !== 'undefined') {
+            window.showToast = showToast;
+            window.dismissToast = dismissToast;
+        }
+        if (typeof globalThis !== 'undefined') {
+            globalThis.showToast = showToast;
+            globalThis.dismissToast = dismissToast;
         }
 
         const appHeader = document.querySelector('header.app-header');
@@ -26162,6 +26303,13 @@
                 btn.innerHTML = originalText;
                 btn.disabled = false;
             }
+        }
+
+        if (typeof window !== 'undefined') {
+            window.autoFillBunkers = autoFillBunkers;
+        }
+        if (typeof globalThis !== 'undefined') {
+            globalThis.autoFillBunkers = autoFillBunkers;
         }
 
         function useAlgorithmicFreight(role) {
