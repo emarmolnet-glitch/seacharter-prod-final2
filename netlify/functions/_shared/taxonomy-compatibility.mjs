@@ -75,8 +75,8 @@ export function classifyAisVesselTaxonomyTypes(value) {
 
   const types = new Set();
   if (/\b(cement carrier|cementero)\b/.test(vesselType)) types.add("cement_carrier");
-  if (/\b(bulk carrier|bulker|dry bulk|handysize|handymax|supramax|ultramax|panamax|capesize)\b/.test(vesselType)) types.add("bulk_carrier");
-  if (/\b(general cargo|coaster)\b/.test(vesselType)) types.add("general_cargo");
+  if (/\b(bulk carrier|bulker|dry bulk|handysize|handymax|supramax|ultramax|panamax|capesize|mini bulker|minibulker|mini-bulker|coaster)\b/.test(vesselType)) types.add("bulk_carrier");
+  if (/\b(general cargo|coaster|costeros?|cabotage|cabotaje|mini bulker|minibulker|mini-bulker|class b|clase b)\b/.test(vesselType)) types.add("general_cargo");
   if (/\b(multi purpose|multipurpose|mpp|mpv)\b/.test(vesselType)) types.add("multipurpose_mpp");
 
   return Array.from(types);

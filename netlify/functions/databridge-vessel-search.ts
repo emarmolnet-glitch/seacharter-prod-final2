@@ -46,14 +46,81 @@ export default async (req: Request) => {
     } else {
       const body = await req.json().catch(() => ({}));
       const payload = asRecord(body);
-      searchTerm = cleanString(payload.q || payload.query || payload.vessel_name || payload.imo_number);
+      searchTerm = cleanString(payload.q || payload.query || payload.vessel_name || payload.imo_number || payload.search);
     }
 
+    const pool = getPool();
+
+    // Ensure columns exist to prevent SQL execution failures on varying schemas
+    await pool.query(`
+      ALTER TABLE vessels_master ADD COLUMN IF NOT EXISTS status TEXT;
+      ALTER TABLE vessels_master ADD COLUMN IF NOT EXISTS validation_status TEXT;
+      ALTER TABLE vessels_master ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+      ALTER TABLE vessels_master ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+    `).catch((err: unknown) => {
+      console.warn("[databridge-vessel-search] Columns check warning:", err);
+    });
+
     if (!searchTerm || searchTerm.toUpperCase() === "TBN") {
-      return Response.json(
-        { success: false, vessel: null, message: "Buque no encontrado en Data Bridge" },
-        { status: 400 },
-      );
+      // Query portfolio vessels from vessels_master for dual-sourcing / bulk loading
+      const allQueryResult = await pool.query<VesselMasterRow>(
+        `
+          SELECT
+            imo_number,
+            vessel_name,
+            dwt,
+            mmsi,
+            vessel_type,
+            draft_meters,
+            flag,
+            latitude,
+            longitude,
+            eta,
+            last_port,
+            current_destination,
+            year_built,
+            owner_manager,
+            has_gears,
+            process_status,
+            status,
+            validation_status,
+            source_payload
+          FROM vessels_master
+          WHERE status = 'EN_CARTERA' OR validation_status = 'VALIDADO'
+          ORDER BY fecha_ultima_actualizacion DESC NULLS LAST
+          LIMIT 1000
+        `
+      ).catch(() => ({ rows: [] as VesselMasterRow[] }));
+
+      const mappedVessels = (allQueryResult.rows || []).map((row) => {
+        const sourcePayload = asRecord(row.source_payload);
+        const metadata = asRecord(sourcePayload.MetaData || sourcePayload.metadata);
+        return {
+          vessel_name: row.vessel_name || sourcePayload.vessel_name || metadata.ShipName || 'Buque Data Bridge',
+          vesselName: row.vessel_name || sourcePayload.vessel_name || metadata.ShipName || 'Buque Data Bridge',
+          imo: row.imo_number || sourcePayload.imo || metadata.IMO || null,
+          imo_number: row.imo_number || sourcePayload.imo_number || metadata.IMO || null,
+          dwt: row.dwt ?? (sourcePayload.dwt as number | null) ?? (metadata.DWT as number | null) ?? null,
+          mmsi: row.mmsi || (sourcePayload.mmsi as string | null) || null,
+          vessel_type: row.vessel_type || (sourcePayload.vessel_type as string | null) || null,
+          latitude: row.latitude ?? (sourcePayload.latitude as number | null) ?? null,
+          longitude: row.longitude ?? (sourcePayload.longitude as number | null) ?? null,
+          lat: row.latitude ?? (sourcePayload.latitude as number | null) ?? null,
+          lng: row.longitude ?? (sourcePayload.longitude as number | null) ?? null,
+          draft: row.draft_meters ?? (sourcePayload.draft as number | null) ?? null,
+          flag: row.flag || (sourcePayload.flag as string | null) || (metadata.Flag as string | null) || null,
+          data_source: 'databridge'
+        };
+      });
+
+      return Response.json({
+        success: true,
+        vessel: mappedVessels[0] || null,
+        vessels: mappedVessels,
+        data: mappedVessels,
+        count: mappedVessels.length,
+        message: "Flota de Data Bridge cargada con éxito"
+      }, { status: 200 });
     }
 
     // Extract base search name/IMO if parenthesized
@@ -64,16 +131,6 @@ export default async (req: Request) => {
 
     // Extract digits for clean IMO check
     const imoDigits = searchTerm.replace(/\D/g, "");
-
-    const pool = getPool();
-
-    // Ensure columns exist to prevent SQL execution failures on varying schemas
-    await pool.query(`
-      ALTER TABLE vessels_master ADD COLUMN IF NOT EXISTS status TEXT;
-      ALTER TABLE vessels_master ADD COLUMN IF NOT EXISTS validation_status TEXT;
-    `).catch((err: unknown) => {
-      console.warn("[databridge-vessel-search] Columns check warning:", err);
-    });
 
     // SQL query: exact match by imo_number OR ILIKE match by vessel_name
     // Strict condition: status = 'EN_CARTERA' AND validation_status = 'VALIDADO'
@@ -87,6 +144,8 @@ export default async (req: Request) => {
           vessel_type,
           draft_meters,
           flag,
+          latitude,
+          longitude,
           eta,
           last_port,
           current_destination,
@@ -115,8 +174,10 @@ export default async (req: Request) => {
       return Response.json({
         success: false,
         vessel: null,
+        vessels: [],
+        data: [],
         message: "Buque no encontrado en Data Bridge",
-      });
+      }, { status: 200 });
     }
 
     const row = queryResult.rows[0];
@@ -125,11 +186,16 @@ export default async (req: Request) => {
 
     const vesselData = {
       vessel_name: row.vessel_name || sourcePayload.vessel_name || metadata.ShipName || searchTerm,
+      vesselName: row.vessel_name || sourcePayload.vessel_name || metadata.ShipName || searchTerm,
       imo: row.imo_number || sourcePayload.imo || metadata.IMO || null,
       imo_number: row.imo_number || sourcePayload.imo_number || metadata.IMO || null,
       dwt: row.dwt ?? (sourcePayload.dwt as number | null) ?? (metadata.DWT as number | null) ?? null,
       mmsi: row.mmsi || (sourcePayload.mmsi as string | null) || null,
       vessel_type: row.vessel_type || (sourcePayload.vessel_type as string | null) || null,
+      latitude: row.latitude ?? (sourcePayload.latitude as number | null) ?? null,
+      longitude: row.longitude ?? (sourcePayload.longitude as number | null) ?? null,
+      lat: row.latitude ?? (sourcePayload.latitude as number | null) ?? null,
+      lng: row.longitude ?? (sourcePayload.longitude as number | null) ?? null,
       draft: row.draft_meters ?? (sourcePayload.draft as number | null) ?? null,
       draft_meters: row.draft_meters ?? (sourcePayload.draft as number | null) ?? null,
       flag: row.flag || (sourcePayload.flag as string | null) || (metadata.Flag as string | null) || null,
@@ -146,17 +212,20 @@ export default async (req: Request) => {
       loa: sourcePayload.loa || null,
       vessel_class: sourcePayload.vessel_class || row.vessel_type || null,
       specialty_type: sourcePayload.specialty_type || row.vessel_type || null,
+      data_source: 'databridge'
     };
 
     return Response.json({
       success: true,
       vessel: vesselData,
-    });
+      vessels: [vesselData],
+      data: [vesselData],
+    }, { status: 200 });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error("[databridge-vessel-search] Query failed:", errorMessage);
     return Response.json(
-      { success: false, vessel: null, message: "Buque no encontrado en Data Bridge", error: errorMessage },
+      { success: false, vessel: null, vessels: [], data: [], message: "Buque no encontrado en Data Bridge", error: errorMessage },
       { status: 500 },
     );
   }
