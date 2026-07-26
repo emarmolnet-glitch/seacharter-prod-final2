@@ -562,14 +562,35 @@
     }
 
     function normalizeCoordinates(lat, lon) {
-        const nLat = parseFloat(lat);
-        const nLon = parseFloat(lon);
+        let nLat, nLon;
+
+        function parseNum(val) {
+            if (val === null || val === undefined || val === '') return NaN;
+            if (typeof val === 'number') return val;
+            if (typeof val === 'string') return parseFloat(val.replace(',', '.').trim());
+            return Number(val);
+        }
+
+        if (lat && typeof lat === 'object') {
+            const v = lat;
+            nLat = parseNum(v.latitude ?? v.lat ?? v.LAT ?? v.latitud ?? (v.MetaData && (v.MetaData.latitude ?? v.MetaData.lat)));
+            nLon = parseNum(v.longitude ?? v.lon ?? v.lng ?? v.LON ?? v.LONG ?? v.longitud ?? (v.MetaData && (v.MetaData.longitude ?? v.MetaData.lon ?? v.MetaData.lng)));
+        } else {
+            nLat = parseNum(lat);
+            nLon = parseNum(lon);
+        }
 
         if (!Number.isFinite(nLat) || !Number.isFinite(nLon)) return null;
         if (nLat < -90 || nLat > 90 || nLon < -180 || nLon > 180) return null;
         if (Math.abs(nLat) < 0.0001 && Math.abs(nLon) < 0.0001) return null;
 
-        return { lat: nLat, lon: nLon };
+        const coords = [nLat, nLon];
+        coords.lat = nLat;
+        coords.lon = nLon;
+        coords.lng = nLon;
+        coords.latitude = nLat;
+        coords.longitude = nLon;
+        return coords;
     }
 
     function isValidWaterPosition(lat, lon) {

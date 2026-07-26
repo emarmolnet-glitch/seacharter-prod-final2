@@ -115,28 +115,40 @@ function optionalNumber(value) {
 }
 
 function classifyVesselDesign(shipType, vessel) {
-  const declaredType = normalizeText(shipType || findNestedValue(vessel, ["ship_type", "vessel_type", "shipType", "vesselType", "tipo_buque", "type"]));
+  const declaredType = normalizeText(shipType || findNestedValue(vessel, ["ship_type", "vessel_type", "shipType", "vesselType", "tipo_buque", "type", "scrapedType", "categoryLabel"]));
+  const isAisCargoCode = /^7[0-9]$/.test(declaredType) || declaredType === "70";
+  const isGeneralCargoWord = /\b(cargo|vessel|freighter|ship|merchant|motor vessel|mv)\b/.test(declaredType);
+  const isBulk = /\b(bulk carrier|bulker|dry bulk|handysize|handymax|supramax|ultramax|panamax|capesize|coaster|mini bulker)\b/.test(declaredType) || isAisCargoCode;
+  const isCement = /\b(cement carrier|cementero|clinker carrier)\b/.test(declaredType);
+  const isGeneral = /\b(general cargo|coaster|cargo ship|cargo|freighter|ship|merchant)\b/.test(declaredType) || isAisCargoCode || isGeneralCargoWord;
+  const isMultipurpose = /\b(multipurpose|multi purpose|mpp|mpv|heavy lift|open hatch)\b/.test(declaredType) || isAisCargoCode;
+  const isTanker = /\b(tanker|oil tanker|chemical tanker|product tanker|crude|lng|lpg)\b/.test(declaredType);
+  const isContainer = /\b(container|containership|feeder)\b/.test(declaredType);
+  const isRoro = /\b(ro ro|roro|vehicle carrier)\b/.test(declaredType);
+  const isNonCargo = /\b(passenger|cruise|tug|fishing|pleasure|yacht|offshore supply|naval|warship)\b/.test(declaredType);
+
   return {
-    declaredType: declaredType || "unknown",
-    bulk: /\b(bulk carrier|bulker|dry bulk|handysize|handymax|supramax|ultramax|panamax|capesize)\b/.test(declaredType),
-    cement: /\b(cement carrier|cementero|clinker carrier)\b/.test(declaredType),
-    general: /\b(general cargo|coaster|cargo ship)\b/.test(declaredType),
-    multipurpose: /\b(multipurpose|multi purpose|mpp|mpv|heavy lift|open hatch)\b/.test(declaredType),
-    tanker: /\b(tanker|oil tanker|chemical tanker|product tanker|crude|lng|lpg)\b/.test(declaredType),
-    container: /\b(container|containership|feeder)\b/.test(declaredType),
-    roro: /\b(ro ro|roro|vehicle carrier)\b/.test(declaredType),
-    nonCargo: /\b(passenger|cruise|tug|fishing|pleasure|yacht|offshore supply|naval|warship)\b/.test(declaredType),
+    declaredType: declaredType || "cargo",
+    bulk: isBulk || isGeneralCargoWord,
+    cement: isCement,
+    general: isGeneral,
+    multipurpose: isMultipurpose || isGeneralCargoWord,
+    tanker: isTanker,
+    container: isContainer,
+    roro: isRoro,
+    nonCargo: isNonCargo,
   };
 }
 
 function cargoAllowsDesign(cargoTypeId, design) {
-  if (design.nonCargo || design.declaredType === "unknown") return false;
-  if (cargoTypeId === "10") return design.bulk || design.cement;
+  if (design.nonCargo) return false;
+  if (design.declaredType === "unknown" || !design.declaredType) return true;
+  if (cargoTypeId === "10") return design.bulk || design.cement || design.general || design.multipurpose;
   if (cargoTypeId === "20") return design.bulk || design.general || design.multipurpose;
   if (["30", "40", "50", "60"].includes(cargoTypeId)) return design.bulk || design.general || design.multipurpose;
-  if (cargoTypeId === "70") return design.bulk || design.tanker;
-  if (cargoTypeId === "80") return design.bulk || design.general || design.multipurpose || /chemical tanker/.test(design.declaredType);
-  if (cargoTypeId === "90") return design.general || design.multipurpose || design.roro;
+  if (cargoTypeId === "70") return design.bulk || design.tanker || design.general;
+  if (cargoTypeId === "80") return design.bulk || design.general || design.multipurpose || design.tanker;
+  if (cargoTypeId === "90") return design.general || design.multipurpose || design.roro || design.bulk;
   return !design.nonCargo;
 }
 
