@@ -19,6 +19,17 @@
 
     function toFiniteNumber(...values) {
         for (const value of values) {
+            if (value === null || value === undefined || value === '') continue;
+            if (typeof value === 'number') {
+                if (Number.isFinite(value)) return value;
+                continue;
+            }
+            if (typeof value === 'string') {
+                const cleaned = value.replace(',', '.').trim();
+                const parsed = parseFloat(cleaned);
+                if (Number.isFinite(parsed)) return parsed;
+                continue;
+            }
             const number = Number(value);
             if (Number.isFinite(number)) return number;
         }
@@ -59,12 +70,26 @@
         return null;
     }
 
+    function firstFiniteNumber(scopes, keys) {
+        for (const scope of scopes) {
+            if (!scope || typeof scope !== 'object') continue;
+            for (const key of keys) {
+                if (scope[key] !== undefined && scope[key] !== null && scope[key] !== '') {
+                    const number = toFiniteNumber(scope[key]);
+                    if (Number.isFinite(number)) return number;
+                }
+            }
+        }
+        return null;
+    }
+
     function normalizeVessel(vessel, index = 0) {
         if (!vessel || typeof vessel !== 'object') return null;
         const scopes = getObjectScopes(vessel);
-        const lat = toFiniteNumber(firstValue(scopes, ['lat', 'latitude', 'Latitude', 'AIS_Live_Lat', 'LAT']));
-        const lng = toFiniteNumber(firstValue(scopes, ['lng', 'lon', 'long', 'longitude', 'Longitude', 'AIS_Live_Lon', 'LON', 'LONG']));
+        const lat = firstFiniteNumber(scopes, ['lat', 'latitude', 'Latitude', 'AIS_Live_Lat', 'LAT', 'latitud']);
+        const lng = firstFiniteNumber(scopes, ['lng', 'lon', 'long', 'longitude', 'Longitude', 'AIS_Live_Lon', 'LON', 'LONG', 'longitud']);
         if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+        if (Math.abs(lat) < 0.0001 && Math.abs(lng) < 0.0001) return null;
         const rawName = firstValue(scopes, ['name', 'vesselName', 'VesselName', 'vessel_name', 'ShipName', 'shipName', 'ship_name', 'NAME']);
         const rawImo = firstValue(scopes, ['imo', 'IMO', 'imoNumber', 'imo_number', 'imo_no', 'IMO_Number']);
         const rawDwt = firstValue(scopes, ['dwt', 'DWT', 'DWT_real', 'dwt_real', 'deadweight', 'deadweightTonnage', 'deadweight_tonnage']);
@@ -86,10 +111,10 @@
     function extractVesselRecords(input) {
         if (Array.isArray(input)) return input.flatMap(extractVesselRecords);
         if (!input || typeof input !== 'object') return [];
+        if (normalizeVessel(input)) return [input];
         for (const key of NESTED_KEYS) {
             if (Array.isArray(input[key])) return extractVesselRecords(input[key]);
         }
-        if (normalizeVessel(input)) return [input];
         return Object.values(input).flatMap(extractVesselRecords);
     }
 
@@ -98,8 +123,23 @@
     }
 
     function getFilteredVessels() {
-        if (!window.GlobalStore || typeof window.GlobalStore.getFilteredVessels !== 'function') return [];
-        return window.GlobalStore.getFilteredVessels();
+        if (!window.GlobalStore) return [];
+        if (typeof window.GlobalStore.getFilteredVessels === 'function' && window.GlobalStore.filteredVesselsInitialized) {
+            const filtered = window.GlobalStore.getFilteredVessels();
+            if (Array.isArray(filtered) && filtered.length > 0) return filtered;
+        }
+        if (typeof window.getDerivedFilteredAisVessels === 'function') {
+            const derived = window.getDerivedFilteredAisVessels();
+            if (Array.isArray(derived) && derived.length > 0) return derived;
+        }
+        if (Array.isArray(window.GlobalStore.nearbyVessels) && window.GlobalStore.nearbyVessels.length > 0) {
+            return window.GlobalStore.nearbyVessels;
+        }
+        if (typeof window.GlobalStore.getRawVessels === 'function') {
+            const raw = window.GlobalStore.getRawVessels();
+            if (Array.isArray(raw) && raw.length > 0) return raw;
+        }
+        return window.GlobalStore.rawVessels || window.GlobalStore.vessels || [];
     }
 
     function getView(key = DEFAULT_KEY) {
@@ -296,8 +336,18 @@
         const view = getView(key);
         if (!view) return [];
         view.hoveredVessel = null;
-        view.vessels = prepareVessels(getFilteredVessels());
-        view.globe.pointsData(view.vessels);
+        if (_vessels !== null && _vessels !== undefined) {
+            view.vessels = prepareVessels(_vessels);
+        } else {
+            view.vessels = prepareVessels(getFilteredVessels());
+        }
+        try {
+            if (view.globe && typeof view.globe.pointsData === 'function') {
+                view.globe.pointsData(view.vessels);
+            }
+        } catch (error) {
+            console.error('[GlobalFleetGlobe] Error al renderizar puntos en el globo:', error);
+        }
         applyPointInteractionStyle(view);
         refreshPointRadius(view);
         focusFirstVessel(view);
@@ -490,7 +540,7 @@
         }
         const existing = getView(key);
         if (existing && existing.container === container) {
-            updateVessels(null, key);
+            updateVessels(options.vesselsData ?? null, key);
             resize(key);
             return existing.adapter;
         }
@@ -587,7 +637,7 @@
             view.resizeObserver.observe(container);
             if (container.parentElement) view.resizeObserver.observe(container.parentElement);
         }
-        updateVessels(null, key);
+        updateVessels(options.vesselsData ?? null, key);
         restoreGlobalRouteState(view);
         if (key === DEFAULT_KEY) window.map = view.adapter;
         if (key === 'density') window.mapaAIS = view.adapter;
