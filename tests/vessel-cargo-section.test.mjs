@@ -65,7 +65,7 @@ test('POD crane count multiplies the effective discharge rate', () => {
 });
 
 test('method base-rate dictionary drives automatic POL and POD rates', () => {
-  assert.match(indexSource, /const methodBaseRates = Object\.freeze\(\{[\s\S]*?'Cinta Transportadora': 5000[\s\S]*?'Grúa Portuaria 30MT': 2500[\s\S]*?'Cuchara \(Grab\) - Grúa Barco': 1500[\s\S]*?'Big Bags \(con Grúa\)': 1000[\s\S]*?'Paletizado \/ Piezas \(con Grúa\)': 800[\s\S]*?'Hierro\/Acero\/Piezas': 1200[\s\S]*?'Camión Tolva': 'custom'/);
+  assert.match(indexSource, /const methodBaseRates = Object\.freeze\(\{[\s\S]*?'Cinta Transportadora': 3600[\s\S]*?'Bombas Neumáticas': 8000[\s\S]*?'Grúa Portuaria 30MT': 2500[\s\S]*?'Cuchara \(Grab\) - Grúa Barco': 1500[\s\S]*?'Big Bags \(con Grúa\)': 1000[\s\S]*?'Paletizado \/ Piezas \(con Grúa\)': 800[\s\S]*?'Hierro\/Acero\/Piezas': 1200[\s\S]*?'Camión Tolva': 'custom'/);
   assert.match(indexSource, /id="metodo_carga"[^>]*onchange="handlePortMethodChange\('pol'\)"/);
   assert.match(indexSource, /id="metodo_descarga_pod"[^>]*onchange="handlePortMethodChange\('pod'\)"/);
   assert.match(indexSource, /function marcarGruasManual[\s\S]*?setRitmoManualIndicator\(side, false\);[\s\S]*?recalcularDiasPuerto\(\)/);

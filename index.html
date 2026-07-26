@@ -7829,6 +7829,7 @@
                                 <label id="label-metodo-carga" class="text-action-required flex items-center min-h-[24px]">Método Carga POL</label>
                                 <select id="metodo_carga" class="hidden input-gc action-required-field required-use-highlight text-action-required" onchange="handlePortMethodChange('pol')">
                                     <option value="cinta_transportadora">Cinta Transportadora</option>
+                                    <option value="bombas_neumaticas">Bombas Neumáticas</option>
                                     <option value="camion_tolva">Camión Tolva</option>
                                     <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
                                     <option value="grua_portuaria_30mt">Grúa Portuaria 30MT</option>
@@ -7872,6 +7873,7 @@
                                 <label id="label-metodo-descarga" class="text-action-required flex items-center min-h-[24px]">Método Descarga POD</label>
                                 <select id="metodo_descarga_pod" class="hidden input-gc action-required-field required-use-highlight text-action-required" onchange="handlePortMethodChange('pod')">
                                     <option value="cinta_transportadora">Cinta Transportadora</option>
+                                    <option value="bombas_neumaticas">Bombas Neumáticas</option>
                                     <option value="camion_tolva">Camión Tolva</option>
                                     <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
                                     <option value="grua_portuaria_30mt">Grúa Portuaria 30MT</option>
@@ -7922,6 +7924,10 @@
                                 <input type="number" id="rate-load" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="5000" step="any" oninput="marcarRitmoManual('pol')">
                                 <p id="rate-load-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
                                 <div id="delta-dias-badge-pol" class="hidden mt-1 text-[11px] font-bold"></div>
+                                <div id="rate-ref-helper-pol" class="mt-1 text-[10px] text-slate-500 font-medium leading-tight">
+                                    <div>Ref. Handysize (Bombas/Cintas): 12,000 - 24,000 TM/D</div>
+                                    <div>Ref. Panamax/Kamsarmax (Cintas): 72,000 - 144,000 TM/D</div>
+                                </div>
                             </div>
                             <div class="input-group">
                                 <div class="flex justify-between items-center mb-1">
@@ -7934,6 +7940,10 @@
                                 <input type="number" id="rate-disch" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="5000" step="any" oninput="marcarRitmoManual('pod')">
                                 <p id="rate-disch-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
                                 <div id="delta-dias-badge-pod" class="hidden mt-1 text-[11px] font-bold"></div>
+                                <div id="rate-ref-helper-pod" class="mt-1 text-[10px] text-slate-500 font-medium leading-tight">
+                                    <div>Ref. Handysize (Bombas/Cintas): 12,000 - 24,000 TM/D</div>
+                                    <div>Ref. Panamax/Kamsarmax (Cintas): 72,000 - 144,000 TM/D</div>
+                                </div>
                             </div>
                             <div id="contenedor-gruas-pol" class="input-group">
                                 <label id="label-ritmo-nominal-pol" class="text-action-required flex items-center min-h-[24px]">Nº Grúas POL</label>
@@ -8006,6 +8016,7 @@
                             <div class="input-group">
                                 <label id="label-turn-time-hours" class="text-action-required flex items-center min-h-[24px]">TURN TIME TOTAL (H)</label>
                                 <select id="turn-time-hours" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="runEngine(); syncCalculatorAndMatching('calculator')">
+                                    <option value="10">10 horas</option>
                                     <option value="12">12 horas</option>
                                     <option value="24" selected>24 horas</option>
                                     <option value="48">48 horas</option>
@@ -24864,6 +24875,7 @@
         };
 
         const TURN_TIME_OPTIONS = Object.freeze([
+            Object.freeze({ value: 10, label: '10 horas' }),
             Object.freeze({ value: 12, label: '12 horas' }),
             Object.freeze({ value: 24, label: '24 horas' }),
             Object.freeze({ value: 48, label: '48 horas' })
@@ -44573,7 +44585,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         initializeSharedGenconSelectors();
 
         const methodBaseRates = Object.freeze({
-            'Cinta Transportadora': 5000,
+            'Cinta Transportadora': 3600,
+            'Bombas Neumáticas': 8000,
             'Grúa Portuaria 30MT': 2500,
             'Cuchara (Grab) - Grúa Barco': 1500,
             'Cuchara (Grab) - Grúa Portuaria': 2500,
@@ -44590,6 +44603,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         });
         const METHOD_LABEL_BY_VALUE = Object.freeze({
             cinta_transportadora: 'Cinta Transportadora',
+            bombas_neumaticas: 'Bombas Neumáticas',
             grua_portuaria_30mt: 'Grúa Portuaria 30MT',
             cuchara_grab: 'Cuchara (Grab) - Grúa Barco',
             cuchara_portuaria: 'Cuchara (Grab) - Grúa Portuaria',
@@ -44607,9 +44621,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         const METHOD_VALUE_BY_LABEL = Object.freeze(Object.fromEntries(
             Object.entries(METHOD_LABEL_BY_VALUE).map(([methodValue, methodLabel]) => [methodLabel, methodValue])
         ));
+        const OPERATIONAL_METHOD_DEFAULTS = Object.freeze({
+            cinta_transportadora: Object.freeze({ rate: 3600, turnTimeHours: 12 }),
+            bombas_neumaticas: Object.freeze({ rate: 8000, turnTimeHours: 10 })
+        });
         const equipmentMatrix = Object.freeze({
-            "Minerales y Construcción": ["Cuchara (Grab) - Grúa Barco", "Cuchara (Grab) - Grúa Portuaria", "Cinta Transportadora", "Camión Tolva", "Big Bags - Grúa Barco", "Big Bags - Grúa Portuaria"],
-            "Biomasa y Combustibles Sólidos": ["Cuchara (Grab) - Grúa Barco", "Cuchara (Grab) - Grúa Portuaria", "Cinta Transportadora", "Camión Tolva"],
+            "Minerales y Construcción": ["Cuchara (Grab) - Grúa Barco", "Cuchara (Grab) - Grúa Portuaria", "Cinta Transportadora", "Bombas Neumáticas", "Camión Tolva", "Big Bags - Grúa Barco", "Big Bags - Grúa Portuaria"],
+            "Biomasa y Combustibles Sólidos": ["Cuchara (Grab) - Grúa Barco", "Cuchara (Grab) - Grúa Portuaria", "Cinta Transportadora", "Bombas Neumáticas", "Camión Tolva"],
             "Carga Siderúrgica y Metales": ["Hierro/Acero - Grúa Barco", "Hierro/Acero - Grúa Portuaria", "Cuchara (Grab) - Grúa Barco", "Cuchara (Grab) - Grúa Portuaria"],
             "Carga Unitarizada / Envasada": ["Paletizado - Grúa Barco", "Paletizado - Grúa Portuaria", "Big Bags - Grúa Barco", "Big Bags - Grúa Portuaria"],
             "Carga Unitizada / Envasada": ["Paletizado - Grúa Barco", "Paletizado - Grúa Portuaria", "Big Bags - Grúa Barco", "Big Bags - Grúa Portuaria"],
@@ -44923,8 +44941,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         // FASE 1: ALERTA DE COMPATIBILIDAD (CARGA VS. MÉTODO)
         // ==========================================
         const cargoCompatibilityMap = Object.freeze({
-            "Minerales y Construcción": ['Cuchara (Grab) - Grúa Barco', 'Cuchara (Grab) - Grúa Portuaria', 'Cinta Transportadora', 'Camión Tolva'],
-            "Biomasa y Combustibles Sólidos": ['Cuchara (Grab) - Grúa Barco', 'Cuchara (Grab) - Grúa Portuaria', 'Cinta Transportadora', 'Camión Tolva'],
+            "Minerales y Construcción": ['Cuchara (Grab) - Grúa Barco', 'Cuchara (Grab) - Grúa Portuaria', 'Cinta Transportadora', 'Bombas Neumáticas', 'Camión Tolva'],
+            "Biomasa y Combustibles Sólidos": ['Cuchara (Grab) - Grúa Barco', 'Cuchara (Grab) - Grúa Portuaria', 'Cinta Transportadora', 'Bombas Neumáticas', 'Camión Tolva'],
             "Carga Unificada / Sacos": ['Big Bags - Grúa Barco', 'Big Bags - Grúa Portuaria', 'Paletizado - Grúa Barco', 'Paletizado - Grúa Portuaria'],
             "Carga Unitarizada / Envasada": ['Big Bags - Grúa Barco', 'Big Bags - Grúa Portuaria', 'Paletizado - Grúa Barco', 'Paletizado - Grúa Portuaria'],
             "Carga Unitizada / Envasada": ['Big Bags - Grúa Barco', 'Big Bags - Grúa Portuaria', 'Paletizado - Grúa Barco', 'Paletizado - Grúa Portuaria'],
@@ -45110,6 +45128,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         ));
         const FACTORES_ESTIBA = {
             cinta_transportadora: 1.0,
+            bombas_neumaticas: 1.0,
             camion_tolva: 1.0,
             cuchara_grab: 1.0,
             grua_portuaria_30mt: 1.0,
@@ -45125,7 +45144,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             3: 0.85,
             4: 0.80
         };
-        const METODOS_PUERTO_PASIVOS = new Set(['camion_tolva']);
+        const METODOS_PUERTO_PASIVOS = new Set(['camion_tolva', 'cinta_transportadora', 'bombas_neumaticas']);
         const METODOS_GRUA_AUTO = new Set([
             'cuchara_grab',
             'grua_portuaria_30mt',
@@ -49106,10 +49125,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         const ciclosEl = document.getElementById(s === 'pod' ? 'gruas-ciclos-pod' : 'gruas-ciclos-pol');
                         if (ciclosEl) ciclosEl.value = String(Math.round(piecesPerHourPerCrane));
                         setEficienciaGruaValor(s, isShipCrane ? 65 : 100);
+                    } else if (methodVal === 'bombas_neumaticas' || methodLabel.includes('Bombas Neumáticas')) {
+                        // E. Bombas Neumáticas (Pneumatic Pumping Engine):
+                        estimatedTpd = 8000;
+                        const turnTimeEl = document.getElementById('turn-time-hours');
+                        if (turnTimeEl) {
+                            turnTimeEl.value = '10';
+                            if (window.State) window.State.turnTimeHours = 10;
+                        }
                     } else if (methodVal === 'cinta_transportadora' || methodLabel.includes('Cinta Transportadora')) {
                         // D. Cinta Transportadora (Continuous Flow Engine):
                         // Rate = Belt Tasa (t/h) * 24 hours.
-                        // General Cargo / Mini-Bulker (modular/hopper systems) = 250 t/h -> 6,000 TM/D
+                        // General Cargo / Mini-Bulker default = 150 t/h -> 3,600 TM/D, Turn Time = 12h
                         // Cement Carrier / Specialized Terminal = 600 t/h -> 14,400 TM/D
                         const vesselTypeStr = String(window.State?.vesselType || document.getElementById('vessel-type')?.value || '').toLowerCase();
                         const cargoProductStr = String(product?.nombre || product?.name || document.getElementById('cargo-product')?.value || '').toLowerCase();
@@ -49119,22 +49146,19 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                             || cargoProductStr.includes('cemento')
                             || cargoProductStr.includes('cement');
 
-                        const isMiniBulkerOrGeneral = vesselTypeStr.includes('mini')
-                            || vesselTypeStr.includes('general')
-                            || vesselTypeStr.includes('coaster')
-                            || category === 'General Cargo'
-                            || category === 'Carga General';
-
-                        let beltTasaTonHour = 250; // Base conservadora (250 t/h -> 6000 TM/D)
+                        let beltTasaTonHour = 150; // Base Mini-Bulker (150 t/h -> 3600 TM/D)
                         if (isCementCarrier) {
                             beltTasaTonHour = 600; // Cementero Especializado / Alta capacidad (600 t/h -> 14400 TM/D)
-                        } else if (isMiniBulkerOrGeneral) {
-                            beltTasaTonHour = 250;
                         } else if (cargoQty > 20000) {
                             beltTasaTonHour = 500;
                         }
 
                         estimatedTpd = Math.round(beltTasaTonHour * 24);
+                        const turnTimeEl = document.getElementById('turn-time-hours');
+                        if (turnTimeEl) {
+                            turnTimeEl.value = '12';
+                            if (window.State) window.State.turnTimeHours = 12;
+                        }
                     } else if (typeof window.isCraneMethod === 'function' && window.isCraneMethod(methodLabel)) {
                         if (typeof window.calcularRitmoEfectivo === 'function') {
                             estimatedTpd = window.calcularRitmoEfectivo(s);
@@ -49168,7 +49192,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         /**
          * Función puente de actualización de costes de PDA según el Método seleccionado
-         * (Grúa Barco: Grúa Tierra = $0; Grúa Portuaria: Grúa Tierra = $1,800; Cinta / Camión Tolva: Costes Terminal)
+         * (Grúa Barco: Grúa Tierra = $0; Grúa Portuaria: Grúa Tierra = $1,800; Cinta / Bombas / Camión Tolva: Costes Terminal)
          */
         function actualizarCostesPDAPorMetodo(targetSide = null) {
             if (!window.State) window.State = {};
@@ -49192,7 +49216,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     || methodVal.includes('portuaria')
                     || methodVal === 'grua_portuaria_30mt';
 
-                const isConveyor = methodText.includes('Cinta Transportadora') || methodVal === 'cinta_transportadora';
+                const isConveyor = methodText.includes('Cinta Transportadora') || methodVal === 'cinta_transportadora'
+                    || methodText.includes('Bombas Neumáticas') || methodVal === 'bombas_neumaticas';
                 const isHopper = methodText.includes('Camión Tolva') || methodVal === 'camion_tolva';
 
                 const breakdownKey = s === 'pol' ? 'pdaPolBreakdown' : 'pdaPodBreakdown';
