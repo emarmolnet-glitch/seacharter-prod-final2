@@ -7749,7 +7749,7 @@
                                 </label>
                                 <div class="relative flex items-center w-full">
                                     <input type="text" id="nombre-buque-calculadora" class="input-gc font-bold text-white pr-8 w-full" value="TBN" oninput="autoClassifySpecialtyFromInputs()">
-                                    <button id="btn-vessel-specs-real-2" onclick="autoFillVesselSpecs()" class="absolute right-2 text-slate-400 hover:text-sky-400 transition" title="Buscar especificaciones reales">
+                                    <button id="btn-vessel-specs-real-2" onclick="searchLocalVesselDataBridge()" class="absolute right-2 text-slate-400 hover:text-sky-400 transition" title="Buscar buque en Data Bridge (Local)">
                                         <i class="fa-solid fa-magnifying-glass text-xs"></i>
                                     </button>
                                 </div>
@@ -26193,6 +26193,124 @@
                     btn.innerHTML = originalContents[index];
                     btn.disabled = false;
                 });
+            }
+        }
+
+        async function searchLocalVesselDataBridge() {
+            const nameInput = document.getElementById('nombre-buque-calculadora') || document.getElementById('vessel-name');
+            let vesselName = nameInput ? nameInput.value.trim() : '';
+
+            // If the name already has specs in parentheses, extract the base name!
+            const parenIndex = vesselName.indexOf('(');
+            if (parenIndex !== -1) {
+                vesselName = vesselName.substring(0, parenIndex).trim();
+            }
+
+            if (!vesselName || vesselName.toUpperCase() === 'TBN') {
+                showToast("⚠️ Por favor, introduce un nombre o IMO de buque para consultar Data Bridge.");
+                return;
+            }
+
+            const btn = document.getElementById('btn-vessel-specs-real-2');
+            const originalContent = btn ? btn.innerHTML : '<i class="fa-solid fa-magnifying-glass text-xs"></i>';
+
+            if (btn) {
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i>';
+                btn.disabled = true;
+            }
+
+            showToast("Consultando Data Bridge local (vessels_master)...", true);
+
+            try {
+                const response = await fetch('/api/databridge-vessel-search?q=' + encodeURIComponent(vesselName));
+                const data = await response.json();
+
+                if (data.success && data.vessel) {
+                    const v = data.vessel;
+
+                    // Binding automatico de campos para rellenar la calculadora
+                    if (v.dwt) {
+                        const dwtEl = document.getElementById('vessel-dwt');
+                        if (dwtEl) dwtEl.value = Math.round(v.dwt);
+                        State.vesselDwtFixed = true;
+                    }
+                    if (v.flag) {
+                        const flagEl = document.getElementById('vessel-flag');
+                        if (flagEl) flagEl.value = v.flag;
+                    }
+                    if (v.spd_ballast) {
+                        const el = document.getElementById('spd-ballast');
+                        if (el) el.value = parseFloat(v.spd_ballast).toFixed(1);
+                        if (typeof markKnownVesselSpeed === 'function') markKnownVesselSpeed('spd-ballast');
+                    }
+                    if (v.spd_laden) {
+                        const el = document.getElementById('spd-laden');
+                        if (el) el.value = parseFloat(v.spd_laden).toFixed(1);
+                        if (typeof markKnownVesselSpeed === 'function') markKnownVesselSpeed('spd-laden');
+                    }
+                    if (v.cons_sea) {
+                        const el = document.getElementById('cons-sea');
+                        if (el) el.value = parseFloat(v.cons_sea).toFixed(1);
+                    }
+                    if (v.cons_port) {
+                        const el = document.getElementById('cons-port');
+                        if (el) el.value = parseFloat(v.cons_port).toFixed(1);
+                    }
+                    if (v.vessel_class || v.vessel_type) {
+                        const badgeClass = v.vessel_class || v.vessel_type;
+                        const badgeEl = document.getElementById('vessel-badge');
+                        if (badgeEl) badgeEl.innerText = badgeClass;
+                        State.class = badgeClass;
+                    }
+                    if (v.specialty_type) {
+                        const specEl = document.getElementById('gc-add-specialty');
+                        if (specEl) specEl.value = v.specialty_type;
+                        State.userHasEditedSpecialty = false;
+                    }
+
+                    // Guardar IMO, LOA, Calado en State
+                    if (v.imo || v.imo_number) State.imo = v.imo || v.imo_number;
+                    if (v.loa) State.loa = v.loa;
+                    if (v.draft || v.draft_meters) State.draft = v.draft || v.draft_meters;
+
+                    // Formatear visualmente el campo de nombre con la informacion encontrada
+                    const officialName = v.vessel_name || vesselName;
+                    const flag = v.flag || 'Unknown';
+                    const builtYear = v.year_built || v.built_year || 'Unknown';
+                    const capacity = v.dwt ? Math.round(v.dwt) : 'Unknown';
+                    const imo = v.imo || v.imo_number || 'Unknown';
+
+                    const formattedName = `${officialName} (${flag}, ${builtYear}, ${capacity} DWT, IMO: ${imo})`;
+                    if (nameInput) nameInput.value = formattedName;
+                    State.vessel = formattedName;
+
+                    // Recalcular OPEX y Demurrage
+                    const dwtVal = parseFloat(document.getElementById('vessel-dwt')?.value) || 0;
+                    if (dwtVal > 0) {
+                        const specialty = (document.getElementById('gc-add-specialty')?.value || '').trim();
+                        const name = (nameInput?.value || '').trim();
+                        if (typeof calculateFixedOpex === 'function') {
+                            const totalOpexDaily = calculateFixedOpex(dwtVal, specialty, name);
+                            const opexEl = document.getElementById('opex-daily');
+                            if (opexEl) opexEl.value = totalOpexDaily;
+                        }
+                        if (typeof autoCalculateDemurrage === 'function') autoCalculateDemurrage(false);
+                    }
+
+                    showToast(`✅ Buque local encontrado en Data Bridge: ${officialName}`);
+                    if (typeof runEngine === 'function') runEngine();
+                } else {
+                    // Aviso local exclusivo sin buscar fuera
+                    showToast("Buque no encontrado en Data Bridge");
+                }
+            } catch (error) {
+                console.error("Error consultando Data Bridge:", error);
+                showToast("Buque no encontrado en Data Bridge");
+            } finally {
+                if (btn) {
+                    btn.innerHTML = originalContent;
+                    btn.disabled = false;
+                }
             }
         }
 
