@@ -123,6 +123,19 @@ export async function ensureApplicationSchema() {
     ALTER TABLE ia_reports ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE ia_reports ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
     ALTER TABLE ia_reports ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+
+    CREATE TABLE IF NOT EXISTS pipeline_inbox (
+      id SERIAL PRIMARY KEY,
+      sync_id TEXT,
+      imo_number TEXT,
+      vessel_name TEXT,
+      source TEXT NOT NULL DEFAULT 'CORE_PRO',
+      status TEXT NOT NULL DEFAULT 'PENDING',
+      payload JSONB NOT NULL,
+      error_message TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `).then(() => undefined).catch((error: unknown) => {
     applicationSchemaReady = null;
     throw error;
