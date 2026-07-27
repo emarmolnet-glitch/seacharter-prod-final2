@@ -7689,7 +7689,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-vessel-loa" class="text-blue-400 flex items-center min-h-[28px]">Eslora Máx / Max LOA (m)</label>
-                                <input type="number" step="any" id="vessel-loa" class="input-gc font-bold text-blue-300" value="200" oninput="if(typeof autoFillPDA==='function'){ autoFillPDA('pol', false); autoFillPDA('pod', false); } runEngine(); syncCalculatorAndMatching('calculator');">
+                                <input type="number" step="any" id="vessel-loa" class="input-gc font-bold text-blue-300" value="200" oninput="if(typeof debouncedAutoFillPDA==='function'){ debouncedAutoFillPDA('pol', false); debouncedAutoFillPDA('pod', false); } else if(typeof autoFillPDA==='function'){ autoFillPDA('pol', false); autoFillPDA('pod', false); } runEngine(); syncCalculatorAndMatching('calculator');">
                             </div>
                         </div>
 
@@ -25065,8 +25065,13 @@
             }
 
             handleDWTChange();
-            autoFillPDA('pol', false);
-            autoFillPDA('pod', false);
+            if (typeof debouncedAutoFillPDA === 'function') {
+                debouncedAutoFillPDA('pol', false);
+                debouncedAutoFillPDA('pod', false);
+            } else if (typeof autoFillPDA === 'function') {
+                autoFillPDA('pol', false);
+                autoFillPDA('pod', false);
+            }
             updateCargoUnit();
         }
 
@@ -25706,7 +25711,10 @@
             if (typeof autoScaleVesselAndCosts === 'function') {
                 autoScaleVesselAndCosts();
             }
-            if (typeof autoFillPDA === 'function') {
+            if (typeof debouncedAutoFillPDA === 'function') {
+                debouncedAutoFillPDA('pol', false);
+                debouncedAutoFillPDA('pod', false);
+            } else if (typeof autoFillPDA === 'function') {
                 autoFillPDA('pol', false);
                 autoFillPDA('pod', false);
             }
@@ -25773,7 +25781,10 @@
 
             document.getElementById('opex-daily').value = totalOpexDaily;
 
-            if (typeof autoFillPDA === 'function') {
+            if (typeof debouncedAutoFillPDA === 'function') {
+                debouncedAutoFillPDA('pol', false);
+                debouncedAutoFillPDA('pod', false);
+            } else if (typeof autoFillPDA === 'function') {
                 autoFillPDA('pol', false);
                 autoFillPDA('pod', false);
             }
@@ -26191,26 +26202,78 @@
 	            }
 	        }
 	        if (typeof window !== 'undefined') {
+	            window.portCache = window.portCache || new Map();
+	            window.pdaAbortControllers = window.pdaAbortControllers || { pol: null, pod: null };
+	            window.autoFillPdaDebounceTimers = window.autoFillPdaDebounceTimers || { pol: null, pod: null };
 	            window.getPortPdaBreakdown = getPortPdaBreakdown;
 	            window.openPdaManualEditModal = openPdaManualEditModal;
 	        }
 
+	        const portCache = (typeof window !== 'undefined' && window.portCache) ? window.portCache : new Map();
+
 	        async function fetchPdaTariffFromDataBridge(type, vesselData) {
-	            const params = new URLSearchParams({
-	                port: vesselData.portName,
-	                type,
-	                dwt: String(Math.round(vesselData.dwt)),
-	                gt: String(Math.round(vesselData.gt)),
-	                loa: String(Math.round(vesselData.loa))
-	            });
-	            const response = await fetch(`/api/databridge-port-tariff?${params.toString()}`, {
-	                method: 'GET',
-	                headers: { Accept: 'application/json' }
-	            });
-	            if (response.status === 404) return null;
-	            if (!response.ok) throw new Error(`Data Bridge tariff lookup failed (${response.status})`);
-	            const payload = await response.json();
-	            return payload?.tariff || payload?.tarifa || payload?.data || payload;
+	            const portNameKey = String(vesselData.portName || '').trim().toLowerCase();
+	            const cacheKey = `${type}:${portNameKey}:${Math.round(vesselData.dwt)}:${Math.round(vesselData.gt)}:${Math.round(vesselData.loa)}`;
+
+	            if (portCache.has(cacheKey)) {
+	                return portCache.get(cacheKey);
+	            }
+
+	            if (typeof window !== 'undefined' && window.pdaAbortControllers) {
+	                if (window.pdaAbortControllers[type]) {
+	                    try { window.pdaAbortControllers[type].abort(); } catch {}
+	                }
+	                window.pdaAbortControllers[type] = new AbortController();
+	            }
+
+	            try {
+	                const params = new URLSearchParams({
+	                    port: vesselData.portName,
+	                    type,
+	                    dwt: String(Math.round(vesselData.dwt)),
+	                    gt: String(Math.round(vesselData.gt)),
+	                    loa: String(Math.round(vesselData.loa))
+	                });
+	                const signal = (typeof window !== 'undefined' && window.pdaAbortControllers && window.pdaAbortControllers[type])
+	                    ? window.pdaAbortControllers[type].signal
+	                    : AbortSignal.timeout(5000);
+
+	                const response = await fetch(`/api/databridge-port-tariff?${params.toString()}`, {
+	                    method: 'GET',
+	                    headers: { Accept: 'application/json' },
+	                    signal
+	                });
+	                if (response.status === 404) return null;
+	                if (!response.ok) throw new Error(`Data Bridge tariff lookup failed (${response.status})`);
+	                const payload = await response.json();
+	                const tariff = payload?.tariff || payload?.tarifa || payload?.data || payload;
+	                if (tariff) {
+	                    portCache.set(cacheKey, tariff);
+	                }
+	                return tariff;
+	            } catch (err) {
+	                if (err && err.name === 'AbortError') return null;
+	                console.warn(`[PDA Tariff Lookup] Network issue encountered for ${type} (${vesselData.portName}). Falling back to algorithmic estimate:`, err?.message || err);
+	                return null;
+	            }
+	        }
+
+	        function debouncedAutoFillPDA(type, showNotification = false, delay = 450) {
+	            const timers = (typeof window !== 'undefined' && window.autoFillPdaDebounceTimers)
+	                ? window.autoFillPdaDebounceTimers
+	                : { pol: null, pod: null };
+
+	            if (timers[type]) {
+	                clearTimeout(timers[type]);
+	            }
+	            timers[type] = setTimeout(() => {
+	                if (typeof autoFillPDA === 'function') {
+	                    autoFillPDA(type, showNotification);
+	                }
+	            }, delay);
+	        }
+	        if (typeof window !== 'undefined') {
+	            window.debouncedAutoFillPDA = debouncedAutoFillPDA;
 	        }
 
 	        function setPdaCalculationStatus(type, mode) {
@@ -26222,6 +26285,14 @@
 	        }
 
 	        async function autoFillPDA(type, showNotification = true) {
+	            const timers = (typeof window !== 'undefined' && window.autoFillPdaDebounceTimers)
+	                ? window.autoFillPdaDebounceTimers
+	                : null;
+	            if (timers && timers[type]) {
+	                clearTimeout(timers[type]);
+	                timers[type] = null;
+	            }
+
 	            const readNumber = (id) => {
 	                const raw = document.getElementById(id)?.value;
 	                if (raw === undefined || raw === null) return 0;
@@ -28374,6 +28445,26 @@
             let pdaPolVal = parseFloat(document.getElementById('pda-pol')?.value) || State.pdaPol || 0;
             let pdaPodVal = parseFloat(document.getElementById('pda-pod')?.value) || State.pdaPod || 0;
             if ((pdaPolVal <= 0 || pdaPodVal <= 0) && typeof autoFillPDA === 'function') {
+                const rawDwt = parseFloat(document.getElementById('vessel-dwt')?.value || State.dwt || 0) || 0;
+                const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value || State.cargoQty || 0) || 0;
+                const dwt = rawDwt > 0 ? rawDwt : (cargoQty > 0 ? Math.round(cargoQty * 1.15) : 15000);
+                if (dwt > 0 && typeof calculateGlobalPdaEstimateBreakdown === 'function') {
+                    const fallbackCalc = calculateGlobalPdaEstimateBreakdown({ dwt, gt: dwt * 0.6, loa: Math.pow(dwt, 0.333) * 5.2 });
+                    if (fallbackCalc && fallbackCalc.totalPDA > 0) {
+                        if (pdaPolVal <= 0) {
+                            pdaPolVal = fallbackCalc.totalPDA;
+                            const el = document.getElementById('pda-pol');
+                            if (el && (!el.value || parseFloat(el.value) <= 0)) el.value = String(pdaPolVal);
+                            State.pdaPol = pdaPolVal;
+                        }
+                        if (pdaPodVal <= 0) {
+                            pdaPodVal = Math.round(fallbackCalc.totalPDA * 1.10);
+                            const el = document.getElementById('pda-pod');
+                            if (el && (!el.value || parseFloat(el.value) <= 0)) el.value = String(pdaPodVal);
+                            State.pdaPod = pdaPodVal;
+                        }
+                    }
+                }
                 if (pdaPolVal <= 0) autoFillPDA('pol', false);
                 if (pdaPodVal <= 0) autoFillPDA('pod', false);
                 pdaPolVal = parseFloat(document.getElementById('pda-pol')?.value) || State.pdaPol || 0;
