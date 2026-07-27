@@ -414,10 +414,30 @@ export default async (req: Request) => {
           const isOversizedFallback = false;
           const activeDwtStatus = vessel.dwtStatus;
 
-          const operationallyEligible = technicalEligibility.eligible && taxonomyCompatibility.compatible;
-          const idealVessel = operationallyEligible && loadState.ballastReady;
+          const hasTechnicalWarning = !technicalEligibility.eligible
+            || technicalEligibility.criticalReasons.length > 0
+            || activeDwtStatus === null
+            || vessel.dwt === null
+            || vessel.dwt <= 0;
+
+          const warningReason = hasTechnicalWarning
+            ? [
+                ...(activeDwtStatus === null || !vessel.dwt ? ["Sin DWT verificado (dwtStatus: null)"] : []),
+                ...technicalEligibility.criticalReasons,
+                ...(taxonomyCompatibility.compatible ? [] : [taxonomyCompatibility.reason]),
+              ].filter(Boolean).join("; ") || "Advertencia técnica: Datos AIS incompletos"
+            : null;
+
+          // Relaxed technical validation logic: vessels with technical warnings pass local filters
+          // so they are counted as eligible and included in Data Bridge payloads.
+          const operationallyEligible = taxonomyCompatibility.compatible !== false;
+          const idealVessel = operationallyEligible && !hasTechnicalWarning && loadState.ballastReady;
 
           return {
+            hasTechnicalWarning,
+            hasWarning: hasTechnicalWarning,
+            warning: warningReason,
+            warningReason,
             dwtStatus: activeDwtStatus,
             isOversizedFallback,
             vessel: {
@@ -428,6 +448,9 @@ export default async (req: Request) => {
               dwt: vessel.dwt,
               dwtStatus: activeDwtStatus,
               isOversizedFallback,
+              hasTechnicalWarning,
+              hasWarning: hasTechnicalWarning,
+              warning: warningReason,
               draft: vessel.draft,
               designDraft: vessel.designDraft,
               loadState: loadState.state,
@@ -466,6 +489,9 @@ export default async (req: Request) => {
               dwt: vessel.dwt,
               dwtStatus: activeDwtStatus,
               isOversizedFallback,
+              hasTechnicalWarning,
+              hasWarning: hasTechnicalWarning,
+              warning: warningReason,
               draft: vessel.draft,
               designDraft: vessel.designDraft,
               loadState: loadState.state,
@@ -496,6 +522,9 @@ export default async (req: Request) => {
               grabOk: !grabRequired || technicalEligibility.equipment.hasGrab === true,
               holdOk: true,
               dateOk,
+              hasTechnicalWarning,
+              hasWarning: hasTechnicalWarning,
+              warning: warningReason,
               taxonomyCompatible: taxonomyCompatibility.compatible,
               taxonomyGoverned: taxonomyCompatibility.governed,
               cargoTaxonomy: taxonomyCompatibility.cargoTaxonomy,
@@ -525,12 +554,15 @@ export default async (req: Request) => {
             scores: { technical: boostedTechnical, economic, risk, overall, cargoBoost: cargoIntelligence.boost },
             cargoIntelligence,
             technicalEligibility,
-            aiStatus: !operationallyEligible ? "INCOMPATIBLE" : idealVessel && overall > 55 && cementSignal.level !== "possible" ? "IDEAL" : overall > 50 ? "MATCH" : "REVIEW",
+            aiStatus: !operationallyEligible ? "INCOMPATIBLE" : hasTechnicalWarning ? "REVIEW" : idealVessel && overall > 55 && cementSignal.level !== "possible" ? "IDEAL" : overall > 50 ? "MATCH" : "REVIEW",
             audit: {
               cargoCode,
               cargoDescription,
               selectedVesselTaxonomies: vesselClassValues,
               operationallyEligible,
+              hasTechnicalWarning,
+              hasWarning: hasTechnicalWarning,
+              warning: warningReason,
               reasons: [
                 ...technicalEligibility.criticalReasons,
                 ...(taxonomyCompatibility.compatible ? [] : [taxonomyCompatibility.reason]),
@@ -552,7 +584,7 @@ export default async (req: Request) => {
 
     const evaluatedMatches = evaluateVessels(1.15, false);
     const matches = evaluatedMatches.filter((match) => match.audit.operationallyEligible);
-    const technicalWarnings = evaluatedMatches.filter((match) => !match.audit.operationallyEligible);
+    const technicalWarnings = evaluatedMatches.filter((match) => match.hasTechnicalWarning || !match.audit.operationallyEligible);
 
     return Response.json({
       success: true,
