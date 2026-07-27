@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 
 const sessionDraftSource = await readFile(new URL('../session-draft.js', import.meta.url), 'utf8');
 const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+const viteConfigSource = await readFile(new URL('../vite.config.js', import.meta.url), 'utf8');
 
 function createStorage(initialValues = {}) {
     const values = new Map(Object.entries(initialValues));
@@ -236,4 +237,9 @@ test('hydration remains outside calculator formulas and protected input flow', (
     assert.doesNotMatch(indexSource, /hydrate:[\s\S]{0,180}runEngine\(/);
     assert.doesNotMatch(sessionDraftSource, /'cargo'|'stowageFactor'|'cargoTolerance'/);
     assert.match(indexSource, /id="cargo-tolerance"[^>]*oninput="runEngine\(\)"/);
+});
+
+test('session-draft.js is configured in legacyAssets and referenced in index.html', () => {
+    assert.match(indexSource, /<script src="\.\/session-draft\.js"><\/script>/);
+    assert.match(viteConfigSource, /"session-draft\.js"/);
 });
