@@ -111,3 +111,24 @@ test('backend port days use load, discharge and turn time only', () => {
   assert.equal(result.state.dias_puerto_total, 12);
   assert.equal(result.coste_opex_total, 17_000);
 });
+
+test('section 2 uses local state buffering and a confirmation button strictly at bottom', () => {
+  // 1. Confirm section2LocalState and updateSection2LocalState functions exist in index.html
+  assert.match(indexSource, /function updateSection2LocalState\(id, value\)/);
+  assert.match(indexSource, /window\.section2LocalState/);
+
+  // 2. Confirm confirmation button exists with ID btn-validate-section2 and calls validarYCalcularSeccion2()
+  assert.match(indexSource, /id="btn-validate-section2"/);
+  assert.match(indexSource, /onclick="validarYCalcularSeccion2\(\)"/);
+  assert.match(indexSource, /Validar Especificaciones \/ Calcular/);
+
+  // 3. Confirm validarYCalcularSeccion2 updates State and triggers global calculation functions
+  assert.match(indexSource, /function validarYCalcularSeccion2\(\)/);
+  assert.match(indexSource, /if \(typeof runEngine === 'function'\) runEngine\(\);/);
+
+  // 4. Confirm inputs in section 2 use updateSection2LocalState instead of runEngine on input
+  assert.match(indexSource, /id="cargo-qty"[^>]*oninput="updateSection2LocalState\('cargo-qty', this\.value\)"/);
+  assert.match(indexSource, /id="cargo-sf"[^>]*oninput="updateSection2LocalState\('cargo-sf', this\.value\)"/);
+  assert.match(indexSource, /id="cargo-tolerance"[^>]*oninput="updateSection2LocalState\('cargo-tolerance', this\.value\)"/);
+});
+

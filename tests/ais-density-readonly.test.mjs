@@ -926,15 +926,18 @@ test('Cost-Plus Coaster strategy toggle dynamically updates title, price, disabl
   assert.equal(getEl('cost-plus-calculated-margin').textContent, '$61920.00');
 });
 
-test('voyage reference is moved to the left vessel card and the print backup card is removed', () => {
+test('voyage reference is moved to top navigation header and the print backup card is removed', () => {
+  const headerStart = indexSource.indexOf('<header class="app-header');
+  const headerEnd = indexSource.indexOf('</header>', headerStart);
+  const headerMarkup = indexSource.slice(headerStart, headerEnd);
   const estimatorStart = indexSource.indexOf('<div id="view-estimator"');
   const estimatorEnd = indexSource.indexOf('<!-- MÓDULO 5: CUMPLIMIENTO CBAM', estimatorStart);
   const estimatorMarkup = indexSource.slice(estimatorStart, estimatorEnd);
-  const vesselCardEnd = estimatorMarkup.indexOf('<!-- 3. Bunkers y Gastos -->');
-  const quickReferencePosition = estimatorMarkup.indexOf('id="quick-ref"');
 
-  assert.ok(quickReferencePosition > 0 && quickReferencePosition < vesselCardEnd);
-  assert.equal((estimatorMarkup.match(/id="quick-ref"/g) || []).length, 1);
+  const quickReferencePosition = headerMarkup.indexOf('id="quick-ref"');
+
+  assert.ok(quickReferencePosition > 0);
+  assert.equal((indexSource.match(/id="quick-ref"/g) || []).length, 1);
   assert.doesNotMatch(estimatorMarkup, /Impresión y Respaldo de Cotizaciones/);
   assert.match(estimatorMarkup, /10\. SIMULADOR DE NEGOCIACIÓN Y CONTRAOFERTAS/i);
 });

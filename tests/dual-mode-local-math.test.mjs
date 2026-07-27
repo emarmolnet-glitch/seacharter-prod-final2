@@ -235,7 +235,7 @@ test('Dual Mode receives frozen read-only snapshots from the main calculator sta
     assert.match(indexSource, /toneladasTotales:\s*Number\(state\.cargo\)/);
     assert.match(indexSource, /factorDeEstiba:\s*Number\(state\.stowageFactor\)/);
     assert.match(indexSource, /toleranciaCarga:\s*Number\(state\.cargoTolerance\)/);
-    assert.match(indexSource, /id="cargo-tolerance"[^>]*oninput="runEngine\(\)"/);
+    assert.match(indexSource, /id="cargo-tolerance"[^>]*oninput="updateSection2LocalState\('cargo-tolerance', this\.value\)"/);
     assert.match(overlaySource, /dualView\.fleteJustoCalculado\s*=/);
     assert.match(overlaySource, /dualView\.toneladasTotales\s*=/);
     assert.match(overlaySource, /dualView\.sessionDraft\s*=/);
