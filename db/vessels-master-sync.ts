@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
-import { getPool } from "./index.js";
+import { ensureApplicationSchema, getPool } from "./index.js";
 
 export type RadarVesselMasterInput = {
   imoNumber: string | null;
@@ -222,17 +222,106 @@ export async function upsertRadarVesselsMaster(rows: RadarVesselMasterInput[]) {
   const vessels = rows.map(normalizeMasterVessel).filter((row): row is NormalizedMasterVessel => row !== null);
   if (vessels.length === 0) return 0;
 
+  await ensureApplicationSchema();
+
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
+
+    const imoVesselsMap = new Map<number, NormalizedMasterVessel>();
+    const nonImoVessels: NormalizedMasterVessel[] = [];
+
     for (const vessel of vessels) {
-      try {
-        await persistMasterVessel(client, vessel);
-      } catch (itemErr) {
-        console.error(`[vessels-master-sync] Error al persistir buque ${vessel.vesselNameValue} (IMO: ${vessel.imoValue}, identity: ${vessel.identity}):`, itemErr);
-        throw itemErr;
+      if (vessel.imoValue) {
+        imoVesselsMap.set(vessel.imoValue, vessel);
+      } else {
+        nonImoVessels.push(vessel);
       }
     }
+
+    const uniqueImoVessels = Array.from(imoVesselsMap.values());
+
+    const CHUNK_SIZE = 100;
+    for (let i = 0; i < uniqueImoVessels.length; i += CHUNK_SIZE) {
+      const chunk = uniqueImoVessels.slice(i, i + CHUNK_SIZE);
+      const valueTuples: string[] = [];
+      const queryParams: unknown[] = [];
+      let pIdx = 1;
+
+      for (const v of chunk) {
+        const vals = queryValues(v);
+        valueTuples.push(`(
+          $${pIdx}::integer, $${pIdx + 1}::text, $${pIdx + 2}::integer, $${pIdx + 3}::text,
+          $${pIdx + 4}::double precision, $${pIdx + 5}::double precision, $${pIdx + 6}::text,
+          $${pIdx + 7}::double precision, $${pIdx + 8}::text, $${pIdx + 9}::text, $${pIdx + 10}::text,
+          $${pIdx + 11}::text, $${pIdx + 11}::text, $${pIdx + 12}::jsonb, $${pIdx + 13}::text,
+          $${pIdx + 14}::text, $${pIdx + 15}::integer, $${pIdx + 16}::text, $${pIdx + 17}::boolean,
+          $${pIdx + 18}::text, NOW()
+        )`);
+
+        queryParams.push(
+          vals[0],
+          vals[1],
+          vals[2],
+          vals[3],
+          vals[4],
+          vals[5],
+          vals[6],
+          vals[7],
+          vals[8],
+          vals[9],
+          vals[10],
+          vals[11],
+          vals[12],
+          vals[13],
+          vals[14],
+          vals[15],
+          vals[16],
+          vals[17],
+          vals[18],
+        );
+
+        pIdx += 19;
+      }
+
+      const sql = `
+        INSERT INTO vessels_master (
+          imo_number, vessel_name, dwt, mmsi, latitude, longitude, vessel_type,
+          draft_meters, eta, last_port, current_destination, origen, audit_source,
+          source_payload, system_identity, flag, year_built, owner_manager,
+          has_gears, process_status, fecha_ultima_actualizacion
+        )
+        VALUES ${valueTuples.join(", ")}
+        ON CONFLICT (imo_number) DO UPDATE SET
+          vessel_name = EXCLUDED.vessel_name,
+          dwt = COALESCE(EXCLUDED.dwt, vessels_master.dwt),
+          mmsi = COALESCE(EXCLUDED.mmsi, vessels_master.mmsi),
+          latitude = EXCLUDED.latitude,
+          longitude = EXCLUDED.longitude,
+          vessel_type = COALESCE(EXCLUDED.vessel_type, vessels_master.vessel_type),
+          draft_meters = COALESCE(EXCLUDED.draft_meters, vessels_master.draft_meters),
+          flag = COALESCE(EXCLUDED.flag, vessels_master.flag),
+          eta = COALESCE(EXCLUDED.eta, vessels_master.eta),
+          last_port = COALESCE(EXCLUDED.last_port, vessels_master.last_port),
+          current_destination = COALESCE(EXCLUDED.current_destination, vessels_master.current_destination),
+          origen = EXCLUDED.origen,
+          audit_source = EXCLUDED.audit_source,
+          source_payload = EXCLUDED.source_payload,
+          system_identity = COALESCE(vessels_master.system_identity, EXCLUDED.system_identity),
+          year_built = COALESCE(EXCLUDED.year_built, vessels_master.year_built),
+          owner_manager = COALESCE(EXCLUDED.owner_manager, vessels_master.owner_manager),
+          has_gears = COALESCE(EXCLUDED.has_gears, vessels_master.has_gears),
+          process_status = EXCLUDED.process_status,
+          fecha_ultima_actualizacion = NOW()
+      `;
+
+      await client.query(sql, queryParams);
+    }
+
+    for (const vessel of nonImoVessels) {
+      await persistMasterVessel(client, vessel);
+    }
+
     await client.query("COMMIT");
     return vessels.length;
   } catch (error) {

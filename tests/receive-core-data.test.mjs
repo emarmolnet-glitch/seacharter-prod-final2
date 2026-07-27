@@ -32,5 +32,19 @@ test('receive-core-data handles OPTIONS, invalid method, invalid body, fleet arr
 test('receive-core-data flattens nested vessels and preserves raw technical warning properties', () => {
   assert.match(source, /const nestedVessel =/);
   assert.match(source, /const nestedAis =/);
-  assert.match(source, /raw: rawSource/);
+  assert.match(source, /raw: \{[\s\S]*hasTechnicalWarning/);
 });
+
+test('upsertRadarVesselsMaster uses single SQL bulk execution for IMO vessels to prevent timeouts', async () => {
+  const syncSource = await readFile(new URL('../db/vessels-master-sync.ts', import.meta.url), 'utf8');
+  assert.match(syncSource, /INSERT INTO vessels_master \([\s\S]*imo_number, vessel_name, dwt, mmsi, latitude, longitude/);
+  assert.match(syncSource, /VALUES \$\{valueTuples\.join\(", "\)\}/);
+  assert.match(syncSource, /ON CONFLICT \(imo_number\) DO UPDATE SET/);
+});
+
+test('frontend postDataBridgeReceiveVessels triggers alert and toast on HTTP 500 server error', async () => {
+  const indexHtml = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(indexHtml, /if \(typeof window !== 'undefined' && typeof window\.alert === 'function' && response\.status >= 500\)/);
+  assert.match(indexHtml, /window\.alert\(`⚠️ Error en Data Bridge \(HTTP \${response\.status}\): \${errorDetail}`\)/);
+});
+

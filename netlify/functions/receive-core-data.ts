@@ -109,7 +109,7 @@ function normalizeVesselItem(item: unknown, index: number): NormalizedFleetVesse
 
   const source = { ...rawSource, ...nestedMeta, ...nestedRouting, ...nestedAis, ...nestedVessel };
 
-  const imoKeys = ["imo", "IMO", "imoNumber", "imo_number", "numero_imo", "numeroIMO", "IMONumber"];
+  const imoKeys = ["imo", "IMO", "imoNumber", "imo_number", "numero_imo", "numeroIMO", "IMONumber", "imo_real"];
   const nameKeys = ["vesselName", "vessel_name", "nombre", "name", "ShipName", "shipName", "vessel", "ship"];
   const dwtKeys = ["dwt", "DWT", "deadweight", "dwt_ajustado"];
   const mmsiKeys = ["mmsi", "MMSI"];
@@ -128,10 +128,23 @@ function normalizeVesselItem(item: unknown, index: number): NormalizedFleetVesse
 
   if (!imo && !name && !mmsi) return null;
 
+  const rawDwt = readFirstString(source, dwtKeys);
+  const dwt = cleanNumber(rawDwt);
+
+  const hasTechnicalWarning = Boolean(
+    source.hasTechnicalWarning ||
+    source.hasWarning ||
+    source.warning ||
+    source.warningReason ||
+    source.technicalWarnings ||
+    source.criticalReasons ||
+    source.dwtStatus === null
+  );
+
   return {
     imo: imo || "N/A",
     name: name || "Unknown Vessel",
-    dwt: cleanNumber(readFirstString(source, dwtKeys)),
+    dwt,
     mmsi,
     type: readFirstString(source, typeKeys) || null,
     flag: readFirstString(source, flagKeys) || null,
@@ -141,7 +154,11 @@ function normalizeVesselItem(item: unknown, index: number): NormalizedFleetVesse
     eta: readFirstString(source, etaKeys) || null,
     lastPort: readFirstString(source, portKeys) || null,
     destination: readFirstString(source, destKeys) || null,
-    raw: rawSource,
+    raw: {
+      ...rawSource,
+      hasTechnicalWarning,
+      ...(dwt === null ? { dwtStatus: null } : {}),
+    },
   };
 }
 
