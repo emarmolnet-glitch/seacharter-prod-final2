@@ -16766,8 +16766,7 @@
         async function generateFrozenReport() {
             try {
                 if (document && typeof document.querySelector === 'function' && document.querySelector('.matching-audit-select')) {
-                    await exportSelectedMatchingToAudit();
-                    return;
+                    return await exportSelectedMatchingToAudit();
                 }
 
                 let vesselsToSend = [];
@@ -16796,13 +16795,14 @@
                 console.log("[CONGELAR_REPORTE] Capturando instantánea de " + frozenVessels.length + " buques.");
                 
                 const frozenReport = createCoreProDataBridgePayload(frozenVessels);
-                await syncCoreProMatchingReport(frozenReport);
+                const persistedReport = await syncCoreProMatchingReport(frozenReport);
                 
                 if (typeof showToast === 'function') {
                     showToast("✅ Informe preparado y exportado a Data Bridge.");
                 } else {
                     alert("✅ Informe preparado y exportado a Data Bridge.");
                 }
+                return persistedReport;
             } catch (err) {
                 console.error("Error al generar el informe congelado:", err);
                 if (typeof showToast === 'function') {
@@ -17610,7 +17610,10 @@
         }
 
         function getStrictVesselImo(source) {
-            const candidates = [source?.imo_real, source?.imo, source?.IMO, source?.imoNumber, source?.imo_number, source?.IMO_NUMBER, source?.numero_imo];
+            const candidates = [
+                source?.imo_real, source?.imo, source?.IMO, source?.imoNumber, source?.imo_number, source?.IMO_NUMBER, source?.numero_imo, source?.numeroImo, source?.vessel_imo, source?.vesselImo,
+                source?.vessel?.imo, source?.vessel?.IMO, source?.vessel?.numero_imo, source?.ais?.imo, source?.ais?.IMO
+            ];
             for (const candidate of candidates) {
                 const digits = String(candidate ?? '').replace(/\D/g, '');
                 if (digits.length === 7) return Number(digits);
@@ -17677,8 +17680,8 @@
                         flag: getStrictVesselString(source, ['flag', 'Flag', 'bandera']).slice(0, 3) || 'N/A',
                         last_port: getStrictVesselString(source, ['last_port', 'lastPort', 'ultimo_puerto']),
                         vessel_type: getStrictVesselString(source, ['vessel_type', 'type', 'tipo', 'tipo_buque']),
-                        year_built: getStrictVesselNumber(source, ['year_built', 'built', 'builtYear', 'built_year', 'anio_construccion']),
-                        owner_manager: getStrictVesselString(source, ['owner_manager', 'owner', 'manager', 'armador']),
+                        year_built: getStrictVesselNumber(source, ['year_built', 'built', 'builtYear', 'built_year', 'anio_construccion', 'ano_construccion']),
+                        owner_manager: getStrictVesselString(source, ['owner_manager', 'owner', 'manager', 'armador', 'armador_manager']),
                         draft_meters: getStrictVesselNumber(source, ['draft_meters', 'draft', 'Draft', 'calado']),
                         eta: normalizeStrictVesselDate(getStrictVesselString(source, ['eta', 'ETA', 'eta_puerto_carga', 'estimatedEta', 'etaEstimated'], 'N/A')),
                         detected_at: normalizeStrictVesselDate(getStrictVesselString(source, ['detected_at', 'detectedAt', 'timestamp', 'created_at', 'createdAt', 'generatedAt', 'generated_at'], 'N/A'))
@@ -18076,11 +18079,6 @@
                     .map(input => input.getAttribute('data-audit-key'))
                     .filter(Boolean);
 
-                if (auditSelectionInputs.length > 0 && selectedKeys.length === 0) {
-                    showToast("Selecciona al menos un buque para exportar a auditoría.");
-                    return;
-                }
-
                 function matchVesselKey(vessel, key) {
                     if (vessel.__auditKey && vessel.__auditKey === key) return true;
                     const vImo = vessel.imo || vessel.IMO || vessel.numero_imo || vessel.numeroImo || (vessel.vessel && vessel.vessel.imo) || (vessel.ais && vessel.ais.imo) || '';
@@ -18111,6 +18109,7 @@
                 const persistedReport = await syncCoreProMatchingReport(selectedAuditReport);
                 const persistedCount = Number(persistedReport?.vessel_count) || 0;
                 showToast(`✅ ${persistedCount} buque${persistedCount === 1 ? '' : 's'} persistido${persistedCount === 1 ? '' : 's'}. Data Bridge los descargará desde la API central.`);
+                return persistedReport;
             } catch (err) {
                 console.error('Error en exportación:', err?.status || 'client', err);
                 showToast("❌ Error al exportar la selección a auditoría.");
