@@ -99,8 +99,7 @@ test('PDA Dinámica: actualizarPDADinamica computes berth days adjustment and cr
   assert.equal(pdaInputPol.value, 11600, 'PDA POL should increase by +$1,600 (+2 days berth delta)');
   assert.equal(runEngineCount, 1, 'runEngine should be triggered on PDA update');
 
-  // 2. Crane method test: Change to "Grúa Barco" -> -$20,000 on base ($2.00/MT * 10,000 MT)
-  // Base = $30,000, delta = 0 days (rate set to 5000), Grúa Barco adjustment = -$20,000 -> $10,000
+  // 2. Dynamic berth adjustment with rate = 5000 (delta = 0) -> maintains base $30,000
   pdaInputPol.dataset.basePda = '30000';
   pdaInputPol.value = '30000';
   rateInputPol.value = '5000';
@@ -109,15 +108,65 @@ test('PDA Dinámica: actualizarPDADinamica computes berth days adjustment and cr
   mockPolSelect.value = 'cuchara_grab';
 
   context.window.actualizarPDADinamica('pol');
-  assert.equal(pdaInputPol.value, 10000, 'PDA POL should decrease by $20,000 for Grúa Barco gear ($2.00/MT * 10,000 MT)');
+  assert.equal(pdaInputPol.value, 30000, 'PDA POL base dues are preserved without unphysical per-ton total deductions');
 
-  // 3. Restore crane method to "Grúa Portuaria" -> 0 deduction from base $30,000 -> $30,000
+  // 3. Restore crane method to "Grúa Portuaria" -> base $30,000
   mockPolSelect.options = [{ textContent: 'Grúa Portuaria 30MT' }];
   mockPolSelect.selectedIndex = 0;
   mockPolSelect.value = 'grua_portuaria_30mt';
 
   context.window.actualizarPDADinamica('pol');
-  assert.equal(pdaInputPol.value, 30000, 'PDA POL should restore to $30,000 for shore crane gear');
+  assert.equal(pdaInputPol.value, 30000, 'PDA POL retains $30,000 for shore crane gear');
+});
+
+test('PDA POD Safety Floor: Enforces safety floor for POD unless explicit free port', () => {
+  const pdaInputPol = { value: '20000', dataset: { basePda: '20000' } };
+  const pdaInputPod = { value: '1000', dataset: { basePda: '1000' } };
+  const rateInputPod = { value: '5000', dataset: { tpdAutoSombra: '5000' } };
+
+  const context = {
+    window: {
+      State: { cargo: 10000, tpdAutoSombraPod: 5000, pdaPol: 20000, basePdaPol: 20000 },
+      runEngine: () => {}
+    },
+    document: {
+      getElementById: (id) => {
+        if (id === 'pda-pol') return pdaInputPol;
+        if (id === 'pda-pod') return pdaInputPod;
+        if (id === 'cargo-qty') return { value: '10000' };
+        if (id === 'rate-disch') return rateInputPod;
+        if (id === 'port-pod') return { value: 'Rotterdam' };
+        return null;
+      }
+    }
+  };
+
+  const script = `
+    ${indexSource.match(/function calcularDeltaDias\([\s\S]*?\n        \}/)[0]}
+    ${indexSource.match(/const COSTE_MUELLAJE_DIARIO = [\s\S]*?\n        function actualizarPDADinamica\([\s\S]*?\n        \}/)[0]}
+    window.actualizarPDADinamica = actualizarPDADinamica;
+  `;
+
+  vm.runInNewContext(script, context);
+
+  // Execute POD update when basePda is $1,000 vs POL $20,000 -> Safety floor elevates to 85% of $20,000 = $17,000
+  context.window.actualizarPDADinamica('pod');
+  assert.equal(pdaInputPod.value, 17000, 'POD PDA elevated to safety floor ($17,000) when residual value $1,000 is detected');
+
+  // Test Free Port Exception:
+  pdaInputPod.value = '1000';
+  pdaInputPod.dataset.basePda = '1000';
+  context.document.getElementById = (id) => {
+    if (id === 'pda-pol') return pdaInputPol;
+    if (id === 'pda-pod') return pdaInputPod;
+    if (id === 'cargo-qty') return { value: '10000' };
+    if (id === 'rate-disch') return rateInputPod;
+    if (id === 'port-pod') return { value: 'Puerto Libre Colon FTZ' };
+    return null;
+  };
+
+  context.window.actualizarPDADinamica('pod');
+  assert.equal(pdaInputPod.value, 1000, 'POD PDA retains $1,000 when explicit free port / FTZ is specified');
 });
 
 test('autoFillPDA Refresh Button: anchors new basePda and reapplies dynamic modifiers', async () => {
@@ -187,7 +236,7 @@ test('autoFillPDA Refresh Button: anchors new basePda and reapplies dynamic modi
   await context.window.autoFillPDA('pol', false);
 
   assert.equal(pdaInputPol.dataset.basePda, '10000', 'basePda anchor remains $10,000');
-  assert.equal(pdaInputPol.value, 0, 'PDA value reflects -$20,000 crane deduction ($10,000 base - $20,000 = $0 min)');
+  assert.equal(pdaInputPol.value, 10000, 'PDA value preserves $10,000 base dues for Grúa Barco');
   assert.ok(runEngineCount > 0, 'runEngine must be called on refresh');
 });
 

@@ -185,6 +185,140 @@
         return { analysis, sourceProfile, detectionMatrix };
     }
 
+    function validateOperationalCoherence(explicitMode = 'Manual', overrides = {}) {
+        const modeRaw = String(explicitMode || 'Manual').trim();
+        const mode = (modeRaw.toLowerCase().includes('auto') || modeRaw === 'Automático') ? 'Automático' : 'Manual';
+
+        const cargoQty = Number.isFinite(overrides.cargoQty) ? Number(overrides.cargoQty) : 0;
+        const cargoCategory = String(overrides.cargoCategory || '').trim();
+        const cargoProduct = String(overrides.cargoProduct || '').trim();
+        const productOrCat = cargoProduct || cargoCategory || 'Mercancía No Especificada';
+
+        const methodPolText = String(overrides.methodPol || '').trim();
+        const methodPodText = String(overrides.methodPod || '').trim();
+        const methodDisplay = [methodPolText, methodPodText].filter(Boolean).join(' / ') || 'Método Estándar';
+
+        let rateLoad = Number.isFinite(overrides.rateLoad) ? Number(overrides.rateLoad) : 0;
+        let rateDisch = Number.isFinite(overrides.rateDisch) ? Number(overrides.rateDisch) : 0;
+        let effectiveQty = cargoQty;
+
+        let isSwapCorrected = false;
+        if (mode === 'Automático' && effectiveQty > 0 && (rateLoad > 0 || rateDisch > 0)) {
+            const maxRateVal = Math.max(rateLoad, rateDisch);
+            if (effectiveQty < maxRateVal && maxRateVal >= 5000 && effectiveQty <= 5000) {
+                const temp = effectiveQty;
+                effectiveQty = maxRateVal;
+                if (rateLoad === maxRateVal) rateLoad = temp;
+                if (rateDisch === maxRateVal) rateDisch = temp;
+                isSwapCorrected = true;
+            }
+        }
+
+        let isAnomaly = false;
+        let causeMessage = '';
+
+        const isPneumatic = methodPolText.includes('Bombas Neumáticas') || methodPodText.includes('Bombas Neumáticas')
+            || methodPolText.includes('bombas_neumaticas') || methodPodText.includes('bombas_neumaticas');
+        const isBelt = methodPolText.includes('Cinta Transportadora') || methodPodText.includes('Cinta Transportadora')
+            || methodPolText.includes('cinta_transportadora') || methodPodText.includes('cinta_transportadora');
+        const isTruck = methodPolText.includes('Camión Tolva') || methodPodText.includes('Camión Tolva')
+            || methodPolText.includes('camion_tolva') || methodPodText.includes('camion_tolva');
+        const isGrab = methodPolText.includes('Cuchara') || methodPodText.includes('Cuchara')
+            || methodPolText.includes('cuchara_grab') || methodPodText.includes('cuchara_grab');
+        const isShipCrane = methodPolText.includes('Grúa Barco') || methodPodText.includes('Grúa Barco')
+            || methodPolText.includes('_barco') || isGrab;
+
+        const prodLower = productOrCat.toLowerCase();
+        const maxRate = Math.max(rateLoad, rateDisch);
+        const isHighSpeedBulk = (isBelt || isPneumatic) && (prodLower.includes('cemento') || prodLower.includes('clinker') || prodLower.includes('grano') || prodLower.includes('carbón'));
+
+        if (isSwapCorrected) {
+            isAnomaly = true;
+            causeMessage = `Incongruencia detectada en extracción automática: Confusión entre cantidad total (${rateLoad.toLocaleString()} MT) y tasa diaria (${effectiveQty.toLocaleString()} TM/d). La IA corrigió la interpretación antes de completar la planilla.`;
+        } else if (!isHighSpeedBulk && effectiveQty >= 5000 && maxRate > 0) {
+            if (maxRate === effectiveQty && effectiveQty >= 5000) {
+                isAnomaly = true;
+                causeMessage = `Confusión entre la cantidad total (${effectiveQty.toLocaleString()} MT) y la tasa diaria (${maxRate.toLocaleString()} TM/d). Se declaró un ritmo idéntico al volumen total de la embarcación.`;
+            } else if (maxRate > 0.6 * effectiveQty && maxRate > 8000) {
+                isAnomaly = true;
+                causeMessage = `Traslape entre Volumen Total (${effectiveQty.toLocaleString()} MT) y Tasa Diaria (TMD de ${maxRate.toLocaleString()} TM/d), implicando un ritmo físico inviable para el equipamiento.`;
+            }
+        } else if (effectiveQty > 0 && effectiveQty < 3000 && maxRate >= 12000) {
+            isAnomaly = true;
+            causeMessage = `Incongruencia entre la cantidad total reducida (${effectiveQty.toLocaleString()} MT) y una tasa diaria sobredimensionada (${maxRate.toLocaleString()} TM/d).`;
+        }
+
+        if (!isAnomaly) {
+            if (isPneumatic) {
+                const isPowder = prodLower.includes('cemento') || prodLower.includes('ceniza') || prodLower.includes('fly ash') || prodLower.includes('polvo') || prodLower.includes('yeso');
+                if (!isPowder || prodLower.includes('clínker') || prodLower.includes('clinker') || prodLower.includes('acero') || prodLower.includes('carbón') || prodLower.includes('big bags') || prodLower.includes('palet')) {
+                    isAnomaly = true;
+                    causeMessage = `El método Bombas Neumáticas / Tuberías es físicamente incompatible con productos no pulverulentos (${productOrCat}). Clíker, carbón o acero obstruyen las líneas neumáticas.`;
+                }
+            } else if (isBelt) {
+                const isBaggedOrSteel = prodLower.includes('acero') || prodLower.includes('siderúrgic') || prodLower.includes('palet') || prodLower.includes('unitariz') || prodLower.includes('breakbulk');
+                if (isBaggedOrSteel) {
+                    isAnomaly = true;
+                    causeMessage = `La Cinta Transportadora no permite la manipulación de piezas siderúrgicas, mercancía unitarizada o paletizada (${productOrCat}).`;
+                }
+            } else if (isGrab) {
+                const isNotBulk = prodLower.includes('palet') || prodLower.includes('big bags') || prodLower.includes('acero') || prodLower.includes('siderúrgic') || prodLower.includes('vehículo') || prodLower.includes('proyecto');
+                if (isNotBulk) {
+                    isAnomaly = true;
+                    causeMessage = `La Cuchara (Grab) es técnicamente incompatible con palets, big bags o piezas siderúrgicas (${productOrCat}).`;
+                }
+            }
+        }
+
+        if (!isAnomaly && maxRate > 0) {
+            if (isShipCrane) {
+                if ((prodLower.includes('big bags') || prodLower.includes('palet')) && maxRate > 4500) {
+                    isAnomaly = true;
+                    causeMessage = `Superación del límite técnico de las grúas del buque para carga envasada/big bags (${maxRate.toLocaleString()} TM/d declarados vs. ritmo máximo de ~1,500-3,000 TM/d).`;
+                } else if ((prodLower.includes('acero') || prodLower.includes('siderúrgic')) && maxRate > 5500) {
+                    isAnomaly = true;
+                    causeMessage = `Superación del límite técnico de las grúas del buque para productos siderúrgicos (${maxRate.toLocaleString()} TM/d declarados vs. ritmo máximo de ~1,500-3,500 TM/d).`;
+                } else if (isGrab && maxRate > 8500) {
+                    isAnomaly = true;
+                    causeMessage = `Superación del límite físico de las grúas del buque con almeja/grab (${maxRate.toLocaleString()} TM/d declarados vs. capacidad máxima de ~4,000-6,000 TM/d).`;
+                }
+            } else if (isTruck && maxRate > 9000) {
+                isAnomaly = true;
+                causeMessage = `Superación de la capacidad técnica de evacuación por Camión Tolva (${maxRate.toLocaleString()} TM/d declarados vs. techo operativo ~3,000-6,000 TM/d).`;
+            } else if (isPneumatic && maxRate > 16000) {
+                isAnomaly = true;
+                causeMessage = `Superación de la capacidad técnica de bombeo neumático continuo (${maxRate.toLocaleString()} TM/d declarados vs. techo operativo ~6,000-12,000 TM/d).`;
+            }
+        }
+
+        if (!isAnomaly && effectiveQty >= 5000 && maxRate > 0 && maxRate < 150) {
+            isAnomaly = true;
+            causeMessage = `Tasa diaria declarada (${maxRate} TM/d) desproporcionadamente baja para un volumen total de ${effectiveQty.toLocaleString()} MT, generando una estadía irreal.`;
+        }
+
+        const headerText = `- [ALERTA DE COHERENCIA OPERATIVA (Modo ${mode})]:`;
+        const diagnosticText = `- Diagnóstico: Incompatibilidad detectada entre el tipo de mercancía (${productOrCat}), el método (${methodDisplay}) y las cantidades/tasas declaradas.`;
+        const causeText = `- Causa probable: ${causeMessage}`;
+        const behaviorText = `- Comportamiento: Mostrar advertencia visual permitiendo al usuario continuar o corregir los datos manualmente sin bloquear el flujo del sistema.`;
+        const formattedAlert = `${headerText}\n  ${diagnosticText}\n  ${causeText}\n  ${behaviorText}`;
+
+        return {
+            active: isAnomaly,
+            mode: `Modo ${mode}`,
+            cargo: productOrCat,
+            method: methodDisplay,
+            qty: effectiveQty,
+            rateLoad,
+            rateDisch,
+            diagnosis: diagnosticText,
+            probableCause: causeMessage,
+            behavior: "Mostrar advertencia visual permitiendo al usuario continuar o corregir los datos manualmente sin bloquear el flujo del sistema.",
+            formattedAlert
+        };
+    }
+
+    global.validateOperationalCoherence = validateOperationalCoherence;
+
     global.SeaCharterNplDataAnalysisEngine = Object.freeze({
         name: MODULE_NAME,
         version: MODULE_VERSION,
@@ -196,6 +330,7 @@
         detectSourceProfile,
         extractCommercialData,
         buildDetectionMatrix,
+        validateOperationalCoherence,
         analyze
     });
 }(window));
