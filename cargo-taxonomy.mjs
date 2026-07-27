@@ -238,8 +238,13 @@ export function evaluateCargoVesselEligibility({
     criticalReasons.push(`Crane SWL inferior o no acreditado (${requiredCraneSwlMt} MT requeridos)`);
   }
 
+  const hasTechnicalWarning = criticalReasons.length > 0 || vesselDwt === null;
+
   return {
     eligible: criticalReasons.length === 0,
+    hasTechnicalWarning,
+    hasWarning: hasTechnicalWarning,
+    warning: hasTechnicalWarning ? criticalReasons.join("; ") : null,
     hiddenByDefault: criticalReasons.length > 0,
     criticalReasons,
     cargoTypeId: normalizedCargoTypeId,

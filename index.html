@@ -19470,8 +19470,11 @@
                 });
 
                 const matches = deduplicatedMatches;
-                const viableMatches = matches.filter(m => m.audit?.operationallyEligible === true);
-                const technicalWarningCount = Math.max(0, matches.length - viableMatches.length);
+                const viableMatches = matches.filter(m => m.audit?.operationallyEligible === true || m.hasTechnicalWarning === true || m.hasWarning === true || m.operationallyEligible === true);
+                const technicalWarningCount = Math.max(
+                    Number(data.technicalWarningCount) || 0,
+                    matches.filter(m => m.hasTechnicalWarning === true || m.hasWarning === true || m.vessel?.dwtStatus === null || m.ais?.dwtStatus === null || m.vessel?.hasTechnicalWarning === true).length
+                );
                 const pipelineSession = typeof window.getPipelineSessionContext === 'function'
                     ? window.getPipelineSessionContext()
                     : { sessionId: '' };
@@ -19499,7 +19502,7 @@
                 if (window.GlobalStore) {
                     window.GlobalStore.matchingCacheSessionId = pipelineSession.sessionId;
                     window.GlobalStore.compatibleVessels = matches
-                        .filter(m => m.audit?.operationallyEligible === true && m.scores.overall > 0)
+                        .filter(m => (m.audit?.operationallyEligible === true || m.hasTechnicalWarning === true) && m.scores.overall > 0)
                         .map(m => ({
                             imo: m.vessel.imo,
                             vesselName: m.vessel.vesselName
@@ -19538,8 +19541,8 @@
                         const isValidCapacity = requiredCargo > 0 ? (v.dwt >= requiredCargo && v.dwt <= requiredCargo * maxDwtTolerance) : (comp.capacityOk !== false);
 
                         const hasTechnicalProblem = m.audit?.operationallyEligible !== true
-                            || !isValidCapacity
-                            || !(comp.dateOk && comp.draftOk && comp.capacityOk && comp.gearOk !== false);
+                            && !m.hasTechnicalWarning
+                            && !m.hasWarning;
                         const hideTechnicalProblems = document.getElementById('hide-technical-problems-toggle')?.checked === true;
                         if (hideTechnicalProblems && hasTechnicalProblem) {
                             return;
@@ -19554,7 +19557,7 @@
                         const isOversizedFallback = v.isOversizedFallback === true || m.isOversizedFallback === true || v.dwtStatus === 'OVERSIZED_FALLBACK' || m.dwtStatus === 'OVERSIZED_FALLBACK' || m.ais?.isOversizedFallback === true || m.aiStatus === 'OVERSIZED_FALLBACK';
                         const isEstimatedDwt = v.dwtStatus === 'ESTIMATED_BY_DIMENSIONS' || m.dwtStatus === 'ESTIMATED_BY_DIMENSIONS' || m.ais?.dwtStatus === 'ESTIMATED_BY_DIMENSIONS';
 
-                        const isComp = (m.audit?.operationallyEligible === true && scores.overall > 0 && !isOversized) || isOversizedFallback;
+                        const isComp = (m.audit?.operationallyEligible === true && scores.overall > 0) || m.hasTechnicalWarning === true || m.hasWarning === true || isOversizedFallback;
                         let compBadge = '';
                         if (isOversizedFallback) {
                             compBadge = '<span class="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1 font-bold" title="Mostrado por escasez de mercado al expandir la capacidad hasta un 500%"><i class="fa-solid fa-triangle-exclamation"></i> ADVERTENCIA: BUQUE SOBREDIMENSIONADO (MOSTRADO POR ESCASEZ DE MERCADO)</span>';
@@ -20044,8 +20047,28 @@
                             lastPortDisplay: ais.lastPortDisplay || ais.lastPortOfCall || "Desconocido / En Navegación",
                             destinationDisplay: ais.destinationDisplay || ais.plannedDestination || "Desconocido / En Navegación"
                         };
+                    const hasTechnicalWarning = Boolean(
+                        match.hasTechnicalWarning
+                        || match.hasWarning
+                        || v.hasTechnicalWarning
+                        || v.hasWarning
+                        || v.dwtStatus === null
+                        || ais.dwtStatus === null
+                        || (Array.isArray(match.technicalEligibility?.criticalReasons) && match.technicalEligibility.criticalReasons.length > 0)
+                    );
+                    const warningText = match.warning
+                        || match.warningReason
+                        || (Array.isArray(match.technicalEligibility?.criticalReasons) && match.technicalEligibility.criticalReasons.length > 0 ? match.technicalEligibility.criticalReasons.join("; ") : null)
+                        || (hasTechnicalWarning ? "Advertencia técnica: Datos AIS incompletos o DWT no disponible" : null);
+
                     return {
                         __auditKey: auditKey,
+                        is_compatible: true,
+                        operationallyEligible: true,
+                        hasTechnicalWarning,
+                        hasWarning: hasTechnicalWarning,
+                        warning: warningText,
+                        advertencia_tecnica: warningText,
                         imo: Number(v.imo || v.IMO || ais.imo || source.imo || source.IMO || source.imo_number) || 0,
                         mmsi: String(v.mmsi || v.MMSI || ais.mmsi || source.mmsi || source.MMSI || ''),
                         name: vesselName,
@@ -20080,7 +20103,7 @@
                             flag: coreProAuditInput.flag || v.flag || v.bandera || ais.flag || "Unknown",
                             eta: coreProAuditInput.eta || route.eta || ais.eta_puerto_carga || ''
                         },
-                        log_correccion: m.log_correccion || null
+                        log_correccion: m.log_correccion || warningText || null
                     };
                 });
                 const renderedAuditVessels = Array.isArray(window.GlobalStore?.auditVessels)
