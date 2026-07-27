@@ -153,3 +153,37 @@ test('blocks ia_report until fleet has a strict 200 acknowledgement', async () =
   assert.equal(iaResponse.success, true);
   assert.deepEqual(sentTypes, ['fleet', 'ia_report']);
 });
+
+test('normalizes raw array and alternative fleet key payloads into strict envelope structure', async () => {
+  let receivedPayloads = [];
+  const client = createClient(async (_url, options) => {
+    receivedPayloads.push(JSON.parse(options.body));
+    return Response.json({ success: true }, { status: 200 });
+  });
+
+  // Test raw array input
+  const arrayResponse = await client.postDataBridgeReceiveVessels({
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify([{ imo: 7654321, name: 'Vessel Array' }]),
+  });
+  assert.equal(arrayResponse.status, 200);
+
+  // Test rankedFleet alternative key input
+  const rankedResponse = await client.postDataBridgeReceiveVessels({
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rankedFleet: [{ imo: 7654322, name: 'Ranked Vessel' }] }),
+  });
+  assert.equal(rankedResponse.status, 200);
+
+  assert.equal(receivedPayloads.length, 2);
+  assert.equal(receivedPayloads[0].type, 'fleet');
+  assert.ok(receivedPayloads[0].syncId);
+  assert.deepEqual(receivedPayloads[0].vessels, [{ imo: 7654321, name: 'Vessel Array' }]);
+
+  assert.equal(receivedPayloads[1].type, 'fleet');
+  assert.ok(receivedPayloads[1].syncId);
+  assert.deepEqual(receivedPayloads[1].vessels, [{ imo: 7654322, name: 'Ranked Vessel' }]);
+});
+

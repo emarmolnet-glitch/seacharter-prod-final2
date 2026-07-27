@@ -17709,6 +17709,17 @@
                         source.dwtStatus === null
                     );
 
+                    const rawEslora = getStrictVesselNumber(source, ['eslora', 'LOA', 'loa', 'length', 'Length', 'length_meters', 'dimension_a', 'eslora_m'], 0);
+                    const calculatedEslora = (typeof window.calcularEsloraMinimaParaDWT === 'function' && dwt && dwt > 0)
+                        ? window.calcularEsloraMinimaParaDWT(dwt)
+                        : (dwt && dwt > 0 ? Math.round(Math.pow(dwt, 0.45) * 8) : 80);
+                    const eslora = Math.max(80, Math.round(rawEslora || calculatedEslora || 80));
+
+                    const rawAisType = getStrictVesselNumber(source, ['ais_type', 'aisType', 'type_code', 'typeCode', 'ship_type_code', 'shipTypeCode', 'tipo_ais', 'tipoAis', 'ShipType'], 0);
+                    const aisType = (rawAisType >= 70 && rawAisType <= 79) ? Math.trunc(rawAisType) : 70;
+
+                    const vesselType = getStrictVesselString(source, ['vessel_type', 'vesselType', 'type', 'tipo', 'tipo_buque', 'ship_type', 'shipType'], 'Bulk Carrier');
+
                     return {
                         ...source,
                         imo,
@@ -17720,7 +17731,13 @@
                         has_gears: getStrictVesselBoolean(source, ['has_gears', 'gruas', 'gruas_geared']),
                         flag: getStrictVesselString(source, ['flag', 'Flag', 'bandera']).slice(0, 3) || 'N/A',
                         last_port: getStrictVesselString(source, ['last_port', 'lastPort', 'ultimo_puerto']),
-                        vessel_type: getStrictVesselString(source, ['vessel_type', 'type', 'tipo', 'tipo_buque']),
+                        vessel_type: vesselType,
+                        ais_type: aisType,
+                        ship_type_code: aisType,
+                        type_code: aisType,
+                        eslora: eslora,
+                        loa: eslora,
+                        length: eslora,
                         year_built: getStrictVesselNumber(source, ['year_built', 'built', 'builtYear', 'built_year', 'anio_construccion', 'ano_construccion']),
                         owner_manager: getStrictVesselString(source, ['owner_manager', 'owner', 'manager', 'armador', 'armador_manager']),
                         draft_meters: getStrictVesselNumber(source, ['draft_meters', 'draft', 'Draft', 'calado']),
@@ -17958,16 +17975,20 @@
 
         async function postDataBridgeReceiveVessels(requestOptions, contract = {}) {
             const nextOptions = { ...(requestOptions || {}) };
-            let payload;
+            let rawPayload;
             try {
-                payload = typeof nextOptions.body === 'string' ? JSON.parse(nextOptions.body) : nextOptions.body;
+                rawPayload = typeof nextOptions.body === 'string' ? JSON.parse(nextOptions.body) : nextOptions.body;
             } catch (error) {
                 return createDataBridgeFailureResponse(400, 'El cuerpo de envío a Data Bridge no contiene JSON válido.');
             }
 
-            if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-                return createDataBridgeFailureResponse(400, 'El cuerpo de envío a Data Bridge debe ser un objeto JSON.');
+            if (!rawPayload || (typeof rawPayload !== 'object' && !Array.isArray(rawPayload))) {
+                return createDataBridgeFailureResponse(400, 'El cuerpo de envío a Data Bridge debe ser un objeto o un array JSON.');
             }
+
+            let payload = Array.isArray(rawPayload)
+                ? { type: 'fleet', vessels: rawPayload }
+                : { ...rawPayload };
 
             const type = String(contract.type || payload.type || 'fleet').trim();
             if (type !== 'fleet' && type !== 'ia_report') {
@@ -17985,14 +18006,26 @@
 
             if (type === 'fleet') {
                 try {
-                    const sourceVessels = Array.isArray(payload?.vessels) ? payload.vessels : [];
+                    let sourceVessels = [];
+                    if (Array.isArray(payload?.vessels)) {
+                        sourceVessels = payload.vessels;
+                    } else if (Array.isArray(payload?.rankedFleet)) {
+                        sourceVessels = payload.rankedFleet;
+                    } else if (Array.isArray(payload?.fleet)) {
+                        sourceVessels = payload.fleet;
+                    } else if (Array.isArray(payload?.buques)) {
+                        sourceVessels = payload.buques;
+                    } else if (Array.isArray(payload?.selectedVessels)) {
+                        sourceVessels = payload.selectedVessels;
+                    } else if (payload && typeof payload === 'object' && getStrictVesselImo(payload) > 0) {
+                        sourceVessels = [payload];
+                    }
+
                     const prepared = prepareDataBridgeVesselsForSend(sourceVessels);
                     if (prepared.rejectedCount > 0 && typeof showToast === 'function') {
-                        showToast(`${prepared.rejectedCount} buque${prepared.rejectedCount === 1 ? '' : 's'} descartado${prepared.rejectedCount === 1 ? '' : 's'} por IMO inválido antes del envío.`, false, 'warning');
+                        showToast(`${prepared.rejectedCount} buque${prepared.rejectedCount === 1 ? '' : 's'} descartado${prepared.rejectedCount === 1 ? '' : 's'} por formato/IMO inválido antes del envío.`, false, 'warning');
                     }
-                    if (sourceVessels.length > 0) {
-                        payload = { ...payload, vessels: prepared.validVessels };
-                    }
+                    payload = { ...payload, type: 'fleet', syncId, vessels: prepared.validVessels };
                     if (sourceVessels.length > 0 && prepared.validVessels.length === 0) {
                         return createDataBridgeFailureResponse(422, 'No hay buques con IMO válido para enviar.', {
                             processedCount: 0,
