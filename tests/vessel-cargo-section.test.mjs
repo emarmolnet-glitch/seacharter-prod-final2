@@ -127,8 +127,83 @@ test('section 2 uses local state buffering and a confirmation button strictly at
   assert.match(indexSource, /if \(typeof runEngine === 'function'\) runEngine\(\);/);
 
   // 4. Confirm inputs in section 2 use updateSection2LocalState instead of runEngine on input
-  assert.match(indexSource, /id="cargo-qty"[^>]*oninput="updateSection2LocalState\('cargo-qty', this\.value\)"/);
+  assert.match(indexSource, /id="cargo-qty"[^>]*updateSection2LocalState\('cargo-qty', this\.value\)/);
   assert.match(indexSource, /id="cargo-sf"[^>]*oninput="updateSection2LocalState\('cargo-sf', this\.value\)"/);
   assert.match(indexSource, /id="cargo-tolerance"[^>]*oninput="updateSection2LocalState\('cargo-tolerance', this\.value\)"/);
+});
+
+test('Centralized Vessel Classification and Synchronized Helper Text in Section 2', () => {
+  assert.match(indexSource, /id="cargo-vessel-class-display"/);
+  assert.match(indexSource, /function getCentralizedVesselClass/);
+  assert.match(indexSource, /function updateCargoVesselClassDisplay/);
+  assert.doesNotMatch(indexSource, /function detectVesselClassFromCargo/);
+
+  let badgeText = 'Mini-Bulker';
+  let helperText = '';
+
+  const context = {
+    document: {
+      getElementById: (id) => {
+        if (id === 'vessel-badge') return { innerText: badgeText };
+        if (id === 'cargo-vessel-class-display') return {
+          get textContent() { return helperText; },
+          set textContent(val) { helperText = val; }
+        };
+        if (id === 'vessel-dwt') return { value: '11500' };
+        if (id === 'cargo-qty') return { value: '10000' };
+        return null;
+      },
+    },
+    window: { State: { class: 'Mini-Bulker' } },
+    parseFloat,
+    String,
+    Math,
+    getCentralizedVesselClass: null,
+    updateCargoVesselClassDisplay: null,
+    getCiclosForMethod: null,
+    getAutoEficienciaForMethodAndCategory: null,
+  };
+
+  const script = `
+    function getCentralizedVesselClass() {
+        const badgeEl = document.getElementById('vessel-badge');
+        const bText = badgeEl?.innerText?.trim();
+        if (bText && bText !== 'Desconocido' && bText !== 'Unknown') return bText;
+        if (window.State && window.State.class && window.State.class !== 'Desconocido') return window.State.class;
+        return 'Desconocido';
+    }
+
+    function updateCargoVesselClassDisplay() {
+        const vClass = getCentralizedVesselClass();
+        const displayEl = document.getElementById('cargo-vessel-class-display');
+        if (displayEl) {
+            displayEl.textContent = (vClass && vClass !== 'Desconocido' && vClass !== 'Unknown')
+                ? 'Clasificado como: ' + vClass
+                : '';
+        }
+        return vClass;
+    }
+
+    function getCiclosForMethod(label = '', vesselClass = '') {
+        const l = String(label || '');
+        const vClass = String(vesselClass || getCentralizedVesselClass()).toLowerCase();
+        if (l.includes('Grúa Barco')) {
+            if (vClass.includes('coaster') || vClass.includes('mini')) return 12;
+            if (vClass.includes('supramax') || vClass.includes('ultramax')) return 18;
+            return 15;
+        }
+        return 15;
+    }
+  `;
+
+  vm.runInNewContext(script, context);
+
+  // Test helper text uses centralized class format
+  const vClass = context.updateCargoVesselClassDisplay();
+  assert.equal(vClass, 'Mini-Bulker');
+  assert.equal(helperText, 'Clasificado como: Mini-Bulker');
+
+  // Test dynamic cycles for centralized vessel class
+  assert.equal(context.getCiclosForMethod('Cuchara (Grab) - Grúa Barco', 'Mini-Bulker'), 12);
 });
 

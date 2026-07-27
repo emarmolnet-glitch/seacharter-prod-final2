@@ -7799,7 +7799,8 @@
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                             <div class="input-group">
                                 <label id="label-cargo-qty" class="text-action-required flex items-center min-h-[24px]">Carga a Transportar (TM)</label>
-                                <input type="number" id="cargo-qty" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="0" step="any" oninput="updateSection2LocalState('cargo-qty', this.value)" onblur="detectVesselSegmentFromInputs()">
+                                <input type="number" id="cargo-qty" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="0" step="any" oninput="updateSection2LocalState('cargo-qty', this.value); updateCargoVesselClassDisplay();" onblur="detectVesselSegmentFromInputs()">
+                                <p id="cargo-vessel-class-display" class="text-[10px] text-teal-300 mt-1 font-semibold min-h-[14px]"></p>
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-type" class="text-action-required flex items-center min-h-[24px]">Categoría de Carga</label>
@@ -25558,12 +25559,19 @@
             const num = (id) => parseFloat(el(id)?.value) || 0;
             const val = (id) => el(id)?.value || '';
 
+            const cargoQty = num('cargo-qty');
+            const centralizedClass = typeof getCentralizedVesselClass === 'function' ? getCentralizedVesselClass() : '';
+
             if (window.State) {
                 window.State.vesselName = val('nombre-buque-calculadora');
                 window.State.dwt = num('vessel-dwt');
                 window.State.speedBallast = num('spd-ballast');
                 window.State.speedLaden = num('spd-laden');
-                window.State.cargo = num('cargo-qty');
+                window.State.cargo = cargoQty;
+                if (centralizedClass && centralizedClass !== 'Desconocido') {
+                    window.State.vesselClass = centralizedClass;
+                    window.State.estimatedVesselClass = centralizedClass;
+                }
                 window.State.cargoType = val('cargo-type');
                 window.State.cargoProduct = val('cargo-product');
                 window.State.stowageFactor = num('cargo-sf');
@@ -25572,6 +25580,31 @@
                 window.State.dischRate = num('rate-disch');
                 window.State.cargoTolerance = num('cargo-tolerance');
             }
+
+            if (typeof updateCargoVesselClassDisplay === 'function') {
+                updateCargoVesselClassDisplay();
+            }
+
+            ['pol', 'pod'].forEach((side) => {
+                if (typeof getSelectedMethodLabel === 'function' && typeof isCraneMethod === 'function') {
+                    const label = getSelectedMethodLabel(side);
+                    if (isCraneMethod(label)) {
+                        const ciclosId = side === 'pod' ? 'gruas-ciclos-pod' : 'gruas-ciclos-pol';
+                        const ciclosEl = el(ciclosId);
+                        if (ciclosEl && ciclosEl.dataset.manualOverride !== 'true' && typeof getCiclosForMethod === 'function') {
+                            ciclosEl.value = String(getCiclosForMethod(label, centralizedClass));
+                        }
+                        if (typeof getAutoEficienciaForMethodAndCategory === 'function' && typeof setEficienciaGruaValor === 'function') {
+                            const category = typeof getActiveCargoCategory === 'function' ? getActiveCargoCategory() : val('cargo-type');
+                            const autoEficiencia = getAutoEficienciaForMethodAndCategory(label, category, centralizedClass);
+                            setEficienciaGruaValor(side, autoEficiencia);
+                        }
+                        if (typeof calcularRitmoGrua === 'function') {
+                            calcularRitmoGrua(side);
+                        }
+                    }
+                }
+            });
 
             if (typeof handleDWTChange === 'function') {
                 handleDWTChange(true, true);
@@ -25628,6 +25661,9 @@
 
             document.getElementById('vessel-badge').innerText = vClass;
             State.class = vClass;
+            if (typeof updateCargoVesselClassDisplay === 'function') {
+                updateCargoVesselClassDisplay();
+            }
             const seaInput = document.getElementById('cons-sea');
             if (seaInput) seaInput.dataset.navigationBase = cSea.toFixed(1);
             if (typeof syncNavigationStrategyEffect === 'function') {
@@ -45253,30 +45289,99 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return 0;
         }
 
-        function getCiclosForMethod(label = '') {
+        function getCentralizedVesselClass() {
+            const badgeEl = document.getElementById('vessel-badge');
+            const badgeText = badgeEl?.innerText?.trim();
+            if (badgeText && badgeText !== 'Desconocido' && badgeText !== 'Unknown' && badgeText !== '-') {
+                return badgeText;
+            }
+            if (window.State && window.State.class && window.State.class !== 'Desconocido' && window.State.class !== 'Unknown') {
+                return window.State.class;
+            }
+            const dwt = typeof getEffectiveDwtForSegmentDetection === 'function'
+                ? getEffectiveDwtForSegmentDetection()
+                : (parseFloat(document.getElementById('vessel-dwt')?.value) || parseFloat(document.getElementById('cargo-qty')?.value) || 0);
+            if (dwt > 0 && typeof detectVesselSegment === 'function') {
+                const seg = detectVesselSegment(dwt);
+                if (seg && seg.segment) return seg.segment;
+            }
+            return 'Desconocido';
+        }
+
+        function updateCargoVesselClassDisplay() {
+            const vClass = getCentralizedVesselClass();
+            const badgeEl = document.getElementById('vessel-badge');
+            if (badgeEl && vClass && vClass !== 'Desconocido' && vClass !== 'Unknown' && (badgeEl.innerText.trim() === 'Desconocido' || badgeEl.innerText.trim() === 'Unknown')) {
+                badgeEl.innerText = vClass;
+                if (window.State) window.State.class = vClass;
+            }
+            const displayEl = document.getElementById('cargo-vessel-class-display');
+            if (displayEl) {
+                displayEl.textContent = (vClass && vClass !== 'Desconocido' && vClass !== 'Unknown')
+                    ? `Clasificado como: ${vClass}`
+                    : '';
+            }
+            return vClass;
+        }
+
+        function getCiclosForMethod(label = '', vesselClass = '') {
             const l = String(label || '');
-            if (l.includes('Grúa Barco')) return 15;
-            if (l.includes('Grúa Portuaria')) return 30;
+            const rawClass = String(vesselClass || (typeof getCentralizedVesselClass === 'function' ? getCentralizedVesselClass() : '') || window.State?.class || '');
+            const vClass = rawClass.toLowerCase();
+
+            if (l.includes('Grúa Barco')) {
+                if (vClass.includes('coaster') || vClass.includes('mini')) return 12;
+                if (vClass.includes('supramax') || vClass.includes('ultramax') || vClass.includes('panamax') || vClass.includes('capesize')) return 18;
+                return 15;
+            }
+            if (l.includes('Grúa Portuaria')) {
+                if (vClass.includes('coaster') || vClass.includes('mini')) return 22;
+                if (vClass.includes('supramax') || vClass.includes('ultramax') || vClass.includes('panamax') || vClass.includes('capesize')) return 35;
+                return 30;
+            }
             return 15;
         }
 
-        function getAutoEficienciaForMethodAndCategory(label = '', category = getActiveCargoCategory()) {
+        function getAutoEficienciaForMethodAndCategory(label = '', category = getActiveCargoCategory(), vesselClass = '') {
             const l = String(label || '');
-            if (!l.includes('Grúa Barco')) return 100;
+            const rawClass = String(vesselClass || (typeof getCentralizedVesselClass === 'function' ? getCentralizedVesselClass() : '') || window.State?.class || '');
+            const vClass = rawClass.toLowerCase();
+
+            if (!l.includes('Grúa Barco')) {
+                if (l.includes('Grúa Portuaria') && (vClass.includes('coaster') || vClass.includes('mini'))) {
+                    return 85;
+                }
+                return 100;
+            }
+
+            let baseEficiencia = 100;
             switch (category) {
                 case 'Minerales y Construcción':
-                    return 50;
+                    baseEficiencia = 50;
+                    break;
                 case 'Biomasa y Combustibles Sólidos':
-                    return 40;
+                    baseEficiencia = 40;
+                    break;
                 case 'Carga Unitarizada / Envasada':
                 case 'Carga Unitizada / Envasada':
                 case 'Carga de Proyecto (Breakbulk)':
-                    return 25;
+                    baseEficiencia = 25;
+                    break;
                 case 'Carga Siderúrgica y Metales':
-                    return 15;
+                    baseEficiencia = 15;
+                    break;
                 default:
-                    return 100;
+                    baseEficiencia = 100;
+                    break;
             }
+
+            if (vClass.includes('coaster') || vClass.includes('mini')) {
+                return Math.max(1, Math.round(baseEficiencia * 0.8));
+            } else if (vClass.includes('supramax') || vClass.includes('ultramax') || vClass.includes('panamax') || vClass.includes('capesize')) {
+                return Math.min(100, Math.round(baseEficiencia * 1.2));
+            }
+
+            return baseEficiencia;
         }
 
         function resetEficienciaGrua(side = 'pol') {
@@ -46654,10 +46759,33 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const metodoPod = getMetodoDescargaActual();
             const activeId = document.activeElement?.id || '';
 
+            const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || parseFloat(window.State?.cargo) || 0;
+            const vClass = typeof detectVesselClassFromCargo === 'function' ? detectVesselClassFromCargo(cargoQty) : '';
+
             sides.forEach(s => {
                 const selectId = s === 'pod' ? 'metodo_descarga_pod' : 'metodo_carga';
                 const forceAutoGruas = activeId === selectId || activeId === s || (['cargo-qty', 'cargo-type', 'cargo-product'].includes(activeId) && !targetSide);
                 aplicarGruasSugeridasPuerto(s, { force: forceAutoGruas });
+
+                const label = typeof getSelectedMethodLabel === 'function' ? getSelectedMethodLabel(s) : '';
+                if (typeof isCraneMethod === 'function' && isCraneMethod(label)) {
+                    const ciclosId = s === 'pod' ? 'gruas-ciclos-pod' : 'gruas-ciclos-pol';
+                    const ciclosEl = document.getElementById(ciclosId);
+                    if (ciclosEl && ciclosEl.dataset.manualOverride !== 'true' && typeof getCiclosForMethod === 'function') {
+                        ciclosEl.value = String(getCiclosForMethod(label, vClass));
+                    }
+                    const numId = s === 'pod' ? 'gruas-eficiencia-num-pod' : 'gruas-eficiencia-num-pol';
+                    const numEl = document.getElementById(numId);
+                    if (numEl && numEl.dataset.manualOverride !== 'true' && typeof getAutoEficienciaForMethodAndCategory === 'function' && typeof setEficienciaGruaValor === 'function') {
+                        const category = typeof getActiveCargoCategory === 'function' ? getActiveCargoCategory() : '';
+                        const autoEficiencia = getAutoEficienciaForMethodAndCategory(label, category, vClass);
+                        setEficienciaGruaValor(s, autoEficiencia);
+                    }
+                    if (typeof calcularRitmoGrua === 'function') {
+                        calcularRitmoGrua(s);
+                    }
+                }
+
                 const ritmoReal = calcularRitmoEfectivo(s);
                 const inputId = s === 'pod' ? 'rate-disch' : 'rate-load';
                 const input = document.getElementById(inputId);
@@ -46695,6 +46823,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.getTaraForMethod = getTaraForMethod;
             window.getCiclosForMethod = getCiclosForMethod;
             window.getAutoEficienciaForMethodAndCategory = getAutoEficienciaForMethodAndCategory;
+            window.getCentralizedVesselClass = getCentralizedVesselClass;
+            window.updateCargoVesselClassDisplay = updateCargoVesselClassDisplay;
             window.updateSwlLabelText = updateSwlLabelText;
             window.actualizarGrabCapacityVisibility = actualizarGrabCapacityVisibility;
             window.checkIsGearedVessel = checkIsGearedVessel;
