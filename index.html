@@ -7301,6 +7301,11 @@
 
         <div class="module-tabs-wrapper">
             <div id="connection-status-root"></div>
+            <div id="header-voyage-ref-container" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-xs font-mono shadow-2xs shrink-0" title="Referencia Única del Viaje / Contrato">
+                <i class="fa-solid fa-hashtag text-[10px] text-slate-400"></i>
+                <span class="text-slate-400 font-sans text-[10px] uppercase font-bold tracking-wider">Ref:</span>
+                <input type="text" id="quick-ref" class="bg-transparent font-mono text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 w-36 transition-all" value="RDM/GC/2026-0727-XXXX" oninput="syncQuickRef(this.value)" title="Referencia Única del Viaje / Contrato">
+            </div>
             <div class="tools-dropdown-container">
                 <button
                     type="button"
@@ -7748,7 +7753,7 @@
                                     <span id="label-vessel-name-real">Nombre del Buque</span>
                                 </label>
                                 <div class="relative flex items-center w-full">
-                                    <input type="text" id="nombre-buque-calculadora" class="input-gc font-bold text-white pr-8 w-full" value="TBN" oninput="autoClassifySpecialtyFromInputs()">
+                                    <input type="text" id="nombre-buque-calculadora" class="input-gc font-bold text-white pr-8 w-full" value="TBN" oninput="updateSection2LocalState('nombre-buque-calculadora', this.value); autoClassifySpecialtyFromInputs()">
                                     <button id="btn-vessel-specs-real-2" onclick="searchLocalVesselDataBridge()" class="absolute right-2 text-slate-400 hover:text-sky-400 transition" title="Buscar buque en Data Bridge (Local)">
                                         <i class="fa-solid fa-magnifying-glass text-xs"></i>
                                     </button>
@@ -7756,7 +7761,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-vessel-dwt" class="text-blue-400 flex items-center min-h-[28px]">Capacidad DWT (TM)</label>
-                                <input type="number" id="vessel-dwt" class="input-gc font-bold text-blue-300" value="0" step="any" oninput="handleDWTChange(true)" onblur="detectVesselSegmentFromInputs()">
+                                <input type="number" id="vessel-dwt" class="input-gc font-bold text-blue-300" value="0" step="any" oninput="updateSection2LocalState('vessel-dwt', this.value); handleDWTChange(true, false)" onblur="detectVesselSegmentFromInputs()">
                             </div>
                             <div class="input-group">
                                 <label for="vessel-has-scrubber-no" class="text-blue-400 flex items-center gap-1 min-h-[28px]">
@@ -7767,9 +7772,9 @@
                                     </span>
                                 </label>
                                 <div class="grid min-h-[42px] grid-cols-2 rounded-lg border border-slate-300 bg-white p-1 shadow-sm" role="radiogroup" aria-label="Scrubber">
-                                    <input type="radio" id="vessel-has-scrubber-no" name="vessel-has-scrubber-choice" class="peer/no sr-only" value="no" checked onchange="setVesselScrubber(false)">
+                                    <input type="radio" id="vessel-has-scrubber-no" name="vessel-has-scrubber-choice" class="peer/no sr-only" value="no" checked onchange="setVesselScrubber(false, false)">
                                     <label for="vessel-has-scrubber-no" class="flex cursor-pointer items-center justify-center rounded-md px-2 py-1 text-[10px] font-black uppercase text-slate-500 transition hover:text-slate-900 peer-checked/no:bg-slate-100 peer-checked/no:text-slate-900 peer-checked/no:ring-1 peer-checked/no:ring-slate-300">No</label>
-                                    <input type="radio" id="vessel-has-scrubber-yes" name="vessel-has-scrubber-choice" class="peer/yes sr-only" value="yes" onchange="setVesselScrubber(true)">
+                                    <input type="radio" id="vessel-has-scrubber-yes" name="vessel-has-scrubber-choice" class="peer/yes sr-only" value="yes" onchange="setVesselScrubber(true, false)">
                                     <label for="vessel-has-scrubber-yes" class="flex cursor-pointer items-center justify-center rounded-md px-2 py-1 text-[10px] font-black uppercase text-slate-500 transition hover:text-slate-900 peer-checked/yes:bg-slate-100 peer-checked/yes:text-slate-900 peer-checked/yes:ring-1 peer-checked/yes:ring-slate-300">Sí</label>
                                     <input type="checkbox" id="vessel-has-scrubber" class="sr-only" aria-hidden="true" tabindex="-1">
                                 </div>
@@ -7777,28 +7782,28 @@
                             <div class="input-group">
                                 <label class="text-blue-300 flex items-center min-h-[28px]">Estrategia de Navegación</label>
                                 <div class="grid min-h-[42px] grid-cols-2 rounded-lg border border-slate-700 bg-slate-950 p-1">
-                                    <button type="button" id="nav-strategy-eco" onclick="setNavigationStrategy('eco')" class="rounded-md bg-blue-600 px-2 py-1 text-[10px] font-black uppercase text-white shadow">Eco-Speed</button>
-                                    <button type="button" id="nav-strategy-full" onclick="setNavigationStrategy('full')" class="rounded-md px-2 py-1 text-[10px] font-black uppercase text-slate-400 hover:text-white">Full-Speed</button>
+                                    <button type="button" id="nav-strategy-eco" onclick="setNavigationStrategy('eco', false)" class="rounded-md bg-blue-600 px-2 py-1 text-[10px] font-black uppercase text-white shadow">Eco-Speed</button>
+                                    <button type="button" id="nav-strategy-full" onclick="setNavigationStrategy('full', false)" class="rounded-md px-2 py-1 text-[10px] font-black uppercase text-slate-400 hover:text-white">Full-Speed</button>
                                 </div>
                             </div>
                             <div class="input-group">
                                 <label id="label-spd-ballast" class="flex items-center min-h-[28px]">Velocidad Lastre (Knts)</label>
-                                <input type="number" id="spd-ballast" class="input-gc" value="11.5" step="any" oninput="markSpeedManualOverride(this); runEngine()">
+                                <input type="number" id="spd-ballast" class="input-gc" value="11.5" step="any" oninput="markSpeedManualOverride(this)">
                             </div>
                             <div class="input-group">
                                 <label id="label-spd-laden" class="flex items-center min-h-[28px]">Velocidad Carga (Knts)</label>
-                                <input type="number" id="spd-laden" class="input-gc" value="10.5" step="any" oninput="markSpeedManualOverride(this); runEngine()">
+                                <input type="number" id="spd-laden" class="input-gc" value="10.5" step="any" oninput="markSpeedManualOverride(this)">
                             </div>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                             <div class="input-group">
                                 <label id="label-cargo-qty" class="text-action-required flex items-center min-h-[24px]">Carga a Transportar (TM)</label>
-                                <input type="number" id="cargo-qty" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="0" step="any" oninput="autoScaleVesselAndCosts(); syncCalculatorAndMatching('calculator'); recalcularDiasPuerto(); actualizarModuloCamionTolva();" onblur="detectVesselSegmentFromInputs()">
+                                <input type="number" id="cargo-qty" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="0" step="any" oninput="updateSection2LocalState('cargo-qty', this.value)" onblur="detectVesselSegmentFromInputs()">
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-type" class="text-action-required flex items-center min-h-[24px]">Categoría de Carga</label>
-                                <select id="cargo-type" class="input-gc action-required-field required-use-highlight text-action-required" required aria-required="true" onchange="handleCargoCategoryChange(); populateCargoProducts(); autoPopulateRouteLimits(); syncCalculatorAndMatching('calculator');">
+                                <select id="cargo-type" class="input-gc action-required-field required-use-highlight text-action-required" required aria-required="true" onchange="updateSection2LocalState('cargo-type', this.value); handleCargoCategoryChange(); populateCargoProducts(); autoPopulateRouteLimits();">
                                     <option value="">Selecciona una categoría</option>
                                     <option value="Minerales y Construcción" selected>Minerales y Construcción</option>
                                     <option value="Biomasa y Combustibles Sólidos">Biomasa y Combustibles Sólidos</option>
@@ -7809,7 +7814,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-product" class="text-action-required flex items-center min-h-[24px]">Producto Específico</label>
-                                <select id="cargo-product" class="input-gc action-required-field required-use-highlight text-action-required" required aria-required="true" onchange="applySelectedCargoProduct(); syncCalculatorAndMatching('calculator');">
+                                <select id="cargo-product" class="input-gc action-required-field required-use-highlight text-action-required" required aria-required="true" onchange="updateSection2LocalState('cargo-product', this.value); applySelectedCargoProduct(false);">
                                     <option value="Cemento a granel" selected>Cemento a granel</option>
                                     <option value="Clínker">Clínker</option>
                                     <option value="Yeso">Yeso</option>
@@ -7817,7 +7822,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-charter-party-standard" class="text-yellow-400 flex items-center min-h-[24px]">Póliza Estándar</label>
-                                <select id="charter-party-standard" class="input-gc font-bold text-yellow-300" onchange="updateCharterPartyStandard()">
+                                <select id="charter-party-standard" class="input-gc font-bold text-yellow-300" onchange="updateSection2LocalState('charter-party-standard', this.value); updateCharterPartyStandard()">
                                     <option value="GENCON">GENCON</option>
                                     <option value="ASBATANKVOY">ASBATANKVOY</option>
                                 </select>
@@ -8001,7 +8006,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-product-sector" class="text-teal-400 flex items-center min-h-[24px]" title="Sector regulado por el Mecanismo de Ajuste en Frontera por Carbono (CBAM) de la UE">Sector CBAM</label>
-                                <select id="product-sector" class="input-gc font-bold text-teal-300" disabled aria-disabled="true" onchange="runEngine()">
+                                <select id="product-sector" class="input-gc font-bold text-teal-300" disabled aria-disabled="true" onchange="updateSection2LocalState('product-sector', this.value)">
                                     <option value="">— N/A —</option>
                                     <option value="Cemento">Cemento</option>
                                     <option value="Acero">Acero</option>
@@ -8011,11 +8016,11 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-sf" class="flex items-center min-h-[24px]">Stowage Factor</label>
-                                <input type="number" id="cargo-sf" class="input-gc text-indigo-300" value="1.20" min="0" step="0.01" oninput="runEngine(); syncCalculatorAndMatching('calculator')">
+                                <input type="number" id="cargo-sf" class="input-gc text-indigo-300" value="1.20" min="0" step="0.01" oninput="updateSection2LocalState('cargo-sf', this.value)">
                             </div>
                             <div class="input-group">
                                 <label id="label-turn-time-hours" class="text-action-required flex items-center min-h-[24px]">TURN TIME TOTAL (H)</label>
-                                <select id="turn-time-hours" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="runEngine(); syncCalculatorAndMatching('calculator')">
+                                <select id="turn-time-hours" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="updateSection2LocalState('turn-time-hours', this.value)">
                                     <option value="10">10 horas</option>
                                     <option value="12">12 horas</option>
                                     <option value="24" selected>24 horas</option>
@@ -8024,7 +8029,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-freight-conditions" class="text-action-required flex items-center min-h-[24px]">Términos (Conditions)</label>
-                                <select id="freight-conditions" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="syncSharedCharterTerm('freight-conditions', ['gc-freight-term']); runEngine()">
+                                <select id="freight-conditions" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="updateSection2LocalState('freight-conditions', this.value); syncSharedCharterTerm('freight-conditions', ['gc-freight-term'])">
                                     <option value="FIO">FIO (Free In and Out)</option>
                                     <option value="FIOS" selected>FIOS (Free In and Out Stowed)</option>
                                     <option value="FIOT">FIOT (Free In and Out Trimmed)</option>
@@ -8036,7 +8041,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-laytime-load-condition" class="text-action-required flex items-center min-h-[24px]">Laytime POL</label>
-                                <select id="laytime-load-condition" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="syncSharedCharterTerm('laytime-load-condition', ['gc-laytime-load-cond']); runEngine()">
+                                <select id="laytime-load-condition" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="updateSection2LocalState('laytime-load-condition', this.value); syncSharedCharterTerm('laytime-load-condition', ['gc-laytime-load-cond'])">
                                     <option value="SHINC">SHINC</option>
                                     <option value="SHEX" selected>SHEX</option>
                                     <option value="SHEX UU">SHEX UU</option>
@@ -8050,7 +8055,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-laytime-disch-condition" class="text-action-required flex items-center min-h-[24px]">Laytime POD</label>
-                                <select id="laytime-disch-condition" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="syncSharedCharterTerm('laytime-disch-condition', ['gc-laytime-disch-cond']); runEngine()">
+                                <select id="laytime-disch-condition" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="updateSection2LocalState('laytime-disch-condition', this.value); syncSharedCharterTerm('laytime-disch-condition', ['gc-laytime-disch-cond'])">
                                     <option value="SHINC">SHINC</option>
                                     <option value="SHEX" selected>SHEX</option>
                                     <option value="SHEX UU">SHEX UU</option>
@@ -8064,55 +8069,53 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-tolerance">Tolerancia de Carga · MOLOO / MOLCO (%)</label>
-                                <input type="number" id="cargo-tolerance" class="input-gc text-indigo-300" value="0" min="0" max="100" step="0.1" oninput="runEngine()">
+                                <input type="number" id="cargo-tolerance" class="input-gc text-indigo-300" value="0" min="0" max="100" step="0.1" oninput="updateSection2LocalState('cargo-tolerance', this.value)">
                             </div>
                             <div class="input-group">
                                 <label id="label-vessel-net-tonnage" class="text-blue-400">SCNT / PCUMS</label>
-                                <input type="number" id="vessel-net-tonnage" class="input-gc font-bold text-blue-300" value="0" step="1" oninput="if(typeof autoFillPDA==='function'){ autoFillPDA('pol', false); autoFillPDA('pod', false); } runEngine();">
+                                <input type="number" id="vessel-net-tonnage" class="input-gc font-bold text-blue-300" value="0" step="1" oninput="updateSection2LocalState('vessel-net-tonnage', this.value)">
                             </div>
                             <div class="input-group">
                                 <label id="label-current-draft" class="text-blue-400">Calado Actual (m)</label>
-                                <input type="number" id="current-draft" class="input-gc font-bold text-blue-300" value="0" step="0.01" oninput="runEngine()">
+                                <input type="number" id="current-draft" class="input-gc font-bold text-blue-300" value="0" step="0.01" oninput="updateSection2LocalState('current-draft', this.value)">
                             </div>
                             <div id="contenedor-crane-swl" class="input-group hidden" style="display: none;">
                                 <label id="label-crane-swl" class="text-amber-400">Crane SWL (MT)</label>
-                                <input type="number" id="crane-swl-mt" class="input-gc font-bold text-amber-300" value="0" min="0" step="0.1" disabled oninput="recalcularDiasPuerto()">
+                                <input type="number" id="crane-swl-mt" class="input-gc font-bold text-amber-300" value="0" min="0" step="0.1" disabled oninput="updateSection2LocalState('crane-swl-mt', this.value)">
                             </div>
                             <div id="contenedor-grab-capacity" class="input-group">
                                 <label id="label-grab-capacity" class="text-amber-400">Grab Capacity (cbm)</label>
-                                <input type="number" id="grab-capacity-cbm" class="input-gc font-bold text-amber-300" value="0" step="0.1" oninput="runEngine()">
+                                <input type="number" id="grab-capacity-cbm" class="input-gc font-bold text-amber-300" value="0" step="0.1" oninput="updateSection2LocalState('grab-capacity-cbm', this.value)">
                             </div>
                             <div id="contenedor-peso-pieza" class="input-group hidden">
                                 <label id="label-peso-pieza" class="text-amber-400">Peso por pieza (MT)</label>
-                                <input type="number" id="peso-pieza-mt" class="input-gc font-bold text-amber-300" value="0" min="0" step="0.1" disabled oninput="recalcularDiasPuerto()">
+                                <input type="number" id="peso-pieza-mt" class="input-gc font-bold text-amber-300" value="0" min="0" step="0.1" disabled oninput="updateSection2LocalState('peso-pieza-mt', this.value)">
                             </div>
                             <div id="contenedor-ciclos-hora" class="input-group hidden" style="display: none;">
                                 <label id="label-ciclos-hora" class="text-amber-400">Ciclos/Hora Grúa</label>
-                                <input type="number" id="ciclos-hora-grua" class="input-gc font-bold text-amber-300" value="0" step="0.1" oninput="recalcularDiasPuerto()">
+                                <input type="number" id="ciclos-hora-grua" class="input-gc font-bold text-amber-300" value="0" step="0.1" oninput="updateSection2LocalState('ciclos-hora-grua', this.value)">
                             </div>
                         </div>
                         <p id="vessel-specs-inference-note" class="hidden mt-3 text-[10px] font-semibold text-[#1d4ed8] bg-white border border-blue-200 rounded-lg px-3 py-2 shadow-sm"></p>
 
-                        <div class="mt-4 rounded-lg border border-indigo-500/30 bg-indigo-950/30 p-3 shadow-inner">
-                            <div class="mb-2 flex items-center justify-between gap-3">
-                                <label id="backup-ref-label" for="quick-ref" class="text-[10px] font-black uppercase tracking-wide text-indigo-300">
-                                    <i class="fa-solid fa-hashtag mr-1 text-indigo-400"></i> Referencia Única del Viaje / Contrato
-                                </label>
-                                <span class="text-[9px] font-bold uppercase text-slate-500">Identificador de cotización</span>
+                        <div class="hidden" style="display: none !important;">
+                            <input type="text" id="search-ref" value="">
+                            <button id="btn-print-historical" disabled></button>
+                            <button id="btn-dl-report" disabled></button>
+                            <button id="btn-dl-contract" disabled></button>
+                            <div id="quotes-history-container">
+                                <select id="quotes-history-select">
+                                    <option value=""></option>
+                                </select>
                             </div>
-                            <input type="text" id="quick-ref" class="input-gc font-bold text-indigo-300" placeholder="Ej: RDM/GC/2026-0716-XXXX" oninput="syncQuickRef(this.value)">
+                        </div>
 
-                            <div class="hidden" style="display: none !important;">
-                                <input type="text" id="search-ref" value="">
-                                <button id="btn-print-historical" disabled></button>
-                                <button id="btn-dl-report" disabled></button>
-                                <button id="btn-dl-contract" disabled></button>
-                                <div id="quotes-history-container">
-                                    <select id="quotes-history-select">
-                                        <option value=""></option>
-                                    </select>
-                                </div>
-                            </div>
+                        <!-- Confirmation / Validation Button for Section 2 -->
+                        <div class="mt-5 flex justify-end pt-3 border-t border-slate-800/80">
+                            <button id="btn-validate-section2" type="button" onclick="validarYCalcularSeccion2()" class="w-full md:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs uppercase tracking-wider px-6 py-3 rounded-lg shadow-lg hover:shadow-indigo-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                                <i class="fa-solid fa-calculator text-sm"></i>
+                                <span>Validar Especificaciones / Calcular</span>
+                            </button>
                         </div>
                     </div>
 
@@ -25541,7 +25544,70 @@
             return fallback.segment;
         }
 
-        function handleDWTChange(isManual = false) {
+        window.section2LocalState = window.section2LocalState || {};
+
+        function updateSection2LocalState(id, value) {
+            if (id) {
+                window.section2LocalState[id] = value;
+            }
+        }
+        window.updateSection2LocalState = updateSection2LocalState;
+
+        function validarYCalcularSeccion2() {
+            const el = (id) => document.getElementById(id);
+            const num = (id) => parseFloat(el(id)?.value) || 0;
+            const val = (id) => el(id)?.value || '';
+
+            if (window.State) {
+                window.State.vesselName = val('nombre-buque-calculadora');
+                window.State.dwt = num('vessel-dwt');
+                window.State.speedBallast = num('spd-ballast');
+                window.State.speedLaden = num('spd-laden');
+                window.State.cargo = num('cargo-qty');
+                window.State.cargoType = val('cargo-type');
+                window.State.cargoProduct = val('cargo-product');
+                window.State.stowageFactor = num('cargo-sf');
+                window.State.turnTimeHours = num('turn-time-hours');
+                window.State.loadRate = num('rate-load');
+                window.State.dischRate = num('rate-disch');
+                window.State.cargoTolerance = num('cargo-tolerance');
+            }
+
+            if (typeof handleDWTChange === 'function') {
+                handleDWTChange(true, true);
+            }
+            if (typeof autoScaleVesselAndCosts === 'function') {
+                autoScaleVesselAndCosts();
+            }
+            if (typeof autoFillPDA === 'function') {
+                autoFillPDA('pol', false);
+                autoFillPDA('pod', false);
+            }
+            if (typeof recalcularDiasPuerto === 'function') {
+                recalcularDiasPuerto();
+            }
+            if (typeof actualizarModuloCamionTolva === 'function') {
+                actualizarModuloCamionTolva();
+            }
+            if (typeof calculateAdjustedEtaAndDays === 'function') {
+                calculateAdjustedEtaAndDays();
+            }
+            if (typeof syncCalculatorAndMatching === 'function') {
+                syncCalculatorAndMatching('calculator');
+            }
+            if (typeof runEngine === 'function') {
+                runEngine();
+            }
+            if (typeof evaluateReactiveSyncStatus === 'function') {
+                evaluateReactiveSyncStatus();
+            }
+            if (typeof showToast === 'function') {
+                showToast('Especificaciones del buque y carga validadas correctamente.', 'success');
+            }
+        }
+        window.validarYCalcularSeccion2 = validarYCalcularSeccion2;
+
+        function handleDWTChange(isManual = false, triggerEngine = true) {
             if (isManual) {
                 State.vesselDwtFixed = true;
             }
@@ -25582,7 +25648,9 @@
                 autoFillPDA('pod', false);
             }
 
-            runEngine();
+            if (triggerEngine && typeof runEngine === 'function') {
+                runEngine();
+            }
             if (typeof updateVesselPricingRouter === 'function') {
                 updateVesselPricingRouter();
             }
@@ -45318,7 +45386,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             container.innerHTML = allowedLabels.map((label) => {
                 const isActive = label === currentLabel;
                 const btnClass = isActive
-                    ? 'px-3 py-1.5 text-xs font-bold rounded-full bg-[#1E3A8A] text-white shadow-sm border border-[#1E3A8A] transition-all cursor-pointer'
+                    ? 'px-3 py-1.5 text-xs font-bold rounded-full bg-blue-100 text-blue-800 border-2 border-blue-500 shadow-sm transition-all cursor-pointer'
                     : 'px-3 py-1.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition-all cursor-pointer';
                 const safeLabel = label.replace(/'/g, "\\'");
                 return `<button type="button" class="${btnClass}" onclick="selectMethodPill('${side}', '${safeLabel}')">${label}</button>`;
@@ -45696,7 +45764,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function getMetodoDescargaActual() {
-            return document.getElementById('metodo_descarga_pod')?.value || getMetodoEstibaActual();
+            return document.getElementById('metodo_descarga_pod')?.value || 'cinta_transportadora';
         }
 
         function getFactorEstibaPuerto(metodo = getMetodoEstibaActual()) {
@@ -45732,7 +45800,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const input = document.getElementById(inputId);
             if (input) input.dataset.manualOverride = 'true';
             setRitmoManualIndicator(side, false);
-            if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
+            if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto(side);
         }
 
         function handlePortMethodChange(side = 'pol') {
@@ -45743,7 +45811,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (typeof applyMethodAndProductConditions === 'function') {
                 applyMethodAndProductConditions(side);
             } else if (typeof recalcularDiasPuerto === 'function') {
-                recalcularDiasPuerto();
+                recalcularDiasPuerto(side);
             }
             if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
         }
@@ -46576,42 +46644,39 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
         }
 
-        function recalcularDiasPuerto() {
+        function recalcularDiasPuerto(targetSide = null) {
             if (typeof isInputInteraction === 'function' && isInputInteraction()) {
                 scheduleDebouncedCalculation(300);
                 return;
             }
+            const sides = targetSide ? [targetSide] : ['pol', 'pod'];
             const metodoPol = getMetodoEstibaActual();
             const metodoPod = getMetodoDescargaActual();
             const activeId = document.activeElement?.id || '';
-            const forceAutoGruas = ['cargo-qty', 'cargo-type', 'cargo-product', 'metodo_carga', 'metodo_descarga_pod'].includes(activeId);
-            aplicarGruasSugeridasPuerto('pol', { force: forceAutoGruas });
-            aplicarGruasSugeridasPuerto('pod', { force: forceAutoGruas });
-            const ritmoRealPol = calcularRitmoEfectivo('pol');
-            const ritmoRealPod = calcularRitmoEfectivo('pod');
-            const inputCarga = document.getElementById('rate-load');
-            const inputDescarga = document.getElementById('rate-disch');
 
-            if (inputCarga) {
-                const metodoAnterior = inputCarga.dataset.autoMetodoCarga;
-                if (metodoAnterior && metodoAnterior !== metodoPol) setRitmoManualIndicator('pol', false);
-                if (!isCustomPortMethod(metodoPol) && inputCarga.dataset.manualOverride !== 'true') {
-                    inputCarga.value = ritmoRealPol.toFixed(0);
+            sides.forEach(s => {
+                const selectId = s === 'pod' ? 'metodo_descarga_pod' : 'metodo_carga';
+                const forceAutoGruas = activeId === selectId || activeId === s || (['cargo-qty', 'cargo-type', 'cargo-product'].includes(activeId) && !targetSide);
+                aplicarGruasSugeridasPuerto(s, { force: forceAutoGruas });
+                const ritmoReal = calcularRitmoEfectivo(s);
+                const inputId = s === 'pod' ? 'rate-disch' : 'rate-load';
+                const input = document.getElementById(inputId);
+                const metodo = s === 'pod' ? metodoPod : metodoPol;
+                const datasetKey = s === 'pod' ? 'autoMetodoDescarga' : 'autoMetodoCarga';
+
+                if (input) {
+                    const metodoAnterior = input.dataset[datasetKey];
+                    if (metodoAnterior && metodoAnterior !== metodo) setRitmoManualIndicator(s, false);
+                    if (!isCustomPortMethod(metodo) && input.dataset.manualOverride !== 'true') {
+                        input.value = ritmoReal.toFixed(0);
+                    }
+                    input.dataset[datasetKey] = metodo;
                 }
-                inputCarga.dataset.autoMetodoCarga = metodoPol;
-            }
-            if (inputDescarga) {
-                const metodoAnterior = inputDescarga.dataset.autoMetodoDescarga;
-                if (metodoAnterior && metodoAnterior !== metodoPod) setRitmoManualIndicator('pod', false);
-                if (!isCustomPortMethod(metodoPod) && inputDescarga.dataset.manualOverride !== 'true') {
-                    inputDescarga.value = ritmoRealPod.toFixed(0);
-                }
-                inputDescarga.dataset.autoMetodoDescarga = metodoPod;
-            }
+                actualizarCampoGruasPuerto(s);
+            });
+
             actualizarAlertaMetodoCarga(metodoPol);
             actualizarAlertaMetodoDescarga(metodoPod);
-            actualizarCampoGruasPuerto('pol');
-            actualizarCampoGruasPuerto('pod');
             actualizarCamposTipoCarga();
             actualizarGrabCapacityVisibility();
             actualizarModuloCamionTolva();
@@ -48920,7 +48985,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             setNavigationStrategyMode('auto');
         }
 
-        function setNavigationStrategy(strategy) {
+        function setNavigationStrategy(strategy, triggerEngine = true) {
             navigationStrategy = strategy === 'full' ? 'full' : 'eco';
             navigationStrategyMode = 'auto';
             const config = NAVIGATION_STRATEGIES[navigationStrategy];
@@ -48937,8 +49002,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             syncNavigationStrategySpeeds();
+            updateSection2LocalState('nav-strategy', navigationStrategy);
 
-            if (typeof runEngine === 'function') runEngine();
+            if (triggerEngine && typeof runEngine === 'function') runEngine();
         }
 
         function syncNavigationStrategyEffect() {
@@ -49089,14 +49155,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return Boolean(document.getElementById('vessel-has-scrubber')?.checked);
         }
 
-        function setVesselScrubber(enabled) {
+        function setVesselScrubber(enabled, triggerEngine = true) {
             const hiddenToggle = document.getElementById('vessel-has-scrubber');
             const yesOption = document.getElementById('vessel-has-scrubber-yes');
             const noOption = document.getElementById('vessel-has-scrubber-no');
             if (hiddenToggle) hiddenToggle.checked = Boolean(enabled);
             if (yesOption) yesOption.checked = Boolean(enabled);
             if (noOption) noOption.checked = !enabled;
-            runEngine();
+            updateSection2LocalState('vessel-has-scrubber', Boolean(enabled));
+            if (triggerEngine && typeof runEngine === 'function') {
+                runEngine();
+            }
         }
 
         function getEffectiveSeaFuelPrice() {
@@ -49816,6 +49885,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const metodoPodSelect = document.getElementById('metodo_descarga_pod');
 
             const handleRateInputChange = (side) => {
+                if (typeof updateSection2LocalState === 'function') {
+                    const inputId = side === 'pod' ? 'rate-disch' : 'rate-load';
+                    const el = document.getElementById(inputId);
+                    if (el) updateSection2LocalState(inputId, el.value);
+                }
+
                 if (typeof window.recalcularDiasPuerto === 'function') {
                     window.recalcularDiasPuerto();
                 }
@@ -49858,6 +49933,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             if (metodoPolSelect) {
                 metodoPolSelect.addEventListener('change', () => {
+                    if (typeof updateSection2LocalState === 'function') updateSection2LocalState('metodo_carga', metodoPolSelect.value);
                     actualizarCostesPDAPorMetodo('pol');
                     if (typeof window.actualizarPDADinamica === 'function') window.actualizarPDADinamica('pol');
                     if (typeof window.recalcularDiasPuerto === 'function') window.recalcularDiasPuerto();
@@ -49868,6 +49944,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             if (metodoPodSelect) {
                 metodoPodSelect.addEventListener('change', () => {
+                    if (typeof updateSection2LocalState === 'function') updateSection2LocalState('metodo_descarga_pod', metodoPodSelect.value);
                     actualizarCostesPDAPorMetodo('pod');
                     if (typeof window.actualizarPDADinamica === 'function') window.actualizarPDADinamica('pod');
                     if (typeof window.recalcularDiasPuerto === 'function') window.recalcularDiasPuerto();
@@ -49904,6 +49981,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const handleControlInteraction = (event) => {
                 const target = event?.target;
+
+                if (event && (event.type === 'input' || event.type === 'change')) {
+                    const section2Card = target?.closest('.collapsible-section');
+                    const isSection2Input = section2Card && section2Card.querySelector('#vessel-header-title');
+                    if (isSection2Input) {
+                        if (target?.id) {
+                            updateSection2LocalState(target.id, target.value);
+                        }
+                        return;
+                    }
+                }
 
                 // 1. Determine active mode
                 let currentMode = getRitmoMode();
@@ -49965,8 +50053,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
 
                 // Injection Logic:
-                // If mode === 'auto' and vessel is geared (isGearedVessel: true),
-                // adjust shore crane rental cost in local PDA state to 0
                 const isGeared = typeof window.checkIsGearedVessel === 'function' ? window.checkIsGearedVessel() : Boolean(window.isGearedVessel);
                 if (currentMode === 'auto' && isGeared) {
                     if (window.State) {
@@ -49991,10 +50077,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     if (shoreCraneInput) shoreCraneInput.value = 0;
                 }
 
-                // Evaluate method and product conditions
                 applyMethodAndProductConditions();
 
-                // Trigger existing core recalculation engine cleanly
                 if (typeof window.recalcularDiasPuerto === 'function') {
                     window.recalcularDiasPuerto();
                 } else if (typeof window.runEngine === 'function') {
@@ -50071,7 +50155,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 el.value = '0';
             });
 
-            ['cargo-qty', 'cargo-type', 'cargo-product', 'turn-time-hours', 'metodo_carga', 'metodo_descarga_pod', 'ritmo_nominal_pol', 'ritmo_nominal_pod', 'peso-pieza-mt', 'ciclos-hora-grua', 'crane-swl-mt', 'input-trincaje', 'coste-maniobra-especial', 'dias-preparacion', 'coa-num-embarques', 'coa-total-tm', 'target-margin', 'apply-bunkerindex-adjustment', 'price-sea', 'price-ifo', 'price-port', 'cons-sea', 'cons-port', 'cons-anchorage', 'cons-anchorage-aux'].forEach((id) => {
+            ['input-trincaje', 'coste-maniobra-especial', 'dias-preparacion', 'coa-num-embarques', 'coa-total-tm', 'target-margin', 'apply-bunkerindex-adjustment', 'price-sea', 'price-ifo', 'price-port', 'cons-sea', 'cons-port', 'cons-anchorage', 'cons-anchorage-aux'].forEach((id) => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.addEventListener('input', function() {
@@ -50083,8 +50167,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             });
             const vesselDwtInput = document.getElementById('vessel-dwt');
             if (vesselDwtInput) {
-                vesselDwtInput.addEventListener('input', updateVesselPricingRouter);
-                vesselDwtInput.addEventListener('change', updateVesselPricingRouter);
+                vesselDwtInput.addEventListener('input', () => updateSection2LocalState('vessel-dwt', vesselDwtInput.value));
+                vesselDwtInput.addEventListener('change', () => updateSection2LocalState('vessel-dwt', vesselDwtInput.value));
             }
             setOperacionModo('SPOT');
             enforceTurnTimeOptions();
@@ -50126,7 +50210,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     scheduleReactiveEngine();
                 });
             });
-            ['port-ballast', 'port-pol', 'port-pod', 'gc-laycan-date', 'gc-laycan-time', 'gc-cancel-date', 'gc-cancel-time', 'asb-laycan-date', 'asb-laycan-time', 'asb-cancel-date', 'asb-cancel-time', 'vessel-dwt', 'cargo-qty', 'metodo_carga', 'metodo_descarga_pod', 'ritmo_nominal_pol', 'ritmo_nominal_pod', 'eta-radar', 'delta-historico', 'factor-clima', 't-fondeo', 't-remolcadores', 'laycan-dias-libres', 'dist-ballast', 'dist-laden'].forEach((id) => {
+            ['port-ballast', 'port-pol', 'port-pod', 'gc-laycan-date', 'gc-laycan-time', 'gc-cancel-date', 'gc-cancel-time', 'asb-laycan-date', 'asb-laycan-time', 'asb-cancel-date', 'asb-cancel-time', 'eta-radar', 'delta-historico', 'factor-clima', 't-fondeo', 't-remolcadores', 'laycan-dias-libres', 'dist-ballast', 'dist-laden'].forEach((id) => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.addEventListener('input', () => {

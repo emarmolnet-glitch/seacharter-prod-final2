@@ -236,7 +236,7 @@ test('hydration remains outside calculator formulas and protected input flow', (
     assert.match(indexSource, /hydrate:\s*\(sessionState\)\s*=>\s*\{\s*SeaCharterStore\.set\(sessionState\);\s*syncGlobalStateToForms\(\);/s);
     assert.doesNotMatch(indexSource, /hydrate:[\s\S]{0,180}runEngine\(/);
     assert.doesNotMatch(sessionDraftSource, /'cargo'|'stowageFactor'|'cargoTolerance'/);
-    assert.match(indexSource, /id="cargo-tolerance"[^>]*oninput="runEngine\(\)"/);
+    assert.match(indexSource, /id="cargo-tolerance"[^>]*oninput="updateSection2LocalState\('cargo-tolerance', this\.value\)"/);
 });
 
 test('session-draft.js is configured in legacyAssets and referenced in index.html', () => {

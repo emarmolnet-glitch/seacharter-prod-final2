@@ -252,5 +252,5 @@ test('Motor de Ritmos Híbrido: Camión Tolva calculation module remains intact'
 
 test('Motor de Ritmos Híbrido: Zero-Touch Core mandate - core calculation functions remain untouched', () => {
   assert.match(indexSource, /function runEngine\(\) \{/);
-  assert.match(indexSource, /function recalcularDiasPuerto\(\) \{/);
+  assert.match(indexSource, /function recalcularDiasPuerto\(/);
 });

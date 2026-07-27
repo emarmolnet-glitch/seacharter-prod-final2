@@ -283,3 +283,14 @@ test('Camión Tolva and Cinta Transportadora isolation: crane submodule hidden a
   assert.match(indexSource, /id="modulo-camion-tolva-pol"/);
   assert.match(indexSource, /Asistente Camión Tolva POL/);
 });
+
+test('Method pills render distinct light blue active state styling for selected method', () => {
+  assert.match(indexSource, /bg-blue-100 text-blue-800 border-2 border-blue-500/);
+});
+
+test('POL and POD method calculations are completely decoupled', () => {
+  assert.match(indexSource, /function getMetodoDescargaActual\(\) \{\s*return document\.getElementById\('metodo_descarga_pod'\)\?\.value \|\| 'cinta_transportadora';\s*\}/);
+  assert.match(indexSource, /function handlePortMethodChange\(side = 'pol'\) \{[\s\S]*?applyMethodAndProductConditions\(side\);/);
+  assert.match(indexSource, /function recalcularDiasPuerto\(targetSide = null\) \{/);
+});
+
