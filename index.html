@@ -14175,11 +14175,36 @@
 
         const SeaCharterStore = {
             listeners: new Set(),
+            isBatching: false,
             getState() {
                 return State;
             },
-            set(partial = {}) {
-                Object.assign(State, partial);
+            set(partial = {}, options = {}) {
+                let changed = false;
+                for (const key in partial) {
+                    if (State[key] !== partial[key]) {
+                        State[key] = partial[key];
+                        changed = true;
+                    }
+                }
+                if (!changed && !options.force) return;
+                if (options.silent) return;
+                if (this.isBatching) return;
+                this.notify();
+            },
+            batch(fn) {
+                const wasBatching = this.isBatching;
+                this.isBatching = true;
+                try {
+                    fn();
+                } finally {
+                    this.isBatching = wasBatching;
+                    if (!wasBatching) {
+                        this.notify();
+                    }
+                }
+            },
+            notify() {
                 this.listeners.forEach((listener) => listener(State));
             },
             subscribe(listener) {
@@ -21940,6 +21965,10 @@
 
         let isSyncing = false;
         function syncCalculatorAndMatching(source) {
+            if (typeof isInputInteraction === 'function' && isInputInteraction()) {
+                scheduleDebouncedCalculation(300);
+                return;
+            }
             if (isSyncing) return;
             isSyncing = true;
             try {
@@ -27655,8 +27684,69 @@
             window.configureAnchorageFuelRate = configureAnchorageFuelRate;
         }
 
+        // --- DEBOUNCED CALCULATION CONTROLLER FOR INP & RE-RENDER OPTIMIZATION ---
+        let pendingCalculationTimer = null;
+        let isExecutingDebouncedBatch = false;
+
+        function isInputInteraction() {
+            if (isExecutingDebouncedBatch) return false;
+            return typeof window !== 'undefined' && window.event && window.event.type === 'input';
+        }
+
+        function scheduleDebouncedCalculation(delay = 300) {
+            if (pendingCalculationTimer) {
+                clearTimeout(pendingCalculationTimer);
+            }
+            pendingCalculationTimer = setTimeout(() => {
+                pendingCalculationTimer = null;
+                flushDebouncedCalculation();
+            }, delay);
+        }
+
+        function flushDebouncedCalculation() {
+            if (pendingCalculationTimer) {
+                clearTimeout(pendingCalculationTimer);
+                pendingCalculationTimer = null;
+            }
+            executeBatchedCalculationsCore();
+        }
+
+        function executeBatchedCalculationsCore() {
+            const wasExecuting = isExecutingDebouncedBatch;
+            isExecutingDebouncedBatch = true;
+            try {
+                if (typeof window !== 'undefined' && window.SeaCharterStore && typeof window.SeaCharterStore.batch === 'function') {
+                    window.SeaCharterStore.batch(() => {
+                        if (typeof runEngine === 'function') runEngine();
+                        if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
+                        if (typeof calculateCostPlusFreight === 'function') calculateCostPlusFreight();
+                        if (typeof calculateInverseTce === 'function') calculateInverseTce();
+                        if (typeof updateChartererNegotiationSimulator === 'function') updateChartererNegotiationSimulator();
+                        if (typeof updateCBAMModuleView === 'function') updateCBAMModuleView();
+                        if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
+                    });
+                } else {
+                    if (typeof runEngine === 'function') runEngine();
+                    if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
+                    if (typeof calculateCostPlusFreight === 'function') calculateCostPlusFreight();
+                    if (typeof calculateInverseTce === 'function') calculateInverseTce();
+                    if (typeof updateChartererNegotiationSimulator === 'function') updateChartererNegotiationSimulator();
+                    if (typeof updateCBAMModuleView === 'function') updateCBAMModuleView();
+                    if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
+                }
+            } finally {
+                isExecutingDebouncedBatch = wasExecuting;
+            }
+        }
+        window.scheduleDebouncedCalculation = scheduleDebouncedCalculation;
+        window.flushDebouncedCalculation = flushDebouncedCalculation;
+
         // --- MOTOR PRINCIPAL ---
         function runEngine() {
+            if (typeof isInputInteraction === 'function' && isInputInteraction()) {
+                scheduleDebouncedCalculation(300);
+                return;
+            }
             ensureDetectedSpeedsBeforeCalculation();
             // Lógica corregida para el cálculo de Lumpsum
             const calcularLumpsum = (cargaReal, tasaFleteMT) => {
@@ -29294,6 +29384,10 @@
         }
 
         function updateCBAMModuleView() {
+            if (typeof isInputInteraction === 'function' && isInputInteraction()) {
+                scheduleDebouncedCalculation(300);
+                return;
+            }
             try {
                 const container = document.getElementById('cbam-module-result');
                 if (!container) return;
@@ -30165,6 +30259,10 @@
         }
 
         function updateChartererNegotiationSimulator() {
+            if (typeof isInputInteraction === 'function' && isInputInteraction()) {
+                scheduleDebouncedCalculation(300);
+                return null;
+            }
             const ownerOfferInput = document.getElementById('negotiation-owner-offer');
             const chartererTargetInput = document.getElementById('negotiation-charterer-target');
             if (!ownerOfferInput || !chartererTargetInput) return null;
@@ -46449,6 +46547,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function recalcularDiasPuerto() {
+            if (typeof isInputInteraction === 'function' && isInputInteraction()) {
+                scheduleDebouncedCalculation(300);
+                return;
+            }
             const metodoPol = getMetodoEstibaActual();
             const metodoPod = getMetodoDescargaActual();
             const activeId = document.activeElement?.id || '';
@@ -49034,6 +49136,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function calculateInverseTce() {
+            if (typeof isInputInteraction === 'function' && isInputInteraction()) {
+                scheduleDebouncedCalculation(300);
+                return;
+            }
             if (isInverseTceSyncEnabled) syncInverseBunkerCostFromVoyage();
             const tceTarget = readInverseTceNumber('inverse-tce-target');
             const daysSea = readInverseTceNumber('inverse-days-sea');
@@ -49097,6 +49203,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function calculateCostPlusFreight() {
+            if (typeof isInputInteraction === 'function' && isInputInteraction()) {
+                scheduleDebouncedCalculation(300);
+                return;
+            }
             const dailyOpex = Math.max(0, readInverseTceNumber('cost-plus-daily-opex'));
             const targetMargin = Math.max(0, readInverseTceNumber('cost-plus-target-margin'));
             const daysSea = Math.max(0, readInverseTceNumber('cost-plus-days-sea'));
