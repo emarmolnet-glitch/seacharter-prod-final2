@@ -28,3 +28,9 @@ test('receive-core-data handles OPTIONS, invalid method, invalid body, fleet arr
   assert.match(source, /extractFleetVessels\(body\)/);
   assert.match(source, /catch \(error: unknown\)/);
 });
+
+test('receive-core-data flattens nested vessels and preserves raw technical warning properties', () => {
+  assert.match(source, /const nestedVessel =/);
+  assert.match(source, /const nestedAis =/);
+  assert.match(source, /raw: rawSource/);
+});

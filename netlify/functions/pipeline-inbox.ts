@@ -46,7 +46,7 @@ export async function insertPipelineInboxBatches(
 ) {
   await ensureApplicationSchema();
 
-  if (vessels.length === 0) return 0;
+  if (!Array.isArray(vessels) || vessels.length === 0) return 0;
 
   const client = await getPool().connect();
   let totalInserted = 0;
@@ -62,7 +62,7 @@ export async function insertPipelineInboxBatches(
       let paramIdx = 1;
 
       for (const item of chunk) {
-        const itemObj = (item && typeof item === "object") ? item : {};
+        const itemObj = (item && typeof item === "object" && !Array.isArray(item)) ? item : {};
         const imoRaw = itemObj.imo ?? itemObj.imo_number ?? itemObj.imoNumber ?? itemObj.IMO ?? itemObj.numero_imo ?? itemObj.IMONumber;
         const imoDigits = String(imoRaw ?? "").replace(/\D/g, "");
         const imoNumber = imoDigits.length === 7 ? imoDigits : (imoRaw ? String(imoRaw).trim() : null);
@@ -70,14 +70,21 @@ export async function insertPipelineInboxBatches(
         const vesselNameRaw = itemObj.vessel_name ?? itemObj.vesselName ?? itemObj.nombre ?? itemObj.name ?? itemObj.ShipName ?? itemObj.ship;
         const vesselName = vesselNameRaw ? String(vesselNameRaw).trim() : null;
 
-        valueTuples.push(`($${paramIdx}, $${paramIdx + 1}, $${paramIdx + 2}, $${paramIdx + 3}, $${paramIdx + 4}, $${paramIdx + 5}::jsonb)`);
+        let safePayloadJson = "{}";
+        try {
+          safePayloadJson = JSON.stringify(itemObj);
+        } catch {
+          safePayloadJson = "{}";
+        }
+
+        valueTuples.push(`($${paramIdx}::text, $${paramIdx + 1}::text, $${paramIdx + 2}::text, $${paramIdx + 3}::text, $${paramIdx + 4}::text, $${paramIdx + 5}::jsonb)`);
         queryParams.push(
-          syncId,
+          syncId ? String(syncId).trim() : null,
           imoNumber,
           vesselName,
-          sourceName,
+          sourceName ? String(sourceName).trim() : "CORE_PRO",
           "PENDING",
-          JSON.stringify(itemObj),
+          safePayloadJson,
         );
         paramIdx += 6;
       }
@@ -95,6 +102,7 @@ export async function insertPipelineInboxBatches(
     return totalInserted;
   } catch (error) {
     await client.query("ROLLBACK");
+    console.warn("[pipeline-inbox] Error durante inserción en lote:", error);
     throw error;
   } finally {
     client.release();

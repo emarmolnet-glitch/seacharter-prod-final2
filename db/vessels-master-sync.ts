@@ -73,6 +73,23 @@ function normalizeMasterVessel(row: RadarVesselMasterInput): NormalizedMasterVes
   return { ...row, imoValue, mmsiValue, vesselNameValue, identity };
 }
 
+function safeJsonSerialize(value: unknown): string {
+  if (value === null || value === undefined) return "{}";
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return JSON.stringify(parsed);
+    } catch {
+      return JSON.stringify({ rawText: value });
+    }
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "{}";
+  }
+}
+
 function queryValues(vessel: NormalizedMasterVessel) {
   return [
     vessel.imoValue,
@@ -87,7 +104,7 @@ function queryValues(vessel: NormalizedMasterVessel) {
     vessel.lastPortOfCall,
     vessel.destination,
     vessel.source || "AISStream",
-    JSON.stringify(vessel.rawData && typeof vessel.rawData === "object" ? vessel.rawData : {}),
+    safeJsonSerialize(vessel.rawData),
     vessel.identity,
     vessel.flag || null,
     Number.isFinite(vessel.yearBuilt) ? Math.trunc(Number(vessel.yearBuilt)) : null,
@@ -98,25 +115,25 @@ function queryValues(vessel: NormalizedMasterVessel) {
 }
 
 const UPDATE_MASTER_FIELDS = `
-  vessel_name = $2,
-  dwt = COALESCE($3, dwt),
-  mmsi = COALESCE($4, mmsi),
-  latitude = $5,
-  longitude = $6,
-  vessel_type = COALESCE($7, vessel_type),
-  draft_meters = COALESCE($8, draft_meters),
-  eta = COALESCE($9, eta),
-  last_port = COALESCE($10, last_port),
-  current_destination = COALESCE($11, current_destination),
-  origen = $12,
-  audit_source = $12,
+  vessel_name = $2::text,
+  dwt = COALESCE($3::integer, dwt),
+  mmsi = COALESCE($4::text, mmsi),
+  latitude = $5::double precision,
+  longitude = $6::double precision,
+  vessel_type = COALESCE($7::text, vessel_type),
+  draft_meters = COALESCE($8::double precision, draft_meters),
+  eta = COALESCE($9::text, eta),
+  last_port = COALESCE($10::text, last_port),
+  current_destination = COALESCE($11::text, current_destination),
+  origen = $12::text,
+  audit_source = $12::text,
   source_payload = $13::jsonb,
-  system_identity = COALESCE(system_identity, $14),
-  flag = COALESCE($15, flag),
-  year_built = COALESCE($16, year_built),
-  owner_manager = COALESCE($17, owner_manager),
-  has_gears = COALESCE($18, has_gears),
-  process_status = $19,
+  system_identity = COALESCE(system_identity, $14::text),
+  flag = COALESCE($15::text, flag),
+  year_built = COALESCE($16::integer, year_built),
+  owner_manager = COALESCE($17::text, owner_manager),
+  has_gears = COALESCE($18::boolean, has_gears),
+  process_status = $19::text,
   fecha_ultima_actualizacion = NOW()
 `;
 
@@ -125,28 +142,58 @@ async function persistMasterVessel(client: PoolClient, vessel: NormalizedMasterV
   await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [vessel.identity]);
 
   if (vessel.imoValue) {
-    const byImo = await client.query(
-      `UPDATE vessels_master SET ${UPDATE_MASTER_FIELDS} WHERE imo_number = $1 RETURNING id`,
+    await client.query(
+      `
+        INSERT INTO vessels_master (
+          imo_number, vessel_name, dwt, mmsi, latitude, longitude, vessel_type,
+          draft_meters, eta, last_port, current_destination, origen, audit_source,
+          source_payload, system_identity, flag, year_built, owner_manager,
+          has_gears, process_status, fecha_ultima_actualizacion
+        )
+        VALUES (
+          $1::integer, $2::text, $3::integer, $4::text, $5::double precision, $6::double precision, $7::text,
+          $8::double precision, $9::text, $10::text, $11::text, $12::text, $12::text,
+          $13::jsonb, $14::text, $15::text, $16::integer, $17::text,
+          $18::boolean, $19::text, NOW()
+        )
+        ON CONFLICT (imo_number) DO UPDATE SET
+          vessel_name = EXCLUDED.vessel_name,
+          dwt = COALESCE(EXCLUDED.dwt, vessels_master.dwt),
+          mmsi = COALESCE(EXCLUDED.mmsi, vessels_master.mmsi),
+          latitude = EXCLUDED.latitude,
+          longitude = EXCLUDED.longitude,
+          vessel_type = COALESCE(EXCLUDED.vessel_type, vessels_master.vessel_type),
+          draft_meters = COALESCE(EXCLUDED.draft_meters, vessels_master.draft_meters),
+          flag = COALESCE(EXCLUDED.flag, vessels_master.flag),
+          eta = COALESCE(EXCLUDED.eta, vessels_master.eta),
+          last_port = COALESCE(EXCLUDED.last_port, vessels_master.last_port),
+          current_destination = COALESCE(EXCLUDED.current_destination, vessels_master.current_destination),
+          origen = EXCLUDED.origen,
+          audit_source = EXCLUDED.audit_source,
+          source_payload = EXCLUDED.source_payload,
+          system_identity = COALESCE(vessels_master.system_identity, EXCLUDED.system_identity),
+          year_built = COALESCE(EXCLUDED.year_built, vessels_master.year_built),
+          owner_manager = COALESCE(EXCLUDED.owner_manager, vessels_master.owner_manager),
+          has_gears = COALESCE(EXCLUDED.has_gears, vessels_master.has_gears),
+          process_status = EXCLUDED.process_status,
+          fecha_ultima_actualizacion = NOW()
+      `,
       values,
     );
-    if (byImo.rowCount) return;
+    return;
+  }
 
-    if (vessel.mmsiValue) {
-      const byMmsi = await client.query(
-        `UPDATE vessels_master SET imo_number = $1, ${UPDATE_MASTER_FIELDS} WHERE mmsi = $4 AND (imo_number IS NULL OR imo_number = 0) RETURNING id`,
-        values,
-      );
-      if (byMmsi.rowCount) return;
-    }
-  } else if (vessel.mmsiValue) {
+  if (vessel.mmsiValue) {
     const byMmsi = await client.query(
-      `UPDATE vessels_master SET imo_number = COALESCE($1::integer, imo_number), ${UPDATE_MASTER_FIELDS} WHERE mmsi = $4 RETURNING id`,
+      `UPDATE vessels_master SET imo_number = COALESCE($1::integer, imo_number), ${UPDATE_MASTER_FIELDS} WHERE mmsi = $4::text RETURNING id`,
       values,
     );
     if (byMmsi.rowCount) return;
-  } else {
+  }
+
+  if (vessel.identity) {
     const bySystemIdentity = await client.query(
-      `UPDATE vessels_master SET imo_number = COALESCE($1::integer, imo_number), ${UPDATE_MASTER_FIELDS} WHERE system_identity = $14 RETURNING id`,
+      `UPDATE vessels_master SET imo_number = COALESCE($1::integer, imo_number), ${UPDATE_MASTER_FIELDS} WHERE system_identity = $14::text RETURNING id`,
       values,
     );
     if (bySystemIdentity.rowCount) return;
@@ -161,10 +208,10 @@ async function persistMasterVessel(client: PoolClient, vessel: NormalizedMasterV
         has_gears, process_status, fecha_ultima_actualizacion
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6, $7,
-        $8, $9, $10, $11, $12, $12,
-        $13::jsonb, $14, $15, $16, $17,
-        $18, $19, NOW()
+        $1::integer, $2::text, $3::integer, $4::text, $5::double precision, $6::double precision, $7::text,
+        $8::double precision, $9::text, $10::text, $11::text, $12::text, $12::text,
+        $13::jsonb, $14::text, $15::text, $16::integer, $17::text,
+        $18::boolean, $19::text, NOW()
       )
     `,
     values,
@@ -178,11 +225,23 @@ export async function upsertRadarVesselsMaster(rows: RadarVesselMasterInput[]) {
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
-    for (const vessel of vessels) await persistMasterVessel(client, vessel);
+    for (const vessel of vessels) {
+      try {
+        await persistMasterVessel(client, vessel);
+      } catch (itemErr) {
+        console.error(`[vessels-master-sync] Error al persistir buque ${vessel.vesselNameValue} (IMO: ${vessel.imoValue}, identity: ${vessel.identity}):`, itemErr);
+        throw itemErr;
+      }
+    }
     await client.query("COMMIT");
     return vessels.length;
   } catch (error) {
-    await client.query("ROLLBACK");
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackErr) {
+      console.error("[vessels-master-sync] Error durante el ROLLBACK:", rollbackErr);
+    }
+    console.error("[vessels-master-sync] Transacción abortada y revertida. Causa raíz:", error);
     throw error;
   } finally {
     client.release();
