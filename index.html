@@ -17694,11 +17694,23 @@
                     const imo = getStrictVesselImo(source);
                     const vesselName = getStrictVesselString(source, ['name', 'vessel_name', 'vesselName', 'ShipName', 'nombre']);
 
+                    const dwt = getStrictVesselNumber(source, ['dwt', 'DWT', 'dwt_ajustado'], null);
+                    const hasTechnicalWarning = Boolean(
+                        source.hasTechnicalWarning ||
+                        source.hasWarning ||
+                        source.warning ||
+                        source.warningReason ||
+                        source.technicalWarnings ||
+                        source.criticalReasons ||
+                        source.dwtStatus === null
+                    );
+
                     return {
+                        ...source,
                         imo,
                         is_audit_required: false,
                         vessel_name: vesselName,
-                        dwt: getStrictVesselNumber(source, ['dwt', 'DWT', 'dwt_ajustado']),
+                        dwt,
                         latitude: getStrictVesselNumber(source, ['latitude', 'lat', 'Latitude', 'AIS_Live_Lat'], null),
                         longitude: getStrictVesselNumber(source, ['longitude', 'lon', 'lng', 'Longitude', 'AIS_Live_Lon'], null),
                         has_gears: getStrictVesselBoolean(source, ['has_gears', 'gruas', 'gruas_geared']),
@@ -17709,7 +17721,9 @@
                         owner_manager: getStrictVesselString(source, ['owner_manager', 'owner', 'manager', 'armador', 'armador_manager']),
                         draft_meters: getStrictVesselNumber(source, ['draft_meters', 'draft', 'Draft', 'calado']),
                         eta: normalizeStrictVesselDate(getStrictVesselString(source, ['eta', 'ETA', 'eta_puerto_carga', 'estimatedEta', 'etaEstimated'], 'N/A')),
-                        detected_at: normalizeStrictVesselDate(getStrictVesselString(source, ['detected_at', 'detectedAt', 'timestamp', 'created_at', 'createdAt', 'generatedAt', 'generated_at'], 'N/A'))
+                        detected_at: normalizeStrictVesselDate(getStrictVesselString(source, ['detected_at', 'detectedAt', 'timestamp', 'created_at', 'createdAt', 'generatedAt', 'generated_at'], 'N/A')),
+                        hasTechnicalWarning,
+                        warning: source.warning || source.warningReason || (hasTechnicalWarning ? 'Advertencia técnica' : null)
                     };
                 })
                 .filter(vessel => isStructuredDataBridgeVessel(vessel) && getStrictVesselImo(vessel) > 0);
@@ -18037,9 +18051,18 @@
                     }
 
                     const failureStatus = response.status === 500 ? 500 : 502;
+                    const errorDetail = responsePayload?.error || responsePayload?.message || `Data Bridge no confirmó la persistencia con HTTP 200 y success=true.`;
+
+                    if (typeof window !== 'undefined' && typeof window.alert === 'function' && response.status >= 500) {
+                        window.alert(`⚠️ Error en Data Bridge (HTTP ${response.status}): ${errorDetail}`);
+                    }
+                    if (typeof showToast === 'function') {
+                        showToast(`❌ Error Data Bridge (${response.status}): ${errorDetail}`, false, 'error');
+                    }
+
                     return createDataBridgeFailureResponse(
                         failureStatus,
-                        responsePayload?.error || responsePayload?.message || `Data Bridge no confirmó la persistencia con HTTP 200 y success=true.`,
+                        errorDetail,
                         { sync_id: syncId, upstream_status: response.status }
                     );
                 } catch (error) {
@@ -18047,7 +18070,14 @@
                         await waitForDataBridgeRetry(attempt);
                         continue;
                     }
-                    return createDataBridgeFailureResponse(502, 'No se pudo completar el envío a Data Bridge.', { sync_id: syncId });
+                    const networkErrorMsg = error instanceof Error ? error.message : 'No se pudo completar el envío a Data Bridge.';
+                    if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+                        window.alert(`⚠️ Error al transmitir a Data Bridge: ${networkErrorMsg}`);
+                    }
+                    if (typeof showToast === 'function') {
+                        showToast(`❌ Error de red Data Bridge: ${networkErrorMsg}`, false, 'error');
+                    }
+                    return createDataBridgeFailureResponse(502, networkErrorMsg, { sync_id: syncId });
                 }
             }
 
