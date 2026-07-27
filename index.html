@@ -7961,6 +7961,29 @@
                             </div>
                         </div>
 
+                        <div id="operational-coherence-alert" class="hidden mb-4 rounded-lg border border-amber-400 bg-amber-50/95 p-3.5 text-amber-950 shadow-sm transition" role="alert" aria-live="polite">
+                            <div class="flex items-start gap-2.5">
+                                <span class="text-amber-600 text-lg leading-none mt-0.5"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                                <div class="w-full space-y-1 font-sans">
+                                    <div class="flex items-center justify-between">
+                                        <h4 id="coherence-alert-header" class="text-xs font-black uppercase text-amber-900 tracking-wide">
+                                            - [ALERTA DE COHERENCIA OPERATIVA (Modo Manual)]:
+                                        </h4>
+                                        <span id="coherence-alert-badge" class="px-2 py-0.5 text-[9px] font-black uppercase rounded bg-amber-200 text-amber-900 border border-amber-300">Soft Warning</span>
+                                    </div>
+                                    <p id="coherence-alert-diagnostic" class="text-[12px] font-bold leading-snug text-amber-950">
+                                        - Diagnóstico: Incompatibilidad detectada entre el tipo de mercancía (...), el método (...) y las cantidades/tasas declaradas.
+                                    </p>
+                                    <p id="coherence-alert-cause" class="text-[11px] font-semibold text-amber-900">
+                                        - Causa probable: ...
+                                    </p>
+                                    <p id="coherence-alert-behavior" class="text-[10px] font-medium italic text-amber-800 border-t border-amber-200/60 pt-1 mt-1">
+                                        - Comportamiento: Mostrar advertencia visual permitiendo al usuario continuar o corregir los datos manualmente sin bloquear el flujo del sistema.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
                         <div id="demurrage-exposure-alert" class="hidden mb-4 rounded-lg border border-orange-300 bg-orange-50 p-3 text-orange-900 shadow-sm" role="alert" aria-live="polite">
                             <p id="demurrage-exposure-text" class="text-[12px] font-black leading-snug"></p>
                             <p id="demurrage-exposure-impact" class="mt-1 text-[11px] font-bold leading-snug"></p>
@@ -26105,10 +26128,15 @@
 	                ? Math.min(2.5, Math.max(0.4, vesselData.loa / stdLoa))
 	                : 1.0;
 
+	            const portDays = (vesselData && Number.isFinite(vesselData.totalDaysInPort) && vesselData.totalDaysInPort > 0)
+	                ? vesselData.totalDaysInPort
+	                : 3.0;
+	            const daysFactor = Math.min(3.0, Math.max(0.5, portDays / 3.0));
+
 	            const tasasAutoridad = Math.round(totalPDA * 0.38 * gtFactor);
 	            const navManiobra = Math.round(totalPDA * 0.32 * loaFactor);
-	            const muelleEstadia = Math.round(totalPDA * 0.18 * loaFactor);
-	            const agenciaVarios = Math.round(totalPDA * 0.12);
+	            const muelleEstadia = Math.round(totalPDA * 0.18 * loaFactor * daysFactor);
+	            const agenciaVarios = Math.round(totalPDA * 0.12 * Math.min(1.5, Math.max(0.8, 1 + (portDays - 3) * 0.05)));
 	            const adjustedTotalPDA = Math.round(tasasAutoridad + navManiobra + muelleEstadia + agenciaVarios);
 
 	            return {
@@ -26348,14 +26376,29 @@
 	            if (type === 'pod') totalPDA *= 1.10; // Recargo general POD (MARPOL, etc)
 
             // Adjustments based on Cargo Type (Dry vs Liquid bulk)
-            const cargoType = document.getElementById('cargo-type').value;
+            const cargoType = document.getElementById('cargo-type')?.value || '';
             let liquidSurchargeTag = '';
             if (cargoType === 'Granel Líquido (Liquid Bulk)') {
                 totalPDA *= 1.30; // Liquid bulk requires slop disposal, safety supervision, specialized terminals (30% increase)
                 liquidSurchargeTag = ' (+30% Liquid Bulk Surcharge)';
             }
 
-            const finalPDA = Math.round(totalPDA / 50) * 50;
+            let finalPDA = Math.round(totalPDA / 50) * 50;
+
+            // Validación de seguridad por defecto para POD
+            let freePortTag = '';
+            if (type === 'pod') {
+                const polPda = parseFloat(document.getElementById('pda-pol')?.value) || parseFloat(window.State?.pdaPol) || parseFloat(window.State?.basePdaPol) || 0;
+                const podPortName = String(document.getElementById('port-pod')?.value || window.State?.pod || '').toLowerCase();
+                const podInputEl = document.getElementById('port-pod');
+                const isFreePort = podPortName.includes('libre') || podPortName.includes('free') || podPortName.includes('ftz') || podPortName.includes('exento') || podPortName.includes('arancel reducido') || podInputEl?.dataset?.freePort === 'true';
+
+                if (polPda > 0 && !isFreePort && finalPDA < polPda * 0.70) {
+                    finalPDA = Math.max(finalPDA, Math.round(polPda * 0.85));
+                } else if (isFreePort && polPda > 0 && finalPDA < polPda) {
+                    freePortTag = ' (Puerto Libre / Arancel Reducido)';
+                }
+            }
             const tugCost = State.smartAdjustments?.tugTotalCost || 0;
             const tugPort = Math.round(tugCost / 2);
             const tugShare = Math.min(Math.round(navManiobra * 0.5), Math.max(tugPort, Math.round(navManiobra * 0.3)));
@@ -26396,7 +26439,7 @@
 
             if (showNotification) {
                 const podTag = type === 'pod' ? ' (+10% POD)' : '';
-                const extraSurcharges = `${podTag}${liquidSurchargeTag}`;
+                const extraSurcharges = `${podTag}${liquidSurchargeTag}${freePortTag}`;
                 const sourceTag = calculationMode === 'official' ? ' | Data Bridge' : ' | Curva global DWT';
                 const sourceLabel = calculationMode === 'official' ? 'Cálculo Oficial' : 'Estimación Algorítmica Global';
                 showToast(`PDA ${type.toUpperCase()}: $${finalCalculatedPda.toLocaleString('en-US')} · ${sourceLabel}${extraSurcharges}<br><span class="text-[10px] text-emerald-300 mt-1 block font-mono">Nav/Maniobra: $${Math.round(navManiobra)} | Tasas: $${Math.round(tasasAutoridad)} | Agencia/Misc: $${Math.round(agenciaVarios)} | Muelle: $${Math.round(muelleEstadia)}${sourceTag}</span>`);
@@ -29414,7 +29457,7 @@
                     speed: toNumber(document.getElementById('spd-laden')?.value || State?.speedLaden || State?.spdLaden) || 12,
                     bunkerConsumptionDaily: toNumber(document.getElementById('cons-sea')?.value || State?.consSea),
                     bunkerPrice: toNumber(document.getElementById('price-sea')?.value || State?.priceSea),
-                    pdaPolBase: toNumber(document.getElementById('pda-pod')?.value || State?.pdaPod),
+                    pdaPolBase: toNumber(document.getElementById('pda-pol')?.value || State?.pdaPol),
                     ingresoBruto1: toNumber(ownerBreakdown.grossRevenue || State?.ownerNetBreakdown?.grossRevenue),
                     costesViaje1: toNumber(ownerBreakdown.bunkerAndPortCosts || ((State?.costBunkers || 0) + (State?.portExpenses || 0)))
                 });
@@ -45880,8 +45923,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         /**
-         * Modificador dinámico para las PDAs (POL y POD) basado en la desviación de ritmos (muellaje)
-         * y en el método operativo seleccionado (grúas de buque vs grúas de tierra).
+         * Modificador dinámico para las PDAs (POL y POD) basado en la desviación de ritmos (muellaje).
          */
         function actualizarPDADinamica(side = 'pol') {
             const pdaInputId = side === 'pod' ? 'pda-pod' : 'pda-pol';
@@ -45907,22 +45949,25 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const deltaDias = typeof calcularDeltaDias === 'function' ? calcularDeltaDias(cargoQty, tpdAuto, tpdManual) : null;
             const ajusteMuellaje = (deltaDias !== null ? deltaDias : 0) * COSTE_MUELLAJE_DIARIO;
 
-            // 3. Ajuste por Método (Grúas de Barco vs Grúas de Tierra)
-            const selectId = side === 'pod' ? 'metodo_descarga_pod' : 'metodo_carga';
-            const selectEl = document.getElementById(selectId);
-            const selectedOption = selectEl?.options?.[selectEl?.selectedIndex];
-            const methodText = selectedOption ? (selectedOption.textContent || selectedOption.innerText || '') : '';
-            const methodVal = selectEl?.value || '';
+            // 3. Sincronizar desglose de equipamiento por método sin alterar el montante base de derechos portuarios
+            if (typeof actualizarCostesPDAPorMetodo === 'function') {
+                actualizarCostesPDAPorMetodo(side);
+            }
 
-            const isShipCrane = methodText.includes('Grúa Barco')
-                || methodVal.includes('barco')
-                || methodVal === 'cuchara_grab'
-                || methodVal === 'ship_crane';
+            // 4. Actualización con suelo de seguridad por defecto
+            let pdaModificada = Math.max(0, Math.round(basePda + ajusteMuellaje));
 
-            const ajusteGruas = isShipCrane ? -(cargoQty * COSTE_GRUA_TIERRA_MT) : 0;
+            if (side === 'pod') {
+                const polPda = parseFloat(document.getElementById('pda-pol')?.value) || parseFloat(window.State?.pdaPol) || parseFloat(window.State?.basePdaPol) || 0;
+                const podPortName = String(document.getElementById('port-pod')?.value || window.State?.pod || '').toLowerCase();
+                const podInputEl = document.getElementById('port-pod');
+                const isFreePort = podPortName.includes('libre') || podPortName.includes('free') || podPortName.includes('ftz') || podPortName.includes('exento') || podPortName.includes('arancel reducido') || podInputEl?.dataset?.freePort === 'true';
 
-            // 4. Actualización del DOM (Inputs de la Sección 3)
-            const pdaModificada = Math.max(0, Math.round(basePda + ajusteMuellaje + ajusteGruas));
+                if (polPda > 0 && !isFreePort && pdaModificada < polPda * 0.70) {
+                    pdaModificada = Math.max(pdaModificada, Math.round(polPda * 0.85));
+                }
+            }
+
             pdaInput.value = pdaModificada;
 
             if (window.State) {
@@ -46797,7 +46842,189 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             };
         }
 
+        // =========================================================================
+        // VALIDADOR EXPERTO DE CONSISTENCIA LÓGICA Y OPERATIVA (SeaCharter Core PRO)
+        // =========================================================================
+        function validateOperationalCoherence(explicitMode = 'Manual', overrides = {}) {
+            const modeRaw = String(explicitMode || 'Manual').trim();
+            const mode = (modeRaw.toLowerCase().includes('auto') || modeRaw === 'Automático') ? 'Automático' : 'Manual';
+
+            // Gather variables (from overrides or DOM state)
+            const cargoQty = Number.isFinite(overrides.cargoQty)
+                ? Number(overrides.cargoQty)
+                : Math.max(0, parseFloat(document.getElementById('cargo-qty')?.value) || parseFloat(window.State?.cargo) || 0);
+
+            const cargoCategory = String(overrides.cargoCategory || document.getElementById('cargo-type')?.value || window.State?.cargoCategory || '').trim();
+            const cargoProduct = String(overrides.cargoProduct || document.getElementById('cargo-product')?.value || window.State?.cargoProduct || '').trim();
+            const productOrCat = cargoProduct || cargoCategory || 'Mercancía No Especificada';
+
+            const methodPolText = String(overrides.methodPol || (typeof getSelectedMethodLabel === 'function' ? getSelectedMethodLabel('pol') : '') || document.getElementById('metodo_carga')?.value || '').trim();
+            const methodPodText = String(overrides.methodPod || (typeof getSelectedMethodLabel === 'function' ? getSelectedMethodLabel('pod') : '') || document.getElementById('metodo_descarga_pod')?.value || '').trim();
+            const methodDisplay = [methodPolText, methodPodText].filter(Boolean).join(' / ') || 'Método Estándar';
+
+            let rateLoad = Number.isFinite(overrides.rateLoad)
+                ? Number(overrides.rateLoad)
+                : Math.max(0, parseFloat(document.getElementById('rate-load')?.value) || parseFloat(window.State?.loadRate) || 0);
+
+            let rateDisch = Number.isFinite(overrides.rateDisch)
+                ? Number(overrides.rateDisch)
+                : Math.max(0, parseFloat(document.getElementById('rate-disch')?.value) || parseFloat(window.State?.dischRate) || 0);
+
+            let effectiveQty = cargoQty;
+
+            // Intelligent correction in Modo Automático for obvious TMD Swap
+            let isSwapCorrected = false;
+            if (mode === 'Automático' && effectiveQty > 0 && (rateLoad > 0 || rateDisch > 0)) {
+                const maxRateVal = Math.max(rateLoad, rateDisch);
+                if (effectiveQty < maxRateVal && maxRateVal >= 5000 && effectiveQty <= 5000) {
+                    const temp = effectiveQty;
+                    effectiveQty = maxRateVal;
+                    if (rateLoad === maxRateVal) rateLoad = temp;
+                    if (rateDisch === maxRateVal) rateDisch = temp;
+                    isSwapCorrected = true;
+                    const qtyEl = document.getElementById('cargo-qty');
+                    const rateLoadEl = document.getElementById('rate-load');
+                    if (qtyEl && !overrides.preventDomUpdate) qtyEl.value = String(effectiveQty);
+                    if (rateLoadEl && !overrides.preventDomUpdate) rateLoadEl.value = String(rateLoad);
+                }
+            }
+
+            let isAnomaly = false;
+            let causeMessage = '';
+
+            const isPneumatic = methodPolText.includes('Bombas Neumáticas') || methodPodText.includes('Bombas Neumáticas')
+                || methodPolText.includes('bombas_neumaticas') || methodPodText.includes('bombas_neumaticas');
+            const isBelt = methodPolText.includes('Cinta Transportadora') || methodPodText.includes('Cinta Transportadora')
+                || methodPolText.includes('cinta_transportadora') || methodPodText.includes('cinta_transportadora');
+            const isTruck = methodPolText.includes('Camión Tolva') || methodPodText.includes('Camión Tolva')
+                || methodPolText.includes('camion_tolva') || methodPodText.includes('camion_tolva');
+            const isGrab = methodPolText.includes('Cuchara') || methodPodText.includes('Cuchara')
+                || methodPolText.includes('cuchara_grab') || methodPodText.includes('cuchara_grab');
+            const isShipCrane = methodPolText.includes('Grúa Barco') || methodPodText.includes('Grúa Barco')
+                || methodPolText.includes('_barco') || isGrab;
+
+            const prodLower = productOrCat.toLowerCase();
+            const maxRate = Math.max(rateLoad, rateDisch);
+            const isHighSpeedBulk = (isBelt || isPneumatic) && (prodLower.includes('cemento') || prodLower.includes('clinker') || prodLower.includes('grano') || prodLower.includes('carbón'));
+
+            // Rule 1: Confusión / Traslape entre Volumen Total y Tasa Diaria (TMD Swap)
+            if (isSwapCorrected) {
+                isAnomaly = true;
+                causeMessage = `Incongruencia detectada en extracción automática: Confusión entre cantidad total (${rateLoad.toLocaleString()} MT) y tasa diaria (${effectiveQty.toLocaleString()} TM/d). La IA corrigió la interpretación antes de completar la planilla.`;
+            } else if (!isHighSpeedBulk && effectiveQty >= 5000 && maxRate > 0) {
+                if (maxRate === effectiveQty && effectiveQty >= 5000) {
+                    isAnomaly = true;
+                    causeMessage = `Confusión entre la cantidad total (${effectiveQty.toLocaleString()} MT) y la tasa diaria (${maxRate.toLocaleString()} TM/d). Se declaró un ritmo idéntico al volumen total de la embarcación.`;
+                } else if (maxRate > 0.6 * effectiveQty && maxRate > 8000) {
+                    isAnomaly = true;
+                    causeMessage = `Traslape entre Volumen Total (${effectiveQty.toLocaleString()} MT) y Tasa Diaria (TMD de ${maxRate.toLocaleString()} TM/d), implicando un ritmo físico inviable para el equipamiento.`;
+                }
+            } else if (effectiveQty > 0 && effectiveQty < 3000 && maxRate >= 12000) {
+                isAnomaly = true;
+                causeMessage = `Incongruencia entre la cantidad total reducida (${effectiveQty.toLocaleString()} MT) y una tasa diaria sobredimensionada (${maxRate.toLocaleString()} TM/d).`;
+            }
+
+            // Rule 2: Incompatibilidad Físico-Mecánica (Mercancía vs Método)
+            if (!isAnomaly) {
+                if (isPneumatic) {
+                    const isPowder = prodLower.includes('cemento') || prodLower.includes('ceniza') || prodLower.includes('fly ash') || prodLower.includes('polvo') || prodLower.includes('yeso');
+                    if (!isPowder || prodLower.includes('clínker') || prodLower.includes('clinker') || prodLower.includes('acero') || prodLower.includes('carbón') || prodLower.includes('big bags') || prodLower.includes('palet')) {
+                        isAnomaly = true;
+                        causeMessage = `El método Bombas Neumáticas / Tuberías es físicamente incompatible con productos no pulverulentos (${productOrCat}). Clíker, carbón o acero obstruyen las líneas neumáticas.`;
+                    }
+                } else if (isBelt) {
+                    const isBaggedOrSteel = prodLower.includes('acero') || prodLower.includes('siderúrgic') || prodLower.includes('palet') || prodLower.includes('unitariz') || prodLower.includes('breakbulk');
+                    if (isBaggedOrSteel) {
+                        isAnomaly = true;
+                        causeMessage = `La Cinta Transportadora no permite la manipulación de piezas siderúrgicas, mercancía unitarizada o paletizada (${productOrCat}).`;
+                    }
+                } else if (isGrab) {
+                    const isNotBulk = prodLower.includes('palet') || prodLower.includes('big bags') || prodLower.includes('acero') || prodLower.includes('siderúrgic') || prodLower.includes('vehículo') || prodLower.includes('proyecto');
+                    if (isNotBulk) {
+                        isAnomaly = true;
+                        causeMessage = `La Cuchara (Grab) es técnicamente incompatible con palets, big bags o piezas siderúrgicas (${productOrCat}).`;
+                    }
+                }
+            }
+
+            // Rule 3: Superación del Techo Técnico Real por Método
+            if (!isAnomaly && maxRate > 0) {
+                if (isShipCrane) {
+                    if ((prodLower.includes('big bags') || prodLower.includes('palet')) && maxRate > 4500) {
+                        isAnomaly = true;
+                        causeMessage = `Superación del límite técnico de las grúas del buque para carga envasada/big bags (${maxRate.toLocaleString()} TM/d declarados vs. ritmo máximo de ~1,500-3,000 TM/d).`;
+                    } else if ((prodLower.includes('acero') || prodLower.includes('siderúrgic')) && maxRate > 5500) {
+                        isAnomaly = true;
+                        causeMessage = `Superación del límite técnico de las grúas del buque para productos siderúrgicos (${maxRate.toLocaleString()} TM/d declarados vs. ritmo máximo de ~1,500-3,500 TM/d).`;
+                    } else if (isGrab && maxRate > 8500) {
+                        isAnomaly = true;
+                        causeMessage = `Superación del límite físico de las grúas del buque con almeja/grab (${maxRate.toLocaleString()} TM/d declarados vs. capacidad máxima de ~4,000-6,000 TM/d).`;
+                    }
+                } else if (isTruck && maxRate > 9000) {
+                    isAnomaly = true;
+                    causeMessage = `Superación de la capacidad técnica de evacuación por Camión Tolva (${maxRate.toLocaleString()} TM/d declarados vs. techo operativo ~3,000-6,000 TM/d).`;
+                } else if (isPneumatic && maxRate > 16000) {
+                    isAnomaly = true;
+                    causeMessage = `Superación de la capacidad técnica de bombeo neumático continuo (${maxRate.toLocaleString()} TM/d declarados vs. techo operativo ~6,000-12,000 TM/d).`;
+                }
+            }
+
+            // Rule 4: Tasa extremadamente baja respecto al volumen total
+            if (!isAnomaly && effectiveQty >= 5000 && maxRate > 0 && maxRate < 150) {
+                isAnomaly = true;
+                causeMessage = `Tasa diaria declarada (${maxRate} TM/d) desproporcionadamente baja para un volumen total de ${effectiveQty.toLocaleString()} MT, generando una estadía irreal.`;
+            }
+
+            const headerText = `- [ALERTA DE COHERENCIA OPERATIVA (Modo ${mode})]:`;
+            const diagnosticText = `- Diagnóstico: Incompatibilidad detectada entre el tipo de mercancía (${productOrCat}), el método (${methodDisplay}) y las cantidades/tasas declaradas.`;
+            const causeText = `- Causa probable: ${causeMessage}`;
+            const behaviorText = `- Comportamiento: Mostrar advertencia visual permitiendo al usuario continuar o corregir los datos manualmente sin bloquear el flujo del sistema.`;
+            const formattedAlert = `${headerText}\n  ${diagnosticText}\n  ${causeText}\n  ${behaviorText}`;
+
+            const alertEl = document.getElementById('operational-coherence-alert');
+            const headerEl = document.getElementById('coherence-alert-header');
+            const diagEl = document.getElementById('coherence-alert-diagnostic');
+            const causeEl = document.getElementById('coherence-alert-cause');
+            const behaviorEl = document.getElementById('coherence-alert-behavior');
+
+            if (alertEl) {
+                alertEl.classList.toggle('hidden', !isAnomaly);
+                if (isAnomaly) {
+                    if (headerEl) headerEl.textContent = headerText;
+                    if (diagEl) diagEl.textContent = diagnosticText;
+                    if (causeEl) causeEl.textContent = causeText;
+                    if (behaviorEl) behaviorEl.textContent = behaviorText;
+                }
+            }
+
+            const result = {
+                active: isAnomaly,
+                mode: `Modo ${mode}`,
+                cargo: productOrCat,
+                method: methodDisplay,
+                qty: effectiveQty,
+                rateLoad,
+                rateDisch,
+                diagnosis: diagnosticText,
+                probableCause: causeMessage,
+                behavior: "Mostrar advertencia visual permitiendo al usuario continuar o corregir los datos manualmente sin bloquear el flujo del sistema.",
+                formattedAlert
+            };
+
+            if (window.State) {
+                window.State.operationalCoherenceAlert = result;
+            }
+
+            return result;
+        }
+
+        window.validateOperationalCoherence = validateOperationalCoherence;
+        window.detectOperationalCoherence = validateOperationalCoherence;
+
         function updateDemurrageExposureAlert() {
+            if (typeof validateOperationalCoherence === 'function') {
+                validateOperationalCoherence('Manual');
+            }
             const alert = document.getElementById('demurrage-exposure-alert');
             if (!alert) return null;
             const cargoQuantity = Math.max(0, parseFloat(document.getElementById('cargo-qty')?.value) || 0);
