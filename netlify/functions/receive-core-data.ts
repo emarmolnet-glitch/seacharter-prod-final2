@@ -92,13 +92,28 @@ function extractFleetVessels(payload: unknown): unknown[] {
 
 function normalizeVesselItem(item: unknown, index: number): NormalizedFleetVessel | null {
   if (!item || typeof item !== "object" || Array.isArray(item)) return null;
-  const source = item as Record<string, unknown>;
+  const rawSource = item as Record<string, unknown>;
+
+  const nestedVessel = rawSource.vessel && typeof rawSource.vessel === "object" && !Array.isArray(rawSource.vessel)
+    ? rawSource.vessel as Record<string, unknown>
+    : {};
+  const nestedAis = rawSource.ais && typeof rawSource.ais === "object" && !Array.isArray(rawSource.ais)
+    ? rawSource.ais as Record<string, unknown>
+    : {};
+  const nestedRouting = rawSource.routing && typeof rawSource.routing === "object" && !Array.isArray(rawSource.routing)
+    ? rawSource.routing as Record<string, unknown>
+    : {};
+  const nestedMeta = rawSource.MetaData && typeof rawSource.MetaData === "object" && !Array.isArray(rawSource.MetaData)
+    ? rawSource.MetaData as Record<string, unknown>
+    : {};
+
+  const source = { ...rawSource, ...nestedMeta, ...nestedRouting, ...nestedAis, ...nestedVessel };
 
   const imoKeys = ["imo", "IMO", "imoNumber", "imo_number", "numero_imo", "numeroIMO", "IMONumber"];
-  const nameKeys = ["vesselName", "vessel_name", "nombre", "name", "ShipName", "shipName", "vessel"];
+  const nameKeys = ["vesselName", "vessel_name", "nombre", "name", "ShipName", "shipName", "vessel", "ship"];
   const dwtKeys = ["dwt", "DWT", "deadweight", "dwt_ajustado"];
   const mmsiKeys = ["mmsi", "MMSI"];
-  const typeKeys = ["vesselType", "vessel_type", "type", "tipo", "tipo_buque", "shipType"];
+  const typeKeys = ["vesselType", "vessel_type", "type", "tipo", "tipo_buque", "shipType", "ShipType"];
   const flagKeys = ["flag", "Flag", "bandera"];
   const draftKeys = ["draft", "Draft", "draft_meters", "calado"];
   const latKeys = ["latitude", "lat", "LAT", "AIS_Live_Lat", "Latitude"];
@@ -126,7 +141,7 @@ function normalizeVesselItem(item: unknown, index: number): NormalizedFleetVesse
     eta: readFirstString(source, etaKeys) || null,
     lastPort: readFirstString(source, portKeys) || null,
     destination: readFirstString(source, destKeys) || null,
-    raw: source,
+    raw: rawSource,
   };
 }
 
@@ -215,40 +230,31 @@ export const handler: Handler = async (eventOrReq: unknown) => {
       .filter((v): v is NormalizedFleetVessel => v !== null);
 
     let persistedCount = 0;
-    try {
-      const masterRows: RadarVesselMasterInput[] = normalizedVessels
-        .filter((v) => v.latitude !== null && v.longitude !== null && (v.latitude !== 0 || v.longitude !== 0))
-        .map((v) => ({
-          imoNumber: v.imo && v.imo !== "N/A" ? v.imo : null,
-          mmsi: v.mmsi,
-          vesselName: v.name,
-          shipType: v.type,
-          draught: v.draft,
-          dwt: v.dwt,
-          latitude: v.latitude!,
-          longitude: v.longitude!,
-          destination: v.destination,
-          lastPortOfCall: v.lastPort,
-          eta: v.eta,
-          source: "Core PRO - receive-core-data",
-          rawData: v.raw,
-          flag: v.flag,
-        }));
+    const masterRows: RadarVesselMasterInput[] = normalizedVessels
+      .filter((v) => v.latitude !== null && v.longitude !== null && (v.latitude !== 0 || v.longitude !== 0))
+      .map((v) => ({
+        imoNumber: v.imo && v.imo !== "N/A" ? v.imo : null,
+        mmsi: v.mmsi,
+        vesselName: v.name,
+        shipType: v.type,
+        draught: v.draft,
+        dwt: v.dwt,
+        latitude: v.latitude!,
+        longitude: v.longitude!,
+        destination: v.destination,
+        lastPortOfCall: v.lastPort,
+        eta: v.eta,
+        source: "Core PRO - receive-core-data",
+        rawData: v.raw,
+        flag: v.flag,
+      }));
 
-      if (masterRows.length > 0) {
-        persistedCount = await upsertRadarVesselsMaster(masterRows);
-      }
-    } catch (dbError) {
-      console.warn("[receive-core-data] Advertencia: No se pudo persistir en base de datos:", dbError);
+    if (masterRows.length > 0) {
+      persistedCount = await upsertRadarVesselsMaster(masterRows);
     }
 
-    let inboxCount = 0;
     const activeSyncId = syncId || crypto.randomUUID();
-    try {
-      inboxCount = await insertPipelineInboxBatches(activeSyncId, rawVessels as Record<string, unknown>[], "CORE_PRO");
-    } catch (inboxErr) {
-      console.warn("[receive-core-data] Advertencia: No se pudo persistir en pipeline_inbox:", inboxErr);
-    }
+    const inboxCount = await insertPipelineInboxBatches(activeSyncId, rawVessels as Record<string, unknown>[], "CORE_PRO");
 
     return createResponse(200, {
       success: true,
