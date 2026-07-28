@@ -23605,37 +23605,45 @@
         }
 
         function initMap() {
-            const mapContainer = document.getElementById('map-container');
-            if (!mapContainer) {
-                setTimeout(initMap, 100);
-                return;
-            }
-            if (map) {
-                resizeRouteMap(map);
-                return;
-            }
-            const mapBounds = mapContainer.getBoundingClientRect();
-            if (mapBounds.width <= 1 || mapBounds.height <= 1) {
-                mapContainer.dataset.renderKey = 'loading';
-                if (!routeMapMountFrameId) {
-                    routeMapMountFrameId = requestAnimationFrame(() => {
-                        routeMapMountFrameId = null;
-                        initMap();
-                    });
+            try {
+                const mapContainer = document.getElementById('map-container');
+                if (!mapContainer) {
+                    setTimeout(() => {
+                        try { initMap(); } catch (err) { console.error('Error in delayed initMap:', err); }
+                    }, 100);
+                    return;
                 }
-                return;
+                if (map) {
+                    resizeRouteMap(map);
+                    return;
+                }
+                const mapBounds = mapContainer.getBoundingClientRect();
+                if (mapBounds.width <= 1 || mapBounds.height <= 1) {
+                    mapContainer.dataset.renderKey = 'loading';
+                    if (!routeMapMountFrameId) {
+                        routeMapMountFrameId = requestAnimationFrame(() => {
+                            routeMapMountFrameId = null;
+                            try { initMap(); } catch (err) { console.error('Error in rAF initMap:', err); }
+                        });
+                    }
+                    return;
+                }
+                mapContainer.dataset.renderKey = 'mounted';
+                const vessels = (window.GlobalStore?.filteredVesselsInitialized)
+                    ? (window.GlobalStore?.getFilteredVessels?.() || [])
+                    : [];
+                map = window.GlobalFleetGlobe?.mount({
+                    containerId: 'map-container',
+                    vesselsData: vessels || [],
+                    renderKey: JSON.stringify(vessels || [])
+                });
+                window.map = map;
+                if (State?.routeGeometry) {
+                    window.GlobalFleetGlobe?.setRouteResult(State.routeGeometry);
+                }
+            } catch (err) {
+                console.error('Safe map initialization caught error:', err);
             }
-            mapContainer.dataset.renderKey = 'mounted';
-            const vessels = window.GlobalStore?.filteredVesselsInitialized
-                ? (window.GlobalStore?.getFilteredVessels?.() || [])
-                : [];
-            map = window.GlobalFleetGlobe?.mount({
-                containerId: 'map-container',
-                vesselsData: vessels,
-                renderKey: JSON.stringify(vessels)
-            });
-            window.map = map;
-            if (State.routeGeometry) window.GlobalFleetGlobe?.setRouteResult(State.routeGeometry);
         }
 
         async function getCoordinates(query) {
@@ -28312,21 +28320,29 @@
 
             const dBal = isZeroCalculation ? 0 : (distBal / (spdBal > 0 ? (spdBal * 24) : 24));
             const dLaden = isZeroCalculation ? 0 : (distLaden / (spdLaden > 0 ? (spdLaden * 24) : 24));
-            const dPortLoad = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba, readNumeroGruasPuerto('pol'));
-            const dPortDisch = isZeroCalculation ? 0 : calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga, readNumeroGruasPuerto('pod'));
-            const dPort = isZeroCalculation ? 0 : (dPortLoad + dPortDisch);
-            const laytimeDays = isZeroCalculation ? 0 : (dPortLoad + dPortDisch + turnTimeDays);
-            const dPortTotal = isZeroCalculation ? 0 : (laytimeDays + diasPreparacionProyecto);
-            const adjustedPortDays = isZeroCalculation ? 0 : (dPortTotal + smartAnchorageDays + smartDeltaDays);
-            const seaPortDays = isZeroCalculation ? 0 : (dBal + dLaden + dPortTotal);
+            const demurrageExposure = isZeroCalculation
+                ? { active: false, exposedDays: 0, financialExposure: 0 }
+                : (typeof updateDemurrageExposureAlert === 'function' ? updateDemurrageExposureAlert() : { active: false, exposedDays: 0, financialExposure: 0 }) || { active: false, exposedDays: 0, financialExposure: 0 };
+            const rawPenaltyDays = (demurrageExposure && demurrageExposure.active) ? Math.max(0, Number(demurrageExposure.exposedDays) || 0) : 0;
+            const extraRatePenaltyDays = Math.min(50, rawPenaltyDays);
+
+            const dPortLoad = isZeroCalculation ? 0 : Math.max(0, calcularDiasPuertoPorEstiba(cargo, rateLoad, metodoEstiba, readNumeroGruasPuerto('pol')) || 0);
+            const dPortDisch = isZeroCalculation ? 0 : Math.max(0, calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga, readNumeroGruasPuerto('pod')) || 0);
+            const dPort = isZeroCalculation ? 0 : Math.max(0, dPortLoad + dPortDisch);
+            const laytimeDays = isZeroCalculation ? 0 : Math.max(0, dPortLoad + dPortDisch + turnTimeDays);
+            const dPortTotal = isZeroCalculation ? 0 : Math.max(0, laytimeDays + diasPreparacionProyecto);
+            const boundedSmartDeltaDays = Math.min(50, Math.max(0, smartDeltaDays || 0));
+            const boundedSmartAnchorageDays = Math.min(50, Math.max(0, smartAnchorageDays || 0));
+            const adjustedPortDays = isZeroCalculation ? 0 : Math.max(0, dPortTotal + boundedSmartAnchorageDays + boundedSmartDeltaDays);
+            const seaPortDays = isZeroCalculation ? 0 : Math.max(0, dBal + dLaden + dPortTotal);
             const baseOperationalDays = seaPortDays;
-            const smartExtraDays = isZeroCalculation ? 0 : (smartDeltaDays + smartAnchorageDays);
+            const smartExtraDays = isZeroCalculation ? 0 : Math.max(0, boundedSmartDeltaDays + boundedSmartAnchorageDays);
 
             // T_sea (Total underway time spent: ballast + laden + weather margin days)
-            const T_sea = isZeroCalculation ? 0 : (dBal + dLaden + marginDays);
-            // T_port (base port operations plus Smart Adjustments that extend port stay)
-            const T_port = isZeroCalculation ? 0 : laytimeDays;
-            const T_portFuel = isZeroCalculation ? 0 : (dPortTotal + smartDeltaDays);
+            const T_sea = isZeroCalculation ? 0 : Math.max(0, dBal + dLaden + marginDays);
+            // T_port (base port operations plus Smart Adjustments & Rate Penalties that extend port stay)
+            const T_port = isZeroCalculation ? 0 : Math.max(0, adjustedPortDays + extraRatePenaltyDays);
+            const T_portFuel = isZeroCalculation ? 0 : T_port;
             const totalDays = isZeroCalculation ? 0 : (T_sea + T_port);
             const smartOperationalDays = totalDays;
             const pdas = isZeroCalculation ? 0 : portExpensesForMode;
@@ -28407,9 +28423,6 @@
                 totalBunkerCost: totalBunkers,
                 totalDays
             });
-            const demurrageExposure = isZeroCalculation
-                ? { active: false, exposedDays: 0, financialExposure: 0 }
-                : (updateDemurrageExposureAlert() || { active: false, exposedDays: 0, financialExposure: 0 });
             const demurrageExposureCost = Math.max(0, Number(demurrageExposure.financialExposure) || 0);
             const adjustedCostTotal = isZeroCalculation ? 0 : (costTotal + tugTotalCost + costPlusContingency.totalCost + demurrageExposureCost);
             const totalSmartCostIncrement = isZeroCalculation ? 0 : Math.max(0, adjustedCostTotal - basicBreakEvenNumerator);
@@ -45911,15 +45924,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         const COSTE_GRUA_TIERRA_MT = 2.00; // $2.00/MT por uso de grúa portuaria de tierra
 
         function calcularDeltaDias(carga, tpdAuto, tpdManual) {
-            const qty = parseFloat(carga) || 0;
-            const autoRate = parseFloat(tpdAuto) || 0;
-            const manualRate = parseFloat(tpdManual) || 0;
+            const qty = Math.max(0, parseFloat(carga) || 0);
+            const autoRate = Math.max(0, parseFloat(tpdAuto) || 0);
+            const manualRate = Math.max(0, parseFloat(tpdManual) || 0);
 
             if (qty <= 0 || autoRate <= 0 || manualRate <= 0) return null;
 
-            const diasBase = qty / autoRate;
-            const diasManuales = qty / manualRate;
-            return diasManuales - diasBase;
+            const diasBase = Math.max(0, qty / autoRate);
+            const diasManuales = Math.max(0, qty / manualRate);
+            return Math.max(0, diasManuales - diasBase);
         }
 
         /**
@@ -48125,10 +48138,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const dPortTotal = isZeroCalculation ? 0 : (laytimeDays + diasPreparacionProyecto);
             const adjustedPortDays = isZeroCalculation ? 0 : (dPortTotal + smartAnchorageDays + smartDeltaDays);
 
+            const demurrageExposureIsolated = isZeroCalculation
+                ? { active: false, exposedDays: 0 }
+                : (typeof updateDemurrageExposureAlert === 'function' ? updateDemurrageExposureAlert() : { active: false, exposedDays: 0 }) || { active: false, exposedDays: 0 };
+            const extraRatePenaltyDaysIsolated = (demurrageExposureIsolated && demurrageExposureIsolated.active) ? Math.max(0, Number(demurrageExposureIsolated.exposedDays) || 0) : 0;
+
             const T_sea = isZeroCalculation ? 0 : (dBal + dLaden + marginDays);
-            const T_port = isZeroCalculation ? 0 : laytimeDays;
-            const T_portFuel = isZeroCalculation ? 0 : (dPortTotal + smartDeltaDays);
-            const baseOperationalDays = isZeroCalculation ? 0 : (dBal + dLaden + dPortTotal);
+            const T_port = isZeroCalculation ? 0 : (adjustedPortDays + extraRatePenaltyDaysIsolated);
+            const T_portFuel = isZeroCalculation ? 0 : T_port;
+            const baseOperationalDays = isZeroCalculation ? 0 : (dBal + dLaden + T_port);
             const totalDays = isZeroCalculation ? 0 : (T_sea + T_port);
 
             const idxLoad = document.getElementById('port-pol')?.value || "";
