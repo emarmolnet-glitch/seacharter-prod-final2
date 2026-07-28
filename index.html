@@ -31084,7 +31084,6 @@ END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL
         window.buildFixtureRecapHTMLTemplate = buildFixtureRecapHTMLTemplate;
 
         async function generateAuditPDF() {
-            let element = null;
             try {
                 if (typeof showToast === 'function') {
                     showToast('Generando Auditoría de Riesgo Comercial (PDF)...', true);
@@ -31092,47 +31091,17 @@ END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL
 
                 const state = getDSSCurrentState();
                 const htmlString = buildAuditHTMLTemplate(state);
-
-                element = document.createElement('div');
-                element.id = 'dss-audit-pdf-template';
-                element.style.position = 'absolute';
-                element.style.left = '-9999px';
-                element.style.top = '0';
-                element.style.width = '800px';
-                element.style.padding = '32px';
-                element.style.background = '#ffffff';
-                element.style.color = '#0f172a';
-                element.style.fontFamily = "'Inter', system-ui, -apple-system, sans-serif";
-                element.style.display = 'block';
-
-                element.innerHTML = htmlString;
-                document.body.appendChild(element);
-
                 const filename = `Auditoria_Riesgo_Comercial_DSS_${state.pol}_${state.pod}_${new Date().toISOString().slice(0, 10)}.pdf`;
 
                 if (typeof html2pdf === 'function') {
                     const opt = {
-                        margin: [8, 8, 8, 8],
-                        filename: filename,
-                        image: { type: 'jpeg', quality: 0.98 },
-                        html2canvas: {
-                            scale: 2,
-                            useCORS: true,
-                            logging: false,
-                            scrollX: 0,
-                            scrollY: 0,
-                            windowWidth: 800,
-                            onclone: (clonedDoc, clonedElement) => {
-                                clonedElement.style.position = 'static';
-                                clonedElement.style.left = '0';
-                                clonedElement.style.top = '0';
-                                clonedElement.style.visibility = 'visible';
-                                clonedElement.style.display = 'block';
-                            }
-                        },
-                        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                        margin:       10,
+                        filename:     filename,
+                        image:        { type: 'jpeg', quality: 0.98 },
+                        html2canvas:  { scale: 2, useCORS: true, logging: true },
+                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
                     };
-                    await html2pdf().from(element).set(opt).save();
+                    await html2pdf().from(htmlString).set(opt).save();
                 } else if (window.jspdf?.jsPDF || window.jsPDF) {
                     await generateAuditJsPDDFallback(state, filename);
                 } else {
@@ -31147,16 +31116,11 @@ END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL
                 if (typeof showToast === 'function') {
                     showToast('❌ Error al generar PDF de Auditoría');
                 }
-            } finally {
-                if (element && element.parentNode) {
-                    element.parentNode.removeChild(element);
-                }
             }
         }
         window.generateAuditPDF = generateAuditPDF;
 
         async function generateFixtureRecapPDF() {
-            let element = null;
             try {
                 if (typeof showToast === 'function') {
                     showToast('Generando Oferta Comercial (Fixture Recap PDF)...', true);
@@ -31164,47 +31128,17 @@ END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL
 
                 const state = getDSSCurrentState();
                 const htmlString = buildFixtureRecapHTMLTemplate(state);
-
-                element = document.createElement('div');
-                element.id = 'dss-fixture-recap-pdf-template';
-                element.style.position = 'absolute';
-                element.style.left = '-9999px';
-                element.style.top = '0';
-                element.style.width = '800px';
-                element.style.padding = '24px';
-                element.style.background = '#ffffff';
-                element.style.color = '#0f172a';
-                element.style.fontFamily = "'Courier New', Courier, monospace";
-                element.style.display = 'block';
-
-                element.innerHTML = htmlString;
-                document.body.appendChild(element);
-
                 const filename = `Firm_Fixture_Recap_${state.pol}_${state.pod}_${new Date().toISOString().slice(0, 10)}.pdf`;
 
                 if (typeof html2pdf === 'function') {
                     const opt = {
-                        margin: [8, 8, 8, 8],
-                        filename: filename,
-                        image: { type: 'jpeg', quality: 0.98 },
-                        html2canvas: {
-                            scale: 2,
-                            useCORS: true,
-                            logging: false,
-                            scrollX: 0,
-                            scrollY: 0,
-                            windowWidth: 800,
-                            onclone: (clonedDoc, clonedElement) => {
-                                clonedElement.style.position = 'static';
-                                clonedElement.style.left = '0';
-                                clonedElement.style.top = '0';
-                                clonedElement.style.visibility = 'visible';
-                                clonedElement.style.display = 'block';
-                            }
-                        },
-                        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                        margin:       10,
+                        filename:     filename,
+                        image:        { type: 'jpeg', quality: 0.98 },
+                        html2canvas:  { scale: 2, useCORS: true, logging: true },
+                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
                     };
-                    await html2pdf().from(element).set(opt).save();
+                    await html2pdf().from(htmlString).set(opt).save();
                 } else if (window.jspdf?.jsPDF || window.jsPDF) {
                     await generateFixtureRecapJsPDDFallback(state, filename);
                 } else {
@@ -31218,10 +31152,6 @@ END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL
                 console.error('Error al generar Fixture Recap PDF:', err);
                 if (typeof showToast === 'function') {
                     showToast('❌ Error al generar Fixture Recap PDF');
-                }
-            } finally {
-                if (element && element.parentNode) {
-                    element.parentNode.removeChild(element);
                 }
             }
         }
