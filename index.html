@@ -9415,7 +9415,7 @@
                 <header class="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 shadow-xl flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3">
                     <div class="flex flex-col md:flex-row md:items-center gap-3 flex-wrap">
                         <span class="text-xs text-slate-400 font-mono shrink-0">Audit Engine</span>
-                        <h1 class="text-xl md:text-2xl font-light tracking-tight text-white flex items-center gap-2 shrink-0 bg-transparent">
+                        <h1 class="text-xl md:text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2 shrink-0 bg-transparent">
                             <span>Sistema de Soporte de Decisiones (DSS)</span>
                         </h1>
                         <span class="hidden md:inline text-slate-600">|</span>
@@ -30508,35 +30508,35 @@
             }
 
             lista.forEach(rec => {
-                let borderClass = 'border-slate-700 bg-slate-900/60';
-                let tagBg = 'bg-slate-800 text-slate-300';
+                let iconColor = 'text-slate-600';
+                let btnTextColor = 'text-slate-700 bg-white border border-gray-200';
 
                 if (rec.tipo === 'critico') {
-                    borderClass = 'border-red-900/50 bg-red-950/20';
-                    tagBg = 'bg-red-900/50 text-red-200 border border-red-700/50';
+                    iconColor = 'text-red-600';
+                    btnTextColor = 'text-red-600 bg-white border border-gray-200';
                 } else if (rec.tipo === 'advertencia') {
-                    borderClass = 'border-amber-900/50 bg-amber-950/20';
-                    tagBg = 'bg-amber-900/50 text-amber-200 border border-amber-700/50';
+                    iconColor = 'text-amber-500';
+                    btnTextColor = 'text-amber-600 bg-white border border-gray-200';
                 } else if (rec.tipo === 'seguro') {
-                    borderClass = 'border-emerald-900/50 bg-emerald-950/20';
-                    tagBg = 'bg-emerald-900/50 text-emerald-200 border border-emerald-700/50';
+                    iconColor = 'text-emerald-600';
+                    btnTextColor = 'text-emerald-600 bg-white border border-gray-200';
                 }
 
                 const itemHtml = `
-                    <div class="p-4 rounded-xl border ${borderClass} flex flex-col md:flex-row md:items-center justify-between gap-3 transition-all hover:border-slate-600">
+                    <div class="p-4 rounded-xl border border-gray-200 bg-white flex flex-col md:flex-row md:items-center justify-between gap-3 transition-all hover:border-gray-300 shadow-sm">
                         <div class="flex items-start gap-3">
-                            <span class="text-xl leading-none select-none">${rec.icono}</span>
+                            <span class="text-xl leading-none select-none ${iconColor}">${rec.icono}</span>
                             <div class="space-y-1">
-                                <h4 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+                                <h4 class="text-sm font-bold text-slate-800 flex items-center gap-2">
                                     ${rec.titulo}
                                 </h4>
-                                <p class="text-xs text-slate-300 leading-relaxed">
+                                <p class="text-xs text-slate-600 leading-relaxed">
                                     ${rec.texto}
                                 </p>
                             </div>
                         </div>
                         <div class="shrink-0 self-end md:self-center">
-                            <span class="px-3 py-1.5 rounded-lg text-xs font-bold ${tagBg} inline-flex items-center gap-1">
+                            <span class="px-3 py-1.5 rounded-lg text-xs font-bold ${btnTextColor} inline-flex items-center gap-1 shadow-sm">
                                 💡 ${rec.accion}
                             </span>
                         </div>
