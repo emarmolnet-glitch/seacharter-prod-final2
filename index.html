@@ -9406,6 +9406,273 @@
         </div>
 
         <!-- ========================================== -->
+        <!-- MÓDULO DECISIONES: SISTEMA DE SOPORTE (DSS)-->
+        <!-- ========================================== -->
+        <div id="view-decisiones" class="view-section absolute inset-0 overflow-y-auto p-4 md:p-6 scroll-smooth bg-slate-900 text-slate-100">
+            <div class="w-full px-4 md:px-8 space-y-6">
+
+                <!-- CABECERA CON RESUMEN DEL VIAJE Y CONTROL DE ESTADO -->
+                <header class="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 shadow-xl flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3">
+                    <div class="flex flex-col md:flex-row md:items-center gap-3 flex-wrap">
+                        <span class="text-xs text-slate-400 font-mono shrink-0">Audit Engine</span>
+                        <h1 class="text-xl md:text-2xl font-light tracking-tight text-white flex items-center gap-2 shrink-0 bg-transparent">
+                            <span>Sistema de Soporte de Decisiones (DSS)</span>
+                        </h1>
+                        <span class="hidden md:inline text-slate-600">|</span>
+                        <p id="voyage-summary-subtitle" class="text-xs md:text-sm text-slate-300 font-medium">
+                            POL: <span id="summary-pol" class="text-indigo-400 font-bold">Rotterdam</span> ➔ 
+                            POD: <span id="summary-pod" class="text-indigo-400 font-bold">Houston</span> | 
+                            <span id="summary-qty" class="text-emerald-400 font-bold">50,000 MT</span> de 
+                            <span id="summary-commodity" class="text-slate-200">Siderúrgico / Carga General</span>
+                        </p>
+                    </div>
+
+                    <!-- Botones de Acción / Simulación y Volver -->
+                    <div class="flex flex-wrap items-center gap-2 shrink-0">
+                        <button type="button" onclick="cargarEscenario('riesgo')" class="px-3 py-1.5 text-xs font-medium bg-red-900/40 text-red-300 hover:bg-red-900/60 border border-red-700/50 rounded-lg transition-all flex items-center gap-1.5">
+                            🔴 Escenario Riesgo
+                        </button>
+                        <button type="button" onclick="cargarEscenario('equilibrado')" class="px-3 py-1.5 text-xs font-medium bg-amber-900/40 text-amber-300 hover:bg-amber-900/60 border border-amber-700/50 rounded-lg transition-all flex items-center gap-1.5">
+                            🟡 Escenario Alerta
+                        </button>
+                        <button type="button" onclick="cargarEscenario('optimo')" class="px-3 py-1.5 text-xs font-medium bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/60 border border-emerald-700/50 rounded-lg transition-all flex items-center gap-1.5">
+                            🟢 Escenario Óptimo
+                        </button>
+                        <button type="button" onclick="toggleParametros()" class="px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 rounded-lg transition-all flex items-center gap-1">
+                            ⚙️ Ajustar Variables
+                        </button>
+                        <button type="button" onclick="switchTab('estimator')" class="px-3 py-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-all flex items-center gap-1">
+                            <i class="fa-solid fa-calculator mr-1"></i> Volver a Calculadora
+                        </button>
+                    </div>
+                </header>
+
+                <!-- PANEL INTERACTIVO DE SIMULACIÓN DE PARÁMETROS (DESPLEGABLE) -->
+                <section id="panel-parametros" class="hidden bg-white border border-slate-200 rounded-2xl p-6 shadow-xl transition-all text-slate-800">
+                    <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 mb-4 flex items-center gap-2">
+                        <span>🎛️ Modificar Variables del Viaje y Calculadora de Fletes</span>
+                    </h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                        <div>
+                            <label class="block text-slate-600 font-semibold mb-1">Puerto Origen (POL)</label>
+                            <input type="text" id="input-pol" value="Rotterdam" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 font-semibold mb-1">Puerto Destino (POD)</label>
+                            <input type="text" id="input-pod" value="Houston" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 font-semibold mb-1">Cantidad Carga (MT)</label>
+                            <input type="number" id="input-cargoQty" value="50000" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 font-semibold mb-1">Mercancía / Commodity</label>
+                            <input type="text" id="input-commodity" value="Siderúrgico / Carga General" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 font-semibold mb-1">Días Restantes Laycan</label>
+                            <input type="number" id="input-laycanDaysLeft" value="10" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 font-semibold mb-1">Días Est. Navegación</label>
+                            <input type="number" id="input-estimatedVoyageDays" value="8" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 font-semibold mb-1">Ritmo de Carga (MT/día)</label>
+                            <input type="number" id="input-loadRate" value="5000" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 font-semibold mb-1">Días en Puerto (Port Days)</label>
+                            <input type="number" id="input-portDays" value="10" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 font-semibold mb-1">Días Navegando (Sea Days)</label>
+                            <input type="number" id="input-seaDays" value="8" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 font-semibold mb-1">Flete Estimado ($)</label>
+                            <input type="number" id="input-fleteEstimado" value="250000" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 font-semibold mb-1">Break-Even ($)</label>
+                            <input type="number" id="input-breakEven" value="210000" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- GRID DE 3 COLUMNAS PARA SEMÁFOROS (RIESGO CRÍTICO, ADVERTENCIA, SEGURO) -->
+                <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                    <!-- TARJETA 1: RIESGO CRÍTICO [ROJO] (LAYCAN AUDIT) -->
+                    <div id="card-laycan" class="bg-slate-800 border border-slate-700 border-l-4 border-l-red-500 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4">
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-bold uppercase tracking-wider text-red-400 flex items-center gap-1.5">
+                                    🔴 Riesgo de Laycan
+                                </span>
+                                <span id="badge-laycan-status" class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-red-950 text-red-300 border border-red-800">
+                                    ALERTA CRÍTICA
+                                </span>
+                            </div>
+                            <h3 id="laycan-title" class="text-lg font-bold text-white mb-2">
+                                Margen de Laycan Peligroso
+                            </h3>
+                            <p id="laycan-desc" class="text-sm text-slate-300 leading-relaxed">
+                                Evaluando margen operativo...
+                            </p>
+                        </div>
+                        <div class="pt-3 border-t border-slate-700/60 text-xs text-slate-400 space-y-1">
+                            <div class="flex justify-between">
+                                <span>Laycan Días Restantes:</span>
+                                <span id="val-laycan-left" class="font-bold text-slate-200">--</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Días Est. Navegación:</span>
+                                <span id="val-laycan-voyage" class="font-bold text-slate-200">--</span>
+                            </div>
+                            <div class="flex justify-between font-semibold">
+                                <span>Buffer de Seguridad:</span>
+                                <span id="val-laycan-buffer" class="text-red-400">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TARJETA 2: ADVERTENCIA [AMARILLO] (RITMO DE CARGA / LOAD RATE) -->
+                    <div id="card-loadrate" class="bg-slate-800 border border-slate-700 border-l-4 border-l-amber-500 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4">
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                                    🟡 Operaciones de Puerto
+                                </span>
+                                <span id="badge-loadrate-status" class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-950 text-amber-300 border border-amber-800">
+                                    ADVERTENCIA
+                                </span>
+                            </div>
+                            <h3 id="loadrate-title" class="text-lg font-bold text-white mb-2">
+                                Ritmo de carga ineficiente / Riesgo de Demoras
+                            </h3>
+                            <p id="loadrate-desc" class="text-sm text-slate-300 leading-relaxed">
+                                Evaluando velocidad de carga...
+                            </p>
+                        </div>
+                        <div class="pt-3 border-t border-slate-700/60 text-xs text-slate-400 space-y-1">
+                            <div class="flex justify-between">
+                                <span>Ritmo Actual (Load Rate):</span>
+                                <span id="val-loadrate-current" class="font-bold text-slate-200">--</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Días Teóricos de Carga:</span>
+                                <span id="val-loadrate-days" class="font-bold text-amber-400">--</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Load Rate Requerido (8d max):</span>
+                                <span id="val-loadrate-required" class="font-bold text-emerald-400">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TARJETA 3: SEGURO [VERDE] (SALUD FINANCIERA / MARGEN BRUTO) -->
+                    <div id="card-financial" class="bg-slate-800 border border-slate-700 border-l-4 border-l-emerald-500 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4">
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                                    🟢 Salud Financiera
+                                </span>
+                                <span id="badge-financial-status" class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-950 text-emerald-300 border border-emerald-800">
+                                    APROBADO
+                                </span>
+                            </div>
+                            <h3 id="financial-title" class="text-lg font-bold text-white mb-2">
+                                Rentabilidad Aprobada
+                            </h3>
+                            <p id="financial-desc" class="text-sm text-slate-300 leading-relaxed">
+                                Evaluando margen de beneficio...
+                            </p>
+                        </div>
+                        <div class="pt-3 border-t border-slate-700/60 text-xs text-slate-400 space-y-1">
+                            <div class="flex justify-between">
+                                <span>Flete Estimado:</span>
+                                <span id="val-financial-flete" class="font-bold text-slate-200">--</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Break-Even (Punto Eq.):</span>
+                                <span id="val-financial-breakeven" class="font-bold text-slate-200">--</span>
+                            </div>
+                            <div class="flex justify-between font-semibold">
+                                <span>Margen Bruto Calculado:</span>
+                                <span id="val-financial-margin" class="text-emerald-400">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </section>
+
+                <!-- SECCIÓN: MOTOR DE RECOMENDACIONES COMERCIALES Y RIESGOS OPERATIVOS -->
+                <section class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-700 pb-4">
+                        <div>
+                            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                <span>🎯 Motor de Recomendaciones Comerciales</span>
+                            </h2>
+                            <p class="text-xs text-slate-400">
+                                Estrategias quirúrgicas de negociación Armador ↔ Fletador generadas automáticamente en tiempo real.
+                            </p>
+                        </div>
+                        <span class="px-3 py-1 rounded-full text-xs font-bold bg-slate-900 text-indigo-400 border border-indigo-500/30">
+                            DSS Algorithmic Directives
+                        </span>
+                    </div>
+
+                    <div id="contenedor-recomendaciones" class="space-y-3">
+                        <!-- Se inyectan dinámicamente -->
+                    </div>
+                </section>
+
+                <!-- BARRA DE PROGRESO VISUAL: RATIO DE TIEMPO (PUERTO VS NAVEGACIÓN) -->
+                <section class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-700 pb-4">
+                        <div>
+                            <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                                <span>⏱️ Distribución de Tiempo Operativo (Puerto vs Navegación)</span>
+                            </h2>
+                            <p class="text-xs text-slate-400">
+                                Análisis visual de exposición a puerto (Port Days) frente a días efectivos de mar (Sea Days).
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-4 text-xs font-semibold">
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>
+                                <span class="text-slate-300">Días en Puerto: <span id="label-port-days-count" class="text-amber-400">0</span> d (<span id="label-port-pct" class="text-amber-400">0%</span>)</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-3 h-3 rounded-full bg-indigo-500 inline-block"></span>
+                                <span class="text-slate-300">Días Navegando: <span id="label-sea-days-count" class="text-indigo-400">0</span> d (<span id="label-sea-pct" class="text-indigo-400">0%</span>)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Contenedor de la barra de progreso dual -->
+                    <div class="space-y-2">
+                        <div class="w-full bg-slate-900 h-6 rounded-full overflow-hidden flex border border-slate-700 shadow-inner">
+                            <div id="bar-port" class="bg-amber-500 h-full text-[11px] font-extrabold text-slate-950 flex items-center justify-center transition-all duration-500" style="width: 50%;">
+                                50% Puerto
+                            </div>
+                            <div id="bar-sea" class="bg-indigo-600 h-full text-[11px] font-extrabold text-white flex items-center justify-center transition-all duration-500" style="width: 50%;">
+                                50% Mar
+                            </div>
+                        </div>
+
+                        <!-- Leyenda e Interpretación de Diagnóstico de Tiempo -->
+                        <div id="diagnostico-tiempo" class="text-xs text-slate-400 bg-slate-900/60 p-3 rounded-xl border border-slate-700/50 flex items-center justify-between">
+                            <span>Cargando análisis de ratio de tiempo...</span>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </div>
+
+        <!-- ========================================== -->
         <!-- MÓDULO 5: CUMPLIMIENTO CBAM                -->
         <!-- ========================================== -->
         <div id="view-cbam" class="view-section absolute inset-0 overflow-y-auto p-6 scroll-smooth bg-[#F8FAFC]">
@@ -22482,6 +22749,7 @@
         const PRIMARY_MODULES = [
             { id: 'map', label: 'Mapa' },
             { id: 'estimator', label: 'Calculadora' },
+            { id: 'decisiones', label: 'Decisiones' },
             { id: 'ais', label: 'Densidad' },
             { id: 'matching', label: 'Coincidencia' },
             { id: 'gencon', label: 'Editor' },
@@ -23158,6 +23426,14 @@
             if (tabId === 'cbam') {
                 syncCBAMModuleFromCalculator();
                 updateCBAMModuleView();
+            }
+
+            if (tabId === 'decisiones') {
+                if (typeof window.syncDecisionesFromCalculator === 'function') {
+                    window.syncDecisionesFromCalculator();
+                } else if (typeof window.generarAuditoriaOperativa === 'function') {
+                    window.generarAuditoriaOperativa(window.estadoInicialDecisiones);
+                }
             }
 
             if (tabId === 'fcl' && typeof updateFCLQuote === 'function') {
@@ -29969,6 +30245,474 @@
                 return null;
             }
         }
+
+        /**
+         * MÓDULO DECISIONES - SISTEMA DE SOPORTE DE DECISIONES (DSS)
+         */
+        const estadoInicialDecisiones = Object.freeze({
+            pol: 'Rotterdam',
+            pod: 'Houston',
+            cargoQty: 50000,
+            commodity: 'Siderúrgico / Carga General',
+            laycanDaysLeft: 10,
+            estimatedVoyageDays: 8,
+            loadRate: 5000,
+            portDays: 10,
+            seaDays: 8,
+            fleteEstimado: 250000,
+            breakEven: 210000
+        });
+        window.estadoInicialDecisiones = estadoInicialDecisiones;
+
+        function syncDecisionesFromCalculator() {
+            try {
+                const pol = document.getElementById('port-pol')?.value || document.getElementById('map-port-pol')?.value || '';
+                const pod = document.getElementById('port-pod')?.value || document.getElementById('map-port-pod')?.value || '';
+                const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
+                const commodity = document.getElementById('cargo-type-manual')?.value ? (window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value) || '') : '';
+                const laycanDaysLeft = parseFloat(document.getElementById('laycan-dias-libres')?.value) || 0;
+                const loadRate = parseFloat(document.getElementById('rate-load')?.value) || parseFloat(document.getElementById('load-rate')?.value) || 0;
+                const portDays = parseFloat(document.getElementById('shadow-port-days')?.value) || 0;
+                const seaDays = parseFloat(document.getElementById('shadow-sea-days')?.value) || 0;
+                const estimatedVoyageDays = seaDays || 0;
+                const fleteEstimado = parseFloat(document.getElementById('freight-sell')?.value) || parseFloat(document.getElementById('selling-freight')?.value) || 0;
+                const breakEvenText = document.getElementById('res-cost-base-break-even')?.textContent || '';
+                const breakEvenParsed = parseFloat(breakEvenText.replace(/[^0-9.]/g, '')) || 0;
+                const breakEven = parseFloat(document.getElementById('shadow-break-even-freight')?.value) || breakEvenParsed || 0;
+
+                if (pol && document.getElementById('input-pol')) document.getElementById('input-pol').value = pol;
+                if (pod && document.getElementById('input-pod')) document.getElementById('input-pod').value = pod;
+                if (cargoQty && document.getElementById('input-cargoQty')) document.getElementById('input-cargoQty').value = cargoQty;
+                if (commodity && document.getElementById('input-commodity')) document.getElementById('input-commodity').value = commodity;
+                if (laycanDaysLeft && document.getElementById('input-laycanDaysLeft')) document.getElementById('input-laycanDaysLeft').value = laycanDaysLeft;
+                if (loadRate && document.getElementById('input-loadRate')) document.getElementById('input-loadRate').value = loadRate;
+                if (portDays && document.getElementById('input-portDays')) document.getElementById('input-portDays').value = portDays;
+                if (seaDays && document.getElementById('input-seaDays')) document.getElementById('input-seaDays').value = seaDays;
+                if (estimatedVoyageDays && document.getElementById('input-estimatedVoyageDays')) document.getElementById('input-estimatedVoyageDays').value = estimatedVoyageDays;
+                if (fleteEstimado && document.getElementById('input-fleteEstimado')) document.getElementById('input-fleteEstimado').value = fleteEstimado;
+                if (breakEven && document.getElementById('input-breakEven')) document.getElementById('input-breakEven').value = breakEven;
+            } catch (error) {
+                // Silencioso
+            }
+
+            actualizarDesdeFormulario();
+        }
+        window.syncDecisionesFromCalculator = syncDecisionesFromCalculator;
+
+        function generarAuditoriaOperativa(estado) {
+            if (!estado) return;
+
+            const {
+                pol = 'Rotterdam',
+                pod = 'Houston',
+                cargoQty = 0,
+                commodity = 'Carga General',
+                laycanDaysLeft = 0,
+                estimatedVoyageDays = 0,
+                loadRate = 1,
+                portDays = 0,
+                seaDays = 0,
+                fleteEstimado = 0,
+                breakEven = 0
+            } = estado;
+
+            const summaryPol = document.getElementById('summary-pol');
+            const summaryPod = document.getElementById('summary-pod');
+            const summaryQty = document.getElementById('summary-qty');
+            const summaryCommodity = document.getElementById('summary-commodity');
+
+            if (summaryPol) summaryPol.textContent = pol;
+            if (summaryPod) summaryPod.textContent = pod;
+            if (summaryQty) summaryQty.textContent = `${Number(cargoQty).toLocaleString()} MT`;
+            if (summaryCommodity) summaryCommodity.textContent = commodity;
+
+            const recomendaciones = [];
+
+            // REGLA 1: LAYCAN (SEMÁFORO ROJO / RIESGO CRÍTICO)
+            const laycanBuffer = laycanDaysLeft - estimatedVoyageDays;
+            const esLaycanPeligroso = laycanBuffer < 3;
+
+            const cardLaycan = document.getElementById('card-laycan');
+            const badgeLaycan = document.getElementById('badge-laycan-status');
+            const titleLaycan = document.getElementById('laycan-title');
+            const descLaycan = document.getElementById('laycan-desc');
+
+            const valLaycanLeft = document.getElementById('val-laycan-left');
+            const valLaycanVoyage = document.getElementById('val-laycan-voyage');
+            const valLaycanBuffer = document.getElementById('val-laycan-buffer');
+
+            if (valLaycanLeft) valLaycanLeft.textContent = `${laycanDaysLeft} días`;
+            if (valLaycanVoyage) valLaycanVoyage.textContent = `${estimatedVoyageDays} días`;
+            if (valLaycanBuffer) valLaycanBuffer.textContent = `${laycanBuffer} días`;
+
+            if (cardLaycan) {
+                if (esLaycanPeligroso) {
+                    cardLaycan.className = 'bg-slate-800 border border-slate-700 border-l-4 border-l-red-500 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4';
+                    if (badgeLaycan) {
+                        badgeLaycan.className = 'px-2 py-0.5 rounded text-[10px] font-extrabold bg-red-950 text-red-300 border border-red-800';
+                        badgeLaycan.textContent = 'ALERTA CRÍTICA';
+                    }
+                    if (titleLaycan) titleLaycan.textContent = 'Margen de Laycan Peligroso';
+                    if (descLaycan) descLaycan.textContent = `El tiempo restante para vencimiento de Laycan (${laycanDaysLeft}d) ofrece un margen insuficiente frente a los días de navegación estimados (${estimatedVoyageDays}d).`;
+                    if (valLaycanBuffer) valLaycanBuffer.className = 'font-bold text-red-400';
+
+                    recomendaciones.push({
+                        tipo: 'critico',
+                        icono: '🔴',
+                        titulo: 'Riesgo de Cancelación de Laycan (Cancelling Date)',
+                        texto: 'Solicitar al fletador ampliar la fecha de cancelación (cancelling date) al menos 3 días por riesgo en buque de carga general.',
+                        accion: 'Negociar Extensión de Laycan'
+                    });
+                } else {
+                    cardLaycan.className = 'bg-slate-800 border border-slate-700 border-l-4 border-l-emerald-500 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4';
+                    if (badgeLaycan) {
+                        badgeLaycan.className = 'px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-950 text-emerald-300 border border-emerald-800';
+                        badgeLaycan.textContent = 'SEGURO';
+                    }
+                    if (titleLaycan) titleLaycan.textContent = 'Margen de Laycan Seguro';
+                    if (descLaycan) descLaycan.textContent = `Buffer holgado de ${laycanBuffer} días entre tiempo de llegada estimado y vencimiento de la ventana de Laycan.`;
+                    if (valLaycanBuffer) valLaycanBuffer.className = 'font-bold text-emerald-400';
+
+                    recomendaciones.push({
+                        tipo: 'seguro',
+                        icono: '🟢',
+                        titulo: 'Ventana de Laycan Protegida',
+                        texto: 'Mantener la programación de zarpe actual y notificar la fecha estimada de llegada (ETA) al consignatario para emitir NOR puntual.',
+                        accion: 'Confirmar ETA a Agente'
+                    });
+                }
+            }
+
+            // REGLA 2: RITMO DE CARGA (SEMÁFORO AMARILLO / ADVERTENCIA)
+            const diasCargaTeoricos = loadRate > 0 ? cargoQty / loadRate : 99;
+            const esRitmoIneficiente = diasCargaTeoricos > 8;
+            const loadRateRequerido = Math.ceil(cargoQty / 8);
+
+            const cardLoadrate = document.getElementById('card-loadrate');
+            const badgeLoadrate = document.getElementById('badge-loadrate-status');
+            const titleLoadrate = document.getElementById('loadrate-title');
+            const descLoadrate = document.getElementById('loadrate-desc');
+
+            const valLoadrateCurrent = document.getElementById('val-loadrate-current');
+            const valLoadrateDays = document.getElementById('val-loadrate-days');
+            const valLoadrateRequired = document.getElementById('val-loadrate-required');
+
+            if (valLoadrateCurrent) valLoadrateCurrent.textContent = `${Number(loadRate).toLocaleString()} MT/día`;
+            if (valLoadrateDays) valLoadrateDays.textContent = `${diasCargaTeoricos.toFixed(1)} días`;
+            if (valLoadrateRequired) valLoadrateRequired.textContent = `${Number(loadRateRequerido).toLocaleString()} MT/día`;
+
+            if (cardLoadrate) {
+                if (esRitmoIneficiente) {
+                    cardLoadrate.className = 'bg-slate-800 border border-slate-700 border-l-4 border-l-amber-500 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4';
+                    if (badgeLoadrate) {
+                        badgeLoadrate.className = 'px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-950 text-amber-300 border border-amber-800';
+                        badgeLoadrate.textContent = 'ADVERTENCIA';
+                    }
+                    if (titleLoadrate) titleLoadrate.textContent = 'Ritmo de carga ineficiente / Riesgo de Demoras';
+                    if (descLoadrate) descLoadrate.textContent = `La tasa de carga pactada (${loadRate} MT/día) requiere ${diasCargaTeoricos.toFixed(1)} días operativos, superando el umbral de 8 días.`;
+
+                    recomendaciones.push({
+                        tipo: 'advertencia',
+                        icono: '🟡',
+                        titulo: 'Plancha Ineficiente y Exposición a Demurrage',
+                        texto: `Exigir un Load Rate superior a ${loadRateRequerido.toLocaleString()} MT/día o negociar términos de Demurrage más altos para compensar plancha.`,
+                        accion: 'Aumentar Load Rate o Tarifa Demurrage'
+                    });
+                } else {
+                    cardLoadrate.className = 'bg-slate-800 border border-slate-700 border-l-4 border-l-emerald-500 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4';
+                    if (badgeLoadrate) {
+                        badgeLoadrate.className = 'px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-950 text-emerald-300 border border-emerald-800';
+                        badgeLoadrate.textContent = 'ÓPTIMO';
+                    }
+                    if (titleLoadrate) titleLoadrate.textContent = 'Ritmo de Carga Eficiente';
+                    if (descLoadrate) descLoadrate.textContent = `Operación de carga proyectada en ${diasCargaTeoricos.toFixed(1)} días, dentro del estándar de fluidez de puerto.`;
+
+                    recomendaciones.push({
+                        tipo: 'seguro',
+                        icono: '🟢',
+                        titulo: 'Operación Portuaria Agilizada',
+                        texto: 'Tasa de carga adecuada. Proceder con el cierre de la póliza de flete asegurando cláusula Weather Working Days (WWD).',
+                        accion: 'Validar Cláusula Laytime'
+                    });
+                }
+            }
+
+            // REGLA 3: SALUD FINANCIERA (SEMÁFORO VERDE / SEGURO)
+            const margenBruto = fleteEstimado > 0 ? ((fleteEstimado - breakEven) / fleteEstimado) * 100 : 0;
+            const esRentable = margenBruto > 10;
+
+            const cardFinancial = document.getElementById('card-financial');
+            const badgeFinancial = document.getElementById('badge-financial-status');
+            const titleFinancial = document.getElementById('financial-title');
+            const descFinancial = document.getElementById('financial-desc');
+
+            const valFinancialFlete = document.getElementById('val-financial-flete');
+            const valFinancialBreakeven = document.getElementById('val-financial-breakeven');
+            const valFinancialMargin = document.getElementById('val-financial-margin');
+
+            if (valFinancialFlete) valFinancialFlete.textContent = `$${Number(fleteEstimado).toLocaleString()}`;
+            if (valFinancialBreakeven) valFinancialBreakeven.textContent = `$${Number(breakEven).toLocaleString()}`;
+            if (valFinancialMargin) valFinancialMargin.textContent = `${margenBruto.toFixed(1)}%`;
+
+            if (cardFinancial) {
+                if (esRentable) {
+                    cardFinancial.className = 'bg-slate-800 border border-slate-700 border-l-4 border-l-emerald-500 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4';
+                    if (badgeFinancial) {
+                        badgeFinancial.className = 'px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-950 text-emerald-300 border border-emerald-800';
+                        badgeFinancial.textContent = 'RENTABLE';
+                    }
+                    if (titleFinancial) titleFinancial.textContent = `Rentabilidad Aprobada. Margen bruto del ${margenBruto.toFixed(1)}%.`;
+                    if (descFinancial) descFinancial.textContent = `El flete cotizado ($${fleteEstimado.toLocaleString()}) proporciona una cobertura adecuada sobre el Break-Even ($${breakEven.toLocaleString()}).`;
+                    if (valFinancialMargin) valFinancialMargin.className = 'font-bold text-emerald-400';
+
+                    recomendaciones.push({
+                        tipo: 'seguro',
+                        icono: '🟢',
+                        titulo: 'Salud Financiera Validada',
+                        texto: `Rentabilidad aprobada con un margen bruto del ${margenBruto.toFixed(1)}%. Se aconseja incorporar cláusula BAF (Bunker Adjustment Factor) para proteger el margen.`,
+                        accion: 'Firmar CP (Charter Party)'
+                    });
+                } else {
+                    cardFinancial.className = 'bg-slate-800 border border-slate-700 border-l-4 border-l-red-500 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4';
+                    if (badgeFinancial) {
+                        badgeFinancial.className = 'px-2 py-0.5 rounded text-[10px] font-extrabold bg-red-950 text-red-300 border border-red-800';
+                        badgeFinancial.textContent = 'MARGEN BAJO';
+                    }
+                    if (titleFinancial) titleFinancial.textContent = `Alerta Financiera: Margen bruto de ${margenBruto.toFixed(1)}%`;
+                    if (descFinancial) descFinancial.textContent = `El flete cotizado está demasiado próximo al punto de equilibrio ($${breakEven.toLocaleString()}), exponiendo el viaje a pérdidas.`;
+                    if (valFinancialMargin) valFinancialMargin.className = 'font-bold text-red-400';
+
+                    recomendaciones.push({
+                        tipo: 'critico',
+                        icono: '⚠️',
+                        titulo: 'Riesgo de Margen Negativo / Ineficiencia Comercial',
+                        texto: `El margen bruto actual (${margenBruto.toFixed(1)}%) es inferior al 10% mínimo recomendado. Incrementar la tarifa de flete a mínimo $${Math.ceil(breakEven / 0.9).toLocaleString()} para asegurar rentabilidad.`,
+                        accion: 'Aumentar Tarifa de Flete'
+                    });
+                }
+            }
+
+            renderizarRecomendaciones(recomendaciones);
+            renderizarRatioTiempo(portDays, seaDays);
+        }
+        window.generarAuditoriaOperativa = generarAuditoriaOperativa;
+
+        function renderizarRecomendaciones(lista) {
+            const contenedor = document.getElementById('contenedor-recomendaciones');
+            if (!contenedor) return;
+            contenedor.innerHTML = '';
+
+            if (!lista || lista.length === 0) {
+                contenedor.innerHTML = '<p class="text-xs text-slate-400">Sin recomendaciones activas.</p>';
+                return;
+            }
+
+            lista.forEach(rec => {
+                let borderClass = 'border-slate-700 bg-slate-900/60';
+                let tagBg = 'bg-slate-800 text-slate-300';
+
+                if (rec.tipo === 'critico') {
+                    borderClass = 'border-red-900/50 bg-red-950/20';
+                    tagBg = 'bg-red-900/50 text-red-200 border border-red-700/50';
+                } else if (rec.tipo === 'advertencia') {
+                    borderClass = 'border-amber-900/50 bg-amber-950/20';
+                    tagBg = 'bg-amber-900/50 text-amber-200 border border-amber-700/50';
+                } else if (rec.tipo === 'seguro') {
+                    borderClass = 'border-emerald-900/50 bg-emerald-950/20';
+                    tagBg = 'bg-emerald-900/50 text-emerald-200 border border-emerald-700/50';
+                }
+
+                const itemHtml = `
+                    <div class="p-4 rounded-xl border ${borderClass} flex flex-col md:flex-row md:items-center justify-between gap-3 transition-all hover:border-slate-600">
+                        <div class="flex items-start gap-3">
+                            <span class="text-xl leading-none select-none">${rec.icono}</span>
+                            <div class="space-y-1">
+                                <h4 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+                                    ${rec.titulo}
+                                </h4>
+                                <p class="text-xs text-slate-300 leading-relaxed">
+                                    ${rec.texto}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="shrink-0 self-end md:self-center">
+                            <span class="px-3 py-1.5 rounded-lg text-xs font-bold ${tagBg} inline-flex items-center gap-1">
+                                💡 ${rec.accion}
+                            </span>
+                        </div>
+                    </div>
+                `;
+                contenedor.innerHTML += itemHtml;
+            });
+        }
+        window.renderizarRecomendaciones = renderizarRecomendaciones;
+
+        function renderizarRatioTiempo(portDays, seaDays) {
+            const pDays = Math.max(0, Number(portDays) || 0);
+            const sDays = Math.max(0, Number(seaDays) || 0);
+            const totalDays = pDays + sDays;
+
+            let portPct = 0;
+            let seaPct = 0;
+
+            if (totalDays > 0) {
+                portPct = (pDays / totalDays) * 100;
+                seaPct = (sDays / totalDays) * 100;
+            }
+
+            const labelPortDaysCount = document.getElementById('label-port-days-count');
+            const labelPortPct = document.getElementById('label-port-pct');
+            const labelSeaDaysCount = document.getElementById('label-sea-days-count');
+            const labelSeaPct = document.getElementById('label-sea-pct');
+
+            if (labelPortDaysCount) labelPortDaysCount.textContent = pDays;
+            if (labelPortPct) labelPortPct.textContent = `${portPct.toFixed(1)}%`;
+            if (labelSeaDaysCount) labelSeaDaysCount.textContent = sDays;
+            if (labelSeaPct) labelSeaPct.textContent = `${seaPct.toFixed(1)}%`;
+
+            const barPort = document.getElementById('bar-port');
+            const barSea = document.getElementById('bar-sea');
+
+            if (barPort) {
+                barPort.style.width = `${portPct}%`;
+                barPort.textContent = portPct > 12 ? `${portPct.toFixed(0)}% Puerto` : '';
+            }
+
+            if (barSea) {
+                barSea.style.width = `${seaPct}%`;
+                barSea.textContent = seaPct > 12 ? `${seaPct.toFixed(0)}% Mar` : '';
+            }
+
+            const diagElem = document.getElementById('diagnostico-tiempo');
+            if (diagElem) {
+                if (portPct > 50) {
+                    diagElem.innerHTML = `
+                        <span class="flex items-center gap-2 text-amber-300">
+                            ⚠️ <strong>Atención:</strong> Exposición portuaria elevada (${portPct.toFixed(1)}%). El buque pasa más tiempo en puerto que navegando, aumentando costos operativos y riesgo de congestión.
+                        </span>
+                    `;
+                } else {
+                    diagElem.innerHTML = `
+                        <span class="flex items-center gap-2 text-emerald-300">
+                            🟢 <strong>Ratio Óptimo:</strong> Mayor proporción de tiempo en navegación marítima (${seaPct.toFixed(1)}%). Maximiza la eficiencia del buque.
+                        </span>
+                    `;
+                }
+            }
+        }
+        window.renderizarRatioTiempo = renderizarRatioTiempo;
+
+        function actualizarDesdeFormulario() {
+            const inputPol = document.getElementById('input-pol');
+            const inputPod = document.getElementById('input-pod');
+            const inputCargoQty = document.getElementById('input-cargoQty');
+            const inputCommodity = document.getElementById('input-commodity');
+            const inputLaycanDaysLeft = document.getElementById('input-laycanDaysLeft');
+            const inputEstimatedVoyageDays = document.getElementById('input-estimatedVoyageDays');
+            const inputLoadRate = document.getElementById('input-loadRate');
+            const inputPortDays = document.getElementById('input-portDays');
+            const inputSeaDays = document.getElementById('input-seaDays');
+            const inputFleteEstimado = document.getElementById('input-fleteEstimado');
+            const inputBreakEven = document.getElementById('input-breakEven');
+
+            const estado = {
+                pol: inputPol ? inputPol.value : 'Rotterdam',
+                pod: inputPod ? inputPod.value : 'Houston',
+                cargoQty: inputCargoQty ? Number(inputCargoQty.value) : 50000,
+                commodity: inputCommodity ? inputCommodity.value : 'Siderúrgico / Carga General',
+                laycanDaysLeft: inputLaycanDaysLeft ? Number(inputLaycanDaysLeft.value) : 10,
+                estimatedVoyageDays: inputEstimatedVoyageDays ? Number(inputEstimatedVoyageDays.value) : 8,
+                loadRate: inputLoadRate ? Number(inputLoadRate.value) : 5000,
+                portDays: inputPortDays ? Number(inputPortDays.value) : 10,
+                seaDays: inputSeaDays ? Number(inputSeaDays.value) : 8,
+                fleteEstimado: inputFleteEstimado ? Number(inputFleteEstimado.value) : 250000,
+                breakEven: inputBreakEven ? Number(inputBreakEven.value) : 210000
+            };
+
+            generarAuditoriaOperativa(estado);
+        }
+        window.actualizarDesdeFormulario = actualizarDesdeFormulario;
+
+        function toggleParametros() {
+            const panel = document.getElementById('panel-parametros');
+            if (panel) panel.classList.toggle('hidden');
+        }
+        window.toggleParametros = toggleParametros;
+
+        function cargarEscenario(tipo) {
+            let config = { ...estadoInicialDecisiones };
+
+            if (tipo === 'riesgo') {
+                config = {
+                    pol: 'Bilbao',
+                    pod: 'New Orleans',
+                    cargoQty: 45000,
+                    commodity: 'Chatarra / Bulk Steel',
+                    laycanDaysLeft: 6,
+                    estimatedVoyageDays: 5,
+                    loadRate: 4000,
+                    portDays: 12,
+                    seaDays: 8,
+                    fleteEstimado: 190000,
+                    breakEven: 185000
+                };
+            } else if (tipo === 'equilibrado') {
+                config = {
+                    pol: 'Valencia',
+                    pod: 'Santos',
+                    cargoQty: 30000,
+                    commodity: 'Azulejos / Productos Cerámicos',
+                    laycanDaysLeft: 14,
+                    estimatedVoyageDays: 9,
+                    loadRate: 3000,
+                    portDays: 10,
+                    seaDays: 12,
+                    fleteEstimado: 310000,
+                    breakEven: 260000
+                };
+            } else if (tipo === 'optimo') {
+                config = {
+                    pol: 'Rotterdam',
+                    pod: 'Houston',
+                    cargoQty: 60000,
+                    commodity: 'Bobinas de Acero',
+                    laycanDaysLeft: 18,
+                    estimatedVoyageDays: 10,
+                    loadRate: 10000,
+                    portDays: 6,
+                    seaDays: 10,
+                    fleteEstimado: 450000,
+                    breakEven: 360000
+                };
+            }
+
+            const inputPol = document.getElementById('input-pol');
+            const inputPod = document.getElementById('input-pod');
+            const inputCargoQty = document.getElementById('input-cargoQty');
+            const inputCommodity = document.getElementById('input-commodity');
+            const inputLaycanDaysLeft = document.getElementById('input-laycanDaysLeft');
+            const inputEstimatedVoyageDays = document.getElementById('input-estimatedVoyageDays');
+            const inputLoadRate = document.getElementById('input-loadRate');
+            const inputPortDays = document.getElementById('input-portDays');
+            const inputSeaDays = document.getElementById('input-seaDays');
+            const inputFleteEstimado = document.getElementById('input-fleteEstimado');
+            const inputBreakEven = document.getElementById('input-breakEven');
+
+            if (inputPol) inputPol.value = config.pol;
+            if (inputPod) inputPod.value = config.pod;
+            if (inputCargoQty) inputCargoQty.value = config.cargoQty;
+            if (inputCommodity) inputCommodity.value = config.commodity;
+            if (inputLaycanDaysLeft) inputLaycanDaysLeft.value = config.laycanDaysLeft;
+            if (inputEstimatedVoyageDays) inputEstimatedVoyageDays.value = config.estimatedVoyageDays;
+            if (inputLoadRate) inputLoadRate.value = config.loadRate;
+            if (inputPortDays) inputPortDays.value = config.portDays;
+            if (inputSeaDays) inputSeaDays.value = config.seaDays;
+            if (inputFleteEstimado) inputFleteEstimado.value = config.fleteEstimado;
+            if (inputBreakEven) inputBreakEven.value = config.breakEven;
+
+            generarAuditoriaOperativa(config);
+        }
+        window.cargarEscenario = cargarEscenario;
 
         function handleCargoManualInput() {
             const options = arguments[0] || {};
@@ -52315,9 +53059,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 <span class="text-xs font-black uppercase tracking-wider text-slate-800">Checklist de Viaje</span>
                 <span id="hud-progress-badge" class="ml-1 text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 border border-slate-300">0/5</span>
             </div>
-            <button type="button" id="hud-toggle-btn" onclick="toggleHudCollapse(event)" class="text-slate-400 hover:text-slate-700 transition text-xs p-1" aria-label="Colapsar HUD">
-                <i id="hud-toggle-icon" class="fa-solid fa-chevron-down pointer-events-none"></i>
-            </button>
+            <div class="flex items-center gap-1">
+                <button type="button" id="hud-toggle-btn" onclick="toggleHudCollapse(event)" class="text-slate-400 hover:text-slate-700 transition text-xs p-1" aria-label="Colapsar HUD">
+                    <i id="hud-toggle-icon" class="fa-solid fa-chevron-down pointer-events-none"></i>
+                </button>
+                <button type="button" id="hud-close-btn" onclick="closeHudStepper(event)" class="text-slate-400 hover:text-red-600 transition text-xs p-1" aria-label="Cerrar Checklist" title="Cerrar Checklist">
+                    <i class="fa-solid fa-xmark pointer-events-none"></i>
+                </button>
+            </div>
         </div>
 
         <!-- Body / Checklist Steps -->
@@ -52351,6 +53100,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
     </div>
 
     <script>
+        function closeHudStepper(event) {
+            if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+            const hud = document.getElementById('validation-stepper-hud');
+            if (hud) {
+                hud.classList.add('hidden');
+            }
+        }
+
         function toggleHudCollapse() {
             const body = document.getElementById('hud-body');
             const toggleIcon = document.getElementById('hud-toggle-icon');
@@ -52575,6 +53332,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         window.validarProgresoViaje = validarProgresoViaje;
+        window.closeHudStepper = closeHudStepper;
         window.toggleHudCollapse = toggleHudCollapse;
         window.initDraggableHud = initDraggableHud;
 
