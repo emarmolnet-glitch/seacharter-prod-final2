@@ -62,6 +62,7 @@ function createForwardHeaders(req: Request, hasBody: boolean) {
   forwardHeaders.delete("connection");
   forwardHeaders.delete("content-length");
   forwardHeaders.delete("host");
+  forwardHeaders.delete("accept-encoding");
 
   if (hasBody && !forwardHeaders.has("content-type")) {
     forwardHeaders.set("content-type", "application/json");
@@ -126,7 +127,12 @@ export default async (req: Request) => {
     const upstreamResponse = await fetchPreservingMethod(targetUrl, req.method, forwardHeaders, body);
     const responseHeaders = new Headers(upstreamResponse.headers);
     responseHeaders.delete("content-length");
+    responseHeaders.delete("content-encoding");
+    responseHeaders.delete("transfer-encoding");
     responseHeaders.set("cache-control", "no-store");
+    if (!responseHeaders.has("content-type")) {
+      responseHeaders.set("content-type", "application/json; charset=utf-8");
+    }
 
     return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,
