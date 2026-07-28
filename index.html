@@ -7685,11 +7685,11 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 hidden">
                             <div class="input-group">
                                 <label id="label-vessel-draft" class="text-blue-400 flex items-center min-h-[28px]">Calado Máx / Max Draft (m)</label>
-                                <input type="number" step="any" id="vessel-draft" class="input-gc font-bold text-blue-300" value="12.5" oninput="runEngine(); syncCalculatorAndMatching('calculator');">
+                                <input type="number" step="any" id="vessel-draft" class="input-gc font-bold text-blue-300" value="0" placeholder="0" oninput="runEngine(); syncCalculatorAndMatching('calculator');">
                             </div>
                             <div class="input-group">
                                 <label id="label-vessel-loa" class="text-blue-400 flex items-center min-h-[28px]">Eslora Máx / Max LOA (m)</label>
-                                <input type="number" step="any" id="vessel-loa" class="input-gc font-bold text-blue-300" value="200" oninput="if(typeof debouncedAutoFillPDA==='function'){ debouncedAutoFillPDA('pol', false); debouncedAutoFillPDA('pod', false); } else if(typeof autoFillPDA==='function'){ autoFillPDA('pol', false); autoFillPDA('pod', false); } runEngine(); syncCalculatorAndMatching('calculator');">
+                                <input type="number" step="any" id="vessel-loa" class="input-gc font-bold text-blue-300" value="0" placeholder="0" oninput="if(typeof debouncedAutoFillPDA==='function'){ debouncedAutoFillPDA('pol', false); debouncedAutoFillPDA('pod', false); } else if(typeof autoFillPDA==='function'){ autoFillPDA('pol', false); autoFillPDA('pod', false); } runEngine(); syncCalculatorAndMatching('calculator');">
                             </div>
                         </div>
 
@@ -7855,20 +7855,20 @@
                                     <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                                         <div>
                                             <label id="label-gruas-swl-pol" for="gruas-swl-pol" class="block text-[10px] font-semibold text-slate-600 mb-0.5">SWL Grúa (MT)</label>
-                                            <input type="number" id="gruas-swl-pol" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="30" min="0" step="0.1" oninput="calcularRitmoGrua('pol')">
+                                            <input type="number" id="gruas-swl-pol" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="0.1" oninput="calcularRitmoGrua('pol')">
                                         </div>
                                         <div>
                                             <label for="gruas-tara-pol" class="block text-[10px] font-semibold text-slate-600 mb-0.5">Tara Accesorio (MT)</label>
-                                            <input type="number" id="gruas-tara-pol" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="12" min="0" step="0.1" oninput="calcularRitmoGrua('pol')">
+                                            <input type="number" id="gruas-tara-pol" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="0.1" oninput="calcularRitmoGrua('pol')">
                                         </div>
                                         <div>
                                             <label for="gruas-ciclos-pol" class="block text-[10px] font-semibold text-slate-600 mb-0.5">Ciclos/Hora</label>
-                                            <input type="number" id="gruas-ciclos-pol" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="15" min="0" step="1" oninput="calcularRitmoGrua('pol')">
+                                            <input type="number" id="gruas-ciclos-pol" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="1" oninput="calcularRitmoGrua('pol')">
                                         </div>
                                         <div>
                                             <div class="flex justify-between items-center mb-0.5">
                                                 <label for="gruas-eficiencia-num-pol" class="block text-[10px] font-semibold text-slate-600">Eficiencia (%)</label>
-                                                <input type="number" id="gruas-eficiencia-num-pol" class="input-gc font-bold text-slate-800 text-[11px] py-0 px-1 w-12 text-right" value="100" min="1" max="100" step="1" oninput="syncEficienciaGrua('pol', 'num')">
+                                                <input type="number" id="gruas-eficiencia-num-pol" class="input-gc font-bold text-slate-800 text-[11px] py-0 px-1 w-12 text-right" value="0" placeholder="0" min="1" max="100" step="1" oninput="syncEficienciaGrua('pol', 'num')">
                                             </div>
                                             <input type="range" id="gruas-eficiencia-slider-pol" class="w-full accent-blue-600 h-1.5 cursor-pointer mt-1" value="100" min="1" max="100" step="1" oninput="syncEficienciaGrua('pol', 'slider')">
                                         </div>
@@ -7899,20 +7899,20 @@
                                     <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                                         <div>
                                             <label id="label-gruas-swl-pod" for="gruas-swl-pod" class="block text-[10px] font-semibold text-slate-600 mb-0.5">SWL Grúa (MT)</label>
-                                            <input type="number" id="gruas-swl-pod" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="30" min="0" step="0.1" oninput="calcularRitmoGrua('pod')">
+                                            <input type="number" id="gruas-swl-pod" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="0.1" oninput="calcularRitmoGrua('pod')">
                                         </div>
                                         <div>
                                             <label for="gruas-tara-pod" class="block text-[10px] font-semibold text-slate-600 mb-0.5">Tara Accesorio (MT)</label>
-                                            <input type="number" id="gruas-tara-pod" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="12" min="0" step="0.1" oninput="calcularRitmoGrua('pod')">
+                                            <input type="number" id="gruas-tara-pod" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="0.1" oninput="calcularRitmoGrua('pod')">
                                         </div>
                                         <div>
                                             <label for="gruas-ciclos-pod" class="block text-[10px] font-semibold text-slate-600 mb-0.5">Ciclos/Hora</label>
-                                            <input type="number" id="gruas-ciclos-pod" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="15" min="0" step="1" oninput="calcularRitmoGrua('pod')">
+                                            <input type="number" id="gruas-ciclos-pod" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="1" oninput="calcularRitmoGrua('pod')">
                                         </div>
                                         <div>
                                             <div class="flex justify-between items-center mb-0.5">
                                                 <label for="gruas-eficiencia-num-pod" class="block text-[10px] font-semibold text-slate-600">Eficiencia (%)</label>
-                                                <input type="number" id="gruas-eficiencia-num-pod" class="input-gc font-bold text-slate-800 text-[11px] py-0 px-1 w-12 text-right" value="100" min="1" max="100" step="1" oninput="syncEficienciaGrua('pod', 'num')">
+                                                <input type="number" id="gruas-eficiencia-num-pod" class="input-gc font-bold text-slate-800 text-[11px] py-0 px-1 w-12 text-right" value="0" placeholder="0" min="1" max="100" step="1" oninput="syncEficienciaGrua('pod', 'num')">
                                             </div>
                                             <input type="range" id="gruas-eficiencia-slider-pod" class="w-full accent-blue-600 h-1.5 cursor-pointer mt-1" value="100" min="1" max="100" step="1" oninput="syncEficienciaGrua('pod', 'slider')">
                                         </div>
@@ -7927,7 +7927,7 @@
                                         <button type="button" id="btn-ritmo-manual-pol" onclick="setRitmoMode('manual', 'pol')" class="px-2 py-0.5 rounded-r-md bg-slate-200 text-slate-700 font-bold transition cursor-pointer" aria-pressed="false">Manual</button>
                                     </div>
                                 </div>
-                                <input type="number" id="rate-load" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="5000" step="any" oninput="marcarRitmoManual('pol')">
+                                <input type="number" id="rate-load" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="0" placeholder="0" step="any" oninput="marcarRitmoManual('pol')">
                                 <p id="rate-load-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
                                 <div id="delta-dias-badge-pol" class="hidden mt-1 text-[11px] font-bold"></div>
                                 <div id="rate-ref-helper-pol" class="mt-1 text-[10px] text-slate-500 font-medium leading-tight">
@@ -7943,7 +7943,7 @@
                                         <button type="button" id="btn-ritmo-manual-pod" onclick="setRitmoMode('manual', 'pod')" class="px-2 py-0.5 rounded-r-md bg-slate-200 text-slate-700 font-bold transition cursor-pointer" aria-pressed="false">Manual</button>
                                     </div>
                                 </div>
-                                <input type="number" id="rate-disch" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="5000" step="any" oninput="marcarRitmoManual('pod')">
+                                <input type="number" id="rate-disch" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="0" placeholder="0" step="any" oninput="marcarRitmoManual('pod')">
                                 <p id="rate-disch-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
                                 <div id="delta-dias-badge-pod" class="hidden mt-1 text-[11px] font-bold"></div>
                                 <div id="rate-ref-helper-pod" class="mt-1 text-[10px] text-slate-500 font-medium leading-tight">
@@ -7953,11 +7953,11 @@
                             </div>
                             <div id="contenedor-gruas-pol" class="input-group">
                                 <label id="label-ritmo-nominal-pol" class="text-action-required flex items-center min-h-[24px]">Nº Grúas POL</label>
-                                <input type="number" id="ritmo_nominal_pol" class="input-gc action-required-field text-action-required font-bold" value="1" min="1" step="1" required oninput="marcarGruasManual('pol')">
+                                <input type="number" id="ritmo_nominal_pol" class="input-gc action-required-field text-action-required font-bold" value="0" placeholder="0" min="0" step="1" required oninput="marcarGruasManual('pol')">
                             </div>
                             <div id="contenedor-gruas-pod" class="input-group">
                                 <label id="label-ritmo-nominal-pod" class="text-action-required flex items-center min-h-[24px]">Nº Grúas POD</label>
-                                <input type="number" id="ritmo_nominal_pod" class="input-gc action-required-field text-action-required font-bold" value="1" min="1" step="1" required oninput="marcarGruasManual('pod')">
+                                <input type="number" id="ritmo_nominal_pod" class="input-gc action-required-field text-action-required font-bold" value="0" placeholder="0" min="0" step="1" required oninput="marcarGruasManual('pod')">
                             </div>
                         </div>
 
@@ -8219,7 +8219,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div class="input-group relative">
                                 <label id="label-opex-daily" class="text-orange-400">OPEX Fijo Diario ($)</label>
-                                <input type="number" id="opex-daily" class="input-gc font-bold text-orange-300" value="2800" step="any" oninput="runEngine()">
+                                <input type="number" id="opex-daily" class="input-gc font-bold text-orange-300" value="0" placeholder="0" step="any" oninput="runEngine()">
                                 <div id="opex-auto-estimated-badge" class="hidden mt-1 inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-1 text-[10px] font-semibold text-[#1d4ed8] shadow-sm">
                                     <i class="fa-solid fa-wand-magic-sparkles text-blue-500"></i>
                                     <span>Autocalculado por IA</span>
@@ -8229,7 +8229,7 @@
                             <div class="input-group">
                                 <label id="label-pda-pol" class="text-emerald-400 font-bold">Gastos PDA POL ($)</label>
 	                                <div class="flex gap-1">
-	                                    <input type="number" id="pda-pol" class="input-gc required-use-highlight text-emerald-300 font-bold" value="8675" step="any" oninput="runEngine()">
+	                                    <input type="number" id="pda-pol" class="input-gc required-use-highlight text-emerald-300 font-bold" value="0" placeholder="0" step="any" oninput="runEngine()">
 	                                    <button id="btn-estimate-pda-pol" onclick="autoFillPDA('pol')" class="required-use-highlight bg-slate-800 text-slate-400 px-2 rounded hover:text-white" title="Consultar Data Bridge o estimar algorítmicamente por DWT"><i class="fa-solid fa-rotate-right"></i></button>
 	                                </div>
 	                                <div id="pda-pol-status" class="hidden mt-1 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em]" role="status" aria-live="polite"></div>
@@ -8237,7 +8237,7 @@
 	                            <div class="input-group">
 	                                <label id="label-pda-pod" class="text-emerald-400 font-bold">Gastos PDA POD ($)</label>
 	                                <div class="flex gap-1">
-	                                    <input type="number" id="pda-pod" class="input-gc required-use-highlight text-emerald-300 font-bold" value="10675" step="any" oninput="runEngine()">
+	                                    <input type="number" id="pda-pod" class="input-gc required-use-highlight text-emerald-300 font-bold" value="0" placeholder="0" step="any" oninput="runEngine()">
 	                                    <button id="btn-estimate-pda-pod" onclick="autoFillPDA('pod')" class="required-use-highlight bg-slate-800 text-slate-400 px-2 rounded hover:text-white" title="Consultar Data Bridge o estimar algorítmicamente por DWT"><i class="fa-solid fa-rotate-right"></i></button>
 	                                </div>
 	                                <div id="pda-pod-status" class="hidden mt-1 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em]" role="status" aria-live="polite"></div>
@@ -8357,7 +8357,7 @@
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                                 <div>
                                     <label class="text-slate-600 font-black uppercase block mb-1">Laycan días libres</label>
-                                    <input type="number" step="0.25" min="0" id="laycan-dias-libres" class="input-gc bg-white text-slate-900 border-slate-300 font-bold" value="3" oninput="runEngine()">
+                                    <input type="number" step="0.25" min="0" id="laycan-dias-libres" class="input-gc bg-white text-slate-900 border-slate-300 font-bold" value="0" placeholder="0" oninput="runEngine()">
                                 </div>
                                 <div class="rounded-lg border border-slate-200 bg-white p-3">
                                     <span class="block text-[10px] uppercase font-black text-slate-500">Impacto Riesgo</span>
@@ -14346,8 +14346,8 @@
                 cargoTypeCode: '100',
                 cargoTypeManual: 'Otros',
                 charterPartyStandard: 'GENCON',
-                marginOwner: DEFAULT_OWNER_MARGIN_PERCENT,
-                marginCharterer: DEFAULT_CHARTERER_MARGIN_PERCENT,
+                marginOwner: 0,
+                marginCharterer: 0,
                 spdBallast: 0,
                 spdLaden: 0,
                 portBallastCoordinates: null,
@@ -14363,13 +14363,19 @@
                 'price-port', 'opex-daily', 'pda-pol', 'pda-pod', 'stevedoring-costs', 'pda-misc',
                 'cargo-surcharge', 'input-trincaje', 'coste-maniobra-especial', 'dias-preparacion',
                 'delta-historico', 'factor-clima', 't-fondeo', 't-remolcadores', 'days-margin',
-                'freight-rate', 'freight-sell', 'comm-pct',
+                'freight-rate', 'freight-sell', 'comm-pct', 'margin-owner', 'margin-charterer',
                 'demurrage-rate', 'coa-num-embarques', 'coa-total-tm', 'target-margin',
-                'eu-carbon-price'
+                'eu-carbon-price', 'gruas-swl-pol', 'gruas-tara-pol', 'gruas-ciclos-pol', 'gruas-eficiencia-num-pol',
+                'gruas-swl-pod', 'gruas-tara-pod', 'gruas-ciclos-pod', 'gruas-eficiencia-num-pod',
+                'camion-tolva-capacidad-mt', 'camion-tolva-slots', 'cargo-sf',
+                'cost-plus-daily-opex', 'cost-plus-target-margin', 'cost-plus-days-sea', 'cost-plus-days-port',
+                'cost-plus-bunker-cost', 'cost-plus-port-costs', 'cost-plus-cargo-volume', 'cost-plus-contingency-days',
+                'inverse-days-sea', 'inverse-days-port', 'inverse-bunker-cost', 'inverse-port-costs', 'inverse-cargo-volume', 'inverse-bunker-daily-port',
+                'market-calibration-factor', 'dispatch-pct', 'laycan-dias-libres'
             ];
             zeroIds.forEach((id) => setInputValue(id, 0));
-            setInputValue('margin-owner', DEFAULT_OWNER_MARGIN_PERCENT);
-            setInputValue('margin-charterer', DEFAULT_CHARTERER_MARGIN_PERCENT);
+            setInputValue('margin-owner', 0);
+            setInputValue('margin-charterer', 0);
             [
                 'port-ballast', 'port-pol', 'port-pod', 'map-port-ballast', 'map-port-pol',
                 'map-port-pod', 'eta-radar', 'gc-laycan-date', 'gc-laycan-time', 'gc-cancel-date',
@@ -21552,7 +21558,7 @@
             'map-port-ballast', 'map-port-pol', 'map-port-pod'
         ];
         const NOMINATIM_SEARCH_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
-        const NOMINATIM_DEBOUNCE_MS = 700;
+        const NOMINATIM_DEBOUNCE_MS = 400;
         const NOMINATIM_CACHE_STORAGE_KEY = 'seacharter:nominatim-port-cache:v1';
         const NOMINATIM_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
         const NOMINATIM_CACHE_MAX_ENTRIES = 50;
@@ -21899,7 +21905,8 @@
 
         async function runUniversalPortSearch(input) {
             const query = input.value;
-            if (normalizePortSearchText(query).length < 2) {
+            const normalizedQuery = normalizePortSearchText(query);
+            if (normalizedQuery.length < 2) {
                 setPortSearchState(input, false);
                 closePortAutocomplete(input);
                 return;
@@ -21909,6 +21916,17 @@
             if (localResults.length > 0) {
                 setPortSearchState(input, false);
                 renderPortAutocomplete(input, localResults);
+                return;
+            }
+
+            const cacheKey = `${normalizedQuery}:8`;
+            const cachedResults = nominatimPortSearchCache.has(cacheKey)
+                ? nominatimPortSearchCache.get(cacheKey).map(result => ({ ...result }))
+                : readNominatimBrowserCache(cacheKey);
+            if (cachedResults) {
+                nominatimPortSearchCache.set(cacheKey, cachedResults.map(result => ({ ...result })));
+                setPortSearchState(input, false);
+                renderPortAutocomplete(input, cachedResults, cachedResults.length ? '' : 'Sin resultados para esta búsqueda.');
                 return;
             }
 
@@ -21947,25 +21965,13 @@
                 closePortAutocomplete(input);
                 return;
             }
-            const localResults = searchLocalWpiPorts(input.value);
-            if (localResults.length > 0) {
-                setPortSearchState(input, false);
-                renderPortAutocomplete(input, localResults);
-                return;
+            if (event.type === 'input') {
+                setPortSearchState(input, true);
+                const timer = setTimeout(() => runUniversalPortSearch(input), NOMINATIM_DEBOUNCE_MS);
+                portAutocompleteTimers.set(input, timer);
+            } else {
+                runUniversalPortSearch(input);
             }
-            const cacheKey = `${normalizedQuery}:8`;
-            const cachedResults = nominatimPortSearchCache.has(cacheKey)
-                ? nominatimPortSearchCache.get(cacheKey).map(result => ({ ...result }))
-                : readNominatimBrowserCache(cacheKey);
-            if (cachedResults) {
-                nominatimPortSearchCache.set(cacheKey, cachedResults.map(result => ({ ...result })));
-                setPortSearchState(input, false);
-                renderPortAutocomplete(input, cachedResults, cachedResults.length ? '' : 'Sin resultados para esta búsqueda.');
-                return;
-            }
-            setPortSearchState(input, true);
-            const timer = setTimeout(() => runUniversalPortSearch(input), NOMINATIM_DEBOUNCE_MS);
-            portAutocompleteTimers.set(input, timer);
         }
 
         function bindUniversalPortAutocomplete(input) {
@@ -26094,65 +26100,268 @@
 	            };
 	        }
 
-	        function calculateGlobalPdaEstimate(dwt) {
-	            const cleanDwt = Number(dwt);
-	            if (!Number.isFinite(cleanDwt) || cleanDwt <= 0) return 0;
+	        const CargoMetricsMatrix = Object.freeze({
+	            "GRANEL_CINTA": {
+	                match: (categoria, metodo) => categoria === "Minerales y Construcción" && String(metodo || '').includes("Cinta"),
+	                uiHint: "Ref. Handysize/Panamax (Cintas): 12,000 - 144,000 TM/D",
+	                pdaPremium: 1.0 // Coste base estándar
+	            },
+	            "GRANEL_CUCHARA": {
+	                match: (categoria, metodo) => (categoria === "Minerales y Construcción" || categoria === "Biomasa y Combustibles Sólidos") && String(metodo || '').includes("Cuchara"),
+	                uiHint: "Ref. Handysize (Cucharas/Grabs): 4,000 - 12,000 TM/D",
+	                pdaPremium: 1.05 // Ligero recargo por limpieza/polvo
+	            },
+	            "SIDERURGICA": {
+	                match: (categoria, metodo) => categoria === "Carga Siderúrgica y Metales",
+	                uiHint: "Ref. Grúas (Bobinas/Tubos/Chatarra): 2,000 - 6,000 TM/D",
+	                pdaPremium: 1.25 // Recargo por trincaje, heavy lift y supervisión
+	            },
+	            "UNITIZADA": {
+	                match: (categoria, metodo) => categoria === "Carga Unitizada / Envasada" || categoria === "Carga Unitarizada / Envasada",
+	                uiHint: "Ref. Grúas (Big Bags/Pallets): 1,000 - 3,500 TM/D",
+	                pdaPremium: 1.35 // Recargo alto por tally clerks, manipulación manual y lentitud
+	            },
+	            "PROYECTO": {
+	                match: (categoria, metodo) => categoria === "Carga de Proyecto (Breakbulk)",
+	                uiHint: "Ref. Heavy Lift (Piezas Especiales): 500 - 1,500 TM/D",
+	                pdaPremium: 1.50 // Recargo máximo por ingenieros, grúas especiales y operativas complejas
+	            },
+	            "DEFAULT": {
+	                match: () => true,
+	                uiHint: "Ref. Estándar: 1,000 - 10,000 TM/D",
+	                pdaPremium: 1.10
+	            }
+	        });
 
-	            const anchors = [
-	                { dwt: 8250, amount: 14500 },
-	                { dwt: 17351, amount: 24500 },
-	                { dwt: 34743, amount: 42000 }
-	            ];
-	            const baseFee = 6500;
-	            const boundedDwt = Math.min(Math.max(cleanDwt, 3000), 60000);
+	        function resolveMethodLabel(metodo) {
+	            if (!metodo) return '';
+	            const metStr = String(metodo).trim();
+	            if (typeof METHOD_LABEL_BY_VALUE !== 'undefined' && METHOD_LABEL_BY_VALUE[metStr]) {
+	                return METHOD_LABEL_BY_VALUE[metStr];
+	            }
+	            return metStr;
+	        }
 
-	            if (boundedDwt <= anchors[0].dwt) {
-	                const variableRate = (anchors[0].amount - baseFee) / anchors[0].dwt;
-	                return Math.round(baseFee + (boundedDwt * variableRate));
+	        function getCargoMetricsEntry(categoria = '', metodo = '') {
+	            const catStr = String(categoria || '').trim();
+	            const resolvedMethod = resolveMethodLabel(metodo);
+	            const metStr = resolvedMethod || String(metodo || '').trim();
+
+	            for (const key of Object.keys(CargoMetricsMatrix)) {
+	                if (key === 'DEFAULT') continue;
+	                const entry = CargoMetricsMatrix[key];
+	                if (typeof entry.match === 'function' && entry.match(catStr, metStr)) {
+	                    return entry;
+	                }
+	            }
+	            return CargoMetricsMatrix.DEFAULT;
+	        }
+
+	        function updateCargoMetricsUi() {
+	            const categoria = document.getElementById('cargo-type')?.value || (window.State && window.State.cargoType) || '';
+
+	            // POL:
+	            const metodoPolVal = document.getElementById('metodo_carga')?.value || '';
+	            const metodoPolLabel = typeof getSelectedMethodLabel === 'function' ? getSelectedMethodLabel('pol') : metodoPolVal;
+	            const entryPol = getCargoMetricsEntry(categoria, metodoPolLabel || metodoPolVal);
+	            const helperPolEl = document.getElementById('rate-ref-helper-pol');
+	            if (helperPolEl && entryPol) {
+	                helperPolEl.innerHTML = `<div>${entryPol.uiHint}</div>`;
 	            }
 
-	            for (let index = 1; index < anchors.length; index += 1) {
-	                const lower = anchors[index - 1];
-	                const upper = anchors[index];
-	                if (boundedDwt <= upper.dwt) {
-	                    const tramoRate = (upper.amount - lower.amount) / (upper.dwt - lower.dwt);
-	                    return Math.round(lower.amount + ((boundedDwt - lower.dwt) * tramoRate));
+	            // POD:
+	            const metodoPodVal = document.getElementById('metodo_descarga_pod')?.value || '';
+	            const metodoPodLabel = typeof getSelectedMethodLabel === 'function' ? getSelectedMethodLabel('pod') : metodoPodVal;
+	            const entryPod = getCargoMetricsEntry(categoria, metodoPodLabel || metodoPodVal);
+	            const helperPodEl = document.getElementById('rate-ref-helper-pod');
+	            if (helperPodEl && entryPod) {
+	                helperPodEl.innerHTML = `<div>${entryPod.uiHint}</div>`;
+	            }
+	        }
+
+	        function getRegionalPdaMultiplier(portName, record) {
+	            const rawPort = String(portName || '').trim().toUpperCase();
+	            if (!rawPort) return 0.90;
+
+	            const REGIONAL_COST_INDEX = {
+	                'DZ': 0.65, 'MA': 0.65, 'TN': 0.65, 'EG': 0.65, // Norte de África
+	                'TR': 0.80, 'GR': 0.80, 'BG': 0.80, 'RO': 0.80, // Mediterráneo Oriental / Mar Negro
+	                'ES': 1.00, 'PT': 1.00, 'IT': 1.00, 'FR': 1.00, // Europa Sur / Península Ibérica (Benchmark 100%)
+	                'NL': 1.30, 'BE': 1.30, 'DE': 1.30, 'UK': 1.30, 'GB': 1.30, // Norte de Europa / ARA
+	                'US': 1.45, 'CA': 1.45,                         // Norteamérica
+	                'BR': 0.85, 'AR': 0.85, 'CO': 0.85,             // Sudamérica
+	                'CN': 0.75, 'IN': 0.75, 'VN': 0.75              // Asia
+	            };
+
+	            let code = '';
+	            if (typeof extractPortCountryIsoAlpha2 === 'function') {
+	                code = extractPortCountryIsoAlpha2(rawPort);
+	            }
+	            if (!code) {
+	                const matchParentheses = rawPort.match(/[\(\[]\s*([A-Z]{2})\s*[\)\]]/);
+	                if (matchParentheses) code = matchParentheses[1];
+	            }
+	            if (!code) {
+	                const prefix = rawPort.slice(0, 2);
+	                if (/^[A-Z]{2}$/.test(prefix) && REGIONAL_COST_INDEX[prefix] !== undefined) {
+	                    code = prefix;
 	                }
 	            }
 
-	            const largeShipRate = 0.78;
-	            return Math.round(anchors[2].amount + ((boundedDwt - anchors[2].dwt) * largeShipRate));
+	            if (code && REGIONAL_COST_INDEX[code] !== undefined) {
+	                return REGIONAL_COST_INDEX[code];
+	            }
+
+	            if (/(DZ|ALGERIA|ARGELIA|BEJAIA|ORAN|SKIKDA|ALGIERS|ARGEL|MA|MOROCCO|MARRUECOS|CASABLANCA|TANGER|TN|TUNISIA|TUNEZ|EG|EGYPT|EGIPTO|ALEXANDRIA|DAMIETTA)/.test(rawPort)) return 0.65;
+	            if (/(TR|TURKEY|TURQUIA|IZMIR|ISTANBUL|MERSIN|GR|GREECE|GRECIA|PIRAEUS|BG|BULGARIA|VARNA|RO|ROMANIA|RUMANIA|CONSTANTA)/.test(rawPort)) return 0.80;
+	            if (/(ES|SPAIN|ESPAÑA|ESPANA|VALENCIA|BARCELONA|BILBAO|ALGECIRAS|GIBRALTAR|PT|PORTUGAL|AVEIRO|LISBOA|SINES|IT|ITALY|ITALIA|GENOVA|RAVENNA|FR|FRANCE|FRANCIA|MARSEILLE)/.test(rawPort)) return 1.00;
+	            if (/(NL|NETHERLANDS|HOLANDA|ROTTERDAM|AMSTERDAM|BE|BELGIUM|BELGICA|ANTWERP|AMBERES|GHENT|DE|GERMANY|ALEMANIA|HAMBURG|BREMEN|UK|GB|UNITED KINGDOM|REINO UNIDO|LONDON)/.test(rawPort)) return 1.30;
+	            if (/(US|USA|UNITED STATES|HOUSTON|NEW YORK|CA|CANADA|MONTREAL|VANCOUVER)/.test(rawPort)) return 1.45;
+	            if (/(BR|BRAZIL|BRASIL|SANTOS|AR|ARGENTINA|BUENOS AIRES|CO|COLOMBIA|CARTAGENA)/.test(rawPort)) return 0.85;
+	            if (/(CN|CHINA|SHANGHAI|NINGBO|QINGDAO|IN|INDIA|MUMBAI|VN|VIETNAM|HO CHI MINH)/.test(rawPort)) return 0.75;
+
+	            return 0.90;
+	        }
+
+	        function getTonnageDuesRate(portName = '') {
+	            const rawPort = String(portName || '').trim().toUpperCase();
+	            if (!rawPort) return 0.30;
+
+	            let code = '';
+	            if (typeof extractPortCountryIsoAlpha2 === 'function') {
+	                code = extractPortCountryIsoAlpha2(rawPort);
+	            }
+	            if (!code) {
+	                const matchParentheses = rawPort.match(/[\(\[]\s*([A-Z]{2})\s*[\)\]]/);
+	                if (matchParentheses) code = matchParentheses[1];
+	            }
+	            if (!code) {
+	                const prefix = rawPort.slice(0, 2);
+	                if (/^[A-Z]{2}$/.test(prefix)) code = prefix;
+	            }
+
+	            if (code) {
+	                switch (code) {
+	                    case 'NO': case 'SE': case 'FI': case 'DK': case 'NL': case 'BE': case 'DE': case 'UK': case 'GB':
+	                        return 0.50; // Europa Norte / Escandinavia
+	                    case 'ES': case 'PT': case 'IT': case 'FR': case 'GR': case 'TR': case 'CY': case 'MT':
+	                        return 0.35; // Europa Sur / Mediterráneo
+	                    case 'DZ': case 'MA': case 'TN': case 'EG': case 'LY':
+	                        return 0.15; // Norte de África
+	                    case 'BR': case 'AR': case 'CO': case 'CL': case 'PE': case 'MX':
+	                        return 0.25; // América Latina
+	                    default:
+	                        break;
+	                }
+	            }
+
+	            if (/(DZ|ALGERIA|ARGELIA|BEJAIA|ORAN|SKIKDA|ALGIERS|ARGEL|MA|MOROCCO|MARRUECOS|CASABLANCA|TANGER|TN|TUNISIA|TUNEZ|EG|EGYPT|EGIPTO|ALEXANDRIA|DAMIETTA)/.test(rawPort)) return 0.15;
+	            if (/(ES|SPAIN|ESPAÑA|ESPANA|VALENCIA|BARCELONA|BILBAO|ALGECIRAS|GIBRALTAR|PT|PORTUGAL|AVEIRO|LISBOA|SINES|IT|ITALY|ITALIA|GENOVA|RAVENNA|FR|FRANCE|FRANCIA|MARSEILLE|GR|GREECE|GRECIA|TR|TURKEY|TURQUIA)/.test(rawPort)) return 0.35;
+	            if (/(NO|NORWAY|NORUEGA|SE|SWEDEN|SUECIA|FI|FINLAND|FINLANDIA|DK|DENMARK|DINAMARCA|NL|NETHERLANDS|HOLANDA|ROTTERDAM|BE|BELGIUM|BELGICA|ANTWERP|AMBERES|DE|GERMANY|ALEMANIA|HAMBURG|UK|GB|UNITED KINGDOM|REINO UNIDO)/.test(rawPort)) return 0.50;
+	            if (/(BR|BRAZIL|BRASIL|AR|ARGENTINA|CO|COLOMBIA|CL|CHILE|PE|PERU|MX|MEXICO)/.test(rawPort)) return 0.25;
+
+	            return 0.30;
+	        }
+
+	        function calculateGlobalPdaEstimate(dwtOrVesselData, portNameParam = '', portDaysParam = 3.0, gtParam = 0) {
+	            let dwt = 0;
+	            let inputGT = 0;
+	            let portName = '';
+	            let portDays = 3.0;
+	            let cargoCategory = '';
+	            let cargoMethod = '';
+
+	            if (typeof dwtOrVesselData === 'object' && dwtOrVesselData !== null) {
+	                dwt = Number(dwtOrVesselData.dwt) || 0;
+	                inputGT = Number(dwtOrVesselData.gt) || 0;
+	                portName = String(dwtOrVesselData.portName || portNameParam || '').trim();
+	                portDays = (Number.isFinite(dwtOrVesselData.totalDaysInPort) && dwtOrVesselData.totalDaysInPort > 0)
+	                    ? Number(dwtOrVesselData.totalDaysInPort)
+	                    : (Number.isFinite(dwtOrVesselData.portDays) && dwtOrVesselData.portDays > 0 ? Number(dwtOrVesselData.portDays) : Number(portDaysParam) || 3.0);
+	                cargoCategory = dwtOrVesselData.cargoCategory || dwtOrVesselData.cargoType || '';
+	                cargoMethod = dwtOrVesselData.cargoMethod || dwtOrVesselData.method || '';
+	            } else {
+	                dwt = Number(dwtOrVesselData) || 0;
+	                inputGT = Number(gtParam) || 0;
+	                portName = String(portNameParam || '').trim();
+	                portDays = Number(portDaysParam) || 3.0;
+	            }
+
+	            if (!cargoCategory) {
+	                cargoCategory = document.getElementById('cargo-type')?.value || (window.State && window.State.cargoType) || '';
+	            }
+	            if (!cargoMethod) {
+	                const isPod = portName && portName.toLowerCase().includes('pod');
+	                cargoMethod = isPod
+	                    ? (document.getElementById('metodo_descarga_pod')?.value || '')
+	                    : (document.getElementById('metodo_carga')?.value || '');
+	            }
+
+	            const calculoGT = inputGT > 0 ? inputGT : (dwt > 0 ? dwt * 0.60 : 6000);
+	            const baseTonnageRate = getTonnageDuesRate(portName);
+	            const tasasAutoridad = calculoGT * baseTonnageRate;
+
+	            const agencyFeeBase = 2300;
+	            const fixedManeuverBase = calculoGT * 1.25;
+	            const dailyBerthBase = calculoGT * 0.15 * portDays;
+
+	            const baseCostes = agencyFeeBase + fixedManeuverBase + dailyBerthBase + tasasAutoridad;
+
+	            const metricsEntry = getCargoMetricsEntry(cargoCategory, cargoMethod);
+	            const pdaPremium = Number(metricsEntry?.pdaPremium) || 1.10;
+
+	            const mGeo = getRegionalPdaMultiplier(portName);
+
+	            const netTotalPda = baseCostes * pdaPremium * mGeo;
+
+	            return Math.round(netTotalPda);
 	        }
 
 	        function calculateGlobalPdaEstimateBreakdown(vesselData) {
-	            const totalPDA = calculateGlobalPdaEstimate(vesselData.dwt);
-	            const stdGt = vesselData.dwt * 0.60;
-	            const stdLoa = Math.pow(vesselData.dwt, 0.333) * 5.2;
+	            const dwt = Number(vesselData?.dwt) || 0;
+	            const inputGT = Number(vesselData?.gt) || 0;
 
-	            const gtFactor = (vesselData.gt > 0 && stdGt > 0)
-	                ? Math.min(2.5, Math.max(0.4, vesselData.gt / stdGt))
-	                : 1.0;
-	            const loaFactor = (vesselData.loa > 0 && stdLoa > 0)
-	                ? Math.min(2.5, Math.max(0.4, vesselData.loa / stdLoa))
-	                : 1.0;
+	            const calculoGT = inputGT > 0 ? inputGT : (dwt > 0 ? dwt * 0.60 : 6000);
+	            const stdGt = dwt > 0 ? dwt * 0.60 : 6000;
+	            const stdLoa = dwt > 0 ? Math.pow(dwt, 0.333) * 5.2 : 200;
+	            const gtFactor = (calculoGT > 0 && stdGt > 0) ? Math.min(2.0, Math.max(0.5, calculoGT / stdGt)) : 1.0;
+	            const loaFactor = (vesselData?.loa > 0 && stdLoa > 0) ? Math.min(2.0, Math.max(0.5, vesselData.loa / stdLoa)) : 1.0;
 
+	            const portName = vesselData?.portName || '';
 	            const portDays = (vesselData && Number.isFinite(vesselData.totalDaysInPort) && vesselData.totalDaysInPort > 0)
-	                ? vesselData.totalDaysInPort
+	                ? Number(vesselData.totalDaysInPort)
 	                : 3.0;
-	            const daysFactor = Math.min(3.0, Math.max(0.5, portDays / 3.0));
 
-	            const tasasAutoridad = Math.round(totalPDA * 0.38 * gtFactor);
-	            const navManiobra = Math.round(totalPDA * 0.32 * loaFactor);
-	            const muelleEstadia = Math.round(totalPDA * 0.18 * loaFactor * daysFactor);
-	            const agenciaVarios = Math.round(totalPDA * 0.12 * Math.min(1.5, Math.max(0.8, 1 + (portDays - 3) * 0.05)));
-	            const adjustedTotalPDA = Math.round(tasasAutoridad + navManiobra + muelleEstadia + agenciaVarios);
+	            const cargoCategory = vesselData?.cargoCategory || vesselData?.cargoType || document.getElementById('cargo-type')?.value || (window.State && window.State.cargoType) || '';
+	            const cargoMethod = vesselData?.cargoMethod || vesselData?.method || document.getElementById('metodo_carga')?.value || '';
+
+	            const baseTonnageRate = getTonnageDuesRate(portName);
+	            const agencyFeeBase = 2300;
+	            const fixedManeuverBase = calculoGT * 1.25;
+	            const dailyBerthBase = calculoGT * 0.15 * portDays;
+	            const rawTasasAutoridad = calculoGT * baseTonnageRate;
+
+	            const metricsEntry = getCargoMetricsEntry(cargoCategory, cargoMethod);
+	            const pdaPremium = Number(metricsEntry?.pdaPremium) || 1.10;
+
+	            const mGeo = getRegionalPdaMultiplier(portName);
+
+	            const agenciaVarios = Math.round(agencyFeeBase * pdaPremium * mGeo);
+	            const navManiobra = Math.round(fixedManeuverBase * pdaPremium * mGeo);
+	            const muelleEstadia = Math.round(dailyBerthBase * pdaPremium * mGeo);
+	            const tasasAutoridad = Math.round(rawTasasAutoridad * pdaPremium * mGeo);
+
+	            const totalPDA = agenciaVarios + navManiobra + muelleEstadia + tasasAutoridad;
 
 	            return {
-	                totalPDA: adjustedTotalPDA,
+	                totalPDA,
 	                tasasAutoridad,
 	                navManiobra,
 	                muelleEstadia,
-	                agenciaVarios
+	                agenciaVarios,
+	                gtFactor,
+	                loaFactor,
+	                pdaPremium
 	            };
 	        }
 
@@ -26238,9 +26447,15 @@
 	            }
 	        }
 	        if (typeof window !== 'undefined') {
+	            window.CargoMetricsMatrix = CargoMetricsMatrix;
+	            window.getCargoMetricsEntry = getCargoMetricsEntry;
+	            window.updateCargoMetricsUi = updateCargoMetricsUi;
 	            window.portCache = window.portCache || new Map();
 	            window.pdaAbortControllers = window.pdaAbortControllers || { pol: null, pod: null };
 	            window.autoFillPdaDebounceTimers = window.autoFillPdaDebounceTimers || { pol: null, pod: null };
+	            window.getRegionalPdaMultiplier = getRegionalPdaMultiplier;
+	            window.calculateGlobalPdaEstimate = calculateGlobalPdaEstimate;
+	            window.calculateGlobalPdaEstimateBreakdown = calculateGlobalPdaEstimateBreakdown;
 	            window.getPortPdaBreakdown = getPortPdaBreakdown;
 	            window.openPdaManualEditModal = openPdaManualEditModal;
 	        }
@@ -26248,8 +26463,18 @@
 	        const portCache = (typeof window !== 'undefined' && window.portCache) ? window.portCache : new Map();
 
 	        async function fetchPdaTariffFromDataBridge(type, vesselData) {
-	            const portNameKey = String(vesselData.portName || '').trim().toLowerCase();
-	            const cacheKey = `${type}:${portNameKey}:${Math.round(vesselData.dwt)}:${Math.round(vesselData.gt)}:${Math.round(vesselData.loa)}`;
+	            const rawPortName = String(vesselData?.portName || '').trim();
+	            const portNameKey = rawPortName.toLowerCase();
+
+	            // Guard Clause: abort network request immediately if port is empty or matches default literal texts
+	            if (!rawPortName ||
+	                portNameKey === 'puerto pol' ||
+	                portNameKey === 'puerto pod' ||
+	                portNameKey === 'desconocido') {
+	                return null;
+	            }
+
+	            const cacheKey = `${type}:${portNameKey}:${Math.round(vesselData.dwt || 0)}:${Math.round(vesselData.gt || 0)}:${Math.round(vesselData.loa || 0)}`;
 
 	            if (portCache.has(cacheKey)) {
 	                return portCache.get(cacheKey);
@@ -26389,22 +26614,8 @@
 	            const totalDaysInPort = daysInPort + (marginDays / 2);
 
 	            const vesselData = { portName, dwt, cargo, gt, loa, beam, totalDaysInPort, netTonnage, loaFromInput };
-	            let calculation = null;
-	            let calculationMode = 'estimated';
-	            try {
-	                const tariffJson = await fetchPdaTariffFromDataBridge(type, vesselData);
-	                const tariffCalculation = tariffJson ? calculateFromTariff(tariffJson, vesselData) : null;
-	                if (tariffCalculation && tariffCalculation.totalPDA > 0) {
-	                    calculation = tariffCalculation;
-	                    calculationMode = 'official';
-	                }
-	            } catch {
-	                calculation = null;
-	            }
-	            if (!calculation) {
-	                calculation = calculateGlobalPdaEstimateBreakdown(vesselData);
-	                calculationMode = 'global-estimate';
-	            }
+	            const calculation = calculateGlobalPdaEstimateBreakdown(vesselData);
+	            const calculationMode = 'global-estimate';
 
 	            let { totalPDA, tasasAutoridad, navManiobra, muelleEstadia, agenciaVarios } = calculation;
 
@@ -26875,39 +27086,48 @@
                 const response = await fetch(`/api/get-bunker-prices?ts=${Date.now()}`, {
                     cache: 'no-store'
                 });
-                const payload = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(payload?.error || 'No se pudo obtener la cotización Bunkerindex.');
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                const vlsfo = Number(data.vlsfo);
+                const ifo380 = Number(data.ifo380);
+                const mgo = Number(data.mgo);
+
+                if (!Number.isFinite(vlsfo) || !Number.isFinite(ifo380) || !Number.isFinite(mgo)) {
+                    throw new Error('La respuesta de Bunkerindex no contiene precios válidos.');
                 }
 
                 const today = getTodayBunkerLabel();
                 const nextCache = {
-                    vlsfo: Number(payload.vlsfo),
-                    ifo380: Number(payload.ifo380),
-                    mgo: Number(payload.mgo),
-                    date: payload.sourceDate || today
+                    vlsfo: vlsfo,
+                    ifo380: ifo380,
+                    mgo: mgo,
+                    date: data.sourceDate || today
                 };
-
-                if (!Number.isFinite(nextCache.vlsfo) || !Number.isFinite(nextCache.ifo380) || !Number.isFinite(nextCache.mgo)) {
-                    throw new Error('La respuesta de Bunkerindex no contiene precios válidos.');
-                }
 
                 if (typeof localStorage !== 'undefined') {
                     localStorage.setItem(BUNKER_INDEX_DATA_KEY, JSON.stringify(nextCache));
                 }
-                applyBunkerIndexData(nextCache);
-                showToast("✅ Cotización Bunkerindex registrada para VLSFO, IFO 380 y MGO.");
-            } catch (error) {
-                const message = error instanceof Error ? error.message : 'Error inesperado al consultar Bunkerindex.';
-                updateBunkerIndexErrorLabel(message);
-                showToast(`❌ ${message}`);
-            }
 
-            isFetchingBunker = false;
-            if (btn) {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
+                applyBunkerIndexData(nextCache);
+                showToast("Precios sincronizados en tiempo real con BunkerIndex (Índice Mundo)");
+            } catch (error) {
+                updateBunkerIndexCacheLabel('');
+
+                const fallbackData = { vlsfo: 840.00, ifo380: 650.00, mgo: 1300.00, date: getTodayBunkerLabel() };
+                applyBunkerIndexData(fallbackData);
+
+                showToast("Sin conexión a BunkerIndex. Aplicando precios algorítmicos de seguridad. Ajuste manualmente si es necesario.");
+            } finally {
+                isFetchingBunker = false;
+                if (btn) {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
             }
         }
 
@@ -28531,17 +28751,22 @@
                 const rawDwt = parseFloat(document.getElementById('vessel-dwt')?.value || State.dwt || 0) || 0;
                 const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value || State.cargoQty || 0) || 0;
                 const dwt = rawDwt > 0 ? rawDwt : (cargoQty > 0 ? Math.round(cargoQty * 1.15) : 15000);
+                const polPortName = document.getElementById('port-pol')?.value || State.pol || '';
+                const podPortName = document.getElementById('port-pod')?.value || State.pod || '';
                 if (dwt > 0 && typeof calculateGlobalPdaEstimateBreakdown === 'function') {
-                    const fallbackCalc = calculateGlobalPdaEstimateBreakdown({ dwt, gt: dwt * 0.6, loa: Math.pow(dwt, 0.333) * 5.2 });
-                    if (fallbackCalc && fallbackCalc.totalPDA > 0) {
-                        if (pdaPolVal <= 0) {
-                            pdaPolVal = fallbackCalc.totalPDA;
+                    if (pdaPolVal <= 0) {
+                        const fallbackPol = calculateGlobalPdaEstimateBreakdown({ portName: polPortName, dwt, gt: dwt * 0.6, loa: Math.pow(dwt, 0.333) * 5.2 });
+                        if (fallbackPol && fallbackPol.totalPDA > 0) {
+                            pdaPolVal = fallbackPol.totalPDA;
                             const el = document.getElementById('pda-pol');
                             if (el && (!el.value || parseFloat(el.value) <= 0)) el.value = String(pdaPolVal);
                             State.pdaPol = pdaPolVal;
                         }
-                        if (pdaPodVal <= 0) {
-                            pdaPodVal = Math.round(fallbackCalc.totalPDA * 1.10);
+                    }
+                    if (pdaPodVal <= 0) {
+                        const fallbackPod = calculateGlobalPdaEstimateBreakdown({ portName: podPortName, dwt, gt: dwt * 0.6, loa: Math.pow(dwt, 0.333) * 5.2 });
+                        if (fallbackPod && fallbackPod.totalPDA > 0) {
+                            pdaPodVal = Math.round(fallbackPod.totalPDA * 1.10);
                             const el = document.getElementById('pda-pod');
                             if (el && (!el.value || parseFloat(el.value) <= 0)) el.value = String(pdaPodVal);
                             State.pdaPod = pdaPodVal;
@@ -46084,6 +46309,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 validarCompatibilidadMetodo(side);
                 renderMethodPills(side);
             });
+            if (typeof updateCargoMetricsUi === 'function') updateCargoMetricsUi();
         }
 
         function handleCargoCategoryChange() {
@@ -46185,6 +46411,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             renderMethodPills(side);
             validarCompatibilidadMetodo(side);
             actualizarDesviacionDeltaManual(side);
+            if (typeof updateCargoMetricsUi === 'function') updateCargoMetricsUi();
             if (typeof applyMethodAndProductConditions === 'function') {
                 applyMethodAndProductConditions(side);
             } else if (typeof recalcularDiasPuerto === 'function') {
@@ -50721,6 +50948,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             initMotorRitmosYFinanzas();
             renderMethodPills('pol');
             renderMethodPills('pod');
+            if (typeof updateCargoMetricsUi === 'function') updateCargoMetricsUi();
             actualizarGrabCapacityVisibility();
             initVoyageEstimatorTooltips();
             hydrateBunkerIndexData();
@@ -50730,11 +50958,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (!window.costPlusGlobalCostSubscription) {
                 window.costPlusGlobalCostSubscription = SeaCharterStore.subscribe(() => calculateCostPlusFreight());
             }
-            calculateInverseTce();
-            calculateCostPlusFreight();
+            resetTotalEstimation({ silent: true });
             updateChartererNegotiationSimulator();
             updateVesselPricingRouter();
-            resetTotalEstimation({ silent: true });
 
             ['ritmoCarga', 'ritmoDescarga'].forEach((id) => {
                 const el = document.getElementById(id);

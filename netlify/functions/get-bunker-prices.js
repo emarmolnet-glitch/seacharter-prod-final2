@@ -7,9 +7,6 @@ const corsHeaders = {
   "Access-Control-Max-Age": "86400",
 };
 
-const SOURCE_URL = "https://www.bunkerindex.com/";
-const WORLD_INDEX_URL = "https://www.bunkerindex.com/indices/world.php";
-
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -21,127 +18,56 @@ function jsonResponse(body, status = 200) {
   });
 }
 
-function parsePrice(value) {
-  if (value === undefined || value === null) return null;
-  const cleaned = String(value).replace(/,/g, "").match(/\d+(?:\.\d+)?/);
-  if (!cleaned) return null;
-  const parsed = Number.parseFloat(cleaned[0]);
-  return Number.isFinite(parsed) ? parsed : null;
+function parsePrice(str) {
+  if (!str) return null;
+  const match = String(str).trim().match(/^(\d+(?:\.\d+)?)/);
+  return match ? parseFloat(match[1]) : null;
 }
 
-function average(values) {
-  const validValues = values.filter((value) => Number.isFinite(value));
-  if (!validValues.length) return null;
-  return Number((validValues.reduce((sum, value) => sum + value, 0) / validValues.length).toFixed(2));
-}
-
-function validatePrices(prices) {
-  const vlsfo = Number(prices.vlsfo);
-  const ifo380 = Number(prices.ifo380);
-  const mgo = Number(prices.mgo);
-
-  if (!Number.isFinite(vlsfo) || !Number.isFinite(ifo380) || !Number.isFinite(mgo)) {
-    return null;
-  }
-
-  return { vlsfo, ifo380, mgo };
-}
-
-async function fetchHtml(url) {
-  const response = await fetch(url, {
+async function scrapeBunkerPrices() {
+  const response = await fetch("https://www.bunkerindex.com/", {
     headers: {
-      "Accept": "text/html,application/xhtml+xml",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       "Cache-Control": "no-cache",
       "Pragma": "no-cache",
-      "User-Agent": "SeaCharterCorePRO/1.0 bunker price proxy",
     },
   });
 
   if (!response.ok) {
-    throw new Error(`Bunkerindex responded with status ${response.status}.`);
+    throw new Error(`Bunkerindex HTTP error: ${response.status}`);
   }
 
-  return response.text();
-}
-
-function scrapeHomePriceTable(html) {
+  const html = await response.text();
   const $ = cheerio.load(html);
-  const table = $("#price-table").first();
-  if (!table.length) return null;
+  let result = null;
 
-  const headers = table
-    .find("thead th")
-    .map((_, element) => $(element).text().trim().toLowerCase())
-    .get();
+  $("table").each((_, table) => {
+    const text = $(table).text();
+    if (text.includes("IFO 380") || text.includes("Index")) {
+      $(table).find("tr").each((_, tr) => {
+        const cells = $(tr).find("td").map((_, c) => $(c).text().trim()).get();
+        if (cells.length >= 4) {
+          const firstCell = cells[0].toLowerCase();
+          if ((firstCell.includes("world") || firstCell.includes("mundo")) && !firstCell.includes("world 3")) {
+            const parsedCells = cells.slice(1).map(parsePrice).filter((n) => n !== null);
+            if (parsedCells.length >= 3) {
+              const values = parsedCells.slice(-3);
+              if (Number.isFinite(values[0]) && Number.isFinite(values[1]) && Number.isFinite(values[2])) {
+                result = { ifo380: values[0], vlsfo: values[1], mgo: values[2] };
+              }
+            }
+          }
+        }
+      });
+    }
+  });
 
-  const ifoIndex = headers.findIndex((header) => header.includes("ifo 380"));
-  const vlsfoIndex = headers.findIndex((header) => header.includes("vlsfo"));
-  const mgoIndex = headers.findIndex((header) => header === "mgo" || header.includes("mgo"));
-
-  if (ifoIndex < 0 || vlsfoIndex < 0 || mgoIndex < 0) return null;
-
-  const rows = table.find("tbody tr").toArray();
-  const ifo380Values = [];
-  const vlsfoValues = [];
-  const mgoValues = [];
-
-  for (const row of rows) {
-    const cells = $(row).find("td").toArray();
-    const ifo380 = parsePrice($(cells[ifoIndex]).text());
-    const vlsfo = parsePrice($(cells[vlsfoIndex]).text());
-    const mgo = parsePrice($(cells[mgoIndex]).text());
-
-    if (Number.isFinite(ifo380)) ifo380Values.push(ifo380);
-    if (Number.isFinite(vlsfo)) vlsfoValues.push(vlsfo);
-    if (Number.isFinite(mgo)) mgoValues.push(mgo);
+  if (!result) {
+    throw new Error("Target row 'Mundo' / 'World' in BIX Indices table was not found or incomplete.");
   }
 
-  return validatePrices({
-    ifo380: average(ifo380Values),
-    vlsfo: average(vlsfoValues),
-    mgo: average(mgoValues),
-  });
-}
-
-function latestQuoteFromTab($, tabId) {
-  const tabText = $(`#${tabId}`).text();
-  const matches = [...tabText.matchAll(/"date"\s*:\s*"([^"]+)"\s*,\s*"price"\s*:\s*"([^"]+)"/g)];
-  const latestMatch = matches.at(-1);
-  if (!latestMatch) return null;
-
-  const price = parsePrice(latestMatch[2]);
-  return Number.isFinite(price) ? { date: latestMatch[1], price } : null;
-}
-
-function scrapeWorldIndices(html) {
-  const $ = cheerio.load(html);
-  const ifo380 = latestQuoteFromTab($, "TabA");
-  const vlsfo = latestQuoteFromTab($, "TabB");
-  const mgo = latestQuoteFromTab($, "TabC");
-  const prices = validatePrices({
-    ifo380: ifo380?.price,
-    vlsfo: vlsfo?.price,
-    mgo: mgo?.price,
-  });
-
-  return prices
-    ? {
-        ...prices,
-        sourceDate: vlsfo?.date || ifo380?.date || mgo?.date || null,
-      }
-    : null;
-}
-
-async function scrapeBunkerPrices() {
-  const indexHtml = await fetchHtml(WORLD_INDEX_URL);
-  const worldPrices = scrapeWorldIndices(indexHtml);
-  if (worldPrices) return worldPrices;
-
-  const homeHtml = await fetchHtml(SOURCE_URL);
-  const homePrices = scrapeHomePriceTable(homeHtml);
-  if (homePrices) return homePrices;
-
-  throw new Error("No valid Global Average bunker prices were found for VLSFO, IFO 380 and MGO.");
+  return result;
 }
 
 export default async (req) => {
@@ -155,10 +81,10 @@ export default async (req) => {
 
   try {
     const prices = await scrapeBunkerPrices();
-    return jsonResponse(prices);
+    return jsonResponse(prices, 200);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown bunker scraping error.";
-    return jsonResponse({ error: `Bunker price scraping failed: ${message}` }, 500);
+    const message = error instanceof Error ? error.message : "Unknown scraping error.";
+    return jsonResponse({ error: `Scraping failed: ${message}` }, 500);
   }
 };
 
