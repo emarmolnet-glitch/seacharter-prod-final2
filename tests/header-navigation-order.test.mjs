@@ -20,6 +20,7 @@ test('header modules use the required visual order and stable text identifiers',
   assert.equal(primaryModulesSource, `const PRIMARY_MODULES = [
             { id: 'map', label: 'Mapa' },
             { id: 'estimator', label: 'Calculadora' },
+            { id: 'decisiones', label: 'Decisiones' },
             { id: 'ais', label: 'Densidad' },
             { id: 'matching', label: 'Coincidencia' },
             { id: 'gencon', label: 'Editor' },
