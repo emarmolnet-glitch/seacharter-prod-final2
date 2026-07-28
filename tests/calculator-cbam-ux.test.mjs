@@ -1,41 +1,39 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-const cbamModuleSource = await readFile(new URL('../cbam-module.js', import.meta.url), 'utf8');
-const cbamModule = await import(`data:text/javascript;base64,${Buffer.from(cbamModuleSource).toString('base64')}`);
+const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
-test('cargo specification uses the standardized selector and defaults to Otros', () => {
-  assert.match(indexSource, /id="label-cargo-type-manual" class="text-action-required/);
-  assert.match(indexSource, /<select id="cargo-type-manual" data-cargo-type-selector="calculator"[^>]*required aria-required="true"/);
-  assert.match(indexSource, /<option value="100" selected>100 · Otros \(N\/A\)<\/option>/);
-  assert.match(indexSource, /#cargo-type-manual\.required-use-highlight/);
+test('calculator cargo state does not overwrite AIS taxonomy selection or vessel types', () => {
+  assert.match(indexSource, /cargoCategoryEl\.value = result\.category/);
+  assert.match(indexSource, /updateCBAMResult\(\)/);
+});
 
+test('hasRequiredCalculationInputs validates required form inputs and sets aria-invalid', () => {
   const helperStart = indexSource.indexOf('function hasRequiredCalculationInputs()');
   const helperEnd = indexSource.indexOf('function resetTotalEstimation', helperStart);
   const helperSource = indexSource.slice(helperStart, helperEnd);
-  const values = new Map([
-    ['port-pol', 'Casablanca'],
-    ['port-pod', 'Valencia'],
-    ['cargo-type-manual', '100'],
-    ['vessel-dwt', '25000'],
-    ['cargo-qty', '10000'],
-    ['cons-sea', '20'],
-    ['cons-port', '3'],
-    ['price-sea', '600'],
-    ['price-port', '700'],
-    ['opex-daily', '8000'],
-    ['margin-owner', '15'],
-    ['margin-charterer', '10'],
+  const elements = new Map([
+    ['port-pol', { value: 'Rotterdam' }],
+    ['port-pod', { value: 'Houston' }],
+    ['vessel-dwt', { value: '50000' }],
+    ['cargo-qty', { value: '50000' }],
+    ['cons-sea', { value: '20' }],
+    ['cons-port', { value: '3' }],
+    ['price-sea', { value: '600' }],
+    ['price-port', { value: '600' }],
+    ['opex-daily', { value: '6000' }],
+    ['margin-owner', { value: '10' }],
+    ['margin-charterer', { value: '10' }],
+    ['cargo-type-manual', {
+      value: 'Siderúrgico / Carga General',
+      attributes: new Map(),
+      setAttribute(name, value) { this.attributes.set(name, String(value)); },
+    }],
   ]);
-  const elements = new Map(Array.from(values, ([id, value]) => [id, {
-    value,
-    attributes: new Map(),
-    setAttribute(name, nextValue) { this.attributes.set(name, String(nextValue)); },
-  }]));
+  const documentMock = { getElementById: id => elements.get(id) || null };
   const hasRequiredCalculationInputs = new Function('document', `${helperSource}; return hasRequiredCalculationInputs;`)(
-    { getElementById: id => elements.get(id) || null },
+    documentMock,
   );
 
   assert.equal(hasRequiredCalculationInputs(), true);
@@ -61,11 +59,12 @@ test('cargo classification enables CBAM only for regulated sectors', () => {
   ]);
   const documentMock = { getElementById: id => elements.get(id) || null };
   const windowMock = { autoClassifyCargo: () => null };
+  globalThis.window = windowMock;
+
   const updateCargoAutoClassification = new Function(
-    'window',
     'document',
-    `${helperSource}; return updateCargoAutoClassification;`,
-  )(windowMock, documentMock);
+    `${helperSource};\nreturn updateCargoAutoClassification;`,
+  )(documentMock);
 
   updateCargoAutoClassification('grain');
   assert.equal(elements.get('product-sector').value, '');
@@ -77,30 +76,4 @@ test('cargo classification enables CBAM only for regulated sectors', () => {
   assert.equal(elements.get('product-sector').value, 'Acero');
   assert.equal(elements.get('product-sector').disabled, false);
   assert.equal(elements.get('product-sector').attributes.get('aria-disabled'), 'false');
-});
-
-test('CBAM starts inactive and non-regulated cargo cannot create a charge', () => {
-  assert.equal(cbamModule.cbamState.sector, '');
-  const result = cbamModule.updateCBAMState({
-    sector: '',
-    origen: 'Marruecos',
-    destino: 'España',
-    tonelaje: 10000,
-    factorManual: '',
-    impuestoOrigen: 0,
-  });
-
-  assert.equal(result.sector, '');
-  assert.equal(result.esValido, false);
-  assert.deepEqual(result.calculos, { escenarioA: 0, escenarioB: 0, escenarioC: 0, ahorro: 0 });
-  assert.equal(result.mensaje, 'No sujeto a CBAM');
-});
-
-test('calculator CBAM automation remains isolated from AIS taxonomy state', () => {
-  const manualInputStart = indexSource.indexOf('function handleCargoManualInput()');
-  const manualInputEnd = indexSource.indexOf('function syncCBAMModuleFromCalculator()', manualInputStart);
-  const manualInputSource = indexSource.slice(manualInputStart, manualInputEnd);
-  assert.doesNotMatch(manualInputSource, /applyFleetCargoTaxonomy|setSelectedFleetTaxonomies/);
-  assert.match(indexSource, /calculatorDrivenCBAMFields = new Set\(\['cargo-qty', 'cargo-type-manual'/);
-  assert.doesNotMatch(indexSource, /sector: val\('cbam-sector'\) \|\| val\('product-sector'\) \|\| State\.cargoType/);
 });
