@@ -51,7 +51,7 @@ test('Nominatim searches are debounced and cancel stale work', () => {
   const handlerStart = autocompleteSource.indexOf('function handlePortAutocomplete(event)');
   const handlerEnd = autocompleteSource.indexOf('function bindUniversalPortAutocomplete(input)', handlerStart);
   const handlerSource = autocompleteSource.slice(handlerStart, handlerEnd);
-  assert.match(autocompleteSource, /const NOMINATIM_DEBOUNCE_MS = 700;/);
+  assert.match(autocompleteSource, /const NOMINATIM_DEBOUNCE_MS = 400;/);
   assert.match(handlerSource, /clearTimeout\(portAutocompleteTimers\.get\(input\)\)/);
   assert.match(handlerSource, /portAutocompleteControllers\.get\(input\)\?\.abort\(\)/);
   assert.match(handlerSource, /setPortSearchState\(input, true\);[\s\S]*setTimeout\(\(\) => runUniversalPortSearch\(input\), NOMINATIM_DEBOUNCE_MS\)/);

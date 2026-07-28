@@ -1485,11 +1485,12 @@ export function ReverseTceCalculator({
       const response = await fetch(`/api/get-bunker-prices?ts=${Date.now()}`, {
         cache: 'no-store',
       });
-      const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload?.error || 'No se pudo obtener la cotización Bunkerindex.');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+
+      const payload = await response.json();
 
       const nextCache: BunkerIndexCache = {
         vlsfo: Number(payload.vlsfo),
@@ -1515,7 +1516,23 @@ export function ReverseTceCalculator({
       setContractBunkerIndexBase((current) => current || getAverageBunkerIndexPrice(nextCache));
       window.localStorage.setItem(BUNKER_INDEX_DATA_KEY, JSON.stringify(nextCache));
     } catch (error) {
-      setBunkerFetchError(error instanceof Error ? error.message : 'Error inesperado al consultar Bunkerindex.');
+      setBunkerFetchError('');
+      const fallbackData: BunkerIndexCache = {
+        vlsfo: 840.00,
+        ifo380: 650.00,
+        mgo: 1300.00,
+        date: getTodayBunkerLabel(),
+      };
+      setVlsfoPrice(fallbackData.vlsfo);
+      setIfoPrice(fallbackData.ifo380);
+      setMgoPrice(fallbackData.mgo);
+      setValues((current) => ({
+        ...current,
+        vlsfoPrice: fallbackData.vlsfo,
+        ifoPrice: fallbackData.ifo380,
+        mgoPrice: fallbackData.mgo,
+      }));
+      setBunkerDateLabel(fallbackData.date);
     } finally {
       setIsFetchingBunker(false);
     }

@@ -4,6 +4,11 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "/api/get-bunker-prices"
+  to = "/.netlify/functions/get-bunker-prices"
+  status = 200
+
 [build]
   # Compile the application only; database lifecycle is managed externally.
   command = "npm run build"
