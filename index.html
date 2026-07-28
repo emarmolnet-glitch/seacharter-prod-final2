@@ -23605,45 +23605,45 @@
         }
 
         function initMap() {
-            try {
-                const mapContainer = document.getElementById('map-container');
-                if (!mapContainer) {
-                    setTimeout(() => {
-                        try { initMap(); } catch (err) { console.error('Error in delayed initMap:', err); }
-                    }, 100);
-                    return;
-                }
-                if (map) {
-                    resizeRouteMap(map);
-                    return;
-                }
-                const mapBounds = mapContainer.getBoundingClientRect();
-                if (mapBounds.width <= 1 || mapBounds.height <= 1) {
-                    mapContainer.dataset.renderKey = 'loading';
-                    if (!routeMapMountFrameId) {
-                        routeMapMountFrameId = requestAnimationFrame(() => {
-                            routeMapMountFrameId = null;
-                            try { initMap(); } catch (err) { console.error('Error in rAF initMap:', err); }
-                        });
+            setTimeout(() => {
+                try {
+                    const mapContainer = document.getElementById('map-container');
+                    if (!mapContainer) return;
+                    if (map) {
+                        try { resizeRouteMap(map); } catch (_) {}
+                        return;
                     }
-                    return;
+                    const mapBounds = mapContainer.getBoundingClientRect();
+                    if (mapBounds.width <= 1 || mapBounds.height <= 1) {
+                        mapContainer.dataset.renderKey = 'loading';
+                        if (!routeMapMountFrameId) {
+                            routeMapMountFrameId = requestAnimationFrame(() => {
+                                routeMapMountFrameId = null;
+                                try { initMap(); } catch (err) { console.error('Error in rAF initMap:', err); }
+                            });
+                        }
+                        return;
+                    }
+                    mapContainer.dataset.renderKey = 'mounted';
+                    const rawVessels = (window.GlobalStore?.filteredVesselsInitialized)
+                        ? (window.GlobalStore?.getFilteredVessels?.() || [])
+                        : [];
+                    const vessels = Array.isArray(rawVessels) ? rawVessels : [];
+                    if (window.GlobalFleetGlobe) {
+                        map = window.GlobalFleetGlobe.mount({
+                            containerId: 'map-container',
+                            vesselsData: vessels,
+                            renderKey: JSON.stringify(vessels)
+                        });
+                        window.map = map;
+                        if (State?.routeGeometry) {
+                            try { window.GlobalFleetGlobe.setRouteResult(State.routeGeometry); } catch (_) {}
+                        }
+                    }
+                } catch (err) {
+                    console.error('Safe map initialization caught error:', err);
                 }
-                mapContainer.dataset.renderKey = 'mounted';
-                const vessels = (window.GlobalStore?.filteredVesselsInitialized)
-                    ? (window.GlobalStore?.getFilteredVessels?.() || [])
-                    : [];
-                map = window.GlobalFleetGlobe?.mount({
-                    containerId: 'map-container',
-                    vesselsData: vessels || [],
-                    renderKey: JSON.stringify(vessels || [])
-                });
-                window.map = map;
-                if (State?.routeGeometry) {
-                    window.GlobalFleetGlobe?.setRouteResult(State.routeGeometry);
-                }
-            } catch (err) {
-                console.error('Safe map initialization caught error:', err);
-            }
+            }, 0);
         }
 
         async function getCoordinates(query) {
@@ -26279,9 +26279,36 @@
 	                    headers: { Accept: 'application/json' },
 	                    signal
 	                });
-	                if (response.status === 404) return null;
-	                if (!response.ok) throw new Error(`Data Bridge tariff lookup failed (${response.status})`);
-	                const payload = await response.json();
+	                if (!response.ok) {
+	                    console.warn(`[PDA Tariff Lookup] Data Bridge tariff lookup returned status ${response.status} for ${type} (${vesselData.portName}). Falling back to algorithmic estimate.`);
+	                    return null;
+	                }
+	                const contentType = (response.headers && typeof response.headers.get === 'function')
+	                    ? (response.headers.get('content-type') || '')
+	                    : 'application/json';
+
+	                if (contentType && !contentType.toLowerCase().includes('application/json')) {
+	                    console.warn(`[PDA Tariff Lookup] Non-JSON Content-Type (${contentType}) received for ${type} (${vesselData.portName}). Falling back to algorithmic estimate.`);
+	                    return null;
+	                }
+
+	                let payload = null;
+	                if (typeof response.text === 'function') {
+	                    const rawText = await response.text();
+	                    if (!rawText || rawText.trim().startsWith('<')) {
+	                        console.warn(`[PDA Tariff Lookup] HTML or invalid non-JSON body received for ${type} (${vesselData.portName}). Falling back to algorithmic estimate.`);
+	                        return null;
+	                    }
+	                    try {
+	                        payload = JSON.parse(rawText);
+	                    } catch (parseErr) {
+	                        console.warn(`[PDA Tariff Lookup] JSON parse failure for ${type} (${vesselData.portName}): ${parseErr?.message || parseErr}. Falling back to algorithmic estimate.`);
+	                        return null;
+	                    }
+	                } else if (typeof response.json === 'function') {
+	                    payload = await response.json();
+	                }
+
 	                const tariff = payload?.tariff || payload?.tarifa || payload?.data || payload;
 	                if (tariff) {
 	                    portCache.set(cacheKey, tariff);
@@ -40405,96 +40432,98 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function initAisMap() {
-            const mapContainer = document.getElementById('ais-map');
-            if (!mapContainer) return;
-            const mapBounds = mapContainer.getBoundingClientRect();
-            if (mapBounds.width <= 1 || mapBounds.height <= 1) {
-                mapContainer.dataset.renderKey = 'loading';
-                cancelAisMapAnimationFrame();
-                aisMapAnimationFrameId = requestAnimationFrame(() => {
-                    aisMapAnimationFrameId = null;
-                    initAisMap();
-                });
-                return;
-            }
-            mapContainer.dataset.renderKey = 'mounted';
-            if (window.GlobalFleetGlobe) {
-                const vessels = getDensityMapSourceVessels();
-                aisMap = window.GlobalFleetGlobe.mount({
-                    key: 'density',
-                    containerId: 'ais-map',
-                    vesselsData: vessels,
-                    renderKey: JSON.stringify(vessels),
-                    autoRotate: true
-                });
-                window.mapaAIS = aisMap;
-                if (State.routeGeometry) {
-                    window.GlobalFleetGlobe.setRouteResult(State.routeGeometry, 'density', { focus: false });
-                } else {
-                    const pol = getAisRoutePortForVisual('POL');
-                    const pod = getAisRoutePortForVisual('POD');
-                    window.GlobalFleetGlobe.setRoute(pol, pod, 'density', { focus: false });
+            setTimeout(() => {
+                try {
+                    const mapContainer = document.getElementById('ais-map');
+                    if (!mapContainer) return;
+                    const mapBounds = mapContainer.getBoundingClientRect();
+                    if (mapBounds.width <= 1 || mapBounds.height <= 1) {
+                        mapContainer.dataset.renderKey = 'loading';
+                        cancelAisMapAnimationFrame();
+                        aisMapAnimationFrameId = requestAnimationFrame(() => {
+                            aisMapAnimationFrameId = null;
+                            initAisMap();
+                        });
+                        return;
+                    }
+                    mapContainer.dataset.renderKey = 'mounted';
+                    if (window.GlobalFleetGlobe) {
+                        const vessels = getDensityMapSourceVessels();
+                        aisMap = window.GlobalFleetGlobe.mount({
+                            key: 'density',
+                            containerId: 'ais-map',
+                            vesselsData: vessels,
+                            renderKey: JSON.stringify(vessels),
+                            autoRotate: true
+                        });
+                        window.mapaAIS = aisMap;
+                        if (State?.routeGeometry) {
+                            try { window.GlobalFleetGlobe.setRouteResult(State.routeGeometry, 'density', { focus: false }); } catch (_) {}
+                        } else {
+                            const pol = typeof getAisRoutePortForVisual === 'function' ? getAisRoutePortForVisual('POL') : '';
+                            const pod = typeof getAisRoutePortForVisual === 'function' ? getAisRoutePortForVisual('POD') : '';
+                            try { window.GlobalFleetGlobe.setRoute(pol, pod, 'density', { focus: false }); } catch (_) {}
+                        }
+                        try { updateAisMarkers(getDensityMapSourceVessels()); } catch (e) { console.warn('updateAisMarkers error:', e); }
+                        return;
+                    }
+                    if (typeof L === 'undefined' || typeof L.map !== 'function') {
+                        console.error('Leaflet no está disponible; no se puede iniciar el radar AIS.');
+                        return;
+                    }
+
+                    if (aisMap) {
+                        cancelAisMapAnimationFrame();
+                        aisMapAnimationFrameId = requestAnimationFrame(() => {
+                            aisMapAnimationFrameId = null;
+                            if (aisMap && typeof aisMap.invalidateSize === 'function') aisMap.invalidateSize();
+                        });
+                        return;
+                    }
+
+                    void mapContainer.offsetWidth;
+
+                    aisMap = L.map(mapContainer, {zoomControl: true, attributionControl: false, preferCanvas: true}).setView([20.0, 0.0], 2);
+                    window.mapaAIS = aisMap;
+                    if (typeof createNauticalBaseLayer === 'function') {
+                        try { createNauticalBaseLayer().addTo(aisMap); } catch (_) {}
+                    }
+                    if (window.MapController?.attachDensityMap) {
+                        try { window.MapController.attachDensityMap(aisMap); } catch (_) {}
+                    }
+
+                    if (typeof L.markerClusterGroup === 'function') {
+                        aisClusterGroup = L.markerClusterGroup({
+                            spiderfyOnMaxZoom: true,
+                            disableClusteringAtZoom: 15,
+                            zoomToBoundsOnClick: true
+                        });
+                        aisClusterGroup.on('clusterclick', function (a) {
+                            a.layer.zoomToBounds();
+                        });
+                        aisMap.addLayer(aisClusterGroup);
+                    } else if (typeof L.layerGroup === 'function') {
+                        aisClusterGroup = L.layerGroup().addTo(aisMap);
+                    }
+
+                    cancelAisMapAnimationFrame();
+                    aisMapAnimationFrameId = requestAnimationFrame(() => {
+                        aisMapAnimationFrameId = null;
+                        if (!aisMap) return;
+                        try { aisMap.invalidateSize(); } catch (_) {}
+                        if (window.aisProspectionVisualState && window.aisProspectionVisualState.active && typeof window.renderAisProspectionRadii === 'function') {
+                            try { window.renderAisProspectionRadii({ fit: false }); } catch (_) {}
+                        }
+                        if (window.GlobalStore?.aisMatchingStateSource === 'matching-validation' && Number(window.GlobalStore?.nearbyCount) > 0) {
+                            try { updateAisMarkers(getDensityMapSourceVessels() || []); } catch (_) {}
+                        } else if (window.GlobalStore && window.GlobalStore.getRawVessels && window.GlobalStore.getRawVessels().length > 0 && typeof window.reapplyCentralFiltersAndRedraw === 'function') {
+                            try { window.reapplyCentralFiltersAndRedraw(); } catch (_) {}
+                        }
+                    });
+                } catch (err) {
+                    console.error('Safe AIS map initialization caught error:', err);
                 }
-                updateAisMarkers(vessels);
-                return;
-            }
-            if (typeof L === 'undefined' || typeof L.map !== 'function') {
-                console.error('Leaflet no está disponible; no se puede iniciar el radar AIS.');
-                return;
-            }
-
-            // The tab is active, so a stale instance should never exist here; if one
-            // somehow survived, just recompute its size and reuse it.
-            if (aisMap) {
-                cancelAisMapAnimationFrame();
-                aisMapAnimationFrameId = requestAnimationFrame(() => {
-                    aisMapAnimationFrameId = null;
-                    if (aisMap) aisMap.invalidateSize();
-                });
-                return;
-            }
-
-            // Force a synchronous reflow now so Leaflet is born measuring the
-            // container's real, settled width/height — never 0x0.
-            void mapContainer.offsetWidth;
-
-            aisMap = L.map(mapContainer, {zoomControl: true, attributionControl: false, preferCanvas: true}).setView([20.0, 0.0], 2);
-            window.mapaAIS = aisMap;
-            createNauticalBaseLayer().addTo(aisMap);
-            window.MapController?.attachDensityMap(aisMap);
-
-            if (typeof L.markerClusterGroup === 'function') {
-                aisClusterGroup = L.markerClusterGroup({
-                    spiderfyOnMaxZoom: true,
-                    disableClusteringAtZoom: 15,
-                    zoomToBoundsOnClick: true
-                });
-                aisClusterGroup.on('clusterclick', function (a) {
-                    a.layer.zoomToBounds();
-                });
-                aisMap.addLayer(aisClusterGroup);
-            } else {
-                console.warn('Leaflet.markercluster no está disponible; el radar AIS funcionará sin agrupación.');
-                aisClusterGroup = L.layerGroup().addTo(aisMap);
-            }
-
-            // The container already holds its final size, so a single invalidateSize on
-            // the next frame settles tile painting; the bounding box is now a real
-            // region without coupling AIS radar execution to map movement or zoom.
-            cancelAisMapAnimationFrame();
-            aisMapAnimationFrameId = requestAnimationFrame(() => {
-                aisMapAnimationFrameId = null;
-                if (!aisMap) return;
-                aisMap.invalidateSize();
-                if (window.aisProspectionVisualState && window.aisProspectionVisualState.active && typeof window.renderAisProspectionRadii === 'function') {
-                    window.renderAisProspectionRadii({ fit: false });
-                }
-                if (window.GlobalStore?.aisMatchingStateSource === 'matching-validation' && Number(window.GlobalStore?.nearbyCount) > 0) {
-                    updateAisMarkers(getDensityMapSourceVessels());
-                } else if (window.GlobalStore && window.GlobalStore.getRawVessels && window.GlobalStore.getRawVessels().length > 0 && typeof window.reapplyCentralFiltersAndRedraw === 'function') {
-                    window.reapplyCentralFiltersAndRedraw();
-                }
-            });
+            }, 0);
         }
 
         // Unmount the Leaflet instance whenever the AIS tab is left. Leaflet's
@@ -49012,9 +49041,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function calculateAdjustedEtaAndDays() {
             const etaRadarInput = document.getElementById('eta-radar')?.value;
-            const deltaVal = parseFloat(document.getElementById('delta-historico')?.value) || 0;
-            const climaVal = parseFloat(document.getElementById('factor-clima')?.value) || 0;
-            const fondeoVal = parseFloat(document.getElementById('t-fondeo')?.value) || 0;
+            const deltaVal = Math.max(0, parseFloat(document.getElementById('delta-historico')?.value) || 0);
+            const climaVal = Math.max(0, parseFloat(document.getElementById('factor-clima')?.value) || 0);
+            const fondeoVal = Math.max(0, parseFloat(document.getElementById('t-fondeo')?.value) || 0);
             const summaryClimateInput = document.getElementById('days-margin');
             if (summaryClimateInput) {
                 summaryClimateInput.value = Math.max(0, climaVal).toFixed(2);
@@ -49029,19 +49058,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             const baseDays = typeof State !== 'undefined' && Number.isFinite(State.baseOperationalDays)
-                ? State.baseOperationalDays
-                : (parseFloat(document.getElementById('res-days-total')?.innerText) || 0);
+                ? Math.max(0, State.baseOperationalDays)
+                : Math.max(0, parseFloat(document.getElementById('res-days-total')?.innerText) || 0);
 
             let baseEtaStr = etaRadarInput || 'N/A';
             let adjustedEtaStr = 'N/A';
-            let adjustedDays = baseDays;
+            const daysToAdd = Math.max(0, deltaVal + climaVal + fondeoVal);
+            let adjustedDays = Math.max(0, baseDays + daysToAdd);
 
             if (etaRadarInput) {
                 const baseDate = new Date(etaRadarInput);
                 if (!isNaN(baseDate.getTime())) {
-                    const daysToAdd = deltaVal + climaVal + fondeoVal;
-                    adjustedDays = baseDays + daysToAdd;
-
                     const adjustedTime = baseDate.getTime() + (daysToAdd * 24 * 60 * 60 * 1000);
                     const adjustedDate = new Date(adjustedTime);
                     adjustedEtaStr = adjustedDate.toISOString().split('T')[0];
@@ -49054,9 +49081,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const adjustedDaysEl = document.getElementById('res-adjusted-days');
 
             if (baseEtaEl) baseEtaEl.innerText = baseEtaStr;
-            if (baseDaysEl) baseDaysEl.innerText = baseDays.toFixed(2) + ' d';
+            if (baseDaysEl) baseDaysEl.innerText = Math.max(0, baseDays).toFixed(2) + ' d';
             if (adjustedEtaEl) adjustedEtaEl.innerText = adjustedEtaStr;
-            if (adjustedDaysEl) adjustedDaysEl.innerText = adjustedDays.toFixed(2) + ' d';
+            if (adjustedDaysEl) adjustedDaysEl.innerText = Math.max(0, adjustedDays).toFixed(2) + ' d';
         }
 
         function setSmartAdjustmentAlert(message, tone = 'info') {
