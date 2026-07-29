@@ -404,7 +404,8 @@
 
             // --- REGLA 1: RIESGO DE LAYCAN ---
             const laycanBuffer = laycanDaysLeft - estimatedVoyageDays;
-            const esLaycanPeligroso = laycanBuffer < 3;
+            const esLaycanPeligroso = laycanBuffer < 2;
+            const esLaycanNeutral = laycanBuffer >= 2 && laycanBuffer < 5;
 
             const today = new Date();
             const etaDate = new Date(today.getTime() + Math.max(0, estimatedVoyageDays) * 86400000);
@@ -413,7 +414,21 @@
             if (activeState.cancellingDate instanceof Date) {
                 cancellingDate = activeState.cancellingDate;
             } else if (activeState.cancellingDate && typeof activeState.cancellingDate === 'string') {
-                const parsed = new Date(activeState.cancellingDate);
+                let parsed = new Date(activeState.cancellingDate);
+                if (isNaN(parsed.getTime()) && activeState.cancellingDate.includes('/')) {
+                    const parts = activeState.cancellingDate.split('/');
+                    if (parts.length === 3) parsed = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                }
+                cancellingDate = isNaN(parsed.getTime())
+                    ? new Date(today.getTime() + Math.max(0, laycanDaysLeft) * 86400000)
+                    : parsed;
+            } else if (typeof State !== 'undefined' && State && (State.cancellingDate || State.laycanEnd) && !dssSimulationState) {
+                const globalVal = State.cancellingDate || State.laycanEnd;
+                let parsed = new Date(globalVal);
+                if (isNaN(parsed.getTime()) && typeof globalVal === 'string' && globalVal.includes('/')) {
+                    const parts = globalVal.split('/');
+                    if (parts.length === 3) parsed = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                }
                 cancellingDate = isNaN(parsed.getTime())
                     ? new Date(today.getTime() + Math.max(0, laycanDaysLeft) * 86400000)
                     : parsed;
@@ -441,36 +456,59 @@
             if (valLaycanVoyage) valLaycanVoyage.textContent = `${Number(estimatedVoyageDays).toFixed(1)} días`;
             if (valLaycanBuffer) valLaycanBuffer.textContent = `${laycanBuffer.toFixed(1)} días`;
 
-            if (esLaycanPeligroso) {
-                cardLaycan.className = 'bg-slate-800 border border-slate-700 border-l-4 border-l-red-500 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4';
-                badgeLaycan.className = 'px-2 py-0.5 rounded text-[10px] font-extrabold bg-red-950 text-red-300 border border-red-800';
-                badgeLaycan.textContent = 'ALERTA CRÍTICA';
-                titleLaycan.textContent = 'Margen de Laycan Peligroso';
-                descLaycan.textContent = `El tiempo restante para vencimiento de Laycan (${Number(laycanDaysLeft).toFixed(1)}d) ofrece un margen insuficiente frente a los días de navegación estimados (${Number(estimatedVoyageDays).toFixed(1)}d).`;
-                document.getElementById('val-laycan-buffer').className = 'font-bold text-red-400';
+            if (cardLaycan) {
+                if (esLaycanPeligroso) {
+                    cardLaycan.className = 'bg-slate-800 border border-slate-700 border-l-4 border-l-red-500 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4';
+                    if (badgeLaycan) {
+                        badgeLaycan.className = 'px-2 py-0.5 rounded text-[10px] font-extrabold bg-red-950 text-red-300 border border-red-800';
+                        badgeLaycan.textContent = 'ALERTA CRÍTICA';
+                    }
+                    if (titleLaycan) titleLaycan.textContent = 'Margen de Laycan Peligroso';
+                    if (descLaycan) descLaycan.textContent = `El tiempo restante para vencimiento de Laycan (${Number(laycanDaysLeft).toFixed(1)}d) ofrece un margen insuficiente frente a los días de navegación estimados (${Number(estimatedVoyageDays).toFixed(1)}d).`;
+                    if (valLaycanBuffer) valLaycanBuffer.className = 'font-bold text-red-400';
 
-                recomendaciones.push({
-                    tipo: 'critico',
-                    icono: '🔴',
-                    titulo: 'Riesgo de Cancelación de Laycan (Cancelling Date)',
-                    texto: `Riesgo de Cancelación Alto (Buffer: ${laycanBuffer.toFixed(1)}d). Se recomienda pasar de términos SHEX a SHINC o SSHINC para forzar operativa ininterrumpida y solicitar al fletador ampliar Cancelling Date a mínimo ${(estimatedVoyageDays + 3).toFixed(1)} días. Añadir cláusula WIBON WIPON WIFPON WICCON para proteger el tendido del N.O.R.`,
-                    accion: 'Negociar Términos SSHINC y Cláusula WIBON/WIPON'
-                });
-            } else {
-                cardLaycan.className = 'bg-slate-800 border border-slate-700 border-l-4 border-l-emerald-500 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4';
-                badgeLaycan.className = 'px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-950 text-emerald-300 border border-emerald-800';
-                badgeLaycan.textContent = 'SEGURO';
-                titleLaycan.textContent = 'Margen de Laycan Seguro';
-                descLaycan.textContent = `Buffer holgado de ${laycanBuffer} días entre tiempo de llegada estimado (${etaStr}) y fecha de cancelación (${cancellingStr}).`;
-                document.getElementById('val-laycan-buffer').className = 'font-bold text-emerald-400';
+                    recomendaciones.push({
+                        tipo: 'critico',
+                        icono: '🔴',
+                        titulo: 'Riesgo de Cancelación de Laycan (Cancelling Date)',
+                        texto: `Riesgo de Cancelación Alto (Buffer: ${laycanBuffer.toFixed(1)}d). Se recomienda pasar de términos SHEX a SHINC o SSHINC para forzar operativa ininterrumpida y solicitar al fletador ampliar Cancelling Date a mínimo ${(estimatedVoyageDays + 3).toFixed(1)} días. Añadir cláusula WIBON WIPON WIFPON WICCON para proteger el tendido del N.O.R.`,
+                        accion: 'Negociar Términos SSHINC y Cláusula WIBON/WIPON'
+                    });
+                } else if (esLaycanNeutral) {
+                    cardLaycan.className = 'bg-slate-800 border border-slate-700 border-l-4 border-l-amber-500 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4';
+                    if (badgeLaycan) {
+                        badgeLaycan.className = 'px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-950 text-amber-300 border border-amber-800';
+                        badgeLaycan.textContent = 'NEUTRAL';
+                    }
+                    if (titleLaycan) titleLaycan.textContent = 'Margen de Laycan Neutro / Aceptable';
+                    if (descLaycan) descLaycan.textContent = `Buffer moderado de ${laycanBuffer.toFixed(1)} días entre tiempo de llegada estimado (${etaStr}) y fecha de cancelación (${cancellingStr}).`;
+                    if (valLaycanBuffer) valLaycanBuffer.className = 'font-bold text-amber-400';
 
-                recomendaciones.push({
-                    tipo: 'seguro',
-                    icono: '🟢',
-                    titulo: 'Ventana de Laycan Protegida',
-                    texto: `Buffer adecuado de ${laycanBuffer} días. Mantener programación y tender N.O.R. bajo términos SHEX UU o SHINC según acuerdo portuario.`,
-                    accion: 'Confirmar ETA y N.O.R.'
-                });
+                    recomendaciones.push({
+                        tipo: 'alerta',
+                        icono: '🟡',
+                        titulo: 'Ventana de Laycan con Margen Moderado',
+                        texto: `Buffer moderado de ${laycanBuffer.toFixed(1)} días. Monitorear progreso de navegación y emitir avisos de ETA a puerto de carga.`,
+                        accion: 'Seguimiento de ETA y Avisos N.O.R.'
+                    });
+                } else {
+                    cardLaycan.className = 'bg-slate-800 border border-slate-700 border-l-4 border-l-emerald-500 rounded-xl p-5 shadow-lg flex flex-col justify-between space-y-4';
+                    if (badgeLaycan) {
+                        badgeLaycan.className = 'px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-950 text-emerald-300 border border-emerald-800';
+                        badgeLaycan.textContent = 'SEGURO';
+                    }
+                    if (titleLaycan) titleLaycan.textContent = 'Margen de Laycan Seguro';
+                    if (descLaycan) descLaycan.textContent = `Buffer holgado de ${laycanBuffer.toFixed(1)} días entre tiempo de llegada estimado (${etaStr}) y fecha de cancelación (${cancellingStr}).`;
+                    if (valLaycanBuffer) valLaycanBuffer.className = 'font-bold text-emerald-400';
+
+                    recomendaciones.push({
+                        tipo: 'seguro',
+                        icono: '🟢',
+                        titulo: 'Ventana de Laycan Protegida',
+                        texto: `Buffer adecuado de ${laycanBuffer.toFixed(1)} días. Mantener programación y tender N.O.R. bajo términos SHEX UU o SHINC según acuerdo portuario.`,
+                        accion: 'Confirmar ETA y N.O.R.'
+                    });
+                }
             }
 
             // --- REGLA 2: OPERACIONES DE PUERTO (DESGLOSE POL / POD) ---
@@ -807,40 +845,41 @@
                 return;
             }
 
-            const inputPol = document.getElementById('input-pol');
-            const inputPod = document.getElementById('input-pod');
-            const inputCargoQty = document.getElementById('input-cargoQty');
-            const inputCommodity = document.getElementById('input-commodity');
-            const inputLaycanDaysLeft = document.getElementById('input-laycanDaysLeft');
-            const inputEstimatedVoyageDays = document.getElementById('input-estimatedVoyageDays');
-            const inputLoadRate = document.getElementById('input-loadRate');
-            const inputDischargeRate = document.getElementById('input-dischargeRate');
-            const inputPortDays = document.getElementById('input-portDays');
-            const inputSeaDays = document.getElementById('input-seaDays');
-            const inputFleteEstimado = document.getElementById('input-fleteEstimado');
-            const inputBreakEven = document.getElementById('input-breakEven');
+            // 1. Purga de Estado Obligatoria (Reset-before-Apply)
+            limpiarDssSimulationState();
 
-            const currentState = {
-                pol: inputPol ? inputPol.value : 'Rotterdam',
-                pod: inputPod ? inputPod.value : 'Houston',
-                cargoQty: inputCargoQty ? Number(inputCargoQty.value) : 50000,
-                commodity: inputCommodity ? inputCommodity.value : 'Siderúrgico / Carga General',
-                laycanDaysLeft: inputLaycanDaysLeft ? Number(inputLaycanDaysLeft.value) : 10,
-                estimatedVoyageDays: inputEstimatedVoyageDays ? Number(inputEstimatedVoyageDays.value) : 8,
-                loadRate: inputLoadRate ? Number(inputLoadRate.value) : 5000,
-                dischargeRate: inputDischargeRate ? Number(inputDischargeRate.value) : 5000,
-                portDays: inputPortDays ? Number(inputPortDays.value) : 20,
-                seaDays: inputSeaDays ? Number(inputSeaDays.value) : 8,
-                fleteUnitario: inputFleteEstimado ? Number(inputFleteEstimado.value) : 35,
-                breakEvenUnitario: inputBreakEven ? Number(inputBreakEven.value) : 25,
-                fleteEstimado: inputFleteEstimado ? Number(inputFleteEstimado.value) : 35,
-                breakEven: inputBreakEven ? Number(inputBreakEven.value) : 25
+            // 2. Obtener baseState limpio desde globalState / DOM (sin arrastrar dssSimulationState previo)
+            const globalState = typeof getDSSCurrentState === 'function' ? getDSSCurrentState() : {
+                pol: document.getElementById('input-pol')?.value || 'Rotterdam',
+                pod: document.getElementById('input-pod')?.value || 'Houston',
+                cargoQty: Number(document.getElementById('input-cargoQty')?.value) || 50000,
+                commodity: document.getElementById('input-commodity')?.value || 'Siderúrgico / Carga General',
+                laycanDaysLeft: Number(document.getElementById('input-laycanDaysLeft')?.value) || 10,
+                estimatedVoyageDays: Number(document.getElementById('input-estimatedVoyageDays')?.value) || 8,
+                loadRate: Number(document.getElementById('input-loadRate')?.value) || 5000,
+                dischargeRate: Number(document.getElementById('input-dischargeRate')?.value) || 5000,
+                portDays: Number(document.getElementById('input-portDays')?.value) || 20,
+                seaDays: Number(document.getElementById('input-seaDays')?.value) || 8,
+                fleteUnitario: Number(document.getElementById('input-fleteEstimado')?.value) || 35,
+                breakEvenUnitario: Number(document.getElementById('input-breakEven')?.value) || 25,
+                fleteEstimado: Number(document.getElementById('input-fleteEstimado')?.value) || 35,
+                breakEven: Number(document.getElementById('input-breakEven')?.value) || 25
             };
 
-            const currentLoadRate = currentState.loadRate || 5000;
-            const currentDischargeRate = currentState.dischargeRate || 5000;
-            const voyageDays = currentState.estimatedVoyageDays || currentState.seaDays || 8;
-            const breakEvenUnitario = currentState.breakEvenUnitario || currentState.breakEven || 25;
+            const baseState = JSON.parse(JSON.stringify(globalState));
+            if (globalState.cancellingDate) {
+                baseState.cancellingDate = globalState.cancellingDate;
+            } else if (typeof State !== 'undefined' && State && (State.cancellingDate || State.laycanEnd)) {
+                baseState.cancellingDate = State.cancellingDate || State.laycanEnd;
+            }
+
+            const currentLoadRate = Number(baseState.loadRate) || 5000;
+            const currentDischargeRate = Number(baseState.dischargeRate) || currentLoadRate || 5000;
+            const voyageDays = Number(baseState.estimatedVoyageDays || baseState.seaDays) || 8;
+            const breakEvenUnitario = Number(baseState.breakEvenUnitario || baseState.breakEven) || 25;
+
+            // Clamping para ritmos de carga/descarga (mínimo realista de 1500 MT/día para graneles)
+            const clampRate = (rate) => Math.min(100000, Math.max(1500, Math.round(Number(rate) || 1500)));
 
             let stressMutations = {};
             const today = new Date();
@@ -850,18 +889,38 @@
                 stressMutations = {
                     laycanDaysLeft: simLaycanDays,
                     cancellingDate: new Date(today.getTime() + Math.max(0, simLaycanDays) * 86400000),
-                    loadRate: Math.max(100, Math.round(currentLoadRate * 0.5)),
-                    dischargeRate: Math.max(100, Math.round(currentDischargeRate * 0.5)),
+                    loadRate: clampRate(currentLoadRate * 0.7),
+                    dischargeRate: clampRate(currentDischargeRate * 0.7),
                     fleteUnitario: Number((breakEvenUnitario * 0.88).toFixed(2)),
                     fleteEstimado: Number((breakEvenUnitario * 0.88).toFixed(2))
                 };
             } else if (tipo === 'alerta' || tipo === 'equilibrado') {
-                const simLaycanDays = currentState.laycanDaysLeft || 10;
+                const simLaycanDays = Number(baseState.laycanDaysLeft) || 10;
+                let globalCancelDate = baseState.cancellingDate;
+                if (!globalCancelDate && typeof State !== 'undefined' && State) {
+                    globalCancelDate = State.cancellingDate || State.laycanEnd;
+                }
+                let finalCancelDate;
+                if (globalCancelDate) {
+                    finalCancelDate = globalCancelDate instanceof Date ? globalCancelDate : new Date(globalCancelDate);
+                    if (isNaN(finalCancelDate.getTime()) && typeof globalCancelDate === 'string' && globalCancelDate.includes('/')) {
+                        const parts = globalCancelDate.split('/');
+                        if (parts.length === 3) {
+                            finalCancelDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                        }
+                    }
+                    if (isNaN(finalCancelDate.getTime())) {
+                        finalCancelDate = new Date(today.getTime() + Math.max(0, simLaycanDays) * 86400000);
+                    }
+                } else {
+                    finalCancelDate = new Date(today.getTime() + Math.max(0, simLaycanDays) * 86400000);
+                }
+
                 stressMutations = {
                     laycanDaysLeft: simLaycanDays,
-                    cancellingDate: currentState.cancellingDate || new Date(today.getTime() + Math.max(0, simLaycanDays) * 86400000),
-                    loadRate: Math.max(100, Math.round(currentLoadRate * 0.7)),
-                    dischargeRate: Math.max(100, Math.round(currentDischargeRate * 0.7)),
+                    cancellingDate: finalCancelDate,
+                    loadRate: clampRate(currentLoadRate * 0.85),
+                    dischargeRate: clampRate(currentDischargeRate * 0.85),
                     fleteUnitario: Number((breakEvenUnitario * 1.03).toFixed(2)),
                     fleteEstimado: Number((breakEvenUnitario * 1.03).toFixed(2))
                 };
@@ -870,17 +929,17 @@
                 stressMutations = {
                     laycanDaysLeft: simLaycanDays,
                     cancellingDate: new Date(today.getTime() + Math.max(0, simLaycanDays) * 86400000),
-                    loadRate: Math.max(1000, Math.round(currentLoadRate * 1.5)),
-                    dischargeRate: Math.max(1000, Math.round(currentDischargeRate * 1.5)),
+                    loadRate: clampRate(currentLoadRate * 1.25),
+                    dischargeRate: clampRate(currentDischargeRate * 1.25),
                     fleteUnitario: Number((breakEvenUnitario * 1.25).toFixed(2)),
                     fleteEstimado: Number((breakEvenUnitario * 1.25).toFixed(2))
                 };
             }
 
-            const updatedState = { ...currentState, ...stressMutations };
+            const updatedState = { ...baseState, ...stressMutations };
 
-            const updatedLoadRate = updatedState.loadRate || 1;
-            const updatedDischargeRate = updatedState.dischargeRate || 1;
+            const updatedLoadRate = updatedState.loadRate || 1500;
+            const updatedDischargeRate = updatedState.dischargeRate || 1500;
             const updatedQty = updatedState.cargoQty || 1;
             const computedPortDays = (updatedQty / updatedLoadRate) + (updatedQty / updatedDischargeRate);
             updatedState.portDays = computedPortDays;
