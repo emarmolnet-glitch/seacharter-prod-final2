@@ -9565,6 +9565,39 @@
                             </div>
                         </div>
 
+                        <!-- ACORDEÓN 3: PRIMAS DE RIESGO & REPOSICIONAMIENTO -->
+                        <div id="accordion-section-riesgo-reposicionamiento" class="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50 shadow-sm">
+                            <button type="button" id="btn-toggle-riesgo" onclick="toggleAccordion('riesgo-reposicionamiento')" class="w-full flex items-center justify-between px-4 py-3 bg-slate-100/90 hover:bg-slate-200/80 font-semibold text-xs text-slate-700 transition-colors select-none">
+                                <span class="flex items-center gap-2">
+                                    <i class="fa-solid fa-shield-halved text-amber-600"></i>
+                                    <span>Primas de Riesgo & Reposicionamiento</span>
+                                </span>
+                                <i id="icon-accordion-riesgo-reposicionamiento" class="fa-solid fa-chevron-up text-xs text-slate-500 transition-transform duration-300"></i>
+                            </button>
+                            <div id="body-accordion-riesgo-reposicionamiento" class="p-4 transition-all duration-300 ease-in-out">
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                                    <div class="sm:col-span-3 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
+                                        <label class="flex items-center gap-2 cursor-pointer font-semibold text-slate-800 select-none">
+                                            <input type="checkbox" id="input-jwlaRiskActive" onchange="toggleJWLAInput(); actualizarDesdeFormulario();" class="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500">
+                                            <span>Ruta en Zona JWLA (Joint War Committee)</span>
+                                        </label>
+                                        <div id="container-jwlaPremiumUSD" class="hidden items-center gap-2">
+                                            <label for="input-jwlaPremiumUSD" class="text-slate-600 font-medium">Prima JWLA ($):</label>
+                                            <input type="number" id="input-jwlaPremiumUSD" value="0" step="100" min="0" oninput="actualizarDesdeFormulario()" class="w-32 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900 font-bold focus:outline-none focus:border-amber-500">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-600 font-semibold mb-1" for="input-ballastDays">Días de Lastre (Reposicionamiento)</label>
+                                        <input type="number" id="input-ballastDays" value="0" step="0.5" min="0" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-600 font-semibold mb-1" for="input-actualCargoIntake">Ajuste de Calado (Short Lift MT)</label>
+                                        <input type="number" id="input-actualCargoIntake" value="50000" step="100" min="1" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- ACCIÓN PRINCIPAL DE FIJACIÓN DE CONDICIONES DEFINITIVAS -->
                         <div class="mt-4 pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
                             <div class="text-xs text-slate-600 font-medium flex items-center gap-1.5">
@@ -31031,12 +31064,90 @@
             window.differenceInDays = differenceInDays;
         }
 
+        function toggleJWLAInput() {
+            const checkbox = document.getElementById('input-jwlaRiskActive');
+            const container = document.getElementById('container-jwlaPremiumUSD');
+            if (checkbox && container) {
+                if (checkbox.checked) {
+                    if (container.classList && typeof container.classList.remove === 'function') {
+                        container.classList.remove('hidden');
+                        container.classList.add('flex');
+                    }
+                    if (container.style) container.style.display = 'flex';
+                } else {
+                    if (container.classList && typeof container.classList.add === 'function') {
+                        container.classList.add('hidden');
+                        container.classList.remove('flex');
+                    }
+                    if (container.style) container.style.display = 'none';
+                }
+            }
+        }
+        if (typeof window !== 'undefined') {
+            window.toggleJWLAInput = toggleJWLAInput;
+        }
+
+        function calculateMarketFreightWithRisk(dssState, globalMarketTCE) {
+            const safeIntake = (dssState && Number(dssState.actualCargoIntake) > 0)
+                ? Number(dssState.actualCargoIntake)
+                : (Number(dssState?.targetCargoMT || dssState?.cargoQty || dssState?.cargo) || 1);
+            const safeBallast = Number(dssState?.ballastDays) || 0;
+            const safeJWLA = dssState?.jwlaRiskActive ? (Number(dssState?.jwlaPremiumUSD) || 0) : 0;
+
+            const safeLadenDays = Number(dssState?.ladenDays ?? dssState?.seaDays ?? dssState?.estimatedVoyageDays ?? 0) || 0;
+            const totalBillableDays = safeLadenDays + safeBallast;
+
+            const safeBunker = Number(dssState?.totalBunkerCost ?? dssState?.bunkerCost ?? 0) || 0;
+            const safePort = Number(dssState?.totalPortDisbursements ?? dssState?.portDisbursements ?? dssState?.portCosts ?? 0) || 0;
+            const totalDirectCosts = safeBunker + safePort;
+
+            const safeMarketTCE = Number(globalMarketTCE) || 0;
+            const totalVoyageCost = (totalBillableDays * safeMarketTCE) + totalDirectCosts + safeJWLA;
+
+            return totalVoyageCost / safeIntake;
+        }
+        if (typeof window !== 'undefined') {
+            window.calculateMarketFreightWithRisk = calculateMarketFreightWithRisk;
+        }
+
+        function handleCommitConditions(currentState, executeSafeCommit) {
+            const targetIntake = Number(currentState?.actualCargoIntake || currentState?.targetCargoMT || currentState?.cargoQty || currentState?.cargo) || 50000;
+            const ballastDays = Number(currentState?.ballastDays) || 0;
+            const jwlaRiskActive = Boolean(currentState?.jwlaRiskActive);
+            const jwlaPremiumUSD = Number(currentState?.jwlaPremiumUSD) || 0;
+            const vesselName = String(currentState?.vesselName || currentState?.vessel || 'Vessel Reference').trim();
+            const freightRateUSD = Number(currentState?.freightRateUSD || currentState?.fleteEstimado || currentState?.fleteUnitario) || 35;
+
+            if (ballastDays < 0 || jwlaPremiumUSD < 0 || targetIntake <= 0 || !vesselName || freightRateUSD <= 0 || Number.isNaN(targetIntake) || Number.isNaN(freightRateUSD)) {
+                console.error("Error de validación pre-PDF: datos inválidos en el estado");
+                return false;
+            }
+
+            const validData = {
+                ballastDays,
+                jwlaRiskActive,
+                jwlaPremiumUSD,
+                actualCargoIntake: targetIntake,
+                vesselName,
+                freightRateUSD
+            };
+
+            if (typeof executeSafeCommit === 'function') {
+                executeSafeCommit(validData);
+            }
+            return true;
+        }
+        if (typeof window !== 'undefined') {
+            window.handleCommitConditions = handleCommitConditions;
+        }
+
         function bloquearInputsSituacionActual(disabled) {
             const ids = [
                 'input-pol', 'input-pod', 'input-cargoQty', 'input-commodity',
                 'input-laycanDaysLeft', 'input-estimatedVoyageDays', 'input-loadRate',
                 'input-dischargeRate', 'input-portDays', 'input-seaDays',
-                'input-fleteEstimado', 'input-breakEven'
+                'input-fleteEstimado', 'input-breakEven',
+                'input-ballastDays', 'input-jwlaRiskActive', 'input-jwlaPremiumUSD', 'input-actualCargoIntake'
             ];
             ids.forEach(id => {
                 const el = document.getElementById(id);
@@ -31142,6 +31253,17 @@
             setVal('input-seaDays', state.seaDays || state.estimatedVoyageDays);
             setVal('input-fleteEstimado', state.fleteEstimado || state.fleteUnitario);
             setVal('input-breakEven', state.breakEven || state.breakEvenUnitario);
+
+            setVal('input-ballastDays', state.ballastDays ?? 0);
+            const jwlaCheckbox = document.getElementById('input-jwlaRiskActive');
+            if (jwlaCheckbox) {
+                jwlaCheckbox.checked = Boolean(state.jwlaRiskActive);
+            }
+            setVal('input-jwlaPremiumUSD', state.jwlaPremiumUSD ?? 0);
+            setVal('input-actualCargoIntake', state.actualCargoIntake ?? state.targetCargoMT ?? state.cargoQty ?? 50000);
+            if (typeof toggleJWLAInput === 'function') {
+                toggleJWLAInput();
+            }
         }
         if (typeof window !== 'undefined') {
             window.sincronizarFormularioDesdeEstado = sincronizarFormularioDesdeEstado;
@@ -31166,9 +31288,19 @@
             const inputFleteEstimado = document.getElementById('input-fleteEstimado');
             const inputBreakEven = document.getElementById('input-breakEven');
 
+            const inputBallastDays = document.getElementById('input-ballastDays');
+            const inputJwlaRiskActive = document.getElementById('input-jwlaRiskActive');
+            const inputJwlaPremiumUSD = document.getElementById('input-jwlaPremiumUSD');
+            const inputActualCargoIntake = document.getElementById('input-actualCargoIntake');
+
             const cargoQty = inputCargoQty ? Number(inputCargoQty.value) : 50000;
             const loadRate = inputLoadRate ? Math.max(1, Number(inputLoadRate.value) || 1) : 5000;
             const dischargeRate = inputDischargeRate ? Math.max(1, Number(inputDischargeRate.value) || 1) : loadRate;
+
+            const ballastDays = inputBallastDays ? (Number(inputBallastDays.value) || 0) : 0;
+            const jwlaRiskActive = inputJwlaRiskActive ? Boolean(inputJwlaRiskActive.checked) : false;
+            const jwlaPremiumUSD = inputJwlaPremiumUSD ? (Number(inputJwlaPremiumUSD.value) || 0) : 0;
+            const actualCargoIntake = inputActualCargoIntake ? (Number(inputActualCargoIntake.value) || cargoQty) : cargoQty;
 
             // Fórmula obligatoria: Dias de Puerto = (Total Carga / dssFormState.ritmoCarga) + (Total Carga / dssFormState.ritmoDescarga)
             const computedPortDays = (cargoQty / loadRate) + (cargoQty / dischargeRate);
@@ -31178,6 +31310,7 @@
                 pol: inputPol ? inputPol.value : 'Rotterdam',
                 pod: inputPod ? inputPod.value : 'Houston',
                 cargoQty,
+                targetCargoMT: cargoQty,
                 commodity: inputCommodity ? inputCommodity.value : 'Siderúrgico / Carga General',
                 laycanDaysLeft: inputLaycanDaysLeft ? Number(inputLaycanDaysLeft.value) : 10,
                 estimatedVoyageDays: inputEstimatedVoyageDays ? Number(inputEstimatedVoyageDays.value) : 8,
@@ -31185,10 +31318,15 @@
                 dischargeRate,
                 portDays: computedPortDays,
                 seaDays: inputSeaDays ? Number(inputSeaDays.value) : 8,
+                ladenDays: inputSeaDays ? Number(inputSeaDays.value) : 8,
                 fleteEstimado: inputFleteEstimado ? Number(inputFleteEstimado.value) : 35,
                 breakEven: inputBreakEven ? Number(inputBreakEven.value) : 25,
                 fleteUnitario: inputFleteEstimado ? Number(inputFleteEstimado.value) : 35,
-                breakEvenUnitario: inputBreakEven ? Number(inputBreakEven.value) : 25
+                breakEvenUnitario: inputBreakEven ? Number(inputBreakEven.value) : 25,
+                ballastDays,
+                jwlaRiskActive,
+                jwlaPremiumUSD,
+                actualCargoIntake: actualCargoIntake > 0 ? actualCargoIntake : cargoQty
             };
 
             if (typeof window !== 'undefined') {
@@ -32255,10 +32393,24 @@ END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL
                 const currentDssFormState = typeof dssFormState !== 'undefined' ? dssFormState : (window.dssFormState || null);
                 const activeDss = typeof getDSSCurrentState === 'function' ? getDSSCurrentState() : (currentDssFormState || {});
 
+                if (typeof handleCommitConditions === 'function') {
+                    const isValidCommit = handleCommitConditions(activeDss);
+                    if (!isValidCommit) {
+                        if (typeof showToast === 'function') {
+                            showToast('❌ Error de validación en datos del viaje antes de fijar condiciones');
+                        }
+                        return;
+                    }
+                }
+
                 const updatedLoadRate = Math.max(1, Number(activeDss.loadRate) || (typeof State !== 'undefined' ? Number(State.loadRate) : 5000) || 5000);
                 const updatedDischargeRate = Math.max(1, Number(activeDss.dischargeRate) || (typeof State !== 'undefined' ? Number(State.dischRate) : updatedLoadRate) || updatedLoadRate);
                 const updatedFreightSell = Number(activeDss.fleteEstimado || activeDss.fleteUnitario || (typeof State !== 'undefined' ? State.freightSell : 35) || 35);
                 const cargoQty = Number(activeDss.cargoQty || (typeof State !== 'undefined' ? State.cargo : 50000) || 50000);
+                const updatedBallastDays = Number(activeDss.ballastDays) || 0;
+                const updatedJwlaRiskActive = Boolean(activeDss.jwlaRiskActive);
+                const updatedJwlaPremiumUSD = Number(activeDss.jwlaPremiumUSD) || 0;
+                const updatedActualCargoIntake = (activeDss.actualCargoIntake && Number(activeDss.actualCargoIntake) > 0) ? Number(activeDss.actualCargoIntake) : cargoQty;
 
                 // 2. Reverse Sync: Sobrescribir globalState / State / SeaCharterStore
                 if (typeof State !== 'undefined' && State) {
@@ -32266,6 +32418,10 @@ END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL
                     State.dischRate = updatedDischargeRate;
                     State.freightSell = updatedFreightSell;
                     State.cargo = cargoQty;
+                    State.ballastDays = updatedBallastDays;
+                    State.jwlaRiskActive = updatedJwlaRiskActive;
+                    State.jwlaPremiumUSD = updatedJwlaPremiumUSD;
+                    State.actualCargoIntake = updatedActualCargoIntake;
                     if (activeDss.pol) State.pol = activeDss.pol;
                     if (activeDss.pod) State.pod = activeDss.pod;
                     if (activeDss.cancellingDate) State.cancellingDate = activeDss.cancellingDate;
@@ -32280,6 +32436,10 @@ END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL
                         dischRate: updatedDischargeRate,
                         freightSell: updatedFreightSell,
                         cargo: cargoQty,
+                        ballastDays: updatedBallastDays,
+                        jwlaRiskActive: updatedJwlaRiskActive,
+                        jwlaPremiumUSD: updatedJwlaPremiumUSD,
+                        actualCargoIntake: updatedActualCargoIntake,
                         pol: activeDss.pol || (typeof State !== 'undefined' ? State.pol : ''),
                         pod: activeDss.pod || (typeof State !== 'undefined' ? State.pod : ''),
                         cancellingDate: activeDss.cancellingDate || (typeof State !== 'undefined' ? State.cancellingDate : '')
@@ -32292,7 +32452,12 @@ END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL
                     dischargeRate: updatedDischargeRate,
                     fleteEstimado: updatedFreightSell,
                     fleteUnitario: updatedFreightSell,
-                    cargoQty: cargoQty
+                    cargoQty: cargoQty,
+                    targetCargoMT: cargoQty,
+                    ballastDays: updatedBallastDays,
+                    jwlaRiskActive: updatedJwlaRiskActive,
+                    jwlaPremiumUSD: updatedJwlaPremiumUSD,
+                    actualCargoIntake: updatedActualCargoIntake
                 };
                 window.dssFormState = consolidatedDssState;
                 if (typeof dssFormState !== 'undefined') {
