@@ -8,12 +8,12 @@ const decisionesHtml = readFileSync(new URL('../decisiones.html', import.meta.ur
 test('PARTE 1: DSS scenario logic performs shallow merge and stress test mutations without modifying context variables', () => {
   // Verify cargarEscenario function definition and logic in index.html
   assert.match(indexHtml, /function cargarEscenario\(tipo\)/, 'cargarEscenario must be defined in index.html');
-  assert.match(indexHtml, /stressMutations = \{/, 'cargarEscenario must construct stress mutations in index.html');
+  assert.match(indexHtml, /dssSimulationState = updatedState;/, 'cargarEscenario must set dssSimulationState in index.html');
   assert.match(indexHtml, /updatedState = \{ \.\.\.currentState, \.\.\.stressMutations \}/, 'cargarEscenario must perform shallow merge in index.html');
 
   // Verify same in decisiones.html
   assert.match(decisionesHtml, /function cargarEscenario\(tipo\)/, 'cargarEscenario must be defined in decisiones.html');
-  assert.match(decisionesHtml, /stressMutations = \{/, 'cargarEscenario must construct stress mutations in decisiones.html');
+  assert.match(decisionesHtml, /dssSimulationState = updatedState;/, 'cargarEscenario must set dssSimulationState in decisiones.html');
   assert.match(decisionesHtml, /updatedState = \{ \.\.\.currentState, \.\.\.stressMutations \}/, 'cargarEscenario must perform shallow merge in decisiones.html');
 
   // Extract helper functions needed for DSS execution
@@ -69,19 +69,25 @@ test('PARTE 1: DSS scenario logic performs shallow merge and stress test mutatio
   // Evaluate scenario 'riesgo'
   evalContext(fakeDocument);
 
-  // Context variables MUST BE UNTOUCHED:
+  // DOM Input variables MUST REMAIN COMPLETELY UNTOUCHED (No DOM mutation / Global state overwrite):
   assert.equal(domState['input-pol'], 'Valencia', 'POL input must remain unchanged');
   assert.equal(domState['input-pod'], 'Santos', 'POD input must remain unchanged');
   assert.equal(domState['input-cargoQty'], '35000', 'Cargo quantity input must remain unchanged');
   assert.equal(domState['input-commodity'], 'Bobinas de Acero', 'Commodity input must remain unchanged');
+  assert.equal(domState['input-laycanDaysLeft'], '12', 'Original laycanDaysLeft DOM input must remain untouched');
+  assert.equal(domState['input-loadRate'], '7000', 'Original loadRate DOM input must remain untouched');
+  assert.equal(domState['input-fleteEstimado'], '35', 'Original fleteEstimado DOM input must remain untouched');
 
-  // Stress variables MUST BE MUTATED for 'riesgo':
-  // Voyage = 9, so laycanDaysLeft stressed below 9 (e.g. 7)
-  assert.ok(Number(domState['input-laycanDaysLeft']) < 9, 'Riesgo scenario must reduce laycanDaysLeft below voyage days');
-  // Load Rate stressed down to ~3500 from 7000 (0.5 factor)
-  assert.equal(Number(domState['input-loadRate']), 3500, 'Riesgo scenario must stress loadRate to half (3500)');
-  // fleteEstimado stressed below breakEven (28 * 0.88 = 24.64)
-  assert.ok(Number(domState['input-fleteEstimado']) < Number(domState['input-breakEven']), 'Riesgo scenario must lower fleteEstimado below break-even');
+  // Stress variables MUST BE SET ONLY in local dssSimulationState:
+  assert.ok(fakeWindow.dssSimulationState, 'dssSimulationState must be populated');
+  assert.ok(Number(fakeWindow.dssSimulationState.laycanDaysLeft) < 9, 'Riesgo scenario must reduce laycanDaysLeft in dssSimulationState below voyage days');
+  assert.equal(Number(fakeWindow.dssSimulationState.loadRate), 3500, 'Riesgo scenario must stress loadRate in dssSimulationState to half (3500)');
+  assert.ok(Number(fakeWindow.dssSimulationState.fleteEstimado) < Number(domState['input-breakEven']), 'Riesgo scenario must lower fleteEstimado in dssSimulationState below break-even');
+  assert.ok(fakeWindow.dssSimulationState.cancellingDate instanceof Date, 'dssSimulationState must store simulated cancellingDate Date object');
+
+  // Scenario Cleanup / Context Restoration:
+  fakeWindow.limpiarEscenario();
+  assert.equal(fakeWindow.dssSimulationState, null, 'limpiarEscenario must reset dssSimulationState to null');
 });
 
 test('PARTE 2: Mathematical formulas (Unit vs Total Freight, Derived Port Days) and Card Elements', () => {
@@ -228,4 +234,102 @@ test('PARTE 3: Commercial Recommendation Engine uses strict chartering catalogs 
   assert.match(renderedHTML, /FIOS|FIOT|FIOST/, 'Recommendation output must contain Cargo terms (e.g. FIOS)');
   assert.match(renderedHTML, /SSHINC|SHINC/, 'Recommendation output must contain Laytime terms (e.g. SSHINC)');
   assert.match(renderedHTML, /WIBON WIPON WIFPON WICCON/, 'Recommendation output must contain N.O.R. clause');
+});
+
+test('PARTE 4: Isolated dssSimulationState, local cancellingDate rendering, and context restoration', () => {
+  const helperStart = indexHtml.indexOf('function determinarTerminoCargo(commodity)');
+  const helperEnd = indexHtml.indexOf('function buildAuditHTMLTemplate', helperStart);
+  const helpersCode = indexHtml.slice(helperStart, helperEnd);
+
+  const domState = {
+    'input-pol': 'Rotterdam',
+    'input-pod': 'Houston',
+    'input-cargoQty': '50000',
+    'input-commodity': 'Siderúrgico / Carga General',
+    'input-laycanDaysLeft': '10',
+    'input-estimatedVoyageDays': '8',
+    'input-loadRate': '5000',
+    'input-dischargeRate': '5000',
+    'input-portDays': '20',
+    'input-seaDays': '8',
+    'input-fleteEstimado': '35',
+    'input-breakEven': '25'
+  };
+
+  const elements = {};
+  const fakeDoc = {
+    getElementById: (id) => {
+      if (!elements[id]) {
+        elements[id] = {
+          get value() { return domState[id] || ''; },
+          set value(v) { domState[id] = String(v); },
+          textContent: '',
+          className: '',
+          classList: { toggle: () => {}, add: () => {}, remove: () => {} },
+          style: {}
+        };
+      }
+      return elements[id];
+    }
+  };
+
+  const globalState = {
+    laycanEnd: '2026-08-15',
+    cancellingDate: '2026-08-15'
+  };
+
+  const fakeWin = {
+    State: globalState
+  };
+  globalThis.window = fakeWin;
+  globalThis.State = globalState;
+
+  const fn = new Function(
+    'document',
+    'window',
+    'State',
+    `
+    ${helpersCode}
+    window.dssSimulationState = dssSimulationState;
+    window.cargarEscenarioRiesgo = cargarEscenarioRiesgo;
+    window.cargarEscenarioOptimo = cargarEscenarioOptimo;
+    window.limpiarEscenario = limpiarEscenario;
+    window.desactivarEscenarios = desactivarEscenarios;
+    window.toggleParametros = toggleParametros;
+    window.actualizarDesdeFormulario = actualizarDesdeFormulario;
+    window.generarAuditoriaOperativa = generarAuditoriaOperativa;
+
+    cargarEscenarioRiesgo();
+    return {
+      dssSimulationState,
+      getDssState: () => dssSimulationState,
+      runClean: () => limpiarEscenario(),
+      runToggle: () => toggleParametros(),
+      runFormUpdate: () => actualizarDesdeFormulario()
+    };
+    `
+  );
+
+  const res = fn(fakeDoc, fakeWin, globalState);
+
+  // 1. cargarEscenarioRiesgo creates isolated dssSimulationState
+  assert.ok(res.getDssState(), 'cargarEscenarioRiesgo creates dssSimulationState');
+  assert.ok(res.getDssState().cancellingDate instanceof Date, 'dssSimulationState contains simulated cancellingDate');
+
+  // 2. Global state remains intact
+  assert.equal(globalState.laycanEnd, '2026-08-15', 'State.laycanEnd must remain untouched');
+  assert.equal(globalState.cancellingDate, '2026-08-15', 'State.cancellingDate must remain untouched');
+
+  // 3. Card 1 rendered cancelling date using simulated cancellingDate
+  const simCancellingStr = res.getDssState().cancellingDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  assert.equal(elements['val-laycan-cancelling'].textContent, simCancellingStr, 'Card 1 must render dssSimulationState.cancellingDate');
+
+  // 4. Context Restoration (Cleanup)
+  res.runClean();
+  assert.equal(fakeWin.dssSimulationState, null, 'limpiarEscenario clears dssSimulationState to null');
+
+  // 5. Card 1 re-rendered reading intact original cancelling date
+  const originalDate = new Date('2026-08-15');
+  const expectedOriginalStr = originalDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  assert.equal(elements['val-laycan-cancelling'].textContent, expectedOriginalStr, 'Card 1 must re-render from original intact State.cancellingDate after cleanup');
 });
