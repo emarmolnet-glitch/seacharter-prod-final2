@@ -9576,6 +9576,13 @@
                             </button>
                             <div id="body-accordion-riesgo-reposicionamiento" class="p-4 transition-all duration-300 ease-in-out">
                                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                                    <!-- BANNER DE ALERTA DE DÉFICIT DE EXPORTACIÓN EN POD -->
+                                    <div id="pod-export-deficit-alert" class="hidden sm:col-span-3 bg-amber-50 border border-amber-300 rounded-lg p-3 text-amber-900 flex items-start gap-2.5 shadow-sm transition-all duration-200">
+                                        <i class="fa-solid fa-triangle-exclamation text-amber-600 text-base mt-0.5 flex-shrink-0"></i>
+                                        <div class="text-xs leading-relaxed font-medium">
+                                            Atención: Este puerto suele presentar déficit de carga de exportación para buques de carga general. Considera incrementar los Días de Lastre, ya que el armador cotizará el reposicionamiento.
+                                        </div>
+                                    </div>
                                     <div class="sm:col-span-3 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
                                         <label class="flex items-center gap-2 cursor-pointer font-semibold text-slate-800 select-none">
                                             <input type="checkbox" id="input-jwlaRiskActive" onchange="toggleJWLAInput(); actualizarDesdeFormulario();" class="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500">
@@ -31269,6 +31276,67 @@
             window.sincronizarFormularioDesdeEstado = sincronizarFormularioDesdeEstado;
         }
 
+        function isExportDeficitPOD(podInput) {
+            if (!podInput) return false;
+            if (typeof podInput === 'object') {
+                if (podInput.isExportDeficit === true || Boolean(podInput.isExportDeficit)) {
+                    return true;
+                }
+            }
+            let podStr = '';
+            if (typeof podInput === 'string') {
+                podStr = podInput;
+            } else if (typeof podInput === 'object') {
+                podStr = podInput.name || podInput.pod || podInput.destinationPort || podInput.port || podInput.region || podInput.country || '';
+            }
+            if (!podStr) return false;
+            const normalized = String(podStr)
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim();
+            if (!normalized) return false;
+            if (normalized.includes('exportdeficit') || normalized.includes('export_deficit') || normalized.includes('deficit_export')) {
+                return true;
+            }
+            const deficitKeywords = [
+                'senegal', 'algeria', 'argelia', 'nigeria', 'ghana', 'angola',
+                'cameroon', 'camerun', 'ivory coast', 'cote d\'ivoire', 'cote divoire', 'costa de marfil',
+                'togo', 'benin', 'guinea', 'sierra leone', 'sierra leona', 'liberia',
+                'mauritania', 'gambia', 'gabon', 'congo', 'equatorial guinea', 'guinea ecuatorial',
+                'west africa', 'africa occidental', 'north africa', 'africa del norte',
+                'dakar', 'algiers', 'argel', 'oran', 'bejaia', 'skikda', 'annaba', 'mostaganem', 'ghazaouet', 'jenjen',
+                'lagos', 'apapa', 'tin can', 'calabar', 'port harcourt', 'warri', 'onne',
+                'luanda', 'lobito', 'namibe', 'tema', 'takoradi', 'douala', 'kribi', 'lome', 'cotonou',
+                'abidjan', 'san pedro', 'conakry', 'freetown', 'monrovia', 'nouakchott', 'nouadhibou',
+                'banjul', 'owendo', 'libreville', 'pointe-noire', 'pointe noire', 'malabo', 'bata', 'luba', 'matadi', 'soyo', 'cabinda'
+            ];
+            return deficitKeywords.some(keyword => normalized.includes(keyword));
+        }
+        window.isExportDeficitPOD = isExportDeficitPOD;
+
+        function evaluarAlertaDeficitPOD(pod) {
+            const alertEl = document.getElementById('pod-export-deficit-alert');
+            if (!alertEl) return;
+            const hasDeficit = typeof isExportDeficitPOD === 'function' ? isExportDeficitPOD(pod) : false;
+            if (alertEl.classList) {
+                if (hasDeficit) {
+                    if (typeof alertEl.classList.remove === 'function') {
+                        alertEl.classList.remove('hidden');
+                    } else if (typeof alertEl.classList.toggle === 'function') {
+                        alertEl.classList.toggle('hidden', false);
+                    }
+                } else {
+                    if (typeof alertEl.classList.add === 'function') {
+                        alertEl.classList.add('hidden');
+                    } else if (typeof alertEl.classList.toggle === 'function') {
+                        alertEl.classList.toggle('hidden', true);
+                    }
+                }
+            }
+        }
+        window.evaluarAlertaDeficitPOD = evaluarAlertaDeficitPOD;
+
         /**
          * Sincroniza las entradas del formulario interactivo con dssFormState y ejecuta la auditoría.
          * Recalcula inmediatamente las variables dependientes (Fórmula obligatoria: Días de Puerto = Carga / Ritmo Carga + Carga / Ritmo Descarga)
@@ -31332,6 +31400,8 @@
             if (typeof window !== 'undefined') {
                 window.dssFormState = dssFormState;
             }
+
+            evaluarAlertaDeficitPOD(dssFormState.pod);
 
             generarAuditoriaOperativa(dssFormState);
         }

@@ -108,3 +108,112 @@ export function handleCommitConditions(currentState: DSSFormState, executeSafeCo
   }
   return true;
 }
+
+export function isExportDeficitPOD(podInput?: string | Record<string, any> | null): boolean {
+  if (!podInput) return false;
+
+  if (typeof podInput === 'object') {
+    if (podInput.isExportDeficit === true || Boolean(podInput.isExportDeficit)) {
+      return true;
+    }
+  }
+
+  let podStr = '';
+  if (typeof podInput === 'string') {
+    podStr = podInput;
+  } else if (typeof podInput === 'object') {
+    podStr = podInput.name || podInput.pod || podInput.destinationPort || podInput.port || podInput.region || podInput.country || '';
+  }
+
+  if (!podStr) return false;
+
+  const normalized = String(podStr)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+  if (!normalized) return false;
+
+  if (normalized.includes('exportdeficit') || normalized.includes('export_deficit') || normalized.includes('deficit_export')) {
+    return true;
+  }
+
+  const deficitKeywords = [
+    'senegal',
+    'algeria',
+    'argelia',
+    'nigeria',
+    'ghana',
+    'angola',
+    'cameroon',
+    'camerun',
+    'ivory coast',
+    'cote d\'ivoire',
+    'cote divoire',
+    'costa de marfil',
+    'togo',
+    'benin',
+    'guinea',
+    'sierra leone',
+    'sierra leona',
+    'liberia',
+    'mauritania',
+    'gambia',
+    'gabon',
+    'congo',
+    'equatorial guinea',
+    'guinea ecuatorial',
+    'west africa',
+    'africa occidental',
+    'north africa',
+    'africa del norte',
+    'dakar',
+    'algiers',
+    'argel',
+    'oran',
+    'bejaia',
+    'skikda',
+    'annaba',
+    'mostaganem',
+    'ghazaouet',
+    'jenjen',
+    'lagos',
+    'apapa',
+    'tin can',
+    'calabar',
+    'port harcourt',
+    'warri',
+    'onne',
+    'luanda',
+    'lobito',
+    'namibe',
+    'tema',
+    'takoradi',
+    'douala',
+    'kribi',
+    'lome',
+    'cotonou',
+    'abidjan',
+    'san pedro',
+    'conakry',
+    'freetown',
+    'monrovia',
+    'nouakchott',
+    'nouadhibou',
+    'banjul',
+    'owendo',
+    'libreville',
+    'pointe-noire',
+    'pointe noire',
+    'malabo',
+    'bata',
+    'luba',
+    'matadi',
+    'soyo',
+    'cabinda'
+  ];
+
+  return deficitKeywords.some(keyword => normalized.includes(keyword));
+}
+
