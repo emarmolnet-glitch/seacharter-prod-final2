@@ -499,3 +499,113 @@ test('PARTE 6: Reactive dssFormState, Two-Way Data Binding, and Card Synchroniza
   assert.equal(elements['val-portdays-total'].textContent, '30.0 días', 'Card 2 total port days must reflect 30.0 días in real-time');
 });
 
+test('PARTE 7: Refactorización Interfaz DSS - Tab Situación Actual, Paneles Colapsables (Acordeones) y Preservación de Layout Inferior', () => {
+  // 1. Verify "Situación Actual" tab button in index.html and decisiones.html
+  assert.match(indexHtml, /id="btn-tab-actual"/, 'index.html must include btn-tab-actual button');
+  assert.match(indexHtml, /cargarEscenario\('actual'\)/, 'btn-tab-actual must trigger cargarEscenario("actual") in index.html');
+  assert.match(indexHtml, /Situación Actual/, 'index.html must display label "Situación Actual"');
+
+  assert.match(decisionesHtml, /id="btn-tab-actual"/, 'decisiones.html must include btn-tab-actual button');
+  assert.match(decisionesHtml, /cargarEscenario\('actual'\)/, 'btn-tab-actual must trigger cargarEscenario("actual") in decisiones.html');
+  assert.match(decisionesHtml, /Situación Actual/, 'decisiones.html must display label "Situación Actual"');
+
+  // 2. Verify Collapsible Accordion Panels ("Variables del Viaje" & "Calculadora de Fletes")
+  assert.match(indexHtml, /id="accordion-section-variables"/, 'index.html must include accordion section for variables');
+  assert.match(indexHtml, /id="accordion-section-fletes"/, 'index.html must include accordion section for fletes');
+  assert.match(indexHtml, /id="btn-toggle-variables"/, 'index.html must include toggle button for variables accordion');
+  assert.match(indexHtml, /id="btn-toggle-fletes"/, 'index.html must include toggle button for fletes accordion');
+  assert.match(indexHtml, /id="icon-accordion-variables"/, 'index.html must include chevron icon for variables accordion');
+  assert.match(indexHtml, /id="icon-accordion-fletes"/, 'index.html must include chevron icon for fletes accordion');
+  assert.match(indexHtml, /function toggleAccordion\(nombre\)/, 'index.html must define toggleAccordion helper function');
+
+  assert.match(decisionesHtml, /id="accordion-section-variables"/, 'decisiones.html must include accordion section for variables');
+  assert.match(decisionesHtml, /id="accordion-section-fletes"/, 'decisiones.html must include accordion section for fletes');
+  assert.match(decisionesHtml, /id="btn-toggle-variables"/, 'decisiones.html must include toggle button for variables accordion');
+  assert.match(decisionesHtml, /id="btn-toggle-fletes"/, 'decisiones.html must include toggle button for fletes accordion');
+  assert.match(decisionesHtml, /id="icon-accordion-variables"/, 'decisiones.html must include chevron icon for variables accordion');
+  assert.match(decisionesHtml, /id="icon-accordion-fletes"/, 'decisiones.html must include chevron icon for fletes accordion');
+
+  // 3. Verify Bottom Layout Preservation ("Motor de Recomendaciones Comerciales" and "Distribución de Tiempo Operativo")
+  assert.match(indexHtml, /Motor de Recomendaciones Comerciales/, 'index.html must preserve Motor de Recomendaciones Comerciales in bottom layout');
+  assert.match(indexHtml, /Distribución de Tiempo Operativo/, 'index.html must preserve Distribución de Tiempo Operativo in bottom layout');
+  assert.match(decisionesHtml, /Motor de Recomendaciones Comerciales/, 'decisiones.html must preserve Motor de Recomendaciones Comerciales in bottom layout');
+  assert.match(decisionesHtml, /Distribución de Tiempo Operativo/, 'decisiones.html must preserve Distribución de Tiempo Operativo in bottom layout');
+
+  // 4. Test "Situación Actual" scenario logic: clears dssSimulationState and uses baseline dssFormState
+  const helperStart = indexHtml.indexOf('function determinarTerminoCargo(commodity)');
+  const helperEnd = indexHtml.indexOf('function buildAuditHTMLTemplate', helperStart);
+  const helpersCode = indexHtml.slice(helperStart, helperEnd);
+
+  const domState = {
+    'input-pol': 'Bilbao',
+    'input-pod': 'Veracruz',
+    'input-cargoQty': '40000',
+    'input-commodity': 'Granel Mineral',
+    'input-laycanDaysLeft': '14',
+    'input-estimatedVoyageDays': '10',
+    'input-loadRate': '6000',
+    'input-dischargeRate': '6000',
+    'input-portDays': '13.3',
+    'input-seaDays': '10',
+    'input-fleteEstimado': '42',
+    'input-breakEven': '30'
+  };
+
+  const elements = {};
+  const fakeDoc = {
+    querySelectorAll: () => [],
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    getElementById: (id) => {
+      if (!elements[id]) {
+        elements[id] = {
+          id,
+          get value() { return domState[id] !== undefined ? domState[id] : ''; },
+          set value(v) { domState[id] = String(v); },
+          textContent: '',
+          className: '',
+          classList: { toggle: () => {}, remove: () => {}, add: () => {}, contains: () => false },
+          style: {},
+          addEventListener: () => {},
+          removeEventListener: () => {}
+        };
+      }
+      return elements[id];
+    }
+  };
+
+  const fakeWin = {
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    State: { cancellingDate: '2026-08-20' }
+  };
+  globalThis.window = fakeWin;
+
+  const evalContext = new Function(
+    'document',
+    'window',
+    `
+    ${helpersCode}
+    window.cargarEscenario = cargarEscenario;
+    window.limpiarDssSimulationState = limpiarDssSimulationState;
+    window.getDSSCurrentState = getDSSCurrentState;
+    `
+  );
+
+  evalContext(fakeDoc, fakeWin);
+
+  // First run scenario 'riesgo' to populate simulation state
+  fakeWin.cargarEscenario('riesgo');
+  assert.ok(fakeWin.dssSimulationState, 'dssSimulationState must be active for Riesgo scenario');
+
+  // Then switch to "Situación Actual" tab ('actual')
+  fakeWin.cargarEscenario('actual');
+
+  // In "Situación Actual", dssSimulationState MUST BE NULL (strictly rendering globalState without simulation modifiers)
+  assert.equal(fakeWin.dssSimulationState, null, 'In Situación Actual tab, dssSimulationState must be strictly null');
+  assert.ok(fakeWin.dssFormState, 'dssFormState must be active');
+  assert.equal(fakeWin.dssFormState.pol, 'Bilbao', 'dssFormState must reflect baseline POL (Bilbao)');
+  assert.equal(fakeWin.dssFormState.cargoQty, 40000, 'dssFormState must reflect baseline cargo quantity (40000)');
+});
+
+
