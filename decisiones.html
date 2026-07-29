@@ -59,6 +59,10 @@
                     <i class="fa-solid fa-file-contract text-indigo-600"></i>
                     <span>Generar Oferta (Fixture Recap)</span>
                 </button>
+                <button type="button" id="btn-fijar-condiciones-top" onclick="fijarCondicionesDefinitivas()" class="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
+                    <i class="fa-solid fa-lock"></i>
+                    <span>Fijar Condiciones Definitivas</span>
+                </button>
             </div>
         </header>
 
@@ -153,6 +157,18 @@
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- ACCIÓN PRINCIPAL DE FIJACIÓN DE CONDICIONES DEFINITIVAS -->
+                <div class="mt-4 pt-3 border-t border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                    <div class="text-xs text-slate-400 font-medium flex items-center gap-1.5">
+                        <i class="fa-solid fa-circle-info text-indigo-400"></i>
+                        <span>Consolida los datos simulados hacia la Calculadora y autocompleta la proforma en el Editor.</span>
+                    </div>
+                    <button type="button" id="btn-fijar-condiciones" onclick="fijarCondicionesDefinitivas()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer">
+                        <i class="fa-solid fa-lock"></i>
+                        <span>Fijar Condiciones Definitivas</span>
+                    </button>
                 </div>
             </div>
         </section>
@@ -1296,12 +1312,6 @@
          * ========================================================================== */
 
         function getDSSCurrentState() {
-            if (dssSimulationState) {
-                return { ...dssSimulationState };
-            }
-            if (dssFormState) {
-                return { ...dssFormState };
-            }
             const inputPol = document.getElementById('input-pol');
             const inputPod = document.getElementById('input-pod');
             const inputCargoQty = document.getElementById('input-cargoQty');
@@ -1309,31 +1319,45 @@
             const inputLaycanDaysLeft = document.getElementById('input-laycanDaysLeft');
             const inputEstimatedVoyageDays = document.getElementById('input-estimatedVoyageDays');
             const inputLoadRate = document.getElementById('input-loadRate');
+            const inputDischargeRate = document.getElementById('input-dischargeRate');
             const inputPortDays = document.getElementById('input-portDays');
             const inputSeaDays = document.getElementById('input-seaDays');
             const inputFleteEstimado = document.getElementById('input-fleteEstimado');
             const inputBreakEven = document.getElementById('input-breakEven');
 
-            const pol = inputPol?.value || 'Rotterdam';
-            const pod = inputPod?.value || 'Houston';
-            const cargoQty = parseFloat(inputCargoQty?.value) || 50000;
-            const commodity = inputCommodity?.value || 'Siderúrgico / Carga General';
-            const laycanDaysLeft = parseFloat(inputLaycanDaysLeft?.value) || 10;
-            const estimatedVoyageDays = parseFloat(inputEstimatedVoyageDays?.value) || 8;
-            const loadRate = parseFloat(inputLoadRate?.value) || 5000;
-            const portDays = parseFloat(inputPortDays?.value) || 10;
-            const seaDays = parseFloat(inputSeaDays?.value) || 8;
+            const fallbackPol = inputPol?.value || document.getElementById('port-pol')?.value || 'Rotterdam';
+            const fallbackPod = inputPod?.value || document.getElementById('port-pod')?.value || 'Houston';
+            const fallbackCargoQty = parseFloat(inputCargoQty?.value) || parseFloat(document.getElementById('cargo-qty')?.value) || 50000;
+            const fallbackCommodity = inputCommodity?.value || 'Siderúrgico / Carga General';
+            const fallbackVesselName = document.getElementById('vessel-name')?.value || 'MV GEARED BULKER';
 
-            const rawFleteVal = parseFloat(inputFleteEstimado?.value) || 35;
-            const rawBreakEvenVal = parseFloat(inputBreakEven?.value) || 25;
+            const activeDss = (typeof dssSimulationState !== 'undefined' && dssSimulationState) 
+                ? dssSimulationState 
+                : ((typeof dssFormState !== 'undefined' && dssFormState) ? dssFormState : {});
+
+            const pol = activeDss.pol || fallbackPol;
+            const pod = activeDss.pod || fallbackPod;
+            const cargoQty = parseFloat(activeDss.cargoQty) || fallbackCargoQty;
+            const commodity = activeDss.commodity || fallbackCommodity;
+            const vesselName = activeDss.vesselName || activeDss.vessel || fallbackVesselName;
+
+            const laycanDaysLeft = parseFloat(activeDss.laycanDaysLeft) || parseFloat(inputLaycanDaysLeft?.value) || parseFloat(document.getElementById('laycan-dias-libres')?.value) || 10;
+            const estimatedVoyageDays = parseFloat(activeDss.estimatedVoyageDays) || parseFloat(inputEstimatedVoyageDays?.value) || parseFloat(document.getElementById('shadow-sea-days')?.value) || 8;
+            const loadRate = parseFloat(activeDss.loadRate) || parseFloat(inputLoadRate?.value) || parseFloat(document.getElementById('rate-load')?.value) || 5000;
+            const dischargeRate = parseFloat(activeDss.dischargeRate) || parseFloat(inputDischargeRate?.value) || parseFloat(document.getElementById('rate-disch')?.value) || 5000;
+            const seaDays = parseFloat(activeDss.seaDays) || parseFloat(inputSeaDays?.value) || parseFloat(document.getElementById('shadow-sea-days')?.value) || 8;
+
+            const computedPortDays = activeDss.portDays !== undefined ? parseFloat(activeDss.portDays) : ((cargoQty / (loadRate || 1)) + (cargoQty / (dischargeRate || 1)));
+
+            const rawFleteVal = activeDss.fleteEstimado !== undefined ? parseFloat(activeDss.fleteEstimado) : (activeDss.fleteUnitario !== undefined ? parseFloat(activeDss.fleteUnitario) : (parseFloat(inputFleteEstimado?.value) || parseFloat(document.getElementById('freight-sell')?.value) || 35));
+            const rawBreakEvenVal = activeDss.breakEven !== undefined ? parseFloat(activeDss.breakEven) : (parseFloat(inputBreakEven?.value) || parseFloat(document.getElementById('shadow-break-even-freight')?.value) || 25);
 
             const qty = Math.max(1, cargoQty);
             const fleteUnitario = rawFleteVal > 1000 ? rawFleteVal / qty : rawFleteVal;
             const breakEvenUnitario = rawBreakEvenVal > 1000 ? rawBreakEvenVal / qty : rawBreakEvenVal;
 
-            const vesselName = 'MV GEARED BULKER';
-
             return {
+                ...activeDss,
                 pol,
                 pod,
                 cargoQty,
@@ -1341,7 +1365,8 @@
                 laycanDaysLeft,
                 estimatedVoyageDays,
                 loadRate,
-                portDays,
+                dischargeRate,
+                portDays: computedPortDays,
                 seaDays,
                 fleteEstimado: fleteUnitario,
                 breakEven: breakEvenUnitario,
@@ -1353,20 +1378,19 @@
         window.getDSSCurrentState = getDSSCurrentState;
 
         function buildAuditHTMLTemplate(state) {
-            const {
-                pol,
-                pod,
-                cargoQty,
-                commodity,
-                laycanDaysLeft,
-                estimatedVoyageDays,
-                loadRate,
-                portDays,
-                seaDays,
-                fleteEstimado,
-                breakEven,
-                vesselName
-            } = state;
+            const safeState = state || {};
+            const pol = String(safeState.pol || 'Rotterdam');
+            const pod = String(safeState.pod || 'Houston');
+            const cargoQty = Number(safeState.cargoQty) || 50000;
+            const commodity = String(safeState.commodity || 'Siderúrgico / Carga General');
+            const laycanDaysLeft = Number(safeState.laycanDaysLeft) || 10;
+            const estimatedVoyageDays = Number(safeState.estimatedVoyageDays) || 8;
+            const loadRate = Number(safeState.loadRate) || 5000;
+            const portDays = Number(safeState.portDays) || 10;
+            const seaDays = Number(safeState.seaDays) || 8;
+            const fleteEstimado = Number(safeState.fleteEstimado || safeState.fleteUnitario) || 35;
+            const breakEven = Number(safeState.breakEven) || 25;
+            const vesselName = String(safeState.vesselName || safeState.vessel || 'MV GEARED BULKER');
 
             const laycanBuffer = laycanDaysLeft - estimatedVoyageDays;
             const esLaycanCritico = laycanBuffer < 3;
@@ -1571,20 +1595,28 @@
         window.buildAuditHTMLTemplate = buildAuditHTMLTemplate;
 
         function buildFixtureRecapHTMLTemplate(state) {
-            const {
-                pol,
-                pod,
-                cargoQty,
-                commodity,
-                laycanDaysLeft,
-                loadRate,
-                fleteEstimado,
-                vesselName
-            } = state;
+            const safeState = state || {};
+            const pol = String(safeState.pol || 'TBA');
+            const pod = String(safeState.pod || 'TBA');
+            const cargoQty = Number(safeState.cargoQty) || 50000;
+            const commodity = String(safeState.commodity || 'CARGA GENERAL');
+            const laycanDaysLeft = safeState.laycanDaysLeft !== undefined && safeState.laycanDaysLeft !== null ? safeState.laycanDaysLeft : 10;
+            const loadRate = Number(safeState.loadRate) || 5000;
+            const rawFlete = Number(safeState.fleteEstimado || safeState.fleteUnitario) || 35;
+            const vesselName = String(safeState.vesselName || safeState.vessel || 'MV GEARED BULKER');
 
-            const freightPerMT = (fleteEstimado / (cargoQty || 1)).toFixed(2);
+            const fleteTotal = rawFlete > 1000 ? rawFlete : rawFlete * cargoQty;
+            const freightPerMT = (cargoQty > 0 ? fleteTotal / cargoQty : rawFlete).toFixed(2);
             const dateStr = new Date().toLocaleDateString('es-ES');
             const refNo = `RSH-FIX-${Math.floor(Math.random() * 899999 + 100000)}`;
+
+            const cleanVessel = vesselName.toUpperCase();
+            const cleanCommodity = commodity.toUpperCase();
+            const cleanPol = pol.toUpperCase();
+            const cleanPod = pod.toUpperCase();
+            const cleanCargoQty = cargoQty.toLocaleString('en-US');
+            const cleanFleteTotal = fleteTotal.toLocaleString('en-US');
+            const cleanLoadRate = loadRate.toLocaleString('en-US');
 
             return `
 <div style="font-family: 'Courier New', Courier, monospace; color: #0f172a; line-height: 1.45; font-size: 11px; background: #ffffff; padding: 10px;">
@@ -1604,17 +1636,17 @@ VOYAGE UNDER THE FOLLOWING MAIN TERMS AND CONDITIONS:
 --------------------------------------------------------------------------------
 - ACCT        : CHARTERERS ACCOUNT / AS NOMINATED BY CHARTERERS
 - OWNERS      : RODAHMAR SHIPPING SL (AS DISPONENT OWNERS)
-- VESSEL      : ${vesselName.toUpperCase()} (MV GEARED BULKER - ABT 50,000 DWT)
+- VESSEL      : ${cleanVessel} (MV GEARED BULKER - ABT 50,000 DWT)
                 FULLY GEARED WITH 4 X 30 MT SWL CRANES AND ELECTRIC GRABS
-- CARGO       : ${cargoQty.toLocaleString('en-US')} METRIC TONS 5% MOLOO (MORE OR LESS IN
-                OWNERS' OPTION) OF ${commodity.toUpperCase()}
-- POL         : 1 SAFE BERTH / 1 SAFE PORT ${pol.toUpperCase()}
-- POD         : 1 SAFE BERTH / 1 SAFE PORT ${pod.toUpperCase()}
+- CARGO       : ${cleanCargoQty} METRIC TONS 5% MOLOO (MORE OR LESS IN
+                OWNERS' OPTION) OF ${cleanCommodity}
+- POL         : 1 SAFE BERTH / 1 SAFE PORT ${cleanPol}
+- POD         : 1 SAFE BERTH / 1 SAFE PORT ${cleanPod}
 - LAYCAN      : ${laycanDaysLeft} DAYS NOTICE FROM DATE / AS PER AGREED VOYAGE SCHEDULE
 
 2. FREIGHT & FINANCIALS
 --------------------------------------------------------------------------------
-- FREIGHT RATE: USD $${freightPerMT} PER METRIC TONNE (OR LUMPSUM USD $${fleteEstimado.toLocaleString('en-US')})
+- FREIGHT RATE: USD $${freightPerMT} PER METRIC TONNE (OR LUMPSUM USD $${cleanFleteTotal})
                 FIOS TERMS. RATE INCLUDES ALL APPLICABLE DSS RISK SURCHARGES.
 - TERMS       : FIOS (FREE IN AND OUT STOWED), FREE OF ALL RISK, EXPENSE, 
                 STEVEDORING AND RESPONSIBILITY TO OWNERS.
@@ -1624,7 +1656,7 @@ VOYAGE UNDER THE FOLLOWING MAIN TERMS AND CONDITIONS:
 
 3. LAYTIME & OPERATIONS
 --------------------------------------------------------------------------------
-- LOADING RATE   : ${loadRate.toLocaleString('en-US')} METRIC TONS PER WEATHER WORKING DAY OF 24
+- LOADING RATE   : ${cleanLoadRate} METRIC TONS PER WEATHER WORKING DAY OF 24
                    CONSECUTIVE HOURS, SUNDAYS AND HOLIDAYS INCLUDED (WWD SHINC).
 - DISDISCH RATE  : MECHANICALLY LIMITED TO ~2,000 METRIC TONS PER WEATHER WORKING
                    DAY OF 24 CONSECUTIVE HOURS, SUNDAYS AND HOLIDAYS INCLUDED 
