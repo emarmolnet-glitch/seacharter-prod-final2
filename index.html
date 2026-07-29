@@ -9439,17 +9439,20 @@
 
                     <!-- Botones de Acción / Simulación y Volver -->
                     <div class="flex flex-wrap items-center gap-2 shrink-0">
-                        <button type="button" onclick="cargarEscenario('riesgo')" class="px-3 py-1.5 text-xs font-medium bg-red-900/40 text-red-300 hover:bg-red-900/60 border border-red-700/50 rounded-lg transition-all flex items-center gap-1.5">
+                        <button type="button" id="btn-tab-actual" onclick="cargarEscenario('actual')" class="px-3 py-1.5 text-xs font-medium bg-indigo-900/40 text-indigo-300 hover:bg-indigo-900/60 border border-indigo-700/50 rounded-lg transition-all flex items-center gap-1.5 shadow-sm">
+                            🔵 Situación Actual
+                        </button>
+                        <button type="button" id="btn-tab-riesgo" onclick="cargarEscenario('riesgo')" class="px-3 py-1.5 text-xs font-medium bg-red-900/40 text-red-300 hover:bg-red-900/60 border border-red-700/50 rounded-lg transition-all flex items-center gap-1.5">
                             🔴 Escenario Riesgo
                         </button>
-                        <button type="button" onclick="cargarEscenario('equilibrado')" class="px-3 py-1.5 text-xs font-medium bg-amber-900/40 text-amber-300 hover:bg-amber-900/60 border border-amber-700/50 rounded-lg transition-all flex items-center gap-1.5">
+                        <button type="button" id="btn-tab-alerta" onclick="cargarEscenario('equilibrado')" class="px-3 py-1.5 text-xs font-medium bg-amber-900/40 text-amber-300 hover:bg-amber-900/60 border border-amber-700/50 rounded-lg transition-all flex items-center gap-1.5">
                             🟡 Escenario Alerta
                         </button>
-                        <button type="button" onclick="cargarEscenario('optimo')" class="px-3 py-1.5 text-xs font-medium bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/60 border border-emerald-700/50 rounded-lg transition-all flex items-center gap-1.5">
+                        <button type="button" id="btn-tab-optimo" onclick="cargarEscenario('optimo')" class="px-3 py-1.5 text-xs font-medium bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/60 border border-emerald-700/50 rounded-lg transition-all flex items-center gap-1.5">
                             🟢 Escenario Óptimo
                         </button>
-                        <button type="button" onclick="toggleParametros()" class="px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 rounded-lg transition-all flex items-center gap-1">
-                            ⚙️ Ajustar Variables
+                        <button type="button" id="btn-toggle-parametros" onclick="toggleParametros()" class="px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 rounded-lg transition-all flex items-center gap-1">
+                            ⚙️ Ajustar Variables <i id="icon-toggle-parametros" class="fa-solid fa-chevron-down text-[10px] ml-1 transition-transform duration-300"></i>
                         </button>
                         <button type="button" id="btn-generate-audit-pdf" onclick="generateAuditPDF()" class="px-3 py-1.5 text-xs font-semibold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-lg transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
                             <i class="fa-solid fa-file-pdf text-red-600"></i>
@@ -9465,59 +9468,96 @@
                     </div>
                 </header>
 
-                <!-- PANEL INTERACTIVO DE SIMULACIÓN DE PARÁMETROS (DESPLEGABLE) -->
-                <section id="panel-parametros" class="hidden bg-white border border-slate-200 rounded-2xl p-6 shadow-xl transition-all text-slate-800">
-                    <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 mb-4 flex items-center gap-2">
-                        <span>🎛️ Modificar Variables del Viaje y Calculadora de Fletes</span>
-                    </h2>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                        <div>
-                            <label class="block text-slate-600 font-semibold mb-1">Puerto Origen (POL)</label>
-                            <input type="text" id="input-pol" value="Rotterdam" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                <!-- PANEL INTERACTIVO DE SIMULACIÓN DE PARÁMETROS (DESPLEGABLE / ACORDEONES) -->
+                <section id="panel-parametros" class="hidden bg-white border border-slate-200 rounded-2xl p-5 shadow-xl transition-all text-slate-800 duration-300 ease-in-out overflow-hidden">
+                    <!-- HEADER GENERAL CON BOTÓN TOGGLE / CHEVRON -->
+                    <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4 cursor-pointer select-none" onclick="toggleParametros()">
+                        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                            <span>🎛️ Modificar Variables del Viaje y Calculadora de Fletes</span>
+                        </h2>
+                        <button type="button" aria-label="Toggle Panel Inputs" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors flex items-center gap-1 text-xs font-semibold">
+                            <span class="hidden sm:inline">Desplegar / Plegar</span>
+                            <i id="icon-toggle-panel-main" class="fa-solid fa-chevron-down text-xs transition-transform duration-300"></i>
+                        </button>
+                    </div>
+
+                    <div class="space-y-4">
+                        <!-- ACORDEÓN 1: VARIABLES DEL VIAJE -->
+                        <div id="accordion-section-variables" class="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50 shadow-sm">
+                            <button type="button" id="btn-toggle-variables" onclick="toggleAccordion('variables')" class="w-full flex items-center justify-between px-4 py-3 bg-slate-100/90 hover:bg-slate-200/80 font-semibold text-xs text-slate-700 transition-colors select-none">
+                                <span class="flex items-center gap-2">
+                                    <i class="fa-solid fa-sliders text-indigo-600"></i>
+                                    <span>Variables del Viaje (Ruta, Carga, Laycan y Ritmos)</span>
+                                </span>
+                                <i id="icon-accordion-variables" class="fa-solid fa-chevron-up text-xs text-slate-500 transition-transform duration-300"></i>
+                            </button>
+                            <div id="body-accordion-variables" class="p-4 transition-all duration-300 ease-in-out">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                                    <div>
+                                        <label class="block text-slate-600 font-semibold mb-1">Puerto Origen (POL)</label>
+                                        <input type="text" id="input-pol" value="Rotterdam" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-600 font-semibold mb-1">Puerto Destino (POD)</label>
+                                        <input type="text" id="input-pod" value="Houston" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-600 font-semibold mb-1">Cantidad Carga (MT)</label>
+                                        <input type="number" id="input-cargoQty" value="50000" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-600 font-semibold mb-1">Mercancía / Commodity</label>
+                                        <input type="text" id="input-commodity" value="Siderúrgico / Carga General" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-600 font-semibold mb-1">Días Restantes Laycan</label>
+                                        <input type="number" id="input-laycanDaysLeft" value="10" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-600 font-semibold mb-1">Días Est. Navegación</label>
+                                        <input type="number" id="input-estimatedVoyageDays" value="8" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-600 font-semibold mb-1">Ritmo Carga (MT/día)</label>
+                                        <input type="number" id="input-loadRate" value="5000" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-600 font-semibold mb-1">Ritmo Descarga (MT/día)</label>
+                                        <input type="number" id="input-dischargeRate" value="5000" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-600 font-semibold mb-1">Días en Puerto (Port Days)</label>
+                                        <input type="number" id="input-portDays" value="10" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-600 font-semibold mb-1">Días Navegando (Sea Days)</label>
+                                        <input type="number" id="input-seaDays" value="8" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-slate-600 font-semibold mb-1">Puerto Destino (POD)</label>
-                            <input type="text" id="input-pod" value="Houston" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 font-semibold mb-1">Cantidad Carga (MT)</label>
-                            <input type="number" id="input-cargoQty" value="50000" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 font-semibold mb-1">Mercancía / Commodity</label>
-                            <input type="text" id="input-commodity" value="Siderúrgico / Carga General" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 font-semibold mb-1">Días Restantes Laycan</label>
-                            <input type="number" id="input-laycanDaysLeft" value="10" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 font-semibold mb-1">Días Est. Navegación</label>
-                            <input type="number" id="input-estimatedVoyageDays" value="8" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 font-semibold mb-1">Ritmo Carga (MT/día)</label>
-                            <input type="number" id="input-loadRate" value="5000" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 font-semibold mb-1">Ritmo Descarga (MT/día)</label>
-                            <input type="number" id="input-dischargeRate" value="5000" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 font-semibold mb-1">Días en Puerto (Port Days)</label>
-                            <input type="number" id="input-portDays" value="10" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 font-semibold mb-1">Días Navegando (Sea Days)</label>
-                            <input type="number" id="input-seaDays" value="8" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 font-semibold mb-1">Flete Unitario ($/MT)</label>
-                            <input type="number" id="input-fleteEstimado" value="35" step="any" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-                        </div>
-                        <div>
-                            <label class="block text-slate-600 font-semibold mb-1">Break-Even Unitario ($/MT)</label>
-                            <input type="number" id="input-breakEven" value="25" step="any" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+
+                        <!-- ACORDEÓN 2: CALCULADORA DE FLETES -->
+                        <div id="accordion-section-fletes" class="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50 shadow-sm">
+                            <button type="button" id="btn-toggle-fletes" onclick="toggleAccordion('fletes')" class="w-full flex items-center justify-between px-4 py-3 bg-slate-100/90 hover:bg-slate-200/80 font-semibold text-xs text-slate-700 transition-colors select-none">
+                                <span class="flex items-center gap-2">
+                                    <i class="fa-solid fa-calculator text-emerald-600"></i>
+                                    <span>Calculadora de Fletes</span>
+                                </span>
+                                <i id="icon-accordion-fletes" class="fa-solid fa-chevron-up text-xs text-slate-500 transition-transform duration-300"></i>
+                            </button>
+                            <div id="body-accordion-fletes" class="p-4 transition-all duration-300 ease-in-out">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                                    <div>
+                                        <label class="block text-slate-600 font-semibold mb-1">Flete Unitario ($/MT)</label>
+                                        <input type="number" id="input-fleteEstimado" value="35" step="any" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-600 font-semibold mb-1">Break-Even Unitario ($/MT)</label>
+                                        <input type="number" id="input-breakEven" value="25" step="any" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -30996,17 +31036,109 @@
         }
         window.actualizarDesdeFormulario = actualizarDesdeFormulario;
 
+        function actualizarEstiloBotonesEscenario(escenarioActivo) {
+            const act = (escenarioActivo === 'situacion_actual' || escenarioActivo === 'limpiar' || escenarioActivo === 'reset') ? 'actual' : escenarioActivo;
+            const btnActual = document.getElementById('btn-tab-actual');
+            const btnRiesgo = document.getElementById('btn-tab-riesgo');
+            const btnAlerta = document.getElementById('btn-tab-alerta');
+            const btnOptimo = document.getElementById('btn-tab-optimo');
+
+            if (btnActual) {
+                if (act === 'actual') {
+                    btnActual.className = "px-3 py-1.5 text-xs font-bold bg-indigo-600 text-white border border-indigo-400 ring-2 ring-indigo-400/50 rounded-lg transition-all flex items-center gap-1.5 shadow-md";
+                } else {
+                    btnActual.className = "px-3 py-1.5 text-xs font-medium bg-indigo-900/40 text-indigo-300 hover:bg-indigo-900/60 border border-indigo-700/50 rounded-lg transition-all flex items-center gap-1.5";
+                }
+            }
+
+            if (btnRiesgo) {
+                if (act === 'riesgo') {
+                    btnRiesgo.className = "px-3 py-1.5 text-xs font-bold bg-red-800 text-white border border-red-400 ring-2 ring-red-400/50 rounded-lg transition-all flex items-center gap-1.5 shadow-md";
+                } else {
+                    btnRiesgo.className = "px-3 py-1.5 text-xs font-medium bg-red-900/40 text-red-300 hover:bg-red-900/60 border border-red-700/50 rounded-lg transition-all flex items-center gap-1.5";
+                }
+            }
+
+            if (btnAlerta) {
+                if (act === 'alerta' || act === 'equilibrado') {
+                    btnAlerta.className = "px-3 py-1.5 text-xs font-bold bg-amber-800 text-white border border-amber-400 ring-2 ring-amber-400/50 rounded-lg transition-all flex items-center gap-1.5 shadow-md";
+                } else {
+                    btnAlerta.className = "px-3 py-1.5 text-xs font-medium bg-amber-900/40 text-amber-300 hover:bg-amber-900/60 border border-amber-700/50 rounded-lg transition-all flex items-center gap-1.5";
+                }
+            }
+
+            if (btnOptimo) {
+                if (act === 'optimo') {
+                    btnOptimo.className = "px-3 py-1.5 text-xs font-bold bg-emerald-800 text-white border border-emerald-400 ring-2 ring-emerald-400/50 rounded-lg transition-all flex items-center gap-1.5 shadow-md";
+                } else {
+                    btnOptimo.className = "px-3 py-1.5 text-xs font-medium bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/60 border border-emerald-700/50 rounded-lg transition-all flex items-center gap-1.5";
+                }
+            }
+        }
+        window.actualizarEstiloBotonesEscenario = actualizarEstiloBotonesEscenario;
+
+        function toggleAccordion(nombre) {
+            const body = document.getElementById(`body-accordion-${nombre}`);
+            const icon = document.getElementById(`icon-accordion-${nombre}`);
+            if (!body) return;
+
+            const isCollapsed = body.classList.contains('hidden') || body.style.maxHeight === '0px' || body.style.display === 'none';
+
+            if (isCollapsed) {
+                body.classList.remove('hidden');
+                body.style.display = 'block';
+                body.style.maxHeight = (body.scrollHeight || 500) + 'px';
+                body.style.opacity = '1';
+                if (icon) icon.classList.remove('rotate-180');
+            } else {
+                body.style.maxHeight = '0px';
+                body.style.opacity = '0';
+                if (icon) icon.classList.add('rotate-180');
+                setTimeout(() => {
+                    if (body.style.maxHeight === '0px') {
+                        body.classList.add('hidden');
+                    }
+                }, 300);
+            }
+        }
+        window.toggleAccordion = toggleAccordion;
+
         function toggleParametros() {
             limpiarDssSimulationState();
             const panel = document.getElementById('panel-parametros');
-            if (panel) panel.classList.toggle('hidden');
-            generarAuditoriaOperativa(typeof getDSSCurrentState === 'function' ? getDSSCurrentState() : null);
+            const icon = document.getElementById('icon-toggle-parametros');
+            const iconMain = document.getElementById('icon-toggle-panel-main');
+            if (!panel) return;
+
+            const isHidden = panel.classList.contains('hidden');
+            if (isHidden) {
+                panel.classList.remove('hidden');
+                panel.style.maxHeight = (panel.scrollHeight || 800) + 'px';
+                panel.style.opacity = '1';
+                if (icon) icon.classList.add('rotate-180');
+                if (iconMain) iconMain.classList.add('rotate-180');
+            } else {
+                panel.classList.add('hidden');
+                panel.style.maxHeight = '0px';
+                panel.style.opacity = '0';
+                if (icon) icon.classList.remove('rotate-180');
+                if (iconMain) iconMain.classList.remove('rotate-180');
+            }
+            actualizarDesdeFormulario();
         }
         window.toggleParametros = toggleParametros;
 
         function cargarEscenario(tipo) {
-            if (tipo === 'limpiar' || tipo === 'reset') {
-                limpiarEscenario();
+            if (tipo === 'actual' || tipo === 'situacion_actual' || tipo === 'limpiar' || tipo === 'reset') {
+                limpiarDssSimulationState();
+                const globalState = typeof getDSSCurrentState === 'function' ? getDSSCurrentState() : (dssFormState || estadoInicialDecisiones);
+                dssFormState = { ...globalState };
+                if (typeof window !== 'undefined') {
+                    window.dssFormState = dssFormState;
+                }
+                sincronizarFormularioDesdeEstado(dssFormState);
+                generarAuditoriaOperativa(dssFormState);
+                actualizarEstiloBotonesEscenario('actual');
                 return;
             }
 
@@ -31143,6 +31275,7 @@
 
             sincronizarFormularioDesdeEstado(dssFormState);
             generarAuditoriaOperativa(dssFormState);
+            actualizarEstiloBotonesEscenario(tipo);
         }
 
         function cargarEscenarioRiesgo() {
