@@ -374,7 +374,8 @@
          * @param {Object} estado 
          */
         function generarAuditoriaOperativa(estado) {
-            if (!estado) return;
+            const activeState = dssSimulationState || estado || estadoInicial;
+            if (!activeState) return;
 
             // Extraer variables con valores por defecto de resguardo
             const {
@@ -390,13 +391,13 @@
                 seaDays = 0,
                 fleteEstimado = 0,
                 breakEven = 0
-            } = estado;
+            } = activeState;
 
             // --- 1. CABECERA Y RESUMEN DEL VIAJE ---
-            document.getElementById('summary-pol').textContent = pol;
-            document.getElementById('summary-pod').textContent = pod;
-            document.getElementById('summary-qty').textContent = `${Number(cargoQty).toLocaleString('es-ES')} MT`;
-            document.getElementById('summary-commodity').textContent = commodity;
+            if (document.getElementById('summary-pol')) document.getElementById('summary-pol').textContent = pol;
+            if (document.getElementById('summary-pod')) document.getElementById('summary-pod').textContent = pod;
+            if (document.getElementById('summary-qty')) document.getElementById('summary-qty').textContent = `${Number(cargoQty).toLocaleString('es-ES')} MT`;
+            if (document.getElementById('summary-commodity')) document.getElementById('summary-commodity').textContent = commodity;
 
             const recomendaciones = [];
             const cargoTerms = determinarTerminoCargo(commodity);
@@ -407,7 +408,19 @@
 
             const today = new Date();
             const etaDate = new Date(today.getTime() + Math.max(0, estimatedVoyageDays) * 86400000);
-            const cancellingDate = new Date(today.getTime() + Math.max(0, laycanDaysLeft) * 86400000);
+            
+            let cancellingDate;
+            if (activeState.cancellingDate instanceof Date) {
+                cancellingDate = activeState.cancellingDate;
+            } else if (activeState.cancellingDate && typeof activeState.cancellingDate === 'string') {
+                const parsed = new Date(activeState.cancellingDate);
+                cancellingDate = isNaN(parsed.getTime())
+                    ? new Date(today.getTime() + Math.max(0, laycanDaysLeft) * 86400000)
+                    : parsed;
+            } else {
+                cancellingDate = new Date(today.getTime() + Math.max(0, laycanDaysLeft) * 86400000);
+            }
+
             const etaStr = etaDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const cancellingStr = cancellingDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
@@ -713,10 +726,29 @@
             }
         }
 
+        let dssSimulationState = null;
+
+        function limpiarDssSimulationState() {
+            dssSimulationState = null;
+            if (typeof window !== 'undefined') {
+                window.dssSimulationState = null;
+            }
+        }
+
+        function limpiarEscenario() {
+            limpiarDssSimulationState();
+            actualizarDesdeFormulario();
+        }
+
+        function desactivarEscenarios() {
+            limpiarEscenario();
+        }
+
         /**
          * Sincroniza las entradas del formulario interactivo con el objeto de estado y ejecuta la auditoría
          */
         function actualizarDesdeFormulario() {
+            limpiarDssSimulationState();
             const inputPol = document.getElementById('input-pol');
             const inputPod = document.getElementById('input-pod');
             const inputCargoQty = document.getElementById('input-cargoQty');
@@ -759,8 +791,10 @@
          * Muestra/Oculta el panel desplegable de ajuste de variables
          */
         function toggleParametros() {
+            limpiarDssSimulationState();
             const panel = document.getElementById('panel-parametros');
-            panel.classList.toggle('hidden');
+            if (panel) panel.classList.toggle('hidden');
+            actualizarDesdeFormulario();
         }
 
         /**
@@ -768,6 +802,11 @@
          * @param {string} tipo 
          */
         function cargarEscenario(tipo) {
+            if (tipo === 'limpiar' || tipo === 'reset') {
+                limpiarEscenario();
+                return;
+            }
+
             const inputPol = document.getElementById('input-pol');
             const inputPod = document.getElementById('input-pod');
             const inputCargoQty = document.getElementById('input-cargoQty');
@@ -804,25 +843,33 @@
             const breakEvenUnitario = currentState.breakEvenUnitario || currentState.breakEven || 25;
 
             let stressMutations = {};
+            const today = new Date();
 
             if (tipo === 'riesgo') {
+                const simLaycanDays = Math.max(1, Number((voyageDays - 2).toFixed(1)));
                 stressMutations = {
-                    laycanDaysLeft: Math.max(1, Number((voyageDays - 2).toFixed(1))),
+                    laycanDaysLeft: simLaycanDays,
+                    cancellingDate: new Date(today.getTime() + Math.max(0, simLaycanDays) * 86400000),
                     loadRate: Math.max(100, Math.round(currentLoadRate * 0.5)),
                     dischargeRate: Math.max(100, Math.round(currentDischargeRate * 0.5)),
                     fleteUnitario: Number((breakEvenUnitario * 0.88).toFixed(2)),
                     fleteEstimado: Number((breakEvenUnitario * 0.88).toFixed(2))
                 };
             } else if (tipo === 'alerta' || tipo === 'equilibrado') {
+                const simLaycanDays = currentState.laycanDaysLeft || 10;
                 stressMutations = {
+                    laycanDaysLeft: simLaycanDays,
+                    cancellingDate: currentState.cancellingDate || new Date(today.getTime() + Math.max(0, simLaycanDays) * 86400000),
                     loadRate: Math.max(100, Math.round(currentLoadRate * 0.7)),
                     dischargeRate: Math.max(100, Math.round(currentDischargeRate * 0.7)),
                     fleteUnitario: Number((breakEvenUnitario * 1.03).toFixed(2)),
                     fleteEstimado: Number((breakEvenUnitario * 1.03).toFixed(2))
                 };
             } else if (tipo === 'optimo') {
+                const simLaycanDays = Number((voyageDays + 10).toFixed(1));
                 stressMutations = {
-                    laycanDaysLeft: Number((voyageDays + 10).toFixed(1)),
+                    laycanDaysLeft: simLaycanDays,
+                    cancellingDate: new Date(today.getTime() + Math.max(0, simLaycanDays) * 86400000),
                     loadRate: Math.max(1000, Math.round(currentLoadRate * 1.5)),
                     dischargeRate: Math.max(1000, Math.round(currentDischargeRate * 1.5)),
                     fleteUnitario: Number((breakEvenUnitario * 1.25).toFixed(2)),
@@ -832,35 +879,41 @@
 
             const updatedState = { ...currentState, ...stressMutations };
 
-            if (inputLaycanDaysLeft && updatedState.laycanDaysLeft !== undefined) inputLaycanDaysLeft.value = updatedState.laycanDaysLeft;
-            if (inputEstimatedVoyageDays && updatedState.estimatedVoyageDays !== undefined) inputEstimatedVoyageDays.value = updatedState.estimatedVoyageDays;
-            if (inputLoadRate && updatedState.loadRate !== undefined) inputLoadRate.value = updatedState.loadRate;
-            if (inputDischargeRate && updatedState.dischargeRate !== undefined) inputDischargeRate.value = updatedState.dischargeRate;
-
             const updatedLoadRate = updatedState.loadRate || 1;
             const updatedDischargeRate = updatedState.dischargeRate || 1;
             const updatedQty = updatedState.cargoQty || 1;
             const computedPortDays = (updatedQty / updatedLoadRate) + (updatedQty / updatedDischargeRate);
             updatedState.portDays = computedPortDays;
 
-            if (inputPortDays) inputPortDays.value = computedPortDays.toFixed(1);
-            if (inputSeaDays && updatedState.seaDays !== undefined) inputSeaDays.value = updatedState.seaDays;
-
-            if (inputFleteEstimado && updatedState.fleteUnitario !== undefined) {
-                inputFleteEstimado.value = updatedState.fleteUnitario;
-            } else if (inputFleteEstimado && updatedState.fleteEstimado !== undefined) {
-                const val = Number(updatedState.fleteEstimado);
-                inputFleteEstimado.value = val > 1000 ? (val / updatedQty).toFixed(2) : val;
-            }
-
-            if (inputBreakEven && updatedState.breakEvenUnitario !== undefined) {
-                inputBreakEven.value = updatedState.breakEvenUnitario;
-            } else if (inputBreakEven && updatedState.breakEven !== undefined) {
-                const val = Number(updatedState.breakEven);
-                inputBreakEven.value = val > 1000 ? (val / updatedQty).toFixed(2) : val;
+            dssSimulationState = updatedState;
+            if (typeof window !== 'undefined') {
+                window.dssSimulationState = dssSimulationState;
             }
 
             generarAuditoriaOperativa(updatedState);
+        }
+
+        function cargarEscenarioRiesgo() {
+            return cargarEscenario('riesgo');
+        }
+        function cargarEscenarioOptimo() {
+            return cargarEscenario('optimo');
+        }
+        function cargarEscenarioEquilibrado() {
+            return cargarEscenario('equilibrado');
+        }
+        function cargarEscenarioAlerta() {
+            return cargarEscenario('alerta');
+        }
+
+        if (typeof window !== 'undefined') {
+            window.cargarEscenario = cargarEscenario;
+            window.cargarEscenarioRiesgo = cargarEscenarioRiesgo;
+            window.cargarEscenarioOptimo = cargarEscenarioOptimo;
+            window.cargarEscenarioEquilibrado = cargarEscenarioEquilibrado;
+            window.cargarEscenarioAlerta = cargarEscenarioAlerta;
+            window.limpiarEscenario = limpiarEscenario;
+            window.desactivarEscenarios = desactivarEscenarios;
         }
 
         /* ==========================================================================
@@ -868,6 +921,9 @@
          * ========================================================================== */
 
         function getDSSCurrentState() {
+            if (dssSimulationState) {
+                return { ...dssSimulationState };
+            }
             const inputPol = document.getElementById('input-pol');
             const inputPod = document.getElementById('input-pod');
             const inputCargoQty = document.getElementById('input-cargoQty');
