@@ -1237,17 +1237,25 @@ export function ReverseTceCalculator({
     };
   };
 
+  const syncedVlsfo = syncedCostData?.vlsfoPrice;
+  const syncedIfo = syncedCostData?.ifoPrice;
+  const syncedMgo = syncedCostData?.mgoPrice;
+  const syncedSeaFuel = syncedCostData?.seaFuelConsumption;
+
   const syncFromSectionData = () => {
     setValues((current) => getSyncedValues(current));
 
-    if (Number.isFinite(Number(syncedCostData?.vlsfoPrice))) {
-      setVlsfoPrice(Number(syncedCostData?.vlsfoPrice));
+    const vlsfoVal = Number(syncedVlsfo);
+    if (Number.isFinite(vlsfoVal)) {
+      setVlsfoPrice((prev) => (prev !== vlsfoVal ? vlsfoVal : prev));
     }
-    if (Number.isFinite(Number(syncedCostData?.ifoPrice))) {
-      setIfoPrice(Number(syncedCostData?.ifoPrice));
+    const ifoVal = Number(syncedIfo);
+    if (Number.isFinite(ifoVal)) {
+      setIfoPrice((prev) => (prev !== ifoVal ? ifoVal : prev));
     }
-    if (Number.isFinite(Number(syncedCostData?.mgoPrice))) {
-      setMgoPrice(Number(syncedCostData?.mgoPrice));
+    const mgoVal = Number(syncedMgo);
+    if (Number.isFinite(mgoVal)) {
+      setMgoPrice((prev) => (prev !== mgoVal ? mgoVal : prev));
     }
   };
 
@@ -1259,14 +1267,17 @@ export function ReverseTceCalculator({
     });
     setRenderRefreshTick((current) => current + 1);
 
-    if (Number.isFinite(Number(syncedCostData?.vlsfoPrice))) {
-      setVlsfoPrice(Number(syncedCostData?.vlsfoPrice));
+    const vlsfoVal = Number(syncedVlsfo);
+    if (Number.isFinite(vlsfoVal)) {
+      setVlsfoPrice((prev) => (prev !== vlsfoVal ? vlsfoVal : prev));
     }
-    if (Number.isFinite(Number(syncedCostData?.ifoPrice))) {
-      setIfoPrice(Number(syncedCostData?.ifoPrice));
+    const ifoVal = Number(syncedIfo);
+    if (Number.isFinite(ifoVal)) {
+      setIfoPrice((prev) => (prev !== ifoVal ? ifoVal : prev));
     }
-    if (Number.isFinite(Number(syncedCostData?.mgoPrice))) {
-      setMgoPrice(Number(syncedCostData?.mgoPrice));
+    const mgoVal = Number(syncedMgo);
+    if (Number.isFinite(mgoVal)) {
+      setMgoPrice((prev) => (prev !== mgoVal ? mgoVal : prev));
     }
   };
 
@@ -1280,7 +1291,7 @@ export function ReverseTceCalculator({
     if (isSyncEnabled) {
       syncFromSectionData();
     }
-  }, [cargoVolume, daysSea, daysPort, syncedCostData, isSyncEnabled, navigationStrategy]);
+  }, [cargoVolume, daysSea, daysPort, syncedVlsfo, syncedIfo, syncedMgo, syncedSeaFuel, isSyncEnabled, navigationStrategy]);
 
   useEffect(() => {
     setValues((current) => ({
@@ -2110,7 +2121,14 @@ export function CostPlusCalculator({
   const [values, setValues] = useState<CostPlusCalculatorState>(COST_PLUS_DEFAULT_VALUES);
   const [priceStrategy, setPriceStrategy] = useState<'cost-plus' | 'market'>('cost-plus');
   const [renderRefreshTick, setRenderRefreshTick] = useState(0);
-  const sharedTotalCosts = safeNumber(syncedCostData?.totalCosts);
+  const syncedTotalCosts = syncedCostData?.totalCosts;
+  const syncedTotalDays = syncedCostData?.totalDays;
+  const syncedDistance = syncedCostData?.distance;
+  const syncedBunkerCost = syncedCostData?.bunkerCost || syncedCostData?.estimatedBunkerCost;
+  const syncedOpexDaily = syncedCostData?.opexDaily;
+  const syncedPortCosts = syncedCostData?.portCosts;
+
+  const sharedTotalCosts = safeNumber(syncedTotalCosts);
 
   const results = useMemo(
     () => calculateCostPlusResults(values, sharedTotalCosts, priceStrategy),
@@ -2120,18 +2138,17 @@ export function CostPlusCalculator({
   const routeSyncData = useMemo(() => {
     const routeDaysSea = safeNumber(daysSea);
     const routeDaysPort = safeNumber(daysPort);
-    const routeTotalDays = safeNumber(syncedCostData?.totalDays);
-    const routeDistance = safeNumber(syncedCostData?.distance);
+    const routeTotalDays = safeNumber(syncedTotalDays);
+    const routeDistance = safeNumber(syncedDistance);
     const routeCargoVolume = safeNumber(cargoVolume);
-    const routeBunkerCost = safeNumber(syncedCostData?.bunkerCost)
-      || safeNumber(syncedCostData?.estimatedBunkerCost);
-    const routeTotalCosts = safeNumber(syncedCostData?.totalCosts);
-    const routeDailyOpex = safeNumber(syncedCostData?.opexDaily);
-    const syncedPortCosts = safeNumber(syncedCostData?.portCosts);
-    const syncedTotalDays = routeDaysSea + routeDaysPort > 0 ? routeDaysSea + routeDaysPort : routeTotalDays;
-    const routePortCosts = syncedPortCosts > 0
-      ? syncedPortCosts
-      : Math.max(0, routeTotalCosts - routeBunkerCost - (routeDailyOpex * syncedTotalDays));
+    const routeBunkerCost = safeNumber(syncedBunkerCost);
+    const routeTotalCosts = safeNumber(syncedTotalCosts);
+    const routeDailyOpex = safeNumber(syncedOpexDaily);
+    const routePortCostsVal = safeNumber(syncedPortCosts);
+    const syncedTotalDaysVal = routeDaysSea + routeDaysPort > 0 ? routeDaysSea + routeDaysPort : routeTotalDays;
+    const routePortCosts = routePortCostsVal > 0
+      ? routePortCostsVal
+      : Math.max(0, routeTotalCosts - routeBunkerCost - (routeDailyOpex * syncedTotalDaysVal));
     const hasRouteTiming = routeDaysSea > 0 || routeDaysPort > 0 || routeTotalDays > 0;
 
     if (!hasRouteTiming && routeDistance <= 0 && routeCargoVolume <= 0 && routeBunkerCost <= 0 && routePortCosts <= 0 && routeTotalCosts <= 0) {
@@ -2152,17 +2169,34 @@ export function CostPlusCalculator({
     if (routeDailyOpex > 0) nextValues.dailyOpex = routeDailyOpex;
 
     return nextValues;
-  }, [currentMode, cargoVolume, daysSea, daysPort, syncedCostData]);
+  }, [
+    currentMode,
+    cargoVolume,
+    daysSea,
+    daysPort,
+    syncedTotalCosts,
+    syncedTotalDays,
+    syncedDistance,
+    syncedBunkerCost,
+    syncedOpexDaily,
+    syncedPortCosts,
+  ]);
 
   useEffect(() => {
     if (!routeSyncData) {
       return;
     }
-
-    setValues((current) => ({
-      ...current,
-      ...routeSyncData,
-    }));
+    setValues((prev) => {
+      let hasChange = false;
+      for (const key in routeSyncData) {
+        const k = key as keyof CostPlusCalculatorState;
+        if (prev[k] !== routeSyncData[k]) {
+          hasChange = true;
+          break;
+        }
+      }
+      return hasChange ? { ...prev, ...routeSyncData } : prev;
+    });
   }, [routeSyncData]);
 
   const updateNumber = (key: CostPlusNumericField, nextValue: string) => {

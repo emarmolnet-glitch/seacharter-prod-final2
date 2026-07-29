@@ -891,10 +891,12 @@
                 const isEstimated = usedKeys.includes(key);
                 if (isEstimated) {
                     this.isWriting = true;
-                    input.value = toNumber(fallbacks[key]).toFixed(config.decimals);
+                    const nextVal = toNumber(fallbacks[key]).toFixed(config.decimals);
+                    if (input.value !== nextVal) {
+                        input.value = nextVal;
+                    }
                     input.readOnly = true;
                     input.dataset.autoEstimated = 'true';
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
                     this.isWriting = false;
                 } else if (input.dataset.autoEstimated === 'true') {
                     input.readOnly = false;
@@ -983,6 +985,7 @@
                 delete event.target.dataset.autoEstimated;
             }, true);
             const handler = (event) => {
+                if (this.isWriting) return;
                 if (!event.target || !event.target.matches('input, select, textarea')) return;
                 this.recalculate({ renderTotals: false });
             };
@@ -1005,7 +1008,6 @@
             this.originalRunEngine = root.runEngine;
             const controller = this;
             root.runEngine = function wrappedRunEngine() {
-                controller.recalculate({ renderTotals: false });
                 const result = controller.originalRunEngine.apply(this, arguments);
                 controller.recalculate({ renderTotals: true });
                 return result;
