@@ -44,4 +44,29 @@ function copyLegacyAssets() {
 
 export default defineConfig({
   plugins: [copyLegacyAssets()],
+  build: {
+    target: "es2022",
+    cssCodeSplit: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("jspdf") || id.includes("html2pdf") || id.includes("html2canvas") || id.includes("pdf-export-service")) {
+            return "pdf-generators";
+          }
+          if (id.includes("npl-data-analysis-engine") || id.includes("npl-secret-module")) {
+            return "risk-audit-engine";
+          }
+          if (id.includes("voyage-cost-engine") || id.includes("stress-test-engine") || id.includes("cbam-module") || id.includes("fcl-module")) {
+            return "operational-calculators";
+          }
+          if (id.includes("GlobalFleetGlobe") || id.includes("map_loader")) {
+            return "map-cartography";
+          }
+          if (id.includes("dual-trading-chartering-view") || id.includes("dual-mode-overlay") || id.includes("dataBridgeSyncService")) {
+            return "dss-module";
+          }
+        },
+      },
+    },
+  },
 });

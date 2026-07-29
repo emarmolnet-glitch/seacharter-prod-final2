@@ -29,10 +29,10 @@
     </script>
     <!-- FontAwesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
     <link rel="stylesheet" href="/assets/css/density-globe.css?v=20260716-radar-tooltip-visible">
-    <script src="https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js"></script>
-    <script src="/GlobalFleetGlobe.js"></script>
+    <script defer src="https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js"></script>
+    <script defer src="/GlobalFleetGlobe.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
         
@@ -202,8 +202,18 @@
             </div>
             <span class="text-[10px] font-semibold text-cyan-200">AIS Points · filteredVessels</span>
         </div>
-        <div class="density-globe-stage" style="height: 280px; min-height: 280px;">
-            <div id="databridge-map" class="density-globe-canvas" data-master-map></div>
+        <div class="density-globe-stage relative overflow-hidden" style="height: 280px; min-height: 280px;">
+            <div id="databridge-map" class="density-globe-canvas relative overflow-hidden" data-master-map>
+                <div id="map-skeleton" class="map-skeleton-container" aria-label="Cargando visor cartográfico">
+                    <div class="map-skeleton-globe">
+                        <div class="map-skeleton-pulse"></div>
+                    </div>
+                    <div class="map-skeleton-status">
+                        <span class="map-skeleton-pulse"></span>
+                        <span>Cargando Visor Data Bridge...</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </section>
 

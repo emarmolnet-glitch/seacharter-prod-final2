@@ -7,8 +7,8 @@
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased p-4 md:p-8">
 
@@ -792,6 +792,8 @@
                 dischargeRate: inputDischargeRate ? Number(inputDischargeRate.value) : 5000,
                 portDays: inputPortDays ? Number(inputPortDays.value) : 20,
                 seaDays: inputSeaDays ? Number(inputSeaDays.value) : 8,
+                fleteUnitario: inputFleteEstimado ? Number(inputFleteEstimado.value) : 35,
+                breakEvenUnitario: inputBreakEven ? Number(inputBreakEven.value) : 25,
                 fleteEstimado: inputFleteEstimado ? Number(inputFleteEstimado.value) : 35,
                 breakEven: inputBreakEven ? Number(inputBreakEven.value) : 25
             };
@@ -799,7 +801,7 @@
             const currentLoadRate = currentState.loadRate || 5000;
             const currentDischargeRate = currentState.dischargeRate || 5000;
             const voyageDays = currentState.estimatedVoyageDays || currentState.seaDays || 8;
-            const breakEven = currentState.breakEven || 25;
+            const breakEvenUnitario = currentState.breakEvenUnitario || currentState.breakEven || 25;
 
             let stressMutations = {};
 
@@ -808,20 +810,23 @@
                     laycanDaysLeft: Math.max(1, Number((voyageDays - 2).toFixed(1))),
                     loadRate: Math.max(100, Math.round(currentLoadRate * 0.5)),
                     dischargeRate: Math.max(100, Math.round(currentDischargeRate * 0.5)),
-                    fleteEstimado: Number((breakEven * 0.88).toFixed(2))
+                    fleteUnitario: Number((breakEvenUnitario * 0.88).toFixed(2)),
+                    fleteEstimado: Number((breakEvenUnitario * 0.88).toFixed(2))
                 };
             } else if (tipo === 'alerta' || tipo === 'equilibrado') {
                 stressMutations = {
                     loadRate: Math.max(100, Math.round(currentLoadRate * 0.7)),
                     dischargeRate: Math.max(100, Math.round(currentDischargeRate * 0.7)),
-                    fleteEstimado: Number((breakEven * 1.03).toFixed(2))
+                    fleteUnitario: Number((breakEvenUnitario * 1.03).toFixed(2)),
+                    fleteEstimado: Number((breakEvenUnitario * 1.03).toFixed(2))
                 };
             } else if (tipo === 'optimo') {
                 stressMutations = {
                     laycanDaysLeft: Number((voyageDays + 10).toFixed(1)),
                     loadRate: Math.max(1000, Math.round(currentLoadRate * 1.5)),
                     dischargeRate: Math.max(1000, Math.round(currentDischargeRate * 1.5)),
-                    fleteEstimado: Number((breakEven * 1.25).toFixed(2))
+                    fleteUnitario: Number((breakEvenUnitario * 1.25).toFixed(2)),
+                    fleteEstimado: Number((breakEvenUnitario * 1.25).toFixed(2))
                 };
             }
 
@@ -840,8 +845,20 @@
 
             if (inputPortDays) inputPortDays.value = computedPortDays.toFixed(1);
             if (inputSeaDays && updatedState.seaDays !== undefined) inputSeaDays.value = updatedState.seaDays;
-            if (inputFleteEstimado && updatedState.fleteEstimado !== undefined) inputFleteEstimado.value = updatedState.fleteEstimado;
-            if (inputBreakEven && updatedState.breakEven !== undefined) inputBreakEven.value = updatedState.breakEven;
+
+            if (inputFleteEstimado && updatedState.fleteUnitario !== undefined) {
+                inputFleteEstimado.value = updatedState.fleteUnitario;
+            } else if (inputFleteEstimado && updatedState.fleteEstimado !== undefined) {
+                const val = Number(updatedState.fleteEstimado);
+                inputFleteEstimado.value = val > 1000 ? (val / updatedQty).toFixed(2) : val;
+            }
+
+            if (inputBreakEven && updatedState.breakEvenUnitario !== undefined) {
+                inputBreakEven.value = updatedState.breakEvenUnitario;
+            } else if (inputBreakEven && updatedState.breakEven !== undefined) {
+                const val = Number(updatedState.breakEven);
+                inputBreakEven.value = val > 1000 ? (val / updatedQty).toFixed(2) : val;
+            }
 
             generarAuditoriaOperativa(updatedState);
         }
@@ -872,8 +889,14 @@
             const loadRate = parseFloat(inputLoadRate?.value) || 5000;
             const portDays = parseFloat(inputPortDays?.value) || 10;
             const seaDays = parseFloat(inputSeaDays?.value) || 8;
-            const fleteEstimado = parseFloat(inputFleteEstimado?.value) || 250000;
-            const breakEven = parseFloat(inputBreakEven?.value) || 210000;
+
+            const rawFleteVal = parseFloat(inputFleteEstimado?.value) || 35;
+            const rawBreakEvenVal = parseFloat(inputBreakEven?.value) || 25;
+
+            const qty = Math.max(1, cargoQty);
+            const fleteUnitario = rawFleteVal > 1000 ? rawFleteVal / qty : rawFleteVal;
+            const breakEvenUnitario = rawBreakEvenVal > 1000 ? rawBreakEvenVal / qty : rawBreakEvenVal;
+
             const vesselName = 'MV GEARED BULKER';
 
             return {
@@ -886,8 +909,10 @@
                 loadRate,
                 portDays,
                 seaDays,
-                fleteEstimado,
-                breakEven,
+                fleteEstimado: fleteUnitario,
+                breakEven: breakEvenUnitario,
+                fleteUnitario,
+                breakEvenUnitario,
                 vesselName
             };
         }

@@ -87,14 +87,14 @@
     </script>
     <!-- FontAwesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <!-- Master Globe.gl renderer shared by Core PRO and Data Bridge. -->
-    <script src="https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js"></script>
+    <!-- Master Globe.gl renderer shared by Core PRO and Data Bridge (Loaded with defer for non-blocking FCP) -->
+    <script defer src="https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js"></script>
     <link rel="stylesheet" href="./assets/css/density-globe.css?v=20260716-radar-tooltip-visible">
     <link rel="stylesheet" href="./assets/css/contextual-feedback.css?v=20260717-ui-hotfix">
     <link rel="stylesheet" href="./ais-market-reference-widget.css?v=20260721">
     <script type="module" src="./cargo-taxonomy.mjs"></script>
     <script type="module" src="./AisMarketReferenceWidget.ts"></script>
-    <script src="./GlobalFleetGlobe.js"></script>
+    <script defer src="./GlobalFleetGlobe.js"></script>
     <script type="module" src="./map_loader.js"></script>
     <script defer src="/aisstream-draft.js"></script>
     <!-- Maritime Routing Library -->
@@ -109,13 +109,13 @@
                 return null;
             });
     </script>
-    <!-- Librerías de Extracción de Texto para el Auditor IA -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Librerías de Extracción de Texto para el Auditor IA (Carga diferida asíncrona) -->
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script defer src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="./public/components.js"></script>
     <script src="./npl-data-analysis-engine.js"></script>
     <script src="./npl-secret-module.js"></script>
@@ -7523,7 +7523,17 @@
         <div id="view-map" class="view-section active-block absolute inset-0 overflow-y-auto p-6 scroll-smooth">
             <div id="map-command-shell" class="map-command-shell">
                 <div id="map-host" class="density-globe-stage min-h-[450px] h-[520px] w-full rounded-lg border border-[#e0e0e0] bg-blue-100 overflow-hidden shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
-                    <div id="map-container" class="density-globe-canvas h-full w-full rounded-lg border border-slate-200 bg-slate-950" data-globe-renderer></div>
+                    <div id="map-container" class="density-globe-canvas h-full w-full rounded-lg border border-slate-200 bg-slate-950 relative overflow-hidden" data-globe-renderer>
+                        <div id="map-skeleton" class="map-skeleton-container" aria-label="Cargando visor cartográfico">
+                            <div class="map-skeleton-globe">
+                                <div class="map-skeleton-pulse"></div>
+                            </div>
+                            <div class="map-skeleton-status">
+                                <span class="map-skeleton-pulse"></span>
+                                <span>Cargando Visor Cartográfico...</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="map-control-stack">
                     <div class="map-route-legend" aria-label="Leyenda de rutas">
@@ -14950,14 +14960,21 @@
         }
 
         function syncGlobalStateToForms() {
-            setInputValue('map-port-ballast', State.portBallast);
-            setInputValue('map-port-pol', State.pol);
-            setInputValue('map-port-pod', State.pod);
+            const updateInputIfNotFocused = (id, val) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (document.activeElement === el) return; // Preservar edición activa del usuario
+                setInputValue(id, val);
+            };
+
+            updateInputIfNotFocused('map-port-ballast', State.portBallast);
+            updateInputIfNotFocused('map-port-pol', State.pol);
+            updateInputIfNotFocused('map-port-pod', State.pod);
             setInputValue('map-laycan-date', State.laycanDate);
             setInputValue('map-cancelling-date', State.cancellingDate);
-            setInputValue('port-ballast', State.portBallast);
-            setInputValue('port-pol', State.pol);
-            setInputValue('port-pod', State.pod);
+            updateInputIfNotFocused('port-ballast', State.portBallast);
+            updateInputIfNotFocused('port-pol', State.pol);
+            updateInputIfNotFocused('port-pod', State.pod);
             applyGeographicLaytimeDefaults('pol', State.pol);
             applyGeographicLaytimeDefaults('pod', State.pod);
             ['gc-laycan-date', 'asb-laycan-date', 'match-laycan-start'].forEach((id) => setInputValue(id, State.laycanDate));
@@ -16774,12 +16791,12 @@
                 initMap();
                 mountRouteMap('map-host');
                 refreshPortDatalist();
-                autoScaleVesselAndCosts();
                 
+                // Formatear estado inicial
+                autoScaleVesselAndCosts();
                 useAlgorithmicFreight('owner');
                 useAlgorithmicFreight('charterer');
-                
-                updateCargoUnit(); // Forzar unidades iniciales
+                updateCargoUnit();
                 syncGencon();
                 syncAsbatankvoy();
 
@@ -16796,12 +16813,25 @@
                 SeaCharterStore.set(readRouteStateFromCalculator());
                 syncGlobalStateToForms();
 
-                autoLoadWPI(); // Cargar automáticamente el archivo WPI.csv
+                // Ejecución única consolidada del motor de cálculo inicial
+                if (typeof runEngine === 'function') runEngine();
 
-                // Inicializar cláusulas de contrato (Part II & Part III)
-                initContractClauses();
-                buildClauseSelectors();
-                syncClausesFromState();
+                // Cargar WPI en segundo plano en tiempo ocioso (Idle Time)
+                if (typeof executeDeferredIdle === 'function') {
+                    executeDeferredIdle(() => {
+                        autoLoadWPI();
+                        initContractClauses();
+                        buildClauseSelectors();
+                        syncClausesFromState();
+                    });
+                } else {
+                    setTimeout(() => {
+                        autoLoadWPI();
+                        initContractClauses();
+                        buildClauseSelectors();
+                        syncClausesFromState();
+                    }, 300);
+                }
 
                 // Event listeners para la caja de texto del auditor
                 const textarea = document.getElementById('recapInput');
@@ -21734,7 +21764,7 @@
             }
         }
 
-        // --- LECTURA DE WPI.CSV Y POBLACIÓN DE PUERTOS ---
+        // --- LECTURA DE WPI.CSV Y POBLACIÓN DE PUERTOS (Carga asíncrona en micro-chunks) ---
         function parseCSVLine(line) {
             let result = [];
             let startValueBnd = 0;
@@ -21751,6 +21781,57 @@
             return result.map(s => s.replace(/^"|"$/g, '').trim());
         }
 
+        async function parseWPIInChunks(lines) {
+            let added = 0;
+            const CHUNK_SIZE = 300;
+            let index = 1;
+
+            return new Promise((resolve) => {
+                function processNextChunk() {
+                    const end = Math.min(index + CHUNK_SIZE, lines.length);
+                    for (; index < end; index++) {
+                        const line = lines[index];
+                        if (!line || !line.trim()) continue;
+                        const data = parseCSVLine(line);
+                        // Formato WPI: 2=Name, 3=Country, 4=Lat, 5=Lon
+                        if (data.length > 20 && data[2]) {
+                            const portName = `${data[2]} (${data[3] || 'INT'})`;
+                            const lat = parseFloat(data[4]);
+                            const lon = parseFloat(data[5]);
+                            if (!isNaN(lat) && !isNaN(lon)) {
+                                PORT_DB[portName] = {
+                                    lat: lat,
+                                    lon: lon,
+                                    chanDepth: data[22] || '',
+                                    anchDepth: data[23] || '',
+                                    cargoDepth: data[24] || '',
+                                    oilDepth: data[25] || '',
+                                    maxVessel: data[27] || '',
+                                    harborSize: data[14] || '',
+                                    harborType: data[15] || '',
+                                    countryCode: String(data[3] || '').trim().toUpperCase(),
+                                    source: 'WPI'
+                                };
+                                added++;
+                            }
+                        }
+                    }
+
+                    if (index < lines.length) {
+                        if ('requestIdleCallback' in window) {
+                            window.requestIdleCallback(processNextChunk, { timeout: 100 });
+                        } else {
+                            setTimeout(processNextChunk, 0);
+                        }
+                    } else {
+                        resolve(added);
+                    }
+                }
+
+                processNextChunk();
+            });
+        }
+
         async function handleWPILoad(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -21764,39 +21845,12 @@
                 const text = await file.text();
                 const lines = text.split('\n');
                 
-                let added = 0;
                 PORT_DB = {}; // Vaciamos la DB estática pequeña para meter la mundial
+                const added = await parseWPIInChunks(lines);
 
-                for(let i = 1; i < lines.length; i++) {
-                    if(!lines[i].trim()) continue;
-                    const data = parseCSVLine(lines[i]);
-                    // Formato WPI: 2=Name, 3=Country, 4=Lat, 5=Lon
-                    if(data.length > 20 && data[2]) {
-                        const portName = `${data[2]} (${data[3] || 'INT'})`;
-                        const lat = parseFloat(data[4]);
-                        const lon = parseFloat(data[5]);
-                        if(!isNaN(lat) && !isNaN(lon)) {
-                            PORT_DB[portName] = {
-                                lat: lat,
-                                lon: lon,
-                                chanDepth: data[22] || '',
-                                anchDepth: data[23] || '',
-                                cargoDepth: data[24] || '',
-                                oilDepth: data[25] || '',
-                                maxVessel: data[27] || '',
-                                harborSize: data[14] || '',
-                                harborType: data[15] || '',
-                                countryCode: String(data[3] || '').trim().toUpperCase(),
-                                source: 'WPI'
-                            };
-                            added++;
-                        }
-                    }
-                }
-                
                 refreshPortDatalist();
                 if (typeof syncEtsRouteSelectorFromPorts === 'function') syncEtsRouteSelectorFromPorts();
-                runEngine();
+                if (typeof runEngine === 'function') runEngine();
                 showToast(`✅ Base de datos Mundial WPI cargada: ${added.toLocaleString()} puertos.`);
                 btn.innerHTML = `<i class="fa-solid fa-check"></i> WPI Activo`;
                 btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');
@@ -21831,39 +21885,11 @@
                 const text = await response.text();
                 const lines = text.split('\n');
                 
-                let added = 0;
                 PORT_DB = {}; // Vaciamos la DB estática pequeña para meter la mundial
+                const added = await parseWPIInChunks(lines);
 
-                for(let i = 1; i < lines.length; i++) {
-                    if(!lines[i].trim()) continue;
-                    const data = parseCSVLine(lines[i]);
-                    // Formato WPI: 2=Name, 3=Country, 4=Lat, 5=Lon
-                    if(data.length > 20 && data[2]) {
-                        const portName = `${data[2]} (${data[3] || 'INT'})`;
-                        const lat = parseFloat(data[4]);
-                        const lon = parseFloat(data[5]);
-                        if(!isNaN(lat) && !isNaN(lon)) {
-                            PORT_DB[portName] = {
-                                lat: lat,
-                                lon: lon,
-                                chanDepth: data[22] || '',
-                                anchDepth: data[23] || '',
-                                cargoDepth: data[24] || '',
-                                oilDepth: data[25] || '',
-                                maxVessel: data[27] || '',
-                                harborSize: data[14] || '',
-                                harborType: data[15] || '',
-                                countryCode: String(data[3] || '').trim().toUpperCase(),
-                                source: 'WPI'
-                            };
-                            added++;
-                        }
-                    }
-                }
-                
                 refreshPortDatalist();
                 if (typeof syncEtsRouteSelectorFromPorts === 'function') syncEtsRouteSelectorFromPorts();
-                runEngine();
                 showToast(`✅ Base de datos Mundial WPI cargada automáticamente: ${added.toLocaleString()} puertos.`);
                 btn.innerHTML = `<i class="fa-solid fa-check"></i> WPI Activo`;
                 btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');
@@ -22274,25 +22300,32 @@
         function handlePortAutocomplete(event) {
             const input = event.currentTarget || event.target;
             if (!input) return;
+
+            // Al escribir (input), se desacopla el texto libre del estado validado anterior sin reescribir el input
             if (event.type === 'input' && input.value !== input.dataset.selectedPortLabel) {
                 clearUniversalPortCoordinates(input);
                 delete input.dataset.selectedLatitude;
                 delete input.dataset.selectedLongitude;
                 delete input.dataset.selectedCountryCode;
             }
+
             clearTimeout(portAutocompleteTimers.get(input));
             portAutocompleteControllers.get(input)?.abort();
+
             const normalizedQuery = normalizePortSearchText(input.value);
             if (normalizedQuery.length < 2) {
                 setPortSearchState(input, false);
                 closePortAutocomplete(input);
                 return;
             }
+
+            // Aplicar siempre debouncing de 300ms al escribir para evitar stuttering y sobrecarga de CPU
             if (event.type === 'input') {
                 setPortSearchState(input, true);
                 const timer = setTimeout(() => runUniversalPortSearch(input), NOMINATIM_DEBOUNCE_MS);
                 portAutocompleteTimers.set(input, timer);
-            } else {
+            } else if (event.type === 'focus' && input.value.trim().length >= 2) {
+                // Al hacer foco con texto existente, mostrar opciones sin sobrescribir el input
                 runUniversalPortSearch(input);
             }
         }
@@ -30797,6 +30830,8 @@
                 dischargeRate: Number(document.getElementById('input-dischargeRate')?.value) || 5000,
                 portDays: Number(document.getElementById('input-portDays')?.value) || 20,
                 seaDays: Number(document.getElementById('input-seaDays')?.value) || 8,
+                fleteUnitario: Number(document.getElementById('input-fleteEstimado')?.value) || 35,
+                breakEvenUnitario: Number(document.getElementById('input-breakEven')?.value) || 25,
                 fleteEstimado: Number(document.getElementById('input-fleteEstimado')?.value) || 35,
                 breakEven: Number(document.getElementById('input-breakEven')?.value) || 25
             };
@@ -30804,7 +30839,7 @@
             const currentLoadRate = currentState.loadRate || 5000;
             const currentDischargeRate = currentState.dischargeRate || 5000;
             const voyageDays = currentState.estimatedVoyageDays || currentState.seaDays || 8;
-            const breakEven = currentState.breakEven || 25;
+            const breakEvenUnitario = currentState.breakEvenUnitario || currentState.breakEven || 25;
 
             let stressMutations = {};
 
@@ -30813,20 +30848,23 @@
                     laycanDaysLeft: Math.max(1, Number((voyageDays - 2).toFixed(1))),
                     loadRate: Math.max(100, Math.round(currentLoadRate * 0.5)),
                     dischargeRate: Math.max(100, Math.round(currentDischargeRate * 0.5)),
-                    fleteEstimado: Number((breakEven * 0.88).toFixed(2))
+                    fleteUnitario: Number((breakEvenUnitario * 0.88).toFixed(2)),
+                    fleteEstimado: Number((breakEvenUnitario * 0.88).toFixed(2))
                 };
             } else if (tipo === 'alerta' || tipo === 'equilibrado') {
                 stressMutations = {
                     loadRate: Math.max(100, Math.round(currentLoadRate * 0.7)),
                     dischargeRate: Math.max(100, Math.round(currentDischargeRate * 0.7)),
-                    fleteEstimado: Number((breakEven * 1.03).toFixed(2))
+                    fleteUnitario: Number((breakEvenUnitario * 1.03).toFixed(2)),
+                    fleteEstimado: Number((breakEvenUnitario * 1.03).toFixed(2))
                 };
             } else if (tipo === 'optimo') {
                 stressMutations = {
                     laycanDaysLeft: Number((voyageDays + 10).toFixed(1)),
                     loadRate: Math.max(1000, Math.round(currentLoadRate * 1.5)),
                     dischargeRate: Math.max(1000, Math.round(currentDischargeRate * 1.5)),
-                    fleteEstimado: Number((breakEven * 1.25).toFixed(2))
+                    fleteUnitario: Number((breakEvenUnitario * 1.25).toFixed(2)),
+                    fleteEstimado: Number((breakEvenUnitario * 1.25).toFixed(2))
                 };
             }
 
@@ -30854,8 +30892,20 @@
 
             if (inputPortDays) inputPortDays.value = computedPortDays.toFixed(1);
             if (inputSeaDays && updatedState.seaDays !== undefined) inputSeaDays.value = updatedState.seaDays;
-            if (inputFleteEstimado && updatedState.fleteEstimado !== undefined) inputFleteEstimado.value = updatedState.fleteEstimado;
-            if (inputBreakEven && updatedState.breakEven !== undefined) inputBreakEven.value = updatedState.breakEven;
+
+            if (inputFleteEstimado && updatedState.fleteUnitario !== undefined) {
+                inputFleteEstimado.value = updatedState.fleteUnitario;
+            } else if (inputFleteEstimado && updatedState.fleteEstimado !== undefined) {
+                const val = Number(updatedState.fleteEstimado);
+                inputFleteEstimado.value = val > 1000 ? (val / updatedQty).toFixed(2) : val;
+            }
+
+            if (inputBreakEven && updatedState.breakEvenUnitario !== undefined) {
+                inputBreakEven.value = updatedState.breakEvenUnitario;
+            } else if (inputBreakEven && updatedState.breakEven !== undefined) {
+                const val = Number(updatedState.breakEven);
+                inputBreakEven.value = val > 1000 ? (val / updatedQty).toFixed(2) : val;
+            }
 
             generarAuditoriaOperativa(updatedState);
         }
@@ -30890,10 +30940,15 @@
             const seaDays = parseFloat(inputSeaDays?.value) || parseFloat(document.getElementById('shadow-sea-days')?.value) || 8;
 
             const computedPortDays = (cargoQty / (loadRate || 1)) + (cargoQty / (dischargeRate || 1));
-            const fleteUnitario = parseFloat(inputFleteEstimado?.value) || parseFloat(document.getElementById('freight-sell')?.value) || 35;
+            
+            const rawFleteVal = parseFloat(inputFleteEstimado?.value) || parseFloat(document.getElementById('freight-sell')?.value) || 35;
             const breakEvenText = document.getElementById('res-cost-base-break-even')?.textContent || '';
             const breakEvenParsed = parseFloat(breakEvenText.replace(/[^0-9.]/g, '')) || 0;
-            const breakEvenUnitario = parseFloat(inputBreakEven?.value) || parseFloat(document.getElementById('shadow-break-even-freight')?.value) || breakEvenParsed || 25;
+            const rawBreakEvenVal = parseFloat(inputBreakEven?.value) || parseFloat(document.getElementById('shadow-break-even-freight')?.value) || breakEvenParsed || 25;
+
+            const qty = Math.max(1, cargoQty);
+            const fleteUnitario = rawFleteVal > 1000 ? rawFleteVal / qty : rawFleteVal;
+            const breakEvenUnitario = rawBreakEvenVal > 1000 ? rawBreakEvenVal / qty : rawBreakEvenVal;
 
             return {
                 pol,
@@ -30906,8 +30961,8 @@
                 dischargeRate,
                 portDays: computedPortDays,
                 seaDays,
-                fleteEstimado: fleteUnitario * cargoQty,
-                breakEven: breakEvenUnitario * cargoQty,
+                fleteEstimado: fleteUnitario,
+                breakEven: breakEvenUnitario,
                 fleteUnitario,
                 breakEvenUnitario,
                 vesselName: document.getElementById('vessel-name')?.value || 'MV GEARED BULKER'
@@ -31229,8 +31284,32 @@ END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL
         }
         window.buildFixtureRecapHTMLTemplate = buildFixtureRecapHTMLTemplate;
 
+        async function ensurePdfLibrariesLoaded() {
+            if (typeof html2pdf === 'function') return true;
+            return new Promise((resolve) => {
+                if (document.getElementById('html2pdf-script')) {
+                    let attempts = 0;
+                    const check = setInterval(() => {
+                        attempts++;
+                        if (typeof html2pdf === 'function' || attempts > 50) {
+                            clearInterval(check);
+                            resolve(typeof html2pdf === 'function');
+                        }
+                    }, 50);
+                } else {
+                    const script = document.createElement('script');
+                    script.id = 'html2pdf-script';
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+                    script.onload = () => resolve(true);
+                    script.onerror = () => resolve(false);
+                    document.head.appendChild(script);
+                }
+            });
+        }
+
         async function generateAuditPDF() {
             try {
+                await ensurePdfLibrariesLoaded();
                 if (typeof showToast === 'function') {
                     showToast('Generando Auditoría de Riesgo Comercial (PDF)...', true);
                 }
@@ -31268,6 +31347,7 @@ END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL
 
         async function generateFixtureRecapPDF() {
             try {
+                await ensurePdfLibrariesLoaded();
                 if (typeof showToast === 'function') {
                     showToast('Generando Oferta Comercial (Fixture Recap PDF)...', true);
                 }
@@ -50559,24 +50639,63 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.toggleWebDataBridgeFullScreen = toggleWebDataBridgeFullScreen;
     </script>
 
-    <!-- SeaCharter Calculations Engine Adjustments with IndexedDB cache -->
+    <!-- SeaCharter Calculations Engine Adjustments with IndexedDB cache (Diferido en idle) -->
     <script>
         const DB_NAME = 'SeaCharterDB';
         const DB_VERSION = 1;
+        let dbConnectionPromise = null;
+
+        function executeDeferredIdle(task) {
+            if (document.readyState === 'complete') {
+                if ('requestIdleCallback' in window) {
+                    window.requestIdleCallback(() => task(), { timeout: 3000 });
+                } else {
+                    setTimeout(task, 200);
+                }
+            } else {
+                window.addEventListener('load', () => {
+                    if ('requestIdleCallback' in window) {
+                        window.requestIdleCallback(() => task(), { timeout: 3000 });
+                    } else {
+                        setTimeout(task, 200);
+                    }
+                }, { once: true });
+            }
+        }
 
         function openSeaCharterDB() {
-            return new Promise((resolve, reject) => {
-                const request = indexedDB.open(DB_NAME, DB_VERSION);
-                request.onupgradeneeded = (event) => {
-                    const db = event.target.result;
-                    if (!db.objectStoreNames.contains('vessels')) {
-                        db.createObjectStore('vessels', { keyPath: 'imo' });
-                    }
+            if (dbConnectionPromise) return dbConnectionPromise;
+
+            dbConnectionPromise = new Promise((resolve, reject) => {
+                const initDB = () => {
+                    const request = indexedDB.open(DB_NAME, DB_VERSION);
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains('vessels')) {
+                            db.createObjectStore('vessels', { keyPath: 'imo' });
+                        }
+                    };
+                    request.onsuccess = (event) => resolve(event.target.result);
+                    request.onerror = (event) => {
+                        dbConnectionPromise = null;
+                        reject(event.target.error);
+                    };
                 };
-                request.onsuccess = (event) => resolve(event.target.result);
-                request.onerror = (event) => reject(event.target.error);
+
+                if (document.readyState === 'complete') {
+                    initDB();
+                } else {
+                    executeDeferredIdle(initDB);
+                }
             });
+
+            return dbConnectionPromise;
         }
+
+        // Pre-warm database connection in idle time
+        executeDeferredIdle(() => {
+            openSeaCharterDB().catch(() => {});
+        });
 
         async function getVesselFromIndexedDB(imo) {
             if (!imo) return null;
