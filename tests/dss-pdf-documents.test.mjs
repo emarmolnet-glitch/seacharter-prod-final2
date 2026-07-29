@@ -135,3 +135,47 @@ test('buildFixtureRecapHTMLTemplate generates traditional shipping telex fixture
   assert.match(html, /WEATHER CLAUSE/, 'Weather clause');
   assert.match(html, /GENCON 1994/, 'GENCON 94 charterparty form');
 });
+
+test('buildFixtureRecapHTMLTemplate and buildAuditHTMLTemplate handle undefined and incomplete state properties safely without throwing TypeError', () => {
+  const startIdxRecap = indexHtml.indexOf('function buildFixtureRecapHTMLTemplate(state)');
+  const endIdxRecap = indexHtml.indexOf('window.buildFixtureRecapHTMLTemplate = buildFixtureRecapHTMLTemplate;', startIdxRecap);
+  const fnSourceRecap = indexHtml.slice(startIdxRecap, endIdxRecap);
+  const evalFnRecap = new Function('state', `${fnSourceRecap}; return buildFixtureRecapHTMLTemplate(state);`);
+
+  const startIdxAudit = indexHtml.indexOf('function buildAuditHTMLTemplate(state)');
+  const endIdxAudit = indexHtml.indexOf('window.buildAuditHTMLTemplate = buildAuditHTMLTemplate;', startIdxAudit);
+  const fnSourceAudit = indexHtml.slice(startIdxAudit, endIdxAudit);
+  const evalFnAudit = new Function('state', `${fnSourceAudit}; return buildAuditHTMLTemplate(state);`);
+
+  // Test with completely empty object
+  assert.doesNotThrow(() => {
+    const htmlRecap = evalFnRecap({});
+    assert.match(htmlRecap, /TBA/, 'Empty state should fall back to TBA in Recap');
+  }, 'Recap with empty object must not throw');
+
+  assert.doesNotThrow(() => {
+    const htmlAudit = evalFnAudit({});
+    assert.match(htmlAudit, /Rotterdam/, 'Empty state should fall back to default values in Audit');
+  }, 'Audit with empty object must not throw');
+
+  // Test with state containing undefined properties
+  const incompleteState = {
+    pol: undefined,
+    pod: undefined,
+    vesselName: undefined,
+    commodity: undefined,
+    cargoQty: undefined,
+    fleteEstimado: undefined
+  };
+
+  assert.doesNotThrow(() => {
+    const htmlRecap = evalFnRecap(incompleteState);
+    assert.match(htmlRecap, /TBA/, 'Incomplete state with undefined props should fall back to TBA in Recap');
+  }, 'Recap with undefined properties must not throw TypeError');
+
+  assert.doesNotThrow(() => {
+    const htmlAudit = evalFnAudit(incompleteState);
+    assert.match(htmlAudit, /Rotterdam/, 'Incomplete state with undefined props should fall back to defaults in Audit');
+  }, 'Audit with undefined properties must not throw TypeError');
+});
+
