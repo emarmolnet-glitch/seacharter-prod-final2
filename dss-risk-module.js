@@ -3,14 +3,16 @@ import {
   defaultDSSState,
   calculateMarketFreightWithRisk,
   dssCommitSchema,
-  handleCommitConditions
+  handleCommitConditions,
+  isExportDeficitPOD
 } from './dss-risk-module.mjs';
 
 export {
   defaultDSSState,
   calculateMarketFreightWithRisk,
   dssCommitSchema,
-  handleCommitConditions
+  handleCommitConditions,
+  isExportDeficitPOD
 };
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -18,6 +20,8 @@ if (typeof module !== 'undefined' && module.exports) {
     defaultDSSState,
     calculateMarketFreightWithRisk,
     dssCommitSchema,
-    handleCommitConditions
+    handleCommitConditions,
+    isExportDeficitPOD
   };
 }
+
