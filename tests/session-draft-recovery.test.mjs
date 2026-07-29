@@ -131,7 +131,9 @@ function createTimers() {
             pending.delete(id);
         },
         runLatest() {
-            const [id, timer] = [...pending.entries()].at(-1);
+            const lastEntry = [...pending.entries()].at(-1);
+            if (!lastEntry) return null;
+            const [id, timer] = lastEntry;
             pending.delete(id);
             timer.callback();
             return timer.delay;
@@ -242,4 +244,74 @@ test('hydration remains outside calculator formulas and protected input flow', (
 test('session-draft.js is configured in legacyAssets and referenced in index.html', () => {
     assert.match(indexSource, /<script src="\.\/session-draft\.js"><\/script>/);
     assert.match(viteConfigSource, /"session-draft\.js"/);
+});
+
+test('empty draft on boot is silently cleaned up with removeItem and banner is not rendered', () => {
+    const storage = createStorage({
+        seacharter_session_draft: JSON.stringify({ version: 1, state: { pol: '', pod: '', dualPrecioFOB: '' } }),
+    });
+    const documentRef = createDocument();
+    const timers = createTimers();
+    const api = loadSessionDraftApi({ storage, documentRef, timers });
+    const controller = api.initialize({
+        store: createStore({}),
+        storage,
+        documentRef,
+        setTimeoutFn: timers.setTimeout,
+        clearTimeoutFn: timers.clearTimeout,
+    });
+
+    assert.equal(storage.getItem(api.key), null, 'Empty draft should be removed silently from storage');
+    assert.equal(controller.hasUnsavedSession(), false, 'hasUnsavedSession must be false for empty draft');
+    assert.equal(documentRef.banner, undefined, 'Banner must not be rendered');
+});
+
+test('saveDraft is blocked if state has no real business data (pol) and removes draft', () => {
+    const storage = createStorage({
+        seacharter_session_draft: JSON.stringify({ version: 1, state: { pol: 'Skikda' } }),
+    });
+    const documentRef = createDocument();
+    const timers = createTimers();
+    const api = loadSessionDraftApi({ storage, documentRef, timers });
+    const store = createStore({});
+
+    api.initialize({
+        store,
+        storage,
+        documentRef,
+        setTimeoutFn: timers.setTimeout,
+        clearTimeoutFn: timers.clearTimeout,
+    });
+
+    // Update store with empty state (e.g. after reset)
+    store.set({ pol: '', pod: '', portBallast: '' });
+    timers.runLatest();
+
+    assert.equal(storage.getItem(api.key), null, 'Empty business state must result in removeItem and no draft in storage');
+});
+
+test('discard performs absolute destruction by cancelling pending save and removing key completely', () => {
+    const storage = createStorage({
+        seacharter_session_draft: JSON.stringify({ version: 1, state: { pol: 'Valencia' } }),
+    });
+    const documentRef = createDocument();
+    const timers = createTimers();
+    const api = loadSessionDraftApi({ storage, documentRef, timers });
+    const store = createStore({});
+
+    const controller = api.initialize({
+        store,
+        storage,
+        documentRef,
+        setTimeoutFn: timers.setTimeout,
+        clearTimeoutFn: timers.clearTimeout,
+    });
+
+    store.set({ pol: 'Skikda' }); // schedule save
+    controller.discardSession(); // discard immediately
+
+    timers.runLatest(); // flush timers if any
+
+    assert.equal(storage.getItem(api.key), null, 'Key must be completely removed from storage');
+    assert.equal(controller.hasUnsavedSession(), false);
 });

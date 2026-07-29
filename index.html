@@ -14597,6 +14597,10 @@
             Object.keys(localStorage)
                 .filter((key) => key.startsWith('calculator_'))
                 .forEach((key) => localStorage.removeItem(key));
+            localStorage.removeItem('seacharter_session_draft');
+            if (window.SeaCharterSessionDraftController?.discardSession) {
+                window.SeaCharterSessionDraftController.discardSession();
+            }
         }
 
         function setCalculatorWaitingState() {
