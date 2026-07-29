@@ -54,13 +54,21 @@ const GlobeCanvasContent = lazy(() => {
 });
 
 export default function LazyGlobeMap({ containerId, globeKey = 'main' }: { containerId: string; globeKey?: string }) {
-  const [isClient, setIsClient] = useState(false);
+  const [showGlobe, setShowGlobe] = useState(false);
 
   useEffect(() => {
-    setIsClient(true);
+    const timer = setTimeout(() => {
+      if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(() => setShowGlobe(true), { timeout: 1000 });
+      } else {
+        setShowGlobe(true);
+      }
+    }, 800);
+
+    return () => clearTimeout(timer);
   }, []);
 
-  if (!isClient) {
+  if (!showGlobe) {
     return <MapSkeletonFallback />;
   }
 

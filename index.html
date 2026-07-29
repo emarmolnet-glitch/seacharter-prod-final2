@@ -11741,7 +11741,17 @@
                             </div>
                         </div>
                         <div class="density-globe-stage relative" style="height: 450px; min-height: 450px;">
-                            <div id="ais-map" class="density-globe-canvas rounded-lg border border-slate-800 bg-slate-950" data-globe-renderer></div>
+                            <div id="ais-map" class="density-globe-canvas rounded-lg border border-slate-800 bg-slate-950 relative overflow-hidden" data-globe-renderer>
+                                <div id="ais-map-skeleton" class="map-skeleton-container" aria-label="Cargando radar AIS">
+                                    <div class="map-skeleton-globe">
+                                        <div class="map-skeleton-pulse"></div>
+                                    </div>
+                                    <div class="map-skeleton-status">
+                                        <span class="map-skeleton-pulse"></span>
+                                        <span>Cargando Radar AIS...</span>
+                                    </div>
+                                </div>
+                            </div>
                             <aside id="global-opportunities-panel" class="global-opportunities-panel" hidden aria-label="Oportunidades globales de Data Bridge">
                                 <div class="global-opportunities-panel__header">
                                     <button id="global-opportunities-toggle" type="button" class="global-opportunities-panel__toggle" aria-expanded="true" aria-controls="global-opportunities-list" title="Plegar panel">
@@ -16820,17 +16830,16 @@
                 // Ejecución única consolidada del motor de cálculo inicial
                 if (typeof runEngine === 'function') runEngine();
 
-                // Cargar WPI en segundo plano en tiempo ocioso (Idle Time)
+                // Configurar carga bajo demanda de WPI y cláusulas contractuales
+                if (typeof bindOnDemandWpiLoaders === 'function') bindOnDemandWpiLoaders();
                 if (typeof executeDeferredIdle === 'function') {
                     executeDeferredIdle(() => {
-                        autoLoadWPI();
                         initContractClauses();
                         buildClauseSelectors();
                         syncClausesFromState();
                     });
                 } else {
                     setTimeout(() => {
-                        autoLoadWPI();
                         initContractClauses();
                         buildClauseSelectors();
                         syncClausesFromState();
@@ -21906,6 +21915,46 @@
             }
         }
 
+        let wpiLoaded = false;
+        let wpiLoadingPromise = null;
+
+        function ensureWpiLoadedOnDemand() {
+            if (wpiLoaded) return Promise.resolve();
+            if (wpiLoadingPromise) return wpiLoadingPromise;
+            wpiLoadingPromise = autoLoadWPI().then(() => {
+                wpiLoaded = true;
+            }).catch((err) => {
+                console.warn("WPI on-demand load error:", err);
+                wpiLoadingPromise = null;
+            });
+            return wpiLoadingPromise;
+        }
+        window.ensureWpiLoadedOnDemand = ensureWpiLoadedOnDemand;
+
+        function bindOnDemandWpiLoaders() {
+            const targets = [
+                'port-pol', 'port-pod', 'port-ballast',
+                'map-port-pol', 'map-port-pod', 'map-port-ballast',
+                'nlp-cargo-input'
+            ];
+            const trigger = () => {
+                ensureWpiLoadedOnDemand();
+            };
+            targets.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('focus', trigger, { once: true });
+                    el.addEventListener('click', trigger, { once: true });
+                }
+            });
+            document.addEventListener('focusin', (e) => {
+                if (e.target && e.target.tagName === 'INPUT' && (e.target.id?.toLowerCase().includes('port') || e.target.name?.toLowerCase().includes('port'))) {
+                    trigger();
+                }
+            }, { once: true });
+        }
+        window.bindOnDemandWpiLoaders = bindOnDemandWpiLoaders;
+
         const UNIVERSAL_PORT_INPUT_IDS = [
             'port-ballast', 'port-pol', 'port-pod',
             'map-port-ballast', 'map-port-pol', 'map-port-pod'
@@ -23979,46 +24028,55 @@
             return Boolean(host && mapEl && host.contains(mapEl) && map);
         }
 
+        let routeMapInitTimer = null;
         function initMap() {
-            setTimeout(() => {
-                try {
-                    const mapContainer = document.getElementById('map-container');
-                    if (!mapContainer) return;
-                    if (map) {
-                        try { resizeRouteMap(map); } catch (_) {}
-                        return;
-                    }
-                    const mapBounds = mapContainer.getBoundingClientRect();
-                    if (mapBounds.width <= 1 || mapBounds.height <= 1) {
-                        mapContainer.dataset.renderKey = 'loading';
-                        if (!routeMapMountFrameId) {
-                            routeMapMountFrameId = requestAnimationFrame(() => {
-                                routeMapMountFrameId = null;
-                                try { initMap(); } catch (err) { console.error('Error in rAF initMap:', err); }
+            if (routeMapInitTimer) clearTimeout(routeMapInitTimer);
+            routeMapInitTimer = setTimeout(() => {
+                const doMount = () => {
+                    try {
+                        const mapContainer = document.getElementById('map-container');
+                        if (!mapContainer) return;
+                        if (map) {
+                            try { resizeRouteMap(map); } catch (_) {}
+                            return;
+                        }
+                        const mapBounds = mapContainer.getBoundingClientRect();
+                        if (mapBounds.width <= 1 || mapBounds.height <= 1) {
+                            mapContainer.dataset.renderKey = 'loading';
+                            if (!routeMapMountFrameId) {
+                                routeMapMountFrameId = requestAnimationFrame(() => {
+                                    routeMapMountFrameId = null;
+                                    try { initMap(); } catch (err) { console.error('Error in rAF initMap:', err); }
+                                });
+                            }
+                            return;
+                        }
+                        mapContainer.dataset.renderKey = 'mounted';
+                        const rawVessels = (window.GlobalStore?.filteredVesselsInitialized)
+                            ? (window.GlobalStore?.getFilteredVessels?.() || [])
+                            : [];
+                        const vessels = Array.isArray(rawVessels) ? rawVessels : [];
+                        if (window.GlobalFleetGlobe) {
+                            map = window.GlobalFleetGlobe.mount({
+                                containerId: 'map-container',
+                                vesselsData: vessels,
+                                renderKey: JSON.stringify(vessels)
                             });
+                            window.map = map;
+                            if (State?.routeGeometry) {
+                                try { window.GlobalFleetGlobe.setRouteResult(State.routeGeometry); } catch (_) {}
+                            }
                         }
-                        return;
+                    } catch (err) {
+                        console.error('Safe map initialization caught error:', err);
                     }
-                    mapContainer.dataset.renderKey = 'mounted';
-                    const rawVessels = (window.GlobalStore?.filteredVesselsInitialized)
-                        ? (window.GlobalStore?.getFilteredVessels?.() || [])
-                        : [];
-                    const vessels = Array.isArray(rawVessels) ? rawVessels : [];
-                    if (window.GlobalFleetGlobe) {
-                        map = window.GlobalFleetGlobe.mount({
-                            containerId: 'map-container',
-                            vesselsData: vessels,
-                            renderKey: JSON.stringify(vessels)
-                        });
-                        window.map = map;
-                        if (State?.routeGeometry) {
-                            try { window.GlobalFleetGlobe.setRouteResult(State.routeGeometry); } catch (_) {}
-                        }
-                    }
-                } catch (err) {
-                    console.error('Safe map initialization caught error:', err);
+                };
+                if ('requestIdleCallback' in window) {
+                    window.requestIdleCallback(doMount, { timeout: 1200 });
+                } else {
+                    doMount();
                 }
-            }, 0);
+            }, 800);
         }
 
         async function getCoordinates(query) {
@@ -42239,99 +42297,108 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             aisMapAnimationFrameId = null;
         }
 
+        let aisMapInitTimer = null;
         function initAisMap() {
-            setTimeout(() => {
-                try {
-                    const mapContainer = document.getElementById('ais-map');
-                    if (!mapContainer) return;
-                    const mapBounds = mapContainer.getBoundingClientRect();
-                    if (mapBounds.width <= 1 || mapBounds.height <= 1) {
-                        mapContainer.dataset.renderKey = 'loading';
-                        cancelAisMapAnimationFrame();
-                        aisMapAnimationFrameId = requestAnimationFrame(() => {
-                            aisMapAnimationFrameId = null;
-                            initAisMap();
-                        });
-                        return;
-                    }
-                    mapContainer.dataset.renderKey = 'mounted';
-                    if (window.GlobalFleetGlobe) {
-                        const vessels = getDensityMapSourceVessels();
-                        aisMap = window.GlobalFleetGlobe.mount({
-                            key: 'density',
-                            containerId: 'ais-map',
-                            vesselsData: vessels,
-                            renderKey: JSON.stringify(vessels),
-                            autoRotate: true
-                        });
+            if (aisMapInitTimer) clearTimeout(aisMapInitTimer);
+            aisMapInitTimer = setTimeout(() => {
+                const doMount = () => {
+                    try {
+                        const mapContainer = document.getElementById('ais-map');
+                        if (!mapContainer) return;
+                        const mapBounds = mapContainer.getBoundingClientRect();
+                        if (mapBounds.width <= 1 || mapBounds.height <= 1) {
+                            mapContainer.dataset.renderKey = 'loading';
+                            cancelAisMapAnimationFrame();
+                            aisMapAnimationFrameId = requestAnimationFrame(() => {
+                                aisMapAnimationFrameId = null;
+                                initAisMap();
+                            });
+                            return;
+                        }
+                        mapContainer.dataset.renderKey = 'mounted';
+                        if (window.GlobalFleetGlobe) {
+                            const vessels = getDensityMapSourceVessels();
+                            aisMap = window.GlobalFleetGlobe.mount({
+                                key: 'density',
+                                containerId: 'ais-map',
+                                vesselsData: vessels,
+                                renderKey: JSON.stringify(vessels),
+                                autoRotate: true
+                            });
+                            window.mapaAIS = aisMap;
+                            if (State?.routeGeometry) {
+                                try { window.GlobalFleetGlobe.setRouteResult(State.routeGeometry, 'density', { focus: false }); } catch (_) {}
+                            } else {
+                                const pol = typeof getAisRoutePortForVisual === 'function' ? getAisRoutePortForVisual('POL') : '';
+                                const pod = typeof getAisRoutePortForVisual === 'function' ? getAisRoutePortForVisual('POD') : '';
+                                try { window.GlobalFleetGlobe.setRoute(pol, pod, 'density', { focus: false }); } catch (_) {}
+                            }
+                            try { updateAisMarkers(getDensityMapSourceVessels()); } catch (e) { console.warn('updateAisMarkers error:', e); }
+                            return;
+                        }
+                        if (typeof L === 'undefined' || typeof L.map !== 'function') {
+                            console.error('Leaflet no está disponible; no se puede iniciar el radar AIS.');
+                            return;
+                        }
+
+                        if (aisMap) {
+                            cancelAisMapAnimationFrame();
+                            aisMapAnimationFrameId = requestAnimationFrame(() => {
+                                aisMapAnimationFrameId = null;
+                                if (aisMap && typeof aisMap.invalidateSize === 'function') aisMap.invalidateSize();
+                            });
+                            return;
+                        }
+
+                        void mapContainer.offsetWidth;
+
+                        aisMap = L.map(mapContainer, {zoomControl: true, attributionControl: false, preferCanvas: true}).setView([20.0, 0.0], 2);
                         window.mapaAIS = aisMap;
-                        if (State?.routeGeometry) {
-                            try { window.GlobalFleetGlobe.setRouteResult(State.routeGeometry, 'density', { focus: false }); } catch (_) {}
-                        } else {
-                            const pol = typeof getAisRoutePortForVisual === 'function' ? getAisRoutePortForVisual('POL') : '';
-                            const pod = typeof getAisRoutePortForVisual === 'function' ? getAisRoutePortForVisual('POD') : '';
-                            try { window.GlobalFleetGlobe.setRoute(pol, pod, 'density', { focus: false }); } catch (_) {}
+                        if (typeof createNauticalBaseLayer === 'function') {
+                            try { createNauticalBaseLayer().addTo(aisMap); } catch (_) {}
                         }
-                        try { updateAisMarkers(getDensityMapSourceVessels()); } catch (e) { console.warn('updateAisMarkers error:', e); }
-                        return;
-                    }
-                    if (typeof L === 'undefined' || typeof L.map !== 'function') {
-                        console.error('Leaflet no está disponible; no se puede iniciar el radar AIS.');
-                        return;
-                    }
+                        if (window.MapController?.attachDensityMap) {
+                            try { window.MapController.attachDensityMap(aisMap); } catch (_) {}
+                        }
 
-                    if (aisMap) {
+                        if (typeof L.markerClusterGroup === 'function') {
+                            aisClusterGroup = L.markerClusterGroup({
+                                spiderfyOnMaxZoom: true,
+                                disableClusteringAtZoom: 15,
+                                zoomToBoundsOnClick: true
+                            });
+                            aisClusterGroup.on('clusterclick', function (a) {
+                                a.layer.zoomToBounds();
+                            });
+                            aisMap.addLayer(aisClusterGroup);
+                        } else if (typeof L.layerGroup === 'function') {
+                            aisClusterGroup = L.layerGroup().addTo(aisMap);
+                        }
+
                         cancelAisMapAnimationFrame();
                         aisMapAnimationFrameId = requestAnimationFrame(() => {
                             aisMapAnimationFrameId = null;
-                            if (aisMap && typeof aisMap.invalidateSize === 'function') aisMap.invalidateSize();
+                            if (!aisMap) return;
+                            try { aisMap.invalidateSize(); } catch (_) {}
+                            if (window.aisProspectionVisualState && window.aisProspectionVisualState.active && typeof window.renderAisProspectionRadii === 'function') {
+                                try { window.renderAisProspectionRadii({ fit: false }); } catch (_) {}
+                            }
+                            if (window.GlobalStore?.aisMatchingStateSource === 'matching-validation' && Number(window.GlobalStore?.nearbyCount) > 0) {
+                                try { updateAisMarkers(getDensityMapSourceVessels() || []); } catch (_) {}
+                            } else if (window.GlobalStore && window.GlobalStore.getRawVessels && window.GlobalStore.getRawVessels().length > 0 && typeof window.reapplyCentralFiltersAndRedraw === 'function') {
+                                try { window.reapplyCentralFiltersAndRedraw(); } catch (_) {}
+                            }
                         });
-                        return;
+                    } catch (err) {
+                        console.error('Safe AIS map initialization caught error:', err);
                     }
-
-                    void mapContainer.offsetWidth;
-
-                    aisMap = L.map(mapContainer, {zoomControl: true, attributionControl: false, preferCanvas: true}).setView([20.0, 0.0], 2);
-                    window.mapaAIS = aisMap;
-                    if (typeof createNauticalBaseLayer === 'function') {
-                        try { createNauticalBaseLayer().addTo(aisMap); } catch (_) {}
-                    }
-                    if (window.MapController?.attachDensityMap) {
-                        try { window.MapController.attachDensityMap(aisMap); } catch (_) {}
-                    }
-
-                    if (typeof L.markerClusterGroup === 'function') {
-                        aisClusterGroup = L.markerClusterGroup({
-                            spiderfyOnMaxZoom: true,
-                            disableClusteringAtZoom: 15,
-                            zoomToBoundsOnClick: true
-                        });
-                        aisClusterGroup.on('clusterclick', function (a) {
-                            a.layer.zoomToBounds();
-                        });
-                        aisMap.addLayer(aisClusterGroup);
-                    } else if (typeof L.layerGroup === 'function') {
-                        aisClusterGroup = L.layerGroup().addTo(aisMap);
-                    }
-
-                    cancelAisMapAnimationFrame();
-                    aisMapAnimationFrameId = requestAnimationFrame(() => {
-                        aisMapAnimationFrameId = null;
-                        if (!aisMap) return;
-                        try { aisMap.invalidateSize(); } catch (_) {}
-                        if (window.aisProspectionVisualState && window.aisProspectionVisualState.active && typeof window.renderAisProspectionRadii === 'function') {
-                            try { window.renderAisProspectionRadii({ fit: false }); } catch (_) {}
-                        }
-                        if (window.GlobalStore?.aisMatchingStateSource === 'matching-validation' && Number(window.GlobalStore?.nearbyCount) > 0) {
-                            try { updateAisMarkers(getDensityMapSourceVessels() || []); } catch (_) {}
-                        } else if (window.GlobalStore && window.GlobalStore.getRawVessels && window.GlobalStore.getRawVessels().length > 0 && typeof window.reapplyCentralFiltersAndRedraw === 'function') {
-                            try { window.reapplyCentralFiltersAndRedraw(); } catch (_) {}
-                        }
-                    });
-                } catch (err) {
-                    console.error('Safe AIS map initialization caught error:', err);
+                };
+                if ('requestIdleCallback' in window) {
+                    window.requestIdleCallback(doMount, { timeout: 1200 });
+                } else {
+                    doMount();
                 }
-            }, 0);
+            }, 800);
         }
 
         // Unmount the Leaflet instance whenever the AIS tab is left. Leaflet's
