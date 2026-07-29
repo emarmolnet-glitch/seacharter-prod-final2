@@ -601,11 +601,126 @@ test('PARTE 7: Refactorización Interfaz DSS - Tab Situación Actual, Paneles Co
   // Then switch to "Situación Actual" tab ('actual')
   fakeWin.cargarEscenario('actual');
 
-  // In "Situación Actual", dssSimulationState MUST BE NULL (strictly rendering globalState without simulation modifiers)
+  // In Situación Actual, dssSimulationState MUST BE NULL (strictly rendering globalState without simulation modifiers)
   assert.equal(fakeWin.dssSimulationState, null, 'In Situación Actual tab, dssSimulationState must be strictly null');
   assert.ok(fakeWin.dssFormState, 'dssFormState must be active');
   assert.equal(fakeWin.dssFormState.pol, 'Bilbao', 'dssFormState must reflect baseline POL (Bilbao)');
   assert.equal(fakeWin.dssFormState.cargoQty, 40000, 'dssFormState must reflect baseline cargo quantity (40000)');
-});
+  });
+
+  test('PARTE 8: Critical DSS Business Logic Fixes - Absolute Date Math, Relative Scenarios, and Situación Actual Input Lockdown', () => {
+  const domState = {
+    'input-pol': 'Rotterdam',
+    'input-pod': 'Houston',
+    'input-cargoQty': '50000',
+    'input-commodity': 'Siderúrgico / Carga General',
+    'input-laycanDaysLeft': '11',
+    'input-estimatedVoyageDays': '8',
+    'input-loadRate': '5000',
+    'input-dischargeRate': '5000',
+    'input-portDays': '20',
+    'input-seaDays': '8',
+    'input-fleteEstimado': '35',
+    'input-breakEven': '25'
+  };
+
+  const elements = {};
+  const fakeDoc = {
+    querySelectorAll: () => [],
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    getElementById: (id) => {
+      if (!elements[id]) {
+        elements[id] = {
+          id,
+          disabled: false,
+          get value() { return domState[id] !== undefined ? domState[id] : ''; },
+          set value(v) { domState[id] = String(v); },
+          textContent: '',
+          className: '',
+          classList: { toggle: () => {}, remove: () => {}, add: () => {}, contains: () => false },
+          style: {},
+          addEventListener: () => {},
+          removeEventListener: () => {}
+        };
+      }
+      return elements[id];
+    }
+  };
+
+  const fakeWin = {
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    State: { cancellingDate: new Date('2026-08-09T00:00:00Z') }
+  };
+  globalThis.window = fakeWin;
+
+  const helperStart = indexHtml.indexOf('function determinarTerminoCargo(commodity)');
+  const helperEnd = indexHtml.indexOf('function buildAuditHTMLTemplate', helperStart);
+  const helpersCode = indexHtml.slice(helperStart, helperEnd);
+
+  const evalContext = new Function(
+    'document',
+    'window',
+    `
+    ${helpersCode}
+    window.generarAuditoriaOperativa = generarAuditoriaOperativa;
+    window.cargarEscenario = cargarEscenario;
+    window.actualizarEstiloBotonesEscenario = actualizarEstiloBotonesEscenario;
+    window.bloquearInputsSituacionActual = bloquearInputsSituacionActual;
+    window.differenceInDays = differenceInDays;
+    `
+  );
+
+  evalContext(fakeDoc, fakeWin);
+
+  // 1. Test Absolute Date Math (differenceInDays):
+  const eta = new Date('2026-08-06T00:00:00Z');
+  const cancelling = new Date('2026-08-09T00:00:00Z');
+  const netBuffer = fakeWin.differenceInDays(cancelling, eta);
+  assert.equal(netBuffer, 3, 'Difference between 2026-08-09 and 2026-08-06 must strictly equal 3 days (Net Buffer)');
+
+  // Test Audit execution with cancelling 09/08 and ETA 06/08
+  const testState = {
+    cargoQty: 50000,
+    commodity: 'Carga General',
+    estimatedVoyageDays: 8,
+    laycanDaysLeft: 11,
+    cancellingDate: cancelling,
+    etaDate: eta,
+    loadRate: 5000,
+    dischargeRate: 5000,
+    fleteEstimado: 35,
+    breakEven: 25
+  };
+  fakeWin.generarAuditoriaOperativa(testState);
+  assert.equal(elements['val-laycan-buffer'].textContent, '3.0 días', 'Card 1 Buffer Net display must show strictly 3.0 days derived from Date difference');
+
+  // 2. Test Relative Scenarios (Freight Rate Intact & Relative Improvement):
+  // Baseline: Freight = $35/MT, BreakEven = $25/MT -> Margin = (35-25)/35 = 28.57%
+  fakeWin.cargarEscenario('optimo');
+  const optimoState = fakeWin.dssSimulationState;
+
+  assert.equal(optimoState.fleteUnitario, 35, 'Escenario Óptimo must keep base negotiated unit freight rate intact (35)');
+  assert.equal(optimoState.fleteEstimado, 35, 'Escenario Óptimo must keep base negotiated estimated freight intact (35)');
+  assert.equal(optimoState.loadRate, 6500, 'Escenario Óptimo must apply +30% load rate efficiency over base 5000 (6500 MT/d)');
+  assert.equal(optimoState.dischargeRate, 6500, 'Escenario Óptimo must apply +30% discharge rate efficiency over base 5000 (6500 MT/d)');
+  assert.equal(optimoState.breakEvenUnitario, 22.5, 'Escenario Óptimo must lower break-even due to despatch/efficiency savings (25 * 0.90 = 22.50)');
+
+  const baseMargin = (35 - 25) / 35;
+  const optimoMargin = (optimoState.fleteUnitario - optimoState.breakEvenUnitario) / optimoState.fleteUnitario;
+  assert.ok(optimoMargin > baseMargin, 'Escenario Óptimo margin must improve over baseline (35.71% > 28.57%)');
+
+  // 3. Test Situación Actual Input Lockdown:
+  fakeWin.cargarEscenario('actual');
+  assert.equal(elements['input-pol'].disabled, true, 'input-pol must be disabled in Situación Actual');
+  assert.equal(elements['input-cargoQty'].disabled, true, 'input-cargoQty must be disabled in Situación Actual');
+  assert.equal(elements['input-fleteEstimado'].disabled, true, 'input-fleteEstimado must be disabled in Situación Actual');
+
+  // Switch back to simulation tab ('riesgo' / 'optimo')
+  fakeWin.cargarEscenario('optimo');
+  assert.equal(elements['input-pol'].disabled, false, 'input-pol must be enabled in simulation scenario');
+  assert.equal(elements['input-cargoQty'].disabled, false, 'input-cargoQty must be enabled in simulation scenario');
+  });
 
 
