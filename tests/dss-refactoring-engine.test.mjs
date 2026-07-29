@@ -78,11 +78,11 @@ test('PARTE 1: DSS scenario logic performs shallow merge and stress test mutatio
   assert.equal(domState['input-loadRate'], '7000', 'Original loadRate DOM input must remain untouched');
   assert.equal(domState['input-fleteEstimado'], '35', 'Original fleteEstimado DOM input must remain untouched');
 
-  // Stress variables MUST BE SET ONLY in local dssSimulationState:
+  // Baseline 1:1 evaluation (Escenario Riesgo = Realidad Actual without artificial penalties)
   assert.ok(fakeWindow.dssSimulationState, 'dssSimulationState must be populated');
-  assert.ok(Number(fakeWindow.dssSimulationState.laycanDaysLeft) < 9, 'Riesgo scenario must reduce laycanDaysLeft in dssSimulationState below voyage days');
-  assert.equal(Number(fakeWindow.dssSimulationState.loadRate), 4900, 'Riesgo scenario must stress loadRate in dssSimulationState with 30% penalty (4900)');
-  assert.ok(Number(fakeWindow.dssSimulationState.fleteEstimado) < Number(domState['input-breakEven']), 'Riesgo scenario must lower fleteEstimado in dssSimulationState below break-even');
+  assert.equal(Number(fakeWindow.dssSimulationState.laycanDaysLeft), 12, 'Riesgo scenario must reflect exact 1:1 laycanDaysLeft from baseline (12)');
+  assert.equal(Number(fakeWindow.dssSimulationState.loadRate), 7000, 'Riesgo scenario must reflect exact 1:1 loadRate from baseline (7000)');
+  assert.equal(Number(fakeWindow.dssSimulationState.fleteEstimado), 35, 'Riesgo scenario must reflect exact 1:1 fleteEstimado from baseline (35)');
   assert.ok(fakeWindow.dssSimulationState.cancellingDate instanceof Date, 'dssSimulationState must store simulated cancellingDate Date object');
 
   // Scenario Cleanup / Context Restoration:
@@ -389,40 +389,113 @@ test('PARTE 5: Critical DSS Bug Fixes - State Purge, Rate Clamping (min 1500 MT/
     `
     ${helpersCode}
     window.dssSimulationState = dssSimulationState;
+    window.dssFormState = dssFormState;
     window.cargarEscenario = cargarEscenario;
     window.cargarEscenarioRiesgo = cargarEscenarioRiesgo;
     window.cargarEscenarioAlerta = cargarEscenarioAlerta;
     window.cargarEscenarioOptimo = cargarEscenarioOptimo;
     window.limpiarEscenario = limpiarEscenario;
     window.getDSSCurrentState = getDSSCurrentState;
+    window.actualizarDesdeFormulario = actualizarDesdeFormulario;
     `
   );
 
   evalContext(fakeDoc, fakeWin, globalState);
 
-  // 1. Test Rate Clamping: Even if input rate is 1800 MT/d, 70% penalty (1260 MT/d) MUST BE CLAMPED to at least 1500 MT/d
+  // 1. Test 1:1 Baseline Reality in Riesgo scenario (Rate 1800 MT/d is preserved 1:1)
   fakeWin.cargarEscenarioRiesgo();
   const riskState = fakeWin.dssSimulationState;
-  assert.equal(riskState.loadRate, 1500, 'Simulated loadRate in Riesgo scenario must be clamped to minimum 1500 MT/day');
-  assert.equal(riskState.dischargeRate, 1500, 'Simulated dischargeRate in Riesgo scenario must be clamped to minimum 1500 MT/day');
+  assert.equal(riskState.loadRate, 1800, 'Escenario Riesgo must reflect exact 1:1 loadRate from base state (1800 MT/day)');
+  assert.equal(riskState.dischargeRate, 1800, 'Escenario Riesgo must reflect exact 1:1 dischargeRate from base state (1800 MT/day)');
 
-  // Verify port days for 10k MT with clamped 1500 MT/d rate: 10000/1500 + 10000/1500 = 6.67 + 6.67 = ~13.3 port days (never >80 days)
-  assert.ok(riskState.portDays < 20, 'Clamped port days for 10k MT must be realistic (< 20 days, not >80 days)');
+  // Verify port days for 10k MT with 1800 MT/d rate: 10000/1800 + 10000/1800 = ~11.1 port days
+  assert.ok(riskState.portDays < 20, 'Port days for 10k MT must be realistic (< 20 days)');
 
-  // 2. Test Reset-before-Apply (State Purge): Switch from Riesgo to Alerta
-  // In Riesgo, cancellingDate was set to simulated early date.
-  // In Alerta, it MUST purge Riesgo state and read globalState.cancellingDate ('2026-08-09')
+  // 2. Test Escenario Alerta: Projection of improvement over reality (1800 * 1.15 = 2070 MT/d)
   fakeWin.cargarEscenarioAlerta();
   const alertaState = fakeWin.dssSimulationState;
 
-  // Verify loadRate in Alerta was calculated from clean globalState (1800 * 0.85 = 1530 MT/d), NOT compounded from Riesgo!
-  assert.equal(alertaState.loadRate, 1530, 'Alerta loadRate must be calculated from clean baseState (1800 * 0.85 = 1530), not compounded from Riesgo');
+  assert.equal(alertaState.loadRate, 2070, 'Alerta loadRate must be calculated as improvement projection (1800 * 1.15 = 2070)');
 
   // 3. Test Laycan Visual Sync in Escenario Alerta:
-  // Alerta uses global laycanDaysLeft (10) vs estimatedVoyageDays (8) -> Buffer = +2.0 days (Neutral state)
-  // Card 1 badge MUST be 'NEUTRAL'
   assert.equal(elements['badge-laycan-status'].textContent, 'NEUTRAL', 'Card 1 in Escenario Alerta must display NEUTRAL status');
-
-  // Card 1 cancelling date MUST display global cancelling date (09/08/2026)
   assert.equal(elements['val-laycan-cancelling'].textContent, '09/08/2026', 'Card 1 in Escenario Alerta must display global cancelling date (09/08/2026)');
 });
+
+test('PARTE 6: Reactive dssFormState, Two-Way Data Binding, and Card Synchronization', () => {
+  const domState = {
+    'input-pol': 'Rotterdam',
+    'input-pod': 'Houston',
+    'input-cargoQty': '50000',
+    'input-commodity': 'Siderúrgico / Carga General',
+    'input-laycanDaysLeft': '10',
+    'input-estimatedVoyageDays': '8',
+    'input-loadRate': '5000',
+    'input-dischargeRate': '5000',
+    'input-portDays': '20',
+    'input-seaDays': '8',
+    'input-fleteEstimado': '35',
+    'input-breakEven': '25'
+  };
+
+  const elements = {};
+  const fakeDoc = {
+    querySelectorAll: () => [],
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    getElementById: (id) => {
+      if (!elements[id]) {
+        elements[id] = {
+          id,
+          get value() { return domState[id] !== undefined ? domState[id] : ''; },
+          set value(v) { domState[id] = String(v); },
+          textContent: '',
+          classList: { toggle: () => {}, remove: () => {}, add: () => {} },
+          style: {},
+          addEventListener: () => {},
+          removeEventListener: () => {}
+        };
+      }
+      return elements[id];
+    }
+  };
+
+  const fakeWin = {
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    State: { cancellingDate: '2026-08-09' }
+  };
+  globalThis.window = fakeWin;
+
+  const helperStart = indexHtml.indexOf('function determinarTerminoCargo(commodity)');
+  const helperEnd = indexHtml.indexOf('function buildAuditHTMLTemplate', helperStart);
+  const helpersCode = indexHtml.slice(helperStart, helperEnd);
+
+  const evalContext = new Function(
+    'document',
+    'window',
+    `
+    ${helpersCode}
+    actualizarDesdeFormulario();
+    `
+  );
+
+  evalContext(fakeDoc, fakeWin);
+
+  // 1. Verify initial calculation: 50000 / 5000 + 50000 / 5000 = 10 + 10 = 20 port days
+  assert.ok(fakeWin.dssFormState, 'dssFormState must be initialized');
+  assert.equal(domState['input-portDays'], '20.0', 'Initial port days input must be 20.0');
+
+  // 2. Modify input-loadRate to 2500 (typing in input field):
+  // Formula obligatoria: Port Days = (50000 / 2500) + (50000 / 5000) = 20 + 10 = 30 port days
+  domState['input-loadRate'] = '2500';
+  fakeWin.actualizarDesdeFormulario();
+
+  assert.equal(domState['input-portDays'], '30.0', 'Modifying loadRate to 2500 must immediately update input-portDays to 30.0');
+  assert.equal(fakeWin.dssFormState.loadRate, 2500, 'dssFormState.loadRate must reflect 2500');
+  assert.equal(fakeWin.dssFormState.portDays, 30, 'dssFormState.portDays must reflect 30');
+
+  // 3. Verify Card 2 (Port Operations) total port days element updated in real-time
+  assert.equal(elements['val-portdays-total'].textContent, '30.0 días', 'Card 2 total port days must reflect 30.0 días in real-time');
+});
+

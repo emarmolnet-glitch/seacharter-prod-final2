@@ -374,7 +374,7 @@
          * @param {Object} estado 
          */
         function generarAuditoriaOperativa(estado) {
-            const activeState = dssSimulationState || estado || estadoInicial;
+            const activeState = dssSimulationState || dssFormState || estado || estadoInicial;
             if (!activeState) return;
 
             // Extraer variables con valores por defecto de resguardo
@@ -765,6 +765,7 @@
         }
 
         let dssSimulationState = null;
+        let dssFormState = null;
 
         function limpiarDssSimulationState() {
             dssSimulationState = null;
@@ -783,7 +784,48 @@
         }
 
         /**
-         * Sincroniza las entradas del formulario interactivo con el objeto de estado y ejecuta la auditoría
+         * Sincroniza los campos de entrada del DOM con el objeto de estado y mantiene dssFormState actualizado (Single Source of Truth)
+         */
+        function sincronizarFormularioDesdeEstado(state) {
+            if (!state) return;
+            dssFormState = { ...state };
+            if (typeof window !== 'undefined') {
+                window.dssFormState = dssFormState;
+            }
+
+            const setVal = (id, val) => {
+                const el = document.getElementById(id);
+                if (el && val !== undefined && val !== null) {
+                    el.value = val;
+                }
+            };
+
+            setVal('input-pol', state.pol);
+            setVal('input-pod', state.pod);
+            setVal('input-cargoQty', state.cargoQty);
+            setVal('input-commodity', state.commodity);
+            setVal('input-laycanDaysLeft', state.laycanDaysLeft);
+            setVal('input-estimatedVoyageDays', state.estimatedVoyageDays || state.seaDays);
+            setVal('input-loadRate', state.loadRate);
+            setVal('input-dischargeRate', state.dischargeRate);
+
+            const cargoQty = Number(state.cargoQty) || 0;
+            const loadRate = Math.max(1, Number(state.loadRate) || 1);
+            const dischargeRate = Math.max(1, Number(state.dischargeRate) || loadRate);
+            const computedPortDays = (cargoQty / loadRate) + (cargoQty / dischargeRate);
+            setVal('input-portDays', computedPortDays.toFixed(1));
+
+            setVal('input-seaDays', state.seaDays || state.estimatedVoyageDays);
+            setVal('input-fleteEstimado', state.fleteEstimado || state.fleteUnitario);
+            setVal('input-breakEven', state.breakEven || state.breakEvenUnitario);
+        }
+        if (typeof window !== 'undefined') {
+            window.sincronizarFormularioDesdeEstado = sincronizarFormularioDesdeEstado;
+        }
+
+        /**
+         * Sincroniza las entradas del formulario interactivo con dssFormState y ejecuta la auditoría.
+         * Recalcula inmediatamente las variables dependientes (Fórmula obligatoria: Días de Puerto = Carga / Ritmo Carga + Carga / Ritmo Descarga)
          */
         function actualizarDesdeFormulario() {
             limpiarDssSimulationState();
@@ -801,13 +843,14 @@
             const inputBreakEven = document.getElementById('input-breakEven');
 
             const cargoQty = inputCargoQty ? Number(inputCargoQty.value) : 50000;
-            const loadRate = inputLoadRate ? Number(inputLoadRate.value) : 5000;
-            const dischargeRate = inputDischargeRate ? Number(inputDischargeRate.value) : 5000;
+            const loadRate = inputLoadRate ? Math.max(1, Number(inputLoadRate.value) || 1) : 5000;
+            const dischargeRate = inputDischargeRate ? Math.max(1, Number(inputDischargeRate.value) || 1) : loadRate;
 
-            const computedPortDays = (cargoQty / (loadRate || 1)) + (cargoQty / (dischargeRate || 1));
+            // Fórmula obligatoria: Dias de Puerto = (Total Carga / dssFormState.ritmoCarga) + (Total Carga / dssFormState.ritmoDescarga)
+            const computedPortDays = (cargoQty / loadRate) + (cargoQty / dischargeRate);
             if (inputPortDays) inputPortDays.value = computedPortDays.toFixed(1);
 
-            const estado = {
+            dssFormState = {
                 pol: inputPol ? inputPol.value : 'Rotterdam',
                 pod: inputPod ? inputPod.value : 'Houston',
                 cargoQty,
@@ -819,10 +862,19 @@
                 portDays: computedPortDays,
                 seaDays: inputSeaDays ? Number(inputSeaDays.value) : 8,
                 fleteEstimado: inputFleteEstimado ? Number(inputFleteEstimado.value) : 35,
-                breakEven: inputBreakEven ? Number(inputBreakEven.value) : 25
+                breakEven: inputBreakEven ? Number(inputBreakEven.value) : 25,
+                fleteUnitario: inputFleteEstimado ? Number(inputFleteEstimado.value) : 35,
+                breakEvenUnitario: inputBreakEven ? Number(inputBreakEven.value) : 25
             };
 
-            generarAuditoriaOperativa(estado);
+            if (typeof window !== 'undefined') {
+                window.dssFormState = dssFormState;
+            }
+
+            generarAuditoriaOperativa(dssFormState);
+        }
+        if (typeof window !== 'undefined') {
+            window.actualizarDesdeFormulario = actualizarDesdeFormulario;
         }
 
         /**
@@ -836,7 +888,7 @@
         }
 
         /**
-         * Carga escenarios predefinidos aplicando shallow merge sobre las variables activas (sin modificar POL, POD, Carga ni Commodity)
+         * Carga escenarios predefinidos aplicando shallow merge sobre las variables activas
          * @param {string} tipo 
          */
         function cargarEscenario(tipo) {
@@ -885,16 +937,7 @@
             const today = new Date();
 
             if (tipo === 'riesgo') {
-                const simLaycanDays = Math.max(1, Number((voyageDays - 2).toFixed(1)));
-                stressMutations = {
-                    laycanDaysLeft: simLaycanDays,
-                    cancellingDate: new Date(today.getTime() + Math.max(0, simLaycanDays) * 86400000),
-                    loadRate: clampRate(currentLoadRate * 0.7),
-                    dischargeRate: clampRate(currentDischargeRate * 0.7),
-                    fleteUnitario: Number((breakEvenUnitario * 0.88).toFixed(2)),
-                    fleteEstimado: Number((breakEvenUnitario * 0.88).toFixed(2))
-                };
-            } else if (tipo === 'alerta' || tipo === 'equilibrado') {
+                // Escenario Riesgo = Realidad Actual 1:1 (Línea Base sin penalizaciones artificiales)
                 const simLaycanDays = Number(baseState.laycanDaysLeft) || 10;
                 let globalCancelDate = baseState.cancellingDate;
                 if (!globalCancelDate && typeof State !== 'undefined' && State) {
@@ -919,18 +962,52 @@
                 stressMutations = {
                     laycanDaysLeft: simLaycanDays,
                     cancellingDate: finalCancelDate,
-                    loadRate: clampRate(currentLoadRate * 0.85),
-                    dischargeRate: clampRate(currentDischargeRate * 0.85),
-                    fleteUnitario: Number((breakEvenUnitario * 1.03).toFixed(2)),
-                    fleteEstimado: Number((breakEvenUnitario * 1.03).toFixed(2))
+                    loadRate: clampRate(currentLoadRate),
+                    dischargeRate: clampRate(currentDischargeRate),
+                    fleteUnitario: Number(baseState.fleteUnitario || baseState.fleteEstimado || 35),
+                    fleteEstimado: Number(baseState.fleteEstimado || baseState.fleteUnitario || 35),
+                    breakEvenUnitario: Number(baseState.breakEvenUnitario || baseState.breakEven || 25),
+                    breakEven: Number(baseState.breakEven || baseState.breakEvenUnitario || 25)
+                };
+            } else if (tipo === 'alerta' || tipo === 'equilibrado') {
+                // Escenario Alerta = Proyección de mejora moderada sobre la realidad
+                const simLaycanDays = Math.max(Number(baseState.laycanDaysLeft) || 10, voyageDays + 2);
+                let globalCancelDate = baseState.cancellingDate;
+                if (!globalCancelDate && typeof State !== 'undefined' && State) {
+                    globalCancelDate = State.cancellingDate || State.laycanEnd;
+                }
+                let finalCancelDate;
+                if (globalCancelDate) {
+                    finalCancelDate = globalCancelDate instanceof Date ? globalCancelDate : new Date(globalCancelDate);
+                    if (isNaN(finalCancelDate.getTime()) && typeof globalCancelDate === 'string' && globalCancelDate.includes('/')) {
+                        const parts = globalCancelDate.split('/');
+                        if (parts.length === 3) {
+                            finalCancelDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                        }
+                    }
+                    if (isNaN(finalCancelDate.getTime())) {
+                        finalCancelDate = new Date(today.getTime() + Math.max(0, simLaycanDays) * 86400000);
+                    }
+                } else {
+                    finalCancelDate = new Date(today.getTime() + Math.max(0, simLaycanDays) * 86400000);
+                }
+
+                stressMutations = {
+                    laycanDaysLeft: simLaycanDays,
+                    cancellingDate: finalCancelDate,
+                    loadRate: clampRate(currentLoadRate * 1.15),
+                    dischargeRate: clampRate(currentDischargeRate * 1.15),
+                    fleteUnitario: Number((breakEvenUnitario * 1.10).toFixed(2)),
+                    fleteEstimado: Number((breakEvenUnitario * 1.10).toFixed(2))
                 };
             } else if (tipo === 'optimo') {
+                // Escenario Óptimo = Proyección de mejora alta sobre la realidad
                 const simLaycanDays = Number((voyageDays + 10).toFixed(1));
                 stressMutations = {
                     laycanDaysLeft: simLaycanDays,
                     cancellingDate: new Date(today.getTime() + Math.max(0, simLaycanDays) * 86400000),
-                    loadRate: clampRate(currentLoadRate * 1.25),
-                    dischargeRate: clampRate(currentDischargeRate * 1.25),
+                    loadRate: clampRate(currentLoadRate * 1.30),
+                    dischargeRate: clampRate(currentDischargeRate * 1.30),
                     fleteUnitario: Number((breakEvenUnitario * 1.25).toFixed(2)),
                     fleteEstimado: Number((breakEvenUnitario * 1.25).toFixed(2))
                 };
@@ -945,11 +1022,14 @@
             updatedState.portDays = computedPortDays;
 
             dssSimulationState = updatedState;
+            dssFormState = { ...updatedState };
             if (typeof window !== 'undefined') {
                 window.dssSimulationState = dssSimulationState;
+                window.dssFormState = dssFormState;
             }
 
-            generarAuditoriaOperativa(updatedState);
+            sincronizarFormularioDesdeEstado(dssFormState);
+            generarAuditoriaOperativa(dssFormState);
         }
 
         function cargarEscenarioRiesgo() {
@@ -982,6 +1062,9 @@
         function getDSSCurrentState() {
             if (dssSimulationState) {
                 return { ...dssSimulationState };
+            }
+            if (dssFormState) {
+                return { ...dssFormState };
             }
             const inputPol = document.getElementById('input-pol');
             const inputPod = document.getElementById('input-pod');
