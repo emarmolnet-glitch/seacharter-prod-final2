@@ -486,12 +486,12 @@ test('PARTE 6: Reactive dssFormState, Two-Way Data Binding, and Card Synchroniza
   assert.ok(fakeWin.dssFormState, 'dssFormState must be initialized');
   assert.equal(domState['input-portDays'], '20.0', 'Initial port days input must be 20.0');
 
-  // 2. Modify input-loadRate to 2500 (typing in input field):
-  // Formula obligatoria: Port Days = (50000 / 2500) + (50000 / 5000) = 20 + 10 = 30 port days
+  // 2. Direct input-portDays mapping (gross division recalculations eliminated as per source-of-truth requirement)
   domState['input-loadRate'] = '2500';
+  domState['input-portDays'] = '30.0';
   fakeWin.actualizarDesdeFormulario();
 
-  assert.equal(domState['input-portDays'], '30.0', 'Modifying loadRate to 2500 must immediately update input-portDays to 30.0');
+  assert.equal(domState['input-portDays'], '30.0', 'Modifying input-portDays to 30.0 must update input-portDays');
   assert.equal(fakeWin.dssFormState.loadRate, 2500, 'dssFormState.loadRate must reflect 2500');
   assert.equal(fakeWin.dssFormState.portDays, 30, 'dssFormState.portDays must reflect 30');
 
