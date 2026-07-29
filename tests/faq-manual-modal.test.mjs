@@ -65,6 +65,9 @@ test('FAQ modal contains required corporate manual sections, semantic markup, an
     assert.match(html, /¿Cómo aplicar y auditar un contrato de fletamento GENCON 94\?/);
     assert.match(html, /¿Cómo verificar la densidad de la flota en tiempo real y filtrar por tipo de buque\?/);
     assert.match(html, /¿Cómo exportar e integrar el reporte ejecutivo con el Data Bridge\?/);
+    assert.match(html, /¿Cómo calcula el DSS los Días de Puerto y Navegación\?/);
+    assert.match(html, /¿Qué es la alerta de Déficit de Exportación \(Backhaul Risk\)\?/);
+    assert.match(html, /¿El sistema contempla riesgos geopolíticos\?/);
 
     // Arquitectura Sandbox
     assert.match(html, /Arquitectura Sandbox y Aislamiento de Memoria/);

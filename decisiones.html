@@ -635,8 +635,13 @@
             const diasCargaTeoricos = cargoQty > 0 ? cargoQty / loadRateVal : 0;
             const diasDescargaTeoricos = cargoQty > 0 ? cargoQty / dischargeRateVal : 0;
 
-            // FÓRMULA ESTRICTA: totalPortDays = (cantidadCargaMT / ritmoActualPOL) + (cantidadCargaMT / ritmoActualPOD)
-            const totalPortDaysCalc = diasCargaTeoricos + diasDescargaTeoricos;
+            const mainEnginePortDays = (typeof State !== 'undefined' && State && (State.portDays || State.totalPortDays || State.tPort))
+                ? Number(State.portDays || State.totalPortDays || State.tPort)
+                : (parseFloat(document.getElementById('res-days-port')?.innerText) || 10);
+
+            const totalPortDaysCalc = (activeState.portDays !== undefined && activeState.portDays !== null && !isNaN(Number(activeState.portDays)) && Number(activeState.portDays) > 0)
+                ? Number(activeState.portDays)
+                : ((diasCargaTeoricos + diasDescargaTeoricos) > 0 ? (diasCargaTeoricos + diasDescargaTeoricos) : mainEnginePortDays);
 
             const loadRateRequerido = Math.ceil(cargoQty / 5);
             const dischargeRateRequerido = Math.ceil(cargoQty / 5);
@@ -1081,16 +1086,22 @@
                     ? Number(State.portDays || State.totalPortDays || State.tPort)
                     : (parseFloat(document.getElementById('res-days-port')?.innerText) || 10));
 
-            const mainEngineSeaDays = (state.seaDays !== undefined && state.seaDays !== null)
+            const resDaysLadenText = document.getElementById('res-days-laden')?.textContent || document.getElementById('res-days-laden')?.innerText || '';
+            const resDaysLadenParsed = parseFloat(resDaysLadenText.replace(/[^0-9.]/g, '')) || 0;
+
+            const calcEngineSeaDays = (typeof State !== 'undefined' && State && (State.seaDays || State.tSea || State.seaDaysLaden || State.ladenDays || State.dLaden))
+                ? Number(State.seaDays || State.tSea || State.seaDaysLaden || State.ladenDays || State.dLaden)
+                : (resDaysLadenParsed || parseFloat(document.getElementById('shadow-navigation-days')?.value) || 0);
+
+            const mainEngineSeaDays = (state.seaDays !== undefined && state.seaDays !== null && Number(state.seaDays) !== 8 && Number(state.seaDays) > 0)
                 ? Number(state.seaDays)
-                : ((state.estimatedVoyageDays !== undefined && state.estimatedVoyageDays !== null)
+                : ((state.estimatedVoyageDays !== undefined && state.estimatedVoyageDays !== null && Number(state.estimatedVoyageDays) !== 8 && Number(state.estimatedVoyageDays) > 0)
                     ? Number(state.estimatedVoyageDays)
-                    : ((typeof State !== 'undefined' && State && (State.seaDays || State.tSea))
-                        ? Number(State.seaDays || State.tSea)
-                        : (parseFloat(document.getElementById('shadow-sea-days')?.value) || 8)));
+                    : (calcEngineSeaDays > 0 ? calcEngineSeaDays : (Number(state.seaDays) || Number(state.estimatedVoyageDays) || 8)));
 
             setVal('input-portDays', mainEnginePortDays.toFixed(1));
             setVal('input-seaDays', mainEngineSeaDays.toFixed(1));
+            setVal('input-estimatedVoyageDays', mainEngineSeaDays.toFixed(1));
 
             setVal('input-fleteEstimado', state.fleteEstimado || state.fleteUnitario);
             setVal('input-breakEven', state.breakEven || state.breakEvenUnitario);
@@ -1245,18 +1256,29 @@
                 ? Number(State.portDays || State.totalPortDays || State.tPort)
                 : (parseFloat(document.getElementById('res-days-port')?.innerText) || 10);
 
-            const mainEngineSeaDays = (typeof State !== 'undefined' && State && (State.seaDays || State.tSea))
-                ? Number(State.seaDays || State.tSea)
-                : (parseFloat(document.getElementById('shadow-sea-days')?.value) || 8);
+            const resDaysLadenText = document.getElementById('res-days-laden')?.textContent || document.getElementById('res-days-laden')?.innerText || '';
+            const resDaysLadenParsed = parseFloat(resDaysLadenText.replace(/[^0-9.]/g, '')) || 0;
 
-            const portDaysVal = inputPortDays && inputPortDays.value !== '' ? Number(inputPortDays.value) : mainEnginePortDays;
-            const seaDaysVal = inputSeaDays && inputSeaDays.value !== '' ? Number(inputSeaDays.value) : mainEngineSeaDays;
+            const mainEngineSeaDays = (typeof State !== 'undefined' && State && (State.seaDays || State.tSea || State.seaDaysLaden || State.ladenDays || State.dLaden))
+                ? Number(State.seaDays || State.tSea || State.seaDaysLaden || State.ladenDays || State.dLaden)
+                : (resDaysLadenParsed || parseFloat(document.getElementById('shadow-navigation-days')?.value) || 8);
 
-            if (inputPortDays && (!inputPortDays.value || inputPortDays.value === '10' || inputPortDays.value === '20')) {
+            const portDaysVal = (inputPortDays && inputPortDays.value !== '')
+                ? Number(inputPortDays.value)
+                : mainEnginePortDays;
+
+            const seaDaysVal = (inputSeaDays && inputSeaDays.value !== '' && inputSeaDays.value !== '8' && inputSeaDays.value !== '8.0')
+                ? Number(inputSeaDays.value)
+                : mainEngineSeaDays;
+
+            if (inputPortDays) {
                 inputPortDays.value = portDaysVal.toFixed(1);
             }
-            if (inputSeaDays && (!inputSeaDays.value || inputSeaDays.value === '8')) {
+            if (inputSeaDays && (!inputSeaDays.value || inputSeaDays.value === '8' || inputSeaDays.value === '8.0')) {
                 inputSeaDays.value = seaDaysVal.toFixed(1);
+            }
+            if (inputEstimatedVoyageDays && (!inputEstimatedVoyageDays.value || inputEstimatedVoyageDays.value === '8' || inputEstimatedVoyageDays.value === '8.0')) {
+                inputEstimatedVoyageDays.value = seaDaysVal.toFixed(1);
             }
 
             dssFormState = {
@@ -1540,8 +1562,29 @@
             const updatedLoadRate = updatedState.loadRate || 1500;
             const updatedDischargeRate = updatedState.dischargeRate || 1500;
             const updatedQty = updatedState.cargoQty || 1;
-            const computedPortDays = (updatedQty / updatedLoadRate) + (updatedQty / updatedDischargeRate);
-            updatedState.portDays = computedPortDays;
+            const mainEnginePortDays = (typeof State !== 'undefined' && State && (State.portDays || State.totalPortDays || State.tPort))
+                ? Number(State.portDays || State.totalPortDays || State.tPort)
+                : (parseFloat(document.getElementById('res-days-port')?.innerText) || 10);
+
+            const resDaysLadenText = document.getElementById('res-days-laden')?.textContent || document.getElementById('res-days-laden')?.innerText || '';
+            const resDaysLadenParsed = parseFloat(resDaysLadenText.replace(/[^0-9.]/g, '')) || 0;
+
+            const mainEngineSeaDays = (typeof State !== 'undefined' && State && (State.seaDays || State.tSea || State.seaDaysLaden || State.ladenDays || State.dLaden))
+                ? Number(State.seaDays || State.tSea || State.seaDaysLaden || State.ladenDays || State.dLaden)
+                : (resDaysLadenParsed || parseFloat(document.getElementById('shadow-navigation-days')?.value) || 8);
+
+            const inheritedPortDays = (baseState.portDays !== undefined && baseState.portDays !== null && !isNaN(Number(baseState.portDays)) && Number(baseState.portDays) > 0)
+                ? Number(baseState.portDays)
+                : mainEnginePortDays;
+
+            const inheritedSeaDays = (baseState.seaDays !== undefined && baseState.seaDays !== null && !isNaN(Number(baseState.seaDays)) && Number(baseState.seaDays) > 0 && Number(baseState.seaDays) !== 8)
+                ? Number(baseState.seaDays)
+                : mainEngineSeaDays;
+
+            updatedState.portDays = inheritedPortDays;
+            updatedState.seaDays = inheritedSeaDays;
+            updatedState.estimatedVoyageDays = inheritedSeaDays;
+            updatedState.ladenDays = inheritedSeaDays;
 
             dssSimulationState = updatedState;
             dssFormState = { ...updatedState };
@@ -1612,12 +1655,30 @@
             const vesselName = activeDss.vesselName || activeDss.vessel || fallbackVesselName;
 
             const laycanDaysLeft = parseFloat(activeDss.laycanDaysLeft) || parseFloat(inputLaycanDaysLeft?.value) || parseFloat(document.getElementById('laycan-dias-libres')?.value) || 10;
-            const estimatedVoyageDays = parseFloat(activeDss.estimatedVoyageDays) || parseFloat(inputEstimatedVoyageDays?.value) || parseFloat(document.getElementById('shadow-sea-days')?.value) || 8;
             const loadRate = parseFloat(activeDss.loadRate) || parseFloat(inputLoadRate?.value) || parseFloat(document.getElementById('rate-load')?.value) || 5000;
             const dischargeRate = parseFloat(activeDss.dischargeRate) || parseFloat(inputDischargeRate?.value) || parseFloat(document.getElementById('rate-disch')?.value) || 5000;
-            const seaDays = parseFloat(activeDss.seaDays) || parseFloat(inputSeaDays?.value) || parseFloat(document.getElementById('shadow-sea-days')?.value) || 8;
 
-            const computedPortDays = activeDss.portDays !== undefined ? parseFloat(activeDss.portDays) : ((cargoQty / (loadRate || 1)) + (cargoQty / (dischargeRate || 1)));
+            const resDaysLadenText = document.getElementById('res-days-laden')?.textContent || document.getElementById('res-days-laden')?.innerText || '';
+            const resDaysLadenParsed = parseFloat(resDaysLadenText.replace(/[^0-9.]/g, '')) || 0;
+
+            const mainEngineSeaDays = (typeof State !== 'undefined' && State && (State.seaDays || State.tSea || State.seaDaysLaden || State.ladenDays || State.dLaden))
+                ? Number(State.seaDays || State.tSea || State.seaDaysLaden || State.ladenDays || State.dLaden)
+                : (resDaysLadenParsed || parseFloat(document.getElementById('shadow-navigation-days')?.value) || 8);
+
+            const seaDaysVal = (activeDss.seaDays !== undefined && activeDss.seaDays !== null && !isNaN(parseFloat(activeDss.seaDays)) && parseFloat(activeDss.seaDays) !== 8 && parseFloat(activeDss.seaDays) > 0)
+                ? parseFloat(activeDss.seaDays)
+                : ((inputSeaDays?.value && parseFloat(inputSeaDays.value) !== 8 && parseFloat(inputSeaDays.value) > 0)
+                    ? parseFloat(inputSeaDays.value)
+                    : mainEngineSeaDays);
+
+            const estimatedVoyageDays = seaDaysVal;
+            const seaDays = seaDaysVal;
+
+            const mainEnginePortDays = (typeof State !== 'undefined' && State && (State.portDays || State.totalPortDays || State.tPort))
+                ? Number(State.portDays || State.totalPortDays || State.tPort)
+                : (parseFloat(document.getElementById('res-days-port')?.innerText) || 10);
+
+            const computedPortDays = (activeDss.portDays !== undefined && activeDss.portDays !== null && !isNaN(parseFloat(activeDss.portDays))) ? parseFloat(activeDss.portDays) : mainEnginePortDays;
 
             const rawFleteVal = activeDss.fleteEstimado !== undefined ? parseFloat(activeDss.fleteEstimado) : (activeDss.fleteUnitario !== undefined ? parseFloat(activeDss.fleteUnitario) : (parseFloat(inputFleteEstimado?.value) || parseFloat(document.getElementById('freight-sell')?.value) || 35));
             const rawBreakEvenVal = activeDss.breakEven !== undefined ? parseFloat(activeDss.breakEven) : (parseFloat(inputBreakEven?.value) || parseFloat(document.getElementById('shadow-break-even-freight')?.value) || 25);
