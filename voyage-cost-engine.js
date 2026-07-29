@@ -1023,10 +1023,81 @@
         }
     }
 
+    const defaultDSSState = {
+        ballastDays: 0,
+        jwlaRiskActive: false,
+        jwlaPremiumUSD: 0,
+        actualCargoIntake: 50000,
+        targetCargoMT: 50000,
+        cargoQty: 50000,
+        ladenDays: 8,
+        seaDays: 8,
+        estimatedVoyageDays: 8,
+        totalBunkerCost: 0,
+        totalPortDisbursements: 0,
+        pol: 'Rotterdam',
+        pod: 'Houston',
+        vesselName: 'Vessel Reference',
+        freightRateUSD: 35,
+        fleteEstimado: 35,
+        fleteUnitario: 35
+    };
+
+    function calculateMarketFreightWithRisk(dssState, globalMarketTCE) {
+        const safeIntake = (dssState && Number(dssState.actualCargoIntake) > 0)
+            ? Number(dssState.actualCargoIntake)
+            : (Number(dssState?.targetCargoMT || dssState?.cargoQty || dssState?.cargo) || 1);
+        const safeBallast = Number(dssState?.ballastDays) || 0;
+        const safeJWLA = dssState?.jwlaRiskActive ? (Number(dssState?.jwlaPremiumUSD) || 0) : 0;
+
+        const safeLadenDays = Number(dssState?.ladenDays ?? dssState?.seaDays ?? dssState?.estimatedVoyageDays ?? 0) || 0;
+        const totalBillableDays = safeLadenDays + safeBallast;
+
+        const safeBunker = Number(dssState?.totalBunkerCost ?? dssState?.bunkerCost ?? 0) || 0;
+        const safePort = Number(dssState?.totalPortDisbursements ?? dssState?.portDisbursements ?? dssState?.portCosts ?? 0) || 0;
+        const totalDirectCosts = safeBunker + safePort;
+
+        const safeMarketTCE = Number(globalMarketTCE) || 0;
+        const totalVoyageCost = (totalBillableDays * safeMarketTCE) + totalDirectCosts + safeJWLA;
+
+        return totalVoyageCost / safeIntake;
+    }
+
+    function handleCommitConditions(currentState, executeSafeCommit) {
+        const targetIntake = Number(currentState?.actualCargoIntake || currentState?.targetCargoMT || currentState?.cargoQty || currentState?.cargo) || 50000;
+        const ballastDays = Number(currentState?.ballastDays) || 0;
+        const jwlaRiskActive = Boolean(currentState?.jwlaRiskActive);
+        const jwlaPremiumUSD = Number(currentState?.jwlaPremiumUSD) || 0;
+        const vesselName = String(currentState?.vesselName || currentState?.vessel || 'Vessel Reference').trim();
+        const freightRateUSD = Number(currentState?.freightRateUSD || currentState?.fleteEstimado || currentState?.fleteUnitario) || 35;
+
+        if (ballastDays < 0 || jwlaPremiumUSD < 0 || targetIntake <= 0 || !vesselName || freightRateUSD <= 0 || Number.isNaN(targetIntake) || Number.isNaN(freightRateUSD)) {
+            console.error("Error de validación pre-PDF: datos inválidos en el estado");
+            return false;
+        }
+
+        const validData = {
+            ballastDays,
+            jwlaRiskActive,
+            jwlaPremiumUSD,
+            actualCargoIntake: targetIntake,
+            vesselName,
+            freightRateUSD
+        };
+
+        if (typeof executeSafeCommit === 'function') {
+            executeSafeCommit(validData);
+        }
+        return true;
+    }
+
     const api = {
         toNumber,
         calculateBunkers,
         calculateOpex,
+        defaultDSSState,
+        calculateMarketFreightWithRisk,
+        handleCommitConditions,
         detectEffectiveCanal,
         estimateNetTonnage,
         estimateMaxSummerDraft,
