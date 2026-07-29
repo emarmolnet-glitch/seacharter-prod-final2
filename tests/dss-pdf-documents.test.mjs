@@ -113,7 +113,7 @@ test('buildFixtureRecapHTMLTemplate generates traditional shipping telex fixture
   assert.match(html, /1\. MAIN TERMS/, 'Section 1 header');
   assert.match(html, /ACCT\s*:\s*CHARTERERS ACCOUNT/, 'ACCT term');
   assert.match(html, /OWNERS\s*:\s*RODAHMAR SHIPPING SL \(AS DISPONENT OWNERS\)/, 'OWNERS as Disponent Owners');
-  assert.match(html, /VESSEL\s*:\s*MV GEARED BULKER/, 'Geared Vessel term');
+  assert.match(html, /VESSEL\s*:\s*MV GEARED BULKER - ABT 50,000 MT DWT FULLY GEARED WITH/, 'Geared Vessel term with DWT');
   assert.match(html, /CARGO\s*:\s*50,000 METRIC TONS/, 'Cargo quantity and commodity');
   assert.match(html, /POL\s*:\s*1 SAFE BERTH \/ 1 SAFE PORT ROTTERDAM/, 'POL term');
   assert.match(html, /POD\s*:\s*1 SAFE BERTH \/ 1 SAFE PORT HOUSTON/, 'POD term');
@@ -134,6 +134,25 @@ test('buildFixtureRecapHTMLTemplate generates traditional shipping telex fixture
   assert.match(html, /GEAR CLAUSE/, 'Gear clause');
   assert.match(html, /WEATHER CLAUSE/, 'Weather clause');
   assert.match(html, /GENCON 1994/, 'GENCON 94 charterparty form');
+});
+
+test('buildFixtureRecapHTMLTemplate formats dynamic vessel name, DWT with thousands separator, and MV TBN fallback', () => {
+  const startIdx = indexHtml.indexOf('function buildFixtureRecapHTMLTemplate(state)');
+  const endIdx = indexHtml.indexOf('window.buildFixtureRecapHTMLTemplate = buildFixtureRecapHTMLTemplate;', startIdx);
+  const fnSource = indexHtml.slice(startIdx, endIdx);
+  const evalFn = new Function('state', `${fnSource}; return buildFixtureRecapHTMLTemplate(state);`);
+
+  // 1. Dynamic vessel name and formatted DWT
+  const htmlCustom = evalFn({ vesselName: 'MV OCEAN TRADER', dwt: 11500, cargoQty: 10000 });
+  assert.match(htmlCustom, /VESSEL\s*:\s*MV OCEAN TRADER - ABT 11,500 MT DWT FULLY GEARED WITH/, 'Captures real vessel name and formatted DWT with thousands separator');
+
+  // 2. Fallback to MV TBN when vessel name is empty
+  const htmlBlank = evalFn({ vesselName: '   ', dwt: 25000 });
+  assert.match(htmlBlank, /VESSEL\s*:\s*MV TBN - ABT 25,000 MT DWT FULLY GEARED WITH/, 'Falls back to MV TBN when vessel name is blank');
+
+  // 3. Fallback when vesselName is undefined
+  const htmlUndefined = evalFn({ dwt: 50000 });
+  assert.match(htmlUndefined, /VESSEL\s*:\s*MV TBN - ABT 50,000 MT DWT FULLY GEARED WITH/, 'Falls back to MV TBN when vesselName is missing');
 });
 
 test('buildFixtureRecapHTMLTemplate and buildAuditHTMLTemplate handle undefined and incomplete state properties safely without throwing TypeError', () => {
