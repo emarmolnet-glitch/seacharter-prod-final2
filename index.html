@@ -29175,6 +29175,19 @@
             const T_port = isZeroCalculation ? 0 : Math.max(0, adjustedPortDays + extraRatePenaltyDays);
             const T_portFuel = isZeroCalculation ? 0 : T_port;
             const totalDays = isZeroCalculation ? 0 : (T_sea + T_port);
+
+            if (typeof State !== 'undefined' && State) {
+                State.portDays = T_port;
+                State.totalPortDays = T_port;
+                State.tPort = T_port;
+                State.seaDays = T_sea;
+                State.tSea = T_sea;
+                State.cargo = cargo;
+                State.targetCargoMT = cargo;
+            }
+            if (typeof syncShortLiftActualCargoIntake === 'function') {
+                syncShortLiftActualCargoIntake(cargo);
+            }
             const smartOperationalDays = totalDays;
             const pdas = isZeroCalculation ? 0 : portExpensesForMode;
             const smartPortExpenses = isZeroCalculation ? 0 : (portExpensesForMode + tugTotalCost);
@@ -31189,6 +31202,28 @@
 
         let dssSimulationState = null;
         let dssFormState = null;
+        let lastTargetCargoMTSynced = null;
+
+        function syncShortLiftActualCargoIntake(newTargetCargoMT) {
+            const targetMT = Number(newTargetCargoMT) || 0;
+            if (targetMT <= 0) return;
+            if (lastTargetCargoMTSynced !== targetMT) {
+                lastTargetCargoMTSynced = targetMT;
+                if (typeof dssFormState !== 'undefined' && dssFormState) {
+                    dssFormState.actualCargoIntake = targetMT;
+                    dssFormState.targetCargoMT = targetMT;
+                }
+                if (typeof window !== 'undefined' && window.dssFormState) {
+                    window.dssFormState.actualCargoIntake = targetMT;
+                    window.dssFormState.targetCargoMT = targetMT;
+                }
+                const el = document.getElementById('input-actualCargoIntake');
+                if (el) {
+                    el.value = targetMT;
+                }
+            }
+        }
+        window.syncShortLiftActualCargoIntake = syncShortLiftActualCargoIntake;
 
         function limpiarDssSimulationState() {
             dssSimulationState = null;
@@ -31251,13 +31286,24 @@
             setVal('input-loadRate', state.loadRate);
             setVal('input-dischargeRate', state.dischargeRate);
 
-            const cargoQty = Number(state.cargoQty) || 0;
-            const loadRate = Math.max(1, Number(state.loadRate) || 1);
-            const dischargeRate = Math.max(1, Number(state.dischargeRate) || loadRate);
-            const computedPortDays = (cargoQty / loadRate) + (cargoQty / dischargeRate);
-            setVal('input-portDays', computedPortDays.toFixed(1));
+            // Mapeo directo de Días de Puerto y Días de Navegación desde el motor principal (sin divisiones brutas)
+            const mainEnginePortDays = (state.portDays !== undefined && state.portDays !== null)
+                ? Number(state.portDays)
+                : ((typeof State !== 'undefined' && State && (State.portDays || State.totalPortDays || State.tPort))
+                    ? Number(State.portDays || State.totalPortDays || State.tPort)
+                    : (parseFloat(document.getElementById('res-days-port')?.innerText) || 10));
 
-            setVal('input-seaDays', state.seaDays || state.estimatedVoyageDays);
+            const mainEngineSeaDays = (state.seaDays !== undefined && state.seaDays !== null)
+                ? Number(state.seaDays)
+                : ((state.estimatedVoyageDays !== undefined && state.estimatedVoyageDays !== null)
+                    ? Number(state.estimatedVoyageDays)
+                    : ((typeof State !== 'undefined' && State && (State.seaDays || State.tSea))
+                        ? Number(State.seaDays || State.tSea)
+                        : (parseFloat(document.getElementById('shadow-sea-days')?.value) || 8)));
+
+            setVal('input-portDays', mainEnginePortDays.toFixed(1));
+            setVal('input-seaDays', mainEngineSeaDays.toFixed(1));
+
             setVal('input-fleteEstimado', state.fleteEstimado || state.fleteUnitario);
             setVal('input-breakEven', state.breakEven || state.breakEvenUnitario);
 
@@ -31267,7 +31313,14 @@
                 jwlaCheckbox.checked = Boolean(state.jwlaRiskActive);
             }
             setVal('input-jwlaPremiumUSD', state.jwlaPremiumUSD ?? 0);
-            setVal('input-actualCargoIntake', state.actualCargoIntake ?? state.targetCargoMT ?? state.cargoQty ?? 50000);
+
+            // Sincronización Bug Short Lift: resetear e igualar automáticamente al cambiar carga principal
+            const targetCargo = Number(state.targetCargoMT ?? state.cargoQty ?? state.cargo) || 50000;
+            const actualIntake = (state.actualCargoIntake !== undefined && state.actualCargoIntake !== null)
+                ? Number(state.actualCargoIntake)
+                : targetCargo;
+            setVal('input-actualCargoIntake', actualIntake > 0 ? actualIntake : targetCargo);
+
             if (typeof toggleJWLAInput === 'function') {
                 toggleJWLAInput();
             }
@@ -31278,40 +31331,66 @@
 
         function isExportDeficitPOD(podInput) {
             if (!podInput) return false;
-            if (typeof podInput === 'object') {
-                if (podInput.isExportDeficit === true || Boolean(podInput.isExportDeficit)) {
+
+            // Prioridad DB: Comprueba primero si el puerto contiene el flag explícito isExportDeficit === true o exportDeficit === true
+            if (typeof podInput === 'object' && podInput !== null) {
+                if (podInput.isExportDeficit === true || podInput.exportDeficit === true) {
                     return true;
                 }
             }
+
+            // Diccionario Global por Texto: Evalúa aplicando .toUpperCase()
             let podStr = '';
             if (typeof podInput === 'string') {
                 podStr = podInput;
-            } else if (typeof podInput === 'object') {
+            } else if (typeof podInput === 'object' && podInput !== null) {
                 podStr = podInput.name || podInput.pod || podInput.destinationPort || podInput.port || podInput.region || podInput.country || '';
             }
+
             if (!podStr) return false;
-            const normalized = String(podStr)
+
+            const rawUpper = String(podStr).toUpperCase().trim();
+            const normalizedUpper = rawUpper
                 .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
-                .toLowerCase()
-                .trim();
-            if (!normalized) return false;
-            if (normalized.includes('exportdeficit') || normalized.includes('export_deficit') || normalized.includes('deficit_export')) {
+                .replace(/[\u0300-\u036f]/g, '');
+
+            if (!rawUpper && !normalizedUpper) return false;
+
+            if (rawUpper.includes('EXPORTDEFICIT') || rawUpper.includes('EXPORT_DEFICIT') || rawUpper.includes('DEFICIT_EXPORT')) {
                 return true;
             }
+
             const deficitKeywords = [
-                'senegal', 'algeria', 'argelia', 'nigeria', 'ghana', 'angola',
-                'cameroon', 'camerun', 'ivory coast', 'cote d\'ivoire', 'cote divoire', 'costa de marfil',
-                'togo', 'benin', 'guinea', 'sierra leone', 'sierra leona', 'liberia',
-                'mauritania', 'gambia', 'gabon', 'congo', 'equatorial guinea', 'guinea ecuatorial',
-                'west africa', 'africa occidental', 'north africa', 'africa del norte',
-                'dakar', 'algiers', 'argel', 'oran', 'bejaia', 'skikda', 'annaba', 'mostaganem', 'ghazaouet', 'jenjen',
-                'lagos', 'apapa', 'tin can', 'calabar', 'port harcourt', 'warri', 'onne',
-                'luanda', 'lobito', 'namibe', 'tema', 'takoradi', 'douala', 'kribi', 'lome', 'cotonou',
-                'abidjan', 'san pedro', 'conakry', 'freetown', 'monrovia', 'nouakchott', 'nouadhibou',
-                'banjul', 'owendo', 'libreville', 'pointe-noire', 'pointe noire', 'malabo', 'bata', 'luba', 'matadi', 'soyo', 'cabinda'
+                // África Occidental e Insular
+                "SAO TOME", "BANJUL", "SENEGAL", "NIGERIA", "ANGOLA", "GUINEA", "GABON", "CONGO",
+                "COTE D'IVOIRE", "COTE DIVOIRE", "COSTA DE MARFIL", "GHANA", "CAMEROON", "CAMERUN", "MAURITANIA",
+                // Norte de África
+                "ALGERIA", "ARGELIA", "LIBYA", "TUNISIA",
+                // África Oriental
+                "KENYA", "TANZANIA", "MOZAMBIQUE", "MADAGASCAR", "DJIBOUTI", "SOMALIA",
+                // Caribe, Pacífico e Islas
+                "CARIBBEAN", "CARIBE", "BAHAMAS", "BARBADOS", "HAITI", "JAMAICA", "DOMINICAN REPUBLIC",
+                "REPUBLICA DOMINICANA", "TRINIDAD", "FIJI", "PAPUA", "SOLOMON", "VANUATU",
+                // Regiones y puertos conocidos de déficit
+                "WEST AFRICA", "AFRICA OCCIDENTAL", "NORTH AFRICA", "AFRICA DEL NORTE", "EAST AFRICA", "AFRICA ORIENTAL",
+                "DAKAR", "ALGIERS", "ARGEL", "ORAN", "BEJAIA", "SKIKDA", "ANNABA", "MOSTAGANEM", "GHAZAOUET", "JENJEN",
+                "LAGOS", "APAPA", "TIN CAN", "CALABAR", "PORT HARCOURT", "WARRI", "ONNE",
+                "LUANDA", "LOBITO", "NAMIBE", "TEMA", "TAKORADI", "DOUALA", "KRIBI", "LOME", "COTONOU",
+                "ABIDJAN", "SAN PEDRO", "CONAKRY", "FREETOWN", "MONROVIA", "NOUAKCHOTT", "NOUADHIBOU",
+                "OWENDO", "LIBREVILLE", "POINTE-NOIRE", "POINTE NOIRE", "MALABO", "BATA", "LUBA", "MATADI", "SOYO", "CABINDA",
+                "TOGO", "BENIN", "SIERRA LEONE", "LIBERIA", "GAMBIA", "EQUATORIAL GUINEA"
             ];
-            return deficitKeywords.some(keyword => normalized.includes(keyword));
+
+            // Identificación de códigos ISO de 2 letras con delimitador de palabra
+            const isoCodes2Letter = ["ST", "GM", "DZ"];
+            for (const iso of isoCodes2Letter) {
+                const pattern = new RegExp(`(?:^|\\b|\\s|,|\\()${iso}(?:$|\\b|\\s|,|\\))`, 'i');
+                if (pattern.test(rawUpper) || pattern.test(normalizedUpper)) {
+                    return true;
+                }
+            }
+
+            return deficitKeywords.some(keyword => rawUpper.includes(keyword) || normalizedUpper.includes(keyword));
         }
         window.isExportDeficitPOD = isExportDeficitPOD;
 
@@ -31370,9 +31449,24 @@
             const jwlaPremiumUSD = inputJwlaPremiumUSD ? (Number(inputJwlaPremiumUSD.value) || 0) : 0;
             const actualCargoIntake = inputActualCargoIntake ? (Number(inputActualCargoIntake.value) || cargoQty) : cargoQty;
 
-            // Fórmula obligatoria: Dias de Puerto = (Total Carga / dssFormState.ritmoCarga) + (Total Carga / dssFormState.ritmoDescarga)
-            const computedPortDays = (cargoQty / loadRate) + (cargoQty / dischargeRate);
-            if (inputPortDays) inputPortDays.value = computedPortDays.toFixed(1);
+            // Mapeo directo desde el motor principal para Port Days y Sea Days (sin divisiones brutas)
+            const mainEnginePortDays = (typeof State !== 'undefined' && State && (State.portDays || State.totalPortDays || State.tPort))
+                ? Number(State.portDays || State.totalPortDays || State.tPort)
+                : (parseFloat(document.getElementById('res-days-port')?.innerText) || 10);
+
+            const mainEngineSeaDays = (typeof State !== 'undefined' && State && (State.seaDays || State.tSea))
+                ? Number(State.seaDays || State.tSea)
+                : (parseFloat(document.getElementById('shadow-sea-days')?.value) || 8);
+
+            const portDaysVal = inputPortDays && inputPortDays.value !== '' ? Number(inputPortDays.value) : mainEnginePortDays;
+            const seaDaysVal = inputSeaDays && inputSeaDays.value !== '' ? Number(inputSeaDays.value) : mainEngineSeaDays;
+
+            if (inputPortDays && (!inputPortDays.value || inputPortDays.value === '10' || inputPortDays.value === '20')) {
+                inputPortDays.value = portDaysVal.toFixed(1);
+            }
+            if (inputSeaDays && (!inputSeaDays.value || inputSeaDays.value === '8')) {
+                inputSeaDays.value = seaDaysVal.toFixed(1);
+            }
 
             dssFormState = {
                 pol: inputPol ? inputPol.value : 'Rotterdam',
@@ -31381,12 +31475,12 @@
                 targetCargoMT: cargoQty,
                 commodity: inputCommodity ? inputCommodity.value : 'Siderúrgico / Carga General',
                 laycanDaysLeft: inputLaycanDaysLeft ? Number(inputLaycanDaysLeft.value) : 10,
-                estimatedVoyageDays: inputEstimatedVoyageDays ? Number(inputEstimatedVoyageDays.value) : 8,
+                estimatedVoyageDays: inputEstimatedVoyageDays ? Number(inputEstimatedVoyageDays.value) : seaDaysVal,
                 loadRate,
                 dischargeRate,
-                portDays: computedPortDays,
-                seaDays: inputSeaDays ? Number(inputSeaDays.value) : 8,
-                ladenDays: inputSeaDays ? Number(inputSeaDays.value) : 8,
+                portDays: portDaysVal,
+                seaDays: seaDaysVal,
+                ladenDays: seaDaysVal,
                 fleteEstimado: inputFleteEstimado ? Number(inputFleteEstimado.value) : 35,
                 breakEven: inputBreakEven ? Number(inputBreakEven.value) : 25,
                 fleteUnitario: inputFleteEstimado ? Number(inputFleteEstimado.value) : 35,
@@ -31706,13 +31800,20 @@
             const cargoQty = parseFloat(inputCargoQty?.value) || parseFloat(document.getElementById('cargo-qty')?.value) || 50000;
             const commodity = inputCommodity?.value || 'Siderúrgico / Carga General';
             const laycanDaysLeft = parseFloat(inputLaycanDaysLeft?.value) || parseFloat(document.getElementById('laycan-dias-libres')?.value) || 10;
-            const estimatedVoyageDays = parseFloat(inputEstimatedVoyageDays?.value) || parseFloat(document.getElementById('shadow-sea-days')?.value) || 8;
+            const mainEnginePortDays = (typeof State !== 'undefined' && State && (State.portDays || State.totalPortDays || State.tPort))
+                ? Number(State.portDays || State.totalPortDays || State.tPort)
+                : (parseFloat(document.getElementById('res-days-port')?.innerText) || 10);
+
+            const mainEngineSeaDays = (typeof State !== 'undefined' && State && (State.seaDays || State.tSea))
+                ? Number(State.seaDays || State.tSea)
+                : (parseFloat(document.getElementById('shadow-sea-days')?.value) || 8);
+
+            const estimatedVoyageDays = parseFloat(inputEstimatedVoyageDays?.value) || mainEngineSeaDays;
             const loadRate = parseFloat(inputLoadRate?.value) || parseFloat(document.getElementById('rate-load')?.value) || 5000;
             const dischargeRate = parseFloat(inputDischargeRate?.value) || parseFloat(document.getElementById('rate-disch')?.value) || 5000;
-            const seaDays = parseFloat(inputSeaDays?.value) || parseFloat(document.getElementById('shadow-sea-days')?.value) || 8;
+            const seaDays = parseFloat(inputSeaDays?.value) || mainEngineSeaDays;
+            const portDays = parseFloat(inputPortDays?.value) || mainEnginePortDays;
 
-            const computedPortDays = (cargoQty / (loadRate || 1)) + (cargoQty / (dischargeRate || 1));
-            
             const rawFleteVal = parseFloat(inputFleteEstimado?.value) || parseFloat(document.getElementById('freight-sell')?.value) || 35;
             const breakEvenText = document.getElementById('res-cost-base-break-even')?.textContent || '';
             const breakEvenParsed = parseFloat(breakEvenText.replace(/[^0-9.]/g, '')) || 0;
@@ -31726,12 +31827,14 @@
                 pol,
                 pod,
                 cargoQty,
+                targetCargoMT: cargoQty,
+                actualCargoIntake: cargoQty,
                 commodity,
                 laycanDaysLeft,
                 estimatedVoyageDays,
                 loadRate,
                 dischargeRate,
-                portDays: computedPortDays,
+                portDays,
                 seaDays,
                 fleteEstimado: fleteUnitario,
                 breakEven: breakEvenUnitario,

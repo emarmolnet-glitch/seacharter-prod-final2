@@ -112,108 +112,64 @@ export function handleCommitConditions(currentState: DSSFormState, executeSafeCo
 export function isExportDeficitPOD(podInput?: string | Record<string, any> | null): boolean {
   if (!podInput) return false;
 
-  if (typeof podInput === 'object') {
-    if (podInput.isExportDeficit === true || Boolean(podInput.isExportDeficit)) {
+  // Prioridad DB: Comprueba primero si el puerto contiene el flag explícito isExportDeficit === true o exportDeficit === true
+  if (typeof podInput === 'object' && podInput !== null) {
+    if (podInput.isExportDeficit === true || podInput.exportDeficit === true) {
       return true;
     }
   }
 
+  // Diccionario Global por Texto: Evalúa aplicando .toUpperCase()
   let podStr = '';
   if (typeof podInput === 'string') {
     podStr = podInput;
-  } else if (typeof podInput === 'object') {
+  } else if (typeof podInput === 'object' && podInput !== null) {
     podStr = podInput.name || podInput.pod || podInput.destinationPort || podInput.port || podInput.region || podInput.country || '';
   }
 
   if (!podStr) return false;
 
-  const normalized = String(podStr)
+  const rawUpper = String(podStr).toUpperCase().trim();
+  const normalizedUpper = rawUpper
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
+    .replace(/[\u0300-\u036f]/g, '');
 
-  if (!normalized) return false;
+  if (!rawUpper && !normalizedUpper) return false;
 
-  if (normalized.includes('exportdeficit') || normalized.includes('export_deficit') || normalized.includes('deficit_export')) {
+  if (rawUpper.includes('EXPORTDEFICIT') || rawUpper.includes('EXPORT_DEFICIT') || rawUpper.includes('DEFICIT_EXPORT')) {
     return true;
   }
 
   const deficitKeywords = [
-    'senegal',
-    'algeria',
-    'argelia',
-    'nigeria',
-    'ghana',
-    'angola',
-    'cameroon',
-    'camerun',
-    'ivory coast',
-    'cote d\'ivoire',
-    'cote divoire',
-    'costa de marfil',
-    'togo',
-    'benin',
-    'guinea',
-    'sierra leone',
-    'sierra leona',
-    'liberia',
-    'mauritania',
-    'gambia',
-    'gabon',
-    'congo',
-    'equatorial guinea',
-    'guinea ecuatorial',
-    'west africa',
-    'africa occidental',
-    'north africa',
-    'africa del norte',
-    'dakar',
-    'algiers',
-    'argel',
-    'oran',
-    'bejaia',
-    'skikda',
-    'annaba',
-    'mostaganem',
-    'ghazaouet',
-    'jenjen',
-    'lagos',
-    'apapa',
-    'tin can',
-    'calabar',
-    'port harcourt',
-    'warri',
-    'onne',
-    'luanda',
-    'lobito',
-    'namibe',
-    'tema',
-    'takoradi',
-    'douala',
-    'kribi',
-    'lome',
-    'cotonou',
-    'abidjan',
-    'san pedro',
-    'conakry',
-    'freetown',
-    'monrovia',
-    'nouakchott',
-    'nouadhibou',
-    'banjul',
-    'owendo',
-    'libreville',
-    'pointe-noire',
-    'pointe noire',
-    'malabo',
-    'bata',
-    'luba',
-    'matadi',
-    'soyo',
-    'cabinda'
+    // África Occidental e Insular
+    "SAO TOME", "BANJUL", "SENEGAL", "NIGERIA", "ANGOLA", "GUINEA", "GABON", "CONGO",
+    "COTE D'IVOIRE", "COTE DIVOIRE", "COSTA DE MARFIL", "GHANA", "CAMEROON", "CAMERUN", "MAURITANIA",
+    // Norte de África
+    "ALGERIA", "ARGELIA", "LIBYA", "TUNISIA",
+    // África Oriental
+    "KENYA", "TANZANIA", "MOZAMBIQUE", "MADAGASCAR", "DJIBOUTI", "SOMALIA",
+    // Caribe, Pacífico e Islas
+    "CARIBBEAN", "CARIBE", "BAHAMAS", "BARBADOS", "HAITI", "JAMAICA", "DOMINICAN REPUBLIC",
+    "REPUBLICA DOMINICANA", "TRINIDAD", "FIJI", "PAPUA", "SOLOMON", "VANUATU",
+    // Regiones y puertos conocidos de déficit
+    "WEST AFRICA", "AFRICA OCCIDENTAL", "NORTH AFRICA", "AFRICA DEL NORTE", "EAST AFRICA", "AFRICA ORIENTAL",
+    "DAKAR", "ALGIERS", "ARGEL", "ORAN", "BEJAIA", "SKIKDA", "ANNABA", "MOSTAGANEM", "GHAZAOUET", "JENJEN",
+    "LAGOS", "APAPA", "TIN CAN", "CALABAR", "PORT HARCOURT", "WARRI", "ONNE",
+    "LUANDA", "LOBITO", "NAMIBE", "TEMA", "TAKORADI", "DOUALA", "KRIBI", "LOME", "COTONOU",
+    "ABIDJAN", "SAN PEDRO", "CONAKRY", "FREETOWN", "MONROVIA", "NOUAKCHOTT", "NOUADHIBOU",
+    "OWENDO", "LIBREVILLE", "POINTE-NOIRE", "POINTE NOIRE", "MALABO", "BATA", "LUBA", "MATADI", "SOYO", "CABINDA",
+    "TOGO", "BENIN", "SIERRA LEONE", "LIBERIA", "GAMBIA", "EQUATORIAL GUINEA"
   ];
 
-  return deficitKeywords.some(keyword => normalized.includes(keyword));
+  // Identificación de códigos ISO de 2 letras con delimitador de palabra
+  const isoCodes2Letter = ["ST", "GM", "DZ"];
+  for (const iso of isoCodes2Letter) {
+    const pattern = new RegExp(`(?:^|\\b|\\s|,|\\()${iso}(?:$|\\b|\\s|,|\\))`, 'i');
+    if (pattern.test(rawUpper) || pattern.test(normalizedUpper)) {
+      return true;
+    }
+  }
+
+  return deficitKeywords.some(keyword => rawUpper.includes(keyword) || normalizedUpper.includes(keyword));
 }
 
