@@ -1683,6 +1683,9 @@
             const rawFleteVal = activeDss.fleteEstimado !== undefined ? parseFloat(activeDss.fleteEstimado) : (activeDss.fleteUnitario !== undefined ? parseFloat(activeDss.fleteUnitario) : (parseFloat(inputFleteEstimado?.value) || parseFloat(document.getElementById('freight-sell')?.value) || 35));
             const rawBreakEvenVal = activeDss.breakEven !== undefined ? parseFloat(activeDss.breakEven) : (parseFloat(inputBreakEven?.value) || parseFloat(document.getElementById('shadow-break-even-freight')?.value) || 25);
 
+            const fallbackDwt = parseFloat(document.getElementById('vessel-dwt')?.value) || (typeof State !== 'undefined' ? parseFloat(State.dwt) : 0) || 50000;
+            const dwt = parseFloat(activeDss.dwt || activeDss.vesselDwt) || fallbackDwt;
+
             const qty = Math.max(1, cargoQty);
             const fleteUnitario = rawFleteVal > 1000 ? rawFleteVal / qty : rawFleteVal;
             const breakEvenUnitario = rawBreakEvenVal > 1000 ? rawBreakEvenVal / qty : rawBreakEvenVal;
@@ -1703,7 +1706,8 @@
                 breakEven: breakEvenUnitario,
                 fleteUnitario,
                 breakEvenUnitario,
-                vesselName
+                vesselName,
+                dwt
             };
         }
         window.getDSSCurrentState = getDSSCurrentState;
@@ -1934,14 +1938,38 @@
             const laycanDaysLeft = safeState.laycanDaysLeft !== undefined && safeState.laycanDaysLeft !== null ? safeState.laycanDaysLeft : 10;
             const loadRate = Number(safeState.loadRate) || 5000;
             const rawFlete = Number(safeState.fleteEstimado || safeState.fleteUnitario) || 35;
-            const vesselName = String(safeState.vesselName || safeState.vessel || 'MV GEARED BULKER');
+
+            const rawVesselName = String(
+                safeState.vesselName || 
+                safeState.vessel || 
+                safeState.nombre_buque || 
+                safeState.shipName || 
+                (typeof document !== 'undefined' ? (document.getElementById('vessel-name')?.value || document.getElementById('nombre-buque-calculadora')?.value) : '') || 
+                (typeof State !== 'undefined' ? State.vessel : '') || 
+                ''
+            ).trim();
+
+            const shipName = rawVesselName ? rawVesselName.toUpperCase() : 'MV TBN';
+
+            const rawDwt = Number(
+                safeState.dwt || 
+                safeState.vesselDwt || 
+                safeState.dwt_real || 
+                safeState.dwtReal || 
+                (typeof document !== 'undefined' ? document.getElementById('vessel-dwt')?.value : 0) || 
+                (typeof State !== 'undefined' ? State.dwt : 0) || 
+                cargoQty || 
+                0
+            );
+
+            const dwt = (!isNaN(rawDwt) && rawDwt > 0) ? rawDwt : cargoQty;
+            const formattedDwt = dwt.toLocaleString('en-US');
 
             const fleteTotal = rawFlete > 1000 ? rawFlete : rawFlete * cargoQty;
             const freightPerMT = (cargoQty > 0 ? fleteTotal / cargoQty : rawFlete).toFixed(2);
             const dateStr = new Date().toLocaleDateString('es-ES');
             const refNo = `RSH-FIX-${Math.floor(Math.random() * 899999 + 100000)}`;
 
-            const cleanVessel = vesselName.toUpperCase();
             const cleanCommodity = commodity.toUpperCase();
             const cleanPol = pol.toUpperCase();
             const cleanPod = pod.toUpperCase();
@@ -1967,8 +1995,7 @@ VOYAGE UNDER THE FOLLOWING MAIN TERMS AND CONDITIONS:
 --------------------------------------------------------------------------------
 - ACCT        : CHARTERERS ACCOUNT / AS NOMINATED BY CHARTERERS
 - OWNERS      : RODAHMAR SHIPPING SL (AS DISPONENT OWNERS)
-- VESSEL      : ${cleanVessel} (MV GEARED BULKER - ABT 50,000 DWT)
-                FULLY GEARED WITH 4 X 30 MT SWL CRANES AND ELECTRIC GRABS
+- VESSEL      : ${shipName} - ABT ${formattedDwt} MT DWT FULLY GEARED WITH 4 X 30 MT SWL CRANES AND ELECTRIC GRABS
 - CARGO       : ${cleanCargoQty} METRIC TONS 5% MOLOO (MORE OR LESS IN
                 OWNERS' OPTION) OF ${cleanCommodity}
 - POL         : 1 SAFE BERTH / 1 SAFE PORT ${cleanPol}
