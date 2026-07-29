@@ -8,13 +8,13 @@ const decisionesHtml = readFileSync(new URL('../decisiones.html', import.meta.ur
 test('PARTE 1: DSS scenario logic performs shallow merge and stress test mutations without modifying context variables', () => {
   // Verify cargarEscenario function definition and logic in index.html
   assert.match(indexHtml, /function cargarEscenario\(tipo\)/, 'cargarEscenario must be defined in index.html');
-  assert.match(indexHtml, /dssSimulationState = updatedState;/, 'cargarEscenario must set dssSimulationState in index.html');
-  assert.match(indexHtml, /updatedState = \{ \.\.\.currentState, \.\.\.stressMutations \}/, 'cargarEscenario must perform shallow merge in index.html');
+  assert.match(indexHtml, /limpiarDssSimulationState\(\);/, 'cargarEscenario must purge dssSimulationState first in index.html');
+  assert.match(indexHtml, /updatedState = \{ \.\.\.baseState, \.\.\.stressMutations \}/, 'cargarEscenario must apply mutations on clean baseState in index.html');
 
   // Verify same in decisiones.html
   assert.match(decisionesHtml, /function cargarEscenario\(tipo\)/, 'cargarEscenario must be defined in decisiones.html');
-  assert.match(decisionesHtml, /dssSimulationState = updatedState;/, 'cargarEscenario must set dssSimulationState in decisiones.html');
-  assert.match(decisionesHtml, /updatedState = \{ \.\.\.currentState, \.\.\.stressMutations \}/, 'cargarEscenario must perform shallow merge in decisiones.html');
+  assert.match(decisionesHtml, /limpiarDssSimulationState\(\);/, 'cargarEscenario must purge dssSimulationState first in decisiones.html');
+  assert.match(decisionesHtml, /updatedState = \{ \.\.\.baseState, \.\.\.stressMutations \}/, 'cargarEscenario must apply mutations on clean baseState in decisiones.html');
 
   // Extract helper functions needed for DSS execution
   const helperStart = indexHtml.indexOf('function determinarTerminoCargo(commodity)');
@@ -81,7 +81,7 @@ test('PARTE 1: DSS scenario logic performs shallow merge and stress test mutatio
   // Stress variables MUST BE SET ONLY in local dssSimulationState:
   assert.ok(fakeWindow.dssSimulationState, 'dssSimulationState must be populated');
   assert.ok(Number(fakeWindow.dssSimulationState.laycanDaysLeft) < 9, 'Riesgo scenario must reduce laycanDaysLeft in dssSimulationState below voyage days');
-  assert.equal(Number(fakeWindow.dssSimulationState.loadRate), 3500, 'Riesgo scenario must stress loadRate in dssSimulationState to half (3500)');
+  assert.equal(Number(fakeWindow.dssSimulationState.loadRate), 4900, 'Riesgo scenario must stress loadRate in dssSimulationState with 30% penalty (4900)');
   assert.ok(Number(fakeWindow.dssSimulationState.fleteEstimado) < Number(domState['input-breakEven']), 'Riesgo scenario must lower fleteEstimado in dssSimulationState below break-even');
   assert.ok(fakeWindow.dssSimulationState.cancellingDate instanceof Date, 'dssSimulationState must store simulated cancellingDate Date object');
 
@@ -332,4 +332,97 @@ test('PARTE 4: Isolated dssSimulationState, local cancellingDate rendering, and 
   const originalDate = new Date('2026-08-15');
   const expectedOriginalStr = originalDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
   assert.equal(elements['val-laycan-cancelling'].textContent, expectedOriginalStr, 'Card 1 must re-render from original intact State.cancellingDate after cleanup');
+});
+
+test('PARTE 5: Critical DSS Bug Fixes - State Purge, Rate Clamping (min 1500 MT/d), and Alerta Neutral Laycan Sync', () => {
+  const helperStart = indexHtml.indexOf('function determinarTerminoCargo(commodity)');
+  const helperEnd = indexHtml.indexOf('function buildAuditHTMLTemplate', helperStart);
+  const helpersCode = indexHtml.slice(helperStart, helperEnd);
+
+  const domState = {
+    'input-pol': 'Rotterdam',
+    'input-pod': 'Houston',
+    'input-cargoQty': '10000',
+    'input-commodity': 'Granel Agrícola',
+    'input-laycanDaysLeft': '10',
+    'input-estimatedVoyageDays': '8',
+    'input-loadRate': '1800',
+    'input-dischargeRate': '1800',
+    'input-portDays': '11.1',
+    'input-seaDays': '8',
+    'input-fleteEstimado': '35',
+    'input-breakEven': '25'
+  };
+
+  const elements = {};
+  const fakeDoc = {
+    getElementById: (id) => {
+      if (!elements[id]) {
+        elements[id] = {
+          get value() { return domState[id] || ''; },
+          set value(v) { domState[id] = String(v); },
+          textContent: '',
+          className: '',
+          classList: { toggle: () => {}, add: () => {}, remove: () => {} },
+          style: {}
+        };
+      }
+      return elements[id];
+    }
+  };
+
+  const globalState = {
+    laycanEnd: '2026-08-09',
+    cancellingDate: '2026-08-09'
+  };
+
+  const fakeWin = {
+    State: globalState
+  };
+  globalThis.window = fakeWin;
+  globalThis.State = globalState;
+
+  const evalContext = new Function(
+    'document',
+    'window',
+    'State',
+    `
+    ${helpersCode}
+    window.dssSimulationState = dssSimulationState;
+    window.cargarEscenario = cargarEscenario;
+    window.cargarEscenarioRiesgo = cargarEscenarioRiesgo;
+    window.cargarEscenarioAlerta = cargarEscenarioAlerta;
+    window.cargarEscenarioOptimo = cargarEscenarioOptimo;
+    window.limpiarEscenario = limpiarEscenario;
+    window.getDSSCurrentState = getDSSCurrentState;
+    `
+  );
+
+  evalContext(fakeDoc, fakeWin, globalState);
+
+  // 1. Test Rate Clamping: Even if input rate is 1800 MT/d, 70% penalty (1260 MT/d) MUST BE CLAMPED to at least 1500 MT/d
+  fakeWin.cargarEscenarioRiesgo();
+  const riskState = fakeWin.dssSimulationState;
+  assert.equal(riskState.loadRate, 1500, 'Simulated loadRate in Riesgo scenario must be clamped to minimum 1500 MT/day');
+  assert.equal(riskState.dischargeRate, 1500, 'Simulated dischargeRate in Riesgo scenario must be clamped to minimum 1500 MT/day');
+
+  // Verify port days for 10k MT with clamped 1500 MT/d rate: 10000/1500 + 10000/1500 = 6.67 + 6.67 = ~13.3 port days (never >80 days)
+  assert.ok(riskState.portDays < 20, 'Clamped port days for 10k MT must be realistic (< 20 days, not >80 days)');
+
+  // 2. Test Reset-before-Apply (State Purge): Switch from Riesgo to Alerta
+  // In Riesgo, cancellingDate was set to simulated early date.
+  // In Alerta, it MUST purge Riesgo state and read globalState.cancellingDate ('2026-08-09')
+  fakeWin.cargarEscenarioAlerta();
+  const alertaState = fakeWin.dssSimulationState;
+
+  // Verify loadRate in Alerta was calculated from clean globalState (1800 * 0.85 = 1530 MT/d), NOT compounded from Riesgo!
+  assert.equal(alertaState.loadRate, 1530, 'Alerta loadRate must be calculated from clean baseState (1800 * 0.85 = 1530), not compounded from Riesgo');
+
+  // 3. Test Laycan Visual Sync in Escenario Alerta:
+  // Alerta uses global laycanDaysLeft (10) vs estimatedVoyageDays (8) -> Buffer = +2.0 days (Neutral state)
+  // Card 1 badge MUST be 'NEUTRAL'
+  assert.equal(elements['badge-laycan-status'].textContent, 'NEUTRAL', 'Card 1 in Escenario Alerta must display NEUTRAL status');
+
+  // Card 1 cancelling date MUST display global cancelling date (09/08/2026)
+  assert.equal(elements['val-laycan-cancelling'].textContent, '09/08/2026', 'Card 1 in Escenario Alerta must display global cancelling date (09/08/2026)');
 });
