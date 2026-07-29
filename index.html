@@ -14964,6 +14964,11 @@
             const gcCancellingDate = getNormalizedDateInputValue('gc-cancel-date');
             const asbCancellingDate = getNormalizedDateInputValue('asb-cancel-date');
             const mapCancellingDate = getNormalizedDateInputValue('map-cancelling-date');
+
+            const isMapInvalid = Boolean(mapLaycanDate && mapCancellingDate && mapCancellingDate < mapLaycanDate);
+            const validMapLaycanDate = isMapInvalid ? State.laycanDate : mapLaycanDate;
+            const validMapCancellingDate = isMapInvalid ? State.cancellingDate : mapCancellingDate;
+
             const gcCancellingTime = document.getElementById('gc-cancel-time')?.value || '';
             const asbCancellingTime = document.getElementById('asb-cancel-time')?.value || '';
             const preferAsbatankvoy = charterPartyStandard === 'ASBATANKVOY';
@@ -14977,9 +14982,9 @@
                 portBallast: firstNonEmpty(document.getElementById('port-ballast')?.value, document.getElementById('map-port-ballast')?.value, State.portBallast),
                 pol: firstNonEmpty(document.getElementById('port-pol')?.value, document.getElementById('map-port-pol')?.value, State.pol),
                 pod: firstNonEmpty(document.getElementById('port-pod')?.value, document.getElementById('map-port-pod')?.value, State.pod),
-                laycanDate: firstNonEmpty(preferredLaycanDate, mapLaycanDate, State.laycanDate),
+                laycanDate: firstNonEmpty(preferredLaycanDate, validMapLaycanDate, State.laycanDate),
                 laycanTime: preferAsbatankvoy ? (asbLaycanTime || gcLaycanTime) : (gcLaycanTime || asbLaycanTime),
-                cancellingDate: firstNonEmpty(preferredCancellingDate, mapCancellingDate, State.cancellingDate),
+                cancellingDate: firstNonEmpty(preferredCancellingDate, validMapCancellingDate, State.cancellingDate),
                 cancellingTime: preferAsbatankvoy ? (asbCancellingTime || gcCancellingTime) : (gcCancellingTime || asbCancellingTime),
                 distBallast: parseFloat(document.getElementById('dist-ballast')?.value) || 0,
                 distLaden: parseFloat(document.getElementById('dist-laden')?.value) || 0,
@@ -15014,6 +15019,44 @@
             }
         }
 
+        function validateGeographicLaycanDates() {
+            const mapLaycanEl = document.getElementById('map-laycan-date');
+            const mapCancellingEl = document.getElementById('map-cancelling-date');
+            const mapBtn = document.getElementById('btn-map-locate-route');
+
+            if (!mapCancellingEl) return true;
+
+            const laycanDate = getNormalizedDateInputValue('map-laycan-date');
+            const cancellingDate = getNormalizedDateInputValue('map-cancelling-date');
+
+            if (mapLaycanEl && laycanDate) {
+                mapCancellingEl.min = laycanDate;
+            } else {
+                mapCancellingEl.removeAttribute('min');
+            }
+
+            const isInvalid = Boolean(laycanDate && cancellingDate && cancellingDate < laycanDate);
+
+            if (isInvalid) {
+                mapCancellingEl.classList.add('border-red-500', 'bg-red-900/20', 'text-red-300', 'border-2');
+                mapCancellingEl.setAttribute('aria-invalid', 'true');
+                if (mapBtn) {
+                    mapBtn.disabled = true;
+                    mapBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+                return false;
+            } else {
+                mapCancellingEl.classList.remove('border-red-500', 'bg-red-900/20', 'text-red-300', 'border-2');
+                mapCancellingEl.removeAttribute('aria-invalid');
+                if (mapBtn) {
+                    mapBtn.disabled = false;
+                    mapBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+                return true;
+            }
+        }
+        window.validateGeographicLaycanDates = validateGeographicLaycanDates;
+
         function syncGlobalStateToForms() {
             const updateInputIfNotFocused = (id, val) => {
                 const el = document.getElementById(id);
@@ -15027,6 +15070,7 @@
             updateInputIfNotFocused('map-port-pod', State.pod);
             setInputValue('map-laycan-date', State.laycanDate);
             setInputValue('map-cancelling-date', State.cancellingDate);
+            validateGeographicLaycanDates();
             updateInputIfNotFocused('port-ballast', State.portBallast);
             updateInputIfNotFocused('port-pol', State.pol);
             updateInputIfNotFocused('port-pod', State.pod);
@@ -15051,6 +15095,10 @@
         }
 
         function captureRouteStateFromMapInputs() {
+            const isValid = validateGeographicLaycanDates();
+            if (!isValid) {
+                return false;
+            }
             SeaCharterStore.set({
                 portBallast: firstNonEmpty(document.getElementById('map-port-ballast')?.value, State.portBallast),
                 pol: firstNonEmpty(document.getElementById('map-port-pol')?.value, State.pol),
@@ -15060,6 +15108,7 @@
             });
             syncGlobalStateToForms();
             if (typeof autoFillNlpFromEstimator === 'function') autoFillNlpFromEstimator();
+            return true;
         }
 
         function stopRouteGlobeRotation() {
@@ -15069,6 +15118,9 @@
         }
 
         async function applyMapRouteToCalculator(forceGeocode = false) {
+            if (!validateGeographicLaycanDates()) {
+                return;
+            }
             stopRouteGlobeRotation();
             captureRouteStateFromMapInputs();
             if (forceGeocode && typeof geocodeAllPorts === 'function') {
@@ -53076,10 +53128,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         scheduleReactiveEngine();
                         return;
                     }
+                    if (typeof validateGeographicLaycanDates === 'function') validateGeographicLaycanDates();
                     captureRouteStateFromMapInputs();
                     scheduleReactiveEngine();
                 });
                 el.addEventListener('change', () => {
+                    if (typeof validateGeographicLaycanDates === 'function') validateGeographicLaycanDates();
                     captureRouteStateFromMapInputs();
                     scheduleReactiveEngine();
                 });
