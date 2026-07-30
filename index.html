@@ -7414,6 +7414,18 @@
                     </button>
                     <ul id="tools-dropdown-menu" class="tools-dropdown-menu" aria-label="Utilidades de sesión" onclick="if (event.target.closest('button')) setTimeout(closeMobileSessionMenu, 0);">
                         <li class="tools-dropdown-item">
+                            <button id="btn-market-report-nav" type="button" onclick="generateMarketReport(); closeMobileSessionMenu();" class="tools-dropdown-action" title="Generar Reporte de Mercado Actual" aria-label="Generar Reporte de Mercado Actual">
+                                <svg class="header-utility-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                    <line x1="16" y1="13" x2="8" y2="13"/>
+                                    <line x1="16" y1="17" x2="8" y2="17"/>
+                                    <polyline points="10 9 9 9 8 9"/>
+                                </svg>
+                                <span>Reporte de Mercado</span>
+                            </button>
+                        </li>
+                        <li class="tools-dropdown-item">
                             <button onclick="saveAuditSession(); closeMobileSessionMenu();" class="tools-dropdown-action" title="Guardar Sesión" aria-label="Guardar Sesión">
                                 <svg class="header-utility-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M5 3h12l2 2v16H5z" />
@@ -8445,6 +8457,9 @@
                         </div>
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <button id="btn-market-report" onclick="generateMarketReport()" class="w-full min-h-12 bg-emerald-700 hover:bg-emerald-800 border border-emerald-800 text-white text-xs font-bold px-4 py-3 rounded-lg shadow transition col-span-1 sm:col-span-2">
+                                <i class="fa-solid fa-file-pdf mr-1.5"></i> Generar Reporte de Mercado Actual
+                            </button>
                             <button id="btn-executive-report" onclick="generateExecutiveReport()" class="w-full min-h-12 bg-white hover:bg-slate-50 border border-slate-300 text-[#1E3A8A] text-xs font-bold px-4 py-3 rounded-lg shadow-sm transition">
                                 <i class="fa-solid fa-eye mr-1"></i> Reporte Ejecutivo
                             </button>
@@ -37944,6 +37959,64 @@ Example:
             document.getElementById('comparison-inputs').classList.remove('hidden');
             document.getElementById('comparison-trip-params').classList.remove('hidden');
         }
+
+        async function generateMarketReport() {
+            try {
+                if (typeof showToast === 'function') {
+                    showToast('📊 Generando SeaCharter Core PRO Market Report (PDF)...', true);
+                }
+
+                const btnAudit = document.getElementById('btn-market-report');
+                const btnNav = document.getElementById('btn-market-report-nav');
+                if (btnAudit) {
+                    btnAudit.disabled = true;
+                    btnAudit.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Compilando Reporte...';
+                }
+                if (btnNav) {
+                    btnNav.disabled = true;
+                }
+
+                const response = await fetch('/api/rodahmar-market-report?format=pdf');
+                if (!response.ok) {
+                    const errJson = await response.json().catch(() => ({}));
+                    throw new Error(errJson.error || errJson.details || `HTTP ${response.status}`);
+                }
+
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = downloadUrl;
+                const nowStr = new Date().toISOString().slice(0, 10);
+                a.download = `SeaCharter_Core_PRO_Market_Report_${nowStr}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(downloadUrl);
+                a.remove();
+
+                if (typeof showToast === 'function') {
+                    showToast('✅ Reporte de Mercado descargado exitosamente');
+                }
+            } catch (err) {
+                console.error('Error al generar SeaCharter Core PRO Market Report:', err);
+                if (typeof showToast === 'function') {
+                    showToast(`❌ Error al generar el reporte: ${err.message || err}`);
+                } else {
+                    alert(`Error al generar el reporte: ${err.message || err}`);
+                }
+            } finally {
+                const btnAudit = document.getElementById('btn-market-report');
+                const btnNav = document.getElementById('btn-market-report-nav');
+                if (btnAudit) {
+                    btnAudit.disabled = false;
+                    btnAudit.innerHTML = '<i class="fa-solid fa-file-pdf mr-1.5"></i> Generar Reporte de Mercado Actual';
+                }
+                if (btnNav) {
+                    btnNav.disabled = false;
+                }
+            }
+        }
+        window.generateMarketReport = generateMarketReport;
 
         function generateExecutiveReport() {
             if (typeof runEngine === 'function') runEngine();
