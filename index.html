@@ -9014,10 +9014,10 @@
                             </div>
                             <div id="ai-margin-proposal-note" class="hidden rounded-md border border-cyan-700/50 bg-cyan-950/40 px-3 py-2 text-[11px] font-semibold text-cyan-100 leading-relaxed"></div>
 
-                            <!-- Cálculo Lumpsum (Carga < 5000 MT) -->
+                            <!-- Cálculo Lumpsum (base facturable explícita, topada por DWT) -->
                             <div id="lumpsum-box" class="hidden bg-white p-3 rounded border border-slate-200 space-y-2 mt-2">
                                 <div class="flex justify-between items-center">
-                                    <span class="text-xs font-bold text-indigo-800 uppercase"><i class="fa-solid fa-circle-info mr-1"></i> Análisis Lumpsum (&lt; 5,000 MT)</span>
+                                    <span class="text-xs font-bold text-indigo-800 uppercase"><i class="fa-solid fa-circle-info mr-1"></i> Análisis Lumpsum (Base Facturable)</span>
                                     <span class="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-mono font-bold">Mín. 5,000 MT</span>
                                 </div>
                                 <div class="grid grid-cols-2 gap-2 text-xs mono text-slate-700">
@@ -9037,7 +9037,7 @@
                                     </div>
                                 </div>
                                 <div id="lumpsum-desc" class="text-[10px] text-slate-500 leading-tight">
-                                    Al ser la carga menor a 5,000 MT (<span id="res-lumpsum-cargo">0</span> MT), se aplica la política de flete Lumpsum. Los ingresos se calculan sobre la base del mínimo de 5,000 MT.
+                                    Modo Lumpsum activado manualmente. Compra y venta se facturan sobre la misma base (<span id="res-lumpsum-cargo">0</span> MT), topada por el DWT del buque.
                                 </div>
                             </div>
                         </div>
@@ -9078,6 +9078,20 @@
                             <div class="col-span-1 md:col-span-2">
                                 <label id="label-lumpsum-override" class="text-[10px] font-bold text-slate-400 uppercase block mb-1">Lumpsum (Opcional)</label>
                                 <input type="number" id="lumpsum-override" class="input-gc h-9 text-sm text-slate-300 font-bold bg-slate-950/40 border border-slate-700 rounded px-2" placeholder="None" step="any" oninput="runEngine()">
+                            </div>
+
+                            <!-- Modo Lumpsum explícito + base objetivo en TM -->
+                            <div class="col-span-1 md:col-span-2">
+                                <label id="label-lumpsum-mode" class="text-[10px] font-bold text-indigo-300 uppercase block mb-1">Modo Lumpsum</label>
+                                <label for="lumpsum-mode" class="flex items-center gap-2 h-9 px-2 rounded bg-slate-950/40 border border-slate-700 cursor-pointer">
+                                    <input type="checkbox" id="lumpsum-mode" class="accent-indigo-500 w-4 h-4" onchange="runEngine()">
+                                    <span id="label-lumpsum-mode-hint" class="text-[10px] font-bold text-slate-400 uppercase">Facturar sobre base fija</span>
+                                </label>
+                            </div>
+                            <div class="col-span-1 md:col-span-2">
+                                <label id="label-lumpsum-base-mt" class="text-[10px] font-bold text-indigo-300 uppercase block mb-1">Base Lumpsum (TM)</label>
+                                <input type="number" id="lumpsum-base-mt" class="input-gc h-9 text-sm text-slate-300 font-bold bg-slate-950/40 border border-slate-700 rounded px-2" value="5000" min="0" step="any" oninput="runEngine()">
+                                <p id="lumpsum-base-cap-note" class="hidden mt-1 text-[9px] font-bold text-amber-300 uppercase"></p>
                             </div>
                             
                             <!-- Comisiones -->
@@ -13872,6 +13886,9 @@
             "Flete Venta Fletador ($)": { en: "Charterer Selling Freight ($)", fr: "Taux de fret venta affréteur ($)" },
             "Comisiones (%)": { en: "Commissions (%)", fr: "Commissions (%)" },
             "Lumpsum (Opcional)": { en: "Lumpsum (Optional)", fr: "Lumpsum (Optionnel)" },
+            "Modo Lumpsum": { en: "Lumpsum Mode", fr: "Mode Lumpsum" },
+            "Facturar sobre base fija": { en: "Invoice on fixed base", fr: "Facturer sur base fixe" },
+            "Base Lumpsum (TM)": { en: "Lumpsum Base (MT)", fr: "Base Lumpsum (TM)" },
             "Calado Máx / Max Draft (m)": { en: "Max Draft (m)", fr: "Tirant d'eau Max (m)" },
             "Eslora Máx / Max LOA (m)": { en: "Max LOA (m)", fr: "Longueur Hors-Tout Max (m)" },
             "Calado Máx (m)": { en: "Max Draft (m)", fr: "Tirant d'eau Max (m)" },
@@ -14006,7 +14023,7 @@
             "NO (Consolidado All-In)": { en: "NO (Consolidated All-In)", fr: "NON (Consolidé All-In)" },
             "SÍ (Itemizado)": { en: "YES (Itemized)", fr: "OUI (Détaillé)" },
             "Costo Total ETS Estimado:": { en: "Total Estimated ETS Cost:", fr: "Coût total ETS estimé :" },
-            "Análisis Lumpsum (< 5,000 MT)": { en: "Lumpsum Analysis (< 5,000 MT)", fr: "Analyse Lumpsum (< 5 000 TM)" },
+            "Análisis Lumpsum (Base Facturable)": { en: "Lumpsum Analysis (Billable Base)", fr: "Analyse Lumpsum (Base facturable)" },
             "Compra Lumpsum": { en: "Lumpsum Purchase", fr: "Achat Lumpsum" },
             "Venta Lumpsum": { en: "Lumpsum Sale", fr: "Vente Lumpsum" },
             "Flete Eq:": { en: "Eq Freight:", fr: "Fret éq :" },
@@ -15061,6 +15078,10 @@
             setInputValue('turn-time-hours', 24);
             setInputValue('apply-ets-surcharge', 'NO');
             setInputValue('ets-route-type', '0');
+            // Nueva estimación: el Lumpsum vuelve a estar desactivado (decisión comercial explícita)
+            const lumpsumModeReset = document.getElementById('lumpsum-mode');
+            if (lumpsumModeReset) lumpsumModeReset.checked = false;
+            setInputValue('lumpsum-base-mt', DEFAULT_LUMPSUM_TARGET_BASE_MT);
 
             ['delta-historico', 'factor-clima', 't-fondeo'].forEach((id) => {
                 const el = document.getElementById(id);
@@ -28041,7 +28062,7 @@
                     suggestedOwner: Number(state.sugOwner) || 0,
                     suggestedCharterer: Number(state.sugCharterer) || 0,
                     tce: Number(state.tce) || 0,
-                    voyageCost: Number(state.totalCost ?? state.costoTotalViaje) || 0
+                    voyageCost: Number(state.totalCosts ?? state.costoTotalViaje) || 0
                 }
             };
         }
@@ -29140,6 +29161,73 @@
         window.scheduleDebouncedCalculation = scheduleDebouncedCalculation;
         window.flushDebouncedCalculation = flushDebouncedCalculation;
 
+        // --- POLÍTICA LUMPSUM: BASE FACTURABLE SIMÉTRICA CON TOPE FÍSICO (DWT) ---
+        const DEFAULT_LUMPSUM_TARGET_BASE_MT = 5000;
+
+        function readLumpsumModeFlag() {
+            const toggle = document.getElementById('lumpsum-mode');
+            if (toggle) return Boolean(toggle.checked);
+            return Boolean(typeof State !== 'undefined' && State && State.isLumpsumMode);
+        }
+
+        function readTargetLumpsumBase() {
+            const parsed = parseFloat(document.getElementById('lumpsum-base-mt')?.value);
+            if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+            const stateBase = parseFloat(typeof State !== 'undefined' && State ? State.lumpsumTargetBase : NaN);
+            return Number.isFinite(stateBase) && stateBase >= 0 ? stateBase : DEFAULT_LUMPSUM_TARGET_BASE_MT;
+        }
+
+        /**
+         * Resuelve la base en toneladas que factura AMBOS lados del negocio.
+         * - El Lumpsum jamás se infiere del tamaño de la carga: depende de isLumpsumMode.
+         * - La base nunca supera el DWT del buque: Math.min(targetLumpsumBase, vesselDWT).
+         */
+        function resolveVoyageFreightBase(actualCargoMT, vesselDWT, options = {}) {
+            const params = {
+                isLumpsumMode: options.isLumpsumMode !== undefined
+                    ? Boolean(options.isLumpsumMode)
+                    : readLumpsumModeFlag(),
+                targetLumpsumBase: options.targetLumpsumBase !== undefined
+                    ? options.targetLumpsumBase
+                    : readTargetLumpsumBase(),
+                actualCargoMT: Math.max(0, parseFloat(actualCargoMT) || 0),
+                vesselDWT: Math.max(0, parseFloat(vesselDWT) || 0)
+            };
+
+            const engineResolver = window.SeaCharterVoyageCostEngine?.resolveFreightBase;
+            if (typeof engineResolver === 'function') return engineResolver(params);
+
+            const targetLumpsumBase = Math.max(0, parseFloat(params.targetLumpsumBase) || 0);
+            if (!params.isLumpsumMode) {
+                return {
+                    isLumpsumMode: false,
+                    mode: 'PMT',
+                    actualCargoMT: params.actualCargoMT,
+                    vesselDWT: params.vesselDWT,
+                    targetLumpsumBase,
+                    finalLumpsumBase: 0,
+                    freightBaseMT: params.actualCargoMT,
+                    dwtCapApplied: false,
+                    dwtCapDeltaMT: 0
+                };
+            }
+            const finalLumpsumBase = params.vesselDWT > 0
+                ? Math.min(targetLumpsumBase, params.vesselDWT)
+                : targetLumpsumBase;
+            return {
+                isLumpsumMode: true,
+                mode: 'LUMPSUM',
+                actualCargoMT: params.actualCargoMT,
+                vesselDWT: params.vesselDWT,
+                targetLumpsumBase,
+                finalLumpsumBase,
+                freightBaseMT: finalLumpsumBase,
+                dwtCapApplied: params.vesselDWT > 0 && params.vesselDWT < targetLumpsumBase,
+                dwtCapDeltaMT: Math.max(0, targetLumpsumBase - finalLumpsumBase)
+            };
+        }
+        window.resolveVoyageFreightBase = resolveVoyageFreightBase;
+
         // --- MOTOR PRINCIPAL ---
         function runEngine() {
             if (typeof isInputInteraction === 'function' && isInputInteraction()) {
@@ -29147,24 +29235,29 @@
                 return;
             }
             ensureDetectedSpeedsBeforeCalculation();
-            // Lógica corregida para el cálculo de Lumpsum
-            const calcularLumpsum = (cargaReal, tasaFleteMT) => {
+            // Lumpsum simétrico: la base facturable llega resuelta (explícita y topada por DWT)
+            const calcularLumpsum = (cargaReal, tasaFleteMT, baseFacturableMT) => {
                 const tasa = parseFloat(tasaFleteMT);
+                const cargaRealNum = Math.max(0, parseFloat(cargaReal) || 0);
                 if (isNaN(tasa) || tasa === 0) {
                     return {
                         baseLumpsum: 0,
-                        fletoEqMT: 0
+                        fletoEqMT: 0,
+                        baseFacturableMT: 0
                     };
                 }
-                const MINIMO_MT = 5000;
-                const cantidadParaCalculo = cargaReal < MINIMO_MT ? MINIMO_MT : cargaReal;
-                
-                // Cálculo de Venta/Compra Lumpsum
+                const parsedBase = parseFloat(baseFacturableMT);
+                const cantidadParaCalculo = Number.isFinite(parsedBase) && parsedBase >= 0
+                    ? parsedBase
+                    : (window.resolveVoyageFreightBase?.(cargaRealNum, document.getElementById('vessel-dwt')?.value)?.freightBaseMT ?? cargaRealNum);
+
+                // Compra y venta se calculan sobre esta misma base (simetría financiera)
                 const totalLumpsum = cantidadParaCalculo * tasa;
-                
+
                 return {
                     baseLumpsum: totalLumpsum,
-                    fletoEqMT: cargaReal > 0 ? (totalLumpsum / cargaReal) : 0 // El 'Fleto Eq' debe mostrar el costo real por MT sobre la carga real
+                    fletoEqMT: cargaRealNum > 0 ? (totalLumpsum / cargaRealNum) : 0, // 'Flete Eq' informa el coste real por TM sobre la carga real
+                    baseFacturableMT: cantidadParaCalculo
                 };
             };
             if (typeof window !== 'undefined') {
@@ -29229,9 +29322,27 @@
             const cargoTolerance = cargoToleranceSnapshot;
             const isZeroCalculation = (cargo === 0);
             
-            // Volume-based freight policy: If cargo is < 5000 MT, apply Lumpsum (minimum 5000 MT limit), else PMT
-            const typeOfFreightApplied = (cargo > 0 && cargo < 5000) ? "Lumpsum" : "PMT";
-            const multiplier = typeOfFreightApplied === "Lumpsum" ? 5000 : cargo;
+            // Política de flete: el Lumpsum es una decisión comercial explícita (isLumpsumMode),
+            // nunca un automatismo por volumen. La base se topa siempre con el DWT del buque.
+            const freightBasePolicy = window.resolveVoyageFreightBase?.(
+                cargo,
+                document.getElementById('vessel-dwt')?.value
+            ) || {
+                    isLumpsumMode: false,
+                    mode: 'PMT',
+                    actualCargoMT: cargo,
+                    vesselDWT: 0,
+                    targetLumpsumBase: 0,
+                    finalLumpsumBase: 0,
+                    freightBaseMT: cargo,
+                    dwtCapApplied: false,
+                    dwtCapDeltaMT: 0
+                };
+            const isLumpsumMode = freightBasePolicy.isLumpsumMode;
+            const typeOfFreightApplied = freightBasePolicy.mode === 'LUMPSUM' ? "Lumpsum" : "PMT";
+            // Base simétrica: la misma tonelada factura la compra (armador) y la venta (fletador)
+            const multiplier = freightBasePolicy.freightBaseMT;
+            const finalLumpsumBase = freightBasePolicy.finalLumpsumBase;
 
             const metodoEstiba = getMetodoEstibaActual();
             const metodoDescarga = getMetodoDescargaActual();
@@ -29694,20 +29805,43 @@
             const etsTotalCostEl = document.getElementById('res-ets-total-cost');
             if (etsTotalCostEl) etsTotalCostEl.innerText = `$${etsCost.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
-            const grossRevOwner = cargo * freightBuy;
+            // Financieros simétricos: una sola base de toneladas (multiplier) para compra y venta.
+            const voyageFinancials = window.SeaCharterVoyageCostEngine?.calculateVoyageFinancials
+                ? window.SeaCharterVoyageCostEngine.calculateVoyageFinancials({
+                    isLumpsumMode,
+                    targetLumpsumBase: freightBasePolicy.targetLumpsumBase,
+                    vesselDWT: freightBasePolicy.vesselDWT,
+                    actualCargoMT: cargo,
+                    ownerRate: freightBuy,
+                    chartererRate: freightSell,
+                    commissionPct: commPct
+                })
+                : {
+                    grossRevenue: multiplier * freightSell,
+                    ownerFreightCost: multiplier * freightBuy,
+                    commissionCost: multiplier * freightSell * (commPct / 100),
+                    totalRevenue: multiplier * freightSell,
+                    totalCost: (multiplier * freightBuy) + (multiplier * freightSell * (commPct / 100))
+                };
+
+            const grossRevOwner = isZeroCalculation ? 0 : voyageFinancials.ownerFreightCost;
             const voyageRevenues = isZeroCalculation ? 0 : (grossRevOwner + voyageExtras);
             const voyageExpenses = isZeroCalculation ? 0 : (totalBunkers + portExpensesForMode);
             const tceTotal = isZeroCalculation ? 0 : (voyageRevenues - voyageExpenses);
             State.totalCosts = isZeroCalculation ? 0 : adjustedCostTotal;
             const sharedTotalCosts = State.totalCosts;
             const netProfitOwner = isZeroCalculation ? 0 : (voyageRevenues - sharedTotalCosts);
-            const grossRevCharterer = multiplier * freightSell;
-            const chartererCommissionCost = isZeroCalculation ? 0 : (grossRevCharterer * (commPct / 100));
-            let netProfitCharterer = isZeroCalculation ? 0 : (grossRevCharterer - grossRevOwner - chartererCommissionCost);
+            const grossRevCharterer = isZeroCalculation ? 0 : voyageFinancials.grossRevenue;
+            const chartererCommissionCost = isZeroCalculation ? 0 : voyageFinancials.commissionCost;
+            const totalRevenue = grossRevCharterer;
+            let totalCost = isZeroCalculation ? 0 : (grossRevOwner + chartererCommissionCost);
+            let netProfitCharterer = isZeroCalculation ? 0 : (totalRevenue - totalCost);
 
             if (cpStandard === 'ASBATANKVOY') {
+                totalCost += delayCost;
                 netProfitCharterer -= delayCost;
             }
+            const netProfit = netProfitCharterer;
 
             const tceOwner = isZeroCalculation ? 0 : (tceTotal / (totalDays || 1));
             const netProfitOwnerDaily = isZeroCalculation ? 0 : (netProfitOwner / (totalDays || 1));
@@ -29986,37 +30120,49 @@
             }
 
             // Update lumpsum box
+            const lumpsumCapNoteEl = document.getElementById('lumpsum-base-cap-note');
+            if (lumpsumCapNoteEl) {
+                if (isLumpsumMode && freightBasePolicy.dwtCapApplied) {
+                    lumpsumCapNoteEl.classList.remove('hidden');
+                    lumpsumCapNoteEl.innerText = `Topado por DWT: ${finalLumpsumBase.toLocaleString('en-US')} TM (objetivo ${freightBasePolicy.targetLumpsumBase.toLocaleString('en-US')} TM)`;
+                } else {
+                    lumpsumCapNoteEl.classList.add('hidden');
+                    lumpsumCapNoteEl.innerText = '';
+                }
+            }
             const lumpsumBox = document.getElementById('lumpsum-box');
             if (lumpsumBox) {
-                if (typeOfFreightApplied === "Lumpsum") {
+                if (isLumpsumMode) {
                     lumpsumBox.classList.remove('hidden');
-                    const buyRes = calcularLumpsum(cargo, freightBuy);
-                    const sellRes = calcularLumpsum(cargo, freightSell);
-                    
+                    const buyRes = calcularLumpsum(cargo, freightBuy, multiplier);
+                    const sellRes = calcularLumpsum(cargo, freightSell, multiplier);
+
                     const totalBuy = buyRes.baseLumpsum;
                     const totalSell = sellRes.baseLumpsum;
                     const buyRate = buyRes.fletoEqMT;
                     const sellRate = sellRes.fletoEqMT;
-                    
+
                     document.getElementById('res-lumpsum-buy').innerText = `$${totalBuy.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
                     document.getElementById('res-lumpsum-sell').innerText = `$${totalSell.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
                     document.getElementById('res-lumpsum-buy-rate').innerText = `$${buyRate.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
                     document.getElementById('res-lumpsum-sell-rate').innerText = `$${sellRate.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-                    
+
                     const currentLang = document.getElementById('language-selector')?.value || 'es';
+                    const formattedBase = finalLumpsumBase.toLocaleString('en-US');
                     const formattedCargo = cargo.toLocaleString('en-US');
+                    const formattedDwt = freightBasePolicy.vesselDWT.toLocaleString('en-US');
                     const descEl = document.getElementById('lumpsum-desc');
                     if (descEl) {
                         if (currentLang === 'en') {
-                            descEl.innerHTML = `Since the cargo is less than 5,000 MT (<span id="res-lumpsum-cargo">${formattedCargo}</span> MT), the Lumpsum freight policy applies. Revenues are calculated based on the 5,000 MT minimum.`;
+                            descEl.innerHTML = `Lumpsum mode enabled manually. Purchase and sale are both invoiced on the same base of <span id="res-lumpsum-cargo">${formattedBase}</span> MT (cargo carried: ${formattedCargo} MT · vessel DWT: ${formattedDwt} MT).`;
                         } else if (currentLang === 'fr') {
-                            descEl.innerHTML = `La cargaison étant inférieure à 5 000 TM (<span id="res-lumpsum-cargo">${formattedCargo}</span> TM), la politique de fret Lumpsum s'applique. Les revenus sont calculés sur la base du minimum de 5 000 TM.`;
+                            descEl.innerHTML = `Mode Lumpsum activé manuellement. L'achat et la vente sont facturés sur la même base de <span id="res-lumpsum-cargo">${formattedBase}</span> TM (cargaison transportée : ${formattedCargo} TM · port en lourd : ${formattedDwt} TM).`;
                         } else {
-                            descEl.innerHTML = `Al ser la carga menor a 5,000 MT (<span id="res-lumpsum-cargo">${formattedCargo}</span> MT), se aplica la política de flete Lumpsum. Los ingresos se calculan sobre la base del mínimo de 5,000 MT.`;
+                            descEl.innerHTML = `Modo Lumpsum activado manualmente. Compra y venta se facturan sobre la misma base de <span id="res-lumpsum-cargo">${formattedBase}</span> TM (carga real: ${formattedCargo} TM · DWT del buque: ${formattedDwt} TM).`;
                         }
                     } else {
                         const cargoEl = document.getElementById('res-lumpsum-cargo');
-                        if (cargoEl) cargoEl.innerText = formattedCargo;
+                        if (cargoEl) cargoEl.innerText = formattedBase;
                     }
                 } else {
                     lumpsumBox.classList.add('hidden');
@@ -30065,7 +30211,7 @@
             }
             if (chartererFreightCostEl) {
                 chartererFreightCostEl.innerText = `-$${grossRevOwner.toLocaleString('en-US', {maximumFractionDigits:0})}`;
-                chartererFreightCostEl.title = `Total Compra = ${freightBuy.toFixed(2)} USD/MT × ${cargo.toLocaleString('en-US')} TM`;
+                chartererFreightCostEl.title = `Total Compra = ${freightBuy.toFixed(2)} USD/MT × ${multiplier.toLocaleString('en-US')} TM`;
             }
             if (chartererCommissionCostEl) {
                 chartererCommissionCostEl.innerText = `-$${chartererCommissionCost.toLocaleString('en-US', {maximumFractionDigits:0})}`;
@@ -30125,6 +30271,14 @@
             State.portExpenses = smartPortExpenses;
             State.opex = opex;
             State.typeOfFreightApplied = typeOfFreightApplied;
+            State.isLumpsumMode = isLumpsumMode;
+            State.lumpsumTargetBase = freightBasePolicy.targetLumpsumBase;
+            State.lumpsumFinalBase = finalLumpsumBase;
+            State.lumpsumDwtCapApplied = Boolean(freightBasePolicy.dwtCapApplied);
+            State.freightBaseMT = multiplier;
+            State.totalRevenue = totalRevenue;
+            State.totalCost = totalCost;
+            State.netProfit = netProfit;
             State.delayHours = delayHours;
             State.delayDailyRate = delayDailyRate;
             State.delayCost = delayCost;
@@ -30347,16 +30501,16 @@
                 document.getElementById('gc-laytime-disch-val').value = rateDisch;
             }
             if (document.getElementById('gc-freight-val')) {
-                if (cargo > 0 && cargo < 5000) {
-                    const sellRes = calcularLumpsum(cargo, freightSell);
+                if (isLumpsumMode && cargo > 0) {
+                    const sellRes = calcularLumpsum(cargo, freightSell, multiplier);
                     document.getElementById('gc-freight-val').value = sellRes.fletoEqMT.toFixed(2);
                 } else {
                     document.getElementById('gc-freight-val').value = freightSell.toFixed(2);
                 }
             }
             if (document.getElementById('asb-freight-val')) {
-                if (cargo > 0 && cargo < 5000) {
-                    const sellRes = calcularLumpsum(cargo, freightSell);
+                if (isLumpsumMode && cargo > 0) {
+                    const sellRes = calcularLumpsum(cargo, freightSell, multiplier);
                     document.getElementById('asb-freight-val').value = sellRes.fletoEqMT.toFixed(2);
                 } else {
                     document.getElementById('asb-freight-val').value = freightSell.toFixed(2);
@@ -34188,8 +34342,9 @@
             const cancel = formatDateTime('asb-cancel-date', 'asb-cancel-time');
 
             let fallbackFreight = State.freightSell ? State.freightSell.toFixed(2) : '0.00';
-            if (State.cargo > 0 && State.cargo < 5000 && State.freightSell) {
-                fallbackFreight = ((5000 * State.freightSell) / State.cargo).toFixed(2);
+            const recapLumpsumBase = Number(State.lumpsumFinalBase) || 0;
+            if (State.isLumpsumMode && recapLumpsumBase > 0 && State.cargo > 0 && State.freightSell) {
+                fallbackFreight = ((recapLumpsumBase * State.freightSell) / State.cargo).toFixed(2);
             }
             const freightVal = getVal('asb-freight-val') || fallbackFreight;
             const freightType = getVal('asb-freight-type') || 'Worldscale';
@@ -34617,8 +34772,9 @@
             }
 
             let fallbackFreight = State.freightSell ? State.freightSell.toFixed(2) : '0.00';
-            if (State.cargo > 0 && State.cargo < 5000 && State.freightSell) {
-                fallbackFreight = ((5000 * State.freightSell) / State.cargo).toFixed(2);
+            const recapLumpsumBase = Number(State.lumpsumFinalBase) || 0;
+            if (State.isLumpsumMode && recapLumpsumBase > 0 && State.cargo > 0 && State.freightSell) {
+                fallbackFreight = ((recapLumpsumBase * State.freightSell) / State.cargo).toFixed(2);
             }
             const freightVal = getVal('gc-freight-val') || fallbackFreight;
             const freightTerm = getVal('gc-freight-term') || 'FIOS';
@@ -34803,7 +34959,7 @@
                 totalDays: totalTceDays,
                 factorPct: safetyFactorPct
             });
-            const freightTons = State.typeOfFreightApplied === 'Lumpsum' ? 5000 : cargo;
+            const freightTons = State.isLumpsumMode ? (Number(State.lumpsumFinalBase) || cargo) : cargo;
             const commissionFactor = Math.max(0, 1 - (commissionPct / 100));
             const stressBreakEvenImpact = freightTons > 0 && commissionFactor > 0
                 ? algorithmicStress.totalIncrement / (freightTons * commissionFactor)
@@ -39118,12 +39274,16 @@ Example:
             document.getElementById('print-cost-total').innerText = `$${Math.round(costTotal).toLocaleString('en-US')}`;
 
             // KPIs Fletador
-            const printType = State.typeOfFreightApplied || ((State.cargo > 0 && State.cargo < 5000) ? "Lumpsum" : "PMT");
-            const printMultiplier = printType === "Lumpsum" ? 5000 : State.cargo;
+            const printType = State.typeOfFreightApplied || (State.isLumpsumMode ? "Lumpsum" : "PMT");
+            const printLumpsumBase = Number(State.lumpsumFinalBase) || 0;
+            const printMultiplier = printType === "Lumpsum" && printLumpsumBase > 0
+                ? printLumpsumBase
+                : (Number(State.freightBaseMT) || State.cargo);
 
             document.getElementById('print-freight-type').innerText = printType;
             if (printType === "Lumpsum") {
-                const lumpsumSuffix = currentLang === 'es' ? ' (Lumpsum mín. 5.000 TM)' : (currentLang === 'en' ? ' (Lumpsum min 5,000 MT)' : ' (Lumpsum min 5 000 TM)');
+                const printBaseLabel = printMultiplier.toLocaleString('en-US');
+                const lumpsumSuffix = currentLang === 'es' ? ` (Lumpsum base ${printBaseLabel} TM)` : (currentLang === 'en' ? ` (Lumpsum base ${printBaseLabel} MT)` : ` (Lumpsum base ${printBaseLabel} TM)`);
                 document.getElementById('print-freight-sell').innerText = `$${State.freightSell.toFixed(2)} / ${currentDWTLabel}${lumpsumSuffix}`;
                 document.getElementById('print-freight-buy').innerText = `$${State.freightRate.toFixed(2)} / ${currentDWTLabel}${lumpsumSuffix}`;
             } else {
@@ -39791,8 +39951,10 @@ Example:
                 financial: {
                     freightBuy: num(State.freightRate || val('freight-rate')),
                     freightSell: num(State.freightSell || val('freight-sell')),
-                    grossOwnerRevenue: cargo * num(State.freightRate || val('freight-rate')),
-                    grossChartererRevenue: cargo * num(State.freightSell || val('freight-sell')),
+                    freightBaseMT: num(State.freightBaseMT) || cargo,
+                    isLumpsumMode: Boolean(State.isLumpsumMode),
+                    grossOwnerRevenue: (num(State.freightBaseMT) || cargo) * num(State.freightRate || val('freight-rate')),
+                    grossChartererRevenue: (num(State.freightBaseMT) || cargo) * num(State.freightSell || val('freight-sell')),
                     bunkers: num(voyage.totalBunkers),
                     opexDaily: num(State.opex || val('opex-daily')),
                     opex: num(voyage.totalOpex),
@@ -40910,6 +41072,9 @@ Example:
                     setVal('freight-rate', State.freightRate !== undefined ? State.freightRate : 0);
                     setVal('freight-sell', State.freightSell !== undefined ? State.freightSell : 0);
                     setVal('comm-pct', State.commPct !== undefined ? State.commPct : 0);
+                    setVal('lumpsum-base-mt', State.lumpsumTargetBase !== undefined ? State.lumpsumTargetBase : DEFAULT_LUMPSUM_TARGET_BASE_MT);
+                    const restoredLumpsumMode = document.getElementById('lumpsum-mode');
+                    if (restoredLumpsumMode) restoredLumpsumMode.checked = Boolean(State.isLumpsumMode);
                     setVal('demurrage-rate', State.demurrage);
                     setVal('asb-delay-hours', State.delayHours !== undefined ? State.delayHours : 0);
                     setVal('asb-delay-hours-main', State.delayHours !== undefined ? State.delayHours : 0);
@@ -41611,8 +41776,9 @@ ADDITIONAL NOTES:
             const surchargeVal = parseFloat(getVal('asb-surcharge-val')) || 0;
             const freightType = getVal('asb-freight-type') || 'Worldscale';
             let fallbackFreight = State.freightSell ? State.freightSell.toFixed(2) : '0.00';
-            if (State.cargo > 0 && State.cargo < 5000 && State.freightSell) {
-                fallbackFreight = ((5000 * State.freightSell) / State.cargo).toFixed(2);
+            const recapLumpsumBase = Number(State.lumpsumFinalBase) || 0;
+            if (State.isLumpsumMode && recapLumpsumBase > 0 && State.cargo > 0 && State.freightSell) {
+                fallbackFreight = ((recapLumpsumBase * State.freightSell) / State.cargo).toFixed(2);
             }
             const freightVal = getVal('asb-freight-val') || fallbackFreight;            
             let freightRecapStr = `${freightType === 'Worldscale' ? 'WS' : 'USD'} ${freightVal}`;
@@ -41769,7 +41935,9 @@ ADDITIONAL NOTES:
             'pdaMisc', 'cargoSurcharge', 'marginOwner', 'marginCharterer', 'commPct',
             'laycanDate', 'laycanTime', 'cancellingDate', 'cancellingTime',
             'totalMiles', 'draft', 'loa', 'delayHours', 'applyEtsSurcharge',
-            'etsRouteFactor', 'euCarbonPrice', 'marketCalibrationFactor'
+            'etsRouteFactor', 'euCarbonPrice', 'marketCalibrationFactor',
+            'isLumpsumMode', 'lumpsumTargetBase', 'lumpsumFinalBase', 'freightBaseMT',
+            'typeOfFreightApplied', 'totalRevenue', 'totalCost', 'netProfit'
         ];
 
         function isSessionPrimitive(value) {
@@ -41930,6 +42098,9 @@ ADDITIONAL NOTES:
             setVal('margin-charterer', State.marginCharterer !== undefined ? State.marginCharterer : DEFAULT_CHARTERER_MARGIN_PERCENT);
             setVal('freight-rate', State.freightRate !== undefined ? State.freightRate : 0);
             setVal('freight-sell', State.freightSell !== undefined ? State.freightSell : 0);
+            setVal('lumpsum-base-mt', State.lumpsumTargetBase !== undefined ? State.lumpsumTargetBase : DEFAULT_LUMPSUM_TARGET_BASE_MT);
+            const flatRestoredLumpsumMode = document.getElementById('lumpsum-mode');
+            if (flatRestoredLumpsumMode) flatRestoredLumpsumMode.checked = Boolean(State.isLumpsumMode);
             setVal('comm-pct', State.commPct !== undefined ? State.commPct : 0);
             setVal('demurrage-rate', State.demurrage);
             setVal('asb-delay-hours', State.delayHours !== undefined ? State.delayHours : 0);
@@ -52486,8 +52657,25 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const cargo = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
             const isZeroCalculation = (cargo === 0);
             
-            const typeOfFreightApplied = (cargo > 0 && cargo < 5000) ? "Lumpsum" : "PMT";
-            const multiplier = typeOfFreightApplied === "Lumpsum" ? 5000 : cargo;
+            // Lumpsum explícito (isLumpsumMode) con tope físico por DWT y base única compra/venta
+            const freightBasePolicy = window.resolveVoyageFreightBase?.(
+                cargo,
+                vessel.dwt ?? document.getElementById('vessel-dwt')?.value
+            ) || {
+                    isLumpsumMode: false,
+                    mode: 'PMT',
+                    actualCargoMT: cargo,
+                    vesselDWT: 0,
+                    targetLumpsumBase: 0,
+                    finalLumpsumBase: 0,
+                    freightBaseMT: cargo,
+                    dwtCapApplied: false,
+                    dwtCapDeltaMT: 0
+                };
+            const isLumpsumMode = freightBasePolicy.isLumpsumMode;
+            const typeOfFreightApplied = freightBasePolicy.mode === 'LUMPSUM' ? "Lumpsum" : "PMT";
+            const multiplier = freightBasePolicy.freightBaseMT;
+            const finalLumpsumBase = freightBasePolicy.finalLumpsumBase;
 
             const metodoEstiba = getMetodoEstibaActual();
             const metodoDescarga = getMetodoDescargaActual();
@@ -52680,18 +52868,39 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const sugOwner = sugOwnerBase;
             const sugChart = sugChartBase;
 
-            const grossRevOwner = cargo * freightBuy;
+            // Simetría compra/venta: la misma base de toneladas (multiplier) factura ambos lados
+            const voyageFinancials = window.SeaCharterVoyageCostEngine?.calculateVoyageFinancials
+                ? window.SeaCharterVoyageCostEngine.calculateVoyageFinancials({
+                    isLumpsumMode,
+                    targetLumpsumBase: freightBasePolicy.targetLumpsumBase,
+                    vesselDWT: freightBasePolicy.vesselDWT,
+                    actualCargoMT: cargo,
+                    ownerRate: freightBuy,
+                    chartererRate: freightSell,
+                    commissionPct: commPct
+                })
+                : {
+                    grossRevenue: multiplier * freightSell,
+                    ownerFreightCost: multiplier * freightBuy,
+                    commissionCost: multiplier * freightSell * (commPct / 100)
+                };
+
+            const grossRevOwner = isZeroCalculation ? 0 : voyageFinancials.ownerFreightCost;
             const voyageRevenues = isZeroCalculation ? 0 : (grossRevOwner + voyageExtras);
             const voyageExpenses = isZeroCalculation ? 0 : (totalBunkers + pdas);
             const tceTotal = isZeroCalculation ? 0 : (voyageRevenues - voyageExpenses);
             const netProfitOwner = isZeroCalculation ? 0 : (tceTotal - ownerOperatingCapitalCosts);
-            const grossRevCharterer = multiplier * freightSell;
-            const chartererCommissionCost = isZeroCalculation ? 0 : (grossRevCharterer * (commPct / 100));
-            let netProfitCharterer = isZeroCalculation ? 0 : (grossRevCharterer - grossRevOwner - chartererCommissionCost);
+            const grossRevCharterer = isZeroCalculation ? 0 : voyageFinancials.grossRevenue;
+            const chartererCommissionCost = isZeroCalculation ? 0 : voyageFinancials.commissionCost;
+            const totalRevenue = grossRevCharterer;
+            let totalCost = isZeroCalculation ? 0 : (grossRevOwner + chartererCommissionCost);
+            let netProfitCharterer = isZeroCalculation ? 0 : (totalRevenue - totalCost);
 
             if (cpStandard === 'ASBATANKVOY') {
+                totalCost += delayCost;
                 netProfitCharterer -= delayCost;
             }
+            const netProfit = netProfitCharterer;
 
             const tceOwner = isZeroCalculation ? 0 : (tceTotal / (totalDays || 1));
             const netProfitOwnerDaily = isZeroCalculation ? 0 : (netProfitOwner / (totalDays || 1));
@@ -52702,6 +52911,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 sugCharterer: sugChart,
                 netProfitOwner: netProfitOwner,
                 netProfitCharterer: netProfitCharterer,
+                isLumpsumMode,
+                typeOfFreightApplied,
+                targetLumpsumBase: freightBasePolicy.targetLumpsumBase,
+                finalLumpsumBase,
+                freightBaseMT: multiplier,
+                lumpsumDwtCapApplied: Boolean(freightBasePolicy.dwtCapApplied),
+                totalRevenue,
+                totalCost,
+                netProfit,
                 tceOwner: tceOwner,
                 tceTotal: tceTotal,
                 netProfitOwnerDaily: netProfitOwnerDaily,
