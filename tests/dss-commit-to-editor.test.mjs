@@ -30,7 +30,7 @@ test('REQUERIMIENTO 2: Sincronización Inversa (Reverse Sync) y actualización d
   const fakeState = {
     loadRate: 2000,
     dischRate: 2000,
-    freightSell: 45.5,
+    freightSell: 37.0,
     cargo: 40000,
     pol: 'Bilbao',
     pod: 'Genoa'
@@ -39,8 +39,9 @@ test('REQUERIMIENTO 2: Sincronización Inversa (Reverse Sync) y actualización d
   const fakeDssState = {
     loadRate: 6500,
     dischargeRate: 7200,
-    fleteEstimado: 48.0,
-    fleteUnitario: 48.0,
+    fleteEstimado: 37.0,
+    fleteUnitario: 37.0,
+    allInRateGross: 40.38,
     cargoQty: 40000,
     pol: 'Bilbao',
     pod: 'Genoa'
@@ -49,11 +50,11 @@ test('REQUERIMIENTO 2: Sincronización Inversa (Reverse Sync) y actualización d
   const domElements = {
     'rate-load': { value: '2000' },
     'rate-disch': { value: '2000' },
-    'freight-sell': { value: '45.5' },
-    'gc-freight-val': { value: '45.5' },
+    'freight-sell': { value: '37.0' },
+    'gc-freight-val': { value: '37.0' },
     'gc-laytime-load-val': { value: '2000' },
     'gc-laytime-disch-val': { value: '2000' },
-    'asb-freight-val': { value: '45.5' },
+    'asb-freight-val': { value: '37.0' },
     'asb-laytime-val': { value: '48' },
     'panel-parametros': { classList: { contains: () => false, add: () => {}, remove: () => {} }, style: {} }
   };
@@ -93,20 +94,23 @@ test('REQUERIMIENTO 2: Sincronización Inversa (Reverse Sync) y actualización d
   // Comprobar la sincronización inversa sobre State
   assert.equal(fakeWin.State.loadRate, 6500, 'State.loadRate debe actualizarse con el valor simulado (6500)');
   assert.equal(fakeWin.State.dischRate, 7200, 'State.dischRate debe actualizarse con el valor simulado (7200)');
-  assert.equal(fakeWin.State.freightSell, 48.0, 'State.freightSell debe actualizarse con el valor simulado (48.0)');
+  assert.equal(fakeWin.State.freightSell, 37.0, 'State.freightSell debe actualizarse con el Flete Base (37.0)');
+  assert.equal(fakeWin.State.allInRateGross, 40.38, 'State.allInRateGross debe actualizarse con el Flete ALL-IN Gross (40.38)');
 
-  // Comprobar la actualización de los inputs DOM de la calculadora
+  // Comprobar la actualización de los inputs DOM de la calculadora y del Editor GENCON
   assert.equal(domElements['rate-load'].value, 6500, 'rate-load DOM debe reflejar 6500');
   assert.equal(domElements['rate-disch'].value, 7200, 'rate-disch DOM debe reflejar 7200');
-  assert.equal(domElements['freight-sell'].value, 48, 'freight-sell DOM debe reflejar 48');
+  assert.equal(domElements['freight-sell'].value, 37, 'freight-sell DOM debe reflejar 37');
+  assert.equal(domElements['gc-freight-val'].value, '40.38', 'gc-freight-val DOM del Editor GENCON debe recibir el Flete ALL-IN GROSS (40.38)');
+  assert.equal(domElements['asb-freight-val'].value, '40.38', 'asb-freight-val DOM del Editor ASBATANKVOY debe recibir el Flete ALL-IN GROSS (40.38)');
 });
 
 test('REQUERIMIENTO 3: Autocompletado del Contrato (Data Bridging hacia el EDITOR)', () => {
   // Verificar la inyección en campos del Editor (GENCON / ASBATANKVOY)
-  assert.match(indexHtml, /setValIfExist\('gc-freight-val', updatedFreightSell\.toFixed\(2\)\);/, 'Debe inyectar flete en gc-freight-val');
+  assert.match(indexHtml, /setValIfExist\('gc-freight-val', allInGrossFreight\.toFixed\(2\)\);/, 'Debe inyectar flete ALL-IN GROSS en gc-freight-val');
   assert.match(indexHtml, /setValIfExist\('gc-laytime-load-val', updatedLoadRate\);/, 'Debe inyectar ritmo de carga en gc-laytime-load-val');
   assert.match(indexHtml, /setValIfExist\('gc-laytime-disch-val', updatedDischargeRate\);/, 'Debe inyectar ritmo de descarga en gc-laytime-disch-val');
-  assert.match(indexHtml, /setValIfExist\('asb-freight-val', updatedFreightSell\.toFixed\(2\)\);/, 'Debe inyectar flete en asb-freight-val');
+  assert.match(indexHtml, /setValIfExist\('asb-freight-val', allInGrossFreight\.toFixed\(2\)\);/, 'Debe inyectar flete ALL-IN GROSS en asb-freight-val');
   assert.match(indexHtml, /if \(typeof syncGencon === 'function'\) syncGencon\(\);/, 'Debe invocar syncGencon()');
   assert.match(indexHtml, /if \(typeof syncAsbatankvoy === 'function'\) syncAsbatankvoy\(\);/, 'Debe invocar syncAsbatankvoy()');
 });
