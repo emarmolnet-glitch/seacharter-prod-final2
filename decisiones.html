@@ -192,8 +192,13 @@
                                 </div>
                             </div>
                             <div>
-                                <label class="block text-slate-400 mb-1" for="input-ballastDays">Días de Lastre (Reposicionamiento)</label>
-                                <input type="number" id="input-ballastDays" value="0" step="0.5" min="0" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                                <label class="block text-slate-400 mb-1 flex items-center justify-between" for="input-ballastDays">
+                                    <span>Días de Lastre (Reposicionamiento)</span>
+                                    <span class="text-[10px] font-extrabold text-indigo-300 bg-indigo-950/60 border border-indigo-700/50 px-1.5 py-0.5 rounded flex items-center gap-1" title="Campo autocalculado por Matriz de Distancias DSS">
+                                        <i class="fa-solid fa-robot text-indigo-400"></i> AUTO
+                                    </span>
+                                </label>
+                                <input type="number" id="input-ballastDays" value="0" step="0.1" min="0" readonly class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 font-extrabold focus:outline-none cursor-not-allowed" title="Autocalculado por Matriz de Distancias DSS (Read-Only)">
                             </div>
                             <div>
                                 <label class="block text-slate-400 mb-1" for="input-actualCargoIntake">Ajuste de Calado (Short Lift MT)</label>
@@ -1157,7 +1162,10 @@
             setVal('input-fleteEstimado', state.fleteEstimado || state.fleteUnitario);
             setVal('input-breakEven', state.breakEven || state.breakEvenUnitario);
 
-            setVal('input-ballastDays', state.ballastDays ?? 0);
+            const effectiveBallastVal = (state.ballastDays !== undefined && state.ballastDays !== null && Number(state.ballastDays) > 0)
+                ? Number(state.ballastDays)
+                : calculateAutoExportDeficitBallast(state.pod || 'Rotterdam', 0, { vesselSpeed: state.vesselSpeed || 12.0 }).ballastDays;
+            setVal('input-ballastDays', effectiveBallastVal.toFixed(1));
             const jwlaCheckbox = document.getElementById('input-jwlaRiskActive');
             if (jwlaCheckbox) {
                 jwlaCheckbox.checked = Boolean(state.jwlaRiskActive);
@@ -1300,22 +1308,161 @@
             return { isRisk, zoneName, polRisk, podRisk };
         }
 
-        function calculateAutoExportDeficitBallast(podInput, manualBallastDays = 0, defaultAutoDays = 4.0) {
+        const FALLBACK_PORT_MATRIX = {
+            "SAO TOME": { fallbackPort: "Las Palmas", distanceNM: 2160 },
+            "BANJUL": { fallbackPort: "Las Palmas", distanceNM: 950 },
+            "DAKAR": { fallbackPort: "Las Palmas", distanceNM: 870 },
+            "LAGOS": { fallbackPort: "Las Palmas", distanceNM: 2450 },
+            "LUANDA": { fallbackPort: "Durban", distanceNM: 1850 },
+            "ABIDJAN": { fallbackPort: "Las Palmas", distanceNM: 1820 },
+            "TEMA": { fallbackPort: "Las Palmas", distanceNM: 2100 },
+            "DOUALA": { fallbackPort: "Las Palmas", distanceNM: 2380 },
+            "NOUAKCHOTT": { fallbackPort: "Las Palmas", distanceNM: 680 },
+            "CONAKRY": { fallbackPort: "Las Palmas", distanceNM: 1250 },
+            "POINTE-NOIRE": { fallbackPort: "Las Palmas", distanceNM: 2650 },
+            "POINTE NOIRE": { fallbackPort: "Las Palmas", distanceNM: 2650 },
+            "LOME": { fallbackPort: "Las Palmas", distanceNM: 2050 },
+            "COTONOU": { fallbackPort: "Las Palmas", distanceNM: 2120 },
+            "LIBREVILLE": { fallbackPort: "Las Palmas", distanceNM: 2280 },
+            "OWENDO": { fallbackPort: "Las Palmas", distanceNM: 2280 },
+            "TAKORADI": { fallbackPort: "Las Palmas", distanceNM: 2100 },
+            "KRIBI": { fallbackPort: "Las Palmas", distanceNM: 2400 },
+            "SAN PEDRO": { fallbackPort: "Las Palmas", distanceNM: 1850 },
+            "SENEGAL": { fallbackPort: "Las Palmas", distanceNM: 870 },
+            "NIGERIA": { fallbackPort: "Las Palmas", distanceNM: 2450 },
+            "ANGOLA": { fallbackPort: "Durban", distanceNM: 1850 },
+            "GUINEA": { fallbackPort: "Las Palmas", distanceNM: 1250 },
+            "GABON": { fallbackPort: "Las Palmas", distanceNM: 2280 },
+            "CONGO": { fallbackPort: "Las Palmas", distanceNM: 2650 },
+            "CAMEROON": { fallbackPort: "Las Palmas", distanceNM: 2380 },
+            "CAMERUN": { fallbackPort: "Las Palmas", distanceNM: 2380 },
+            "MAURITANIA": { fallbackPort: "Las Palmas", distanceNM: 680 },
+            "GHANA": { fallbackPort: "Las Palmas", distanceNM: 2100 },
+            "IVORY COAST": { fallbackPort: "Las Palmas", distanceNM: 1820 },
+            "COTE D'IVOIRE": { fallbackPort: "Las Palmas", distanceNM: 1820 },
+            "COTE DIVOIRE": { fallbackPort: "Las Palmas", distanceNM: 1820 },
+            "GAMBIA": { fallbackPort: "Las Palmas", distanceNM: 950 },
+            "ALGIERS": { fallbackPort: "Gibraltar", distanceNM: 410 },
+            "ARGEL": { fallbackPort: "Gibraltar", distanceNM: 410 },
+            "ORAN": { fallbackPort: "Gibraltar", distanceNM: 230 },
+            "BEJAIA": { fallbackPort: "Gibraltar", distanceNM: 520 },
+            "SKIKDA": { fallbackPort: "Gibraltar", distanceNM: 580 },
+            "ANNABA": { fallbackPort: "Gibraltar", distanceNM: 620 },
+            "TRIPOLI": { fallbackPort: "Augusta", distanceNM: 320 },
+            "TUNIS": { fallbackPort: "Augusta", distanceNM: 210 },
+            "RADES": { fallbackPort: "Augusta", distanceNM: 210 },
+            "ALGERIA": { fallbackPort: "Gibraltar", distanceNM: 410 },
+            "ARGELIA": { fallbackPort: "Gibraltar", distanceNM: 410 },
+            "LIBYA": { fallbackPort: "Augusta", distanceNM: 320 },
+            "TUNISIA": { fallbackPort: "Augusta", distanceNM: 210 },
+            "MOMBASA": { fallbackPort: "Durban", distanceNM: 1620 },
+            "DAR ES SALAAM": { fallbackPort: "Durban", distanceNM: 1420 },
+            "MAPUTO": { fallbackPort: "Durban", distanceNM: 280 },
+            "TOAMASINA": { fallbackPort: "Durban", distanceNM: 1150 },
+            "DJIBOUTI": { fallbackPort: "Jeddah", distanceNM: 620 },
+            "MOGADISHU": { fallbackPort: "Durban", distanceNM: 2100 },
+            "KENYA": { fallbackPort: "Durban", distanceNM: 1620 },
+            "TANZANIA": { fallbackPort: "Durban", distanceNM: 1420 },
+            "MOZAMBIQUE": { fallbackPort: "Durban", distanceNM: 280 },
+            "MADAGASCAR": { fallbackPort: "Durban", distanceNM: 1150 },
+            "SOMALIA": { fallbackPort: "Durban", distanceNM: 2100 },
+            "KINGSTON": { fallbackPort: "Houston", distanceNM: 1180 },
+            "SANTO DOMINGO": { fallbackPort: "Houston", distanceNM: 1350 },
+            "PORT-AU-PRINCE": { fallbackPort: "Houston", distanceNM: 1280 },
+            "NASSAU": { fallbackPort: "Houston", distanceNM: 980 },
+            "BRIDGETOWN": { fallbackPort: "Houston", distanceNM: 1950 },
+            "PORT OF SPAIN": { fallbackPort: "Houston", distanceNM: 1880 },
+            "HAITI": { fallbackPort: "Houston", distanceNM: 1280 },
+            "JAMAICA": { fallbackPort: "Houston", distanceNM: 1180 },
+            "BAHAMAS": { fallbackPort: "Houston", distanceNM: 980 },
+            "BARBADOS": { fallbackPort: "Houston", distanceNM: 1950 },
+            "TRINIDAD": { fallbackPort: "Houston", distanceNM: 1880 },
+            "DOMINICAN REPUBLIC": { fallbackPort: "Houston", distanceNM: 1350 },
+            "SUVA": { fallbackPort: "Newcastle", distanceNM: 1750 },
+            "PORT MORESBY": { fallbackPort: "Newcastle", distanceNM: 1680 },
+            "HONIARA": { fallbackPort: "Newcastle", distanceNM: 1820 },
+            "PORT VILA": { fallbackPort: "Newcastle", distanceNM: 1450 },
+            "FIJI": { fallbackPort: "Newcastle", distanceNM: 1750 },
+            "PAPUA": { fallbackPort: "Newcastle", distanceNM: 1680 },
+            "WEST AFRICA": { fallbackPort: "Las Palmas", distanceNM: 1800 },
+            "AFRICA OCCIDENTAL": { fallbackPort: "Las Palmas", distanceNM: 1800 },
+            "NORTH AFRICA": { fallbackPort: "Gibraltar", distanceNM: 450 },
+            "AFRICA DEL NORTE": { fallbackPort: "Gibraltar", distanceNM: 450 },
+            "EAST AFRICA": { fallbackPort: "Durban", distanceNM: 1500 },
+            "AFRICA ORIENTAL": { fallbackPort: "Durban", distanceNM: 1500 },
+            "CARIBBEAN": { fallbackPort: "Houston", distanceNM: 1250 },
+            "CARIBE": { fallbackPort: "Houston", distanceNM: 1250 },
+            "DEFAULT": { fallbackPort: "Las Palmas", distanceNM: 1152 }
+        };
+
+        function getFallbackPortAndDistance(podInput) {
+            let podStr = '';
+            if (typeof podInput === 'string') {
+                podStr = podInput;
+            } else if (typeof podInput === 'object' && podInput !== null) {
+                podStr = podInput.name || podInput.pod || podInput.destinationPort || podInput.port || podInput.region || podInput.country || '';
+            }
+            const rawUpper = String(podStr || '').toUpperCase().trim();
+            const normalizedUpper = rawUpper.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            if (rawUpper || normalizedUpper) {
+                for (const [key, entry] of Object.entries(FALLBACK_PORT_MATRIX)) {
+                    if (key === 'DEFAULT') continue;
+                    if (rawUpper.includes(key) || normalizedUpper.includes(key)) {
+                        return { fallbackPort: entry.fallbackPort, distanceNM: entry.distanceNM, matchedKey: key };
+                    }
+                }
+            }
+            const defaultEntry = FALLBACK_PORT_MATRIX['DEFAULT'] || { fallbackPort: "Las Palmas", distanceNM: 1152 };
+            return { fallbackPort: defaultEntry.fallbackPort, distanceNM: defaultEntry.distanceNM, matchedKey: 'DEFAULT' };
+        }
+
+        function calculateAutoExportDeficitBallast(podInput, manualBallastDays = 0, speedOrOptions = {}) {
             const isDeficit = typeof isExportDeficitPOD === 'function' ? isExportDeficitPOD(podInput) : false;
             const manual = Number(manualBallastDays) || 0;
             if (manual > 0) {
-                return { isDeficitApplied: false, isDeficitPOD: isDeficit, ballastDays: manual, autoCalculated: false };
+                return { isDeficitApplied: false, isDeficitPOD: isDeficit, ballastDays: manual, autoCalculated: false, fallbackPort: null, distanceNM: 0 };
             }
             if (isDeficit) {
-                return { isDeficitApplied: true, isDeficitPOD: true, ballastDays: defaultAutoDays, autoCalculated: true };
+                const fallbackInfo = getFallbackPortAndDistance(podInput);
+                let speed = 12.0;
+                if (typeof speedOrOptions === 'object' && speedOrOptions !== null) {
+                    speed = Number(speedOrOptions.vesselSpeed || speedOrOptions.speedBallast || speedOrOptions.speed || speedOrOptions.spdBallast) || 12.0;
+                } else if (typeof speedOrOptions === 'number' && speedOrOptions > 0) {
+                    if (speedOrOptions >= 5 && speedOrOptions <= 30) {
+                        speed = speedOrOptions;
+                    } else {
+                        speed = 12.0;
+                    }
+                } else if (typeof State !== 'undefined' && State) {
+                    speed = Number(State.vesselSpeed || State.speedBallast || State.speed || State.spdBallast) || 12.0;
+                }
+                if (speed <= 0 || !Number.isFinite(speed)) speed = 12.0;
+                const calculatedDays = fallbackInfo.distanceNM / (speed * 24);
+                const ballastDays = Number(calculatedDays.toFixed(2));
+                return {
+                    isDeficitApplied: true,
+                    isDeficitPOD: true,
+                    ballastDays,
+                    autoCalculated: true,
+                    fallbackPort: fallbackInfo.fallbackPort,
+                    distanceNM: fallbackInfo.distanceNM,
+                    vesselSpeed: speed
+                };
             }
-            return { isDeficitApplied: false, isDeficitPOD: false, ballastDays: 0, autoCalculated: false };
+            return { isDeficitApplied: false, isDeficitPOD: false, ballastDays: 0, autoCalculated: false, fallbackPort: null, distanceNM: 0 };
         }
 
         function calculateAllInFreightGross(dssState = {}, options = {}) {
-            const safeIntake = (Number(dssState.actualCargoIntake) > 0)
-                ? Number(dssState.actualCargoIntake)
-                : (Number(dssState.targetCargoMT || dssState.cargoQty || dssState.cargo || dssState.tons) || 50000);
+            const realCargoQty = Number(
+                dssState.cargoQty ??
+                dssState.actualCargoIntake ??
+                dssState.targetCargoMT ??
+                dssState.cargo ??
+                dssState.tons ??
+                options.cargoQty ??
+                (typeof State !== 'undefined' && State ? (State.cargoQty || State.actualCargoIntake) : null)
+            );
+            const safeIntake = (realCargoQty > 0) ? realCargoQty : 50000;
 
             const pol = dssState.pol || options.pol || '';
             const pod = dssState.pod || options.pod || '';
@@ -1327,8 +1474,27 @@
                 ? (Number(dssState.jwlaPremiumUSD || dssState.jwcPremiumUSD) || defaultJwcPrem)
                 : 0;
 
+            const vesselSpeed = Number(
+                dssState.vesselSpeed ??
+                dssState.speedBallast ??
+                dssState.speed ??
+                dssState.spdBallast ??
+                dssState.vessel_speed ??
+                options.vesselSpeed ??
+                (typeof State !== 'undefined' && State ? (State.vesselSpeed || State.speedBallast || State.speed || State.spdBallast) : null)
+            ) || 12.0;
+            const safeSpeed = vesselSpeed > 0 ? vesselSpeed : 12.0;
+
+            const opexDaily = Number(
+                dssState.opex ??
+                dssState.opexDaily ??
+                dssState.opex_fijo_diario ??
+                options.opex ??
+                (typeof State !== 'undefined' && State ? State.opex : null)
+            ) || 6000;
+
             const manualBallast = Number(dssState.ballastDays) || 0;
-            const deficitEval = calculateAutoExportDeficitBallast(pod, manualBallast, options.defaultAutoBallastDays || 4.0);
+            const deficitEval = calculateAutoExportDeficitBallast(pod, manualBallast, { vesselSpeed: safeSpeed });
             const effectiveBallastDays = deficitEval.ballastDays;
 
             const ladenDays = Number(dssState.ladenDays ?? dssState.seaDays ?? dssState.estimatedVoyageDays ?? 8) || 0;
@@ -1336,32 +1502,46 @@
             const baseVoyageDays = ladenDays + portDays;
             const totalDaysWithBallast = baseVoyageDays + effectiveBallastDays;
 
-            const bunkerCost = Number(dssState.totalBunkerCost ?? dssState.bunkerCost ?? 0) || 0;
-            const portCost = Number(dssState.totalPortDisbursements ?? dssState.portDisbursements ?? dssState.portCosts ?? 0) || 0;
-            const totalVoyageCosts = bunkerCost + portCost;
-
             const calculationMode = options.mode || dssState.calculationMode || (dssState.targetTCE || dssState.tceTarget ? 'inversa_tce' : 'cost_plus');
             
             let dailyRate = 0;
             if (calculationMode === 'inversa_tce') {
                 dailyRate = Number(dssState.targetTCE || dssState.tceTarget || dssState.globalMarketTCE || 18000);
             } else {
-                dailyRate = Number(dssState.opex || dssState.opexDaily || dssState.opex_fijo_diario || 6000);
+                dailyRate = opexDaily;
             }
 
-            const timeCharterCost = dailyRate * totalDaysWithBallast;
-            const totalNetVoyageCost = timeCharterCost + totalVoyageCosts + jwcPremiumUSD;
-            const netFreightRate = safeIntake > 0 ? (totalNetVoyageCost / safeIntake) : 0;
+            const ballastCostUSD = opexDaily * effectiveBallastDays;
+            const totalSurchargesUSD = jwcPremiumUSD + ballastCostUSD;
+            const surchargesPerTon = safeIntake > 0 ? (totalSurchargesUSD / safeIntake) : 0;
+
+            const rawBaseFreight = Number(
+                dssState.baseNetFreight ??
+                dssState.fleteUnitario ??
+                dssState.fleteEstimado ??
+                dssState.freightSell ??
+                dssState.freightRateUSD ??
+                options.baseNetFreight
+            ) || 0;
+
+            let baseNetFreight = rawBaseFreight;
+            if (baseNetFreight <= 0) {
+                const bunkerCost = Number(dssState.totalBunkerCost ?? dssState.bunkerCost ?? 0) || 0;
+                const portCost = Number(dssState.totalPortDisbursements ?? dssState.portDisbursements ?? dssState.portCosts ?? 0) || 0;
+                const baseDirectVoyageCost = (dailyRate * baseVoyageDays) + bunkerCost + portCost;
+                baseNetFreight = safeIntake > 0 ? (baseDirectVoyageCost / safeIntake) : 0;
+            }
+
+            const totalNetRate = baseNetFreight + surchargesPerTon;
 
             const totalCommissionPct = Number(dssState.totalCommission ?? dssState.commissionPct ?? dssState.comisionTotal ?? 5.0);
             const commissionDecimal = totalCommissionPct / 100;
             const grossFactor = (commissionDecimal < 1 && commissionDecimal >= 0) ? (1 - commissionDecimal) : 0.95;
-            const allInRateGross = netFreightRate / grossFactor;
-
-            const ballastCostUSD = dailyRate * effectiveBallastDays;
+            const allInRateGross = totalNetRate / grossFactor;
 
             return {
-                netFreightRate: Number(netFreightRate.toFixed(2)),
+                netFreightRate: Number(baseNetFreight.toFixed(2)),
+                totalNetRate: Number(totalNetRate.toFixed(2)),
                 allInRateGross: Number(allInRateGross.toFixed(2)),
                 jwcRiskActive: isJwcActive,
                 jwcPremiumUSD,
@@ -1369,7 +1549,11 @@
                 isExportDeficit: deficitEval.isDeficitPOD,
                 autoBallastApplied: deficitEval.autoCalculated,
                 effectiveBallastDays,
+                fallbackPort: deficitEval.fallbackPort || null,
+                distanceNM: deficitEval.distanceNM || 0,
                 ballastCostUSD,
+                totalSurchargesUSD,
+                surchargesPerTon: Number(surchargesPerTon.toFixed(2)),
                 totalCommissionPct,
                 calculationMode,
                 totalDaysWithBallast,
@@ -1553,6 +1737,11 @@
             dssFormState.netFreightRate = allInResult.netFreightRate;
             dssFormState.totalNetRate = allInResult.totalNetRate;
             dssFormState.allInRateGross = allInResult.allInRateGross;
+            dssFormState.ballastDays = allInResult.effectiveBallastDays;
+
+            if (inputBallastDays) {
+                inputBallastDays.value = allInResult.effectiveBallastDays.toFixed(1);
+            }
 
             if (typeof window !== 'undefined') {
                 window.dssFormState = dssFormState;

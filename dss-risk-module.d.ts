@@ -63,6 +63,8 @@ export interface AllInFreightResult {
   isExportDeficit: boolean;
   autoBallastApplied: boolean;
   effectiveBallastDays: number;
+  fallbackPort: string | null;
+  distanceNM: number;
   ballastCostUSD: number;
   totalSurchargesUSD: number;
   surchargesPerTon: number;
@@ -86,15 +88,24 @@ export declare function evaluateJWCRisk(polInput?: string | Record<string, any> 
   polRisk: boolean;
   podRisk: boolean;
 };
+export declare const FALLBACK_PORT_MATRIX: Record<string, { fallbackPort: string; distanceNM: number }>;
+export declare function getFallbackPortAndDistance(podInput?: string | Record<string, any> | null): {
+  fallbackPort: string;
+  distanceNM: number;
+  matchedKey: string;
+};
 export declare function calculateAutoExportDeficitBallast(
   podInput?: string | Record<string, any> | null,
   manualBallastDays?: number,
-  defaultAutoDays?: number
+  speedOrOptions?: number | Partial<DSSFormState> | { vesselSpeed?: number; speedBallast?: number; speed?: number }
 ): {
   isDeficitApplied: boolean;
   isDeficitPOD: boolean;
   ballastDays: number;
   autoCalculated: boolean;
+  fallbackPort: string | null;
+  distanceNM: number;
+  vesselSpeed?: number;
 };
 export declare function calculateAllInFreightGross(
   dssState?: Partial<DSSFormState>,
@@ -105,5 +116,8 @@ export declare function calculateAllInFreightGross(
     baseNetFreight?: number;
     defaultJwcPremium?: number;
     defaultAutoBallastDays?: number;
+    vesselSpeed?: number;
+    opex?: number;
+    cargoQty?: number;
   }
 ): AllInFreightResult;
