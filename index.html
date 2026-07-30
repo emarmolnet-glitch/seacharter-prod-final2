@@ -12523,7 +12523,7 @@
                             Módulos de la Interfaz y Lógica Interna
                         </h2>
                         <p class="text-slate-700 text-sm leading-relaxed">
-                            SeaCharter Core PRO se estructura en seis módulos de trabajo interconectados, accesibles desde la barra de navegación superior:
+                            SeaCharter Core PRO se estructura en siete módulos de trabajo interconectados, accesibles desde la barra de navegación superior:
                         </p>
                         
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
@@ -12542,6 +12542,15 @@
                                 </h3>
                                 <p class="text-xs text-slate-600 leading-relaxed">
                                     Núcleo de cálculo financiero de viajes. Evalúa costes de combustible (VLSFO, LSMGO, Scrubber), costes de puerto (PDA), gastos de estiba por método (Grúa Barco, Cinta, Camión Tolva, Cuchara), OPEX diario del buque, comisiones comerciales, contingencias y recargos regulatorios CBAM/ETS, determinando el Flete Justo, el Break-Even ($/TM) y el TCE ($/día).
+                                </p>
+                            </div>
+
+                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50 space-y-2">
+                                <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+                                    <i class="fa-solid fa-brain text-amber-600"></i> Decisiones (DSS)
+                                </h3>
+                                <p class="text-xs text-slate-600 leading-relaxed">
+                                    Sistema de Apoyo a la Decisión (<em>Decision Support System</em>) para simulación y análisis de escenarios de riesgo de viaje. Controla la eficiencia de reposicionamiento calculando el Ratio de Lastre (%), gestiona la alerta de Déficit de Exportación (<em>Backhaul Risk</em>), evalúa primas de riesgo de guerra JWC y permite la fijación de condiciones definitivas e inmutables pre-contrato.
                                 </p>
                             </div>
 
@@ -12606,6 +12615,12 @@
                                         <td class="p-3">Flete Justo ($/TM), Break-Even, TCE ($/día), Días de Viaje</td>
                                     </tr>
                                     <tr>
+                                        <td class="p-3 font-bold text-slate-900 border-r border-slate-200">Decisiones (DSS)</td>
+                                        <td class="p-3 border-r border-slate-200">Días de Lastre, Flag/Monto Prima JWC, Tonelaje Objetivo/Real, Precios Bunker, OPEX</td>
+                                        <td class="p-3 border-r border-slate-200">Simulación de escenarios de riesgo, control de Ratio de Lastre (%), detección de Déficit de Exportación y Gross-Up con comisiones</td>
+                                        <td class="p-3">Flete Neto Base ($/TM), Recargos Totales ($), All-In Rate Gross ($/TM), Score de Eficiencia (0-100)</td>
+                                    </tr>
+                                    <tr>
                                         <td class="p-3 font-bold text-slate-900 border-r border-slate-200">Densidad</td>
                                         <td class="p-3 border-r border-slate-200">Filtro de Taxonomía, Radio de Búsqueda</td>
                                         <td class="p-3 border-r border-slate-200">Procesamiento de tráficos AIS y clasificación por DWT/Tipo</td>
@@ -12648,10 +12663,10 @@
                                     <i class="fa-solid fa-gear text-slate-700"></i> Menú de Configuración (Icono de Engranaje)
                                 </h3>
                                 <ul class="text-xs text-slate-700 space-y-2 leading-relaxed">
-                                    <li><strong>FCL:</strong> Módulo de utilidades para carga contenerizada (<em>Full Container Load</em>).</li>
-                                    <li><strong>Editor ASBATANKVOY:</strong> Herramienta de redacción y edición de pólizas de fletamento específicas para buques tanque (<em>tankers</em>) bajo el estándar ASBATANKVOY.</li>
-                                    <li><strong>CBAM:</strong> Panel de gestión, cálculo y configuración del Mecanismo de Ajuste Fronterizo de Carbono y derechos de emisión ETS.</li>
-                                    <li><strong>Modo Dual - Trading & Chartering:</strong> Conmutador que adapta la interfaz y el motor de cálculo para gestionar simultáneamente la compraventa de la mercancía (Trading) y la contratación del flete (Chartering).</li>
+                                    <li><strong>FCL:</strong> Módulo de utilidades para carga contenerizada (<em>Full Container Load</em>) y simulación de fletes por TEU/FEU.</li>
+                                    <li><strong>Editor ASBATANKVOY:</strong> Herramienta especializada de redacción y edición de pólizas de fletamento para buques tanque (<em>tankers</em>) bajo el estándar internacional ASBATANKVOY.</li>
+                                    <li><strong>CBAM:</strong> Panel de gestión, cálculo y configuración del Mecanismo de Ajuste Fronterizo de Carbono (CBAM) y derechos de emisión ETS de la Unión Europea.</li>
+                                    <li><strong>Modo Dual - Trading & Chartering:</strong> Conmutador que adapta la interfaz y el motor de cálculo para gestionar simultáneamente la compraventa de la mercancía (Trading) y la contratación del flete (Chartering), calculando el margen comercial bruto en tiempo real.</li>
                                 </ul>
                             </div>
 
@@ -12661,8 +12676,10 @@
                                     <i class="fa-solid fa-ellipsis-vertical text-slate-700"></i> Menú de Sesión y Data Bridge (Icono de 3 Puntos)
                                 </h3>
                                 <ul class="text-xs text-slate-700 space-y-2 leading-relaxed">
+                                    <li><strong>Reporte de Mercado:</strong> Acceso directo para generar el informe certificado de inteligencia de mercado en PDF (<em>Market Report</em>) con <em>Narrative Engine</em> cualitativo, diseño visual limpio sin fondos oscuros y autoría exclusiva de SeaCharter Core PRO.</li>
                                     <li><strong>Guardar / Cargar Sesión:</strong> Permite almacenar el estado actual del área de trabajo en el navegador y recuperarlo posteriormente sin perder los datos introducidos.</li>
                                     <li><strong>Data Bridge & Data Bridge Link:</strong> Panel de conexión directa y sincronización segura con la base de datos centralizada de la compañía.</li>
+                                    <li><strong>Motor NPL (Arma Secreta Data Bridge):</strong> Procesamiento de Lenguaje Natural para capturar foto, cargar ficha o introducir texto libre/fichas (ej. <em>"Fletamento de 20.000 TM de cemento..."</em>), extraer automáticamente los datos técnicos y formatear el JSON directo al Data Bridge.</li>
                                     <li><strong>Salir:</strong> Cierra la sesión activa de forma segura.</li>
                                 </ul>
                             </div>
@@ -12674,7 +12691,7 @@
                                 <i class="fa-solid fa-wand-magic-sparkles text-indigo-600"></i> Motor NPL (Arma Secreta Data Bridge)
                             </h3>
                             <p class="text-xs text-slate-700 leading-relaxed">
-                                Herramienta avanzada de Procesamiento de Lenguaje Natural. Permite capturar una foto, cargar una ficha o introducir texto libre (ej. <em>"Fletamento de 20.000 TM de cemento..."</em>). El motor NPL extrae automáticamente los datos técnicos del buque o la carga y los formatea en un JSON listo para ser enviado directamente al Data Bridge, saltándose el Motor de Coincidencias tradicional.
+                                Herramienta avanzada de Procesamiento de Lenguaje Natural. Permite capturar una foto, cargar una ficha o introducir texto libre/fichas (ej. <em>"Fletamento de 20.000 TM de cemento..."</em>). El motor NPL extrae automáticamente los datos técnicos del buque o la carga y los formatea en un JSON listo para ser enviado directamente al Data Bridge, saltándose el Motor de Coincidencias tradicional.
                             </p>
                         </div>
                     </section>
@@ -12800,6 +12817,88 @@
                                 <div class="mt-2 text-xs text-slate-700 space-y-2">
                                     <p>
                                         Sí. El módulo permite integrar cotizaciones de primas de riesgo para rutas que transitan por Zonas de Guerra (JWLA - Joint War Committee), consolidando este sobrecoste directamente en la auditoría financiera final.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- FAQ 9: Market Report -->
+                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
+                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
+                                    ¿Qué es el Generador del Reporte de Mercado (Market Report) y quién lo emite?
+                                </h3>
+                                <div class="mt-2 text-xs text-slate-700 space-y-2">
+                                    <p>
+                                        El <strong>Market Report</strong> es el informe certificado de inteligencia marítima emitido con <strong>autoría exclusiva por SeaCharter Core PRO</strong>. Procesa e hiper-indexa dinámicamente el comportamiento de todas las categorías de carga (Minerales, Carga Siderúrgica, Fertilizantes, Biomasa, Breakbulk) y la totalidad de tipologías de buques (Coaster, Handysize, Supramax, Kamsarmax, Panamax, Capesize), consolidando promedios de flete All-In Gross, TCE global y métricas de riesgo operativo.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- FAQ 10: Narrative Engine -->
+                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
+                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
+                                    ¿Cómo funciona el Motor de Análisis Cualitativo (Narrative Engine)?
+                                </h3>
+                                <div class="mt-2 text-xs text-slate-700 space-y-2">
+                                    <p>
+                                        El <strong>Narrative Engine</strong> es una lógica backend avanzada que analiza los deltas semanales de los fletes All-In, días de lastre y rendimiento TCE. Con estos datos, ensambla de forma autónoma párrafos de análisis editorial cualitativo en el reporte, explicando el trasfondo de las tendencias de mercado, el impulso de rutas clave y los factores de distorsión comercial.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- FAQ 11: Diseño Visual Minimalista -->
+                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
+                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
+                                    ¿Qué características presenta el diseño visual del Reporte PDF?
+                                </h3>
+                                <div class="mt-2 text-xs text-slate-700 space-y-2">
+                                    <p>
+                                        El reporte adopta una estética minimalista de alto rendimiento que <strong>elimina por completo los bloques de fondo oscuro pesados</strong>. Emplea superficies sobre fondos claros (#FFFFFF, #F8FAFC), líneas divisorias sutiles (#E2E8F0), tipografía de alta definición y acentos corporativos en verde esmeralda (#00875A) y azul marino (#0F172A), garantizando máxima legibilidad e impresiones impecables.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- FAQ 12: Doble Modo de Ejecución -->
+                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
+                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
+                                    ¿Cómo se ejecuta el informe en el Doble Modo (Automático y On-Demand)?
+                                </h3>
+                                <div class="mt-2 text-xs text-slate-700 space-y-2">
+                                    <p>
+                                        El sistema opera bajo una arquitectura híbrida de doble modo:
+                                    </p>
+                                    <ul class="list-disc pl-5 space-y-1 font-medium">
+                                        <li><strong>Modo Automático (Cron Job):</strong> Tarea programada en servidor para compilar y guardar en repositorio persistente cada viernes a las 08:00 AM.</li>
+                                        <li><strong>Modo On-Demand (Manual):</strong> Endpoint protegido accesible al instante mediante los botones interactivos en el módulo de <strong>Auditoría</strong> y en el menú desplegable (<code>...</code>) de la barra de navegación superior.</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <!-- FAQ 13: DSS Auto-Ballast & Backhaul Risk -->
+                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
+                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
+                                    ¿Cómo monitoriza el DSS Auto-Ballast el riesgo de posicionamiento en vacío?
+                                </h3>
+                                <div class="mt-2 text-xs text-slate-700 space-y-2">
+                                    <p>
+                                        El módulo <strong>DSS Auto-Ballast</strong> evalúa la eficiencia de reposicionamiento calculando el Ratio de Lastre (%) y el Score de Eficiencia (0-100). Detecta automáticamente puertos con Déficit de Exportación (<em>Backhaul Risk</em>) asignando puertos de retorno óptimos desde la matriz de fallbacks y calculando los días de lastre proporcionales a la velocidad del buque.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- FAQ 14: Auditorías de Riesgo JWC y Congestión Portuaria -->
+                            <div class="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                                <h3 class="text-sm font-bold text-blue-950 flex items-center gap-2">
+                                    <i class="fa-solid fa-circle-question text-blue-600"></i>
+                                    ¿Cómo se auditan e integran los riesgos geopolíticos JWC y la congestión portuaria?
+                                </h3>
+                                <div class="mt-2 text-xs text-slate-700 space-y-2">
+                                    <p>
+                                        El sistema realiza auditorías continuas detectando rutas que transitan por chokepoints o zonas de guerra reguladas por el <em>Joint War Committee</em> (Mar Rojo, Golfo de Adén, Mar Negro), inyectando sobrecostes unitarios por prima de riesgo ($/TM). Asimismo, cuantifica financieramente los días de espera en nodos con congestión portuaria (ej. Canal de Panamá, Santos), calculando su impacto directo en el TCE de la flota ($/día).
                                     </p>
                                 </div>
                             </div>

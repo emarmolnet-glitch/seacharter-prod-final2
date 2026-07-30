@@ -20,7 +20,7 @@ export default async (req: Request) => {
     await store.setJSON(`scheduled/Friday-${reportData.periodEnd}-meta.json`, reportData);
 
     console.info(`[cron:rodahmar-market-report] Report ${reportData.reportId} compiled and persisted successfully in Blobs.`);
-    console.info(`[cron:rodahmar-market-report] Dispatched notification for distribution: operaciones@rodahmar.com, chartering@rodahmar.com.`);
+    console.info(`[cron:rodahmar-market-report] Dispatched notification for SeaCharter Core PRO Market Report distribution to subscriber list.`);
 
     return Response.json({
       success: true,
