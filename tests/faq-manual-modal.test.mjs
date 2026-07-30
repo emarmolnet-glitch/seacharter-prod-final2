@@ -43,6 +43,7 @@ test('FAQ modal contains required corporate manual sections, semantic markup, an
     assert.match(html, /Módulos de la Interfaz y Lógica Interna/);
     assert.match(html, /Mapa y Estado Geográfico/);
     assert.match(html, /Calculadora \(Voyage Estimator\)/);
+    assert.match(html, /Decisiones \(DSS\)/);
     assert.match(html, /Densidad de Flota AIS/);
     assert.match(html, /Coincidencia \(Matching Engine\)/);
     assert.match(html, /Editor Contractual \(GENCON 94\)/);
@@ -68,6 +69,12 @@ test('FAQ modal contains required corporate manual sections, semantic markup, an
     assert.match(html, /¿Cómo calcula el DSS los Días de Puerto y Navegación\?/);
     assert.match(html, /¿Qué es la alerta de Déficit de Exportación \(Backhaul Risk\)\?/);
     assert.match(html, /¿El sistema contempla riesgos geopolíticos\?/);
+    assert.match(html, /¿Qué es el Generador del Reporte de Mercado \(Market Report\) y quién lo emite\?/);
+    assert.match(html, /¿Cómo funciona el Motor de Análisis Cualitativo \(Narrative Engine\)\?/);
+    assert.match(html, /¿Qué características presenta el diseño visual del Reporte PDF\?/);
+    assert.match(html, /¿Cómo se ejecuta el informe en el Doble Modo \(Automático y On-Demand\)\?/);
+    assert.match(html, /¿Cómo monitoriza el DSS Auto-Ballast el riesgo de posicionamiento en vacío\?/);
+    assert.match(html, /¿Cómo se auditan e integran los riesgos geopolíticos JWC y la congestión portuaria\?/);
 
     // Arquitectura Sandbox
     assert.match(html, /Arquitectura Sandbox y Aislamiento de Memoria/);
