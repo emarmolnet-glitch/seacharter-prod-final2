@@ -495,6 +495,97 @@
         return { ...totals, canal, cranes, tugs, fallbacks: fallbackResult.fallbacks, canal_efectivo: fallbackResult.canal_efectivo, state: effectiveState };
     }
 
+    const DEFAULT_LUMPSUM_TARGET_BASE_MT = 5000;
+
+    /**
+     * Resolves the billable tonnage base shared by purchase (owner) and sale (charterer).
+     * Lumpsum is never inferred from the cargo size: it is an explicit commercial decision
+     * (isLumpsumMode) and it is always capped by the physical capacity of the vessel (DWT).
+     */
+    function resolveFreightBase(options = {}) {
+        const actualCargoMT = Math.max(0, toNumber(options.actualCargoMT));
+        const vesselDWT = Math.max(0, toNumber(options.vesselDWT));
+        const isLumpsumMode = Boolean(options.isLumpsumMode);
+        const requestedTargetBase = options.targetLumpsumBase === undefined || options.targetLumpsumBase === null || options.targetLumpsumBase === ''
+            ? DEFAULT_LUMPSUM_TARGET_BASE_MT
+            : toNumber(options.targetLumpsumBase);
+        const targetLumpsumBase = Math.max(0, requestedTargetBase);
+
+        if (!isLumpsumMode) {
+            return {
+                isLumpsumMode: false,
+                mode: 'PMT',
+                actualCargoMT,
+                vesselDWT,
+                targetLumpsumBase,
+                finalLumpsumBase: 0,
+                freightBaseMT: actualCargoMT,
+                dwtCapApplied: false,
+                dwtCapDeltaMT: 0
+            };
+        }
+
+        // Physical cap: it is impossible to invoice more tonnage than the vessel can lift.
+        const finalLumpsumBase = vesselDWT > 0
+            ? Math.min(targetLumpsumBase, vesselDWT)
+            : targetLumpsumBase;
+
+        return {
+            isLumpsumMode: true,
+            mode: 'LUMPSUM',
+            actualCargoMT,
+            vesselDWT,
+            targetLumpsumBase,
+            finalLumpsumBase,
+            freightBaseMT: finalLumpsumBase,
+            dwtCapApplied: vesselDWT > 0 && vesselDWT < targetLumpsumBase,
+            dwtCapDeltaMT: Math.max(0, targetLumpsumBase - finalLumpsumBase)
+        };
+    }
+
+    /**
+     * Symmetric voyage financials. The same tonnage base always drives both sides of the
+     * trade, so no phantom arbitrage can be produced by billing the sale on one base and
+     * the purchase on another.
+     */
+    function calculateVoyageFinancials(params = {}) {
+        const base = resolveFreightBase(params);
+        const freightBaseMT = base.freightBaseMT;
+        const ownerRate = Math.max(0, toNumber(params.ownerRate));
+        const chartererRate = Math.max(0, toNumber(params.chartererRate));
+        const commissionPct = Math.min(100, Math.max(0, toNumber(params.commissionPct)));
+        const revenueExtras = toNumber(params.revenueExtras);
+        const additionalCosts = toNumber(params.additionalCosts);
+
+        // Sale side (charterer revenue) and purchase side (owner freight cost) share freightBaseMT.
+        const grossRevenue = freightBaseMT * chartererRate;
+        const ownerFreightCost = freightBaseMT * ownerRate;
+        const commissionCost = grossRevenue * (commissionPct / 100);
+
+        const totalRevenue = roundMoney(grossRevenue + revenueExtras);
+        const totalCost = roundMoney(ownerFreightCost + commissionCost + additionalCosts);
+        const netProfit = roundMoney(totalRevenue - totalCost);
+
+        return {
+            ...base,
+            ownerRate,
+            chartererRate,
+            commissionPct,
+            grossRevenue: roundMoney(grossRevenue),
+            revenueExtras: roundMoney(revenueExtras),
+            ownerFreightCost: roundMoney(ownerFreightCost),
+            commissionCost: roundMoney(commissionCost),
+            additionalCosts: roundMoney(additionalCosts),
+            totalRevenue,
+            totalCost,
+            netProfit,
+            netMarginPct: totalRevenue > 0 ? roundMoney((netProfit / totalRevenue) * 100) : 0,
+            // Equivalent rates over the tonnage physically carried, for display only.
+            effectiveOwnerRatePerMT: base.actualCargoMT > 0 ? roundMoney(ownerFreightCost / base.actualCargoMT) : 0,
+            effectiveChartererRatePerMT: base.actualCargoMT > 0 ? roundMoney(grossRevenue / base.actualCargoMT) : 0
+        };
+    }
+
     const RISK_SCENARIOS = Object.freeze([
         { key: 'base', label: 'Base', bunkerVolatility: 0, portDelayFactor: 1, offHireDays: 0 },
         { key: 'moderate', label: 'Moderado', bunkerVolatility: 0.10, portDelayFactor: 1.2, offHireDays: 1 },
@@ -1220,6 +1311,9 @@
         shouldAutoEstimateStevedoring,
         estimateStevedoringTerminal,
         calculateVoyageCostState,
+        DEFAULT_LUMPSUM_TARGET_BASE_MT,
+        resolveFreightBase,
+        calculateVoyageFinancials,
         RISK_SCENARIOS,
         calculateSensitivityScenario,
         runSensitivityBatch,
