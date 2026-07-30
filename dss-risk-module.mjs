@@ -259,27 +259,214 @@ export function evaluateJWCRisk(polInput, podInput) {
   return { isRisk, zoneName, polRisk, podRisk };
 }
 
-export function calculateAutoExportDeficitBallast(podInput, manualBallastDays = 0, defaultAutoDays = 4.0) {
+// Matriz Interna de Distancias y Puertos Seguros de Lastre (Internal DB Distance Matrix)
+export const FALLBACK_PORT_MATRIX = {
+  // África Occidental y del Sur
+  "SAO TOME": { fallbackPort: "Las Palmas", distanceNM: 2160 },
+  "BANJUL": { fallbackPort: "Las Palmas", distanceNM: 950 },
+  "DAKAR": { fallbackPort: "Las Palmas", distanceNM: 870 },
+  "LAGOS": { fallbackPort: "Las Palmas", distanceNM: 2450 },
+  "LUANDA": { fallbackPort: "Durban", distanceNM: 1850 },
+  "ABIDJAN": { fallbackPort: "Las Palmas", distanceNM: 1820 },
+  "TEMA": { fallbackPort: "Las Palmas", distanceNM: 2100 },
+  "DOUALA": { fallbackPort: "Las Palmas", distanceNM: 2380 },
+  "NOUAKCHOTT": { fallbackPort: "Las Palmas", distanceNM: 680 },
+  "CONAKRY": { fallbackPort: "Las Palmas", distanceNM: 1250 },
+  "POINTE-NOIRE": { fallbackPort: "Las Palmas", distanceNM: 2650 },
+  "POINTE NOIRE": { fallbackPort: "Las Palmas", distanceNM: 2650 },
+  "LOME": { fallbackPort: "Las Palmas", distanceNM: 2050 },
+  "COTONOU": { fallbackPort: "Las Palmas", distanceNM: 2120 },
+  "LIBREVILLE": { fallbackPort: "Las Palmas", distanceNM: 2280 },
+  "OWENDO": { fallbackPort: "Las Palmas", distanceNM: 2280 },
+  "TAKORADI": { fallbackPort: "Las Palmas", distanceNM: 2100 },
+  "KRIBI": { fallbackPort: "Las Palmas", distanceNM: 2400 },
+  "SAN PEDRO": { fallbackPort: "Las Palmas", distanceNM: 1850 },
+  "SENEGAL": { fallbackPort: "Las Palmas", distanceNM: 870 },
+  "NIGERIA": { fallbackPort: "Las Palmas", distanceNM: 2450 },
+  "ANGOLA": { fallbackPort: "Durban", distanceNM: 1850 },
+  "GUINEA": { fallbackPort: "Las Palmas", distanceNM: 1250 },
+  "GABON": { fallbackPort: "Las Palmas", distanceNM: 2280 },
+  "CONGO": { fallbackPort: "Las Palmas", distanceNM: 2650 },
+  "CAMEROON": { fallbackPort: "Las Palmas", distanceNM: 2380 },
+  "CAMERUN": { fallbackPort: "Las Palmas", distanceNM: 2380 },
+  "MAURITANIA": { fallbackPort: "Las Palmas", distanceNM: 680 },
+  "GHANA": { fallbackPort: "Las Palmas", distanceNM: 2100 },
+  "IVORY COAST": { fallbackPort: "Las Palmas", distanceNM: 1820 },
+  "COTE D'IVOIRE": { fallbackPort: "Las Palmas", distanceNM: 1820 },
+  "COTE DIVOIRE": { fallbackPort: "Las Palmas", distanceNM: 1820 },
+  "GAMBIA": { fallbackPort: "Las Palmas", distanceNM: 950 },
+
+  // Norte de África
+  "ALGIERS": { fallbackPort: "Gibraltar", distanceNM: 410 },
+  "ARGEL": { fallbackPort: "Gibraltar", distanceNM: 410 },
+  "ORAN": { fallbackPort: "Gibraltar", distanceNM: 230 },
+  "BEJAIA": { fallbackPort: "Gibraltar", distanceNM: 520 },
+  "SKIKDA": { fallbackPort: "Gibraltar", distanceNM: 580 },
+  "ANNABA": { fallbackPort: "Gibraltar", distanceNM: 620 },
+  "TRIPOLI": { fallbackPort: "Augusta", distanceNM: 320 },
+  "TUNIS": { fallbackPort: "Augusta", distanceNM: 210 },
+  "RADES": { fallbackPort: "Augusta", distanceNM: 210 },
+  "ALGERIA": { fallbackPort: "Gibraltar", distanceNM: 410 },
+  "ARGELIA": { fallbackPort: "Gibraltar", distanceNM: 410 },
+  "LIBYA": { fallbackPort: "Augusta", distanceNM: 320 },
+  "TUNISIA": { fallbackPort: "Augusta", distanceNM: 210 },
+
+  // África Oriental
+  "MOMBASA": { fallbackPort: "Durban", distanceNM: 1620 },
+  "DAR ES SALAAM": { fallbackPort: "Durban", distanceNM: 1420 },
+  "MAPUTO": { fallbackPort: "Durban", distanceNM: 280 },
+  "TOAMASINA": { fallbackPort: "Durban", distanceNM: 1150 },
+  "DJIBOUTI": { fallbackPort: "Jeddah", distanceNM: 620 },
+  "MOGADISHU": { fallbackPort: "Durban", distanceNM: 2100 },
+  "KENYA": { fallbackPort: "Durban", distanceNM: 1620 },
+  "TANZANIA": { fallbackPort: "Durban", distanceNM: 1420 },
+  "MOZAMBIQUE": { fallbackPort: "Durban", distanceNM: 280 },
+  "MADAGASCAR": { fallbackPort: "Durban", distanceNM: 1150 },
+  "SOMALIA": { fallbackPort: "Durban", distanceNM: 2100 },
+
+  // Caribe y Atlántico
+  "KINGSTON": { fallbackPort: "Houston", distanceNM: 1180 },
+  "SANTO DOMINGO": { fallbackPort: "Houston", distanceNM: 1350 },
+  "PORT-AU-PRINCE": { fallbackPort: "Houston", distanceNM: 1280 },
+  "NASSAU": { fallbackPort: "Houston", distanceNM: 980 },
+  "BRIDGETOWN": { fallbackPort: "Houston", distanceNM: 1950 },
+  "PORT OF SPAIN": { fallbackPort: "Houston", distanceNM: 1880 },
+  "HAITI": { fallbackPort: "Houston", distanceNM: 1280 },
+  "JAMAICA": { fallbackPort: "Houston", distanceNM: 1180 },
+  "BAHAMAS": { fallbackPort: "Houston", distanceNM: 980 },
+  "BARBADOS": { fallbackPort: "Houston", distanceNM: 1950 },
+  "TRINIDAD": { fallbackPort: "Houston", distanceNM: 1880 },
+  "DOMINICAN REPUBLIC": { fallbackPort: "Houston", distanceNM: 1350 },
+
+  // Pacífico e Islas
+  "SUVA": { fallbackPort: "Newcastle", distanceNM: 1750 },
+  "PORT MORESBY": { fallbackPort: "Newcastle", distanceNM: 1680 },
+  "HONIARA": { fallbackPort: "Newcastle", distanceNM: 1820 },
+  "PORT VILA": { fallbackPort: "Newcastle", distanceNM: 1450 },
+  "FIJI": { fallbackPort: "Newcastle", distanceNM: 1750 },
+  "PAPUA": { fallbackPort: "Newcastle", distanceNM: 1680 },
+
+  // Regiones por defecto
+  "WEST AFRICA": { fallbackPort: "Las Palmas", distanceNM: 1800 },
+  "AFRICA OCCIDENTAL": { fallbackPort: "Las Palmas", distanceNM: 1800 },
+  "NORTH AFRICA": { fallbackPort: "Gibraltar", distanceNM: 450 },
+  "AFRICA DEL NORTE": { fallbackPort: "Gibraltar", distanceNM: 450 },
+  "EAST AFRICA": { fallbackPort: "Durban", distanceNM: 1500 },
+  "AFRICA ORIENTAL": { fallbackPort: "Durban", distanceNM: 1500 },
+  "CARIBBEAN": { fallbackPort: "Houston", distanceNM: 1250 },
+  "CARIBE": { fallbackPort: "Houston", distanceNM: 1250 },
+
+  // Fallback Global por defecto
+  "DEFAULT": { fallbackPort: "Las Palmas", distanceNM: 1152 }
+};
+
+export function getFallbackPortAndDistance(podInput) {
+  let podStr = '';
+  if (typeof podInput === 'string') {
+    podStr = podInput;
+  } else if (typeof podInput === 'object' && podInput !== null) {
+    podStr = podInput.name || podInput.pod || podInput.destinationPort || podInput.port || podInput.region || podInput.country || '';
+  }
+
+  const rawUpper = String(podStr || '').toUpperCase().trim();
+  const normalizedUpper = rawUpper.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  if (rawUpper || normalizedUpper) {
+    for (const [key, entry] of Object.entries(FALLBACK_PORT_MATRIX)) {
+      if (key === 'DEFAULT') continue;
+      if (rawUpper.includes(key) || normalizedUpper.includes(key)) {
+        return {
+          fallbackPort: entry.fallbackPort,
+          distanceNM: entry.distanceNM,
+          matchedKey: key
+        };
+      }
+    }
+  }
+
+  const defaultEntry = FALLBACK_PORT_MATRIX['DEFAULT'] || { fallbackPort: "Las Palmas", distanceNM: 1152 };
+  return {
+    fallbackPort: defaultEntry.fallbackPort,
+    distanceNM: defaultEntry.distanceNM,
+    matchedKey: 'DEFAULT'
+  };
+}
+
+export function calculateAutoExportDeficitBallast(podInput, manualBallastDays = 0, speedOrOptions = {}) {
   const isDeficit = isExportDeficitPOD(podInput);
   const manual = Number(manualBallastDays) || 0;
+
   if (manual > 0) {
-    return { isDeficitApplied: false, isDeficitPOD: isDeficit, ballastDays: manual, autoCalculated: false };
+    return {
+      isDeficitApplied: false,
+      isDeficitPOD: isDeficit,
+      ballastDays: manual,
+      autoCalculated: false,
+      fallbackPort: null,
+      distanceNM: 0
+    };
   }
+
   if (isDeficit) {
-    return { isDeficitApplied: true, isDeficitPOD: true, ballastDays: defaultAutoDays, autoCalculated: true };
+    const fallbackInfo = getFallbackPortAndDistance(podInput);
+    let speed = 12.0;
+
+    if (typeof speedOrOptions === 'object' && speedOrOptions !== null) {
+      speed = Number(speedOrOptions.vesselSpeed || speedOrOptions.speedBallast || speedOrOptions.speed || speedOrOptions.spdBallast) || 12.0;
+    } else if (typeof speedOrOptions === 'number' && speedOrOptions > 0) {
+      if (speedOrOptions >= 5 && speedOrOptions <= 30) {
+        speed = speedOrOptions;
+      } else {
+        speed = 12.0;
+      }
+    } else if (typeof State !== 'undefined' && State) {
+      speed = Number(State.vesselSpeed || State.speedBallast || State.speed || State.spdBallast) || 12.0;
+    }
+
+    if (speed <= 0 || !Number.isFinite(speed)) speed = 12.0;
+
+    // Fórmula estricta: Días de Lastre = Millas Náuticas (de la DB) / (Velocidad Nudos * 24)
+    const calculatedDays = fallbackInfo.distanceNM / (speed * 24);
+    const ballastDays = Number(calculatedDays.toFixed(2));
+
+    return {
+      isDeficitApplied: true,
+      isDeficitPOD: true,
+      ballastDays,
+      autoCalculated: true,
+      fallbackPort: fallbackInfo.fallbackPort,
+      distanceNM: fallbackInfo.distanceNM,
+      vesselSpeed: speed
+    };
   }
-  return { isDeficitApplied: false, isDeficitPOD: false, ballastDays: 0, autoCalculated: false };
+
+  return {
+    isDeficitApplied: false,
+    isDeficitPOD: false,
+    ballastDays: 0,
+    autoCalculated: false,
+    fallbackPort: null,
+    distanceNM: 0
+  };
 }
 
 export function calculateAllInFreightGross(dssState = {}, options = {}) {
-  const safeIntake = (Number(dssState.actualCargoIntake) > 0)
-    ? Number(dssState.actualCargoIntake)
-    : (Number(dssState.targetCargoMT || dssState.cargoQty || dssState.cargo || dssState.tons) || 50000);
+  // 1. Data Binding de Tonelaje (Corrección cargoQty): lectura estricta de la cantidad real de carga (State.cargoQty / dssState.cargoQty)
+  const realCargoQty = Number(
+    dssState.cargoQty ??
+    dssState.actualCargoIntake ??
+    dssState.targetCargoMT ??
+    dssState.cargo ??
+    dssState.tons ??
+    options.cargoQty ??
+    (typeof State !== 'undefined' && State ? (State.cargoQty || State.actualCargoIntake) : null)
+  );
+  const safeIntake = (realCargoQty > 0) ? realCargoQty : 50000;
 
   const pol = dssState.pol || options.pol || '';
   const pod = dssState.pod || options.pod || '';
 
-  // 1. Evaluacion Automatica de Riesgo JWC y Prima
+  // 2. Evaluacion Automatica de Riesgo JWC y Prima
   const jwcEval = evaluateJWCRisk(pol, pod);
   const isJwcActive = Boolean(dssState.jwlaRiskActive || dssState.jwcRiskActive || jwcEval.isRisk);
   const defaultJwcPrem = options.defaultJwcPremium ?? 15000;
@@ -287,32 +474,56 @@ export function calculateAllInFreightGross(dssState = {}, options = {}) {
     ? (Number(dssState.jwlaPremiumUSD || dssState.jwcPremiumUSD) || defaultJwcPrem)
     : 0;
 
-  // 2. Evaluacion y Autocalculo de Lastre por Deficit de Exportacion (Transparente e Interno)
+  // 3. Velocidad del buque y OPEX Diario del estado global o dssState
+  const vesselSpeed = Number(
+    dssState.vesselSpeed ??
+    dssState.speedBallast ??
+    dssState.speed ??
+    dssState.spdBallast ??
+    dssState.vessel_speed ??
+    options.vesselSpeed ??
+    (typeof State !== 'undefined' && State ? (State.vesselSpeed || State.speedBallast || State.speed || State.spdBallast) : null)
+  ) || 12.0;
+  const safeSpeed = vesselSpeed > 0 ? vesselSpeed : 12.0;
+
+  const opexDaily = Number(
+    dssState.opex ??
+    dssState.opexDaily ??
+    dssState.opex_fijo_diario ??
+    options.opex ??
+    (typeof State !== 'undefined' && State ? State.opex : null)
+  ) || 6000;
+
+  // 4. Consulta a la Matriz de Distancias DB y Cálculo Dinámico de Días de Lastre
   const manualBallast = Number(dssState.ballastDays) || 0;
-  const deficitEval = calculateAutoExportDeficitBallast(pod, manualBallast, options.defaultAutoBallastDays || 4.0);
+  const deficitEval = calculateAutoExportDeficitBallast(pod, manualBallast, { vesselSpeed: safeSpeed });
   const effectiveBallastDays = deficitEval.ballastDays;
 
-  // 3. Dias de navegacion y puerto (solo lectura de las calculadoras base)
+  // 5. Dias de navegacion y puerto (solo lectura de las calculadoras base)
   const ladenDays = Number(dssState.ladenDays ?? dssState.seaDays ?? dssState.estimatedVoyageDays ?? 8) || 0;
   const portDays = Number(dssState.portDays ?? dssState.totalPortDays ?? 10) || 0;
   const baseVoyageDays = ladenDays + portDays;
   const totalDaysWithBallast = baseVoyageDays + effectiveBallastDays;
 
-  // 4. Tarifa Base Diaria del Buque (OPEX o TCE Objetivo)
+  // 6. Tarifa Base Diaria del Buque (OPEX o TCE Objetivo)
   const calculationMode = options.mode || dssState.calculationMode || (dssState.targetTCE || dssState.tceTarget ? 'inversa_tce' : 'cost_plus');
   let dailyRate = 0;
   if (calculationMode === 'inversa_tce') {
     dailyRate = Number(dssState.targetTCE || dssState.tceTarget || dssState.globalMarketTCE || 18000);
   } else {
-    dailyRate = Number(dssState.opex || dssState.opexDaily || dssState.opex_fijo_diario || 6000);
+    dailyRate = opexDaily;
   }
 
-  // 5. Costes de Lastre y Recargos Totales ($)
-  const ballastCostUSD = dailyRate * effectiveBallastDays;
+  // 7. Coste Operativo de Lastre = Días de Lastre (de la DB) * OPEX Diario ($)
+  const ballastCostUSD = opexDaily * effectiveBallastDays;
+
+  // 8. Inyección en Recargos Totales = Prima JWC + Coste Operativo de Lastre
   const totalSurchargesUSD = jwcPremiumUSD + ballastCostUSD;
+
+  // 9. Formula Estricta: Recargo Unitario = Recargos Totales / State.cargoQty (safeIntake)
   const surchargesPerTon = safeIntake > 0 ? (totalSurchargesUSD / safeIntake) : 0;
 
-  // 6. Flete Neto Base (Vinculado dinámicamente al estado de la calculadora activa)
+  // 10. Flete Neto Base (Vinculado dinámicamente al estado de la calculadora activa)
   const rawBaseFreight = Number(
     dssState.baseNetFreight ??
     dssState.fleteUnitario ??
@@ -330,10 +541,10 @@ export function calculateAllInFreightGross(dssState = {}, options = {}) {
     baseNetFreight = safeIntake > 0 ? (baseDirectVoyageCost / safeIntake) : 0;
   }
 
-  // 7. Formula Estricta: Total Net Rate = Flete Neto Base + (Recargos Totales / Toneladas)
+  // 11. Formula Estricta: Total Net Rate = Flete Neto Base + Recargo Unitario
   const totalNetRate = baseNetFreight + surchargesPerTon;
 
-  // 8. Gross-Up para absorcion de comisiones: Flete ALL-IN Gross = Total Net Rate / (1 - (Comisiones / 100))
+  // 12. Gross-Up para absorcion de comisiones: Flete ALL-IN Gross = Total Net Rate / (1 - (Comisiones / 100))
   const totalCommissionPct = Number(dssState.totalCommission ?? dssState.commissionPct ?? dssState.comisionTotal ?? 5.0);
   const commissionDecimal = totalCommissionPct / 100;
   const grossFactor = (commissionDecimal < 1 && commissionDecimal >= 0) ? (1 - commissionDecimal) : 0.95;
@@ -349,6 +560,8 @@ export function calculateAllInFreightGross(dssState = {}, options = {}) {
     isExportDeficit: deficitEval.isDeficitPOD,
     autoBallastApplied: deficitEval.autoCalculated,
     effectiveBallastDays,
+    fallbackPort: deficitEval.fallbackPort || null,
+    distanceNM: deficitEval.distanceNM || 0,
     ballastCostUSD,
     totalSurchargesUSD,
     surchargesPerTon: Number(surchargesPerTon.toFixed(2)),
@@ -358,5 +571,6 @@ export function calculateAllInFreightGross(dssState = {}, options = {}) {
     safeIntake
   };
 }
+
 
 

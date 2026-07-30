@@ -8,6 +8,8 @@ import {
   jwcRiskKeywords,
   isJWCRiskZone,
   evaluateJWCRisk,
+  FALLBACK_PORT_MATRIX,
+  getFallbackPortAndDistance,
   calculateAutoExportDeficitBallast,
   calculateAllInFreightGross
 } from './dss-risk-module.mjs';
@@ -21,6 +23,8 @@ export {
   jwcRiskKeywords,
   isJWCRiskZone,
   evaluateJWCRisk,
+  FALLBACK_PORT_MATRIX,
+  getFallbackPortAndDistance,
   calculateAutoExportDeficitBallast,
   calculateAllInFreightGross
 };
@@ -35,6 +39,8 @@ if (typeof module !== 'undefined' && module.exports) {
     jwcRiskKeywords,
     isJWCRiskZone,
     evaluateJWCRisk,
+    FALLBACK_PORT_MATRIX,
+    getFallbackPortAndDistance,
     calculateAutoExportDeficitBallast,
     calculateAllInFreightGross
   };
