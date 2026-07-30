@@ -7860,6 +7860,7 @@
                                     <option value="bombas_neumaticas">Bombas Neumáticas</option>
                                     <option value="camion_tolva">Camión Tolva</option>
                                     <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
+                                    <option value="cuchara_portuaria">Cuchara (Grab) - Grúa Portuaria</option>
                                     <option value="grua_portuaria_30mt">Grúa Portuaria 30MT</option>
                                     <option value="big_bags_barco">Big Bags - Grúa Barco</option>
                                     <option value="big_bags_portuaria">Big Bags - Grúa Portuaria</option>
@@ -7895,6 +7896,9 @@
                                             <input type="range" id="gruas-eficiencia-slider-pol" class="w-full accent-blue-600 h-1.5 cursor-pointer mt-1" value="100" min="1" max="100" step="1" oninput="syncEficienciaGrua('pol', 'slider')">
                                         </div>
                                     </div>
+                                    <div id="gruas-derivacion-pol" class="mt-2 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-[10px] font-semibold text-blue-800">
+                                        Introduce los datos de grúa para derivar el RITMO REAL.
+                                    </div>
                                 </div>
                             </div>
                             <div id="contenedor_metodo_descarga" class="input-group">
@@ -7904,6 +7908,7 @@
                                     <option value="bombas_neumaticas">Bombas Neumáticas</option>
                                     <option value="camion_tolva">Camión Tolva</option>
                                     <option value="cuchara_grab">Cuchara (Grab) - Grúa Barco</option>
+                                    <option value="cuchara_portuaria">Cuchara (Grab) - Grúa Portuaria</option>
                                     <option value="grua_portuaria_30mt">Grúa Portuaria 30MT</option>
                                     <option value="big_bags_barco">Big Bags - Grúa Barco</option>
                                     <option value="big_bags_portuaria">Big Bags - Grúa Portuaria</option>
@@ -7938,6 +7943,9 @@
                                             </div>
                                             <input type="range" id="gruas-eficiencia-slider-pod" class="w-full accent-blue-600 h-1.5 cursor-pointer mt-1" value="100" min="1" max="100" step="1" oninput="syncEficienciaGrua('pod', 'slider')">
                                         </div>
+                                    </div>
+                                    <div id="gruas-derivacion-pod" class="mt-2 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-[10px] font-semibold text-blue-800">
+                                        Introduce los datos de grúa para derivar el RITMO REAL.
                                     </div>
                                 </div>
                             </div>
@@ -9273,8 +9281,8 @@
                                         </div>
                                     </div>
                                     <div>
-                                        <label for="shadow-break-even-freight" class="mb-1 block text-[10px] font-black uppercase text-emerald-300">Flete Minimo Necesario (Break-Even)</label>
-                                        <input id="shadow-break-even-freight" type="number" min="0" step="1000" class="input-gc w-full text-sm font-black text-emerald-300" readonly>
+                                        <label for="shadow-break-even-freight" class="mb-1 block text-[10px] font-black uppercase text-emerald-300">Flete Minimo Necesario (Break-Even USD Total · Viaje 2 Hipotético)</label>
+                                        <input id="shadow-break-even-freight" type="number" min="0" step="1000" class="input-gc w-full text-sm font-black text-emerald-300" readonly title="Break-even TOTAL en USD del segundo viaje hipotético (relet). No es el break-even $/MT del viaje activo: ese lo publica el motor principal.">
                                     </div>
                                     <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3 text-[10px] text-slate-400">
                                         <div class="flex justify-between gap-3"><span>Beneficio Neto Viaje 1</span><strong id="shadow-base-profit" class="mono text-slate-200">$0</strong></div>
@@ -30251,6 +30259,27 @@
             State.baseBreakEven = basicBreakEven;
             State.baseOperationalDays = baseOperationalDays;
             State.operacionModo = operacionModo;
+
+            // ==========================================
+            // FUENTE ÚNICA DE VERDAD FINANCIERA (Módulos 5, 7 y 10)
+            // Un solo objeto canónico publicado por el motor principal. Cualquier
+            // consumidor (Simulador de Negociación, DSS/Decisiones, Cost-Plus /
+            // TCE Inverso) DEBE leer de aquí y nunca reconstruir sus propios totales.
+            // ==========================================
+            State.voyageFinancials = {
+                totalVoyageCost: adjustedCostTotal,
+                baseVoyageCost: costTotal,
+                voyageCostWithoutEts: costTotalWithoutEts,
+                etsCost,
+                breakEvenFreight: breakEven,
+                breakEvenArmador: breakEvenArmadorDisplay,
+                breakEvenTotal: breakEven * (multiplier || 0),
+                basicBreakEven,
+                cargoQty: cargo,
+                multiplier,
+                commissionFactor,
+                source: 'runEngine'
+            };
             syncInverseTceFromVoyage(cargo, T_sea, T_port);
             if (typeof calculateInverseTce === 'function') {
                 calculateInverseTce();
@@ -30377,6 +30406,10 @@
                     totalCosts: State.totalCosts,
                     costTotal: State.costTotal,
                     costBreakdown: State.costBreakdown,
+                    voyageFinancials: State.voyageFinancials,
+                    breakEven: State.breakEven,
+                    breakEvenArmador: State.breakEvenArmador,
+                    baseVoyageCosts: State.baseVoyageCosts,
                     cargo: State.cargo,
                     stowageFactor: State.stowageFactor,
                     cargoTolerance: State.cargoTolerance,
@@ -30805,6 +30838,79 @@
         });
         window.estadoInicialDecisiones = estadoInicialDecisiones;
 
+        // ==========================================
+        // PROVEEDOR DE ESTADO GLOBAL CANÓNICO — MÓDULOS 5, 7 y 10
+        // Lee exclusivamente del estado publicado por el motor principal (runEngine).
+        // El DOM sólo se usa como último recurso si el motor aún no ha corrido.
+        // NUNCA se lee #shadow-break-even-freight: ese campo es el break-even TOTAL
+        // en USD de un segundo viaje hipotético (relet), no el break-even $/MT del
+        // viaje activo, y mezclarlos era el origen de la divergencia $96k vs $135k.
+        // ==========================================
+        function getCanonicalVoyageFinancials(sourceState) {
+            const st = sourceState
+                || ((typeof SeaCharterStore !== 'undefined' && SeaCharterStore && typeof SeaCharterStore.getState === 'function') ? SeaCharterStore.getState() : null)
+                || ((typeof State !== 'undefined') ? State : null)
+                || {};
+
+            const published = st.voyageFinancials || null;
+
+            const parseDomNumber = (id) => {
+                const el = document.getElementById(id);
+                if (!el) return 0;
+                const raw = el.textContent || el.innerText || el.value || '';
+                return Math.abs(parseFloat(String(raw).replace(/[^0-9.\-]/g, ''))) || 0;
+            };
+
+            const cargoQty = Math.max(
+                0,
+                Number(published?.cargoQty) || Number(st.cargo) || parseFloat(document.getElementById('cargo-qty')?.value) || 0
+            );
+
+            const totalVoyageCost = Math.max(0,
+                Number(published?.totalVoyageCost)
+                || Number(st.totalCosts)
+                || Number(st.costTotal)
+                || parseDomNumber('res-cost-total')
+                || 0);
+
+            const baseVoyageCost = Math.max(0,
+                Number(published?.baseVoyageCost)
+                || Number(st.baseVoyageCosts)
+                || totalVoyageCost);
+
+            // breakEvenFreight es SIEMPRE unitario ($/MT). Si el valor heredado viene
+            // como total en USD, se normaliza dividiendo por la carga.
+            let breakEvenFreight = Number(published?.breakEvenFreight)
+                || Number(st.breakEvenArmador)
+                || Number(st.breakEven)
+                || parseDomNumber('res-cost-base-break-even')
+                || 0;
+
+            if (breakEvenFreight > 1000 && cargoQty > 1) {
+                breakEvenFreight = breakEvenFreight / cargoQty;
+            }
+            breakEvenFreight = Math.max(0, breakEvenFreight);
+
+            const breakEvenTotal = Math.max(0,
+                Number(published?.breakEvenTotal) || (breakEvenFreight * cargoQty));
+
+            return {
+                totalVoyageCost,
+                baseVoyageCost,
+                voyageCostWithoutEts: Math.max(0, Number(published?.voyageCostWithoutEts) || baseVoyageCost),
+                etsCost: Math.max(0, Number(published?.etsCost) || Number(st.etsCost) || 0),
+                breakEvenFreight,
+                breakEvenArmador: Math.max(0, Number(published?.breakEvenArmador) || breakEvenFreight),
+                breakEvenTotal,
+                cargoQty,
+                isEngineAuthoritative: Boolean(published),
+                source: published ? 'runEngine' : 'dom-fallback'
+            };
+        }
+        if (typeof window !== 'undefined') {
+            window.getCanonicalVoyageFinancials = getCanonicalVoyageFinancials;
+        }
+
         function syncDecisionesFromCalculator() {
             try {
                 const pol = document.getElementById('port-pol')?.value || document.getElementById('map-port-pol')?.value || '';
@@ -30812,8 +30918,10 @@
                 const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
                 const commodity = document.getElementById('cargo-type-manual')?.value ? (window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value) || '') : '';
                 const laycanDaysLeft = parseFloat(document.getElementById('laycan-dias-libres')?.value) || 0;
-                const loadRate = parseFloat(document.getElementById('rate-load')?.value) || parseFloat(document.getElementById('load-rate')?.value) || 0;
-                const dischargeRate = parseFloat(document.getElementById('rate-disch')?.value) || parseFloat(document.getElementById('rate-discharge')?.value) || parseFloat(document.getElementById('discharge-rate')?.value) || 0;
+                const loadRate = (typeof calcularRitmoEfectivo === 'function' ? calcularRitmoEfectivo('pol') : 0)
+                    || parseFloat(document.getElementById('rate-load')?.value) || parseFloat(document.getElementById('load-rate')?.value) || 0;
+                const dischargeRate = (typeof calcularRitmoEfectivo === 'function' ? calcularRitmoEfectivo('pod') : 0)
+                    || parseFloat(document.getElementById('rate-disch')?.value) || parseFloat(document.getElementById('rate-discharge')?.value) || parseFloat(document.getElementById('discharge-rate')?.value) || 0;
                 const resDaysLadenText = document.getElementById('res-days-laden')?.textContent || document.getElementById('res-days-laden')?.innerText || '';
                 const resDaysLadenParsed = parseFloat(resDaysLadenText.replace(/[^0-9.]/g, '')) || 0;
 
@@ -30822,9 +30930,10 @@
                     : (resDaysLadenParsed || parseFloat(document.getElementById('shadow-navigation-days')?.value) || 0);
 
                 const fleteEstimado = parseFloat(document.getElementById('freight-sell')?.value) || parseFloat(document.getElementById('selling-freight')?.value) || 0;
-                const breakEvenText = document.getElementById('res-cost-base-break-even')?.textContent || '';
-                const breakEvenParsed = parseFloat(breakEvenText.replace(/[^0-9.]/g, '')) || 0;
-                const breakEven = parseFloat(document.getElementById('shadow-break-even-freight')?.value) || breakEvenParsed || 0;
+
+                // SSOT: break-even unitario ($/MT) y coste total de viaje desde el motor.
+                const canonical = getCanonicalVoyageFinancials();
+                const breakEven = canonical.breakEvenFreight;
 
                 const mainEnginePortDays = (typeof State !== 'undefined' && State && (State.portDays || State.totalPortDays || State.tPort))
                     ? Number(State.portDays || State.totalPortDays || State.tPort)
@@ -30841,7 +30950,19 @@
                 if (mainEngineSeaDays > 0 && document.getElementById('input-seaDays')) document.getElementById('input-seaDays').value = mainEngineSeaDays.toFixed(1);
                 if (mainEngineSeaDays > 0 && document.getElementById('input-estimatedVoyageDays')) document.getElementById('input-estimatedVoyageDays').value = mainEngineSeaDays.toFixed(1);
                 if (fleteEstimado && document.getElementById('input-fleteEstimado')) document.getElementById('input-fleteEstimado').value = fleteEstimado;
-                if (breakEven && document.getElementById('input-breakEven')) document.getElementById('input-breakEven').value = breakEven;
+                if (breakEven && document.getElementById('input-breakEven')) document.getElementById('input-breakEven').value = breakEven.toFixed(2);
+
+                // Propagar el coste total canónico al estado del DSS (Módulo 7).
+                if (typeof dssFormState !== 'undefined' && dssFormState) {
+                    dssFormState.totalVoyageCost = canonical.totalVoyageCost;
+                    dssFormState.breakEven = breakEven;
+                    dssFormState.breakEvenUnitario = breakEven;
+                }
+                if (typeof window !== 'undefined' && window.dssFormState) {
+                    window.dssFormState.totalVoyageCost = canonical.totalVoyageCost;
+                    window.dssFormState.breakEven = breakEven;
+                    window.dssFormState.breakEvenUnitario = breakEven;
+                }
             } catch (error) {
                 // Silencioso
             }
@@ -31126,8 +31247,14 @@
             const fleteUnitarioCalculado = rawFleteVal > 1000 ? rawFleteVal / qty : rawFleteVal;
             const fleteTotalCalculado = rawFleteVal > 1000 ? rawFleteVal : rawFleteVal * qty;
 
-            const breakEvenUnitarioCalculado = rawBreakEvenVal > 1000 ? rawBreakEvenVal / qty : rawBreakEvenVal;
-            const breakEvenTotalCalculado = rawBreakEvenVal > 1000 ? rawBreakEvenVal : rawBreakEvenVal * qty;
+            // SSOT: el break-even se toma del motor principal (siempre $/MT). La
+            // heurística ">1000" queda sólo como red de seguridad si el motor no ha
+            // corrido todavía; antes reinterpretaba el break-even TOTAL filtrado por
+            // el estimador sombra como coste de viaje, produciendo la divergencia.
+            const canonicalAudit = (typeof getCanonicalVoyageFinancials === 'function') ? getCanonicalVoyageFinancials() : null;
+            const breakEvenUnitarioCalculado = Number(canonicalAudit?.breakEvenFreight)
+                || (rawBreakEvenVal > 1000 ? rawBreakEvenVal / qty : rawBreakEvenVal);
+            const breakEvenTotalCalculado = breakEvenUnitarioCalculado * qty;
 
             const margenBruto = fleteTotalCalculado > 0 ? ((fleteTotalCalculado - breakEvenTotalCalculado) / fleteTotalCalculado) * 100 : 0;
             const esRentable = margenBruto >= 10 && fleteTotalCalculado >= breakEvenTotalCalculado;
@@ -31344,8 +31471,13 @@
             const safeLadenDays = Number(dssState?.ladenDays ?? dssState?.seaDays ?? dssState?.estimatedVoyageDays ?? 0) || 0;
             const totalBillableDays = safeLadenDays + safeBallast;
 
-            const safeBunker = Number(dssState?.totalBunkerCost ?? dssState?.bunkerCost ?? 0) || 0;
-            const safePort = Number(dssState?.totalPortDisbursements ?? dssState?.portDisbursements ?? dssState?.portCosts ?? 0) || 0;
+            // SSOT: si el DSS no trae costes directos propios, se toman del desglose
+            // publicado por el motor principal en lugar de asumir cero.
+            const engineBreakdown = (typeof State !== 'undefined' && State && State.costBreakdown) ? State.costBreakdown : {};
+            const safeBunker = Number(dssState?.totalBunkerCost ?? dssState?.bunkerCost
+                ?? engineBreakdown.bunkers ?? (typeof State !== 'undefined' ? State.costBunkers : 0) ?? 0) || 0;
+            const safePort = Number(dssState?.totalPortDisbursements ?? dssState?.portDisbursements ?? dssState?.portCosts
+                ?? engineBreakdown.pda ?? (typeof State !== 'undefined' ? State.costPda : 0) ?? 0) || 0;
             const totalDirectCosts = safeBunker + safePort;
 
             const safeMarketTCE = Number(globalMarketTCE) || 0;
@@ -32474,9 +32606,9 @@
             const portDays = parseFloat(inputPortDays?.value) || mainEnginePortDays;
 
             const rawFleteVal = parseFloat(inputFleteEstimado?.value) || parseFloat(document.getElementById('freight-sell')?.value) || 35;
-            const breakEvenText = document.getElementById('res-cost-base-break-even')?.textContent || '';
-            const breakEvenParsed = parseFloat(breakEvenText.replace(/[^0-9.]/g, '')) || 0;
-            const rawBreakEvenVal = parseFloat(inputBreakEven?.value) || parseFloat(document.getElementById('shadow-break-even-freight')?.value) || breakEvenParsed || 25;
+            // SSOT: el break-even proviene del motor, nunca del estimador sombra (relet).
+            const canonicalFinancials = (typeof getCanonicalVoyageFinancials === 'function') ? getCanonicalVoyageFinancials() : null;
+            const rawBreakEvenVal = parseFloat(inputBreakEven?.value) || Number(canonicalFinancials?.breakEvenFreight) || 25;
 
             const qty = Math.max(1, cargoQty);
             const fleteUnitario = rawFleteVal > 1000 ? rawFleteVal / qty : rawFleteVal;
@@ -32499,6 +32631,7 @@
                 breakEven: breakEvenUnitario,
                 fleteUnitario,
                 breakEvenUnitario,
+                totalVoyageCost: Number(canonicalFinancials?.totalVoyageCost) || 0,
                 vesselName: document.getElementById('vessel-name')?.value || 'MV GEARED BULKER'
             };
         }
@@ -32778,9 +32911,13 @@
             const computedPortDays = (activeDss.portDays !== undefined && activeDss.portDays !== null && !isNaN(parseFloat(activeDss.portDays))) ? parseFloat(activeDss.portDays) : mainEnginePortDays;
             
             const rawFleteVal = activeDss.fleteEstimado !== undefined ? parseFloat(activeDss.fleteEstimado) : (activeDss.fleteUnitario !== undefined ? parseFloat(activeDss.fleteUnitario) : (parseFloat(inputFleteEstimado?.value) || parseFloat(document.getElementById('freight-sell')?.value) || 35));
-            const breakEvenText = document.getElementById('res-cost-base-break-even')?.textContent || '';
-            const breakEvenParsed = parseFloat(breakEvenText.replace(/[^0-9.]/g, '')) || 0;
-            const rawBreakEvenVal = activeDss.breakEven !== undefined ? parseFloat(activeDss.breakEven) : (parseFloat(inputBreakEven?.value) || parseFloat(document.getElementById('shadow-break-even-freight')?.value) || breakEvenParsed || 25);
+            // SSOT: el break-even y el coste total de viaje provienen del motor principal.
+            // El estimador sombra (#shadow-break-even-freight) queda deliberadamente excluido:
+            // publica un break-even TOTAL en USD de un relet hipotético, no el $/MT del viaje.
+            const canonicalFinancials = (typeof getCanonicalVoyageFinancials === 'function') ? getCanonicalVoyageFinancials() : null;
+            const rawBreakEvenVal = activeDss.breakEven !== undefined
+                ? parseFloat(activeDss.breakEven)
+                : (Number(canonicalFinancials?.breakEvenFreight) || parseFloat(inputBreakEven?.value) || 25);
 
             const fallbackDwt = parseFloat(document.getElementById('vessel-dwt')?.value) || (typeof State !== 'undefined' ? parseFloat(State.dwt) : 0) || 50000;
             const dwt = parseFloat(activeDss.dwt || activeDss.vesselDwt) || fallbackDwt;
@@ -32805,6 +32942,8 @@
                 breakEven: breakEvenUnitario,
                 fleteUnitario,
                 breakEvenUnitario,
+                totalVoyageCost: Number(canonicalFinancials?.totalVoyageCost) || Number(activeDss.totalVoyageCost) || 0,
+                breakEvenTotal: breakEvenUnitario * qty,
                 vesselName,
                 dwt
             };
@@ -34639,8 +34778,15 @@
 
             const breakEvenText = document.getElementById('res-breakeven')?.textContent || '';
             const parsedBreakEven = parseFloat(breakEvenText.replace(/[^0-9.-]+/g, '')) || 0;
-            const baseBreakEven = Math.max(0, Number(State.breakEvenArmador || State.breakEven || parsedBreakEven) || 0);
-            const cargo = Math.max(0, Number(State.cargo || document.getElementById('cargo-qty')?.value) || 0);
+            // SSOT: break-even y coste total de viaje leídos del proveedor canónico.
+            const canonicalVoyage = (typeof getCanonicalVoyageFinancials === 'function')
+                ? getCanonicalVoyageFinancials()
+                : null;
+            const baseBreakEven = Math.max(0, Number(canonicalVoyage?.breakEvenArmador)
+                || Number(canonicalVoyage?.breakEvenFreight)
+                || Number(State.breakEvenArmador || State.breakEven || parsedBreakEven) || 0);
+            const totalVoyageCost = Math.max(0, Number(canonicalVoyage?.totalVoyageCost) || Number(State.totalCosts || State.costTotal) || 0);
+            const cargo = Math.max(0, Number(canonicalVoyage?.cargoQty || State.cargo || document.getElementById('cargo-qty')?.value) || 0);
             const costBreakdown = State.costBreakdown || {};
             const contingencyDays = Math.max(0, Number(State.costPlusContingencyDays || costBreakdown.contingencyDays) || 0);
             const baseDays = Math.max(0, Number(State.daysSea) || 0) + Math.max(0, Number(State.daysPort) || 0);
@@ -34833,6 +34979,8 @@
                 cargo,
                 baseBreakEven,
                 breakEven,
+                totalVoyageCost,
+                voyageFinancialsSource: canonicalVoyage?.source || 'state',
                 TargetSugerido,
                 voyageReference,
                 algorithmicStress,
@@ -34859,9 +35007,11 @@
         function applySuggestedNegotiationTarget() {
             const targetInput = document.getElementById('negotiation-charterer-target');
             if (!targetInput) return false;
-            const breakEvenText = document.getElementById('res-breakeven')?.textContent || '';
-            const parsedBreakEven = parseFloat(breakEvenText.replace(/[^0-9.-]+/g, '')) || 0;
-            const breakEven = Math.max(0, Number(State.breakEvenArmador || State.breakEven || parsedBreakEven) || 0);
+            // SSOT: mismo break-even que consume el simulador y el resto de módulos.
+            const canonicalVoyage = (typeof getCanonicalVoyageFinancials === 'function') ? getCanonicalVoyageFinancials() : null;
+            const breakEven = Math.max(0, Number(canonicalVoyage?.breakEvenArmador)
+                || Number(canonicalVoyage?.breakEvenFreight)
+                || Number(State.breakEvenArmador || State.breakEven) || 0);
             const TargetSugerido = Number(State.negotiationSimulator?.TargetSugerido) || calculateSuggestedNegotiationTarget(breakEven, 5);
             if (TargetSugerido <= 0) return false;
             targetInput.value = TargetSugerido.toFixed(2);
@@ -49795,11 +49945,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             container.innerHTML = allowedLabels.map((label) => {
                 const isActive = label === currentLabel;
+                // Estado activo inequívoco: fondo azul, borde grueso, anillo y check.
                 const btnClass = isActive
-                    ? 'px-3 py-1.5 text-xs font-bold rounded-full bg-blue-100 text-blue-800 border-2 border-blue-500 shadow-sm transition-all cursor-pointer'
-                    : 'px-3 py-1.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition-all cursor-pointer';
+                    ? 'method-pill method-pill-active px-3 py-1.5 text-xs font-bold rounded-full bg-blue-100 text-blue-800 border-2 border-blue-500 ring-2 ring-blue-300 ring-offset-1 shadow-md scale-[1.03] transition-all cursor-pointer'
+                    : 'method-pill px-3 py-1.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 hover:border-slate-300 transition-all cursor-pointer';
                 const safeLabel = label.replace(/'/g, "\\'");
-                return `<button type="button" class="${btnClass}" onclick="selectMethodPill('${side}', '${safeLabel}')">${label}</button>`;
+                const marker = isActive ? '<i class="fa-solid fa-circle-check mr-1 text-blue-600"></i>' : '';
+                const title = isActive ? ` title="Método activo: ${label}"` : '';
+                return `<button type="button" class="${btnClass}" data-method-label="${label}" data-active="${isActive ? 'true' : 'false'}" aria-pressed="${isActive ? 'true' : 'false'}"${title} onclick="selectMethodPill('${side}', '${safeLabel}')">${marker}${label}</button>`;
             }).join('');
 
             actualizarSubmoduloGruas(side);
@@ -49811,6 +49964,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const methodValue = METHOD_VALUE_BY_LABEL[label] || '';
 
             if (selectEl) {
+                // Blindaje: si el <option> no existe, el navegador descarta la asignación
+                // y el pill nunca queda marcado como activo. Se inyecta al vuelo.
+                if (methodValue && !Array.from(selectEl.options).some(o => o.value === methodValue)) {
+                    const opt = document.createElement('option');
+                    opt.value = methodValue;
+                    opt.textContent = label;
+                    selectEl.appendChild(opt);
+                }
                 selectEl.value = methodValue;
             }
 
@@ -49889,6 +50050,84 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
         }
 
+        // ==========================================
+        // MOTOR DERIVADO DE GRÚAS — FUENTE ÚNICA DE VERDAD DEL RITMO REAL
+        // Formula: (Carga por Ciclo * Ciclos/Hora * Eficiencia/100 * 24 * Nº Grúas)
+        // donde Carga por Ciclo = SWL - Tara.
+        // Devuelve null cuando el método no depende de grúas o los datos físicos
+        // son incompletos, para que el consumidor pueda usar el ritmo base.
+        // ==========================================
+        function calcularRitmoGruaTeorico(side = 'pol') {
+            const label = getSelectedMethodLabel(side);
+            if (!isCraneMethod(label)) return null;
+
+            const swlId = side === 'pod' ? 'gruas-swl-pod' : 'gruas-swl-pol';
+            const taraId = side === 'pod' ? 'gruas-tara-pod' : 'gruas-tara-pol';
+            const ciclosId = side === 'pod' ? 'gruas-ciclos-pod' : 'gruas-ciclos-pol';
+            const eficienciaId = side === 'pod' ? 'gruas-eficiencia-num-pod' : 'gruas-eficiencia-num-pol';
+
+            const swl = Math.max(0, parseFloat(document.getElementById(swlId)?.value) || 30);
+            const tara = Math.max(0, parseFloat(document.getElementById(taraId)?.value) || 0);
+            const ciclosHora = Math.max(0, parseFloat(document.getElementById(ciclosId)?.value) || 0);
+            const eficiencia = Math.min(100, Math.max(1, parseFloat(document.getElementById(eficienciaId)?.value) || 100));
+            const nGruas = readNumeroGruasPuerto(side);
+
+            const cargaPorCiclo = swl - tara;
+            if (!(cargaPorCiclo > 0) || !(ciclosHora > 0) || !(nGruas > 0)) return null;
+
+            // Formula with friction: Math.round((((SWL - Tara) * Ciclos/Hora * 24) * Nº Grúas) * (Eficiencia / 100))
+            const ritmoCalculado = Math.max(0, Math.round((((swl - tara) * ciclosHora * 24) * nGruas) * (eficiencia / 100)));
+            return ritmoCalculado > 0 ? ritmoCalculado : null;
+        }
+
+        function publicarRitmoRealEnEstado(side = 'pol', ritmo = 0) {
+            const value = Math.max(0, Number(ritmo) || 0);
+            const stateKey = side === 'pod' ? 'dischRate' : 'loadRate';
+            const legacyKey = side === 'pod' ? 'ritmoRealPod' : 'ritmoRealPol';
+            if (typeof State !== 'undefined' && State) {
+                State[stateKey] = value;
+                State[legacyKey] = value;
+            }
+            if (typeof SeaCharterStore !== 'undefined' && SeaCharterStore && typeof SeaCharterStore.set === 'function') {
+                SeaCharterStore.set({ [stateKey]: value, [legacyKey]: value }, { silent: true });
+            }
+            const dssInputId = side === 'pod' ? 'input-dischargeRate' : 'input-loadRate';
+            const dssInput = document.getElementById(dssInputId);
+            if (dssInput && value > 0) dssInput.value = String(value);
+            const dssKey = side === 'pod' ? 'dischargeRate' : 'loadRate';
+            if (typeof dssFormState !== 'undefined' && dssFormState && value > 0) dssFormState[dssKey] = value;
+            if (typeof window !== 'undefined' && window.dssFormState && value > 0) window.dssFormState[dssKey] = value;
+            return value;
+        }
+
+        function renderDerivacionGrua(side = 'pol', ritmo = null) {
+            const el = document.getElementById(side === 'pod' ? 'gruas-derivacion-pod' : 'gruas-derivacion-pol');
+            if (!el) return;
+
+            const swlId = side === 'pod' ? 'gruas-swl-pod' : 'gruas-swl-pol';
+            const taraId = side === 'pod' ? 'gruas-tara-pod' : 'gruas-tara-pol';
+            const ciclosId = side === 'pod' ? 'gruas-ciclos-pod' : 'gruas-ciclos-pol';
+            const eficienciaId = side === 'pod' ? 'gruas-eficiencia-num-pod' : 'gruas-eficiencia-num-pol';
+
+            const swl = Math.max(0, parseFloat(document.getElementById(swlId)?.value) || 0);
+            const tara = Math.max(0, parseFloat(document.getElementById(taraId)?.value) || 0);
+            const ciclosHora = Math.max(0, parseFloat(document.getElementById(ciclosId)?.value) || 0);
+            const eficiencia = Math.min(100, Math.max(1, parseFloat(document.getElementById(eficienciaId)?.value) || 100));
+            const nGruas = readNumeroGruasPuerto(side);
+            const cargaPorCiclo = Math.max(0, swl - tara);
+
+            if (!(ritmo > 0)) {
+                el.className = 'mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] font-semibold text-amber-800';
+                el.textContent = 'Datos de grúa incompletos: el RITMO REAL usa el ritmo nominal del método.';
+                return;
+            }
+
+            el.className = 'mt-2 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-[10px] font-semibold text-blue-800';
+            el.innerHTML = `<i class="fa-solid fa-arrow-right-long mr-1"></i>RITMO REAL derivado: `
+                + `<strong>${ritmo.toLocaleString('es-ES')} TM/día</strong> `
+                + `<span class="font-normal text-blue-700">= ${cargaPorCiclo.toLocaleString('es-ES')} MT/ciclo × ${ciclosHora} ciclos/h × 24 h × ${nGruas} grúa(s) × ${eficiencia}% eficiencia</span>`;
+        }
+
         function calcularRitmoGrua(side = 'pol') {
             const label = getSelectedMethodLabel(side);
             if (!isCraneMethod(label)) return;
@@ -49906,29 +50145,26 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     rateInput.disabled = false;
                     rateInput.removeAttribute('readonly');
                     rateInput.removeAttribute('disabled');
+                    publicarRitmoRealEnEstado(side, parseFloat(rateInput.value) || 0);
                 }
                 return;
             }
 
             const swlId = side === 'pod' ? 'gruas-swl-pod' : 'gruas-swl-pol';
-            const taraId = side === 'pod' ? 'gruas-tara-pod' : 'gruas-tara-pol';
-            const ciclosId = side === 'pod' ? 'gruas-ciclos-pod' : 'gruas-ciclos-pol';
-            const eficienciaId = side === 'pod' ? 'gruas-eficiencia-num-pod' : 'gruas-eficiencia-num-pol';
-
             const swl = Math.max(0, parseFloat(document.getElementById(swlId)?.value) || 30);
-            const tara = Math.max(0, parseFloat(document.getElementById(taraId)?.value) || 0);
-            const ciclosHora = Math.max(0, parseFloat(document.getElementById(ciclosId)?.value) || 0);
-            const eficiencia = Math.min(100, Math.max(1, parseFloat(document.getElementById(eficienciaId)?.value) || 100));
-            const nGruas = readNumeroGruasPuerto(side);
 
-            // Formula with friction: Math.round((((SWL - Tara) * Ciclos/Hora * 24) * Nº Grúas) * (Eficiencia / 100))
-            const ritmoCalculado = Math.max(0, Math.round((((swl - tara) * ciclosHora * 24) * nGruas) * (eficiencia / 100)));
+            // Ritmo derivado directamente de la física de grúas declarada por el usuario.
+            const ritmoCalculado = calcularRitmoGruaTeorico(side) || 0;
 
             if (rateInput) {
                 rateInput.value = String(ritmoCalculado);
                 rateInput.readOnly = true;
                 setRitmoManualIndicator(side, false);
             }
+
+            // Inyección inmediata en el estado global para que laytime y OPEX cascadeen.
+            publicarRitmoRealEnEstado(side, ritmoCalculado);
+            renderDerivacionGrua(side, ritmoCalculado);
 
             const craneSwlMtEl = document.getElementById('crane-swl-mt');
             if (craneSwlMtEl && swl > 0) {
@@ -50890,6 +51126,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (isCustomPortMethod(metodo) || rateInput?.dataset.manualOverride === 'true') {
                 return enteredRate;
             }
+
+            // FUENTE ÚNICA DE VERDAD: si el método depende de grúas, el ritmo real es
+            // el derivado de la física declarada (SWL/Tara/Ciclos/Eficiencia/Nº Grúas),
+            // no el ritmo nominal de tabla. Esto cascadea a laytime, OPEX y CAPEX.
+            const ritmoGrua = (typeof calcularRitmoGruaTeorico === 'function') ? calcularRitmoGruaTeorico(side) : null;
+            if (ritmoGrua !== null && ritmoGrua > 0) {
+                return ritmoGrua;
+            }
+
             const ritmoUnitario = getRitmoBasePuerto(metodo);
             const numeroGruas = readNumeroGruasPuerto(side);
             return metodoPuertoUsaGruas(metodo) ? ritmoUnitario * numeroGruas : ritmoUnitario;
@@ -51291,6 +51536,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     }
                     input.dataset[datasetKey] = metodo;
                 }
+                // Publicar el ritmo efectivo (grúas incluidas) como fuente única de verdad.
+                if (typeof publicarRitmoRealEnEstado === 'function') {
+                    publicarRitmoRealEnEstado(s, Math.max(0, parseFloat(input?.value) || ritmoReal));
+                }
                 actualizarCampoGruasPuerto(s);
             });
 
@@ -51325,6 +51574,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.selectMethodPill = selectMethodPill;
             window.actualizarSubmoduloGruas = actualizarSubmoduloGruas;
             window.calcularRitmoGrua = calcularRitmoGrua;
+            window.calcularRitmoGruaTeorico = calcularRitmoGruaTeorico;
+            window.publicarRitmoRealEnEstado = publicarRitmoRealEnEstado;
+            window.renderDerivacionGrua = renderDerivacionGrua;
             window.onCargoCategoryChange = onCargoCategoryChange;
             window.handleCargoCategoryChange = handleCargoCategoryChange;
             window.GENCON_CONDITION_OPTIONS = GENCON_CONDITION_OPTIONS;
@@ -53469,7 +53721,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.calculateNegotiationAlgorithmicStress = calculateNegotiationAlgorithmicStress;
 
         function getSharedVoyageCostBasis(sourceState = SeaCharterStore.getState()) {
-            const totalCosts = Math.max(0, safeCalculationNumber(sourceState?.totalCosts ?? sourceState?.costTotal));
+            // SSOT: el coste total y el break-even provienen del proveedor canónico
+            // publicado por runEngine, de modo que Cost-Plus / TCE Inverso (Módulo 10)
+            // muestren exactamente la misma cifra que Negociación (5) y el DSS (7).
+            const canonical = (typeof getCanonicalVoyageFinancials === 'function')
+                ? getCanonicalVoyageFinancials(sourceState)
+                : null;
+            const totalCosts = Math.max(0, safeCalculationNumber(
+                canonical?.totalVoyageCost ?? sourceState?.totalCosts ?? sourceState?.costTotal
+            ));
             const breakdown = sourceState?.costBreakdown || {};
             const includesPositioning = Boolean(breakdown.includesPositioning || safeCalculationNumber(sourceState?.distBallast) > 0);
             const includesEts = safeCalculationNumber(breakdown.ets ?? sourceState?.etsCost) > 0;
@@ -53482,6 +53742,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return {
                 totalCosts,
                 breakdown,
+                breakEvenFreight: Math.max(0, safeCalculationNumber(canonical?.breakEvenFreight)),
+                cargoQty: Math.max(0, safeCalculationNumber(canonical?.cargoQty ?? sourceState?.cargo)),
                 disclosure: includedCosts.length
                     ? `Incluye ${includedCosts.join(', ')}. Misma base usada por Negociación.`
                     : 'Base global compartida con Negociación.'
