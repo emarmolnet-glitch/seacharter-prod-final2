@@ -4,7 +4,12 @@ import {
   calculateMarketFreightWithRisk,
   dssCommitSchema,
   handleCommitConditions,
-  isExportDeficitPOD
+  isExportDeficitPOD,
+  jwcRiskKeywords,
+  isJWCRiskZone,
+  evaluateJWCRisk,
+  calculateAutoExportDeficitBallast,
+  calculateAllInFreightGross
 } from './dss-risk-module.mjs';
 
 export {
@@ -12,7 +17,12 @@ export {
   calculateMarketFreightWithRisk,
   dssCommitSchema,
   handleCommitConditions,
-  isExportDeficitPOD
+  isExportDeficitPOD,
+  jwcRiskKeywords,
+  isJWCRiskZone,
+  evaluateJWCRisk,
+  calculateAutoExportDeficitBallast,
+  calculateAllInFreightGross
 };
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -21,7 +31,11 @@ if (typeof module !== 'undefined' && module.exports) {
     calculateMarketFreightWithRisk,
     dssCommitSchema,
     handleCommitConditions,
-    isExportDeficitPOD
+    isExportDeficitPOD,
+    jwcRiskKeywords,
+    isJWCRiskZone,
+    evaluateJWCRisk,
+    calculateAutoExportDeficitBallast,
+    calculateAllInFreightGross
   };
 }
-

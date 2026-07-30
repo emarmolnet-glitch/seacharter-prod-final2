@@ -178,13 +178,17 @@
                                 </div>
                             </div>
                             <div class="sm:col-span-3 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
-                                <label class="flex items-center gap-2 cursor-pointer font-semibold text-slate-200 select-none">
-                                    <input type="checkbox" id="input-jwlaRiskActive" onchange="toggleJWLAInput(); actualizarDesdeFormulario();" class="w-4 h-4 text-amber-500 rounded border-slate-700 focus:ring-amber-500">
-                                    <span>Ruta en Zona JWLA (Joint War Committee)</span>
-                                </label>
-                                <div id="container-jwlaPremiumUSD" class="hidden items-center gap-2">
-                                    <label for="input-jwlaPremiumUSD" class="text-slate-300 font-medium">Prima JWLA ($):</label>
-                                    <input type="number" id="input-jwlaPremiumUSD" value="0" step="100" min="0" oninput="actualizarDesdeFormulario()" class="w-32 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 font-bold focus:outline-none focus:border-amber-500">
+                                <div class="flex items-center gap-2 font-semibold text-slate-200 select-none text-xs">
+                                    <input type="checkbox" id="input-jwlaRiskActive" class="hidden" disabled>
+                                    <i class="fa-solid fa-shield-halved text-amber-400"></i>
+                                    <span>Ruta JWC (Joint War Committee):</span>
+                                    <span id="badge-jwc-auto-status" class="px-2.5 py-1 text-xs font-bold rounded-lg border bg-slate-700/60 text-slate-400 border-slate-600/50">
+                                        NORMAL (Sin Recargo Geopolítico)
+                                    </span>
+                                </div>
+                                <div id="container-jwlaPremiumUSD" class="flex items-center gap-2">
+                                    <label for="input-jwlaPremiumUSD" class="text-slate-300 font-medium text-xs">Prima JWLA ($):</label>
+                                    <input type="number" id="input-jwlaPremiumUSD" value="0" step="100" min="0" oninput="actualizarDesdeFormulario()" class="w-32 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 font-bold text-xs focus:outline-none focus:border-amber-500">
                                 </div>
                             </div>
                             <div>
@@ -196,6 +200,54 @@
                                 <input type="number" id="input-actualCargoIntake" value="50000" step="100" min="1" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- PANEL DESTACADO: FLETE ORIENTATIVO ALL-IN (FLOOR RATE) GROSS -->
+                <div id="section-flete-all-in-gross" class="mt-4 p-4 bg-slate-900/90 border border-emerald-500/40 rounded-xl shadow-lg transition-all duration-200">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 font-extrabold text-xs rounded-lg border border-emerald-500/30 flex items-center gap-1.5">
+                                <i class="fa-solid fa-chart-line text-emerald-400"></i>
+                                <span>DSS ALL-IN RATE ENGINE</span>
+                            </span>
+                            <h3 class="text-sm font-bold text-white">Flete Orientativo ALL-IN (Floor Rate) Gross</h3>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div id="badge-jwc-risk" class="hidden px-2.5 py-1 bg-amber-500/20 text-amber-300 font-bold text-xs rounded-lg border border-amber-500/40 flex items-center gap-1">
+                                <i class="fa-solid fa-shield-halved text-amber-400"></i>
+                                <span>Zona JWC (Riesgo Geopolítico)</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs mb-3">
+                        <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700">
+                            <span class="text-slate-400 block text-[11px]">Flete Neto Base ($/MT)</span>
+                            <strong id="display-net-freight" class="text-slate-200 font-extrabold text-sm">$0.00</strong>
+                        </div>
+                        <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700">
+                            <span class="text-slate-400 block text-[11px]">Recargo JWC / Lastre ($)</span>
+                            <strong id="display-surcharges-total" class="text-amber-300 font-extrabold text-sm">$0</strong>
+                        </div>
+                        <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700">
+                            <span class="text-slate-400 block text-[11px]">Gross-Up Comisiones (%)</span>
+                            <strong id="display-commission-pct" class="text-slate-200 font-extrabold text-sm">5.0%</strong>
+                        </div>
+                        <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700 flex flex-col justify-between">
+                            <span class="text-slate-300 font-bold text-[11px]">FLETE ALL-IN GROSS</span>
+                            <strong id="display-all-in-gross" class="text-emerald-400 font-bold text-xl">$0.00 / MT</strong>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800">
+                        <span class="text-[11px] text-slate-400 font-medium">
+                            Cálculo aislado en DSS modo solo-lectura (no muta calculadoras base).
+                        </span>
+                        <button type="button" id="btn-aplicar-condiciones-recap" onclick="aplicarCondicionesAlRecap()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer">
+                            <i class="fa-solid fa-file-contract"></i>
+                            <span>Aplicar Condiciones al Recap</span>
+                        </button>
                     </div>
                 </div>
 
@@ -907,14 +959,13 @@
 
         function differenceInDays(date1, date2) {
             if (!date1 || !date2) return 0;
-            const d1 = date1 instanceof Date ? date1 : new Date(date1);
-            const d2 = date2 instanceof Date ? date2 : new Date(date2);
+            const d1 = date1 instanceof Date ? new Date(date1.getTime()) : new Date(date1);
+            const d2 = date2 instanceof Date ? new Date(date2.getTime()) : new Date(date2);
             if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return 0;
+            d1.setHours(0, 0, 0, 0);
+            d2.setHours(0, 0, 0, 0);
             const diff = (d1.getTime() - d2.getTime()) / 86400000;
-            if (Math.abs(diff - Math.round(diff)) < 0.0001) {
-                return Math.round(diff);
-            }
-            return Math.round(diff * 10) / 10;
+            return Math.round(diff);
         }
         if (typeof window !== 'undefined') {
             window.differenceInDays = differenceInDays;
@@ -1218,6 +1269,157 @@
             window.evaluarAlertaDeficitPOD = evaluarAlertaDeficitPOD;
         }
 
+        const jwcRiskKeywords = [
+            "RED SEA", "MAR ROJO", "BLACK SEA", "MAR NEGRO", "PERSIAN GULF", "GOLFO PERSICO",
+            "YEMEN", "UKRAINE", "UCRANIA", "RUSSIA", "RUSIA", "ISRAEL", "LEBANON", "LIBANO",
+            "BAB EL-MANDEB", "BAB EL MANDEB", "HORMUZ", "GULF OF ADEN", "GOLFO DE ADEN",
+            "SOMALIA", "SUDAN", "SYRIA", "SIRIA", "PORT SAID", "SUEZ", "HODEIDAH", "HUDAYDAH",
+            "NOVOROSSIYSK", "ODESA", "ODESSA", "HAIFA", "ASHDOD", "SEVASTOPOL", "CHORNOMORSK",
+            "IRAN", "IRAQ", "STRAIT OF HORMUZ", "AZOV", "MAR DE AZOV"
+        ];
+
+        function isJWCRiskZone(portInput) {
+            if (!portInput) return false;
+            let str = '';
+            if (typeof portInput === 'string') {
+                str = portInput;
+            } else if (typeof portInput === 'object' && portInput !== null) {
+                str = portInput.name || portInput.pol || portInput.pod || portInput.port || portInput.country || portInput.region || '';
+            }
+            if (!str) return false;
+            const rawUpper = String(str).toUpperCase().trim();
+            const normalizedUpper = rawUpper.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            return jwcRiskKeywords.some(kw => rawUpper.includes(kw) || normalizedUpper.includes(kw));
+        }
+
+        function evaluateJWCRisk(polInput, podInput) {
+            const polRisk = isJWCRiskZone(polInput);
+            const podRisk = isJWCRiskZone(podInput);
+            const isRisk = polRisk || podRisk;
+            const zoneName = polRisk ? String(polInput) : (podRisk ? String(podInput) : null);
+            return { isRisk, zoneName, polRisk, podRisk };
+        }
+
+        function calculateAutoExportDeficitBallast(podInput, manualBallastDays = 0, defaultAutoDays = 4.0) {
+            const isDeficit = typeof isExportDeficitPOD === 'function' ? isExportDeficitPOD(podInput) : false;
+            const manual = Number(manualBallastDays) || 0;
+            if (manual > 0) {
+                return { isDeficitApplied: false, isDeficitPOD: isDeficit, ballastDays: manual, autoCalculated: false };
+            }
+            if (isDeficit) {
+                return { isDeficitApplied: true, isDeficitPOD: true, ballastDays: defaultAutoDays, autoCalculated: true };
+            }
+            return { isDeficitApplied: false, isDeficitPOD: false, ballastDays: 0, autoCalculated: false };
+        }
+
+        function calculateAllInFreightGross(dssState = {}, options = {}) {
+            const safeIntake = (Number(dssState.actualCargoIntake) > 0)
+                ? Number(dssState.actualCargoIntake)
+                : (Number(dssState.targetCargoMT || dssState.cargoQty || dssState.cargo || dssState.tons) || 50000);
+
+            const pol = dssState.pol || options.pol || '';
+            const pod = dssState.pod || options.pod || '';
+
+            const jwcEval = evaluateJWCRisk(pol, pod);
+            const isJwcActive = Boolean(dssState.jwlaRiskActive || dssState.jwcRiskActive || jwcEval.isRisk);
+            const defaultJwcPrem = options.defaultJwcPremium ?? 15000;
+            const jwcPremiumUSD = isJwcActive
+                ? (Number(dssState.jwlaPremiumUSD || dssState.jwcPremiumUSD) || defaultJwcPrem)
+                : 0;
+
+            const manualBallast = Number(dssState.ballastDays) || 0;
+            const deficitEval = calculateAutoExportDeficitBallast(pod, manualBallast, options.defaultAutoBallastDays || 4.0);
+            const effectiveBallastDays = deficitEval.ballastDays;
+
+            const ladenDays = Number(dssState.ladenDays ?? dssState.seaDays ?? dssState.estimatedVoyageDays ?? 8) || 0;
+            const portDays = Number(dssState.portDays ?? dssState.totalPortDays ?? 10) || 0;
+            const baseVoyageDays = ladenDays + portDays;
+            const totalDaysWithBallast = baseVoyageDays + effectiveBallastDays;
+
+            const bunkerCost = Number(dssState.totalBunkerCost ?? dssState.bunkerCost ?? 0) || 0;
+            const portCost = Number(dssState.totalPortDisbursements ?? dssState.portDisbursements ?? dssState.portCosts ?? 0) || 0;
+            const totalVoyageCosts = bunkerCost + portCost;
+
+            const calculationMode = options.mode || dssState.calculationMode || (dssState.targetTCE || dssState.tceTarget ? 'inversa_tce' : 'cost_plus');
+            
+            let dailyRate = 0;
+            if (calculationMode === 'inversa_tce') {
+                dailyRate = Number(dssState.targetTCE || dssState.tceTarget || dssState.globalMarketTCE || 18000);
+            } else {
+                dailyRate = Number(dssState.opex || dssState.opexDaily || dssState.opex_fijo_diario || 6000);
+            }
+
+            const timeCharterCost = dailyRate * totalDaysWithBallast;
+            const totalNetVoyageCost = timeCharterCost + totalVoyageCosts + jwcPremiumUSD;
+            const netFreightRate = safeIntake > 0 ? (totalNetVoyageCost / safeIntake) : 0;
+
+            const totalCommissionPct = Number(dssState.totalCommission ?? dssState.commissionPct ?? dssState.comisionTotal ?? 5.0);
+            const commissionDecimal = totalCommissionPct / 100;
+            const grossFactor = (commissionDecimal < 1 && commissionDecimal >= 0) ? (1 - commissionDecimal) : 0.95;
+            const allInRateGross = netFreightRate / grossFactor;
+
+            const ballastCostUSD = dailyRate * effectiveBallastDays;
+
+            return {
+                netFreightRate: Number(netFreightRate.toFixed(2)),
+                allInRateGross: Number(allInRateGross.toFixed(2)),
+                jwcRiskActive: isJwcActive,
+                jwcPremiumUSD,
+                jwcZone: jwcEval.zoneName,
+                isExportDeficit: deficitEval.isDeficitPOD,
+                autoBallastApplied: deficitEval.autoCalculated,
+                effectiveBallastDays,
+                ballastCostUSD,
+                totalCommissionPct,
+                calculationMode,
+                totalDaysWithBallast,
+                safeIntake
+            };
+        }
+
+        function aplicarCondicionesAlRecap() {
+            const currentState = typeof getDSSCurrentState === 'function' ? getDSSCurrentState() : (window.dssFormState || {});
+            const allInResult = calculateAllInFreightGross(currentState);
+            const demurrageRate = (typeof State !== 'undefined' && State && State.demurrage) ? Number(State.demurrage) : 15000;
+
+            window.dssInjectedRecapFreight = allInResult.allInRateGross;
+            window.dssInjectedRecapDemurrage = demurrageRate;
+            window.dssInjectedJwcActive = allInResult.jwcRiskActive;
+
+            if (typeof State !== 'undefined' && State) {
+                State.allInRateGross = allInResult.allInRateGross;
+                State.demurrage = demurrageRate;
+                State.jwcActive = allInResult.jwcRiskActive;
+            }
+
+            if (typeof buildFixtureRecapHTMLTemplate === 'function') {
+                const recapContainer = document.getElementById('fixture-recap-preview-container') || document.getElementById('contenedor-recap');
+                if (recapContainer) {
+                    recapContainer.innerHTML = buildFixtureRecapHTMLTemplate({
+                        ...currentState,
+                        allInRateGross: allInResult.allInRateGross,
+                        demurrageRate,
+                        jwlaRiskActive: allInResult.jwcRiskActive
+                    });
+                }
+            }
+
+            if (typeof showToast === 'function') {
+                showToast(`✅ Condiciones del DSS aplicadas al Recap (Flete ALL-IN Gross: $${allInResult.allInRateGross.toFixed(2)}/MT, Demurrage: $${demurrageRate.toLocaleString('en-US')}/día)`);
+            } else {
+                alert(`Condiciones inyectadas al Fixture Recap:\n• Flete ALL-IN Gross: $${allInResult.allInRateGross.toFixed(2)} / MT\n• Demurrage Recomendado: $${demurrageRate.toLocaleString('en-US')} / día`);
+            }
+        }
+
+        if (typeof window !== 'undefined') {
+            window.jwcRiskKeywords = jwcRiskKeywords;
+            window.isJWCRiskZone = isJWCRiskZone;
+            window.evaluateJWCRisk = evaluateJWCRisk;
+            window.calculateAutoExportDeficitBallast = calculateAutoExportDeficitBallast;
+            window.calculateAllInFreightGross = calculateAllInFreightGross;
+            window.aplicarCondicionesAlRecap = aplicarCondicionesAlRecap;
+        }
+
         /**
          * Sincroniza las entradas del formulario interactivo con dssFormState y ejecuta la auditoría.
          * Recalcula inmediatamente las variables dependientes (Fórmula obligatoria: Días de Puerto = Carga / Ritmo Carga + Carga / Ritmo Descarga)
@@ -1242,16 +1444,55 @@
             const inputJwlaPremiumUSD = document.getElementById('input-jwlaPremiumUSD');
             const inputActualCargoIntake = document.getElementById('input-actualCargoIntake');
 
+            const polVal = inputPol ? inputPol.value : 'Rotterdam';
+            const podVal = inputPod ? inputPod.value : 'Houston';
             const cargoQty = inputCargoQty ? Number(inputCargoQty.value) : 50000;
             const loadRate = inputLoadRate ? Math.max(1, Number(inputLoadRate.value) || 1) : 5000;
             const dischargeRate = inputDischargeRate ? Math.max(1, Number(inputDischargeRate.value) || 1) : loadRate;
 
-            const ballastDays = inputBallastDays ? (Number(inputBallastDays.value) || 0) : 0;
-            const jwlaRiskActive = inputJwlaRiskActive ? Boolean(inputJwlaRiskActive.checked) : false;
-            const jwlaPremiumUSD = inputJwlaPremiumUSD ? (Number(inputJwlaPremiumUSD.value) || 0) : 0;
+            let ballastDays = inputBallastDays ? (Number(inputBallastDays.value) || 0) : 0;
+            let jwlaPremiumUSD = inputJwlaPremiumUSD ? (Number(inputJwlaPremiumUSD.value) || 0) : 0;
             const actualCargoIntake = inputActualCargoIntake ? (Number(inputActualCargoIntake.value) || cargoQty) : cargoQty;
 
-            // Mapeo directo desde el motor principal para Port Days y Sea Days (sin divisiones brutas)
+            // Vincular estrictamente el Flete Neto Base al output real de la calculadora activa
+            const activeCalcFreight = (typeof State !== 'undefined' && State && (Number(State.freightSell) > 0 || Number(State.fleteUnitario) > 0 || Number(State.fleteEstimado) > 0 || Number(State.freightRate) > 0))
+                ? Number(State.freightSell || State.fleteUnitario || State.fleteEstimado || State.freightRate)
+                : (parseFloat(document.getElementById('freight-sell')?.value) || 35);
+
+            if (inputFleteEstimado) {
+                inputFleteEstimado.value = activeCalcFreight.toFixed(2);
+            }
+
+            const fleteBaseUnitario = activeCalcFreight;
+
+            // Evaluacion de Riesgo JWC e Inyeccion Automatica
+            const jwcEval = evaluateJWCRisk(polVal, podVal);
+            let jwlaRiskActive = jwcEval.isRisk;
+            const jwcBadgeStatus = document.getElementById('badge-jwc-auto-status');
+
+            if (jwcEval.isRisk) {
+                if (jwlaPremiumUSD === 0) {
+                    jwlaPremiumUSD = 15000;
+                    if (inputJwlaPremiumUSD) inputJwlaPremiumUSD.value = '15000';
+                }
+                if (jwcBadgeStatus) {
+                    jwcBadgeStatus.className = 'px-2.5 py-1 text-xs font-bold rounded-lg border bg-amber-500/20 text-amber-300 border-amber-500/40';
+                    jwcBadgeStatus.textContent = 'ACTIVA (Zona de Riesgo Geopolítico)';
+                }
+            } else {
+                jwlaPremiumUSD = 0;
+                if (inputJwlaPremiumUSD) inputJwlaPremiumUSD.value = '0';
+                if (jwcBadgeStatus) {
+                    jwcBadgeStatus.className = 'px-2.5 py-1 text-xs font-bold rounded-lg border bg-slate-700/60 text-slate-400 border-slate-600/50';
+                    jwcBadgeStatus.textContent = 'NORMAL (Sin Recargo Geopolítico)';
+                }
+            }
+            if (inputJwlaRiskActive) inputJwlaRiskActive.checked = jwlaRiskActive;
+
+            // Evaluacion de Lastre Automatico por Deficit de Exportacion
+            const deficitEval = calculateAutoExportDeficitBallast(podVal, ballastDays, 4.0);
+
+            // Mapeo directo desde el motor principal para Port Days y Sea Days
             const mainEnginePortDays = (typeof State !== 'undefined' && State && (State.portDays || State.totalPortDays || State.tPort))
                 ? Number(State.portDays || State.totalPortDays || State.tPort)
                 : (parseFloat(document.getElementById('res-days-port')?.innerText) || 10);
@@ -1282,8 +1523,8 @@
             }
 
             dssFormState = {
-                pol: inputPol ? inputPol.value : 'Rotterdam',
-                pod: inputPod ? inputPod.value : 'Houston',
+                pol: polVal,
+                pod: podVal,
                 cargoQty,
                 targetCargoMT: cargoQty,
                 commodity: inputCommodity ? inputCommodity.value : 'Siderúrgico / Carga General',
@@ -1294,19 +1535,41 @@
                 portDays: portDaysVal,
                 seaDays: seaDaysVal,
                 ladenDays: seaDaysVal,
-                fleteEstimado: inputFleteEstimado ? Number(inputFleteEstimado.value) : 35,
+                fleteEstimado: fleteBaseUnitario,
                 breakEven: inputBreakEven ? Number(inputBreakEven.value) : 25,
-                fleteUnitario: inputFleteEstimado ? Number(inputFleteEstimado.value) : 35,
+                fleteUnitario: fleteBaseUnitario,
+                baseNetFreight: fleteBaseUnitario,
+                freightSell: fleteBaseUnitario,
                 breakEvenUnitario: inputBreakEven ? Number(inputBreakEven.value) : 25,
                 ballastDays,
                 jwlaRiskActive,
                 jwlaPremiumUSD,
-                actualCargoIntake: actualCargoIntake > 0 ? actualCargoIntake : cargoQty
+                actualCargoIntake: actualCargoIntake > 0 ? actualCargoIntake : cargoQty,
+                cancellingDate: (typeof dssSimulationState !== 'undefined' && dssSimulationState && dssSimulationState.cancellingDate) ? dssSimulationState.cancellingDate : ((typeof State !== 'undefined' && State) ? State.cancellingDate : undefined),
+                etaDate: (typeof dssSimulationState !== 'undefined' && dssSimulationState && dssSimulationState.etaDate) ? dssSimulationState.etaDate : undefined
             };
+
+            const allInResult = calculateAllInFreightGross(dssFormState);
+            dssFormState.netFreightRate = allInResult.netFreightRate;
+            dssFormState.totalNetRate = allInResult.totalNetRate;
+            dssFormState.allInRateGross = allInResult.allInRateGross;
 
             if (typeof window !== 'undefined') {
                 window.dssFormState = dssFormState;
             }
+
+            const elNet = document.getElementById('display-net-freight');
+            const elSurcharges = document.getElementById('display-surcharges-total');
+            const elComm = document.getElementById('display-commission-pct');
+            const elGross = document.getElementById('display-all-in-gross');
+            const badgeJwc = document.getElementById('badge-jwc-risk');
+
+            if (elNet) elNet.textContent = `$${(allInResult.netFreightRate || 0).toFixed(2)} / MT`;
+            if (elSurcharges) elSurcharges.textContent = `$${(Number(allInResult.totalSurchargesUSD) || ((allInResult.jwcPremiumUSD || 0) + (allInResult.ballastCostUSD || 0))).toLocaleString('en-US')}`;
+            if (elComm) elComm.textContent = `${(allInResult.totalCommissionPct || 5).toFixed(1)}%`;
+            if (elGross) elGross.textContent = `$${(allInResult.allInRateGross || 0).toFixed(2)} / MT`;
+
+            if (badgeJwc) badgeJwc.classList.toggle('hidden', !allInResult.jwcRiskActive);
 
             evaluarAlertaDeficitPOD(dssFormState.pod);
 
@@ -1937,7 +2200,6 @@
             const commodity = String(safeState.commodity || 'CARGA GENERAL');
             const laycanDaysLeft = safeState.laycanDaysLeft !== undefined && safeState.laycanDaysLeft !== null ? safeState.laycanDaysLeft : 10;
             const loadRate = Number(safeState.loadRate) || 5000;
-            const rawFlete = Number(safeState.fleteEstimado || safeState.fleteUnitario) || 35;
 
             const rawVesselName = String(
                 safeState.vesselName || 
@@ -1965,8 +2227,47 @@
             const dwt = (!isNaN(rawDwt) && rawDwt > 0) ? rawDwt : cargoQty;
             const formattedDwt = dwt.toLocaleString('en-US');
 
+            const rawVesselType = String(
+                safeState.vesselType ||
+                (typeof State !== 'undefined' ? State.vesselType : '') ||
+                'GENERAL CARGO'
+            ).trim().toUpperCase();
+            const vesselType = rawVesselType || 'GENERAL CARGO';
+
+            const rawFlete = Number(
+                safeState.allInRateGross ||
+                safeState.fleteGross ||
+                (typeof window !== 'undefined' ? window.dssInjectedRecapFreight : null) ||
+                safeState.fleteEstimado ||
+                safeState.fleteUnitario ||
+                35
+            );
+
             const fleteTotal = rawFlete > 1000 ? rawFlete : rawFlete * cargoQty;
-            const freightPerMT = (cargoQty > 0 ? fleteTotal / cargoQty : rawFlete).toFixed(2);
+            const allInRateGross = (cargoQty > 0 ? fleteTotal / cargoQty : rawFlete).toFixed(2);
+            const cleanFleteTotal = fleteTotal.toLocaleString('en-US');
+
+            const rawDemurrage = Number(
+                safeState.demurrageRate ||
+                safeState.demurrageRecomendado ||
+                (typeof window !== 'undefined' ? window.dssInjectedRecapDemurrage : null) ||
+                safeState.demurrage ||
+                (typeof State !== 'undefined' ? State.demurrage : null) ||
+                15000
+            );
+            const demurrageRate = rawDemurrage.toLocaleString('en-US');
+
+            const isJwcActive = Boolean(
+                safeState.jwlaRiskActive ||
+                safeState.jwcRiskActive ||
+                (typeof window !== 'undefined' ? window.dssInjectedJwcActive : false) ||
+                (typeof isJWCRiskZone === 'function' && (isJWCRiskZone(pol) || isJWCRiskZone(pod)))
+            );
+
+            const jwcClauseText = isJwcActive
+                ? `\n\n- JWC WAR RISK    : ANY ADDITIONAL PREMIUMS (AWRP / K&R / ETC) C/O CHARTERERS AS PER JWC.`
+                : '';
+
             const dateStr = new Date().toLocaleDateString('es-ES');
             const refNo = `RSH-FIX-${Math.floor(Math.random() * 899999 + 100000)}`;
 
@@ -1974,7 +2275,6 @@
             const cleanPol = pol.toUpperCase();
             const cleanPod = pod.toUpperCase();
             const cleanCargoQty = cargoQty.toLocaleString('en-US');
-            const cleanFleteTotal = fleteTotal.toLocaleString('en-US');
             const cleanLoadRate = loadRate.toLocaleString('en-US');
 
             return `
@@ -1995,7 +2295,7 @@ VOYAGE UNDER THE FOLLOWING MAIN TERMS AND CONDITIONS:
 --------------------------------------------------------------------------------
 - ACCT        : CHARTERERS ACCOUNT / AS NOMINATED BY CHARTERERS
 - OWNERS      : RODAHMAR SHIPPING SL (AS DISPONENT OWNERS)
-- VESSEL      : ${shipName} - ABT ${formattedDwt} MT DWT FULLY GEARED WITH 4 X 30 MT SWL CRANES AND ELECTRIC GRABS
+- VESSEL      : ${shipName} - ABT ${formattedDwt} MT DWT FULLY GEARED WITH 4 X 30 MT SWL CRANES AND ELECTRIC GRABS (${vesselType})
 - CARGO       : ${cleanCargoQty} METRIC TONS 5% MOLOO (MORE OR LESS IN
                 OWNERS' OPTION) OF ${cleanCommodity}
 - POL         : 1 SAFE BERTH / 1 SAFE PORT ${cleanPol}
@@ -2004,8 +2304,8 @@ VOYAGE UNDER THE FOLLOWING MAIN TERMS AND CONDITIONS:
 
 2. FREIGHT & FINANCIALS
 --------------------------------------------------------------------------------
-- FREIGHT RATE: USD $${freightPerMT} PER METRIC TONNE (OR LUMPSUM USD $${cleanFleteTotal})
-                FIOS TERMS. RATE INCLUDES ALL APPLICABLE DSS RISK SURCHARGES.
+- FREIGHT RATE: USD $${allInRateGross} PER METRIC TONNE (OR LUMPSUM USD $${cleanFleteTotal})
+                FREIGHT: USD ${allInRateGross} PER METRIC TON FIOST BSS 1/1. RATE INCLUDES ALL APPLICABLE DSS RISK SURCHARGES.
 - TERMS       : FIOS (FREE IN AND OUT STOWED), FREE OF ALL RISK, EXPENSE, 
                 STEVEDORING AND RESPONSIBILITY TO OWNERS.
 - PAYMENT     : 100% FREIGHT PRE-PAYABLE WITHIN 3 BANKING DAYS AFTER SIGNING 
@@ -2019,7 +2319,7 @@ VOYAGE UNDER THE FOLLOWING MAIN TERMS AND CONDITIONS:
 - DISDISCH RATE  : MECHANICALLY LIMITED TO ~2,000 METRIC TONS PER WEATHER WORKING
                    DAY OF 24 CONSECUTIVE HOURS, SUNDAYS AND HOLIDAYS INCLUDED 
                    (WWD SHINC) ON VESSEL'S GEAR.
-- DEMURRAGE      : USD 15,000 PER DAY OR PRO RATA FOR ANY TIME LOST AT POL/POD.
+- DEMURRAGE      : USD ${demurrageRate} PER DAY PRO RATA FOR ANY TIME LOST AT POL/POD.
 - DESPATCH       : NIL / HALF DEMURRAGE ON WORKING TIME SAVED.
 - NOTICES        : 5 / 3 / 2 / 1 DAYS APPROXIMATE NOTICE AND 24 HOURS DEFINITE
                    NOTICE OF READINESS (NOR) TO BE TENDERED AT POL AND POD.
@@ -2038,7 +2338,7 @@ VOYAGE UNDER THE FOLLOWING MAIN TERMS AND CONDITIONS:
 - WEATHER CLAUSE : TIME LOST DUE TO ADVERSE WEATHER, BAD SEA CONDITIONS, OR
                    FORCE MAJEURE EVENTS PREVENTING SAFE LOADING/DISCHARGING
                    OPERATIONS SHALL NOT COUNT AS LAYTIME UNLESS THE VESSEL IS
-                   ALREADY ON DEMURRAGE.
+                   ALREADY ON DEMURRAGE.${jwcClauseText}
 
 - C/P FORM       : GENCON 1994 CHARTERPARTY FORM AS REVISED, INCORPORATING
                    BIMCO WAR RISKS CLAUSE (VOYWAR 2025), SANCTIONS CLAUSE,

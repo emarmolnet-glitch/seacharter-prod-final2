@@ -228,3 +228,135 @@ export function isExportDeficitPOD(podInput) {
   return deficitKeywords.some(keyword => rawUpper.includes(keyword) || normalizedUpper.includes(keyword));
 }
 
+export const jwcRiskKeywords = [
+  "RED SEA", "MAR ROJO", "BLACK SEA", "MAR NEGRO", "PERSIAN GULF", "GOLFO PERSICO",
+  "YEMEN", "UKRAINE", "UCRANIA", "RUSSIA", "RUSIA", "ISRAEL", "LEBANON", "LIBANO",
+  "BAB EL-MANDEB", "BAB EL MANDEB", "HORMUZ", "GULF OF ADEN", "GOLFO DE ADEN",
+  "SOMALIA", "SUDAN", "SYRIA", "SIRIA", "PORT SAID", "SUEZ", "HODEIDAH", "HUDAYDAH",
+  "NOVOROSSIYSK", "ODESA", "ODESSA", "HAIFA", "ASHDOD", "SEVASTOPOL", "CHORNOMORSK",
+  "IRAN", "IRAQ", "STRAIT OF HORMUZ", "AZOV", "MAR DE AZOV"
+];
+
+export function isJWCRiskZone(portInput) {
+  if (!portInput) return false;
+  let str = '';
+  if (typeof portInput === 'string') {
+    str = portInput;
+  } else if (typeof portInput === 'object' && portInput !== null) {
+    str = portInput.name || portInput.pol || portInput.pod || portInput.port || portInput.country || portInput.region || '';
+  }
+  if (!str) return false;
+  const rawUpper = String(str).toUpperCase().trim();
+  const normalizedUpper = rawUpper.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return jwcRiskKeywords.some(kw => rawUpper.includes(kw) || normalizedUpper.includes(kw));
+}
+
+export function evaluateJWCRisk(polInput, podInput) {
+  const polRisk = isJWCRiskZone(polInput);
+  const podRisk = isJWCRiskZone(podInput);
+  const isRisk = polRisk || podRisk;
+  const zoneName = polRisk ? String(polInput) : (podRisk ? String(podInput) : null);
+  return { isRisk, zoneName, polRisk, podRisk };
+}
+
+export function calculateAutoExportDeficitBallast(podInput, manualBallastDays = 0, defaultAutoDays = 4.0) {
+  const isDeficit = isExportDeficitPOD(podInput);
+  const manual = Number(manualBallastDays) || 0;
+  if (manual > 0) {
+    return { isDeficitApplied: false, isDeficitPOD: isDeficit, ballastDays: manual, autoCalculated: false };
+  }
+  if (isDeficit) {
+    return { isDeficitApplied: true, isDeficitPOD: true, ballastDays: defaultAutoDays, autoCalculated: true };
+  }
+  return { isDeficitApplied: false, isDeficitPOD: false, ballastDays: 0, autoCalculated: false };
+}
+
+export function calculateAllInFreightGross(dssState = {}, options = {}) {
+  const safeIntake = (Number(dssState.actualCargoIntake) > 0)
+    ? Number(dssState.actualCargoIntake)
+    : (Number(dssState.targetCargoMT || dssState.cargoQty || dssState.cargo || dssState.tons) || 50000);
+
+  const pol = dssState.pol || options.pol || '';
+  const pod = dssState.pod || options.pod || '';
+
+  // 1. Evaluacion Automatica de Riesgo JWC y Prima
+  const jwcEval = evaluateJWCRisk(pol, pod);
+  const isJwcActive = Boolean(dssState.jwlaRiskActive || dssState.jwcRiskActive || jwcEval.isRisk);
+  const defaultJwcPrem = options.defaultJwcPremium ?? 15000;
+  const jwcPremiumUSD = isJwcActive
+    ? (Number(dssState.jwlaPremiumUSD || dssState.jwcPremiumUSD) || defaultJwcPrem)
+    : 0;
+
+  // 2. Evaluacion y Autocalculo de Lastre por Deficit de Exportacion (Transparente e Interno)
+  const manualBallast = Number(dssState.ballastDays) || 0;
+  const deficitEval = calculateAutoExportDeficitBallast(pod, manualBallast, options.defaultAutoBallastDays || 4.0);
+  const effectiveBallastDays = deficitEval.ballastDays;
+
+  // 3. Dias de navegacion y puerto (solo lectura de las calculadoras base)
+  const ladenDays = Number(dssState.ladenDays ?? dssState.seaDays ?? dssState.estimatedVoyageDays ?? 8) || 0;
+  const portDays = Number(dssState.portDays ?? dssState.totalPortDays ?? 10) || 0;
+  const baseVoyageDays = ladenDays + portDays;
+  const totalDaysWithBallast = baseVoyageDays + effectiveBallastDays;
+
+  // 4. Tarifa Base Diaria del Buque (OPEX o TCE Objetivo)
+  const calculationMode = options.mode || dssState.calculationMode || (dssState.targetTCE || dssState.tceTarget ? 'inversa_tce' : 'cost_plus');
+  let dailyRate = 0;
+  if (calculationMode === 'inversa_tce') {
+    dailyRate = Number(dssState.targetTCE || dssState.tceTarget || dssState.globalMarketTCE || 18000);
+  } else {
+    dailyRate = Number(dssState.opex || dssState.opexDaily || dssState.opex_fijo_diario || 6000);
+  }
+
+  // 5. Costes de Lastre y Recargos Totales ($)
+  const ballastCostUSD = dailyRate * effectiveBallastDays;
+  const totalSurchargesUSD = jwcPremiumUSD + ballastCostUSD;
+  const surchargesPerTon = safeIntake > 0 ? (totalSurchargesUSD / safeIntake) : 0;
+
+  // 6. Flete Neto Base (Vinculado dinámicamente al estado de la calculadora activa)
+  const rawBaseFreight = Number(
+    dssState.baseNetFreight ??
+    dssState.fleteUnitario ??
+    dssState.fleteEstimado ??
+    dssState.freightSell ??
+    dssState.freightRateUSD ??
+    options.baseNetFreight
+  ) || 0;
+
+  let baseNetFreight = rawBaseFreight;
+  if (baseNetFreight <= 0) {
+    const bunkerCost = Number(dssState.totalBunkerCost ?? dssState.bunkerCost ?? 0) || 0;
+    const portCost = Number(dssState.totalPortDisbursements ?? dssState.portDisbursements ?? dssState.portCosts ?? 0) || 0;
+    const baseDirectVoyageCost = (dailyRate * baseVoyageDays) + bunkerCost + portCost;
+    baseNetFreight = safeIntake > 0 ? (baseDirectVoyageCost / safeIntake) : 0;
+  }
+
+  // 7. Formula Estricta: Total Net Rate = Flete Neto Base + (Recargos Totales / Toneladas)
+  const totalNetRate = baseNetFreight + surchargesPerTon;
+
+  // 8. Gross-Up para absorcion de comisiones: Flete ALL-IN Gross = Total Net Rate / (1 - (Comisiones / 100))
+  const totalCommissionPct = Number(dssState.totalCommission ?? dssState.commissionPct ?? dssState.comisionTotal ?? 5.0);
+  const commissionDecimal = totalCommissionPct / 100;
+  const grossFactor = (commissionDecimal < 1 && commissionDecimal >= 0) ? (1 - commissionDecimal) : 0.95;
+  const allInRateGross = totalNetRate / grossFactor;
+
+  return {
+    netFreightRate: Number(baseNetFreight.toFixed(2)),
+    totalNetRate: Number(totalNetRate.toFixed(2)),
+    allInRateGross: Number(allInRateGross.toFixed(2)),
+    jwcRiskActive: isJwcActive,
+    jwcPremiumUSD,
+    jwcZone: jwcEval.zoneName,
+    isExportDeficit: deficitEval.isDeficitPOD,
+    autoBallastApplied: deficitEval.autoCalculated,
+    effectiveBallastDays,
+    ballastCostUSD,
+    totalSurchargesUSD,
+    surchargesPerTon: Number(surchargesPerTon.toFixed(2)),
+    totalCommissionPct,
+    calculationMode,
+    totalDaysWithBallast,
+    safeIntake
+  };
+}
+
+
