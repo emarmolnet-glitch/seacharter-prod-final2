@@ -49717,6 +49717,87 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             "Carga de Proyecto (Breakbulk)": ["Hierro/Acero - Grúa Barco", "Hierro/Acero - Grúa Portuaria", "Cuchara (Grab) - Grúa Barco", "Cuchara (Grab) - Grúa Portuaria"]
         });
 
+        // ==========================================================================
+        // FÍSICA DE IZADA — BIG BAGS CON GRÚAS PORTUARIAS (PORT CRANES)
+        // Cada puerto (POL / POD) es un nodo modular independiente: estos
+        // parámetros se resuelven por puerto y nunca se heredan del otro extremo.
+        //   · Esparcidor múltiple: 14 big bags por izada.
+        //   · Peso de referencia por big bag: 1.5 MT.
+        //   · Carga total por ciclo fija: 14 × 1.5 = 21.0 MT.
+        //   · Tara del accesorio ya incluida en el peso de referencia (0 MT).
+        //   · Eficiencia operativa por defecto 70–80% (nunca 100%): modela la
+        //     espera de la grúa por la logística terrestre (llegada y
+        //     posicionamiento de camiones bajo el gancho).
+        // ==========================================================================
+        const BIG_BAGS_PORT_CRANE_PHYSICS = Object.freeze({
+            bagsPerLift: 14,
+            bagWeightMt: 1.5,
+            liftCapacityMt: 21.0,
+            taraMt: 0,
+            operatingHoursPerDay: 24,
+            efficiencyMinPct: 70,
+            efficiencyMaxPct: 80,
+            efficiencyDefaultPct: 75
+        });
+
+        function getBigBagsPortCraneSpec() {
+            return window.SeaCharterVoyageCostEngine?.BIG_BAGS_PORT_CRANE || BIG_BAGS_PORT_CRANE_PHYSICS;
+        }
+
+        // Acepta etiquetas ("Big Bags - Grúa Portuaria") y valores de método
+        // ("big_bags_portuaria"). También cubre la grúa portuaria genérica cuando
+        // la mercancía declarada del puerto es Big Bags.
+        function isBigBagsPortCraneMethod(method = '', cargoType = null) {
+            const normalize = (value) => String(value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toUpperCase()
+                .replace(/[_\-]+/g, ' ');
+
+            const normalizedMethod = normalize(method);
+            const usesPortCrane = normalizedMethod.includes('PORTUARIA') || normalizedMethod.includes('PORT CRANE');
+            if (!usesPortCrane) return false;
+            if (normalizedMethod.includes('BIG BAG')) return true;
+
+            // Una grúa portuaria equipada con otro útil (cuchara, paletizado,
+            // siderúrgico) no iza 14 bolsas por ciclo aunque la carga sea big bags.
+            const otroGear = ['CUCHARA', 'GRAB', 'PALETIZADO', 'HIERRO', 'ACERO', 'CINTA', 'BOMBAS', 'TOLVA'];
+            if (otroGear.some((keyword) => normalizedMethod.includes(keyword))) return false;
+
+            const declaredCargo = cargoType !== null
+                ? cargoType
+                : (typeof normalizarTipoCarga === 'function' ? normalizarTipoCarga() : '');
+            return normalize(declaredCargo).includes('BIG BAG');
+        }
+
+        // 21.0 MT por ciclo. Valor fijado por la lógica de rendimiento portuario.
+        function getBigBagsPortCraneLiftCapacityMt() {
+            const engine = window.SeaCharterVoyageCostEngine;
+            if (typeof engine?.getBigBagsPortCraneLiftCapacityMt === 'function') {
+                return engine.getBigBagsPortCraneLiftCapacityMt();
+            }
+            const spec = getBigBagsPortCraneSpec();
+            return spec.bagsPerLift * spec.bagWeightMt;
+        }
+
+        // Reducción por cuello de botella terrestre, siempre dentro de 70–80%.
+        function getBigBagsPortCraneEfficiencyPct(vesselClass = '') {
+            const engine = window.SeaCharterVoyageCostEngine;
+            if (typeof engine?.getBigBagsPortCraneEfficiencyPct === 'function') {
+                return engine.getBigBagsPortCraneEfficiencyPct(vesselClass);
+            }
+            const spec = getBigBagsPortCraneSpec();
+            const normalizedClass = String(vesselClass || '').toLowerCase();
+            if (normalizedClass.includes('coaster') || normalizedClass.includes('mini')) return spec.efficiencyMinPct;
+            if (normalizedClass.includes('supramax')
+                || normalizedClass.includes('ultramax')
+                || normalizedClass.includes('panamax')
+                || normalizedClass.includes('capesize')) {
+                return spec.efficiencyMaxPct;
+            }
+            return spec.efficiencyDefaultPct;
+        }
+
         function isCraneMethod(label = '') {
             const l = String(label || '');
             return l.includes('Grúa')
@@ -49728,6 +49809,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function getSwlForMethod(label = '') {
             const l = String(label || '');
+            // Big Bags con grúa portuaria: izada fija de 21.0 MT (14 bolsas × 1.5 MT).
+            if (isBigBagsPortCraneMethod(l)) return getBigBagsPortCraneLiftCapacityMt();
             if (l.includes('Cuchara')) return 30;
             if (l.includes('Big Bags')) return 8;
             if (l.includes('Paletizado')) return 4;
@@ -49737,6 +49820,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function getTaraForMethod(label = '') {
             const l = String(label || '');
+            // El peso de referencia de 1.5 MT por big bag ya incluye la bolsa, de
+            // modo que el esparcidor múltiple no descuenta tara adicional.
+            if (isBigBagsPortCraneMethod(l)) return getBigBagsPortCraneSpec().taraMt;
             if (l.includes('Cuchara')) return 12;
             if (l.includes('Big Bags')) return 0.5;
             if (l.includes('Paletizado')) return 1.0;
@@ -49801,6 +49887,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const l = String(label || '');
             const rawClass = String(vesselClass || (typeof getCentralizedVesselClass === 'function' ? getCentralizedVesselClass() : '') || window.State?.class || '');
             const vClass = rawClass.toLowerCase();
+
+            // Restricción de cuello de botella: una grúa portuaria manipulando Big
+            // Bags nunca opera al 100%. Queda limitada por la logística terrestre
+            // (camiones bajo el gancho) dentro de la banda 70–80%.
+            if (isBigBagsPortCraneMethod(l)) {
+                return getBigBagsPortCraneEfficiencyPct(rawClass);
+            }
 
             if (!l.includes('Grúa Barco')) {
                 if (l.includes('Grúa Portuaria') && (vClass.includes('coaster') || vClass.includes('mini'))) {
@@ -49880,7 +49973,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (!labelEl) return;
 
             const l = String(label || '');
-            if (l.includes('Big Bags') || l.includes('Paletizado')) {
+            if (isBigBagsPortCraneMethod(l)) {
+                const spec = getBigBagsPortCraneSpec();
+                labelEl.textContent = `Carga Bruta por Izada (${spec.bagsPerLift} × ${spec.bagWeightMt} MT)`;
+            } else if (l.includes('Big Bags') || l.includes('Paletizado')) {
                 labelEl.textContent = 'Carga Bruta por Izada (MT)';
             } else {
                 labelEl.textContent = 'SWL Grúa (MT)';
@@ -50052,8 +50148,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         // ==========================================
         // MOTOR DERIVADO DE GRÚAS — FUENTE ÚNICA DE VERDAD DEL RITMO REAL
-        // Formula: (Carga por Ciclo * Ciclos/Hora * Eficiencia/100 * 24 * Nº Grúas)
-        // donde Carga por Ciclo = SWL - Tara.
+        // Formula: (Carga por Ciclo * Ciclos/Hora * Horas Operativas * Eficiencia/100 * Nº Grúas)
+        // donde Carga por Ciclo = SWL - Tara, salvo en Big Bags con grúa portuaria,
+        // que usa la izada fija de 21.0 MT (14 bolsas × 1.5 MT).
         // Devuelve null cuando el método no depende de grúas o los datos físicos
         // son incompletos, para que el consumidor pueda usar el ritmo base.
         // ==========================================
@@ -50072,11 +50169,19 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const eficiencia = Math.min(100, Math.max(1, parseFloat(document.getElementById(eficienciaId)?.value) || 100));
             const nGruas = readNumeroGruasPuerto(side);
 
-            const cargaPorCiclo = swl - tara;
+            // Big Bags + grúa portuaria: la carga por ciclo es una constante de
+            // 21.0 MT (esparcidor de 14 bolsas × 1.5 MT), no una resta SWL - Tara.
+            const esBigBagsGruaPortuaria = isBigBagsPortCraneMethod(label);
+            const cargaPorCiclo = esBigBagsGruaPortuaria
+                ? getBigBagsPortCraneLiftCapacityMt()
+                : (swl - tara);
             if (!(cargaPorCiclo > 0) || !(ciclosHora > 0) || !(nGruas > 0)) return null;
 
-            // Formula with friction: Math.round((((SWL - Tara) * Ciclos/Hora * 24) * Nº Grúas) * (Eficiencia / 100))
-            const ritmoCalculado = Math.max(0, Math.round((((swl - tara) * ciclosHora * 24) * nGruas) * (eficiencia / 100)));
+            // Formula with friction: Math.round(((Carga por Ciclo * Ciclos/Hora * Horas Operativas) * Nº Grúas) * (Eficiencia / 100))
+            const horasOperativas = esBigBagsGruaPortuaria
+                ? getBigBagsPortCraneSpec().operatingHoursPerDay
+                : 24;
+            const ritmoCalculado = Math.max(0, Math.round(((cargaPorCiclo * ciclosHora * horasOperativas) * nGruas) * (eficiencia / 100)));
             return ritmoCalculado > 0 ? ritmoCalculado : null;
         }
 
@@ -50114,7 +50219,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const ciclosHora = Math.max(0, parseFloat(document.getElementById(ciclosId)?.value) || 0);
             const eficiencia = Math.min(100, Math.max(1, parseFloat(document.getElementById(eficienciaId)?.value) || 100));
             const nGruas = readNumeroGruasPuerto(side);
-            const cargaPorCiclo = Math.max(0, swl - tara);
+            const label = getSelectedMethodLabel(side);
+            const esBigBagsGruaPortuaria = isBigBagsPortCraneMethod(label);
+            const spec = getBigBagsPortCraneSpec();
+            const cargaPorCiclo = esBigBagsGruaPortuaria
+                ? getBigBagsPortCraneLiftCapacityMt()
+                : Math.max(0, swl - tara);
+            const horasOperativas = esBigBagsGruaPortuaria ? spec.operatingHoursPerDay : 24;
 
             if (!(ritmo > 0)) {
                 el.className = 'mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] font-semibold text-amber-800';
@@ -50122,10 +50233,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return;
             }
 
+            const detalleCiclo = esBigBagsGruaPortuaria
+                ? `${cargaPorCiclo.toLocaleString('es-ES')} MT/ciclo (${spec.bagsPerLift} big bags × ${spec.bagWeightMt} MT)`
+                : `${cargaPorCiclo.toLocaleString('es-ES')} MT/ciclo`;
+            const notaCuelloBotella = esBigBagsGruaPortuaria
+                ? `<span class="mt-1 block font-normal text-blue-700">Eficiencia ${eficiencia}% = espera de grúa por logística terrestre (camiones bajo el gancho).</span>`
+                : '';
+
             el.className = 'mt-2 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-[10px] font-semibold text-blue-800';
             el.innerHTML = `<i class="fa-solid fa-arrow-right-long mr-1"></i>RITMO REAL derivado: `
                 + `<strong>${ritmo.toLocaleString('es-ES')} TM/día</strong> `
-                + `<span class="font-normal text-blue-700">= ${cargaPorCiclo.toLocaleString('es-ES')} MT/ciclo × ${ciclosHora} ciclos/h × 24 h × ${nGruas} grúa(s) × ${eficiencia}% eficiencia</span>`;
+                + `<span class="font-normal text-blue-700">= ${detalleCiclo} × ${ciclosHora} ciclos/h × ${horasOperativas} h × ${nGruas} grúa(s) × ${eficiencia}% eficiencia</span>`
+                + notaCuelloBotella;
         }
 
         function calcularRitmoGrua(side = 'pol') {
@@ -51559,6 +51678,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.methodBaseRates = methodBaseRates;
             window.equipmentMatrix = equipmentMatrix;
             window.isCraneMethod = isCraneMethod;
+            window.BIG_BAGS_PORT_CRANE_PHYSICS = BIG_BAGS_PORT_CRANE_PHYSICS;
+            window.getBigBagsPortCraneSpec = getBigBagsPortCraneSpec;
+            window.isBigBagsPortCraneMethod = isBigBagsPortCraneMethod;
+            window.getBigBagsPortCraneLiftCapacityMt = getBigBagsPortCraneLiftCapacityMt;
+            window.getBigBagsPortCraneEfficiencyPct = getBigBagsPortCraneEfficiencyPct;
             window.getSwlForMethod = getSwlForMethod;
             window.getTaraForMethod = getTaraForMethod;
             window.getCiclosForMethod = getCiclosForMethod;
@@ -54632,6 +54756,46 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         const ciclosEl = document.getElementById(s === 'pod' ? 'gruas-ciclos-pod' : 'gruas-ciclos-pol');
                         if (ciclosEl) ciclosEl.value = String(cyclesPerHour);
                         setEficienciaGruaValor(s, Math.round(efficiencyFactor * 100));
+                    } else if (typeof window.isBigBagsPortCraneMethod === 'function'
+                        && (window.isBigBagsPortCraneMethod(methodLabel) || window.isBigBagsPortCraneMethod(methodVal))) {
+                        // B1. Big Bags con GRÚA PORTUARIA — nodo independiente por puerto.
+                        // Izada fija de 21.0 MT (esparcidor de 14 big bags × 1.5 MT),
+                        // reducida por la eficiencia operativa 70–80% que modela la
+                        // espera de camiones bajo el gancho. Nunca se asume 100%.
+                        const spec = typeof window.getBigBagsPortCraneSpec === 'function'
+                            ? window.getBigBagsPortCraneSpec()
+                            : { liftCapacityMt: 21.0, operatingHoursPerDay: 24, efficiencyDefaultPct: 75 };
+                        const liftLoadMt = typeof window.getBigBagsPortCraneLiftCapacityMt === 'function'
+                            ? window.getBigBagsPortCraneLiftCapacityMt()
+                            : spec.liftCapacityMt;
+                        const vesselClassForPort = typeof window.getCentralizedVesselClass === 'function'
+                            ? window.getCentralizedVesselClass()
+                            : (window.State?.vesselClass || '');
+                        const efficiencyPct = typeof window.getBigBagsPortCraneEfficiencyPct === 'function'
+                            ? window.getBigBagsPortCraneEfficiencyPct(vesselClassForPort)
+                            : spec.efficiencyDefaultPct;
+                        const cyclesPerHour = typeof window.getCiclosForMethod === 'function'
+                            ? window.getCiclosForMethod(methodLabel, vesselClassForPort)
+                            : 30;
+                        const operatingHours = spec.operatingHoursPerDay;
+
+                        estimatedTpd = typeof window.SeaCharterVoyageCostEngine?.calculateBigBagsPortCraneDailyRate === 'function'
+                            ? window.SeaCharterVoyageCostEngine.calculateBigBagsPortCraneDailyRate({
+                                cyclesPerHour,
+                                cranes: numCranes,
+                                efficiencyPct,
+                                operatingHoursPerDay: operatingHours,
+                                liftCapacityMt: liftLoadMt
+                            })
+                            : Math.round(liftLoadMt * cyclesPerHour * operatingHours * numCranes * (efficiencyPct / 100));
+
+                        const swlEl = document.getElementById(s === 'pod' ? 'gruas-swl-pod' : 'gruas-swl-pol');
+                        if (swlEl) swlEl.value = String(liftLoadMt);
+                        const taraEl = document.getElementById(s === 'pod' ? 'gruas-tara-pod' : 'gruas-tara-pol');
+                        if (taraEl) taraEl.value = String(spec.taraMt ?? 0);
+                        const ciclosEl = document.getElementById(s === 'pod' ? 'gruas-ciclos-pod' : 'gruas-ciclos-pol');
+                        if (ciclosEl) ciclosEl.value = String(cyclesPerHour);
+                        setEficienciaGruaValor(s, efficiencyPct);
                     } else if (methodLabel.includes('Big Bags') || methodLabel.includes('Paletizado') || methodVal.includes('big_bags') || methodVal.includes('paletizado')) {
                         // B. Big Bags / Unified Cargo: Port Crane = 30 cycles/h, 82.5% eff. Ship Crane = 17.5 cycles/h, 62.5% eff.
                         const cyclesPerHour = isPortCrane ? 30 : 17.5;

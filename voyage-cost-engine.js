@@ -43,11 +43,98 @@
     };
     const PASSIVE_PORT_METHODS = new Set(['cinta_transportadora', 'camion_tolva']);
 
+    // =========================================================================
+    // F\u00cdSICA DE IZADA \u2014 BIG BAGS MANIPULADOS CON GR\u00daA PORTUARIA (PORT CRANE)
+    // Cada puerto del itinerario (POL / POD) es un nodo modular independiente:
+    // estas constantes se resuelven por puerto y nunca se heredan del otro
+    // extremo del viaje.
+    //   \u00b7 Esparcidor m\u00faltiple: 14 big bags izados simult\u00e1neamente.
+    //   \u00b7 Peso de referencia por big bag: 1.5 MT.
+    //   \u00b7 Carga total por ciclo (lift capacity): 14 \u00d7 1.5 = 21.0 MT fijos.
+    //   \u00b7 La tara del accesorio ya est\u00e1 contenida en el peso de referencia.
+    //   \u00b7 Eficiencia operativa 70\u201380%: modela obligatoriamente la espera de la
+    //     gr\u00faa por la log\u00edstica terrestre (llegada y posicionamiento de camiones
+    //     bajo el gancho). Nunca se asume eficiencia mec\u00e1nica del 100%.
+    // =========================================================================
+    const BIG_BAGS_PORT_CRANE = Object.freeze({
+        bagsPerLift: 14,
+        bagWeightMt: 1.5,
+        liftCapacityMt: 21.0,
+        taraMt: 0,
+        operatingHoursPerDay: 24,
+        efficiencyMinPct: 70,
+        efficiencyMaxPct: 80,
+        efficiencyDefaultPct: 75
+    });
+
     function normalizeText(value) {
         return toText(value)
             .normalize('NFD')
             .replace(/[\u0300-\u036f]/g, '')
             .toUpperCase();
+    }
+
+    // Acepta indistintamente etiquetas ("Big Bags - Gr\u00faa Portuaria") y valores
+    // de m\u00e9todo ("big_bags_portuaria"), normalizando guiones y subrayados.
+    function normalizeMethodKey(value) {
+        return normalizeText(value).replace(/[_\-]+/g, ' ');
+    }
+
+    // Gear explícitamente distinto del esparcidor de big bags: aunque la grúa sea
+    // portuaria y la mercancía venga en big bags, una cuchara, un accesorio de
+    // paletizado o un útil siderúrgico no izan 14 bolsas por ciclo.
+    const NON_BIG_BAG_GEAR_KEYWORDS = Object.freeze(['CUCHARA', 'GRAB', 'PALETIZADO', 'HIERRO', 'ACERO', 'CINTA', 'BOMBAS', 'TOLVA']);
+
+    function isBigBagsPortCraneMethod(method, cargoType = '') {
+        const normalizedMethod = normalizeMethodKey(method);
+        const usesPortCrane = normalizedMethod.includes('PORTUARIA') || normalizedMethod.includes('PORT CRANE');
+        if (!usesPortCrane) return false;
+        if (normalizedMethod.includes('BIG BAG')) return true;
+        if (NON_BIG_BAG_GEAR_KEYWORDS.some((keyword) => normalizedMethod.includes(keyword))) return false;
+        return normalizeMethodKey(cargoType).includes('BIG BAG');
+    }
+
+    function getBigBagsPortCraneLiftCapacityMt() {
+        return BIG_BAGS_PORT_CRANE.bagsPerLift * BIG_BAGS_PORT_CRANE.bagWeightMt;
+    }
+
+    // Cuello de botella terrestre: los patios peque\u00f1os rotan camiones peor, y
+    // las terminales que sirven buques mayores ofrecen m\u00e1s carriles bajo el
+    // gancho. El resultado permanece siempre dentro de la banda 70\u201380%.
+    function getBigBagsPortCraneEfficiencyPct(vesselClass = '') {
+        const normalizedClass = normalizeText(vesselClass);
+        if (normalizedClass.includes('COASTER') || normalizedClass.includes('MINI')) {
+            return BIG_BAGS_PORT_CRANE.efficiencyMinPct;
+        }
+        if (normalizedClass.includes('SUPRAMAX')
+            || normalizedClass.includes('ULTRAMAX')
+            || normalizedClass.includes('PANAMAX')
+            || normalizedClass.includes('CAPESIZE')) {
+            return BIG_BAGS_PORT_CRANE.efficiencyMaxPct;
+        }
+        return BIG_BAGS_PORT_CRANE.efficiencyDefaultPct;
+    }
+
+    // Rendimiento te\u00f3rico (MT/d\u00eda) = 21.0 MT \u00d7 ciclos/hora \u00d7 horas operativas
+    // \u00d7 n\u00ba de gr\u00faas, reducido por la eficiencia operativa.
+    function calculateBigBagsPortCraneDailyRate(options = {}) {
+        const {
+            cyclesPerHour = 0,
+            cranes = 1,
+            efficiencyPct = BIG_BAGS_PORT_CRANE.efficiencyDefaultPct,
+            operatingHoursPerDay = BIG_BAGS_PORT_CRANE.operatingHoursPerDay,
+            liftCapacityMt = getBigBagsPortCraneLiftCapacityMt()
+        } = options;
+
+        const cycles = Math.max(0, toNumber(cyclesPerHour));
+        const craneCount = Math.max(1, Math.floor(toNumber(cranes) || 1));
+        const hours = Math.max(0, toNumber(operatingHoursPerDay));
+        const lift = Math.max(0, toNumber(liftCapacityMt));
+        const efficiency = Math.min(100, Math.max(1, toNumber(efficiencyPct) || BIG_BAGS_PORT_CRANE.efficiencyDefaultPct));
+        if (cycles <= 0 || hours <= 0 || lift <= 0) return 0;
+
+        const theoreticalMtPerDay = lift * cycles * hours * craneCount;
+        return Math.max(0, Math.round(theoreticalMtPerDay * (efficiency / 100)));
     }
 
     function includesAny(value, keywords) {
@@ -1119,6 +1206,11 @@
         SMART_LOADING_BASE_RATE_PER_DAY,
         SMART_LOADING_INTERFERENCE_FACTORS,
         PASSIVE_PORT_METHODS,
+        BIG_BAGS_PORT_CRANE,
+        isBigBagsPortCraneMethod,
+        getBigBagsPortCraneLiftCapacityMt,
+        getBigBagsPortCraneEfficiencyPct,
+        calculateBigBagsPortCraneDailyRate,
         getStowageMethodFactor,
         getRealPortRate,
         portMethodUsesCranes,
