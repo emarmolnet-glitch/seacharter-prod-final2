@@ -33335,11 +33335,23 @@
                 const updatedJwlaPremiumUSD = Number(activeDss.jwlaPremiumUSD) || 0;
                 const updatedActualCargoIntake = (activeDss.actualCargoIntake && Number(activeDss.actualCargoIntake) > 0) ? Number(activeDss.actualCargoIntake) : cargoQty;
 
+                // Calcular / obtener el Flete ALL-IN GROSS del DSS (incluye comisiones y recargos)
+                const allInResult = (typeof calculateAllInFreightGross === 'function')
+                    ? calculateAllInFreightGross(activeDss)
+                    : null;
+                const allInGrossFreight = Number(
+                    allInResult?.allInRateGross ||
+                    activeDss.allInRateGross ||
+                    activeDss.fleteGross ||
+                    updatedFreightSell
+                );
+
                 // 2. Reverse Sync: Sobrescribir globalState / State / SeaCharterStore
                 if (typeof State !== 'undefined' && State) {
                     State.loadRate = updatedLoadRate;
                     State.dischRate = updatedDischargeRate;
                     State.freightSell = updatedFreightSell;
+                    State.allInRateGross = allInGrossFreight;
                     State.cargo = cargoQty;
                     State.ballastDays = updatedBallastDays;
                     State.jwlaRiskActive = updatedJwlaRiskActive;
@@ -33358,6 +33370,7 @@
                         loadRate: updatedLoadRate,
                         dischRate: updatedDischargeRate,
                         freightSell: updatedFreightSell,
+                        allInRateGross: allInGrossFreight,
                         cargo: cargoQty,
                         ballastDays: updatedBallastDays,
                         jwlaRiskActive: updatedJwlaRiskActive,
@@ -33375,6 +33388,7 @@
                     dischargeRate: updatedDischargeRate,
                     fleteEstimado: updatedFreightSell,
                     fleteUnitario: updatedFreightSell,
+                    allInRateGross: allInGrossFreight,
                     cargoQty: cargoQty,
                     targetCargoMT: cargoQty,
                     ballastDays: updatedBallastDays,
@@ -33407,10 +33421,10 @@
                 }
 
                 // 3. Autocompletado del Contrato (Data Bridging hacia el EDITOR)
-                setValIfExist('gc-freight-val', updatedFreightSell.toFixed(2));
+                setValIfExist('gc-freight-val', allInGrossFreight.toFixed(2));
                 setValIfExist('gc-laytime-load-val', updatedLoadRate);
                 setValIfExist('gc-laytime-disch-val', updatedDischargeRate);
-                setValIfExist('asb-freight-val', updatedFreightSell.toFixed(2));
+                setValIfExist('asb-freight-val', allInGrossFreight.toFixed(2));
 
                 const mainEnginePortDaysForContract = (typeof State !== 'undefined' && State && (State.portDays || State.totalPortDays || State.tPort))
                     ? Number(State.portDays || State.totalPortDays || State.tPort)
