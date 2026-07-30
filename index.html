@@ -265,6 +265,23 @@
         .input-gc:disabled { background-color: #0f172a; color: #64748b; cursor: not-allowed; }
         .input-gc.bg-gray-100 { background-color: #f3f4f6; color: #0f172a; border-color: #cbd5e1; cursor: not-allowed; }
 
+        /* Ritmo Real POD: el modo de cálculo (Auto/Manual) se lee de un golpe de vista.
+           Auto = valor derivado y bloqueado; Manual = campo editable en verde. */
+        #rate-disch[data-pod-calc-mode="auto"],
+        #rate-disch[data-pod-calc-mode="auto"].required-use-highlight {
+            background-color: #f3f4f6 !important;
+            border-color: #e5e7eb !important;
+            color: #475569 !important;
+            cursor: not-allowed !important;
+        }
+        #rate-disch[data-pod-calc-mode="manual"],
+        #rate-disch[data-pod-calc-mode="manual"].required-use-highlight {
+            background-color: #dcfce7 !important;
+            border-color: #86efac !important;
+            color: #14532d !important;
+            cursor: text;
+        }
+
         /* Restauración de visibilidad en desplegables select, opciones e inputs de fecha/calendario */
         select option {
             background-color: #ffffff !important;
@@ -7953,12 +7970,12 @@
                                 <div class="flex justify-between items-center mb-1">
                                     <label id="label-rate-load" class="text-action-required flex items-center min-h-[24px] mb-0">Ritmo Real POL (TM/d)</label>
                                     <div class="inline-flex rounded-md shadow-sm text-[10px]" role="group" aria-label="Modo Ritmo POL">
-                                        <button type="button" id="btn-ritmo-auto-pol" onclick="setRitmoMode('auto', 'pol')" class="px-2 py-0.5 rounded-l-md bg-[#1E3A8A] text-white font-bold transition cursor-pointer" aria-pressed="true">Auto</button>
-                                        <button type="button" id="btn-ritmo-manual-pol" onclick="setRitmoMode('manual', 'pol')" class="px-2 py-0.5 rounded-r-md bg-slate-200 text-slate-700 font-bold transition cursor-pointer" aria-pressed="false">Manual</button>
+                                        <button type="button" id="btn-ritmo-auto-pol" data-ritmo-mode-btn="auto" onclick="setRitmoMode('auto', 'pol')" class="px-2 py-0.5 rounded-l-md font-bold transition cursor-pointer bg-blue-900 text-white" aria-pressed="true">Auto</button>
+                                        <button type="button" id="btn-ritmo-manual-pol" data-ritmo-mode-btn="manual" onclick="setRitmoMode('manual', 'pol')" class="px-2 py-0.5 rounded-r-md font-bold transition cursor-pointer bg-gray-100 text-gray-500 hover:bg-gray-200" aria-pressed="false">Manual</button>
                                     </div>
                                 </div>
                                 <input type="number" id="rate-load" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="0" placeholder="0" step="any" oninput="marcarRitmoManual('pol')">
-                                <p id="rate-load-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
+                                <div id="pol-opex-impact-alert" class="hidden flex items-center p-2 mt-2 text-red-700 bg-red-100 border border-red-300 rounded text-sm font-semibold shadow-sm" role="alert" aria-live="polite"></div>
                                 <div id="delta-dias-badge-pol" class="hidden mt-1 text-[11px] font-bold"></div>
                                 <div id="rate-ref-helper-pol" class="mt-1 text-[10px] text-slate-500 font-medium leading-tight">
                                     <div>Ref. Handysize (Bombas/Cintas): 12,000 - 24,000 TM/D</div>
@@ -7969,12 +7986,12 @@
                                 <div class="flex justify-between items-center mb-1">
                                     <label id="label-rate-disch" class="text-action-required flex items-center min-h-[24px] mb-0">Ritmo Real POD (TM/d)</label>
                                     <div class="inline-flex rounded-md shadow-sm text-[10px]" role="group" aria-label="Modo Ritmo POD">
-                                        <button type="button" id="btn-ritmo-auto-pod" onclick="setRitmoMode('auto', 'pod')" class="px-2 py-0.5 rounded-l-md bg-[#1E3A8A] text-white font-bold transition cursor-pointer" aria-pressed="true">Auto</button>
-                                        <button type="button" id="btn-ritmo-manual-pod" onclick="setRitmoMode('manual', 'pod')" class="px-2 py-0.5 rounded-r-md bg-slate-200 text-slate-700 font-bold transition cursor-pointer" aria-pressed="false">Manual</button>
+                                        <button type="button" id="btn-ritmo-auto-pod" data-ritmo-mode-btn="auto" data-pod-calc-mode="auto" onclick="setRitmoMode('auto', 'pod')" class="px-2 py-0.5 rounded-l-md font-bold transition cursor-pointer bg-blue-900 text-white" aria-pressed="true">Auto</button>
+                                        <button type="button" id="btn-ritmo-manual-pod" data-ritmo-mode-btn="manual" data-pod-calc-mode="manual" onclick="setRitmoMode('manual', 'pod')" class="px-2 py-0.5 rounded-r-md font-bold transition cursor-pointer bg-gray-100 text-gray-500 hover:bg-gray-200" aria-pressed="false">Manual</button>
                                     </div>
                                 </div>
-                                <input type="number" id="rate-disch" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="0" placeholder="0" step="any" oninput="marcarRitmoManual('pod')">
-                                <p id="rate-disch-override" class="hidden text-[10px] font-bold text-amber-300 mt-1">Manual Override</p>
+                                <input type="number" id="rate-disch" class="input-gc action-required-field required-use-highlight text-action-required font-bold bg-gray-100 border-gray-200 cursor-not-allowed" value="0" placeholder="0" step="any" readonly aria-readonly="true" data-pod-calc-mode="auto" title="Ritmo Real POD derivado automáticamente (solo lectura). Cambia a Manual para editarlo." oninput="marcarRitmoManual('pod')">
+                                <div id="pod-opex-impact-alert" class="hidden flex items-center p-2 mt-2 text-red-700 bg-red-100 border border-red-300 rounded text-sm font-semibold shadow-sm" role="alert" aria-live="polite"></div>
                                 <div id="delta-dias-badge-pod" class="hidden mt-1 text-[11px] font-bold"></div>
                                 <div id="rate-ref-helper-pod" class="mt-1 text-[10px] text-slate-500 font-medium leading-tight">
                                     <div>Ref. Handysize (Bombas/Cintas): 12,000 - 24,000 TM/D</div>
@@ -42113,6 +42130,10 @@ ADDITIONAL NOTES:
             if (document.getElementById('vessel-badge')) {
                 document.getElementById('vessel-badge').innerText = State.class || "Coaster";
             }
+
+            // Tras repoblar los inputs, el interruptor y el input del POD vuelven a
+            // reflejar `podCalcMode` (y su alerta de impacto en OPEX).
+            if (typeof window.sincronizarModoCalculoPod === 'function') window.sincronizarModoCalculoPod();
         }
 
         function refreshImportedAuditSession() {
@@ -50239,14 +50260,25 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
         }
 
+        // El POD tiene su propio modo de cálculo (`podCalcMode`). El flag legacy
+        // `State.ritmoMode` pertenece al POL, por lo que jamás se consulta desde el
+        // lado POD: hacerlo arrastraba al POD a modo Manual al tocar solo el POL.
         function isRitmoModoManual(side = 'pol') {
-            const rateInputId = side === 'pod' ? 'rate-disch' : 'rate-load';
-            const rateInput = document.getElementById(rateInputId);
-            const modeKey = `ritmoMode_${side}`;
+            const isPod = side === 'pod';
+            const rateInput = document.getElementById(isPod ? 'rate-disch' : 'rate-load');
+            const state = window.State || {};
+            const stateManual = isPod
+                ? (state.podCalcMode === 'manual' || state.ritmoMode_pod === 'manual')
+                : (state.ritmoMode_pol === 'manual' || state.ritmoMode === 'manual');
             return Boolean(
-                (window.State && (window.State[modeKey] === 'manual' || window.State.ritmoMode === 'manual'))
-                || (rateInput && rateInput.dataset.manualOverride === 'true')
+                stateManual
+                || (rateInput && (rateInput.dataset.manualOverride === 'true'
+                    || (isPod && rateInput.dataset.podCalcMode === 'manual')))
             );
+        }
+
+        function getPodCalcMode() {
+            return isRitmoModoManual('pod') ? 'manual' : 'auto';
         }
 
         function syncEficienciaGrua(side = 'pol', source = 'num') {
@@ -50450,6 +50482,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     rateInputEl.removeAttribute('disabled');
                 }
                 resetEficienciaGrua(side);
+            }
+
+            // En el POD el bloqueo del input lo manda el interruptor Auto/Manual,
+            // no el método: se reaplica al final para que el modo siempre gane.
+            if (side === 'pod' && typeof aplicarEstiloRitmoPod === 'function') {
+                aplicarEstiloRitmoPod();
             }
         }
 
@@ -50726,6 +50764,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 rateInput.value = String(ritmoCalculado);
                 rateInput.readOnly = true;
                 setRitmoManualIndicator(side, false);
+                if (side === 'pod' && typeof aplicarEstiloRitmoPod === 'function') {
+                    aplicarEstiloRitmoPod('auto');
+                }
             }
 
             // Inyección inmediata en el estado global para que laytime y OPEX cascadeen.
@@ -50867,23 +50908,63 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
         window.actualizarPDADinamica = actualizarPDADinamica;
 
+        // Alerta de impacto en OPEX. POL y POD comparten estructura, clases y formato
+        // (icono ❗ + días entre corchetes) para que ambas columnas midan exactamente
+        // lo mismo y la cuadrícula no pierda la simetría horizontal.
+        const OPEX_IMPACT_ALERT_CLASSES = 'flex items-center p-2 mt-2 text-red-700 bg-red-100 border border-red-300 rounded text-sm font-semibold shadow-sm';
+
+        function renderOpexImpactAlert(side = 'pol', opexImpactDays = 0) {
+            const alertId = side === 'pod' ? 'pod-opex-impact-alert' : 'pol-opex-impact-alert';
+            const alertEl = document.getElementById(alertId);
+            const dias = Math.max(0, Number(opexImpactDays) || 0);
+            if (!alertEl) return dias;
+
+            // Cada lado solo se pinta con su propio desvío: la variable del POL nunca
+            // alimenta la alerta del POD ni al contrario.
+            if (dias > 0) {
+                alertEl.className = OPEX_IMPACT_ALERT_CLASSES;
+                alertEl.textContent = `❗ [${dias.toFixed(2)}] Días (Impacto Negativo en OPEX)`;
+            } else {
+                alertEl.className = `hidden ${OPEX_IMPACT_ALERT_CLASSES}`;
+                alertEl.textContent = '';
+            }
+
+            return dias;
+        }
+
+        function renderPodOpexImpactAlert(podOpexImpactDays = 0) {
+            return renderOpexImpactAlert('pod', podOpexImpactDays);
+        }
+
+        function publicarImpactoOpexDias(side = 'pol', dias = 0) {
+            const valor = Math.max(0, Number(dias) || 0);
+            if (!window.State) window.State = {};
+            if (side === 'pod') {
+                window.State.podOpexImpactDays = valor;
+            } else {
+                window.State.polOpexImpactDays = valor;
+            }
+            renderOpexImpactAlert(side, valor);
+            return valor;
+        }
+
         function actualizarDesviacionDeltaManual(side = 'pol') {
             const inputId = side === 'pod' ? 'rate-disch' : 'rate-load';
             const badgeId = side === 'pod' ? 'delta-dias-badge-pod' : 'delta-dias-badge-pol';
             const input = document.getElementById(inputId);
             const badgeEl = document.getElementById(badgeId);
 
-            if (!input || !badgeEl) {
+            if (!input) {
+                publicarImpactoOpexDias(side, 0);
                 actualizarPDADinamica(side);
                 return;
             }
 
-            const modeKey = `ritmoMode_${side}`;
-            const isManual = (window.State && (window.State[modeKey] === 'manual' || window.State.ritmoMode === 'manual'))
-                || input.dataset.manualOverride === 'true';
+            const isManual = isRitmoModoManual(side);
 
             if (!isManual) {
-                badgeEl.classList.add('hidden');
+                if (badgeEl) badgeEl.classList.add('hidden');
+                publicarImpactoOpexDias(side, 0);
                 actualizarPDADinamica(side);
                 return;
             }
@@ -50896,22 +50977,27 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const delta = calcularDeltaDias(carga, tpdAuto, tpdManual);
 
             if (delta === null) {
-                badgeEl.classList.add('hidden');
+                if (badgeEl) badgeEl.classList.add('hidden');
+                publicarImpactoOpexDias(side, 0);
                 actualizarPDADinamica(side);
                 return;
             }
 
-            badgeEl.classList.remove('hidden');
+            // El impacto en OPEX se publica por lado antes de pintar cualquier aviso.
+            publicarImpactoOpexDias(side, delta);
 
-            if (Math.abs(delta) < 0.001) {
-                badgeEl.className = 'mt-1 text-[11px] font-bold inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200';
-                badgeEl.textContent = 'Sin desviación vs. Estándar';
-            } else if (delta > 0) {
-                badgeEl.className = 'mt-1 text-[11px] font-bold inline-block px-2 py-0.5 rounded bg-red-100 text-red-800 border border-red-200';
-                badgeEl.textContent = `+ ${delta.toFixed(2)} días (Impacto Negativo en OPEX)`;
-            } else {
-                badgeEl.className = 'mt-1 text-[11px] font-bold inline-block px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200';
-                badgeEl.textContent = `- ${Math.abs(delta).toFixed(2)} días (Ahorro de Tiempo)`;
+            if (badgeEl) {
+                const impactoNegativo = delta > 0.001;
+                // El impacto negativo lo comunica la alerta OPEX dedicada, idéntica en
+                // POL y POD, así que el badge nunca duplica el mensaje en ningún lado.
+                badgeEl.classList.toggle('hidden', impactoNegativo);
+
+                if (!impactoNegativo) {
+                    badgeEl.className = 'mt-1 text-[11px] font-bold inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200';
+                    badgeEl.textContent = 'Sin desviación vs. Estándar';
+                } else {
+                    badgeEl.textContent = '';
+                }
             }
 
             // Aplicar ajuste dinámico a la PDA de la Sección 3
@@ -51055,35 +51141,98 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return readNumeroGruasPuerto(side);
         }
 
+        // ==========================================
+        // INTERRUPTOR AUTO / MANUAL DEL RITMO REAL
+        // Estilo único para ambos puertos: el botón activo queda en azul oscuro y el
+        // inactivo en gris neutro, de modo que el modo vigente se lee de inmediato.
+        // ==========================================
+        const RITMO_MODE_BTN_BASE_AUTO = 'px-2 py-0.5 rounded-l-md font-bold transition cursor-pointer';
+        const RITMO_MODE_BTN_BASE_MANUAL = 'px-2 py-0.5 rounded-r-md font-bold transition cursor-pointer';
+        const RITMO_MODE_BTN_ACTIVE = 'bg-blue-900 text-white';
+        const RITMO_MODE_BTN_INACTIVE = 'bg-gray-100 text-gray-500 hover:bg-gray-200';
+        const POD_RATE_AUTO_CLASSES = ['bg-gray-100', 'border-gray-200', 'cursor-not-allowed'];
+        const POD_RATE_MANUAL_CLASSES = ['bg-green-100', 'text-green-900', 'border-green-300'];
+
+        function aplicarEstadoBotonesRitmo(side = 'pol', mode = 'auto') {
+            const isManual = mode === 'manual';
+            const autoBtn = document.getElementById(`btn-ritmo-auto-${side}`) || document.getElementById('btn-mode-auto');
+            const manualBtn = document.getElementById(`btn-ritmo-manual-${side}`) || document.getElementById('btn-mode-manual');
+
+            if (autoBtn) {
+                autoBtn.className = `${RITMO_MODE_BTN_BASE_AUTO} ${isManual ? RITMO_MODE_BTN_INACTIVE : RITMO_MODE_BTN_ACTIVE}`;
+                autoBtn.setAttribute('aria-pressed', isManual ? 'false' : 'true');
+            }
+            if (manualBtn) {
+                manualBtn.className = `${RITMO_MODE_BTN_BASE_MANUAL} ${isManual ? RITMO_MODE_BTN_ACTIVE : RITMO_MODE_BTN_INACTIVE}`;
+                manualBtn.setAttribute('aria-pressed', isManual ? 'true' : 'false');
+            }
+        }
+
+        // El input de Ritmo Real POD reacciona al interruptor: bloqueado y gris cuando
+        // el ritmo lo deriva el motor, editable y verde cuando lo teclea el usuario.
+        function aplicarEstiloRitmoPod(mode = getPodCalcMode()) {
+            const input = document.getElementById('rate-disch');
+            if (!input) return mode;
+
+            const isManual = mode === 'manual';
+            input.dataset.podCalcMode = isManual ? 'manual' : 'auto';
+            input.readOnly = !isManual;
+            if (isManual) {
+                input.removeAttribute('readonly');
+            } else {
+                input.setAttribute('readonly', 'readonly');
+            }
+            input.setAttribute('aria-readonly', isManual ? 'false' : 'true');
+
+            POD_RATE_AUTO_CLASSES.forEach(cls => input.classList.toggle(cls, !isManual));
+            POD_RATE_MANUAL_CLASSES.forEach(cls => input.classList.toggle(cls, isManual));
+
+            input.title = isManual
+                ? 'Ritmo Real POD editable (modo Manual).'
+                : 'Ritmo Real POD derivado automáticamente (solo lectura). Cambia a Manual para editarlo.';
+
+            return mode;
+        }
+
+        // Sincroniza interruptor, input y alerta OPEX del POD con `podCalcMode`.
+        function sincronizarModoCalculoPod() {
+            const mode = getPodCalcMode();
+            if (!window.State) window.State = {};
+            window.State.podCalcMode = mode;
+            aplicarEstadoBotonesRitmo('pod', mode);
+            aplicarEstiloRitmoPod(mode);
+            renderPodOpexImpactAlert(window.State.podOpexImpactDays || 0);
+            return mode;
+        }
+
         function setRitmoManualIndicator(side = 'pol', isManual = false) {
             const inputId = side === 'pod' ? 'rate-disch' : 'rate-load';
-            const badgeId = side === 'pod' ? 'rate-disch-override' : 'rate-load-override';
             const input = document.getElementById(inputId);
-            const badge = document.getElementById(badgeId);
+            // El modo ya se comunica con el interruptor Auto/Manual: el texto residual
+            // "Manual Override" se retiró de ambas columnas para no romper su altura.
             if (input) {
                 input.dataset.manualOverride = isManual ? 'true' : 'false';
                 input.classList.toggle('border-amber-400', isManual);
                 input.classList.toggle('text-amber-300', isManual);
             }
-            if (badge) badge.classList.toggle('hidden', !isManual);
         }
 
         function setRitmoMode(mode = 'auto', side = null) {
             const sides = side ? [side] : ['pol', 'pod'];
+            const targetMode = mode === 'manual' ? 'manual' : 'auto';
 
             sides.forEach(s => {
                 const key = `ritmoMode_${s}`;
                 if (!window.State) window.State = {};
-                window.State[key] = mode;
-                if (!side || side === 'pol') window.State.ritmoMode = mode;
+                window.State[key] = targetMode;
+                // `State.ritmoMode` es el flag legacy del POL: el POD usa `podCalcMode`.
+                if (!side || side === 'pol') window.State.ritmoMode = targetMode;
+                if (s === 'pod') window.State.podCalcMode = targetMode;
 
                 const inputId = s === 'pod' ? 'rate-disch' : 'rate-load';
                 const input = document.getElementById(inputId);
 
-                const autoBtn = document.getElementById(`btn-ritmo-auto-${s}`) || document.getElementById('btn-mode-auto');
-                const manualBtn = document.getElementById(`btn-ritmo-manual-${s}`) || document.getElementById('btn-mode-manual');
-
-                if (mode === 'manual') {
+                if (targetMode === 'manual') {
                     if (input) {
                         const shadowKey = s === 'pol' ? 'tpdAutoSombraPol' : 'tpdAutoSombraPod';
                         if (!window.State[shadowKey] || window.State[shadowKey] <= 0) {
@@ -51096,14 +51245,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         input.classList.remove('cursor-not-allowed', 'bg-slate-100');
                         input.dataset.manualOverride = 'true';
                     }
-                    if (autoBtn) {
-                        autoBtn.className = 'px-2 py-0.5 rounded-l-md bg-slate-200 text-slate-700 font-bold transition cursor-pointer';
-                        autoBtn.setAttribute('aria-pressed', 'false');
-                    }
-                    if (manualBtn) {
-                        manualBtn.className = 'px-2 py-0.5 rounded-r-md bg-[#1E3A8A] text-white font-bold transition cursor-pointer';
-                        manualBtn.setAttribute('aria-pressed', 'true');
-                    }
+                    aplicarEstadoBotonesRitmo(s, 'manual');
+                    if (s === 'pod') aplicarEstiloRitmoPod('manual');
                     setRitmoManualIndicator(s, true);
                     // Congelar el slider de eficiencia y despejar su valor implícito.
                     sincronizarEficienciaInversa(s);
@@ -51111,20 +51254,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     if (input) {
                         input.dataset.manualOverride = 'false';
                     }
-                    if (autoBtn) {
-                        autoBtn.className = 'px-2 py-0.5 rounded-l-md bg-[#1E3A8A] text-white font-bold transition cursor-pointer';
-                        autoBtn.setAttribute('aria-pressed', 'true');
-                    }
-                    if (manualBtn) {
-                        manualBtn.className = 'px-2 py-0.5 rounded-r-md bg-slate-200 text-slate-700 font-bold transition cursor-pointer';
-                        manualBtn.setAttribute('aria-pressed', 'false');
-                    }
+                    aplicarEstadoBotonesRitmo(s, 'auto');
                     setRitmoManualIndicator(s, false);
                     // Al volver a Auto la eficiencia recupera su condición de input.
                     setEficienciaGruaBloqueada(s, false);
                     if (typeof actualizarSubmoduloGruas === 'function') {
                         actualizarSubmoduloGruas(s);
                     }
+                    if (s === 'pod') aplicarEstiloRitmoPod('auto');
                 }
                 actualizarDesviacionDeltaManual(s);
             });
@@ -51133,6 +51270,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (typeof runEngine === 'function') runEngine();
         }
         window.setRitmoMode = setRitmoMode;
+        window.getPodCalcMode = getPodCalcMode;
+        window.isRitmoModoManual = isRitmoModoManual;
+        window.renderPodOpexImpactAlert = renderPodOpexImpactAlert;
+        window.renderOpexImpactAlert = renderOpexImpactAlert;
+        window.aplicarEstiloRitmoPod = aplicarEstiloRitmoPod;
+        window.sincronizarModoCalculoPod = sincronizarModoCalculoPod;
 
         function marcarRitmoManual(side = 'pol') {
             const inputId = side === 'pod' ? 'rate-disch' : 'rate-load';
@@ -51154,18 +51297,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     if (side === 'pol') window.State.loadRate = val;
                     else window.State.dischRate = val;
                     window.State[`ritmoMode_${side}`] = 'manual';
+                    if (side === 'pod') window.State.podCalcMode = 'manual';
                 }
             }
-            const autoBtn = document.getElementById(`btn-ritmo-auto-${side}`);
-            const manualBtn = document.getElementById(`btn-ritmo-manual-${side}`);
-            if (autoBtn) {
-                autoBtn.className = 'px-2 py-0.5 rounded-l-md bg-slate-200 text-slate-700 font-bold transition cursor-pointer';
-                autoBtn.setAttribute('aria-pressed', 'false');
-            }
-            if (manualBtn) {
-                manualBtn.className = 'px-2 py-0.5 rounded-r-md bg-[#1E3A8A] text-white font-bold transition cursor-pointer';
-                manualBtn.setAttribute('aria-pressed', 'true');
-            }
+            aplicarEstadoBotonesRitmo(side, 'manual');
+            if (side === 'pod') aplicarEstiloRitmoPod('manual');
             setRitmoManualIndicator(side, true);
             // Vínculo inverso en tiempo real: el slider de eficiencia retrocede
             // según el ritmo teclado y pinta el semáforo de riesgo OPEX.
@@ -55238,8 +55374,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const rateInputId = s === 'pod' ? 'rate-disch' : 'rate-load';
                 const rateInput = document.getElementById(rateInputId);
                 const modeKey = `ritmoMode_${s}`;
-                const isManual = (window.State[modeKey] === 'manual' || window.State.ritmoMode === 'manual')
-                    || (rateInput && rateInput.dataset.manualOverride === 'true');
+                // El modo se evalúa por puerto: el POD no hereda el flag legacy del POL.
+                const isManual = typeof window.isRitmoModoManual === 'function'
+                    ? window.isRitmoModoManual(s)
+                    : ((window.State[modeKey] === 'manual' || (s !== 'pod' && window.State.ritmoMode === 'manual'))
+                        || (rateInput && rateInput.dataset.manualOverride === 'true'));
 
                 if (!isManual && rateInput) {
                     let estimatedTpd = 0;
@@ -55502,7 +55641,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     window.State.totalPortDays = totalPortDays;
                     if (side === 'pol') window.State.loadRate = loadRate;
                     if (side === 'pod') window.State.dischRate = dischRate;
-                    window.State[`ritmoMode_${side}`] = 'manual';
+                    // Solo un campo editable puede reclamar el override manual: las
+                    // escrituras programáticas en modo Auto no deben cambiar el modo.
+                    const rateEl = document.getElementById(side === 'pod' ? 'rate-disch' : 'rate-load');
+                    if (!rateEl || !rateEl.readOnly) {
+                        window.State[`ritmoMode_${side}`] = 'manual';
+                        if (side === 'pod') window.State.podCalcMode = 'manual';
+                    }
                 }
 
                 if (typeof window.actualizarPDADinamica === 'function') {
@@ -55726,6 +55871,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             initMotorRitmosYFinanzas();
             renderMethodPills('pol');
             renderMethodPills('pod');
+            if (typeof window.sincronizarModoCalculoPod === 'function') window.sincronizarModoCalculoPod();
             if (typeof updateCargoMetricsUi === 'function') updateCargoMetricsUi();
             actualizarGrabCapacityVisibility();
             initVoyageEstimatorTooltips();
