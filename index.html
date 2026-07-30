@@ -33101,7 +33101,7 @@
             );
 
             const jwcClauseText = isJwcActive
-                ? `\n\n- JWC WAR RISK    : ANY ADDITIONAL PREMIUMS (AWRP / K&R / ETC) C/O CHARTERERS AS PER JWC.`
+                ? `<li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">JWC WAR RISK    : ANY ADDITIONAL PREMIUMS (AWRP / K&R / ETC) C/O CHARTERERS AS PER JWC.</li>`
                 : '';
 
             const dateStr = new Date().toLocaleDateString('es-ES');
@@ -33114,79 +33114,87 @@
             const cleanLoadRate = loadRate.toLocaleString('en-US');
 
             return `
-<div style="font-family: 'Courier New', Courier, monospace; color: #0f172a; line-height: 1.45; font-size: 11px; background: #ffffff; padding: 10px;">
-================================================================================
-RODAHMAR SHIPPING SL - FIRM FIXTURE RECAP / OFERTA COMERCIAL
-================================================================================
-ISSUED BY : RODAHMAR SHIPPING SL (AS DISPONENT OWNERS)
-DATE      : ${dateStr}
-REF NO    : ${refNo}
-VALIDITY  : 24 HOURS FROM ISSUANCE - SUBJECT UNREPLIED
-================================================================================
+<div style="font-family: 'Courier New', Courier, monospace; color: #0f172a; line-height: 1.55; font-size: 9.5pt; background: #ffffff; padding: 15px; max-width: 800px; margin: 0 auto;">
+    <style>
+        .recap-section { break-inside: avoid !important; page-break-inside: avoid !important; }
+        .recap-section h4, .recap-title { break-after: avoid !important; page-break-after: avoid !important; }
+        .recap-list li { break-inside: avoid !important; page-break-inside: avoid !important; }
+    </style>
+    <div style="border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 14px; break-inside: avoid; page-break-inside: avoid;">
+        <div style="font-weight: bold; font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+            RODAHMAR SHIPPING SL - FIRM FIXTURE RECAP / OFERTA COMERCIAL
+        </div>
+        <div style="font-size: 9.5pt; color: #334155; line-height: 1.55;">
+            ISSUED BY : RODAHMAR SHIPPING SL (AS DISPONENT OWNERS)<br/>
+            DATE      : ${dateStr}<br/>
+            REF NO    : ${refNo}<br/>
+            VALIDITY  : 24 HOURS FROM ISSUANCE - SUBJECT UNREPLIED
+        </div>
+    </div>
 
-WE ARE PLEASED TO CONFIRM THE FOLLOWING FIRM FIXTURE RECAP FOR THE UNDERMENTIONED
-VOYAGE UNDER THE FOLLOWING MAIN TERMS AND CONDITIONS:
+    <div style="margin-bottom: 14px; font-weight: bold; color: #1e293b;">
+        WE ARE PLEASED TO CONFIRM THE FOLLOWING FIRM FIXTURE RECAP FOR THE UNDERMENTIONED VOYAGE UNDER THE FOLLOWING MAIN TERMS AND CONDITIONS:
+    </div>
 
-1. MAIN TERMS
---------------------------------------------------------------------------------
-- ACCT        : CHARTERERS ACCOUNT / AS NOMINATED BY CHARTERERS
-- OWNERS      : RODAHMAR SHIPPING SL (AS DISPONENT OWNERS)
-- VESSEL      : ${shipName} - ABT ${formattedDwt} MT DWT FULLY GEARED WITH 4 X 30 MT SWL CRANES AND ELECTRIC GRABS (${vesselType})
-- CARGO       : ${cleanCargoQty} METRIC TONS 5% MOLOO (MORE OR LESS IN
-                OWNERS' OPTION) OF ${cleanCommodity}
-- POL         : 1 SAFE BERTH / 1 SAFE PORT ${cleanPol}
-- POD         : 1 SAFE BERTH / 1 SAFE PORT ${cleanPod}
-- LAYCAN      : ${laycanDaysLeft} DAYS NOTICE FROM DATE / AS PER AGREED VOYAGE SCHEDULE
+    <!-- 1. MAIN TERMS -->
+    <div class="recap-section" style="margin-bottom: 14px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px; background: #f8fafc; break-inside: avoid; page-break-inside: avoid;">
+        <h4 class="recap-title" style="font-weight: bold; font-size: 9.5pt; text-transform: uppercase; border-bottom: 1px solid #94a3b8; padding-bottom: 4px; margin-top: 0; margin-bottom: 8px; color: #0f172a; break-after: avoid; page-break-after: avoid;">
+            1. MAIN TERMS
+        </h4>
+        <ul class="recap-list" style="list-style-type: disc; margin: 0; padding-left: 20px;">
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">ACCT        : CHARTERERS ACCOUNT / AS NOMINATED BY CHARTERERS</li>
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">OWNERS      : RODAHMAR SHIPPING SL (AS DISPONENT OWNERS)</li>
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">VESSEL      : ${shipName} - ABT ${formattedDwt} MT DWT FULLY GEARED WITH 4 X 30 MT SWL CRANES AND ELECTRIC GRABS (${vesselType})</li>
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">CARGO       : ${cleanCargoQty} METRIC TONS 5% MOLOO (MORE OR LESS IN OWNERS' OPTION) OF ${cleanCommodity}</li>
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">POL         : 1 SAFE BERTH / 1 SAFE PORT ${cleanPol}</li>
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">POD         : 1 SAFE BERTH / 1 SAFE PORT ${cleanPod}</li>
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">LAYCAN      : ${laycanDaysLeft} DAYS NOTICE FROM DATE / AS PER AGREED VOYAGE SCHEDULE</li>
+        </ul>
+    </div>
 
-2. FREIGHT & FINANCIALS
---------------------------------------------------------------------------------
-- FREIGHT RATE: USD $${allInRateGross} PER METRIC TONNE (OR LUMPSUM USD $${cleanFleteTotal})
-                FREIGHT: USD ${allInRateGross} PER METRIC TON FIOST BSS 1/1. RATE INCLUDES ALL APPLICABLE DSS RISK SURCHARGES.
-- TERMS       : FIOS (FREE IN AND OUT STOWED), FREE OF ALL RISK, EXPENSE, 
-                STEVEDORING AND RESPONSIBILITY TO OWNERS.
-- PAYMENT     : 100% FREIGHT PRE-PAYABLE WITHIN 3 BANKING DAYS AFTER SIGNING 
-                AND RELEASING BILLS OF LADING (BS/L), DISCOUNTLESS AND 
-                NON-REFUNDABLE, SHIP AND/OR CARGO LOST OR NOT LOST.
+    <!-- 2. FREIGHT & FINANCIALS -->
+    <div class="recap-section" style="margin-bottom: 14px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px; background: #f8fafc; break-inside: avoid; page-break-inside: avoid;">
+        <h4 class="recap-title" style="font-weight: bold; font-size: 9.5pt; text-transform: uppercase; border-bottom: 1px solid #94a3b8; padding-bottom: 4px; margin-top: 0; margin-bottom: 8px; color: #0f172a; break-after: avoid; page-break-after: avoid;">
+            2. FREIGHT & FINANCIALS
+        </h4>
+        <ul class="recap-list" style="list-style-type: disc; margin: 0; padding-left: 20px;">
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">FREIGHT RATE: USD $${allInRateGross} PER METRIC TONNE (OR LUMPSUM USD $${cleanFleteTotal})<br/><span style="color: #334155;">FREIGHT: USD ${allInRateGross} PER METRIC TON FIOST BSS 1/1. RATE INCLUDES ALL APPLICABLE DSS RISK SURCHARGES.</span></li>
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">TERMS       : FIOS (FREE IN AND OUT STOWED), FREE OF ALL RISK, EXPENSE, STEVEDORING AND RESPONSIBILITY TO OWNERS.</li>
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">PAYMENT     : 100% FREIGHT PRE-PAYABLE WITHIN 3 BANKING DAYS AFTER SIGNING AND RELEASING BILLS OF LADING (BS/L), DISCOUNTLESS AND NON-REFUNDABLE, SHIP AND/OR CARGO LOST OR NOT LOST.</li>
+        </ul>
+    </div>
 
-3. LAYTIME & OPERATIONS
---------------------------------------------------------------------------------
-- LOADING RATE   : ${cleanLoadRate} METRIC TONS PER WEATHER WORKING DAY OF 24
-                   CONSECUTIVE HOURS, SUNDAYS AND HOLIDAYS INCLUDED (WWD SHINC).
-- DISDISCH RATE  : MECHANICALLY LIMITED TO ~2,000 METRIC TONS PER WEATHER WORKING
-                   DAY OF 24 CONSECUTIVE HOURS, SUNDAYS AND HOLIDAYS INCLUDED 
-                   (WWD SHINC) ON VESSEL'S GEAR.
-- DEMURRAGE      : USD ${demurrageRate} PER DAY PRO RATA FOR ANY TIME LOST AT POL/POD.
-- DESPATCH       : NIL / HALF DEMURRAGE ON WORKING TIME SAVED.
-- NOTICES        : 5 / 3 / 2 / 1 DAYS APPROXIMATE NOTICE AND 24 HOURS DEFINITE
-                   NOTICE OF READINESS (NOR) TO BE TENDERED AT POL AND POD.
+    <!-- 3. LAYTIME & OPERATIONS -->
+    <div class="recap-section" style="margin-bottom: 14px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px; background: #f8fafc; break-inside: avoid; page-break-inside: avoid;">
+        <h4 class="recap-title" style="font-weight: bold; font-size: 9.5pt; text-transform: uppercase; border-bottom: 1px solid #94a3b8; padding-bottom: 4px; margin-top: 0; margin-bottom: 8px; color: #0f172a; break-after: avoid; page-break-after: avoid;">
+            3. LAYTIME & OPERATIONS
+        </h4>
+        <ul class="recap-list" style="list-style-type: disc; margin: 0; padding-left: 20px;">
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">LOADING RATE   : ${cleanLoadRate} METRIC TONS PER WEATHER WORKING DAY OF 24 CONSECUTIVE HOURS, SUNDAYS AND HOLIDAYS INCLUDED (WWD SHINC).</li>
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">DISDISCH RATE  : MECHANICALLY LIMITED TO ~2,000 METRIC TONS PER WEATHER WORKING DAY OF 24 CONSECUTIVE HOURS, SUNDAYS AND HOLIDAYS INCLUDED (WWD SHINC) ON VESSEL'S GEAR.</li>
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">DEMURRAGE      : USD ${demurrageRate} PER DAY PRO RATA FOR ANY TIME LOST AT POL/POD.</li>
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">DESPATCH       : NIL / HALF DEMURRAGE ON WORKING TIME SAVED.</li>
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">NOTICES        : 5 / 3 / 2 / 1 DAYS APPROXIMATE NOTICE AND 24 HOURS DEFINITE NOTICE OF READINESS (NOR) TO BE TENDERED AT POL AND POD.</li>
+        </ul>
+    </div>
 
-4. SPECIAL CLAUSES
---------------------------------------------------------------------------------
-- GEAR CLAUSE    : VESSEL'S CRANES AND GRABS SHALL BE PROVIDED FREE OF EXPENSE
-                   TO CHARTERERS FOR LOADING AND DISCHARGING OPERATIONS. HOWEVER,
-                   DISCHARGE RATE USING VESSEL'S GEAR IS STRICTLY LIMITED 
-                   MECHANICALLY TO MAXIMUM ~2,000 MT/DAY. SHOULD CHARTERERS
-                   REQUIRE OR DEMAND A HIGHER LOADING/DISCHARGING RATE,
-                   CHARTERERS SHALL HIRE AND PAY FOR SHORE CRANES, SHORE 
-                   EQUIPMENT OR SHORE LABOR AT THEIR SOLE EXPENSE UNDER FIO TERMS
-                   WITHOUT DELAY OR LIABILITY TO THE VESSEL.
+    <!-- 4. SPECIAL CLAUSES -->
+    <div class="recap-section" style="margin-bottom: 14px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px; background: #f8fafc; break-inside: avoid; page-break-inside: avoid;">
+        <h4 class="recap-title" style="font-weight: bold; font-size: 9.5pt; text-transform: uppercase; border-bottom: 1px solid #94a3b8; padding-bottom: 4px; margin-top: 0; margin-bottom: 8px; color: #0f172a; break-after: avoid; page-break-after: avoid;">
+            4. SPECIAL CLAUSES
+        </h4>
+        <ul class="recap-list" style="list-style-type: disc; margin: 0; padding-left: 20px;">
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">GEAR CLAUSE    : VESSEL'S CRANES AND GRABS SHALL BE PROVIDED FREE OF EXPENSE TO CHARTERERS FOR LOADING AND DISCHARGING OPERATIONS. HOWEVER, DISCHARGE RATE USING VESSEL'S GEAR IS STRICTLY LIMITED MECHANICALLY TO MAXIMUM ~2,000 MT/DAY. SHOULD CHARTERERS REQUIRE OR DEMAND A HIGHER LOADING/DISCHARGING RATE, CHARTERERS SHALL HIRE AND PAY FOR SHORE CRANES, SHORE EQUIPMENT OR SHORE LABOR AT THEIR SOLE EXPENSE UNDER FIO TERMS WITHOUT DELAY OR LIABILITY TO THE VESSEL.</li>
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">WEATHER CLAUSE : TIME LOST DUE TO ADVERSE WEATHER, BAD SEA CONDITIONS, OR FORCE MAJEURE EVENTS PREVENTING SAFE LOADING/DISCHARGING OPERATIONS SHALL NOT COUNT AS LAYTIME UNLESS THE VESSEL IS ALREADY ON DEMURRAGE.</li>
+            ${jwcClauseText}
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">C/P FORM       : GENCON 1994 CHARTERPARTY FORM AS REVISED, INCORPORATING BIMCO WAR RISKS CLAUSE (VOYWAR 2025), SANCTIONS CLAUSE, AND EU CBAM COMPLIANCE CLAUSE.</li>
+            <li style="margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid;">ARBITRATION    : THIS RECAP AND SUBSEQUENT CHARTERPARTY SHALL BE GOVERNED BY ENGLISH LAW AND ANY DISPUTE ARISEN SHALL BE REFERRED TO ARBITRATION IN LONDON IN ACCORDANCE WITH LMAA TERMS.</li>
+        </ul>
+    </div>
 
-- WEATHER CLAUSE : TIME LOST DUE TO ADVERSE WEATHER, BAD SEA CONDITIONS, OR
-                   FORCE MAJEURE EVENTS PREVENTING SAFE LOADING/DISCHARGING
-                   OPERATIONS SHALL NOT COUNT AS LAYTIME UNLESS THE VESSEL IS
-                   ALREADY ON DEMURRAGE.${jwcClauseText}
-
-- C/P FORM       : GENCON 1994 CHARTERPARTY FORM AS REVISED, INCORPORATING
-                   BIMCO WAR RISKS CLAUSE (VOYWAR 2025), SANCTIONS CLAUSE,
-                   AND EU CBAM COMPLIANCE CLAUSE.
-
-- ARBITRATION    : THIS RECAP AND SUBSEQUENT CHARTERPARTY SHALL BE GOVERNED BY
-                   ENGLISH LAW AND ANY DISPUTE ARISEN SHALL BE REFERRED TO
-                   ARBITRATION IN LONDON IN ACCORDANCE WITH LMAA TERMS.
-
-================================================================================
-END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL
-================================================================================
+    <div style="border-top: 2px solid #0f172a; padding-top: 8px; margin-top: 14px; text-align: center; font-weight: bold; font-size: 9.5pt; break-inside: avoid; page-break-inside: avoid;">
+        END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL
+    </div>
 </div>
             `;
         }
@@ -33270,7 +33278,8 @@ END OF FIRM FIXTURE RECAP - RODAHMAR SHIPPING SL
                         filename:     filename,
                         image:        { type: 'jpeg', quality: 0.98 },
                         html2canvas:  { scale: 2, useCORS: true, logging: true },
-                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
                     };
                     await html2pdf().from(htmlString).set(opt).save();
                 } else if (window.jspdf?.jsPDF || window.jsPDF) {
