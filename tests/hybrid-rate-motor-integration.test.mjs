@@ -222,6 +222,9 @@ test('Motor de Ritmos Híbrido: actualizarSubmoduloGruas shows submodulo-gruas f
     const actualizarGrabCapacityVisibility = () => {};
     const resetEficienciaGrua = () => {};
     const calcularRitmoGrua = () => {};
+    const isRitmoModoManual = () => false;
+    const sincronizarEficienciaInversa = () => null;
+    const setEficienciaGruaBloqueada = () => {};
     ${indexSource.match(/function actualizarSubmoduloGruas\([\s\S]*?\n        \}/)[0]}
     window.actualizarSubmoduloGruas = actualizarSubmoduloGruas;
   `;

@@ -68,6 +68,7 @@ function buildCraneContext(elements = new Map(), overrides = {}) {
     extractDeclaration('getSwlForMethod'),
     extractDeclaration('getTaraForMethod'),
     extractDeclaration('getAutoEficienciaForMethodAndCategory'),
+    extractDeclaration('getCapacidadTeoricaGrua'),
     extractDeclaration('calcularRitmoGruaTeorico')
   ].join('\n');
 
