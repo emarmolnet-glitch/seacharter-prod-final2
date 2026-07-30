@@ -17750,12 +17750,27 @@
         window.evaluateReactiveSyncStatus = evaluateReactiveSyncStatus;
 
         window.SeaCharterStore?.subscribe?.(() => evaluateReactiveSyncStatus());
+        let syncStatusTimer = null;
         window.addEventListener('DOMContentLoaded', () => {
             ['port-pol', 'map-port-pol', 'port-pod', 'map-port-pod', 'gc-laycan-date', 'map-laycan-date'].forEach((id) => {
                 const input = document.getElementById(id);
                 if (!input || input.dataset.reactiveSyncBound === 'true') return;
-                input.addEventListener('input', () => evaluateReactiveSyncStatus());
-                input.addEventListener('change', () => evaluateReactiveSyncStatus());
+                const isGeographic = ['port-pol', 'map-port-pol', 'port-pod', 'map-port-pod'].includes(id);
+                input.addEventListener('input', () => {
+                    if (isGeographic) {
+                        if (syncStatusTimer) clearTimeout(syncStatusTimer);
+                        syncStatusTimer = setTimeout(() => {
+                            syncStatusTimer = null;
+                            evaluateReactiveSyncStatus();
+                        }, 400);
+                    } else {
+                        evaluateReactiveSyncStatus();
+                    }
+                });
+                input.addEventListener('change', () => {
+                    if (isGeographic && syncStatusTimer) { clearTimeout(syncStatusTimer); syncStatusTimer = null; }
+                    evaluateReactiveSyncStatus();
+                });
                 input.dataset.reactiveSyncBound = 'true';
             });
             evaluateReactiveSyncStatus();
@@ -54840,10 +54855,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 etaRadarInput.addEventListener('paste', blockLockedEtaEdit);
                 etaRadarInput.addEventListener('mousedown', blockLockedEtaEdit);
             }
+            let mapPortTimer = null;
             ['map-port-ballast', 'map-port-pol', 'map-port-pod', 'map-laycan-date', 'map-cancelling-date'].forEach((id) => {
                 const el = document.getElementById(id);
                 if (!el) return;
-                el.addEventListener('input', () => {
+                const isGeographic = ['map-port-pol', 'map-port-pod', 'map-port-ballast'].includes(id);
+                const handleMapInput = () => {
                     if (id.startsWith('map-port-')) {
                         const stateKey = id === 'map-port-ballast' ? 'portBallast' : (id === 'map-port-pod' ? 'pod' : 'pol');
                         SeaCharterStore.set({ [stateKey]: el.value });
@@ -54853,26 +54870,52 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     if (typeof validateGeographicLaycanDates === 'function') validateGeographicLaycanDates();
                     captureRouteStateFromMapInputs();
                     scheduleReactiveEngine();
+                };
+                el.addEventListener('input', () => {
+                    if (isGeographic) {
+                        if (mapPortTimer) clearTimeout(mapPortTimer);
+                        mapPortTimer = setTimeout(() => {
+                            mapPortTimer = null;
+                            handleMapInput();
+                        }, 400);
+                    } else {
+                        handleMapInput();
+                    }
                 });
                 el.addEventListener('change', () => {
+                    if (isGeographic && mapPortTimer) { clearTimeout(mapPortTimer); mapPortTimer = null; }
                     if (typeof validateGeographicLaycanDates === 'function') validateGeographicLaycanDates();
                     captureRouteStateFromMapInputs();
                     scheduleReactiveEngine();
                 });
             });
+            let calcPortTimer = null;
             ['port-ballast', 'port-pol', 'port-pod', 'gc-laycan-date', 'gc-laycan-time', 'gc-cancel-date', 'gc-cancel-time', 'asb-laycan-date', 'asb-laycan-time', 'asb-cancel-date', 'asb-cancel-time', 'eta-radar', 'delta-historico', 'factor-clima', 't-fondeo', 't-remolcadores', 'laycan-dias-libres', 'dist-ballast', 'dist-laden'].forEach((id) => {
                 const el = document.getElementById(id);
                 if (!el) return;
-                el.addEventListener('input', () => {
+                const isGeographic = ['port-pol', 'port-pod', 'port-ballast'].includes(id);
+                const handleCalcInput = () => {
                     SeaCharterStore.set(readRouteStateFromCalculator());
-                    if (['port-ballast', 'port-pol', 'port-pod'].includes(id)) {
+                    if (isGeographic) {
                         scheduleReactiveEngine();
                         return;
                     }
                     syncGlobalStateToForms();
                     scheduleReactiveEngine();
+                };
+                el.addEventListener('input', () => {
+                    if (isGeographic) {
+                        if (calcPortTimer) clearTimeout(calcPortTimer);
+                        calcPortTimer = setTimeout(() => {
+                            calcPortTimer = null;
+                            handleCalcInput();
+                        }, 400);
+                    } else {
+                        handleCalcInput();
+                    }
                 });
                 el.addEventListener('change', () => {
+                    if (isGeographic && calcPortTimer) { clearTimeout(calcPortTimer); calcPortTimer = null; }
                     SeaCharterStore.set(readRouteStateFromCalculator());
                     syncGlobalStateToForms();
                     scheduleReactiveEngine();
@@ -54991,14 +55034,25 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.updateCBAMModuleView?.();
         };
         refreshCargoClassification();
+        let cbamPortTimer = null;
         ['cargo-qty', 'cargo-type-manual', 'product-sector', 'cargo-category', 'port-pol', 'port-pod', 'cbam-sector', 'cbam-origin', 'cbam-destination', 'cbam-quantity', 'cbam-reported-emissions', 'cbam-competitor-origin', 'cbam-competitor-factor'].forEach((id) => {
             const el = document.getElementById(id);
             if (!el) return;
+            const isGeographic = ['port-pol', 'port-pod'].includes(id);
             el.addEventListener('input', () => {
-                if (id === 'cargo-type-manual') refreshCargoClassification();
-                refreshCBAMCalculations(id);
+                if (isGeographic) {
+                    if (cbamPortTimer) clearTimeout(cbamPortTimer);
+                    cbamPortTimer = setTimeout(() => {
+                        cbamPortTimer = null;
+                        refreshCBAMCalculations(id);
+                    }, 400);
+                } else {
+                    if (id === 'cargo-type-manual') refreshCargoClassification();
+                    refreshCBAMCalculations(id);
+                }
             });
             el.addEventListener('change', () => {
+                if (isGeographic && cbamPortTimer) { clearTimeout(cbamPortTimer); cbamPortTimer = null; }
                 if (id === 'cargo-type-manual') refreshCargoClassification();
                 refreshCBAMCalculations(id);
             });

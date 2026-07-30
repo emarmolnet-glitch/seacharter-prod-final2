@@ -984,9 +984,26 @@
                 if (this.isWriting || event.target?.id !== 't-remolcadores') return;
                 delete event.target.dataset.autoEstimated;
             }, true);
+            let timer = null;
+            const debouncedRecalculate = (delay = 400) => {
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(() => {
+                    timer = null;
+                    this.recalculate({ renderTotals: false });
+                }, delay);
+            };
             const handler = (event) => {
                 if (this.isWriting) return;
                 if (!event.target || !event.target.matches('input, select, textarea')) return;
+                const targetId = event.target.id;
+                const isGeographic = targetId === 'port-pol' || targetId === 'port-pod' || targetId === 'map-port-pol' || targetId === 'map-port-pod';
+                if (isGeographic) {
+                    if (event.type === 'input') {
+                        debouncedRecalculate(400);
+                        return;
+                    }
+                    if (timer) { clearTimeout(timer); timer = null; }
+                }
                 this.recalculate({ renderTotals: false });
             };
             container.addEventListener('input', handler);
@@ -994,12 +1011,23 @@
         }
 
         bindRouteListeners() {
+            let timer = null;
+            const debouncedRecalculate = (delay = 400) => {
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(() => {
+                    timer = null;
+                    this.recalculate({ renderTotals: false });
+                }, delay);
+            };
             ['port-pol', 'port-pod'].forEach((id) => {
                 const input = this.el(id);
                 if (!input || input.dataset.voyageRouteListener === 'true') return;
                 input.dataset.voyageRouteListener = 'true';
-                input.addEventListener('input', () => this.recalculate({ renderTotals: false }));
-                input.addEventListener('blur', () => this.recalculate({ renderTotals: false }));
+                input.addEventListener('input', () => debouncedRecalculate(400));
+                input.addEventListener('blur', () => {
+                    if (timer) { clearTimeout(timer); timer = null; }
+                    this.recalculate({ renderTotals: false });
+                });
             });
         }
 

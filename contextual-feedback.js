@@ -166,9 +166,19 @@
             }
         }
 
+        let routeAnnounceTimer = null;
+        function debouncedAnnounceRoute(target, delay = 400) {
+            if (routeAnnounceTimer) globalObject.clearTimeout(routeAnnounceTimer);
+            routeAnnounceTimer = globalObject.setTimeout(() => {
+                routeAnnounceTimer = null;
+                announceRouteWhenReady(target);
+            }, delay);
+        }
+
         documentObject.addEventListener('change', (event) => {
             const target = event.target;
             if (!(target instanceof globalObject.Element)) return;
+            if (routeAnnounceTimer) { globalObject.clearTimeout(routeAnnounceTimer); routeAnnounceTimer = null; }
             announceRouteWhenReady(target);
             announceModuleUpdate(target);
         });
@@ -176,7 +186,11 @@
         documentObject.addEventListener('input', (event) => {
             const target = event.target;
             if (!(target instanceof globalObject.Element)) return;
-            announceRouteWhenReady(target);
+            if (target.matches('#map-port-pol, #map-port-pod, #port-pol, #port-pod')) {
+                debouncedAnnounceRoute(target, 400);
+            } else {
+                announceRouteWhenReady(target);
+            }
             announceModuleUpdate(target);
         });
 
