@@ -4,6 +4,11 @@ import test from 'node:test';
 
 const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
+// El Fixture Recap renderiza cada dupla como <span> etiqueta (con los dos puntos ya
+// concatenados) + <span> valor, por lo que las aserciones de contenido se validan
+// sobre el texto plano del documento y no sobre el marcado.
+const plainText = (html) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
 test('DSS panel header contains the secondary PDF document action buttons', () => {
   assert.match(indexHtml, /id="btn-generate-audit-pdf"/, 'Audit PDF button must exist in index.html');
   assert.match(indexHtml, /onclick="generateAuditPDF\(\)"/, 'Audit PDF button must invoke generateAuditPDF()');
@@ -104,36 +109,63 @@ test('buildFixtureRecapHTMLTemplate generates traditional shipping telex fixture
   };
 
   const html = evalFn(mockState);
+  const text = plainText(html);
 
   // Requirement 3 validations:
-  assert.match(html, /RODAHMAR SHIPPING SL - FIRM FIXTURE RECAP \/ OFERTA COMERCIAL/, 'Recap title');
-  assert.match(html, /VALIDITY\s*:\s*24 HOURS FROM ISSUANCE/, '24h validity statement');
+  assert.match(text, /RODAHMAR SHIPPING SL - FIRM FIXTURE RECAP \/ OFERTA COMERCIAL/, 'Recap title');
+  assert.match(text, /VALIDITY\s*:\s*24 HOURS FROM ISSUANCE/, '24h validity statement');
 
   // 1. MAIN TERMS
-  assert.match(html, /1\. MAIN TERMS/, 'Section 1 header');
-  assert.match(html, /ACCT\s*:\s*CHARTERERS ACCOUNT/, 'ACCT term');
-  assert.match(html, /OWNERS\s*:\s*RODAHMAR SHIPPING SL \(AS DISPONENT OWNERS\)/, 'OWNERS as Disponent Owners');
-  assert.match(html, /VESSEL\s*:\s*MV GEARED BULKER - ABT 50,000 MT DWT FULLY GEARED WITH/, 'Geared Vessel term with DWT');
-  assert.match(html, /CARGO\s*:\s*50,000 METRIC TONS/, 'Cargo quantity and commodity');
-  assert.match(html, /POL\s*:\s*1 SAFE BERTH \/ 1 SAFE PORT ROTTERDAM/, 'POL term');
-  assert.match(html, /POD\s*:\s*1 SAFE BERTH \/ 1 SAFE PORT HOUSTON/, 'POD term');
+  assert.match(text, /1\. MAIN TERMS/, 'Section 1 header');
+  assert.match(text, /ACCT\s*:\s*CHARTERERS ACCOUNT/, 'ACCT term');
+  assert.match(text, /OWNERS\s*:\s*RODAHMAR SHIPPING SL \(AS DISPONENT OWNERS\)/, 'OWNERS as Disponent Owners');
+  assert.match(text, /VESSEL\s*:\s*MV GEARED BULKER - ABT 50,000 MT DWT FULLY GEARED WITH/, 'Geared Vessel term with DWT');
+  assert.match(text, /CARGO\s*:\s*50,000 METRIC TONS/, 'Cargo quantity and commodity');
+  assert.match(text, /POL\s*:\s*1 SAFE BERTH \/ 1 SAFE PORT ROTTERDAM/, 'POL term');
+  assert.match(text, /POD\s*:\s*1 SAFE BERTH \/ 1 SAFE PORT HOUSTON/, 'POD term');
 
   // 2. FREIGHT & FINANCIALS
-  assert.match(html, /2\. FREIGHT & FINANCIALS/, 'Section 2 header');
-  assert.match(html, /FREIGHT RATE:\s*USD \$5\.00 PER METRIC TONNE/, 'Freight rate applying surcharges');
-  assert.match(html, /TERMS\s*:\s*FIOS \(FREE IN AND OUT STOWED\)/, 'FIOS terms');
+  assert.match(text, /2\. FREIGHT & FINANCIALS/, 'Section 2 header');
+  assert.match(text, /FREIGHT RATE:\s*USD \$5\.00 PER METRIC TONNE/, 'Freight rate applying surcharges');
+  assert.match(text, /TERMS\s*:\s*FIOS \(FREE IN AND OUT STOWED\)/, 'FIOS terms');
 
   // 3. LAYTIME & OPERATIONS
-  assert.match(html, /3\. LAYTIME & OPERATIONS/, 'Section 3 header');
-  assert.match(html, /LOADING RATE\s*:\s*5,000 METRIC TONS PER WEATHER WORKING DAY/, 'Load rate');
-  assert.match(html, /DISDISCH RATE\s*:\s*MECHANICALLY LIMITED TO ~2,000 METRIC TONS/, 'Discharge rate limited to ~2,000 MT WWD SHINC');
-  assert.match(html, /DEMURRAGE\s*:\s*USD 15,000 PER DAY/, 'Demurrage protection rate');
+  assert.match(text, /3\. LAYTIME & OPERATIONS/, 'Section 3 header');
+  assert.match(text, /LOADING RATE\s*:\s*5,000 METRIC TONS PER WEATHER WORKING DAY/, 'Load rate');
+  assert.match(text, /DISDISCH RATE\s*:\s*MECHANICALLY LIMITED TO ~2,000 METRIC TONS/, 'Discharge rate limited to ~2,000 MT WWD SHINC');
+  assert.match(text, /DEMURRAGE\s*:\s*USD 15,000 PER DAY/, 'Demurrage protection rate');
 
   // 4. SPECIAL CLAUSES
-  assert.match(html, /4\. SPECIAL CLAUSES/, 'Section 4 header');
-  assert.match(html, /GEAR CLAUSE/, 'Gear clause');
-  assert.match(html, /WEATHER CLAUSE/, 'Weather clause');
-  assert.match(html, /GENCON 1994/, 'GENCON 94 charterparty form');
+  assert.match(text, /4\. SPECIAL CLAUSES/, 'Section 4 header');
+  assert.match(text, /GEAR CLAUSE/, 'Gear clause');
+  assert.match(text, /WEATHER CLAUSE/, 'Weather clause');
+  assert.match(text, /GENCON 1994/, 'GENCON 94 charterparty form');
+});
+
+test('buildFixtureRecapHTMLTemplate renders label-value pairs without a standalone colon cell', () => {
+  const startIdx = indexHtml.indexOf('function buildFixtureRecapHTMLTemplate(state)');
+  const endIdx = indexHtml.indexOf('window.buildFixtureRecapHTMLTemplate = buildFixtureRecapHTMLTemplate;', startIdx);
+  const fnSource = indexHtml.slice(startIdx, endIdx);
+  const evalFn = new Function('state', `${fnSource}; return buildFixtureRecapHTMLTemplate(state);`);
+
+  const html = evalFn({ pol: 'Rotterdam', pod: 'Houston', cargoQty: 50000, loadRate: 5000 });
+  const markup = html.replace(/<style[\s\S]*?<\/style>/, '');
+
+  // The colon belongs to the label string itself.
+  assert.match(markup, /class="recap-field-label">VALIDITY:<\/span>/, 'VALIDITY label must carry its own colon');
+  assert.match(markup, /class="recap-field-label">FREIGHT RATE:<\/span>/, 'FREIGHT RATE label must carry its own colon');
+  assert.match(markup, /class="recap-field-label">TERMS:<\/span>/, 'TERMS label must carry its own colon');
+  assert.match(markup, /class="recap-field-label">DEMURRAGE:<\/span>/, 'DEMURRAGE label must carry its own colon');
+
+  // No dedicated element/column is used to paint the separator.
+  assert.doesNotMatch(markup, /<(?:span|td|div)[^>]*>\s*:\s*<\/(?:span|td|div)>/, 'No element may exist only to render the colon');
+
+  // Labels must not be padded with collapsing spaces before the colon (root cause of the overlap).
+  assert.doesNotMatch(markup, /[A-Z] {2,}:/, 'Labels must not be aligned with runs of spaces');
+
+  // Separation is delegated to CSS padding on the label column.
+  assert.match(html, /\.recap-field-label\s*\{[^}]*padding-right:\s*12px/, 'Label column must reserve horizontal space via padding-right');
+  assert.match(html, /\.recap-field-label\s*\{[^}]*width:\s*140px/, 'Label column must have a fixed width so pairs stay aligned');
 });
 
 test('buildFixtureRecapHTMLTemplate formats dynamic vessel name, DWT with thousands separator, and MV TBN fallback', () => {
@@ -144,15 +176,15 @@ test('buildFixtureRecapHTMLTemplate formats dynamic vessel name, DWT with thousa
 
   // 1. Dynamic vessel name and formatted DWT
   const htmlCustom = evalFn({ vesselName: 'MV OCEAN TRADER', dwt: 11500, cargoQty: 10000 });
-  assert.match(htmlCustom, /VESSEL\s*:\s*MV OCEAN TRADER - ABT 11,500 MT DWT FULLY GEARED WITH/, 'Captures real vessel name and formatted DWT with thousands separator');
+  assert.match(plainText(htmlCustom), /VESSEL\s*:\s*MV OCEAN TRADER - ABT 11,500 MT DWT FULLY GEARED WITH/, 'Captures real vessel name and formatted DWT with thousands separator');
 
   // 2. Fallback to MV TBN when vessel name is empty
   const htmlBlank = evalFn({ vesselName: '   ', dwt: 25000 });
-  assert.match(htmlBlank, /VESSEL\s*:\s*MV TBN - ABT 25,000 MT DWT FULLY GEARED WITH/, 'Falls back to MV TBN when vessel name is blank');
+  assert.match(plainText(htmlBlank), /VESSEL\s*:\s*MV TBN - ABT 25,000 MT DWT FULLY GEARED WITH/, 'Falls back to MV TBN when vessel name is blank');
 
   // 3. Fallback when vesselName is undefined
   const htmlUndefined = evalFn({ dwt: 50000 });
-  assert.match(htmlUndefined, /VESSEL\s*:\s*MV TBN - ABT 50,000 MT DWT FULLY GEARED WITH/, 'Falls back to MV TBN when vesselName is missing');
+  assert.match(plainText(htmlUndefined), /VESSEL\s*:\s*MV TBN - ABT 50,000 MT DWT FULLY GEARED WITH/, 'Falls back to MV TBN when vesselName is missing');
 });
 
 test('buildFixtureRecapHTMLTemplate and buildAuditHTMLTemplate handle undefined and incomplete state properties safely without throwing TypeError', () => {

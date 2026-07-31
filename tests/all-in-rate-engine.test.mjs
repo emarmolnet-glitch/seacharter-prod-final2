@@ -142,7 +142,10 @@ test('Fixture Recap Generator: injects dynamic Vessel, Freight Gross, Demurrage,
     jwlaRiskActive: true
   };
 
-  const recapText = evalFn(mockState);
+  const recapText = evalFn(mockState)
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
   // 1. Vessel Clause
   assert.match(recapText, /VESSEL\s*:\s*MV SEA LEADER - ABT 32,000 MT DWT/, 'Dynamic Vessel Name and formatted DWT with thousands separator');
