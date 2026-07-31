@@ -10520,7 +10520,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div class="space-y-2">
                                 <label class="block text-xs text-slate-500 font-semibold mb-1">Flete de Venta ($):</label>
-                                <input type="text" id="gc-freight-val" class="w-full border rounded px-2 py-1 text-xs font-bold text-blue-900" oninput="syncGencon()">
+                                <input type="text" id="gc-freight-val" class="w-full border rounded px-2 py-1 text-xs font-bold text-blue-900" oninput="setContractFreightFromEditor(this.value); syncGencon()" onchange="setContractFreightFromEditor(this.value); syncGencon()">
                             </div>
                             <div class="space-y-2">
                                 <label class="block text-xs text-slate-500 font-semibold mb-1">Términos (Conditions):</label>
@@ -14837,6 +14837,7 @@
             costBunkers: 0, costOpex: 0, costPda: 0, costTotal: 0, totalCosts: 0,
             breakEven: 0, sugOwner: 0, sugCharterer: 0,
             freightRate: 0, freightSell: 0,
+            contractFreightGross: null,
             netProfitOwner: 0, netProfitCharterer: 0, demurrage: 0,
             dualPrecioFOB: "", dualPrecioCIF: "", dualMargenBruto: 0, dualMargenNeto: 0,
             spdBallast: 11, spdLaden: 11,
@@ -30579,8 +30580,16 @@
             if (document.getElementById('gc-laytime-disch-val')) {
                 document.getElementById('gc-laytime-disch-val').value = rateDisch;
             }
+            // El flete del contrato (ALL-IN GROSS fijado por el DSS o editado a mano) tiene prioridad:
+            // sólo se repuebla desde freightSell cuando no hay un valor de contrato vigente.
+            const contractFreightOverride = (typeof State !== 'undefined' && State && State.contractFreightGross !== null && State.contractFreightGross !== undefined && !isNaN(Number(State.contractFreightGross)))
+                ? Number(State.contractFreightGross)
+                : null;
+
             if (document.getElementById('gc-freight-val')) {
-                if (isLumpsumMode && cargo > 0) {
+                if (contractFreightOverride !== null) {
+                    document.getElementById('gc-freight-val').value = contractFreightOverride.toFixed(2);
+                } else if (isLumpsumMode && cargo > 0) {
                     const sellRes = calcularLumpsum(cargo, freightSell, multiplier);
                     document.getElementById('gc-freight-val').value = sellRes.fletoEqMT.toFixed(2);
                 } else {
@@ -30588,7 +30597,9 @@
                 }
             }
             if (document.getElementById('asb-freight-val')) {
-                if (isLumpsumMode && cargo > 0) {
+                if (contractFreightOverride !== null) {
+                    document.getElementById('asb-freight-val').value = contractFreightOverride.toFixed(2);
+                } else if (isLumpsumMode && cargo > 0) {
                     const sellRes = calcularLumpsum(cargo, freightSell, multiplier);
                     document.getElementById('asb-freight-val').value = sellRes.fletoEqMT.toFixed(2);
                 } else {
@@ -32312,9 +32323,30 @@
 
             if (typeof State !== 'undefined' && State) {
                 State.allInRateGross = allInResult.allInRateGross;
+                State.contractFreightGross = allInResult.allInRateGross;
                 State.demurrage = demurrageRate;
                 State.jwcActive = allInResult.jwcRiskActive;
             }
+
+            // Inyección del Flete ALL-IN GROSS en el estado global del contrato (reemplaza el flete neto anterior)
+            // antes de navegar al Editor, de modo que el Editor no arrastre el flete antiguo.
+            if (typeof SeaCharterStore !== 'undefined' && SeaCharterStore.set) {
+                SeaCharterStore.set({
+                    allInRateGross: allInResult.allInRateGross,
+                    contractFreightGross: allInResult.allInRateGross,
+                    demurrage: demurrageRate,
+                    jwcActive: allInResult.jwcRiskActive
+                });
+            }
+
+            const setContractFreightInput = (id) => {
+                const el = document.getElementById(id);
+                if (el) el.value = allInResult.allInRateGross.toFixed(2);
+            };
+            setContractFreightInput('gc-freight-val');
+            setContractFreightInput('asb-freight-val');
+            if (typeof syncGencon === 'function') syncGencon();
+            if (typeof syncAsbatankvoy === 'function') syncAsbatankvoy();
 
             if (typeof buildFixtureRecapHTMLTemplate === 'function') {
                 const recapContainer = document.getElementById('fixture-recap-preview-container') || document.getElementById('contenedor-recap');
@@ -33893,6 +33925,8 @@
                     State.dischRate = updatedDischargeRate;
                     State.freightSell = updatedFreightSell;
                     State.allInRateGross = allInGrossFreight;
+                    // Flete de contrato de referencia para el Editor: ALL-IN GROSS, no el flete neto.
+                    State.contractFreightGross = allInGrossFreight;
                     State.cargo = cargoQty;
                     State.ballastDays = updatedBallastDays;
                     State.jwlaRiskActive = updatedJwlaRiskActive;
@@ -33912,6 +33946,7 @@
                         dischRate: updatedDischargeRate,
                         freightSell: updatedFreightSell,
                         allInRateGross: allInGrossFreight,
+                        contractFreightGross: allInGrossFreight,
                         cargo: cargoQty,
                         ballastDays: updatedBallastDays,
                         jwlaRiskActive: updatedJwlaRiskActive,
@@ -35001,6 +35036,25 @@
             }
             if (dictGatillos) dictGatillos.innerHTML = triggerData.definition || "Definición no disponible.";
         }
+
+        /**
+         * Two-Way Binding del campo 'Flete de Venta ($)' del Editor.
+         * Propaga el valor tecleado por el usuario al estado global del contrato para que
+         * la edición manual persista y no sea sobrescrita por las re-sincronizaciones.
+         */
+        function setContractFreightFromEditor(rawValue) {
+            const parsed = parseFloat(String(rawValue).replace(',', '.'));
+            const nextFreight = isNaN(parsed) ? null : parsed;
+
+            if (typeof State !== 'undefined' && State) {
+                State.contractFreightGross = nextFreight;
+                if (nextFreight !== null) State.allInRateGross = nextFreight;
+            }
+            if (typeof SeaCharterStore !== 'undefined' && SeaCharterStore.set) {
+                SeaCharterStore.set({ contractFreightGross: nextFreight });
+            }
+        }
+        window.setContractFreightFromEditor = setContractFreightFromEditor;
 
         function syncGencon() {
             const u = (cls, val) => document.querySelectorAll(cls).forEach(el => el.textContent = val);
