@@ -239,7 +239,7 @@ test('Las alertas OPEX solo se renderizan con impacto de días positivo y lo hac
 
   context.publicarImpactoOpexDias('pod', 1.3333);
   assert.equal(alertaPod.classList.contains('hidden'), false);
-  assert.equal(alertaPod.textContent, '❗ [1.33] Días (Impacto Negativo en OPEX)');
+  assert.equal(alertaPod.textContent, '❗ Impacto Negativo: [1.33] Días (Coste OPEX)');
   assert.equal(clasesVisibles(alertaPod), clasesEsperadas);
   assert.equal(context.window.State.podOpexImpactDays, 1.3333);
 
@@ -248,9 +248,9 @@ test('Las alertas OPEX solo se renderizan con impacto de días positivo y lo hac
   context.publicarImpactoOpexDias('pol', 9.5);
   assert.equal(context.window.State.polOpexImpactDays, 9.5);
   assert.equal(alertaPol.classList.contains('hidden'), false);
-  assert.equal(alertaPol.textContent, '❗ [9.50] Días (Impacto Negativo en OPEX)');
+  assert.equal(alertaPol.textContent, '❗ Impacto Negativo: [9.50] Días (Coste OPEX)');
   assert.equal(clasesVisibles(alertaPol), clasesVisibles(alertaPod));
-  assert.equal(alertaPod.textContent, '❗ [1.33] Días (Impacto Negativo en OPEX)');
+  assert.equal(alertaPod.textContent, '❗ Impacto Negativo: [1.33] Días (Coste OPEX)');
 
   // Y al desaparecer el desvío cada caja se oculta por separado.
   context.publicarImpactoOpexDias('pod', 0);
@@ -258,6 +258,46 @@ test('Las alertas OPEX solo se renderizan con impacto de días positivo y lo hac
   assert.equal(clasesVisibles(alertaPod), clasesEsperadas);
   assert.equal(alertaPol.classList.contains('hidden'), false);
 
+  context.publicarImpactoOpexDias('pol', 0);
+  assert.equal(alertaPol.classList.contains('hidden'), true);
+  assert.equal(alertaPol.textContent, '');
+});
+
+test('La alerta OPEX cambia de lectura con globalViewMode sin tocar días ni clases', () => {
+  const { context, elements } = buildScene();
+  const alertaPod = elements.get('pod-opex-impact-alert');
+  const alertaPol = elements.get('pol-opex-impact-alert');
+  const clasesEsperadas = ALERT_CLASSES.split(' ').sort().join(' ');
+  const clasesVisibles = (el) => el.className.split(' ').filter((c) => c !== 'hidden').sort().join(' ');
+
+  // Por defecto (sin estado global definido) se lee como armador: coste OPEX.
+  context.publicarImpactoOpexDias('pol', 2.5);
+  assert.equal(alertaPol.textContent, '❗ Impacto Negativo: [2.50] Días (Coste OPEX)');
+
+  // En Vista Fletador el mismo desvío se lee como exposición a penalización.
+  context.window.globalViewMode = 'charterer';
+  context.publicarImpactoOpexDias('pol', 2.5);
+  context.publicarImpactoOpexDias('pod', 4);
+  assert.equal(alertaPol.textContent, '❗ Riesgo Crítico: Exceso de Laytime. Exposición a penalización.');
+  assert.equal(alertaPod.textContent, '❗ Riesgo Crítico: Exceso de Laytime. Exposición a penalización.');
+
+  // El motor no se entera: los días siguen siendo los mismos y las clases tampoco cambian.
+  assert.equal(context.window.State.polOpexImpactDays, 2.5);
+  assert.equal(context.window.State.podOpexImpactDays, 4);
+  assert.equal(clasesVisibles(alertaPol), clasesEsperadas);
+  assert.equal(clasesVisibles(alertaPod), clasesEsperadas);
+
+  // Y al volver a Vista Armador se recupera la redacción con los días.
+  context.window.globalViewMode = 'owner';
+  context.publicarImpactoOpexDias('pod', 4);
+  assert.equal(alertaPod.textContent, '❗ Impacto Negativo: [4.00] Días (Coste OPEX)');
+
+  // Sin desvío no se pinta nada, en ninguna de las dos vistas.
+  context.window.globalViewMode = 'charterer';
+  context.publicarImpactoOpexDias('pod', 0);
+  assert.equal(alertaPod.classList.contains('hidden'), true);
+  assert.equal(alertaPod.textContent, '');
+  context.window.globalViewMode = 'owner';
   context.publicarImpactoOpexDias('pol', 0);
   assert.equal(alertaPol.classList.contains('hidden'), true);
   assert.equal(alertaPol.textContent, '');
