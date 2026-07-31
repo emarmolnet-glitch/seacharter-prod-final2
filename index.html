@@ -7334,6 +7334,7 @@
 
     </style>
     <link href="./calculator_view.css" rel="stylesheet">
+    <link href="./market-contacts.css" rel="stylesheet">
 </head>
 <body class="theme-light h-screen flex flex-col overflow-hidden">
 
@@ -23627,6 +23628,20 @@
                     })
                 });
                 window.openDualModeOverlay?.(event, dualModeReadOnlyStateSource);
+            });
+
+            const contactsItem = document.createElement('li');
+            contactsItem.className = 'tools-dropdown-item';
+            contactsItem.innerHTML = `
+                <button type="button" id="open-market-contacts-btn" class="tools-dropdown-action" aria-haspopup="dialog" aria-label="Abrir Agenda de Brokers">
+                    <span>Agenda de Brokers</span>
+                </button>
+            `;
+            menu.appendChild(contactsItem);
+            contactsItem.querySelector('#open-market-contacts-btn')?.addEventListener('click', event => {
+                event.preventDefault();
+                closeAdvancedModulesMenu();
+                window.openMarketContactsDirectory?.();
             });
 
             const preferenceItem = document.createElement('li');
@@ -57840,6 +57855,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
     </script>
 
+    <script type="module" src="./market-contacts.js"></script>
     <script src="./contextual-feedback.js?v=20260717-global-banner"></script>
 
     <!-- ==========================================================================
