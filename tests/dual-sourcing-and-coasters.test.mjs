@@ -4,17 +4,17 @@ import { readFile } from 'node:fs/promises';
 import * as cargoTaxonomy from '../cargo-taxonomy.mjs';
 import * as taxonomyCompatibility from '../netlify/functions/_shared/taxonomy-compatibility.mjs';
 
-test('Dual-Sourcing: mergeDualSourcedVessels combines Data Bridge and Radar Live and deduplicates by IMO prioritizing live position', async (t) => {
+test('Triple-Sourcing: client merge deduplicates by IMO or name plus DWT and prioritizes live position', async () => {
   const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(indexSource, /function mergeTripleSourcedVessels/);
   assert.match(indexSource, /function mergeDualSourcedVessels/, 'mergeDualSourcedVessels function should be defined in index.html');
 
-  // Evaluate the mergeDualSourcedVessels function in node context for testing
-  const functionMatch = indexSource.match(/function mergeDualSourcedVessels[\s\S]*?window\.mergeDualSourcedVessels = mergeDualSourcedVessels;/);
-  assert.ok(functionMatch, 'Should find mergeDualSourcedVessels definition in index.html');
+  const functionMatch = indexSource.match(/function getVesselFallbackKey[\s\S]*?window\.mergeDualSourcedVessels = mergeDualSourcedVessels;/);
+  assert.ok(functionMatch, 'Should find triple-source merge definitions in index.html');
 
-  const evalContext = new Function('window', `${functionMatch[0]}; return window.mergeDualSourcedVessels;`);
+  const evalContext = new Function('window', `${functionMatch[0]}; return { mergeTripleSourcedVessels: window.mergeTripleSourcedVessels, mergeDualSourcedVessels: window.mergeDualSourcedVessels, getVesselKey: window.getVesselKey };`);
   const windowMock = {};
-  const mergeDualSourcedVessels = evalContext(windowMock);
+  const { mergeTripleSourcedVessels, mergeDualSourcedVessels, getVesselKey } = evalContext(windowMock);
 
   const dbVessels = [
     { imo: 9123456, mmsi: 123456789, vesselName: 'DB Vessel 1', latitude: 10.0, longitude: 20.0, dwt: 5000 },
@@ -35,6 +35,7 @@ test('Dual-Sourcing: mergeDualSourcedVessels combines Data Bridge and Radar Live
   assert.equal(v1.data_source, 'radar_live', 'Vessel detected by Radar Live should have data_source = radar_live');
   assert.equal(v1.latitude, 11.5, 'Live position latitude from Radar AIS should override Data Bridge position');
   assert.equal(v1.longitude, 21.5, 'Live position longitude from Radar AIS should override Data Bridge position');
+  assert.deepEqual(v1.source_origins, ['DATABRIDGE', 'AIS_LIVE']);
 
   const v2 = merged.find(v => Number(v.imo) === 9876543);
   assert.ok(v2, 'Vessel 9876543 should exist');
@@ -43,6 +44,14 @@ test('Dual-Sourcing: mergeDualSourcedVessels combines Data Bridge and Radar Live
   const v3 = merged.find(v => Number(v.imo) === 9999999);
   assert.ok(v3, 'New Radar vessel should exist');
   assert.equal(v3.data_source, 'radar_live', 'New discovery from Radar should have data_source = radar_live');
+
+  const noImoDataBridge = { vesselName: 'M/V Baltic Cedar', dwt: 12620, status: 'EN_CARTERA', latitude: 8, longitude: 9 };
+  const imoAis = { imo: 9312345, vesselName: 'Baltic Cedar', dwt: 12710, latitude: 10, longitude: 11, speed: 13.1 };
+  const fallbackMerged = mergeTripleSourcedVessels([], [noImoDataBridge], [imoAis]);
+  assert.equal(fallbackMerged.length, 1, 'Name and DWT fallback should link a no-IMO Data Bridge record to AIS');
+  assert.equal(getVesselKey(fallbackMerged[0]), 'imo-9312345');
+  assert.deepEqual(fallbackMerged[0].source_origins, ['DATABRIDGE', 'AIS_LIVE']);
+  assert.equal(fallbackMerged[0].latitude, 10);
 });
 
 test('Map Visual Differentiation: GlobalFleetGlobe applies distinct point colors and tooltip badges per data_source', async (t) => {

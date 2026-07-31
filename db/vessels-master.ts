@@ -2,7 +2,7 @@ import type { QueryResultRow } from "pg";
 import { getPool } from "./index.js";
 
 export type VesselMasterRow = QueryResultRow & {
-  imo_number: string;
+  imo_number: string | null;
   vessel_name: string;
   dwt: number | null;
   mmsi: string | null;
@@ -18,6 +18,9 @@ export type VesselMasterRow = QueryResultRow & {
   owner_manager: string | null;
   has_gears: boolean;
   process_status: string | null;
+  status?: string | null;
+  validation_status?: string | null;
+  origen?: string | null;
   source_payload: unknown;
   updated_at: Date | string | null;
 };

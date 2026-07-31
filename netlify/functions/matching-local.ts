@@ -5,7 +5,13 @@ import {
   listVesselsMasterPendingAudit,
   type VesselMasterRow,
 } from "../../db/vessels-master.js";
+import {
+  listDataBridgePortfolioVessels,
+  listValidatedAisVesselsNearPol,
+  type AisMatchingRow,
+} from "../../db/matching-sources.js";
 import runAiAisFilter from "./ai-ais-filter.js";
+import { mergeTripleVesselSources } from "./_shared/vessel-source-merge.js";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -152,9 +158,47 @@ function serializeMasterVessel(row: VesselMasterRow) {
     ownerManager: row.owner_manager,
     hasGears: row.has_gears,
     processStatus: row.process_status,
+    status: row.status || null,
+    validation_status: row.validation_status || null,
+    origin: row.origen || null,
     cacheStatus: "Caché Validada",
     cacheValidated: true,
     masterUpdatedAt: updatedAt && Number.isFinite(updatedAt.getTime()) ? updatedAt.toISOString() : null,
+  };
+}
+
+function toIsoString(value: Date | string | null) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
+function serializeAisVessel(row: AisMatchingRow) {
+  const rawData = parseRecord(row.raw_data);
+  return {
+    ...rawData,
+    storageKey: row.storage_key,
+    imo: row.imo_number,
+    IMO: row.imo_number,
+    imoNumber: row.imo_number,
+    imo_number: row.imo_number,
+    mmsi: row.mmsi,
+    MMSI: row.mmsi,
+    vesselName: row.vessel_name,
+    vessel_name: row.vessel_name,
+    vesselType: row.vessel_type,
+    vessel_type: row.vessel_type,
+    latitude: row.latitude,
+    lat: row.latitude,
+    longitude: row.longitude,
+    lon: row.longitude,
+    lng: row.longitude,
+    source: row.source,
+    audit_status: row.audit_status,
+    auditStatus: row.audit_status,
+    firstSeenAt: toIsoString(row.first_seen_at),
+    lastSeenAt: toIsoString(row.last_seen_at),
+    distanceToPolNm: Number(row.distance_nm),
   };
 }
 
@@ -189,18 +233,41 @@ export default async (req: Request) => {
 
     if (operation === "execute") {
       const matchingPayload = asRecord(body.matchingPayload);
-      const localRows = await listLocalVesselsMaster(6000);
-      const localVessels = localRows.map(serializeMasterVessel);
-      if (localVessels.length === 0) {
+      const cargo = asRecord(matchingPayload.cargo);
+      const loadingPortLat = finiteNumberValue(cargo.loadingPortLat);
+      const loadingPortLon = finiteNumberValue(cargo.loadingPortLon);
+      const matchRadiusNm = Math.min(5000, Math.max(1, finiteNumberValue(matchingPayload.matchRadiusNm) || 2000));
+      const [masterRows, dataBridgeRows, aisRows] = await Promise.all([
+        listLocalVesselsMaster(6000),
+        listDataBridgePortfolioVessels(2000),
+        loadingPortLat !== null && loadingPortLon !== null
+          ? listValidatedAisVesselsNearPol(loadingPortLat, loadingPortLon, matchRadiusNm, 2000)
+          : Promise.resolve([]),
+      ]);
+      const masterVessels = masterRows.map(serializeMasterVessel);
+      const dataBridgeVessels = dataBridgeRows.map(serializeMasterVessel);
+      const aisVessels = aisRows.map(serializeAisVessel);
+      const unifiedVessels = mergeTripleVesselSources(masterVessels, dataBridgeVessels, aisVessels);
+      const sourceCounts = {
+        master: masterVessels.length,
+        dataBridge: dataBridgeVessels.length,
+        aisLive: aisVessels.length,
+        unified: unifiedVessels.length,
+      };
+      if (unifiedVessels.length === 0) {
         return Response.json({
           success: true,
           operation: "execute",
-          source: "vessels_master",
+          source: "triple_source",
+          sourceCounts,
           readOnly: true,
           data: [],
           matches: [],
           count: 0,
-          localVesselCount: 0,
+          localVesselCount: masterVessels.length,
+          dataBridgeVesselCount: dataBridgeVessels.length,
+          aisVesselCount: aisVessels.length,
+          unifiedVesselCount: 0,
           message: "No se encontraron coincidencias locales",
         }, { headers });
       }
@@ -210,8 +277,8 @@ export default async (req: Request) => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           ...matchingPayload,
-          radarSnapshot: localVessels,
-          searchMode: "local_database",
+          radarSnapshot: unifiedVessels,
+          searchMode: "triple_source_database",
           frozenAt: new Date().toISOString(),
         }),
       });
@@ -223,13 +290,17 @@ export default async (req: Request) => {
         ...scoringResult,
         success: scoringResponse.ok && scoringResult.success !== false,
         operation: "execute",
-        source: "vessels_master",
+        source: "triple_source",
+        sourceCounts,
         readOnly: true,
         data: evaluatedMatches,
         matches: eligibleMatches,
         count: evaluatedMatches.length,
-        localVesselCount: localVessels.length,
-        message: evaluatedMatches.length > 0 ? "Coincidencias locales calculadas" : "No se encontraron coincidencias locales",
+        localVesselCount: masterVessels.length,
+        dataBridgeVesselCount: dataBridgeVessels.length,
+        aisVesselCount: aisVessels.length,
+        unifiedVesselCount: unifiedVessels.length,
+        message: evaluatedMatches.length > 0 ? "Coincidencias de triple fuente calculadas" : "No se encontraron coincidencias locales",
       }, { status: scoringResponse.status, headers });
     }
 
@@ -245,8 +316,8 @@ export default async (req: Request) => {
     }
 
     const rows = await loadExactCandidates(candidates);
-    const validated = [];
-    const unknown = [];
+    const validated: AnyRecord[] = [];
+    const unknown: AnyRecord[] = [];
     for (const candidate of candidates) {
       const matchedRow = findExactMasterRow(candidate, rows);
       if (matchedRow) {

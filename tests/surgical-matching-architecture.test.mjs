@@ -13,14 +13,14 @@ test('matching execution loads the complete synchronized AIS fleet capacity', ()
   assert.match(vesselsMasterSource, /Math\.min\(10000, Math\.max\(1, Math\.trunc\(limit\)\)\)/);
 });
 
-test('matching execution queries vessels_master without automatic radar fallback', () => {
+test('matching execution delegates triple-source reads without starting an external radar sweep', () => {
   const executionStart = indexSource.indexOf('async function executeMatchingEngine');
   const executionEnd = indexSource.indexOf('window.runMatchingEngine = runMatchingEngine', executionStart);
   const executionSource = indexSource.slice(executionStart, executionEnd);
 
   assert.match(executionSource, /requestMatchingLocal\('execute', \[\], payload\)/);
-  assert.match(executionSource, /No se encontraron coincidencias locales/);
-  assert.match(executionSource, /Caché Validada/);
+  assert.match(executionSource, /No se encontraron coincidencias en las fuentes disponibles/);
+  assert.match(executionSource, /Triple Fuente Validada/);
   assert.doesNotMatch(executionSource, /requestAiAisFilter|ai-ais-filter/);
   assert.doesNotMatch(executionSource, /radarSnapshot/);
   assert.doesNotMatch(executionSource, /await window\.fetchAisData/);
@@ -28,9 +28,11 @@ test('matching execution queries vessels_master without automatic radar fallback
   assert.doesNotMatch(executionSource, /await window\.executeAISSweep/);
 });
 
-test('local matching endpoint performs read-only exact lookup and pending audit reads', () => {
+test('local matching endpoint performs read-only triple-source, exact, and pending audit reads', () => {
   assert.match(vesselsMasterSource, /FROM vessels_master/);
   assert.match(localMatchingSource, /listLocalVesselsMaster/);
+  assert.match(localMatchingSource, /listDataBridgePortfolioVessels/);
+  assert.match(localMatchingSource, /listValidatedAisVesselsNearPol/);
   assert.match(localMatchingSource, /runAiAisFilter\(scoringRequest\)/);
   assert.match(localMatchingSource, /operation === "audit"/);
   assert.match(localMatchingSource, /listVesselsMasterPendingAudit/);
@@ -38,7 +40,7 @@ test('local matching endpoint performs read-only exact lookup and pending audit 
   assert.match(vesselsMasterSource, /ORDER BY fecha_ultima_actualizacion DESC NULLS LAST/);
   assert.doesNotMatch(vesselsMasterSource, /process_status, source, source_payload/);
   assert.doesNotMatch(vesselsMasterSource, /source: string \| null/);
-  assert.doesNotMatch(localMatchingSource, /source: row\.source/);
+  assert.match(localMatchingSource, /source: row\.source/);
   assert.match(localMatchingSource, /readOnly: true/);
   assert.doesNotMatch(localMatchingSource, /\bINSERT\b|\bUPDATE\b|\bDELETE\b/i);
   assert.doesNotMatch(vesselsMasterSource, /\bINSERT\b|\bUPDATE\b|\bDELETE\b/i);

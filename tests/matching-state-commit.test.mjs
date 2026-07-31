@@ -53,8 +53,8 @@ test('matching engine listener enables a local database query without radar vess
   assert.match(source, /const matchingVessels = Array\.isArray\(store\.matchingSelection\?\.vessels\)/);
   assert.match(source, /button\.dataset\.matchingReady = 'true'/);
   assert.match(source, /button\.dataset\.readyVesselCount = String\(vesselCount\)/);
-  assert.match(source, /resultsBadge\.innerText = 'Consulta local lista'/);
-  assert.match(source, /Consulta local directa a vessels_master/);
+  assert.match(source, /resultsBadge\.innerText = 'Consulta triple lista'/);
+  assert.match(source, /Consulta unificada MASTER, DATABRIDGE y AIS_LIVE/);
   assert.match(source, /resultsBadge\.dataset\.counterSource = 'ready-for-matching'/);
 });
 

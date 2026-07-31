@@ -51,16 +51,6 @@ export default async (req: Request) => {
 
     const pool = getPool();
 
-    // Ensure columns exist to prevent SQL execution failures on varying schemas
-    await pool.query(`
-      ALTER TABLE vessels_master ADD COLUMN IF NOT EXISTS status TEXT;
-      ALTER TABLE vessels_master ADD COLUMN IF NOT EXISTS validation_status TEXT;
-      ALTER TABLE vessels_master ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
-      ALTER TABLE vessels_master ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
-    `).catch((err: unknown) => {
-      console.warn("[databridge-vessel-search] Columns check warning:", err);
-    });
-
     if (!searchTerm || searchTerm.toUpperCase() === "TBN") {
       // Query portfolio vessels from vessels_master for dual-sourcing / bulk loading
       const allQueryResult = await pool.query<VesselMasterRow>(
@@ -133,7 +123,7 @@ export default async (req: Request) => {
     const imoDigits = searchTerm.replace(/\D/g, "");
 
     // SQL query: exact match by imo_number OR ILIKE match by vessel_name
-    // Strict condition: status = 'EN_CARTERA' AND validation_status = 'VALIDADO'
+    // Portfolio condition: either explicitly open or already validated.
     const queryResult = await pool.query<VesselMasterRow>(
       `
         SELECT
@@ -162,8 +152,7 @@ export default async (req: Request) => {
           OR ($3 != '' AND imo_number::text = $3)
           OR vessel_name ILIKE $2
         )
-        AND status = 'EN_CARTERA'
-        AND validation_status = 'VALIDADO'
+        AND (status = 'EN_CARTERA' OR validation_status = 'VALIDADO')
         ORDER BY fecha_ultima_actualizacion DESC NULLS LAST
         LIMIT 1
       `,
