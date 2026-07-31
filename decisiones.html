@@ -1572,6 +1572,8 @@
 
             if (typeof State !== 'undefined' && State) {
                 State.allInRateGross = allInResult.allInRateGross;
+                // Flete de contrato de referencia: el ALL-IN GROSS reemplaza el flete neto anterior.
+                State.contractFreightGross = allInResult.allInRateGross;
                 State.demurrage = demurrageRate;
                 State.jwcActive = allInResult.jwcRiskActive;
             }
