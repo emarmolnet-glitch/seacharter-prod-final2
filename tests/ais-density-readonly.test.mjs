@@ -627,7 +627,7 @@ test('taxonomy changes reapply filters without clearing the global fleet', () =>
   assert.doesNotMatch(filterHandler, /resetAisDensityResults\(\)/);
 });
 
-test('matching queries the local master independently from the radar array', () => {
+test('matching delegates the unified triple-source query independently from the client radar array', () => {
   const executionStart = indexSource.indexOf('async function executeMatchingEngine');
   const executionEnd = indexSource.indexOf('window.runMatchingEngine = runMatchingEngine', executionStart);
   const executionSource = indexSource.slice(executionStart, executionEnd);
@@ -636,7 +636,7 @@ test('matching queries the local master independently from the radar array', () 
   assert.match(executionSource, /values: selectedVesselTaxonomies\.slice\(\)/);
   assert.doesNotMatch(executionSource, /captureRadarSnapshotForFleetMatching\(\)/);
   assert.match(indexSource, /matching-source-integrity/);
-  assert.match(indexSource, /Integridad local verificada/);
+  assert.match(indexSource, /Integridad triple verificada/);
 });
 
 test('live vessel endpoint rejects unbounded requests and persists only strict taxonomy matches', () => {

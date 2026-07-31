@@ -246,8 +246,13 @@ function normalizeVessel(value: unknown) {
   const declaredEta = textValue(source.eta, source.ETA, source.Eta, source.estimatedEta, source.etaEstimated, source.eta_calculado, meta.eta, meta.ETA, meta.Eta, meta.estimatedEta, meta.etaEstimated);
   const lastPortOfCall = textValue(source.lastPortOfCall, source.last_port_of_call, source.ultimo_puerto, source.LastPort, source.LastPortOfCall, source.PreviousPort, source.DeparturePort, meta.lastPortOfCall, meta.ultimo_puerto, meta.LastPort, meta.LastPortOfCall, meta.PreviousPort, meta.DeparturePort) || "N/A";
   const designDraft = nullableNumberValue(source.designDraft, source.maxDraft, source.MaximumStaticDraught, meta.designDraft, meta.maxDraft, meta.MaximumStaticDraught);
+  const sourceOrigins = (Array.isArray(source.source_origins) ? source.source_origins : Array.isArray(source.sourceOrigins) ? source.sourceOrigins : [])
+    .map((origin) => textValue(origin))
+    .filter(Boolean);
+  const sourceOrigin = textValue(source.source_origin, source.sourceOrigin, source.data_source) || sourceOrigins.join(" + ") || "MASTER";
+  const vesselKey = textValue(source.vessel_key, source.vesselKey);
 
-  return { source, vesselName, mmsi, imo, shipType, dwt, dwtStatus, draft, designDraft, loa, beam, speed, destination, declaredEta, lastPortOfCall, latitude, longitude };
+  return { source, vesselName, mmsi, imo, shipType, dwt, dwtStatus, draft, designDraft, loa, beam, speed, destination, declaredEta, lastPortOfCall, latitude, longitude, sourceOrigins, sourceOrigin, vesselKey };
 }
 
 function parseLaycanEnd(value: unknown) {
@@ -434,6 +439,13 @@ export default async (req: Request) => {
           const idealVessel = operationallyEligible && !hasTechnicalWarning && loadState.ballastReady;
 
           return {
+            vessel_key: vessel.vesselKey,
+            vesselKey: vessel.vesselKey,
+            source_origins: vessel.sourceOrigins,
+            sourceOrigins: vessel.sourceOrigins,
+            source_origin: vessel.sourceOrigin,
+            sourceOrigin: vessel.sourceOrigin,
+            data_source: vessel.sourceOrigin,
             hasTechnicalWarning,
             hasWarning: hasTechnicalWarning,
             warning: warningReason,
@@ -468,6 +480,13 @@ export default async (req: Request) => {
               lastPortOfCall: vessel.lastPortOfCall,
               last_port_of_call: vessel.lastPortOfCall,
               ultimo_puerto: vessel.lastPortOfCall,
+              vessel_key: vessel.vesselKey,
+              vesselKey: vessel.vesselKey,
+              source_origins: vessel.sourceOrigins,
+              sourceOrigins: vessel.sourceOrigins,
+              source_origin: vessel.sourceOrigin,
+              sourceOrigin: vessel.sourceOrigin,
+              data_source: vessel.sourceOrigin,
             },
             ais: {
               mmsi: vessel.mmsi,
@@ -498,6 +517,13 @@ export default async (req: Request) => {
               estado_carga: loadState.state,
               loa: vessel.loa,
               cementCarrierClassification: cementSignal,
+              vessel_key: vessel.vesselKey,
+              vesselKey: vessel.vesselKey,
+              source_origins: vessel.sourceOrigins,
+              sourceOrigins: vessel.sourceOrigins,
+              source_origin: vessel.sourceOrigin,
+              sourceOrigin: vessel.sourceOrigin,
+              data_source: vessel.sourceOrigin,
             },
             routing: {
               eta: etaDate.toISOString(),

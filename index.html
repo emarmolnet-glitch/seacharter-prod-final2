@@ -20241,27 +20241,8 @@
                         dwt: Number(matchingRequest.dwt) || 0
                     } : null
                 };
-                const radarEndpoint = (typeof window.getAuditAisEndpoint === 'function' ? window.getAuditAisEndpoint(selectedVesselTaxonomies[0] || 'All Cargo') : '') || '/api/audit-vessels';
-
-                const [dataBridgeRes, radarLiveRes] = await Promise.allSettled([
-                    requestMatchingLocal('execute', [], payload),
-                    fetch(radarEndpoint, { headers: { Accept: 'application/json' }, cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)
-                ]);
-
-                const data = dataBridgeRes.status === 'fulfilled' && dataBridgeRes.value ? dataBridgeRes.value : { success: false };
-                const dbVessels = data.success && Array.isArray(data.data) ? data.data : [];
-
-                const radarPayload = radarLiveRes.status === 'fulfilled' ? radarLiveRes.value : null;
-                const radarVessels = radarPayload && Array.isArray(radarPayload.vessels) ? radarPayload.vessels : [];
-
-                const combinedMatches = typeof window.mergeDualSourcedVessels === 'function'
-                    ? window.mergeDualSourcedVessels(dbVessels, radarVessels)
-                    : (dbVessels.length > 0 ? dbVessels : radarVessels);
-
-                if (combinedMatches.length > 0) {
-                    data.success = true;
-                    data.data = combinedMatches;
-                } else if (!data.success) {
+                const data = await requestMatchingLocal('execute', [], payload);
+                if (!data?.success) {
                     throw new Error(data.error || 'No se pudo consultar vessels_master.');
                 }
 
@@ -20274,8 +20255,11 @@
                 const technicalWarningResponseCount = Math.max(0, Number(data.technicalWarningCount) || technicalWarningMatches.length);
                 const evaluatedResponseCount = Math.max(0, Number(data.evaluatedCount) || rawMatches.length);
                 const localVesselCount = Math.max(0, Number(data.localVesselCount) || 0);
+                const dataBridgeVesselCount = Math.max(0, Number(data.dataBridgeVesselCount) || Number(data.sourceCounts?.dataBridge) || 0);
+                const aisVesselCount = Math.max(0, Number(data.aisVesselCount) || Number(data.sourceCounts?.aisLive) || 0);
+                const unifiedVesselCount = Math.max(0, Number(data.unifiedVesselCount) || Number(data.sourceCounts?.unified) || 0);
                 window.matchingLocalState = {
-                    status: rawMatches.length > 0 ? 'Caché Validada' : 'empty',
+                    status: rawMatches.length > 0 ? 'Triple Fuente Validada' : 'empty',
                     validated: rawMatches.slice(),
                     unknown: [],
                     checkedAt: new Date().toISOString()
@@ -20314,16 +20298,16 @@
                         }
                         return preservedSessionMatches;
                     }
-                    const emptyMessage = 'No se encontraron coincidencias locales';
+                    const emptyMessage = 'No se encontraron coincidencias en las fuentes disponibles';
                     updateSequentialTelemetryBlock(
                         'matching-execution-success-stick',
                         'pending',
                         emptyMessage,
-                        { matchingResultCount: 0, cacheSource: 'vessels_master' }
+                        { matchingResultCount: 0, cacheSource: 'triple_source' }
                     );
                     if (sourceIntegrity) {
                         sourceIntegrity.className = 'mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-700';
-                        sourceIntegrity.innerHTML = `<strong>${emptyMessage}</strong>. La consulta terminó en vessels_master sin validar conexiones externas ni iniciar un Barrido de Radar.`;
+                        sourceIntegrity.innerHTML = `<strong>${emptyMessage}</strong>. Se consultaron MASTER, DATABRIDGE y AIS_LIVE persistido sin iniciar un barrido AIS externo.`;
                     }
                     resultsList.innerHTML = `<div class="rounded-xl border border-slate-200 bg-slate-50 px-5 py-12 text-center text-slate-600"><i class="fa-solid fa-database text-2xl text-slate-400"></i><p class="mt-3 text-sm font-black">${emptyMessage}</p></div>`;
                     resultsList.classList.remove('hidden');
@@ -20337,17 +20321,17 @@
                 updateSequentialTelemetryBlock(
                     'matching-execution-success-stick',
                     'success',
-                    `Caché Validada · ${eligibleResponseCount} candidato${eligibleResponseCount === 1 ? '' : 's'} idóneo${eligibleResponseCount === 1 ? '' : 's'}`,
-                    { matchingResultCount: eligibleResponseCount, technicalWarningCount: technicalWarningResponseCount, cacheSource: 'vessels_master' }
+                    `Triple Fuente · ${eligibleResponseCount} candidato${eligibleResponseCount === 1 ? '' : 's'} idóneo${eligibleResponseCount === 1 ? '' : 's'}`,
+                    { matchingResultCount: eligibleResponseCount, technicalWarningCount: technicalWarningResponseCount, cacheSource: 'triple_source' }
                 );
                 const sourceLabel = document.getElementById('matching-audit-mode-status');
-                if (sourceLabel) sourceLabel.textContent = `Caché Validada: ${eligibleResponseCount} candidatos idóneos · ${technicalWarningResponseCount} advertencias · ${selectedVesselTaxonomies.join(' + ')}`;
+                if (sourceLabel) sourceLabel.textContent = `Triple fuente validada: ${eligibleResponseCount} candidatos idóneos · ${technicalWarningResponseCount} advertencias · ${selectedVesselTaxonomies.join(' + ')}`;
                 const missingDwtCount = rawMatches.filter((match) => {
                     const value = match?.vessel?.dwt ?? match?.ais?.dwt;
                     return !Number.isFinite(Number(value)) || Number(value) <= 0;
                 }).length;
                 const engineInputCount = Number(data.snapshot?.vesselCount) || 0;
-                const excludedBeforeScoring = Math.max(0, localVesselCount - engineInputCount);
+                const excludedBeforeScoring = Math.max(0, unifiedVesselCount - engineInputCount);
                 const excludedAfterScoring = Math.max(0, engineInputCount - evaluatedResponseCount);
                 if (sourceIntegrity) {
                     const hasExclusions = excludedBeforeScoring > 0 || excludedAfterScoring > 0;
@@ -20355,34 +20339,16 @@
                         ? 'border-amber-300 bg-amber-50 text-amber-900'
                         : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`;
                     sourceIntegrity.innerHTML = hasExclusions
-                        ? `<strong>Integridad local:</strong> vessels_master ${localVesselCount} · normalizados ${engineInputCount} · evaluados ${evaluatedResponseCount} · idóneos ${eligibleResponseCount} · advertencias ${technicalWarningResponseCount}. ${excludedBeforeScoring ? `${excludedBeforeScoring} excluidos por posición/identidad inválida. ` : ''}${excludedAfterScoring ? `${excludedAfterScoring} fuera del radio o sin puntuación operativa. ` : ''}${missingDwtCount ? `${missingDwtCount} sin DWT quedaron sujetos a incompatibilidad técnica estricta.` : ''}`
-                        : `<strong>Integridad local verificada:</strong> ${eligibleResponseCount} candidatos idóneos y ${technicalWarningResponseCount} advertencias técnicas calculados desde vessels_master.${missingDwtCount ? ` ${missingDwtCount} sin DWT quedaron sujetos a incompatibilidad técnica estricta.` : ''}`;
+                        ? `<strong>Integridad triple:</strong> MASTER ${localVesselCount} · DATABRIDGE ${dataBridgeVesselCount} · AIS_LIVE ${aisVesselCount} · unificados ${unifiedVesselCount} · normalizados ${engineInputCount} · evaluados ${evaluatedResponseCount} · idóneos ${eligibleResponseCount} · advertencias ${technicalWarningResponseCount}. ${excludedBeforeScoring ? `${excludedBeforeScoring} excluidos por posición/identidad inválida. ` : ''}${excludedAfterScoring ? `${excludedAfterScoring} fuera del radio o sin puntuación operativa. ` : ''}${missingDwtCount ? `${missingDwtCount} sin DWT quedaron sujetos a incompatibilidad técnica estricta.` : ''}`
+                        : `<strong>Integridad triple verificada:</strong> MASTER ${localVesselCount} · DATABRIDGE ${dataBridgeVesselCount} · AIS_LIVE ${aisVesselCount} · ${unifiedVesselCount} candidatos unificados antes de puntuación.${missingDwtCount ? ` ${missingDwtCount} sin DWT quedaron sujetos a incompatibilidad técnica estricta.` : ''}`;
                 }
 
                 // --- FRONTEND DEDUPLICATION AND MERGING LOGIC ---
                 const groupedMatches = {};
                 rawMatches.forEach(m => {
-                    const v = m.vessel || {};
-                    const ais = m.ais || {};
-                    const imo = (v.imo || ais.imo || m.imo || '').toString().trim();
-                    const mmsi = (v.mmsi || ais.mmsi || m.mmsi || '').toString().trim();
-                    
-                    const isValidImo = imo && imo !== '0' && imo !== 'N/A' && imo !== 'Unknown' && imo !== 'PENDING';
-                    const isValidMmsi = mmsi && mmsi !== '0' && mmsi !== 'N/A' && mmsi !== 'Unknown';
-                    
-                    let key = '';
-                    if (isValidImo) {
-                        key = 'IMO_' + imo;
-                    } else if (isValidMmsi) {
-                        key = 'MMSI_' + mmsi;
-                    } else {
-                        const name = (v.vesselName || v.vessel_name || '').toString().trim().toLowerCase();
-                        if (name) {
-                            key = 'NAME_' + name;
-                        } else {
-                            key = 'RAND_' + Math.random().toString();
-                        }
-                    }
+                    const key = typeof window.getVesselKey === 'function'
+                        ? window.getVesselKey(m)
+                        : `name-dwt-unknown-${Number(m?.vessel?.dwt || m?.ais?.dwt || 0)}`;
 
                     if (!groupedMatches[key]) {
                         groupedMatches[key] = [];
@@ -20834,7 +20800,10 @@
                                 const geared = v.gruas_geared !== undefined ? v.gruas_geared : (v.hasCranes !== undefined ? v.hasCranes : (m.vessel && m.vessel.hasCranes));
                                 return geared === true || geared === 'true' || geared === 1 || geared === 'Geared';
                             })(),
-                            log_correccion: m.log_correccion || null
+                            log_correccion: m.log_correccion || null,
+                            vessel_key: m.vessel_key || m.vesselKey || v.vessel_key || v.vesselKey || null,
+                            source_origins: m.source_origins || m.sourceOrigins || v.source_origins || v.sourceOrigins || [],
+                            source_origin: m.source_origin || m.sourceOrigin || v.source_origin || v.sourceOrigin || 'MASTER'
                         });
 
                         // Get vessel initials for fallback rendering when no actual photo is present
@@ -20853,9 +20822,23 @@
                             `<a href="https://www.vesselfinder.com/vessels?name=${v.imo}" target="_blank" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] uppercase py-1.5 rounded transition flex items-center justify-center gap-1 shadow-sm text-center">
                                 <i class="fa-solid fa-circle-info"></i> Ver Ficha Técnica / View Data Sheet
                              </a>` : '';
+                        const sourceOrigins = [...new Set(
+                            (Array.isArray(m.source_origins) ? m.source_origins : Array.isArray(m.sourceOrigins) ? m.sourceOrigins : [])
+                                .filter(origin => ['MASTER', 'DATABRIDGE', 'AIS_LIVE'].includes(origin))
+                        )];
+                        if (sourceOrigins.length === 0) sourceOrigins.push('MASTER');
+                        const sourceBadgeClasses = {
+                            MASTER: 'border-slate-300 bg-slate-100 text-slate-700',
+                            DATABRIDGE: 'border-cyan-300 bg-cyan-50 text-cyan-800',
+                            AIS_LIVE: 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                        };
+                        const sourceBadgesHtml = sourceOrigins.map(origin => `
+                            <span class="inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-black tracking-wide ${sourceBadgeClasses[origin]}">${origin}</span>
+                        `).join('');
+                        const sourceOriginLabel = sourceOrigins.join(' + ');
 
                         const cardHtml = `
-                            <div class="matching-vessel-card border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : 'border-slate-200 bg-slate-50/50 opacity-75 cursor-pointer'} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-vessel-imo="${v.imo || ''}" data-map-focus-id="${mapFocusId}" onclick="toggleMatchingAuditSelection(event)">
+                            <div class="matching-vessel-card border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : 'border-slate-200 bg-slate-50/50 opacity-75 cursor-pointer'} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-vessel-imo="${v.imo || ''}" data-source-origin="${sourceOriginLabel}" data-map-focus-id="${mapFocusId}" onclick="toggleMatchingAuditSelection(event)">
                                 <!-- Rank Ribbon -->
                                 <div class="absolute top-4 right-5 flex items-center gap-2">
                                     ${estimatedDwtBadge}
@@ -20898,6 +20881,7 @@
                                             <span class="text-[10px] ${visual.bg} ${visual.color} font-bold px-1.5 py-0.5 rounded border border-current flex items-center gap-1">
                                                 <i class="${visual.icon}"></i> ${v.vesselClass || 'Bulk'}
                                             </span>
+                                            ${sourceBadgesHtml}
                                         </div>
 
                                         <p class="text-[11px] text-slate-400 mt-0.5">Bandera / Flag: <span class="font-bold text-slate-600">${flag || 'N/A'}</span> | DWT: <span class="font-bold text-slate-600">${v.dwt.toLocaleString()} MT</span> | Año / Built: <span class="font-bold text-slate-600">${yearBuiltValue || 'N/A'}</span></p>
@@ -21147,7 +21131,7 @@
                 if (arrayDeBuquesEncontrados.length === 0) {
                     console.log("[Core PRO] La consulta local no produjo coincidencias.");
                 } else {
-                    console.log(`[Core PRO] Validación local completada para ${arrayDeBuquesEncontrados.length} buques desde vessels_master.`);
+                    console.log(`[Core PRO] Validación triple completada para ${arrayDeBuquesEncontrados.length} buques desde MASTER, DATABRIDGE y AIS_LIVE.`);
                 }
 
                 window.dispatchEvent(new CustomEvent('MATCHING_EXECUTION_SUCCESS', {
@@ -23862,7 +23846,7 @@
                 : count > 0
                 ? `Ejecutar Coincidencias. ${count} resultados disponibles en caché.`
                 : hasLocalTaxonomyQuery
-                    ? 'Ejecutar Coincidencias. Consulta local directa a vessels_master.'
+                    ? 'Ejecutar Coincidencias. Consulta unificada MASTER, DATABRIDGE y AIS_LIVE.'
                     : 'Ejecutar Coincidencias. Guarda una selección de taxonomía para activar el motor.');
         }
 
@@ -23888,10 +23872,10 @@
                 button.setAttribute('aria-disabled', 'false');
                 button.dataset.matchingReady = 'true';
                 button.dataset.readyVesselCount = String(vesselCount);
-                button.setAttribute('aria-label', 'Ejecutar Coincidencias. Consulta local directa a vessels_master.');
+                button.setAttribute('aria-label', 'Ejecutar Coincidencias. Consulta unificada MASTER, DATABRIDGE y AIS_LIVE.');
             }
             if (resultsBadge) {
-                resultsBadge.innerText = 'Consulta local lista';
+                resultsBadge.innerText = 'Consulta triple lista';
                 resultsBadge.dataset.counterSource = 'ready-for-matching';
                 resultsBadge.classList.remove('hidden');
             }
@@ -44779,119 +44763,123 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return window.resetAisDensityResults({ force: true, source: 'manual-refresh' });
         };
 
-        function mergeDualSourcedVessels(dataBridgeList = [], radarLiveList = []) {
-            const dbVessels = Array.isArray(dataBridgeList) ? dataBridgeList : [];
-            const radarVessels = Array.isArray(radarLiveList) ? radarLiveList : [];
+        function getVesselFallbackKey(vessel) {
+            const readFirst = (...values) => values.find(value => value !== undefined && value !== null && String(value).trim() !== '');
+            const rawName = readFirst(vessel?.vesselName, vessel?.vessel_name, vessel?.ShipName, vessel?.name, vessel?.vessel?.vesselName, vessel?.vessel?.vessel_name, vessel?.ais?.vesselName, vessel?.MetaData?.ShipName);
+            const normalizedName = String(rawName ?? '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/^(m\/?v|m\/?s|s\/?s)\s+/i, '')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '') || 'unknown';
+            const rawDwt = readFirst(vessel?.dwt, vessel?.DWT, vessel?.vessel?.dwt, vessel?.ais?.dwt, vessel?.MetaData?.DWT);
+            const numericDwt = Number(rawDwt);
+            const dwtBucketSize = 2500;
+            const dwtRange = Number.isFinite(numericDwt) && numericDwt > 0
+                ? `${Math.floor(numericDwt / dwtBucketSize) * dwtBucketSize}-${Math.floor(numericDwt / dwtBucketSize) * dwtBucketSize + dwtBucketSize - 1}`
+                : 'unknown';
+            return `name-dwt-${normalizedName}-${dwtRange}`;
+        }
+        window.getVesselFallbackKey = getVesselFallbackKey;
 
+        function getVesselKey(vessel) {
+            const rawImo = vessel?.imo ?? vessel?.IMO ?? vessel?.imoNumber ?? vessel?.imo_number ?? vessel?.vessel?.imo ?? vessel?.ais?.imo ?? vessel?.MetaData?.IMO;
+            const imoDigits = String(rawImo ?? '').replace(/\D/g, '');
+            if (/^\d{7}$/.test(imoDigits)) return `imo-${imoDigits}`;
+            return getVesselFallbackKey(vessel);
+        }
+        window.getVesselKey = getVesselKey;
+
+        function mergeTripleSourcedVessels(masterList = [], dataBridgeList = [], aisLiveList = []) {
             const mergedMap = new Map();
-
-            function getImoKey(vessel) {
-                const rawImo = vessel?.imo ?? vessel?.IMO ?? vessel?.imo_number ?? vessel?.vessel?.imo ?? vessel?.ais?.imo ?? vessel?.MetaData?.IMO;
-                if (rawImo !== undefined && rawImo !== null) {
-                    const str = String(rawImo).trim();
-                    if (str && str !== '0' && str !== 'N/A' && str !== 'Unknown' && str !== 'PENDING') {
-                        return `IMO_${str}`;
+            const keyAliases = new Map();
+            const validValue = value => value !== undefined && value !== null && value !== '' && value !== 'N/A' && value !== 'Unknown' && value !== 'PENDING';
+            const mergeObjects = (base, incoming) => {
+                const merged = { ...(base || {}) };
+                Object.entries(incoming || {}).forEach(([key, value]) => {
+                    if (!validValue(value)) return;
+                    if (value && typeof value === 'object' && !Array.isArray(value)) {
+                        merged[key] = mergeObjects(merged[key], value);
+                    } else {
+                        merged[key] = value;
                     }
-                }
-                return null;
-            }
-
-            function getFallbackKey(vessel, prefix) {
-                const rawMmsi = vessel?.mmsi ?? vessel?.MMSI ?? vessel?.vessel?.mmsi ?? vessel?.ais?.mmsi ?? vessel?.MetaData?.MMSI;
-                if (rawMmsi !== undefined && rawMmsi !== null) {
-                    const str = String(rawMmsi).trim();
-                    if (str && str !== '0' && str !== 'N/A' && str !== 'Unknown') {
-                        return `MMSI_${str}`;
+                });
+                return merged;
+            };
+            const readOrigins = vessel => {
+                const origins = Array.isArray(vessel?.source_origins)
+                    ? vessel.source_origins
+                    : Array.isArray(vessel?.sourceOrigins) ? vessel.sourceOrigins : [];
+                return origins.filter(origin => ['MASTER', 'DATABRIDGE', 'AIS_LIVE'].includes(origin));
+            };
+            const applyOrigins = (vessel, origins) => {
+                const uniqueOrigins = [...new Set(origins)];
+                const sourceOrigin = uniqueOrigins.join(' + ');
+                const dataSource = uniqueOrigins.includes('AIS_LIVE') ? 'radar_live' : uniqueOrigins.includes('DATABRIDGE') ? 'databridge' : 'master';
+                const vesselKey = getVesselKey(vessel);
+                return {
+                    ...vessel,
+                    vessel_key: vesselKey,
+                    vesselKey,
+                    source_origins: uniqueOrigins,
+                    sourceOrigins: uniqueOrigins,
+                    source_origin: sourceOrigin,
+                    sourceOrigin,
+                    data_source: dataSource
+                };
+            };
+            const mergeList = (list, origin) => {
+                (Array.isArray(list) ? list : []).forEach(vessel => {
+                    if (!vessel || typeof vessel !== 'object') return;
+                    const primaryKey = getVesselKey(vessel);
+                    const fallbackKey = getVesselFallbackKey(vessel);
+                    let key = keyAliases.get(primaryKey) || keyAliases.get(fallbackKey) || primaryKey;
+                    let existing = mergedMap.get(key);
+                    if (primaryKey.startsWith('imo-') && key !== primaryKey && existing) {
+                        mergedMap.delete(key);
+                        key = primaryKey;
+                        mergedMap.set(key, existing);
                     }
-                }
-                const rawName = vessel?.vesselName ?? vessel?.vessel_name ?? vessel?.ShipName ?? vessel?.name ?? vessel?.vessel?.vesselName;
-                if (rawName) {
-                    const str = String(rawName).trim().toLowerCase();
-                    if (str && str !== 'desconocido' && str !== 'unknown') {
-                        return `NAME_${str}`;
-                    }
-                }
-                return `${prefix}_KEY_${Math.random()}`;
-            }
-
-            dbVessels.forEach(vessel => {
-                if (!vessel || typeof vessel !== 'object') return;
-                const item = { ...vessel, data_source: 'databridge' };
-                if (item.vessel) item.vessel = { ...item.vessel, data_source: 'databridge' };
-                if (item.ais) item.ais = { ...item.ais, data_source: 'databridge' };
-
-                const imoKey = getImoKey(item);
-                const key = imoKey || getFallbackKey(item, 'DB');
-                mergedMap.set(key, item);
-            });
-
-            radarVessels.forEach(vessel => {
-                if (!vessel || typeof vessel !== 'object') return;
-                const liveItem = { ...vessel, data_source: 'radar_live' };
-                if (liveItem.vessel) liveItem.vessel = { ...liveItem.vessel, data_source: 'radar_live' };
-                if (liveItem.ais) liveItem.ais = { ...liveItem.ais, data_source: 'radar_live' };
-
-                const imoKey = getImoKey(liveItem);
-                const key = imoKey || getFallbackKey(liveItem, 'RADAR');
-
-                if (imoKey && mergedMap.has(imoKey)) {
-                    const existing = mergedMap.get(imoKey);
-
-                    const liveLat = liveItem.latitude ?? liveItem.lat ?? liveItem.LAT ?? liveItem.MetaData?.latitude;
-                    const liveLon = liveItem.longitude ?? liveItem.lon ?? liveItem.lng ?? liveItem.LONG ?? liveItem.MetaData?.longitude;
-                    const liveSpeed = liveItem.speed ?? liveItem.SOG ?? liveItem.MetaData?.speed;
-                    const liveHeading = liveItem.heading ?? liveItem.TrueHeading ?? liveItem.MetaData?.heading;
-                    const liveCourse = liveItem.course ?? liveItem.COG ?? liveItem.MetaData?.course;
-                    const liveTimestamp = liveItem.timestamp ?? liveItem.lastSeen ?? liveItem.updatedAt ?? new Date().toISOString();
-                    const liveDestination = liveItem.destination ?? liveItem.Destination ?? liveItem.ais?.plannedDestination ?? liveItem.vessel?.destination;
-                    const liveStatus = liveItem.statusLabel ?? liveItem.NavigationalStatus;
-
-                    const merged = {
-                        ...existing,
-                        data_source: 'radar_live',
-                        latitude: liveLat !== undefined && liveLat !== null ? Number(liveLat) : existing.latitude,
-                        longitude: liveLon !== undefined && liveLon !== null ? Number(liveLon) : existing.longitude,
-                        lat: liveLat !== undefined && liveLat !== null ? Number(liveLat) : (existing.lat ?? existing.latitude),
-                        lon: liveLon !== undefined && liveLon !== null ? Number(liveLon) : (existing.lon ?? existing.longitude),
-                        lng: liveLon !== undefined && liveLon !== null ? Number(liveLon) : (existing.lng ?? existing.longitude),
-                        speed: liveSpeed !== undefined ? liveSpeed : existing.speed,
-                        heading: liveHeading !== undefined ? liveHeading : existing.heading,
-                        course: liveCourse !== undefined ? liveCourse : existing.course,
-                        timestamp: liveTimestamp || existing.timestamp,
-                        lastSeen: liveTimestamp || existing.lastSeen,
-                        destination: liveDestination || existing.destination,
-                        statusLabel: liveStatus || existing.statusLabel,
-                        has_live_position_update: true
-                    };
-                    if (merged.vessel) {
-                        merged.vessel = {
-                            ...merged.vessel,
-                            data_source: 'radar_live',
-                            latitude: merged.latitude,
-                            longitude: merged.longitude,
-                            lat: merged.lat,
-                            lon: merged.lon,
-                            lng: merged.lng
+                    let merged = existing ? mergeObjects(existing, vessel) : mergeObjects({}, vessel);
+                    if (origin === 'AIS_LIVE' && existing) {
+                        const liveLat = vessel.latitude ?? vessel.lat ?? vessel.ais?.latitude ?? vessel.ais?.lat;
+                        const liveLon = vessel.longitude ?? vessel.lon ?? vessel.lng ?? vessel.ais?.longitude ?? vessel.ais?.lon ?? vessel.ais?.lng;
+                        const liveSpeed = vessel.speed ?? vessel.SOG ?? vessel.speed_over_ground ?? vessel.ais?.speed_over_ground ?? vessel.ais?.speedOverGround;
+                        const liveHeading = vessel.heading ?? vessel.TrueHeading ?? vessel.ais?.heading;
+                        const liveCourse = vessel.course ?? vessel.COG ?? vessel.ais?.course;
+                        merged = {
+                            ...merged,
+                            latitude: validValue(liveLat) ? Number(liveLat) : existing.latitude,
+                            longitude: validValue(liveLon) ? Number(liveLon) : existing.longitude,
+                            lat: validValue(liveLat) ? Number(liveLat) : (existing.lat ?? existing.latitude),
+                            lon: validValue(liveLon) ? Number(liveLon) : (existing.lon ?? existing.longitude),
+                            lng: validValue(liveLon) ? Number(liveLon) : (existing.lng ?? existing.longitude),
+                            speed: validValue(liveSpeed) ? liveSpeed : existing.speed,
+                            heading: validValue(liveHeading) ? liveHeading : existing.heading,
+                            course: validValue(liveCourse) ? liveCourse : existing.course,
+                            has_live_position_update: true
                         };
+                        merged.ais = mergeObjects(existing.ais, vessel.ais || vessel);
                     }
-                    if (merged.ais) {
-                        merged.ais = {
-                            ...merged.ais,
-                            data_source: 'radar_live',
-                            latitude: merged.latitude,
-                            longitude: merged.longitude,
-                            lat: merged.lat,
-                            lon: merged.lon,
-                            lng: merged.lng
-                        };
-                    }
-                    mergedMap.set(imoKey, merged);
-                } else {
-                    mergedMap.set(key, liveItem);
-                }
-            });
+                    const tagged = applyOrigins(merged, [...readOrigins(existing), ...readOrigins(vessel), origin]);
+                    mergedMap.set(key, tagged);
+                    keyAliases.set(primaryKey, key);
+                    keyAliases.set(fallbackKey, key);
+                    keyAliases.set(getVesselKey(tagged), key);
+                    keyAliases.set(getVesselFallbackKey(tagged), key);
+                });
+            };
 
+            mergeList(masterList, 'MASTER');
+            mergeList(dataBridgeList, 'DATABRIDGE');
+            mergeList(aisLiveList, 'AIS_LIVE');
             return Array.from(mergedMap.values());
+        }
+        window.mergeTripleSourcedVessels = mergeTripleSourcedVessels;
+
+        function mergeDualSourcedVessels(dataBridgeList = [], radarLiveList = []) {
+            return mergeTripleSourcedVessels([], dataBridgeList, radarLiveList);
         }
         window.mergeDualSourcedVessels = mergeDualSourcedVessels;
 
