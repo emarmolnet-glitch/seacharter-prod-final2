@@ -636,7 +636,7 @@ test('matching delegates the unified triple-source query independently from the 
   assert.match(executionSource, /values: selectedVesselTaxonomies\.slice\(\)/);
   assert.doesNotMatch(executionSource, /captureRadarSnapshotForFleetMatching\(\)/);
   assert.match(indexSource, /matching-source-integrity/);
-  assert.match(indexSource, /Integridad triple verificada/);
+  assert.match(indexSource, /Integridad verificada/);
 });
 
 test('live vessel endpoint rejects unbounded requests and persists only strict taxonomy matches', () => {

@@ -22,7 +22,7 @@ test('classified fleet remains local after visual validation', () => {
   const badgeIndex = indexSource.indexOf('resultsBadge.innerText = `${viableMatches.length}', stateIndex);
   const completionIndex = indexSource.indexOf("new CustomEvent('MATCHING_EXECUTION_SUCCESS'", stateIndex);
   assert.ok(stateIndex >= 0 && badgeIndex > stateIndex && completionIndex > badgeIndex);
-  assert.match(indexSource, /Validación triple completada para \$\{arrayDeBuquesEncontrados\.length\} buques desde MASTER, DATABRIDGE y AIS_LIVE/);
+  assert.match(indexSource, /Validación completada para \$\{arrayDeBuquesEncontrados\.length\} buques desde \$\{getAllowedMatchingSources\(\)\.join\(', '\)\}/);
   assert.doesNotMatch(indexSource.slice(stateIndex, completionIndex), /syncCoreProMatchingReport\(|fetch\('/);
   assert.doesNotMatch(indexSource, /const aisSearchInput = document\.getElementById\('ais-vessel-search'\)/);
 });

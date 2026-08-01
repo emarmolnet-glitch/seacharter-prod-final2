@@ -13639,6 +13639,17 @@
                                         <div id="matching-audit-suggestions" class="hidden mt-3 space-y-2 text-left" aria-live="polite"></div>
                                 </div>
                         </div>
+                        <div class="mb-3 rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm" aria-label="Filtros de origen de datos">
+                            <div class="mb-2 flex items-center justify-between gap-3">
+                                <span class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Orígenes de datos</span>
+                                <span class="text-[10px] font-semibold text-slate-400">Filtrado antes del cálculo</span>
+                            </div>
+                            <div class="flex flex-wrap gap-2" id="matching-source-filters">
+                                <label class="cursor-pointer"><input type="checkbox" class="peer sr-only matching-source-toggle" value="DATABRIDGE" checked><span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-500 transition peer-checked:border-cyan-300 peer-checked:bg-cyan-50 peer-checked:text-cyan-800 peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-300"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>DataBridge</span></label>
+                                <label class="cursor-pointer"><input type="checkbox" class="peer sr-only matching-source-toggle" value="AIS_LIVE" checked><span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-500 transition peer-checked:border-emerald-300 peer-checked:bg-emerald-50 peer-checked:text-emerald-800 peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-300"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>AIS Live</span></label>
+                                <label class="cursor-pointer"><input type="checkbox" class="peer sr-only matching-source-toggle" value="OPENSHIPS"><span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-500 transition peer-checked:border-violet-300 peer-checked:bg-violet-50 peer-checked:text-violet-800 peer-focus-visible:ring-2 peer-focus-visible:ring-violet-300"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>OpenShips</span></label>
+                            </div>
+                        </div>
                         <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 mb-4">
                             <label class="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-slate-600 cursor-pointer">
                                 <input type="checkbox" id="hide-technical-problems-toggle" class="rounded border-slate-300 text-[#004e64] focus:ring-[#004e64]" checked>
@@ -13685,6 +13696,10 @@
                         <!-- RANKED CARDS CANVAS -->
                         <div id="matching-results-list" class="hidden space-y-4 flex-1">
                             <!-- Populated dynamically via JS -->
+                        </div>
+                        <div id="matching-load-more-container" class="hidden pt-4 text-center">
+                            <button type="button" id="matching-load-more-button" class="inline-flex min-w-52 items-center justify-center gap-2 rounded-xl border border-[#004e64]/20 bg-[#004e64] px-5 py-2.5 text-xs font-black uppercase tracking-wide text-white shadow-sm transition hover:bg-[#003b4d] disabled:cursor-wait disabled:opacity-70"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Cargar más buques</span></button>
+                            <p id="matching-load-more-status" class="mt-2 text-[10px] font-semibold text-slate-400" aria-live="polite"></p>
                         </div>
                     </div>
                 </div>
@@ -19557,9 +19572,44 @@
 
         const MATCHING_RESULTS_INITIAL_VISIBLE_COUNT = 15;
         const MATCHING_RESULTS_BATCH_SIZE = 15;
+        const MATCHING_RESULTS_PAGE_SIZE = 50;
         let matchingResultsRenderCycle = 0;
         let matchingResultsVisibleCount = MATCHING_RESULTS_INITIAL_VISIBLE_COUNT;
         let matchingResultsObserver = null;
+        window.matchingPaginationState = window.matchingPaginationState || {
+            limit: MATCHING_RESULTS_PAGE_SIZE,
+            offset: 0,
+            nextOffset: 0,
+            total: 0,
+            hasMore: false,
+            loading: false
+        };
+
+        function getAllowedMatchingSources() {
+            const selectedSources = Array.from(document.querySelectorAll('.matching-source-toggle:checked'))
+                .map(input => String(input.value || '').trim().toUpperCase())
+                .filter(source => ['DATABRIDGE', 'AIS_LIVE', 'OPENSHIPS'].includes(source));
+            return selectedSources.length > 0 ? selectedSources : ['DATABRIDGE', 'AIS_LIVE'];
+        }
+        window.getAllowedMatchingSources = getAllowedMatchingSources;
+
+        function updateMatchingLoadMoreControl() {
+            const container = document.getElementById('matching-load-more-container');
+            const button = document.getElementById('matching-load-more-button');
+            const status = document.getElementById('matching-load-more-status');
+            const pagination = window.matchingPaginationState || {};
+            if (!container || !button || !status) return;
+            const hasResults = Array.isArray(window.matchingResultsState?.vessels) && window.matchingResultsState.vessels.length > 0;
+            container.classList.toggle('hidden', !hasResults || pagination.hasMore !== true);
+            button.disabled = pagination.loading === true;
+            button.innerHTML = pagination.loading === true
+                ? '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span>Cargando buques...</span>'
+                : '<i class="fa-solid fa-plus" aria-hidden="true"></i><span>Cargar más buques</span>';
+            status.textContent = hasResults && Number.isFinite(Number(pagination.total)) && Number(pagination.total) > 0
+                ? `${window.matchingResultsState.vessels.length} evaluados de ${Number(pagination.total)} registros disponibles`
+                : '';
+        }
+        window.updateMatchingLoadMoreControl = updateMatchingLoadMoreControl;
 
         function beginMatchingResultsRender() {
             matchingResultsObserver?.disconnect();
@@ -20127,6 +20177,7 @@
 
         async function executeMatchingEngine(routeOverride = null, executionToken = null) {
             const executionOptions = arguments[2] || {};
+            const isAppending = executionOptions.append === true;
             if (executionToken !== MATCHING_MANUAL_EXECUTION_TOKEN && executionToken !== MATCHING_AUTO_EXECUTION_TOKEN) return false;
             const matchingRequest = typeof window.fetchMatchingRequestFromGlobalStore === 'function'
                 ? window.fetchMatchingRequestFromGlobalStore(window.GlobalStore?.calculatedState || window.CalculatedState)
@@ -20206,18 +20257,33 @@
             const renderedVesselsForReport = [];
 
             // Toggle states
-            updateMatchingExecutionSuccessStick([]);
-            resultsList.innerHTML = '';
-            resultsList.classList.add('hidden');
-            resultsBadge.classList.add('hidden');
-            if (sourceIntegrity) {
-                sourceIntegrity.className = 'hidden mb-4 rounded-lg border px-3 py-2 text-[11px]';
-                sourceIntegrity.innerHTML = '';
+            if (!isAppending) {
+                window.matchingPaginationState = {
+                    limit: MATCHING_RESULTS_PAGE_SIZE,
+                    offset: 0,
+                    nextOffset: 0,
+                    total: 0,
+                    hasMore: false,
+                    loading: false,
+                    allowedSources: getAllowedMatchingSources()
+                };
+                document.getElementById('matching-load-more-container')?.classList.add('hidden');
+                updateMatchingExecutionSuccessStick([]);
+                resultsList.innerHTML = '';
+                resultsList.classList.add('hidden');
+                resultsBadge.classList.add('hidden');
+                if (sourceIntegrity) {
+                    sourceIntegrity.className = 'hidden mb-4 rounded-lg border px-3 py-2 text-[11px]';
+                    sourceIntegrity.innerHTML = '';
+                }
+                emptyState.classList.add('hidden');
+                loadingState.classList.remove('hidden');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Calculando...';
+            } else {
+                window.matchingPaginationState.loading = true;
+                updateMatchingLoadMoreControl();
             }
-            emptyState.classList.add('hidden');
-            loadingState.classList.remove('hidden');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Calculando...';
 
             // Helper function to assign a representative image or icon based on vessel type
             function getVesselTypeVisual(vesselType) {
@@ -20464,6 +20530,9 @@
                     },
                     searchMode: 'local_database',
                     matchRadiusNm: (window.AIS_PROSPECTION_RADII_NM && Number(window.AIS_PROSPECTION_RADII_NM.POL)) || 2000,
+                    allowedSources: getAllowedMatchingSources(),
+                    limit: MATCHING_RESULTS_PAGE_SIZE,
+                    offset: isAppending ? Math.max(0, Number(window.matchingPaginationState?.nextOffset) || 0) : 0,
                     matchingRequest: matchingRequest ? {
                         requestId: matchingRequest.requestId,
                         calculationId: matchingRequest.calculationId,
@@ -20475,20 +20544,33 @@
                     throw new Error(data.error || 'No se pudo consultar vessels_master.');
                 }
 
-                const rawMatches = Array.isArray(data.data) ? data.data.slice() : [];
+                const previousMatches = isAppending && Array.isArray(window.matchingResultsState?.vessels)
+                    ? window.matchingResultsState.vessels.slice()
+                    : [];
+                const rawMatches = previousMatches.concat(Array.isArray(data.data) ? data.data.slice() : []);
                 const technicalWarningMatches = Array.isArray(data.technicalWarnings)
                     ? data.technicalWarnings
                     : [];
                 if (data.dataIncludesWarnings !== true) rawMatches.push(...technicalWarningMatches);
+                const responsePagination = data.pagination && typeof data.pagination === 'object' ? data.pagination : {};
+                window.matchingPaginationState = {
+                    limit: Math.max(1, Number(responsePagination.limit) || MATCHING_RESULTS_PAGE_SIZE),
+                    offset: Math.max(0, Number(responsePagination.offset) || 0),
+                    nextOffset: Math.max(0, Number(responsePagination.nextOffset) || 0),
+                    total: Math.max(0, Number(responsePagination.total) || 0),
+                    hasMore: responsePagination.hasMore === true,
+                    loading: false,
+                    allowedSources: Array.isArray(data.allowedSources) ? data.allowedSources.slice() : getAllowedMatchingSources()
+                };
                 const eligibleResponseCount = Math.max(0, Number(data.eligibleCount) || (rawMatches.length - technicalWarningMatches.length));
                 const technicalWarningResponseCount = Math.max(0, Number(data.technicalWarningCount) || technicalWarningMatches.length);
                 const evaluatedResponseCount = Math.max(0, Number(data.evaluatedCount) || rawMatches.length);
-                const localVesselCount = Math.max(0, Number(data.localVesselCount) || 0);
                 const dataBridgeVesselCount = Math.max(0, Number(data.dataBridgeVesselCount) || Number(data.sourceCounts?.dataBridge) || 0);
                 const aisVesselCount = Math.max(0, Number(data.aisVesselCount) || Number(data.sourceCounts?.aisLive) || 0);
+                const openShipsVesselCount = Math.max(0, Number(data.openShipsVesselCount) || Number(data.sourceCounts?.openShips) || 0);
                 const unifiedVesselCount = Math.max(0, Number(data.unifiedVesselCount) || Number(data.sourceCounts?.unified) || 0);
                 window.matchingLocalState = {
-                    status: rawMatches.length > 0 ? 'Triple Fuente Validada' : 'empty',
+                    status: rawMatches.length > 0 ? 'Fuentes Seleccionadas Validadas' : 'empty',
                     validated: rawMatches.slice(),
                     unknown: [],
                     checkedAt: new Date().toISOString()
@@ -20532,11 +20614,11 @@
                         'matching-execution-success-stick',
                         'pending',
                         emptyMessage,
-                        { matchingResultCount: 0, cacheSource: 'triple_source' }
+                        { matchingResultCount: 0, cacheSource: 'filtered_sources' }
                     );
                     if (sourceIntegrity) {
                         sourceIntegrity.className = 'mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-700';
-                        sourceIntegrity.innerHTML = `<strong>${emptyMessage}</strong>. Se consultaron MASTER, DATABRIDGE y AIS_LIVE persistido sin iniciar un barrido AIS externo.`;
+                        sourceIntegrity.innerHTML = `<strong>${emptyMessage}</strong>. Se consultaron ${getAllowedMatchingSources().join(', ')} sin iniciar un barrido AIS externo.`;
                     }
                     resultsList.innerHTML = `<div class="rounded-xl border border-slate-200 bg-slate-50 px-5 py-12 text-center text-slate-600"><i class="fa-solid fa-database text-2xl text-slate-400"></i><p class="mt-3 text-sm font-black">${emptyMessage}</p></div>`;
                     resultsList.classList.remove('hidden');
@@ -20550,11 +20632,11 @@
                 updateSequentialTelemetryBlock(
                     'matching-execution-success-stick',
                     'success',
-                    `Triple Fuente · ${eligibleResponseCount} candidato${eligibleResponseCount === 1 ? '' : 's'} idóneo${eligibleResponseCount === 1 ? '' : 's'}`,
-                    { matchingResultCount: eligibleResponseCount, technicalWarningCount: technicalWarningResponseCount, cacheSource: 'triple_source' }
+                    `Fuentes filtradas · ${eligibleResponseCount} candidato${eligibleResponseCount === 1 ? '' : 's'} idóneo${eligibleResponseCount === 1 ? '' : 's'}`,
+                    { matchingResultCount: eligibleResponseCount, technicalWarningCount: technicalWarningResponseCount, cacheSource: 'filtered_sources' }
                 );
                 const sourceLabel = document.getElementById('matching-audit-mode-status');
-                if (sourceLabel) sourceLabel.textContent = `Triple fuente validada: ${eligibleResponseCount} candidatos idóneos · ${technicalWarningResponseCount} advertencias · ${selectedVesselTaxonomies.join(' + ')}`;
+                if (sourceLabel) sourceLabel.textContent = `${getAllowedMatchingSources().join(' + ')}: ${eligibleResponseCount} candidatos idóneos · ${technicalWarningResponseCount} advertencias · ${selectedVesselTaxonomies.join(' + ')}`;
                 const missingDwtCount = rawMatches.filter((match) => {
                     const value = match?.vessel?.dwt ?? match?.ais?.dwt;
                     return !Number.isFinite(Number(value)) || Number(value) <= 0;
@@ -20568,8 +20650,8 @@
                         ? 'border-amber-300 bg-amber-50 text-amber-900'
                         : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`;
                     sourceIntegrity.innerHTML = hasExclusions
-                        ? `<strong>Integridad triple:</strong> MASTER ${localVesselCount} · DATABRIDGE ${dataBridgeVesselCount} · AIS_LIVE ${aisVesselCount} · unificados ${unifiedVesselCount} · normalizados ${engineInputCount} · evaluados ${evaluatedResponseCount} · idóneos ${eligibleResponseCount} · advertencias ${technicalWarningResponseCount}. ${excludedBeforeScoring ? `${excludedBeforeScoring} excluidos por posición/identidad inválida. ` : ''}${excludedAfterScoring ? `${excludedAfterScoring} fuera del radio o sin puntuación operativa. ` : ''}${missingDwtCount ? `${missingDwtCount} sin DWT quedaron sujetos a incompatibilidad técnica estricta.` : ''}`
-                        : `<strong>Integridad triple verificada:</strong> MASTER ${localVesselCount} · DATABRIDGE ${dataBridgeVesselCount} · AIS_LIVE ${aisVesselCount} · ${unifiedVesselCount} candidatos unificados antes de puntuación.${missingDwtCount ? ` ${missingDwtCount} sin DWT quedaron sujetos a incompatibilidad técnica estricta.` : ''}`;
+                        ? `<strong>Integridad de fuentes:</strong> DATABRIDGE ${dataBridgeVesselCount} · AIS_LIVE ${aisVesselCount} · OPENSHIPS ${openShipsVesselCount} · unificados ${unifiedVesselCount} · normalizados ${engineInputCount} · evaluados ${evaluatedResponseCount} · idóneos ${eligibleResponseCount} · advertencias ${technicalWarningResponseCount}. ${excludedBeforeScoring ? `${excludedBeforeScoring} excluidos por posición/identidad inválida. ` : ''}${excludedAfterScoring ? `${excludedAfterScoring} fuera del radio o sin puntuación operativa. ` : ''}${missingDwtCount ? `${missingDwtCount} sin DWT quedaron sujetos a incompatibilidad técnica estricta.` : ''}`
+                        : `<strong>Integridad verificada:</strong> DATABRIDGE ${dataBridgeVesselCount} · AIS_LIVE ${aisVesselCount} · OPENSHIPS ${openShipsVesselCount} · ${unifiedVesselCount} candidatos unificados antes de puntuación.${missingDwtCount ? ` ${missingDwtCount} sin DWT quedaron sujetos a incompatibilidad técnica estricta.` : ''}`;
                 }
 
                 // --- FRONTEND DEDUPLICATION AND MERGING LOGIC ---
@@ -21053,13 +21135,14 @@
                              </a>` : '';
                         const sourceOrigins = [...new Set(
                             (Array.isArray(m.source_origins) ? m.source_origins : Array.isArray(m.sourceOrigins) ? m.sourceOrigins : [])
-                                .filter(origin => ['MASTER', 'DATABRIDGE', 'AIS_LIVE'].includes(origin))
+                                .filter(origin => ['MASTER', 'DATABRIDGE', 'AIS_LIVE', 'OPENSHIPS'].includes(origin))
                         )];
                         if (sourceOrigins.length === 0) sourceOrigins.push('MASTER');
                         const sourceBadgeClasses = {
                             MASTER: 'border-slate-300 bg-slate-100 text-slate-700',
                             DATABRIDGE: 'border-cyan-300 bg-cyan-50 text-cyan-800',
-                            AIS_LIVE: 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                            AIS_LIVE: 'border-emerald-300 bg-emerald-50 text-emerald-800',
+                            OPENSHIPS: 'border-violet-300 bg-violet-50 text-violet-800'
                         };
                         const sourceBadgesHtml = sourceOrigins.map(origin => `
                             <span class="inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-black tracking-wide ${sourceBadgeClasses[origin]}">${origin}</span>
@@ -21247,6 +21330,7 @@
                 resultsList.dataset.matchingResultCount = String(viableMatches.length);
                 resultsList.dataset.technicalWarningCount = String(technicalWarningCount);
                 resultsList.dataset.matchingHydrated = 'true';
+                updateMatchingLoadMoreControl();
                 syncMatchingButtonWithCachedResults(viableMatches.length);
                 if (window.__lastCarteraMatches && typeof highlightCarteraMatchesInUI === 'function') {
                     highlightCarteraMatchesInUI(window.__lastCarteraMatches);
@@ -21361,7 +21445,7 @@
                 if (arrayDeBuquesEncontrados.length === 0) {
                     console.log("[Core PRO] La consulta local no produjo coincidencias.");
                 } else {
-                    console.log(`[Core PRO] Validación triple completada para ${arrayDeBuquesEncontrados.length} buques desde MASTER, DATABRIDGE y AIS_LIVE.`);
+                    console.log(`[Core PRO] Validación completada para ${arrayDeBuquesEncontrados.length} buques desde ${getAllowedMatchingSources().join(', ')}.`);
                 }
 
                 window.dispatchEvent(new CustomEvent('MATCHING_EXECUTION_SUCCESS', {
@@ -21375,7 +21459,7 @@
                 
             } catch (err) {
                 console.error("Matching failed:", err);
-                resultsList.innerHTML = `
+                if (!isAppending) resultsList.innerHTML = `
                     <div class="text-center py-12 text-slate-500">
                         <i class="fa-solid fa-triangle-exclamation text-2xl mb-2 text-red-500"></i>
                         <p class="font-bold">Error en la simulación del Motor de Coincidencias.</p>
@@ -21384,6 +21468,8 @@
                 `;
                 resultsList.classList.remove('hidden');
             } finally {
+                window.matchingPaginationState.loading = false;
+                updateMatchingLoadMoreControl();
                 loadingState.classList.add('hidden');
                 const canRunMatching = (
                     window.GlobalStore?.matchingSelectionPending !== true
@@ -21690,6 +21776,34 @@
                     auto: true,
                     preserveRadarLive: radarIsLive
                 });
+            });
+        }
+
+        document.querySelectorAll('.matching-source-toggle').forEach((toggle) => {
+            if (toggle.dataset.matchingBound === 'true') return;
+            toggle.dataset.matchingBound = 'true';
+            toggle.addEventListener('change', () => {
+                const checkedSources = document.querySelectorAll('.matching-source-toggle:checked');
+                if (checkedSources.length === 0) toggle.checked = true;
+                const hasCachedResults = Array.isArray(window.matchingResultsState?.vessels)
+                    && window.matchingResultsState.vessels.length > 0;
+                if (!hasCachedResults) return;
+                const route = typeof window.getMatchingExecutionRouteOverride === 'function'
+                    ? window.getMatchingExecutionRouteOverride()
+                    : null;
+                void window.runMatchingEngine(route, { auto: true });
+            });
+        });
+
+        const matchingLoadMoreButton = document.getElementById('matching-load-more-button');
+        if (matchingLoadMoreButton && matchingLoadMoreButton.dataset.matchingBound !== 'true') {
+            matchingLoadMoreButton.dataset.matchingBound = 'true';
+            matchingLoadMoreButton.addEventListener('click', () => {
+                if (window.matchingPaginationState?.loading === true || window.matchingPaginationState?.hasMore !== true) return;
+                const route = typeof window.getMatchingExecutionRouteOverride === 'function'
+                    ? window.getMatchingExecutionRouteOverride()
+                    : null;
+                void window.runMatchingEngine(route, { auto: true, append: true });
             });
         }
 

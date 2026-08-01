@@ -7,10 +7,11 @@ const localMatchingSource = await readFile(new URL('../netlify/functions/matchin
 const vesselsMasterSource = await readFile(new URL('../db/vessels-master.ts', import.meta.url), 'utf8');
 const connectionStatusSource = await readFile(new URL('../public/ConnectionStatusBar.js', import.meta.url), 'utf8');
 
-test('matching execution loads the complete synchronized AIS fleet capacity', () => {
-  assert.match(localMatchingSource, /listLocalVesselsMaster\(6000\)/);
-  assert.match(vesselsMasterSource, /listLocalVesselsMaster\(limit = 6000\)/);
-  assert.match(vesselsMasterSource, /Math\.min\(10000, Math\.max\(1, Math\.trunc\(limit\)\)\)/);
+test('matching execution loads bounded source pages', () => {
+  assert.match(localMatchingSource, /listPaginatedMatchingSources\(/);
+  assert.match(localMatchingSource, /requestedLimit/);
+  assert.match(localMatchingSource, /requestedOffset/);
+  assert.match(localMatchingSource, /pagination,/);
 });
 
 test('matching execution delegates triple-source reads without starting an external radar sweep', () => {
@@ -20,7 +21,7 @@ test('matching execution delegates triple-source reads without starting an exter
 
   assert.match(executionSource, /requestMatchingLocal\('execute', \[\], payload\)/);
   assert.match(executionSource, /No se encontraron coincidencias en las fuentes disponibles/);
-  assert.match(executionSource, /Triple Fuente Validada/);
+  assert.match(executionSource, /Fuentes Seleccionadas Validadas/);
   assert.doesNotMatch(executionSource, /requestAiAisFilter|ai-ais-filter/);
   assert.doesNotMatch(executionSource, /radarSnapshot/);
   assert.doesNotMatch(executionSource, /await window\.fetchAisData/);
@@ -28,11 +29,11 @@ test('matching execution delegates triple-source reads without starting an exter
   assert.doesNotMatch(executionSource, /await window\.executeAISSweep/);
 });
 
-test('local matching endpoint performs read-only triple-source, exact, and pending audit reads', () => {
+test('local matching endpoint performs read-only filtered-source, exact, and pending audit reads', () => {
   assert.match(vesselsMasterSource, /FROM vessels_master/);
-  assert.match(localMatchingSource, /listLocalVesselsMaster/);
-  assert.match(localMatchingSource, /listDataBridgePortfolioVessels/);
-  assert.match(localMatchingSource, /listValidatedAisVesselsNearPol/);
+  assert.match(localMatchingSource, /listPaginatedMatchingSources/);
+  assert.match(localMatchingSource, /normalizeAllowedMatchingSources/);
+  assert.match(localMatchingSource, /serializeOpenShipsVessel/);
   assert.match(localMatchingSource, /runAiAisFilter\(scoringRequest\)/);
   assert.match(localMatchingSource, /operation === "audit"/);
   assert.match(localMatchingSource, /listVesselsMasterPendingAudit/);
