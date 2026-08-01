@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
-const chunkRendererStart = indexSource.indexOf('const MATCHING_RESULTS_CHUNK_SIZE');
+const chunkRendererStart = indexSource.indexOf('const MATCHING_RESULTS_INITIAL_VISIBLE_COUNT');
 const chunkRendererEnd = indexSource.indexOf('async function toggleMatchingAuditMode', chunkRendererStart);
 const chunkRendererSource = indexSource.slice(chunkRendererStart, chunkRendererEnd);
 
@@ -22,12 +22,18 @@ test('matching feedback uses a vessel-shaped Tailwind skeleton immediately', () 
   assert.match(executionSource, /resultsList\.classList\.add\('hidden'\);[\s\S]*loadingState\.classList\.remove\('hidden'\);/);
 });
 
-test('matching results render in animation-frame chunks of fifty', () => {
-  assert.match(chunkRendererSource, /MATCHING_RESULTS_CHUNK_SIZE = 50/);
+test('matching results render progressively in observer-driven batches of fifteen', () => {
+  assert.match(chunkRendererSource, /MATCHING_RESULTS_INITIAL_VISIBLE_COUNT = 15/);
+  assert.match(chunkRendererSource, /MATCHING_RESULTS_BATCH_SIZE = 15/);
+  assert.match(chunkRendererSource, /matchingResultsVisibleCount = MATCHING_RESULTS_INITIAL_VISIBLE_COUNT/);
   assert.match(chunkRendererSource, /requestAnimationFrame\(resolve\)/);
-  assert.match(chunkRendererSource, /offset \+= MATCHING_RESULTS_CHUNK_SIZE/);
-  assert.match(chunkRendererSource, /container\.appendChild\(template\.content\)/);
-  assert.match(executionSource, /await renderMatchingResultsInChunks\(resultsList, matches/);
+  assert.match(chunkRendererSource, /matches\.slice\(0, matchingResultsVisibleCount\)/);
+  assert.match(chunkRendererSource, /sentinel\.dataset\.matchingResultsSentinel = 'true'/);
+  assert.match(chunkRendererSource, /new IntersectionObserver/);
+  assert.match(chunkRendererSource, /matchingResultsVisibleCount \+ MATCHING_RESULTS_BATCH_SIZE/);
+  assert.match(chunkRendererSource, /matchingResultsObserver\?\.disconnect\(\)/);
+  assert.match(chunkRendererSource, /container\.insertBefore\(template\.content, sentinel\)/);
+  assert.match(executionSource, /await renderMatchingResultsInChunks\(resultsList, displayMatches/);
   assert.match(cachedRendererSource, /renderMatchingResultsInChunks\(resultsList, matches/);
 });
 

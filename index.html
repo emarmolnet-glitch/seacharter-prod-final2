@@ -19550,10 +19550,16 @@
             }
         }
 
-        const MATCHING_RESULTS_CHUNK_SIZE = 50;
+        const MATCHING_RESULTS_INITIAL_VISIBLE_COUNT = 15;
+        const MATCHING_RESULTS_BATCH_SIZE = 15;
         let matchingResultsRenderCycle = 0;
+        let matchingResultsVisibleCount = MATCHING_RESULTS_INITIAL_VISIBLE_COUNT;
+        let matchingResultsObserver = null;
 
         function beginMatchingResultsRender() {
+            matchingResultsObserver?.disconnect();
+            matchingResultsObserver = null;
+            matchingResultsVisibleCount = MATCHING_RESULTS_INITIAL_VISIBLE_COUNT;
             matchingResultsRenderCycle += 1;
             return matchingResultsRenderCycle;
         }
@@ -19564,23 +19570,89 @@
 
         async function renderMatchingResultsInChunks(container, matches, renderCard, renderCycle) {
             container.replaceChildren();
-            for (let offset = 0; offset < matches.length; offset += MATCHING_RESULTS_CHUNK_SIZE) {
-                await waitForMatchingRenderFrame();
-                if (renderCycle !== matchingResultsRenderCycle) return false;
+            const totalMatches = matches.length;
+            let renderedSourceCount = 0;
+            let isRenderingBatch = false;
 
-                const chunkEnd = Math.min(offset + MATCHING_RESULTS_CHUNK_SIZE, matches.length);
-                const chunkHtml = [];
-                for (let index = offset; index < chunkEnd; index += 1) {
-                    const cardHtml = renderCard(matches[index], index);
-                    if (cardHtml) chunkHtml.push(cardHtml);
+            if (totalMatches === 0) return true;
+
+            const sentinel = document.createElement('div');
+            sentinel.className = 'flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-4 py-3 text-[11px] font-bold text-slate-500';
+            sentinel.dataset.matchingResultsSentinel = 'true';
+            sentinel.setAttribute('role', 'status');
+            sentinel.setAttribute('aria-live', 'polite');
+
+            const updateSentinel = () => {
+                const remainingCount = Math.max(0, totalMatches - renderedSourceCount);
+                sentinel.innerHTML = remainingCount > 0
+                    ? `<i class="fa-solid fa-spinner fa-spin text-teal-600" aria-hidden="true"></i><span>Cargando más buques · ${renderedSourceCount} de ${totalMatches}</span>`
+                    : '';
+            };
+
+            const appendVisibleMatches = async () => {
+                if (isRenderingBatch || renderCycle !== matchingResultsRenderCycle) return false;
+                isRenderingBatch = true;
+
+                await waitForMatchingRenderFrame();
+                if (renderCycle !== matchingResultsRenderCycle) {
+                    isRenderingBatch = false;
+                    return false;
                 }
+
+                const visibleMatches = matches.slice(0, matchingResultsVisibleCount);
+                const pendingMatches = visibleMatches.slice(renderedSourceCount);
+                const chunkHtml = [];
+                pendingMatches.forEach((match, pendingIndex) => {
+                    const index = renderedSourceCount + pendingIndex;
+                    const cardHtml = renderCard(match, index);
+                    if (cardHtml) chunkHtml.push(cardHtml);
+                });
 
                 if (chunkHtml.length > 0) {
                     const template = document.createElement('template');
                     template.innerHTML = chunkHtml.join('');
-                    container.appendChild(template.content);
+                    container.insertBefore(template.content, sentinel);
                 }
+
+                renderedSourceCount = visibleMatches.length;
+                updateSentinel();
+                isRenderingBatch = false;
+
+                if (renderedSourceCount >= totalMatches) {
+                    matchingResultsObserver?.disconnect();
+                    matchingResultsObserver = null;
+                    sentinel.remove();
+                }
+
+                return true;
+            };
+
+            matchingResultsVisibleCount = Math.min(MATCHING_RESULTS_INITIAL_VISIBLE_COUNT, totalMatches);
+            updateSentinel();
+            container.appendChild(sentinel);
+
+            const initialRenderCompleted = await appendVisibleMatches();
+            if (!initialRenderCompleted) return false;
+
+            if (renderedSourceCount < totalMatches && 'IntersectionObserver' in window) {
+                matchingResultsObserver = new IntersectionObserver((entries) => {
+                    if (!entries.some(entry => entry.isIntersecting) || isRenderingBatch) return;
+                    matchingResultsVisibleCount = Math.min(
+                        matchingResultsVisibleCount + MATCHING_RESULTS_BATCH_SIZE,
+                        totalMatches
+                    );
+                    void appendVisibleMatches();
+                }, {
+                    root: null,
+                    rootMargin: '320px 0px',
+                    threshold: 0.01
+                });
+                matchingResultsObserver.observe(sentinel);
+            } else if (renderedSourceCount < totalMatches) {
+                matchingResultsVisibleCount = totalMatches;
+                await appendVisibleMatches();
             }
+
             return true;
         }
 
@@ -20659,7 +20731,11 @@
                     }
                 }
 
-                let renderedCount = 0;
+                const hideTechnicalProblems = document.getElementById('hide-technical-problems-toggle')?.checked === true;
+                const displayMatches = hideTechnicalProblems
+                    ? matches.filter((match) => match.audit?.operationallyEligible === true || match.hasTechnicalWarning === true || match.hasWarning === true)
+                    : matches;
+                const renderedCount = displayMatches.length;
 
                 if (matches.length === 0) {
                     resultsBadge.innerText = `0 Buques / Vessels`;
@@ -20673,7 +20749,7 @@
                 } else {
                     loadingState.classList.add('hidden');
                     resultsList.classList.remove('hidden');
-                    const renderCompleted = await renderMatchingResultsInChunks(resultsList, matches, (m, idx) => {
+                    const renderCompleted = await renderMatchingResultsInChunks(resultsList, displayMatches, (m, idx) => {
                         const v = m.vessel;
 
                         const route = m.routing;
@@ -20687,15 +20763,7 @@
                         const isUndersized = requiredCargo > 0 && v.dwt < requiredCargo;
                         const isValidCapacity = requiredCargo > 0 ? (v.dwt >= requiredCargo && v.dwt <= requiredCargo * maxDwtTolerance) : (comp.capacityOk !== false);
 
-                        const hasTechnicalProblem = m.audit?.operationallyEligible !== true
-                            && !m.hasTechnicalWarning
-                            && !m.hasWarning;
-                        const hideTechnicalProblems = document.getElementById('hide-technical-problems-toggle')?.checked === true;
-                        if (hideTechnicalProblems && hasTechnicalProblem) {
-                            return;
-                        }
-                        renderedCount++;
-                        const visibleRank = renderedCount;
+                        const visibleRank = idx + 1;
 
                         const rankColor = visibleRank === 1 ? 'bg-amber-500 text-slate-900 border-amber-600' :
                                           visibleRank === 2 ? 'bg-slate-300 text-slate-900 border-slate-400' :
