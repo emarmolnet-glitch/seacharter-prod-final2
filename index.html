@@ -54088,10 +54088,19 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         );
         const DATA_BRIDGE_API_URL = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_API_URL, '');
         const DATA_BRIDGE_API_SECRET = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_API_SECRET, '');
+        const DATA_BRIDGE_WS_URL = resolveDataBridgeWebSocketUrl(
+            resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_WS_URL, ''),
+            DATA_BRIDGE_API_URL,
+            resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_WS_PATH, '/ws')
+        );
         const HAS_VALID_DATA_BRIDGE_API_URL = isValidDataBridgeApiUrl(DATA_BRIDGE_API_URL);
         const DATA_BRIDGE_VERIFY_ENDPOINT = '/api/verify-connection';
         const DATA_BRIDGE_CONNECTION_STATE_ENDPOINT = '/api/databridge-connection-state';
+        const TENDER_NOR_ENDPOINT = '/api/v1/voyage/tender-nor';
         const DATA_BRIDGE_VERIFIED_SESSION_KEY = 'seacharter_databridge_verified_at';
+        const dataBridgeNorRequests = new Map();
+        let dataBridgeNorSocket = null;
+        let dataBridgeNorReconnectTimer = null;
         window.dataBridgePersistentConnectionState = window.dataBridgePersistentConnectionState || null;
         const DATA_BRIDGE_STATUS_LABELS = {
             inactive: 'Inactivo',
@@ -54112,6 +54121,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             bindDataBridgeLinkForm();
             updateDataBridgeConnectionIndicator();
             restorePersistentDataBridgeConnection();
+            startDataBridgeNorListener();
             
             // Check if we are running in an Electron environment with our API exposed
             if (window.dataBridgeAPI) {
@@ -54134,13 +54144,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         });
 
         window.addEventListener('message', (event) => {
-            if (event.data && event.data.type === 'SEACHARTER_DATABRIDGE_HIDE') {
+            const dataBridgeFrame = document.getElementById('web-databridge-iframe');
+            const isDataBridgeSource = event.source === window || event.source === dataBridgeFrame?.contentWindow;
+            if (!isDataBridgeSource) return;
+
+            if (extractNorTriggerPayload(event.data)) {
+                processDataBridgeNorMessage(event.data);
+            } else if (event.data && event.data.type === 'SEACHARTER_DATABRIDGE_HIDE') {
                 hideWebDataBridge();
             } else if (event.data && event.data.type === 'SEACHARTER_DATABRIDGE_FULLSCREEN') {
                 toggleWebDataBridgeFullScreen();
             } else if (event.data && event.data.type === 'SEACHARTER_DATABRIDGE_OPPORTUNITIES') {
-                const dataBridgeFrame = document.getElementById('web-databridge-iframe');
-                if (event.source !== window && event.source !== dataBridgeFrame?.contentWindow) return;
                 const candidates = event.data.candidates || event.data.vessels || event.data.buques || [];
                 window.receiveDataBridgeOpportunities?.(candidates);
             }
@@ -54187,6 +54201,156 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return url.protocol === 'http:' || url.protocol === 'https:';
             } catch (error) {
                 return false;
+            }
+        }
+
+        function resolveDataBridgeWebSocketUrl(value, apiUrl, path = '/ws') {
+            const explicitUrl = String(value || '').trim();
+            if (explicitUrl) {
+                try {
+                    const url = new URL(explicitUrl);
+                    return url.protocol === 'ws:' || url.protocol === 'wss:' ? url.toString() : '';
+                } catch (error) {
+                    return '';
+                }
+            }
+
+            if (!isValidDataBridgeApiUrl(apiUrl)) return '';
+
+            try {
+                const url = new URL(apiUrl);
+                url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+                url.pathname = `/${String(path || '/ws').replace(/^\/+/, '')}`;
+                url.search = '';
+                url.hash = '';
+                return url.toString();
+            } catch (error) {
+                return '';
+            }
+        }
+
+        function extractNorTriggerPayload(message) {
+            if (!message || typeof message !== 'object') return null;
+
+            if (message.NOR_TRIGGER && typeof message.NOR_TRIGGER === 'object') {
+                return message.NOR_TRIGGER;
+            }
+
+            const eventKey = String(message.key || message.type || message.event || '').trim().toUpperCase();
+            if (eventKey !== 'NOR_TRIGGER') return null;
+
+            const payload = message.payload || message.data || message;
+            return payload && typeof payload === 'object' ? payload : null;
+        }
+
+        function normalizeNorPayload(message) {
+            const payload = extractNorTriggerPayload(message);
+            if (!payload) return null;
+
+            const vesselMmsi = String(payload.vessel_mmsi || '').trim();
+            const portId = String(payload.port_id || '').trim();
+            const distanceNm = Number(payload.distance_nm);
+            const timestamp = new Date(payload.timestamp);
+
+            if (!/^\d{9}$/.test(vesselMmsi) || !portId || !Number.isFinite(distanceNm) || distanceNm < 0 || Number.isNaN(timestamp.getTime())) {
+                return null;
+            }
+
+            return {
+                vessel_mmsi: vesselMmsi,
+                port_id: portId,
+                distance_nm: distanceNm,
+                timestamp: timestamp.toISOString()
+            };
+        }
+
+        function formatNorDistance(distanceNm) {
+            return Number(distanceNm).toLocaleString(undefined, { maximumFractionDigits: 2 });
+        }
+
+        async function submitAutomaticNor(payload) {
+            const requestKey = `${payload.vessel_mmsi}:${payload.port_id}:${payload.timestamp}`;
+            if (dataBridgeNorRequests.has(requestKey)) return dataBridgeNorRequests.get(requestKey);
+
+            const request = (async () => {
+                const response = await fetch(TENDER_NOR_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || result.success !== true) {
+                    throw new Error(result.error || `Error HTTP ${response.status}`);
+                }
+
+                if (typeof showToast === 'function') {
+                    showToast(`NOR Disparado Automáticamente a ${formatNorDistance(payload.distance_nm)} NM`);
+                }
+
+                window.dispatchEvent(new CustomEvent('voyage:nor-tendered', { detail: { ...payload, ...result } }));
+                return result;
+            })();
+
+            dataBridgeNorRequests.set(requestKey, request);
+            try {
+                const result = await request;
+                window.setTimeout(() => dataBridgeNorRequests.delete(requestKey), 300000);
+                return result;
+            } catch (error) {
+                dataBridgeNorRequests.delete(requestKey);
+                throw error;
+            }
+        }
+
+        function processDataBridgeNorMessage(message) {
+            const payload = normalizeNorPayload(message);
+            if (!payload) {
+                console.warn('[Core PRO] NOR_TRIGGER descartado por payload inválido.');
+                return;
+            }
+
+            submitAutomaticNor(payload).catch((error) => {
+                console.error('[Core PRO] No se pudo registrar el NOR automático.', error);
+                if (typeof showToast === 'function') {
+                    showToast('No se pudo registrar el NOR automático.', false, 'error');
+                }
+            });
+        }
+
+        function scheduleDataBridgeNorReconnect() {
+            if (!DATA_BRIDGE_WS_URL || dataBridgeNorReconnectTimer) return;
+            dataBridgeNorReconnectTimer = window.setTimeout(() => {
+                dataBridgeNorReconnectTimer = null;
+                startDataBridgeNorListener();
+            }, 5000);
+        }
+
+        function startDataBridgeNorListener() {
+            if (!DATA_BRIDGE_WS_URL || dataBridgeNorSocket?.readyState === WebSocket.OPEN || dataBridgeNorSocket?.readyState === WebSocket.CONNECTING) {
+                return;
+            }
+
+            try {
+                dataBridgeNorSocket = new WebSocket(DATA_BRIDGE_WS_URL);
+                dataBridgeNorSocket.addEventListener('message', (event) => {
+                    try {
+                        processDataBridgeNorMessage(JSON.parse(event.data));
+                    } catch (error) {
+                        console.warn('[Core PRO] Mensaje WebSocket de Data Bridge no válido.', error);
+                    }
+                });
+                dataBridgeNorSocket.addEventListener('close', () => {
+                    dataBridgeNorSocket = null;
+                    scheduleDataBridgeNorReconnect();
+                });
+                dataBridgeNorSocket.addEventListener('error', () => {
+                    dataBridgeNorSocket?.close();
+                });
+            } catch (error) {
+                console.warn('[Core PRO] No se pudo iniciar el listener WebSocket de Data Bridge.', error);
+                dataBridgeNorSocket = null;
+                scheduleDataBridgeNorReconnect();
             }
         }
 
