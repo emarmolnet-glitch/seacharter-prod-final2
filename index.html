@@ -13534,7 +13534,16 @@
                                 <p class="text-[10px] font-black uppercase tracking-[0.18em] text-teal-700" data-i18n="databridge_sync_status">Estado de Sincronización</p>
                                 <p class="mt-1 text-xs font-semibold text-slate-600">Datos operativos recibidos desde el mapa</p>
                             </div>
-                            <span id="matching-route-sync-badge" class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase text-slate-500">Inactivo</span>
+                            <div class="flex items-center gap-3">
+                                <span id="matching-route-sync-badge" class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase text-slate-500">Inactivo</span>
+                                <div id="openships-status-pill" class="flex items-center gap-2 bg-emerald-900/80 border border-emerald-700 text-emerald-100 px-3 py-1 rounded-full text-xs font-bold shadow-sm transition-colors duration-300">
+                                    <span class="relative flex h-2 w-2" aria-hidden="true">
+                                        <span id="openships-radar-ping" class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                                        <span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-400"></span>
+                                    </span>
+                                    <span>OPENSHIPS: <span id="openships-live-counter" class="text-emerald-300">--</span> LIVE</span>
+                                </div>
+                            </div>
                         </div>
                         <div class="mt-3 grid gap-2 rounded-lg border border-teal-100 bg-teal-50/60 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.6fr)] sm:items-center">
                             <div>
@@ -58010,6 +58019,49 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
     <script type="module" src="./market-contacts.js"></script>
     <script src="./contextual-feedback.js?v=20260717-global-banner"></script>
+
+    <script>
+        async function updateOpenShipsRadar() {
+            const counter = document.getElementById('openships-live-counter');
+            const statusPill = document.getElementById('openships-status-pill');
+            const radarPing = document.getElementById('openships-radar-ping');
+            if (!counter || !statusPill) return;
+
+            try {
+                const response = await fetch('/api/openships/live-status', {
+                    headers: { Accept: 'application/json' },
+                    cache: 'no-store'
+                });
+                if (!response.ok) throw new Error(`OpenShips status request failed (${response.status})`);
+
+                const payload = await response.json();
+                const recentVessels = Number(payload?.recent_vessels);
+                if (!Number.isFinite(recentVessels)) throw new Error('Invalid OpenShips status response');
+
+                counter.innerText = String(recentVessels);
+                statusPill.classList.remove('bg-red-900/80', 'border-red-700');
+                statusPill.classList.add('bg-emerald-900/80', 'border-emerald-700');
+                radarPing?.classList.add('animate-ping');
+            } catch (error) {
+                console.error('[OpenShips Radar] Unable to update live status.', error);
+                counter.innerText = 'ERR';
+                statusPill.classList.remove('bg-emerald-900/80', 'border-emerald-700');
+                statusPill.classList.add('bg-red-900/80', 'border-red-700');
+                radarPing?.classList.remove('animate-ping');
+            }
+        }
+
+        function startOpenShipsRadarPolling() {
+            updateOpenShipsRadar();
+            window.setInterval(updateOpenShipsRadar, 30000);
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', startOpenShipsRadarPolling, { once: true });
+        } else {
+            startOpenShipsRadarPolling();
+        }
+    </script>
 
     <!-- ==========================================================================
          CONTROLADOR DE CAPA DE PRESENTACIÓN: VISTA ARMADOR / VISTA FLETADOR
