@@ -130,9 +130,10 @@ test('strict eligibility enforces required cranes and grab capacity', () => {
 test('technical warnings are hidden by default and remain reviewable', () => {
   assert.match(indexSource, /id="hide-technical-problems-toggle"[^>]*checked/);
   assert.match(indexSource, /Array\.isArray\(data\.technicalWarnings\)/);
-  assert.match(indexSource, /m\.audit\?\.operationallyEligible !== true/);
+  assert.match(indexSource, /strictTechnicalFilter[\s\S]*matches\.filter\(m => m\.audit\?\.operationallyEligible === true/);
   assert.match(indexSource, /Array\.isArray\(m\.audit\?\.reasons\)/);
-  assert.match(indexSource, /Advertencia técnica/);
+  assert.match(indexSource, /DWT Desconocido/);
+  assert.match(indexSource, /DWT Insuficiente/);
   assert.match(indexSource, /technicalProblemsToggle\.addEventListener\('change'/);
 });
 

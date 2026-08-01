@@ -3,7 +3,7 @@ type AnyRecord = Record<string, unknown>;
 export type VesselSourceOrigin = "MASTER" | "DATABRIDGE" | "AIS_LIVE" | "OPENSHIPS";
 
 const DWT_BUCKET_SIZE = 2500;
-const EMPTY_MARKERS = new Set(["", "0", "n/a", "na", "unknown", "pending", "null", "undefined"]);
+const EMPTY_MARKERS = new Set(["", "0", "n/a", "na", "n/d", "nd", "unknown", "desconocido", "pending", "null", "undefined"]);
 
 function asRecord(value: unknown): AnyRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as AnyRecord : {};

@@ -39,10 +39,10 @@ test('matching results render progressively in observer-driven batches of fiftee
 
 test('read-only matching result arrays are shallow-frozen', () => {
   assert.match(executionSource, /const matches = deduplicatedMatches;[\s\S]*Object\.freeze\(matches\);/);
-  assert.match(executionSource, /const viableMatches = matches\.filter[\s\S]*Object\.freeze\(viableMatches\);/);
+  assert.match(executionSource, /const viableMatches = strictTechnicalFilter[\s\S]*matches\.filter[\s\S]*Object\.freeze\(viableMatches\);/);
   assert.match(cachedRendererSource, /Object\.freeze\(Array\.isArray\(cachedMatches\) \? cachedMatches\.slice\(\) : \[\]\)/);
 });
 
-test('optimized rendering preserves the existing vessel card classes', () => {
-  assert.match(executionSource, /class="matching-vessel-card border \$\{isComp \? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : 'border-slate-200 bg-slate-50\/50 opacity-75 cursor-pointer'\} rounded-xl p-5 transition relative overflow-hidden"/);
+test('optimized rendering visually penalizes technically unsuitable vessel cards', () => {
+  assert.match(executionSource, /class="matching-vessel-card border \$\{isComp \? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : 'border-red-200 bg-red-50\/40 opacity-80 cursor-pointer'\} rounded-xl p-5 transition relative overflow-hidden"/);
 });

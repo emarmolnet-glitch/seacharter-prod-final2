@@ -117,6 +117,11 @@ function buildRequiredVesselDescription(allowedVesselTaxonomies) {
     .join(" o ");
 }
 
+function isDryBulkOrBaggedCargo(value) {
+  const cargo = normalizeTaxonomyText(value);
+  return /\b(granel|bulk|dry cargo|carga seca|saco|sacos|bag|bags|bagged|big bag|big bags|grain|grano|granos|cereal|cereales|trigo|wheat|maiz|corn|soja|soy)\b/.test(cargo);
+}
+
 export function evaluateTaxonomyCompatibility(cargoDescription, vessel) {
   const cargoTaxonomy = classifyCargoCompatibilityTaxonomy(cargoDescription);
   const declaredVesselType = getAisVesselDeclaredTaxonomyType(vessel);
@@ -124,6 +129,25 @@ export function evaluateTaxonomyCompatibility(cargoDescription, vessel) {
     ...classifyAisVesselTaxonomyTypes(declaredVesselType),
     ...classifyAisVesselCapabilityTaxonomies(vessel),
   ]));
+
+  if (!cargoTaxonomy && isDryBulkOrBaggedCargo(cargoDescription)) {
+    const allowedVesselTaxonomies = ["bulk_carrier", "general_cargo", "multipurpose_mpp"];
+    const compatible = vesselTaxonomies.some((taxonomy) => allowedVesselTaxonomies.includes(taxonomy));
+    const requiredVesselDescription = buildRequiredVesselDescription(allowedVesselTaxonomies);
+    return {
+      governed: true,
+      compatible,
+      cargoTaxonomy: "dry_bulk_bagged",
+      declaredVesselType,
+      vesselTaxonomies,
+      allowedVesselTaxonomies,
+      cargoDescription: textValue(cargoDescription),
+      requiredVesselDescription,
+      reason: compatible
+        ? "Compatibilidad confirmada para carga seca a granel o ensacada"
+        : `Incompatibilidad taxonómica: la carga seca a granel o ensacada requiere ${requiredVesselDescription}`,
+    };
+  }
 
   if (!cargoTaxonomy) {
     return {

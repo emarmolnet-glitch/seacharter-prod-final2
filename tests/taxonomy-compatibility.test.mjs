@@ -40,10 +40,21 @@ test("declared AIS taxonomy takes precedence over display and radar categories",
   assert.equal(result.compatible, false);
 });
 
-test("ungoverned cargoes retain the existing matching behavior", () => {
+test("dry bulk and bagged cargoes require cargo-capable vessel types", () => {
   const result = taxonomy.evaluateTaxonomyCompatibility("Grain", { ship_type: "Bulk Carrier" });
-  assert.equal(result.governed, false);
+  assert.equal(result.governed, true);
   assert.equal(result.compatible, true);
+  assert.equal(result.cargoTaxonomy, "dry_bulk_bagged");
+
+  const baggedCargo = taxonomy.evaluateTaxonomyCompatibility("Fertilizante en sacos", { ship_type: "General Cargo" });
+  assert.equal(baggedCargo.compatible, true);
+
+  const tanker = taxonomy.evaluateTaxonomyCompatibility("Grain in bulk", { ship_type: "Chemical Tanker" });
+  assert.equal(tanker.compatible, false);
+
+  const ungoverned = taxonomy.evaluateTaxonomyCompatibility("Carga comercial sin especificar", { ship_type: "Chemical Tanker" });
+  assert.equal(ungoverned.governed, false);
+  assert.equal(ungoverned.compatible, true);
 
   const broadCategory = taxonomy.evaluateTaxonomyCompatibility("Cemento, yeso, cal y clínker", { ship_type: "Bulk Carrier" });
   assert.equal(broadCategory.governed, false);

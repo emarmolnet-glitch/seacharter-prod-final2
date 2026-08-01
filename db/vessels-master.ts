@@ -54,7 +54,7 @@ export async function findExactVesselsMasterRows(
     `
       SELECT ${VESSEL_MASTER_COLUMNS}
       FROM vessels_master
-      WHERE imo_number::text = ANY($1::text[])
+      WHERE REGEXP_REPLACE(imo_number::text, '[^0-9]', '', 'g') = ANY($1::text[])
         OR mmsi::text = ANY($2::text[])
         OR LOWER(REGEXP_REPLACE(vessel_name, '[^a-zA-Z0-9]+', ' ', 'g')) = ANY($3::text[])
     `,

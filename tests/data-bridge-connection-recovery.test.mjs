@@ -63,6 +63,21 @@ test('connected Data Bridge menu action opens the deployment root', () => {
   assert.match(indexSource, /id="databridge-connection-dot"/);
 });
 
+test('NOR WebSocket uses bounded exponential backoff and exposes disconnected state', () => {
+  assert.match(indexSource, /DATA_BRIDGE_NOR_MAX_RECONNECT_ATTEMPTS = 3/);
+  assert.match(indexSource, /DATA_BRIDGE_NOR_RECONNECT_BASE_MS \* \(2 \*\* dataBridgeNorReconnectAttempts\)/);
+  assert.match(indexSource, /dataBridgeNorReconnectStopped = true/);
+  assert.match(indexSource, /id="databridge-ws-disconnected"/);
+  assert.match(indexSource, /updateDataBridgeNorSocketStatus\('disconnected'\)/);
+});
+
+test('polling and matching requests are protected against duplicate in-flight calls', () => {
+  assert.match(indexSource, /window\.matchingLocalInFlightRequests = window\.matchingLocalInFlightRequests \|\| new Map\(\)/);
+  assert.match(indexSource, /if \(existingRequest\) return existingRequest/);
+  assert.match(indexSource, /if \(window\.openShipsRadarPollingTimer\) return/);
+  assert.match(indexSource, /window\.openShipsRadarRequestInFlight/);
+});
+
 test('Netlify serves the SPA shell for internal browser routes', () => {
   assert.match(redirectsSource, /^\/\* \/index\.html 200\s*$/m);
 });
