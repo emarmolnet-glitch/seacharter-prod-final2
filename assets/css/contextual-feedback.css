@@ -131,34 +131,6 @@
     color: var(--toast-accent);
 }
 
-.contextual-export-button {
-    display: inline-flex;
-    width: auto;
-    min-height: 1.9rem;
-    margin: 0;
-    padding: 0.32rem 0.7rem;
-    border: 1px solid #047857;
-    border-radius: 0.55rem;
-    background: #047857;
-    color: #ffffff;
-    font-size: 0.56rem;
-    font-weight: 900;
-    line-height: 1.1;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    box-shadow: 0 8px 16px -12px rgba(4, 120, 87, 0.8);
-    cursor: pointer;
-    transition: background-color 160ms ease, transform 160ms ease;
-}
-
-.contextual-export-button:hover {
-    background: #065f46;
-}
-
-.contextual-export-button:active {
-    transform: translateY(1px);
-}
-
 @media (max-width: 640px) {
     .contextual-guide-banner {
         align-items: flex-start;
@@ -176,8 +148,7 @@
 
 @media (prefers-reduced-motion: reduce) {
     .contextual-guide-banner__close,
-    .contextual-toast,
-    .contextual-export-button {
+    .contextual-toast {
         transition: none;
     }
 }

@@ -193,18 +193,6 @@
         });
     }
 
-    function mountMatchingGatekeeper(documentObject) {
-        const actionDock = documentObject.getElementById('matching-action-dock');
-        if (!actionDock || documentObject.getElementById('contextual-export-databridge')) return;
-        const button = documentObject.createElement('button');
-        button.id = 'contextual-export-databridge';
-        button.type = 'button';
-        button.className = 'contextual-export-button';
-        button.innerHTML = '<i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Enviar a Data Bridge';
-        button.addEventListener('click', () => requestMatchingExport());
-        actionDock.appendChild(button);
-    }
-
     async function requestMatchingExport(context = globalObject) {
         const gate = canExportMatching(context);
         if (!gate.allowed) {
@@ -225,7 +213,6 @@
         renderModuleHelpBanner(getCurrentModule(documentObject), documentObject);
         observeCurrentModule(documentObject);
         bindContextualActions(documentObject);
-        mountMatchingGatekeeper(documentObject);
     }
 
     const api = Object.freeze({

@@ -13612,6 +13612,15 @@
                                         <i class="fa-solid fa-paper-plane"></i>
                                         Enviar a Data Bridge
                                     </button>
+                                    <div id="sync-container" class="hidden w-64 shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 shadow-sm" role="status" aria-live="polite" aria-atomic="true">
+                                        <div class="flex items-center justify-between gap-3 text-[10px] font-black uppercase tracking-wide text-emerald-900">
+                                            <span id="sync-status-text">Preparando sincronización…</span>
+                                            <span id="sync-percentage">0%</span>
+                                        </div>
+                                        <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-emerald-100">
+                                            <div id="sync-progress-bar" class="h-full w-0 rounded-full bg-emerald-600 transition-[width] duration-200 ease-out" style="width: 0%"></div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -18927,6 +18936,27 @@
 
         async function postDataBridgeReceiveVessels(requestOptions, contract = {}) {
             const nextOptions = { ...(requestOptions || {}) };
+            const syncContainer = typeof document !== 'undefined' ? document.getElementById('sync-container') : null;
+            const syncStatusText = typeof document !== 'undefined' ? document.getElementById('sync-status-text') : null;
+            const syncPercentage = typeof document !== 'undefined' ? document.getElementById('sync-percentage') : null;
+            const syncProgressBar = typeof document !== 'undefined' ? document.getElementById('sync-progress-bar') : null;
+
+            function updateSyncProgress(insertedCount, totalCount, percentage, state = 'active') {
+                if (!syncContainer) return;
+                syncContainer.classList.remove('hidden');
+                if (syncStatusText) {
+                    syncStatusText.textContent = state === 'error'
+                        ? `Error tras insertar ${insertedCount} de ${totalCount} buques`
+                        : `${insertedCount} de ${totalCount} buques insertados`;
+                }
+                if (syncPercentage) syncPercentage.textContent = `${percentage}%`;
+                if (syncProgressBar) {
+                    syncProgressBar.style.width = `${percentage}%`;
+                    syncProgressBar.classList.toggle('bg-red-500', state === 'error');
+                    syncProgressBar.classList.toggle('bg-emerald-600', state !== 'error');
+                }
+            }
+
             let rawPayload;
             try {
                 rawPayload = typeof nextOptions.body === 'string' ? JSON.parse(nextOptions.body) : nextOptions.body;
@@ -18990,87 +19020,156 @@
                 }
             }
 
-            const requestBody = type === 'fleet'
-                ? JSON.stringify({
-                    type: 'fleet',
-                    syncId,
-                    vessels: Array.isArray(payload.vessels) ? payload.vessels : []
-                })
-                : JSON.stringify({ ...payload, sync_id: syncId, type });
             const headers = {
                 ...(nextOptions.headers || {}),
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             };
+            const vessels = type === 'fleet' && Array.isArray(payload.vessels) ? payload.vessels : [];
+            const batches = [];
+            if (type === 'fleet') {
+                for (let index = 0; index < vessels.length; index += 50) {
+                    batches.push(vessels.slice(index, index + 50));
+                }
+                if (batches.length === 0) batches.push([]);
+                updateSyncProgress(0, vessels.length, 0);
+            } else {
+                batches.push(null);
+            }
 
-            for (let attempt = 0; attempt < DATA_BRIDGE_MAX_ATTEMPTS; attempt += 1) {
-                try {
-                    const dataBridgeFetch = window.__coreProNativeFetch || fetch;
-                    const response = await dataBridgeFetch(DATA_BRIDGE_RECEIVE_CORE_DATA_URL, {
-                        ...nextOptions,
-                        method: 'POST',
-                        headers,
-                        body: requestBody
-                    });
-                    const responseText = await response.text();
-                    let responsePayload = null;
+            let insertedCount = 0;
+            let completedCount = 0;
+            let rejectedCount = 0;
+            let lastResponsePayload = null;
+            const allCarteraMatches = [];
+
+            for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+                const batch = batches[batchIndex];
+                const requestBody = type === 'fleet'
+                    ? JSON.stringify({ type: 'fleet', syncId, vessels: batch })
+                    : JSON.stringify({ ...payload, sync_id: syncId, type });
+                let batchSucceeded = false;
+
+                for (let attempt = 0; attempt < DATA_BRIDGE_MAX_ATTEMPTS; attempt += 1) {
                     try {
-                        responsePayload = responseText ? JSON.parse(responseText) : null;
+                        const dataBridgeFetch = window.__coreProNativeFetch || fetch;
+                        const response = await dataBridgeFetch(DATA_BRIDGE_RECEIVE_CORE_DATA_URL, {
+                            ...nextOptions,
+                            method: 'POST',
+                            headers,
+                            body: requestBody
+                        });
+                        const responseText = await response.text();
+                        let responsePayload = null;
+                        try {
+                            responsePayload = responseText ? JSON.parse(responseText) : null;
+                        } catch (error) {
+                            responsePayload = null;
+                        }
+
+                        if (response.status === 200 && responsePayload?.success === true) {
+                            lastResponsePayload = responsePayload;
+                            const carteraMatches = responsePayload?.carteraMatches || responsePayload?.cartera_matches;
+                            if (Array.isArray(carteraMatches)) allCarteraMatches.push(...carteraMatches);
+                            if (type === 'fleet') {
+                                const confirmedCount = Number(
+                                    responsePayload?.processedCount
+                                    ?? responsePayload?.persistedCount
+                                    ?? responsePayload?.acceptedCount
+                                    ?? batch.length
+                                );
+                                insertedCount += Math.min(batch.length, Math.max(0, Number.isFinite(confirmedCount) ? confirmedCount : batch.length));
+                                rejectedCount += Math.max(0, Number(responsePayload?.rejectedCount) || 0);
+                                completedCount += batch.length;
+                                const percentage = vessels.length === 0 ? 100 : Math.round((completedCount / vessels.length) * 100);
+                                updateSyncProgress(insertedCount, vessels.length, percentage);
+                            }
+                            batchSucceeded = true;
+                            break;
+                        }
+
+                        if (response.status === 500 && attempt < DATA_BRIDGE_MAX_ATTEMPTS - 1) {
+                            await waitForDataBridgeRetry(attempt);
+                            continue;
+                        }
+
+                        const failureStatus = response.status === 500 ? 500 : 502;
+                        const errorDetail = responsePayload?.error || responsePayload?.message || 'Data Bridge no confirmó la persistencia con HTTP 200 y success=true.';
+                        if (type === 'fleet') {
+                            const percentage = vessels.length === 0 ? 0 : Math.round((completedCount / vessels.length) * 100);
+                            updateSyncProgress(insertedCount, vessels.length, percentage, 'error');
+                        }
+                        if (typeof window !== 'undefined' && typeof window.alert === 'function' && response.status >= 500) {
+                            window.alert(`⚠️ Error en Data Bridge (HTTP ${response.status}): ${errorDetail}`);
+                        }
+                        if (typeof showToast === 'function') {
+                            showToast(`❌ Error Data Bridge (${response.status}): ${errorDetail}`, false, 'error');
+                        }
+                        return createDataBridgeFailureResponse(failureStatus, errorDetail, {
+                            sync_id: syncId,
+                            upstream_status: response.status,
+                            processedCount: insertedCount
+                        });
                     } catch (error) {
-                        responsePayload = null;
-                    }
-
-                    if (response.status === 200 && responsePayload?.success === true) {
-                        if (type === 'fleet') confirmedDataBridgeFleetSyncIds.add(syncId);
-                        const carteraMatches = responsePayload?.carteraMatches || responsePayload?.cartera_matches;
-                        if (Array.isArray(carteraMatches) && carteraMatches.length > 0 && typeof highlightCarteraMatchesInUI === 'function') {
-                            highlightCarteraMatchesInUI(carteraMatches);
+                        if (attempt < DATA_BRIDGE_MAX_ATTEMPTS - 1) {
+                            await waitForDataBridgeRetry(attempt);
+                            continue;
                         }
-                        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-                            window.dispatchEvent(new CustomEvent('DATABRIDGE_SYNC_STATUS', {
-                                detail: { state: 'success', syncId, httpStatus: response.status, confirmation: responsePayload }
-                            }));
+                        const networkErrorMsg = error instanceof Error ? error.message : 'No se pudo completar el envío a Data Bridge.';
+                        if (type === 'fleet') {
+                            const percentage = vessels.length === 0 ? 0 : Math.round((completedCount / vessels.length) * 100);
+                            updateSyncProgress(insertedCount, vessels.length, percentage, 'error');
                         }
-                        return Response.json({ ...responsePayload, sync_id: syncId, syncId }, { status: 200 });
+                        if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+                            window.alert(`⚠️ Error al transmitir a Data Bridge: ${networkErrorMsg}`);
+                        }
+                        if (typeof showToast === 'function') {
+                            showToast(`❌ Error de red Data Bridge: ${networkErrorMsg}`, false, 'error');
+                        }
+                        return createDataBridgeFailureResponse(502, networkErrorMsg, {
+                            sync_id: syncId,
+                            processedCount: insertedCount
+                        });
                     }
+                }
 
-                    if (response.status === 500 && attempt < DATA_BRIDGE_MAX_ATTEMPTS - 1) {
-                        await waitForDataBridgeRetry(attempt);
-                        continue;
-                    }
+                if (!batchSucceeded) {
+                    return createDataBridgeFailureResponse(502, 'No se pudo completar el envío a Data Bridge.', {
+                        sync_id: syncId,
+                        processedCount: insertedCount
+                    });
+                }
 
-                    const failureStatus = response.status === 500 ? 500 : 502;
-                    const errorDetail = responsePayload?.error || responsePayload?.message || `Data Bridge no confirmó la persistencia con HTTP 200 y success=true.`;
-
-                    if (typeof window !== 'undefined' && typeof window.alert === 'function' && response.status >= 500) {
-                        window.alert(`⚠️ Error en Data Bridge (HTTP ${response.status}): ${errorDetail}`);
-                    }
-                    if (typeof showToast === 'function') {
-                        showToast(`❌ Error Data Bridge (${response.status}): ${errorDetail}`, false, 'error');
-                    }
-
-                    return createDataBridgeFailureResponse(
-                        failureStatus,
-                        errorDetail,
-                        { sync_id: syncId, upstream_status: response.status }
-                    );
-                } catch (error) {
-                    if (attempt < DATA_BRIDGE_MAX_ATTEMPTS - 1) {
-                        await waitForDataBridgeRetry(attempt);
-                        continue;
-                    }
-                    const networkErrorMsg = error instanceof Error ? error.message : 'No se pudo completar el envío a Data Bridge.';
-                    if (typeof window !== 'undefined' && typeof window.alert === 'function') {
-                        window.alert(`⚠️ Error al transmitir a Data Bridge: ${networkErrorMsg}`);
-                    }
-                    if (typeof showToast === 'function') {
-                        showToast(`❌ Error de red Data Bridge: ${networkErrorMsg}`, false, 'error');
-                    }
-                    return createDataBridgeFailureResponse(502, networkErrorMsg, { sync_id: syncId });
+                if (type === 'fleet' && batchIndex < batches.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 150));
                 }
             }
 
-            return createDataBridgeFailureResponse(502, 'No se pudo completar el envío a Data Bridge.', { sync_id: syncId });
+            if (type === 'fleet') confirmedDataBridgeFleetSyncIds.add(syncId);
+            if (allCarteraMatches.length > 0 && typeof highlightCarteraMatchesInUI === 'function') {
+                highlightCarteraMatchesInUI(allCarteraMatches);
+            }
+
+            const confirmation = type === 'fleet'
+                ? {
+                    ...(lastResponsePayload || {}),
+                    success: true,
+                    receivedCount: vessels.length,
+                    processedCount: insertedCount,
+                    acceptedCount: insertedCount,
+                    persistedCount: insertedCount,
+                    rejectedCount,
+                    batchCount: batches.length,
+                    carteraMatches: allCarteraMatches
+                }
+                : (lastResponsePayload || { success: true });
+
+            if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+                window.dispatchEvent(new CustomEvent('DATABRIDGE_SYNC_STATUS', {
+                    detail: { state: 'success', syncId, httpStatus: 200, confirmation }
+                }));
+            }
+            return Response.json({ ...confirmation, sync_id: syncId, syncId }, { status: 200 });
         }
         window.postDataBridgeReceiveVessels = postDataBridgeReceiveVessels;
 
