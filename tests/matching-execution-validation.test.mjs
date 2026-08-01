@@ -386,7 +386,7 @@ test('valid clicks synchronize the complete global fleet before core execution',
   assert.equal(windowMock.GlobalStore.matchingSelection.vessels[0], fleet[0]);
   assert.equal(resultsList.dataset.executionFleetCount, '750');
   assert.equal(integrityBanner.dataset.executionFleetCount, '750');
-  assert.match(source, /Integridad triple verificada:[\s\S]*MASTER[\s\S]*DATABRIDGE[\s\S]*AIS_LIVE[\s\S]*candidatos unificados antes de puntuación/);
+  assert.match(source, /Integridad verificada:[\s\S]*DATABRIDGE[\s\S]*AIS_LIVE[\s\S]*OPENSHIPS[\s\S]*candidatos unificados antes de puntuación/);
 });
 
 test('cache hydration remains distinct from a successful matching execution', () => {

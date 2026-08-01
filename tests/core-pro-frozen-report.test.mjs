@@ -68,9 +68,9 @@ test("the globe suppresses invalid ballast destination labels", () => {
   assert.match(globalFleetGlobeSource, /role === 'LASTRE'[\s\S]*!rawName[\s\S]*rawName\.toUpperCase\(\)\.includes\('TBA'\)[\s\S]*coordinates\.lat === 0 && coordinates\.lng === 0[\s\S]*return null/);
 });
 
-test("the matching engine completes triple-source validation without transmitting the fleet", () => {
+test("the matching engine completes filtered-source validation without transmitting the fleet", () => {
   assert.match(coreProSource, /const matches = deduplicatedMatches;[\s\S]*window\.lastMatchingEngineResults = matches;/);
-  assert.match(coreProSource, /Validación triple completada para \$\{arrayDeBuquesEncontrados\.length\} buques desde MASTER, DATABRIDGE y AIS_LIVE/);
+  assert.match(coreProSource, /Validación completada para \$\{arrayDeBuquesEncontrados\.length\} buques desde \$\{getAllowedMatchingSources\(\)\.join\(', '\)\}/);
   assert.doesNotMatch(coreProSource, /dataBridgeSynced: false/);
   assert.match(coreProSource, /pol: \{ lat: pol\.lat, lon: pol\.lon \}/);
   assert.match(coreProSource, /pod: \{ lat: pod\.lat, lon: pod\.lon \}/);

@@ -10,20 +10,23 @@ const [indexSource, matchingSource, matchingDbSource, mergeSource, filterSource]
   readFile(new URL('../netlify/functions/ai-ais-filter.ts', import.meta.url), 'utf8'),
 ]);
 
-test('matching backend loads master, Data Bridge portfolio, and validated AIS concurrently', () => {
-  assert.match(matchingSource, /Promise\.all\(\[/);
-  assert.match(matchingSource, /listLocalVesselsMaster\(6000\)/);
-  assert.match(matchingSource, /listDataBridgePortfolioVessels\(2000\)/);
-  assert.match(matchingSource, /listValidatedAisVesselsNearPol\(loadingPortLat, loadingPortLon, matchRadiusNm, 2000\)/);
-  assert.match(matchingSource, /mergeTripleVesselSources\(masterVessels, dataBridgeVessels, aisVessels\)/);
-  assert.match(matchingSource, /searchMode: "triple_source_database"/);
+test('matching backend pages allowed sources and sends every page through Core PRO scoring', () => {
+  assert.match(matchingSource, /normalizeAllowedMatchingSources\(matchingPayload\.allowedSources \|\| body\.allowedSources\)/);
+  assert.match(matchingSource, /listPaginatedMatchingSources\(/);
+  assert.match(matchingSource, /mergeTripleVesselSources\(\[\], dataBridgeVessels, aisVessels, openShipsVessels\)/);
+  assert.match(matchingSource, /radarSnapshot: unifiedVessels/);
+  assert.match(matchingSource, /searchMode: "filtered_source_database"/);
+  assert.match(matchingSource, /pagination,/);
 });
 
-test('Data Bridge and AIS queries enforce portfolio, validation, and POL proximity filters', () => {
-  assert.match(matchingDbSource, /status = 'EN_CARTERA'[\s\S]*OR validation_status = 'VALIDADO'/);
+test('source query filters Data Bridge, AIS, and OpenShips before applying limit and offset', () => {
+  assert.match(matchingDbSource, /status = 'EN_CARTERA'[\s\S]*OR vm\.validation_status = 'VALIDADO'/);
   assert.match(matchingDbSource, /FROM ais_vessels/);
   assert.match(matchingDbSource, /audit_status = 'VALIDATED'/);
-  assert.match(matchingDbSource, /WHERE distance_nm <= \$8/);
+  assert.match(matchingDbSource, /FROM ais_telemetry_buffer/);
+  assert.match(matchingDbSource, /WHERE source_system = ANY\(\$1::text\[\]\)/);
+  assert.match(matchingDbSource, /LIMIT \$5[\s\S]*OFFSET \$6/);
+  assert.match(matchingDbSource, /ROW_NUMBER\(\) OVER/);
 });
 
 test('server identity uses valid IMO first and normalized name plus DWT range otherwise', () => {
@@ -41,7 +44,10 @@ test('matching execution uses the unified backend response and exposes source ba
   assert.doesNotMatch(executionSource, /radarLiveRes|dataBridgeRes|Promise\.allSettled/);
   assert.match(indexSource, /sourceBadgesHtml/);
   assert.match(indexSource, /data-source-origin="\$\{sourceOriginLabel\}"/);
-  assert.match(indexSource, /MASTER:[\s\S]*DATABRIDGE:[\s\S]*AIS_LIVE:/);
+  assert.match(indexSource, /DATABRIDGE:[\s\S]*AIS_LIVE:[\s\S]*OPENSHIPS:/);
+  assert.match(indexSource, /matching-source-toggle/);
+  assert.match(indexSource, /matching-load-more-button/);
+  assert.match(indexSource, /previousMatches\.concat/);
 });
 
 test('scoring preserves vessel key and combined source origins', () => {

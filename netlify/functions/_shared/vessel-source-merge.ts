@@ -1,6 +1,6 @@
 type AnyRecord = Record<string, unknown>;
 
-export type VesselSourceOrigin = "MASTER" | "DATABRIDGE" | "AIS_LIVE";
+export type VesselSourceOrigin = "MASTER" | "DATABRIDGE" | "AIS_LIVE" | "OPENSHIPS";
 
 const DWT_BUCKET_SIZE = 2500;
 const EMPTY_MARKERS = new Set(["", "0", "n/a", "na", "unknown", "pending", "null", "undefined"]);
@@ -110,7 +110,7 @@ function readOrigins(value: unknown): VesselSourceOrigin[] {
       ? record.sourceOrigins
       : [];
   return rawOrigins.filter((origin): origin is VesselSourceOrigin => (
-    origin === "MASTER" || origin === "DATABRIDGE" || origin === "AIS_LIVE"
+    origin === "MASTER" || origin === "DATABRIDGE" || origin === "AIS_LIVE" || origin === "OPENSHIPS"
   ));
 }
 
@@ -157,6 +157,7 @@ export function mergeTripleVesselSources(
   masterRows: unknown[] = [],
   dataBridgeRows: unknown[] = [],
   aisRows: unknown[] = [],
+  openShipsRows: unknown[] = [],
 ) {
   const mergedByKey = new Map<string, AnyRecord>();
   const keyAliases = new Map<string, string>();
@@ -193,6 +194,7 @@ export function mergeTripleVesselSources(
   mergeList(masterRows, "MASTER");
   mergeList(dataBridgeRows, "DATABRIDGE");
   mergeList(aisRows, "AIS_LIVE");
+  mergeList(openShipsRows, "OPENSHIPS");
 
   return Array.from(mergedByKey.values());
 }

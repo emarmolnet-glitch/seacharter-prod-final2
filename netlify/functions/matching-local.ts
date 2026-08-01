@@ -1,13 +1,12 @@
 import type { Config } from "@netlify/functions";
 import {
   findExactVesselsMasterRows,
-  listLocalVesselsMaster,
   listVesselsMasterPendingAudit,
   type VesselMasterRow,
 } from "../../db/vessels-master.js";
 import {
-  listDataBridgePortfolioVessels,
-  listValidatedAisVesselsNearPol,
+  listPaginatedMatchingSources,
+  normalizeAllowedMatchingSources,
   type AisMatchingRow,
 } from "../../db/matching-sources.js";
 import runAiAisFilter from "./ai-ais-filter.js";
@@ -202,6 +201,51 @@ function serializeAisVessel(row: AisMatchingRow) {
   };
 }
 
+function serializeOpenShipsVessel(value: unknown) {
+  const row = asRecord(value);
+  const rawData = parseRecord(row.raw_data);
+  const metadata = asRecord(row.MetaData || row.metadata || rawData.MetaData || rawData.metadata);
+  const vesselName = textValue(row.vessel_name, row.vesselName, row.ShipName, rawData.vessel_name, rawData.vesselName, metadata.ShipName) || "Unknown vessel";
+  const vesselType = textValue(row.vessel_type, row.vesselType, rawData.vessel_type, rawData.vesselType, metadata.ShipType) || "Unknown";
+  const latitude = finiteNumberValue(row.latitude, row.lat, rawData.latitude, rawData.lat, metadata.Latitude);
+  const longitude = finiteNumberValue(row.longitude, row.lon, row.lng, rawData.longitude, rawData.lon, rawData.lng, metadata.Longitude);
+  const imo = textValue(row.imo_number, row.imo, row.IMO, rawData.imo_number, rawData.imo, rawData.IMO, metadata.IMO) || "N/A";
+  const mmsi = textValue(row.mmsi, row.MMSI, rawData.mmsi, rawData.MMSI, metadata.MMSI) || "N/A";
+  const dwt = numericValue(row.dwt, row.DWT, rawData.dwt, rawData.DWT, metadata.dwt, metadata.DWT);
+  return {
+    ...rawData,
+    ...row,
+    storageKey: textValue(row.storage_key, row.storageKey, row.vessel_key),
+    imo,
+    IMO: imo,
+    imoNumber: imo,
+    imo_number: imo,
+    mmsi,
+    MMSI: mmsi,
+    vesselName,
+    vessel_name: vesselName,
+    ShipName: vesselName,
+    vesselType,
+    vessel_type: vesselType,
+    shipType: vesselType,
+    dwt,
+    DWT: dwt,
+    latitude,
+    lat: latitude,
+    longitude,
+    lon: longitude,
+    lng: longitude,
+    source: "OPENSHIPS",
+    audit_status: "OPENSHIPS_LIVE",
+    auditStatus: "OPENSHIPS_LIVE",
+    speed: finiteNumberValue(row.speed_over_ground, row.speed, row.sog, rawData.speed_over_ground, rawData.speed, rawData.sog),
+    course: finiteNumberValue(row.course_over_ground, row.course, row.cog, rawData.course_over_ground, rawData.course, rawData.cog),
+    heading: finiteNumberValue(row.heading, rawData.heading),
+    lastSeenAt: textValue(row.observed_at, row.fetched_at, row.updated_at) || null,
+    distanceToPolNm: finiteNumberValue(row.distance_nm),
+  };
+}
+
 function findExactMasterRow(candidate: ReturnType<typeof normalizeCandidate>, rows: VesselMasterRow[]) {
   const candidateName = normalizeText(candidate.vesselName);
   return rows.find((row) => candidate.imo && row.imo_number === candidate.imo)
@@ -237,36 +281,58 @@ export default async (req: Request) => {
       const loadingPortLat = finiteNumberValue(cargo.loadingPortLat);
       const loadingPortLon = finiteNumberValue(cargo.loadingPortLon);
       const matchRadiusNm = Math.min(5000, Math.max(1, finiteNumberValue(matchingPayload.matchRadiusNm) || 2000));
-      const [masterRows, dataBridgeRows, aisRows] = await Promise.all([
-        listLocalVesselsMaster(6000),
-        listDataBridgePortfolioVessels(2000),
-        loadingPortLat !== null && loadingPortLon !== null
-          ? listValidatedAisVesselsNearPol(loadingPortLat, loadingPortLon, matchRadiusNm, 2000)
-          : Promise.resolve([]),
-      ]);
-      const masterVessels = masterRows.map(serializeMasterVessel);
-      const dataBridgeVessels = dataBridgeRows.map(serializeMasterVessel);
-      const aisVessels = aisRows.map(serializeAisVessel);
-      const unifiedVessels = mergeTripleVesselSources(masterVessels, dataBridgeVessels, aisVessels);
+      const allowedSources = normalizeAllowedMatchingSources(matchingPayload.allowedSources || body.allowedSources);
+      const requestedLimit = finiteNumberValue(matchingPayload.limit, body.limit) || 50;
+      const requestedOffset = finiteNumberValue(matchingPayload.offset, body.offset) || 0;
+      const sourcePage = await listPaginatedMatchingSources(
+        allowedSources,
+        loadingPortLat,
+        loadingPortLon,
+        matchRadiusNm,
+        requestedLimit,
+        requestedOffset,
+      );
+      const dataBridgeVessels = sourcePage.rows
+        .filter((row) => row.source_system === "DATABRIDGE")
+        .map((row) => serializeMasterVessel(row.payload as unknown as VesselMasterRow));
+      const aisVessels = sourcePage.rows
+        .filter((row) => row.source_system === "AIS_LIVE")
+        .map((row) => serializeAisVessel(row.payload as unknown as AisMatchingRow));
+      const openShipsVessels = sourcePage.rows
+        .filter((row) => row.source_system === "OPENSHIPS")
+        .map((row) => serializeOpenShipsVessel(row.payload));
+      const unifiedVessels = mergeTripleVesselSources([], dataBridgeVessels, aisVessels, openShipsVessels);
       const sourceCounts = {
-        master: masterVessels.length,
+        master: 0,
         dataBridge: dataBridgeVessels.length,
         aisLive: aisVessels.length,
+        openShips: openShipsVessels.length,
         unified: unifiedVessels.length,
+      };
+      const pagination = {
+        limit: sourcePage.limit,
+        offset: sourcePage.offset,
+        nextOffset: sourcePage.offset + sourcePage.rows.length,
+        returned: sourcePage.rows.length,
+        total: sourcePage.totalCount,
+        hasMore: sourcePage.offset + sourcePage.rows.length < sourcePage.totalCount,
       };
       if (unifiedVessels.length === 0) {
         return Response.json({
           success: true,
           operation: "execute",
-          source: "triple_source",
+          source: "filtered_sources",
           sourceCounts,
+          allowedSources,
+          pagination,
           readOnly: true,
           data: [],
           matches: [],
           count: 0,
-          localVesselCount: masterVessels.length,
+          localVesselCount: 0,
           dataBridgeVesselCount: dataBridgeVessels.length,
           aisVesselCount: aisVessels.length,
+          openShipsVesselCount: openShipsVessels.length,
           unifiedVesselCount: 0,
           message: "No se encontraron coincidencias locales",
         }, { headers });
@@ -278,7 +344,7 @@ export default async (req: Request) => {
         body: JSON.stringify({
           ...matchingPayload,
           radarSnapshot: unifiedVessels,
-          searchMode: "triple_source_database",
+          searchMode: "filtered_source_database",
           frozenAt: new Date().toISOString(),
         }),
       });
@@ -290,17 +356,20 @@ export default async (req: Request) => {
         ...scoringResult,
         success: scoringResponse.ok && scoringResult.success !== false,
         operation: "execute",
-        source: "triple_source",
+        source: "filtered_sources",
         sourceCounts,
+        allowedSources,
+        pagination,
         readOnly: true,
         data: evaluatedMatches,
         matches: eligibleMatches,
         count: evaluatedMatches.length,
-        localVesselCount: masterVessels.length,
+        localVesselCount: 0,
         dataBridgeVesselCount: dataBridgeVessels.length,
         aisVesselCount: aisVessels.length,
+        openShipsVesselCount: openShipsVessels.length,
         unifiedVesselCount: unifiedVessels.length,
-        message: evaluatedMatches.length > 0 ? "Coincidencias de triple fuente calculadas" : "No se encontraron coincidencias locales",
+        message: evaluatedMatches.length > 0 ? "Coincidencias de fuentes filtradas calculadas" : "No se encontraron coincidencias locales",
       }, { status: scoringResponse.status, headers });
     }
 
