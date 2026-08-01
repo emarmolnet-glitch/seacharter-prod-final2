@@ -95,15 +95,32 @@ async function tenderNor(
        voyage_id,
        arrival_timestamp,
        nor_distance_nm,
+       nor_pod_tendered_at,
        updated_at
      )
-     VALUES ($1, $2, $3, NOW())
+     VALUES ($1, $2, $3, $2, NOW())
      ON CONFLICT (voyage_id) DO UPDATE
        SET arrival_timestamp = EXCLUDED.arrival_timestamp,
            nor_distance_nm = EXCLUDED.nor_distance_nm,
+           nor_pod_tendered_at = EXCLUDED.nor_pod_tendered_at,
            updated_at = NOW()
      RETURNING id`,
     [voyage.id, arrivalTimestamp, distanceNm],
+  );
+
+  await client.query(
+    `INSERT INTO voyage_tracking_events (
+       voyage_id,
+       phase,
+       event_type,
+       status,
+       summary,
+       metric_value,
+       metric_unit,
+       occurred_at
+     )
+     VALUES ($1, 5, 'NOR_POD_TENDERED', 'OK', 'NOR POD tendido automáticamente dentro del geofence.', $2, 'NM', $3)`,
+    [voyage.id, distanceNm, arrivalTimestamp],
   );
 
   return {

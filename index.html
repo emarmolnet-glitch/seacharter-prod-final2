@@ -7327,6 +7327,7 @@
     </style>
     <link href="./calculator_view.css" rel="stylesheet">
     <link href="./market-contacts.css" rel="stylesheet">
+    <link href="./tracking-live.css" rel="stylesheet">
 </head>
 <body class="theme-light h-screen flex flex-col overflow-hidden">
 
@@ -12761,6 +12762,7 @@
                                     <li><strong>FCL:</strong> Módulo de utilidades para carga contenerizada (<em>Full Container Load</em>) y simulación de fletes por TEU/FEU.</li>
                                     <li><strong>Editor ASBATANKVOY:</strong> Herramienta especializada de redacción y edición de pólizas de fletamento para buques tanque (<em>tankers</em>) bajo el estándar internacional ASBATANKVOY.</li>
                                     <li><strong>CBAM:</strong> Panel de gestión, cálculo y configuración del Mecanismo de Ajuste Fronterizo de Carbono (CBAM) y derechos de emisión ETS de la Unión Europea.</li>
+                                    <li><strong>Tracking Live (Premium):</strong> Consola operativa PRO para auditar el viaje completo desde la aproximación al POL hasta el cierre en POD, cruzando Charter Party, AIS, geofencing, plancha y alertas contractuales.</li>
                                     <li><strong>Modo Dual - Trading & Chartering:</strong> Conmutador que adapta la interfaz y el motor de cálculo para gestionar simultáneamente la compraventa de la mercancía (Trading) y la contratación del flete (Chartering), calculando el margen comercial bruto en tiempo real.</li>
                                 </ul>
                             </div>
@@ -23854,6 +23856,21 @@
                 event.preventDefault();
                 closeAdvancedModulesMenu();
                 window.openMarketContactsDirectory?.();
+            });
+
+            const trackingLiveItem = document.createElement('li');
+            trackingLiveItem.className = 'tools-dropdown-item';
+            trackingLiveItem.innerHTML = `
+                <button type="button" id="open-tracking-live-btn" class="tools-dropdown-action" aria-haspopup="dialog" aria-label="Abrir Tracking Live Premium">
+                    <span>Tracking Live (Premium)</span>
+                    <span class="tracking-pro-badge">PRO</span>
+                </button>
+            `;
+            menu.appendChild(trackingLiveItem);
+            trackingLiveItem.querySelector('#open-tracking-live-btn')?.addEventListener('click', event => {
+                event.preventDefault();
+                closeAdvancedModulesMenu();
+                window.openTrackingLive?.();
             });
 
             const preferenceItem = document.createElement('li');
@@ -58250,6 +58267,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
     </script>
 
     <script type="module" src="./market-contacts.js"></script>
+    <script type="module" src="./tracking-live.js"></script>
     <script src="./contextual-feedback.js?v=20260717-global-banner"></script>
 
     <script>
