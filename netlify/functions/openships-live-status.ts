@@ -3,7 +3,7 @@ import type { QueryResultRow } from "pg";
 import { getPool } from "../../db/index.js";
 
 type OpenShipsStatusRow = QueryResultRow & {
-  recent_vessels: string | number;
+  vessel: Record<string, unknown>;
 };
 
 export default async (req: Request) => {
@@ -16,14 +16,38 @@ export default async (req: Request) => {
 
   try {
     const result = await getPool().query<OpenShipsStatusRow>(`
-      SELECT COUNT(DISTINCT mmsi) AS recent_vessels
+      SELECT DISTINCT ON (COALESCE(NULLIF(mmsi::text, ''), vessel_key))
+        COALESCE(raw_data, '{}'::jsonb) || jsonb_build_object(
+          'storage_key', vessel_key,
+          'vessel_key', vessel_key,
+          'mmsi', mmsi,
+          'vessel_name', vessel_name,
+          'latitude', latitude,
+          'longitude', longitude,
+          'speed_over_ground', speed_over_ground,
+          'course_over_ground', course_over_ground,
+          'heading', heading,
+          'vessel_type', vessel_type,
+          'observed_at', observed_at,
+          'fetched_at', fetched_at,
+          'source', 'OPENSHIPS',
+          'source_origin', 'OPENSHIPS',
+          'source_origins', jsonb_build_array('OPENSHIPS'),
+          'data_source', 'OPENSHIPS'
+        ) AS vessel
       FROM ais_telemetry_buffer
-      WHERE fetched_at >= NOW() - INTERVAL '24 hours';
+      WHERE fetched_at >= NOW() - INTERVAL '24 hours'
+        AND latitude IS NOT NULL
+        AND longitude IS NOT NULL
+      ORDER BY COALESCE(NULLIF(mmsi::text, ''), vessel_key),
+        COALESCE(observed_at, fetched_at, updated_at) DESC NULLS LAST;
     `);
-    const recentVessels = Number(result.rows[0]?.recent_vessels ?? 0);
+    const vessels = result.rows
+      .map((row) => row.vessel)
+      .filter((vessel) => vessel && typeof vessel === "object");
 
     return Response.json(
-      { recent_vessels: recentVessels },
+      { recent_vessels: vessels.length, vessels },
       { headers: { "cache-control": "no-store" } },
     );
   } catch (error) {

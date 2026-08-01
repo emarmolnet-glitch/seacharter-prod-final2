@@ -139,12 +139,24 @@ export async function listPaginatedMatchingSources(
         FROM source_rows
         WHERE source_system = ANY($1::text[])
           AND (source_system = 'DATABRIDGE' OR distance_nm <= $4)
+      ), active_source AS (
+        SELECT source_system
+        FROM filtered_sources
+        GROUP BY source_system
+        ORDER BY CASE source_system
+          WHEN 'OPENSHIPS' THEN 1
+          WHEN 'AIS_LIVE' THEN 2
+          WHEN 'DATABRIDGE' THEN 3
+          ELSE 4
+        END
+        LIMIT 1
       ), ranked_sources AS (
         SELECT *, ROW_NUMBER() OVER (
           PARTITION BY source_system
           ORDER BY sort_at DESC NULLS LAST, payload->>'mmsi', payload->>'vessel_name'
         ) AS source_position
         FROM filtered_sources
+        WHERE source_system = (SELECT source_system FROM active_source)
       )
       SELECT source_system, payload, COUNT(*) OVER() AS total_count
       FROM ranked_sources
