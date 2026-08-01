@@ -44622,6 +44622,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             matchingReady: false,
             matchingSelectionPending: false,
             matchingSelection: null,
+            activeVessel: null,
             setVessels(newVessels) {
                 if (window.matchingAuditModeState?.enabled) return;
                 const incomingVessels = Array.isArray(newVessels) ? newVessels : [];
@@ -44804,10 +44805,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 typeof aisVesselsData !== 'undefined' ? aisVesselsData : null,
                 window.lastVesselsInArea,
                 window.listaBarcos,
+                window.exploratoryVesselsCache,
+                window.dataBridgeLocalCandidates,
+                window.dataBridgeGlobalCandidates,
+                window.lastMatchingEngineResults,
                 window.buquesAlmacenados instanceof Map ? Array.from(window.buquesAlmacenados.values()) : null,
                 window.GlobalStore && window.GlobalStore.rawVessels,
                 window.GlobalStore && window.GlobalStore.vessels,
-                window.GlobalStore && window.GlobalStore.polPrimaryVessels
+                window.GlobalStore && window.GlobalStore.polPrimaryVessels,
+                window.GlobalStore && window.GlobalStore.activeVessel ? [window.GlobalStore.activeVessel] : null,
+                window.objetoCalculadoraPrincipal && window.objetoCalculadoraPrincipal.vessel ? [window.objetoCalculadoraPrincipal] : null
             ];
             const vesselsByKey = new Map();
             sources.forEach(source => {
@@ -45829,31 +45836,87 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         // behave inconsistently in Production.
         let aisMapAnimationFrameId = null;
 
+        function getDensityVesselIdentity(vessel) {
+            if (!vessel || typeof vessel !== 'object') return null;
+            const meta = vessel.MetaData || vessel.metadata || {};
+            const imo = String(vessel.imo || vessel.IMO || meta.imo || meta.IMO || '').replace(/\D/g, '');
+            const mmsi = String(vessel.mmsi || vessel.MMSI || meta.mmsi || meta.MMSI || '').replace(/\D/g, '');
+            const name = String(vessel.vesselName || vessel.vessel || vessel.name || vessel.ShipName || meta.ShipName || '').trim().toLowerCase();
+            const latitude = Number(vessel.latitude ?? vessel.lat ?? meta.latitude ?? meta.lat);
+            const longitude = Number(vessel.longitude ?? vessel.lon ?? vessel.lng ?? meta.longitude ?? meta.lon ?? meta.lng);
+            return { imo, mmsi, name, latitude, longitude };
+        }
+
+        function findDensityVesselByIdentity(identity, vessels) {
+            const target = getDensityVesselIdentity(identity);
+            if (!target) return null;
+            return (Array.isArray(vessels) ? vessels : []).find(candidate => {
+                const current = getDensityVesselIdentity(candidate);
+                if (!current) return false;
+                return (target.imo && current.imo === target.imo)
+                    || (target.mmsi && current.mmsi === target.mmsi)
+                    || (target.name && current.name === target.name);
+            }) || null;
+        }
+
+        function mergeDensityVesselSources(sources) {
+            const vesselsByKey = new Map();
+            (Array.isArray(sources) ? sources : []).forEach(source => {
+                const vessels = Array.isArray(source) ? source : (source ? [source] : []);
+                vessels.forEach((rawVessel, index) => {
+                    if (!rawVessel || typeof rawVessel !== 'object') return;
+                    const vessel = typeof window.normalizeAisVesselForRadar === 'function'
+                        ? window.normalizeAisVesselForRadar(rawVessel)
+                        : rawVessel;
+                    if (!vessel) return;
+                    const identity = getDensityVesselIdentity(vessel);
+                    const coordinateKey = Number.isFinite(identity?.latitude) && Number.isFinite(identity?.longitude)
+                        ? `${identity.latitude.toFixed(5)}:${identity.longitude.toFixed(5)}`
+                        : '';
+                    const key = identity?.imo || identity?.mmsi || identity?.name || coordinateKey || `density-${index}`;
+                    const previous = vesselsByKey.get(key) || {};
+                    vesselsByKey.set(key, { ...previous, ...vessel });
+                });
+            });
+            return Array.from(vesselsByKey.values());
+        }
+
         function getDensityMapSourceVessels() {
             const store = window.GlobalStore;
             const matchingSource = String(store?.aisMatchingStateSource || '');
             const hasCommittedLocalMatches = matchingSource === 'matching-validation'
                 && Array.isArray(store?.nearbyVessels) && store.nearbyVessels.length > 0;
-            if (hasCommittedLocalMatches) {
-                return store.nearbyVessels.slice();
-            }
             const filtered = store?.getFilteredVessels?.();
-            if (Array.isArray(filtered) && filtered.length > 0) {
-                return filtered.slice();
-            }
             const raw = (typeof store?.getRawVessels === 'function' ? store.getRawVessels() : null) || store?.rawVessels || store?.vessels;
-            if (Array.isArray(raw) && raw.length > 0) {
-                return raw.slice();
-            }
-            if (Array.isArray(window.listaBarcos) && window.listaBarcos.length > 0) {
-                return window.listaBarcos.slice();
-            }
-            if (Array.isArray(window.lastVesselsInArea) && window.lastVesselsInArea.length > 0) {
-                return window.lastVesselsInArea.slice();
-            }
-            return [];
+            const cached = typeof window.getCachedAisVessels === 'function' ? window.getCachedAisVessels() : [];
+            return mergeDensityVesselSources([
+                hasCommittedLocalMatches ? store.nearbyVessels : null,
+                filtered,
+                raw,
+                window.listaBarcos,
+                window.lastVesselsInArea,
+                cached,
+                window.exploratoryVesselsCache,
+                window.dataBridgeLocalCandidates,
+                window.dataBridgeGlobalCandidates,
+                store?.activeVessel,
+                window.objetoCalculadoraPrincipal?.vessel ? window.objetoCalculadoraPrincipal : null
+            ]);
         }
         window.getDensityMapSourceVessels = getDensityMapSourceVessels;
+
+        function syncDensityActiveVessel(vessels = getDensityMapSourceVessels()) {
+            const selectedState = window.GlobalStore?.activeVessel || window.activeVessel || window.objetoCalculadoraPrincipal;
+            const activeVessel = findDensityVesselByIdentity(selectedState, vessels);
+            if (!activeVessel) return null;
+            if (window.GlobalStore) window.GlobalStore.activeVessel = activeVessel;
+            window.activeVessel = activeVessel;
+            if (window.GlobalFleetGlobe?.getInstance('density')) {
+                window.GlobalFleetGlobe.selectVessel(activeVessel, 'density');
+            }
+            return activeVessel;
+        }
+        window.syncDensityActiveVessel = syncDensityActiveVessel;
 
         function cancelAisMapAnimationFrame() {
             if (aisMapAnimationFrameId && typeof cancelAnimationFrame === 'function') {
@@ -45891,6 +45954,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                                 autoRotate: true
                             });
                             window.mapaAIS = aisMap;
+                            syncDensityActiveVessel(vessels);
                             if (State?.routeGeometry) {
                                 try { window.GlobalFleetGlobe.setRouteResult(State.routeGeometry, 'density', { focus: false }); } catch (_) {}
                             } else {
@@ -46035,6 +46099,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (window.GlobalFleetGlobe?.getInstance('density') === aisMap) {
                 const renderableVessels = uniqueRenderableVessels;
                 window.GlobalFleetGlobe.updateVessels(renderableVessels, 'density');
+                syncDensityActiveVessel(renderableVessels);
                 aisMarkers = uniqueRenderableVessels
                     .filter((vessel) => Number.isFinite(Number(vessel.latitude ?? vessel.lat)) && Number.isFinite(Number(vessel.longitude ?? vessel.lon ?? vessel.lng)))
                     .map((vessel) => ({
@@ -46401,9 +46466,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             if (aisMap) {
-                const currentRadarVessels = Array.isArray(window.aisVesselsData) ? window.aisVesselsData : [];
-                updateAisMarkers(currentRadarVessels);
+                updateAisMarkers(getDensityMapSourceVessels());
             }
+
+            if (typeof calculateAndDisplayAisFreight === 'function') calculateAndDisplayAisFreight();
+            window.dispatchEvent(new CustomEvent('databridge:filtered-vessels-updated', {
+                detail: { vessels: normalizedCandidates.slice(), vesselCount: normalizedCandidates.length }
+            }));
 
             return { localCandidates, globalCandidates };
         }
@@ -46439,15 +46508,24 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             // Global synchronization function to sync table row selection with calculator and map
             window.selectShip = function(name, mmsi, lat, lon, imo = null, destination = null) {
+                const selectionProbe = { name, vesselName: name, mmsi, imo, lat, lon, latitude: lat, longitude: lon };
+                const sharedDensityVessels = getDensityMapSourceVessels();
+                const selectedSourceVessel = findDensityVesselByIdentity(selectionProbe, sharedDensityVessels);
                 // Store user-selected ship securely and immutably
                 window.objetoCalculadoraPrincipal = Object.freeze({
+                    ...(selectedSourceVessel || {}),
                     vessel: name,
+                    vesselName: name,
                     mmsi: mmsi,
                     imo: imo,
                     lat: lat,
                     lon: lon,
+                    latitude: lat,
+                    longitude: lon,
                     destination: destination
                 });
+                window.activeVessel = window.objetoCalculadoraPrincipal;
+                if (window.GlobalStore) window.GlobalStore.activeVessel = window.objetoCalculadoraPrincipal;
 
                 if (imo && imo !== 'N/A' && imo !== 'Unknown') {
                     State.imo = imo;
@@ -46479,7 +46557,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const usesDensityGlobe = Boolean(window.GlobalFleetGlobe?.getInstance('density'));
                 if (mapAIS) {
                     if (usesDensityGlobe) {
-                        window.GlobalFleetGlobe.focusVessel({ name, vesselName: name, mmsi, imo, lat, lng: lon, latitude: lat, longitude: lon }, 'density');
+                        updateAisMarkers(getDensityMapSourceVessels());
+                        window.GlobalFleetGlobe.selectVessel(window.objetoCalculadoraPrincipal, 'density');
                     } else {
                         mapAIS.setView([lat, lon], 10); // Zooms in on the ship
 
@@ -46506,6 +46585,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         imo
                     });
                 }
+                if (typeof setVesselClassContext === 'function') {
+                    setVesselClassContext(getSelectedFleetTaxonomies(), getDensityMapSourceVessels());
+                }
+                window.dispatchEvent(new CustomEvent('vessel-selection:changed', {
+                    detail: { activeVessel: window.objetoCalculadoraPrincipal }
+                }));
+                if (typeof calculateAndDisplayAisFreight === 'function') calculateAndDisplayAisFreight();
                 console.log(`Selected: ${name} (${mmsi}) at coordinates ${lat}, ${lon}, IMO: ${imo}, Dest: ${destination}`);
             };
 
@@ -50086,9 +50172,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function calculateAndDisplayAisFreight() {
             const baseBEText = document.getElementById('res-breakeven')?.innerText || "$0.00";
             const baseBE = parseFloat(baseBEText.replace('$', '')) || State.breakEven || 0;
-            const activeVesselClassContext = window.vesselClassContext || (typeof setVesselClassContext === 'function'
-                ? setVesselClassContext(getSelectedFleetTaxonomies())
-                : null);
+            const densitySourceVessels = typeof getDensityMapSourceVessels === 'function'
+                ? getDensityMapSourceVessels()
+                : [];
+            const activeVesselClassContext = typeof setVesselClassContext === 'function'
+                ? setVesselClassContext(getSelectedFleetTaxonomies(), densitySourceVessels)
+                : (window.vesselClassContext || null);
             const activeVesselProfile = activeVesselClassContext?.profile || { riskCoefficient: 1 };
             
             const estimatorBeEl = document.getElementById('ais-estimator-be');
@@ -50099,7 +50188,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const committedMatchingSource = String(window.GlobalStore?.aisMatchingStateSource || '');
             const hasCommittedMatchingState = ['density-filter', 'matching-validation'].includes(committedMatchingSource)
                 && Number(window.GlobalStore?.nearbyCount) > 0;
-            const hasAisData = window.GlobalStore?.hasAisData === true || hasCommittedMatchingState;
+            const hasAisData = window.GlobalStore?.hasAisData === true || hasCommittedMatchingState || densitySourceVessels.length > 0;
             if (!hasAisData) {
                 renderPendingAisMarketReference();
                 return;
@@ -50163,11 +50252,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const polPrimaryStoreVessels = (typeof window !== 'undefined' && window.GlobalStore && Array.isArray(window.GlobalStore.polPrimaryVessels))
                 ? window.GlobalStore.polPrimaryVessels
                 : null;
-            const sourceAisVessels = globalFilteredVessels
-                ? globalFilteredVessels
-                : (cachedAisVessels.length > 0
+            const sourceAisVessels = densitySourceVessels.length > 0
+                ? densitySourceVessels
+                : (globalFilteredVessels
+                    ? globalFilteredVessels
+                    : (cachedAisVessels.length > 0
                     ? cachedAisVessels
-                    : ((typeof aisVesselsData !== 'undefined' && Array.isArray(aisVesselsData)) ? aisVesselsData : []));
+                    : ((typeof aisVesselsData !== 'undefined' && Array.isArray(aisVesselsData)) ? aisVesselsData : [])));
             const contextFilteredVessels = activeVesselClassContext && Array.isArray(activeVesselClassContext.filteredVessels)
                 ? activeVesselClassContext.filteredVessels
                 : null;

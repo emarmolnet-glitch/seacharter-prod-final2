@@ -80,7 +80,8 @@ test('commercial negotiation mounts the isolated AIS widget module', () => {
 test('AIS market rates remain pending until a sweep or trusted local matching confirms availability', () => {
   assert.match(widgetSource, /function hasConfirmedAisData\(\): boolean/);
   assert.match(widgetSource, /hasTrustedMatchingState = \['density-filter', 'matching-validation'\]\.includes\(matchingSource\)/);
-  assert.match(widgetSource, /window\.GlobalStore\?\.hasAisData === true \|\| hasTrustedMatchingState/);
+  assert.match(widgetSource, /hasSharedDensityFleet = \(window\.getDensityMapSourceVessels\?\.\(\)\.length \|\| 0\) > 0/);
+  assert.match(widgetSource, /window\.GlobalStore\?\.hasAisData === true \|\| hasTrustedMatchingState \|\| hasSharedDensityFleet/);
   assert.match(widgetSource, /Number\(window\.GlobalStore\?\.nearbyCount\) > 0/);
   assert.match(widgetSource, /AIS_MARKET_AVAILABILITY_CHANGED/);
   assert.match(widgetSource, /rate\.textContent = '--\.--\$'/);
@@ -88,7 +89,7 @@ test('AIS market rates remain pending until a sweep or trusted local matching co
   assert.match(widgetSource, /applyButton\.disabled = true/);
   assert.match(indexSource, /hasAisData: false/);
   assert.match(indexSource, /setAisDataAvailability\?\.\(true,[\s\S]*manual-sweep-complete/);
-  assert.match(indexSource, /const hasCommittedMatchingState = \['density-filter', 'matching-validation'\]\.includes\(committedMatchingSource\)[\s\S]*const hasAisData = window\.GlobalStore\?\.hasAisData === true \|\| hasCommittedMatchingState;[\s\S]*if \(!hasAisData\) \{[\s\S]*renderPendingAisMarketReference\(\);[\s\S]*return;/);
+  assert.match(indexSource, /const hasCommittedMatchingState = \['density-filter', 'matching-validation'\]\.includes\(committedMatchingSource\)[\s\S]*const hasAisData = window\.GlobalStore\?\.hasAisData === true \|\| hasCommittedMatchingState \|\| densitySourceVessels\.length > 0;[\s\S]*if \(!hasAisData\) \{[\s\S]*renderPendingAisMarketReference\(\);[\s\S]*return;/);
   assert.match(indexSource, /if \(nearbyCount <= 0\) \{[\s\S]*renderPendingAisMarketReference\(\);[\s\S]*return;/);
 });
 

@@ -24,6 +24,7 @@ declare global {
             nearbyCount?: number;
             aisMatchingStateSource?: string;
         };
+        getDensityMapSourceVessels?: () => unknown[];
     }
 
     interface WindowEventMap {
@@ -94,8 +95,9 @@ function readAisMarketRatesFromEngine(): AisMarketRates | null {
 function hasConfirmedAisData(): boolean {
     const matchingSource = String(window.GlobalStore?.aisMatchingStateSource || '');
     const hasTrustedMatchingState = ['density-filter', 'matching-validation'].includes(matchingSource);
+    const hasSharedDensityFleet = (window.getDensityMapSourceVessels?.().length || 0) > 0;
     return Number(window.GlobalStore?.nearbyCount) > 0
-        && (window.GlobalStore?.hasAisData === true || hasTrustedMatchingState);
+        && (window.GlobalStore?.hasAisData === true || hasTrustedMatchingState || hasSharedDensityFleet);
 }
 
 export function handleApplyAisRate(rate: AisMarketRate): boolean {
