@@ -164,6 +164,17 @@ test('matching action dock groups the four primary controls on the left', () => 
   assert.equal((indexSource.match(/id="commercial-nlp-send-btn"/g) || []).length, 1);
 });
 
+test('matching toolbar exposes one Data Bridge button and inline sync progress', () => {
+  const dockStart = indexSource.indexOf('<div id="matching-action-dock"');
+  const dockEnd = indexSource.indexOf('<div id="matching-action-feedback"', dockStart);
+  const dockSource = indexSource.slice(dockStart, dockEnd);
+  assert.match(dockSource, /id="sync-container"[^>]*class="hidden/);
+  assert.match(dockSource, /id="sync-status-text"/);
+  assert.match(dockSource, /id="sync-percentage"/);
+  assert.match(dockSource, /id="sync-progress-bar"/);
+  assert.equal((dockSource.match(/Enviar a Data Bridge/g) || []).length, 1);
+});
+
 test('matching header uses one compact desktop row and standardized controls', () => {
   const styleStart = indexSource.indexOf('#matching-action-dock {');
   const styleEnd = indexSource.indexOf('#matching-results-panel .collapsible-section__chevron', styleStart);

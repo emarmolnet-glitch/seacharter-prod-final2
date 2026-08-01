@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 
 const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 
-function createClient(fetchImpl) {
+function createClient(fetchImpl, overrides = {}) {
   const start = indexSource.indexOf("const DATA_BRIDGE_RECEIVE_CORE_DATA_URL = '/api/databridge/receive-core-data';");
   const end = indexSource.indexOf('const DATA_BRIDGE_VESSEL_BATCH_SIZE = 50;', start);
   assert.ok(start >= 0 && end > start, 'Data Bridge HTTP client block must exist');
@@ -32,6 +32,7 @@ function createClient(fetchImpl) {
     Math,
     Promise,
     setTimeout,
+    ...overrides,
   });
 
   vm.runInContext(`${clientSource}\nglobalThis.__dataBridgeClient = { postDataBridgeReceiveVessels, postDataBridgeIaReport };`, context);
@@ -71,6 +72,30 @@ test('sends the exact flat fleet contract at the JSON root', async () => {
   assert.equal(response.status, 200);
   assert.equal(body.success, true);
   assert.equal(body.syncId, receivedPayload.syncId);
+});
+
+test('splits fleet exports into sequential batches of 50 with a 150ms pause', async () => {
+  const batchSizes = [];
+  const delays = [];
+  const client = createClient(async (_url, options) => {
+    const payload = JSON.parse(options.body);
+    batchSizes.push(payload.vessels.length);
+    return Response.json({ success: true, processedCount: payload.vessels.length }, { status: 200 });
+  }, {
+    setTimeout: (resolve, delay) => {
+      delays.push(delay);
+      resolve();
+    },
+  });
+  const vessels = Array.from({ length: 121 }, (_, index) => ({ imo: 1000000 + index }));
+
+  const response = await client.postDataBridgeReceiveVessels(fleetRequest({ vessels }));
+  const body = await response.json();
+
+  assert.deepEqual(batchSizes, [50, 50, 21]);
+  assert.deepEqual(delays, [150, 150]);
+  assert.equal(body.processedCount, 121);
+  assert.equal(body.batchCount, 3);
 });
 
 test('rejects every non-200 response even when fetch marks it ok', async () => {
@@ -186,4 +211,3 @@ test('normalizes raw array and alternative fleet key payloads into strict envelo
   assert.ok(receivedPayloads[1].syncId);
   assert.deepEqual(receivedPayloads[1].vessels, [{ imo: 7654322, name: 'Ranked Vessel' }]);
 });
-

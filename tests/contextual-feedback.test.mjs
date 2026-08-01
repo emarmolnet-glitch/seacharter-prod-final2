@@ -117,6 +117,11 @@ test('blocks Data Bridge export until matching audit results exist', () => {
   });
 });
 
+test('does not inject a duplicate Data Bridge export button', () => {
+  assert.doesNotMatch(feedbackSource, /contextual-export-databridge|mountMatchingGatekeeper|contextual-export-button/);
+  assert.doesNotMatch(feedbackCssSource, /contextual-export-button/);
+});
+
 test('detects incomplete financial context without mutating form state', () => {
   const values = new Map([
     ['cargo-qty', '25000'],
