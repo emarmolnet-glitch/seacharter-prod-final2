@@ -50172,13 +50172,45 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function calculateAndDisplayAisFreight() {
             const baseBEText = document.getElementById('res-breakeven')?.innerText || "$0.00";
             const baseBE = parseFloat(baseBEText.replace('$', '')) || State.breakEven || 0;
+            const selectedActiveVessel = window.GlobalStore?.activeVessel || window.activeVessel || window.objetoCalculadoraPrincipal || null;
+            const hasActiveVessel = Boolean(selectedActiveVessel && typeof selectedActiveVessel === 'object');
             const densitySourceVessels = typeof getDensityMapSourceVessels === 'function'
                 ? getDensityMapSourceVessels()
                 : [];
             const activeVesselClassContext = typeof setVesselClassContext === 'function'
                 ? setVesselClassContext(getSelectedFleetTaxonomies(), densitySourceVessels)
                 : (window.vesselClassContext || null);
-            const activeVesselProfile = activeVesselClassContext?.profile || { riskCoefficient: 1 };
+            const activeVesselMetadata = selectedActiveVessel?.MetaData && typeof selectedActiveVessel.MetaData === 'object'
+                ? selectedActiveVessel.MetaData
+                : {};
+            const unifiedActiveVesselProfile = [
+                selectedActiveVessel?.pricingProfile,
+                selectedActiveVessel?.vesselProfile,
+                selectedActiveVessel?.classProfile,
+                selectedActiveVessel?.profile,
+                selectedActiveVessel?.vesselClassContext?.profile,
+                activeVesselMetadata.pricingProfile,
+                activeVesselMetadata.vesselProfile,
+                activeVesselMetadata.classProfile,
+                activeVesselMetadata.profile
+            ].find(profile => profile && typeof profile === 'object') || null;
+            const fallbackVesselProfile = window.GlobalStore?.vesselClassContext?.profile
+                || activeVesselClassContext?.profile
+                || { riskCoefficient: 1 };
+            const directRiskCoefficient = Number(
+                selectedActiveVessel?.riskCoefficient
+                ?? selectedActiveVessel?.risk_coefficient
+                ?? activeVesselMetadata.riskCoefficient
+                ?? activeVesselMetadata.risk_coefficient
+                ?? unifiedActiveVesselProfile?.riskCoefficient
+            );
+            const activeVesselProfile = {
+                ...fallbackVesselProfile,
+                ...(unifiedActiveVesselProfile || {}),
+                riskCoefficient: Number.isFinite(directRiskCoefficient) && directRiskCoefficient > 0
+                    ? directRiskCoefficient
+                    : (Number(fallbackVesselProfile.riskCoefficient) || 1)
+            };
             
             const estimatorBeEl = document.getElementById('ais-estimator-be');
             if (estimatorBeEl) {
@@ -50188,7 +50220,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const committedMatchingSource = String(window.GlobalStore?.aisMatchingStateSource || '');
             const hasCommittedMatchingState = ['density-filter', 'matching-validation'].includes(committedMatchingSource)
                 && Number(window.GlobalStore?.nearbyCount) > 0;
-            const hasAisData = window.GlobalStore?.hasAisData === true || hasCommittedMatchingState || densitySourceVessels.length > 0;
+            const hasAisData = window.GlobalStore?.hasAisData === true || hasCommittedMatchingState || densitySourceVessels.length > 0 || hasActiveVessel;
             if (!hasAisData) {
                 renderPendingAisMarketReference();
                 return;
@@ -50551,13 +50583,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
             }
 
-            if (nearbyCount <= 0) {
+            if (nearbyCount <= 0 && !hasActiveVessel) {
                 renderPendingAisMarketReference();
                 return;
             }
 
             let supplyFactor = 1.0;
-            const compatibleCount = compatibleVessels.length;
+            const compatibleCount = compatibleVessels.length > 0 ? compatibleVessels.length : (hasActiveVessel ? 1 : 0);
             if (compatibleCount === 0) {
                 supplyFactor = 1.15; 
             } else if (compatibleCount <= 2) {
