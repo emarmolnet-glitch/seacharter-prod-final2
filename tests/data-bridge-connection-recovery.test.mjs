@@ -63,7 +63,7 @@ test('connected Data Bridge menu action opens the deployment root', () => {
   assert.match(indexSource, /id="databridge-connection-dot"/);
 });
 
-test('NOR WebSocket switches to 30-second HTTP polling after bounded retries', () => {
+test('Data Bridge starts with 30-second polling and opens WebSocket only for visible Radar LIVE', () => {
   assert.match(indexSource, /DATA_BRIDGE_NOR_MAX_RECONNECT_ATTEMPTS = 3/);
   assert.match(indexSource, /DATA_BRIDGE_NOR_RECONNECT_BASE_MS \* \(2 \*\* dataBridgeNorReconnectAttempts\)/);
   assert.match(indexSource, /dataBridgeNorReconnectStopped = true/);
@@ -72,15 +72,23 @@ test('NOR WebSocket switches to 30-second HTTP polling after bounded retries', (
   assert.match(indexSource, /startDataBridgeHttpPolling\(\)/);
   assert.match(indexSource, /window\.setInterval\([\s\S]*DATA_BRIDGE_HTTP_POLL_INTERVAL_MS/);
   assert.match(indexSource, /window\.clearInterval\(dataBridgeHttpPollingTimer\)/);
+  assert.match(indexSource, /startDataBridgeHttpPolling\(\);\s*syncDataBridgeRadarTransport\('dom-ready'\)/);
+  assert.match(indexSource, /function shouldUseDataBridgeWebSocket\(\)[\s\S]*dataBridgeRadarLiveRequested && isRadarMapViewActive\(\)/);
+  assert.match(indexSource, /window\.addEventListener\('RADAR_GLOBAL_STATE_CHANGED'/);
+  assert.match(indexSource, /function deactivateDataBridgeLiveTracking[\s\S]*socket\.close\(\)[\s\S]*startDataBridgeHttpPolling\(\)/);
   assert.match(indexSource, /window\.addEventListener\('pagehide', cleanupDataBridgeNorTransport\)/);
   assert.match(indexSource, /window\.addEventListener\('connection-status:unmount', cleanupDataBridgeNorTransport\)/);
-  assert.match(indexSource, /window\.addEventListener\('pageshow',[\s\S]*event\.persisted[\s\S]*startDataBridgeNorListener\(\)/);
+  assert.match(indexSource, /window\.addEventListener\('pageshow',[\s\S]*event\.persisted[\s\S]*startDataBridgeHttpPolling\(\)[\s\S]*syncDataBridgeRadarTransport\('page-restore'\)/);
   assert.match(indexSource, /new CustomEvent\('databridge:route-position'/);
+  assert.match(indexSource, /socket\.addEventListener\('message',[\s\S]*processDataBridgeHttpPollingPayload\(JSON\.parse\(event\.data\)\)/);
 });
 
 test('Data Bridge header uses corporate states without saturated red fills', () => {
   assert.match(indexSource, /data-state="fallback"/);
-  assert.match(indexSource, /--connection-accent: #B45309/);
+  assert.match(indexSource, /--connection-accent: #3B6480/);
+  assert.match(indexSource, /--connection-accent: #0F766E/);
+  assert.match(indexSource, /secure: 'LIVE TRACKING'/);
+  assert.match(indexSource, /fallback: 'SYNC HTTP · 30S'/);
   assert.match(indexSource, /--connection-accent: #64748B/);
   assert.doesNotMatch(indexSource.slice(indexSource.indexOf('.connection-status-bar {'), indexSource.indexOf('@keyframes connectionPipeFlow')), /#DC2626|#991B1B|background:\s*[^;]*(red|rose|pink)/i);
 });

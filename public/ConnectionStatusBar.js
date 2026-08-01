@@ -9,16 +9,16 @@ const STATUS_CONFIG = {
     bridgeTitle: "Data Bridge inactivo",
   },
   secure: {
-    label: "WS Conectado",
+    label: "LIVE TRACKING",
     state: "secure",
-    icon: "fa-solid fa-bridge-lock",
-    bridgeTitle: "Data Bridge conectado por WebSocket",
+    icon: "fa-solid fa-satellite-dish",
+    bridgeTitle: "Radar conectado en tiempo real por WebSocket",
   },
   fallback: {
-    label: "HTTP Polling",
+    label: "SYNC HTTP · 30S",
     state: "fallback",
     icon: "fa-solid fa-arrows-rotate",
-    bridgeTitle: "Data Bridge en modo de respaldo HTTP",
+    bridgeTitle: "Sincronización silenciosa mediante polling HTTP cada 30 segundos",
   },
   unauthorized: {
     label: "Unauthorized",
@@ -35,7 +35,7 @@ const STATUS_CONFIG = {
 };
 
 export function ConnectionStatusBar() {
-  const config = STATUS_CONFIG.inactive;
+  const config = STATUS_CONFIG.fallback;
 
   return (
     React.createElement(
@@ -62,7 +62,7 @@ export function ConnectionStatusBar() {
           React.createElement("path", { className: "connection-pipe-track", d: "M3 9 C25 9 28 9 50 9 S75 9 97 9" }),
           React.createElement("path", { className: "connection-pipe-flow", d: "M3 9 C25 9 28 9 50 9 S75 9 97 9" }),
         ),
-        React.createElement("span", { className: "connection-live-icon" }, React.createElement("i", { className: "fa-solid fa-bridge-lock" })),
+        React.createElement("span", { className: "connection-live-icon" }, React.createElement("i", { className: "fa-solid fa-arrows-rotate" })),
       ),
       React.createElement(
         "div",
