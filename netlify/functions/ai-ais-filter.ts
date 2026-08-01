@@ -25,6 +25,12 @@ function textValue(...values: unknown[]) {
   return value === undefined || value === null ? "" : String(value).trim();
 }
 
+const UNKNOWN_TECHNICAL_VALUES = new Set(["", "n/a", "na", "n/d", "n d", "nd", "unknown", "desconocido", "null", "undefined"]);
+
+function isUnknownTechnicalValue(value: unknown) {
+  return UNKNOWN_TECHNICAL_VALUES.has(normalizeTaxonomyText(value));
+}
+
 function numberValue(...values: unknown[]) {
   for (const value of values) {
     if (value === undefined || value === null || value === "") continue;
@@ -202,7 +208,7 @@ function normalizeVessel(value: unknown) {
   const mmsi = textValue(source.mmsi, source.MMSI, meta.MMSI, position.UserID, staticData.UserID);
   const imo = textValue(source.imo, source.IMO, source.imoNumber, source.imo_number, meta.IMO, staticData.ImoNumber) || (mmsi ? "PENDING" : "");
   const vesselName = textValue(source.vesselName, source.vessel_name, source.ShipName, source.name, meta.ShipName, staticData.Name) || "Unknown vessel";
-  const shipType = textValue(
+  const declaredShipType = textValue(
     source.ship_type,
     source.vessel_type,
     source.radarCategory,
@@ -222,9 +228,12 @@ function normalizeVessel(value: unknown) {
     meta.ShipType,
     meta.shipType,
     staticData.Type,
-  ) || "Unknown";
+  );
+  const shipType = isUnknownTechnicalValue(declaredShipType) ? "Unknown" : declaredShipType;
   let dwt = numberValue(source.dwt, source.DWT, meta.dwt, meta.DWT, sourcePayload.dwt, sourcePayload.DWT);
   let dwtStatus = textValue(source.dwtStatus, source.dwt_status, meta.dwtStatus) || null;
+  const isOpenShipsSource = textValue(source.source, source.source_origin, source.sourceOrigin).toUpperCase().includes("OPENSHIPS")
+    || (Array.isArray(source.source_origins) && source.source_origins.includes("OPENSHIPS"));
   const draft = numberValue(source.draft, source.Draft, source.draft_meters, source.calado, meta.draft, meta.Draft, meta.calado, staticData.MaximumStaticDraught);
   const dimA = numberValue(staticData.DimensionA, source.DimensionA, meta.DimensionA);
   const dimB = numberValue(staticData.DimensionB, source.DimensionB, meta.DimensionB);
@@ -233,13 +242,14 @@ function normalizeVessel(value: unknown) {
   const loa = numberValue(source.loa, source.LOA, source.eslora, source.length, meta.loa, meta.LOA, meta.eslora, meta.length, dimA + dimB > 0 ? dimA + dimB : 0);
   const beam = numberValue(source.beam, source.Beam, source.manga, source.width, meta.beam, meta.Beam, meta.manga, meta.width, dimC + dimD > 0 ? dimC + dimD : 0);
 
-  if ((!dwt || dwt <= 0) && loa > 0 && beam > 0 && draft > 0) {
+  if (!isOpenShipsSource && (!dwt || dwt <= 0) && loa > 0 && beam > 0 && draft > 0) {
     const estimated = estimateDwtFromDimensions(loa, beam, draft);
     if (estimated > 0) {
       dwt = estimated;
       dwtStatus = "ESTIMATED_BY_DIMENSIONS";
     }
   }
+  if (dwt && dwt > 0 && !dwtStatus) dwtStatus = "SOURCE_REPORTED";
 
   const speed = numberValue(source.speed_over_ground, source.speedOverGround, source.sog, source.SOG, source.speed, meta.speed_over_ground, meta.speedOverGround, meta.SOG, meta.speed, position.Sog, position.SOG, 12) || 12;
   const destination = textValue(source.destination, source.Destination, source.current_destination, meta.Destination, staticData.Destination, staticData.PortOfDestination) || "N/A";
@@ -329,6 +339,8 @@ export default async (req: Request) => {
       cargo.tipo_carga,
     );
     const cargoCode = textValue(cargo.cargoCode, cargo.cargoTypeId, cargo.typeId, body.cargoCode, body.cargoTypeId) || "100";
+    const strictTechnicalFilter = body.strictTechnicalFilter === true || cargo.strictTechnicalFilter === true;
+    const debugIncludeUnknownDwt = body.debugIncludeUnknownDwt === true || cargo.debugIncludeUnknownDwt === true;
     const methodsRequireShipGear = [cargo.loadMethod, cargo.dischargeMethod].some((value) => {
       const method = textValue(value).toLowerCase();
       return method === "cuchara_grab"
@@ -418,6 +430,17 @@ export default async (req: Request) => {
           const isOversizedUnderStandard = quantity > 0 && vessel.dwt !== null && vessel.dwt > quantity * 1.15;
           const isOversizedFallback = false;
           const activeDwtStatus = vessel.dwtStatus;
+          const dwtAssessment = vessel.dwt === null || vessel.dwt <= 0
+            ? { status: "UNKNOWN", label: "DWT Desconocido" }
+            : quantity > 0 && vessel.dwt < quantity
+              ? { status: "INSUFFICIENT", label: "DWT Insuficiente" }
+              : { status: "SUFFICIENT", label: "DWT Validado" };
+          const strictCriticalReasons = technicalEligibility.criticalReasons.filter((reason) => (
+            reason !== "DWT no disponible para validar capacidad"
+          ));
+          const debugUnknownDwtAllowed = debugIncludeUnknownDwt
+            && dwtAssessment.status === "UNKNOWN"
+            && strictCriticalReasons.length === 0;
 
           const hasTechnicalWarning = !technicalEligibility.eligible
             || technicalEligibility.criticalReasons.length > 0
@@ -433,9 +456,8 @@ export default async (req: Request) => {
               ].filter(Boolean).join("; ") || "Advertencia técnica: Datos AIS incompletos"
             : null;
 
-          // Relaxed technical validation logic: vessels with technical warnings pass local filters
-          // so they are counted as eligible and included in Data Bridge payloads.
-          const operationallyEligible = taxonomyCompatibility.compatible !== false;
+          const operationallyEligible = taxonomyCompatibility.compatible !== false
+            && (!strictTechnicalFilter || technicalEligibility.eligible || debugUnknownDwtAllowed);
           const idealVessel = operationallyEligible && !hasTechnicalWarning && loadState.ballastReady;
 
           return {
@@ -451,6 +473,8 @@ export default async (req: Request) => {
             warning: warningReason,
             warningReason,
             dwtStatus: activeDwtStatus,
+            dwtAssessment,
+            debugUnknownDwtAllowed,
             isOversizedFallback,
             vessel: {
               vesselName: vessel.vesselName,
@@ -459,6 +483,9 @@ export default async (req: Request) => {
               mmsi: vessel.mmsi,
               dwt: vessel.dwt,
               dwtStatus: activeDwtStatus,
+              dwtAssessment,
+              vesselType: vessel.shipType,
+              vessel_type: vessel.shipType,
               isOversizedFallback,
               hasTechnicalWarning,
               hasWarning: hasTechnicalWarning,
@@ -539,6 +566,7 @@ export default async (req: Request) => {
             },
             compatibility: {
               capacityOk,
+              dwtAssessment,
               isOversizedFallback,
               volumeOk: technicalEligibility.volume.compatible,
               draftOk,
@@ -586,6 +614,9 @@ export default async (req: Request) => {
               cargoDescription,
               selectedVesselTaxonomies: vesselClassValues,
               operationallyEligible,
+              strictTechnicalFilter,
+              debugIncludeUnknownDwt,
+              debugUnknownDwtAllowed,
               hasTechnicalWarning,
               hasWarning: hasTechnicalWarning,
               warning: warningReason,
@@ -622,6 +653,8 @@ export default async (req: Request) => {
       compatibleCount: matches.length,
       operationalFilters: {
         gearedRequired,
+        strictTechnicalFilter,
+        debugIncludeUnknownDwt,
         stowageFactor,
         requiredVolumeCbm,
       },

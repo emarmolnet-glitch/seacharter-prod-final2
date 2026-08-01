@@ -7501,6 +7501,10 @@
                                 <span class="inline-flex items-center gap-2">
                                     <span id="databridge-connection-dot" class="hidden h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.75)]" aria-hidden="true"></span>
                                     <span>Data Bridge</span>
+                                    <span id="databridge-ws-disconnected" class="hidden items-center gap-1 text-[9px] font-black uppercase text-red-600" role="status" aria-live="polite">
+                                        <i class="fa-solid fa-plug-circle-xmark" aria-hidden="true"></i>
+                                        Desconectado
+                                    </span>
                                 </span>
                             </button>
                         </li>
@@ -13653,9 +13657,14 @@
                         <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 mb-4">
                             <label class="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-slate-600 cursor-pointer">
                                 <input type="checkbox" id="hide-technical-problems-toggle" class="rounded border-slate-300 text-[#004e64] focus:ring-[#004e64]" checked>
-                                <span>Ocultar buques con problemas técnicos</span>
+                                <span>Filtro técnico estricto</span>
                             </label>
-                            <span id="technical-problems-toggle-status" class="text-[10px] font-semibold text-slate-400">Draft, capacidad, laycan y gear</span>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button id="debug-dwt-filter-toggle" type="button" onclick="toggleMatchingDwtDebugMode()" aria-pressed="false" class="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-800 transition hover:bg-amber-100 focus:ring-2 focus:ring-amber-300">
+                                    Modo Debug Filtros
+                                </button>
+                                <span id="technical-problems-toggle-status" class="text-[10px] font-semibold text-slate-400">Excluye DWT/tipo incompatibles y demás fallos técnicos</span>
+                            </div>
                         </div>
                         <div id="matching-source-integrity" class="hidden mb-4 rounded-lg border px-3 py-2 text-[11px]" role="status" aria-live="polite"></div>
 
@@ -19478,22 +19487,36 @@
             unknown: [],
             checkedAt: null
         }, window.matchingLocalState || {});
+        window.matchingLocalInFlightRequests = window.matchingLocalInFlightRequests || new Map();
 
         async function requestMatchingLocal(operation, candidates, matchingPayload = null) {
-            const response = await fetch('/api/matching-local', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                body: JSON.stringify({
-                    operation,
-                    candidates: Array.isArray(candidates) ? candidates : [],
-                    matchingPayload: matchingPayload && typeof matchingPayload === 'object' ? matchingPayload : undefined
-                })
-            });
-            const payload = await response.json();
-            if (!response.ok || payload.success === false) {
-                throw new Error(payload.error || 'No se pudo consultar vessels_master.');
+            const requestBody = {
+                operation,
+                candidates: Array.isArray(candidates) ? candidates : [],
+                matchingPayload: matchingPayload && typeof matchingPayload === 'object' ? matchingPayload : undefined
+            };
+            const requestKey = JSON.stringify(requestBody);
+            const existingRequest = window.matchingLocalInFlightRequests.get(requestKey);
+            if (existingRequest) return existingRequest;
+
+            const request = (async () => {
+                const response = await fetch('/api/matching-local', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    body: requestKey
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.success === false) {
+                    throw new Error(payload.error || 'No se pudo consultar vessels_master.');
+                }
+                return payload;
+            })();
+            window.matchingLocalInFlightRequests.set(requestKey, request);
+            try {
+                return await request;
+            } finally {
+                window.matchingLocalInFlightRequests.delete(requestKey);
             }
-            return payload;
         }
         window.requestMatchingLocal = requestMatchingLocal;
 
@@ -20529,6 +20552,8 @@
                         sourceTaxonomies: selectedVesselTaxonomies.slice()
                     },
                     searchMode: 'local_database',
+                    strictTechnicalFilter: document.getElementById('hide-technical-problems-toggle')?.checked === true,
+                    debugIncludeUnknownDwt: window.matchingDebugIncludeUnknownDwt === true,
                     matchRadiusNm: (window.AIS_PROSPECTION_RADII_NM && Number(window.AIS_PROSPECTION_RADII_NM.POL)) || 2000,
                     allowedSources: getAllowedMatchingSources(),
                     limit: MATCHING_RESULTS_PAGE_SIZE,
@@ -20644,14 +20669,22 @@
                 const engineInputCount = Number(data.snapshot?.vesselCount) || 0;
                 const excludedBeforeScoring = Math.max(0, unifiedVesselCount - engineInputCount);
                 const excludedAfterScoring = Math.max(0, engineInputCount - evaluatedResponseCount);
+                const openShipsEnrichment = data.openShipsEnrichment && typeof data.openShipsEnrichment === 'object'
+                    ? data.openShipsEnrichment
+                    : {};
+                const enrichmentSummary = Number(openShipsEnrichment.attempted) > 0
+                    ? ` Cruce IMO OPENSHIPS: ${Number(openShipsEnrichment.matchedByImo) || 0}/${Number(openShipsEnrichment.attempted) || 0} encontrados, ${Number(openShipsEnrichment.dwtEnriched) || 0} DWT y ${Number(openShipsEnrichment.vesselTypeEnriched) || 0} tipos recuperados.${openShipsEnrichment.failed ? ' Error VESSELS_MASTER_LOOKUP_FAILED.' : ''}`
+                    : '';
                 if (sourceIntegrity) {
-                    const hasExclusions = excludedBeforeScoring > 0 || excludedAfterScoring > 0;
+                    const hasExclusions = excludedBeforeScoring > 0
+                        || excludedAfterScoring > 0
+                        || openShipsEnrichment.failed === true;
                     sourceIntegrity.className = `mb-4 rounded-lg border px-3 py-2 text-[11px] ${hasExclusions
                         ? 'border-amber-300 bg-amber-50 text-amber-900'
                         : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`;
                     sourceIntegrity.innerHTML = hasExclusions
-                        ? `<strong>Integridad de fuentes:</strong> DATABRIDGE ${dataBridgeVesselCount} · AIS_LIVE ${aisVesselCount} · OPENSHIPS ${openShipsVesselCount} · unificados ${unifiedVesselCount} · normalizados ${engineInputCount} · evaluados ${evaluatedResponseCount} · idóneos ${eligibleResponseCount} · advertencias ${technicalWarningResponseCount}. ${excludedBeforeScoring ? `${excludedBeforeScoring} excluidos por posición/identidad inválida. ` : ''}${excludedAfterScoring ? `${excludedAfterScoring} fuera del radio o sin puntuación operativa. ` : ''}${missingDwtCount ? `${missingDwtCount} sin DWT quedaron sujetos a incompatibilidad técnica estricta.` : ''}`
-                        : `<strong>Integridad verificada:</strong> DATABRIDGE ${dataBridgeVesselCount} · AIS_LIVE ${aisVesselCount} · OPENSHIPS ${openShipsVesselCount} · ${unifiedVesselCount} candidatos unificados antes de puntuación.${missingDwtCount ? ` ${missingDwtCount} sin DWT quedaron sujetos a incompatibilidad técnica estricta.` : ''}`;
+                        ? `<strong>Integridad de fuentes:</strong> DATABRIDGE ${dataBridgeVesselCount} · AIS_LIVE ${aisVesselCount} · OPENSHIPS ${openShipsVesselCount} · unificados ${unifiedVesselCount} · normalizados ${engineInputCount} · evaluados ${evaluatedResponseCount} · idóneos ${eligibleResponseCount} · advertencias ${technicalWarningResponseCount}. ${excludedBeforeScoring ? `${excludedBeforeScoring} excluidos por posición/identidad inválida. ` : ''}${excludedAfterScoring ? `${excludedAfterScoring} fuera del radio o sin puntuación operativa. ` : ''}${missingDwtCount ? `${missingDwtCount} sin DWT quedaron sujetos a incompatibilidad técnica estricta.` : ''}${enrichmentSummary}`
+                        : `<strong>Integridad verificada:</strong> DATABRIDGE ${dataBridgeVesselCount} · AIS_LIVE ${aisVesselCount} · OPENSHIPS ${openShipsVesselCount} · ${unifiedVesselCount} candidatos unificados antes de puntuación.${missingDwtCount ? ` ${missingDwtCount} sin DWT quedaron sujetos a incompatibilidad técnica estricta.` : ''}${enrichmentSummary}`;
                 }
 
                 // --- FRONTEND DEDUPLICATION AND MERGING LOGIC ---
@@ -20773,7 +20806,10 @@
 
                 const matches = deduplicatedMatches;
                 Object.freeze(matches);
-                const viableMatches = matches.filter(m => m.audit?.operationallyEligible === true || m.hasTechnicalWarning === true || m.hasWarning === true || m.operationallyEligible === true);
+                const strictTechnicalFilter = document.getElementById('hide-technical-problems-toggle')?.checked === true;
+                const viableMatches = strictTechnicalFilter
+                    ? matches.filter(m => m.audit?.operationallyEligible === true || m.operationallyEligible === true)
+                    : matches.slice();
                 Object.freeze(viableMatches);
                 const technicalWarningCount = Math.max(
                     Number(data.technicalWarningCount) || 0,
@@ -20818,10 +20854,7 @@
                     }
                 }
 
-                const hideTechnicalProblems = document.getElementById('hide-technical-problems-toggle')?.checked === true;
-                const displayMatches = hideTechnicalProblems
-                    ? matches.filter((match) => match.audit?.operationallyEligible === true || match.hasTechnicalWarning === true || match.hasWarning === true)
-                    : matches;
+                const displayMatches = viableMatches;
                 const renderedCount = displayMatches.length;
 
                 if (matches.length === 0) {
@@ -20846,9 +20879,13 @@
 
                         const maxDwtTolerance = 1.15;
                         const requiredCargo = quantity;
-                        const isOversized = requiredCargo > 0 && v.dwt > requiredCargo * maxDwtTolerance;
-                        const isUndersized = requiredCargo > 0 && v.dwt < requiredCargo;
-                        const isValidCapacity = requiredCargo > 0 ? (v.dwt >= requiredCargo && v.dwt <= requiredCargo * maxDwtTolerance) : (comp.capacityOk !== false);
+                        const vesselDwt = Number(v.dwt);
+                        const hasKnownDwt = Number.isFinite(vesselDwt) && vesselDwt > 0;
+                        const dwtAssessmentStatus = m.dwtAssessment?.status || v.dwtAssessment?.status || comp.dwtAssessment?.status || (!hasKnownDwt ? 'UNKNOWN' : requiredCargo > 0 && vesselDwt < requiredCargo ? 'INSUFFICIENT' : 'SUFFICIENT');
+                        const isOversized = hasKnownDwt && requiredCargo > 0 && vesselDwt > requiredCargo * maxDwtTolerance;
+                        const isUndersized = dwtAssessmentStatus === 'INSUFFICIENT';
+                        const isDwtUnknown = dwtAssessmentStatus === 'UNKNOWN';
+                        const isValidCapacity = dwtAssessmentStatus === 'SUFFICIENT' && (requiredCargo <= 0 || vesselDwt <= requiredCargo * maxDwtTolerance);
 
                         const visibleRank = idx + 1;
 
@@ -20859,10 +20896,25 @@
                         const isOversizedFallback = v.isOversizedFallback === true || m.isOversizedFallback === true || v.dwtStatus === 'OVERSIZED_FALLBACK' || m.dwtStatus === 'OVERSIZED_FALLBACK' || m.ais?.isOversizedFallback === true || m.aiStatus === 'OVERSIZED_FALLBACK';
                         const isEstimatedDwt = v.dwtStatus === 'ESTIMATED_BY_DIMENSIONS' || m.dwtStatus === 'ESTIMATED_BY_DIMENSIONS' || m.ais?.dwtStatus === 'ESTIMATED_BY_DIMENSIONS';
 
-                        const isComp = (m.audit?.operationallyEligible === true && scores.overall > 0) || m.hasTechnicalWarning === true || m.hasWarning === true || isOversizedFallback;
+                        const isComp = m.audit?.operationallyEligible === true && scores.overall > 0 && m.hasTechnicalWarning !== true && m.hasWarning !== true;
+                        const declaredVesselType = comp.declaredVesselType || v.vesselType || v.vessel_type || v.vesselClass || v.specialtyType || 'Desconocido';
+                        const vesselTypeCompatible = comp.taxonomyCompatible !== false;
+                        const dwtPenaltyBadge = isDwtUnknown
+                            ? '<span class="bg-red-50 text-red-700 border border-red-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-circle-xmark"></i> DWT Desconocido</span>'
+                            : isUndersized
+                                ? '<span class="bg-red-50 text-red-700 border border-red-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-circle-xmark"></i> DWT Insuficiente</span>'
+                                : '';
+                        const debugDwtBadge = m.debugUnknownDwtAllowed === true || m.audit?.debugUnknownDwtAllowed === true
+                            ? '<span class="bg-amber-50 text-amber-800 border border-amber-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-bug"></i> Debug DWT N/D</span>'
+                            : '';
+                        const vesselTypePenaltyBadge = !vesselTypeCompatible
+                            ? '<span class="bg-red-50 text-red-700 border border-red-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-ship"></i> Tipo incompatible</span>'
+                            : '';
                         let compBadge = '';
                         if (isOversizedFallback) {
                             compBadge = '<span class="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1 font-bold" title="Mostrado por escasez de mercado al expandir la capacidad hasta un 500%"><i class="fa-solid fa-triangle-exclamation"></i> ADVERTENCIA: BUQUE SOBREDIMENSIONADO (MOSTRADO POR ESCASEZ DE MERCADO)</span>';
+                        } else if (isDwtUnknown || isUndersized || !vesselTypeCompatible) {
+                            compBadge = '';
                         } else if (isComp) {
                             compBadge = '<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> Compatible (100%)</span>';
                         } else if (isOversized) {
@@ -20874,7 +20926,7 @@
                         const estimatedDwtBadge = isEstimatedDwt ?
                             '<span class="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1" title="DWT estimado a partir de las dimensiones AIS (LOA * Beam * Draft * 0.70 * 1.025)"><i class="fa-solid fa-ruler-combined"></i> DWT ESTIMADO (Vía Eslora/Manga)</span>' : '';
 
-                        const overallScoreClass = isComp ? 'text-indigo-600 font-black' : 'text-slate-400 font-bold';
+                        const overallScoreClass = isComp ? 'text-indigo-600 font-black' : 'text-red-600 font-bold';
 
                         // Compile incompatibility reasons
                         let reasonHtml = '';
@@ -20966,7 +21018,7 @@
                             vessel_name: v.vesselName,
                             imo: v.imo,
                             flag: flag,
-                            dwt: v.dwt,
+                            dwt: hasKnownDwt ? vesselDwt : null,
                             loa: `${v.loa}m`,
                             draft: `${v.draft}m`,
                             built_year: yearBuiltValue,
@@ -20975,7 +21027,7 @@
                             cons_sea: v.consSea || "18.0",
                             cons_port: v.consPort || "1.5",
                             daily_opex: dailyOpex,
-                            vessel_class: v.vesselClass,
+                            vessel_class: declaredVesselType,
                             specialty_type: v.specialtyType,
                             eta: route.eta
                         }));
@@ -21150,10 +21202,13 @@
                         const sourceOriginLabel = sourceOrigins.join(' + ');
 
                         const cardHtml = `
-                            <div class="matching-vessel-card border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : 'border-slate-200 bg-slate-50/50 opacity-75 cursor-pointer'} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-vessel-imo="${v.imo || ''}" data-source-origin="${sourceOriginLabel}" data-map-focus-id="${mapFocusId}" onclick="toggleMatchingAuditSelection(event)">
+                            <div class="matching-vessel-card border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : 'border-red-200 bg-red-50/40 opacity-80 cursor-pointer'} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-vessel-imo="${v.imo || ''}" data-source-origin="${sourceOriginLabel}" data-map-focus-id="${mapFocusId}" onclick="toggleMatchingAuditSelection(event)">
                                 <!-- Rank Ribbon -->
                                 <div class="absolute top-4 right-5 flex items-center gap-2">
                                     ${estimatedDwtBadge}
+                                    ${dwtPenaltyBadge}
+                                    ${debugDwtBadge}
+                                    ${vesselTypePenaltyBadge}
                                     ${projectionBadge}
                                     ${within300Badge}
                                     ${compBadge}
@@ -21191,12 +21246,17 @@
                                             <h4 class="text-sm font-black text-slate-800 truncate max-w-full" title="${v.vesselName}">${v.vesselName}</h4>
                                             <span class="text-[10px] bg-slate-100 text-slate-500 font-mono font-bold px-1.5 py-0.5 rounded border border-slate-200">IMO ${v.imo || 'PENDING'}</span>
                                             <span class="text-[10px] ${visual.bg} ${visual.color} font-bold px-1.5 py-0.5 rounded border border-current flex items-center gap-1">
-                                                <i class="${visual.icon}"></i> ${v.vesselClass || 'Bulk'}
+                                                <i class="${visual.icon}"></i> ${declaredVesselType}
                                             </span>
                                             ${sourceBadgesHtml}
                                         </div>
 
-                                        <p class="text-[11px] text-slate-400 mt-0.5">Bandera / Flag: <span class="font-bold text-slate-600">${flag || 'N/A'}</span> | DWT: <span class="font-bold text-slate-600">${v.dwt.toLocaleString()} MT</span> | Año / Built: <span class="font-bold text-slate-600">${yearBuiltValue || 'N/A'}</span></p>
+                                        <p class="text-[11px] text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                                            <span>Vessel Type: <strong class="${vesselTypeCompatible ? 'text-slate-700' : 'text-red-700'}">${declaredVesselType}</strong></span>
+                                            <span>DWT: <strong class="${isDwtUnknown || isUndersized ? 'text-red-700' : 'text-slate-700'}">${hasKnownDwt ? `${vesselDwt.toLocaleString()} MT` : 'Desconocido'}</strong></span>
+                                            <span>Bandera / Flag: <strong class="text-slate-700">${flag || 'N/A'}</strong></span>
+                                            <span>Año / Built: <strong class="text-slate-700">${yearBuiltValue || 'N/A'}</strong></span>
+                                        </p>
 
                                         <!-- Active Alert Banner (Layer 3 Optimization) -->
                                         ${activeAlertHtml}
@@ -21216,8 +21276,8 @@
                                                     <span class="font-bold ${comp.draftOk ? 'text-emerald-600' : 'text-rose-600'}">${comp.draftOk ? 'OK' : 'Excede'}</span>
                                                 </div>
                                                 <div class="flex items-center justify-between text-xs">
-                                                    <span class="text-slate-500">Capacidad (${v.dwt} MT vs ${quantity} MT):</span>
-                                                    <span class="font-bold ${isValidCapacity ? 'text-emerald-600' : 'text-rose-600'}">${isValidCapacity ? 'OK' : (isOversized ? 'Sobredimensionado (OVERSIZED)' : 'Insuficiente')}</span>
+                                                    <span class="text-slate-500">Capacidad (${hasKnownDwt ? `${vesselDwt.toLocaleString()} MT` : 'DWT desconocido'} vs ${quantity} MT):</span>
+                                                    <span class="font-bold ${isValidCapacity ? 'text-emerald-600' : 'text-rose-600'}">${isValidCapacity ? 'OK' : (isDwtUnknown ? 'Desconocido' : isOversized ? 'Sobredimensionado (OVERSIZED)' : 'Insuficiente')}</span>
                                                 </div>
                                             </div>
 
@@ -21301,12 +21361,12 @@
                         window.frozenRadarSnapshot.classifiedVessels = JSON.parse(JSON.stringify(renderedVesselsForReport));
                     }
 
-                    resultsBadge.innerText = `${viableMatches.length} candidato${viableMatches.length === 1 ? '' : 's'} idóneo${viableMatches.length === 1 ? '' : 's'} · ${technicalWarningCount} advertencia${technicalWarningCount === 1 ? '' : 's'}`;
+                    resultsBadge.innerText = `${viableMatches.length} candidato${viableMatches.length === 1 ? '' : 's'} visible${viableMatches.length === 1 ? '' : 's'} · ${technicalWarningCount} advertencia${technicalWarningCount === 1 ? '' : 's'}`;
                     resultsBadge.classList.remove('hidden');
                     const technicalToggleStatus = document.getElementById('technical-problems-toggle-status');
                     if (technicalToggleStatus) {
                         technicalToggleStatus.textContent = technicalWarningCount > 0
-                            ? `${technicalWarningCount} advertencia${technicalWarningCount === 1 ? '' : 's'} técnica${technicalWarningCount === 1 ? '' : 's'} ${document.getElementById('hide-technical-problems-toggle')?.checked ? 'oculta' : 'visible'}${technicalWarningCount === 1 ? '' : 's'}`
+                            ? `${technicalWarningCount} advertencia${technicalWarningCount === 1 ? '' : 's'} técnica${technicalWarningCount === 1 ? '' : 's'} · filtro ${strictTechnicalFilter ? 'estricto' : 'visual'}`
                             : 'Sin incompatibilidades técnicas críticas';
                     }
                     const hiddenByUiCount = Math.max(0, matches.length - renderedCount);
@@ -21761,22 +21821,47 @@
         }
         window.runMatchingEngine = runMatchingEngine;
 
+        window.matchingDebugIncludeUnknownDwt = window.matchingDebugIncludeUnknownDwt === true;
+        function updateMatchingDwtDebugButton() {
+            const button = document.getElementById('debug-dwt-filter-toggle');
+            if (!button) return;
+            const enabled = window.matchingDebugIncludeUnknownDwt === true;
+            button.setAttribute('aria-pressed', String(enabled));
+            button.className = enabled
+                ? 'rounded-md border border-red-300 bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-red-700 transition hover:bg-red-100 focus:ring-2 focus:ring-red-300'
+                : 'rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-800 transition hover:bg-amber-100 focus:ring-2 focus:ring-amber-300';
+            button.innerHTML = enabled
+                ? '<i class="fa-solid fa-bug mr-1"></i> Debug DWT N/D activo'
+                : 'Modo Debug Filtros';
+        }
+
+        function rerunMatchingAfterFilterChange() {
+            const hasCachedResults = Array.isArray(window.matchingResultsState?.vessels)
+                && window.matchingResultsState.vessels.length > 0;
+            if (!hasCachedResults) return;
+            const route = typeof window.getMatchingExecutionRouteOverride === 'function'
+                ? window.getMatchingExecutionRouteOverride()
+                : null;
+            const radarIsLive = window.RadarGlobalControl?.getState?.().mode === 'live';
+            void window.runMatchingEngine(route, {
+                auto: true,
+                preserveRadarLive: radarIsLive
+            });
+        }
+
+        function toggleMatchingDwtDebugMode() {
+            window.matchingDebugIncludeUnknownDwt = window.matchingDebugIncludeUnknownDwt !== true;
+            updateMatchingDwtDebugButton();
+            rerunMatchingAfterFilterChange();
+            return window.matchingDebugIncludeUnknownDwt;
+        }
+        window.toggleMatchingDwtDebugMode = toggleMatchingDwtDebugMode;
+        updateMatchingDwtDebugButton();
+
         const technicalProblemsToggle = document.getElementById('hide-technical-problems-toggle');
         if (technicalProblemsToggle && technicalProblemsToggle.dataset.matchingBound !== 'true') {
             technicalProblemsToggle.dataset.matchingBound = 'true';
-            technicalProblemsToggle.addEventListener('change', () => {
-                const hasCachedResults = Array.isArray(window.matchingResultsState?.vessels)
-                    && window.matchingResultsState.vessels.length > 0;
-                if (!hasCachedResults) return;
-                const route = typeof window.getMatchingExecutionRouteOverride === 'function'
-                    ? window.getMatchingExecutionRouteOverride()
-                    : null;
-                const radarIsLive = window.RadarGlobalControl?.getState?.().mode === 'live';
-                window.runMatchingEngine(route, {
-                    auto: true,
-                    preserveRadarLive: radarIsLive
-                });
-            });
+            technicalProblemsToggle.addEventListener('change', rerunMatchingAfterFilterChange);
         }
 
         document.querySelectorAll('.matching-source-toggle').forEach((toggle) => {
@@ -54232,6 +54317,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         const dataBridgeNorRequests = new Map();
         let dataBridgeNorSocket = null;
         let dataBridgeNorReconnectTimer = null;
+        let dataBridgeNorReconnectAttempts = 0;
+        let dataBridgeNorReconnectStopped = false;
+        const DATA_BRIDGE_NOR_MAX_RECONNECT_ATTEMPTS = 3;
+        const DATA_BRIDGE_NOR_RECONNECT_BASE_MS = 1000;
+        const DATA_BRIDGE_NOR_RECONNECT_MAX_MS = 30000;
         window.dataBridgePersistentConnectionState = window.dataBridgePersistentConnectionState || null;
         const DATA_BRIDGE_STATUS_LABELS = {
             inactive: 'Inactivo',
@@ -54449,12 +54539,31 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             });
         }
 
+        function updateDataBridgeNorSocketStatus(state) {
+            const disconnectedBadge = document.getElementById('databridge-ws-disconnected');
+            const disconnected = state === 'disconnected';
+            disconnectedBadge?.classList.toggle('hidden', !disconnected);
+            disconnectedBadge?.classList.toggle('inline-flex', disconnected);
+            if (disconnected) updateConnectionStatusBar('disconnected');
+        }
+
         function scheduleDataBridgeNorReconnect() {
-            if (!DATA_BRIDGE_WS_URL || dataBridgeNorReconnectTimer) return;
+            if (!DATA_BRIDGE_WS_URL || dataBridgeNorReconnectTimer || dataBridgeNorReconnectStopped) return;
+            if (dataBridgeNorReconnectAttempts >= DATA_BRIDGE_NOR_MAX_RECONNECT_ATTEMPTS) {
+                dataBridgeNorReconnectStopped = true;
+                updateDataBridgeNorSocketStatus('disconnected');
+                console.warn('[Core PRO] WebSocket de Data Bridge desconectado tras 3 reintentos. Reconexión automática detenida.');
+                return;
+            }
+            const delay = Math.min(
+                DATA_BRIDGE_NOR_RECONNECT_MAX_MS,
+                DATA_BRIDGE_NOR_RECONNECT_BASE_MS * (2 ** dataBridgeNorReconnectAttempts)
+            );
+            dataBridgeNorReconnectAttempts += 1;
             dataBridgeNorReconnectTimer = window.setTimeout(() => {
                 dataBridgeNorReconnectTimer = null;
                 startDataBridgeNorListener();
-            }, 5000);
+            }, delay);
         }
 
         function startDataBridgeNorListener() {
@@ -54464,6 +54573,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             try {
                 dataBridgeNorSocket = new WebSocket(DATA_BRIDGE_WS_URL);
+                dataBridgeNorSocket.addEventListener('open', () => {
+                    dataBridgeNorReconnectAttempts = 0;
+                    dataBridgeNorReconnectStopped = false;
+                    updateDataBridgeNorSocketStatus('connected');
+                });
                 dataBridgeNorSocket.addEventListener('message', (event) => {
                     try {
                         processDataBridgeNorMessage(JSON.parse(event.data));
@@ -54484,6 +54598,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 scheduleDataBridgeNorReconnect();
             }
         }
+
+        function retryDataBridgeNorListener() {
+            dataBridgeNorReconnectStopped = false;
+            dataBridgeNorReconnectAttempts = 0;
+            updateDataBridgeNorSocketStatus('connecting');
+            startDataBridgeNorListener();
+        }
+        window.retryDataBridgeNorListener = retryDataBridgeNorListener;
 
         function getStoredDataBridgeToken() {
             try {
@@ -58389,7 +58511,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const counter = document.getElementById('openships-live-counter');
             const statusPill = document.getElementById('openships-status-pill');
             const radarPing = document.getElementById('openships-radar-ping');
-            if (!counter || !statusPill) return;
+            if (!counter || !statusPill || window.openShipsRadarRequestInFlight) return;
+            window.openShipsRadarRequestInFlight = true;
 
             try {
                 const response = await fetch('/api/openships/live-status', {
@@ -58412,12 +58535,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 statusPill.classList.remove('bg-emerald-900/80', 'border-emerald-700');
                 statusPill.classList.add('bg-red-900/80', 'border-red-700');
                 radarPing?.classList.remove('animate-ping');
+            } finally {
+                window.openShipsRadarRequestInFlight = false;
             }
         }
 
         function startOpenShipsRadarPolling() {
+            if (window.openShipsRadarPollingTimer) return;
             updateOpenShipsRadar();
-            window.setInterval(updateOpenShipsRadar, 30000);
+            window.openShipsRadarPollingTimer = window.setInterval(() => {
+                if (document.visibilityState === 'visible') updateOpenShipsRadar();
+            }, 30000);
         }
 
         if (document.readyState === 'loading') {

@@ -19,6 +19,16 @@ test('matching backend pages allowed sources and sends every page through Core P
   assert.match(matchingSource, /pagination,/);
 });
 
+test('OpenShips technical data is enriched by IMO before source merging', () => {
+  assert.match(matchingSource, /enrichOpenShipsTechnicalData/);
+  assert.match(matchingSource, /findExactVesselsMasterRows\(imoNumbers, \[\], \[\]\)/);
+  assert.match(matchingSource, /VERIFIED_VESSELS_MASTER/);
+  assert.match(matchingSource, /technicalDataEnrichment/);
+  assert.match(matchingSource, /const openShipsEnrichment = await enrichOpenShipsTechnicalData/);
+  assert.match(matchingSource, /VESSELS_MASTER_LOOKUP_FAILED/);
+  assert.match(matchingSource, /openShipsEnrichment: openShipsEnrichment\.diagnostics/);
+});
+
 test('source query filters Data Bridge, AIS, and OpenShips before applying limit and offset', () => {
   assert.match(matchingDbSource, /status = 'EN_CARTERA'[\s\S]*OR vm\.validation_status = 'VALIDADO'/);
   assert.match(matchingDbSource, /FROM ais_vessels/);
@@ -54,4 +64,17 @@ test('scoring preserves vessel key and combined source origins', () => {
   assert.match(filterSource, /source_origins: vessel\.sourceOrigins/);
   assert.match(filterSource, /source_origin: vessel\.sourceOrigin/);
   assert.match(filterSource, /vessel_key: vessel\.vesselKey/);
+});
+
+test('strict technical filtering exposes DWT assessment and compact-card penalties', () => {
+  assert.match(filterSource, /strictTechnicalFilter/);
+  assert.match(filterSource, /status: "UNKNOWN", label: "DWT Desconocido"/);
+  assert.match(filterSource, /status: "INSUFFICIENT", label: "DWT Insuficiente"/);
+  assert.match(indexSource, /DWT Desconocido/);
+  assert.match(indexSource, /DWT Insuficiente/);
+  assert.match(indexSource, /Vessel Type:/);
+  assert.match(indexSource, /strictTechnicalFilter: document\.getElementById\('hide-technical-problems-toggle'\)/);
+  assert.match(indexSource, /Modo Debug Filtros/);
+  assert.match(indexSource, /debugIncludeUnknownDwt: window\.matchingDebugIncludeUnknownDwt === true/);
+  assert.match(filterSource, /debugUnknownDwtAllowed/);
 });

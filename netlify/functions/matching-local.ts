@@ -55,6 +55,17 @@ function numericValue(...values: unknown[]) {
   return null;
 }
 
+const UNKNOWN_TECHNICAL_VALUES = new Set(["", "n/a", "na", "n/d", "n d", "nd", "unknown", "desconocido", "null", "undefined"]);
+
+function isUnknownTechnicalValue(value: unknown) {
+  return UNKNOWN_TECHNICAL_VALUES.has(normalizeText(value));
+}
+
+function validImo(value: unknown) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return /^\d{7}$/.test(digits) ? digits : "";
+}
+
 function normalizeText(value: unknown) {
   return textValue(value)
     .normalize("NFD")
@@ -206,7 +217,8 @@ function serializeOpenShipsVessel(value: unknown) {
   const rawData = parseRecord(row.raw_data);
   const metadata = asRecord(row.MetaData || row.metadata || rawData.MetaData || rawData.metadata);
   const vesselName = textValue(row.vessel_name, row.vesselName, row.ShipName, rawData.vessel_name, rawData.vesselName, metadata.ShipName) || "Unknown vessel";
-  const vesselType = textValue(row.vessel_type, row.vesselType, rawData.vessel_type, rawData.vesselType, metadata.ShipType) || "Unknown";
+  const rawVesselType = textValue(row.vessel_type, row.vesselType, rawData.vessel_type, rawData.vesselType, metadata.ShipType);
+  const vesselType = isUnknownTechnicalValue(rawVesselType) ? "Unknown" : rawVesselType;
   const latitude = finiteNumberValue(row.latitude, row.lat, rawData.latitude, rawData.lat, metadata.Latitude);
   const longitude = finiteNumberValue(row.longitude, row.lon, row.lng, rawData.longitude, rawData.lon, rawData.lng, metadata.Longitude);
   const imo = textValue(row.imo_number, row.imo, row.IMO, rawData.imo_number, rawData.imo, rawData.IMO, metadata.IMO) || "N/A";
@@ -230,6 +242,8 @@ function serializeOpenShipsVessel(value: unknown) {
     shipType: vesselType,
     dwt,
     DWT: dwt,
+    dwtStatus: dwt ? "OPENSHIPS_REPORTED" : null,
+    vesselTypeStatus: vesselType !== "Unknown" ? "OPENSHIPS_REPORTED" : null,
     latitude,
     lat: latitude,
     longitude,
@@ -244,6 +258,94 @@ function serializeOpenShipsVessel(value: unknown) {
     lastSeenAt: textValue(row.observed_at, row.fetched_at, row.updated_at) || null,
     distanceToPolNm: finiteNumberValue(row.distance_nm),
   };
+}
+
+async function enrichOpenShipsTechnicalData(vessels: AnyRecord[]) {
+  const vesselsRequiringEnrichment = vessels.filter((vessel) => (
+    (!numericValue(vessel.dwt, vessel.DWT) || isUnknownTechnicalValue(vessel.vesselType || vessel.vessel_type))
+    && validImo(vessel.imo || vessel.IMO || vessel.imo_number)
+  ));
+  const imoNumbers = [...new Set(vesselsRequiringEnrichment
+    .map((vessel) => validImo(vessel.imo || vessel.IMO || vessel.imo_number))
+    .filter(Boolean))];
+  const diagnostics = {
+    attempted: vesselsRequiringEnrichment.length,
+    queriedImos: imoNumbers.length,
+    matchedByImo: 0,
+    dwtEnriched: 0,
+    vesselTypeEnriched: 0,
+    failed: false,
+    errorCode: null as string | null,
+  };
+  if (imoNumbers.length === 0) return { vessels, diagnostics };
+
+  let masterRows: VesselMasterRow[];
+  try {
+    masterRows = await findExactVesselsMasterRows(imoNumbers, [], []);
+  } catch (error) {
+    diagnostics.failed = true;
+    diagnostics.errorCode = "VESSELS_MASTER_LOOKUP_FAILED";
+    console.error(
+      "[matching-local] OpenShips IMO enrichment failed.",
+      error instanceof Error ? error.message : "Unknown database error",
+    );
+    return {
+      vessels: vessels.map((vessel) => ({
+        ...vessel,
+        technicalDataEnrichment: {
+          attempted: vesselsRequiringEnrichment.includes(vessel),
+          matchedByImo: false,
+          source: null,
+          dwtEnriched: false,
+          vesselTypeEnriched: false,
+          errorCode: diagnostics.errorCode,
+        },
+      })),
+      diagnostics,
+    };
+  }
+  const masterByImo = new Map(masterRows
+    .map((row) => [validImo(row.imo_number), row] as const)
+    .filter(([imo]) => Boolean(imo)));
+
+  const enrichedVessels = vessels.map((vessel) => {
+    const imo = validImo(vessel.imo || vessel.IMO || vessel.imo_number);
+    const master = imo ? masterByImo.get(imo) : null;
+    const currentDwt = numericValue(vessel.dwt, vessel.DWT);
+    const masterDwt = numericValue(master?.dwt);
+    const currentType = textValue(vessel.vesselType, vessel.vessel_type, vessel.shipType);
+    const masterType = textValue(master?.vessel_type);
+    const needsDwt = !currentDwt;
+    const needsVesselType = isUnknownTechnicalValue(currentType);
+    const enrichedDwt = needsDwt ? masterDwt : currentDwt;
+    const enrichedVesselType = needsVesselType && !isUnknownTechnicalValue(masterType) ? masterType : currentType;
+    if (master) diagnostics.matchedByImo += 1;
+    if (needsDwt && masterDwt) diagnostics.dwtEnriched += 1;
+    if (needsVesselType && !isUnknownTechnicalValue(masterType)) diagnostics.vesselTypeEnriched += 1;
+
+    return {
+      ...vessel,
+      dwt: enrichedDwt,
+      DWT: enrichedDwt,
+      dwtStatus: enrichedDwt
+        ? needsDwt && masterDwt ? "VERIFIED_VESSELS_MASTER" : vessel.dwtStatus || "OPENSHIPS_REPORTED"
+        : null,
+      vesselType: isUnknownTechnicalValue(enrichedVesselType) ? "Unknown" : enrichedVesselType,
+      vessel_type: isUnknownTechnicalValue(enrichedVesselType) ? "Unknown" : enrichedVesselType,
+      shipType: isUnknownTechnicalValue(enrichedVesselType) ? "Unknown" : enrichedVesselType,
+      vesselTypeStatus: !isUnknownTechnicalValue(enrichedVesselType)
+        ? needsVesselType && !isUnknownTechnicalValue(masterType) ? "VERIFIED_VESSELS_MASTER" : vessel.vesselTypeStatus || "OPENSHIPS_REPORTED"
+        : null,
+      technicalDataEnrichment: {
+        attempted: needsDwt || needsVesselType,
+        matchedByImo: Boolean(master),
+        source: master ? "DATABRIDGE_VESSELS_MASTER" : null,
+        dwtEnriched: Boolean(needsDwt && masterDwt),
+        vesselTypeEnriched: Boolean(needsVesselType && !isUnknownTechnicalValue(masterType)),
+      },
+    };
+  });
+  return { vessels: enrichedVessels, diagnostics };
 }
 
 function findExactMasterRow(candidate: ReturnType<typeof normalizeCandidate>, rows: VesselMasterRow[]) {
@@ -298,9 +400,11 @@ export default async (req: Request) => {
       const aisVessels = sourcePage.rows
         .filter((row) => row.source_system === "AIS_LIVE")
         .map((row) => serializeAisVessel(row.payload as unknown as AisMatchingRow));
-      const openShipsVessels = sourcePage.rows
+      const serializedOpenShipsVessels = sourcePage.rows
         .filter((row) => row.source_system === "OPENSHIPS")
         .map((row) => serializeOpenShipsVessel(row.payload));
+      const openShipsEnrichment = await enrichOpenShipsTechnicalData(serializedOpenShipsVessels);
+      const openShipsVessels = openShipsEnrichment.vessels;
       const unifiedVessels = mergeTripleVesselSources([], dataBridgeVessels, aisVessels, openShipsVessels);
       const sourceCounts = {
         master: 0,
@@ -323,6 +427,7 @@ export default async (req: Request) => {
           operation: "execute",
           source: "filtered_sources",
           sourceCounts,
+          openShipsEnrichment: openShipsEnrichment.diagnostics,
           allowedSources,
           pagination,
           readOnly: true,
@@ -358,6 +463,7 @@ export default async (req: Request) => {
         operation: "execute",
         source: "filtered_sources",
         sourceCounts,
+        openShipsEnrichment: openShipsEnrichment.diagnostics,
         allowedSources,
         pagination,
         readOnly: true,
