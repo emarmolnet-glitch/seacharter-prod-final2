@@ -1022,8 +1022,10 @@
         }
 
         .connection-status-bar[data-state="secure"] {
-            --connection-accent: var(--accent);
+            --connection-accent: #0F766E;
             --connection-muted: #0F766E;
+            border-color: rgba(15, 118, 110, 0.42);
+            box-shadow: 0 4px 16px rgba(15, 118, 110, 0.14), 0 0 0 3px rgba(20, 184, 166, 0.08);
         }
 
         .connection-status-bar[data-state="secure"] .connection-status-icon {
@@ -1058,10 +1060,10 @@
         }
 
         .connection-status-bar[data-state="fallback"] {
-            --connection-accent: #B45309;
-            --connection-muted: #92400E;
-            border-color: #D6D3D1;
-            background: rgba(255, 255, 255, 0.92);
+            --connection-accent: #3B6480;
+            --connection-muted: #475569;
+            border-color: #CBD5E1;
+            background: rgba(248, 250, 252, 0.92);
             box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
         }
 
@@ -1070,8 +1072,8 @@
         }
 
         .connection-status-bar[data-state="fallback"] .connection-status-icon {
-            color: #B45309;
-            border-color: rgba(180, 83, 9, 0.3);
+            color: #3B6480;
+            border-color: rgba(59, 100, 128, 0.28);
             background: #FFFFFF;
         }
 
@@ -24495,6 +24497,10 @@
         function switchTab(tabId) {
             const openingReadOnlyDensityMap = tabId === 'ais';
             const leavingReadOnlyDensityMap = window.aisDensityReadOnly === true && !openingReadOnlyDensityMap;
+            if (leavingReadOnlyDensityMap) {
+                window.RadarGlobalControl?.freeze?.('map-view-exit');
+                window.deactivateDataBridgeLiveTracking?.('map-view-exit');
+            }
             window.aisDensityReadOnly = openingReadOnlyDensityMap;
             if (openingReadOnlyDensityMap) {
                 window.aisRadarUserActivated = window.RadarGlobalControl?.getState().mode === 'live';
@@ -24601,6 +24607,7 @@
                 // into a container whose dimensions are already settled.
                 destroyAisMap();
             }
+            window.syncDataBridgeRadarTransport?.('tab-change');
             syncPrintPolicyClass();
         }
 
@@ -54366,20 +54373,22 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         let dataBridgeHttpPollingRequest = null;
         let dataBridgeHttpPollingController = null;
         let dataBridgeHttpPollingFailures = 0;
+        let dataBridgeNorTransportState = 'fallback';
+        let dataBridgeRadarLiveRequested = false;
         const DATA_BRIDGE_NOR_MAX_RECONNECT_ATTEMPTS = 3;
         const DATA_BRIDGE_NOR_RECONNECT_BASE_MS = 1000;
         const DATA_BRIDGE_NOR_RECONNECT_MAX_MS = 30000;
         window.dataBridgePersistentConnectionState = window.dataBridgePersistentConnectionState || null;
         const DATA_BRIDGE_STATUS_LABELS = {
             inactive: 'Inactivo',
-            secure: 'WS Conectado',
-            fallback: 'HTTP Polling',
+            secure: 'LIVE TRACKING',
+            fallback: 'SYNC HTTP · 30S',
             unauthorized: 'Unauthorized',
             disconnected: 'Disconnected'
         };
         const DATA_BRIDGE_STATUS_ICONS = {
             inactive: 'fa-solid fa-circle-pause',
-            secure: 'fa-solid fa-bridge-lock',
+            secure: 'fa-solid fa-satellite-dish',
             fallback: 'fa-solid fa-arrows-rotate',
             unauthorized: 'fa-solid fa-lock-open',
             disconnected: 'fa-solid fa-plug-circle-xmark'
@@ -54397,7 +54406,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             bindDataBridgeLinkForm();
             updateDataBridgeConnectionIndicator();
             restorePersistentDataBridgeConnection();
-            startDataBridgeNorListener();
+            startDataBridgeHttpPolling();
+            syncDataBridgeRadarTransport('dom-ready');
             
             // Check if we are running in an Electron environment with our API exposed
             if (window.dataBridgeAPI) {
@@ -54595,6 +54605,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function updateDataBridgeNorSocketStatus(state) {
+            dataBridgeNorTransportState = state;
             const disconnectedBadge = document.getElementById('databridge-ws-disconnected');
             const badgeIcon = disconnectedBadge?.querySelector('i');
             const badgeLabel = disconnectedBadge?.querySelector('[data-databridge-transport-label]');
@@ -54608,6 +54619,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (badgeIcon) badgeIcon.className = fallback ? 'fa-solid fa-arrows-rotate' : 'fa-solid fa-plug-circle-xmark';
             if (badgeLabel) badgeLabel.textContent = fallback ? 'Respaldo HTTP' : 'Desconectado';
             if (state === 'connected') updateConnectionStatusBar('secure');
+            if (state === 'connecting') updateConnectionStatusBar('fallback');
             if (fallback) updateConnectionStatusBar('fallback');
             if (disconnected) updateConnectionStatusBar('disconnected');
         }
@@ -54679,7 +54691,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function scheduleDataBridgeNorReconnect() {
-            if (!DATA_BRIDGE_WS_URL || dataBridgeNorReconnectTimer || dataBridgeNorReconnectStopped) return;
+            if (!DATA_BRIDGE_WS_URL || dataBridgeNorReconnectTimer || dataBridgeNorReconnectStopped || !shouldUseDataBridgeWebSocket()) return;
             if (dataBridgeNorReconnectAttempts >= DATA_BRIDGE_NOR_MAX_RECONNECT_ATTEMPTS) {
                 dataBridgeNorReconnectStopped = true;
                 startDataBridgeHttpPolling();
@@ -54698,6 +54710,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function startDataBridgeNorListener() {
+            if (!shouldUseDataBridgeWebSocket()) {
+                startDataBridgeHttpPolling();
+                return;
+            }
             if (!DATA_BRIDGE_WS_URL) {
                 startDataBridgeHttpPolling();
                 return;
@@ -54707,26 +54723,36 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
 
             try {
-                dataBridgeNorSocket = new WebSocket(DATA_BRIDGE_WS_URL);
-                dataBridgeNorSocket.addEventListener('open', () => {
+                updateDataBridgeNorSocketStatus('connecting');
+                const socket = new WebSocket(DATA_BRIDGE_WS_URL);
+                dataBridgeNorSocket = socket;
+                socket.addEventListener('open', () => {
+                    if (!shouldUseDataBridgeWebSocket()) {
+                        socket.close();
+                        return;
+                    }
                     dataBridgeNorReconnectAttempts = 0;
                     dataBridgeNorReconnectStopped = false;
                     stopDataBridgeHttpPolling();
                     updateDataBridgeNorSocketStatus('connected');
                 });
-                dataBridgeNorSocket.addEventListener('message', (event) => {
+                socket.addEventListener('message', (event) => {
                     try {
-                        processDataBridgeNorMessage(JSON.parse(event.data));
+                        processDataBridgeHttpPollingPayload(JSON.parse(event.data));
                     } catch (error) {
                         console.warn('[Core PRO] Mensaje WebSocket de Data Bridge no válido.', error);
                     }
                 });
-                dataBridgeNorSocket.addEventListener('close', () => {
-                    dataBridgeNorSocket = null;
-                    scheduleDataBridgeNorReconnect();
+                socket.addEventListener('close', () => {
+                    if (dataBridgeNorSocket === socket) dataBridgeNorSocket = null;
+                    updateDataBridgeNorSocketStatus('fallback');
+                    startDataBridgeHttpPolling();
+                    if (shouldUseDataBridgeWebSocket()) {
+                        scheduleDataBridgeNorReconnect();
+                    }
                 });
-                dataBridgeNorSocket.addEventListener('error', () => {
-                    dataBridgeNorSocket?.close();
+                socket.addEventListener('error', () => {
+                    socket.close();
                 });
             } catch (error) {
                 console.warn('[Core PRO] No se pudo iniciar el listener WebSocket de Data Bridge.', error);
@@ -54736,15 +54762,65 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function retryDataBridgeNorListener() {
-            stopDataBridgeHttpPolling();
+            dataBridgeRadarLiveRequested = window.RadarGlobalControl?.getState?.().mode === 'live';
             dataBridgeNorReconnectStopped = false;
             dataBridgeNorReconnectAttempts = 0;
-            updateDataBridgeNorSocketStatus('connecting');
-            startDataBridgeNorListener();
+            syncDataBridgeRadarTransport('manual-retry');
         }
         window.retryDataBridgeNorListener = retryDataBridgeNorListener;
 
+        function isRadarMapViewActive() {
+            return document.getElementById('view-ais')?.classList.contains('active-block') === true;
+        }
+
+        function shouldUseDataBridgeWebSocket() {
+            return dataBridgeRadarLiveRequested && isRadarMapViewActive();
+        }
+
+        function activateDataBridgeLiveTracking(source = 'radar-live') {
+            dataBridgeRadarLiveRequested = true;
+            if (!isRadarMapViewActive()) {
+                startDataBridgeHttpPolling();
+                return { started: false, reason: 'radar-map-not-visible', source };
+            }
+            dataBridgeNorReconnectStopped = false;
+            dataBridgeNorReconnectAttempts = 0;
+            startDataBridgeNorListener();
+            return { started: true, source };
+        }
+        window.activateDataBridgeLiveTracking = activateDataBridgeLiveTracking;
+
+        function deactivateDataBridgeLiveTracking(source = 'radar-frozen') {
+            dataBridgeRadarLiveRequested = false;
+            dataBridgeNorReconnectStopped = true;
+            if (dataBridgeNorReconnectTimer) {
+                window.clearTimeout(dataBridgeNorReconnectTimer);
+                dataBridgeNorReconnectTimer = null;
+            }
+            if (dataBridgeNorSocket) {
+                const socket = dataBridgeNorSocket;
+                dataBridgeNorSocket = null;
+                socket.close();
+            }
+            startDataBridgeHttpPolling();
+            updateDataBridgeNorSocketStatus('fallback');
+            return { stopped: true, source };
+        }
+        window.deactivateDataBridgeLiveTracking = deactivateDataBridgeLiveTracking;
+
+        function syncDataBridgeRadarTransport(source = 'radar-state') {
+            const radarIsLive = window.RadarGlobalControl?.getState?.().mode === 'live';
+            return radarIsLive && isRadarMapViewActive()
+                ? activateDataBridgeLiveTracking(source)
+                : deactivateDataBridgeLiveTracking(source);
+        }
+        window.syncDataBridgeRadarTransport = syncDataBridgeRadarTransport;
+        window.addEventListener('RADAR_GLOBAL_STATE_CHANGED', (event) => {
+            syncDataBridgeRadarTransport(event.detail?.source || 'radar-state-change');
+        });
+
         function cleanupDataBridgeNorTransport() {
+            dataBridgeRadarLiveRequested = false;
             dataBridgeNorReconnectStopped = true;
             if (dataBridgeNorReconnectTimer) {
                 window.clearTimeout(dataBridgeNorReconnectTimer);
@@ -54761,9 +54837,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.addEventListener('connection-status:unmount', cleanupDataBridgeNorTransport);
         window.addEventListener('pageshow', (event) => {
             if (!event.persisted) return;
-            dataBridgeNorReconnectStopped = false;
-            dataBridgeNorReconnectAttempts = 0;
-            startDataBridgeNorListener();
+            startDataBridgeHttpPolling();
+            syncDataBridgeRadarTransport('page-restore');
         });
 
         function getStoredDataBridgeToken() {
@@ -54849,11 +54924,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 linkBtn.setAttribute('title', isConnected ? 'Data Bridge conectado' : 'Conectar Data Bridge');
                 linkBtn.setAttribute('aria-label', isConnected ? 'Data Bridge conectado' : 'Conectar Data Bridge');
             }
-            updateConnectionStatusBar(isConnected ? 'secure' : 'inactive');
+            updateConnectionStatusBar(dataBridgeNorTransportState === 'connected' ? 'secure' : 'fallback');
         }
 
         function updateConnectionStatusBar(state = 'inactive') {
-            const normalizedState = ['inactive', 'secure', 'fallback', 'unauthorized', 'disconnected'].includes(state) ? state : 'inactive';
+            const requestedState = ['inactive', 'secure', 'fallback', 'unauthorized', 'disconnected'].includes(state) ? state : 'inactive';
+            const normalizedState = requestedState === 'secure' && dataBridgeNorTransportState !== 'connected'
+                ? 'fallback'
+                : requestedState;
             const bar = document.querySelector('#connection-status-root .connection-status-bar');
             const label = document.querySelector('#connection-status-root .connection-status-text');
             const bridgeIcon = document.querySelector('#connection-status-root [data-connection-bridge-icon]');

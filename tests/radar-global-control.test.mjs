@@ -41,10 +41,12 @@ test('activating radar from matching rehydrates matchingRequest before starting 
   assert.ok(componentSource.indexOf('fetchMatchingRequestFromGlobalStore') < componentSource.indexOf('window.startRadarLive'));
 });
 
-test('switching tabs no longer freezes or restarts the global radar service', () => {
+test('leaving the radar map freezes LIVE mode and cleans up the on-demand transport', () => {
   const switchStart = source.indexOf('function switchTab(tabId)');
   const switchEnd = source.indexOf("if (tabId === 'auditor')", switchStart);
   const switchSource = source.slice(switchStart, switchEnd);
-  assert.doesNotMatch(switchSource, /stopAisRadarPolling|stopAisProxyPolling/);
+  assert.match(switchSource, /leavingReadOnlyDensityMap/);
+  assert.match(switchSource, /window\.RadarGlobalControl\?\.freeze\?\.\('map-view-exit'\)/);
+  assert.match(switchSource, /window\.deactivateDataBridgeLiveTracking\?\.\('map-view-exit'\)/);
   assert.doesNotMatch(switchSource, /window\.isLiveTrackingEnabled =/);
 });
