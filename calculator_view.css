@@ -1,14 +1,5 @@
 /* Mobile and Tablet responsive overrides (@media max-width: 768px) */
 @media (max-width: 768px) {
-    /* Compact + Nueva Estimación button on touch / mobile screens */
-    #new-estimation-btn {
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
-    }
-    #new-estimation-btn span {
-        display: none !important;
-    }
-
     /* Checklist Flotante (Validation Stepper HUD) mobile positioning */
     #validation-stepper-hud {
         bottom: 12px !important;

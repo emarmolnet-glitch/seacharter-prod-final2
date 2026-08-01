@@ -7307,15 +7307,6 @@
 
         /* Mobile and Tablet responsive overrides (@media max-width: 768px) */
         @media (max-width: 768px) {
-            /* Compact + Nueva Estimación button on touch / mobile screens */
-            #new-estimation-btn {
-                padding-left: 0.5rem !important;
-                padding-right: 0.5rem !important;
-            }
-            #new-estimation-btn span {
-                display: none !important;
-            }
-
             /* Checklist Flotante (Validation Stepper HUD) mobile positioning */
             #validation-stepper-hud {
                 bottom: 12px !important;
@@ -7429,15 +7420,14 @@
                     id="new-estimation-btn"
                     type="button"
                     onclick="resetTotalEstimation(); closeMobileSessionMenu();"
-                    class="bg-teal-700 hover:bg-teal-800 text-white font-medium text-sm px-4 py-2 rounded-md transition-colors shadow-sm flex items-center gap-2"
+                    class="tools-dropdown-trigger flex items-center justify-center"
                     title="Nueva Estimación"
                     aria-label="Nueva Estimación"
                 >
-                    <svg class="w-4 h-4 stroke-current" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 5v14" />
                         <path d="M5 12h14" />
                     </svg>
-                    <span>+ Nueva Estimación</span>
                 </button>
                 <div class="tools-dropdown-container">
                     <input
