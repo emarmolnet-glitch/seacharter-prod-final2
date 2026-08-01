@@ -38,6 +38,39 @@ function formatTrackingDate(value, includeTime = true) {
     }).format(date);
 }
 
+function formatTrackingTime(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return new Intl.DateTimeFormat('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    }).format(date);
+}
+
+function normalizeTrackingAlertLevel(alert) {
+    const level = String(alert?.level || alert?.severity || alert?.status || '').trim().toLowerCase();
+    if (['critical', 'danger', 'error', 'high'].includes(level)) return 'critical';
+    if (['warning', 'warn', 'medium'].includes(level)) return 'warning';
+    return level === 'ok' ? 'ok' : 'warning';
+}
+
+function renderTrackingAlert(alert) {
+    const level = normalizeTrackingAlertLevel(alert);
+    const title = alert?.title || alert?.summary || alert?.eventType || alert?.event_type || 'Alerta operativa';
+    const detail = alert?.detail || alert?.description || alert?.message || '';
+    return `<article class="tracking-alert" data-level="${escapeTrackingHtml(level)}"><div><strong>${escapeTrackingHtml(title)}</strong>${detail ? `<p>${escapeTrackingHtml(detail)}</p>` : ''}</div></article>`;
+}
+
+function renderTrackingEvent(event) {
+    const occurredAt = event?.occurredAt || event?.occurred_at || event?.timestamp || event?.createdAt || event?.created_at;
+    const description = event?.description || event?.summary || event?.detail || event?.message || 'Evento operativo registrado';
+    const phase = Number(event?.phase);
+    const isoDate = occurredAt && !Number.isNaN(new Date(occurredAt).getTime()) ? new Date(occurredAt).toISOString() : '';
+    return `<article class="tracking-event"><time class="tracking-event-time"${isoDate ? ` datetime="${escapeTrackingHtml(isoDate)}"` : ''}>${escapeTrackingHtml(formatTrackingTime(occurredAt))}</time><p class="tracking-event-description">${escapeTrackingHtml(description)}</p>${Number.isFinite(phase) ? `<span class="tracking-event-phase">F${escapeTrackingHtml(phase)}</span>` : ''}</article>`;
+}
+
 function trackingStatusLabel(status) {
     return ({ complete: 'Completada', active: 'En curso', pending: 'Pendiente' })[status] || status;
 }
@@ -161,8 +194,6 @@ function renderTrackingDashboard(data) {
     const alerts = Array.isArray(data.alerts) ? data.alerts : [];
     const milestones = Array.isArray(data.milestones) ? data.milestones : [];
     const timeline = Array.isArray(data.timeline) ? data.timeline : [];
-    const criticalCount = alerts.filter((alert) => alert.level === 'critical').length;
-    const alertCountLabel = criticalCount ? `${criticalCount}!` : alerts.length;
     const position = live.position ? `${formatTrackingNumber(live.position.latitude, { maximumFractionDigits: 4 })}, ${formatTrackingNumber(live.position.longitude, { maximumFractionDigits: 4 })}` : 'Sin posición';
 
     content.innerHTML = `
@@ -189,9 +220,9 @@ function renderTrackingDashboard(data) {
                 </div>
             </article>
             <aside class="tracking-alerts-panel">
-                <div class="tracking-panel-heading"><div><div class="tracking-panel-kicker">Motor contractual</div><h2 class="tracking-panel-title">Alertas en tiempo real</h2></div><span class="tracking-alert-count">${escapeTrackingHtml(alertCountLabel)}</span></div>
+                <div class="tracking-panel-heading"><div><div class="tracking-panel-kicker">Motor contractual</div><h2 class="tracking-panel-title">Alertas en tiempo real</h2></div><span class="tracking-alert-count${alerts.length ? ' has-alerts' : ''}" aria-label="${escapeTrackingHtml(`${alerts.length} alertas activas`)}">${escapeTrackingHtml(alerts.length)}</span></div>
                 <div class="tracking-alert-list">
-                    ${alerts.map((alert) => `<article class="tracking-alert" data-level="${escapeTrackingHtml(alert.level)}"><span class="tracking-alert-light"></span><div><strong>${escapeTrackingHtml(alert.title)}</strong><p>${escapeTrackingHtml(alert.detail)}</p></div></article>`).join('')}
+                    ${alerts.length ? alerts.map(renderTrackingAlert).join('') : '<div class="tracking-alerts-empty">Sin alertas activas en este momento.</div>'}
                 </div>
             </aside>
         </section>
@@ -205,7 +236,7 @@ function renderTrackingDashboard(data) {
             <aside class="tracking-timeline-panel">
                 <div class="tracking-panel-heading"><div><div class="tracking-panel-kicker">Audit trail</div><h2 class="tracking-panel-title">Últimos eventos</h2></div></div>
                 <div class="tracking-timeline">
-                    ${timeline.length ? timeline.map((event) => `<article class="tracking-event"><time>${escapeTrackingHtml(formatTrackingDate(event.occurredAt))} · F${escapeTrackingHtml(event.phase)}</time><strong>${escapeTrackingHtml(event.summary)}</strong></article>`).join('') : '<div class="tracking-timeline-empty">Los eventos de geofence, NOR, carga, travesía y descarga aparecerán aquí conforme sean registrados.</div>'}
+                    ${timeline.length ? timeline.map(renderTrackingEvent).join('') : '<div class="tracking-timeline-empty">Los eventos de geofence, NOR, carga, travesía y descarga aparecerán aquí conforme sean registrados.</div>'}
                 </div>
             </aside>
         </section>
