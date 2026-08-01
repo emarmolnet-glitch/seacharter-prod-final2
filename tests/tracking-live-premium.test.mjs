@@ -34,13 +34,26 @@ test('tracking console supports contract lookup, polling and all six operational
   assert.match(stylesSource, /data-level="critical"/);
 });
 
-test('tracking endpoint validates references and returns only calculated operational data', () => {
-  assert.match(endpointSource, /path: "\/api\/v1\/voyage\/tracking\/:contractRef"/);
-  assert.match(endpointSource, /CONTRACT_REF_PATTERN/);
-  assert.match(endpointSource, /WHERE upper\(v\.contract_ref\) = \$1/);
-  assert.match(endpointSource, /haversineNm/);
-  assert.match(endpointSource, /Demurrage activo/);
-  assert.match(endpointSource, /Rendimiento crítico/);
+test('tracking console uses the SeaCharter light corporate theme', () => {
+  assert.match(stylesSource, /--tracking-bg: #f1f5f9/);
+  assert.match(stylesSource, /--tracking-surface: #ffffff/);
+  assert.match(stylesSource, /--tracking-text: #0f172a/);
+  assert.match(stylesSource, /--tracking-primary: #004e64/);
+  assert.match(stylesSource, /\.tracking-live-topbar[\s\S]*background: rgba\(255, 255, 255, 0\.96\)/);
+  assert.match(stylesSource, /\.tracking-voyage-card,[\s\S]*background: var\(--tracking-surface\)/);
+  assert.doesNotMatch(stylesSource, /#06131d|#0b1b27|#102635|#071722/);
+});
+
+test('tracking endpoint uses pg safely and returns the dashboard payload shape', () => {
+  assert.match(endpointSource, /import \{ Pool \} from "pg"/);
+  assert.match(endpointSource, /path: "\/api\/v1\/voyage\/tracking\/\*"/);
+  assert.match(endpointSource, /decodeURIComponent\(encodedParam\)/);
+  assert.match(endpointSource, /SELECT \* FROM voyages_tracking WHERE contract_ref = \$1 LIMIT 1/);
+  assert.doesNotMatch(endpointSource, /"contractRef"/);
+  assert.match(endpointSource, /contract:/);
+  assert.match(endpointSource, /live:/);
+  assert.match(endpointSource, /milestones:/);
+  assert.match(endpointSource, /timeline:/);
   assert.doesNotMatch(endpointSource, /password|api_key|secret/i);
 });
 
