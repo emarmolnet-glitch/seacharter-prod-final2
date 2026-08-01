@@ -9,10 +9,16 @@ const STATUS_CONFIG = {
     bridgeTitle: "Data Bridge inactivo",
   },
   secure: {
-    label: "Secure Connection",
+    label: "WS Conectado",
     state: "secure",
     icon: "fa-solid fa-bridge-lock",
-    bridgeTitle: "Data Bridge secure",
+    bridgeTitle: "Data Bridge conectado por WebSocket",
+  },
+  fallback: {
+    label: "HTTP Polling",
+    state: "fallback",
+    icon: "fa-solid fa-arrows-rotate",
+    bridgeTitle: "Data Bridge en modo de respaldo HTTP",
   },
   unauthorized: {
     label: "Unauthorized",
@@ -61,7 +67,7 @@ export function ConnectionStatusBar() {
       React.createElement(
         "div",
         { className: "connection-status-node", title: config.bridgeTitle },
-        React.createElement("span", { className: "connection-status-icon", "aria-hidden": "true" }, React.createElement("i", { className: config.icon })),
+        React.createElement("span", { className: "connection-status-icon", "aria-hidden": "true" }, React.createElement("i", { className: config.icon, "data-connection-bridge-icon": "" })),
         React.createElement("span", { className: "connection-status-label" }, "Data Bridge"),
       ),
       React.createElement("span", { className: "connection-status-text" }, config.label),
@@ -73,7 +79,12 @@ export function mountConnectionStatusBar(target = document.getElementById("conne
   if (!target) return null;
   const root = createRoot(target);
   root.render(React.createElement(ConnectionStatusBar));
-  return root;
+  return {
+    unmount() {
+      window.dispatchEvent(new CustomEvent("connection-status:unmount"));
+      root.unmount();
+    },
+  };
 }
 
 mountConnectionStatusBar();
