@@ -15,10 +15,10 @@ test('density map loads validated vessels through the read-only endpoint', () =>
   assert.match(indexSource, /getAuditAisEndpoint/);
   assert.match(indexSource, /fetch\(endpoint,[\s\S]*?method: 'GET'/);
   assert.match(indexSource, /loadValidatedAisDensityVessels/);
-  assert.match(indexSource, /audit-database-readonly/);
+  assert.match(indexSource, /fair-freight-background-readonly/);
 });
 
-test('Radar LIVE activation loads audited ais_vessels and refreshes the shared map store', () => {
+test('Radar LIVE activation loads audited ais_vessels into isolated fair-freight state', () => {
   const toggleStart = indexSource.indexOf('window.toggleLiveTracking = async function');
   const toggleEnd = indexSource.indexOf('window.isFirstLoad', toggleStart);
   const toggleSource = indexSource.slice(toggleStart, toggleEnd);
@@ -34,8 +34,10 @@ test('Radar LIVE activation loads audited ais_vessels and refreshes the shared m
   assert.match(toggleSource, /Radar LIVE actualizado con/);
   assert.match(loaderSource, /window\.getAuditAisEndpoint\(selectedTaxonomy\)/);
   assert.match(loaderSource, /await fetch\(endpoint/);
-  assert.match(loaderSource, /window\.GlobalStore\.rawVessels = validatedVessels\.slice\(\)/);
-  assert.match(loaderSource, /new CustomEvent\('ais:vessels-updated'/);
+  assert.match(loaderSource, /window\.setBackgroundAisData\(validatedVessels\)/);
+  assert.match(loaderSource, /new CustomEvent\('ais:background-data-updated'/);
+  assert.doesNotMatch(loaderSource, /window\.GlobalStore\.rawVessels = validatedVessels/);
+  assert.doesNotMatch(loaderSource, /new CustomEvent\('ais:vessels-updated'/);
 });
 
 test('density endpoints query ais_vessels directly without a compatibility view', () => {
@@ -164,6 +166,7 @@ test('parent taxonomies aggregate their real child vessel types without cross-fi
     filteredVesselsInitialized: true,
     getFilteredVessels: () => currentFilteredVessels,
   };
+  windowMock.renderFleet = currentFilteredVessels;
   windowMock.renderAisTaxonomyBreakdown = () => {};
   const counterStart = indexSource.indexOf('window.getDerivedFilteredAisVessels = function()');
   const counterEnd = indexSource.indexOf('window.reiniciarMemoriaBarridoAIS', counterStart);
@@ -173,19 +176,23 @@ test('parent taxonomies aggregate their real child vessel types without cross-fi
   );
 
   currentFilteredVessels = windowMock.filterVessels(vessels, 'Bulk Carrier');
+  windowMock.renderFleet = currentFilteredVessels;
   assert.equal(windowMock.renderFilteredAisCounters(), 2);
   assert.equal(elements.get('ais-density-count').textContent, '2');
 
   currentFilteredVessels = windowMock.filterVessels(vessels, 'type:cement');
+  windowMock.renderFleet = currentFilteredVessels;
   assert.equal(windowMock.renderFilteredAisCounters(), 1);
   assert.equal(elements.get('ais-density-count').textContent, '1');
 
   currentFilteredVessels = windowMock.filterVessels(vessels, ['type:general']);
+  windowMock.renderFleet = currentFilteredVessels;
   assert.deepEqual(currentFilteredVessels.map(vessel => vessel.ship_type), ['General Cargo']);
   assert.equal(windowMock.renderFilteredAisCounters(), 1);
   assert.equal(elements.get('buques-count').textContent, '1');
 
   currentFilteredVessels = windowMock.filterVessels(vessels, ['type:general', 'type:container']);
+  windowMock.renderFleet = currentFilteredVessels;
   assert.deepEqual(currentFilteredVessels.map(vessel => vessel.ship_type), ['General Cargo', 'Container Ship']);
 
   currentFilteredVessels = windowMock.filterVessels(vessels, ['ALL CARGO']);
@@ -260,7 +267,7 @@ test('density map restores globally filtered vessels without refetching', () => 
   const tabInitialization = indexSource.slice(indexSource.indexOf("if(tabId === 'ais')"), indexSource.indexOf("} else if (typeof destroyAisMap"));
   assert.doesNotMatch(tabInitialization, /resetAisDensityResults\(\)/);
   assert.match(tabInitialization, /getFilteredVessels\(\)/);
-  assert.match(tabInitialization, /updateAisMarkers\(persistedFilteredVessels\)/);
+  assert.match(tabInitialization, /updateAisMarkers\(\)/);
   assert.doesNotMatch(tabInitialization, /loadValidatedAisDensityVessels\(\)/);
 });
 
@@ -306,7 +313,7 @@ test('read-only response feeds rendering, counters, and freight calculation', ()
   assert.match(indexSource, /calculateAndDisplayAisFreight\(\)/);
 });
 
-test('main AIS KPI is derived only from the filtered vessel array', () => {
+test('main AIS KPI is derived only from renderFleet', () => {
   const derivedCounterStart = indexSource.indexOf('window.getDerivedFilteredAisVessels = function()');
   const derivedCounterEnd = indexSource.indexOf('// Global Store (Shared Memory)', derivedCounterStart);
   const derivedCounterSource = indexSource.slice(derivedCounterStart, derivedCounterEnd);
@@ -320,6 +327,7 @@ test('main AIS KPI is derived only from the filtered vessel array', () => {
   ];
   let breakdownVessels = null;
   const windowMock = {
+    renderFleet: filteredVessels,
     GlobalStore: {
       filteredVesselsInitialized: true,
       getFilteredVessels: () => filteredVessels
@@ -336,7 +344,7 @@ test('main AIS KPI is derived only from the filtered vessel array', () => {
   assert.equal(elements.get('buques-count').textContent, '2');
   assert.equal(breakdownVessels, filteredVessels);
 
-  windowMock.GlobalStore.filteredVesselsInitialized = false;
+  windowMock.renderFleet = [];
   assert.equal(windowMock.renderFilteredAisCounters(), 0);
   assert.equal(elements.get('ais-density-count').textContent, '0');
   assert.deepEqual(breakdownVessels, []);
@@ -393,8 +401,8 @@ test('Core PRO sends POL coordinates and a bounded radius to AIS endpoints', () 
 });
 
 test('Core PRO renders the globally filtered AIS fleet independently of route ports', () => {
-  assert.match(indexSource, /const renderableVessels = \(Array\.isArray\(vessels\)/);
-  assert.match(indexSource, /GlobalFleetGlobe\.updateVessels\(renderableVessels, 'density'\)/);
+  assert.match(indexSource, /const renderFleet = getDensityMapSourceVessels\(\)/);
+  assert.match(indexSource, /GlobalFleetGlobe\.updateVessels\(window\.renderFleet, 'density'\)/);
   assert.doesNotMatch(indexSource, /const renderableVessels = \(hasLoadingPort/);
 });
 
@@ -404,7 +412,8 @@ test('filtered AIS state is global and immediately redraws every globe', () => {
   assert.match(indexSource, /ais:filtered-vessels-updated/);
   assert.ok(globeSource.includes("window.addEventListener('ais:filtered-vessels-updated', syncAllViews)"));
   assert.ok(globeSource.includes('views.forEach((view) => updateVessels(null, view.key))'));
-  assert.ok(globeSource.includes('view.vessels = prepareVessels(getFilteredVessels())'));
+  assert.ok(globeSource.includes("key === 'density' && typeof window.getDensityMapSourceVessels === 'function'"));
+  assert.ok(globeSource.includes('view.vessels = prepareVessels(Array.isArray(densityVessels) ? densityVessels : getFilteredVessels())'));
 });
 
 test('Core PRO and Data Bridge share Globe.gl 2.46.1', () => {

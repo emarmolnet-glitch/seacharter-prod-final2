@@ -102,18 +102,6 @@ function mergeMeaningful(baseValue: unknown, incomingValue: unknown): unknown {
   return merged;
 }
 
-function readOrigins(value: unknown): VesselSourceOrigin[] {
-  const record = asRecord(value);
-  const rawOrigins = Array.isArray(record.source_origins)
-    ? record.source_origins
-    : Array.isArray(record.sourceOrigins)
-      ? record.sourceOrigins
-      : [];
-  return rawOrigins.filter((origin): origin is VesselSourceOrigin => (
-    origin === "MASTER" || origin === "DATABRIDGE" || origin === "AIS_LIVE" || origin === "OPENSHIPS"
-  ));
-}
-
 function applyOrigins(value: unknown, origins: VesselSourceOrigin[]) {
   const record = asRecord(value);
   const uniqueOrigins = [...new Set(origins)];
@@ -174,15 +162,12 @@ export function mergeTripleVesselSources(
         canonicalKey = primaryKey;
         mergedByKey.set(canonicalKey, existing);
       }
-      const existingOrigins = readOrigins(existing);
-      const incomingOrigins = readOrigins(row);
-      const origins = [...existingOrigins, ...incomingOrigins, origin];
       const merged = !existing
         ? asRecord(mergeMeaningful({}, row))
         : origin === "AIS_LIVE"
           ? mergeAisLive(existing, row)
           : asRecord(mergeMeaningful(existing, row));
-      const tagged = applyOrigins(merged, origins);
+      const tagged = applyOrigins(merged, [origin]);
       mergedByKey.set(canonicalKey, tagged);
       keyAliases.set(primaryKey, canonicalKey);
       keyAliases.set(fallbackKey, canonicalKey);
@@ -191,10 +176,24 @@ export function mergeTripleVesselSources(
     });
   };
 
-  mergeList(masterRows, "MASTER");
-  mergeList(dataBridgeRows, "DATABRIDGE");
-  mergeList(aisRows, "AIS_LIVE");
-  mergeList(openShipsRows, "OPENSHIPS");
+  const validOpenShipsRows = openShipsRows.filter((row) => row && typeof row === "object");
+  if (validOpenShipsRows.length > 0) {
+    mergeList(validOpenShipsRows, "OPENSHIPS");
+    return Array.from(mergedByKey.values());
+  }
 
-  return Array.from(mergedByKey.values());
+  const validAisRows = aisRows.filter((row) => row && typeof row === "object");
+  if (validAisRows.length > 0) {
+    mergeList(validAisRows, "AIS_LIVE");
+    return Array.from(mergedByKey.values());
+  }
+
+  const validDataBridgeRows = dataBridgeRows.filter((row) => row && typeof row === "object");
+  if (validDataBridgeRows.length > 0) {
+    mergeList(validDataBridgeRows, "DATABRIDGE");
+    return Array.from(mergedByKey.values());
+  }
+
+  void masterRows;
+  return [];
 }

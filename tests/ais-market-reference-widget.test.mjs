@@ -92,7 +92,7 @@ test('AIS market rates remain pending until AIS data or an active vessel confirm
   assert.match(indexSource, /hasAisData: false/);
   assert.match(indexSource, /setAisDataAvailability\?\.\(true,[\s\S]*manual-sweep-complete/);
   assert.match(indexSource, /const hasActiveVessel = Boolean\(selectedActiveVessel && typeof selectedActiveVessel === 'object'\)/);
-  assert.match(indexSource, /const hasAisData = window\.GlobalStore\?\.hasAisData === true \|\| hasCommittedMatchingState \|\| densitySourceVessels\.length > 0 \|\| hasActiveVessel;/);
+  assert.match(indexSource, /const hasAisData = window\.GlobalStore\?\.hasAisData === true \|\| hasCommittedMatchingState \|\| backgroundAisData\.length > 0 \|\| renderFleet\.length > 0 \|\| hasActiveVessel;/);
   assert.match(indexSource, /if \(nearbyCount <= 0 && !hasActiveVessel\) \{[\s\S]*renderPendingAisMarketReference\(\);[\s\S]*return;/);
 });
 

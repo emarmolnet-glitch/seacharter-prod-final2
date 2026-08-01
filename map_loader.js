@@ -805,6 +805,10 @@
 
     function pollAisProxyOnce(endpoint, mapInstance) {
         if (typeof fetch !== 'function') return Promise.resolve(null);
+        if (typeof window !== 'undefined' && window.shouldBlockSecondaryFleetSources?.()) {
+            stopAisProxyPolling();
+            return Promise.resolve(null);
+        }
         if (aisProxyPollingState.inFlight) return Promise.resolve(null);
 
         aisProxyPollingState.inFlight = true;
@@ -834,6 +838,10 @@
     }
 
     function startAisProxyPolling(endpoint, mapInstance, options) {
+        if (typeof window !== 'undefined' && window.shouldBlockSecondaryFleetSources?.()) {
+            stopAisProxyPolling();
+            return { started: false, reason: window.hasPriorityOpenShipsData?.() ? 'openships-priority-active' : 'openships-priority-pending' };
+        }
         const opts = options || {};
         aisProxyPollingState.endpoint = endpoint || aisProxyPollingState.endpoint;
         aisProxyPollingState.map = mapInstance || aisProxyPollingState.map || getDefaultAisMap();

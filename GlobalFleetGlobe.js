@@ -471,14 +471,12 @@
         if (!normalized || !view) return false;
         selectVessel(normalized, view.key);
         setAutoRotate(false, view.key);
-        const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-        return focusCoordinates(
-            normalized.lat,
-            normalized.lng,
-            view.key,
-            ACTIVE_VESSEL_FOCUS_ALTITUDE,
-            reducedMotion ? 0 : ACTIVE_VESSEL_TRANSITION_MS
-        );
+        view.globe.pointOfView({
+            lat: normalized.lat,
+            lng: normalized.lng,
+            altitude: 1.2
+        }, 1500);
+        return true;
     }
 
     function getScreenCoordinates(lat, lng, key = 'density', altitude = POINT_ALTITUDE) {

@@ -45,13 +45,15 @@ test('matching block consumes MATCHING_EXECUTION_SUCCESS', () => {
   assert.match(source, /`\$\{vessels\.length\} Buque\$\{vessels\.length === 1 \? '' : 's'\} en Caché`/);
 });
 
-test('Data Bridge send control stays disabled until matching has results', () => {
+test('Data Bridge send control depends only on the matching vessel array', () => {
   assert.match(source, /id="commercial-nlp-send-btn"[^>]*disabled[^>]*aria-disabled="true"[^>]*data-databridge-transmission="true"/);
-  assert.match(source, /function setDataBridgeTransmissionAvailability\(hasMatchingResults\)/);
+  assert.match(source, /function getDataBridgeTransmissionVessels\(\)[\s\S]*window\.matchingResultsState\?\.vessels/);
+  assert.match(source, /function setDataBridgeTransmissionAvailability\(matchedVessels = getDataBridgeTransmissionVessels\(\)\)/);
+  assert.match(source, /const enabled = vessels\.length > 0/);
   assert.match(source, /control\.disabled = !enabled/);
-  assert.match(source, /setDataBridgeTransmissionAvailability\(vessels\.length > 0\)/);
-  assert.match(source, /if \(matchingResultCount === 0\)[\s\S]*setDataBridgeTransmissionAvailability\?\.\(false\)[\s\S]*return/);
-  assert.match(source, /setDataBridgeTransmissionAvailability\?\.\(currentMatchingResultCount > 0\)/);
+  assert.match(source, /setDataBridgeTransmissionAvailability\(vessels\)/);
+  assert.match(source, /if \(matchedVessels\.length === 0\)[\s\S]*setDataBridgeTransmissionAvailability\?\.\(matchedVessels\)[\s\S]*return/);
+  assert.doesNotMatch(source, /sendBtn\.disabled = true/);
 });
 
 test('Data Bridge telemetry exposes processing, success and network error states', () => {
