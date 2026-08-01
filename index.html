@@ -7561,23 +7561,23 @@
                 <button
                     type="button"
                     id="btn-view-mode-owner"
-                    class="inline-flex items-center justify-center rounded-md px-1.5 py-1 text-base leading-none"
+                    class="inline-flex w-10 items-center justify-center rounded-md py-1.5 leading-none"
                     onclick="setGlobalViewMode('owner')"
                     aria-pressed="true"
                     title="Vista Armador (Shipowner): la demora es ingreso y el KPI principal es el TCE"
                 >
-                    <span aria-hidden="true">🚢</span>
+                    <span aria-hidden="true" class="text-[10px] font-bold tracking-wider uppercase">OWN</span>
                     <span class="sr-only">Vista Armador</span>
                 </button>
                 <button
                     type="button"
                     id="btn-view-mode-charterer"
-                    class="inline-flex items-center justify-center rounded-md px-1.5 py-1 text-base leading-none"
+                    class="inline-flex w-10 items-center justify-center rounded-md py-1.5 leading-none"
                     onclick="setGlobalViewMode('charterer')"
                     aria-pressed="false"
                     title="Vista Fletador (Charterer): la demora es penalización y el KPI principal es el coste por tonelada"
                 >
-                    <span aria-hidden="true">📦</span>
+                    <span aria-hidden="true" class="text-[10px] font-bold tracking-wider uppercase">CHR</span>
                     <span class="sr-only">Vista Fletador</span>
                 </button>
             </div>
@@ -58141,8 +58141,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             // --- Interruptor del header -----------------------------------------
             // Sólo icono a propósito: el rail derecho del header ya va sobrado de
-            // contenido para el ancho de su columna, así que el interruptor se queda
-            // en el mínimo posible (~55px) y la etiqueta vive en title + sr-only.
+            // contenido para el ancho de su columna, así que el interruptor mantiene
+            // un ancho compacto y la etiqueta técnica se complementa con title + sr-only.
             // El aspecto activo/inactivo se resuelve en CSS a partir de aria-pressed,
             // porque el tema claro fuerza `button { background:#FFF !important }` y las
             // utilidades de Tailwind no pueden ganar esa batalla de especificidad.
