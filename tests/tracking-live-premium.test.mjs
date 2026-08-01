@@ -34,6 +34,17 @@ test('tracking console supports contract lookup, polling and all six operational
   assert.match(stylesSource, /data-level="critical"/);
 });
 
+test('tracking console renders alert and audit collections dynamically', () => {
+  assert.match(scriptSource, /tracking-alert-count\$\{alerts\.length \? ' has-alerts' : ''\}/);
+  assert.match(scriptSource, />\$\{escapeTrackingHtml\(alerts\.length\)\}<\/span>/);
+  assert.match(scriptSource, /alerts\.map\(renderTrackingAlert\)/);
+  assert.match(scriptSource, /timeline\.map\(renderTrackingEvent\)/);
+  assert.match(scriptSource, /event\?\.occurred_at/);
+  assert.match(scriptSource, /event\?\.description \|\| event\?\.summary/);
+  assert.match(stylesSource, /\.tracking-alert-count\.has-alerts/);
+  assert.match(stylesSource, /\.tracking-event-time[\s\S]*font: 850/);
+});
+
 test('tracking console uses the SeaCharter light corporate theme', () => {
   assert.match(stylesSource, /--tracking-bg: #f1f5f9/);
   assert.match(stylesSource, /--tracking-surface: #ffffff/);
