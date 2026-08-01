@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+
+const [indexSource, scriptSource, stylesSource, endpointSource, migrationSource, norSource] = await Promise.all([
+  readFile(new URL('../index.html', import.meta.url), 'utf8'),
+  readFile(new URL('../tracking-live.js', import.meta.url), 'utf8'),
+  readFile(new URL('../tracking-live.css', import.meta.url), 'utf8'),
+  readFile(new URL('../netlify/functions/voyage-tracking.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../netlify/database/migrations/20260801150000_extend_voyage_live_tracking/migration.sql', import.meta.url), 'utf8'),
+  readFile(new URL('../netlify/functions/tender-nor.ts', import.meta.url), 'utf8'),
+]);
+
+test('advanced settings exposes Tracking Live directly after the broker directory', () => {
+  const agendaIndex = indexSource.indexOf('Agenda de Brokers');
+  const trackingIndex = indexSource.indexOf('Tracking Live (Premium)', agendaIndex);
+  const preferencesIndex = indexSource.indexOf('Mostrar FCL en barra superior', trackingIndex);
+
+  assert.ok(agendaIndex > -1);
+  assert.ok(trackingIndex > agendaIndex);
+  assert.ok(preferencesIndex > trackingIndex);
+  assert.match(indexSource, /tracking-pro-badge/);
+  assert.match(indexSource, /tracking-live\.css/);
+  assert.match(indexSource, /tracking-live\.js/);
+});
+
+test('tracking console supports contract lookup, polling and all six operational phases', () => {
+  assert.match(scriptSource, /\/api\/v1\/voyage\/tracking\/\$\{encodeURIComponent\(contractRef\)\}/);
+  assert.match(scriptSource, /TRACKING_POLL_INTERVAL = 30_000/);
+  assert.match(scriptSource, /case 1:/);
+  assert.match(scriptSource, /case 6:/);
+  assert.match(scriptSource, /Alertas en tiempo real/);
+  assert.match(stylesSource, /\.tracking-stepper/);
+  assert.match(stylesSource, /data-level="critical"/);
+});
+
+test('tracking endpoint validates references and returns only calculated operational data', () => {
+  assert.match(endpointSource, /path: "\/api\/v1\/voyage\/tracking\/:contractRef"/);
+  assert.match(endpointSource, /CONTRACT_REF_PATTERN/);
+  assert.match(endpointSource, /WHERE upper\(v\.contract_ref\) = \$1/);
+  assert.match(endpointSource, /haversineNm/);
+  assert.match(endpointSource, /Demurrage activo/);
+  assert.match(endpointSource, /Rendimiento crítico/);
+  assert.doesNotMatch(endpointSource, /password|api_key|secret/i);
+});
+
+test('incremental schema preserves applied migrations and adds an auditable event stream', () => {
+  assert.match(migrationSource, /ALTER TABLE "voyages"/);
+  assert.match(migrationSource, /ADD COLUMN IF NOT EXISTS "contract_ref"/);
+  assert.match(migrationSource, /CREATE TABLE IF NOT EXISTS "voyage_tracking_events"/);
+  assert.match(migrationSource, /voyage_tracking_events_timeline_idx/);
+  assert.match(norSource, /NOR_POD_TENDERED/);
+  assert.match(norSource, /nor_pod_tendered_at/);
+});
