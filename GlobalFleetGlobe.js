@@ -6,6 +6,8 @@
     const INITIAL_VIEW = Object.freeze({ lat: 12, lng: -24, altitude: 2.15 });
     const FOCUS_ALTITUDE = 1.8;
     const CAMERA_TRANSITION_MS = 700;
+    const ACTIVE_VESSEL_FOCUS_ALTITUDE = 0.72;
+    const ACTIVE_VESSEL_TRANSITION_MS = 1200;
     const POINT_COLOR = 'rgba(0, 255, 255, 0.8)';
     const POINT_HOVER_COLOR = '#FFFFFF';
     const POINT_ALTITUDE = 0.008;
@@ -463,6 +465,22 @@
         return focusCoordinates(normalized.lat, normalized.lng, key);
     }
 
+    function focusActiveVessel(vessel, key = 'density') {
+        const normalized = normalizeVessel(vessel);
+        const view = getView(key) || getView(DEFAULT_KEY);
+        if (!normalized || !view) return false;
+        selectVessel(normalized, view.key);
+        setAutoRotate(false, view.key);
+        const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+        return focusCoordinates(
+            normalized.lat,
+            normalized.lng,
+            view.key,
+            ACTIVE_VESSEL_FOCUS_ALTITUDE,
+            reducedMotion ? 0 : ACTIVE_VESSEL_TRANSITION_MS
+        );
+    }
+
     function getScreenCoordinates(lat, lng, key = 'density', altitude = POINT_ALTITUDE) {
         const view = getView(key) || getView(DEFAULT_KEY);
         const normalized = normalizeRoutePoint({ lat, lng });
@@ -787,6 +805,16 @@
                     setSelectedVessel(view, vessel);
                     setAutoRotate(false, key);
                     applyPointInteractionStyle(view);
+                    if (typeof window.selectShip === 'function') {
+                        window.selectShip(
+                            vessel.vesselName,
+                            vessel.mmsi,
+                            vessel.lat,
+                            vessel.lng,
+                            vessel.imo,
+                            vessel.destination
+                        );
+                    }
                 })
                 .pointsTransitionDuration(0)
                 .arcsData([])
@@ -847,6 +875,12 @@
 
     window.addEventListener('ais:filtered-vessels-updated', syncAllViews);
     window.addEventListener('databridge:filtered-vessels-updated', syncAllViews);
+    window.addEventListener('vessel-selection:changed', (event) => {
+        const activeVessel = event?.detail?.activeVessel
+            || window.GlobalStore?.activeVessel
+            || window.activeVessel;
+        focusActiveVessel(activeVessel, 'density');
+    });
     window.getGlobalFleetGlobeDiagnostics = () => ({
         diagnostics: window.globalFleetGlobeDiagnostics || null,
         lastError: window.globalFleetGlobeLastError || null
@@ -862,6 +896,7 @@
         setRouteResult,
         selectVessel,
         focusVessel,
+        focusActiveVessel,
         focusCoordinates,
         getScreenCoordinates,
         resetCamera,

@@ -29,10 +29,19 @@ test('density map mounts from combined local, OpenShips, and Data Bridge vessels
   assert.match(mapSource, /updateAisMarkers\(getDensityMapSourceVessels\(\)\)/);
 });
 
-test('density globe restores the globally selected vessel without camera movement', () => {
+test('density globe restores the globally selected vessel without duplicating camera movement', () => {
   assert.match(mapSource, /function syncDensityActiveVessel\(vessels = getDensityMapSourceVessels\(\)\)/);
   assert.match(mapSource, /window\.GlobalFleetGlobe\.selectVessel\(activeVessel, 'density'\)/);
   assert.doesNotMatch(mapSource, /syncDensityActiveVessel[\s\S]*focusVessel\(activeVessel/);
+});
+
+test('globe selection uses the shared vessel state and focuses with reduced-motion support', () => {
+  const globeSource = readFileSync(new URL('../GlobalFleetGlobe.js', import.meta.url), 'utf8');
+  assert.match(globeSource, /window\.selectShip\([\s\S]*vessel\.vesselName,[\s\S]*vessel\.mmsi,[\s\S]*vessel\.lat,[\s\S]*vessel\.lng/);
+  assert.match(globeSource, /window\.addEventListener\('vessel-selection:changed'/);
+  assert.match(globeSource, /focusActiveVessel\(activeVessel, 'density'\)/);
+  assert.match(globeSource, /matchMedia\?\.\('\(prefers-reduced-motion: reduce\)'\)/);
+  assert.match(globeSource, /ACTIVE_VESSEL_FOCUS_ALTITUDE = 0\.72/);
 });
 
 test('local matching refreshes mounted density map from the state event', () => {
