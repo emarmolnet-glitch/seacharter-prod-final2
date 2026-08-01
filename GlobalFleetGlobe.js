@@ -13,7 +13,8 @@
     const POINT_HOVER_RADIUS_FACTOR = 1.45;
     const VESSEL_MARKER_ALTITUDE = 0.012;
     const VESSEL_MARKER_BEARING_DISTANCE_DEG = 0.42;
-    const VESSEL_MARKER_COLOR = 'rgba(226, 232, 240, 0.92)';
+    const VESSEL_MARKER_COLOR = 'rgba(203, 213, 225, 0.92)';
+    const VESSEL_ACTIVE_COLOR = '#2DD4BF';
     const TRANSPARENT_POINT_COLOR = 'rgba(255, 255, 255, 0.001)';
     const PATH_STYLE = Object.freeze({ color: '#00FFFF', width: 2, simplify: true });
     const BALLAST_PATH_COLOR = '#F59E0B';
@@ -266,6 +267,7 @@
                 </svg>
             </span>`;
         marker.style.setProperty('--vessel-marker-color', VESSEL_MARKER_COLOR);
+        marker.style.setProperty('--vessel-active-color', VESSEL_ACTIVE_COLOR);
         marker.style.setProperty('--vessel-marker-scale', String(getVesselMarkerScale(view)));
         view.vesselElements.set(vessel, marker);
         return marker;
@@ -431,12 +433,33 @@
         }) || null;
     }
 
-    function focusVessel(vessel, key = 'density') {
+    function getVesselIdentity(vessel) {
+        if (!vessel) return null;
+        const imo = String(vessel.imo || '').replace(/\D/g, '');
+        const mmsi = String(vessel.mmsi || '').replace(/\D/g, '');
+        return imo || mmsi ? { imo, mmsi } : null;
+    }
+
+    function setSelectedVessel(view, vessel) {
+        view.selectedVessel = vessel || null;
+        view.selectedVesselIdentity = getVesselIdentity(vessel);
+    }
+
+    function selectVessel(vessel, key = 'density') {
         const normalized = normalizeVessel(vessel);
         const view = getView(key) || getView(DEFAULT_KEY);
         if (!normalized || !view) return false;
         view.selectedVessel = findMatchingVessel(view.vessels, normalized);
+        view.selectedVesselIdentity = getVesselIdentity(normalized);
         applyPointInteractionStyle(view);
+        return Boolean(view.selectedVessel);
+    }
+
+    function focusVessel(vessel, key = 'density') {
+        const normalized = normalizeVessel(vessel);
+        const view = getView(key) || getView(DEFAULT_KEY);
+        if (!normalized || !view) return false;
+        selectVessel(normalized, key);
         return focusCoordinates(normalized.lat, normalized.lng, key);
     }
 
@@ -481,11 +504,14 @@
         const view = getView(key);
         if (!view) return [];
         view.hoveredVessel = null;
-        const selectedVessel = view.selectedVessel;
+        const selectedVessel = view.selectedVesselIdentity || view.selectedVessel;
         if (_vessels !== null && _vessels !== undefined) {
             view.vessels = prepareVessels(_vessels);
         } else {
-            view.vessels = prepareVessels(getFilteredVessels());
+            const densityVessels = key === 'density' && typeof window.getDensityMapSourceVessels === 'function'
+                ? window.getDensityMapSourceVessels()
+                : null;
+            view.vessels = prepareVessels(Array.isArray(densityVessels) ? densityVessels : getFilteredVessels());
         }
         view.selectedVessel = findMatchingVessel(view.vessels, selectedVessel);
         try {
@@ -713,6 +739,7 @@
             pointRadius: getPointRadius(INITIAL_VIEW.altitude),
             hoveredVessel: null,
             selectedVessel: null,
+            selectedVesselIdentity: null,
             vesselElements: new Map(),
             vesselOrientationFrameId: null,
             hoverStyleFrameId: null,
@@ -757,7 +784,7 @@
                     schedulePointInteractionStyle(view);
                 })
                 .onPointClick((vessel) => {
-                    view.selectedVessel = vessel || null;
+                    setSelectedVessel(view, vessel);
                     setAutoRotate(false, key);
                     applyPointInteractionStyle(view);
                 })
@@ -833,6 +860,7 @@
         setRoute,
         setRouteSegments,
         setRouteResult,
+        selectVessel,
         focusVessel,
         focusCoordinates,
         getScreenCoordinates,
