@@ -19335,6 +19335,16 @@
         }
         window.toggleMatchingAuditSelection = toggleMatchingAuditSelection;
 
+        function handleMatchingVesselCardClick(event) {
+            if (event?.target?.closest('button, a, input, select, textarea, label, [data-no-row-select]')) return;
+            toggleMatchingAuditSelection(event);
+            const focusId = event?.currentTarget?.dataset?.mapFocusId;
+            if (focusId && typeof window.focusMatchingVesselOnMap === 'function') {
+                void window.focusMatchingVesselOnMap(event, focusId);
+            }
+        }
+        window.handleMatchingVesselCardClick = handleMatchingVesselCardClick;
+
         function downloadFrozenReport() {
             try {
                 let vesselsToSend = [];
@@ -21236,7 +21246,7 @@
                         const sourceOriginLabel = sourceOrigins.join(' + ');
 
                         const cardHtml = `
-                            <div class="matching-vessel-card border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : 'border-red-200 bg-red-50/40 opacity-80 cursor-pointer'} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-vessel-imo="${v.imo || ''}" data-source-origin="${sourceOriginLabel}" data-map-focus-id="${mapFocusId}" onclick="toggleMatchingAuditSelection(event)">
+                            <div class="matching-vessel-card border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : 'border-red-200 bg-red-50/40 opacity-80 cursor-pointer'} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-vessel-imo="${v.imo || ''}" data-source-origin="${sourceOriginLabel}" data-map-focus-id="${mapFocusId}" onclick="handleMatchingVesselCardClick(event)">
                                 <!-- Rank Ribbon -->
                                 <div class="absolute top-4 right-5 flex items-center gap-2">
                                     ${estimatedDwtBadge}
@@ -24424,8 +24434,11 @@
                 const dwt = Number(vessel.dwt) || 0;
                 const distance = Number(ais.currentDistanceToLoadPort);
                 const score = Number(scores.overall) || 0;
+                window.matchingMapFocusPayloads = window.matchingMapFocusPayloads || {};
+                const mapFocusId = `matching-cache-focus-${index}-${String(imo || vesselName).replace(/[^a-z0-9_-]/gi, '')}`;
+                window.matchingMapFocusPayloads[mapFocusId] = match;
                 return `
-                    <article class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" data-matching-cache-card="true">
+                    <article class="matching-vessel-card cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-teal-300 hover:shadow-md" data-matching-cache-card="true" data-map-focus-id="${mapFocusId}" onclick="handleMatchingVesselCardClick(event)">
                         <div class="flex items-start justify-between gap-4">
                             <div class="min-w-0">
                                 <p class="text-[10px] font-black uppercase tracking-wider text-[#004e64]">Resultado #${index + 1} · Caché validada</p>
@@ -25662,6 +25675,237 @@
             };
         }
 
+        let vesselQuickInfoState = null;
+
+        function escapeVesselQuickInfo(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function getVesselQuickInfoScopes(source) {
+            const scopes = [];
+            const queue = [source];
+            const visited = new Set();
+            while (queue.length) {
+                const current = queue.shift();
+                if (!current || typeof current !== 'object' || Array.isArray(current) || visited.has(current)) continue;
+                visited.add(current);
+                scopes.push(current);
+                ['vessel', 'ais', 'scores', 'audit', 'route', 'technical', 'source_payload', 'sourcePayload'].forEach(key => {
+                    if (current[key] && typeof current[key] === 'object') queue.push(current[key]);
+                });
+            }
+            return scopes;
+        }
+
+        function getVesselQuickInfoValue(source, keys) {
+            const scopes = getVesselQuickInfoScopes(source);
+            for (const scope of scopes) {
+                for (const key of keys) {
+                    if (scope[key] !== undefined && scope[key] !== null && scope[key] !== '') return scope[key];
+                }
+            }
+            return null;
+        }
+
+        function getVesselQuickInfoNumber(source, keys) {
+            const value = getVesselQuickInfoValue(source, keys);
+            const number = Number.parseFloat(String(value ?? '').replace(/[^0-9.+-]/g, ''));
+            return Number.isFinite(number) ? number : null;
+        }
+
+        function getVesselQuickInfoInputNumber(ids) {
+            for (const id of ids) {
+                const value = document.getElementById(id)?.value;
+                const number = Number.parseFloat(String(value ?? '').replace(/[^0-9.+-]/g, ''));
+                if (Number.isFinite(number) && number > 0) return number;
+            }
+            return null;
+        }
+
+        function getVesselQuickInfoPol(source) {
+            const inputName = document.getElementById('port-pol')?.value
+                || document.getElementById('match-load-port')?.value
+                || window.State?.pol
+                || getVesselQuickInfoValue(source, ['polName', 'loadPort', 'loadingPort']);
+            let coordinates = null;
+            if (typeof getAisOperationalPort === 'function') coordinates = getAisOperationalPort('POL');
+            if (!coordinates && inputName && typeof findPortData === 'function') coordinates = findPortData(inputName);
+            const lat = Number(coordinates?.lat ?? coordinates?.latitude);
+            const lon = Number(coordinates?.lon ?? coordinates?.lng ?? coordinates?.longitude);
+            return {
+                name: String(inputName || coordinates?.name || 'POL').trim() || 'POL',
+                lat: Number.isFinite(lat) ? lat : null,
+                lon: Number.isFinite(lon) ? lon : null
+            };
+        }
+
+        function findVesselQuickInfoSource(identity) {
+            const collections = [
+                window.aisVesselsData,
+                window.GlobalFleetGlobe?.getVessels?.('density'),
+                window.dataBridgeLocalCandidates,
+                window.dataBridgeGlobalCandidates,
+                window.lastMatchingEngineResults
+            ];
+            const normalizedImo = String(identity?.imo || '').replace(/\D/g, '');
+            const normalizedMmsi = String(identity?.mmsi || '').replace(/\D/g, '');
+            const normalizedName = String(identity?.name || '').trim().toLowerCase();
+            for (const collection of collections) {
+                if (!Array.isArray(collection)) continue;
+                const match = collection.find(item => {
+                    const imo = String(getVesselQuickInfoValue(item, ['imo', 'IMO', 'imo_number']) || '').replace(/\D/g, '');
+                    const mmsi = String(getVesselQuickInfoValue(item, ['mmsi', 'MMSI']) || '').replace(/\D/g, '');
+                    const name = String(getVesselQuickInfoValue(item, ['vesselName', 'vessel_name', 'name', 'ShipName']) || '').trim().toLowerCase();
+                    return (normalizedImo && imo === normalizedImo)
+                        || (normalizedMmsi && mmsi === normalizedMmsi)
+                        || (normalizedName && name === normalizedName);
+                });
+                if (match) return match;
+            }
+            return identity || {};
+        }
+
+        function hideVesselQuickInfoOverlay() {
+            if (!vesselQuickInfoState) return;
+            if (vesselQuickInfoState.animationFrame) cancelAnimationFrame(vesselQuickInfoState.animationFrame);
+            if (vesselQuickInfoState.map && vesselQuickInfoState.mapMoveHandler) {
+                vesselQuickInfoState.map.off?.('move', vesselQuickInfoState.mapMoveHandler);
+                vesselQuickInfoState.map.off?.('zoom', vesselQuickInfoState.mapMoveHandler);
+                vesselQuickInfoState.map.off?.('resize', vesselQuickInfoState.mapMoveHandler);
+            }
+            vesselQuickInfoState.overlay?.remove();
+            vesselQuickInfoState = null;
+        }
+        window.hideVesselQuickInfoOverlay = hideVesselQuickInfoOverlay;
+
+        function positionVesselQuickInfoOverlay() {
+            const state = vesselQuickInfoState;
+            if (!state?.overlay?.isConnected || !state.host?.isConnected) return;
+            let point = null;
+            if (state.mapType === 'mapbox' && typeof state.map?.project === 'function') {
+                const projected = state.map.project([state.lon, state.lat]);
+                point = { x: Number(projected?.x), y: Number(projected?.y) };
+            } else if (state.mapType === 'leaflet' && typeof state.map?.latLngToContainerPoint === 'function') {
+                const projected = state.map.latLngToContainerPoint([state.lat, state.lon]);
+                point = { x: Number(projected?.x), y: Number(projected?.y) };
+            } else if (window.GlobalFleetGlobe?.getScreenCoordinates) {
+                point = window.GlobalFleetGlobe.getScreenCoordinates(state.lat, state.lon, state.globeKey || 'density');
+            }
+            if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
+            const overlayWidth = state.overlay.offsetWidth || 320;
+            const overlayHeight = state.overlay.offsetHeight || 190;
+            const x = Math.min(Math.max(point.x, overlayWidth / 2 + 10), state.host.clientWidth - overlayWidth / 2 - 10);
+            const y = Math.min(Math.max(point.y, 12), state.host.clientHeight - 12);
+            state.overlay.dataset.placement = y < overlayHeight + 36 ? 'bottom' : 'top';
+            state.overlay.style.setProperty('--quick-info-x', `${x}px`);
+            state.overlay.style.setProperty('--quick-info-y', `${y}px`);
+        }
+
+        function showVesselQuickInfoOverlay(options = {}) {
+            const host = options.host;
+            const lat = Number(options.lat);
+            const lon = Number(options.lon);
+            if (!host || !Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+            hideVesselQuickInfoOverlay();
+
+            const source = options.source || {};
+            const name = options.name || getVesselQuickInfoValue(source, ['vesselName', 'vessel_name', 'name', 'ShipName']) || 'Buque seleccionado';
+            const imo = options.imo || getVesselQuickInfoValue(source, ['imo', 'IMO', 'imo_number']) || 'N/D';
+            const score = options.score ?? getVesselQuickInfoNumber(source, ['overall', 'profitabilityScore', 'profitability_score', 'commercialScore', 'matchScore', 'score']);
+            const draft = options.draft ?? getVesselQuickInfoNumber(source, ['currentDraft', 'current_draft', 'draft', 'Draft', 'draft_meters', 'calado']);
+            const dwt = options.dwt ?? getVesselQuickInfoNumber(source, ['dwt', 'DWT', 'deadweight', 'deadweightTonnage']);
+            const draftLimit = options.draftLimit ?? getVesselQuickInfoInputNumber(['match-max-draft', 'port-pol-draft', 'vessel-draft']);
+            const dwtLimit = options.dwtLimit ?? getVesselQuickInfoInputNumber(['match-quantity', 'cargo-qty']);
+            const pol = options.pol || getVesselQuickInfoPol(source);
+            let distanceNm = Number(options.distanceNm);
+            if (!Number.isFinite(distanceNm)) distanceNm = getVesselQuickInfoNumber(source, ['currentDistanceToLoadPort', 'distanceToPol', 'distance_to_pol', 'distanceNm']);
+            if (!Number.isFinite(distanceNm) && Number.isFinite(pol?.lat) && Number.isFinite(pol?.lon)) {
+                distanceNm = typeof haversine === 'function'
+                    ? haversine(lat, lon, pol.lat, pol.lon)
+                    : null;
+            }
+
+            const formatMetric = (value, digits = 1) => Number.isFinite(Number(value))
+                ? Number(value).toLocaleString(undefined, { maximumFractionDigits: digits })
+                : 'N/D';
+            const scoreLabel = Number.isFinite(Number(score)) ? `${Math.round(Number(score))} pts` : 'N/D pts';
+            const distanceLabel = Number.isFinite(distanceNm)
+                ? `${formatMetric(distanceNm, 0)} NM a POL · ${escapeVesselQuickInfo(pol?.name || 'POL')}`
+                : `Distancia N/D · ${escapeVesselQuickInfo(pol?.name || 'POL')}`;
+            const draftLabel = `${formatMetric(draft)} m${Number.isFinite(Number(draftLimit)) ? ` / límite ${formatMetric(draftLimit)} m` : ' / límite N/D'}`;
+            const dwtLabel = `${formatMetric(dwt, 0)} MT${Number.isFinite(Number(dwtLimit)) ? ` / requerido ${formatMetric(dwtLimit, 0)} MT` : ' / requerido N/D'}`;
+
+            const overlay = document.createElement('section');
+            overlay.className = 'vessel-quick-info';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-label', `Información rápida de ${name}`);
+            overlay.innerHTML = `
+                <div class="vessel-quick-info__header">
+                    <div class="min-w-0">
+                        <p class="vessel-quick-info__eyebrow">Quick Info · Fletamento</p>
+                        <h4 class="vessel-quick-info__title">${escapeVesselQuickInfo(name)}</h4>
+                        <div class="vessel-quick-info__meta">
+                            <span>IMO ${escapeVesselQuickInfo(imo)}</span>
+                            <span aria-hidden="true">·</span>
+                            <span class="vessel-quick-info__score">${scoreLabel}</span>
+                        </div>
+                    </div>
+                    <button type="button" class="vessel-quick-info__close" aria-label="Cerrar ficha rápida" title="Cerrar">
+                        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div class="vessel-quick-info__metrics">
+                    <div class="vessel-quick-info__metric">
+                        <span class="vessel-quick-info__icon"><i class="fa-solid fa-route" aria-hidden="true"></i></span>
+                        <div><span class="vessel-quick-info__label">Distancia al POL</span><span class="vessel-quick-info__value">${distanceLabel}</span></div>
+                    </div>
+                    <div class="vessel-quick-info__metric">
+                        <span class="vessel-quick-info__icon"><i class="fa-solid fa-water" aria-hidden="true"></i></span>
+                        <div><span class="vessel-quick-info__label">Calado actual / límite</span><span class="vessel-quick-info__value">${draftLabel}</span></div>
+                    </div>
+                    <div class="vessel-quick-info__metric">
+                        <span class="vessel-quick-info__icon"><i class="fa-solid fa-weight-hanging" aria-hidden="true"></i></span>
+                        <div><span class="vessel-quick-info__label">DWT / carga requerida</span><span class="vessel-quick-info__value">${dwtLabel}</span></div>
+                    </div>
+                </div>
+            `;
+            host.appendChild(overlay);
+            vesselQuickInfoState = {
+                overlay,
+                host,
+                lat,
+                lon,
+                map: options.map || null,
+                mapType: options.mapType || 'globe',
+                globeKey: options.globeKey || 'density',
+                animationFrame: null,
+                mapMoveHandler: null
+            };
+            overlay.querySelector('.vessel-quick-info__close')?.addEventListener('click', hideVesselQuickInfoOverlay);
+
+            if ((vesselQuickInfoState.mapType === 'mapbox' || vesselQuickInfoState.mapType === 'leaflet') && vesselQuickInfoState.map) {
+                vesselQuickInfoState.mapMoveHandler = positionVesselQuickInfoOverlay;
+                vesselQuickInfoState.map.on?.('move', vesselQuickInfoState.mapMoveHandler);
+                vesselQuickInfoState.map.on?.('zoom', vesselQuickInfoState.mapMoveHandler);
+                vesselQuickInfoState.map.on?.('resize', vesselQuickInfoState.mapMoveHandler);
+                requestAnimationFrame(positionVesselQuickInfoOverlay);
+            } else {
+                const trackGlobeAnchor = () => {
+                    if (!vesselQuickInfoState?.overlay?.isConnected) return;
+                    positionVesselQuickInfoOverlay();
+                    vesselQuickInfoState.animationFrame = requestAnimationFrame(trackGlobeAnchor);
+                };
+                vesselQuickInfoState.animationFrame = requestAnimationFrame(trackGlobeAnchor);
+            }
+            return true;
+        }
+        window.showVesselQuickInfoOverlay = showVesselQuickInfoOverlay;
+
         async function focusMatchingVesselOnMap(event, focusId) {
             if (event?.target?.closest('button, a, input, select, textarea, [data-no-map-focus]')) return;
             const match = window.matchingMapFocusPayloads?.[focusId];
@@ -25703,20 +25947,29 @@
                 if (matchingTargetPopup) matchingTargetPopup.remove();
                 const markerEl = document.createElement('div');
                 markerEl.className = 'matching-target-marker';
-                markerEl.innerHTML = '<div class="w-5 h-5 rounded-full bg-sky-500 border-2 border-white shadow-lg ring-4 ring-sky-400/30"></div>';
+                markerEl.innerHTML = '<div class="w-5 h-5 rounded-full bg-teal-500 border-2 border-white shadow-lg ring-4 ring-teal-400/30"></div>';
                 const name = vessel.vesselName || match.ais?.vesselName || origin.name;
-                matchingTargetPopup = new mapboxgl.Popup({ offset: 20, className: 'seacharter-clean-popup' }).setHTML(`
-                    <div class="text-xs text-slate-700">
-                        <div class="font-black text-slate-900 uppercase mb-1">${name}</div>
-                        <div>Distancia Lastre Real: <strong>${Math.round(route.distance).toLocaleString()} NM</strong></div>
-                        <div>ETA estimado al POL: <strong>${etaText}</strong></div>
-                    </div>
-                `);
                 matchingTargetMarker = new mapboxgl.Marker({ element: markerEl, anchor: 'center' })
                     .setLngLat([origin.lon, origin.lat])
-                    .setPopup(matchingTargetPopup)
                     .addTo(routeMap);
-                matchingTargetPopup.addTo(routeMap).setLngLat([origin.lon, origin.lat]);
+                matchingTargetPopup = null;
+                showVesselQuickInfoOverlay({
+                    host: document.getElementById('map-host'),
+                    map: routeMap,
+                    mapType: 'mapbox',
+                    lat: origin.lat,
+                    lon: origin.lon,
+                    source: match,
+                    name,
+                    imo: vessel.imo || match.ais?.imo,
+                    score: match.scores?.overall,
+                    distanceNm: route.distance,
+                    pol: { name: pol.name || document.getElementById('port-pol')?.value || 'POL', lat: pol.lat, lon: pol.lon },
+                    draft: vessel.currentDraft ?? vessel.current_draft ?? vessel.draft ?? match.ais?.draft,
+                    dwt: vessel.dwt,
+                    draftLimit: getVesselQuickInfoInputNumber(['match-max-draft', 'port-pol-draft']),
+                    dwtLimit: getVesselQuickInfoInputNumber(['match-quantity', 'cargo-qty'])
+                });
             };
             if (routeMap.loaded()) {
                 runFocus();
@@ -46097,12 +46350,32 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (window.GlobalFleetGlobe?.getInstance('density')) {
                 globalOpportunitiesState.focusedMarker = createGlobalOpportunityMarker(candidate);
                 window.GlobalFleetGlobe.focusVessel(candidate, 'density');
+                showVesselQuickInfoOverlay({
+                    host: document.getElementById('ais-map')?.parentElement,
+                    mapType: 'globe',
+                    globeKey: 'density',
+                    lat: candidate.latitude,
+                    lon: candidate.longitude,
+                    source: candidate,
+                    name: candidate.vesselName,
+                    imo: candidate.imo
+                });
                 return;
             }
             if (globalOpportunitiesState.focusedMarker) aisMap.removeLayer(globalOpportunitiesState.focusedMarker);
             globalOpportunitiesState.focusedMarker = createGlobalOpportunityMarker(candidate);
             aisMap.setView([candidate.latitude, candidate.longitude], Math.max(aisMap.getZoom(), 7), { animate: true });
             globalOpportunitiesState.focusedMarker?.openPopup();
+            showVesselQuickInfoOverlay({
+                host: document.getElementById('ais-map')?.parentElement,
+                map: aisMap,
+                mapType: 'leaflet',
+                lat: candidate.latitude,
+                lon: candidate.longitude,
+                source: candidate,
+                name: candidate.vesselName,
+                imo: candidate.imo
+            });
         }
 
         function setGlobalOpportunityCandidates(candidates) {
@@ -46203,8 +46476,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
                 // 2. Automatically locate on the map
                 const mapAIS = window.mapaAIS || window.mapAIS || window.map;
+                const usesDensityGlobe = Boolean(window.GlobalFleetGlobe?.getInstance('density'));
                 if (mapAIS) {
-                    if (window.GlobalFleetGlobe?.getInstance('density')) {
+                    if (usesDensityGlobe) {
                         window.GlobalFleetGlobe.focusVessel({ name, vesselName: name, mmsi, imo, lat, lng: lon, latitude: lat, longitude: lon }, 'density');
                     } else {
                         mapAIS.setView([lat, lon], 10); // Zooms in on the ship
@@ -46216,6 +46490,21 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                             }
                         });
                     }
+                }
+                const quickInfoSource = findVesselQuickInfoSource({ name, vesselName: name, mmsi, imo, lat, lon, latitude: lat, longitude: lon });
+                const densityMapHost = document.getElementById('ais-map')?.parentElement;
+                if (densityMapHost) {
+                    showVesselQuickInfoOverlay({
+                        host: densityMapHost,
+                        map: usesDensityGlobe ? null : mapAIS,
+                        mapType: usesDensityGlobe ? 'globe' : 'leaflet',
+                        globeKey: 'density',
+                        lat,
+                        lon,
+                        source: quickInfoSource,
+                        name,
+                        imo
+                    });
                 }
                 console.log(`Selected: ${name} (${mmsi}) at coordinates ${lat}, ${lon}, IMO: ${imo}, Dest: ${destination}`);
             };

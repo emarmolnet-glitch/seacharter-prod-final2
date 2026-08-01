@@ -169,7 +169,8 @@
     const DATABRIDGE_POINT_COLOR = '#00D2FF';
     const RADAR_LIVE_POINT_COLOR = '#10B981';
 
-    function getVesselPointColor(vessel, hoveredVessel) {
+    function getVesselPointColor(vessel, hoveredVessel, selectedVessel) {
+        if (vessel === selectedVessel) return '#2DD4BF';
         if (vessel === hoveredVessel) return POINT_HOVER_COLOR;
         const source = String(vessel?.data_source || vessel?.data_source_type || vessel?.source || '').toLowerCase();
         if (source === 'databridge' || source === 'cartera' || source === 'en_cartera') {
@@ -333,7 +334,32 @@
 
     function focusVessel(vessel, key = 'density') {
         const normalized = normalizeVessel(vessel);
-        return normalized ? focusCoordinates(normalized.lat, normalized.lng, key) : false;
+        const view = getView(key) || getView(DEFAULT_KEY);
+        if (!normalized || !view) return false;
+        const normalizedImo = String(normalized.imo || '').replace(/\D/g, '');
+        const normalizedMmsi = String(normalized.mmsi || '').replace(/\D/g, '');
+        const normalizedName = String(normalized.vesselName || '').trim().toLowerCase();
+        view.selectedVessel = view.vessels.find(candidate => {
+            const candidateImo = String(candidate.imo || '').replace(/\D/g, '');
+            const candidateMmsi = String(candidate.mmsi || '').replace(/\D/g, '');
+            const candidateName = String(candidate.vesselName || '').trim().toLowerCase();
+            return (normalizedImo && normalizedImo === candidateImo)
+                || (normalizedMmsi && normalizedMmsi === candidateMmsi)
+                || (normalizedName && normalizedName === candidateName)
+                || (Math.abs(candidate.lat - normalized.lat) < 0.0001 && Math.abs(candidate.lng - normalized.lng) < 0.0001);
+        }) || null;
+        applyPointInteractionStyle(view);
+        return focusCoordinates(normalized.lat, normalized.lng, key);
+    }
+
+    function getScreenCoordinates(lat, lng, key = 'density', altitude = POINT_ALTITUDE) {
+        const view = getView(key) || getView(DEFAULT_KEY);
+        const normalized = normalizeRoutePoint({ lat, lng });
+        if (!view || !normalized || typeof view.globe?.getScreenCoords !== 'function') return null;
+        const coordinates = view.globe.getScreenCoords(normalized.lat, normalized.lng, altitude);
+        return Number.isFinite(Number(coordinates?.x)) && Number.isFinite(Number(coordinates?.y))
+            ? { x: Number(coordinates.x), y: Number(coordinates.y) }
+            : null;
     }
 
     function focusFirstVessel(view) {
@@ -353,9 +379,9 @@
     function applyPointInteractionStyle(view) {
         if (!view?.globe) return;
         view.globe
-            .pointColor((vessel) => getVesselPointColor(vessel, view.hoveredVessel))
-            .pointAltitude((vessel) => vessel === view.hoveredVessel ? POINT_HOVER_ALTITUDE : POINT_ALTITUDE)
-            .pointRadius((vessel) => vessel === view.hoveredVessel ? view.pointRadius * POINT_HOVER_RADIUS_FACTOR : view.pointRadius);
+            .pointColor((vessel) => getVesselPointColor(vessel, view.hoveredVessel, view.selectedVessel))
+            .pointAltitude((vessel) => vessel === view.hoveredVessel || vessel === view.selectedVessel ? POINT_HOVER_ALTITUDE : POINT_ALTITUDE)
+            .pointRadius((vessel) => vessel === view.hoveredVessel || vessel === view.selectedVessel ? view.pointRadius * POINT_HOVER_RADIUS_FACTOR : view.pointRadius);
     }
 
     function updateVessels(_vessels, key = DEFAULT_KEY) {
@@ -584,6 +610,7 @@
             portLabels: [],
             pointRadius: getPointRadius(INITIAL_VIEW.altitude),
             hoveredVessel: null,
+            selectedVessel: null,
             hoverStyleFrameId: null,
             autoRotate: options.autoRotate !== false,
             hasFocusedVessel: false,
@@ -607,9 +634,9 @@
                 .atmosphereAltitude(0.16)
                 .pointLat('lat')
                 .pointLng('lng')
-                .pointColor((vessel) => getVesselPointColor(vessel, view.hoveredVessel))
-                .pointAltitude((vessel) => vessel === view.hoveredVessel ? POINT_HOVER_ALTITUDE : POINT_ALTITUDE)
-                .pointRadius((vessel) => vessel === view.hoveredVessel ? view.pointRadius * POINT_HOVER_RADIUS_FACTOR : view.pointRadius)
+                .pointColor((vessel) => getVesselPointColor(vessel, view.hoveredVessel, view.selectedVessel))
+                .pointAltitude((vessel) => vessel === view.hoveredVessel || vessel === view.selectedVessel ? POINT_HOVER_ALTITUDE : POINT_ALTITUDE)
+                .pointRadius((vessel) => vessel === view.hoveredVessel || vessel === view.selectedVessel ? view.pointRadius * POINT_HOVER_RADIUS_FACTOR : view.pointRadius)
                 .pointLabel(getTooltip)
                 .onPointHover((vessel) => {
                     if (view.hoveredVessel === vessel) return;
@@ -691,6 +718,7 @@
         setRouteResult,
         focusVessel,
         focusCoordinates,
+        getScreenCoordinates,
         resetCamera,
         setAutoRotate,
         toggleAutoRotate,
