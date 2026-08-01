@@ -58,9 +58,9 @@ test('invokes validarProgresoViaje inside runEngine and binds blur event listene
   assert.match(indexSource, /el\.addEventListener\('blur', \(\) => validarProgresoViaje\(\)\)/);
 });
 
-test('defines mobile responsive @media (max-width: 768px) rules for compact new estimation button and floating checklist HUD', () => {
+test('uses matching compact header controls and mobile rules for the floating checklist HUD', () => {
   assert.match(indexSource, /@media\s*\(max-width:\s*768px\)/);
-  assert.match(indexSource, /#new-estimation-btn\s*span\s*\{\s*display:\s*none\s*!important;\s*\}/);
+  assert.match(indexSource, /id="new-estimation-btn"[\s\S]*?class="tools-dropdown-trigger flex items-center justify-center"/);
+  assert.doesNotMatch(indexSource, /<span>\+ Nueva Estimación<\/span>/);
   assert.match(indexSource, /#validation-stepper-hud\s*\{[^}]*bottom:\s*12px\s*!important/);
 });
-
