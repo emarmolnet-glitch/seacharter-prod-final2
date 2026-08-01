@@ -122,6 +122,7 @@
     <script type="module" src="./public/ConnectionStatusBar.js"></script>
     <script type="module" src="./voyage-cost-engine.js"></script>
     <script type="module" src="./stress-test-engine.js"></script>
+    <script type="module" src="./src/route-configurator-entry.tsx"></script>
     <script src="./session-draft.js"></script>
     <script type="module" src="./dual-mode-overlay.js"></script>
 
@@ -7503,7 +7504,7 @@
                             </button>
                         </li>
                         <li class="tools-dropdown-item">
-                            <button id="btn-open-databridge-direct" type="button" onclick="openDataBridgeLinkModal(); closeMobileSessionMenu();" class="tools-dropdown-action" title="Conectar Data Bridge" aria-label="Conectar Data Bridge">
+                            <button id="btn-open-databridge-direct" type="button" class="tools-dropdown-action" title="Conectar Data Bridge" aria-label="Conectar Data Bridge">
                                 <svg class="header-utility-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M7 7h10v10" />
                                     <path d="M7 17 17 7" />
@@ -7801,6 +7802,8 @@
                             <span id="ais-radar-status-dot" class="h-2 w-2 rounded-full bg-slate-300"></span>
                             <span id="ais-radar-status-text">Radar en espera: Introduzca puertos y laycan</span>
                         </div>
+
+                        <div id="route-configurator-root"></div>
 
                         <!-- Open-Meteo Marine Weather Section -->
                         <div id="weather-section" class="collapsible-section mt-4 bg-slate-950 p-4 rounded-lg border border-slate-800 hidden" data-collapsible-section data-default-open="false">
@@ -54099,6 +54102,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         document.addEventListener('DOMContentLoaded', () => {
             const btn = document.getElementById('btn-toggle-databridge');
+            const directLinkButton = document.getElementById('btn-open-databridge-direct');
+            directLinkButton?.addEventListener('click', () => {
+                openDataBridgeLinkModal();
+                if (typeof window.closeMobileSessionMenu === 'function') {
+                    window.closeMobileSessionMenu();
+                }
+            });
             bindDataBridgeLinkForm();
             updateDataBridgeConnectionIndicator();
             restorePersistentDataBridgeConnection();
@@ -54281,12 +54291,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.open(DATA_BRIDGE_FRONTEND_URL, '_blank', 'noopener');
         }
 
-        function openDataBridgeLinkModal() {
+        export function openDataBridgeLinkModal() {
             const modal = document.getElementById('databridge-link-modal');
             if (!modal) return;
             updateDataBridgeLinkModalState();
             modal.classList.remove('opacity-0', 'pointer-events-none');
         }
+        window.openDataBridgeLinkModal = openDataBridgeLinkModal;
 
         function closeDataBridgeLinkModal() {
             const modal = document.getElementById('databridge-link-modal');
@@ -54482,7 +54493,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         window.toggleDataBridge = toggleDataBridge;
         window.openDataBridgeDashboard = openDataBridgeDashboard;
-        window.openDataBridgeLinkModal = openDataBridgeLinkModal;
         window.closeDataBridgeLinkModal = closeDataBridgeLinkModal;
         window.updateConnectionStatusBar = updateConnectionStatusBar;
         window.hideWebDataBridge = hideWebDataBridge;
