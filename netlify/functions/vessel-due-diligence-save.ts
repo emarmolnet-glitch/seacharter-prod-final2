@@ -129,7 +129,17 @@ export default async (req: Request) => {
   const flag = cleanFlagCode(readFirst(vessel, ["flag", "bandera"]));
   const yearBuilt = cleanInteger(readFirst(vessel, ["yearBuilt", "builtYear", "year_built", "built_year"]));
   const grossTonnage = cleanPositiveNumber(readFirst(vessel, ["gross_tonnage", "grossTonnage", "gt", "GT"]));
-  const loaMeters = cleanPositiveNumber(readFirst(vessel, ["loa_meters", "loaMeters", "loa", "LOA", "length_overall"]));
+  const loaMeters = cleanPositiveNumber(readFirst(vessel, [
+    "loa_meters",
+    "loaMeters",
+    "loa",
+    "LOA",
+    "length",
+    "Length",
+    "LENGTH",
+    "length_overall",
+    "lengthOverall",
+  ]));
   if (vesselType && NON_COMMERCIAL_VESSEL_PATTERN.test(vesselType)) {
     return json({ success: false, error: `Buque no comercial detectado: ${vesselType}` }, 422, headers);
   }

@@ -72,7 +72,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             vesselType: readText(record?.vesselType || record?.vessel_type || record?.shipType || record?.ship_type || record?.type || meta.vesselType || meta.vessel_type),
             yearBuilt: readYear(record?.yearBuilt || record?.builtYear || record?.year_built || record?.built_year || record?.anio || record?.ano_construccion || meta.yearBuilt),
             grossTonnage: readPositiveNumber(record?.grossTonnage || record?.gross_tonnage || record?.gt || record?.GT || meta.grossTonnage || meta.gross_tonnage),
-            loaMeters: readPositiveNumber(record?.loaMeters || record?.loa_meters || record?.loa || record?.LOA || record?.length_overall || meta.loaMeters || meta.loa_meters),
+            loaMeters: readPositiveNumber(record?.loaMeters || record?.loa_meters || record?.loa || record?.LOA || record?.length || record?.Length || record?.LENGTH || record?.length_overall || record?.lengthOverall || meta.loaMeters || meta.loa_meters),
             draft: readPositiveNumber(record?.draft || record?.calado || record?.draught || meta.draft || meta.Draft),
             sourceUrl: readText(record?.sourceUrl),
         };

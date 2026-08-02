@@ -6,6 +6,7 @@ import {
   upsertVesselTechnicalRecord,
   type VesselTechnicalRecord,
 } from "../../db/vessel-technical-cache.js";
+import { mappedVesselField } from "./_shared/vessel-field-mappings.mjs";
 
 type VesselData = {
   imo_number: string | null;
@@ -91,21 +92,6 @@ const DIRECT_SOURCES: DirectSource[] = [
     ],
   },
 ];
-
-const FIELD_LABELS: Record<keyof VesselData, string[]> = {
-  imo_number: ["imo number", "imo"],
-  vessel_name: ["vessel name", "ship name", "name"],
-  flag: ["flag", "country"],
-  vessel_type: ["vessel type", "ship type", "type", "class"],
-  year_built: ["year built", "year of build", "built", "build year"],
-  loa_meters: ["length overall", "loa", "length"],
-  beam_meters: ["breadth", "beam"],
-  gross_tonnage: ["gross tonnage", "gt"],
-  net_tonnage: ["net tonnage", "nt"],
-  dwt: ["deadweight", "dwt"],
-  last_port: ["last port", "last port of call"],
-  eta: ["eta", "estimated time of arrival"],
-};
 
 function emptyVesselData(): VesselData {
   return {
@@ -223,16 +209,17 @@ function extractLabeledData(html: string): VesselData {
     const node = $(element);
     const cells = node.find("th, td, dt, dd");
     if (cells.length >= 2) {
-      const label = cleanText($(cells[0]).text())?.toLowerCase();
+      const label = cleanText($(cells[0]).text());
       const value = cleanText($(cells[cells.length - 1]).text());
       if (label && value) candidates.set(label, value);
     }
   });
 
-  for (const field of FIELD_NAMES) {
-    const labels = FIELD_LABELS[field];
-    const entry = Array.from(candidates.entries()).find(([label]) => labels.some((wanted) => label.includes(wanted)));
-    if (entry) (data[field] as VesselData[typeof field]) = valueForField(field, entry[1]);
+  for (const [rawKey, rawValue] of candidates) {
+    const field = mappedVesselField(rawKey) as keyof VesselData | null;
+    if (field && data[field] === null) {
+      (data[field] as VesselData[typeof field]) = valueForField(field, rawValue);
+    }
   }
 
   const explicitType = cleanText(
@@ -277,7 +264,7 @@ function extractTableData(html: string, identity: LookupIdentity): VesselData {
 
   $("table").each((_, table) => {
     if (data.dwt !== null && data.imo_number !== null) return false;
-    const headers = $(table).find("tr").first().find("th,td").map((__, cell) => normalizedIdentityText($(cell).text())).get();
+    const headers = $(table).find("tr").first().find("th,td").map((__, cell) => cleanText($(cell).text()) || "").get();
     const rows = $(table).find("tr").slice(1).toArray();
     const matchedRow = rows.find((row) => {
       const rowText = normalizedIdentityText($(row).text());
@@ -287,8 +274,8 @@ function extractTableData(html: string, identity: LookupIdentity): VesselData {
     if (!matchedRow) return undefined;
 
     const cells = $(matchedRow).find("td").toArray();
-    const readCell = (labels: string[]) => {
-      const index = headers.findIndex((header) => labels.some((label) => header.includes(label)));
+    const readCell = (field: keyof VesselData) => {
+      const index = headers.findIndex((header) => mappedVesselField(header) === field);
       return index >= 0 && cells[index] ? cleanText($(cells[index]).text()) : null;
     };
     const rowText = cleanText($(matchedRow).text()) || "";
@@ -299,17 +286,17 @@ function extractTableData(html: string, identity: LookupIdentity): VesselData {
     const rowImo = identityText.match(/IMO[^0-9]*(\d{7})/i)?.[1]
       || identityText.match(/\b(\d{7})\b/)?.[1];
     data.imo_number = normalizeImo(rowImo) || null;
-    data.vessel_name = linkText || readCell(["name", "vessel", "ship"]);
-    data.flag = readCell(["flag", "country"]);
-    data.vessel_type = readCell(["vessel type", "ship type", "type", "class"]);
-    const builtText = readCell(["built", "year"]);
+    data.vessel_name = linkText || readCell("vessel_name");
+    data.flag = readCell("flag");
+    data.vessel_type = readCell("vessel_type");
+    const builtText = readCell("year_built");
     const builtMatch = String(builtText ?? "").match(/\b(18|19|20)\d{2}\b/);
     data.year_built = builtMatch ? Number(builtMatch[0]) : null;
-    data.loa_meters = cleanNumber(readCell(["loa", "length"]));
-    data.beam_meters = cleanNumber(readCell(["beam", "breadth"]));
-    data.gross_tonnage = cleanNumber(readCell(["gross tonnage", "gt"]));
-    data.net_tonnage = cleanNumber(readCell(["net tonnage", "nt"]));
-    data.dwt = cleanNumber(readCell(["deadweight", "dwt"]));
+    data.loa_meters = cleanNumber(readCell("loa_meters"));
+    data.beam_meters = cleanNumber(readCell("beam_meters"));
+    data.gross_tonnage = cleanNumber(readCell("gross_tonnage"));
+    data.net_tonnage = cleanNumber(readCell("net_tonnage"));
+    data.dwt = cleanNumber(readCell("dwt"));
     return undefined;
   });
 
