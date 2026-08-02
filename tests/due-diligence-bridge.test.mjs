@@ -214,8 +214,8 @@ test('backend accepts IMO, MMSI, or vessel name and searches the four public pro
   assert.match(backendSource, /buildUrls: \(identity\)/);
   assert.match(backendSource, /encodeURIComponent\(identity\.query\)/);
   assert.match(backendSource, /runSourceWaterfall\(identity, deadlineAt, cachedData\)/);
-  assert.match(backendSource, /vessel_type: \["vessel type", "ship type", "type", "class"\]/);
-  assert.match(backendSource, /data\.vessel_type = readCell/);
+  assert.match(backendSource, /import \{ mappedVesselField \}/);
+  assert.match(backendSource, /data\.vessel_type = readCell\("vessel_type"\)/);
   assert.match(backendSource, /findStructuredVesselType/);
   assert.match(backendSource, /field === "vessel_type"/);
   assert.match(backendSource, /script\[type='application\/ld\+json'\]/);
