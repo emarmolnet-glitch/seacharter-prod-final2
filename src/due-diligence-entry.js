@@ -12,6 +12,8 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         { field: 'flag', label: 'Bandera' },
         { field: 'vesselType', label: 'Tipo de buque' },
         { field: 'yearBuilt', label: 'Año de construcción' },
+        { field: 'grossTonnage', label: 'Gross Tonnage' },
+        { field: 'loaMeters', label: 'LOA' },
     ]);
     const pendingProposals = new Map();
 
@@ -69,6 +71,8 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             flag: readText(record?.flag || record?.bandera || record?.country || meta.flag),
             vesselType: readText(record?.vesselType || record?.vessel_type || record?.shipType || record?.ship_type || record?.type || meta.vesselType || meta.vessel_type),
             yearBuilt: readYear(record?.yearBuilt || record?.builtYear || record?.year_built || record?.built_year || record?.anio || record?.ano_construccion || meta.yearBuilt),
+            grossTonnage: readPositiveNumber(record?.grossTonnage || record?.gross_tonnage || record?.gt || record?.GT || meta.grossTonnage || meta.gross_tonnage),
+            loaMeters: readPositiveNumber(record?.loaMeters || record?.loa_meters || record?.loa || record?.LOA || record?.length_overall || meta.loaMeters || meta.loa_meters),
             draft: readPositiveNumber(record?.draft || record?.calado || record?.draught || meta.draft || meta.Draft),
             sourceUrl: readText(record?.sourceUrl),
         };
@@ -135,6 +139,20 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             target.built_year = technical.yearBuilt;
             target.ano_construccion = technical.yearBuilt;
             meta.yearBuilt = technical.yearBuilt;
+        }
+        if (technical.grossTonnage) {
+            target.grossTonnage = technical.grossTonnage;
+            target.gross_tonnage = technical.grossTonnage;
+            target.gt = technical.grossTonnage;
+            meta.grossTonnage = technical.grossTonnage;
+            meta.gross_tonnage = technical.grossTonnage;
+        }
+        if (technical.loaMeters) {
+            target.loaMeters = technical.loaMeters;
+            target.loa_meters = technical.loaMeters;
+            target.loa = technical.loaMeters;
+            meta.loaMeters = technical.loaMeters;
+            meta.loa_meters = technical.loaMeters;
         }
         if (technical.draft) {
             target.draft = technical.draft;
@@ -319,6 +337,12 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
                 yearBuilt: technical.yearBuilt || null,
                 year_built: technical.yearBuilt || null,
                 built_year: technical.yearBuilt || null,
+                grossTonnage: technical.grossTonnage || null,
+                gross_tonnage: technical.grossTonnage || null,
+                gt: technical.grossTonnage || null,
+                loaMeters: technical.loaMeters || null,
+                loa_meters: technical.loaMeters || null,
+                loa: technical.loaMeters || null,
                 vesselType: technical.vesselType || '',
                 vessel_type: technical.vesselType || '',
                 auditStatus: 'PENDING',
@@ -430,6 +454,10 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             vessel_type: technical.vesselType,
             yearBuilt: technical.yearBuilt,
             year_built: technical.yearBuilt,
+            grossTonnage: technical.grossTonnage,
+            gross_tonnage: technical.grossTonnage,
+            loaMeters: technical.loaMeters,
+            loa_meters: technical.loaMeters,
         });
     }
 
