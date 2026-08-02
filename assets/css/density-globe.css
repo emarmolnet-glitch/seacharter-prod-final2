@@ -374,6 +374,10 @@
   opacity: 0.46;
 }
 
+.global-vessel-marker.is-heading-unknown {
+  height: 22px;
+}
+
 .global-vessel-marker__glyph {
   display: block;
   width: 100%;
@@ -442,6 +446,16 @@
   fill: rgba(148, 163, 184, 0.92);
 }
 
+.global-vessel-marker__unknown-ring {
+  fill: rgba(15, 23, 42, 0.72);
+  stroke: var(--vessel-marker-color, rgba(226, 232, 240, 0.92));
+  stroke-width: 2;
+}
+
+.global-vessel-marker__unknown-core {
+  fill: rgba(148, 163, 184, 0.95);
+}
+
 .global-vessel-marker.is-hovered .global-vessel-marker__glyph {
   filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.95)) drop-shadow(0 2px 3px rgba(2, 12, 27, 0.9));
 }
@@ -461,6 +475,15 @@
 }
 
 .global-vessel-marker.is-selected .global-vessel-marker__deck {
+  fill: #99f6e4;
+}
+
+.global-vessel-marker.is-selected .global-vessel-marker__unknown-ring {
+  fill: rgba(15, 118, 110, 0.82);
+  stroke: var(--vessel-active-color, #2dd4bf);
+}
+
+.global-vessel-marker.is-selected .global-vessel-marker__unknown-core {
   fill: #99f6e4;
 }
 

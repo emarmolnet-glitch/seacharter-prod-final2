@@ -62,7 +62,15 @@
             visited.add(current);
             scopes.push(current);
             Object.values(current).forEach((nestedValue) => {
-                if (nestedValue && typeof nestedValue === 'object' && !Array.isArray(nestedValue)) queue.push(nestedValue);
+                if (nestedValue && typeof nestedValue === 'object' && !Array.isArray(nestedValue)) {
+                    queue.push(nestedValue);
+                    return;
+                }
+                if (typeof nestedValue !== 'string' || !nestedValue.trim().startsWith('{')) return;
+                try {
+                    const parsedValue = JSON.parse(nestedValue);
+                    if (parsedValue && typeof parsedValue === 'object' && !Array.isArray(parsedValue)) queue.push(parsedValue);
+                } catch (_) {}
             });
         }
         return scopes;
@@ -90,13 +98,23 @@
         return null;
     }
 
-    function resolveVesselHeading(scopes) {
-        const reportedHeading = firstFiniteNumber(scopes, ['heading', 'Heading', 'trueHeading', 'TrueHeading']);
-        if (Number.isFinite(reportedHeading) && reportedHeading >= 0 && reportedHeading < 360 && reportedHeading !== 511) {
-            return reportedHeading;
+    function findValidAisDirection(scopes, keys, unavailableValue) {
+        for (const scope of scopes) {
+            if (!scope || typeof scope !== 'object') continue;
+            for (const key of keys) {
+                const direction = toFiniteNumber(scope[key]);
+                if (!Number.isFinite(direction) || direction === unavailableValue) continue;
+                if (direction >= 0 && direction < 360) return direction;
+            }
         }
-        const course = firstFiniteNumber(scopes, ['course', 'Course', 'courseOverGround', 'CourseOverGround', 'cog', 'COG', 'cogDegrees']);
-        return Number.isFinite(course) && course >= 0 && course < 360 ? course : 0;
+        return null;
+    }
+
+    function resolveVesselHeading(scopes) {
+        const course = findValidAisDirection(scopes, ['courseOverGround', 'CourseOverGround', 'cogDegrees', 'Cog', 'COG', 'cog', 'course', 'Course'], 360);
+        if (course !== null) return { value: course, source: 'COG' };
+        const heading = findValidAisDirection(scopes, ['trueHeading', 'TrueHeading', 'HDG', 'hdg', 'heading', 'Heading'], 511);
+        return heading !== null ? { value: heading, source: 'HDG' } : { value: null, source: null };
     }
 
     function normalizeVessel(vessel, index = 0) {
@@ -111,7 +129,7 @@
         const rawMmsi = firstValue(scopes, ['mmsi', 'MMSI', 'mmsiNumber', 'mmsi_number']);
         const rawDwt = firstValue(scopes, ['dwt', 'DWT', 'DWT_real', 'dwt_real', 'deadweight', 'deadweightTonnage', 'deadweight_tonnage']);
         const dwt = toFiniteNumber(rawDwt);
-        const heading = resolveVesselHeading(scopes);
+        const navigation = resolveVesselHeading(scopes);
         return {
             ...vessel,
             lat,
@@ -123,7 +141,9 @@
             imo: rawImo ? String(rawImo).trim() : 'N/A',
             mmsi: rawMmsi ? String(rawMmsi).trim() : '',
             dwt,
-            heading,
+            heading: navigation.value,
+            headingSource: navigation.source,
+            hasHeading: navigation.value !== null,
             sourceIndex: index
         };
     }
@@ -258,14 +278,22 @@
     function createVesselMarkerElement(vessel, view) {
         const marker = document.createElement('div');
         marker.className = 'global-vessel-marker';
+        marker.classList.add(vessel.hasHeading ? 'has-reported-heading' : 'is-heading-unknown');
+        marker.dataset.headingSource = vessel.headingSource || 'unavailable';
         marker.setAttribute('aria-hidden', 'true');
-        marker.innerHTML = `
+        marker.innerHTML = vessel.hasHeading ? `
             <span class="global-vessel-marker__glyph">
                 <span class="global-vessel-marker__radar-cone" aria-hidden="true"></span>
                 <svg viewBox="0 0 24 52" focusable="false" aria-hidden="true">
                     <path class="global-vessel-marker__hull" d="M12 1 20 10v31l-4 10H8L4 41V10L12 1Z"/>
                     <path class="global-vessel-marker__hold" d="M7 14h10v9H7zm0 11h10v9H7z"/>
                     <path class="global-vessel-marker__deck" d="M8 37h8v8H8z"/>
+                </svg>
+            </span>` : `
+            <span class="global-vessel-marker__glyph">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <circle class="global-vessel-marker__unknown-ring" cx="12" cy="12" r="8.5"/>
+                    <circle class="global-vessel-marker__unknown-core" cx="12" cy="12" r="3"/>
                 </svg>
             </span>`;
         marker.style.setProperty('--vessel-marker-color', VESSEL_MARKER_COLOR);
@@ -279,6 +307,11 @@
         if (!view?.globe || view.vesselElements.size === 0) return;
         const scale = getVesselMarkerScale(view);
         view.vesselElements.forEach((marker, vessel) => {
+            marker.style.setProperty('--vessel-marker-scale', String(scale));
+            if (!Number.isFinite(vessel.heading)) {
+                marker.style.removeProperty('--vessel-screen-heading');
+                return;
+            }
             const origin = view.globe.getScreenCoords?.(vessel.lat, vessel.lng, VESSEL_MARKER_ALTITUDE);
             const destination = destinationPoint(vessel.lat, vessel.lng, vessel.heading);
             const projectedHeading = view.globe.getScreenCoords?.(destination.lat, destination.lng, VESSEL_MARKER_ALTITUDE);
@@ -287,7 +320,6 @@
             const deltaY = Number(projectedHeading.y) - Number(origin.y);
             if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY) || (Math.abs(deltaX) < 0.01 && Math.abs(deltaY) < 0.01)) return;
             marker.style.setProperty('--vessel-screen-heading', `${Math.atan2(deltaY, deltaX) * 180 / Math.PI + 90}deg`);
-            marker.style.setProperty('--vessel-marker-scale', String(scale));
         });
     }
 
