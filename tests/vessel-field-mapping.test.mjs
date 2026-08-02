@@ -19,6 +19,13 @@ test("LENGTH variants map to loa_meters after key normalization", () => {
   assert.equal(mappedVesselField("LOA (m)"), "loa_meters");
 });
 
+test("Due Diligence English labels map to vessels_master columns", () => {
+  assert.equal(mappedVesselField("Flag"), "flag");
+  assert.equal(mappedVesselField("LENGTH"), "loa_meters");
+  assert.deepEqual(parseVesselAttribute("Flag", "Panama"), { column: "flag", value: "Panama" });
+  assert.deepEqual(parseVesselAttribute("LENGTH", "142.75 m"), { column: "loa_meters", value: 142.75 });
+});
+
 test("related Marine Man technical labels use the canonical database fields", () => {
   assert.equal(vesselFieldDictionary.bandera, "flag");
   assert.equal(mappedVesselField("Indicativo"), "call_sign");
