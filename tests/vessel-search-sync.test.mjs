@@ -84,7 +84,7 @@ test('Apply to Estimator consolidates IMO and exposes the active calculator vess
   assert.match(applySource, /window\.GlobalStore\.calculatorVessel = vessel/);
 });
 
-test('calculator renders five editable technical badges in one responsive row', () => {
+test('calculator renders six editable technical badges in a full-width row between vessel speeds', () => {
   const badgesStart = indexSource.indexOf('id="vessel-identity-meta"');
   const badgesEnd = indexSource.indexOf('<div class="input-group">', badgesStart);
   const badgesSource = indexSource.slice(badgesStart, badgesEnd);
@@ -92,21 +92,25 @@ test('calculator renders five editable technical badges in one responsive row', 
   assert.match(indexSource, /id="vessel-identity-flag"/);
   assert.match(indexSource, /id="vessel-identity-dwt"/);
   assert.match(indexSource, /id="vessel-identity-gt"/);
+  assert.match(indexSource, /id="vessel-identity-loa"/);
   assert.match(indexSource, /id="vessel-identity-year"/);
-  assert.match(badgesSource, /class="flex flex-row flex-nowrap items-center gap-2 mt-2 w-full overflow-hidden"/);
-  const unifiedBadgeClass = 'flex flex-row items-center bg-slate-50 border border-slate-200 rounded px-2 py-1 focus-within:ring-1 focus-within:ring-blue-500 focus-within:bg-white focus-within:border-blue-500 transition-colors shrink-0';
-  assert.equal(badgesSource.split(unifiedBadgeClass).length - 1, 5);
-  assert.equal(badgesSource.split('text-slate-500 text-xs font-semibold mr-1').length - 1, 5);
-  assert.equal(badgesSource.split('placeholder="N/A"').length - 1, 5);
-  assert.match(badgesSource, />IMO:<\/span>[\s\S]*w-16 placeholder-slate-400/);
-  assert.match(badgesSource, />Bandera:<\/span>[\s\S]*w-24 placeholder-slate-400/);
-  assert.match(badgesSource, />DWT:<\/span>[\s\S]*w-14 placeholder-slate-400/);
-  assert.match(badgesSource, />GT:<\/span>[\s\S]*w-14 placeholder-slate-400/);
-  assert.match(badgesSource, />Año:<\/span>[\s\S]*w-10 placeholder-slate-400/);
+  assert.match(indexSource, /id="spd-ballast"[\s\S]*<\/div>\s*<\/div>\s*<!-- FILA DE ESPECIFICACIONES TÉCNICAS \(ANCHO COMPLETO\) -->\s*<div id="vessel-identity-meta"/);
+  assert.match(indexSource, /id="vessel-identity-meta"[\s\S]*<div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">\s*<div class="input-group">\s*<label id="label-spd-laden"/);
+  assert.match(badgesSource, /class="w-full flex flex-row items-center justify-between gap-4 mt-4 mb-4 col-span-full"/);
+  const unifiedBadgeClass = 'flex-1 flex items-center bg-white border border-gray-300 rounded px-2 py-1 h-9 shadow-sm';
+  assert.equal(badgesSource.split(unifiedBadgeClass).length - 1, 6);
+  assert.equal(badgesSource.split('text-[10px] font-bold text-slate-500 mr-1 uppercase tracking-wider whitespace-nowrap').length - 1, 6);
+  assert.equal(badgesSource.split('w-full text-right text-xs text-slate-800 bg-transparent focus:outline-none').length - 1, 6);
+  assert.equal(badgesSource.split('placeholder="-"').length - 1, 3);
+  assert.equal(badgesSource.split('placeholder="0"').length - 1, 2);
+  assert.equal(badgesSource.split('placeholder="0.0"').length - 1, 1);
+  assert.match(badgesSource, />GT:<\/span>[\s\S]*>LOA \(m\):<\/span>[\s\S]*>AÑO:<\/span>/);
+  assert.doesNotMatch(badgesSource, /class="grid grid-cols-5 gap-4 mt-3 w-full col-span-full px-2"|w-2\/3|placeholder="N\/A"/);
   assert.match(badgesSource, /handleManualVesselUpdate\('imo', this\.value\)/);
   assert.match(badgesSource, /handleManualVesselUpdate\('dwt', this\.value\)/);
   assert.match(badgesSource, /handleManualVesselUpdate\('flag', this\.value\)/);
   assert.match(badgesSource, /handleManualVesselUpdate\('gt', this\.value\)/);
+  assert.match(badgesSource, /handleManualVesselUpdate\('loa', this\.value\)/);
   assert.match(badgesSource, /handleManualVesselUpdate\('year_built', this\.value\)/);
   assert.doesNotMatch(badgesSource, /bg-slate-900|bg-blue-900|bg-sky-50|text-sky-700|text-blue-500|border-slate-700/);
   assert.match(indexSource, /function updateCalculatorVesselIdentityDisplay\(vessel, fallbackName = ''\)/);
@@ -117,8 +121,11 @@ test('calculator renders five editable technical badges in one responsive row', 
   assert.match(indexSource, /imoInput\.value = imo/);
   assert.match(indexSource, /flagBadgeInput\.value = flag/);
   assert.match(indexSource, /gtInput\.value = Number\.isFinite\(gt\)/);
+  assert.match(indexSource, /loaInput\.value = loaValue/);
+  assert.match(indexSource, /calculatorLoaInput\.value = loaValue/);
   assert.match(indexSource, /yearInput\.value = Number\.isFinite\(yearBuilt\)/);
   assert.match(indexSource, /dwt: updateCalculatorDwtBadge\(dwt\)/);
+  assert.match(indexSource, /loa: loaValue/);
   assert.match(indexSource, /const dwt = parseFloat\(document\.getElementById\('vessel-dwt'\)\.value\) \|\| 0;[\s\S]*updateCalculatorDwtBadge\(dwt\)/);
   assert.match(indexSource.slice(
     indexSource.indexOf('function applyMatchingVesselToCalculator('),
@@ -143,6 +150,10 @@ test('manual DWT edits update calculator state and force compatibility recalcula
   assert.match(handlerSource, /updateSection2LocalState\('vessel-dwt'/);
   assert.match(handlerSource, /handleDWTChange\(true, false\)/);
   assert.match(handlerSource, /refreshVesselCompatibilityWarning\(\)/);
+  assert.match(handlerSource, /numericFields = new Set\(\['dwt', 'gt', 'loa', 'year_built'\]\)/);
+  assert.match(handlerSource, /updatedVessel\.loa = loa/);
+  assert.match(handlerSource, /State\.loa = loa \|\| 0/);
+  assert.match(handlerSource, /field === 'gt' \|\| field === 'loa'/);
   assert.match(handlerSource, /window\.GlobalStore\.activeVessel = updatedVessel/);
   assert.match(handlerSource, /window\.GlobalStore\.calculatorVessel = updatedVessel/);
   assert.match(handlerSource, /scheduleReactiveEngine\(\)/);
@@ -156,11 +167,12 @@ test('calculator save persists editable master fields and keeps GT locally', () 
   assert.match(saveSource, /document\.getElementById\('vessel-identity-dwt'\)/);
   assert.match(saveSource, /document\.getElementById\('vessel-identity-flag'\)/);
   assert.match(saveSource, /document\.getElementById\('vessel-identity-gt'\)/);
+  assert.match(saveSource, /document\.getElementById\('vessel-identity-loa'\)/);
   assert.match(saveSource, /document\.getElementById\('vessel-identity-year'\)/);
   assert.match(saveSource, /fetch\('\/api\/vessel-due-diligence-save'/);
   assert.match(saveSource, /method: 'PUT'/);
   assert.match(saveSource, /body: JSON\.stringify\(\{ vessel: payload \}\)/);
-  assert.match(saveSource, /saveVesselToIndexedDB\(\{ \.\.\.savedVessel, imo, name: vesselName, gt \}\)/);
+  assert.match(saveSource, /saveVesselToIndexedDB\(\{ \.\.\.savedVessel, imo, name: vesselName, gt, loa \}\)/);
   assert.doesNotMatch(saveSource, /const formattedName/);
 });
 
@@ -171,6 +183,7 @@ test('IndexedDB preserves canonical vessel identity and technical fields', () =>
   assert.match(saveSource, /imo: String\(vessel\.imo\)/);
   assert.match(saveSource, /flag: vessel\.flag \|\| vessel\.bandera/);
   assert.match(saveSource, /gt: vessel\.gt \|\| vessel\.gross_tonnage/);
+  assert.match(saveSource, /loa: vessel\.loa \|\| vessel\.LOA \|\| vessel\.length_overall/);
   assert.match(saveSource, /year_built: vessel\.year_built \|\| vessel\.built_year \|\| vessel\.yearBuilt/);
   assert.match(saveSource, /spd_ballast:/);
   assert.match(saveSource, /cons_port:/);
