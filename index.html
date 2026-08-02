@@ -7893,28 +7893,6 @@
                                         <i class="fa-solid fa-magnifying-glass text-xs"></i>
                                     </button>
                                 </div>
-                                <div id="vessel-identity-meta" class="flex flex-row flex-nowrap items-center gap-2 mt-2 w-full overflow-hidden" aria-label="Especificaciones técnicas editables del buque">
-                                    <div class="flex flex-row items-center bg-slate-50 border border-slate-200 rounded px-2 py-1 focus-within:ring-1 focus-within:ring-blue-500 focus-within:bg-white focus-within:border-blue-500 transition-colors shrink-0">
-                                        <span class="text-slate-500 text-xs font-semibold mr-1">IMO:</span>
-                                        <input type="text" id="vessel-identity-imo" class="bg-transparent text-slate-700 text-xs outline-none w-16 placeholder-slate-400" value="" placeholder="N/A" aria-label="IMO" oninput="handleManualVesselUpdate('imo', this.value)">
-                                    </div>
-                                    <div class="flex flex-row items-center bg-slate-50 border border-slate-200 rounded px-2 py-1 focus-within:ring-1 focus-within:ring-blue-500 focus-within:bg-white focus-within:border-blue-500 transition-colors shrink-0">
-                                        <span class="text-slate-500 text-xs font-semibold mr-1">Bandera:</span>
-                                        <input type="text" id="vessel-identity-flag" class="bg-transparent text-slate-700 text-xs outline-none w-24 placeholder-slate-400" value="" placeholder="N/A" aria-label="Bandera" oninput="handleManualVesselUpdate('flag', this.value)">
-                                    </div>
-                                    <div class="flex flex-row items-center bg-slate-50 border border-slate-200 rounded px-2 py-1 focus-within:ring-1 focus-within:ring-blue-500 focus-within:bg-white focus-within:border-blue-500 transition-colors shrink-0">
-                                        <span class="text-slate-500 text-xs font-semibold mr-1">DWT:</span>
-                                        <input type="number" id="vessel-identity-dwt" class="bg-transparent text-slate-700 text-xs outline-none w-14 placeholder-slate-400" value="" placeholder="N/A" aria-label="DWT en toneladas métricas" min="0" step="1" oninput="handleManualVesselUpdate('dwt', this.value)">
-                                    </div>
-                                    <div class="flex flex-row items-center bg-slate-50 border border-slate-200 rounded px-2 py-1 focus-within:ring-1 focus-within:ring-blue-500 focus-within:bg-white focus-within:border-blue-500 transition-colors shrink-0">
-                                        <span class="text-slate-500 text-xs font-semibold mr-1">GT:</span>
-                                        <input type="number" id="vessel-identity-gt" class="bg-transparent text-slate-700 text-xs outline-none w-14 placeholder-slate-400" value="" placeholder="N/A" aria-label="Arqueo bruto GT" min="0" step="1" oninput="handleManualVesselUpdate('gt', this.value)">
-                                    </div>
-                                    <div class="flex flex-row items-center bg-slate-50 border border-slate-200 rounded px-2 py-1 focus-within:ring-1 focus-within:ring-blue-500 focus-within:bg-white focus-within:border-blue-500 transition-colors shrink-0">
-                                        <span class="text-slate-500 text-xs font-semibold mr-1">Año:</span>
-                                        <input type="number" id="vessel-identity-year" class="bg-transparent text-slate-700 text-xs outline-none w-10 placeholder-slate-400" value="" placeholder="N/A" aria-label="Año de construcción" min="1800" max="2100" step="1" oninput="handleManualVesselUpdate('year_built', this.value)">
-                                    </div>
-                                </div>
                             </div>
                             <div class="input-group">
                                 <label id="label-vessel-dwt" class="text-blue-400 flex items-center min-h-[28px]">Capacidad DWT (TM)</label>
@@ -7947,6 +7925,37 @@
                                 <label id="label-spd-ballast" class="flex items-center min-h-[28px]">Velocidad Lastre (Knts)</label>
                                 <input type="number" id="spd-ballast" class="input-gc" value="11.5" step="any" oninput="markSpeedManualOverride(this)">
                             </div>
+                        </div>
+
+                        <!-- FILA DE ESPECIFICACIONES TÉCNICAS (ANCHO COMPLETO) -->
+                        <div id="vessel-identity-meta" class="w-full flex flex-row items-center justify-between gap-4 mt-4 mb-4 col-span-full" aria-label="Especificaciones técnicas editables del buque">
+                            <div class="flex-1 flex items-center bg-white border border-gray-300 rounded px-2 py-1 h-9 shadow-sm">
+                                <span class="text-[10px] font-bold text-slate-500 mr-1 uppercase tracking-wider whitespace-nowrap">IMO:</span>
+                                <input type="text" id="vessel-identity-imo" class="w-full text-right text-xs text-slate-800 bg-transparent focus:outline-none" value="" placeholder="-" aria-label="IMO" oninput="handleManualVesselUpdate('imo', this.value)">
+                            </div>
+                            <div class="flex-1 flex items-center bg-white border border-gray-300 rounded px-2 py-1 h-9 shadow-sm">
+                                <span class="text-[10px] font-bold text-slate-500 mr-1 uppercase tracking-wider whitespace-nowrap">BANDERA:</span>
+                                <input type="text" id="vessel-identity-flag" class="w-full text-right text-xs text-slate-800 bg-transparent focus:outline-none" value="" placeholder="-" aria-label="Bandera" oninput="handleManualVesselUpdate('flag', this.value)">
+                            </div>
+                            <div class="flex-1 flex items-center bg-white border border-gray-300 rounded px-2 py-1 h-9 shadow-sm">
+                                <span class="text-[10px] font-bold text-slate-500 mr-1 uppercase tracking-wider whitespace-nowrap">DWT:</span>
+                                <input type="number" id="vessel-identity-dwt" class="w-full text-right text-xs text-slate-800 bg-transparent focus:outline-none" value="" placeholder="0" aria-label="DWT en toneladas métricas" min="0" step="1" oninput="handleManualVesselUpdate('dwt', this.value)">
+                            </div>
+                            <div class="flex-1 flex items-center bg-white border border-gray-300 rounded px-2 py-1 h-9 shadow-sm">
+                                <span class="text-[10px] font-bold text-slate-500 mr-1 uppercase tracking-wider whitespace-nowrap">GT:</span>
+                                <input type="number" id="vessel-identity-gt" class="w-full text-right text-xs text-slate-800 bg-transparent focus:outline-none" value="" placeholder="0" aria-label="Arqueo bruto GT" min="0" step="1" oninput="handleManualVesselUpdate('gt', this.value)">
+                            </div>
+                            <div class="flex-1 flex items-center bg-white border border-gray-300 rounded px-2 py-1 h-9 shadow-sm">
+                                <span class="text-[10px] font-bold text-slate-500 mr-1 uppercase tracking-wider whitespace-nowrap">LOA (m):</span>
+                                <input type="number" id="vessel-identity-loa" class="w-full text-right text-xs text-slate-800 bg-transparent focus:outline-none" value="" placeholder="0.0" aria-label="Eslora total LOA en metros" min="0" step="0.01" oninput="handleManualVesselUpdate('loa', this.value)">
+                            </div>
+                            <div class="flex-1 flex items-center bg-white border border-gray-300 rounded px-2 py-1 h-9 shadow-sm">
+                                <span class="text-[10px] font-bold text-slate-500 mr-1 uppercase tracking-wider whitespace-nowrap">AÑO:</span>
+                                <input type="number" id="vessel-identity-year" class="w-full text-right text-xs text-slate-800 bg-transparent focus:outline-none" value="" placeholder="-" aria-label="Año de construcción" min="1800" max="2100" step="1" oninput="handleManualVesselUpdate('year_built', this.value)">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
                             <div class="input-group">
                                 <label id="label-spd-laden" class="flex items-center min-h-[28px]">Velocidad Carga (Knts)</label>
                                 <input type="number" id="spd-laden" class="input-gc" value="10.5" step="any" oninput="markSpeedManualOverride(this)">
@@ -22811,6 +22820,7 @@
             const flag = String(vessel?.flag || '').trim();
             const dwt = Number(vessel?.dwt);
             const gt = Number(vessel?.gt ?? vessel?.gross_tonnage ?? vessel?.grossTonnage);
+            const loa = Number(vessel?.loa ?? vessel?.LOA ?? vessel?.length_overall ?? vessel?.lengthOverall);
             const yearBuilt = Number(vessel?.year_built ?? vessel?.built_year ?? vessel?.yearBuilt ?? vessel?.builtYear);
             const nameInput = document.getElementById('vessel-name') || document.getElementById('nombre-buque-calculadora');
             if (nameInput && vesselName) nameInput.value = vesselName;
@@ -22822,6 +22832,12 @@
             if (flagBadgeInput) flagBadgeInput.value = flag;
             const gtInput = document.getElementById('vessel-identity-gt');
             if (gtInput) gtInput.value = Number.isFinite(gt) && gt > 0 ? String(Math.round(gt)) : '';
+            const loaValue = Number.isFinite(loa) && loa > 0 ? loa : null;
+            const loaInput = document.getElementById('vessel-identity-loa');
+            if (loaInput) loaInput.value = loaValue ? String(loaValue) : '';
+            const calculatorLoaInput = document.getElementById('vessel-loa');
+            if (calculatorLoaInput) calculatorLoaInput.value = loaValue ? String(loaValue) : '0';
+            State.loa = loaValue || 0;
             const yearInput = document.getElementById('vessel-identity-year');
             if (yearInput) yearInput.value = Number.isFinite(yearBuilt) && yearBuilt > 1800 ? String(Math.round(yearBuilt)) : '';
             return {
@@ -22830,13 +22846,14 @@
                 flag: flag || 'Unknown',
                 dwt: updateCalculatorDwtBadge(dwt),
                 gt: Number.isFinite(gt) && gt > 0 ? gt : null,
+                loa: loaValue,
                 year_built: Number.isFinite(yearBuilt) && yearBuilt > 1800 ? yearBuilt : null
             };
         }
 
         function handleManualVesselUpdate(field, value) {
             const rawValue = String(value ?? '').trim();
-            const numericFields = new Set(['dwt', 'gt', 'year_built']);
+            const numericFields = new Set(['dwt', 'gt', 'loa', 'year_built']);
             const normalizedValue = numericFields.has(field)
                 ? (rawValue === '' ? null : Number(rawValue))
                 : rawValue;
@@ -22865,6 +22882,12 @@
                 if (typeof handleFlagOrPscChange === 'function') handleFlagOrPscChange();
             } else if (field === 'gt') {
                 updatedVessel.gt = Number.isFinite(normalizedValue) && normalizedValue > 0 ? normalizedValue : null;
+            } else if (field === 'loa') {
+                const loa = Number.isFinite(normalizedValue) && normalizedValue > 0 ? normalizedValue : null;
+                updatedVessel.loa = loa;
+                State.loa = loa || 0;
+                const calculatorLoaInput = document.getElementById('vessel-loa');
+                if (calculatorLoaInput) calculatorLoaInput.value = loa ? String(loa) : '0';
             } else if (field === 'year_built') {
                 const yearBuilt = Number.isFinite(normalizedValue) && normalizedValue > 1800 ? Math.round(normalizedValue) : null;
                 updatedVessel.year_built = yearBuilt;
@@ -22878,7 +22901,7 @@
                 window.GlobalStore.activeVessel = updatedVessel;
                 window.GlobalStore.calculatorVessel = updatedVessel;
             }
-            if (field === 'gt' && typeof debouncedAutoFillPDA === 'function') {
+            if ((field === 'gt' || field === 'loa') && typeof debouncedAutoFillPDA === 'function') {
                 debouncedAutoFillPDA('pol', false, 150);
                 debouncedAutoFillPDA('pod', false, 150);
             }
@@ -28243,13 +28266,15 @@
 	        function getCalculatorVesselForPda(dwtOverride = 0) {
 	            const storedVessel = window.GlobalStore?.calculatorVessel || window.GlobalStore?.activeVessel || {};
 	            const manualGt = Number(document.getElementById('vessel-identity-gt')?.value);
+	            const manualLoa = Number(document.getElementById('vessel-identity-loa')?.value || document.getElementById('vessel-loa')?.value);
 	            const dwt = Number(dwtOverride) > 0
 	                ? Number(dwtOverride)
 	                : (Number(document.getElementById('vessel-dwt')?.value) || Number(storedVessel.dwt) || Number(State?.dwt) || 0);
 	            return {
 	                ...storedVessel,
 	                dwt,
-	                gt: manualGt > 0 ? manualGt : storedVessel.gt
+	                gt: manualGt > 0 ? manualGt : storedVessel.gt,
+	                loa: manualLoa > 0 ? manualLoa : (Number(storedVessel.loa) || Number(State?.loa) || 0)
 	            };
 	        }
 
@@ -28272,6 +28297,17 @@
 	            return hasRealGt
 	                ? `Arqueo Bruto GT Real: ${Math.round(realGt).toLocaleString('es-ES')}`
 	                : 'Arqueo Bruto GT Estimado al 60% DWT';
+	        }
+
+	        function getPdaLoaMethodologyLabel(language = 'es') {
+	            const vessel = getCalculatorVesselForPda();
+	            const realLoa = Number(vessel.loa);
+	            const hasRealLoa = Number.isFinite(realLoa) && realLoa > 0;
+	            const displayLoa = hasRealLoa ? String(Math.round(realLoa * 100) / 100) : '';
+	            if (language === 'en') {
+	                return hasRealLoa ? `Actual Length Overall LOA: ${displayLoa}m` : 'Estimated LOA';
+	            }
+	            return hasRealLoa ? `Eslora ${displayLoa}m Real` : 'LOA Estimada';
 	        }
 
 	        function calculateGlobalPdaEstimate(dwtOrVesselData, portNameParam = '', portDaysParam = 3.0, gtParam = 0) {
@@ -38703,7 +38739,7 @@
             const builtYear = parseInt(document.getElementById('vessel-identity-year')?.value) || null;
             const gt = parseInt(document.getElementById('vessel-identity-gt')?.value) || null;
             const dwt = parseInt(document.getElementById('vessel-identity-dwt')?.value || document.getElementById('vessel-dwt')?.value) || null;
-            const loa = State.loa || null;
+            const loa = parseFloat(document.getElementById('vessel-identity-loa')?.value || document.getElementById('vessel-loa')?.value) || null;
             const draft = State.draft || parseFloat(document.getElementById('vessel-draft')?.value) || null;
             const spd_ballast = parseFloat(document.getElementById('spd-ballast').value) || null;
             const spd_laden = parseFloat(document.getElementById('spd-laden').value) || null;
@@ -38762,7 +38798,7 @@
                         window.GlobalStore.activeVessel = savedVessel;
                         window.GlobalStore.calculatorVessel = savedVessel;
                     }
-                    await saveVesselToIndexedDB({ ...savedVessel, imo, name: vesselName, gt });
+                    await saveVesselToIndexedDB({ ...savedVessel, imo, name: vesselName, gt, loa });
                 } else {
                     showToast(`⚠️ Error al guardar buque: ${resData.error || (resData.success ? 'No se devolvieron datos' : 'Desconocido')}`);
                 }
@@ -40482,8 +40518,8 @@ Example:
                                     <p><strong>${currentLang === 'es' ? 'Fuentes y Metodología' : 'Methodology & Sources'}:</strong></p>
                                     <p class="italic text-slate-500 font-sans font-medium">
                                         ${currentLang === 'es'
-                                            ? `Las tarifas se calculan utilizando el estimador algorítmico paramétrico SeaCharter Core PRO, parametrizando las características del buque (${getPdaGtMethodologyLabel('es')}, Eslora LOA, Manga Beam) y aplicando multiplicadores de puerto según la base de datos nacional e internacional.`
-                                            : `Tariffs are calculated using the SeaCharter Core PRO parametric algorithmic estimator, based on vessel characteristics (${getPdaGtMethodologyLabel('en')}, Length Overall LOA, Beam) and applying port-specific country multipliers from the local database.`}
+                                            ? `Las tarifas se calculan utilizando el estimador algorítmico paramétrico SeaCharter Core PRO, parametrizando las características del buque (${getPdaGtMethodologyLabel('es')}, ${getPdaLoaMethodologyLabel('es')}, Manga Beam) y aplicando multiplicadores de puerto según la base de datos nacional e internacional.`
+                                            : `Tariffs are calculated using the SeaCharter Core PRO parametric algorithmic estimator, based on vessel characteristics (${getPdaGtMethodologyLabel('en')}, ${getPdaLoaMethodologyLabel('en')}, Beam) and applying port-specific country multipliers from the local database.`}
                                     </p>
                                 </div>
                             </details>
@@ -41109,7 +41145,7 @@ Example:
                                 </tr>
                             </table>
                             <p style="font-size: 6.8pt; color: #64748b; margin: 4px 0 0 0; text-align: justify; font-style: italic;">
-                                Tarifas calculadas utilizando el estimador paramétrico SeaCharter Core PRO, según las características del buque (${getPdaGtMethodologyLabel('es')}, Eslora LOA, Manga Beam) y multiplicadores de puerto de la base de datos local. / Tariffs calculated using SeaCharter Core PRO parametric estimator, based on vessel specs (${getPdaGtMethodologyLabel('en')}, Length Overall LOA, Beam) and port country multipliers.
+                                Tarifas calculadas utilizando el estimador paramétrico SeaCharter Core PRO, según las características del buque (${getPdaGtMethodologyLabel('es')}, ${getPdaLoaMethodologyLabel('es')}, Manga Beam) y multiplicadores de puerto de la base de datos local. / Tariffs calculated using SeaCharter Core PRO parametric estimator, based on vessel specs (${getPdaGtMethodologyLabel('en')}, ${getPdaLoaMethodologyLabel('en')}, Beam) and port country multipliers.
                             </p>
                         </div>
                     </div>
@@ -56227,6 +56263,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     draft: vessel.draft || (existing ? existing.draft : null),
                     dwt: vessel.dwt || (existing ? existing.dwt : null),
                     gt: vessel.gt || vessel.gross_tonnage || vessel.grossTonnage || (existing ? existing.gt : null),
+                    loa: vessel.loa || vessel.LOA || vessel.length_overall || (existing ? existing.loa : null),
                     flag: vessel.flag || vessel.bandera || (existing ? existing.flag : "Unknown"),
                     year_built: vessel.year_built || vessel.built_year || vessel.yearBuilt || (existing ? existing.year_built : null),
                     spd_ballast: vessel.spd_ballast || (existing ? existing.spd_ballast : null),

@@ -60,9 +60,15 @@ test('manual GT changes refresh POL and POD PDA calculations reactively', () => 
   assert.match(handlerBlock, /debouncedAutoFillPDA\('pod', false, 150\)/);
 });
 
-test('executive screen and print reports identify real or estimated GT dynamically', () => {
+test('executive screen and print reports identify real or estimated GT and LOA dynamically', () => {
   assert.match(indexSource, /Arqueo Bruto GT Real:/);
   assert.match(indexSource, /Arqueo Bruto GT Estimado al 60% DWT/);
+  assert.match(indexSource, /Eslora \$\{displayLoa\}m Real/);
+  assert.match(indexSource, /LOA Estimada/);
+  assert.match(indexSource, /const manualLoa = Number\(document\.getElementById\('vessel-identity-loa'\)/);
   assert.match(indexSource, /getPdaGtMethodologyLabel\('es'\)/);
   assert.match(indexSource, /getPdaGtMethodologyLabel\('en'\)/);
+  assert.match(indexSource, /getPdaLoaMethodologyLabel\('es'\)/);
+  assert.match(indexSource, /getPdaLoaMethodologyLabel\('en'\)/);
+  assert.match(indexSource, /\$\{getPdaGtMethodologyLabel\('es'\)\}, \$\{getPdaLoaMethodologyLabel\('es'\)\}, Manga Beam/);
 });
