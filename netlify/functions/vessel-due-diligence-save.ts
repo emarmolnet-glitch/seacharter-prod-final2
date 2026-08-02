@@ -127,8 +127,10 @@ export default async (req: Request) => {
   const vesselType = cleanText(readFirst(vessel, ["vesselType", "vessel_type", "shipType", "ship_type"]));
   const draftMeters = cleanNumber(readFirst(vessel, ["draft", "Draft", "draft_meters", "calado"]));
   const flag = cleanFlagCode(readFirst(vessel, ["flag", "bandera"]));
+  const callSign = cleanText(readFirst(vessel, ["callSign", "call_sign", "call sign", "indicativo"]));
   const yearBuilt = cleanInteger(readFirst(vessel, ["yearBuilt", "builtYear", "year_built", "built_year"]));
   const grossTonnage = cleanPositiveNumber(readFirst(vessel, ["gross_tonnage", "grossTonnage", "gt", "GT"]));
+  const netTonnage = cleanPositiveNumber(readFirst(vessel, ["net_tonnage", "netTonnage", "nt", "NT"]));
   const loaMeters = cleanPositiveNumber(readFirst(vessel, [
     "loa_meters",
     "loaMeters",
@@ -139,6 +141,13 @@ export default async (req: Request) => {
     "LENGTH",
     "length_overall",
     "lengthOverall",
+  ]));
+  const beamMeters = cleanPositiveNumber(readFirst(vessel, [
+    "beam_meters",
+    "beamMeters",
+    "beam",
+    "Beam",
+    "manga",
   ]));
   if (vesselType && NON_COMMERCIAL_VESSEL_PATTERN.test(vesselType)) {
     return json({ success: false, error: `Buque no comercial detectado: ${vesselType}` }, 422, headers);
@@ -154,9 +163,12 @@ export default async (req: Request) => {
       vesselType,
       draftMeters,
       flag,
+      callSign,
       yearBuilt,
       grossTonnage,
+      netTonnage,
       loaMeters,
+      beamMeters,
     });
     const pool = getPool();
     const countResult = await pool.query<{ total: number }>(
@@ -174,9 +186,12 @@ export default async (req: Request) => {
         vessel_type: savedVessel.vesselType,
         draft_meters: savedVessel.draftMeters,
         flag: savedVessel.flag,
+        call_sign: savedVessel.callSign,
         year_built: savedVessel.yearBuilt,
         gross_tonnage: savedVessel.grossTonnage,
+        net_tonnage: savedVessel.netTonnage,
         loa_meters: savedVessel.loaMeters,
+        beam_meters: savedVessel.beamMeters,
       },
       masterVesselCount: Number(countResult.rows[0]?.total || 0),
     }, 200, headers);
