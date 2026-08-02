@@ -65,7 +65,7 @@ test('matching execution sends query criteria instead of a committed radar array
   assert.match(executionSource, /Array\.isArray\(window\.GlobalStore\?\.selectedTaxonomies\)/);
   assert.match(executionSource, /value: selectedVesselTaxonomies\.slice\(\)/);
   assert.match(executionSource, /values: selectedVesselTaxonomies\.slice\(\)/);
-  assert.match(executionSource, /requestMatchingLocal\('execute', \[\], payload\)/);
+  assert.match(executionSource, /requestMatchingLocal\('execute', openShipsCandidates, payload\)/);
   assert.doesNotMatch(executionSource, /matchingSelection\?\.vessels|radarSnapshot/);
 });
 

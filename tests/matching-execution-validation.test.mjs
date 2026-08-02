@@ -184,6 +184,125 @@ test('global route hydration supplies POL and POD to validation and core executi
   assert.equal(feedback.classList.contains('hidden'), true);
 });
 
+test('manual matching preserves the active route while reading stale calculated state', async () => {
+  const blockStart = source.indexOf('function getMatchingExecutionRouteOverride');
+  const blockEnd = source.indexOf('window.runMatchingEngine = runMatchingEngine;', blockStart)
+    + 'window.runMatchingEngine = runMatchingEngine;'.length;
+  const blockSource = source.slice(blockStart, blockEnd);
+
+  const elements = new Map();
+  const addElement = (id, value = '') => {
+    const attributes = new Map();
+    const element = {
+      value,
+      textContent: '',
+      innerHTML: '',
+      disabled: false,
+      dataset: {},
+      classList: createClassList(id === 'matching-execution-validation' ? ['hidden'] : []),
+      setAttribute(name, nextValue) { attributes.set(name, String(nextValue)); },
+      getAttribute(name) { return attributes.get(name) || null; },
+    };
+    elements.set(id, element);
+    return element;
+  };
+
+  addElement('btn-run-matching');
+  addElement('matching-execution-validation');
+  addElement('match-cargo-type', 'Grain');
+  addElement('match-quantity', '25000');
+  addElement('match-load-port', 'BEJAIA');
+  addElement('match-unload-port', 'AVEIRO');
+  addElement('match-laycan-start', '2026-08-10');
+  addElement('match-load-lat', '36.75');
+  addElement('match-load-lon', '5.08');
+  addElement('match-unload-lat', '40.64');
+  addElement('match-unload-lon', '-8.65');
+
+  const activeState = {
+    pol: 'BEJAIA',
+    pod: 'AVEIRO',
+    laycanDate: '2026-08-10',
+    pol_coordinates: { lat: 36.75, lon: 5.08 },
+    pod_coordinates: { lat: 40.64, lon: -8.65 },
+  };
+  const staleRoute = {
+    pol: 'POL',
+    pod: 'POD',
+    laycan: '2026-07-01',
+    pol_coordinates: null,
+    pod_coordinates: null,
+  };
+  const readOptions = [];
+  let routePersistenceCalls = 0;
+  let receivedRoute = null;
+  const windowMock = {
+    coreProMatchingRouteContext: {
+      pol: { lat: 36.75, lon: 5.08 },
+      pod: { lat: 40.64, lon: -8.65 },
+      laycan: '2026-08-10',
+    },
+    SeaCharterStore: { getState: () => activeState },
+    GlobalStore: {
+      pol: 'BEJAIA',
+      pod: 'AVEIRO',
+      polCoordinates: activeState.pol_coordinates,
+      podCoordinates: activeState.pod_coordinates,
+      matchingReady: true,
+      matchingSelectionPending: false,
+      selectedTaxonomies: ['category:cargo'],
+    },
+    rehydrateCalculatedState: async options => {
+      readOptions.push(options);
+      if (options?.applyToContext !== false) {
+        activeState.pol = staleRoute.pol;
+        activeState.pod = staleRoute.pod;
+        activeState.pol_coordinates = null;
+        activeState.pod_coordinates = null;
+      }
+      return { route: staleRoute };
+    },
+    fetchMatchingRequestFromGlobalStore: (_state, options) => {
+      readOptions.push(options);
+      if (options?.applyToContext !== false) {
+        elements.get('match-load-port').value = staleRoute.pol;
+        elements.get('match-unload-port').value = staleRoute.pod;
+        elements.get('match-load-lat').value = '';
+        elements.get('match-load-lon').value = '';
+        elements.get('match-unload-lat').value = '';
+        elements.get('match-unload-lon').value = '';
+      }
+      return { route: staleRoute };
+    },
+    persistLastValidMatchingRoute: () => { routePersistenceCalls += 1; },
+  };
+  const documentMock = { getElementById: id => elements.get(id) || null };
+  new Function('window', 'document', 'executeMatchingEngine', 'MATCHING_MANUAL_EXECUTION_TOKEN', blockSource)(
+    windowMock,
+    documentMock,
+    async routeOverride => { receivedRoute = routeOverride; return true; },
+    Symbol('manual'),
+  );
+
+  const result = await windowMock.handleMatchingExecutionClick({ preventDefault() {} });
+
+  assert.equal(result, true);
+  assert.equal(routePersistenceCalls, 0);
+  assert.ok(readOptions.every(options => options?.applyToContext === false));
+  assert.equal(windowMock.GlobalStore.pol, 'BEJAIA');
+  assert.equal(windowMock.GlobalStore.pod, 'AVEIRO');
+  assert.equal(activeState.pol, 'BEJAIA');
+  assert.equal(activeState.pod, 'AVEIRO');
+  assert.deepEqual(activeState.pol_coordinates, { lat: 36.75, lon: 5.08 });
+  assert.deepEqual(activeState.pod_coordinates, { lat: 40.64, lon: -8.65 });
+  assert.equal(elements.get('match-load-port').value, 'BEJAIA');
+  assert.equal(elements.get('match-unload-port').value, 'AVEIRO');
+  assert.equal(receivedRoute.pol, 'BEJAIA');
+  assert.equal(receivedRoute.pod, 'AVEIRO');
+  assert.deepEqual(receivedRoute.pol_coordinates, { lat: 36.75, lon: 5.08 });
+  assert.deepEqual(receivedRoute.pod_coordinates, { lat: 40.64, lon: -8.65 });
+});
+
 test('Null Island route context recovers the matching coordinates from session storage', async () => {
   const blockStart = source.indexOf('function getMatchingExecutionRouteOverride');
   const blockEnd = source.indexOf('window.runMatchingEngine = runMatchingEngine;', blockStart)

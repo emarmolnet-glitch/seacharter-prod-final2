@@ -99,7 +99,7 @@ test("the matching engine completes filtered-source validation without transmitt
   assert.match(coreProSource, /coreProMatchingRouteContext\?\.laycan \|\| routeReadiness\.laycan/);
   assert.match(coreProSource, /new CustomEvent\('SEA_ROUTE_DEFINED', \{ detail: \{ pol, pod, laycan, lat, lon \} \}\)/);
 
-  const engineQueryIndex = coreProSource.indexOf("requestMatchingLocal('execute', [], payload)");
+  const engineQueryIndex = coreProSource.indexOf("requestMatchingLocal('execute', openShipsCandidates, payload)");
   const engineStateIndex = coreProSource.indexOf("window.lastMatchingEngineResults = matches", engineQueryIndex);
   const completionIndex = coreProSource.indexOf("new CustomEvent('MATCHING_EXECUTION_SUCCESS'", engineStateIndex);
   const matchingFlowSource = coreProSource.slice(engineStateIndex, completionIndex);

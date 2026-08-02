@@ -42,7 +42,8 @@ test('matching engine rehydrates matchingRequest before local validation and exe
   const executionEnd = source.indexOf('function getMatchingExecutionRouteOverride', executionStart);
   const executionSource = source.slice(executionStart, executionEnd);
 
-  assert.match(clickSource, /fetchMatchingRequestFromGlobalStore\(calculatedState\)/);
+  assert.match(clickSource, /fetchMatchingRequestFromGlobalStore\(calculatedState, \{ applyToContext: false, persist: false \}\)/);
+  assert.match(clickSource, /rehydrateCalculatedState\(\{ applyToContext: false \}\)/);
   assert.ok(clickSource.indexOf('fetchMatchingRequestFromGlobalStore') < clickSource.indexOf('getMatchingExecutionValidation'));
   assert.match(source, /function applyMatchingRequestToContext\(request\)/);
   assert.match(source, /const normalizedCargo = normalizeMatchingCargoPayload\(request\.cargo\)/);

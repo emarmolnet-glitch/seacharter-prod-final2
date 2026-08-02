@@ -262,7 +262,7 @@ function normalizeVessel(value: unknown) {
   const sourceOrigin = textValue(source.source_origin, source.sourceOrigin, source.data_source) || sourceOrigins.join(" + ") || "MASTER";
   const vesselKey = textValue(source.vessel_key, source.vesselKey);
 
-  return { source, vesselName, mmsi, imo, shipType, dwt, dwtStatus, draft, designDraft, loa, beam, speed, destination, declaredEta, lastPortOfCall, latitude, longitude, sourceOrigins, sourceOrigin, vesselKey };
+  return { source, vesselName, mmsi, imo, shipType, dwt, dwtStatus, draft, designDraft, loa, beam, speed, destination, declaredEta, lastPortOfCall, latitude, longitude, sourceOrigins, sourceOrigin, vesselKey, isOpenShipsSource };
 }
 
 function parseLaycanEnd(value: unknown) {
@@ -370,7 +370,8 @@ export default async (req: Request) => {
     const vessels_buffer = vessels
       .map(normalizeVessel)
       .filter((vessel): vessel is NonNullable<ReturnType<typeof normalizeVessel>> => Boolean(vessel))
-      .filter((vessel) => vesselMatchesAnyTaxonomy(vessel, vesselClassValues));
+      .filter((vessel) => vesselMatchesAnyTaxonomy(vessel, vesselClassValues)
+        || (!strictTechnicalFilter && vessel.isOpenShipsSource && isUnknownTechnicalValue(vessel.shipType)));
 
     const evaluateVessels = (maxDwtToleranceMultiplier: number, isFallbackPass: boolean) => {
       return vessels_buffer

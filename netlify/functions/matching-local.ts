@@ -400,9 +400,14 @@ export default async (req: Request) => {
       const aisVessels = sourcePage.rows
         .filter((row) => row.source_system === "AIS_LIVE")
         .map((row) => serializeAisVessel(row.payload as unknown as AisMatchingRow));
-      const serializedOpenShipsVessels = sourcePage.rows
-        .filter((row) => row.source_system === "OPENSHIPS")
-        .map((row) => serializeOpenShipsVessel(row.payload));
+      const serializedOpenShipsVessels = [
+        ...sourcePage.rows
+          .filter((row) => row.source_system === "OPENSHIPS")
+          .map((row) => serializeOpenShipsVessel(row.payload)),
+        ...(allowedSources.includes("OPENSHIPS")
+          ? candidates.map((candidate) => serializeOpenShipsVessel(candidate.source))
+          : []),
+      ];
       const openShipsEnrichment = await enrichOpenShipsTechnicalData(serializedOpenShipsVessels);
       const openShipsVessels = openShipsEnrichment.vessels;
       const unifiedVessels = mergeTripleVesselSources([], dataBridgeVessels, aisVessels, openShipsVessels);

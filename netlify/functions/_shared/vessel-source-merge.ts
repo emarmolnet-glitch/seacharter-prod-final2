@@ -70,19 +70,31 @@ function vesselIdentityParts(value: unknown) {
     ais.vessel_name,
     metadata.ShipName,
   ));
+  const mmsi = String(firstValue(
+    record.mmsi,
+    record.MMSI,
+    vessel.mmsi,
+    vessel.MMSI,
+    ais.mmsi,
+    ais.MMSI,
+    metadata.MMSI,
+  ) ?? "").replace(/\D/g, "");
   const dwt = firstValue(record.dwt, record.DWT, vessel.dwt, vessel.DWT, ais.dwt, ais.DWT, metadata.DWT);
-  return { imo, name, dwt };
+  return { imo, mmsi: /^\d{7,9}$/.test(mmsi) ? mmsi : "", name, dwt };
 }
 
 export function getVesselKey(value: unknown) {
-  const { imo, name, dwt } = vesselIdentityParts(value);
+  const { imo, mmsi, name, dwt } = vesselIdentityParts(value);
   if (imo) return `imo-${imo}`;
+  if (mmsi) return `mmsi-${mmsi}`;
   return `name-dwt-${name || "unknown"}-${dwtRange(dwt)}`;
 }
 
 export function getVesselFallbackKey(value: unknown) {
-  const { name, dwt } = vesselIdentityParts(value);
-  return `name-dwt-${name || "unknown"}-${dwtRange(dwt)}`;
+  const { mmsi, name, dwt } = vesselIdentityParts(value);
+  if (name && name !== "unknown") return `name-dwt-${name}-${dwtRange(dwt)}`;
+  if (mmsi) return `mmsi-${mmsi}`;
+  return `name-dwt-unknown-${dwtRange(dwt)}`;
 }
 
 function mergeMeaningful(baseValue: unknown, incomingValue: unknown): unknown {
@@ -167,7 +179,11 @@ export function mergeTripleVesselSources(
         : origin === "AIS_LIVE"
           ? mergeAisLive(existing, row)
           : asRecord(mergeMeaningful(existing, row));
-      const tagged = applyOrigins(merged, [origin]);
+      const existingOrigins = [
+        ...(Array.isArray(existing?.source_origins) ? existing.source_origins : []),
+        ...(Array.isArray(existing?.sourceOrigins) ? existing.sourceOrigins : []),
+      ].filter((value): value is VesselSourceOrigin => value === "DATABRIDGE" || value === "AIS_LIVE" || value === "OPENSHIPS");
+      const tagged = applyOrigins(merged, [...existingOrigins, origin]);
       mergedByKey.set(canonicalKey, tagged);
       keyAliases.set(primaryKey, canonicalKey);
       keyAliases.set(fallbackKey, canonicalKey);
@@ -176,24 +192,9 @@ export function mergeTripleVesselSources(
     });
   };
 
-  const validOpenShipsRows = openShipsRows.filter((row) => row && typeof row === "object");
-  if (validOpenShipsRows.length > 0) {
-    mergeList(validOpenShipsRows, "OPENSHIPS");
-    return Array.from(mergedByKey.values());
-  }
-
-  const validAisRows = aisRows.filter((row) => row && typeof row === "object");
-  if (validAisRows.length > 0) {
-    mergeList(validAisRows, "AIS_LIVE");
-    return Array.from(mergedByKey.values());
-  }
-
-  const validDataBridgeRows = dataBridgeRows.filter((row) => row && typeof row === "object");
-  if (validDataBridgeRows.length > 0) {
-    mergeList(validDataBridgeRows, "DATABRIDGE");
-    return Array.from(mergedByKey.values());
-  }
-
   void masterRows;
-  return [];
+  mergeList(dataBridgeRows, "DATABRIDGE");
+  mergeList(aisRows, "AIS_LIVE");
+  mergeList(openShipsRows, "OPENSHIPS");
+  return Array.from(mergedByKey.values());
 }

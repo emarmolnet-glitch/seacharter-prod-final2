@@ -20,13 +20,14 @@ test('CALCULATION_EVENT injects a session-scoped CalculatedState before persiste
   assert.match(source, /window\.GlobalStore\.calculationSessionId = session\.sessionId/);
 });
 
-test('local matching click rehydrates calculation context before changing operation mode', () => {
+test('local matching click reads calculation context without replacing the active route', () => {
   const clickStart = source.indexOf('async function handleMatchingExecutionClick');
   const clickEnd = source.indexOf('window.handleMatchingExecutionClick = handleMatchingExecutionClick;', clickStart);
   const clickSource = source.slice(clickStart, clickEnd);
 
-  assert.match(clickSource, /await window\.rehydrateCalculatedState\(\)/);
-  assert.match(clickSource, /window\.fetchMatchingRequestFromGlobalStore\(calculatedState\)/);
+  assert.match(clickSource, /const capturedRoute = getMatchingExecutionRouteOverride\(routeOverride\)/);
+  assert.match(clickSource, /await window\.rehydrateCalculatedState\(\{ applyToContext: false \}\)/);
+  assert.match(clickSource, /window\.fetchMatchingRequestFromGlobalStore\(calculatedState, \{ applyToContext: false, persist: false \}\)/);
   assert.match(clickSource, /window\.hasCurrentSessionMatchingCache\(\)/);
   assert.match(clickSource, /enforceLocalOnlyMatchingMode\(\{ preserveSynchronization: Boolean\(matchingRequest \|\| \(calculatedState && hasSessionCache\)\) \}\)/);
   assert.ok(clickSource.indexOf('rehydrateCalculatedState') < clickSource.indexOf('enforceLocalOnlyMatchingMode'));

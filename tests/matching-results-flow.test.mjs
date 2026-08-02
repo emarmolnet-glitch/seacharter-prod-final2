@@ -28,7 +28,7 @@ test('classified fleet remains local after visual validation', () => {
 });
 
 test('matching server imports database and scoring modules without an HTTP scoring hop', () => {
-  assert.match(indexSource, /requestMatchingLocal\('execute', \[\], payload\)/);
+  assert.match(indexSource, /requestMatchingLocal\('execute', openShipsCandidates, payload\)/);
   assert.doesNotMatch(indexSource, /requestAiAisFilter|AI_AIS_FILTER_ENDPOINT|AI_AIS_FILTER_COMPATIBILITY_ENDPOINT/);
   assert.match(localMatchingSource, /from "\.\.\/\.\.\/db\/vessels-master\.js"/);
   assert.match(localMatchingSource, /import runAiAisFilter from "\.\/ai-ais-filter\.js"/);

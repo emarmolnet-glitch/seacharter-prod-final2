@@ -36,11 +36,11 @@ export type PaginatedMatchingSources = {
 const MATCHING_SOURCE_SYSTEMS = new Set<MatchingSourceSystem>(["DATABRIDGE", "AIS_LIVE", "OPENSHIPS"]);
 
 export function normalizeAllowedMatchingSources(value: unknown): MatchingSourceSystem[] {
-  if (!Array.isArray(value)) return ["DATABRIDGE", "AIS_LIVE"];
+  if (!Array.isArray(value)) return ["DATABRIDGE", "AIS_LIVE", "OPENSHIPS"];
   const normalized = [...new Set(value
     .map((source) => String(source || "").trim().toUpperCase())
     .filter((source): source is MatchingSourceSystem => MATCHING_SOURCE_SYSTEMS.has(source as MatchingSourceSystem)))];
-  return normalized.length > 0 ? normalized : ["DATABRIDGE", "AIS_LIVE"];
+  return normalized.length > 0 ? normalized : ["DATABRIDGE", "AIS_LIVE", "OPENSHIPS"];
 }
 
 export async function listPaginatedMatchingSources(
@@ -139,24 +139,12 @@ export async function listPaginatedMatchingSources(
         FROM source_rows
         WHERE source_system = ANY($1::text[])
           AND (source_system = 'DATABRIDGE' OR distance_nm <= $4)
-      ), active_source AS (
-        SELECT source_system
-        FROM filtered_sources
-        GROUP BY source_system
-        ORDER BY CASE source_system
-          WHEN 'OPENSHIPS' THEN 1
-          WHEN 'AIS_LIVE' THEN 2
-          WHEN 'DATABRIDGE' THEN 3
-          ELSE 4
-        END
-        LIMIT 1
       ), ranked_sources AS (
         SELECT *, ROW_NUMBER() OVER (
           PARTITION BY source_system
           ORDER BY sort_at DESC NULLS LAST, payload->>'mmsi', payload->>'vessel_name'
         ) AS source_position
         FROM filtered_sources
-        WHERE source_system = (SELECT source_system FROM active_source)
       )
       SELECT source_system, payload, COUNT(*) OVER() AS total_count
       FROM ranked_sources
