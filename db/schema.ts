@@ -80,10 +80,15 @@ export const vesselsMaster = pgTable("vessels_master", {
   ownerManager: text("owner_manager"),
   hasGears: boolean("has_gears"),
   processStatus: text("process_status"),
+  status: text("status"),
+  auditStatus: text("audit_status"),
+  sourceProvenance: text("source_provenance"),
+  origin: text("origen"),
   source: text("source"),
   sourcePayload: jsonb("source_payload"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
+  lastUpdatedAt: timestamp("fecha_ultima_actualizacion", { withTimezone: true }),
 });
 
 export const aisVessels = pgTable("ais_vessels", {
@@ -122,4 +127,3 @@ export const pipelineInbox = pgTable("pipeline_inbox", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
-
