@@ -136,6 +136,23 @@ export async function ensureApplicationSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS pda_vessel_confirmations (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      estimation_id TEXT,
+      vessel_name TEXT NOT NULL,
+      imo_number TEXT,
+      pol TEXT,
+      pod TEXT,
+      previous_vessel JSONB NOT NULL,
+      actual_vessel JSONB NOT NULL,
+      operational_validation JSONB NOT NULL,
+      financial_breakdown JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS pda_vessel_confirmations_imo_created_idx
+      ON pda_vessel_confirmations (imo_number, created_at DESC);
   `).then(() => undefined).catch((error: unknown) => {
     applicationSchemaReady = null;
     throw error;

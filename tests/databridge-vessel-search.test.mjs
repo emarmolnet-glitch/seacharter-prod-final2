@@ -32,17 +32,16 @@ test('searchLocalVesselDataBridge queries local backend endpoint and handles not
   assert.match(localSearchSource, /showToast\("Buque no encontrado en Data Bridge"\)/);
 });
 
-test('calculator search hydrates and validates technical data before persisting parameters', () => {
+test('calculator search validates technical data and stages it for confirmation', () => {
   const fetchIndex = localSearchSource.indexOf("fetch('/api/databridge-vessel-search'");
-  const hydrateIndex = localSearchSource.indexOf("const formattedName =");
+  const normalizeIndex = localSearchSource.indexOf('const vessel = normalizeCalculatorStoreVessel');
   const validateIndex = localSearchSource.indexOf('const hasValidatedTechnicalData =');
-  const persistIndex = localSearchSource.indexOf('await saveVesselToIndexedDB({');
+  const confirmationIndex = localSearchSource.indexOf('openPdaVesselConfirmationModal');
   assert.ok(fetchIndex >= 0);
-  assert.ok(fetchIndex < hydrateIndex);
-  assert.ok(hydrateIndex < validateIndex);
-  assert.ok(validateIndex < persistIndex);
-  assert.match(localSearchSource, /handleDWTChange\(true, false\)/);
-  assert.match(localSearchSource, /autoClassifySpecialtyFromInputs\(\)/);
+  assert.ok(fetchIndex < normalizeIndex);
+  assert.ok(normalizeIndex < validateIndex);
+  assert.ok(validateIndex < confirmationIndex);
+  assert.doesNotMatch(localSearchSource, /applyResolvedVesselToCalculator\(data\.vessel/);
 });
 
 test('databridge-vessel-search function queries vessels_master for EN_CARTERA and VALIDADO', () => {

@@ -16,7 +16,9 @@ type VesselMasterRow = QueryResultRow & {
   current_destination?: string | null;
   year_built?: string | number | null;
   gross_tonnage?: number | null;
+  net_tonnage?: number | null;
   loa_meters?: number | null;
+  beam_meters?: number | null;
   owner_manager?: string | null;
   has_gears?: boolean | null;
   process_status?: string | null;
@@ -74,7 +76,9 @@ export default async (req: Request) => {
             current_destination,
             year_built,
             gross_tonnage,
+            net_tonnage,
             loa_meters,
+            beam_meters,
             owner_manager,
             has_gears,
             process_status,
@@ -109,8 +113,11 @@ export default async (req: Request) => {
           flag: row.flag || (sourcePayload.flag as string | null) || (metadata.Flag as string | null) || null,
           gross_tonnage: row.gross_tonnage ?? (sourcePayload.gross_tonnage as number | null) ?? (sourcePayload.gt as number | null) ?? null,
           gt: row.gross_tonnage ?? (sourcePayload.gross_tonnage as number | null) ?? (sourcePayload.gt as number | null) ?? null,
+          net_tonnage: row.net_tonnage ?? (sourcePayload.net_tonnage as number | null) ?? (sourcePayload.nt as number | null) ?? null,
           loa_meters: row.loa_meters ?? (sourcePayload.loa_meters as number | null) ?? (sourcePayload.loa as number | null) ?? null,
           loa: row.loa_meters ?? (sourcePayload.loa_meters as number | null) ?? (sourcePayload.loa as number | null) ?? null,
+          beam_meters: row.beam_meters ?? (sourcePayload.beam_meters as number | null) ?? (sourcePayload.beam as number | null) ?? null,
+          beam: row.beam_meters ?? (sourcePayload.beam_meters as number | null) ?? (sourcePayload.beam as number | null) ?? null,
           audit_status: row.audit_status || null,
           auditStatus: row.audit_status || null,
           audit_source: row.audit_source || null,
@@ -156,7 +163,9 @@ export default async (req: Request) => {
           current_destination,
           year_built,
           gross_tonnage,
+          net_tonnage,
           loa_meters,
+          beam_meters,
           owner_manager,
           has_gears,
           process_status,
@@ -220,7 +229,9 @@ export default async (req: Request) => {
       built_year: row.year_built || (sourcePayload.built_year as string | number | null) || (metadata.Year_Built as string | number | null) || null,
       gross_tonnage: row.gross_tonnage ?? (sourcePayload.gross_tonnage as number | null) ?? (sourcePayload.gt as number | null) ?? null,
       gt: row.gross_tonnage ?? (sourcePayload.gross_tonnage as number | null) ?? (sourcePayload.gt as number | null) ?? null,
+      net_tonnage: row.net_tonnage ?? (sourcePayload.net_tonnage as number | null) ?? (sourcePayload.nt as number | null) ?? null,
       loa_meters: row.loa_meters ?? (sourcePayload.loa_meters as number | null) ?? (sourcePayload.loa as number | null) ?? null,
+      beam_meters: row.beam_meters ?? (sourcePayload.beam_meters as number | null) ?? (sourcePayload.beam as number | null) ?? null,
       owner_manager: row.owner_manager || null,
       has_gears: row.has_gears ?? null,
       status: row.status,
@@ -233,6 +244,7 @@ export default async (req: Request) => {
       cons_sea: sourcePayload.cons_sea || null,
       cons_port: sourcePayload.cons_port || null,
       loa: row.loa_meters ?? (sourcePayload.loa_meters as number | null) ?? (sourcePayload.loa as number | null) ?? null,
+      beam: row.beam_meters ?? (sourcePayload.beam_meters as number | null) ?? (sourcePayload.beam as number | null) ?? null,
       vessel_class: sourcePayload.vessel_class || row.vessel_type || null,
       specialty_type: sourcePayload.specialty_type || row.vessel_type || null,
       data_source: 'vessels_master',
