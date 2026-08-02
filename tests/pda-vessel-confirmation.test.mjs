@@ -18,6 +18,7 @@ test('confirmation modal includes technical, operational and financial review se
   assert.match(html, /id="pda-vessel-comparison-body"/);
   assert.match(html, /id="pda-port-compliance-body"/);
   assert.match(html, /id="pda-financial-breakdown-body"/);
+  assert.match(html, /id="pda-freight-per-ton-cards"/);
   assert.match(html, /Aceptar y Actualizar/);
 });
 
@@ -30,8 +31,23 @@ test('port impact uses recalculated minus previous values and reconciles through
 
 test('modal header and fixed action area use the SeaCharter corporate palette', () => {
   assert.match(html, /from-\[#003746\] via-\[#004e64\] to-\[#0b6670\]/);
+  assert.match(html, /max-h-\[85dvh\]/);
+  assert.match(html, /min-h-0 flex-1 space-y-5 overflow-y-auto/);
+  assert.match(html, /sticky bottom-0 z-10/);
+  assert.match(html, /bg-white px-5/);
   assert.match(html, /pb-\[max\(1rem,env\(safe-area-inset-bottom\)\)\]/);
   assert.match(html, /min-h-11 w-full items-center justify-center whitespace-nowrap/);
+});
+
+test('freight per ton contrasts owner net and charterer gross using actual vessel capacity', () => {
+  assert.match(html, /function getPdaVesselDwcc\(vesselData, cargoTons = 0\)/);
+  assert.match(html, /source\.dwcc \?\? source\.dwcc_mt \?\? source\.cargo_capacity/);
+  assert.match(html, /const freightPerTon = calculatePdaFreightPerTon\(previous, actual\)/);
+  assert.match(html, /ownerNetTotal = billingTons \* ownerRate \* \(1 - \(commissionPct \/ 100\)\)/);
+  assert.match(html, /chartererTotal = billingTons \* chartererRate/);
+  assert.match(html, /Perspectiva Armador/);
+  assert.match(html, /Perspectiva Fletador/);
+  assert.match(html, /financialBreakdown = \{[\s\S]*freightPerTon,/);
 });
 
 test('acceptance persists through Netlify Database before applying live values', () => {
