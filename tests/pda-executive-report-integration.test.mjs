@@ -44,3 +44,25 @@ test('UI Cost-Plus panel includes ✨ Auto indicator and openPdaManualEditModal 
   assert.match(indexSource, /openPdaManualEditModal\(\)/);
   assert.match(indexSource, /✨ Auto/);
 });
+
+test('PDA engine prioritizes real vessel GT and only falls back to 60% DWT', () => {
+  assert.match(indexSource, /const gtParaCalculo = \(vessel\.gt && realGt > 0\) \? realGt : \(dwt \* 0\.60\)/);
+  assert.match(indexSource, /const fixedManeuverBase = gtParaCalculo \* 1\.25/);
+  assert.match(indexSource, /const dailyBerthBase = gtParaCalculo \* 0\.15 \* portDays/);
+  assert.match(indexSource, /const rawTasasAutoridad = gtParaCalculo \* baseTonnageRate/);
+});
+
+test('manual GT changes refresh POL and POD PDA calculations reactively', () => {
+  const handlerStart = indexSource.indexOf('function handleManualVesselUpdate');
+  const handlerEnd = indexSource.indexOf('window.handleManualVesselUpdate', handlerStart);
+  const handlerBlock = indexSource.slice(handlerStart, handlerEnd);
+  assert.match(handlerBlock, /debouncedAutoFillPDA\('pol', false, 150\)/);
+  assert.match(handlerBlock, /debouncedAutoFillPDA\('pod', false, 150\)/);
+});
+
+test('executive screen and print reports identify real or estimated GT dynamically', () => {
+  assert.match(indexSource, /Arqueo Bruto GT Real:/);
+  assert.match(indexSource, /Arqueo Bruto GT Estimado al 60% DWT/);
+  assert.match(indexSource, /getPdaGtMethodologyLabel\('es'\)/);
+  assert.match(indexSource, /getPdaGtMethodologyLabel\('en'\)/);
+});
