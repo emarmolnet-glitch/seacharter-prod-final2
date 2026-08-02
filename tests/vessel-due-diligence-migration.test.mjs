@@ -11,7 +11,7 @@ const removedReplacement = new URL(
   import.meta.url,
 );
 const etaMigration = new URL(
-  "../netlify/database/migrations/20260802213000_convert_vessels_master_eta_to_timestamptz/migration.sql",
+  "../netlify/database/migrations/20260803000100_convert_vessels_master_eta_to_timestamptz/migration.sql",
   import.meta.url,
 );
 
