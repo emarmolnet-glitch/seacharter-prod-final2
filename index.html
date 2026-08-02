@@ -123,6 +123,7 @@
     <script type="module" src="./voyage-cost-engine.js"></script>
     <script type="module" src="./stress-test-engine.js"></script>
     <script type="module" src="./src/route-configurator-entry.tsx"></script>
+    <script type="module" src="./src/due-diligence-entry.js"></script>
     <script src="./session-draft.js"></script>
     <script type="module" src="./dual-mode-overlay.js"></script>
 
@@ -21019,6 +21020,11 @@
                         const isUndersized = dwtAssessmentStatus === 'INSUFFICIENT';
                         const isDwtUnknown = dwtAssessmentStatus === 'UNKNOWN';
                         const isValidCapacity = dwtAssessmentStatus === 'SUFFICIENT' && (requiredCargo <= 0 || vesselDwt <= requiredCargo * maxDwtTolerance);
+                        const isValidImo = /^\d{7}$/.test(String(v.imo || '').replace(/\D/g, ''));
+                        const requiresDueDiligence = isDwtUnknown || !isValidImo;
+                        const hasDueDiligenceIdentity = isValidImo
+                            || /^\d{9}$/.test(String(v.mmsi || m.ais?.mmsi || '').replace(/\D/g, ''))
+                            || Boolean(String(v.vesselName || v.vessel_name || v.ShipName || '').trim());
 
                         const visibleRank = idx + 1;
 
@@ -21033,7 +21039,7 @@
                         const declaredVesselType = comp.declaredVesselType || v.vesselType || v.vessel_type || v.vesselClass || v.specialtyType || 'Desconocido';
                         const vesselTypeCompatible = comp.taxonomyCompatible !== false;
                         const dwtPenaltyBadge = isDwtUnknown
-                            ? '<span class="bg-red-50 text-red-700 border border-red-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-circle-xmark"></i> DWT Desconocido</span>'
+                            ? '<span data-missing-technical-warning="true" class="bg-red-50 text-red-700 border border-red-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-circle-xmark"></i> DWT Desconocido</span>'
                             : isUndersized
                                 ? '<span class="bg-red-50 text-red-700 border border-red-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-circle-xmark"></i> DWT Insuficiente</span>'
                                 : '';
@@ -21053,7 +21059,7 @@
                         } else if (isOversized) {
                             compBadge = '<span class="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1" title="El DWT del buque excede la tolerancia del 15% sobre la carga requerida"><i class="fa-solid fa-up-right-and-down-left-from-center"></i> OVERSIZED (Sobredimensionado)</span>';
                         } else {
-                            compBadge = '<span class="bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> Advertencia técnica</span>';
+                            compBadge = `<span ${requiresDueDiligence ? 'data-missing-technical-warning="true"' : ''} class="bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> Advertencia técnica</span>`;
                         }
 
                         const estimatedDwtBadge = isEstimatedDwt ?
@@ -21064,7 +21070,7 @@
                         // Compile incompatibility reasons
                         let reasonHtml = '';
                         if (!isComp) {
-                            reasonHtml = '<div class="mt-3 p-3 bg-rose-50/50 border border-rose-100 rounded-lg text-[11px] text-red-700 space-y-1 font-mono">';
+                            reasonHtml = '<div data-technical-reasons class="mt-3 p-3 bg-rose-50/50 border border-rose-100 rounded-lg text-[11px] text-red-700 space-y-1 font-mono">';
                             const criticalReasons = Array.isArray(m.technicalEligibility?.criticalReasons)
                                 ? m.technicalEligibility.criticalReasons
                                 : [];
@@ -21313,7 +21319,28 @@
                             }
                         }
 
-                        const isValidImo = v.imo && v.imo !== 'N/A' && v.imo !== 'PENDING' && v.imo !== '0' && v.imo !== 'Unknown' && v.imo !== '';
+                        const dueDiligenceIdentity = encodeURIComponent(JSON.stringify({
+                            imo: isValidImo ? v.imo : '',
+                            mmsi: v.mmsi || m.ais?.mmsi || '',
+                            name: v.vesselName || v.vessel_name || v.ShipName || '',
+                            latitude: Number(m.ais?.latitude ?? m.ais?.lat ?? v.latitude ?? v.lat) || null,
+                            longitude: Number(m.ais?.longitude ?? m.ais?.lon ?? m.ais?.lng ?? v.longitude ?? v.lon ?? v.lng) || null,
+                            sourceOrigins: m.source_origins || m.sourceOrigins || v.source_origins || v.sourceOrigins || []
+                        }));
+                        const dueDiligenceButtonHtml = requiresDueDiligence && hasDueDiligenceIdentity ? `
+                            <button type="button" data-due-diligence-button data-external-scraper-only="true" data-due-diligence-payload="${dueDiligenceIdentity}" class="w-full border border-cyan-300 bg-cyan-50 hover:bg-cyan-100 text-cyan-900 font-black text-[10px] uppercase py-1.5 rounded transition flex items-center justify-center gap-1.5 shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-400">
+                                <i class="fa-solid fa-magnifying-glass-chart"></i>
+                                Due Diligence · Data Bridge
+                            </button>
+                            <p data-due-diligence-status class="text-[10px] font-semibold text-rose-700">Completa IMO y DWT mediante Data Bridge antes de enviar a Calculadora.</p>
+                            <div data-due-diligence-review class="hidden"></div>
+                        ` : requiresDueDiligence ? `
+                            <button type="button" disabled aria-disabled="true" class="w-full border border-slate-300 bg-slate-100 text-slate-500 font-black text-[10px] uppercase py-1.5 rounded flex items-center justify-center gap-1.5 cursor-not-allowed">
+                                <i class="fa-solid fa-lock"></i>
+                                Due Diligence sin identidad
+                            </button>
+                            <p data-due-diligence-status class="text-[10px] font-semibold text-rose-700">Se requiere al menos IMO, MMSI o nombre del buque.</p>
+                        ` : '';
                         const trackingButtonHtml = isValidImo ? 
                             `<a href="https://www.vesselfinder.com/vessels?name=${v.imo}" target="_blank" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] uppercase py-1.5 rounded transition flex items-center justify-center gap-1 shadow-sm text-center">
                                 <i class="fa-solid fa-circle-info"></i> Ver Ficha Técnica / View Data Sheet
@@ -21335,7 +21362,7 @@
                         const sourceOriginLabel = sourceOrigins.join(' + ');
 
                         const cardHtml = `
-                            <div class="matching-vessel-card border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : 'border-red-200 bg-red-50/40 opacity-80 cursor-pointer'} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-vessel-imo="${v.imo || ''}" data-source-origin="${sourceOriginLabel}" data-map-focus-id="${mapFocusId}" onclick="handleMatchingVesselCardClick(event)">
+                            <div class="matching-vessel-card border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : 'border-red-200 bg-red-50/40 opacity-80 cursor-pointer'} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-requires-due-diligence="${requiresDueDiligence}" data-vessel-imo="${v.imo || ''}" data-source-origin="${sourceOriginLabel}" data-map-focus-id="${mapFocusId}" onclick="handleMatchingVesselCardClick(event)">
                                 <!-- Rank Ribbon -->
                                 <div class="absolute top-4 right-5 flex items-center gap-2">
                                     ${estimatedDwtBadge}
@@ -21377,7 +21404,7 @@
                                         <!-- Title / Basic details -->
                                         <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
                                             <h4 class="text-sm font-black text-slate-800 truncate max-w-full" title="${v.vesselName}">${v.vesselName}</h4>
-                                            <span class="text-[10px] bg-slate-100 text-slate-500 font-mono font-bold px-1.5 py-0.5 rounded border border-slate-200">IMO ${v.imo || 'PENDING'}</span>
+                                            <span data-vessel-field="imo" ${!isValidImo ? 'data-missing-technical-warning="true"' : ''} class="text-[10px] ${isValidImo ? 'bg-slate-100 text-slate-500 border-slate-200' : 'bg-red-50 text-red-700 border-red-300'} font-mono font-bold px-1.5 py-0.5 rounded border">IMO ${isValidImo ? v.imo : 'PENDING'}</span>
                                             <span class="text-[10px] ${visual.bg} ${visual.color} font-bold px-1.5 py-0.5 rounded border border-current flex items-center gap-1">
                                                 <i class="${visual.icon}"></i> ${declaredVesselType}
                                             </span>
@@ -21385,10 +21412,10 @@
                                         </div>
 
                                         <p class="text-[11px] text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                                            <span>Vessel Type: <strong class="${vesselTypeCompatible ? 'text-slate-700' : 'text-red-700'}">${declaredVesselType}</strong></span>
-                                            <span>DWT: <strong class="${isDwtUnknown || isUndersized ? 'text-red-700' : 'text-slate-700'}">${hasKnownDwt ? `${vesselDwt.toLocaleString()} MT` : 'Desconocido'}</strong></span>
-                                            <span>Bandera / Flag: <strong class="text-slate-700">${flag || 'N/A'}</strong></span>
-                                            <span>Año / Built: <strong class="text-slate-700">${yearBuiltValue || 'N/A'}</strong></span>
+                                            <span>Vessel Type: <strong data-vessel-field="vesselType" class="${vesselTypeCompatible ? 'text-slate-700' : 'text-red-700'}">${declaredVesselType}</strong></span>
+                                            <span>DWT: <strong data-vessel-field="dwt" class="${isDwtUnknown || isUndersized ? 'text-red-700' : 'text-slate-700'}">${hasKnownDwt ? `${vesselDwt.toLocaleString()} MT` : 'Desconocido'}</strong></span>
+                                            <span>Bandera / Flag: <strong data-vessel-field="flag" class="text-slate-700">${flag || 'N/A'}</strong></span>
+                                            <span>Año / Built: <strong data-vessel-field="yearBuilt" class="text-slate-700">${yearBuiltValue || 'N/A'}</strong></span>
                                         </p>
 
                                         <!-- Active Alert Banner (Layer 3 Optimization) -->
@@ -21405,12 +21432,12 @@
                                                     <span class="font-bold ${m.aiStatus ? 'text-blue-500' : (comp.dateOk ? 'text-emerald-600' : 'text-rose-600')}">${laycanStatus}</span>
                                                 </div>
                                                 <div class="flex items-center justify-between text-xs">
-                                                    <span class="text-slate-500">Calado (${v.draft}m vs ${maxDraft}m):</span>
+                                                    <span class="text-slate-500">Calado (<span data-vessel-field="draft">${v.draft}m</span> vs ${maxDraft}m):</span>
                                                     <span class="font-bold ${comp.draftOk ? 'text-emerald-600' : 'text-rose-600'}">${comp.draftOk ? 'OK' : 'Excede'}</span>
                                                 </div>
                                                 <div class="flex items-center justify-between text-xs">
-                                                    <span class="text-slate-500">Capacidad (${hasKnownDwt ? `${vesselDwt.toLocaleString()} MT` : 'DWT desconocido'} vs ${quantity} MT):</span>
-                                                    <span class="font-bold ${isValidCapacity ? 'text-emerald-600' : 'text-rose-600'}">${isValidCapacity ? 'OK' : (isDwtUnknown ? 'Desconocido' : isOversized ? 'Sobredimensionado (OVERSIZED)' : 'Insuficiente')}</span>
+                                                    <span data-vessel-capacity-comparison class="text-slate-500">Capacidad (${hasKnownDwt ? `${vesselDwt.toLocaleString()} MT` : 'DWT desconocido'} vs ${quantity} MT):</span>
+                                                    <span data-vessel-capacity-status class="font-bold ${isValidCapacity ? 'text-emerald-600' : 'text-rose-600'}">${isValidCapacity ? 'OK' : (isDwtUnknown ? 'Desconocido' : isOversized ? 'Sobredimensionado (OVERSIZED)' : 'Insuficiente')}</span>
                                                 </div>
                                             </div>
 
@@ -21468,7 +21495,8 @@
 
                                                 <!-- Apply trigger & deep-link buttons -->
                                                 <div class="flex flex-col gap-1.5 mt-3">
-                                                    <button onclick="applyMatchingVesselToCalculator('${escapedVesselData}', '${loadingPortLat}', '${loadingPortLon}', '${unloadingPortLat}', '${unloadingPortLon}', '${quantity}', '${freightRate}', '${cargoType}', '${loadingPortName}', '${unloadingPortName}')" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] uppercase py-1.5 rounded transition flex items-center justify-center gap-1 shadow-sm">
+                                                    ${dueDiligenceButtonHtml}
+                                                    <button type="button" data-calculator-apply-button data-vessel-json="${escapedVesselData}" onclick="event.stopPropagation(); applyMatchingVesselToCalculator(this.dataset.vesselJson, '${loadingPortLat}', '${loadingPortLon}', '${unloadingPortLat}', '${unloadingPortLon}', '${quantity}', '${freightRate}', '${cargoType}', '${loadingPortName}', '${unloadingPortName}')" ${requiresDueDiligence ? 'disabled aria-disabled="true"' : 'aria-disabled="false"'} class="w-full ${requiresDueDiligence ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 text-white'} font-bold text-[10px] uppercase py-1.5 rounded transition flex items-center justify-center gap-1 shadow-sm">
                                                         <i class="fa-solid fa-share-from-square"></i>
                                                         Aplicar a Estimador / Apply to Estimator
                                                     </button>
@@ -56009,6 +56037,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         async function saveEditedVesselParams() {
+            if (window.dueDiligenceExternalOnlyActive === true || Date.now() < Number(window.dueDiligenceSuppressLocalPersistenceUntil || 0)) {
+                return false;
+            }
             const activeImo = State.imo || '';
             if (!activeImo || activeImo === 'Unknown' || activeImo === 'N/A') return;
 
