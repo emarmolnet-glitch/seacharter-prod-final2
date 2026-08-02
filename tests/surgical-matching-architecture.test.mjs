@@ -19,7 +19,7 @@ test('matching execution delegates triple-source reads without starting an exter
   const executionEnd = indexSource.indexOf('window.runMatchingEngine = runMatchingEngine', executionStart);
   const executionSource = indexSource.slice(executionStart, executionEnd);
 
-  assert.match(executionSource, /requestMatchingLocal\('execute', \[\], payload\)/);
+  assert.match(executionSource, /requestMatchingLocal\('execute', openShipsCandidates, payload\)/);
   assert.match(executionSource, /No se encontraron coincidencias en las fuentes disponibles/);
   assert.match(executionSource, /Fuentes Seleccionadas Validadas/);
   assert.doesNotMatch(executionSource, /requestAiAisFilter|ai-ais-filter/);
@@ -132,8 +132,11 @@ test('LOCAL-ONLY interceptor blocks DataBridge and connection verification route
   const clickStart = indexSource.indexOf('async function handleMatchingExecutionClick');
   const clickEnd = indexSource.indexOf('window.handleMatchingExecutionClick', clickStart);
   const clickSource = indexSource.slice(clickStart, clickEnd);
+  assert.ok(clickSource.indexOf('const capturedRoute = getMatchingExecutionRouteOverride') < clickSource.indexOf('rehydrateCalculatedState'));
   assert.ok(clickSource.indexOf('rehydrateCalculatedState') < clickSource.indexOf('enforceLocalOnlyMatchingMode'));
-  assert.ok(clickSource.indexOf('enforceLocalOnlyMatchingMode({ preserveSynchronization:') < clickSource.indexOf('getMatchingExecutionRouteOverride'));
+  assert.match(clickSource, /rehydrateCalculatedState\(\{ applyToContext: false \}\)/);
+  assert.match(clickSource, /fetchMatchingRequestFromGlobalStore\(calculatedState, \{ applyToContext: false, persist: false \}\)/);
+  assert.ok(clickSource.indexOf('enforceLocalOnlyMatchingMode({ preserveSynchronization:') < clickSource.indexOf('const hydratedRoute = getMatchingExecutionRouteOverride'));
 });
 
 test('global radar control replaces the matching manual sweep button', () => {

@@ -44,37 +44,39 @@ test('source query filters Data Bridge, AIS, and OpenShips before applying limit
   assert.match(matchingDbSource, /audit_status = 'VALIDATED'/);
   assert.match(matchingDbSource, /FROM ais_telemetry_buffer/);
   assert.match(matchingDbSource, /WHERE source_system = ANY\(\$1::text\[\]\)/);
-  assert.match(matchingDbSource, /active_source AS \([\s\S]*WHEN 'OPENSHIPS' THEN 1[\s\S]*WHEN 'AIS_LIVE' THEN 2[\s\S]*WHEN 'DATABRIDGE' THEN 3/);
-  assert.match(matchingDbSource, /WHERE source_system = \(SELECT source_system FROM active_source\)/);
+  assert.doesNotMatch(matchingDbSource, /active_source AS/);
+  assert.doesNotMatch(matchingDbSource, /WHERE source_system = \(SELECT source_system FROM active_source\)/);
   assert.match(matchingDbSource, /LIMIT \$5[\s\S]*OFFSET \$6/);
   assert.match(matchingDbSource, /ROW_NUMBER\(\) OVER/);
 });
 
-test('server identity uses valid IMO first and normalized name plus DWT range otherwise', () => {
+test('server identity uses IMO, MMSI, and normalized name plus DWT without collapsing raw OpenShips vessels', () => {
   assert.match(mergeSource, /return `imo-\$\{imo\}`/);
+  assert.match(mergeSource, /return `mmsi-\$\{mmsi\}`/);
   assert.match(mergeSource, /name-dwt-\$\{name \|\| "unknown"\}-\$\{dwtRange\(dwt\)\}/);
   assert.match(mergeSource, /DWT_BUCKET_SIZE = 2500/);
   assert.match(mergeSource, /keyAliases\.get\(primaryKey\) \|\| keyAliases\.get\(fallbackKey\)/);
 });
 
-test('source unification uses an exclusive OpenShips, AIS Live, Data Bridge priority cascade', () => {
-  assert.match(mergeSource, /if \(validOpenShipsRows\.length > 0\) \{[\s\S]*mergeList\(validOpenShipsRows, "OPENSHIPS"\);[\s\S]*return Array\.from\(mergedByKey\.values\(\)\);[\s\S]*\}/);
-  assert.match(mergeSource, /if \(validAisRows\.length > 0\) \{[\s\S]*mergeList\(validAisRows, "AIS_LIVE"\);[\s\S]*return Array\.from\(mergedByKey\.values\(\)\);[\s\S]*\}/);
-  assert.match(mergeSource, /if \(validDataBridgeRows\.length > 0\) \{[\s\S]*mergeList\(validDataBridgeRows, "DATABRIDGE"\);[\s\S]*return Array\.from\(mergedByKey\.values\(\)\);[\s\S]*\}/);
-  assert.match(mergeSource, /const tagged = applyOrigins\(merged, \[origin\]\)/);
-  assert.match(mergeSource, /void masterRows;[\s\S]*return \[\]/);
-  assert.doesNotMatch(mergeSource, /mergeList\(dataBridgeRows, "DATABRIDGE"\)[\s\S]*mergeList\(aisRows, "AIS_LIVE"\)[\s\S]*mergeList\(openShipsRows, "OPENSHIPS"\)/);
+test('source unification concatenates every selected source and preserves combined origins', () => {
+  assert.match(mergeSource, /mergeList\(dataBridgeRows, "DATABRIDGE"\)[\s\S]*mergeList\(aisRows, "AIS_LIVE"\)[\s\S]*mergeList\(openShipsRows, "OPENSHIPS"\)/);
+  assert.match(mergeSource, /existingOrigins[\s\S]*applyOrigins\(merged, \[\.\.\.existingOrigins, origin\]\)/);
+  assert.doesNotMatch(mergeSource, /validOpenShipsRows\.length > 0/);
 });
 
 test('matching execution uses the unified backend response and exposes source badges', () => {
   const executionStart = indexSource.indexOf('async function executeMatchingEngine');
   const executionEnd = indexSource.indexOf('function getMatchingExecutionRouteOverride', executionStart);
   const executionSource = indexSource.slice(executionStart, executionEnd);
-  assert.match(executionSource, /const data = await requestMatchingLocal\('execute', \[\], payload\)/);
+  assert.match(executionSource, /const openShipsCandidates = !isAppending[\s\S]*payload\.allowedSources\.includes\('OPENSHIPS'\)/);
+  assert.match(executionSource, /requestMatchingLocal\('execute', openShipsCandidates, payload\)/);
+  assert.match(matchingSource, /candidates\.map\(\(candidate\) => serializeOpenShipsVessel\(candidate\.source\)\)/);
   assert.doesNotMatch(executionSource, /radarLiveRes|dataBridgeRes|Promise\.allSettled/);
   assert.match(indexSource, /sourceBadgesHtml/);
   assert.match(indexSource, /data-source-origin="\$\{sourceOriginLabel\}"/);
   assert.match(indexSource, /DATABRIDGE:[\s\S]*AIS_LIVE:[\s\S]*OPENSHIPS:/);
+  assert.match(indexSource, /value="OPENSHIPS" checked/);
+  assert.match(indexSource, /selectedSources\.length > 0 \? selectedSources : \['DATABRIDGE', 'AIS_LIVE', 'OPENSHIPS'\]/);
   assert.match(indexSource, /matching-source-toggle/);
   assert.match(indexSource, /matching-load-more-button/);
   assert.match(indexSource, /previousMatches\.concat/);
@@ -97,4 +99,6 @@ test('strict technical filtering exposes DWT assessment and compact-card penalti
   assert.match(indexSource, /Modo Debug Filtros/);
   assert.match(indexSource, /debugIncludeUnknownDwt: window\.matchingDebugIncludeUnknownDwt === true/);
   assert.match(filterSource, /debugUnknownDwtAllowed/);
+  assert.match(filterSource, /!strictTechnicalFilter && vessel\.isOpenShipsSource && isUnknownTechnicalValue\(vessel\.shipType\)/);
+  assert.match(filterSource, /operationallyEligible = taxonomyCompatibility\.compatible !== false[\s\S]*!strictTechnicalFilter/);
 });

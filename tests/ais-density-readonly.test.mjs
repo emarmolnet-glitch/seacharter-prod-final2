@@ -640,7 +640,7 @@ test('matching delegates the unified triple-source query independently from the 
   const executionStart = indexSource.indexOf('async function executeMatchingEngine');
   const executionEnd = indexSource.indexOf('window.runMatchingEngine = runMatchingEngine', executionStart);
   const executionSource = indexSource.slice(executionStart, executionEnd);
-  assert.match(executionSource, /requestMatchingLocal\('execute', \[\], payload\)/);
+  assert.match(executionSource, /requestMatchingLocal\('execute', openShipsCandidates, payload\)/);
   assert.match(executionSource, /value: selectedVesselTaxonomies\.slice\(\)/);
   assert.match(executionSource, /values: selectedVesselTaxonomies\.slice\(\)/);
   assert.doesNotMatch(executionSource, /captureRadarSnapshotForFleetMatching\(\)/);
