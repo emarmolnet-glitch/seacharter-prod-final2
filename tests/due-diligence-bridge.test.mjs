@@ -148,6 +148,44 @@ test('fetchDueDiligence posts identity and normalizes the complete technical pay
   });
 });
 
+test('frontend normalization recognizes external labels for flag, length, and vessel type', () => {
+  const normalized = serviceModule.normalizeDueDiligenceData({
+    IMO: '9876543',
+    DWT: '10,953 MT',
+    Flag: 'Barbados',
+    'Vessel Type': 'General Cargo',
+    'Year Built': '2011',
+    'Gross Tonnage': '7,580',
+    LENGTH: '138.4 m',
+  });
+  assert.deepEqual(normalized, {
+    imo: '9876543',
+    dwt: 10_953,
+    flag: 'Barbados',
+    vesselType: 'General Cargo',
+    builtYear: 2011,
+    grossTonnage: 7_580,
+    loaMeters: 138.4,
+  });
+
+  const { bridge } = loadBridge();
+  assert.deepEqual({ ...bridge.normalizeTechnicalRecord({
+    Flag: 'Malta',
+    'Ship Type': 'Bulk Carrier',
+    LOA: '179.9 m',
+  }) }, {
+    imo: '',
+    dwt: null,
+    flag: 'Malta',
+    vesselType: 'Bulk Carrier',
+    yearBuilt: null,
+    grossTonnage: null,
+    loaMeters: 179.9,
+    draft: null,
+    sourceUrl: '',
+  });
+});
+
 test('persistDueDiligenceVessel sends the consolidated vessel through PUT', async () => {
   let request = null;
   const vessel = { imo: '9876543', vesselName: 'NERMIN KARABEKIR', dwt: 10_953, audit_status: 'PENDING' };
@@ -186,8 +224,9 @@ test('persistence backend consolidates normalized technical fields by IMO or MMS
   assert.match(technicalMigrationSource, /ADD COLUMN IF NOT EXISTS year_built INT/);
   assert.match(persistenceBackendSource, /SELECT COUNT\(\*\)::integer AS total FROM vessels_master/);
   assert.match(persistenceBackendSource, /masterVesselCount:/);
-  assert.match(persistenceBackendSource, /barbados: "BRB"/);
-  assert.match(persistenceBackendSource, /cleanFlagCode/);
+  assert.match(persistenceBackendSource, /import \{ sanitizeVesselTechnicalRecord \}/);
+  assert.match(persistenceBackendSource, /const sanitizedVessel = sanitizeVesselTechnicalRecord\(\{/);
+  assert.match(technicalCacheSource, /prepareVesselTechnicalPersistence\(record\)/);
   assert.match(persistenceBackendSource, /NON_COMMERCIAL_VESSEL_PATTERN\.test\(vesselType\)/);
   assert.match(persistenceBackendSource, /console\.error\("\[vessel-due-diligence-save\] PostgreSQL persistence failed", error\)/);
   assert.match(persistenceBackendSource, /return json\(\{ success: false, error: errorMessage \}, 500, headers\)/);
@@ -213,12 +252,17 @@ test('backend accepts IMO, MMSI, or vessel name and searches the four public pro
   const vesselFinder = backendSource.indexOf('provider: "VesselFinder"');
   const marineTraffic = backendSource.indexOf('provider: "MarineTraffic"');
   const balticShipping = backendSource.indexOf('provider: "BalticShipping"');
-  assert.ok(marineVesselTraffic < vesselFinder && vesselFinder < marineTraffic && marineTraffic < balticShipping);
+  assert.ok(vesselFinder < marineVesselTraffic && marineVesselTraffic < marineTraffic && marineTraffic < balticShipping);
   assert.match(backendSource, /buildUrls: \(identity\)/);
   assert.match(backendSource, /encodeURIComponent\(identity\.query\)/);
   assert.match(backendSource, /runSourceWaterfall\(identity, deadlineAt, cachedData\)/);
   assert.match(backendSource, /import \{ mappedVesselField, parseVesselAttribute \}/);
+  assert.match(backendSource, /import \{ extractVesselFinderDetailUrl, extractVesselFinderFields \}/);
   assert.match(backendSource, /parseVesselAttribute\(rawKey, rawValue\)/);
+  assert.match(backendSource, /provider === "VesselFinder"/);
+  assert.match(backendSource, /extractVesselFinderFields\(html, identity\)/);
+  assert.match(backendSource, /extractVesselFinderDetailUrl\(html, identity\)/);
+  assert.match(backendSource, /pendingUrls\.push\(detailUrl\)/);
   assert.match(backendSource, /data\.vessel_type = readCell\("vessel_type"\)/);
   assert.match(backendSource, /data\.call_sign = readCell\("call_sign"\)/);
   assert.match(backendSource, /findStructuredVesselType/);
@@ -227,6 +271,12 @@ test('backend accepts IMO, MMSI, or vessel name and searches the four public pro
   assert.match(backendSource, /data-field='vessel-type'/);
   assert.match(backendSource, /hasCompleteDueDiligenceData\(combinedData\)/);
   assert.match(backendSource, /data: normalizedResponseData\(result\.data\)/);
+  assert.match(technicalCacheSource, /last_port = COALESCE\(\$16::text, vessels_master\.last_port\)/);
+  assert.match(technicalCacheSource, /NULLIF\(\$17::text, ''\)::timestamptz/);
+  assert.match(technicalCacheSource, /ON CONFLICT \(imo_number\) DO UPDATE SET/);
+  assert.match(technicalCacheSource, /eta = COALESCE\(EXCLUDED\.eta, vessels_master\.eta\)/);
+  assert.match(persistenceBackendSource, /last_port: savedVessel\.lastPort/);
+  assert.match(persistenceBackendSource, /eta: savedVessel\.eta/);
 });
 
 test('external Data Bridge response envelopes resolve to the scraped vessel record', () => {

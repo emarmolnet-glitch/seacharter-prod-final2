@@ -45,6 +45,21 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         return match ? Number(match[0]) : null;
     }
 
+    function normalizeFieldLabel(value) {
+        return readText(value)
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '');
+    }
+
+    function readLabeledValue(record, labels) {
+        if (!record || typeof record !== 'object') return undefined;
+        const entriesByLabel = new Map(Object.entries(record).map(([key, value]) => [normalizeFieldLabel(key), value]));
+        const matchedLabel = labels.map(normalizeFieldLabel).find(label => entriesByLabel.has(label));
+        return matchedLabel ? entriesByLabel.get(matchedLabel) : undefined;
+    }
+
     function getMeta(vessel) {
         return vessel && vessel.MetaData && typeof vessel.MetaData === 'object' ? vessel.MetaData : {};
     }
@@ -66,13 +81,13 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
     function normalizeTechnicalRecord(record) {
         const meta = getMeta(record);
         return {
-            imo: normalizeImo(record?.imo_number || record?.imo || record?.IMO || record?.numero_imo || meta.imo || meta.IMO),
-            dwt: readPositiveNumber(record?.dwt || record?.DWT || record?.deadweight || meta.dwt || meta.DWT),
-            flag: readText(record?.flag || record?.bandera || record?.country || meta.flag),
-            vesselType: readText(record?.vesselType || record?.vessel_type || record?.shipType || record?.ship_type || record?.type || meta.vesselType || meta.vessel_type),
-            yearBuilt: readYear(record?.yearBuilt || record?.builtYear || record?.year_built || record?.built_year || record?.anio || record?.ano_construccion || meta.yearBuilt),
-            grossTonnage: readPositiveNumber(record?.grossTonnage || record?.gross_tonnage || record?.gt || record?.GT || meta.grossTonnage || meta.gross_tonnage),
-            loaMeters: readPositiveNumber(record?.loaMeters || record?.loa_meters || record?.loa || record?.LOA || record?.length || record?.Length || record?.LENGTH || record?.length_overall || record?.lengthOverall || meta.loaMeters || meta.loa_meters),
+            imo: normalizeImo(readLabeledValue(record, ['IMO Number', 'IMO', 'Numero IMO']) || readLabeledValue(meta, ['IMO Number', 'IMO'])),
+            dwt: readPositiveNumber(readLabeledValue(record, ['DWT', 'Deadweight']) || readLabeledValue(meta, ['DWT', 'Deadweight'])),
+            flag: readText(readLabeledValue(record, ['Flag', 'Bandera', 'Country']) || readLabeledValue(meta, ['Flag', 'Bandera', 'Country'])),
+            vesselType: readText(readLabeledValue(record, ['Vessel Type', 'Ship Type', 'VesselType', 'ShipType', 'Type']) || readLabeledValue(meta, ['Vessel Type', 'Ship Type', 'VesselType', 'ShipType', 'Type'])),
+            yearBuilt: readYear(readLabeledValue(record, ['Year Built', 'Built Year', 'YearBuilt', 'Anio', 'Ano Construccion']) || readLabeledValue(meta, ['Year Built', 'Built Year', 'YearBuilt'])),
+            grossTonnage: readPositiveNumber(readLabeledValue(record, ['Gross Tonnage', 'GrossTonnage', 'GT']) || readLabeledValue(meta, ['Gross Tonnage', 'GrossTonnage', 'GT'])),
+            loaMeters: readPositiveNumber(readLabeledValue(record, ['LOA Meters', 'LOA', 'Length', 'Length Overall']) || readLabeledValue(meta, ['LOA Meters', 'LOA', 'Length', 'Length Overall'])),
             draft: readPositiveNumber(record?.draft || record?.calado || record?.draught || meta.draft || meta.Draft),
             sourceUrl: readText(record?.sourceUrl),
         };

@@ -29,26 +29,31 @@ function readYear(value) {
   return match ? Number(match[0]) : null;
 }
 
+function normalizeFieldLabel(value) {
+  return readText(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function readLabeledValue(record, labels) {
+  if (!record || typeof record !== 'object') return undefined;
+  const entriesByLabel = new Map(Object.entries(record).map(([key, value]) => [normalizeFieldLabel(key), value]));
+  const matchedLabel = labels.map(normalizeFieldLabel).find(label => entriesByLabel.has(label));
+  return matchedLabel ? entriesByLabel.get(matchedLabel) : undefined;
+}
+
 export function normalizeDueDiligenceData(result = {}) {
   const data = result?.data && typeof result.data === 'object' ? result.data : result;
   return {
-    imo: normalizeImo(data.imo_number || data.imo || data.IMO),
-    dwt: readPositiveNumber(data.dwt || data.DWT || data.deadweight),
-    flag: readText(data.flag || data.bandera || data.country),
-    vesselType: readText(data.vessel_type || data.vesselType || data.shipType || data.type),
-    builtYear: readYear(data.year_built || data.builtYear || data.yearBuilt || data.anio),
-    grossTonnage: readPositiveNumber(data.gross_tonnage || data.grossTonnage || data.gt || data.GT),
-    loaMeters: readPositiveNumber(
-      data.loa_meters
-      || data.loaMeters
-      || data.loa
-      || data.LOA
-      || data.length
-      || data.Length
-      || data.LENGTH
-      || data.length_overall
-      || data.lengthOverall,
-    ),
+    imo: normalizeImo(readLabeledValue(data, ['IMO Number', 'IMO', 'Numero IMO'])),
+    dwt: readPositiveNumber(readLabeledValue(data, ['DWT', 'Deadweight'])),
+    flag: readText(readLabeledValue(data, ['Flag', 'Bandera', 'Country'])),
+    vesselType: readText(readLabeledValue(data, ['Vessel Type', 'Ship Type', 'VesselType', 'ShipType', 'Type'])),
+    builtYear: readYear(readLabeledValue(data, ['Year Built', 'Built Year', 'YearBuilt', 'Anio'])),
+    grossTonnage: readPositiveNumber(readLabeledValue(data, ['Gross Tonnage', 'GrossTonnage', 'GT'])),
+    loaMeters: readPositiveNumber(readLabeledValue(data, ['LOA Meters', 'LOA', 'Length', 'Length Overall'])),
   };
 }
 

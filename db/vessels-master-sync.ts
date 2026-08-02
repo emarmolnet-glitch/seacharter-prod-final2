@@ -123,7 +123,7 @@ const UPDATE_MASTER_FIELDS = `
   longitude = $6::double precision,
   vessel_type = COALESCE($7::text, vessel_type),
   draft_meters = COALESCE($8::double precision, draft_meters),
-  eta = COALESCE($9::text, eta),
+  eta = COALESCE(NULLIF($9::text, '')::timestamptz, eta),
   last_port = COALESCE($10::text, last_port),
   current_destination = COALESCE($11::text, current_destination),
   origen = $12::text,
@@ -153,7 +153,7 @@ async function persistMasterVessel(client: PoolClient, vessel: NormalizedMasterV
         )
         VALUES (
           $1::integer, $2::text, $3::integer, $4::text, $5::double precision, $6::double precision, $7::text,
-          $8::double precision, $9::text, $10::text, $11::text, $12::text, $13::text,
+          $8::double precision, NULLIF($9::text, '')::timestamptz, $10::text, $11::text, $12::text, $13::text,
           $14::jsonb, $15::text, $16::text, $17::integer, $18::text,
           $19::boolean, $20::text, NOW()
         )
@@ -210,7 +210,7 @@ async function persistMasterVessel(client: PoolClient, vessel: NormalizedMasterV
       )
       VALUES (
         $1::integer, $2::text, $3::integer, $4::text, $5::double precision, $6::double precision, $7::text,
-        $8::double precision, $9::text, $10::text, $11::text, $12::text, $13::text,
+        $8::double precision, NULLIF($9::text, '')::timestamptz, $10::text, $11::text, $12::text, $13::text,
         $14::jsonb, $15::text, $16::text, $17::integer, $18::text,
         $19::boolean, $20::text, NOW()
       )

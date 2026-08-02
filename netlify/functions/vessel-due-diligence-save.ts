@@ -1,34 +1,9 @@
 import type { Config } from "@netlify/functions";
 import { getPool } from "../../db/index.js";
 import { upsertVesselTechnicalRecord } from "../../db/vessel-technical-cache.js";
+import { sanitizeVesselTechnicalRecord } from "../../db/vessel-technical-normalizer.mjs";
 
 const NON_COMMERCIAL_VESSEL_PATTERN = /yacht|passenger|ferry|pleasure|cruise|military/i;
-const FLAG_CODES: Record<string, string> = {
-  antiguaandbarbuda: "ATG",
-  bahamas: "BHS",
-  barbados: "BRB",
-  belize: "BLZ",
-  china: "CHN",
-  cyprus: "CYP",
-  denmark: "DNK",
-  germany: "DEU",
-  greece: "GRC",
-  hongkong: "HKG",
-  italy: "ITA",
-  liberia: "LBR",
-  malta: "MLT",
-  marshallislands: "MHL",
-  netherlands: "NLD",
-  norway: "NOR",
-  panama: "PAN",
-  portugal: "PRT",
-  singapore: "SGP",
-  spain: "ESP",
-  türkiye: "TUR",
-  turkey: "TUR",
-  unitedkingdom: "GBR",
-  unitedstates: "USA",
-};
 
 function corsHeaders(req: Request) {
   return {
@@ -74,15 +49,6 @@ function cleanMmsi(value: unknown) {
   return digits.length === 9 ? digits : null;
 }
 
-function cleanFlagCode(value: unknown) {
-  const text = cleanText(value);
-  if (!text) return null;
-  const compact = text.toLowerCase().replace(/[^a-záéíóúüñç]/g, "");
-  if (FLAG_CODES[compact]) return FLAG_CODES[compact];
-  const letters = text.replace(/[^a-z]/gi, "").toUpperCase();
-  return letters.length >= 2 ? letters.slice(0, 3) : null;
-}
-
 function cleanNumber(value: unknown) {
   if (value === null || value === undefined || String(value).trim() === "") return null;
   const numeric = Number(String(value).replace(/[^\d.-]/g, ""));
@@ -126,7 +92,7 @@ export default async (req: Request) => {
   const longitude = cleanCoordinate(readFirst(vessel, ["longitude", "lon", "lng"]), -180, 180);
   const vesselType = cleanText(readFirst(vessel, ["vesselType", "vessel_type", "shipType", "ship_type"]));
   const draftMeters = cleanNumber(readFirst(vessel, ["draft", "Draft", "draft_meters", "calado"]));
-  const flag = cleanFlagCode(readFirst(vessel, ["flag", "bandera"]));
+  const flag = readFirst(vessel, ["flag", "bandera"]);
   const callSign = cleanText(readFirst(vessel, ["callSign", "call_sign", "call sign", "indicativo"]));
   const yearBuilt = cleanInteger(readFirst(vessel, ["yearBuilt", "builtYear", "year_built", "built_year"]));
   const grossTonnage = cleanPositiveNumber(readFirst(vessel, ["gross_tonnage", "grossTonnage", "gt", "GT"]));
@@ -149,11 +115,13 @@ export default async (req: Request) => {
     "Beam",
     "manga",
   ]));
+  const lastPort = readFirst(vessel, ["last_port", "lastPort", "lastPortOfCall", "ultimo_puerto"]);
+  const eta = readFirst(vessel, ["eta", "ETA", "estimatedTimeOfArrival"]);
   if (vesselType && NON_COMMERCIAL_VESSEL_PATTERN.test(vesselType)) {
     return json({ success: false, error: `Buque no comercial detectado: ${vesselType}` }, 422, headers);
   }
   try {
-    const savedVessel = await upsertVesselTechnicalRecord({
+    const sanitizedVessel = sanitizeVesselTechnicalRecord({
       imoNumber: imoNumber ? Number(imoNumber) : null,
       mmsi,
       vesselName,
@@ -169,7 +137,10 @@ export default async (req: Request) => {
       netTonnage,
       loaMeters,
       beamMeters,
+      lastPort,
+      eta,
     });
+    const savedVessel = await upsertVesselTechnicalRecord(sanitizedVessel);
     const pool = getPool();
     const countResult = await pool.query<{ total: number }>(
       `SELECT COUNT(*)::integer AS total FROM vessels_master`,
@@ -192,6 +163,8 @@ export default async (req: Request) => {
         net_tonnage: savedVessel.netTonnage,
         loa_meters: savedVessel.loaMeters,
         beam_meters: savedVessel.beamMeters,
+        last_port: savedVessel.lastPort,
+        eta: savedVessel.eta,
       },
       masterVesselCount: Number(countResult.rows[0]?.total || 0),
     }, 200, headers);

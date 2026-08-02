@@ -7,6 +7,7 @@ import {
   type VesselTechnicalRecord,
 } from "../../db/vessel-technical-cache.js";
 import { mappedVesselField, parseVesselAttribute } from "./_shared/vessel-field-mappings.mjs";
+import { extractVesselFinderDetailUrl, extractVesselFinderFields } from "./_shared/vesselfinder-extractor.mjs";
 
 type VesselData = {
   imo_number: string | null;
@@ -69,16 +70,17 @@ const FIELD_NAMES = [
 
 const DIRECT_SOURCES: DirectSource[] = [
   {
+    provider: "VesselFinder",
+    buildUrls: (identity) => [
+      ...(identity.imo ? [new URL(`https://www.vesselfinder.com/vessels/details/${identity.imo}`)] : []),
+      new URL(`https://www.vesselfinder.com/vessels?name=${encodeURIComponent(identity.query)}`),
+    ],
+  },
+  {
     provider: "MarineVesselTraffic",
     buildUrls: (identity) => [
       new URL(`https://www.marinevesseltraffic.com/vessels/${encodeURIComponent(identity.query)}/ship-information`),
       new URL(`https://www.marinevesseltraffic.com/vessels?search=${encodeURIComponent(identity.query)}`),
-    ],
-  },
-  {
-    provider: "VesselFinder",
-    buildUrls: (identity) => [
-      new URL(`https://www.vesselfinder.com/vessels?name=${encodeURIComponent(identity.query)}`),
     ],
   },
   {
@@ -324,9 +326,15 @@ function extractTableData(html: string, identity: LookupIdentity): VesselData {
   return data;
 }
 
-function extractVesselData(html: string, identity: LookupIdentity) {
+function extractVesselData(html: string, identity: LookupIdentity, provider: string) {
   const data = extractLabeledData(html);
   mergeFirstValues(data, extractTableData(html, identity));
+  if (provider === "VesselFinder") {
+    const vesselFinderData = extractVesselFinderFields(html, identity);
+    for (const field of ["flag", "call_sign", "vessel_type", "loa_meters", "beam_meters", "net_tonnage", "last_port", "eta"] as const) {
+      if (vesselFinderData[field] !== null) data[field] = vesselFinderData[field];
+    }
+  }
   return data;
 }
 
@@ -364,6 +372,8 @@ function cachedRecordToVesselData(record: VesselTechnicalRecord | null): VesselD
     gross_tonnage: Number(record?.grossTonnage) > 0 ? Number(record?.grossTonnage) : null,
     net_tonnage: Number(record?.netTonnage) > 0 ? Number(record?.netTonnage) : null,
     dwt: Number(record?.dwt) > 0 ? Number(record?.dwt) : null,
+    last_port: record?.lastPort || null,
+    eta: record?.eta || null,
   };
 }
 
@@ -385,6 +395,8 @@ function vesselDataToTechnicalRecord(data: VesselData, identity: LookupIdentity)
     netTonnage: data.net_tonnage,
     loaMeters: data.loa_meters,
     beamMeters: data.beam_meters,
+    lastPort: data.last_port,
+    eta: data.eta,
   };
 }
 
@@ -394,7 +406,12 @@ async function fetchDirectSource(
   deadlineAt: number,
 ): Promise<SourceResult> {
   const combined = emptyVesselData();
-  for (const url of source.buildUrls(identity)) {
+  const pendingUrls = source.buildUrls(identity);
+  const visitedUrls = new Set<string>();
+  for (let index = 0; index < pendingUrls.length; index += 1) {
+    const url = pendingUrls[index];
+    if (visitedUrls.has(url.href)) continue;
+    visitedUrls.add(url.href);
     const remainingMs = deadlineAt - Date.now();
     if (remainingMs <= 0) return { status: "timeout", data: combined };
     try {
@@ -411,8 +428,19 @@ async function fetchDirectSource(
       if (isBlockedPage(html)) {
         return { status: hasUsefulTechnicalData(combined) ? "success" : "blocked", data: combined };
       }
-      mergeFirstValues(combined, extractVesselData(html, identity));
-      if (hasCompleteDueDiligenceData(combined) && hasMandatoryTechnicalData(combined)) {
+      if (source.provider === "VesselFinder") {
+        const detailPath = extractVesselFinderDetailUrl(html, identity);
+        if (detailPath) {
+          const detailUrl = new URL(detailPath, url);
+          if (!visitedUrls.has(detailUrl.href) && !pendingUrls.some((candidate) => candidate.href === detailUrl.href)) {
+            pendingUrls.push(detailUrl);
+          }
+        }
+      }
+      mergeFirstValues(combined, extractVesselData(html, identity, source.provider));
+      const vesselFinderDetailPending = source.provider === "VesselFinder"
+        && pendingUrls.slice(index + 1).some((candidate) => candidate.pathname.includes("/vessels/details/"));
+      if (!vesselFinderDetailPending && hasCompleteDueDiligenceData(combined) && hasMandatoryTechnicalData(combined)) {
         return { status: "success", data: combined };
       }
     } catch (error) {
