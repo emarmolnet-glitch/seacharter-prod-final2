@@ -20,6 +20,8 @@ type VesselMasterRow = QueryResultRow & {
   process_status?: string | null;
   status?: string | null;
   validation_status?: string | null;
+  audit_status?: string | null;
+  audit_source?: string | null;
   source_payload?: unknown;
 };
 
@@ -74,6 +76,8 @@ export default async (req: Request) => {
             process_status,
             status,
             validation_status,
+            audit_status,
+            audit_source,
             source_payload
           FROM vessels_master
           WHERE status = 'EN_CARTERA' OR validation_status = 'VALIDADO'
@@ -99,6 +103,9 @@ export default async (req: Request) => {
           lng: row.longitude ?? (sourcePayload.longitude as number | null) ?? null,
           draft: row.draft_meters ?? (sourcePayload.draft as number | null) ?? null,
           flag: row.flag || (sourcePayload.flag as string | null) || (metadata.Flag as string | null) || null,
+          audit_status: row.audit_status || null,
+          auditStatus: row.audit_status || null,
+          audit_source: row.audit_source || null,
           data_source: 'databridge'
         };
       });
@@ -122,8 +129,8 @@ export default async (req: Request) => {
     // Extract digits for clean IMO check
     const imoDigits = searchTerm.replace(/\D/g, "");
 
-    // SQL query: exact match by imo_number OR ILIKE match by vessel_name
-    // Portfolio condition: either explicitly open or already validated.
+    // Local-first lookup: targeted searches must include freshly saved Due Diligence
+    // records even while they are still pending portfolio validation.
     const queryResult = await pool.query<VesselMasterRow>(
       `
         SELECT
@@ -145,15 +152,26 @@ export default async (req: Request) => {
           process_status,
           status,
           validation_status,
+          audit_status,
+          audit_source,
           source_payload
         FROM vessels_master
         WHERE (
           imo_number::text = $1
           OR ($3 != '' AND imo_number::text = $3)
+          OR mmsi = $1
+          OR ($3 != '' AND mmsi = $3)
           OR vessel_name ILIKE $2
         )
-        AND (status = 'EN_CARTERA' OR validation_status = 'VALIDADO')
-        ORDER BY fecha_ultima_actualizacion DESC NULLS LAST
+        ORDER BY
+          CASE
+            WHEN imo_number::text = $1 OR ($3 != '' AND imo_number::text = $3) THEN 0
+            WHEN mmsi = $1 OR ($3 != '' AND mmsi = $3) THEN 1
+            WHEN LOWER(vessel_name) = LOWER($1) THEN 2
+            WHEN audit_status IS NOT NULL THEN 3
+            ELSE 4
+          END,
+          fecha_ultima_actualizacion DESC NULLS LAST
         LIMIT 1
       `,
       [searchTerm, `%${searchTerm}%`, imoDigits],
@@ -194,6 +212,9 @@ export default async (req: Request) => {
       has_gears: row.has_gears ?? null,
       status: row.status,
       validation_status: row.validation_status,
+      audit_status: row.audit_status,
+      auditStatus: row.audit_status,
+      audit_source: row.audit_source,
       spd_ballast: sourcePayload.spd_ballast || null,
       spd_laden: sourcePayload.spd_laden || null,
       cons_sea: sourcePayload.cons_sea || null,
@@ -201,7 +222,8 @@ export default async (req: Request) => {
       loa: sourcePayload.loa || null,
       vessel_class: sourcePayload.vessel_class || row.vessel_type || null,
       specialty_type: sourcePayload.specialty_type || row.vessel_type || null,
-      data_source: 'databridge'
+      data_source: 'vessels_master',
+      local_first: true,
     };
 
     return Response.json({

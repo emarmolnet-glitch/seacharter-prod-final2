@@ -4,13 +4,12 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import vm from 'node:vm';
 
-const [indexSource, entrySource, serviceSource, backendSource, persistenceBackendSource, persistenceMigrationSource] = await Promise.all([
+const [indexSource, entrySource, serviceSource, backendSource, persistenceBackendSource] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../src/due-diligence-entry.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/services/dueDiligenceService.js', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/functions/vessel-due-diligence.ts', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/functions/vessel-due-diligence-save.ts', import.meta.url), 'utf8'),
-  readFile(new URL('../netlify/database/migrations/20260802120000_add_vessels_master_due_diligence_audit/migration.sql', import.meta.url), 'utf8'),
 ]);
 const serviceModule = await import(`data:text/javascript;base64,${Buffer.from(serviceSource).toString('base64')}`);
 const cargoTaxonomyModule = await import(new URL('../cargo-taxonomy.mjs', import.meta.url));
@@ -84,6 +83,9 @@ test('Due Diligence click is captured exclusively and never invokes local persis
   assert.match(entrySource, /persistDueDiligenceVessel\(vessel/);
   assert.match(entrySource, /acceptButton\.setAttribute\('aria-busy', 'true'\)/);
   assert.match(entrySource, /Guardando\.\.\./);
+  assert.match(entrySource, /Perfil técnico guardado en Neon y listo para Calculadora\./);
+  assert.match(entrySource, /Due Diligence guardada correctamente en Neon\./);
+  assert.match(entrySource, /No se pudo guardar en Neon\. El Store no fue modificado\./);
   assert.match(entrySource, /BUQUE NO COMERCIAL DETECTADO/);
   assert.match(entrySource, /accept\.disabled = commerciallyBlocked/);
   assert.doesNotMatch(entrySource, /\/api\/scrape-vessel/);
@@ -159,26 +161,22 @@ test('persistDueDiligenceVessel sends the consolidated vessel through PUT', asyn
   assert.equal(result.success, true);
 });
 
-test('persistence backend upserts vessels_master with pending audit provenance', () => {
+test('persistence backend upserts vessels_master using only standard technical columns', () => {
   assert.match(persistenceBackendSource, /path: "\/api\/vessel-due-diligence-save"/);
   assert.match(persistenceBackendSource, /ON CONFLICT \(imo_number\) DO UPDATE SET/);
-  assert.match(persistenceBackendSource, /audit_status = EXCLUDED\.audit_status/);
-  assert.match(persistenceBackendSource, /status = EXCLUDED\.status/);
-  assert.match(persistenceBackendSource, /fecha_ultima_actualizacion = NOW\(\)/);
-  assert.match(persistenceBackendSource, /audit_source = EXCLUDED\.audit_source/);
-  assert.match(persistenceBackendSource, /validation_status = EXCLUDED\.validation_status/);
-  assert.match(persistenceBackendSource, /const AUDIT_STATUS = "PENDING"/);
-  assert.match(persistenceBackendSource, /const SOURCE_PROVENANCE = "due_diligence_manual"/);
+  assert.match(persistenceBackendSource, /imo_number, vessel_name, dwt, mmsi, latitude, longitude, vessel_type,/);
+  assert.match(persistenceBackendSource, /draft_meters, flag, year_built/);
+  assert.match(persistenceBackendSource, /flag = COALESCE\(EXCLUDED\.flag, vessels_master\.flag\)/);
+  assert.match(persistenceBackendSource, /year_built = COALESCE\(EXCLUDED\.year_built, vessels_master\.year_built\)/);
+  assert.match(persistenceBackendSource, /SELECT COUNT\(\*\)::integer AS total FROM vessels_master/);
+  assert.match(persistenceBackendSource, /masterVesselCount:/);
   assert.match(persistenceBackendSource, /barbados: "BRB"/);
   assert.match(persistenceBackendSource, /cleanFlagCode/);
   assert.match(persistenceBackendSource, /NON_COMMERCIAL_VESSEL_PATTERN\.test\(vesselType\)/);
   assert.match(persistenceBackendSource, /console\.error\("\[vessel-due-diligence-save\] PostgreSQL persistence failed", error\)/);
   assert.match(persistenceBackendSource, /return json\(\{ success: false, error: errorMessage \}, 500, headers\)/);
-  assert.doesNotMatch(persistenceBackendSource, /source_provenance, origen, source, source_payload, updated_at/);
-  assert.match(persistenceMigrationSource, /ADD COLUMN IF NOT EXISTS "audit_status" text/);
-  assert.match(persistenceMigrationSource, /ADD COLUMN IF NOT EXISTS "source_provenance" text/);
-  assert.match(persistenceMigrationSource, /ADD COLUMN IF NOT EXISTS "status" text/);
-  assert.match(persistenceMigrationSource, /ADD COLUMN IF NOT EXISTS "fecha_ultima_actualizacion" timestamp with time zone/);
+  assert.doesNotMatch(persistenceBackendSource, /source_provenance|audit_status|audit_source|validation_status|system_identity|source_payload|fecha_ultima_actualizacion/);
+  assert.doesNotMatch(persistenceBackendSource, /\bsource\b\s*[,)!=]/);
 });
 
 test('backend accepts IMO, MMSI, or vessel name and searches the four public providers', () => {
@@ -267,7 +265,7 @@ test('store hydration updates matching and OpenShips records and clears missing-
     technicalEligibility: { criticalReasons: ['DWT desconocido', 'IMO pending'] },
     audit: { reasons: ['DWT no disponible'] },
   };
-  const { bridge, events } = loadBridge({
+  const { bridge, events, window } = loadBridge({
     openShipsVesselsCache: [rawVessel],
     lastMatchingEngineResults: [match],
     matchingResultsState: { vessels: [match], eligibleVessels: [] },
@@ -285,6 +283,9 @@ test('store hydration updates matching and OpenShips records and clears missing-
   assert.deepEqual(match.technicalEligibility.criticalReasons, []);
   assert.equal(rawVessel.latitude, 36.1234);
   assert.equal(rawVessel.longitude, -5.4321);
+  assert.equal(window.GlobalStore.dueDiligenceVessels.length, 1);
+  assert.equal(window.GlobalStore.dueDiligenceVessels[0].imo, '9876543');
+  assert.equal(window.GlobalStore.dueDiligenceVessels[0].year_built, 2018);
   assert.ok(events.some(event => event.type === 'vessel:due-diligence-hydrated'));
 });
 
@@ -390,13 +391,10 @@ test('proposal review persists first and hydrates the Store only after HTTP succ
   assert.equal(match.dwtAssessment.status, 'SUFFICIENT');
   assert.equal(match.compatibility.capacityOk, true);
   assert.equal(match.hasTechnicalWarning, false);
-  assert.equal(match.vessel.audit_status, 'PENDING');
-  assert.equal(match.vessel.source_provenance, 'due_diligence_manual');
   assert.equal(persistedVessel.imo, '9876543');
   assert.equal(persistedVessel.dwt, 10_953);
-  assert.equal(persistedVessel.audit_status, 'PENDING');
-  assert.equal(persistedVessel.process_status, 'PENDING_REVIEW');
-  assert.equal(persistedVessel.source_provenance, 'due_diligence_manual');
+  assert.equal('audit_status' in persistedVessel, false);
+  assert.equal('source_provenance' in persistedVessel, false);
   assert.equal(bridge.pendingProposals.has(key), false);
 });
 
