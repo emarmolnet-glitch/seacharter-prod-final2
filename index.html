@@ -14945,7 +14945,7 @@
         window.DEFAULT_CHARTERER_MARGIN = DEFAULT_CHARTERER_MARGIN;
 
         const State = {
-            vessel: "", dwt: 0, class: "", opex: 0, vesselDwtFixed: false,
+            vessel: "", dwt: 0, gt: 0, loa: 0, class: "", opex: 0, vesselDwtFixed: false,
             userHasEditedSpecialty: false,
             uploadedFile: null,
             nplDataOrigin: "Externo",
@@ -21189,7 +21189,10 @@
                             imo: v.imo,
                             flag: flag,
                             dwt: hasKnownDwt ? vesselDwt : null,
-                            loa: `${v.loa}m`,
+                            gt: v.gt ?? v.gross_tonnage ?? v.grossTonnage ?? 0,
+                            gross_tonnage: v.gross_tonnage ?? v.gt ?? v.grossTonnage ?? 0,
+                            loa: v.loa ?? v.loa_meters ?? v.LOA ?? v.length_overall ?? v.lengthOverall ?? 0,
+                            loa_meters: v.loa_meters ?? v.loa ?? v.LOA ?? v.length_overall ?? v.lengthOverall ?? 0,
                             draft: `${v.draft}m`,
                             built_year: yearBuiltValue,
                             spd_ballast: v.spdBallast || "12.0",
@@ -22819,8 +22822,8 @@
             const imo = String(vessel?.imo || vessel?.imo_number || vessel?.numero_imo || '').trim();
             const flag = String(vessel?.flag || '').trim();
             const dwt = Number(vessel?.dwt);
-            const gt = Number(vessel?.gt ?? vessel?.gross_tonnage ?? vessel?.grossTonnage);
-            const loa = Number(vessel?.loa ?? vessel?.LOA ?? vessel?.length_overall ?? vessel?.lengthOverall);
+            const gt = parseFloat(vessel?.gt ?? vessel?.gross_tonnage ?? vessel?.grossTonnage);
+            const loa = parseFloat(vessel?.loa ?? vessel?.loa_meters ?? vessel?.LOA ?? vessel?.length_overall ?? vessel?.lengthOverall);
             const yearBuilt = Number(vessel?.year_built ?? vessel?.built_year ?? vessel?.yearBuilt ?? vessel?.builtYear);
             const nameInput = document.getElementById('vessel-name') || document.getElementById('nombre-buque-calculadora');
             if (nameInput && vesselName) nameInput.value = vesselName;
@@ -22832,6 +22835,7 @@
             if (flagBadgeInput) flagBadgeInput.value = flag;
             const gtInput = document.getElementById('vessel-identity-gt');
             if (gtInput) gtInput.value = Number.isFinite(gt) && gt > 0 ? String(Math.round(gt)) : '';
+            State.gt = Number.isFinite(gt) && gt > 0 ? gt : 0;
             const loaValue = Number.isFinite(loa) && loa > 0 ? loa : null;
             const loaInput = document.getElementById('vessel-identity-loa');
             if (loaInput) loaInput.value = loaValue ? String(loaValue) : '';
@@ -22882,6 +22886,7 @@
                 if (typeof handleFlagOrPscChange === 'function') handleFlagOrPscChange();
             } else if (field === 'gt') {
                 updatedVessel.gt = Number.isFinite(normalizedValue) && normalizedValue > 0 ? normalizedValue : null;
+                State.gt = updatedVessel.gt || 0;
             } else if (field === 'loa') {
                 const loa = Number.isFinite(normalizedValue) && normalizedValue > 0 ? normalizedValue : null;
                 updatedVessel.loa = loa;
@@ -22915,7 +22920,9 @@
                 const vessel = {
                     ...sourceVessel,
                     imo: sourceVessel.imo || sourceVessel.imo_number,
-                    flag: sourceVessel.flag || 'Unknown'
+                    flag: sourceVessel.flag || 'Unknown',
+                    gt: sourceVessel.gt ?? sourceVessel.gross_tonnage ?? sourceVessel.grossTonnage ?? 0,
+                    loa: sourceVessel.loa ?? sourceVessel.loa_meters ?? sourceVessel.LOA ?? sourceVessel.length_overall ?? sourceVessel.lengthOverall ?? 0
                 };
                 const resolvedImo = String(vessel.imo || vessel.imo_number || vessel.numero_imo || '').replace(/\D/g, '');
                 if (resolvedImo.length === 7) {
@@ -22942,7 +22949,7 @@
                 if (draftInput) draftInput.value = parseFloat(vessel.draft);
 
                 const loaInput = document.getElementById('vessel-loa');
-                if (loaInput) loaInput.value = parseFloat(vessel.loa);
+                if (loaInput && identity.loa) loaInput.value = String(identity.loa);
 
                 const speedBallastInput = document.getElementById('vessel-speed-ballast');
                 if (speedBallastInput) speedBallastInput.value = vessel.spd_ballast;
@@ -39921,35 +39928,47 @@ Example:
         function applyVesselSpecsFromComp(vesselEscaped) {
             try {
                 const data = JSON.parse(decodeURIComponent(vesselEscaped));
+                const vessel = {
+                    ...data,
+                    gt: data.gt ?? data.gross_tonnage ?? data.grossTonnage ?? 0,
+                    loa: data.loa ?? data.loa_meters ?? data.LOA ?? data.length_overall ?? data.lengthOverall ?? 0
+                };
+                const identity = updateCalculatorVesselIdentityDisplay(vessel);
                 
-                if (data.vessel_name || data.Name) {
-                    document.getElementById('vessel-name').value = data.vessel_name || data.Name;
+                if (vessel.vessel_name || vessel.Name) {
+                    document.getElementById('vessel-name').value = vessel.vessel_name || vessel.Name;
                 }
-                if (data.dwt || data.DWT) {
-                    document.getElementById('vessel-dwt').value = Math.round(data.dwt || data.DWT);
+                if (vessel.dwt || vessel.DWT) {
+                    document.getElementById('vessel-dwt').value = Math.round(vessel.dwt || vessel.DWT);
                     State.vesselDwtFixed = true;
                 }
-                if (data.spd_ballast) {
-                    document.getElementById('spd-ballast').value = parseFloat(data.spd_ballast).toFixed(1);
+                if (vessel.spd_ballast) {
+                    document.getElementById('spd-ballast').value = parseFloat(vessel.spd_ballast).toFixed(1);
                     markKnownVesselSpeed('spd-ballast');
                 }
-                if (data.spd_laden) {
-                    document.getElementById('spd-laden').value = parseFloat(data.spd_laden).toFixed(1);
+                if (vessel.spd_laden) {
+                    document.getElementById('spd-laden').value = parseFloat(vessel.spd_laden).toFixed(1);
                     markKnownVesselSpeed('spd-laden');
                 }
-                if (data.cons_sea) {
-                    document.getElementById('cons-sea').value = parseFloat(data.cons_sea).toFixed(1);
+                if (vessel.cons_sea) {
+                    document.getElementById('cons-sea').value = parseFloat(vessel.cons_sea).toFixed(1);
                 }
-                if (data.cons_port) {
-                    document.getElementById('cons-port').value = parseFloat(data.cons_port).toFixed(1);
+                if (vessel.cons_port) {
+                    document.getElementById('cons-port').value = parseFloat(vessel.cons_port).toFixed(1);
                 }
-                if (data.vessel_class) {
-                    document.getElementById('vessel-badge').innerText = data.vessel_class;
-                    State.class = data.vessel_class;
+                if (vessel.vessel_class) {
+                    document.getElementById('vessel-badge').innerText = vessel.vessel_class;
+                    State.class = vessel.vessel_class;
                 }
-                if (data.specialty_type) {
-                    document.getElementById('gc-add-specialty').value = data.specialty_type;
+                if (vessel.specialty_type) {
+                    document.getElementById('gc-add-specialty').value = vessel.specialty_type;
                     State.userHasEditedSpecialty = false;
+                }
+                State.vessel = identity.vesselName;
+                State.dwt = Number(vessel.dwt ?? vessel.DWT) || 0;
+                if (window.GlobalStore) {
+                    window.GlobalStore.activeVessel = vessel;
+                    window.GlobalStore.calculatorVessel = vessel;
                 }
 
                 closeComparisonModal();
@@ -56263,7 +56282,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     draft: vessel.draft || (existing ? existing.draft : null),
                     dwt: vessel.dwt || (existing ? existing.dwt : null),
                     gt: vessel.gt || vessel.gross_tonnage || vessel.grossTonnage || (existing ? existing.gt : null),
-                    loa: vessel.loa || vessel.LOA || vessel.length_overall || (existing ? existing.loa : null),
+                    loa: vessel.loa || vessel.loa_meters || vessel.LOA || vessel.length_overall || (existing ? existing.loa : null),
                     flag: vessel.flag || vessel.bandera || (existing ? existing.flag : "Unknown"),
                     year_built: vessel.year_built || vessel.built_year || vessel.yearBuilt || (existing ? existing.year_built : null),
                     spd_ballast: vessel.spd_ballast || (existing ? existing.spd_ballast : null),

@@ -76,6 +76,8 @@ test('Apply to Estimator consolidates IMO and exposes the active calculator vess
   assert.match(applySource, /vessel\.imo \|\| vessel\.imo_number \|\| vessel\.numero_imo/);
   assert.match(applySource, /imo: sourceVessel\.imo \|\| sourceVessel\.imo_number/);
   assert.match(applySource, /flag: sourceVessel\.flag \|\| 'Unknown'/);
+  assert.match(applySource, /gt: sourceVessel\.gt \?\? sourceVessel\.gross_tonnage/);
+  assert.match(applySource, /loa: sourceVessel\.loa \?\? sourceVessel\.loa_meters/);
   assert.match(applySource, /void saveVesselToIndexedDB\(\{/);
   assert.match(applySource, /imo: vessel\.imo \|\| vessel\.imo_number/);
   assert.match(applySource, /flag: vessel\.flag \|\| 'Unknown'/);
@@ -121,6 +123,7 @@ test('calculator renders six editable technical badges in a full-width row betwe
   assert.match(indexSource, /imoInput\.value = imo/);
   assert.match(indexSource, /flagBadgeInput\.value = flag/);
   assert.match(indexSource, /gtInput\.value = Number\.isFinite\(gt\)/);
+  assert.match(indexSource, /State\.gt = Number\.isFinite\(gt\)/);
   assert.match(indexSource, /loaInput\.value = loaValue/);
   assert.match(indexSource, /calculatorLoaInput\.value = loaValue/);
   assert.match(indexSource, /yearInput\.value = Number\.isFinite\(yearBuilt\)/);
@@ -131,6 +134,16 @@ test('calculator renders six editable technical badges in a full-width row betwe
     indexSource.indexOf('function applyMatchingVesselToCalculator('),
     indexSource.indexOf('// --- LECTURA DE WPI.CSV'),
   ), /updateCalculatorVesselIdentityDisplay\(vessel\)/);
+  assert.match(indexSource, /const loa = parseFloat\(vessel\?\.loa \?\? vessel\?\.loa_meters/);
+  assert.match(indexSource, /gross_tonnage: v\.gross_tonnage \?\? v\.gt/);
+  assert.match(indexSource, /loa_meters: v\.loa_meters \?\? v\.loa/);
+  const comparisonApplyStart = indexSource.indexOf('function applyVesselSpecsFromComp(vesselEscaped)');
+  const comparisonApplyEnd = indexSource.indexOf('function backToComparisonInputs()', comparisonApplyStart);
+  const comparisonApplySource = indexSource.slice(comparisonApplyStart, comparisonApplyEnd);
+  assert.match(comparisonApplySource, /gt: data\.gt \?\? data\.gross_tonnage/);
+  assert.match(comparisonApplySource, /loa: data\.loa \?\? data\.loa_meters/);
+  assert.match(comparisonApplySource, /updateCalculatorVesselIdentityDisplay\(vessel\)/);
+  assert.match(comparisonApplySource, /window\.GlobalStore\.calculatorVessel = vessel/);
   assert.match(indexSource.slice(
     indexSource.indexOf('async function loadVesselParamsFromIndexedDB'),
     indexSource.indexOf('async function saveEditedVesselParams'),
@@ -152,6 +165,7 @@ test('manual DWT edits update calculator state and force compatibility recalcula
   assert.match(handlerSource, /refreshVesselCompatibilityWarning\(\)/);
   assert.match(handlerSource, /numericFields = new Set\(\['dwt', 'gt', 'loa', 'year_built'\]\)/);
   assert.match(handlerSource, /updatedVessel\.loa = loa/);
+  assert.match(handlerSource, /State\.gt = updatedVessel\.gt \|\| 0/);
   assert.match(handlerSource, /State\.loa = loa \|\| 0/);
   assert.match(handlerSource, /field === 'gt' \|\| field === 'loa'/);
   assert.match(handlerSource, /window\.GlobalStore\.activeVessel = updatedVessel/);
@@ -183,7 +197,7 @@ test('IndexedDB preserves canonical vessel identity and technical fields', () =>
   assert.match(saveSource, /imo: String\(vessel\.imo\)/);
   assert.match(saveSource, /flag: vessel\.flag \|\| vessel\.bandera/);
   assert.match(saveSource, /gt: vessel\.gt \|\| vessel\.gross_tonnage/);
-  assert.match(saveSource, /loa: vessel\.loa \|\| vessel\.LOA \|\| vessel\.length_overall/);
+  assert.match(saveSource, /loa: vessel\.loa \|\| vessel\.loa_meters \|\| vessel\.LOA \|\| vessel\.length_overall/);
   assert.match(saveSource, /year_built: vessel\.year_built \|\| vessel\.built_year \|\| vessel\.yearBuilt/);
   assert.match(saveSource, /spd_ballast:/);
   assert.match(saveSource, /cons_port:/);
