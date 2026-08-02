@@ -22878,6 +22878,10 @@
                 window.GlobalStore.activeVessel = updatedVessel;
                 window.GlobalStore.calculatorVessel = updatedVessel;
             }
+            if (field === 'gt' && typeof debouncedAutoFillPDA === 'function') {
+                debouncedAutoFillPDA('pol', false, 150);
+                debouncedAutoFillPDA('pod', false, 150);
+            }
             if (typeof scheduleReactiveEngine === 'function') scheduleReactiveEngine();
         }
         window.handleManualVesselUpdate = handleManualVesselUpdate;
@@ -28236,6 +28240,40 @@
 	            return 0.30;
 	        }
 
+	        function getCalculatorVesselForPda(dwtOverride = 0) {
+	            const storedVessel = window.GlobalStore?.calculatorVessel || window.GlobalStore?.activeVessel || {};
+	            const manualGt = Number(document.getElementById('vessel-identity-gt')?.value);
+	            const dwt = Number(dwtOverride) > 0
+	                ? Number(dwtOverride)
+	                : (Number(document.getElementById('vessel-dwt')?.value) || Number(storedVessel.dwt) || Number(State?.dwt) || 0);
+	            return {
+	                ...storedVessel,
+	                dwt,
+	                gt: manualGt > 0 ? manualGt : storedVessel.gt
+	            };
+	        }
+
+	        function getPdaGtCalculationContext(vesselData = {}) {
+	            const vessel = vesselData && typeof vesselData === 'object' ? vesselData : {};
+	            const realGt = Number(vessel.gt);
+	            const dwt = Number(vessel.dwt) || 0;
+	            const gtParaCalculo = (vessel.gt && realGt > 0) ? realGt : (dwt * 0.60);
+	            return { gtParaCalculo, hasRealGt: Boolean(vessel.gt && realGt > 0), realGt, dwt };
+	        }
+
+	        function getPdaGtMethodologyLabel(language = 'es') {
+	            const vessel = getCalculatorVesselForPda();
+	            const { hasRealGt, realGt } = getPdaGtCalculationContext(vessel);
+	            if (language === 'en') {
+	                return hasRealGt
+	                    ? `Actual Gross Tonnage GT: ${Math.round(realGt).toLocaleString('en-US')}`
+	                    : 'Estimated Gross Tonnage GT at 60% of DWT';
+	            }
+	            return hasRealGt
+	                ? `Arqueo Bruto GT Real: ${Math.round(realGt).toLocaleString('es-ES')}`
+	                : 'Arqueo Bruto GT Estimado al 60% DWT';
+	        }
+
 	        function calculateGlobalPdaEstimate(dwtOrVesselData, portNameParam = '', portDaysParam = 3.0, gtParam = 0) {
 	            let dwt = 0;
 	            let inputGT = 0;
@@ -28270,13 +28308,14 @@
 	                    : (document.getElementById('metodo_carga')?.value || '');
 	            }
 
-	            const calculoGT = inputGT > 0 ? inputGT : (dwt > 0 ? dwt * 0.60 : 6000);
+	            const vessel = { dwt, gt: inputGT };
+	            const { gtParaCalculo } = getPdaGtCalculationContext(vessel);
 	            const baseTonnageRate = getTonnageDuesRate(portName);
-	            const tasasAutoridad = calculoGT * baseTonnageRate;
+	            const tasasAutoridad = gtParaCalculo * baseTonnageRate;
 
 	            const agencyFeeBase = 2300;
-	            const fixedManeuverBase = calculoGT * 1.25;
-	            const dailyBerthBase = calculoGT * 0.15 * portDays;
+	            const fixedManeuverBase = gtParaCalculo * 1.25;
+	            const dailyBerthBase = gtParaCalculo * 0.15 * portDays;
 
 	            const baseCostes = agencyFeeBase + fixedManeuverBase + dailyBerthBase + tasasAutoridad;
 
@@ -28294,10 +28333,11 @@
 	            const dwt = Number(vesselData?.dwt) || 0;
 	            const inputGT = Number(vesselData?.gt) || 0;
 
-	            const calculoGT = inputGT > 0 ? inputGT : (dwt > 0 ? dwt * 0.60 : 6000);
-	            const stdGt = dwt > 0 ? dwt * 0.60 : 6000;
+	            const vessel = { ...vesselData, dwt, gt: inputGT };
+	            const { gtParaCalculo } = getPdaGtCalculationContext(vessel);
+	            const stdGt = dwt * 0.60;
 	            const stdLoa = dwt > 0 ? Math.pow(dwt, 0.333) * 5.2 : 200;
-	            const gtFactor = (calculoGT > 0 && stdGt > 0) ? Math.min(2.0, Math.max(0.5, calculoGT / stdGt)) : 1.0;
+	            const gtFactor = (gtParaCalculo > 0 && stdGt > 0) ? Math.min(2.0, Math.max(0.5, gtParaCalculo / stdGt)) : 1.0;
 	            const loaFactor = (vesselData?.loa > 0 && stdLoa > 0) ? Math.min(2.0, Math.max(0.5, vesselData.loa / stdLoa)) : 1.0;
 
 	            const portName = vesselData?.portName || '';
@@ -28310,9 +28350,9 @@
 
 	            const baseTonnageRate = getTonnageDuesRate(portName);
 	            const agencyFeeBase = 2300;
-	            const fixedManeuverBase = calculoGT * 1.25;
-	            const dailyBerthBase = calculoGT * 0.15 * portDays;
-	            const rawTasasAutoridad = calculoGT * baseTonnageRate;
+	            const fixedManeuverBase = gtParaCalculo * 1.25;
+	            const dailyBerthBase = gtParaCalculo * 0.15 * portDays;
+	            const rawTasasAutoridad = gtParaCalculo * baseTonnageRate;
 
 	            const metricsEntry = getCargoMetricsEntry(cargoCategory, cargoMethod);
 	            const pdaPremium = Number(metricsEntry?.pdaPremium) || 1.10;
@@ -28577,16 +28617,19 @@
                 marginInput.value = marginDays.toFixed(2);
             }
 
-            // Pre-cálculos navales ajustados al buque real (Ej: Acqua Stella 10k DWT = ~6.3k GT)
+            // Pre-cálculos navales: priorizar siempre el GT real del buque y estimarlo solo como fallback.
             const netTonnage = readNumber('vessel-net-tonnage');
-            const gt = Math.round(netTonnage > 0 ? Math.max(netTonnage * 1.55, dwt * 0.45) : dwt * 0.60);
+            const storedVessel = window.GlobalStore?.calculatorVessel || window.GlobalStore?.activeVessel || {};
+            const manualGt = readNumber('vessel-identity-gt');
+            const vessel = { ...storedVessel, dwt, gt: manualGt > 0 ? manualGt : storedVessel.gt };
+            const gtParaCalculo = (vessel.gt && Number(vessel.gt) > 0) ? Number(vessel.gt) : (Number(vessel.dwt) * 0.60);
             const loaFromInput = readNumber('vessel-loa');
             const loa = Math.round(loaFromInput > 0 ? loaFromInput : Math.pow(dwt, 0.333) * 5.2);
             const beam = Math.round(Math.pow(dwt, 0.333) * 0.82);
 	            const daysInPort = cargo > 0 && activeRate > 0 ? (cargo / activeRate) : 0;
 	            const totalDaysInPort = daysInPort + (marginDays / 2);
 
-	            const vesselData = { portName, dwt, cargo, gt, loa, beam, totalDaysInPort, netTonnage, loaFromInput };
+	            const vesselData = { ...vessel, portName, dwt, cargo, gt: gtParaCalculo, loa, beam, totalDaysInPort, netTonnage, loaFromInput };
 	            const calculation = calculateGlobalPdaEstimateBreakdown(vesselData);
 	            const calculationMode = 'global-estimate';
 
@@ -30967,9 +31010,11 @@
                 const dwt = rawDwt > 0 ? rawDwt : (cargoQty > 0 ? Math.round(cargoQty * 1.15) : 15000);
                 const polPortName = document.getElementById('port-pol')?.value || State.pol || '';
                 const podPortName = document.getElementById('port-pod')?.value || State.pod || '';
+                const vessel = getCalculatorVesselForPda(dwt);
+                const { gtParaCalculo } = getPdaGtCalculationContext(vessel);
                 if (dwt > 0 && typeof calculateGlobalPdaEstimateBreakdown === 'function') {
                     if (pdaPolVal <= 0) {
-                        const fallbackPol = calculateGlobalPdaEstimateBreakdown({ portName: polPortName, dwt, gt: dwt * 0.6, loa: Math.pow(dwt, 0.333) * 5.2 });
+                        const fallbackPol = calculateGlobalPdaEstimateBreakdown({ ...vessel, portName: polPortName, dwt, gt: gtParaCalculo, loa: Math.pow(dwt, 0.333) * 5.2 });
                         if (fallbackPol && fallbackPol.totalPDA > 0) {
                             pdaPolVal = fallbackPol.totalPDA;
                             const el = document.getElementById('pda-pol');
@@ -30978,7 +31023,7 @@
                         }
                     }
                     if (pdaPodVal <= 0) {
-                        const fallbackPod = calculateGlobalPdaEstimateBreakdown({ portName: podPortName, dwt, gt: dwt * 0.6, loa: Math.pow(dwt, 0.333) * 5.2 });
+                        const fallbackPod = calculateGlobalPdaEstimateBreakdown({ ...vessel, portName: podPortName, dwt, gt: gtParaCalculo, loa: Math.pow(dwt, 0.333) * 5.2 });
                         if (fallbackPod && fallbackPod.totalPDA > 0) {
                             pdaPodVal = Math.round(fallbackPod.totalPDA * 1.10);
                             const el = document.getElementById('pda-pod');
@@ -40437,8 +40482,8 @@ Example:
                                     <p><strong>${currentLang === 'es' ? 'Fuentes y Metodología' : 'Methodology & Sources'}:</strong></p>
                                     <p class="italic text-slate-500 font-sans font-medium">
                                         ${currentLang === 'es'
-                                            ? 'Las tarifas se calculan utilizando el estimador algorítmico paramétrico SeaCharter Core PRO, parametrizando las características del buque (Arqueo Bruto GT ≈ DWT * 0.60, Eslora LOA, Manga Beam) y aplicando multiplicadores de puerto según la base de datos nacional e internacional.'
-                                            : 'Tariffs are calculated using the SeaCharter Core PRO parametric algorithmic estimator, based on vessel characteristics (Gross Tonnage GT ≈ DWT * 0.60, Length Overall LOA, Beam) and applying port-specific country multipliers from the local database.'}
+                                            ? `Las tarifas se calculan utilizando el estimador algorítmico paramétrico SeaCharter Core PRO, parametrizando las características del buque (${getPdaGtMethodologyLabel('es')}, Eslora LOA, Manga Beam) y aplicando multiplicadores de puerto según la base de datos nacional e internacional.`
+                                            : `Tariffs are calculated using the SeaCharter Core PRO parametric algorithmic estimator, based on vessel characteristics (${getPdaGtMethodologyLabel('en')}, Length Overall LOA, Beam) and applying port-specific country multipliers from the local database.`}
                                     </p>
                                 </div>
                             </details>
@@ -41064,7 +41109,7 @@ Example:
                                 </tr>
                             </table>
                             <p style="font-size: 6.8pt; color: #64748b; margin: 4px 0 0 0; text-align: justify; font-style: italic;">
-                                Tarifas calculadas utilizando el estimador paramétrico SeaCharter Core PRO, según las características del buque (GT, LOA, Manga) y multiplicadores de puerto de la base de datos local. / Tariffs calculated using SeaCharter Core PRO parametric estimator, based on vessel specs (GT, LOA, Beam) and port country multipliers.
+                                Tarifas calculadas utilizando el estimador paramétrico SeaCharter Core PRO, según las características del buque (${getPdaGtMethodologyLabel('es')}, Eslora LOA, Manga Beam) y multiplicadores de puerto de la base de datos local. / Tariffs calculated using SeaCharter Core PRO parametric estimator, based on vessel specs (${getPdaGtMethodologyLabel('en')}, Length Overall LOA, Beam) and port country multipliers.
                             </p>
                         </div>
                     </div>

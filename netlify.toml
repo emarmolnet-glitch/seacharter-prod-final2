@@ -17,7 +17,6 @@
 
 [build.environment]
   NODE_ENV = "production"
-  NETLIFY_DATABASE_MIGRATIONS_ENABLED = "true"
 
 [[headers]]
   for = "/*"
