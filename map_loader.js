@@ -241,6 +241,27 @@
         return Number.isFinite(parsed) ? parsed : null;
     }
 
+    function findValidAisDirection(scopes, keys, unavailableValue) {
+        for (const scope of scopes) {
+            if (!scope || typeof scope !== 'object') continue;
+            for (const key of keys) {
+                const direction = normalizeNumeric(scope[key]);
+                if (direction === null || direction === unavailableValue) continue;
+                if (direction >= 0 && direction < 360) return direction;
+            }
+        }
+        return null;
+    }
+
+    function resolveAisNavigationCourse(scopesInput) {
+        const scopes = Array.isArray(scopesInput) ? scopesInput : [scopesInput];
+        const cog = findValidAisDirection(scopes, ['courseOverGround', 'CourseOverGround', 'cogDegrees', 'Cog', 'COG', 'cog', 'course', 'Course'], 360);
+        const hdg = findValidAisDirection(scopes, ['trueHeading', 'TrueHeading', 'HDG', 'hdg', 'heading', 'Heading'], 511);
+        if (cog !== null) return { value: cog, source: 'COG', cog, hdg };
+        if (hdg !== null) return { value: hdg, source: 'HDG', cog, hdg };
+        return { value: null, source: null, cog, hdg };
+    }
+
     function getVesselDisplayName(ship) {
         const meta = ship && ship.MetaData ? ship.MetaData : {};
         return firstDefined(ship && ship.name, ship && ship.ShipName, ship && ship.vessel_name, meta.ShipName, meta.shipName, meta.name) || "Sin nombre";
@@ -425,9 +446,22 @@
     function normalizeShipFields(ship) {
         if (!ship || typeof ship !== 'object') return null;
         const sourcePayload = parseAisSourcePayload(ship.source_payload || ship.sourcePayload);
-        const meta = ship.MetaData || ship.metadata || sourcePayload.MetaData || sourcePayload.metadata || {};
-        const position = ship.PositionReport || ship.position || sourcePayload.PositionReport || sourcePayload.position || {};
-        const scopes = [ship, sourcePayload, meta, position];
+        const message = ship.Message || ship.message || sourcePayload.Message || sourcePayload.message || {};
+        const meta = ship.MetaData || ship.metadata || message.MetaData || message.metadata || sourcePayload.MetaData || sourcePayload.metadata || {};
+        const position = ship.PositionReport
+            || ship.StandardClassBPositionReport
+            || ship.ExtendedClassBPositionReport
+            || ship.position
+            || message.PositionReport
+            || message.StandardClassBPositionReport
+            || message.ExtendedClassBPositionReport
+            || message.position
+            || sourcePayload.PositionReport
+            || sourcePayload.StandardClassBPositionReport
+            || sourcePayload.ExtendedClassBPositionReport
+            || sourcePayload.position
+            || {};
+        const scopes = [ship, sourcePayload, message, meta, position];
         const read = (keys) => {
             for (const scope of scopes) {
                 for (const key of keys) {
@@ -446,6 +480,7 @@
         const normalizedDwt = normalizeNumeric(read(['DWT_real', 'dwt_real', 'DWT', 'dwt', 'deadweight', 'deadweight_tonnage']));
         const normalizedDraft = normalizeNumeric(read(['Draft', 'draft', 'maxDraft', 'max_draft', 'draft_meters']));
         const speed = normalizeNumeric(read(['speed', 'sog', 'Sog', 'SOG'])) || 0;
+        const navigation = resolveAisNavigationCourse(scopes);
         const destination = firstDefined(read(['destination', 'Destination', 'current_destination', 'plannedDestination', 'destino_actual', 'destino', 'dest', 'Dest']), 'N/A');
         const lastPortOfCall = firstDefined(read(['lastPortOfCall', 'last_port_of_call', 'ultimo_puerto', 'LastPort', 'lastPort', 'DeparturePort']), 'N/A');
         const shipType = firstDefined(read(['shipType', 'ShipType', 'vesselType', 'vessel_type', 'type']), 'Unknown');
@@ -487,6 +522,14 @@
             Draft: normalizedDraft === null ? undefined : normalizedDraft,
             draft: normalizedDraft === null ? undefined : normalizedDraft,
             speed,
+            course: navigation.cog === null ? undefined : navigation.cog,
+            cog: navigation.cog === null ? undefined : navigation.cog,
+            COG: navigation.cog === null ? undefined : navigation.cog,
+            heading: navigation.hdg === null ? undefined : navigation.hdg,
+            HDG: navigation.hdg === null ? undefined : navigation.hdg,
+            navigationCourse: navigation.value === null ? undefined : navigation.value,
+            headingSource: navigation.source,
+            hasHeading: navigation.value !== null,
             destination: String(destination),
             plannedDestination: String(destination),
             destino_actual: String(destination),
@@ -1102,6 +1145,7 @@
         isCommercialVessel,
         filterCommercialVessels,
         normalizeShipFields,
+        resolveAisNavigationCourse,
         emitHydrationUpdate,
         setAisStreamBounds,
         setAisStreamBoundsFromLeafletBounds,
