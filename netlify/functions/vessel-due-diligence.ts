@@ -6,12 +6,13 @@ import {
   upsertVesselTechnicalRecord,
   type VesselTechnicalRecord,
 } from "../../db/vessel-technical-cache.js";
-import { mappedVesselField } from "./_shared/vessel-field-mappings.mjs";
+import { mappedVesselField, parseVesselAttribute } from "./_shared/vessel-field-mappings.mjs";
 
 type VesselData = {
   imo_number: string | null;
   vessel_name: string | null;
   flag: string | null;
+  call_sign: string | null;
   vessel_type: string | null;
   year_built: number | null;
   loa_meters: number | null;
@@ -54,6 +55,7 @@ const FIELD_NAMES = [
   "imo_number",
   "vessel_name",
   "flag",
+  "call_sign",
   "vessel_type",
   "year_built",
   "loa_meters",
@@ -98,6 +100,7 @@ function emptyVesselData(): VesselData {
     imo_number: null,
     vessel_name: null,
     flag: null,
+    call_sign: null,
     vessel_type: null,
     year_built: null,
     loa_meters: null,
@@ -205,9 +208,9 @@ function extractLabeledData(html: string): VesselData {
   const data = emptyVesselData();
   const candidates = new Map<string, string>();
 
-  $("tr, dl, li, [class*='detail'], [class*='info']").each((_, element) => {
+  $("tr, li, [class*='detail'], [class*='info'], [class*='attribute'], [class*='spec']").each((_, element) => {
     const node = $(element);
-    const cells = node.find("th, td, dt, dd");
+    const cells = node.children("th, td, dt, dd, div, span");
     if (cells.length >= 2) {
       const label = cleanText($(cells[0]).text());
       const value = cleanText($(cells[cells.length - 1]).text());
@@ -215,10 +218,26 @@ function extractLabeledData(html: string): VesselData {
     }
   });
 
+  $("dt").each((_, element) => {
+    const label = cleanText($(element).text());
+    const value = cleanText($(element).next("dd").text());
+    if (label && value) candidates.set(label, value);
+  });
+
+  $("[data-label], [data-title]").each((_, element) => {
+    const node = $(element);
+    const label = cleanText(node.attr("data-label") || node.attr("data-title"));
+    const value = cleanText(node.text());
+    if (label && value) candidates.set(label, value);
+  });
+
   for (const [rawKey, rawValue] of candidates) {
-    const field = mappedVesselField(rawKey) as keyof VesselData | null;
-    if (field && data[field] === null) {
-      (data[field] as VesselData[typeof field]) = valueForField(field, rawValue);
+    const parsedAttribute = parseVesselAttribute(rawKey, rawValue) as {
+      column: keyof VesselData;
+      value: VesselData[keyof VesselData];
+    } | null;
+    if (parsedAttribute && data[parsedAttribute.column] === null) {
+      (data[parsedAttribute.column] as VesselData[typeof parsedAttribute.column]) = parsedAttribute.value;
     }
   }
 
@@ -245,6 +264,7 @@ function extractLabeledData(html: string): VesselData {
   data.imo_number ||= normalizeImo(bodyText.match(/\bIMO(?:\s+number)?\s*[:#-]?\s*(\d{7})\b/i)?.[1]) || null;
   data.dwt ||= cleanNumber(bodyText.match(/\b(?:DWT|Deadweight)\s*[:#-]?\s*([\d,\.\s]+)\s*(?:MT|t|tonnes)?\b/i)?.[1]);
   data.flag ||= cleanText(bodyText.match(/\bFlag\s*[:#-]\s*([A-Za-z][A-Za-z .'-]{1,40}?)(?=\s+(?:IMO|MMSI|Vessel|Ship|Type|Built|Year|DWT|Deadweight)\b|$)/i)?.[1]);
+  data.call_sign ||= cleanText(bodyText.match(/\b(?:Call\s*Sign|Indicativo)\s*[:#-]\s*([A-Za-z0-9-]{2,20})\b/i)?.[1]);
   data.vessel_type ||= cleanText(bodyText.match(/\b(?:Vessel|Ship)\s+Type\s*[:#-]\s*([A-Za-z][A-Za-z0-9 /&.'-]{1,60}?)(?=\s+(?:IMO|MMSI|Flag|Built|Year|DWT|Deadweight)\b|$)/i)?.[1]);
   data.year_built ||= valueForField("year_built", bodyText.match(/\b(?:Year\s+Built|Year\s+of\s+Build|Built)\s*[:#-]?\s*((?:18|19|20)\d{2})\b/i)?.[1]) as number | null;
   data.vessel_name ||= cleanText($("h1").first().text() || $("title").text().split("-")[0]);
@@ -288,6 +308,7 @@ function extractTableData(html: string, identity: LookupIdentity): VesselData {
     data.imo_number = normalizeImo(rowImo) || null;
     data.vessel_name = linkText || readCell("vessel_name");
     data.flag = readCell("flag");
+    data.call_sign = readCell("call_sign");
     data.vessel_type = readCell("vessel_type");
     const builtText = readCell("year_built");
     const builtMatch = String(builtText ?? "").match(/\b(18|19|20)\d{2}\b/);
@@ -335,10 +356,13 @@ function cachedRecordToVesselData(record: VesselTechnicalRecord | null): VesselD
     imo_number: record?.imoNumber ? String(record.imoNumber) : null,
     vessel_name: record?.vesselName || null,
     flag: record?.flag || null,
+    call_sign: record?.callSign || null,
     vessel_type: record?.vesselType || null,
     year_built: record?.yearBuilt || null,
     loa_meters: Number(record?.loaMeters) > 0 ? Number(record?.loaMeters) : null,
+    beam_meters: Number(record?.beamMeters) > 0 ? Number(record?.beamMeters) : null,
     gross_tonnage: Number(record?.grossTonnage) > 0 ? Number(record?.grossTonnage) : null,
+    net_tonnage: Number(record?.netTonnage) > 0 ? Number(record?.netTonnage) : null,
     dwt: Number(record?.dwt) > 0 ? Number(record?.dwt) : null,
   };
 }
@@ -355,9 +379,12 @@ function vesselDataToTechnicalRecord(data: VesselData, identity: LookupIdentity)
     vesselType: data.vessel_type,
     draftMeters: null,
     flag: data.flag,
+    callSign: data.call_sign,
     yearBuilt: data.year_built,
     grossTonnage: data.gross_tonnage,
+    netTonnage: data.net_tonnage,
     loaMeters: data.loa_meters,
+    beamMeters: data.beam_meters,
   };
 }
 

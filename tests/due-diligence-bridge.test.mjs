@@ -175,7 +175,10 @@ test('persistence backend consolidates normalized technical fields by IMO or MMS
   assert.match(persistenceBackendSource, /upsertVesselTechnicalRecord/);
   assert.match(technicalCacheSource, /ON CONFLICT \(imo_number\) DO UPDATE SET/);
   assert.match(technicalCacheSource, /gross_tonnage = COALESCE\(EXCLUDED\.gross_tonnage, vessels_master\.gross_tonnage\)/);
+  assert.match(technicalCacheSource, /net_tonnage = COALESCE\(EXCLUDED\.net_tonnage, vessels_master\.net_tonnage\)/);
   assert.match(technicalCacheSource, /loa_meters = COALESCE\(EXCLUDED\.loa_meters, vessels_master\.loa_meters\)/);
+  assert.match(technicalCacheSource, /beam_meters = COALESCE\(EXCLUDED\.beam_meters, vessels_master\.beam_meters\)/);
+  assert.match(technicalCacheSource, /call_sign = COALESCE\(EXCLUDED\.call_sign, vessels_master\.call_sign\)/);
   assert.match(technicalCacheSource, /year_built = COALESCE\(EXCLUDED\.year_built, vessels_master\.year_built\)/);
   assert.match(technicalCacheSource, /OR \(\$2::text IS NOT NULL AND mmsi = \$2::text\)/);
   assert.match(technicalMigrationSource, /ADD COLUMN IF NOT EXISTS gross_tonnage NUMERIC/);
@@ -214,8 +217,10 @@ test('backend accepts IMO, MMSI, or vessel name and searches the four public pro
   assert.match(backendSource, /buildUrls: \(identity\)/);
   assert.match(backendSource, /encodeURIComponent\(identity\.query\)/);
   assert.match(backendSource, /runSourceWaterfall\(identity, deadlineAt, cachedData\)/);
-  assert.match(backendSource, /import \{ mappedVesselField \}/);
+  assert.match(backendSource, /import \{ mappedVesselField, parseVesselAttribute \}/);
+  assert.match(backendSource, /parseVesselAttribute\(rawKey, rawValue\)/);
   assert.match(backendSource, /data\.vessel_type = readCell\("vessel_type"\)/);
+  assert.match(backendSource, /data\.call_sign = readCell\("call_sign"\)/);
   assert.match(backendSource, /findStructuredVesselType/);
   assert.match(backendSource, /field === "vessel_type"/);
   assert.match(backendSource, /script\[type='application\/ld\+json'\]/);

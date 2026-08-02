@@ -11,9 +11,12 @@ export type VesselTechnicalRecord = {
   vesselType: string | null;
   draftMeters: number | null;
   flag: string | null;
+  callSign: string | null;
   yearBuilt: number | null;
   grossTonnage: number | null;
+  netTonnage: number | null;
   loaMeters: number | null;
+  beamMeters: number | null;
 };
 
 type VesselTechnicalRow = QueryResultRow & {
@@ -26,14 +29,18 @@ type VesselTechnicalRow = QueryResultRow & {
   vessel_type: string | null;
   draft_meters: number | null;
   flag: string | null;
+  call_sign: string | null;
   year_built: number | null;
   gross_tonnage: number | string | null;
+  net_tonnage: number | string | null;
   loa_meters: number | string | null;
+  beam_meters: number | string | null;
 };
 
 const RETURNING_COLUMNS = `
   imo_number, mmsi, vessel_name, dwt, latitude, longitude, vessel_type,
-  draft_meters, flag, year_built, gross_tonnage, loa_meters
+  draft_meters, flag, call_sign, year_built, gross_tonnage, net_tonnage,
+  loa_meters, beam_meters
 `;
 
 function toRecord(row: VesselTechnicalRow): VesselTechnicalRecord {
@@ -47,9 +54,12 @@ function toRecord(row: VesselTechnicalRow): VesselTechnicalRecord {
     vesselType: row.vessel_type,
     draftMeters: row.draft_meters,
     flag: row.flag,
+    callSign: row.call_sign,
     yearBuilt: row.year_built,
     grossTonnage: row.gross_tonnage === null ? null : Number(row.gross_tonnage),
+    netTonnage: row.net_tonnage === null ? null : Number(row.net_tonnage),
     loaMeters: row.loa_meters === null ? null : Number(row.loa_meters),
+    beamMeters: row.beam_meters === null ? null : Number(row.beam_meters),
   };
 }
 
@@ -114,9 +124,12 @@ export async function upsertVesselTechnicalRecord(record: VesselTechnicalRecord)
           vessel_type = COALESCE($7::text, vessels_master.vessel_type),
           draft_meters = COALESCE($8::double precision, vessels_master.draft_meters),
           flag = COALESCE($9::text, vessels_master.flag),
-          year_built = COALESCE($10::integer, vessels_master.year_built),
-          gross_tonnage = COALESCE($11::double precision, vessels_master.gross_tonnage),
-          loa_meters = COALESCE($12::double precision, vessels_master.loa_meters),
+          call_sign = COALESCE($10::text, vessels_master.call_sign),
+          year_built = COALESCE($11::integer, vessels_master.year_built),
+          gross_tonnage = COALESCE($12::double precision, vessels_master.gross_tonnage),
+          net_tonnage = COALESCE($13::double precision, vessels_master.net_tonnage),
+          loa_meters = COALESCE($14::double precision, vessels_master.loa_meters),
+          beam_meters = COALESCE($15::double precision, vessels_master.beam_meters),
           updated_at = NOW(),
           fecha_ultima_actualizacion = NOW()
         WHERE id = (SELECT id FROM matched_vessel)
@@ -125,13 +138,15 @@ export async function upsertVesselTechnicalRecord(record: VesselTechnicalRecord)
       inserted_vessel AS (
         INSERT INTO vessels_master (
           imo_number, mmsi, vessel_name, dwt, latitude, longitude, vessel_type,
-          draft_meters, flag, year_built, gross_tonnage, loa_meters,
+          draft_meters, flag, call_sign, year_built, gross_tonnage, net_tonnage,
+          loa_meters, beam_meters,
           updated_at, fecha_ultima_actualizacion
         )
         SELECT
           $1::integer, $2::text, $3::text, $4::integer, $5::double precision,
           $6::double precision, $7::text, $8::double precision, $9::text,
-          $10::integer, $11::double precision, $12::double precision, NOW(), NOW()
+          $10::text, $11::integer, $12::double precision, $13::double precision,
+          $14::double precision, $15::double precision, NOW(), NOW()
         WHERE NOT EXISTS (SELECT 1 FROM updated_vessel)
         ON CONFLICT (imo_number) DO UPDATE SET
           mmsi = COALESCE(EXCLUDED.mmsi, vessels_master.mmsi),
@@ -142,9 +157,12 @@ export async function upsertVesselTechnicalRecord(record: VesselTechnicalRecord)
           vessel_type = COALESCE(EXCLUDED.vessel_type, vessels_master.vessel_type),
           draft_meters = COALESCE(EXCLUDED.draft_meters, vessels_master.draft_meters),
           flag = COALESCE(EXCLUDED.flag, vessels_master.flag),
+          call_sign = COALESCE(EXCLUDED.call_sign, vessels_master.call_sign),
           year_built = COALESCE(EXCLUDED.year_built, vessels_master.year_built),
           gross_tonnage = COALESCE(EXCLUDED.gross_tonnage, vessels_master.gross_tonnage),
+          net_tonnage = COALESCE(EXCLUDED.net_tonnage, vessels_master.net_tonnage),
           loa_meters = COALESCE(EXCLUDED.loa_meters, vessels_master.loa_meters),
+          beam_meters = COALESCE(EXCLUDED.beam_meters, vessels_master.beam_meters),
           updated_at = NOW(),
           fecha_ultima_actualizacion = NOW()
         RETURNING ${RETURNING_COLUMNS}
@@ -164,9 +182,12 @@ export async function upsertVesselTechnicalRecord(record: VesselTechnicalRecord)
       record.vesselType,
       record.draftMeters,
       record.flag,
+      record.callSign,
       record.yearBuilt,
       record.grossTonnage,
+      record.netTonnage,
       record.loaMeters,
+      record.beamMeters,
     ],
   );
 
