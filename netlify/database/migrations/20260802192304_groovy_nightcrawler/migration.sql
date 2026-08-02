@@ -1,0 +1,1 @@
+ALTER TABLE "vessels_master" ALTER COLUMN "eta" SET DATA TYPE timestamp with time zone USING "eta"::timestamp with time zone;
