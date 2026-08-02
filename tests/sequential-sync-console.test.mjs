@@ -47,7 +47,8 @@ test('matching block consumes MATCHING_EXECUTION_SUCCESS', () => {
 
 test('Data Bridge send control depends only on the matching vessel array', () => {
   assert.match(source, /id="commercial-nlp-send-btn"[^>]*disabled[^>]*aria-disabled="true"[^>]*data-databridge-transmission="true"/);
-  assert.match(source, /function getDataBridgeTransmissionVessels\(\)[\s\S]*window\.matchingResultsState\?\.vessels/);
+  assert.match(source, /function getDataBridgeTransmissionVessels\(\)[\s\S]*window\.renderedMatchingVessels/);
+  assert.match(source, /function setRenderedMatchingVessels\(vessels, metadata = \{\}\)[\s\S]*setDataBridgeTransmissionAvailability\(renderedVessels\)/);
   assert.match(source, /function setDataBridgeTransmissionAvailability\(matchedVessels = getDataBridgeTransmissionVessels\(\)\)/);
   assert.match(source, /const enabled = vessels\.length > 0/);
   assert.match(source, /control\.disabled = !enabled/);

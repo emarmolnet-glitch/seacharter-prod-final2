@@ -15,12 +15,12 @@ test('success stick uses the same matching result array as the vessel counter', 
   assert.match(source, /const vessels = Array\.isArray\(matches\) \? matches : \[\]/);
   assert.match(source, /stick\.dataset\.matchingResultCount = String\(vessels\.length\)/);
   assert.match(source, /updateSequentialTelemetryBlock\([\s\S]*'matching-execution-success-stick',[\s\S]*vessels\.length > 0 \? 'success' : 'pending'/);
-  assert.match(source, /window\.matchingResultsState\?\.vessels \|\| matches/);
+  assert.match(source, /const displayMatches = setRenderedMatchingVessels\(viableMatches/);
 });
 
 test('successful matching dispatches the visual event and empty runs clear the stick', () => {
   assert.match(source, /updateMatchingExecutionSuccessStick\(\[\]\);/);
-  assert.match(source, /new CustomEvent\('MATCHING_EXECUTION_SUCCESS', \{[\s\S]*matches: window\.matchingResultsState\?\.vessels \|\| matches,[\s\S]*eligibleMatches: window\.matchingResultsState\?\.eligibleVessels \|\| viableMatches,[\s\S]*count: window\.matchingResultsState\?\.eligibleCount \|\| viableMatches\.length,[\s\S]*evaluatedCount: window\.matchingResultsState\?\.count \|\| matches\.length/);
+  assert.match(source, /new CustomEvent\('MATCHING_EXECUTION_SUCCESS', \{[\s\S]*matches: displayMatches,[\s\S]*eligibleMatches: displayMatches,[\s\S]*count: displayMatches\.length,[\s\S]*evaluatedCount: window\.matchingResultsState\?\.count \|\| matches\.length/);
   assert.match(source, /window\.addEventListener\('MATCHING_EXECUTION_SUCCESS'/);
 });
 
