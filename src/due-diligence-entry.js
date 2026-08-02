@@ -307,6 +307,33 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
 
     function hydrateStores(identity, technical) {
         let hydratedMatch = null;
+        if (globalScope.GlobalStore) {
+            const dueDiligenceVessel = {
+                ...identity,
+                ...technical,
+                imo: technical.imo || identity.imo || '',
+                imo_number: technical.imo || identity.imo || '',
+                vesselName: identity.name || identity.vesselName || '',
+                vessel_name: identity.name || identity.vesselName || '',
+                mmsi: identity.mmsi || '',
+                yearBuilt: technical.yearBuilt || null,
+                year_built: technical.yearBuilt || null,
+                built_year: technical.yearBuilt || null,
+                vesselType: technical.vesselType || '',
+                vessel_type: technical.vesselType || '',
+                auditStatus: 'PENDING',
+                audit_status: 'PENDING',
+                source: 'openships_validated',
+                source_provenance: 'due_diligence_manual',
+            };
+            const storedVessels = Array.isArray(globalScope.GlobalStore.dueDiligenceVessels)
+                ? globalScope.GlobalStore.dueDiligenceVessels
+                : [];
+            const existingIndex = storedVessels.findIndex(vessel => vesselIdentityMatches(vessel, identity));
+            if (existingIndex >= 0) storedVessels[existingIndex] = mergeNonEmptyRecords(storedVessels[existingIndex], dueDiligenceVessel);
+            else storedVessels.push(dueDiligenceVessel);
+            globalScope.GlobalStore.dueDiligenceVessels = storedVessels;
+        }
         const matchingCollections = [
             globalScope.lastMatchingEngineResults,
             globalScope.matchingResultsState?.vessels,
@@ -403,9 +430,6 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             vessel_type: technical.vesselType,
             yearBuilt: technical.yearBuilt,
             year_built: technical.yearBuilt,
-            audit_status: 'PENDING',
-            process_status: 'PENDING_REVIEW',
-            source_provenance: 'due_diligence_manual',
         });
     }
 
@@ -513,10 +537,10 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             updateCard(card, pending.identity, pending.technical, resolvedMatch);
             clearProposalReview(card, key);
             if (status) {
-                status.textContent = 'Perfil técnico guardado en Neon y pendiente de auditoría.';
+                status.textContent = 'Perfil técnico guardado en Neon y listo para Calculadora.';
                 status.className = 'text-[10px] font-bold text-emerald-700';
             }
-            notify('Due Diligence guardada en Neon y enviada a auditoría.');
+            notify('Due Diligence guardada correctamente en Neon.');
             return true;
         } catch (error) {
             const status = card?.querySelector('[data-due-diligence-status]');

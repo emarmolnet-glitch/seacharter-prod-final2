@@ -180,10 +180,10 @@
             </div>
         </div>
         <div class="bg-white border border-slate-200 rounded-xl p-4 flex flex-col justify-between">
-            <span class="text-[10px] font-bold text-slate-500 uppercase">Buques Activos AIS</span>
+            <span class="text-[10px] font-bold text-slate-500 uppercase">Total Histórico Data Bridge</span>
             <div class="flex items-baseline gap-1 mt-1">
-                <span class="text-xl font-bold text-slate-900 console-font" id="vessel-count">482</span>
-                <span class="text-xs text-emerald-400 font-semibold"><i class="fa-solid fa-circle-play"></i> Live</span>
+                <span class="text-xl font-bold text-slate-900 console-font" id="vessel-count">—</span>
+                <span class="text-xs text-emerald-400 font-semibold"><i class="fa-solid fa-database"></i> Master</span>
             </div>
         </div>
         <div class="bg-white border border-slate-200 rounded-xl p-4 flex flex-col justify-between">
@@ -375,7 +375,7 @@
         let isPaused = false;
         let countdown = 30;
         let rateCount = 1482;
-        let vesselCount = 482;
+        let vesselCount = 0;
         let timer = null;
         let latestNplResult = null;
         let latestNplFileName = null;
@@ -841,12 +841,10 @@
             countdown = 30;
             SyncService.refresh();
 
-            setTimeout(() => {
-                // Update random stats slightly
+            setTimeout(async () => {
                 rateCount += Math.floor(Math.random() * 8) + 1;
-                vesselCount += Math.floor(Math.random() * 5) - 2;
                 rateCountEl.textContent = rateCount.toLocaleString();
-                vesselCountEl.textContent = vesselCount.toLocaleString();
+                await refreshDataBridgeMasterCount();
 
                 addLog(`[SUCCESS] ${getTimestamp()} - Se actualizaron ${Math.floor(Math.random() * 10) + 1} tarifas de fletes y ${Math.floor(Math.random() * 20) + 1} posiciones de buques.`);
                 addLog(`[INFO] ${getTimestamp()} - Transmisión de fletes a SeaCharter Core PRO finalizada con éxito.`);
@@ -1001,6 +999,26 @@
 
         function createCoreProApiUrl(pathname) {
             return new URL(pathname, `${CORE_PRO_API_ORIGIN}/`);
+        }
+
+        async function refreshDataBridgeMasterCount() {
+            try {
+                const response = await fetch(createCoreProApiUrl('/api/databridge-master-stats'), {
+                    headers: { Accept: 'application/json' },
+                    cache: 'no-store'
+                });
+                const payload = await response.json();
+                if (!response.ok || payload?.success === false) {
+                    throw new Error(payload?.error || `HTTP ${response.status}`);
+                }
+                vesselCount = Number(payload?.totalVessels) || 0;
+                vesselCountEl.textContent = vesselCount.toLocaleString();
+                return vesselCount;
+            } catch (error) {
+                vesselCountEl.textContent = vesselCount > 0 ? vesselCount.toLocaleString() : '—';
+                console.warn('[Data Bridge] No se pudo cargar el histórico maestro.', error);
+                return vesselCount;
+            }
         }
 
         window.GlobalStore = window.GlobalStore || {
@@ -1723,6 +1741,7 @@
 
         // Initialize
         populateInitialLogs();
+        refreshDataBridgeMasterCount();
         syncDataBridgeMasterMap();
         SyncService.refresh();
         if (currentSyncId) {

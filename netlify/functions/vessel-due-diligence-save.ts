@@ -1,10 +1,6 @@
 import type { Config } from "@netlify/functions";
 import { getPool } from "../../db/index.js";
 
-const AUDIT_STATUS = "PENDING";
-const PROCESS_STATUS = "PENDING_REVIEW";
-const VALIDATION_STATUS = "PENDIENTE";
-const SOURCE_PROVENANCE = "due_diligence_manual";
 const NON_COMMERCIAL_VESSEL_PATTERN = /yacht|passenger|ferry|pleasure|cruise|military/i;
 const FLAG_CODES: Record<string, string> = {
   antiguaandbarbuda: "ATG",
@@ -129,26 +125,17 @@ export default async (req: Request) => {
   if (vesselType && NON_COMMERCIAL_VESSEL_PATTERN.test(vesselType)) {
     return json({ success: false, error: `Buque no comercial detectado: ${vesselType}` }, 422, headers);
   }
-  const sourcePayload = {
-    ...vessel,
-    audit_status: AUDIT_STATUS,
-    process_status: PROCESS_STATUS,
-    source_provenance: SOURCE_PROVENANCE,
-  };
-
   try {
-    const result = await getPool().query(
+    const pool = getPool();
+    const result = await pool.query(
       `
         INSERT INTO vessels_master (
           imo_number, vessel_name, dwt, mmsi, latitude, longitude, vessel_type,
-          draft_meters, flag, year_built, process_status, status, audit_status,
-          validation_status, audit_source, origen, source_payload, system_identity,
-          fecha_ultima_actualizacion
+          draft_meters, flag, year_built
         )
         VALUES (
           $1::integer, $2, $3::integer, $4, $5, $6, $7,
-          $8, $9, $10::integer, $11, $12, $12,
-          $13, $14, $14, $15::jsonb, $16, NOW()
+          $8, $9, $10::integer
         )
         ON CONFLICT (imo_number) DO UPDATE SET
           vessel_name = EXCLUDED.vessel_name,
@@ -159,20 +146,10 @@ export default async (req: Request) => {
           vessel_type = COALESCE(EXCLUDED.vessel_type, vessels_master.vessel_type),
           draft_meters = COALESCE(EXCLUDED.draft_meters, vessels_master.draft_meters),
           flag = COALESCE(EXCLUDED.flag, vessels_master.flag),
-          year_built = COALESCE(EXCLUDED.year_built, vessels_master.year_built),
-          process_status = EXCLUDED.process_status,
-          status = EXCLUDED.status,
-          audit_status = EXCLUDED.audit_status,
-          validation_status = EXCLUDED.validation_status,
-          audit_source = EXCLUDED.audit_source,
-          origen = EXCLUDED.origen,
-          source_payload = EXCLUDED.source_payload,
-          system_identity = COALESCE(vessels_master.system_identity, EXCLUDED.system_identity),
-          fecha_ultima_actualizacion = NOW()
+          year_built = COALESCE(EXCLUDED.year_built, vessels_master.year_built)
         RETURNING
           imo_number, vessel_name, dwt, mmsi, latitude, longitude, vessel_type,
-          draft_meters, flag, year_built, process_status, status, audit_status,
-          validation_status, audit_source, origen, fecha_ultima_actualizacion
+          draft_meters, flag, year_built
       `,
       [
         imoNumber,
@@ -185,15 +162,16 @@ export default async (req: Request) => {
         draftMeters,
         flag,
         yearBuilt,
-        PROCESS_STATUS,
-        AUDIT_STATUS,
-        VALIDATION_STATUS,
-        SOURCE_PROVENANCE,
-        JSON.stringify(sourcePayload),
-        `DUE_DILIGENCE:IMO:${imoNumber}`,
       ],
     );
-    return json({ success: true, vessel: result.rows[0], auditStatus: AUDIT_STATUS }, 200, headers);
+    const countResult = await pool.query<{ total: number }>(
+      `SELECT COUNT(*)::integer AS total FROM vessels_master`,
+    );
+    return json({
+      success: true,
+      vessel: result.rows[0],
+      masterVesselCount: Number(countResult.rows[0]?.total || 0),
+    }, 200, headers);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown database error";
     console.error("[vessel-due-diligence-save] PostgreSQL persistence failed", error);

@@ -7893,6 +7893,28 @@
                                         <i class="fa-solid fa-magnifying-glass text-xs"></i>
                                     </button>
                                 </div>
+                                <div id="vessel-identity-meta" class="flex flex-row flex-nowrap items-center gap-2 mt-2 w-full overflow-hidden" aria-label="Especificaciones técnicas editables del buque">
+                                    <div class="flex flex-row items-center bg-slate-50 border border-slate-200 rounded px-2 py-1 focus-within:ring-1 focus-within:ring-blue-500 focus-within:bg-white focus-within:border-blue-500 transition-colors shrink-0">
+                                        <span class="text-slate-500 text-xs font-semibold mr-1">IMO:</span>
+                                        <input type="text" id="vessel-identity-imo" class="bg-transparent text-slate-700 text-xs outline-none w-16 placeholder-slate-400" value="" placeholder="N/A" aria-label="IMO" oninput="handleManualVesselUpdate('imo', this.value)">
+                                    </div>
+                                    <div class="flex flex-row items-center bg-slate-50 border border-slate-200 rounded px-2 py-1 focus-within:ring-1 focus-within:ring-blue-500 focus-within:bg-white focus-within:border-blue-500 transition-colors shrink-0">
+                                        <span class="text-slate-500 text-xs font-semibold mr-1">Bandera:</span>
+                                        <input type="text" id="vessel-identity-flag" class="bg-transparent text-slate-700 text-xs outline-none w-24 placeholder-slate-400" value="" placeholder="N/A" aria-label="Bandera" oninput="handleManualVesselUpdate('flag', this.value)">
+                                    </div>
+                                    <div class="flex flex-row items-center bg-slate-50 border border-slate-200 rounded px-2 py-1 focus-within:ring-1 focus-within:ring-blue-500 focus-within:bg-white focus-within:border-blue-500 transition-colors shrink-0">
+                                        <span class="text-slate-500 text-xs font-semibold mr-1">DWT:</span>
+                                        <input type="number" id="vessel-identity-dwt" class="bg-transparent text-slate-700 text-xs outline-none w-14 placeholder-slate-400" value="" placeholder="N/A" aria-label="DWT en toneladas métricas" min="0" step="1" oninput="handleManualVesselUpdate('dwt', this.value)">
+                                    </div>
+                                    <div class="flex flex-row items-center bg-slate-50 border border-slate-200 rounded px-2 py-1 focus-within:ring-1 focus-within:ring-blue-500 focus-within:bg-white focus-within:border-blue-500 transition-colors shrink-0">
+                                        <span class="text-slate-500 text-xs font-semibold mr-1">GT:</span>
+                                        <input type="number" id="vessel-identity-gt" class="bg-transparent text-slate-700 text-xs outline-none w-14 placeholder-slate-400" value="" placeholder="N/A" aria-label="Arqueo bruto GT" min="0" step="1" oninput="handleManualVesselUpdate('gt', this.value)">
+                                    </div>
+                                    <div class="flex flex-row items-center bg-slate-50 border border-slate-200 rounded px-2 py-1 focus-within:ring-1 focus-within:ring-blue-500 focus-within:bg-white focus-within:border-blue-500 transition-colors shrink-0">
+                                        <span class="text-slate-500 text-xs font-semibold mr-1">Año:</span>
+                                        <input type="number" id="vessel-identity-year" class="bg-transparent text-slate-700 text-xs outline-none w-10 placeholder-slate-400" value="" placeholder="N/A" aria-label="Año de construcción" min="1800" max="2100" step="1" oninput="handleManualVesselUpdate('year_built', this.value)">
+                                    </div>
+                                </div>
                             </div>
                             <div class="input-group">
                                 <label id="label-vessel-dwt" class="text-blue-400 flex items-center min-h-[28px]">Capacidad DWT (TM)</label>
@@ -22776,14 +22798,108 @@
             executeAutoFlowMatching(event);
         });
 
+        function updateCalculatorDwtBadge(value) {
+            const dwt = Number(value);
+            const dwtInput = document.getElementById('vessel-identity-dwt');
+            if (dwtInput) dwtInput.value = Number.isFinite(dwt) && dwt > 0 ? String(Math.round(dwt)) : '';
+            return Number.isFinite(dwt) && dwt > 0 ? dwt : null;
+        }
+
+        function updateCalculatorVesselIdentityDisplay(vessel, fallbackName = '') {
+            const vesselName = String(vessel?.vessel_name || vessel?.vesselName || vessel?.name || fallbackName || '').trim();
+            const imo = String(vessel?.imo || vessel?.imo_number || vessel?.numero_imo || '').trim();
+            const flag = String(vessel?.flag || '').trim();
+            const dwt = Number(vessel?.dwt);
+            const gt = Number(vessel?.gt ?? vessel?.gross_tonnage ?? vessel?.grossTonnage);
+            const yearBuilt = Number(vessel?.year_built ?? vessel?.built_year ?? vessel?.yearBuilt ?? vessel?.builtYear);
+            const nameInput = document.getElementById('vessel-name') || document.getElementById('nombre-buque-calculadora');
+            if (nameInput && vesselName) nameInput.value = vesselName;
+            const flagInput = document.getElementById('vessel-flag');
+            if (flagInput) flagInput.value = flag;
+            const imoInput = document.getElementById('vessel-identity-imo');
+            if (imoInput) imoInput.value = imo;
+            const flagBadgeInput = document.getElementById('vessel-identity-flag');
+            if (flagBadgeInput) flagBadgeInput.value = flag;
+            const gtInput = document.getElementById('vessel-identity-gt');
+            if (gtInput) gtInput.value = Number.isFinite(gt) && gt > 0 ? String(Math.round(gt)) : '';
+            const yearInput = document.getElementById('vessel-identity-year');
+            if (yearInput) yearInput.value = Number.isFinite(yearBuilt) && yearBuilt > 1800 ? String(Math.round(yearBuilt)) : '';
+            return {
+                vesselName,
+                imo,
+                flag: flag || 'Unknown',
+                dwt: updateCalculatorDwtBadge(dwt),
+                gt: Number.isFinite(gt) && gt > 0 ? gt : null,
+                year_built: Number.isFinite(yearBuilt) && yearBuilt > 1800 ? yearBuilt : null
+            };
+        }
+
+        function handleManualVesselUpdate(field, value) {
+            const rawValue = String(value ?? '').trim();
+            const numericFields = new Set(['dwt', 'gt', 'year_built']);
+            const normalizedValue = numericFields.has(field)
+                ? (rawValue === '' ? null : Number(rawValue))
+                : rawValue;
+            const store = window.GlobalStore || {};
+            const currentVessel = store.calculatorVessel || store.activeVessel || {};
+            const updatedVessel = { ...currentVessel, [field]: normalizedValue };
+
+            if (field === 'imo') {
+                const imo = rawValue.replace(/\D/g, '');
+                updatedVessel.imo = imo || null;
+                updatedVessel.imo_number = imo || null;
+                State.imo = imo || 'Unknown';
+            } else if (field === 'dwt') {
+                const dwt = Number.isFinite(normalizedValue) && normalizedValue > 0 ? normalizedValue : 0;
+                updatedVessel.dwt = dwt || null;
+                State.dwt = dwt;
+                const dwtInput = document.getElementById('vessel-dwt');
+                if (dwtInput) dwtInput.value = dwt ? String(dwt) : '0';
+                updateSection2LocalState('vessel-dwt', dwt ? String(dwt) : '0');
+                handleDWTChange(true, false);
+                refreshVesselCompatibilityWarning();
+            } else if (field === 'flag') {
+                updatedVessel.flag = rawValue || null;
+                const flagInput = document.getElementById('vessel-flag');
+                if (flagInput) flagInput.value = rawValue;
+                if (typeof handleFlagOrPscChange === 'function') handleFlagOrPscChange();
+            } else if (field === 'gt') {
+                updatedVessel.gt = Number.isFinite(normalizedValue) && normalizedValue > 0 ? normalizedValue : null;
+            } else if (field === 'year_built') {
+                const yearBuilt = Number.isFinite(normalizedValue) && normalizedValue > 1800 ? Math.round(normalizedValue) : null;
+                updatedVessel.year_built = yearBuilt;
+                updatedVessel.built_year = yearBuilt;
+                State.yearBuilt = yearBuilt;
+                const builtYearInput = document.getElementById('vessel-built-year');
+                if (builtYearInput) builtYearInput.value = yearBuilt ? String(yearBuilt) : '';
+            }
+
+            if (window.GlobalStore) {
+                window.GlobalStore.activeVessel = updatedVessel;
+                window.GlobalStore.calculatorVessel = updatedVessel;
+            }
+            if (typeof scheduleReactiveEngine === 'function') scheduleReactiveEngine();
+        }
+        window.handleManualVesselUpdate = handleManualVesselUpdate;
+
         function applyMatchingVesselToCalculator(vesselJsonEscaped, loadPortLat, loadPortLon, unloadPortLat, unloadPortLon, quantity, freightRate, cargoType, loadName, unloadName) {
             try {
-                const vessel = JSON.parse(decodeURIComponent(vesselJsonEscaped));
+                const sourceVessel = JSON.parse(decodeURIComponent(vesselJsonEscaped));
+                const vessel = {
+                    ...sourceVessel,
+                    imo: sourceVessel.imo || sourceVessel.imo_number,
+                    flag: sourceVessel.flag || 'Unknown'
+                };
+                const resolvedImo = String(vessel.imo || vessel.imo_number || vessel.numero_imo || '').replace(/\D/g, '');
+                if (resolvedImo.length === 7) {
+                    vessel.imo = resolvedImo;
+                    vessel.imo_number = resolvedImo;
+                }
                 
                 // 1. Autofill calculator fields
                 const nameInput = document.getElementById('vessel-name') || document.getElementById('nombre-buque-calculadora');
+                const identity = updateCalculatorVesselIdentityDisplay(vessel);
                 if (nameInput) {
-                    nameInput.value = vessel.vessel_name;
                     // Trigger input event to update matching in other tables
                     nameInput.dispatchEvent(new Event('input'));
                 }
@@ -22793,7 +22909,7 @@
                 if (dwtInput) dwtInput.value = vessel.dwt;
 
                 const builtYearInput = document.getElementById('vessel-built-year');
-                if (builtYearInput) builtYearInput.value = vessel.built_year;
+                if (builtYearInput) builtYearInput.value = vessel.built_year || vessel.year_built || vessel.yearBuilt || '';
 
                 const draftInput = document.getElementById('vessel-draft');
                 if (draftInput) draftInput.value = parseFloat(vessel.draft);
@@ -22833,7 +22949,13 @@
                 }
 
                 // Set active IMO
-                State.imo = vessel.imo || 'Unknown';
+                State.imo = resolvedImo.length === 7 ? resolvedImo : 'Unknown';
+                State.vessel = identity.vesselName;
+                State.dwt = Number(vessel.dwt) || 0;
+                if (window.GlobalStore) {
+                    window.GlobalStore.activeVessel = vessel;
+                    window.GlobalStore.calculatorVessel = vessel;
+                }
 
                 // Set ETA_Radar
                 setEtaRadarFromSystem(
@@ -22842,8 +22964,18 @@
                 );
 
                 // Load parameters from IndexedDB (Delta_Historico, T_Fondeo, T_Remolcadores)
-                if (typeof loadVesselParamsFromIndexedDB === 'function') {
-                    loadVesselParamsFromIndexedDB(vessel.imo);
+                if (resolvedImo.length === 7 && typeof loadVesselParamsFromIndexedDB === 'function') {
+                    loadVesselParamsFromIndexedDB(resolvedImo);
+                }
+                if (resolvedImo.length === 7 && typeof saveVesselToIndexedDB === 'function') {
+                    void saveVesselToIndexedDB({
+                        ...vessel,
+                        imo: vessel.imo || vessel.imo_number,
+                        flag: vessel.flag || 'Unknown',
+                        name: identity.vesselName,
+                        vesselName: identity.vesselName,
+                        year_built: vessel.year_built || vessel.built_year || vessel.yearBuilt || null,
+                    });
                 }
 
                 // Set voyage details
@@ -27601,6 +27733,7 @@
                 State.vesselDwtFixed = true;
             }
             const dwt = parseFloat(document.getElementById('vessel-dwt').value) || 0;
+            updateCalculatorDwtBadge(dwt);
             if (typeof updateVesselPricingRouter === 'function') {
                 updateVesselPricingRouter();
             }
@@ -27650,6 +27783,29 @@
                 updateVesselPricingRouter();
             }
         }
+
+        function refreshVesselCompatibilityWarning() {
+            const warningEl = document.getElementById('vessel-compatibility-warning');
+            if (!warningEl) return;
+            const vesselDwtVal = parseFloat(document.getElementById('vessel-dwt')?.value) || 0;
+            const cargo = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
+            const currentCargoType = document.getElementById('cargo-type')?.value || '';
+            const vesselPurpose = (document.getElementById('gc-add-purpose')?.value || '').toLowerCase();
+            if (vesselDwtVal > 0 && cargo > 0 && vesselDwtVal < cargo) {
+                warningEl.innerText = "NOTICE: THIS VESSEL IS NOT COMPATIBLE DUE TO EXCESS WEIGHT.";
+                warningEl.classList.remove('hidden');
+            } else if (vesselDwtVal > 0 && cargo > 0 && vesselDwtVal > cargo * 1.15) {
+                warningEl.innerText = "AVISO: EL BUQUE ESTÁ SOBREDIMENSIONADO (OVERSIZED) PARA ESTA CARGA (MÁX 15% DE TOLERANCIA).";
+                warningEl.classList.remove('hidden');
+            } else if (currentCargoType === 'Granel Líquido (Liquid Bulk)' && (vesselPurpose.includes('bulker') || vesselPurpose.includes('bulk carrier') || vesselPurpose.includes('general cargo'))) {
+                warningEl.innerText = "NOTICE: THIS VESSEL TYPE IS NOT COMPATIBLE WITH LIQUID BULK CARGO (REQUIRES TANKER).";
+                warningEl.classList.remove('hidden');
+            } else {
+                warningEl.classList.add('hidden');
+            }
+        }
+        window.refreshVesselCompatibilityWarning = refreshVesselCompatibilityWarning;
+
         function autoClassifySpecialtyFromInputs() {
             if (State.userHasEditedSpecialty) return;
 
@@ -28693,6 +28849,108 @@
             }
         }
 
+        function normalizeCalculatorStoreVessel(candidate) {
+            if (!candidate || typeof candidate !== 'object') return null;
+            const ais = candidate.ais && typeof candidate.ais === 'object' ? candidate.ais : {};
+            const nestedVessel = candidate.vessel && typeof candidate.vessel === 'object' ? candidate.vessel : {};
+            const source = { ...ais, ...nestedVessel, ...candidate };
+            const metadata = source.MetaData && typeof source.MetaData === 'object' ? source.MetaData : {};
+            const imoDigits = String(source.imo || source.imo_number || source.numero_imo || source.IMO || metadata.IMO || '').replace(/\D/g, '');
+            const mmsiDigits = String(source.mmsi || source.MMSI || metadata.MMSI || '').replace(/\D/g, '');
+            const vesselName = String(source.vessel_name || source.vesselName || source.name || source.ShipName || metadata.ShipName || '').trim();
+            const dwt = Number(source.dwt ?? source.DWT ?? metadata.DWT);
+            const yearBuilt = Number(source.year_built ?? source.built_year ?? source.yearBuilt ?? source.builtYear ?? source.ano_construccion ?? metadata.Year_Built);
+            const gt = Number(source.gt ?? source.gross_tonnage ?? source.grossTonnage ?? metadata.GT);
+            return {
+                ...source,
+                vessel_name: vesselName,
+                vesselName,
+                imo: imoDigits.length === 7 ? imoDigits : null,
+                imo_number: imoDigits.length === 7 ? imoDigits : null,
+                mmsi: mmsiDigits.length === 9 ? mmsiDigits : (source.mmsi || null),
+                dwt: Number.isFinite(dwt) && dwt > 0 ? dwt : null,
+                gt: Number.isFinite(gt) && gt > 0 ? gt : null,
+                year_built: Number.isFinite(yearBuilt) && yearBuilt > 1800 ? yearBuilt : null,
+                built_year: Number.isFinite(yearBuilt) && yearBuilt > 1800 ? yearBuilt : null,
+                flag: source.flag || source.Flag || metadata.Flag || null,
+                draft: source.draft ?? source.draft_meters ?? source.Draft ?? null,
+                draft_meters: source.draft_meters ?? source.draft ?? source.Draft ?? null,
+                vessel_type: source.vessel_type || source.vesselType || source.shipType || null,
+                vessel_class: source.vessel_class || source.vesselClass || source.vessel_type || source.vesselType || null,
+                specialty_type: source.specialty_type || source.specialtyType || source.vessel_type || source.vesselType || null,
+            };
+        }
+
+        function findCompleteVesselInGlobalStore(searchTerm) {
+            const store = window.GlobalStore;
+            if (!store) return null;
+            const normalizedSearch = String(searchTerm || '').trim().toLowerCase();
+            const searchDigits = normalizedSearch.replace(/\D/g, '');
+            const collections = [
+                store.activeVessel,
+                store.calculatorVessel,
+                ...(Array.isArray(store.dueDiligenceVessels) ? store.dueDiligenceVessels : []),
+                ...(Array.isArray(store.matchingVessels) ? store.matchingVessels : []),
+                ...(Array.isArray(store.compatibleVessels) ? store.compatibleVessels : []),
+                ...(Array.isArray(store.filteredVessels) ? store.filteredVessels : []),
+                ...(Array.isArray(store.rawVessels) ? store.rawVessels : []),
+                ...(Array.isArray(store.vessels) ? store.vessels : []),
+            ].filter(Boolean);
+
+            for (const candidate of collections) {
+                const vessel = normalizeCalculatorStoreVessel(candidate);
+                if (!vessel || !vessel.dwt || !vessel.year_built) continue;
+                const candidateName = String(vessel.vessel_name || '').trim().toLowerCase();
+                const identityMatches = (searchDigits.length === 7 && vessel.imo === searchDigits)
+                    || (searchDigits.length === 9 && String(vessel.mmsi || '') === searchDigits)
+                    || (normalizedSearch && candidateName && (candidateName === normalizedSearch || candidateName.includes(normalizedSearch) || normalizedSearch.includes(candidateName)));
+                if (identityMatches) return vessel;
+            }
+            return null;
+        }
+
+        function applyResolvedVesselToCalculator(rawVessel, fallbackName = '') {
+            const backendVessel = rawVessel && typeof rawVessel === 'object' ? rawVessel : {};
+            const vessel = normalizeCalculatorStoreVessel({
+                ...backendVessel,
+                dwt: backendVessel.dwt,
+                imo_number: backendVessel.imo_number,
+                vessel_name: backendVessel.vessel_name,
+                year_built: backendVessel.year_built,
+            }) || backendVessel;
+            const resolvedDwt = Number(vessel.dwt);
+            const resolvedImo = String(vessel.imo_number || vessel.imo || '').replace(/\D/g, '');
+            const resolvedName = String(vessel.vessel_name || fallbackName || '').trim();
+            const resolvedYear = Number(vessel.year_built);
+            const dwtInput = document.getElementById('vessel-dwt');
+
+            if (Number.isFinite(resolvedDwt) && resolvedDwt > 0) {
+                const visualDwt = String(Math.round(resolvedDwt));
+                if (dwtInput) dwtInput.value = visualDwt;
+                State.dwt = resolvedDwt;
+                State.vesselDwtFixed = true;
+                updateSection2LocalState('vessel-dwt', visualDwt);
+            }
+            if (resolvedImo.length === 7) State.imo = resolvedImo;
+            if (resolvedName) State.vessel = resolvedName;
+            if (Number.isFinite(resolvedYear) && resolvedYear > 1800) {
+                State.yearBuilt = resolvedYear;
+                const yearInput = document.getElementById('vessel-built-year');
+                if (yearInput) yearInput.value = String(resolvedYear);
+            }
+
+            updateCalculatorVesselIdentityDisplay(vessel, resolvedName || fallbackName);
+            if (window.GlobalStore) {
+                window.GlobalStore.activeVessel = vessel;
+                window.GlobalStore.calculatorVessel = vessel;
+            }
+
+            dwtInput?.dispatchEvent(new Event('input', { bubbles: true }));
+            if (typeof handleDWTChange === 'function' && resolvedDwt > 0) handleDWTChange(true, false);
+            if (typeof refreshVesselCompatibilityWarning === 'function') refreshVesselCompatibilityWarning();
+            return vessel;
+        }
+
         async function searchLocalVesselDataBridge() {
             const nameInput = document.getElementById('nombre-buque-calculadora') || document.getElementById('vessel-name');
             let vesselName = nameInput ? nameInput.value.trim() : '';
@@ -28716,31 +28974,39 @@
                 btn.disabled = true;
             }
 
-            showToast("Consultando Data Bridge local (vessels_master)...", true);
+            showToast("Consultando memoria local y Data Bridge...", true);
 
             try {
-                const response = await fetch('/api/databridge-vessel-search', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({ q: vesselName })
-                });
-                if (!response.ok) {
-                    throw new Error(`Data Bridge vessel search failed (${response.status})`);
+                const storeVessel = findCompleteVesselInGlobalStore(vesselName);
+                let data = null;
+                let networkError = null;
+                try {
+                    const response = await fetch('/api/databridge-vessel-search', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({ q: vesselName, imo_number: State.imo || undefined })
+                    });
+                    if (!response.ok) {
+                        throw new Error(`Data Bridge vessel search failed (${response.status})`);
+                    }
+                    data = await response.json();
+                } catch (error) {
+                    networkError = error;
                 }
-                const data = await response.json();
+                if ((!data || data.success === false || !data.vessel) && storeVessel) {
+                    data = { success: true, vessel: storeVessel, source: 'global-store-fallback' };
+                }
+                if (!data && networkError) {
+                    throw networkError;
+                }
 
                 if (data.success && data.vessel) {
-                    const v = data.vessel;
+                    const v = applyResolvedVesselToCalculator(data.vessel, vesselName);
 
                     // Binding automatico de campos para rellenar la calculadora
-                    if (v.dwt) {
-                        const dwtEl = document.getElementById('vessel-dwt');
-                        if (dwtEl) dwtEl.value = Math.round(v.dwt);
-                        State.vesselDwtFixed = true;
-                    }
                     if (v.flag) {
                         const flagEl = document.getElementById('vessel-flag');
                         if (flagEl) flagEl.value = v.flag;
@@ -28775,21 +29041,11 @@
                         State.userHasEditedSpecialty = false;
                     }
 
-                    // Guardar IMO, LOA, Calado en State
-                    if (v.imo || v.imo_number) State.imo = v.imo || v.imo_number;
+                    // Guardar LOA y Calado en State
                     if (v.loa) State.loa = v.loa;
                     if (v.draft || v.draft_meters) State.draft = v.draft || v.draft_meters;
 
-                    // Formatear visualmente el campo de nombre con la informacion encontrada
                     const officialName = v.vessel_name || vesselName;
-                    const flag = v.flag || 'Unknown';
-                    const builtYear = v.year_built || v.built_year || 'Unknown';
-                    const capacity = v.dwt ? Math.round(v.dwt) : 'Unknown';
-                    const imo = v.imo || v.imo_number || 'Unknown';
-
-                    const formattedName = `${officialName} (${flag}, ${builtYear}, ${capacity} DWT, IMO: ${imo})`;
-                    if (nameInput) nameInput.value = formattedName;
-                    State.vessel = formattedName;
 
                     const fetchedDwt = Number(v.dwt);
                     const fetchedBallastSpeed = Number(v.spd_ballast);
@@ -28802,10 +29058,8 @@
                     }
 
                     nameInput?.dispatchEvent(new Event('input', { bubbles: true }));
-                    document.getElementById('vessel-dwt')?.dispatchEvent(new Event('input', { bubbles: true }));
                     document.getElementById('spd-ballast')?.dispatchEvent(new Event('input', { bubbles: true }));
                     document.getElementById('spd-laden')?.dispatchEvent(new Event('input', { bubbles: true }));
-                    if (typeof handleDWTChange === 'function' && fetchedDwt > 0) handleDWTChange(true, false);
                     if (typeof autoClassifySpecialtyFromInputs === 'function') autoClassifySpecialtyFromInputs();
 
                     // Recalcular OPEX y Demurrage
@@ -28836,7 +29090,9 @@
                         });
                     }
 
-                    showToast(`✅ Buque local encontrado en Data Bridge: ${officialName}`);
+                    if (typeof refreshVesselCompatibilityWarning === 'function') refreshVesselCompatibilityWarning();
+                    const sourceLabel = data.source === 'global-store-fallback' ? 'Store local' : 'Neon';
+                    showToast(`✅ Buque encontrado en ${sourceLabel}: ${officialName}`);
                     if (typeof runEngine === 'function') runEngine();
                 } else {
                     // Aviso local exclusivo sin buscar fuera
@@ -31568,25 +31824,7 @@
                 document.getElementById('gc-add-dwt-req').value = `${minDwtReq.toLocaleString('en-US')} / ${maxDwtReq.toLocaleString('en-US')} mt`;
             }
 
-            // Vessel Compatibility Check (DWT vs Cargo & Cargo Type vs Vessel Purpose)
-            const warningEl = document.getElementById('vessel-compatibility-warning');
-            const vesselDwtVal = parseFloat(document.getElementById('vessel-dwt').value) || 0;
-            const currentCargoType = document.getElementById('cargo-type').value;
-            const vesselPurpose = (document.getElementById('gc-add-purpose')?.value || '').toLowerCase();
-            if (warningEl) {
-                if (vesselDwtVal > 0 && cargo > 0 && vesselDwtVal < cargo) {
-                    warningEl.innerText = "NOTICE: THIS VESSEL IS NOT COMPATIBLE DUE TO EXCESS WEIGHT.";
-                    warningEl.classList.remove('hidden');
-                } else if (vesselDwtVal > 0 && cargo > 0 && vesselDwtVal > cargo * 1.15) {
-                    warningEl.innerText = "AVISO: EL BUQUE ESTÁ SOBREDIMENSIONADO (OVERSIZED) PARA ESTA CARGA (MÁX 15% DE TOLERANCIA).";
-                    warningEl.classList.remove('hidden');
-                } else if (currentCargoType === 'Granel Líquido (Liquid Bulk)' && (vesselPurpose.includes('bulker') || vesselPurpose.includes('bulk carrier') || vesselPurpose.includes('general cargo'))) {
-                    warningEl.innerText = "NOTICE: THIS VESSEL TYPE IS NOT COMPATIBLE WITH LIQUID BULK CARGO (REQUIRES TANKER).";
-                    warningEl.classList.remove('hidden');
-                } else {
-                    warningEl.classList.add('hidden');
-                }
-            }
+            refreshVesselCompatibilityWarning();
 
             if (typeof SeaCharterStore !== 'undefined' && SeaCharterStore && typeof SeaCharterStore.set === 'function') {
                 SeaCharterStore.set({
@@ -38402,42 +38640,26 @@
 
         // --- PERSISTENT HISTORY OF AUDITED VESSELS (NETLIFY DB) ---
         async function saveCurrentVesselToDB() {
-            let vesselNameVal = document.getElementById('vessel-name').value.trim();
+            const vesselNameInput = document.getElementById('nombre-buque-calculadora') || document.getElementById('vessel-name');
+            const vesselNameVal = vesselNameInput?.value.trim() || '';
             if (!vesselNameVal || vesselNameVal.toUpperCase() === 'TBN') {
                 showToast("⚠️ Por favor, introduce un nombre de buque real primero.");
                 return;
             }
 
-            let vesselName = vesselNameVal;
-            let flag = 'Unknown';
-            let builtYear = null;
-            let imo = State.imo || 'Unknown';
-            let loa = State.loa || null;
-            let draft = State.draft || null;
-
-            // Try to parse values from the formatted vessel name if present
-            const parenIndex = vesselNameVal.indexOf('(');
-            if (parenIndex !== -1 && vesselNameVal.endsWith(')')) {
-                vesselName = vesselNameVal.substring(0, parenIndex).trim();
-                const specsContent = vesselNameVal.substring(parenIndex + 1, vesselNameVal.length - 1);
-                const parts = specsContent.split(',').map(s => s.trim());
-                if (parts.length >= 1) flag = parts[0];
-                if (parts.length >= 2) {
-                    const parsedYear = parseInt(parts[1]);
-                    if (!isNaN(parsedYear)) builtYear = parsedYear;
-                }
-                parts.forEach(part => {
-                    if (part.toUpperCase().includes('IMO:')) {
-                        imo = part.split(':')[1].trim();
-                    } else if (part.toUpperCase().includes('LOA:')) {
-                        loa = part.split(':')[1].trim();
-                    } else if (part.toUpperCase().includes('DRAFT:')) {
-                        draft = part.split(':')[1].trim();
-                    }
-                });
+            const imo = String(document.getElementById('vessel-identity-imo')?.value || State.imo || '').replace(/\D/g, '');
+            if (imo.length !== 7) {
+                showToast("⚠️ Introduce un IMO válido de 7 dígitos antes de guardar.");
+                return;
             }
 
-            const dwt = parseInt(document.getElementById('vessel-dwt').value) || null;
+            const vesselName = vesselNameVal.includes('(') ? vesselNameVal.substring(0, vesselNameVal.indexOf('(')).trim() : vesselNameVal;
+            const flag = document.getElementById('vessel-identity-flag')?.value.trim() || null;
+            const builtYear = parseInt(document.getElementById('vessel-identity-year')?.value) || null;
+            const gt = parseInt(document.getElementById('vessel-identity-gt')?.value) || null;
+            const dwt = parseInt(document.getElementById('vessel-identity-dwt')?.value || document.getElementById('vessel-dwt')?.value) || null;
+            const loa = State.loa || null;
+            const draft = State.draft || parseFloat(document.getElementById('vessel-draft')?.value) || null;
             const spd_ballast = parseFloat(document.getElementById('spd-ballast').value) || null;
             const spd_laden = parseFloat(document.getElementById('spd-laden').value) || null;
             const cons_sea = parseFloat(document.getElementById('cons-sea').value) || null;
@@ -38450,8 +38672,10 @@
                 imo: imo,
                 flag: flag,
                 dwt: dwt,
+                gt: gt,
                 loa: loa,
                 draft: draft,
+                year_built: builtYear,
                 built_year: builtYear,
                 spd_ballast: spd_ballast,
                 spd_laden: spd_laden,
@@ -38476,23 +38700,24 @@
             }
 
             try {
-                const response = await fetch('/api/vessels', {
-                    method: 'POST',
+                const response = await fetch('/api/vessel-due-diligence-save', {
+                    method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({ vessel: payload })
                 });
                 
                 const resData = await response.json();
-                if (resData.success && resData.data) {
+                if (response.ok && resData.success && resData.vessel) {
                     showToast(`⚓ Buque "${vesselName}" guardado con éxito en la base de datos.`);
-                    
-                    if (resData.data.imo) State.imo = resData.data.imo;
-                    if (resData.data.loa) State.loa = resData.data.loa;
-                    if (resData.data.draft) State.draft = resData.data.draft;
-
-                    const formattedName = `${resData.data.vessel_name} (${resData.data.flag || 'Unknown'}, ${resData.data.built_year || 'Unknown'}, ${resData.data.dwt ? Math.round(resData.data.dwt) : 'Unknown'} DWT, IMO: ${resData.data.imo || 'Unknown'}, LOA: ${resData.data.loa || 'Unknown'}, Draft: ${resData.data.draft || 'Unknown'})`;
-                    document.getElementById('vessel-name').value = formattedName;
-                    State.vessel = formattedName;
+                    const savedVessel = normalizeCalculatorStoreVessel({ ...payload, ...resData.vessel, gt }) || payload;
+                    State.imo = imo;
+                    State.vessel = vesselName;
+                    updateCalculatorVesselIdentityDisplay(savedVessel, vesselName);
+                    if (window.GlobalStore) {
+                        window.GlobalStore.activeVessel = savedVessel;
+                        window.GlobalStore.calculatorVessel = savedVessel;
+                    }
+                    await saveVesselToIndexedDB({ ...savedVessel, imo, name: vesselName, gt });
                 } else {
                     showToast(`⚠️ Error al guardar buque: ${resData.error || (resData.success ? 'No se devolvieron datos' : 'Desconocido')}`);
                 }
@@ -44812,8 +45037,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             matchingVessels: [],
             matchingReady: false,
             matchingSelectionPending: false,
-            matchingSelection: null,
-            activeVessel: null,
+	            matchingSelection: null,
+	            activeVessel: null,
+	            calculatorVessel: null,
+	            dueDiligenceVessels: [],
             setVessels(newVessels) {
                 if (window.matchingAuditModeState?.enabled) return;
                 const incomingVessels = Array.isArray(newVessels) ? newVessels : [];
@@ -55954,6 +56181,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     type: vessel.type || vessel.vesselClass || (existing ? existing.type : "Bulk Carrier"),
                     draft: vessel.draft || (existing ? existing.draft : null),
                     dwt: vessel.dwt || (existing ? existing.dwt : null),
+                    gt: vessel.gt || vessel.gross_tonnage || vessel.grossTonnage || (existing ? existing.gt : null),
+                    flag: vessel.flag || vessel.bandera || (existing ? existing.flag : "Unknown"),
+                    year_built: vessel.year_built || vessel.built_year || vessel.yearBuilt || (existing ? existing.year_built : null),
+                    spd_ballast: vessel.spd_ballast || (existing ? existing.spd_ballast : null),
+                    spd_laden: vessel.spd_laden || (existing ? existing.spd_laden : null),
+                    cons_sea: vessel.cons_sea || (existing ? existing.cons_sea : null),
+                    cons_port: vessel.cons_port || (existing ? existing.cons_port : null),
+                    source: vessel.source || (existing ? existing.source : null),
                     status: vessel.status || vessel.auditStatus || (existing ? existing.status : "Approved"),
                     delta_historico: vessel.delta_historico !== undefined ? vessel.delta_historico : (existing ? existing.delta_historico : 0),
                     t_fondeo: vessel.t_fondeo !== undefined ? vessel.t_fondeo : (existing ? existing.t_fondeo : 0),
@@ -55993,6 +56228,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             try {
                 const vessel = await getVesselFromIndexedDB(imo);
                 if (vessel) {
+                    if (typeof updateCalculatorVesselIdentityDisplay === 'function') {
+                        updateCalculatorVesselIdentityDisplay({ ...vessel, imo: vessel.imo || imo }, vessel.name || '');
+                    }
                     deltaInput.value = vessel.delta_historico !== undefined ? vessel.delta_historico : 0;
                     fondeoInput.value = vessel.t_fondeo !== undefined ? vessel.t_fondeo : 0;
                     remolcadoresInput.value = vessel.t_remolcadores !== undefined ? vessel.t_remolcadores : 0;
@@ -56049,9 +56287,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const remolcadoresVal = parseFloat(remolcadoresEl?.value) || 0;
 
             const existing = await getVesselFromIndexedDB(activeImo);
+            const activeVessel = window.GlobalStore?.calculatorVessel || window.GlobalStore?.activeVessel || {};
             const vesselData = {
                 imo: String(activeImo),
                 name: existing ? existing.name : (document.getElementById('nombre-buque-calculadora')?.value || 'TBN'),
+                dwt: parseFloat(document.getElementById('vessel-identity-dwt')?.value) || activeVessel.dwt || null,
+                gt: parseFloat(document.getElementById('vessel-identity-gt')?.value) || activeVessel.gt || null,
+                flag: document.getElementById('vessel-identity-flag')?.value.trim() || activeVessel.flag || null,
+                year_built: parseInt(document.getElementById('vessel-identity-year')?.value) || activeVessel.year_built || activeVessel.built_year || null,
                 delta_historico: deltaVal,
                 t_fondeo: fondeoVal,
                 t_remolcadores: remolcadoresVal
