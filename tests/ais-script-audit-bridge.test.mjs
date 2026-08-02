@@ -37,10 +37,10 @@ test('vessels rendered in AIS tables populate the global audit array', () => {
   assert.match(indexSource, /setRenderedAisVessels\(listaNormalizada, \{ source: 'radar-store' \}\)/);
 });
 
-test('Core PRO audit payload falls back to the vessels visible in the central table', () => {
-  assert.match(matchingAuditSource, /const arrayDeBuquesEncontrados = viableMatches\.map/);
-  assert.match(matchingAuditSource, /const renderedAuditVessels = Array\.isArray\(window\.GlobalStore\?\.auditVessels\)/);
-  assert.match(matchingAuditSource, /arrayDeBuquesEncontrados\.length === 0 && renderedAuditVessels\.length > 0/);
-  assert.match(matchingAuditSource, /arrayDeBuquesEncontrados\.push\(\.\.\.renderedAuditVessels\.map/);
-  assert.match(indexSource, /Array\.isArray\(window\.GlobalStore\?\.auditVessels\)[\s\S]*\? window\.GlobalStore\.auditVessels/);
+test('Core PRO audit payload is derived from the exact vessels rendered in matching', () => {
+  assert.match(indexSource, /function getDataBridgeTransmissionVessels\(\)[\s\S]*window\.renderedMatchingVessels/);
+  assert.match(indexSource, /const displayMatches = setRenderedMatchingVessels\(viableMatches, \{ source: 'matching-execution' \}\)/);
+  assert.match(matchingAuditSource, /const arrayDeBuquesEncontrados = displayMatches\.map/);
+  assert.doesNotMatch(matchingAuditSource, /renderedAuditVessels|GlobalStore\?\.auditVessels/);
+  assert.match(indexSource, /const renderedVessels = getDataBridgeTransmissionVessels\(\);[\s\S]*const vesselsToSend = JSON\.parse\(JSON\.stringify\(renderedVessels\)\)/);
 });

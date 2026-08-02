@@ -58,7 +58,7 @@ test('matching coordinate readers skip null database values before nested AIS co
 });
 
 test('matching audit payload returns and snapshots serializable vessel objects', () => {
-  assert.match(indexSource, /const arrayDeBuquesEncontrados = viableMatches\.map\([^=]+=> \{[\s\S]*return \{[\s\S]*latitude,[\s\S]*longitude,[\s\S]*cargoType,[\s\S]*dwt:/);
+  assert.match(indexSource, /const displayMatches = setRenderedMatchingVessels\(viableMatches,[\s\S]*const arrayDeBuquesEncontrados = displayMatches\.map\([^=]+=> \{[\s\S]*return \{[\s\S]*latitude,[\s\S]*longitude,[\s\S]*cargoType,[\s\S]*dwt:/);
   assert.match(indexSource, /const serializedMatchingPayload = JSON\.parse\(JSON\.stringify\(arrayDeBuquesEncontrados\)\)/);
   assert.match(indexSource, /Payload JSON:", serializedMatchingPayload/);
 });

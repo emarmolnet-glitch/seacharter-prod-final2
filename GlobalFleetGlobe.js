@@ -873,11 +873,27 @@
 
     window.addEventListener('ais:filtered-vessels-updated', syncAllViews);
     window.addEventListener('databridge:filtered-vessels-updated', syncAllViews);
+    let activeVesselFocusTimer = null;
+    function focusActiveVesselWhenReady(vessel, key = 'density', attempt = 0) {
+        if (focusActiveVessel(vessel, key)) {
+            activeVesselFocusTimer = null;
+            return true;
+        }
+        if (attempt >= 5) {
+            activeVesselFocusTimer = null;
+            return false;
+        }
+        if (activeVesselFocusTimer) window.clearTimeout(activeVesselFocusTimer);
+        activeVesselFocusTimer = window.setTimeout(() => {
+            focusActiveVesselWhenReady(vessel, key, attempt + 1);
+        }, 300);
+        return false;
+    }
     window.addEventListener('vessel-selection:changed', (event) => {
         const activeVessel = event?.detail?.activeVessel
             || window.GlobalStore?.activeVessel
             || window.activeVessel;
-        focusActiveVessel(activeVessel, 'density');
+        focusActiveVesselWhenReady(activeVessel, 'density');
     });
     window.getGlobalFleetGlobeDiagnostics = () => ({
         diagnostics: window.globalFleetGlobeDiagnostics || null,

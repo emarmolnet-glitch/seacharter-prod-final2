@@ -24,10 +24,10 @@ test("Core PRO uploads the complete frozen report before continuing Data Bridge 
   assert.match(coreProSource, /const payload = \{[\s\S]*syncId,[\s\S]*vessels: vesselsWithCoordinates/);
   assert.match(coreProSource, /fetch\('\/api\/core-pro-frozen-report', \{[\s\S]*method:\s*'POST'/);
   assert.match(coreProSource, /body:\s*JSON\.stringify\(payload\)/);
-  assert.match(coreProSource, /const vesselsWithCoordinates = vesselsArray[\s\S]*\.map\(normalizeCoreProVesselCoordinates\)[\s\S]*\.filter\(Boolean\)/);
-  assert.match(coreProSource, /return null;[\s\S]*No hay buques con coordenadas AIS válidas para sincronizar con Data Bridge/);
+  assert.match(coreProSource, /const vesselsWithCoordinates = vesselsArray\.map\(\(vessel, index\) => \([\s\S]*normalizeCoreProVesselCoordinates\(vessel, index\) \|\| vessel/);
+  assert.doesNotMatch(coreProSource, /vesselsWithCoordinates\.length !== vesselsArray\.length/);
   assert.match(coreProSource, /const syncId = reportData\?\.syncId \|\| reportData\?\.sync_id \|\| generateSyncId\(\)/);
-  assert.match(coreProSource, /const selectedAuditReport = createCoreProDataBridgePayload\([\s\S]*JSON\.parse\(JSON\.stringify\(vesselsToSend\)\)[\s\S]*const persistedReport = await syncCoreProMatchingReport\(selectedAuditReport\);/);
+  assert.match(coreProSource, /const renderedVessels = getDataBridgeTransmissionVessels\(\);[\s\S]*const vesselsToSend = JSON\.parse\(JSON\.stringify\(renderedVessels\)\);[\s\S]*const persistedReport = await syncCoreProMatchingReport\(selectedAuditReport\);/);
   assert.doesNotMatch(coreProSource, /seacharter\.matching\.export\.v1|core-pro-matching-selected/);
   assert.doesNotMatch(coreProSource, /core_pro_frozen_report|saveCoreProFrozenReport|readValidatedCoreProFrozenReport/);
   assert.doesNotMatch(coreProSource, /createCoreProDataBridgePayload\(batch, selectedAuditReport\.syncId\)/);
@@ -59,7 +59,7 @@ test("Core PRO reads matching engine coordinates from the nested AIS object", ()
 
 test("matching export snapshots keep AIS coordinates at the vessel root", () => {
   assert.match(coreProSource, /renderedVesselsForReport\.push\(\{[\s\S]*latitude:\s*Number\(m\.ais\?\.latitude[\s\S]*longitude:\s*Number\(m\.ais\?\.longitude/);
-  assert.match(coreProSource, /const arrayDeBuquesEncontrados = viableMatches\.map[\s\S]*const latitude = Number\(ais\.latitude[\s\S]*const longitude = Number\(ais\.longitude[\s\S]*latitude,[\s\S]*longitude,/);
+  assert.match(coreProSource, /const arrayDeBuquesEncontrados = displayMatches\.map[\s\S]*const latitude = Number\(ais\.latitude[\s\S]*const longitude = Number\(ais\.longitude[\s\S]*latitude,[\s\S]*longitude,/);
   assert.match(coreProSource, /const latitude = Number\(\s*vessel\?\.latitude/);
   assert.match(coreProSource, /const longitude = Number\(\s*vessel\?\.longitude/);
 });
