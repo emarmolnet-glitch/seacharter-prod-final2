@@ -23,6 +23,20 @@ export const appConfig = pgTable("AppConfig", {
   updatedAt: updatedAt(),
 });
 
+export const pdaVesselConfirmations = pgTable("pda_vessel_confirmations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  estimationId: text("estimation_id"),
+  vesselName: text("vessel_name").notNull(),
+  imoNumber: text("imo_number"),
+  pol: text("pol"),
+  pod: text("pod"),
+  previousVessel: jsonb("previous_vessel").notNull(),
+  actualVessel: jsonb("actual_vessel").notNull(),
+  operationalValidation: jsonb("operational_validation").notNull(),
+  financialBreakdown: jsonb("financial_breakdown").notNull(),
+  createdAt: createdAt(),
+});
+
 export const sessionSync = pgTable(
   "session_sync",
   {

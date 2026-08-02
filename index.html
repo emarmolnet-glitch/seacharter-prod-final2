@@ -13196,6 +13196,44 @@
         </div>
     </div>
 
+    <div id="pda-vessel-confirmation-modal" class="fixed inset-0 z-[240] hidden items-center justify-center bg-slate-950/85 p-3 backdrop-blur-sm no-print" role="dialog" aria-modal="true" aria-labelledby="pda-vessel-confirmation-title">
+        <div class="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-[#25a18e]/35 bg-slate-950 shadow-2xl shadow-[#002b38]/60">
+            <div class="flex shrink-0 items-start justify-between gap-4 border-b border-[#25a18e]/35 bg-gradient-to-r from-[#003746] via-[#004e64] to-[#0b6670] px-5 py-4 shadow-[inset_0_-1px_0_rgba(255,255,255,0.06)]">
+                <div>
+                    <div class="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-[#8de4d5]"><span class="h-2 w-2 rounded-full bg-[#25a18e] shadow-[0_0_12px_#25a18e]"></span> Validación maestra en directo</div>
+                    <h3 id="pda-vessel-confirmation-title" class="text-lg font-black text-white">Confirmación y contraste de buque</h3>
+                    <p id="pda-vessel-confirmation-subtitle" class="mt-1 text-xs text-teal-50/70">Revisa el impacto técnico, operativo y financiero antes de sustituir la estimación.</p>
+                </div>
+                <button type="button" onclick="closePdaVesselConfirmationModal()" class="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-white/20 bg-white/5 text-teal-50/80 transition hover:border-[#8de4d5]/70 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8de4d5]" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+                <section>
+                    <div class="mb-2 flex items-center justify-between gap-3"><h4 class="text-xs font-black uppercase tracking-wider text-white">Antes vs. después</h4><span class="rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-[10px] font-bold text-blue-300">Maestro de buques</span></div>
+                    <div class="overflow-hidden rounded-xl border border-slate-800"><table class="w-full text-left text-xs"><thead class="bg-slate-900 text-[10px] uppercase tracking-wider text-slate-400"><tr><th class="px-3 py-2">Parámetro</th><th class="px-3 py-2 text-right">Estimado previo</th><th class="px-3 py-2 text-right">Valor real</th><th class="px-3 py-2 text-right">Variación</th></tr></thead><tbody id="pda-vessel-comparison-body" class="divide-y divide-slate-800 bg-slate-950 text-slate-200"></tbody></table></div>
+                </section>
+                <section>
+                    <div class="mb-2 flex items-center justify-between gap-3"><h4 class="text-xs font-black uppercase tracking-wider text-white">Cumplimiento operativo POL / POD</h4><span id="pda-compliance-summary" class="rounded-full px-3 py-1 text-[10px] font-black"></span></div>
+                    <div class="overflow-hidden rounded-xl border border-slate-800"><table class="w-full text-left text-xs"><thead class="bg-slate-900 text-[10px] uppercase tracking-wider text-slate-400"><tr><th class="px-3 py-2">Puerto</th><th class="px-3 py-2">Control</th><th class="px-3 py-2 text-right">Buque</th><th class="px-3 py-2 text-right">Límite / condición</th><th class="px-3 py-2 text-center">Estado</th></tr></thead><tbody id="pda-port-compliance-body" class="divide-y divide-slate-800 bg-slate-950 text-slate-200"></tbody></table></div>
+                </section>
+                <section>
+                    <div class="mb-2 flex items-center justify-between gap-3"><h4 class="text-xs font-black uppercase tracking-wider text-white">Desglose portuario y financiero</h4><span class="text-[10px] font-bold text-slate-500">USD · POL + POD</span></div>
+                    <div class="grid gap-4 lg:grid-cols-[1.45fr_0.55fr]">
+                        <div class="overflow-hidden rounded-xl border border-slate-800"><table class="w-full text-left text-xs"><thead class="bg-slate-900 text-[10px] uppercase tracking-wider text-slate-400"><tr><th class="px-3 py-2">Concepto</th><th class="px-3 py-2 text-right">Anterior</th><th class="px-3 py-2 text-right">Recalculado</th><th class="px-3 py-2 text-right">Impacto</th></tr></thead><tbody id="pda-financial-breakdown-body" class="divide-y divide-slate-800 bg-slate-950 text-slate-200"></tbody></table></div>
+                        <div id="pda-financial-impact-cards" class="grid gap-3 sm:grid-cols-3 lg:grid-cols-1"></div>
+                    </div>
+                </section>
+                <div id="pda-confirmation-error" class="hidden rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs font-bold text-red-300"></div>
+            </div>
+            <div class="flex shrink-0 flex-col gap-3 border-t border-[#25a18e]/25 bg-slate-900 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <p class="text-[10px] leading-4 text-slate-400"><i class="fa-solid fa-database mr-1 text-[#25a18e]"></i> La aceptación queda registrada y sincroniza la calculadora principal.</p>
+                <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                    <button type="button" onclick="closePdaVesselConfirmationModal()" class="inline-flex min-h-11 w-full items-center justify-center whitespace-nowrap rounded-lg border border-slate-600 px-5 py-2.5 text-xs font-black text-slate-100 transition hover:border-slate-400 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 sm:w-auto">Cancelar</button>
+                    <button id="pda-confirm-accept-button" type="button" onclick="acceptPdaVesselUpdate()" class="inline-flex min-h-11 w-full items-center justify-center whitespace-nowrap rounded-lg bg-[#25a18e] px-5 py-2.5 text-xs font-black text-white shadow-lg shadow-[#002b38]/40 transition hover:bg-[#1f8f80] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8de4d5] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-wait disabled:opacity-60 sm:w-auto"><i class="fa-solid fa-check-double mr-1.5"></i>Aceptar y Actualizar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL DE COMPARATIVA DE BUQUES (IA) -->
     <div id="comparison-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4 no-print">
         <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh]">
@@ -29105,6 +29143,9 @@
             const dwt = Number(source.dwt ?? source.DWT ?? metadata.DWT);
             const yearBuilt = Number(source.year_built ?? source.built_year ?? source.yearBuilt ?? source.builtYear ?? source.ano_construccion ?? metadata.Year_Built);
             const gt = Number(source.gt ?? source.gross_tonnage ?? source.grossTonnage ?? metadata.GT);
+            const netTonnage = Number(source.net_tonnage ?? source.netTonnage ?? source.nt ?? metadata.NT);
+            const loa = Number(source.loa ?? source.loa_meters ?? source.loaMeters ?? metadata.LOA);
+            const beam = Number(source.beam ?? source.beam_meters ?? source.beamMeters ?? metadata.Beam);
             return {
                 ...source,
                 vessel_name: vesselName,
@@ -29114,6 +29155,11 @@
                 mmsi: mmsiDigits.length === 9 ? mmsiDigits : (source.mmsi || null),
                 dwt: Number.isFinite(dwt) && dwt > 0 ? dwt : null,
                 gt: Number.isFinite(gt) && gt > 0 ? gt : null,
+                net_tonnage: Number.isFinite(netTonnage) && netTonnage > 0 ? netTonnage : null,
+                loa: Number.isFinite(loa) && loa > 0 ? loa : null,
+                loa_meters: Number.isFinite(loa) && loa > 0 ? loa : null,
+                beam: Number.isFinite(beam) && beam > 0 ? beam : null,
+                beam_meters: Number.isFinite(beam) && beam > 0 ? beam : null,
                 year_built: Number.isFinite(yearBuilt) && yearBuilt > 1800 ? yearBuilt : null,
                 built_year: Number.isFinite(yearBuilt) && yearBuilt > 1800 ? yearBuilt : null,
                 flag: source.flag || source.Flag || metadata.Flag || null,
@@ -29195,6 +29241,287 @@
             return vessel;
         }
 
+        let pendingPdaVesselConfirmation = null;
+
+        function pdaReadNumber(id) {
+            const value = document.getElementById(id)?.value;
+            return parseFloat(String(value ?? '').replace(',', '.').replace(/[^\d.-]/g, '')) || 0;
+        }
+
+        function pdaMoney(value) {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 2
+            }).format(Number(value) || 0);
+        }
+
+        function pdaMetric(value, unit = '', digits = 0) {
+            const number = Number(value);
+            return Number.isFinite(number) && number > 0 ? `${number.toLocaleString('es-ES', { maximumFractionDigits: digits })}${unit}` : 'N/D';
+        }
+
+        function getPdaEstimatedVesselSnapshot() {
+            const stored = window.GlobalStore?.calculatorVessel || window.GlobalStore?.activeVessel || {};
+            const dwt = pdaReadNumber('vessel-dwt') || Number(State.dwt) || 0;
+            const gt = pdaReadNumber('vessel-identity-gt') || Number(stored.gt) || (dwt * 0.60);
+            const loa = pdaReadNumber('vessel-loa') || Number(stored.loa) || (dwt > 0 ? Math.pow(dwt, 0.333) * 5.2 : 0);
+            const beam = Number(stored.beam || stored.beam_meters) || (dwt > 0 ? Math.pow(dwt, 0.333) * 0.82 : 0);
+            return {
+                vessel_name: document.getElementById('nombre-buque-calculadora')?.value || State.vessel || 'TBN',
+                imo: State.imo || document.getElementById('vessel-identity-imo')?.value || '',
+                dwt,
+                gt,
+                net_tonnage: pdaReadNumber('vessel-net-tonnage') || Number(stored.net_tonnage) || 0,
+                loa,
+                beam,
+                draft: pdaReadNumber('vessel-draft') || Number(State.draft) || 0,
+                year_built: pdaReadNumber('vessel-built-year') || Number(State.yearBuilt) || 0,
+                flag: document.getElementById('vessel-flag')?.value || stored.flag || '',
+                spd_ballast: pdaReadNumber('spd-ballast'),
+                spd_laden: pdaReadNumber('spd-laden'),
+                cons_sea: pdaReadNumber('cons-sea'),
+                cons_port: pdaReadNumber('cons-port')
+            };
+        }
+
+        function calculatePdaPortPreview(type, vesselData, targetPda = 0, polPreviewTotal = 0) {
+            const cargo = pdaReadNumber('cargo-qty');
+            const dwt = Number(vesselData.dwt) || 0;
+            const gt = Number(vesselData.gt || vesselData.gross_tonnage) || (dwt * 0.60);
+            const loa = Number(vesselData.loa || vesselData.loa_meters) || (dwt > 0 ? Math.pow(dwt, 0.333) * 5.2 : 0);
+            const beam = Number(vesselData.beam || vesselData.beam_meters) || (dwt > 0 ? Math.pow(dwt, 0.333) * 0.82 : 0);
+            const activeRate = type === 'pol'
+                ? (pdaReadNumber('rate-load') || (typeof calcularRitmoEfectivo === 'function' ? calcularRitmoEfectivo('pol') : 0))
+                : (pdaReadNumber('rate-disch') || (typeof calcularRitmoEfectivo === 'function' ? calcularRitmoEfectivo('pod') : 0));
+            const daysInPort = cargo > 0 && activeRate > 0 ? cargo / activeRate : 0;
+            const totalDaysInPort = daysInPort + Math.max(0, pdaReadNumber('factor-clima')) / 2;
+            const portName = document.getElementById(type === 'pol' ? 'port-pol' : 'port-pod')?.value || (type === 'pol' ? 'POL' : 'POD');
+            const calculation = calculateGlobalPdaEstimateBreakdown({ ...vesselData, dwt, gt, loa, beam, portName, cargo, totalDaysInPort });
+            let totalPda = Number(calculation.totalPDA) || 0;
+            if (type === 'pod') totalPda *= 1.10;
+            if (document.getElementById('cargo-type')?.value === 'Granel Líquido (Liquid Bulk)') totalPda *= 1.30;
+            totalPda = Math.round(totalPda / 50) * 50;
+            if (type === 'pod' && polPreviewTotal > 0) {
+                const podName = String(portName).toLowerCase();
+                const isFreePort = /(libre|free|ftz|exento|arancel reducido)/.test(podName) || document.getElementById('port-pod')?.dataset?.freePort === 'true';
+                if (!isFreePort && totalPda < polPreviewTotal * 0.70) totalPda = Math.max(totalPda, Math.round(polPreviewTotal * 0.85));
+            }
+            if (targetPda > 0) totalPda = targetPda;
+
+            const nav = Number(calculation.navManiobra) || 0;
+            const baseItems = {
+                'Entrada / salida': (Number(calculation.tasasAutoridad) || 0) + ((Number(calculation.agenciaVarios) || 0) * 0.55),
+                'Atraque y amarre': nav * 0.18,
+                'Muellaje y estadía': Number(calculation.muelleEstadia) || 0,
+                'Practicaje': nav * 0.42,
+                'Remolcadores': nav * 0.40
+            };
+            const baseSum = Object.values(baseItems).reduce((sum, amount) => sum + amount, 0) || 1;
+            const pdaItems = Object.fromEntries(Object.entries(baseItems).map(([key, amount]) => [key, totalPda * amount / baseSum]));
+            const stevedoringTotal = pdaReadNumber('stevedoring-costs');
+            pdaItems.Estiba = stevedoringTotal / 2;
+            return { type, portName, pdaTotal: totalPda, total: totalPda + pdaItems.Estiba, daysInPort: totalDaysInPort, items: pdaItems };
+        }
+
+        function extractPdaLimit(value) {
+            const numbers = String(value ?? '').replace(',', '.').match(/\d+(?:\.\d+)?/g);
+            return numbers?.length ? Math.max(...numbers.map(Number).filter(Number.isFinite)) : 0;
+        }
+
+        function getPdaPortRestrictions(inputId, vessel) {
+            const portName = document.getElementById(inputId)?.value || (inputId === 'port-pol' ? 'POL' : 'POD');
+            const portInfo = window.currentPortInfoResults?.[inputId] || {};
+            const general = portInfo.informacion_general || {};
+            const selected = window.selectedPortInfoTerminals?.[inputId] || {};
+            const draftLimit = extractPdaLimit(selected.calado || document.getElementById(`${inputId}-draft`)?.value || general.calado_maximo);
+            const loaLimit = extractPdaLimit(general.restricciones_eslora || portInfo.max_loa || portInfo.loa_maximo);
+            const beamLimit = extractPdaLimit(general.restricciones_manga || portInfo.max_beam || portInfo.manga_maxima);
+            const terminalKnown = Boolean(selected.terminal) || Array.isArray(portInfo.terminales_disponibles);
+            const terminalCompatible = selected.compatible === true || (!selected.terminal && portInfo.terminales_disponibles?.some((terminal) => terminal.compatible !== false));
+            const checks = [
+                { control: 'Calado máximo', actual: Number(vessel.draft || vessel.draft_meters) || 0, limit: draftLimit, unit: ' m', status: draftLimit > 0 ? ((Number(vessel.draft || vessel.draft_meters) || 0) <= draftLimit ? 'pass' : 'fail') : 'pending' },
+                { control: 'Eslora de muelle', actual: Number(vessel.loa || vessel.loa_meters) || 0, limit: loaLimit, unit: ' m', status: loaLimit > 0 ? ((Number(vessel.loa || vessel.loa_meters) || 0) <= loaLimit ? 'pass' : 'fail') : 'pending' },
+                { control: 'Manga / acceso', actual: Number(vessel.beam || vessel.beam_meters) || 0, limit: beamLimit, unit: ' m', status: beamLimit > 0 ? ((Number(vessel.beam || vessel.beam_meters) || 0) <= beamLimit ? 'pass' : 'fail') : 'pending' },
+                { control: 'Acceso a terminal', actualLabel: vessel.vessel_type || vessel.vessel_class || 'Buque comercial', limitLabel: selected.terminal || (terminalKnown ? 'Terminal compatible conocida' : 'Pendiente Port Info'), status: terminalKnown ? (terminalCompatible ? 'pass' : 'fail') : 'pending' }
+            ];
+            return { inputId, portName, checks };
+        }
+
+        function renderPdaStatus(status) {
+            if (status === 'pass') return '<span class="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-1 font-black text-emerald-300"><span class="h-2 w-2 rounded-full bg-emerald-400"></span>Cumple</span>';
+            if (status === 'fail') return '<span class="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-1 font-black text-red-300"><span class="h-2 w-2 rounded-full bg-red-400"></span>No cumple</span>';
+            return '<span class="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-1 font-black text-amber-300"><span class="h-2 w-2 rounded-full bg-amber-400"></span>Pendiente dato</span>';
+        }
+
+        function openPdaVesselConfirmationModal(rawVessel, source = 'databridge') {
+            const actual = normalizeCalculatorStoreVessel(rawVessel) || rawVessel;
+            const previous = getPdaEstimatedVesselSnapshot();
+            const previousPol = calculatePdaPortPreview('pol', previous, pdaReadNumber('pda-pol'));
+            const previousPod = calculatePdaPortPreview('pod', previous, pdaReadNumber('pda-pod'), previousPol.pdaTotal);
+            const actualPol = calculatePdaPortPreview('pol', actual);
+            const actualPod = calculatePdaPortPreview('pod', actual, 0, actualPol.pdaTotal);
+            const operationalValidation = {
+                pol: getPdaPortRestrictions('port-pol', actual),
+                pod: getPdaPortRestrictions('port-pod', actual)
+            };
+            const totalDays = Number(State.totalDays) || 0;
+            const previousDwt = Number(previous.dwt) || 1;
+            const actualDwt = Number(actual.dwt) || previousDwt;
+            const currentDailyOpex = pdaReadNumber('opex-daily') || Number(State.opex) || 0;
+            const actualDailyOpex = typeof calculateFixedOpex === 'function'
+                ? calculateFixedOpex(actualDwt, actual.specialty_type || actual.vessel_type || '', actual.vessel_name || '')
+                : currentDailyOpex;
+            const currentCapexDaily = Number(State.capexDaily || State.ownerNetBreakdown?.capexDaily) || 0;
+            const actualCapexDaily = currentCapexDaily > 0 ? currentCapexDaily * (actualDwt / previousDwt) : 0;
+            const shipments = typeof getOperacionModo === 'function' && getOperacionModo() === 'COA'
+                ? Math.max(1, parseInt(document.getElementById('coa-num-embarques')?.value, 10) || 1)
+                : 1;
+            const concepts = ['Entrada / salida', 'Atraque y amarre', 'Muellaje y estadía', 'Practicaje', 'Remolcadores', 'Estiba'];
+            const toMoneyCents = (value) => Math.round((Number(value) || 0) * 100);
+            const financialRows = concepts.map((concept) => {
+                const previousCents = toMoneyCents((previousPol.items[concept] || 0) + (previousPod.items[concept] || 0));
+                const recalculatedCents = toMoneyCents((actualPol.items[concept] || 0) + (actualPod.items[concept] || 0));
+                return {
+                    concept,
+                    previousCents,
+                    recalculatedCents,
+                    impactCents: recalculatedCents - previousCents,
+                    previous: previousCents / 100,
+                    recalculated: recalculatedCents / 100,
+                    impact: (recalculatedCents - previousCents) / 100
+                };
+            });
+            const previousPortTotalCents = financialRows.reduce((sum, row) => sum + row.previousCents, 0);
+            const recalculatedPortTotalCents = financialRows.reduce((sum, row) => sum + row.recalculatedCents, 0);
+            const portDeltaCents = financialRows.reduce((sum, row) => sum + row.impactCents, 0);
+            const previousPortTotal = previousPortTotalCents / 100;
+            const recalculatedPortTotal = recalculatedPortTotalCents / 100;
+            const portDelta = portDeltaCents / 100;
+            const opexImpact = portDelta + ((actualDailyOpex - currentDailyOpex) * totalDays);
+            const capexImpact = (actualCapexDaily - currentCapexDaily) * totalDays;
+            const financialBreakdown = {
+                previous: { pol: previousPol, pod: previousPod, total: previousPortTotal },
+                recalculated: { pol: actualPol, pod: actualPod, total: recalculatedPortTotal },
+                rows: financialRows,
+                impact: { portDelta, opexImpact, capexImpact, contractImpact: (opexImpact + capexImpact) * shipments, shipments, totalDays, previousDailyOpex: currentDailyOpex, actualDailyOpex, previousCapexDaily: currentCapexDaily, actualCapexDaily }
+            };
+            pendingPdaVesselConfirmation = { previous, actual, operationalValidation, financialBreakdown, source };
+
+            const metricRows = [
+                ['DWT', previous.dwt, actual.dwt, ' t', 0], ['GT', previous.gt, actual.gt, '', 0], ['NT', previous.net_tonnage, actual.net_tonnage, '', 0],
+                ['LOA', previous.loa, actual.loa, ' m', 2], ['Manga', previous.beam, actual.beam, ' m', 2], ['Calado', previous.draft, actual.draft, ' m', 2],
+                ['Año construcción', previous.year_built, actual.year_built, '', 0]
+            ];
+            document.getElementById('pda-vessel-comparison-body').innerHTML = metricRows.map(([label, before, after, unit, digits]) => {
+                const beforeNumber = Number(before) || 0;
+                const afterNumber = Number(after) || 0;
+                const delta = afterNumber > 0 && beforeNumber > 0 ? afterNumber - beforeNumber : 0;
+                const deltaClass = delta === 0 ? 'text-slate-500' : (delta > 0 ? 'text-amber-300' : 'text-cyan-300');
+                return `<tr><td class="px-3 py-2.5 font-bold text-slate-300">${label}</td><td class="px-3 py-2.5 text-right text-slate-400">${pdaMetric(before, unit, digits)}</td><td class="px-3 py-2.5 text-right font-black text-white">${pdaMetric(after, unit, digits)}</td><td class="px-3 py-2.5 text-right font-black ${deltaClass}">${afterNumber > 0 && beforeNumber > 0 ? `${delta > 0 ? '+' : ''}${delta.toLocaleString('es-ES', { maximumFractionDigits: digits })}${unit}` : 'N/D'}</td></tr>`;
+            }).join('');
+
+            const checks = [...operationalValidation.pol.checks, ...operationalValidation.pod.checks];
+            document.getElementById('pda-port-compliance-body').innerHTML = [operationalValidation.pol, operationalValidation.pod].flatMap((port) => port.checks.map((check) => `<tr><td class="px-3 py-2.5 font-black text-white">${escapeHtml(port.portName)}</td><td class="px-3 py-2.5 text-slate-300">${check.control}</td><td class="px-3 py-2.5 text-right">${check.actualLabel || pdaMetric(check.actual, check.unit || '', 2)}</td><td class="px-3 py-2.5 text-right text-slate-400">${check.limitLabel || pdaMetric(check.limit, check.unit || '', 2)}</td><td class="px-3 py-2.5 text-center">${renderPdaStatus(check.status)}</td></tr>`)).join('');
+            const failed = checks.filter((check) => check.status === 'fail').length;
+            const pending = checks.filter((check) => check.status === 'pending').length;
+            const complianceSummary = document.getElementById('pda-compliance-summary');
+            complianceSummary.className = `rounded-full px-3 py-1 text-[10px] font-black ${failed ? 'bg-red-500/15 text-red-300' : pending ? 'bg-amber-500/15 text-amber-300' : 'bg-emerald-500/15 text-emerald-300'}`;
+            complianceSummary.textContent = failed ? `${failed} restricción(es) no conformes` : pending ? `Conforme con ${pending} dato(s) pendiente(s)` : 'Cumplimiento verificado';
+
+            document.getElementById('pda-financial-breakdown-body').innerHTML = financialRows.map((row) => {
+                return `<tr><td class="px-3 py-2.5 font-bold text-slate-300">${row.concept}</td><td class="px-3 py-2.5 text-right text-slate-400">${pdaMoney(row.previous)}</td><td class="px-3 py-2.5 text-right font-black text-white">${pdaMoney(row.recalculated)}</td><td class="px-3 py-2.5 text-right font-black ${row.impact > 0 ? 'text-red-300' : row.impact < 0 ? 'text-emerald-300' : 'text-slate-500'}">${row.impact > 0 ? '+' : ''}${pdaMoney(row.impact)}</td></tr>`;
+            }).join('') + `<tr class="bg-slate-900/70"><td class="px-3 py-3 font-black text-white">TOTAL PORTUARIO</td><td class="px-3 py-3 text-right font-black text-slate-300">${pdaMoney(financialBreakdown.previous.total)}</td><td class="px-3 py-3 text-right font-black text-cyan-300">${pdaMoney(financialBreakdown.recalculated.total)}</td><td class="px-3 py-3 text-right font-black ${portDelta > 0 ? 'text-red-300' : 'text-emerald-300'}">${portDelta > 0 ? '+' : ''}${pdaMoney(portDelta)}</td></tr>`;
+            document.getElementById('pda-financial-impact-cards').innerHTML = [
+                ['Impacto OPEX viaje', opexImpact, `PDAs + ${totalDays.toFixed(2)} días operativos`],
+                ['Impacto CAPEX viaje', capexImpact, `${pdaMoney(actualCapexDaily)}/día recalculado`],
+                ['Proyección contrato', financialBreakdown.impact.contractImpact, `${shipments} embarque(s)`]
+            ].map(([label, value, detail]) => `<div class="rounded-xl border ${Number(value) > 0 ? 'border-red-500/25 bg-red-500/5' : 'border-emerald-500/25 bg-emerald-500/5'} p-4"><div class="text-[10px] font-black uppercase tracking-wider text-slate-400">${label}</div><div class="mt-1 text-xl font-black ${Number(value) > 0 ? 'text-red-300' : 'text-emerald-300'}">${Number(value) > 0 ? '+' : ''}${pdaMoney(value)}</div><div class="mt-1 text-[10px] text-slate-500">${detail}</div></div>`).join('');
+            document.getElementById('pda-vessel-confirmation-subtitle').textContent = `${actual.vessel_name || actual.vesselName || 'Buque'} · IMO ${actual.imo || actual.imo_number || 'N/D'} · Fuente ${source === 'global-store-fallback' ? 'Store local' : 'Data Bridge'}`;
+            document.getElementById('pda-confirmation-error').classList.add('hidden');
+            const modal = document.getElementById('pda-vessel-confirmation-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closePdaVesselConfirmationModal() {
+            const modal = document.getElementById('pda-vessel-confirmation-modal');
+            modal?.classList.add('hidden');
+            modal?.classList.remove('flex');
+            pendingPdaVesselConfirmation = null;
+        }
+        window.closePdaVesselConfirmationModal = closePdaVesselConfirmationModal;
+
+        async function acceptPdaVesselUpdate() {
+            const pending = pendingPdaVesselConfirmation;
+            if (!pending) return;
+            const button = document.getElementById('pda-confirm-accept-button');
+            const errorBox = document.getElementById('pda-confirmation-error');
+            button.disabled = true;
+            button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Sincronizando...';
+            errorBox.classList.add('hidden');
+            try {
+                const payload = {
+                    estimationId: window.CalculatedState?.sessionId || window.GlobalStore?.calculationSessionId || null,
+                    vesselName: pending.actual.vessel_name || pending.actual.vesselName,
+                    imoNumber: pending.actual.imo || pending.actual.imo_number,
+                    pol: document.getElementById('port-pol')?.value || State.pol || '',
+                    pod: document.getElementById('port-pod')?.value || State.pod || '',
+                    previousVessel: pending.previous,
+                    actualVessel: pending.actual,
+                    operationalValidation: pending.operationalValidation,
+                    financialBreakdown: pending.financialBreakdown
+                };
+                const response = await fetch('/api/pda-vessel-confirmation', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(payload) });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || !result.success) throw new Error(result.error || 'No se pudo registrar la confirmación.');
+
+                const vessel = applyResolvedVesselToCalculator(pending.actual, pending.actual.vessel_name || '');
+                const fieldBindings = [
+                    ['vessel-flag', vessel.flag], ['spd-ballast', vessel.spd_ballast], ['spd-laden', vessel.spd_laden],
+                    ['cons-sea', vessel.cons_sea], ['cons-port', vessel.cons_port], ['vessel-draft', vessel.draft || vessel.draft_meters],
+                    ['vessel-loa', vessel.loa || vessel.loa_meters], ['vessel-identity-gt', vessel.gt || vessel.gross_tonnage],
+                    ['vessel-net-tonnage', vessel.net_tonnage]
+                ];
+                fieldBindings.forEach(([id, value]) => {
+                    const element = document.getElementById(id);
+                    if (!element) return;
+                    if ((id === 'vessel-flag' && value) || Number(value) > 0) element.value = value;
+                });
+                State.draft = Number(vessel.draft || vessel.draft_meters) || State.draft;
+                State.loa = Number(vessel.loa || vessel.loa_meters) || State.loa;
+                State.gt = Number(vessel.gt || vessel.gross_tonnage) || State.gt;
+                if (vessel.vessel_class || vessel.vessel_type) {
+                    State.class = vessel.vessel_class || vessel.vessel_type;
+                    const badge = document.getElementById('vessel-badge');
+                    if (badge) badge.textContent = State.class;
+                }
+                if (typeof calculateFixedOpex === 'function') {
+                    const dailyOpex = calculateFixedOpex(Number(vessel.dwt) || 0, vessel.specialty_type || vessel.vessel_type || '', vessel.vessel_name || '');
+                    const opexInput = document.getElementById('opex-daily');
+                    if (opexInput && Number(dailyOpex) > 0) opexInput.value = dailyOpex;
+                }
+                if (typeof autoCalculateDemurrage === 'function') autoCalculateDemurrage(false);
+                if (typeof autoFillPDA === 'function') {
+                    await autoFillPDA('pol', false);
+                    await autoFillPDA('pod', false);
+                }
+                if (typeof runEngine === 'function') runEngine();
+                if (typeof persistCalculationEvent === 'function' && window.CalculatedState) await persistCalculationEvent(window.CalculatedState);
+                closePdaVesselConfirmationModal();
+                showToast('✅ Buque validado: PDAs, OPEX y CAPEX actualizados y registrados.');
+            } catch (error) {
+                console.error('No se pudo aceptar la actualización del buque:', error);
+                errorBox.textContent = error.message || 'No se pudo completar la sincronización.';
+                errorBox.classList.remove('hidden');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '<i class="fa-solid fa-check-double mr-1.5"></i>Aceptar y Actualizar';
+            }
+        }
+        window.acceptPdaVesselUpdate = acceptPdaVesselUpdate;
+
         async function searchLocalVesselDataBridge() {
             const nameInput = document.getElementById('nombre-buque-calculadora') || document.getElementById('vessel-name');
             let vesselName = nameInput ? nameInput.value.trim() : '';
@@ -29248,96 +29575,13 @@
                 }
 
                 if (data.success && data.vessel) {
-                    const v = applyResolvedVesselToCalculator(data.vessel, vesselName);
-
-                    // Binding automatico de campos para rellenar la calculadora
-                    if (v.flag) {
-                        const flagEl = document.getElementById('vessel-flag');
-                        if (flagEl) flagEl.value = v.flag;
-                    }
-                    if (v.spd_ballast) {
-                        const el = document.getElementById('spd-ballast');
-                        if (el) el.value = parseFloat(v.spd_ballast).toFixed(1);
-                        if (typeof markKnownVesselSpeed === 'function') markKnownVesselSpeed('spd-ballast');
-                    }
-                    if (v.spd_laden) {
-                        const el = document.getElementById('spd-laden');
-                        if (el) el.value = parseFloat(v.spd_laden).toFixed(1);
-                        if (typeof markKnownVesselSpeed === 'function') markKnownVesselSpeed('spd-laden');
-                    }
-                    if (v.cons_sea) {
-                        const el = document.getElementById('cons-sea');
-                        if (el) el.value = parseFloat(v.cons_sea).toFixed(1);
-                    }
-                    if (v.cons_port) {
-                        const el = document.getElementById('cons-port');
-                        if (el) el.value = parseFloat(v.cons_port).toFixed(1);
-                    }
-                    if (v.vessel_class || v.vessel_type) {
-                        const badgeClass = v.vessel_class || v.vessel_type;
-                        const badgeEl = document.getElementById('vessel-badge');
-                        if (badgeEl) badgeEl.innerText = badgeClass;
-                        State.class = badgeClass;
-                    }
-                    if (v.specialty_type) {
-                        const specEl = document.getElementById('gc-add-specialty');
-                        if (specEl) specEl.value = v.specialty_type;
-                        State.userHasEditedSpecialty = false;
-                    }
-
-                    // Guardar LOA y Calado en State
-                    if (v.loa) State.loa = v.loa;
-                    if (v.draft || v.draft_meters) State.draft = v.draft || v.draft_meters;
-
-                    const officialName = v.vessel_name || vesselName;
-
-                    const fetchedDwt = Number(v.dwt);
-                    const fetchedBallastSpeed = Number(v.spd_ballast);
-                    const fetchedLadenSpeed = Number(v.spd_laden);
-                    const hasValidatedTechnicalData = (Number.isFinite(fetchedDwt) && fetchedDwt > 0)
-                        || (Number.isFinite(fetchedBallastSpeed) && fetchedBallastSpeed > 0)
-                        || (Number.isFinite(fetchedLadenSpeed) && fetchedLadenSpeed > 0);
+                    const vessel = normalizeCalculatorStoreVessel(data.vessel) || data.vessel;
+                    const fetchedDwt = Number(vessel.dwt);
+                    const hasValidatedTechnicalData = Number.isFinite(fetchedDwt) && fetchedDwt > 0;
                     if (!hasValidatedTechnicalData) {
-                        throw new Error('El registro encontrado no contiene DWT ni velocidades válidas.');
+                        throw new Error('El registro encontrado no contiene DWT válido.');
                     }
-
-                    nameInput?.dispatchEvent(new Event('input', { bubbles: true }));
-                    document.getElementById('spd-ballast')?.dispatchEvent(new Event('input', { bubbles: true }));
-                    document.getElementById('spd-laden')?.dispatchEvent(new Event('input', { bubbles: true }));
-                    if (typeof autoClassifySpecialtyFromInputs === 'function') autoClassifySpecialtyFromInputs();
-
-                    // Recalcular OPEX y Demurrage
-                    const dwtVal = parseFloat(document.getElementById('vessel-dwt')?.value) || 0;
-                    if (dwtVal > 0) {
-                        const specialty = (document.getElementById('gc-add-specialty')?.value || '').trim();
-                        const name = (nameInput?.value || '').trim();
-                        if (typeof calculateFixedOpex === 'function') {
-                            const totalOpexDaily = calculateFixedOpex(dwtVal, specialty, name);
-                            const opexEl = document.getElementById('opex-daily');
-                            if (opexEl) opexEl.value = totalOpexDaily;
-                        }
-                        if (typeof autoCalculateDemurrage === 'function') autoCalculateDemurrage(false);
-                    }
-
-                    const resolvedImo = v.imo || v.imo_number;
-                    if (resolvedImo && typeof saveVesselToIndexedDB === 'function') {
-                        await saveVesselToIndexedDB({
-                            imo: String(resolvedImo),
-                            name: officialName,
-                            dwt: Number.isFinite(fetchedDwt) ? fetchedDwt : null,
-                            flag: v.flag || null,
-                            spd_ballast: Number.isFinite(fetchedBallastSpeed) ? fetchedBallastSpeed : null,
-                            spd_laden: Number.isFinite(fetchedLadenSpeed) ? fetchedLadenSpeed : null,
-                            cons_sea: Number(v.cons_sea) || null,
-                            cons_port: Number(v.cons_port) || null,
-                            source: 'vessels_master'
-                        });
-                    }
-
-                    if (typeof refreshVesselCompatibilityWarning === 'function') refreshVesselCompatibilityWarning();
-                    const sourceLabel = data.source === 'global-store-fallback' ? 'Store local' : 'Neon';
-                    showToast(`✅ Buque encontrado en ${sourceLabel}: ${officialName}`);
-                    if (typeof runEngine === 'function') runEngine();
+                    openPdaVesselConfirmationModal(vessel, data.source || 'databridge');
                 } else {
                     // Aviso local exclusivo sin buscar fuera
                     showToast("Buque no encontrado en Data Bridge");
