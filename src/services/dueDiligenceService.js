@@ -37,6 +37,8 @@ export function normalizeDueDiligenceData(result = {}) {
     flag: readText(data.flag || data.bandera || data.country),
     vesselType: readText(data.vessel_type || data.vesselType || data.shipType || data.type),
     builtYear: readYear(data.year_built || data.builtYear || data.yearBuilt || data.anio),
+    grossTonnage: readPositiveNumber(data.gross_tonnage || data.grossTonnage || data.gt || data.GT),
+    loaMeters: readPositiveNumber(data.loa_meters || data.loaMeters || data.loa || data.LOA || data.length_overall),
   };
 }
 

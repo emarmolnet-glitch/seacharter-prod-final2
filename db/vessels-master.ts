@@ -15,6 +15,8 @@ export type VesselMasterRow = QueryResultRow & {
   last_port: string | null;
   current_destination: string | null;
   year_built: string | null;
+  gross_tonnage: number | null;
+  loa_meters: number | null;
   owner_manager: string | null;
   has_gears: boolean;
   process_status: string | null;
@@ -40,6 +42,7 @@ export type VesselMasterAuditRow = QueryResultRow & {
 const VESSEL_MASTER_COLUMNS = `
   imo_number, vessel_name, dwt, mmsi, latitude, longitude, vessel_type,
   draft_meters, flag, eta, last_port, current_destination, year_built,
+  gross_tonnage, loa_meters,
   owner_manager, has_gears, process_status, source_payload,
   fecha_ultima_actualizacion AS updated_at
 `;

@@ -1,5 +1,11 @@
 import type { Config } from "@netlify/functions";
 import * as cheerio from "cheerio";
+import {
+  findVesselTechnicalRecord,
+  hasCachedMandatoryTechnicalData,
+  upsertVesselTechnicalRecord,
+  type VesselTechnicalRecord,
+} from "../../db/vessel-technical-cache.js";
 
 type VesselData = {
   imo_number: string | null;
@@ -332,6 +338,42 @@ function hasCompleteDueDiligenceData(data: VesselData) {
     && data.year_built !== null;
 }
 
+function hasMandatoryTechnicalData(data: VesselData) {
+  return Number(data.gross_tonnage) > 0 && Number(data.loa_meters) > 0;
+}
+
+function cachedRecordToVesselData(record: VesselTechnicalRecord | null): VesselData {
+  return {
+    ...emptyVesselData(),
+    imo_number: record?.imoNumber ? String(record.imoNumber) : null,
+    vessel_name: record?.vesselName || null,
+    flag: record?.flag || null,
+    vessel_type: record?.vesselType || null,
+    year_built: record?.yearBuilt || null,
+    loa_meters: Number(record?.loaMeters) > 0 ? Number(record?.loaMeters) : null,
+    gross_tonnage: Number(record?.grossTonnage) > 0 ? Number(record?.grossTonnage) : null,
+    dwt: Number(record?.dwt) > 0 ? Number(record?.dwt) : null,
+  };
+}
+
+function vesselDataToTechnicalRecord(data: VesselData, identity: LookupIdentity): VesselTechnicalRecord {
+  const imo = normalizeImo(data.imo_number || identity.imo);
+  return {
+    imoNumber: imo ? Number(imo) : null,
+    mmsi: identity.mmsi || null,
+    vesselName: data.vessel_name || identity.vesselName || null,
+    dwt: data.dwt === null ? null : Math.trunc(data.dwt),
+    latitude: null,
+    longitude: null,
+    vesselType: data.vessel_type,
+    draftMeters: null,
+    flag: data.flag,
+    yearBuilt: data.year_built,
+    grossTonnage: data.gross_tonnage,
+    loaMeters: data.loa_meters,
+  };
+}
+
 async function fetchDirectSource(
   source: DirectSource,
   identity: LookupIdentity,
@@ -356,7 +398,9 @@ async function fetchDirectSource(
         return { status: hasUsefulTechnicalData(combined) ? "success" : "blocked", data: combined };
       }
       mergeFirstValues(combined, extractVesselData(html, identity));
-      if (hasCompleteDueDiligenceData(combined)) return { status: "success", data: combined };
+      if (hasCompleteDueDiligenceData(combined) && hasMandatoryTechnicalData(combined)) {
+        return { status: "success", data: combined };
+      }
     } catch (error) {
       if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
         return { status: hasUsefulTechnicalData(combined) ? "success" : "timeout", data: combined };
@@ -366,9 +410,9 @@ async function fetchDirectSource(
   return { status: hasUsefulTechnicalData(combined) ? "success" : "empty", data: combined };
 }
 
-async function runSourceWaterfall(identity: LookupIdentity, deadlineAt: number) {
+async function runSourceWaterfall(identity: LookupIdentity, deadlineAt: number, cachedData: VesselData) {
   const attempts: SearchAttempt[] = [];
-  const combinedData = emptyVesselData();
+  const combinedData = cachedData;
   const successfulProviders: string[] = [];
 
   for (const source of DIRECT_SOURCES) {
@@ -378,17 +422,18 @@ async function runSourceWaterfall(identity: LookupIdentity, deadlineAt: number) 
     if (result.status === "success") {
       successfulProviders.push(source.provider);
       mergeFirstValues(combinedData, result.data);
-      if (hasCompleteDueDiligenceData(combinedData)) break;
+      if (hasCompleteDueDiligenceData(combinedData) && hasMandatoryTechnicalData(combinedData)) break;
     }
   }
 
   const timedOut = Date.now() >= deadlineAt || attempts.some((attempt) => attempt.status === "timeout");
   return {
     provider: successfulProviders.length ? successfulProviders.join(" + ") : null,
-    status: hasUsefulTechnicalData(combinedData) ? "success" : timedOut ? "timeout" : attempts.at(-1)?.status ?? "empty",
+    status: successfulProviders.length ? "success" : timedOut ? "timeout" : attempts.at(-1)?.status ?? "empty",
     data: combinedData,
     attempts,
     timedOut,
+    extracted: successfulProviders.length > 0,
   };
 }
 
@@ -438,7 +483,56 @@ export default async (req: Request) => {
     return json({ success: false, error: "Se requiere al menos un IMO válido, MMSI o nombre del buque." }, 400, headers);
   }
 
-  const result = await runSourceWaterfall(identity, deadlineAt);
+  let cachedRecord: VesselTechnicalRecord | null = null;
+  try {
+    cachedRecord = await findVesselTechnicalRecord(
+      identity.imo ? Number(identity.imo) : null,
+      identity.mmsi || null,
+      identity.vesselName || null,
+    );
+  } catch (error) {
+    console.error("[vessel-due-diligence] Local vessel cache lookup failed", error);
+  }
+
+  const cachedData = cachedRecordToVesselData(cachedRecord);
+  if (hasCachedMandatoryTechnicalData(cachedRecord)) {
+    return json({
+      success: true,
+      data: normalizedResponseData(cachedData),
+      verificationLog: verificationLog(cachedData, "vessels_master"),
+      meta: {
+        mode: "local-database-cache",
+        provider: "vessels_master",
+        status: "success",
+        attempts: [],
+        timedOut: false,
+        partial: Object.values(cachedData).some((value) => value === null),
+        identity: {
+          queryType: identityQueryType(identity),
+          imo: identity.imo || null,
+          mmsi: identity.mmsi || null,
+          vesselName: identity.vesselName || null,
+        },
+        elapsedMs: Date.now() - requestStartedAt,
+      },
+    }, 200, headers);
+  }
+
+  const result = await runSourceWaterfall(identity, deadlineAt, cachedData);
+  if (result.extracted && hasUsefulTechnicalData(result.data)) {
+    try {
+      await upsertVesselTechnicalRecord(vesselDataToTechnicalRecord(result.data, identity));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown database error";
+      console.error("[vessel-due-diligence] Automatic technical persistence failed", error);
+      return json({
+        success: false,
+        error: `La extracción finalizó, pero no se pudo consolidar vessels_master: ${errorMessage}`,
+        data: normalizedResponseData(result.data),
+      }, 500, headers);
+    }
+  }
+
   return json({
     success: true,
     data: normalizedResponseData(result.data),
@@ -447,6 +541,7 @@ export default async (req: Request) => {
       mode: "public-source-waterfall",
       provider: result.provider,
       status: result.status,
+      persisted: result.extracted && hasUsefulTechnicalData(result.data),
       attempts: result.attempts,
       timedOut: result.timedOut,
       partial: Object.values(result.data).some((value) => value === null),

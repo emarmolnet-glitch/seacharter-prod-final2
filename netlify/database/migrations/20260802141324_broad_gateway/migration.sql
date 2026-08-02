@@ -1,0 +1,2 @@
+ALTER TABLE "vessels_master" ALTER COLUMN "gross_tonnage" SET DATA TYPE numeric USING "gross_tonnage"::numeric;--> statement-breakpoint
+ALTER TABLE "vessels_master" ALTER COLUMN "loa_meters" SET DATA TYPE numeric USING "loa_meters"::numeric;

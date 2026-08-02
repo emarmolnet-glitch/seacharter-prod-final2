@@ -4,12 +4,14 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import vm from 'node:vm';
 
-const [indexSource, entrySource, serviceSource, backendSource, persistenceBackendSource] = await Promise.all([
+const [indexSource, entrySource, serviceSource, backendSource, persistenceBackendSource, technicalCacheSource, technicalMigrationSource] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../src/due-diligence-entry.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/services/dueDiligenceService.js', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/functions/vessel-due-diligence.ts', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/functions/vessel-due-diligence-save.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../db/vessel-technical-cache.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../netlify/database/migrations/20260802170000_add_vessels_master_technical_dimensions/migration.sql', import.meta.url), 'utf8'),
 ]);
 const serviceModule = await import(`data:text/javascript;base64,${Buffer.from(serviceSource).toString('base64')}`);
 const cargoTaxonomyModule = await import(new URL('../cargo-taxonomy.mjs', import.meta.url));
@@ -119,6 +121,8 @@ test('fetchDueDiligence posts identity and normalizes the complete technical pay
             flag: 'Barbados',
             vessel_type: 'General Cargo',
             year_built: 2011,
+            gross_tonnage: 7_580,
+            loa_meters: 138.4,
           },
         }), {
           status: 200,
@@ -139,6 +143,8 @@ test('fetchDueDiligence posts identity and normalizes the complete technical pay
     flag: 'Barbados',
     vesselType: 'General Cargo',
     builtYear: 2011,
+    grossTonnage: 7_580,
+    loaMeters: 138.4,
   });
 });
 
@@ -161,13 +167,20 @@ test('persistDueDiligenceVessel sends the consolidated vessel through PUT', asyn
   assert.equal(result.success, true);
 });
 
-test('persistence backend upserts vessels_master using only standard technical columns', () => {
+test('persistence backend consolidates normalized technical fields by IMO or MMSI', () => {
   assert.match(persistenceBackendSource, /path: "\/api\/vessel-due-diligence-save"/);
-  assert.match(persistenceBackendSource, /ON CONFLICT \(imo_number\) DO UPDATE SET/);
-  assert.match(persistenceBackendSource, /imo_number, vessel_name, dwt, mmsi, latitude, longitude, vessel_type,/);
-  assert.match(persistenceBackendSource, /draft_meters, flag, year_built/);
-  assert.match(persistenceBackendSource, /flag = COALESCE\(EXCLUDED\.flag, vessels_master\.flag\)/);
-  assert.match(persistenceBackendSource, /year_built = COALESCE\(EXCLUDED\.year_built, vessels_master\.year_built\)/);
+  assert.match(persistenceBackendSource, /gross_tonnage/);
+  assert.match(persistenceBackendSource, /loa_meters/);
+  assert.match(persistenceBackendSource, /Se requiere IMO o MMSI válido/);
+  assert.match(persistenceBackendSource, /upsertVesselTechnicalRecord/);
+  assert.match(technicalCacheSource, /ON CONFLICT \(imo_number\) DO UPDATE SET/);
+  assert.match(technicalCacheSource, /gross_tonnage = COALESCE\(EXCLUDED\.gross_tonnage, vessels_master\.gross_tonnage\)/);
+  assert.match(technicalCacheSource, /loa_meters = COALESCE\(EXCLUDED\.loa_meters, vessels_master\.loa_meters\)/);
+  assert.match(technicalCacheSource, /year_built = COALESCE\(EXCLUDED\.year_built, vessels_master\.year_built\)/);
+  assert.match(technicalCacheSource, /OR \(\$2::text IS NOT NULL AND mmsi = \$2::text\)/);
+  assert.match(technicalMigrationSource, /ADD COLUMN IF NOT EXISTS gross_tonnage NUMERIC/);
+  assert.match(technicalMigrationSource, /ADD COLUMN IF NOT EXISTS loa_meters NUMERIC/);
+  assert.match(technicalMigrationSource, /ADD COLUMN IF NOT EXISTS year_built INT/);
   assert.match(persistenceBackendSource, /SELECT COUNT\(\*\)::integer AS total FROM vessels_master/);
   assert.match(persistenceBackendSource, /masterVesselCount:/);
   assert.match(persistenceBackendSource, /barbados: "BRB"/);
@@ -177,6 +190,17 @@ test('persistence backend upserts vessels_master using only standard technical c
   assert.match(persistenceBackendSource, /return json\(\{ success: false, error: errorMessage \}, 500, headers\)/);
   assert.doesNotMatch(persistenceBackendSource, /source_provenance|audit_status|audit_source|validation_status|system_identity|source_payload|fecha_ultima_actualizacion/);
   assert.doesNotMatch(persistenceBackendSource, /\bsource\b\s*[,)!=]/);
+});
+
+test('backend reads vessels_master first and persists successful waterfall extraction', () => {
+  assert.match(backendSource, /findVesselTechnicalRecord/);
+  assert.match(technicalCacheSource, /LOWER\(BTRIM\(vessel_name\)\) = LOWER\(BTRIM\(\$3::text\)\)/);
+  assert.match(backendSource, /hasCachedMandatoryTechnicalData\(cachedRecord\)/);
+  assert.match(backendSource, /mode: "local-database-cache"/);
+  assert.match(backendSource, /attempts: \[\]/);
+  assert.match(backendSource, /runSourceWaterfall\(identity, deadlineAt, cachedData\)/);
+  assert.match(backendSource, /await upsertVesselTechnicalRecord\(vesselDataToTechnicalRecord\(result\.data, identity\)\)/);
+  assert.match(backendSource, /persisted: result\.extracted && hasUsefulTechnicalData\(result\.data\)/);
 });
 
 test('backend accepts IMO, MMSI, or vessel name and searches the four public providers', () => {
@@ -189,7 +213,7 @@ test('backend accepts IMO, MMSI, or vessel name and searches the four public pro
   assert.ok(marineVesselTraffic < vesselFinder && vesselFinder < marineTraffic && marineTraffic < balticShipping);
   assert.match(backendSource, /buildUrls: \(identity\)/);
   assert.match(backendSource, /encodeURIComponent\(identity\.query\)/);
-  assert.match(backendSource, /runSourceWaterfall\(identity, deadlineAt\)/);
+  assert.match(backendSource, /runSourceWaterfall\(identity, deadlineAt, cachedData\)/);
   assert.match(backendSource, /vessel_type: \["vessel type", "ship type", "type", "class"\]/);
   assert.match(backendSource, /data\.vessel_type = readCell/);
   assert.match(backendSource, /findStructuredVesselType/);
@@ -235,6 +259,8 @@ test('technical merge enriches fields without changing OpenShips coordinates', (
     flag: 'Spain',
     vesselType: 'General Cargo',
     yearBuilt: 2018,
+    grossTonnage: 7_580,
+    loaMeters: 138.4,
     draft: 9.4,
   });
 
@@ -244,6 +270,8 @@ test('technical merge enriches fields without changing OpenShips coordinates', (
   assert.equal(vessel.vesselType, 'General Cargo');
   assert.equal(vessel.vessel_type, 'General Cargo');
   assert.equal(vessel.yearBuilt, 2018);
+  assert.equal(vessel.gross_tonnage, 7_580);
+  assert.equal(vessel.loa_meters, 138.4);
   assert.equal(vessel.draft, 9.4);
   assert.equal(vessel.latitude, 36.1234);
   assert.equal(vessel.longitude, -5.4321);

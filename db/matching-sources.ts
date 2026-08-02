@@ -165,6 +165,7 @@ export async function listPaginatedMatchingSources(
 const DATA_BRIDGE_COLUMNS = `
   imo_number, vessel_name, dwt, mmsi, latitude, longitude, vessel_type,
   draft_meters, flag, eta, last_port, current_destination, year_built,
+  gross_tonnage, loa_meters,
   owner_manager, has_gears, process_status, source_payload,
   status, validation_status, origen, fecha_ultima_actualizacion AS updated_at
 `;

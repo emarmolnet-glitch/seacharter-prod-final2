@@ -1,5 +1,6 @@
 import type { Config } from "@netlify/functions";
 import { getPool } from "../../db/index.js";
+import { upsertVesselTechnicalRecord } from "../../db/vessel-technical-cache.js";
 
 const NON_COMMERCIAL_VESSEL_PATTERN = /yacht|passenger|ferry|pleasure|cruise|military/i;
 const FLAG_CODES: Record<string, string> = {
@@ -88,6 +89,11 @@ function cleanNumber(value: unknown) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
+function cleanPositiveNumber(value: unknown) {
+  const numeric = cleanNumber(value);
+  return numeric !== null && numeric > 0 ? numeric : null;
+}
+
 function cleanInteger(value: unknown) {
   const numeric = cleanNumber(value);
   return numeric === null ? null : Math.trunc(numeric);
@@ -110,66 +116,58 @@ export default async (req: Request) => {
   const vessel = asRecord(bodyRecord.vessel || bodyRecord);
   const imoNumber = cleanImo(readFirst(vessel, ["imo", "IMO", "imo_number", "imoNumber"]));
   const vesselName = cleanText(readFirst(vessel, ["vesselName", "vessel_name", "name", "ShipName"]));
-  if (!imoNumber || !vesselName) {
-    return json({ success: false, error: "Se requieren IMO válido y nombre del buque para persistir Due Diligence." }, 400, headers);
+  const mmsi = cleanMmsi(readFirst(vessel, ["mmsi", "MMSI"]));
+  if (!imoNumber && !mmsi) {
+    return json({ success: false, error: "Se requiere IMO o MMSI válido para persistir Due Diligence." }, 400, headers);
   }
 
   const dwt = cleanInteger(readFirst(vessel, ["dwt", "DWT", "deadweight"]));
-  const mmsi = cleanMmsi(readFirst(vessel, ["mmsi", "MMSI"]));
   const latitude = cleanCoordinate(readFirst(vessel, ["latitude", "lat"]), -90, 90);
   const longitude = cleanCoordinate(readFirst(vessel, ["longitude", "lon", "lng"]), -180, 180);
   const vesselType = cleanText(readFirst(vessel, ["vesselType", "vessel_type", "shipType", "ship_type"]));
   const draftMeters = cleanNumber(readFirst(vessel, ["draft", "Draft", "draft_meters", "calado"]));
   const flag = cleanFlagCode(readFirst(vessel, ["flag", "bandera"]));
   const yearBuilt = cleanInteger(readFirst(vessel, ["yearBuilt", "builtYear", "year_built", "built_year"]));
+  const grossTonnage = cleanPositiveNumber(readFirst(vessel, ["gross_tonnage", "grossTonnage", "gt", "GT"]));
+  const loaMeters = cleanPositiveNumber(readFirst(vessel, ["loa_meters", "loaMeters", "loa", "LOA", "length_overall"]));
   if (vesselType && NON_COMMERCIAL_VESSEL_PATTERN.test(vesselType)) {
     return json({ success: false, error: `Buque no comercial detectado: ${vesselType}` }, 422, headers);
   }
   try {
+    const savedVessel = await upsertVesselTechnicalRecord({
+      imoNumber: imoNumber ? Number(imoNumber) : null,
+      mmsi,
+      vesselName,
+      dwt,
+      latitude,
+      longitude,
+      vesselType,
+      draftMeters,
+      flag,
+      yearBuilt,
+      grossTonnage,
+      loaMeters,
+    });
     const pool = getPool();
-    const result = await pool.query(
-      `
-        INSERT INTO vessels_master (
-          imo_number, vessel_name, dwt, mmsi, latitude, longitude, vessel_type,
-          draft_meters, flag, year_built
-        )
-        VALUES (
-          $1::integer, $2, $3::integer, $4, $5, $6, $7,
-          $8, $9, $10::integer
-        )
-        ON CONFLICT (imo_number) DO UPDATE SET
-          vessel_name = EXCLUDED.vessel_name,
-          dwt = COALESCE(EXCLUDED.dwt, vessels_master.dwt),
-          mmsi = COALESCE(EXCLUDED.mmsi, vessels_master.mmsi),
-          latitude = COALESCE(EXCLUDED.latitude, vessels_master.latitude),
-          longitude = COALESCE(EXCLUDED.longitude, vessels_master.longitude),
-          vessel_type = COALESCE(EXCLUDED.vessel_type, vessels_master.vessel_type),
-          draft_meters = COALESCE(EXCLUDED.draft_meters, vessels_master.draft_meters),
-          flag = COALESCE(EXCLUDED.flag, vessels_master.flag),
-          year_built = COALESCE(EXCLUDED.year_built, vessels_master.year_built)
-        RETURNING
-          imo_number, vessel_name, dwt, mmsi, latitude, longitude, vessel_type,
-          draft_meters, flag, year_built
-      `,
-      [
-        imoNumber,
-        vesselName,
-        dwt,
-        mmsi,
-        latitude,
-        longitude,
-        vesselType,
-        draftMeters,
-        flag,
-        yearBuilt,
-      ],
-    );
     const countResult = await pool.query<{ total: number }>(
       `SELECT COUNT(*)::integer AS total FROM vessels_master`,
     );
     return json({
       success: true,
-      vessel: result.rows[0],
+      vessel: {
+        imo_number: savedVessel.imoNumber,
+        mmsi: savedVessel.mmsi,
+        vessel_name: savedVessel.vesselName,
+        dwt: savedVessel.dwt,
+        latitude: savedVessel.latitude,
+        longitude: savedVessel.longitude,
+        vessel_type: savedVessel.vesselType,
+        draft_meters: savedVessel.draftMeters,
+        flag: savedVessel.flag,
+        year_built: savedVessel.yearBuilt,
+        gross_tonnage: savedVessel.grossTonnage,
+        loa_meters: savedVessel.loaMeters,
+      },
       masterVesselCount: Number(countResult.rows[0]?.total || 0),
     }, 200, headers);
   } catch (error) {
