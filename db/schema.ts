@@ -78,7 +78,7 @@ export const vesselsMaster = pgTable(
     draftMeters: doublePrecision("draft_meters"),
     flag: text("flag"),
     callSign: text("call_sign"),
-    eta: text("eta"),
+    eta: timestamp("eta", { withTimezone: true, mode: "string" }),
     lastPort: text("last_port"),
     currentDestination: text("current_destination"),
     yearBuilt: integer("year_built"),
