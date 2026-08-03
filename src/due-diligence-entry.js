@@ -798,7 +798,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
     }
 
     async function runVesselDueDiligence(button, encodedIdentity) {
-        const card = button?.closest('[data-matching-result-card="true"]');
+        const card = button?.closest('[data-matching-result-card="true"], [data-vessel-recommendation="true"]');
         const status = card?.querySelector('[data-due-diligence-status]');
         const originalHtml = button?.innerHTML || '';
         let identity;
@@ -885,7 +885,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             event.stopPropagation();
             event.stopImmediatePropagation();
             const actionButton = acceptButton || rejectButton;
-            const card = actionButton.closest('[data-matching-result-card="true"]');
+            const card = actionButton.closest('[data-matching-result-card="true"], [data-vessel-recommendation="true"]');
             const key = acceptButton?.dataset.dueDiligenceAccept || rejectButton?.dataset.dueDiligenceReject || '';
             if (acceptButton) void acceptPendingProposal(key, card, acceptButton);
             else rejectPendingProposal(key, card);

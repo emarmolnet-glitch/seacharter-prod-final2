@@ -39,14 +39,15 @@ test('matching UI requests and renders the Data Bridge recommendation fields', (
   assert.match(indexSource, /\['distance_nm', 'distanceNm', 'distance_to_load_nm'\]/);
   assert.match(indexSource, /\['total_score', 'totalScore', 'score'\]/);
   assert.match(indexSource, /id="databridge-recommendations-body"/);
-  assert.match(indexSource, /\$\{score\.toFixed\(1\)\}\/100/);
+  assert.match(indexSource, /\$\{score\.toFixed\(1\)\}/);
 });
 
 test('ranking table exposes technical, AIS and Neon metadata at a glance', () => {
   assert.match(indexSource, />GT \/ DWT</);
   assert.match(indexSource, />Bandera \/ Año</);
-  assert.match(indexSource, />LOA \/ Manga</);
-  assert.match(indexSource, />Calado actual</);
+  assert.match(indexSource, />Dimensiones</);
+  assert.match(indexSource, />Manga \$\{formatRecommendationNumber\(beamMeters/);
+  assert.match(indexSource, />Calado \$\{formatRecommendationNumber\(draftMeters/);
   assert.match(indexSource, />Velocidad \/ Estado</);
   assert.match(indexSource, />ETA</);
   assert.match(indexSource, /\['gross_tonnage', 'grossTonnage', 'gt', 'GT'\]/);
@@ -54,4 +55,26 @@ test('ranking table exposes technical, AIS and Neon metadata at a glance', () =>
   assert.match(indexSource, /record\?\.source_payload/);
   assert.match(indexSource, /record\?\.MetaData/);
   assert.match(indexSource, /renderRecommendationUnavailable\(label = 'N\/A'\)/);
+});
+
+test('ranking checkbox activates the estimator and synchronized vessel detail', () => {
+  assert.match(indexSource, /class="fleet-ranking-select"/);
+  assert.match(indexSource, /onchange="handleDataBridgeRecommendationSelection\(event, \$\{index\}\)"/);
+  assert.match(indexSource, /accent-color: #0891b2/);
+  assert.match(indexSource, /data-active-estimator-vessel="\$\{isActive\}"/);
+  assert.match(indexSource, /window\.GlobalStore\.calculatorVessel = vessel/);
+  assert.match(indexSource, /applyResolvedVesselToCalculator\(vessel, vessel\.vessel_name\)/);
+  assert.match(indexSource, /new CustomEvent\('vessel-selection:changed'/);
+  assert.match(indexSource, /card\.dataset\.activeEstimatorVessel = String\(isActive\)/);
+});
+
+test('ranking fills its container and exposes row-level Due Diligence', () => {
+  assert.match(indexSource, /id="databridge-recommendations-panel" class="[^"]*w-full max-w-none/);
+  assert.match(indexSource, /id="databridge-recommendations-table" class="[^"]*w-full overflow-x-auto/);
+  assert.match(indexSource, /class="fleet-ranking-table w-full text-left"/);
+  assert.doesNotMatch(indexSource, /fleet-ranking-table w-full min-w-\[1080px\]/);
+  assert.match(indexSource, />Verificación</);
+  assert.match(indexSource, /class="fleet-ranking-due-button/);
+  assert.match(indexSource, /data-due-diligence-payload="\$\{dueDiligenceIdentity\}"/);
+  assert.match(indexSource, /<span>Verificar<\/span>/);
 });
