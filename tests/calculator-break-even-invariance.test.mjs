@@ -7,6 +7,9 @@ const indexSource = await readFile(new URL('../index.html', import.meta.url), 'u
 const calculatorStart = indexSource.indexOf('function calcularViaje(datosDelBuqueAislados)');
 const calculatorEnd = indexSource.indexOf("if (typeof window !== 'undefined') {\n            window.calcularViaje", calculatorStart);
 const calculatorSource = indexSource.slice(calculatorStart, calculatorEnd).trim();
+const stevedoringAllocationStart = indexSource.indexOf('function resolveStevedoringAllocation(condition, cargoTons)');
+const stevedoringAllocationEnd = indexSource.indexOf('function renderStevedoringCostBreakdown', stevedoringAllocationStart);
+const stevedoringAllocationSource = indexSource.slice(stevedoringAllocationStart, stevedoringAllocationEnd).trim();
 const requiredInputsStart = indexSource.indexOf('function hasRequiredCalculationInputs()');
 const requiredInputsEnd = indexSource.indexOf('function resetTotalEstimation', requiredInputsStart);
 const requiredInputsSource = indexSource.slice(requiredInputsStart, requiredInputsEnd).trim();
@@ -119,7 +122,7 @@ function runCalculator(overrides = {}) {
     calcularPrecioObjetivo: (base, margin) => Math.max(0, Number(base) || 0) * (1 + ((Number(margin) || 0) / 100)),
   };
   vm.runInNewContext(
-    `${calculatorSource}; globalThis.result = calcularViaje({ dwt: ${Number(values['vessel-dwt']) || 0}, hasScrubber: false });`,
+    `${stevedoringAllocationSource}; ${calculatorSource}; globalThis.result = calcularViaje({ dwt: ${Number(values['vessel-dwt']) || 0}, hasScrubber: false });`,
     context,
   );
   return { result: context.result, elements };
@@ -219,6 +222,28 @@ test('conditions allocate stevedoring cost to the owner', () => {
   assert.equal(liner.stevedoringOwnerCost, 20000);
   assert.ok(filo.breakEven > fios.breakEven);
   assert.ok(liner.breakEven > filo.breakEven);
+});
+
+test('liner terms auto-estimate stevedoring while FIOS keeps owner cost at zero', () => {
+  const fios = runCalculator({
+    'freight-conditions': 'FIOS',
+    'stevedoring-costs': 0,
+  });
+  const liner = runCalculator({
+    'freight-conditions': 'LINER',
+    'stevedoring-costs': 0,
+    'cargo-qty': 20000,
+  });
+
+  assert.equal(fios.result.stevedoringOwnerCost, 0);
+  assert.equal(liner.result.stevedoringEnteredCost, 50000);
+  assert.equal(liner.result.stevedoringOwnerCost, 50000);
+  assert.equal(liner.elements.get('stevedoring-costs').dataset.autoEstimated, 'true');
+  assert.match(indexSource, /id="res-cost-stevedoring-note"/);
+  assert.match(indexSource, /FIOS: coste \$0 para el armador/);
+  assert.match(indexSource, /Liner Terms: coste a cargo del armador/);
+  assert.match(indexSource, /pdaRecurrente[\s\S]*stevedoringAllocation\.ownerCost/);
+  assert.doesNotMatch(indexSource, /pdaRecurrente[\s\S]{0,300}parseFloat\(document\.getElementById\('stevedoring-costs'\)\.value\)/);
 });
 
 test('slower real port rates increase voyage days and break-even', () => {
