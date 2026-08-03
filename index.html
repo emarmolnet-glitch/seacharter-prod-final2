@@ -24826,6 +24826,7 @@
             { id: 'map', label: 'Mapa' },
             { id: 'estimator', label: 'Calculadora' },
             { id: 'decisiones', label: 'Decisiones' },
+            { id: 'tracking', label: 'Tracking', presentation: 'dialog' },
             { id: 'ais', label: 'Densidad' },
             { id: 'matching', label: 'Coincidencia' },
             { id: 'gencon', label: 'Editor' },
@@ -24932,8 +24933,16 @@
             const localizedLabel = getLocalizedModuleLabel(moduleConfig.label);
             button.textContent = localizedLabel;
             button.setAttribute('aria-label', localizedLabel);
+            if (moduleConfig.presentation === 'dialog') {
+                button.setAttribute('aria-haspopup', 'dialog');
+                button.setAttribute('aria-controls', 'tracking-live-overlay');
+            }
             button.addEventListener('click', () => {
-                switchTab(moduleConfig.id);
+                if (moduleConfig.presentation === 'dialog') {
+                    window.openTrackingLive?.();
+                } else {
+                    switchTab(moduleConfig.id);
+                }
                 if (variant !== 'primary') closeAdvancedModulesMenu();
                 if (variant === 'mobile') closeMobileModuleNav();
             });
@@ -25099,21 +25108,6 @@
                 event.preventDefault();
                 closeAdvancedModulesMenu();
                 window.openMarketContactsDirectory?.();
-            });
-
-            const trackingLiveItem = document.createElement('li');
-            trackingLiveItem.className = 'tools-dropdown-item';
-            trackingLiveItem.innerHTML = `
-                <button type="button" id="open-tracking-live-btn" class="tools-dropdown-action" aria-haspopup="dialog" aria-label="Abrir Tracking Live Premium">
-                    <span>Tracking Live (Premium)</span>
-                    <span class="tracking-pro-badge">PRO</span>
-                </button>
-            `;
-            menu.appendChild(trackingLiveItem);
-            trackingLiveItem.querySelector('#open-tracking-live-btn')?.addEventListener('click', event => {
-                event.preventDefault();
-                closeAdvancedModulesMenu();
-                window.openTrackingLive?.();
             });
 
             const preferenceItem = document.createElement('li');
@@ -25295,6 +25289,21 @@
                 });
             });
         }
+
+        function restoreActiveViewNavigation() {
+            const activeModuleId = document.querySelector('.view-section.active-block, .view-section.active-flex')?.id?.replace('view-', '') || 'map';
+            updateNavigationContext(activeModuleId);
+            updateMobileModuleNavLabel(activeModuleId);
+        }
+
+        document.addEventListener('tracking-live:open', () => {
+            updateNavigationContext('tracking');
+            updateMobileModuleNavLabel('tracking');
+            closeMobileModuleNav();
+            closeAdvancedModulesMenu();
+        });
+
+        document.addEventListener('tracking-live:close', restoreActiveViewNavigation);
 
         function getCachedMatchingResultsForPreflight() {
             const executionCache = window.aisMatchingExecutionState || {};

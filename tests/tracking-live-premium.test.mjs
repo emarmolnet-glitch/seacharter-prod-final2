@@ -11,17 +11,19 @@ const [indexSource, scriptSource, stylesSource, endpointSource, migrationSource,
   readFile(new URL('../netlify/functions/tender-nor.ts', import.meta.url), 'utf8'),
 ]);
 
-test('advanced settings exposes Tracking Live directly after the broker directory', () => {
-  const agendaIndex = indexSource.indexOf('Agenda de Brokers');
-  const trackingIndex = indexSource.indexOf('Tracking Live (Premium)', agendaIndex);
-  const preferencesIndex = indexSource.indexOf('Mostrar FCL en barra superior', trackingIndex);
-
-  assert.ok(agendaIndex > -1);
-  assert.ok(trackingIndex > agendaIndex);
-  assert.ok(preferencesIndex > trackingIndex);
-  assert.match(indexSource, /tracking-pro-badge/);
+test('primary navigation exposes Tracking without duplicating it in advanced settings', () => {
+  assert.match(indexSource, /\{ id: 'tracking', label: 'Tracking', presentation: 'dialog' \}/);
+  assert.doesNotMatch(indexSource, /id="open-tracking-live-btn"/);
+  assert.doesNotMatch(indexSource, /const trackingLiveItem = document\.createElement/);
   assert.match(indexSource, /tracking-live\.css/);
   assert.match(indexSource, /tracking-live\.js/);
+});
+
+test('tracking open and close events synchronize the active header module', () => {
+  assert.match(scriptSource, /CustomEvent\('tracking-live:open'\)/);
+  assert.match(scriptSource, /CustomEvent\('tracking-live:close'\)/);
+  assert.match(indexSource, /updateNavigationContext\('tracking'\)/);
+  assert.match(indexSource, /document\.addEventListener\('tracking-live:close', restoreActiveViewNavigation\)/);
 });
 
 test('tracking console supports contract lookup, polling and all six operational phases', () => {
