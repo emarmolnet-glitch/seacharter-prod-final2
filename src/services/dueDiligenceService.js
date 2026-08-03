@@ -54,6 +54,7 @@ export function normalizeDueDiligenceData(result = {}) {
     builtYear: readYear(readLabeledValue(data, ['Year Built', 'Built Year', 'YearBuilt', 'Anio'])),
     grossTonnage: readPositiveNumber(readLabeledValue(data, ['Gross Tonnage', 'GrossTonnage', 'GT'])),
     loaMeters: readPositiveNumber(readLabeledValue(data, ['LOA Meters', 'LOA', 'Length', 'Length Overall'])),
+    beamMeters: readPositiveNumber(readLabeledValue(data, ['Beam Meters', 'Beam', 'Breadth', 'Manga'])),
   };
 }
 
@@ -78,7 +79,7 @@ export async function fetchDueDiligence(
   const response = await fetchImpl(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, externalOnly: true }),
     signal,
   });
   const rawText = await response.text();

@@ -19942,6 +19942,30 @@
             return new Promise(resolve => requestAnimationFrame(resolve));
         }
 
+        function renderMatchingCardErrorFallback(match, index, error) {
+            const source = match && typeof match === 'object' ? match : {};
+            const vessel = source.vessel && typeof source.vessel === 'object' ? source.vessel : {};
+            const ais = source.ais && typeof source.ais === 'object' ? source.ais : {};
+            const vesselName = String(vessel.vesselName || vessel.vessel_name || ais.vesselName || ais.vessel_name || `Buque ${index + 1}`).trim();
+            console.error('[Matching] No se pudo renderizar una tarjeta de buque.', {
+                index,
+                vesselName,
+                message: error instanceof Error ? error.message : String(error || 'Error desconocido'),
+            });
+            return `
+                <article class="matching-vessel-card rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-sm" data-matching-render-error="true">
+                    <div class="flex items-start gap-3">
+                        <i class="fa-solid fa-triangle-exclamation mt-0.5 text-rose-600" aria-hidden="true"></i>
+                        <div class="min-w-0">
+                            <p class="truncate text-sm font-black text-rose-900">${escapeHtml(vesselName || 'Buque sin nombre')}</p>
+                            <p class="mt-1 text-[11px] font-semibold text-rose-700">No se pudo mostrar este registro porque contiene datos técnicos incompletos.</p>
+                            <p class="mt-1 text-[10px] text-rose-600">El resto de resultados continúa disponible.</p>
+                        </div>
+                    </div>
+                </article>
+            `;
+        }
+
         async function renderMatchingResultsInChunks(container, matches, renderCard, renderCycle) {
             container.replaceChildren();
             const totalMatches = matches.length;
@@ -19978,7 +20002,12 @@
                 const chunkHtml = [];
                 pendingMatches.forEach((match, pendingIndex) => {
                     const index = renderedSourceCount + pendingIndex;
-                    const cardHtml = renderCard(match, index);
+                    let cardHtml = '';
+                    try {
+                        cardHtml = renderCard(match, index);
+                    } catch (error) {
+                        cardHtml = renderMatchingCardErrorFallback(match, index, error);
+                    }
                     if (cardHtml) chunkHtml.push(cardHtml);
                 });
 
@@ -20114,15 +20143,30 @@
                 record.source_origin,
                 record.sourceOrigin,
                 record.data_source,
-                record.source
+                record.source,
+                record.source_system,
+                record.origen,
+                record.origin,
+                record.source_provenance,
+                record.sourceProvenance
             ].flatMap(value => Array.isArray(value) ? value : [value]));
             const sourceOrigins = new Set();
             sourceValues.forEach((value) => {
-                const normalizedSource = String(value || '').trim().toLowerCase();
-                if (normalizedSource.includes('openships')) sourceOrigins.add('OPENSHIPS');
-                if (normalizedSource.includes('ais_live') || normalizedSource.includes('ais live')) sourceOrigins.add('AIS_LIVE');
-                if (normalizedSource.includes('databridge') || normalizedSource.includes('data bridge')) sourceOrigins.add('DATABRIDGE');
+                const normalizedSource = String(value || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+                if (normalizedSource.includes('OPENSHIPS')) sourceOrigins.add('OPENSHIPS');
+                if (normalizedSource === 'AIS' || normalizedSource.includes('AIS_LIVE')) sourceOrigins.add('AIS_LIVE');
+                if (normalizedSource === 'DATA_BRIDGE' || normalizedSource.includes('DATABRIDGE')) sourceOrigins.add('DATABRIDGE');
             });
+            const hasLocalMasterMetadata = sourceRecords.some(record => Boolean(
+                record.source_payload
+                || record.fecha_ultima_actualizacion
+                || record.validation_status
+                || record.status === 'EN_CARTERA'
+                || record.cacheValidated === true
+                || record.masterUpdatedAt
+                || record.processStatus
+            ));
+            if (hasLocalMasterMetadata) sourceOrigins.add('DATABRIDGE');
             const originalSource = sourceRecords
                 .map(record => record.source)
                 .find(value => typeof value === 'string' && value.trim()) || '';
@@ -21243,16 +21287,41 @@
                     loadingState.classList.add('hidden');
                     resultsList.classList.remove('hidden');
                     const renderCompleted = await renderMatchingResultsInChunks(resultsList, displayMatches, (m, idx) => {
-                        const v = m.vessel;
-
-                        const route = m.routing;
-                        const fin = m.financials;
-                        const comp = m.compatibility;
-                        const scores = m.scores;
+                        const sourceMatch = m && typeof m === 'object' ? m : {};
+                        const rawAis = sourceMatch.ais && typeof sourceMatch.ais === 'object' ? sourceMatch.ais : {};
+                        const rawVessel = sourceMatch.vessel && typeof sourceMatch.vessel === 'object'
+                            ? sourceMatch.vessel
+                            : rawAis;
+                        const vesselName = String(rawVessel.vesselName || rawVessel.vessel_name || rawVessel.ShipName || rawAis.vesselName || rawAis.vessel_name || 'Buque sin nombre').trim() || 'Buque sin nombre';
+                        const v = { ...rawVessel, vesselName, vessel_name: rawVessel.vessel_name || vesselName };
+                        const route = sourceMatch.routing && typeof sourceMatch.routing === 'object' ? sourceMatch.routing : {};
+                        const rawFinancials = sourceMatch.financials && typeof sourceMatch.financials === 'object' ? sourceMatch.financials : {};
+                        const fin = {
+                            ...rawFinancials,
+                            netProfit: Number.isFinite(Number(rawFinancials.netProfit)) ? Number(rawFinancials.netProfit) : 0,
+                            tce: Number.isFinite(Number(rawFinancials.tce)) ? Number(rawFinancials.tce) : 0,
+                            ballastFuelCost: Number.isFinite(Number(rawFinancials.ballastFuelCost)) ? Number(rawFinancials.ballastFuelCost) : 0,
+                            suggestedFreightRate: Number.isFinite(Number(rawFinancials.suggestedFreightRate)) ? Number(rawFinancials.suggestedFreightRate) : 0,
+                        };
+                        const comp = sourceMatch.compatibility && typeof sourceMatch.compatibility === 'object' ? sourceMatch.compatibility : {};
+                        const rawScores = sourceMatch.scores && typeof sourceMatch.scores === 'object' ? sourceMatch.scores : {};
+                        const scores = { ...rawScores, overall: Number.isFinite(Number(rawScores.overall)) ? Number(rawScores.overall) : 0 };
+                        const ais = rawAis;
+                        m = { ...sourceMatch, vessel: v, ais, routing: route, financials: fin, compatibility: comp, scores };
+                        const currentLatitude = Number(ais.latitude ?? ais.lat);
+                        const currentLongitude = Number(ais.longitude ?? ais.lon ?? ais.lng);
+                        const projectedLatitude = Number(ais.projectedLatitude);
+                        const projectedLongitude = Number(ais.projectedLongitude);
+                        const hasCurrentCoordinates = Number.isFinite(currentLatitude) && Number.isFinite(currentLongitude);
+                        const hasProjectedCoordinates = ais.positionProjected === true && Number.isFinite(projectedLatitude) && Number.isFinite(projectedLongitude);
 
                         const maxDwtTolerance = 1.15;
                         const requiredCargo = quantity;
                         const vesselDwt = Number(v.dwt);
+                        const vesselGt = Number(v.gt ?? v.gross_tonnage ?? v.grossTonnage);
+                        const vesselLoa = Number(v.loa ?? v.loa_meters ?? v.LOA ?? v.length_overall ?? v.lengthOverall);
+                        const vesselBeam = Number(v.beam ?? v.beam_meters ?? v.beamMeters ?? v.breadth);
+                        const vesselDraft = Number(v.draft ?? v.draft_meters ?? v.draught);
                         const hasKnownDwt = Number.isFinite(vesselDwt) && vesselDwt > 0;
                         const dwtAssessmentStatus = m.dwtAssessment?.status || v.dwtAssessment?.status || comp.dwtAssessment?.status || (!hasKnownDwt ? 'UNKNOWN' : requiredCargo > 0 && vesselDwt < requiredCargo ? 'INSUFFICIENT' : 'SUFFICIENT');
                         const isOversized = hasKnownDwt && requiredCargo > 0 && vesselDwt > requiredCargo * maxDwtTolerance;
@@ -21264,6 +21333,26 @@
                         const hasDueDiligenceIdentity = isValidImo
                             || /^\d{9}$/.test(String(v.mmsi || m.ais?.mmsi || '').replace(/\D/g, ''))
                             || Boolean(String(v.vesselName || v.vessel_name || v.ShipName || '').trim());
+                        const sourceMetadata = normalizeMatchingSourceMetadata(m, v, m.ais);
+                        const sourceOrigins = [...sourceMetadata.source_origins];
+                        const isDataBridgeVessel = sourceOrigins.includes('DATABRIDGE');
+                        if (sourceOrigins.length === 0) sourceOrigins.push('MASTER');
+                        const sourceBadgeClasses = {
+                            MASTER: 'border-slate-300 bg-slate-100 text-slate-700',
+                            DATABRIDGE: 'border-cyan-400 bg-gradient-to-r from-cyan-50 to-sky-100 text-cyan-900 shadow-sm',
+                            AIS_LIVE: 'border-emerald-300 bg-emerald-50 text-emerald-800',
+                            OPENSHIPS: 'border-violet-300 bg-violet-50 text-violet-800'
+                        };
+                        const sourceBadgeLabels = {
+                            MASTER: 'Master V2',
+                            DATABRIDGE: 'Data Bridge',
+                            AIS_LIVE: 'AIS Live',
+                            OPENSHIPS: 'OpenShips'
+                        };
+                        const sourceBadgesHtml = sourceOrigins.map(origin => `
+                            <span class="inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-black tracking-wide ${sourceBadgeClasses[origin]}">${sourceBadgeLabels[origin]}</span>
+                        `).join('');
+                        const sourceOriginLabel = sourceOrigins.join(' + ');
 
                         const visibleRank = idx + 1;
 
@@ -21397,11 +21486,13 @@
                             imo: v.imo,
                             flag: flag,
                             dwt: hasKnownDwt ? vesselDwt : null,
-                            gt: v.gt ?? v.gross_tonnage ?? v.grossTonnage ?? 0,
-                            gross_tonnage: v.gross_tonnage ?? v.gt ?? v.grossTonnage ?? 0,
-                            loa: v.loa ?? v.loa_meters ?? v.LOA ?? v.length_overall ?? v.lengthOverall ?? 0,
-                            loa_meters: v.loa_meters ?? v.loa ?? v.LOA ?? v.length_overall ?? v.lengthOverall ?? 0,
-                            draft: `${v.draft}m`,
+                            gt: Number.isFinite(vesselGt) && vesselGt > 0 ? vesselGt : null,
+                            gross_tonnage: Number.isFinite(vesselGt) && vesselGt > 0 ? vesselGt : null,
+                            loa: Number.isFinite(vesselLoa) && vesselLoa > 0 ? vesselLoa : null,
+                            loa_meters: Number.isFinite(vesselLoa) && vesselLoa > 0 ? vesselLoa : null,
+                            beam: Number.isFinite(vesselBeam) && vesselBeam > 0 ? vesselBeam : null,
+                            beam_meters: Number.isFinite(vesselBeam) && vesselBeam > 0 ? vesselBeam : null,
+                            draft: Number.isFinite(vesselDraft) && vesselDraft > 0 ? `${vesselDraft}m` : '',
                             built_year: yearBuiltValue,
                             spd_ballast: v.spdBallast || "12.0",
                             spd_laden: v.spdLaden || "11.5",
@@ -21567,42 +21658,27 @@
                             name: v.vesselName || v.vessel_name || v.ShipName || '',
                             latitude: Number(m.ais?.latitude ?? m.ais?.lat ?? v.latitude ?? v.lat) || null,
                             longitude: Number(m.ais?.longitude ?? m.ais?.lon ?? m.ais?.lng ?? v.longitude ?? v.lon ?? v.lng) || null,
-                            sourceOrigins: m.source_origins || m.sourceOrigins || v.source_origins || v.sourceOrigins || []
+                            sourceOrigins,
+                            source: isDataBridgeVessel ? 'DATABRIDGE' : sourceOriginLabel
                         }));
-                        const dueDiligenceButtonHtml = requiresDueDiligence && hasDueDiligenceIdentity ? `
-                            <button type="button" data-due-diligence-button data-external-scraper-only="true" data-due-diligence-payload="${dueDiligenceIdentity}" class="w-full border border-cyan-300 bg-cyan-50 hover:bg-cyan-100 text-cyan-900 font-black text-[10px] uppercase py-1.5 rounded transition flex items-center justify-center gap-1.5 shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-400">
+                        const dueDiligenceButtonHtml = hasDueDiligenceIdentity ? `
+                            <button type="button" data-due-diligence-button data-due-diligence-mode="external-search" data-external-search="true" data-due-diligence-payload="${dueDiligenceIdentity}" class="w-full border border-cyan-300 bg-cyan-50 hover:bg-cyan-100 text-cyan-900 font-black text-[10px] uppercase py-1.5 rounded transition flex items-center justify-center gap-1.5 shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-400">
                                 <i class="fa-solid fa-magnifying-glass-chart"></i>
-                                Due Diligence · Data Bridge
+                                Due Diligence · Buscar datos externos
                             </button>
-                            <p data-due-diligence-status class="text-[10px] font-semibold text-rose-700">Completa IMO y DWT mediante Data Bridge antes de enviar a Calculadora.</p>
+                            <p data-due-diligence-status class="text-[10px] font-semibold ${requiresDueDiligence ? 'text-rose-700' : 'text-slate-500'}">${requiresDueDiligence ? 'Completa los datos técnicos antes de enviar a Calculadora.' : 'Audita y enriquece el registro maestro con fuentes externas.'}</p>
                             <div data-due-diligence-review class="hidden"></div>
-                        ` : requiresDueDiligence ? `
+                        ` : `
                             <button type="button" disabled aria-disabled="true" class="w-full border border-slate-300 bg-slate-100 text-slate-500 font-black text-[10px] uppercase py-1.5 rounded flex items-center justify-center gap-1.5 cursor-not-allowed">
                                 <i class="fa-solid fa-lock"></i>
                                 Due Diligence sin identidad
                             </button>
                             <p data-due-diligence-status class="text-[10px] font-semibold text-rose-700">Se requiere al menos IMO, MMSI o nombre del buque.</p>
-                        ` : '';
+                        `;
                         const trackingButtonHtml = isValidImo ? 
                             `<a href="https://www.vesselfinder.com/vessels?name=${v.imo}" target="_blank" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] uppercase py-1.5 rounded transition flex items-center justify-center gap-1 shadow-sm text-center">
                                 <i class="fa-solid fa-circle-info"></i> Ver Ficha Técnica / View Data Sheet
                              </a>` : '';
-                        const sourceOrigins = [...new Set(
-                            (Array.isArray(m.source_origins) ? m.source_origins : Array.isArray(m.sourceOrigins) ? m.sourceOrigins : [])
-                                .filter(origin => ['MASTER', 'DATABRIDGE', 'AIS_LIVE', 'OPENSHIPS'].includes(origin))
-                        )];
-                        if (sourceOrigins.length === 0) sourceOrigins.push('MASTER');
-                        const sourceBadgeClasses = {
-                            MASTER: 'border-slate-300 bg-slate-100 text-slate-700',
-                            DATABRIDGE: 'border-cyan-300 bg-cyan-50 text-cyan-800',
-                            AIS_LIVE: 'border-emerald-300 bg-emerald-50 text-emerald-800',
-                            OPENSHIPS: 'border-violet-300 bg-violet-50 text-violet-800'
-                        };
-                        const sourceBadgesHtml = sourceOrigins.map(origin => `
-                            <span class="inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-black tracking-wide ${sourceBadgeClasses[origin]}">${origin}</span>
-                        `).join('');
-                        const sourceOriginLabel = sourceOrigins.join(' + ');
-
                         const cardHtml = `
                             <div class="matching-vessel-card border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : 'border-red-200 bg-red-50/40 opacity-80 cursor-pointer'} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-requires-due-diligence="${requiresDueDiligence}" data-vessel-imo="${v.imo || ''}" data-source-origin="${sourceOriginLabel}" data-map-focus-id="${mapFocusId}" onclick="handleMatchingVesselCardClick(event)">
                                 <!-- Rank Ribbon -->
@@ -21674,7 +21750,7 @@
                                                     <span class="font-bold ${m.aiStatus ? 'text-blue-500' : (comp.dateOk ? 'text-emerald-600' : 'text-rose-600')}">${laycanStatus}</span>
                                                 </div>
                                                 <div class="flex items-center justify-between text-xs">
-                                                    <span class="text-slate-500">Calado (<span data-vessel-field="draft">${v.draft}m</span> vs ${maxDraft}m):</span>
+                                                    <span class="text-slate-500">Calado (<span data-vessel-field="draft">${Number.isFinite(vesselDraft) && vesselDraft > 0 ? `${vesselDraft}m` : 'N/D'}</span> vs ${maxDraft}m):</span>
                                                     <span class="font-bold ${comp.draftOk ? 'text-emerald-600' : 'text-rose-600'}">${comp.draftOk ? 'OK' : 'Excede'}</span>
                                                 </div>
                                                 <div class="flex items-center justify-between text-xs">
@@ -21695,8 +21771,8 @@
                                                     <span class="font-bold text-slate-700 truncate max-w-[160px] sm:max-w-[200px]" title="${geoDisplay.destinationDisplay}">${geoDisplay.destinationDisplay}</span>
                                                 </div>
                                                 <div class="text-[10px] text-slate-400 mt-1 border-t border-slate-100/60 pt-1 font-mono">
-                                                    <div>Coord Actual: ${m.ais.latitude.toFixed(3)}, ${m.ais.longitude.toFixed(3)}</div>
-                                                    ${m.ais.positionProjected ? `<div class="text-blue-600 font-bold">Coord Proyectada: ${m.ais.projectedLatitude.toFixed(3)}, ${m.ais.projectedLongitude.toFixed(3)}</div>` : ''}
+                                                    <div>Coord Actual: ${hasCurrentCoordinates ? `${currentLatitude.toFixed(3)}, ${currentLongitude.toFixed(3)}` : 'N/D'}</div>
+                                                    ${hasProjectedCoordinates ? `<div class="text-blue-600 font-bold">Coord Proyectada: ${projectedLatitude.toFixed(3)}, ${projectedLongitude.toFixed(3)}</div>` : ''}
                                                 </div>
                                             </div>
 

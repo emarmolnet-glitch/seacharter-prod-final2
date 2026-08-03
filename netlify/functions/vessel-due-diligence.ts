@@ -521,23 +521,63 @@ export default async (req: Request) => {
 
   const body = await req.json().catch(() => null) as Record<string, unknown> | null;
   const identity = body ? buildIdentity(body) : null;
+  const localOnly = body?.localOnly === true;
+  const externalOnly = body?.externalOnly === true;
   if (!identity) {
     return json({ success: false, error: "Se requiere al menos un IMO válido, MMSI o nombre del buque." }, 400, headers);
   }
 
   let cachedRecord: VesselTechnicalRecord | null = null;
-  try {
-    cachedRecord = await findVesselTechnicalRecord(
-      identity.imo ? Number(identity.imo) : null,
-      identity.mmsi || null,
-      identity.vesselName || null,
-    );
-  } catch (error) {
-    console.error("[vessel-due-diligence] Local vessel cache lookup failed", error);
+  let cacheLookupFailed = false;
+  if (!externalOnly) {
+    try {
+      cachedRecord = await findVesselTechnicalRecord(
+        identity.imo ? Number(identity.imo) : null,
+        identity.mmsi || null,
+        identity.vesselName || null,
+      );
+    } catch (error) {
+      cacheLookupFailed = true;
+      console.error("[vessel-due-diligence] Local vessel cache lookup failed", error);
+    }
   }
 
   const cachedData = cachedRecordToVesselData(cachedRecord);
-  if (hasCachedMandatoryTechnicalData(cachedRecord)) {
+  if (localOnly) {
+    if (cacheLookupFailed) {
+      return json({
+        success: false,
+        error: "No se pudo consultar el registro maestro de Data Bridge en Neon.",
+      }, 503, headers);
+    }
+    if (!cachedRecord) {
+      return json({
+        success: false,
+        error: "No se encontró el registro maestro de Data Bridge en Neon.",
+      }, 404, headers);
+    }
+    return json({
+      success: true,
+      data: normalizedResponseData(cachedData),
+      verificationLog: verificationLog(cachedData, "vessels_master"),
+      meta: {
+        mode: "local-database-cache",
+        provider: "vessels_master",
+        status: "success",
+        attempts: [],
+        timedOut: false,
+        partial: Object.values(cachedData).some((value) => value === null),
+        identity: {
+          queryType: identityQueryType(identity),
+          imo: identity.imo || null,
+          mmsi: identity.mmsi || null,
+          vesselName: identity.vesselName || null,
+        },
+        elapsedMs: Date.now() - requestStartedAt,
+      },
+    }, 200, headers);
+  }
+  if (!externalOnly && hasCachedMandatoryTechnicalData(cachedRecord)) {
     return json({
       success: true,
       data: normalizedResponseData(cachedData),
@@ -560,8 +600,8 @@ export default async (req: Request) => {
     }, 200, headers);
   }
 
-  const result = await runSourceWaterfall(identity, deadlineAt, cachedData);
-  if (result.extracted && hasUsefulTechnicalData(result.data)) {
+  const result = await runSourceWaterfall(identity, deadlineAt, externalOnly ? emptyVesselData() : cachedData);
+  if (!externalOnly && result.extracted && hasUsefulTechnicalData(result.data)) {
     try {
       await upsertVesselTechnicalRecord(vesselDataToTechnicalRecord(result.data, identity));
     } catch (error) {
@@ -580,10 +620,11 @@ export default async (req: Request) => {
     data: normalizedResponseData(result.data),
     verificationLog: verificationLog(result.data, result.provider),
     meta: {
-      mode: "public-source-waterfall",
+      mode: externalOnly ? "public-source-audit" : "public-source-waterfall",
       provider: result.provider,
       status: result.status,
-      persisted: result.extracted && hasUsefulTechnicalData(result.data),
+      persisted: !externalOnly && result.extracted && hasUsefulTechnicalData(result.data),
+      requiresAcceptance: externalOnly,
       attempts: result.attempts,
       timedOut: result.timedOut,
       partial: Object.values(result.data).some((value) => value === null),

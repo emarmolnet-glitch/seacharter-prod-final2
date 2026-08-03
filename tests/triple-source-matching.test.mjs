@@ -75,6 +75,7 @@ test('matching execution uses the unified backend response and exposes source ba
   assert.match(indexSource, /sourceBadgesHtml/);
   assert.match(indexSource, /data-source-origin="\$\{sourceOriginLabel\}"/);
   assert.match(indexSource, /DATABRIDGE:[\s\S]*AIS_LIVE:[\s\S]*OPENSHIPS:/);
+  assert.match(indexSource, /DATABRIDGE: 'Data Bridge'/);
   assert.match(indexSource, /value="OPENSHIPS" checked/);
   assert.match(indexSource, /selectedSources\.length > 0 \? selectedSources : \['DATABRIDGE', 'AIS_LIVE', 'OPENSHIPS'\]/);
   assert.match(indexSource, /matching-source-toggle/);

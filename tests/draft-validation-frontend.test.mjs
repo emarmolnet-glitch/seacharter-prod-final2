@@ -17,6 +17,14 @@ test("draft validator TSX files import the React runtime explicitly", () => {
   assert.match(routeEntrySource, /^import React from ["']react["'];/);
 });
 
+test("route configurator render failures stay isolated behind a local ErrorBoundary", () => {
+  assert.match(routeEntrySource, /class RouteConfiguratorErrorBoundary extends React\.Component/);
+  assert.match(routeEntrySource, /static getDerivedStateFromError/);
+  assert.match(routeEntrySource, /componentDidCatch\(error: Error\)/);
+  assert.match(routeEntrySource, /El resto de Core PRO continúa disponible/);
+  assert.match(routeEntrySource, /<RouteConfiguratorErrorBoundary>[\s\S]*<RouteConfigurator \/>/);
+});
+
 test("NGA validator follows reactive POL/POD state without a fixed port", () => {
   assert.match(routeConfiguratorSource, /SeaCharterStore\?\.subscribe/);
   assert.match(routeConfiguratorSource, /route:port-coordinates-updated/);
