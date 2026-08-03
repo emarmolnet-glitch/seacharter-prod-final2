@@ -29,8 +29,11 @@ test('port impact uses recalculated minus previous values and reconciles through
   assert.match(html, /style: 'currency'/);
 });
 
-test('modal header and fixed action area use the SeaCharter corporate palette', () => {
-  assert.match(html, /from-\[#003746\] via-\[#004e64\] to-\[#0b6670\]/);
+test('modal header and fixed action area use accessible corporate contrast', () => {
+  assert.match(html, /rounded-t-xl border-b border-teal-800\/60 bg-slate-900 px-6 py-4 text-white/);
+  assert.match(html, /text-xs font-bold uppercase tracking-wider text-emerald-400/);
+  assert.match(html, /text-lg font-extrabold tracking-tight text-white/);
+  assert.match(html, /mt-1 text-xs font-medium text-teal-200/);
   assert.match(html, /max-h-\[85dvh\]/);
   assert.match(html, /min-h-0 flex-1 space-y-5 overflow-y-auto/);
   assert.match(html, /sticky bottom-0 z-10/);
