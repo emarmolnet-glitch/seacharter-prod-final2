@@ -42,3 +42,16 @@ test('matching UI requests and renders the Data Bridge recommendation fields', (
   assert.match(indexSource, /\$\{score\.toFixed\(1\)\}\/100/);
 });
 
+test('ranking table exposes technical, AIS and Neon metadata at a glance', () => {
+  assert.match(indexSource, />GT \/ DWT</);
+  assert.match(indexSource, />Bandera \/ Año</);
+  assert.match(indexSource, />LOA \/ Manga</);
+  assert.match(indexSource, />Calado actual</);
+  assert.match(indexSource, />Velocidad \/ Estado</);
+  assert.match(indexSource, />ETA</);
+  assert.match(indexSource, /\['gross_tonnage', 'grossTonnage', 'gt', 'GT'\]/);
+  assert.match(indexSource, /\['draft_meters', 'draftMeters', 'draft', 'Draft', 'draught', 'Draught', 'current_draft', 'currentDraft'\]/);
+  assert.match(indexSource, /record\?\.source_payload/);
+  assert.match(indexSource, /record\?\.MetaData/);
+  assert.match(indexSource, /renderRecommendationUnavailable\(label = 'N\/A'\)/);
+});
