@@ -58,10 +58,13 @@ function loadBridge(windowOverrides = {}) {
   return { bridge: window.VesselDueDiligenceBridge, events, window };
 }
 
-test('matching cards gate Calculator and expose Due Diligence only for missing IMO or DWT', () => {
+test('matching cards gate Calculator but expose external Due Diligence for every identified vessel', () => {
   assert.match(indexSource, /const requiresDueDiligence = isDwtUnknown \|\| !isValidImo/);
   assert.match(indexSource, /data-due-diligence-button/);
-  assert.match(indexSource, /data-external-scraper-only="true"/);
+  assert.match(indexSource, /const dueDiligenceButtonHtml = hasDueDiligenceIdentity \? `/);
+  assert.match(indexSource, /data-due-diligence-mode="external-search"/);
+  assert.match(indexSource, /data-external-search="true"/);
+  assert.match(indexSource, /Due Diligence · Buscar datos externos/);
   assert.match(indexSource, /data-due-diligence-payload="\$\{dueDiligenceIdentity\}"/);
   assert.match(indexSource, /const hasDueDiligenceIdentity = isValidImo/);
   assert.match(indexSource, /\^\\d\{9\}\$.*v\.mmsi/);
@@ -74,22 +77,44 @@ test('matching cards gate Calculator and expose Due Diligence only for missing I
   assert.match(indexSource, /data-vessel-capacity-comparison/);
   assert.match(indexSource, /data-vessel-capacity-status/);
   assert.match(indexSource, /data-technical-reasons/);
+  assert.match(indexSource, /const sourceMatch = m && typeof m === 'object' \? m : \{\}/);
+  assert.match(indexSource, /Number\.isFinite\(Number\(rawFinancials\.netProfit\)\)/);
+  assert.match(indexSource, /hasCurrentCoordinates \? `\$\{currentLatitude\.toFixed\(3\)\}/);
+  assert.match(indexSource, /renderMatchingCardErrorFallback/);
+  assert.match(indexSource, /data-matching-render-error="true"/);
 });
 
-test('Due Diligence click is captured exclusively and never invokes local persistence', () => {
+test('Due Diligence uses one external search and persists only after acceptance', () => {
   assert.match(entrySource, /import \{ fetchDueDiligence, persistDueDiligenceVessel \} from '.\/services\/dueDiligenceService\.js'/);
   assert.match(entrySource, /addEventListener\('click', handleDueDiligenceClick, true\)/);
   assert.match(entrySource, /event\.preventDefault\(\)/);
   assert.match(entrySource, /event\.stopImmediatePropagation\(\)/);
-  assert.match(entrySource, /fetchDueDiligence\([\s\S]*\{ imo, mmsi, vesselName \}/);
+  assert.match(entrySource, /const responsePayload = await fetchDueDiligence/);
+  assert.match(entrySource, /data-due-diligence-button\]\[data-due-diligence-mode\]/);
+  assert.doesNotMatch(entrySource, /fetchLocalDueDiligence|usesLocalCache/);
+  assert.match(entrySource, /Consultando fuentes externas/);
   assert.match(entrySource, /persistDueDiligenceVessel\(vessel/);
   assert.match(entrySource, /acceptButton\.setAttribute\('aria-busy', 'true'\)/);
   assert.match(entrySource, /Guardando\.\.\./);
-  assert.match(entrySource, /Perfil técnico guardado en Neon y listo para Calculadora\./);
+  assert.match(entrySource, /Perfil guardado en Neon\. PDAs y márgenes recalculados\./);
+  assert.match(entrySource, /vessel:financial-recalculated/);
   assert.match(entrySource, /Due Diligence guardada correctamente en Neon\./);
   assert.match(entrySource, /No se pudo guardar en Neon\. El Store no fue modificado\./);
   assert.match(entrySource, /BUQUE NO COMERCIAL DETECTADO/);
   assert.match(entrySource, /accept\.disabled = commerciallyBlocked/);
+  assert.match(entrySource, /aria-modal/);
+  assert.match(entrySource, /Comparación externa/);
+  assert.match(entrySource, /\['Campo', 'Actual', 'Externo', 'Estado'\]/);
+  assert.match(entrySource, /\{ field: 'beamMeters', label: 'Manga' \}/);
+  assert.match(entrySource, /const safeProposals = Array\.isArray\(proposals\)/);
+  assert.match(entrySource, /const pendingTechnical = pending\.technical && typeof pending\.technical === 'object'/);
+  assert.match(entrySource, /flex max-h-\[90vh\][^']*flex-col overflow-hidden/);
+  assert.match(entrySource, /min-h-0 flex-1[^']*overflow-y-auto/);
+  assert.match(entrySource, /body\.dataset\.dueDiligenceScrollBody = 'true'/);
+  assert.match(entrySource, /footer\.dataset\.dueDiligenceFooter = 'true'/);
+  assert.match(entrySource, /footer\.className = 'shrink-0 border-t/);
+  assert.match(entrySource, /reject\.textContent = 'Rechazar'/);
+  assert.match(entrySource, /panel\.append\(body\);[\s\S]*panel\.append\(footer\)/);
   assert.doesNotMatch(entrySource, /\/api\/scrape-vessel/);
   assert.doesNotMatch(entrySource, /IndexedDB|localStorage|saveEditedVesselParams|saveVesselToIndexedDB/);
   assert.doesNotMatch(entrySource, /ais:vessels-updated/);
@@ -98,12 +123,23 @@ test('Due Diligence click is captured exclusively and never invokes local persis
   assert.match(backendSource, /path: "\/api\/vessel-due-diligence"/);
 });
 
+test('Data Bridge source aliases and V2 metadata render the corporate badge', () => {
+  assert.match(indexSource, /normalizedSource === 'DATA_BRIDGE'/);
+  assert.match(indexSource, /normalizedSource\.includes\('DATABRIDGE'\)/);
+  assert.match(indexSource, /const hasLocalMasterMetadata = sourceRecords\.some/);
+  assert.match(indexSource, /source_payload/);
+  assert.match(indexSource, /cacheValidated === true/);
+  assert.match(indexSource, /normalizeMatchingSourceMetadata\(m, v, m\.ais\)/);
+  assert.match(indexSource, /DATABRIDGE: 'Data Bridge'/);
+  assert.match(indexSource, /MASTER: 'Master V2'/);
+});
+
 test('Vite bundles the ES module service and no loose ghost script remains', () => {
   assert.match(indexSource, /<script type="module" src="\.\/src\/due-diligence-entry\.js"><\/script>/);
   assert.doesNotMatch(indexSource, /<script[^>]+src="\.\/due-diligence-bridge\.js/);
   assert.equal(existsSync(new URL('../due-diligence-bridge.js', import.meta.url)), false);
   assert.match(serviceSource, /export async function fetchDueDiligence/);
-  assert.match(serviceSource, /body: JSON\.stringify\(payload\)/);
+  assert.match(serviceSource, /body: JSON\.stringify\(\{ \.\.\.payload, externalOnly: true \}\)/);
 });
 
 test('fetchDueDiligence posts identity and normalizes the complete technical payload', async () => {
@@ -123,6 +159,7 @@ test('fetchDueDiligence posts identity and normalizes the complete technical pay
             year_built: 2011,
             gross_tonnage: 7_580,
             loa_meters: 138.4,
+            beam_meters: 21.5,
           },
         }), {
           status: 200,
@@ -136,6 +173,7 @@ test('fetchDueDiligence posts identity and normalizes the complete technical pay
     imo: '',
     mmsi: '224123456',
     vesselName: 'NERMIN KARABEKIR',
+    externalOnly: true,
   });
   assert.deepEqual(result.data, {
     imo: '9876543',
@@ -145,7 +183,17 @@ test('fetchDueDiligence posts identity and normalizes the complete technical pay
     builtYear: 2011,
     grossTonnage: 7_580,
     loaMeters: 138.4,
+    beamMeters: 21.5,
   });
+});
+
+test('backend external audit bypasses Neon cache and waits for explicit acceptance', () => {
+  assert.match(backendSource, /body\?\.externalOnly === true/);
+  assert.match(backendSource, /if \(!externalOnly\) \{[\s\S]*findVesselTechnicalRecord/);
+  assert.match(backendSource, /externalOnly \? emptyVesselData\(\) : cachedData/);
+  assert.match(backendSource, /if \(!externalOnly && result\.extracted/);
+  assert.match(backendSource, /mode: externalOnly \? "public-source-audit"/);
+  assert.match(backendSource, /requiresAcceptance: externalOnly/);
 });
 
 test('frontend normalization recognizes external labels for flag, length, and vessel type', () => {
@@ -157,6 +205,7 @@ test('frontend normalization recognizes external labels for flag, length, and ve
     'Year Built': '2011',
     'Gross Tonnage': '7,580',
     LENGTH: '138.4 m',
+    Beam: '21.5 m',
   });
   assert.deepEqual(normalized, {
     imo: '9876543',
@@ -166,6 +215,7 @@ test('frontend normalization recognizes external labels for flag, length, and ve
     builtYear: 2011,
     grossTonnage: 7_580,
     loaMeters: 138.4,
+    beamMeters: 21.5,
   });
 
   const { bridge } = loadBridge();
@@ -181,6 +231,7 @@ test('frontend normalization recognizes external labels for flag, length, and ve
     yearBuilt: null,
     grossTonnage: null,
     loaMeters: 179.9,
+    beamMeters: null,
     draft: null,
     sourceUrl: '',
   });
@@ -240,9 +291,9 @@ test('backend reads vessels_master first and persists successful waterfall extra
   assert.match(backendSource, /hasCachedMandatoryTechnicalData\(cachedRecord\)/);
   assert.match(backendSource, /mode: "local-database-cache"/);
   assert.match(backendSource, /attempts: \[\]/);
-  assert.match(backendSource, /runSourceWaterfall\(identity, deadlineAt, cachedData\)/);
+  assert.match(backendSource, /runSourceWaterfall\(identity, deadlineAt, externalOnly \? emptyVesselData\(\) : cachedData\)/);
   assert.match(backendSource, /await upsertVesselTechnicalRecord\(vesselDataToTechnicalRecord\(result\.data, identity\)\)/);
-  assert.match(backendSource, /persisted: result\.extracted && hasUsefulTechnicalData\(result\.data\)/);
+  assert.match(backendSource, /persisted: !externalOnly && result\.extracted && hasUsefulTechnicalData\(result\.data\)/);
 });
 
 test('backend accepts IMO, MMSI, or vessel name and searches the four public providers', () => {
@@ -255,7 +306,7 @@ test('backend accepts IMO, MMSI, or vessel name and searches the four public pro
   assert.ok(vesselFinder < marineVesselTraffic && marineVesselTraffic < marineTraffic && marineTraffic < balticShipping);
   assert.match(backendSource, /buildUrls: \(identity\)/);
   assert.match(backendSource, /encodeURIComponent\(identity\.query\)/);
-  assert.match(backendSource, /runSourceWaterfall\(identity, deadlineAt, cachedData\)/);
+  assert.match(backendSource, /runSourceWaterfall\(identity, deadlineAt, externalOnly \? emptyVesselData\(\) : cachedData\)/);
   assert.match(backendSource, /import \{ mappedVesselField, parseVesselAttribute \}/);
   assert.match(backendSource, /import \{ extractVesselFinderDetailUrl, extractVesselFinderFields \}/);
   assert.match(backendSource, /parseVesselAttribute\(rawKey, rawValue\)/);
@@ -316,6 +367,7 @@ test('technical merge enriches fields without changing OpenShips coordinates', (
     yearBuilt: 2018,
     grossTonnage: 7_580,
     loaMeters: 138.4,
+    beamMeters: 21.5,
     draft: 9.4,
   });
 
@@ -327,11 +379,39 @@ test('technical merge enriches fields without changing OpenShips coordinates', (
   assert.equal(vessel.yearBuilt, 2018);
   assert.equal(vessel.gross_tonnage, 7_580);
   assert.equal(vessel.loa_meters, 138.4);
+  assert.equal(vessel.beam_meters, 21.5);
   assert.equal(vessel.draft, 9.4);
   assert.equal(vessel.latitude, 36.1234);
   assert.equal(vessel.longitude, -5.4321);
   assert.equal(vessel.MetaData.latitude, 36.1234);
   assert.equal(vessel.MetaData.longitude, -5.4321);
+});
+
+test('accepted external data recalculates PDAs and financial margins for the active vessel', () => {
+  const activeVessel = { mmsi: '224123456', vesselName: 'ACTIVE VESSEL', dwt: 9_000, gt: 5_000, loa: 110 };
+  const manualUpdates = [];
+  const pdaCalls = [];
+  let engineCalls = 0;
+  const { bridge, events, window } = loadBridge({
+    GlobalStore: { activeVessel, calculatorVessel: activeVessel },
+    handleManualVesselUpdate: (field, value) => manualUpdates.push([field, value]),
+    debouncedAutoFillPDA: (...args) => pdaCalls.push(args),
+    scheduleReactiveEngine: () => { engineCalls += 1; },
+  });
+  const recalculated = bridge.recalculateFinancialEngine(
+    { mmsi: '224123456', name: 'ACTIVE VESSEL' },
+    { imo: '9876543', dwt: 12_500, grossTonnage: 7_800, loaMeters: 138.4, beamMeters: 21.5, flag: 'Malta', yearBuilt: 2014 },
+  );
+  assert.equal(recalculated, true);
+  assert.equal(window.GlobalStore.calculatorVessel.dwt, 12_500);
+  assert.equal(window.GlobalStore.calculatorVessel.gross_tonnage, 7_800);
+  assert.equal(window.GlobalStore.calculatorVessel.loa_meters, 138.4);
+  assert.equal(window.GlobalStore.calculatorVessel.beam_meters, 21.5);
+  assert.ok(manualUpdates.some(([field, value]) => field === 'dwt' && value === 12_500));
+  assert.ok(manualUpdates.some(([field, value]) => field === 'gt' && value === 7_800));
+  assert.deepEqual(pdaCalls.map(call => call[0]), ['pol', 'pod']);
+  assert.equal(engineCalls, 1);
+  assert.ok(events.some(event => event.type === 'vessel:financial-recalculated'));
 });
 
 test('store hydration updates matching and OpenShips records and clears missing-data warnings', () => {

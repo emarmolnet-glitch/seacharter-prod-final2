@@ -135,8 +135,9 @@ test('calculator renders six editable technical badges in a full-width row betwe
     indexSource.indexOf('// --- LECTURA DE WPI.CSV'),
   ), /updateCalculatorVesselIdentityDisplay\(vessel\)/);
   assert.match(indexSource, /const loa = parseFloat\(vessel\?\.loa \?\? vessel\?\.loa_meters/);
-  assert.match(indexSource, /gross_tonnage: v\.gross_tonnage \?\? v\.gt/);
-  assert.match(indexSource, /loa_meters: v\.loa_meters \?\? v\.loa/);
+  assert.match(indexSource, /gross_tonnage: Number\.isFinite\(vesselGt\) && vesselGt > 0 \? vesselGt : null/);
+  assert.match(indexSource, /loa_meters: Number\.isFinite\(vesselLoa\) && vesselLoa > 0 \? vesselLoa : null/);
+  assert.match(indexSource, /beam_meters: Number\.isFinite\(vesselBeam\) && vesselBeam > 0 \? vesselBeam : null/);
   const comparisonApplyStart = indexSource.indexOf('function applyVesselSpecsFromComp(vesselEscaped)');
   const comparisonApplyEnd = indexSource.indexOf('function backToComparisonInputs()', comparisonApplyStart);
   const comparisonApplySource = indexSource.slice(comparisonApplyStart, comparisonApplyEnd);

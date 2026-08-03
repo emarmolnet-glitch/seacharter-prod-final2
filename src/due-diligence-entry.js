@@ -14,6 +14,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         { field: 'yearBuilt', label: 'Año de construcción' },
         { field: 'grossTonnage', label: 'Gross Tonnage' },
         { field: 'loaMeters', label: 'LOA' },
+        { field: 'beamMeters', label: 'Manga' },
     ]);
     const pendingProposals = new Map();
 
@@ -88,6 +89,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             yearBuilt: readYear(readLabeledValue(record, ['Year Built', 'Built Year', 'YearBuilt', 'Anio', 'Ano Construccion']) || readLabeledValue(meta, ['Year Built', 'Built Year', 'YearBuilt'])),
             grossTonnage: readPositiveNumber(readLabeledValue(record, ['Gross Tonnage', 'GrossTonnage', 'GT']) || readLabeledValue(meta, ['Gross Tonnage', 'GrossTonnage', 'GT'])),
             loaMeters: readPositiveNumber(readLabeledValue(record, ['LOA Meters', 'LOA', 'Length', 'Length Overall']) || readLabeledValue(meta, ['LOA Meters', 'LOA', 'Length', 'Length Overall'])),
+            beamMeters: readPositiveNumber(readLabeledValue(record, ['Beam Meters', 'Beam', 'Breadth', 'Manga']) || readLabeledValue(meta, ['Beam Meters', 'Beam', 'Breadth', 'Manga'])),
             draft: readPositiveNumber(record?.draft || record?.calado || record?.draught || meta.draft || meta.Draft),
             sourceUrl: readText(record?.sourceUrl),
         };
@@ -130,10 +132,10 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         if (technical.dwt) {
             target.dwt = technical.dwt;
             target.DWT = technical.dwt;
-            target.dwtStatus = 'VERIFIED_BY_DATABRIDGE';
+            target.dwtStatus = 'VERIFIED_BY_EXTERNAL_AUDIT';
             meta.dwt = technical.dwt;
             meta.DWT = technical.dwt;
-            meta.dwtStatus = 'VERIFIED_BY_DATABRIDGE';
+            meta.dwtStatus = 'VERIFIED_BY_EXTERNAL_AUDIT';
         }
         if (technical.flag) {
             target.flag = technical.flag;
@@ -168,6 +170,14 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             target.loa = technical.loaMeters;
             meta.loaMeters = technical.loaMeters;
             meta.loa_meters = technical.loaMeters;
+        }
+        if (technical.beamMeters) {
+            target.beamMeters = technical.beamMeters;
+            target.beam_meters = technical.beamMeters;
+            target.beam = technical.beamMeters;
+            target.breadth = technical.beamMeters;
+            meta.beamMeters = technical.beamMeters;
+            meta.beam_meters = technical.beamMeters;
         }
         if (technical.draft) {
             target.draft = technical.draft;
@@ -298,11 +308,11 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         if (technical.imo) match.imo = technical.imo;
         if (technical.dwt) {
             match.dwt = technical.dwt;
-            match.dwtStatus = 'VERIFIED_BY_DATABRIDGE';
+            match.dwtStatus = 'VERIFIED_BY_EXTERNAL_AUDIT';
             match.dwtAssessment = {
                 ...(match.dwtAssessment || {}),
                 status: 'SUFFICIENT',
-                source: 'DATABRIDGE_DUE_DILIGENCE',
+                source: 'EXTERNAL_DUE_DILIGENCE',
             };
         }
         match.dueDiligenceStatus = 'HYDRATED';
@@ -358,11 +368,14 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
                 loaMeters: technical.loaMeters || null,
                 loa_meters: technical.loaMeters || null,
                 loa: technical.loaMeters || null,
+                beamMeters: technical.beamMeters || null,
+                beam_meters: technical.beamMeters || null,
+                beam: technical.beamMeters || null,
                 vesselType: technical.vesselType || '',
                 vessel_type: technical.vesselType || '',
                 auditStatus: 'PENDING',
                 audit_status: 'PENDING',
-                source: 'openships_validated',
+                source: 'external_due_diligence_validated',
                 source_provenance: 'due_diligence_manual',
             };
             const storedVessels = Array.isArray(globalScope.GlobalStore.dueDiligenceVessels)
@@ -424,20 +437,26 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
 
     function proposalValue(field, value) {
         if (field === 'dwt' && value) return `${Number(value).toLocaleString()} MT`;
+        if (['grossTonnage', 'loaMeters', 'beamMeters'].includes(field) && value) {
+            const unit = field === 'grossTonnage' ? ' GT' : ' m';
+            return `${Number(value).toLocaleString()}${unit}`;
+        }
         return readText(value) || 'Sin dato';
     }
 
     function buildProposals(identity, technical) {
-        const match = findMatchingResult(identity);
+        const safeIdentity = identity && typeof identity === 'object' ? identity : {};
+        const safeTechnical = technical && typeof technical === 'object' ? technical : {};
+        const match = findMatchingResult(safeIdentity);
         const current = normalizeTechnicalRecord(match?.vessel || match?.ais || match || {});
         const proposals = PROPOSAL_FIELDS.flatMap(({ field, label }) => {
-            const proposedValue = technical[field];
+            const proposedValue = safeTechnical[field];
             if (proposedValue === null || proposedValue === undefined || proposedValue === '') return [];
             const currentValue = current[field];
-            if (readText(currentValue).toLowerCase() === readText(proposedValue).toLowerCase()) return [];
-            return [{ field, label, currentValue, proposedValue }];
+            const changed = readText(currentValue).toLowerCase() !== readText(proposedValue).toLowerCase();
+            return [{ field, label, currentValue, proposedValue, changed }];
         });
-        return { current, match, proposals };
+        return { current, match, proposals, changedCount: proposals.filter(proposal => proposal.changed).length };
     }
 
     function isNonCommercialVesselType(vesselType) {
@@ -454,25 +473,29 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
     }
 
     function buildPersistenceVessel(identity, technical, match) {
+        const safeIdentity = identity && typeof identity === 'object' ? identity : {};
+        const safeTechnical = technical && typeof technical === 'object' ? technical : {};
         const vessel = match?.vessel && typeof match.vessel === 'object' ? match.vessel : {};
         const ais = match?.ais && typeof match.ais === 'object' ? match.ais : {};
-        return mergeNonEmptyRecords(mergeNonEmptyRecords(mergeNonEmptyRecords(ais, vessel), identity), {
-            ...technical,
-            imo: technical.imo,
-            imo_number: technical.imo,
-            vesselName: vessel.vesselName || vessel.vessel_name || identity.name,
-            vessel_name: vessel.vessel_name || vessel.vesselName || identity.name,
-            mmsi: vessel.mmsi || ais.mmsi || identity.mmsi,
-            latitude: vessel.latitude ?? ais.latitude ?? identity.latitude ?? null,
-            longitude: vessel.longitude ?? ais.longitude ?? identity.longitude ?? null,
-            vesselType: technical.vesselType,
-            vessel_type: technical.vesselType,
-            yearBuilt: technical.yearBuilt,
-            year_built: technical.yearBuilt,
-            grossTonnage: technical.grossTonnage,
-            gross_tonnage: technical.grossTonnage,
-            loaMeters: technical.loaMeters,
-            loa_meters: technical.loaMeters,
+        return mergeNonEmptyRecords(mergeNonEmptyRecords(mergeNonEmptyRecords(ais, vessel), safeIdentity), {
+            ...safeTechnical,
+            imo: safeTechnical.imo,
+            imo_number: safeTechnical.imo,
+            vesselName: vessel.vesselName || vessel.vessel_name || safeIdentity.name || safeIdentity.vesselName,
+            vessel_name: vessel.vessel_name || vessel.vesselName || safeIdentity.name || safeIdentity.vesselName,
+            mmsi: vessel.mmsi || ais.mmsi || safeIdentity.mmsi,
+            latitude: vessel.latitude ?? ais.latitude ?? safeIdentity.latitude ?? null,
+            longitude: vessel.longitude ?? ais.longitude ?? safeIdentity.longitude ?? null,
+            vesselType: safeTechnical.vesselType,
+            vessel_type: safeTechnical.vesselType,
+            yearBuilt: safeTechnical.yearBuilt,
+            year_built: safeTechnical.yearBuilt,
+            grossTonnage: safeTechnical.grossTonnage,
+            gross_tonnage: safeTechnical.grossTonnage,
+            loaMeters: safeTechnical.loaMeters,
+            loa_meters: safeTechnical.loaMeters,
+            beamMeters: safeTechnical.beamMeters,
+            beam_meters: safeTechnical.beamMeters,
         });
     }
 
@@ -487,15 +510,36 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
     function renderProposalReview(card, key, proposals, technical = {}) {
         const review = card?.querySelector('[data-due-diligence-review]');
         if (!review || !globalScope.document) return;
+        const safeTechnical = technical && typeof technical === 'object' ? technical : {};
+        const safeProposals = Array.isArray(proposals) ? proposals.filter(proposal => proposal && typeof proposal === 'object') : [];
         review.replaceChildren();
-        review.className = 'rounded-lg border border-cyan-200 bg-white p-2.5 space-y-2 shadow-sm';
+        review.className = 'fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-slate-950/70 p-3 sm:p-4 backdrop-blur-sm';
+        review.setAttribute('role', 'dialog');
+        review.setAttribute('aria-modal', 'true');
+        review.setAttribute('aria-label', 'Comparación de Due Diligence');
 
-        const title = globalScope.document.createElement('p');
-        title.className = 'text-[10px] font-black uppercase tracking-wide text-cyan-900';
-        title.textContent = 'Revisión de datos encontrados';
-        review.append(title);
+        const panel = globalScope.document.createElement('div');
+        panel.className = 'flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-cyan-300 bg-white shadow-2xl';
+        const header = globalScope.document.createElement('div');
+        header.className = 'flex shrink-0 items-center justify-between border-b border-cyan-100 bg-gradient-to-r from-cyan-50 to-sky-50 px-5 py-4';
 
-        const extractedType = readText(technical.vesselType) || 'Sin dato';
+        const title = globalScope.document.createElement('div');
+        title.className = 'space-y-0.5';
+        const titleText = globalScope.document.createElement('p');
+        titleText.className = 'text-sm font-black uppercase tracking-wide text-cyan-950';
+        titleText.textContent = 'Due Diligence · Comparación externa';
+        const subtitle = globalScope.document.createElement('p');
+        subtitle.className = 'text-[11px] font-semibold text-cyan-700';
+        subtitle.textContent = 'Valores actuales en Core PRO frente a datos encontrados en fuentes públicas.';
+        title.append(titleText, subtitle);
+        header.append(title);
+        panel.append(header);
+
+        const body = globalScope.document.createElement('div');
+        body.className = 'min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-5';
+        body.dataset.dueDiligenceScrollBody = 'true';
+
+        const extractedType = readText(safeTechnical.vesselType) || 'Sin dato';
         const typeSummary = globalScope.document.createElement('div');
         typeSummary.className = 'flex items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px]';
         const typeLabel = globalScope.document.createElement('strong');
@@ -504,36 +548,48 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         typeValue.className = 'font-black text-slate-800';
         typeValue.textContent = extractedType;
         typeSummary.append(typeLabel, typeValue);
-        review.append(typeSummary);
+        body.append(typeSummary);
 
         const commerciallyBlocked = isNonCommercialVesselType(extractedType);
         if (commerciallyBlocked) {
             const warning = globalScope.document.createElement('div');
             warning.className = 'rounded border border-red-300 bg-red-50 px-2 py-2 text-[10px] font-black text-red-800';
             warning.textContent = `❌ BUQUE NO COMERCIAL DETECTADO: ${extractedType}`;
-            review.append(warning);
+            body.append(warning);
         }
 
-        proposals.forEach(proposal => {
+        const columns = globalScope.document.createElement('div');
+        columns.className = 'grid grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 border-b border-slate-200 px-3 pb-2 text-[9px] font-black uppercase tracking-wider text-slate-400';
+        ['Campo', 'Actual', 'Externo', 'Estado'].forEach(value => {
+            const column = globalScope.document.createElement('span');
+            column.textContent = value;
+            columns.append(column);
+        });
+        body.append(columns);
+
+        safeProposals.forEach(proposal => {
             const row = globalScope.document.createElement('div');
-            row.className = 'grid grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 text-[10px]';
+            row.className = `grid grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border px-3 py-2.5 text-[11px] ${proposal.changed ? 'border-amber-200 bg-amber-50/60' : 'border-emerald-100 bg-emerald-50/40'}`;
             const label = globalScope.document.createElement('strong');
             label.textContent = proposal.label;
             const current = globalScope.document.createElement('span');
-            current.className = 'truncate text-slate-500 line-through';
+            current.className = `truncate ${proposal.changed ? 'text-slate-500 line-through' : 'text-slate-700'}`;
             current.textContent = proposalValue(proposal.field, proposal.currentValue);
-            const arrow = globalScope.document.createElement('span');
-            arrow.className = 'text-cyan-600';
-            arrow.textContent = '→';
             const proposed = globalScope.document.createElement('span');
-            proposed.className = 'truncate font-bold text-emerald-700';
+            proposed.className = 'truncate font-black text-cyan-900';
             proposed.textContent = proposalValue(proposal.field, proposal.proposedValue);
-            row.append(label, current, arrow, proposed);
-            review.append(row);
+            const state = globalScope.document.createElement('span');
+            state.className = `rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${proposal.changed ? 'bg-amber-200 text-amber-900' : 'bg-emerald-200 text-emerald-900'}`;
+            state.textContent = proposal.changed ? 'Cambio' : 'Coincide';
+            row.append(label, current, proposed, state);
+            body.append(row);
         });
 
+        const footer = globalScope.document.createElement('footer');
+        footer.className = 'shrink-0 border-t border-slate-200 bg-white px-5 py-4 shadow-[0_-8px_20px_-16px_rgba(15,23,42,0.45)]';
+        footer.dataset.dueDiligenceFooter = 'true';
         const actions = globalScope.document.createElement('div');
-        actions.className = 'grid grid-cols-2 gap-2 pt-1';
+        actions.className = 'grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3';
         const reject = globalScope.document.createElement('button');
         reject.type = 'button';
         reject.dataset.dueDiligenceReject = key;
@@ -549,14 +605,59 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             : 'rounded bg-emerald-600 px-2 py-1.5 text-[10px] font-black uppercase text-white hover:bg-emerald-500';
         accept.textContent = 'Aceptar Datos';
         actions.append(reject, accept);
-        review.append(actions);
+        footer.append(actions);
+        panel.append(body);
+        panel.append(footer);
+        review.append(panel);
+    }
+
+    function recalculateFinancialEngine(identity, technical) {
+        const safeIdentity = identity && typeof identity === 'object' ? identity : {};
+        const safeTechnical = technical && typeof technical === 'object' ? technical : {};
+        const activeVessel = globalScope.GlobalStore?.calculatorVessel || globalScope.GlobalStore?.activeVessel;
+        if (!activeVessel || !vesselIdentityMatches(activeVessel, safeIdentity)) return false;
+        mergeTechnicalFields(activeVessel, safeTechnical);
+        const fieldUpdates = [
+            ['imo', safeTechnical.imo],
+            ['dwt', safeTechnical.dwt],
+            ['flag', safeTechnical.flag],
+            ['gt', safeTechnical.grossTonnage],
+            ['loa', safeTechnical.loaMeters],
+            ['year_built', safeTechnical.yearBuilt],
+        ];
+        if (typeof globalScope.handleManualVesselUpdate === 'function') {
+            fieldUpdates.forEach(([field, value]) => {
+                if (value !== null && value !== undefined && value !== '') {
+                    globalScope.handleManualVesselUpdate(field, value);
+                }
+            });
+        }
+        if (typeof globalScope.debouncedAutoFillPDA === 'function') {
+            globalScope.debouncedAutoFillPDA('pol', false, 0);
+            globalScope.debouncedAutoFillPDA('pod', false, 0);
+        }
+        if (typeof globalScope.scheduleReactiveEngine === 'function') {
+            globalScope.scheduleReactiveEngine();
+        } else if (typeof globalScope.runEngine === 'function') {
+            globalScope.runEngine();
+        }
+        globalScope.dispatchEvent(new CustomEvent('vessel:financial-recalculated', {
+            detail: { identity: { ...safeIdentity }, technical: { ...safeTechnical } },
+        }));
+        return true;
     }
 
     async function acceptPendingProposal(key, card = null, acceptButton = null) {
         const pending = pendingProposals.get(key);
         if (!pending) return false;
-        if (pending.commerciallyBlocked || isNonCommercialVesselType(pending.technical?.vesselType)) {
-            notify(`Buque no comercial bloqueado: ${pending.technical?.vesselType || 'tipo no apto'}.`, 'error');
+        const pendingIdentity = pending.identity && typeof pending.identity === 'object' ? pending.identity : {};
+        const pendingTechnical = pending.technical && typeof pending.technical === 'object' ? pending.technical : {};
+        if (!proposalKey(pendingIdentity)) {
+            notify('No se pudo identificar el buque para guardar la Due Diligence.', 'error');
+            return false;
+        }
+        if (pending.commerciallyBlocked || isNonCommercialVesselType(pendingTechnical.vesselType)) {
+            notify(`Buque no comercial bloqueado: ${pendingTechnical.vesselType || 'tipo no apto'}.`, 'error');
             return false;
         }
         if (acceptButton) {
@@ -565,8 +666,8 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             acceptButton.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Guardando...';
         }
         try {
-            const currentMatch = pending.match || findMatchingResult(pending.identity);
-            const vessel = buildPersistenceVessel(pending.identity, pending.technical, currentMatch);
+            const currentMatch = pending.match || findMatchingResult(pendingIdentity);
+            const vessel = buildPersistenceVessel(pendingIdentity, pendingTechnical, currentMatch);
             const status = card?.querySelector('[data-due-diligence-status]');
             if (status) {
                 status.textContent = 'Guardando el buque en Neon antes de actualizar el Store...';
@@ -575,12 +676,15 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             await persistDueDiligenceVessel(vessel, {
                 fetchImpl: typeof globalScope.fetch === 'function' ? globalScope.fetch.bind(globalScope) : undefined,
             });
-            const hydratedMatch = hydrateStores(pending.identity, pending.technical);
-            const resolvedMatch = hydratedMatch || currentMatch || findMatchingResult(pending.identity);
-            updateCard(card, pending.identity, pending.technical, resolvedMatch);
+            const hydratedMatch = hydrateStores(pendingIdentity, pendingTechnical);
+            const resolvedMatch = hydratedMatch || currentMatch || findMatchingResult(pendingIdentity);
+            updateCard(card, pendingIdentity, pendingTechnical, resolvedMatch);
+            const financialRecalculated = recalculateFinancialEngine(pendingIdentity, pendingTechnical);
             clearProposalReview(card, key);
             if (status) {
-                status.textContent = 'Perfil técnico guardado en Neon y listo para Calculadora.';
+                status.textContent = financialRecalculated
+                    ? 'Perfil guardado en Neon. PDAs y márgenes recalculados.'
+                    : 'Perfil técnico guardado en Neon y disponible para el estimador.';
                 status.className = 'text-[10px] font-bold text-emerald-700';
             }
             notify('Due Diligence guardada correctamente en Neon.');
@@ -659,6 +763,14 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         if (technical.yearBuilt) setText(card, 'yearBuilt', String(technical.yearBuilt));
         if (technical.draft) setText(card, 'draft', `${technical.draft}m`);
         renderTechnicalValidation(card, match, technical);
+
+        const applyButton = card.querySelector('[data-calculator-apply-button]');
+        if (applyButton) {
+            const payload = JSON.parse(decodeURIComponent(applyButton.dataset.vesselJson || '%7B%7D'));
+            mergeTechnicalFields(payload, technical);
+            if (payload.vessel_name === undefined) payload.vessel_name = identity.name;
+            applyButton.dataset.vesselJson = encodeURIComponent(JSON.stringify(payload));
+        }
         if (!complete) return;
 
         card.querySelectorAll('[data-missing-technical-warning="true"]').forEach(element => element.remove());
@@ -672,22 +784,15 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         });
         card.classList.remove('border-red-200', 'bg-red-50/40', 'opacity-80');
         card.classList.add('border-slate-200', 'bg-white', 'shadow-sm');
-        const dueButton = card.querySelector('[data-due-diligence-button]');
-        if (dueButton) dueButton.classList.add('hidden');
-        const applyButton = card.querySelector('[data-calculator-apply-button]');
         if (applyButton) {
             applyButton.disabled = false;
             applyButton.setAttribute('aria-disabled', 'false');
             applyButton.classList.remove('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
             applyButton.classList.add('bg-slate-900', 'hover:bg-slate-800', 'text-white');
-            const payload = JSON.parse(decodeURIComponent(applyButton.dataset.vesselJson || '%7B%7D'));
-            mergeTechnicalFields(payload, technical);
-            if (payload.vessel_name === undefined) payload.vessel_name = identity.name;
-            applyButton.dataset.vesselJson = encodeURIComponent(JSON.stringify(payload));
         }
         const status = card.querySelector('[data-due-diligence-status]');
         if (status) {
-            status.textContent = 'Perfil técnico verificado por Data Bridge. Listo para Calculadora.';
+            status.textContent = 'Perfil técnico auditado con fuentes externas. Puedes volver a contrastarlo cuando sea necesario.';
             status.className = 'text-[10px] font-bold text-emerald-700';
         }
     }
@@ -707,7 +812,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         if (button) {
             button.disabled = true;
             button.setAttribute('aria-busy', 'true');
-            button.innerHTML = '<i class="fa-solid fa-satellite-dish fa-spin"></i> Consultando Data Bridge...';
+            button.innerHTML = '<i class="fa-solid fa-satellite-dish fa-spin"></i> Consultando fuentes externas...';
         }
         if (status) {
             status.textContent = 'Buscando el buque por IMO, MMSI o nombre en fuentes públicas...';
@@ -735,7 +840,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             });
             const review = buildProposals(identity, technical);
             if (review.proposals.length === 0) {
-                throw new Error('La búsqueda no devolvió datos técnicos nuevos para revisar.');
+                throw new Error('La búsqueda externa no devolvió campos técnicos auditables.');
             }
             const key = proposalKey(identity);
             pendingProposals.set(key, {
@@ -747,7 +852,9 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             });
             renderProposalReview(card, key, review.proposals, technical);
             if (status) {
-                status.textContent = `${review.proposals.length} cambios encontrados. Revísalos antes de actualizar el buque.`;
+                status.textContent = review.changedCount > 0
+                    ? `${review.changedCount} cambios encontrados. Revísalos antes de actualizar Neon.`
+                    : 'Los valores externos coinciden. Puedes confirmar la auditoría en Neon.';
                 status.className = 'text-[10px] font-bold text-cyan-700';
             }
             if (button) button.innerHTML = originalHtml;
@@ -784,7 +891,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             else rejectPendingProposal(key, card);
             return;
         }
-        const button = event?.target?.closest?.('[data-due-diligence-button][data-external-scraper-only="true"]');
+        const button = event?.target?.closest?.('[data-due-diligence-button][data-due-diligence-mode]');
         if (!button) return;
         event.preventDefault();
         event.stopPropagation();
@@ -808,6 +915,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         normalizeTechnicalRecord,
         pendingProposals,
         proposalKey,
+        recalculateFinancialEngine,
         reevaluateTechnicalMatch,
         refreshMatchingDerivedState,
         rejectPendingProposal,
