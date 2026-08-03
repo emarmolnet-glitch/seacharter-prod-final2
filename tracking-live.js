@@ -285,6 +285,7 @@ function openTrackingLive() {
     const quickRef = document.getElementById('quick-ref')?.value || '';
     overlay?.classList.add('is-open');
     document.body.classList.add('tracking-live-open');
+    document.dispatchEvent(new CustomEvent('tracking-live:open'));
     if (input && !input.value) input.value = /^REF:\s*SHM\//i.test(quickRef) ? quickRef : '';
     window.setTimeout(() => input?.focus(), 80);
 }
@@ -293,6 +294,7 @@ function closeTrackingLive() {
     document.getElementById('tracking-live-overlay')?.classList.remove('is-open');
     document.body.classList.remove('tracking-live-open');
     window.clearTimeout(trackingState.pollTimer);
+    document.dispatchEvent(new CustomEvent('tracking-live:close'));
 }
 
 document.addEventListener('keydown', (event) => {
