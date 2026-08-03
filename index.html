@@ -13198,11 +13198,11 @@
 
     <div id="pda-vessel-confirmation-modal" class="fixed inset-0 z-[240] hidden items-center justify-center bg-slate-950/85 p-3 backdrop-blur-sm no-print" role="dialog" aria-modal="true" aria-labelledby="pda-vessel-confirmation-title">
         <div class="flex max-h-[85dvh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-[#25a18e]/35 bg-slate-950 shadow-2xl shadow-[#002b38]/60">
-            <div class="flex shrink-0 items-start justify-between gap-4 border-b border-[#25a18e]/35 bg-gradient-to-r from-[#003746] via-[#004e64] to-[#0b6670] px-5 py-4 shadow-[inset_0_-1px_0_rgba(255,255,255,0.06)]">
+            <div class="flex shrink-0 items-start justify-between gap-4 rounded-t-xl border-b border-teal-800/60 bg-slate-900 px-6 py-4 text-white">
                 <div>
-                    <div class="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-[#8de4d5]"><span class="h-2 w-2 rounded-full bg-[#25a18e] shadow-[0_0_12px_#25a18e]"></span> Validación maestra en directo</div>
-                    <h3 id="pda-vessel-confirmation-title" class="text-lg font-black text-white">Confirmación y contraste de buque</h3>
-                    <p id="pda-vessel-confirmation-subtitle" class="mt-1 text-xs text-teal-50/70">Revisa el impacto técnico, operativo y financiero antes de sustituir la estimación.</p>
+                    <span class="mb-1 block text-xs font-bold uppercase tracking-wider text-emerald-400">VALIDACIÓN MAESTRA EN DIRECTO</span>
+                    <h2 id="pda-vessel-confirmation-title" class="text-lg font-extrabold tracking-tight text-white">Confirmación y contraste de buque</h2>
+                    <p id="pda-vessel-confirmation-subtitle" class="mt-1 text-xs font-medium text-teal-200">Revisa el impacto técnico, operativo y financiero antes de sustituir la estimación.</p>
                 </div>
                 <button type="button" onclick="closePdaVesselConfirmationModal()" class="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-white/20 bg-white/5 text-teal-50/80 transition hover:border-[#8de4d5]/70 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8de4d5]" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button>
             </div>
@@ -13221,13 +13221,13 @@
                         <div class="overflow-hidden rounded-xl border border-slate-800"><table class="w-full text-left text-xs"><thead class="bg-slate-900 text-[10px] uppercase tracking-wider text-slate-400"><tr><th class="px-3 py-2">Concepto</th><th class="px-3 py-2 text-right">Anterior</th><th class="px-3 py-2 text-right">Recalculado</th><th class="px-3 py-2 text-right">Impacto</th></tr></thead><tbody id="pda-financial-breakdown-body" class="divide-y divide-slate-800 bg-slate-950 text-slate-200"></tbody></table></div>
                         <div class="grid content-start gap-3">
                             <div id="pda-financial-impact-cards" class="grid gap-3 sm:grid-cols-3 lg:grid-cols-1"></div>
-                            <div class="overflow-hidden rounded-xl border border-cyan-400/25 bg-gradient-to-br from-cyan-400/10 via-slate-900 to-emerald-400/5">
-                                <div class="flex items-center justify-between gap-3 border-b border-cyan-400/15 px-4 py-3">
+                            <div class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                                <div class="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
                                     <div>
-                                        <div class="text-[10px] font-black uppercase tracking-[0.16em] text-cyan-300">Flete por tonelada</div>
-                                        <div id="pda-freight-tonnage-basis" class="mt-0.5 text-[10px] text-slate-500">Base de carga recalculada</div>
+                                        <div class="text-xs font-bold uppercase tracking-[0.16em] text-gray-700">Flete por tonelada</div>
+                                        <div id="pda-freight-tonnage-basis" class="mt-0.5 text-xs text-gray-500">Base de carga recalculada</div>
                                     </div>
-                                    <span class="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-[9px] font-black text-cyan-200">USD / t</span>
+                                    <span class="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[9px] font-bold text-gray-500">USD / t</span>
                                 </div>
                                 <div id="pda-freight-per-ton-cards" class="grid gap-2 p-3 sm:grid-cols-2 lg:grid-cols-1"></div>
                             </div>
@@ -29512,8 +29512,8 @@
                 {
                     label: 'Perspectiva Armador',
                     icon: 'fa-ship',
-                    color: 'text-emerald-300',
-                    border: 'border-emerald-400/20 bg-emerald-400/5',
+                    color: 'text-emerald-600',
+                    border: 'border-gray-200 bg-white',
                     value: freightPerTon.owner.recalculated,
                     previousValue: freightPerTon.owner.previous,
                     detail: `Neto tras ${freightPerTon.commissionPct.toFixed(2).replace(/\.00$/, '')}% de comisión`
@@ -29521,16 +29521,16 @@
                 {
                     label: 'Perspectiva Fletador',
                     icon: 'fa-scale-balanced',
-                    color: 'text-cyan-300',
-                    border: 'border-cyan-400/20 bg-cyan-400/5',
+                    color: 'text-blue-600',
+                    border: 'border-gray-200 bg-white',
                     value: freightPerTon.charterer.recalculated,
                     previousValue: freightPerTon.charterer.previous,
                     detail: 'Coste bruto total por tonelada transportada'
                 }
             ].map((card) => {
                 const delta = card.value - card.previousValue;
-                const deltaClass = delta > 0 ? 'text-red-300' : delta < 0 ? 'text-emerald-300' : 'text-slate-500';
-                return `<div class="rounded-lg border ${card.border} p-3"><div class="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-slate-300"><i class="fa-solid ${card.icon} ${card.color}"></i>${card.label}</div><div class="mt-2 flex items-end justify-between gap-3"><div class="text-2xl font-black ${card.color}">${pdaMoney(card.value)}<span class="ml-1 text-[10px] text-slate-500">/t</span></div><div class="text-right text-[9px] text-slate-500">Antes ${pdaMoney(card.previousValue)}/t<br><span class="font-black ${deltaClass}">${delta > 0 ? '+' : ''}${pdaMoney(delta)}/t</span></div></div><div class="mt-2 text-[9px] leading-4 text-slate-500">${card.detail}</div></div>`;
+                const deltaClass = delta > 0 ? 'text-red-600' : delta < 0 ? 'text-emerald-600' : 'text-gray-500';
+                return `<div class="rounded-lg border ${card.border} p-3 shadow-sm"><div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-500"><i class="fa-solid ${card.icon} ${card.color}"></i>${card.label}</div><div class="mt-2 flex items-end justify-between gap-3"><div class="text-2xl font-bold ${card.color}">${pdaMoney(card.value)}<span class="ml-1 text-[10px] text-gray-500">/t</span></div><div class="text-right text-[9px] text-gray-500">Antes ${pdaMoney(card.previousValue)}/t<br><span class="font-bold ${deltaClass}">${delta > 0 ? '+' : ''}${pdaMoney(delta)}/t</span></div></div><div class="mt-2 text-xs leading-4 text-gray-500">${card.detail}</div></div>`;
             }).join('');
             document.getElementById('pda-vessel-confirmation-subtitle').textContent = `${actual.vessel_name || actual.vesselName || 'Buque'} · IMO ${actual.imo || actual.imo_number || 'N/D'} · Fuente ${source === 'global-store-fallback' ? 'Store local' : 'Data Bridge'}`;
             document.getElementById('pda-confirmation-error').classList.add('hidden');
