@@ -91,6 +91,7 @@ test('Due Diligence uses one external search and persists only after acceptance'
   assert.match(entrySource, /event\.stopImmediatePropagation\(\)/);
   assert.match(entrySource, /const responsePayload = await fetchDueDiligence/);
   assert.match(entrySource, /data-due-diligence-button\]\[data-due-diligence-mode\]/);
+  assert.match(entrySource, /\[data-matching-result-card="true"\], \[data-vessel-recommendation="true"\]/);
   assert.doesNotMatch(entrySource, /fetchLocalDueDiligence|usesLocalCache/);
   assert.match(entrySource, /Consultando fuentes externas/);
   assert.match(entrySource, /persistDueDiligenceVessel\(vessel/);
