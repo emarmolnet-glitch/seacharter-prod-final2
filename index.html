@@ -8282,7 +8282,7 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-freight-conditions" class="text-action-required flex items-center min-h-[24px]">Términos (Conditions)</label>
-                                <select id="freight-conditions" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="updateSection2LocalState('freight-conditions', this.value); syncSharedCharterTerm('freight-conditions', ['gc-freight-term'])">
+                                <select id="freight-conditions" class="input-gc action-required-field required-use-highlight text-action-required font-bold" onchange="updateSection2LocalState('freight-conditions', this.value); syncSharedCharterTerm('freight-conditions', ['gc-freight-term']); runEngine()">
                                     <option value="FIO">FIO (Free In and Out)</option>
                                     <option value="FIOS" selected>FIOS (Free In and Out Stowed)</option>
                                     <option value="FIOT">FIOT (Free In and Out Trimmed)</option>
@@ -8737,6 +8737,10 @@
                             <div class="flex justify-between"><span id="label-opex-cost-basis" class="font-bold">OPEX Total:</span> <span id="res-cost-opex" class="font-bold text-[#334155]">$0</span></div>
                             <div class="flex justify-between"><span id="label-capex-cost-basis" class="font-bold">CAPEX / Depreciación:</span> <span id="res-cost-capex" class="font-bold text-[#334155]">$0</span></div>
                             <div class="flex justify-between items-center"><span id="label-pda-cost-basis" class="font-bold flex items-center gap-1">PDAs/Puertos <button type="button" onclick="openPdaManualEditModal()" class="inline-flex items-center gap-0.5 text-[10px] font-extrabold text-sky-600 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-1.5 py-0.5 rounded shadow-sm transition" title="Calculado algorítmicamente a partir de GT y LOA. Clic para editar costes">✨ Auto</button>:</span> <span id="res-cost-pda" onclick="openPdaManualEditModal()" class="font-bold text-[#334155] cursor-pointer hover:text-sky-600 transition" title="Clic para modificar costes de puerto">$0</span></div>
+                            <div id="stevedoring-cost-breakdown" class="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5">
+                                <div class="flex justify-between gap-3"><span class="font-bold">Estiba a cargo del armador:</span> <strong id="res-cost-stevedoring" class="text-[#334155]">$0</strong></div>
+                                <p id="res-cost-stevedoring-note" class="mt-0.5 text-[10px] leading-snug text-slate-500">FIOS: coste $0 para el armador; la estiba corresponde al fletador.</p>
+                            </div>
                             <div class="flex justify-between"><span id="label-ets-cost-basis" class="font-bold">ETS Estimado:</span> <span id="res-cost-ets" class="font-bold text-[#1E3A8A]">$0</span></div>
 
                             <div class="mt-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 shadow-sm" id="base-cost-break-even-card" aria-live="polite">
@@ -31704,9 +31708,11 @@
             const diasPreparacionProyecto = tipoCargaOperativa === 'proyecto' ? Math.max(0, parseFloat(document.getElementById('dias-preparacion')?.value) || 0) : 0;
             const canalCost = parseFloat(document.getElementById('pda-misc').value) || 0;
             const voyageExtras = parseFloat(document.getElementById('cargo-surcharge').value) || 0;
+            const freightConditions = document.getElementById('freight-conditions')?.value || 'FIOS';
+            const stevedoringAllocation = resolveStevedoringAllocation(freightConditions, cargo);
             const pdaRecurrente = (parseFloat(document.getElementById('pda-pol').value) || 0) + 
                          (parseFloat(document.getElementById('pda-pod').value) || 0) + 
-                         (parseFloat(document.getElementById('stevedoring-costs').value) || 0) +
+                         stevedoringAllocation.ownerCost +
                          canalCost;
             const basePortExpenses = pdaRecurrente + costeTrincaje + costeManiobraEspecial;
             const operacionModo = getOperacionModo();
@@ -32046,6 +32052,7 @@
             if (pdaEl) {
                 pdaEl.innerText = `$${Math.round(smartPortExpenses).toLocaleString()}`;
             }
+            renderStevedoringCostBreakdown(stevedoringAllocation);
             document.getElementById('res-cost-ets').innerText = `$${Math.round(etsCost).toLocaleString()}`;
             document.getElementById('res-cost-total').innerText = `$${Math.round(adjustedCostTotal).toLocaleString()}`;
 
@@ -32611,6 +32618,11 @@
                 capex: totalCapex,
                 pda: smartPortExpenses,
                 basePda: pdas,
+                stevedoringEnteredCost: stevedoringAllocation.enteredCost,
+                stevedoringOwnerCost: stevedoringAllocation.ownerCost,
+                stevedoringOwnerFactor: stevedoringAllocation.ownerFactor,
+                stevedoringCondition: stevedoringAllocation.condition,
+                stevedoringNote: stevedoringAllocation.note,
                 ets: etsCost,
                 contingency: costPlusContingency.totalCost,
                 contingencyDays: costPlusContingency.extraDays,
@@ -52656,6 +52668,58 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return CONDITION_OWNER_STEVEDORING_FACTORS[normalizedCondition] ?? 0;
         }
 
+        function resolveStevedoringAllocation(condition, cargoTons) {
+            const normalizedCondition = String(condition || 'FIOS').trim().toUpperCase();
+            const ownerFactor = getOwnerStevedoringFactor(normalizedCondition);
+            const input = document.getElementById('stevedoring-costs');
+            let enteredCost = Math.max(0, parseFloat(input?.value) || 0);
+            let autoEstimated = input?.dataset.autoEstimated === 'true';
+
+            if (normalizedCondition === 'LINER' && (enteredCost <= 0 || autoEstimated)) {
+                const estimate = window.SeaCharterVoyageCostEngine?.estimateStevedoringTerminal
+                    ? window.SeaCharterVoyageCostEngine.estimateStevedoringTerminal(cargoTons)
+                    : Math.max(0, Number(cargoTons) || 0) * 2.50;
+                enteredCost = Math.max(0, Number(estimate) || 0);
+                autoEstimated = enteredCost > 0;
+                if (input && autoEstimated) {
+                    input.value = enteredCost.toFixed(2);
+                    input.dataset.autoEstimated = 'true';
+                    input.title = 'Estimación automática para Liner Terms: USD 2.50/MT';
+                }
+            } else if (normalizedCondition !== 'LINER' && autoEstimated) {
+                enteredCost = 0;
+                autoEstimated = false;
+                if (input) {
+                    input.value = '0';
+                    delete input.dataset.autoEstimated;
+                    input.title = 'En términos FIO/FIOS/FIOT/FIOST la estiba no corresponde al armador';
+                }
+            }
+
+            const ownerCost = enteredCost * ownerFactor;
+            const note = ownerFactor === 0
+                ? `${normalizedCondition}: coste $0 para el armador; carga, descarga y estiba corresponden al fletador.`
+                : normalizedCondition === 'LINER'
+                    ? `Liner Terms: coste a cargo del armador${autoEstimated ? ' estimado automáticamente a USD 2.50/MT.' : ' según el importe indicado.'}`
+                    : `${normalizedCondition}: el armador asume el ${(ownerFactor * 100).toFixed(0)}% del coste de estiba indicado.`;
+            return { condition: normalizedCondition, ownerFactor, enteredCost, ownerCost, autoEstimated, note };
+        }
+
+        function renderStevedoringCostBreakdown(allocation) {
+            const value = document.getElementById('res-cost-stevedoring');
+            const note = document.getElementById('res-cost-stevedoring-note');
+            const container = document.getElementById('stevedoring-cost-breakdown');
+            if (value) value.textContent = `$${Math.round(Number(allocation?.ownerCost) || 0).toLocaleString()}`;
+            if (note) note.textContent = allocation?.note || '';
+            if (container) {
+                const hasOwnerCost = Number(allocation?.ownerCost) > 0;
+                container.classList.toggle('border-slate-200', !hasOwnerCost);
+                container.classList.toggle('bg-slate-50', !hasOwnerCost);
+                container.classList.toggle('border-emerald-200', hasOwnerCost);
+                container.classList.toggle('bg-emerald-50', hasOwnerCost);
+            }
+        }
+
         initializeSharedGenconSelectors();
 
         const methodBaseRates = Object.freeze({
@@ -55932,9 +55996,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const diasPreparacionProyecto = tipoCargaOperativa === 'proyecto' ? Math.max(0, parseFloat(document.getElementById('dias-preparacion')?.value) || 0) : 0;
             const voyageExtras = parseFloat(document.getElementById('cargo-surcharge')?.value) || 0;
             const freightConditions = document.getElementById('freight-conditions')?.value || 'FIOS';
-            const stevedoringOwnerFactor = getOwnerStevedoringFactor(freightConditions);
-            const stevedoringEnteredCost = Math.max(0, parseFloat(document.getElementById('stevedoring-costs')?.value) || 0);
-            const stevedoringOwnerCost = stevedoringEnteredCost * stevedoringOwnerFactor;
+            const stevedoringAllocation = resolveStevedoringAllocation(freightConditions, cargo);
+            const stevedoringOwnerFactor = stevedoringAllocation.ownerFactor;
+            const stevedoringEnteredCost = stevedoringAllocation.enteredCost;
+            const stevedoringOwnerCost = stevedoringAllocation.ownerCost;
             const pdas = (parseFloat(document.getElementById('pda-pol')?.value) || 0) + 
                          (parseFloat(document.getElementById('pda-pod')?.value) || 0) + 
                          stevedoringOwnerCost +

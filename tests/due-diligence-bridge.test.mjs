@@ -106,6 +106,14 @@ test('Due Diligence uses one external search and persists only after acceptance'
   assert.match(entrySource, /aria-modal/);
   assert.match(entrySource, /Comparación externa/);
   assert.match(entrySource, /\['Campo', 'Actual', 'Externo', 'Estado'\]/);
+  assert.match(entrySource, /Factor de Estiba \(SF\)/);
+  assert.match(entrySource, /selectedProduct\?\.sf/);
+  assert.match(entrySource, /Calado calculado/);
+  assert.match(entrySource, /SeaCharterReactiveCostState\?\.state\?\.calado_actual/);
+  assert.match(entrySource, /SeaCharterVoyageCostEngine\?\.estimateDraft/);
+  assert.match(entrySource, /Algoritmo Core PRO/);
+  assert.doesNotMatch(entrySource, /label: 'Factor de Estiba \(SF\)'[\s\S]{0,260}N\/D/);
+  assert.doesNotMatch(entrySource, /label: 'Calado calculado'[\s\S]{0,260}N\/D/);
   assert.match(entrySource, /\{ field: 'beamMeters', label: 'Manga' \}/);
   assert.match(entrySource, /const safeProposals = Array\.isArray\(proposals\)/);
   assert.match(entrySource, /const pendingTechnical = pending\.technical && typeof pending\.technical === 'object'/);

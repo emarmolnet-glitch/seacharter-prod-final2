@@ -459,6 +459,101 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         return { current, match, proposals, changedCount: proposals.filter(proposal => proposal.changed).length };
     }
 
+    function firstPositiveNumber(values) {
+        for (const value of values) {
+            const number = readPositiveNumber(value);
+            if (number) return number;
+        }
+        return null;
+    }
+
+    function readCalculationInput(id) {
+        return readPositiveNumber(globalScope.document?.getElementById(id)?.value);
+    }
+
+    function estimateAlgorithmicDraft(dwt, cargoQuantity) {
+        const vesselDwt = readPositiveNumber(dwt);
+        if (!vesselDwt) return null;
+        const cargoTons = Math.max(0, Number(cargoQuantity) || 0);
+        const engineEstimate = globalScope.SeaCharterVoyageCostEngine?.estimateDraft;
+        if (typeof engineEstimate === 'function') {
+            return readPositiveNumber(engineEstimate(vesselDwt, cargoTons));
+        }
+        const maxSummerDraft = (vesselDwt * 0.00015) + 5.5;
+        const ballastDraft = maxSummerDraft * 0.45;
+        return ballastDraft + ((maxSummerDraft - ballastDraft) * (cargoTons / vesselDwt));
+    }
+
+    function readActiveCalculationContext(technical = {}) {
+        const calculatedStateCandidate = globalScope.GlobalStore?.calculatedState || globalScope.CalculatedState || {};
+        const calculatedState = typeof globalScope.isCalculatedStateCurrent !== 'function'
+            || globalScope.isCalculatedStateCurrent(calculatedStateCandidate)
+            ? calculatedStateCandidate
+            : {};
+        const matchingRequest = calculatedState.matchingRequest
+            || globalScope.GlobalStore?.matchingRequest
+            || globalScope.matchingRequest
+            || {};
+        const storeState = globalScope.SeaCharterStore?.getState?.() || {};
+        const selectedProduct = globalScope.getSelectedCargoProduct?.() || null;
+        const stowageFactor = firstPositiveNumber([
+            selectedProduct?.sf,
+            matchingRequest?.cargo?.stowageFactor,
+            calculatedState?.cargo?.stowageFactor,
+            storeState.stowageFactor,
+            globalScope.GlobalStore?.stowageFactor,
+            readCalculationInput('cargo-sf'),
+        ]);
+        const cargoQuantity = firstPositiveNumber([
+            matchingRequest?.cargo?.quantity,
+            calculatedState?.cargo?.quantity,
+            storeState.cargo,
+            globalScope.GlobalStore?.cargo,
+            readCalculationInput('cargo-qty'),
+        ]) || 0;
+        const vesselDwt = firstPositiveNumber([
+            technical?.dwt,
+            globalScope.GlobalStore?.calculatorVessel?.dwt,
+            globalScope.GlobalStore?.activeVessel?.dwt,
+            matchingRequest?.dwt,
+            readCalculationInput('vessel-dwt'),
+        ]);
+        const calculatedDraft = firstPositiveNumber([
+            globalScope.SeaCharterReactiveCostState?.state?.calado_actual,
+            calculatedState?.operational?.caladoActual,
+            calculatedState?.operational?.currentDraft,
+            calculatedState?.calado_actual,
+            readCalculationInput('current-draft'),
+            estimateAlgorithmicDraft(vesselDwt, cargoQuantity),
+        ]);
+        const cargoLabel = readText(
+            selectedProduct?.nombre
+            || matchingRequest?.cargo?.cargoDescription
+            || matchingRequest?.cargo?.typeLabel
+            || calculatedState?.cargo?.typeLabel
+            || globalScope.document?.getElementById('cargo-product')?.value,
+        ) || 'Taxonomía activa';
+        return { stowageFactor, cargoLabel, calculatedDraft };
+    }
+
+    function appendCalculationRow(body, { label, currentValue, sourceValue, stateText }) {
+        const row = globalScope.document.createElement('div');
+        row.className = 'grid grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50/60 px-3 py-2.5 text-[11px]';
+        const field = globalScope.document.createElement('strong');
+        field.textContent = label;
+        const current = globalScope.document.createElement('span');
+        current.className = 'truncate font-black text-cyan-950';
+        current.textContent = currentValue;
+        const source = globalScope.document.createElement('span');
+        source.className = 'truncate text-cyan-800';
+        source.textContent = sourceValue;
+        const state = globalScope.document.createElement('span');
+        state.className = 'rounded-full bg-cyan-200 px-2 py-0.5 text-[9px] font-black uppercase text-cyan-900';
+        state.textContent = stateText;
+        row.append(field, current, source, state);
+        body.append(row);
+    }
+
     function isNonCommercialVesselType(vesselType) {
         return NON_COMMERCIAL_VESSEL_PATTERN.test(readText(vesselType));
     }
@@ -512,6 +607,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         if (!review || !globalScope.document) return;
         const safeTechnical = technical && typeof technical === 'object' ? technical : {};
         const safeProposals = Array.isArray(proposals) ? proposals.filter(proposal => proposal && typeof proposal === 'object') : [];
+        const calculationContext = readActiveCalculationContext(safeTechnical);
         review.replaceChildren();
         review.className = 'fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-slate-950/70 p-3 sm:p-4 backdrop-blur-sm';
         review.setAttribute('role', 'dialog');
@@ -531,7 +627,13 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         const subtitle = globalScope.document.createElement('p');
         subtitle.className = 'text-[11px] font-semibold text-cyan-700';
         subtitle.textContent = 'Valores actuales en Core PRO frente a datos encontrados en fuentes públicas.';
-        title.append(titleText, subtitle);
+        const sessionSummary = globalScope.document.createElement('p');
+        sessionSummary.className = 'text-[10px] font-black text-cyan-900';
+        sessionSummary.textContent = [
+            calculationContext.stowageFactor ? `SF ${calculationContext.stowageFactor.toFixed(2)} m³/MT` : '',
+            calculationContext.calculatedDraft ? `Calado calculado ${calculationContext.calculatedDraft.toFixed(2)} m` : '',
+        ].filter(Boolean).join(' · ');
+        title.append(titleText, subtitle, sessionSummary);
         header.append(title);
         panel.append(header);
 
@@ -566,6 +668,23 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             columns.append(column);
         });
         body.append(columns);
+
+        if (calculationContext.stowageFactor) {
+            appendCalculationRow(body, {
+                label: 'Factor de Estiba (SF)',
+                currentValue: `${calculationContext.stowageFactor.toFixed(2)} m³/MT`,
+                sourceValue: calculationContext.cargoLabel,
+                stateText: 'Taxonomía',
+            });
+        }
+        if (calculationContext.calculatedDraft) {
+            appendCalculationRow(body, {
+                label: 'Calado calculado',
+                currentValue: `${calculationContext.calculatedDraft.toFixed(2)} m`,
+                sourceValue: safeTechnical.draft ? `${Number(safeTechnical.draft).toFixed(2)} m externo` : 'Algoritmo Core PRO',
+                stateText: 'Sesión',
+            });
+        }
 
         safeProposals.forEach(proposal => {
             const row = globalScope.document.createElement('div');
