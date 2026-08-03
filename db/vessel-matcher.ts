@@ -6,6 +6,7 @@ const DEFAULT_TELEMETRY_TTL_HOURS = 24;
 export interface MatchRequest {
   minDwt: number;
   maxDwt: number;
+  targetCargoDwt?: number;
   targetLat?: number;
   targetLon?: number;
   telemetryTtlHours?: number;
@@ -28,11 +29,13 @@ export interface MatchedVessel extends QueryResultRow {
   longitude: number | null;
   telemetry_updated_at: Date | string | null;
   approximate_distance_nm: number | null;
+  dwt_difference_mt: number;
 }
 
 interface NormalizedMatchRequest {
   minDwt: number;
   maxDwt: number;
+  targetCargoDwt: number;
   targetLat: number | null;
   targetLon: number | null;
   telemetryTtlHours: number;
@@ -81,9 +84,16 @@ function normalizeRequest(request: MatchRequest): NormalizedMatchRequest {
     throw new RangeError("telemetryTtlHours debe ser un entero positivo.");
   }
 
+  const targetCargoDwt = request.targetCargoDwt ?? Math.round((request.minDwt + request.maxDwt) / 2);
+  assertFiniteNumber(targetCargoDwt, "targetCargoDwt");
+  if (!Number.isInteger(targetCargoDwt) || targetCargoDwt <= 0) {
+    throw new RangeError("targetCargoDwt debe ser un entero positivo.");
+  }
+
   return {
     minDwt: request.minDwt,
     maxDwt: request.maxDwt,
+    targetCargoDwt,
     targetLat: request.targetLat ?? null,
     targetLon: request.targetLon ?? null,
     telemetryTtlHours,
@@ -142,26 +152,28 @@ export async function matchVessels(request: MatchRequest): Promise<MatchedVessel
           tb.longitude,
           tb.updated_at AS telemetry_updated_at,
           CASE
-            WHEN $3::double precision IS NULL
-              OR $4::double precision IS NULL
+            WHEN $4::double precision IS NULL
+              OR $5::double precision IS NULL
               OR tb.latitude IS NULL
               OR tb.longitude IS NULL
             THEN NULL
             ELSE 3440.065 * 2 * ASIN(SQRT(LEAST(1, GREATEST(0,
-              POWER(SIN(RADIANS(tb.latitude - $3::double precision) / 2), 2) +
-              COS(RADIANS($3::double precision)) * COS(RADIANS(tb.latitude)) *
-              POWER(SIN(RADIANS(tb.longitude - $4::double precision) / 2), 2)
+              POWER(SIN(RADIANS(tb.latitude - $4::double precision) / 2), 2) +
+              COS(RADIANS($4::double precision)) * COS(RADIANS(tb.latitude)) *
+              POWER(SIN(RADIANS(tb.longitude - $5::double precision) / 2), 2)
             ))))
-          END AS approximate_distance_nm
+          END AS approximate_distance_nm,
+          ABS(vm.dwt - $3::integer) AS dwt_difference_mt
         FROM master_candidates vm
         LEFT JOIN ais_telemetry_buffer tb
           ON (vm.mmsi = tb.mmsi OR vm.imo::text = tb.mmsi::text)
-          AND tb.updated_at >= NOW() - make_interval(hours => $5)
-        ORDER BY approximate_distance_nm ASC NULLS LAST, tb.updated_at DESC
+          AND tb.updated_at >= NOW() - make_interval(hours => $6)
+        ORDER BY dwt_difference_mt ASC, approximate_distance_nm ASC NULLS LAST, tb.updated_at DESC
       `,
       [
         normalized.minDwt,
         normalized.maxDwt,
+        normalized.targetCargoDwt,
         normalized.targetLat,
         normalized.targetLon,
         normalized.telemetryTtlHours,

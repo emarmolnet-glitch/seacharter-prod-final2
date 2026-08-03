@@ -1,6 +1,7 @@
 import type { Config } from "@netlify/functions";
 import { calculateCargoIntelligenceBoost, estimateDwtFromDimensions, evaluateCargoVesselEligibility } from "../../cargo-taxonomy.mjs";
 import { calculateTaxonomyTechnicalScore } from "./_shared/taxonomy-compatibility.mjs";
+import { buildCommercialVesselRank, compareCommercialVesselRanks } from "./_shared/commercial-vessel-ranking.mjs";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -203,7 +204,9 @@ function normalizeVessel(value: unknown) {
   const latitude = numberValue(source.latitude, source.lat, source.AIS_Live_Lat, sourcePayload.latitude, sourcePayload.lat, meta.latitude, meta.Latitude, meta.AIS_Live_Lat, position.Latitude, position.latitude);
   const longitude = numberValue(source.longitude, source.lon, source.lng, source.AIS_Live_Lon, sourcePayload.longitude, sourcePayload.lon, sourcePayload.lng, meta.longitude, meta.Longitude, meta.AIS_Live_Lon, position.Longitude, position.longitude);
 
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude === 0 && longitude === 0) return null;
+  const hasValidPosition = Number.isFinite(latitude)
+    && Number.isFinite(longitude)
+    && !(latitude === 0 && longitude === 0);
 
   const mmsi = textValue(source.mmsi, source.MMSI, meta.MMSI, position.UserID, staticData.UserID);
   const imo = textValue(source.imo, source.IMO, source.imoNumber, source.imo_number, meta.IMO, staticData.ImoNumber) || (mmsi ? "PENDING" : "");
@@ -262,7 +265,10 @@ function normalizeVessel(value: unknown) {
   const sourceOrigin = textValue(source.source_origin, source.sourceOrigin, source.data_source) || sourceOrigins.join(" + ") || "MASTER";
   const vesselKey = textValue(source.vessel_key, source.vesselKey);
 
-  return { source, vesselName, mmsi, imo, shipType, dwt, dwtStatus, draft, designDraft, loa, beam, speed, destination, declaredEta, lastPortOfCall, latitude, longitude, sourceOrigins, sourceOrigin, vesselKey, isOpenShipsSource };
+  const longDistanceTransitToPol = source.longDistanceTransitToPol === true || meta.longDistanceTransitToPol === true;
+  const commercialTransitCandidate = source.commercialTransitCandidate === true || meta.commercialTransitCandidate === true;
+
+  return { source, vesselName, mmsi, imo, shipType, dwt, dwtStatus, draft, designDraft, loa, beam, speed, destination, declaredEta, lastPortOfCall, latitude, longitude, hasValidPosition, longDistanceTransitToPol, commercialTransitCandidate, sourceOrigins, sourceOrigin, vesselKey, isOpenShipsSource };
 }
 
 function parseLaycanEnd(value: unknown) {
@@ -339,7 +345,7 @@ export default async (req: Request) => {
       cargo.tipo_carga,
     );
     const cargoCode = textValue(cargo.cargoCode, cargo.cargoTypeId, cargo.typeId, body.cargoCode, body.cargoTypeId) || "100";
-    const strictTechnicalFilter = body.strictTechnicalFilter === true || cargo.strictTechnicalFilter === true;
+    const strictTechnicalFilter = false;
     const debugIncludeUnknownDwt = body.debugIncludeUnknownDwt === true || cargo.debugIncludeUnknownDwt === true;
     const methodsRequireShipGear = [cargo.loadMethod, cargo.dischargeMethod].some((value) => {
       const method = textValue(value).toLowerCase();
@@ -371,18 +377,22 @@ export default async (req: Request) => {
       .map(normalizeVessel)
       .filter((vessel): vessel is NonNullable<ReturnType<typeof normalizeVessel>> => Boolean(vessel))
       .filter((vessel) => vesselMatchesAnyTaxonomy(vessel, vesselClassValues)
-        || (!strictTechnicalFilter && vessel.isOpenShipsSource && isUnknownTechnicalValue(vessel.shipType)));
+        || (!strictTechnicalFilter && isUnknownTechnicalValue(vessel.shipType)));
 
     const evaluateVessels = (maxDwtToleranceMultiplier: number, isFallbackPass: boolean) => {
       return vessels_buffer
         .map((vessel) => {
           const cementSignal = classifyCementCarrierCandidate(vessel);
-          const distance = haversineNm(loadingPortLat, loadingPortLon, vessel.latitude, vessel.longitude);
+          const distance = vessel.hasValidPosition
+            ? haversineNm(loadingPortLat, loadingPortLon, vessel.latitude as number, vessel.longitude as number)
+            : null;
           const speedOverGround = Math.max(vessel.speed, 1);
-          const hoursToLoadPort = distance / speedOverGround;
-          const daysToLoadPort = hoursToLoadPort / 24;
-          const etaDate = new Date(Date.now() + hoursToLoadPort * 60 * 60 * 1000);
+          const hoursToLoadPort = distance === null ? null : distance / speedOverGround;
+          const daysToLoadPort = hoursToLoadPort === null ? null : hoursToLoadPort / 24;
           const declaredEtaDate = parseDateValue(vessel.declaredEta);
+          const etaDate = hoursToLoadPort !== null
+            ? new Date(Date.now() + hoursToLoadPort * 60 * 60 * 1000)
+            : (declaredEtaDate || new Date(laycanEnd.getTime() + 24 * 60 * 60 * 1000));
           const etaDriftHours = declaredEtaDate
             ? Math.round(Math.abs(declaredEtaDate.getTime() - etaDate.getTime()) / 36_000) / 100
             : null;
@@ -422,10 +432,10 @@ export default async (req: Request) => {
           const boostedTechnical = technicalEligibility.eligible
             ? boostedTechnicalBeforeEligibility
             : Math.min(20, boostedTechnicalBeforeEligibility);
-          const economic = Math.max(0, 100 - distance / 35);
-          const risk = Math.max(0, 100 - Math.max(0, daysToLoadPort - 7) * 8 * riskCoefficient);
+          const economic = distance === null ? 0 : Math.max(0, 100 - distance / 35);
+          const risk = daysToLoadPort === null ? 0 : Math.max(0, 100 - Math.max(0, daysToLoadPort - 7) * 8 * riskCoefficient);
           const overall = Math.round(Math.min(100, boostedTechnical * 0.55 + economic * 0.30 + risk * 0.15));
-          const ballastFuelCost = distance * (fuelPrice / 100);
+          const ballastFuelCost = distance === null ? 0 : distance * (fuelPrice / 100);
           const suggestedFreightRate = freightRate > 0 ? freightRate : Math.max(0, (ballastFuelCost + portExpenses + dailyOpex) / Math.max(quantity, 1));
           
           const isOversizedUnderStandard = quantity > 0 && vessel.dwt !== null && vessel.dwt > quantity * 1.15;
@@ -460,6 +470,13 @@ export default async (req: Request) => {
           const operationallyEligible = taxonomyCompatibility.compatible !== false
             && (!strictTechnicalFilter || technicalEligibility.eligible || debugUnknownDwtAllowed);
           const idealVessel = operationallyEligible && !hasTechnicalWarning && loadState.ballastReady;
+          const commercialRank = buildCommercialVesselRank({
+            vesselDwt: vessel.dwt,
+            targetCargoDwt: quantity,
+            laycanCompliant: dateOk,
+            transitHours: hoursToLoadPort,
+            distanceNm: distance,
+          });
 
           return {
             vessel_key: vessel.vesselKey,
@@ -475,6 +492,9 @@ export default async (req: Request) => {
             warningReason,
             dwtStatus: activeDwtStatus,
             dwtAssessment,
+            commercialRank,
+            dwtDifferenceMt: commercialRank.dwtDifferenceMt,
+            dwtFitPercent: commercialRank.dwtFitPercent,
             debugUnknownDwtAllowed,
             isOversizedFallback,
             vessel: {
@@ -521,8 +541,11 @@ export default async (req: Request) => {
               imo: vessel.imo,
               latitude: vessel.latitude,
               longitude: vessel.longitude,
-              currentDistanceToLoadPort: Math.round(distance),
-              daysToLoadPort: Math.round(daysToLoadPort * 10) / 10,
+              currentDistanceToLoadPort: distance === null ? null : Math.round(distance),
+              hasValidPosition: vessel.hasValidPosition,
+              longDistanceTransitToPol: vessel.longDistanceTransitToPol,
+              commercialTransitCandidate: vessel.commercialTransitCandidate,
+              daysToLoadPort: daysToLoadPort === null ? null : Math.round(daysToLoadPort * 10) / 10,
               speed_over_ground: speedOverGround,
               plannedDestination: vessel.destination,
               destination: vessel.destination,
@@ -555,8 +578,8 @@ export default async (req: Request) => {
             },
             routing: {
               eta: etaDate.toISOString(),
-              ballastDistanceNM: Math.round(distance),
-              daysToLoadPort: Math.round(daysToLoadPort * 10) / 10,
+              ballastDistanceNM: distance === null ? null : Math.round(distance),
+              daysToLoadPort: daysToLoadPort === null ? null : Math.round(daysToLoadPort * 10) / 10,
               speedOverGround: speedOverGround,
             },
             financials: {
@@ -634,14 +657,16 @@ export default async (req: Request) => {
             timestamp: Date.now(),
           };
         })
-        .filter((match) => match.ais.currentDistanceToLoadPort <= matchRadiusNm)
-        .sort((a, b) => Number(b.audit.operationallyEligible) - Number(a.audit.operationallyEligible)
-          || b.scores.overall - a.scores.overall
-          || a.ais.currentDistanceToLoadPort - b.ais.currentDistanceToLoadPort);
+        .filter((match) => match.ais.hasValidPosition !== true
+          || (match.ais.currentDistanceToLoadPort !== null && match.ais.currentDistanceToLoadPort <= matchRadiusNm)
+          || match.ais.longDistanceTransitToPol === true
+          || match.ais.commercialTransitCandidate === true)
+        .sort((a, b) => compareCommercialVesselRanks(a.commercialRank, b.commercialRank)
+          || b.scores.overall - a.scores.overall);
     };
 
     const evaluatedMatches = evaluateVessels(1.15, false);
-    const matches = evaluatedMatches.filter((match) => match.audit.operationallyEligible);
+    const matches = evaluatedMatches.slice();
     const technicalWarnings = evaluatedMatches.filter((match) => match.hasTechnicalWarning || !match.audit.operationallyEligible);
 
     return Response.json({

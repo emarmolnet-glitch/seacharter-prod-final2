@@ -14,15 +14,16 @@ test('vessel matcher preserves master vessels through resilient fresh telemetry 
   assert.match(matcherSource, /vm\.mmsi = tb\.mmsi OR vm\.imo::text = tb\.mmsi::text/);
   assert.match(
     matcherSource,
-    /tb\.updated_at >= NOW\(\) - make_interval\(hours => \$5\)/,
+    /tb\.updated_at >= NOW\(\) - make_interval\(hours => \$6\)/,
   );
 });
 
 test('vessel matcher calculates optional proximity and releases PostgreSQL clients', () => {
   assert.match(matcherSource, /AS approximate_distance_nm/);
+  assert.match(matcherSource, /ABS\(vm\.dwt - \$3::integer\) AS dwt_difference_mt/);
   assert.match(
     matcherSource,
-    /ORDER BY approximate_distance_nm ASC NULLS LAST, tb\.updated_at DESC/,
+    /ORDER BY dwt_difference_mt ASC, approximate_distance_nm ASC NULLS LAST, tb\.updated_at DESC/,
   );
   assert.match(matcherSource, /telemetryTtlHours \?\? DEFAULT_TELEMETRY_TTL_HOURS/);
   assert.match(matcherSource, /finally \{[\s\S]*client\.release\(\)/);

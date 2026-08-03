@@ -388,6 +388,8 @@ export default async (req: Request) => {
       const cargo = asRecord(matchingPayload.cargo);
       const loadingPortLat = finiteNumberValue(cargo.loadingPortLat);
       const loadingPortLon = finiteNumberValue(cargo.loadingPortLon);
+      const targetCargoDwtValue = finiteNumberValue(cargo.quantity);
+      const targetCargoDwt = targetCargoDwtValue !== null && targetCargoDwtValue > 0 ? targetCargoDwtValue : null;
       const matchRadiusNm = Math.min(5000, Math.max(1, finiteNumberValue(matchingPayload.matchRadiusNm) || 2000));
       const allowedSources = normalizeAllowedMatchingSources(matchingPayload.allowedSources || body.allowedSources);
       const requestedLimit = finiteNumberValue(matchingPayload.limit, body.limit) || 50;
@@ -397,6 +399,7 @@ export default async (req: Request) => {
         loadingPortLat,
         loadingPortLon,
         matchRadiusNm,
+        targetCargoDwt,
         requestedLimit,
         requestedOffset,
       );

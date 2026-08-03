@@ -3,6 +3,8 @@ import WebSocket from "ws";
 import { countVessels, isCargoShipType, readVessels, readVesselsNearPoint, upsertVessels, type VesselRecord } from "./vessel-store.js";
 import { filterVesselsByTaxonomies, parseRequestedTaxonomies } from "./ais-taxonomy.js";
 import { upsertRadarVesselsMaster } from "../../db/vessels-master-sync.js";
+import { evaluateCommercialTransitToPol, LONG_DISTANCE_TRANSIT_LABEL } from "./_shared/ais-commercial-transit.mjs";
+import { buildCommercialVesselRank, compareCommercialVesselRanks } from "./_shared/commercial-vessel-ranking.mjs";
 
 type VesselMessage = Record<string, unknown>;
 type LiveCollectionResult = {
@@ -26,6 +28,7 @@ const ROUTE_CORRIDOR_RADIUS_NM = 100;
 const PROJECTION_SCAN_RADIUS_NM = 1000;
 const PROJECTION_LOOKAHEAD_HOURS = 72;
 const PROJECTION_VECTOR_MINUTES = 60;
+const MAX_COMMERCIAL_TRANSIT_CAPTURE_RADIUS_NM = 6500;
 
 let vesselCache: VesselMessage[] = [];
 let cacheUpdatedAt = 0;
@@ -116,7 +119,12 @@ function getRequestedBoundingBoxes(url: URL) {
   if (requestedBoxes) return requestedBoxes;
   const pol = parseRouteCoordinate(url, "coords_pol");
   const pod = parseRouteCoordinate(url, "coords_pod");
-  const requestedRadiusNm = Math.min(2000, Math.max(25, numberParam(url, ["radiusNm", "radius_nm"], POL_VISUAL_RADIUS_NM)));
+  const commercialTransitScan = ["1", "true", "yes"].includes(textParam(url, ["matchingMode", "commercialTransit"], "0").toLowerCase());
+  const captureRadiusFallback = commercialTransitScan ? MAX_COMMERCIAL_TRANSIT_CAPTURE_RADIUS_NM : POL_VISUAL_RADIUS_NM;
+  const requestedRadiusNm = Math.min(
+    commercialTransitScan ? MAX_COMMERCIAL_TRANSIT_CAPTURE_RADIUS_NM : 2000,
+    Math.max(25, numberParam(url, ["captureRadiusNm", "capture_radius_nm", "radiusNm", "radius_nm"], captureRadiusFallback)),
+  );
   const boxes = [
     pol ? createBoundingBoxAroundCoordinate(pol, requestedRadiusNm) : null,
     pod ? createBoundingBoxAroundCoordinate(pod, POD_VISUAL_RADIUS_NM) : null,
@@ -467,6 +475,20 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
   const podLon = coordsPod?.lon ?? normalizeNumber(url.searchParams.get("podLon"));
   const zone = textParam(url, ["zone"], "DUAL").toUpperCase();
   const matchingMode = ["1", "true", "yes"].includes(textParam(url, ["matchingMode", "projectionMatching"], "0").toLowerCase());
+  const targetCargoDwt = numberParam(url, ["targetCargoDwt", "cargoDwt", "cargoQuantity"], 0);
+  const polName = textParam(url, ["polName", "pol"], "");
+  const laycanStart = textParam(url, ["laycanStart", "laycan_start", "laycan"], "");
+  const laycanEnd = textParam(url, ["laycanEnd", "laycan_end", "cancellingDate"], laycanStart);
+  const compatiblePorts = (() => {
+    const raw = textParam(url, ["compatiblePorts", "polAliases"], "");
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+    } catch (_) {
+      return raw.split("|").map((value) => value.trim()).filter(Boolean);
+    }
+  })();
   const requestedPolRadiusNm = Math.min(2000, Math.max(25, numberParam(url, ["radiusNm", "radius_nm"], POL_VISUAL_RADIUS_NM)));
   const activePoints = [
     zone !== "POD" && polLat !== undefined && polLon !== undefined ? { role: "POL", lat: polLat, lon: polLon, radiusNm: requestedPolRadiusNm } : null,
@@ -525,10 +547,32 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
       const routeCorridor = routeCorridorMatch(lat, lon, routePol, routePod);
       const insideRouteCorridor = !!routeCorridor?.inside;
       const insidePolGeofence = !selectedPolTarget || pointMatches.some((point) => point.role === "POL");
-      if (!isGlobalNameSearch && selectedPolTarget && !insidePolGeofence && !insideRouteCorridor) return null;
       const projection = buildProjection(vessel, selectedPolTarget || nearestVisual || nearestByDistance);
       const distanceToPol = selectedPolTarget ? haversineNm(selectedPolTarget.lat, selectedPolTarget.lon, lat, lon) : null;
       const distanceToPod = routePod ? haversineNm(routePod.lat, routePod.lon, lat, lon) : null;
+      const destination = normalizeDestination(firstDefined(
+        vessel.destination,
+        vessel.Destination,
+        vessel.PortOfDestination,
+        metadata.destination,
+        metadata.Destination,
+        metadata.PortOfDestination,
+      ));
+      const aisEta = normalizeEta(vessel, selectedPolTarget || nearestVisual || nearestByDistance);
+      const commercialTransit = evaluateCommercialTransitToPol({
+        destination,
+        polName,
+        compatiblePorts,
+        aisEta,
+        laycanStart,
+        laycanEnd,
+        distanceNm: distanceToPol,
+        speedKnots: firstDefined(vessel.speed, vessel.SOG, metadata.speed, metadata.SOG),
+        serviceSpeedKnots: firstDefined(vessel.serviceSpeed, vessel.service_speed, metadata.serviceSpeed, metadata.service_speed),
+        visualRadiusNm: requestedPolRadiusNm,
+      });
+      const isCommercialTransitCandidate = matchingMode && commercialTransit.candidate;
+      if (!isGlobalNameSearch && selectedPolTarget && !insidePolGeofence && !insideRouteCorridor && !isCommercialTransitCandidate) return null;
       const isPolOperationalMatch = distanceToPol !== null && distanceToPol <= requestedPolRadiusNm && loadState === "Laden";
       const isPodOperationalMatch = distanceToPod !== null && distanceToPod <= POD_VISUAL_RADIUS_NM && loadState === "Ballast";
       if (selective && !isGlobalNameSearch && nearestVisual?.role === "POL" && !isPolOperationalMatch) return null;
@@ -553,7 +597,9 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
       }
 
       const nearest = nearestVisual || nearestByDistance;
-      const matchZone = isProjectionCandidate
+      const matchZone = isCommercialTransitCandidate && commercialTransit.longDistance
+        ? "LONG_DISTANCE_POL"
+        : isProjectionCandidate
         ? "PROJECTION"
         : isGlobalNameSearch
           ? "GLOBAL"
@@ -567,7 +613,6 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
             : null;
       const imo = String(firstDefined(vessel.IMO, vessel.imo, metadata.IMO, "") || "").trim();
       const lastPort = String(firstDefined(vessel.lastPortOfCall, vessel.last_port_of_call, vessel.ultimo_puerto, metadata.lastPortOfCall, metadata.ultimo_puerto, "") || "").trim() || "N/A";
-      const aisEta = normalizeEta(vessel, nearest);
       const driftHours = etaDriftHours(aisEta, projection?.etaProjected);
       const isCompatible = evaluateCommercialCompatibility(vessel, url);
 
@@ -586,7 +631,11 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
         etaDesfase: driftHours !== null && driftHours > 6,
         projection,
         projectionCandidate: isProjectionCandidate,
-        aisMarkerStyle: matchZone === "GLOBAL" ? "standard" : (isProjectionCandidate ? "ghost" : "focus"),
+        commercialTransitCandidate: isCommercialTransitCandidate,
+        longDistanceTransitToPol: isCommercialTransitCandidate && commercialTransit.longDistance,
+        operationalLabel: isCommercialTransitCandidate && commercialTransit.longDistance ? LONG_DISTANCE_TRANSIT_LABEL : null,
+        commercialTransit,
+        aisMarkerStyle: matchZone === "GLOBAL" ? "standard" : ((isProjectionCandidate || commercialTransit.longDistance) ? "ghost" : "focus"),
         aisRouteCorridor: routeCorridor || undefined,
         lastPortOfCall: lastPort,
         last_port_of_call: lastPort,
@@ -611,7 +660,11 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
           etaDesfase: driftHours !== null && driftHours > 6,
           projection,
           projectionCandidate: isProjectionCandidate,
-          aisMarkerStyle: matchZone === "GLOBAL" ? "standard" : (isProjectionCandidate ? "ghost" : "focus"),
+          commercialTransitCandidate: isCommercialTransitCandidate,
+          longDistanceTransitToPol: isCommercialTransitCandidate && commercialTransit.longDistance,
+          operationalLabel: isCommercialTransitCandidate && commercialTransit.longDistance ? LONG_DISTANCE_TRANSIT_LABEL : null,
+          commercialTransit,
+          aisMarkerStyle: matchZone === "GLOBAL" ? "standard" : ((isProjectionCandidate || commercialTransit.longDistance) ? "ghost" : "focus"),
           aisRouteCorridor: routeCorridor || undefined,
           lastPortOfCall: lastPort,
           ultimo_puerto: lastPort,
@@ -627,7 +680,22 @@ function filterSelectiveVessels(url: URL, vessels: VesselMessage[]) {
       return enriched;
     })
     .filter((vessel): vessel is VesselMessage & { distanceNm: number | null } => vessel !== null)
-    .sort((a, b) => Number(a.distanceNm ?? 9999) - Number(b.distanceNm ?? 9999))
+    .sort((a, b) => compareCommercialVesselRanks(
+      buildCommercialVesselRank({
+        vesselDwt: firstDefined(a.dwt, a.DWT, asRecord(a.MetaData).dwt, asRecord(a.MetaData).DWT),
+        targetCargoDwt,
+        laycanCompliant: asRecord(a.commercialTransit).etaWithinLaycan,
+        transitHours: asRecord(a.commercialTransit).transitHours,
+        distanceNm: a.distanceToPolNm ?? a.distanceNm,
+      }),
+      buildCommercialVesselRank({
+        vesselDwt: firstDefined(b.dwt, b.DWT, asRecord(b.MetaData).dwt, asRecord(b.MetaData).DWT),
+        targetCargoDwt,
+        laycanCompliant: asRecord(b.commercialTransit).etaWithinLaycan,
+        transitHours: asRecord(b.commercialTransit).transitHours,
+        distanceNm: b.distanceToPolNm ?? b.distanceNm,
+      }),
+    ))
     .slice(0, numberParam(url, ["quantity", "limit"], DEFAULT_QUANTITY));
 }
 
@@ -891,7 +959,8 @@ async function readStoredVesselMessages(limit: number, url?: URL) {
     const polLon = pol?.lon ?? (url ? normalizeNumber(url.searchParams.get("polLon")) : undefined);
     const requestedRadius = url ? numberParam(url, ["radiusNm", "radius_nm"], POL_VISUAL_RADIUS_NM) : POL_VISUAL_RADIUS_NM;
     const radiusNm = Math.min(2000, Math.max(25, requestedRadius));
-    const storedRows = polLat !== undefined && polLon !== undefined
+    const commercialTransitScan = url && ["1", "true", "yes"].includes(textParam(url, ["matchingMode", "commercialTransit"], "0").toLowerCase());
+    const storedRows = polLat !== undefined && polLon !== undefined && !commercialTransitScan
       ? await readVesselsNearPoint(polLat, polLon, radiusNm, limit)
       : (await readVessels()).slice(0, limit);
     return storedRows.map(fromVesselRecord);

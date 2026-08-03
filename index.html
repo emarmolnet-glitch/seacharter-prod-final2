@@ -13773,14 +13773,14 @@
                         </div>
                         <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 mb-4">
                             <label class="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-slate-600 cursor-pointer">
-                                <input type="checkbox" id="hide-technical-problems-toggle" class="rounded border-slate-300 text-[#004e64] focus:ring-[#004e64]" checked>
-                                <span>Filtro técnico estricto</span>
+                                <input type="checkbox" id="hide-technical-problems-toggle" class="rounded border-slate-300 text-[#004e64] focus:ring-[#004e64]" disabled aria-disabled="true" aria-checked="false">
+                                <span>Filtro técnico estricto · desactivado</span>
                             </label>
                             <div class="flex flex-wrap items-center gap-2">
                                 <button id="debug-dwt-filter-toggle" type="button" onclick="toggleMatchingDwtDebugMode()" aria-pressed="false" class="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-800 transition hover:bg-amber-100 focus:ring-2 focus:ring-amber-300">
                                     Modo Debug Filtros
                                 </button>
-                                <span id="technical-problems-toggle-status" class="text-[10px] font-semibold text-slate-400">Excluye DWT/tipo incompatibles y demás fallos técnicos</span>
+                                <span id="technical-problems-toggle-status" class="text-[10px] font-semibold text-slate-400">Todos los candidatos se muestran con sus advertencias técnicas</span>
                             </div>
                         </div>
                         <div id="matching-source-integrity" class="hidden mb-4 rounded-lg border px-3 py-2 text-[11px]" role="status" aria-live="polite"></div>
@@ -19648,6 +19648,46 @@
             checkedAt: null
         }, window.matchingLocalState || {});
         window.matchingLocalInFlightRequests = window.matchingLocalInFlightRequests || new Map();
+        window.matchingStrictTechnicalFilter = false;
+
+        window.getCommercialTargetCargoDwt = function() {
+            const candidates = [
+                document.getElementById('match-quantity')?.value,
+                document.getElementById('cargo-qty')?.value,
+                window.GlobalStore?.matchingRequest?.cargo?.quantity,
+                window.GlobalStore?.calculatedState?.cargoQty,
+                window.SeaCharterStore?.getState?.()?.cargoQty,
+                typeof State !== 'undefined' ? State.cargoQty : null
+            ];
+            const target = candidates.map(Number).find(value => Number.isFinite(value) && value > 0);
+            return target || 0;
+        };
+
+        window.buildCommercialVesselRank = function({ vesselDwt, targetCargoDwt, laycanCompliant, transitHours, distanceNm }) {
+            const dwt = Number(vesselDwt);
+            const target = Number(targetCargoDwt);
+            const hasDwtFit = Number.isFinite(dwt) && dwt > 0 && Number.isFinite(target) && target > 0;
+            const dwtDifferenceMt = hasDwtFit ? Math.abs(dwt - target) : Infinity;
+            const similarityStepMt = Number.isFinite(target) && target > 0 ? Math.max(500, target * 0.05) : 500;
+            return {
+                targetCargoDwt: Number.isFinite(target) && target > 0 ? target : null,
+                vesselDwt: Number.isFinite(dwt) && dwt > 0 ? dwt : null,
+                dwtDifferenceMt: Number.isFinite(dwtDifferenceMt) ? dwtDifferenceMt : null,
+                dwtSimilarityBand: Number.isFinite(dwtDifferenceMt) ? Math.floor(dwtDifferenceMt / similarityStepMt) : Number.MAX_SAFE_INTEGER,
+                dwtFitPercent: hasDwtFit ? Math.max(0, 100 - (dwtDifferenceMt / target) * 100) : null,
+                laycanCompliant: laycanCompliant === true,
+                laycanPriority: laycanCompliant === true ? 0 : laycanCompliant === false ? 2 : 1,
+                transitHours: Number.isFinite(Number(transitHours)) && Number(transitHours) >= 0 ? Number(transitHours) : null,
+                distanceNm: Number.isFinite(Number(distanceNm)) && Number(distanceNm) >= 0 ? Number(distanceNm) : null
+            };
+        };
+
+        window.compareCommercialVesselRanks = function(left, right) {
+            return (left.dwtDifferenceMt ?? Infinity) - (right.dwtDifferenceMt ?? Infinity)
+                || left.laycanPriority - right.laycanPriority
+                || (left.transitHours ?? Infinity) - (right.transitHours ?? Infinity)
+                || (left.distanceNm ?? Infinity) - (right.distanceNm ?? Infinity);
+        };
 
         async function requestMatchingLocal(operation, candidates, matchingPayload = null) {
             const requestBody = {
@@ -21050,7 +21090,7 @@
                         sourceTaxonomies: selectedVesselTaxonomies.slice()
                     },
                     searchMode: 'local_database',
-                    strictTechnicalFilter: document.getElementById('hide-technical-problems-toggle')?.checked === true,
+                    strictTechnicalFilter: false,
                     debugIncludeUnknownDwt: window.matchingDebugIncludeUnknownDwt === true,
                     matchRadiusNm: (window.AIS_PROSPECTION_RADII_NM && Number(window.AIS_PROSPECTION_RADII_NM.POL)) || 2000,
                     allowedSources: getAllowedMatchingSources(),
@@ -21258,13 +21298,9 @@
                     }
                 });
 
-                // Sort the deduplicated results by operational fit:
-                // DWT-compatible vessels first, then closest to POL, then better DWT utilization and score.
+                // Rank operational candidates by commercial hold fit: DWT proximity first,
+                // laycan/transit second and geographic distance only as the final tie-breaker.
                 deduplicatedMatches.sort((a, b) => {
-                    const eligibilityA = a.audit?.operationallyEligible === true ? 1 : 0;
-                    const eligibilityB = b.audit?.operationallyEligible === true ? 1 : 0;
-                    if (eligibilityA !== eligibilityB) return eligibilityB - eligibilityA;
-
                     const getDistanceToPol = (m) => {
                         if (!m.ais) return null;
                         if (m.ais.currentDistanceToLoadPort !== undefined && m.ais.currentDistanceToLoadPort !== null && !isNaN(m.ais.currentDistanceToLoadPort)) {
@@ -21276,46 +21312,41 @@
                         return null;
                     };
 
-                    const distA = getDistanceToPol(a);
-                    const distB = getDistanceToPol(b);
-
-                    const hasDistA = distA !== null && distA !== undefined && !isNaN(distA);
-                    const hasDistB = distB !== null && distB !== undefined && !isNaN(distB);
-
-                    // Handling Null Data: automatically move vessels without valid distance to the end
-                    if (!hasDistA && !hasDistB) return 0;
-                    if (!hasDistA) return 1;
-                    if (!hasDistB) return -1;
-
-                    const capacityA = a.compatibility?.capacityOk === true ? 1 : 0;
-                    const capacityB = b.compatibility?.capacityOk === true ? 1 : 0;
-                    if (capacityA !== capacityB) {
-                        return capacityB - capacityA;
-                    }
-
-                    if (distA !== distB) {
-                        return distA - distB;
-                    }
-
-                    const dwtFitA = Number(a.eficienciaDwt);
-                    const dwtFitB = Number(b.eficienciaDwt);
-                    const safeDwtFitA = Number.isFinite(dwtFitA) ? dwtFitA : -1;
-                    const safeDwtFitB = Number.isFinite(dwtFitB) ? dwtFitB : -1;
-                    if (safeDwtFitA !== safeDwtFitB) {
-                        return safeDwtFitB - safeDwtFitA;
-                    }
+                    const buildRank = (match) => window.buildCommercialVesselRank({
+                        vesselDwt: match.vessel?.dwt ?? match.ais?.dwt,
+                        targetCargoDwt: quantity,
+                        laycanCompliant: match.compatibility?.dateOk ?? match.commercialRank?.laycanCompliant,
+                        transitHours: Number(match.routing?.daysToLoadPort) * 24,
+                        distanceNm: getDistanceToPol(match)
+                    });
+                    const rankA = buildRank(a);
+                    const rankB = buildRank(b);
+                    const commercialOrder = window.compareCommercialVesselRanks(rankA, rankB);
+                    if (commercialOrder !== 0) return commercialOrder;
 
                     const scoreA = a.scores?.overall ?? a.score ?? 0;
                     const scoreB = b.scores?.overall ?? b.score ?? 0;
                     return scoreB - scoreA;
                 });
 
+                deduplicatedMatches.forEach((match, index) => {
+                    const distanceNm = Number(match.ais?.currentDistanceToLoadPort);
+                    match.commercialRank = {
+                        ...window.buildCommercialVesselRank({
+                            vesselDwt: match.vessel?.dwt ?? match.ais?.dwt,
+                            targetCargoDwt: quantity,
+                            laycanCompliant: match.compatibility?.dateOk ?? match.commercialRank?.laycanCompliant,
+                            transitHours: Number(match.routing?.daysToLoadPort) * 24,
+                            distanceNm
+                        }),
+                        position: index + 1
+                    };
+                });
+
                 const matches = deduplicatedMatches;
                 Object.freeze(matches);
-                const strictTechnicalFilter = document.getElementById('hide-technical-problems-toggle')?.checked === true;
-                const viableMatches = strictTechnicalFilter
-                    ? matches.filter(m => m.audit?.operationallyEligible === true || m.operationallyEligible === true)
-                    : matches.slice();
+                const strictTechnicalFilter = false;
+                const viableMatches = matches.slice();
                 Object.freeze(viableMatches);
                 const technicalWarningCount = Math.max(
                     Number(data.technicalWarningCount) || 0,
@@ -21419,6 +21450,19 @@
                         const isUndersized = dwtAssessmentStatus === 'INSUFFICIENT';
                         const isDwtUnknown = dwtAssessmentStatus === 'UNKNOWN';
                         const isValidCapacity = dwtAssessmentStatus === 'SUFFICIENT' && (requiredCargo <= 0 || vesselDwt <= requiredCargo * maxDwtTolerance);
+                        const commercialRank = m.commercialRank || window.buildCommercialVesselRank({
+                            vesselDwt,
+                            targetCargoDwt: requiredCargo,
+                            laycanCompliant: comp.dateOk,
+                            transitHours: Number(route.daysToLoadPort) * 24,
+                            distanceNm: ais.currentDistanceToLoadPort
+                        });
+                        const dwtDifferenceLabel = Number.isFinite(Number(commercialRank.dwtDifferenceMt))
+                            ? `Δ ${Number(commercialRank.dwtDifferenceMt).toLocaleString()} MT`
+                            : 'Δ DWT N/D';
+                        const dwtFitLabel = Number.isFinite(Number(commercialRank.dwtFitPercent))
+                            ? `${Number(commercialRank.dwtFitPercent).toFixed(1)}% ajuste`
+                            : 'Ajuste N/D';
                         const isValidImo = /^\d{7}$/.test(String(v.imo || '').replace(/\D/g, ''));
                         const requiresDueDiligence = isDwtUnknown || !isValidImo;
                         const hasDueDiligenceIdentity = isValidImo
@@ -21816,6 +21860,9 @@
                                             <span data-vessel-field="imo" ${!isValidImo ? 'data-missing-technical-warning="true"' : ''} class="text-[10px] ${isValidImo ? 'bg-slate-100 text-slate-500 border-slate-200' : 'bg-red-50 text-red-700 border-red-300'} font-mono font-bold px-1.5 py-0.5 rounded border">IMO ${isValidImo ? v.imo : 'PENDING'}</span>
                                             <span class="text-[10px] ${visual.bg} ${visual.color} font-bold px-1.5 py-0.5 rounded border border-current flex items-center gap-1">
                                                 <i class="${visual.icon}"></i> ${declaredVesselType}
+                                            </span>
+                                            <span data-commercial-dwt-rank="true" class="inline-flex items-center gap-1 rounded border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-black text-cyan-800" title="Ranking comercial: diferencia absoluta entre DWT y carga objetivo">
+                                                <i class="fa-solid fa-scale-balanced"></i> #${commercialRank.position || visibleRank} DWT · ${dwtDifferenceLabel} · ${dwtFitLabel}
                                             </span>
                                             ${sourceBadgesHtml}
                                         </div>
@@ -22432,9 +22479,10 @@
         updateMatchingDwtDebugButton();
 
         const technicalProblemsToggle = document.getElementById('hide-technical-problems-toggle');
-        if (technicalProblemsToggle && technicalProblemsToggle.dataset.matchingBound !== 'true') {
-            technicalProblemsToggle.dataset.matchingBound = 'true';
-            technicalProblemsToggle.addEventListener('change', rerunMatchingAfterFilterChange);
+        if (technicalProblemsToggle) {
+            technicalProblemsToggle.checked = false;
+            technicalProblemsToggle.disabled = true;
+            technicalProblemsToggle.setAttribute('aria-checked', 'false');
         }
 
         document.querySelectorAll('.matching-source-toggle').forEach((toggle) => {
@@ -25136,9 +25184,25 @@
             const loadingState = document.getElementById('matching-loading-state');
             if (!resultsList || !resultsBadge) return false;
 
-            const matches = Array.isArray(cachedMatches) && Object.isFrozen(cachedMatches)
-                ? cachedMatches
-                : Object.freeze(Array.isArray(cachedMatches) ? cachedMatches.slice() : []);
+            const targetCargoDwt = window.getCommercialTargetCargoDwt?.() || 0;
+            const frozenCachedMatches = Object.freeze(Array.isArray(cachedMatches) ? cachedMatches.slice() : []);
+            const rankedCachedMatches = frozenCachedMatches
+                .map(match => {
+                    const vessel = match?.vessel || {};
+                    const ais = match?.ais || {};
+                    const routing = match?.routing || {};
+                    const commercialRank = window.buildCommercialVesselRank({
+                        vesselDwt: vessel.dwt ?? ais.dwt,
+                        targetCargoDwt,
+                        laycanCompliant: match?.compatibility?.dateOk ?? match?.commercialRank?.laycanCompliant,
+                        transitHours: Number(routing.daysToLoadPort) * 24,
+                        distanceNm: ais.currentDistanceToLoadPort
+                    });
+                    return { ...match, commercialRank };
+                })
+                .sort((a, b) => window.compareCommercialVesselRanks(a.commercialRank, b.commercialRank))
+                .map((match, index) => ({ ...match, commercialRank: { ...match.commercialRank, position: index + 1 } }));
+            const matches = Object.freeze(rankedCachedMatches);
             const renderedMatches = setRenderedMatchingVessels(matches, { source: 'matching-cache' });
             renderMatchingSourceCounts(renderedMatches);
             const cachedCount = renderedMatches.length;
@@ -25155,7 +25219,7 @@
             const renderCycle = beginMatchingResultsRender();
             resultsList.classList.add('hidden');
             loadingState?.classList.remove('hidden');
-            void renderMatchingResultsInChunks(resultsList, renderedMatches, (match, index) => {
+            void renderMatchingResultsInChunks(resultsList, matches, (match, index) => {
                 const vessel = match.vessel || {};
                 const ais = match.ais || {};
                 const scores = match.scores || {};
@@ -25164,6 +25228,7 @@
                 const dwt = Number(vessel.dwt) || 0;
                 const distance = Number(ais.currentDistanceToLoadPort);
                 const score = Number(scores.overall) || 0;
+                const dwtDifference = Number(match.commercialRank?.dwtDifferenceMt);
                 window.matchingMapFocusPayloads = window.matchingMapFocusPayloads || {};
                 const mapFocusId = `matching-cache-focus-${index}-${String(imo || vesselName).replace(/[^a-z0-9_-]/gi, '')}`;
                 window.matchingMapFocusPayloads[mapFocusId] = match;
@@ -25174,6 +25239,7 @@
                                 <p class="text-[10px] font-black uppercase tracking-wider text-[#004e64]">Resultado #${index + 1} · Caché validada</p>
                                 <h4 class="mt-1 truncate text-sm font-black text-slate-800">${escapeHtml(vesselName)}</h4>
                                 <p class="mt-1 text-[11px] text-slate-500">IMO ${escapeHtml(imo)} · DWT ${dwt > 0 ? dwt.toLocaleString() : 'N/D'} MT</p>
+                                <p data-commercial-dwt-rank="true" class="mt-1 text-[10px] font-black text-cyan-700">#${match.commercialRank?.position || index + 1} ajuste DWT · ${Number.isFinite(dwtDifference) ? `Δ ${dwtDifference.toLocaleString()} MT` : 'DWT objetivo N/D'}</p>
                             </div>
                             <div class="shrink-0 text-right">
                                 <span class="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">${score > 0 ? `${score.toFixed(0)} pts` : 'En caché'}</span>
@@ -48355,7 +48421,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     return '';
                 }
                 const radiusNm = AIS_PROSPECTION_RADII_NM.POL;
-                const box = createAisBoxAroundPort(pol, radiusNm);
+                const captureRadiusNm = 6500;
+                const box = createAisBoxAroundPort(pol, captureRadiusNm);
                 if (!box) return '';
                 const zone = 'POL';
                 const boundedQuantity = Math.min(1000, Math.max(1, Number(quantity) || 500));
@@ -48367,9 +48434,27 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     polLat: String(pol.lat),
                     polLon: String(pol.lon),
                     radiusNm: String(radiusNm),
+                    captureRadiusNm: String(captureRadiusNm),
                     coords_pol: JSON.stringify([pol.lat, pol.lon]),
-                    boxes: JSON.stringify([box])
+                    boxes: JSON.stringify([box]),
+                    polName: pol.name || document.getElementById('port-pol')?.value || '',
+                    matchingMode: '1',
+                    targetCargoDwt: String(window.getCommercialTargetCargoDwt?.() || 0)
                 });
+                const laycanStart = document.getElementById('match-laycan-start')?.value
+                    || document.getElementById('gc-laycan-date')?.value
+                    || document.getElementById('asb-laycan-date')?.value
+                    || document.getElementById('map-laycan-date')?.value
+                    || '';
+                const laycanEnd = document.getElementById('match-laycan-end')?.value
+                    || document.getElementById('gc-cancel-date')?.value
+                    || document.getElementById('asb-cancel-date')?.value
+                    || document.getElementById('map-cancelling-date')?.value
+                    || laycanStart;
+                const compatiblePorts = getRouteAisScanTargets('POL').map(target => target.name).filter(Boolean);
+                if (laycanStart) params.set('laycanStart', laycanStart);
+                if (laycanEnd) params.set('laycanEnd', laycanEnd);
+                if (compatiblePorts.length > 0) params.set('compatiblePorts', JSON.stringify(compatiblePorts));
                 const selectedTaxonomies = typeof getSelectedFleetTaxonomies === 'function'
                     ? getSelectedFleetTaxonomies()
                     : ['category:cargo'];
@@ -49819,6 +49904,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             function evaluateSmartVesselAlert(vessel, polPort) {
                 const polName = document.getElementById('port-pol')?.value || window.State?.pol || '';
+                if (vessel?.longDistanceTransitToPol === true || vessel?.MetaData?.longDistanceTransitToPol === true) {
+                    const projectedEta = parseSmartAlertDate(vessel?.commercialTransit?.projectedEta || vessel?.MetaData?.commercialTransit?.projectedEta);
+                    return {
+                        level: 'ok',
+                        label: 'En tránsito de larga distancia hacia POL',
+                        detail: projectedEta
+                            ? `Tránsito viable · ETA ${projectedEta.toISOString().slice(0, 10)}`
+                            : 'Destino AIS y laycan compatibles'
+                    };
+                }
                 if (!destinationMatchesPol(vessel, polName)) return null;
 
                 const issues = [];
@@ -49917,7 +50012,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const coords = (window.MapLoader && typeof window.MapLoader.normalizeCoordinates === 'function')
                         ? window.MapLoader.normalizeCoordinates(v)
                         : [parseFloat((v.MetaData && v.MetaData.latitude) || v.latitude || 0), parseFloat((v.MetaData && v.MetaData.longitude) || v.longitude || 0)];
-                    if (!coords) return false;
+                    if (!coords) return true;
                     const [lat, lon] = coords;
 
                     if (window.MapLoader && typeof window.MapLoader.isValidWaterPosition === 'function') {
@@ -49931,6 +50026,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
                 const polPort = getAisOperationalPort('POL');
                 const podPort = getAisOperationalPort('POD');
+                const targetCargoDwt = window.getCommercialTargetCargoDwt?.() || 0;
                 const normalizedVessels = filteredVessels.map(v => {
                     const name = v.vesselName || v.ShipName || (v.MetaData && v.MetaData.ShipName) || "Desconocido";
                     const mmsi = v.mmsi || v.MMSI || (v.MetaData && v.MetaData.MMSI) || "N/A";
@@ -49939,7 +50035,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const coords = v.noAisSignal
                         ? [NaN, NaN]
                         : (window.MapLoader && typeof window.MapLoader.normalizeCoordinates === 'function')
-                        ? window.MapLoader.normalizeCoordinates(v)
+                        ? (window.MapLoader.normalizeCoordinates(v) || [NaN, NaN])
                         : [parseFloat((v.MetaData && v.MetaData.latitude) || v.latitude || 38.0), parseFloat((v.MetaData && v.MetaData.longitude) || v.longitude || 15.0)];
                     const [lat, lon] = coords;
                     const speed = parseFloat(v.speed !== undefined ? v.speed : (v.MetaData && v.MetaData.speed) || 0);
@@ -49957,6 +50053,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const shipTypeVal = v.ShipType || v.shipType || (v.MetaData && (v.MetaData.ShipType || v.MetaData.shipType));
                     const classification = classifyBulkCarrierRealTime(rawDwt, name, mmsi, imo, shipTypeVal);
                     const zoneMatch = assignAisProspectionZone({ ...v, latitude: lat, longitude: lon }, polPort, podPort);
+                    const longDistanceTransitToPol = v.longDistanceTransitToPol === true || v.MetaData?.longDistanceTransitToPol === true;
                     const enrichedVessel = typeof hydrateRadarVesselCargoType === 'function' ? hydrateRadarVesselCargoType(v) : v;
                     const fleetIntelMatch = markFleetIntelVessel(enrichedVessel);
                     const fleetIntelTechnical = fleetIntelMatch && typeof getFleetIntelTechnicalRecord === 'function'
@@ -49969,6 +50066,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         : cementSignal.level === 'possible'
                         ? 'Possible Cement Carrier'
                         : normalizeRadarCategory(readRadarCategorySource(enrichedVessel), classifyVesselCategory(rawDwt, name, mmsi, imo, shipTypeVal));
+                    const distanceToPol = Number.isFinite(Number(v.distanceToPolNm))
+                        ? Number(v.distanceToPolNm)
+                        : (zoneMatch && Number.isFinite(zoneMatch.distanceToPol) ? zoneMatch.distanceToPol : undefined);
+                    const transitHours = Number(v.commercialTransit?.transitHours ?? v.MetaData?.commercialTransit?.transitHours);
+                    const fallbackTransitHours = Number.isFinite(distanceToPol) ? distanceToPol / (speed > 0 ? speed : 12) : null;
+                    const commercialRank = window.buildCommercialVesselRank({
+                        vesselDwt: classification.dwt,
+                        targetCargoDwt,
+                        laycanCompliant: v.commercialTransit?.etaWithinLaycan ?? v.MetaData?.commercialTransit?.etaWithinLaycan,
+                        transitHours: Number.isFinite(transitHours) ? transitHours : fallbackTransitHours,
+                        distanceNm: distanceToPol
+                    });
 
                     return {
                         ...enrichedVessel,
@@ -49994,32 +50103,43 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         cementCarrierClassification: cementSignal,
                         cementCarrierCandidate: cementSignal.level,
                         fleetIntelTechnical,
-                        aisRadarZone: zoneMatch ? zoneMatch.zone : 'ROUTE',
-                        aisRadarColor: zoneMatch ? zoneMatch.color : '#3b82f6',
+                        aisRadarZone: longDistanceTransitToPol ? 'LONG_DISTANCE_POL' : (zoneMatch ? zoneMatch.zone : 'ROUTE'),
+                        aisRadarColor: longDistanceTransitToPol ? '#38bdf8' : (zoneMatch ? zoneMatch.color : '#3b82f6'),
                         aisNodeName: zoneMatch ? zoneMatch.nodeName : undefined,
                         aisNodeRegion: zoneMatch ? zoneMatch.nodeRegion : undefined,
                         distanceToPolNode: zoneMatch && Number.isFinite(zoneMatch.distanceToPolNode) ? zoneMatch.distanceToPolNode : undefined,
                         distanceToPodNode: zoneMatch && Number.isFinite(zoneMatch.distanceToPodNode) ? zoneMatch.distanceToPodNode : undefined,
                         fleetIntelMatch,
-                        distanceToPol: zoneMatch && Number.isFinite(zoneMatch.distanceToPol) ? zoneMatch.distanceToPol : undefined,
+                        distanceToPol,
                         distanceToPod: zoneMatch && Number.isFinite(zoneMatch.distanceToPod) ? zoneMatch.distanceToPod : undefined,
+                        commercialRank,
+                        hasIncompleteRadarData: !Number.isFinite(lat)
+                            || !Number.isFinite(lon)
+                            || rawDwt === 'N/A'
+                            || !shipTypeVal
+                            || String(shipTypeVal).toLowerCase() === 'unknown',
                         NavigationalStatus: statusVal,
                         noAisSignal: !!v.noAisSignal,
                         timestamp: v.timestamp || v.lastSeen || v.created_at || v.createdAt || Date.now()
                     };
                 });
-                const polPrimaryVessels = normalizedVessels
-                    .filter(v => v.aisRadarZone === 'POL')
-                    .sort((a, b) => {
-                        const aSpeed = Number(a.speed) > 0 ? Number(a.speed) : 12;
-                        const bSpeed = Number(b.speed) > 0 ? Number(b.speed) : 12;
-                        const aEta = Number.isFinite(a.distanceToPol) ? a.distanceToPol / aSpeed : Infinity;
-                        const bEta = Number.isFinite(b.distanceToPol) ? b.distanceToPol / bSpeed : Infinity;
-                        return aEta - bEta;
-                    });
-                const visibleCandidates = (strictFleetMode || polPrimaryVessels.length > 0)
-                    ? (strictFleetMode ? normalizedVessels : polPrimaryVessels)
-                    : normalizedVessels;
+                const commerciallyRankedVessels = normalizedVessels.slice().sort((a, b) =>
+                    window.compareCommercialVesselRanks(a.commercialRank, b.commercialRank)
+                );
+                commerciallyRankedVessels.forEach((vessel, index) => {
+                    vessel.commercialRank = { ...vessel.commercialRank, position: index + 1 };
+                });
+                const polPrimaryVessels = commerciallyRankedVessels
+                    .filter(v => v.aisRadarZone === 'POL' || v.aisRadarZone === 'LONG_DISTANCE_POL');
+                polPrimaryVessels.forEach((vessel, index) => {
+                    vessel.commercialRank = { ...vessel.commercialRank, position: index + 1 };
+                });
+                const incompleteRadarVessels = commerciallyRankedVessels.filter(v => v.hasIncompleteRadarData === true);
+                const visibleCandidates = strictFleetMode
+                    ? commerciallyRankedVessels
+                    : (polPrimaryVessels.length > 0
+                        ? [...polPrimaryVessels, ...incompleteRadarVessels.filter(v => !polPrimaryVessels.includes(v))]
+                        : commerciallyRankedVessels);
                 const visibleVesselsByKey = new Map();
                 visibleCandidates.forEach((vessel, index) => {
                     const key = String(
@@ -50110,7 +50230,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                                 : '<span class="text-amber-300 font-black">Sin señal</span>';
                             const smartAlert = evaluateSmartVesselAlert(v, polPort);
                             tr.innerHTML = `
-                                <td class="py-3 px-3 font-semibold text-slate-200">${v.vesselName}</td>
+                                <td class="py-3 px-3 font-semibold text-slate-200">${v.vesselName}<span data-radar-dwt-rank="true" class="mt-1 block text-[10px] font-black text-cyan-300">#${v.commercialRank?.position || '-'} ajuste DWT · ${Number.isFinite(Number(v.commercialRank?.dwtDifferenceMt)) ? `Δ ${Number(v.commercialRank.dwtDifferenceMt).toLocaleString()} MT` : 'DWT objetivo N/D'}</span></td>
                                 <td class="py-3 px-3 text-slate-400 mono">${v.imo}</td>
                                 <td class="py-3 px-3 text-slate-400 mono">${positionLabel}</td>
                                 <td class="py-3 px-3 text-slate-400 mono">${v.speed} kn <span class="text-[10px] text-emerald-400 block">${v.statusLabel}</span></td>

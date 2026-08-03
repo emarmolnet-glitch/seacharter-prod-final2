@@ -48,6 +48,7 @@ export async function listPaginatedMatchingSources(
   latitude: number | null,
   longitude: number | null,
   radiusNm: number,
+  targetCargoDwt: number | null,
   limit = 50,
   offset = 0,
 ): Promise<PaginatedMatchingSources> {
@@ -138,21 +139,37 @@ export async function listPaginatedMatchingSources(
         SELECT *
         FROM source_rows
         WHERE source_system = ANY($1::text[])
-          AND (source_system = 'DATABRIDGE' OR distance_nm <= $4)
+          AND (
+            source_system = 'DATABRIDGE'
+            OR distance_nm <= $4
+            OR payload->>'longDistanceTransitToPol' = 'true'
+            OR payload#>>'{MetaData,longDistanceTransitToPol}' = 'true'
+            OR payload->>'commercialTransitCandidate' = 'true'
+            OR payload#>>'{MetaData,commercialTransitCandidate}' = 'true'
+          )
       ), ranked_sources AS (
         SELECT *, ROW_NUMBER() OVER (
           PARTITION BY source_system
-          ORDER BY sort_at DESC NULLS LAST, payload->>'mmsi', payload->>'vessel_name'
+          ORDER BY
+            CASE
+              WHEN $5::double precision IS NULL THEN NULL
+              WHEN COALESCE(payload->>'dwt', payload->>'DWT') ~ '^[0-9]+([.][0-9]+)?$'
+              THEN ABS(COALESCE(payload->>'dwt', payload->>'DWT')::double precision - $5)
+              ELSE NULL
+            END ASC NULLS LAST,
+            sort_at DESC NULLS LAST,
+            payload->>'mmsi',
+            payload->>'vessel_name'
         ) AS source_position
         FROM filtered_sources
       )
       SELECT source_system, payload, COUNT(*) OVER() AS total_count
       FROM ranked_sources
       ORDER BY source_position, source_system
-      LIMIT $5
-      OFFSET $6
+      LIMIT $6
+      OFFSET $7
     `,
-    [safeSources, safeLatitude, safeLongitude, safeRadius, safeLimit, safeOffset],
+    [safeSources, safeLatitude, safeLongitude, safeRadius, targetCargoDwt, safeLimit, safeOffset],
   );
   return {
     rows: result.rows,

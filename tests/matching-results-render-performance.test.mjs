@@ -39,7 +39,7 @@ test('matching results render progressively in observer-driven batches of fiftee
 
 test('read-only matching result arrays are shallow-frozen', () => {
   assert.match(executionSource, /const matches = deduplicatedMatches;[\s\S]*Object\.freeze\(matches\);/);
-  assert.match(executionSource, /const viableMatches = strictTechnicalFilter[\s\S]*matches\.filter[\s\S]*Object\.freeze\(viableMatches\);/);
+  assert.match(executionSource, /const strictTechnicalFilter = false;[\s\S]*const viableMatches = matches\.slice\(\);[\s\S]*Object\.freeze\(viableMatches\);/);
   assert.match(cachedRendererSource, /Object\.freeze\(Array\.isArray\(cachedMatches\) \? cachedMatches\.slice\(\) : \[\]\)/);
 });
 
