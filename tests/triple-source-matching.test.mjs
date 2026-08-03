@@ -46,7 +46,8 @@ test('source query filters Data Bridge, AIS, and OpenShips before applying limit
   assert.match(matchingDbSource, /WHERE source_system = ANY\(\$1::text\[\]\)/);
   assert.doesNotMatch(matchingDbSource, /active_source AS/);
   assert.doesNotMatch(matchingDbSource, /WHERE source_system = \(SELECT source_system FROM active_source\)/);
-  assert.match(matchingDbSource, /LIMIT \$5[\s\S]*OFFSET \$6/);
+  assert.match(matchingDbSource, /LIMIT \$6[\s\S]*OFFSET \$7/);
+  assert.match(matchingDbSource, /ABS\(COALESCE\(payload->>'dwt', payload->>'DWT'\)::double precision - \$5\)/);
   assert.match(matchingDbSource, /ROW_NUMBER\(\) OVER/);
 });
 
@@ -96,10 +97,10 @@ test('strict technical filtering exposes DWT assessment and compact-card penalti
   assert.match(indexSource, /DWT Desconocido/);
   assert.match(indexSource, /DWT Insuficiente/);
   assert.match(indexSource, /Vessel Type:/);
-  assert.match(indexSource, /strictTechnicalFilter: document\.getElementById\('hide-technical-problems-toggle'\)/);
+  assert.match(indexSource, /strictTechnicalFilter: false/);
   assert.match(indexSource, /Modo Debug Filtros/);
   assert.match(indexSource, /debugIncludeUnknownDwt: window\.matchingDebugIncludeUnknownDwt === true/);
   assert.match(filterSource, /debugUnknownDwtAllowed/);
-  assert.match(filterSource, /!strictTechnicalFilter && vessel\.isOpenShipsSource && isUnknownTechnicalValue\(vessel\.shipType\)/);
+  assert.match(filterSource, /!strictTechnicalFilter && isUnknownTechnicalValue\(vessel\.shipType\)/);
   assert.match(filterSource, /operationallyEligible = taxonomyCompatibility\.compatible !== false[\s\S]*!strictTechnicalFilter/);
 });
