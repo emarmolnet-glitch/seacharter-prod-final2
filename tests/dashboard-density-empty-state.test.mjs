@@ -38,9 +38,18 @@ test('density module blocks automatic AIS reads until POL coordinates exist', ()
 
 test('density globe starts from a neutral global camera without a POL', () => {
   assert.match(indexSource, /initialView: densityPolCoordinates[\s\S]*\{ lat: 20, lng: 0, altitude: 2\.45 \}/);
-  assert.match(indexSource, /const openShipsData = densityPolCoordinates[\s\S]*\? normalizeDensityVesselCollection\(window\.openShipsVesselsCache\)[\s\S]*: \[\]/);
+  assert.match(indexSource, /const openShipsData = densityPolCoordinates[\s\S]*\? getDensityMapSourceVessels\(\)[\s\S]*: \[\]/);
   assert.match(indexSource, /setView\(\[20\.0, 0\.0\], 2\)/);
   assert.match(globeSource, /function normalizeInitialView\(value\)/);
   assert.match(globeSource, /const initialView = normalizeInitialView\(options\.initialView\)/);
-  assert.match(globeSource, /view\.globe\.pointOfView\(view\.initialView, 0\)/);
+  assert.match(globeSource, /view\.globe\.pointOfView\(view\.initialView, view\.initialViewDuration\)/);
+});
+
+test('density globe flies close to the POL only on its initial mount', () => {
+  assert.match(indexSource, /\{ lat: densityPolCoordinates\.lat, lng: densityPolCoordinates\.lon, altitude: 0\.15 \}/);
+  assert.match(indexSource, /initialViewDuration: densityPolCoordinates \? 1000 : 0/);
+  assert.match(indexSource, /focusFirstVessel: false/);
+  assert.match(indexSource, /focusActiveVesselOnMount: false/);
+  assert.match(globeSource, /altitude: Math\.max\(0\.15, altitude \?\? INITIAL_VIEW\.altitude\)/);
+  assert.match(globeSource, /initialViewDuration: Math\.max\(0, toFiniteNumber\(options\.initialViewDuration, 0\) \|\| 0\)/);
 });

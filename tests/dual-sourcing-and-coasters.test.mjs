@@ -54,11 +54,12 @@ test('Triple-Sourcing: client merge deduplicates by IMO or name plus DWT and pri
   assert.equal(fallbackMerged[0].latitude, 10);
 });
 
-test('Map Visual Differentiation: GlobalFleetGlobe applies distinct point colors and tooltip badges per data_source', async (t) => {
+test('Map Visual Differentiation: GlobalFleetGlobe applies semantic vessel colors and keeps source badges', async (t) => {
   const globeSource = await readFile(new URL('../GlobalFleetGlobe.js', import.meta.url), 'utf8');
 
-  assert.match(globeSource, /DATABRIDGE_POINT_COLOR/, 'GlobalFleetGlobe should define DATABRIDGE_POINT_COLOR');
-  assert.match(globeSource, /RADAR_LIVE_POINT_COLOR/, 'GlobalFleetGlobe should define RADAR_LIVE_POINT_COLOR');
+  assert.match(globeSource, /COMMERCIAL_VESSEL_COLOR/, 'GlobalFleetGlobe should define the commercial vessel color');
+  assert.match(globeSource, /TANKER_VESSEL_COLOR/, 'GlobalFleetGlobe should define the tanker vessel color');
+  assert.match(globeSource, /NOISE_VESSEL_COLOR/, 'GlobalFleetGlobe should define the non-commercial vessel color');
   assert.match(globeSource, /getVesselPointColor/, 'GlobalFleetGlobe should define getVesselPointColor');
   assert.match(globeSource, /🏷️ En Cartera \(Data Bridge\)/, 'Tooltip should display Data Bridge badge');
   assert.match(globeSource, /📡 Descubrimiento en Vivo \(Radar\)/, 'Tooltip should display Radar Live badge');

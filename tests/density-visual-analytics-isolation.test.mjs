@@ -18,8 +18,8 @@ const markerEnd = source.indexOf('const globalOpportunitiesState', markerStart);
 const markerSource = source.slice(markerStart, markerEnd);
 
 test('analytical AIS and visual fleet use separate state containers', () => {
-  assert.match(source, /window\.backgroundAisData = Array\.isArray\(window\.backgroundAisData\)/);
-  assert.match(source, /window\.renderFleet = Array\.isArray\(window\.renderFleet\)/);
+  assert.match(source, /window\.backgroundAisData = \[\]/);
+  assert.match(source, /window\.renderFleet = \[\]/);
   assert.match(source, /window\.setBackgroundAisData = function/);
   assert.match(source, /window\.setRenderFleet = function/);
 });
@@ -32,16 +32,17 @@ test('fair-freight loader preserves its network call without mutating visual sto
   assert.doesNotMatch(loaderSource, /ais:vessels-updated/);
 });
 
-test('priority cascade commits only its winning source into renderFleet', () => {
-  assert.match(densitySource, /if \(openShipsData\.length > 0\) return window\.setRenderFleet\(openShipsData\)/);
-  assert.match(densitySource, /if \(aisLiveData\.length > 0\) return window\.setRenderFleet\(aisLiveData\)/);
-  assert.match(densitySource, /if \(dataBridgeData\.length > 0\) return window\.setRenderFleet\(dataBridgeData\)/);
+test('commercial OpenShips funnel commits only viable ranked vessels into renderFleet', () => {
+  assert.match(densitySource, /window\.useCommercialFilter\(openShipsData/);
+  assert.match(densitySource, /capacityTolerance: 1\.05/);
+  assert.match(densitySource, /return window\.setRenderFleet\(commercialState\.filteredVessels\)/);
+  assert.match(densitySource, /return window\.setRenderFleet\(openShipsData\)/);
   assert.doesNotMatch(densitySource, /backgroundAisData/);
 });
 
 test('GlobalFleetGlobe receives only the OpenShips visual fleet and never backgroundAisData', () => {
   assert.match(source, /const openShipsData = normalizeDensityVesselCollection\(window\.openShipsVesselsCache\);[\s\S]*vesselsData: openShipsData/);
-  assert.match(markerSource, /const renderFleet = normalizeDensityVesselCollection\(window\.openShipsVesselsCache\)/);
+  assert.match(markerSource, /const renderFleet = getDensityMapSourceVessels\(\)/);
   assert.match(markerSource, /window\.GlobalFleetGlobe\.updateVessels\(window\.renderFleet, 'density'\)/);
   assert.doesNotMatch(markerSource, /backgroundAisData/);
 });
