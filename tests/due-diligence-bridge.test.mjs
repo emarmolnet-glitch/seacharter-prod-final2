@@ -244,6 +244,9 @@ test('backend external audit bypasses Neon cache and waits for explicit acceptan
   assert.match(backendSource, /if \(!externalOnly && result\.extracted/);
   assert.match(backendSource, /mode: externalOnly \? "public-source-audit"/);
   assert.match(backendSource, /requiresAcceptance: externalOnly/);
+  assert.match(backendSource, /externalOnly && !Number\(result\.data\.gross_tonnage\)/);
+  assert.match(backendSource, /grossTonnageRecoveredFromMaster/);
+  assert.match(backendSource, /grossTonnageRequired: !Number\(result\.data\.gross_tonnage\)/);
 });
 
 test('frontend normalization recognizes external labels for flag, length, and vessel type', () => {

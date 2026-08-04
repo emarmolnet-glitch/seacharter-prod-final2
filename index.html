@@ -12307,12 +12307,18 @@
                                         <th class="py-2.5 px-3">Posición</th>
                                         <th class="py-2.5 px-3">Velocidad</th>
                                         <th class="py-2.5 px-3">Clase</th>
+                                        <th class="py-2.5 px-3">GT</th>
+                                        <th class="py-2.5 px-3">DWT</th>
+                                        <th class="py-2.5 px-3">LOA</th>
+                                        <th class="py-2.5 px-3">Bandera</th>
+                                        <th class="py-2.5 px-3">Año</th>
                                         <th class="py-2.5 px-3">Alertas</th>
+                                        <th class="py-2.5 px-3 text-right">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody id="ais-vessels-tbody" class="divide-y divide-slate-800/50 text-xs">
                                     <tr>
-                                        <td colspan="6" class="py-8 text-center text-slate-500">
+                                        <td colspan="12" class="py-8 text-center text-slate-500">
                                             <i class="fa-solid fa-satellite-dish text-xl mb-2 animate-bounce block"></i>
                                             Haz clic en "Consultar Disponibilidad Real-Time" para iniciar la captura AIS del servidor
                                         </td>
@@ -46588,7 +46594,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             aisMarkers = [];
             const tbody = document.getElementById('ais-vessels-tbody');
             if (tbody) {
-                tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-500">Mapa limpio. Ejecuta una búsqueda POL/POD para iniciar un nuevo barrido.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="12" class="py-8 text-center text-slate-500">Mapa limpio. Ejecuta una búsqueda POL/POD para iniciar un nuevo barrido.</td></tr>`;
             }
             ['ais-density-count', 'buques-count'].forEach((id) => { const el = document.getElementById(id); if (el) el.innerText = '--'; });
             if (typeof window.renderAisTaxonomyBreakdown === 'function') {
@@ -47698,7 +47704,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (tbody) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" class="py-8 text-center text-rose-300 font-bold">
+                        <td colspan="12" class="py-8 text-center text-rose-300 font-bold">
                             Sin conexión AIS. Compruebe API Key o estado del servidor
                         </td>
                     </tr>
@@ -48643,6 +48649,32 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }[character]));
         }
 
+        function readDensityTechnicalValue(vessel, aliases) {
+            const metadata = vessel?.MetaData && typeof vessel.MetaData === 'object' ? vessel.MetaData : {};
+            for (const alias of aliases) {
+                const value = vessel?.[alias] ?? metadata?.[alias];
+                if (value !== null && value !== undefined && String(value).trim() !== '') return value;
+            }
+            return null;
+        }
+
+        function readDensityPositiveNumber(vessel, aliases) {
+            const rawValue = readDensityTechnicalValue(vessel, aliases);
+            const numericValue = Number(String(rawValue ?? '').replace(/[^\d.-]/g, ''));
+            return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : null;
+        }
+
+        function buildDensityDueDiligencePayload(vessel, vesselName, imo, latitude, longitude) {
+            return encodeURIComponent(JSON.stringify({
+                imo: imo === '-' ? '' : imo,
+                mmsi: readDensityTechnicalValue(vessel, ['mmsi', 'MMSI']) || '',
+                name: vesselName,
+                vesselName,
+                latitude: Number.isFinite(latitude) ? latitude : null,
+                longitude: Number.isFinite(longitude) ? longitude : null,
+            }));
+        }
+
         function renderDensityVesselsTable(vessels, options = {}) {
             const displayVessels = Array.isArray(vessels) ? vessels : [];
             const maxRows = Math.max(1, Number(options.maxRows) || 200);
@@ -48651,7 +48683,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (!tbody) return visibleRows;
             tbody.innerHTML = '';
             if (visibleRows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-500">${window.GlobalStore?.isGlobalDebugActive === true ? 'No hay barcos compatibles' : 'No se detectaron buques AIS activos.'}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="12" class="py-8 text-center text-slate-500">${window.GlobalStore?.isGlobalDebugActive === true ? 'No hay barcos compatibles' : 'No se detectaron buques AIS activos.'}</td></tr>`;
                 return visibleRows;
             }
             visibleRows.forEach(vessel => {
@@ -48662,23 +48694,45 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const speed = Number(vessel.speed ?? vessel.sog ?? vessel.SOG);
                 const vesselClass = vessel.vesselClass || vessel.vesselType || vessel.shipType || vessel.ShipType || 'Unknown';
                 const navigationStatus = vessel.statusLabel || vessel.navigationStatus || vessel.navigationalStatus || vessel.NavigationalStatus || '-';
+                const grossTonnage = readDensityPositiveNumber(vessel, ['grossTonnage', 'gross_tonnage', 'gt', 'GT']);
+                const dwt = readDensityPositiveNumber(vessel, ['dwt', 'DWT', 'deadweight']);
+                const loaMeters = readDensityPositiveNumber(vessel, ['loaMeters', 'loa_meters', 'loa', 'LOA', 'lengthOverall', 'length_overall', 'length']);
+                const flag = readDensityTechnicalValue(vessel, ['flag', 'Flag', 'bandera', 'country']) || '-';
+                const yearBuilt = readDensityTechnicalValue(vessel, ['yearBuilt', 'year_built', 'builtYear', 'built_year']) || '-';
+                const dueDiligencePayload = buildDensityDueDiligencePayload(vessel, vesselName, imo, latitude, longitude);
+                const commercialRank = Number(vessel.commercialRank?.position);
+                const dwtDifference = Number(vessel.commercialRank?.dwtDifferenceMt);
+                const commercialRankHtml = Number.isFinite(commercialRank) && commercialRank > 0
+                    ? `<span data-radar-dwt-rank="true" class="mt-1 block text-[10px] font-black text-cyan-300">#${commercialRank} ajuste DWT · ${Number.isFinite(dwtDifference) ? `Δ ${dwtDifference.toLocaleString('es-ES')} MT` : 'DWT objetivo N/D'}</span>`
+                    : '';
                 const position = Number.isFinite(latitude) && Number.isFinite(longitude)
                     ? `${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`
                     : 'Posición N/D';
                 const row = document.createElement('tr');
                 row.className = 'border-b border-slate-800/40 hover:bg-slate-900/30 transition-colors cursor-pointer';
+                row.dataset.densityCommercialMatch = 'true';
                 row.onclick = () => {
                     if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
                         window.selectShip?.(vesselName, vessel.mmsi, latitude, longitude, imo, vessel.destination, vessel);
                     }
                 };
                 row.innerHTML = `
-                    <td class="py-3 px-3 font-semibold text-slate-200">${escapeDensityTableText(vesselName)}</td>
+                    <td class="py-3 px-3 font-semibold text-slate-200">${escapeDensityTableText(vesselName)}${commercialRankHtml}</td>
                     <td class="py-3 px-3 text-slate-400 mono">${escapeDensityTableText(imo)}</td>
                     <td class="py-3 px-3 text-slate-400 mono">${escapeDensityTableText(position)}</td>
                     <td class="py-3 px-3 text-slate-400 mono">${Number.isFinite(speed) ? `${speed.toFixed(1)} kn` : '-'}<span class="text-[10px] text-emerald-400 block">${escapeDensityTableText(navigationStatus)}</span></td>
                     <td class="py-3 px-3"><span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700">${escapeDensityTableText(vesselClass)}</span></td>
-                    <td class="py-3 px-3"><span class="text-[10px] text-slate-500">${Number(vessel.dwt) > 0 ? `${Number(vessel.dwt).toLocaleString('es-ES')} DWT` : 'DWT N/D'}</span></td>`;
+                    <td class="py-3 px-3 font-bold ${grossTonnage ? 'text-cyan-300' : 'text-amber-400'}">${grossTonnage ? grossTonnage.toLocaleString('es-ES') : 'REQUERIDO'}</td>
+                    <td class="py-3 px-3 text-slate-300 mono">${dwt ? dwt.toLocaleString('es-ES') : 'N/D'}</td>
+                    <td class="py-3 px-3 text-slate-300 mono">${loaMeters ? `${loaMeters.toLocaleString('es-ES')} m` : 'N/D'}</td>
+                    <td class="py-3 px-3 text-slate-300">${escapeDensityTableText(flag)}</td>
+                    <td class="py-3 px-3 text-slate-300 mono">${escapeDensityTableText(yearBuilt)}</td>
+                    <td class="py-3 px-3"><span class="text-[10px] ${grossTonnage ? 'text-emerald-400' : 'font-bold text-amber-400'}">${grossTonnage ? 'Ficha técnica disponible' : 'GT pendiente de auditoría'}</span><p data-due-diligence-status class="mt-1 text-[9px] text-slate-500" aria-live="polite"></p></td>
+                    <td class="py-3 px-3 text-right">
+                        <button type="button" onclick="event.stopPropagation()" data-due-diligence-button data-due-diligence-mode="external-search" data-external-search="true" data-due-diligence-payload="${dueDiligencePayload}" class="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-cyan-300 transition hover:border-cyan-300 hover:bg-cyan-400/20 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Auditar ${escapeDensityTableText(vesselName)}">
+                            <i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span>Auditar</span>
+                        </button>
+                    </td>`;
                 tbody.appendChild(row);
             });
             window.GlobalStore?.setRenderedAisVessels?.(visibleRows, { source: 'density-display-vessels' });
@@ -51836,46 +51890,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     timestampEl.innerText = `Última actualización: ${new Date().toLocaleTimeString()}`;
                 }
 
-                const tbody = document.getElementById('ais-vessels-tbody');
-                if (tbody) {
-                    tbody.innerHTML = '';
-                    if (primaryVisibleVessels.length === 0) {
-                        tbody.innerHTML = `
-                            <tr>
-                                <td colspan="6" class="py-8 text-center text-slate-500">
-                                    No se detectaron buques AIS activos en la zona visible del mapa.
-                                </td>
-                            </tr>
-                        `;
-                    } else {
-                        primaryVisibleVessels.forEach(v => {
-                            const tr = document.createElement('tr');
-                            tr.className = "border-b border-slate-800/40 hover:bg-slate-900/30 transition-colors cursor-pointer";
-                            tr.onclick = () => {
-                                if (!v.noAisSignal) window.selectShip(v.vesselName, v.mmsi, v.latitude, v.longitude, v.imo, v.destination);
-                            };
-                            const hoverTitle = tooltipMap[v.vesselClass] || '';
-                            const vCategory = v.radarCategory || normalizeRadarCategory(readRadarCategorySource(v), classifyVesselCategory(v.dwt, v.vesselName, v.mmsi, v.imo, v.shipType || v.ShipType));
-                            const nodeLabel = String(v.aisRadarZone || '').startsWith('NODE')
-                                ? `<span class="text-[10px] text-orange-400 block font-bold">Nodo vecino: ${v.aisNodeName || v.aisNodeRegion || 'regional'}</span>`
-                                : '';
-                            const hasLiveCoords = Number.isFinite(Number(v.latitude)) && Number.isFinite(Number(v.longitude));
-                            const positionLabel = hasLiveCoords
-                                ? `${Number(v.latitude).toFixed(4)}°, ${Number(v.longitude).toFixed(4)}°${nodeLabel}`
-                                : '<span class="text-amber-300 font-black">Sin señal</span>';
-                            const smartAlert = evaluateSmartVesselAlert(v, polPort);
-                            tr.innerHTML = `
-                                <td class="py-3 px-3 font-semibold text-slate-200">${v.vesselName}<span data-radar-dwt-rank="true" class="mt-1 block text-[10px] font-black text-cyan-300">#${v.commercialRank?.position || '-'} ajuste DWT · ${Number.isFinite(Number(v.commercialRank?.dwtDifferenceMt)) ? `Δ ${Number(v.commercialRank.dwtDifferenceMt).toLocaleString()} MT` : 'DWT objetivo N/D'}</span></td>
-                                <td class="py-3 px-3 text-slate-400 mono">${v.imo}</td>
-                                <td class="py-3 px-3 text-slate-400 mono">${positionLabel}</td>
-                                <td class="py-3 px-3 text-slate-400 mono">${v.speed} kn <span class="text-[10px] text-emerald-400 block">${v.statusLabel}</span></td>
-                                <td class="py-3 px-3"><span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700 cursor-help" title="${hoverTitle}">${vCategory}</span></td>
-                                <td class="py-3 px-3">${renderSmartVesselAlert(smartAlert)}</td>
-                            `;
-                            tbody.appendChild(tr);
-                        });
-                    }
-                }
+                window.renderDensityVesselsTable?.(primaryVisibleVessels);
 
                 updateAisMarkers();
 
@@ -52299,26 +52314,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         targetMap.setView([36.5, 3.0], 7);
                     }
                     
-                    const tbody = document.getElementById('ais-vessels-tbody');
-                    if (tbody) {
-                        tbody.innerHTML = '';
-                        algerianVessels.forEach(v => {
-                            const tr = document.createElement('tr');
-                            tr.className = "border-b border-slate-800/40 hover:bg-slate-900/30 transition-colors cursor-pointer";
-                            tr.onclick = () => {
-                                window.selectShip(v.vesselName, v.mmsi, v.latitude, v.longitude);
-                            };
-                            const hoverTitle = tooltipMap[v.vesselClass] || '';
-                            tr.innerHTML = `
-                                <td class="py-3 px-3 font-semibold text-slate-200">${v.vesselName}</td>
-                                <td class="py-3 px-3 text-slate-400 mono">${v.imo}</td>
-                                <td class="py-3 px-3 text-slate-400 mono">${v.latitude.toFixed(4)}°, ${v.longitude.toFixed(4)}°</td>
-                                <td class="py-3 px-3 text-slate-400 mono">${v.speed} kn <span class="text-[10px] text-emerald-400 block">${v.statusLabel}</span></td>
-                                <td class="py-3 px-3"><span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700 cursor-help" title="${hoverTitle}">${v.vesselClass}</span></td>
-                            `;
-                            tbody.appendChild(tr);
-                        });
-                    }
+                    window.renderDensityVesselsTable?.(algerianVessels);
                     
                     if (targetMap) {
                         let opened = false;
@@ -53025,47 +53021,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 window.GlobalStore.setRenderedAisVessels(aisVesselsData, { source: 'central-ais-table' });
             }
 
-            const tbody = document.getElementById('ais-vessels-tbody');
-            if (tbody) {
-                tbody.innerHTML = '';
-
-                if (aisVesselsData.length === 0) {
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="6" class="py-8 text-center text-slate-500">
-                                No se detectaron buques AIS activos en la zona visible del mapa.
-                            </td>
-                        </tr>
-                    `;
-                    return;
-                }
-
-                aisVesselsData.forEach(v => {
-                    const tr = document.createElement('tr');
-                    tr.className = "border-b border-slate-800/40 hover:bg-slate-900/30 transition-colors cursor-pointer";
-                    tr.onclick = () => {
-                        window.selectShip(v.vesselName, v.mmsi, v.latitude, v.longitude, v.imo, v.destination);
-                    };
-                    const hoverTitle = v.cementCarrierClassification && v.cementCarrierClassification.level === 'possible'
-                        ? `Posible cement carrier por señales: ${(v.cementCarrierClassification.reasons || []).join(', ')}`
-                        : tooltipMap[v.vesselClass] || '';
-                    const vCategory = normalizeRadarCategory(readRadarCategorySource(v), classifyVesselCategory(v.dwt, v.vesselName, v.mmsi, v.imo, v.shipType || v.ShipType));
-                    const badgeClass = v.cementCarrierClassification && v.cementCarrierClassification.level === 'possible'
-                        ? 'bg-amber-900/40 text-amber-200 border-amber-700'
-                        : 'bg-slate-800 text-slate-300 border-slate-700';
-                    const polPort = typeof getAisOperationalPort === 'function' ? getAisOperationalPort('POL') : null;
-                    const smartAlert = typeof evaluateSmartVesselAlert === 'function' ? evaluateSmartVesselAlert(v, polPort) : null;
-                    tr.innerHTML = `
-                        <td class="py-3 px-3 font-semibold text-slate-200">${v.vesselName}</td>
-                        <td class="py-3 px-3 text-slate-400 mono">${v.imo}</td>
-                        <td class="py-3 px-3 text-slate-400 mono">${v.latitude.toFixed(4)}°, ${v.longitude.toFixed(4)}°</td>
-                        <td class="py-3 px-3 text-slate-400 mono">${v.speed} kn <span class="text-[10px] text-emerald-400 block">${v.statusLabel}</span></td>
-                        <td class="py-3 px-3"><span class="px-2 py-0.5 text-[10px] font-bold rounded border ${badgeClass} cursor-help" title="${hoverTitle}">${vCategory}</span></td>
-                        <td class="py-3 px-3">${typeof renderSmartVesselAlert === 'function' ? renderSmartVesselAlert(smartAlert) : '<span class="text-[10px] text-slate-600">-</span>'}</td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-            }
+            window.renderDensityVesselsTable?.(aisVesselsData);
 
             updateAisMarkers();
             
@@ -53835,28 +53791,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             // Keep only the 6 closest vessels
             const closestVessels = vesselsWithDist.slice(0, 6);
 
-            // Re-render the table with closest vessels and distances clearly displayed
-            const tbody = document.getElementById('ais-vessels-tbody');
-            if (tbody) {
-                tbody.innerHTML = '';
-                closestVessels.forEach(v => {
-                    const tr = document.createElement('tr');
-                    tr.className = "border-b border-slate-800/40 hover:bg-slate-900/30 transition-colors cursor-pointer";
-                    tr.onclick = () => {
-                        window.selectShip(v.vesselName, v.mmsi, v.latitude, v.longitude, v.imo, v.destination);
-                    };
-                    const hoverTitle = (typeof tooltipMap !== 'undefined' && tooltipMap[v.vesselClass]) || '';
-                    const vCategory = normalizeRadarCategory(readRadarCategorySource(v), classifyVesselCategory(v.dwt, v.vesselName, v.mmsi, v.imo, v.shipType || v.ShipType));
-                    tr.innerHTML = `
-                        <td class="py-3 px-3 font-semibold text-slate-200">${v.vesselName}</td>
-                        <td class="py-3 px-3 text-slate-400 mono">${v.imo}</td>
-                        <td class="py-3 px-3 text-slate-400 mono">${v.latitude.toFixed(4)}°, ${v.longitude.toFixed(4)}° <span class="text-[10px] text-indigo-400 block font-bold">${v.distanceToPol.toFixed(1)} NM a POL · ETA ${Math.round(v.etaHoursToPol)} h</span></td>
-                        <td class="py-3 px-3 text-slate-400 mono">${v.speed} kn <span class="text-[10px] text-emerald-400 block">${v.statusLabel}</span></td>
-                        <td class="py-3 px-3"><span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700 cursor-help" title="${hoverTitle}">${vCategory}</span></td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-            }
+            window.renderDensityVesselsTable?.(closestVessels, { maxRows: 6 });
 
         };
 

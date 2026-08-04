@@ -45,7 +45,8 @@ test('save action commits the exact array returned by the table redraw', () => {
 
 test('taxonomy change redraws the AIS table from the derived filtered array', () => {
   assert.match(source, /document\.getElementById\('fleet-intel-vessel-type'\)\?\.addEventListener\('change',[\s\S]*const selectedTaxonomies = getSelectedFleetTaxonomies\(\)[\s\S]*const filteredVessels = typeof window\.reapplyCentralFiltersAndRedraw[\s\S]*setVesselClassContext\(selectedTaxonomies, filteredVessels\)/);
-  assert.match(source, /const tbody = document\.getElementById\('ais-vessels-tbody'\)[\s\S]*primaryVisibleVessels\.forEach/);
+  assert.match(source, /window\.renderDensityVesselsTable\?\.\(primaryVisibleVessels\)/);
+  assert.match(source, /function renderDensityVesselsTable\(vessels/);
 });
 
 test('matching engine listener prepares the query but keeps execution locked without radar vessels', () => {
