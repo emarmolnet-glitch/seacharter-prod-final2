@@ -1,10 +1,14 @@
 import { calculateLaytime } from './laytime-engine.mjs';
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import DashboardExecutive from './src/components/DashboardExecutive.jsx';
 
 const TRACKING_POLL_INTERVAL = 30_000;
 const TRACKING_AIS_POLL_INTERVAL = 30_000;
 const TRACKING_MAP_KEY = 'tracking';
 
 const trackingState = {
+    activeTab: 'gis',
     contractRef: '',
     loading: false,
     pollTimer: null,
@@ -20,6 +24,33 @@ const trackingState = {
     routes: { ballast: [], laden: [] },
     laytimeStatements: [],
     laytimeIncidents: [],
+    executiveRoot: null,
+};
+
+const contractData = {
+    reference: 'RDM/2026-0604',
+    vessel: { name: 'NERMIN KARABEKIR', imo: 'IMO pendiente', status: 'Seguimiento GIS activo' },
+    pol: { name: 'Bejaia', country: 'Argelia' },
+    pod: { name: 'Aveiro', country: 'Portugal' },
+    cargo: { description: 'Carga seca', quantity: 'Cantidad por confirmar' },
+    phase: 'Tránsito comercial',
+    lastSync: 'Datos operativos consolidados',
+    laytime: {
+        allowedHours: 72,
+        usedHours: 64.5,
+        status: 'En Control',
+        demurrageRateUSD: 8500,
+        estimatedDemurrageUSD: 0,
+        balance: 'Sin demoras confirmadas',
+        exposure: 'USD 0',
+        terms: 'Sujeto a NOR y SOF',
+        operation: 'POL + POD',
+        allowed: 'Por confirmar',
+        used: 'En cálculo',
+        remaining: 'En cálculo',
+        progress: 42,
+    },
+    nextAction: 'Validar NOR y Statement of Facts',
 };
 
 function escapeTrackingHtml(value) {
@@ -142,6 +173,56 @@ function renderMilestoneMetrics(milestone) {
     return entries.slice(0, 5).map(([label, value]) => `<div class="tracking-step-metric"><span>${escapeTrackingHtml(metricLabel(label))}</span><strong>${escapeTrackingHtml(metricValue(label, value))}${escapeTrackingHtml(metricUnit(label))}</strong></div>`).join('');
 }
 
+function getExecutiveContractData() {
+    const source = trackingState.data || {};
+    const contract = source.contract || {};
+    const live = source.live || {};
+    const pol = contract.pol || {};
+    const pod = contract.pod || {};
+    return {
+        ...contractData,
+        reference: contract.reference || trackingState.contractRef || contractData.reference,
+        vessel: {
+            ...contractData.vessel,
+            name: contract.vesselName || contractData.vessel.name,
+            imo: contract.vesselImo ? `IMO ${contract.vesselImo}` : contractData.vessel.imo,
+        },
+        pol: { ...contractData.pol, ...pol, name: pol.name || pol.id || contractData.pol.name },
+        pod: { ...contractData.pod, ...pod, name: pod.name || pod.id || contractData.pod.name },
+        cargo: {
+            ...contractData.cargo,
+            description: contract.cargoName || contractData.cargo.description,
+            quantity: Number.isFinite(Number(contract.cargoQuantityMt)) ? `${formatTrackingNumber(contract.cargoQuantityMt)} MT` : contractData.cargo.quantity,
+        },
+        phase: live.phase ? `Fase ${live.phase} de 6` : contractData.phase,
+        lastSync: source.generatedAt ? `Sync ${formatTrackingTime(source.generatedAt)}` : contractData.lastSync,
+    };
+}
+
+function renderExecutiveDashboard() {
+    const mount = document.getElementById('tracking-executive-root');
+    if (!mount) return;
+    trackingState.executiveRoot ||= createRoot(mount);
+    trackingState.executiveRoot.render(React.createElement(DashboardExecutive, { contractData: getExecutiveContractData() }));
+}
+
+function setTrackingActiveTab(activeTab) {
+    trackingState.activeTab = activeTab === 'executive' ? 'executive' : 'gis';
+    const executiveActive = trackingState.activeTab === 'executive';
+    document.getElementById('tracking-gis-view')?.toggleAttribute('hidden', executiveActive);
+    document.getElementById('tracking-executive-view')?.toggleAttribute('hidden', !executiveActive);
+    document.querySelectorAll('[data-tracking-tab]').forEach((button) => {
+        const selected = button.dataset.trackingTab === trackingState.activeTab;
+        button.classList.toggle('is-active', selected);
+        button.setAttribute('aria-selected', String(selected));
+        button.tabIndex = selected ? 0 : -1;
+    });
+    const title = document.getElementById('tracking-live-title');
+    if (title) title.textContent = executiveActive ? 'Dashboard Ejecutivo & Laytime' : 'Tracking GIS';
+    if (executiveActive) renderExecutiveDashboard();
+    else window.requestAnimationFrame(() => window.GlobalFleetGlobe?.resize?.(TRACKING_MAP_KEY));
+}
+
 function createTrackingOverlay() {
     if (document.getElementById('tracking-live-overlay')) return;
     const overlay = document.createElement('section');
@@ -159,11 +240,16 @@ function createTrackingOverlay() {
             </div>
             <div class="tracking-live-context"><span class="tracking-live-connection" id="tracking-live-connection">GIS disponible</span><span id="tracking-live-last-sync">Modo ruta libre</span></div>
             <div class="tracking-live-actions">
+                <nav class="tracking-live-tabs" role="tablist" aria-label="Vistas del contrato">
+                    <button type="button" class="tracking-live-tab is-active" role="tab" aria-selected="true" aria-controls="tracking-gis-view" data-tracking-tab="gis"><i class="fa-solid fa-earth-europe" aria-hidden="true"></i><span>Tracking GIS</span></button>
+                    <button type="button" class="tracking-live-tab" role="tab" aria-selected="false" aria-controls="tracking-executive-view" data-tracking-tab="executive" tabindex="-1"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Dashboard Ejecutivo &amp; Laytime</span></button>
+                </nav>
                 <button type="button" class="tracking-live-refresh map-icon-button" id="tracking-live-refresh" aria-label="Actualizar datos"><i class="fa-solid fa-rotate"></i></button>
                 <button type="button" class="tracking-live-close map-icon-button" id="tracking-live-close" aria-label="Cerrar tracking"><i class="fa-solid fa-xmark"></i></button>
             </div>
         </header>
         <main class="tracking-live-shell">
+            <div class="tracking-tab-view" id="tracking-gis-view" role="tabpanel">
             <section class="tracking-map-stage">
                 <div class="tracking-map-canvas" id="tracking-globe" aria-label="Globo GIS con ruta marítima y posición AIS"></div>
                 <div class="tracking-map-atmosphere" aria-hidden="true"></div>
@@ -211,6 +297,10 @@ function createTrackingOverlay() {
             <section class="tracking-analytics" id="tracking-live-content">
                 <div class="tracking-state-card ecosystem-panel is-manual"><span class="tracking-state-orbit"><i class="fa-solid fa-route"></i></span><div><h2>Modo Ruta Libre</h2><p>Busca un IMO, MMSI o nombre para visualizar el buque y su posición AIS sin contrato. Define POL y POD solo cuando quieras calcular una ruta; la analítica contractual permanece opcional.</p></div></div>
             </section>
+            </div>
+            <section class="tracking-tab-view tracking-executive-view" id="tracking-executive-view" role="tabpanel" hidden>
+                <div id="tracking-executive-root"></div>
+            </section>
         </main>`;
     document.body.appendChild(overlay);
     const referenceManager = window.ContractReference || window.ContractRefManager;
@@ -219,6 +309,7 @@ function createTrackingOverlay() {
     if (contractInput) contractInput.value = activeContractRef;
 
     document.getElementById('tracking-live-close')?.addEventListener('click', closeTrackingLive);
+    document.querySelectorAll('[data-tracking-tab]').forEach((button) => button.addEventListener('click', () => setTrackingActiveTab(button.dataset.trackingTab)));
     document.getElementById('tracking-live-refresh')?.addEventListener('click', () => {
         if (trackingState.contractRef) {
             loadTrackingContract(trackingState.contractRef, true);
@@ -634,6 +725,7 @@ function clearTrackingContract(message = 'Modo ruta libre activo. El contrato es
     const contractInput = document.getElementById('tracking-live-contract-ref');
     if (contractInput) contractInput.value = '';
     renderManualTrackingState();
+    renderExecutiveDashboard();
     const inputMessage = document.getElementById('tracking-input-message');
     inputMessage.textContent = message;
     inputMessage.dataset.state = 'neutral';
@@ -942,6 +1034,7 @@ async function loadTrackingContract(rawRef, silent = false) {
         syncTrackingMap(payload);
         renderTrackingMapChrome(payload);
         renderTrackingAnalytics(payload);
+        renderExecutiveDashboard();
         const vesselQuery = payload.contract?.vesselMmsi || payload.contract?.vesselImo || payload.contract?.vesselName;
         if (vesselQuery) void loadTrackingVessel(vesselQuery, true);
         document.getElementById('tracking-live-last-sync').textContent = `Sync ${formatTrackingTime(payload.generatedAt)}`;
@@ -976,6 +1069,7 @@ function openTrackingLive(contractRef = '') {
     createTrackingOverlay();
     const overlay = document.getElementById('tracking-live-overlay');
     overlay?.classList.add('is-open');
+    setTrackingActiveTab(trackingState.activeTab);
     document.body.classList.add('tracking-live-open');
     window.requestAnimationFrame(() => {
         ensureTrackingMap();
