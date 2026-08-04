@@ -32,23 +32,23 @@ test('fair-freight loader preserves its network call without mutating visual sto
   assert.doesNotMatch(loaderSource, /ais:vessels-updated/);
 });
 
-test('commercial OpenShips funnel commits only viable ranked vessels into renderFleet', () => {
-  assert.match(densitySource, /window\.useCommercialFilter\(openShipsData/);
+test('commercial OpenShips funnel commits one displayVessels snapshot into renderFleet', () => {
+  assert.match(densitySource, /window\.useCommercialFilter\(sourceVessels/);
   assert.match(densitySource, /capacityTolerance: 1\.05/);
-  assert.match(densitySource, /return window\.setRenderFleet\(commercialState\.filteredVessels\)/);
-  assert.match(densitySource, /return window\.setRenderFleet\(openShipsData\)/);
+  assert.match(source, /const displayVessels = isGlobalDebugActive \? filteredVessels : rawVessels/);
+  assert.match(densitySource, /return window\.setRenderFleet\(displayVessels\)/);
   assert.doesNotMatch(densitySource, /backgroundAisData/);
 });
 
 test('GlobalFleetGlobe receives only the OpenShips visual fleet and never backgroundAisData', () => {
-  assert.match(source, /const openShipsData = normalizeDensityVesselCollection\(window\.openShipsVesselsCache\);[\s\S]*vesselsData: openShipsData/);
-  assert.match(markerSource, /const renderFleet = getDensityMapSourceVessels\(\)/);
-  assert.match(markerSource, /window\.GlobalFleetGlobe\.updateVessels\(window\.renderFleet, 'density'\)/);
+  assert.match(source, /const displayVessels = densityPolCoordinates[\s\S]*vesselsData: displayVessels/);
+  assert.match(markerSource, /const displayVessels = getDensityDisplayVessels\(\)/);
+  assert.match(markerSource, /window\.GlobalFleetGlobe\.updateVessels\(displayVessels, 'density'\)/);
   assert.doesNotMatch(markerSource, /backgroundAisData/);
 });
 
-test('fair-freight calculations prefer background AIS while the density counter uses renderFleet', () => {
+test('fair-freight calculations prefer background AIS while density uses displayVessels', () => {
   assert.match(calculatorSource, /const sourceAisVessels = backgroundAisData\.length > 0[\s\S]*\? backgroundAisData/);
   assert.match(calculatorSource, /const pricingSourceVessels = backgroundAisData\.length > 0[\s\S]*\? backgroundAisData/);
-  assert.match(source, /window\.renderFilteredAisCounters = function[\s\S]*const renderFleet = Array\.isArray\(window\.renderFleet\)[\s\S]*const filteredCount = renderFleet\.length/);
+  assert.match(source, /window\.renderFilteredAisCounters = function[\s\S]*const displayVessels = Array\.isArray\(vesselsInput\)[\s\S]*const filteredCount = displayVessels\.length/);
 });

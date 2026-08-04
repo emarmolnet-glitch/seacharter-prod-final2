@@ -12202,6 +12202,15 @@
                                 MAPA DE DENSIDAD
                             </h3>
                             <div class="collapsible-section-actions flex items-center gap-2">
+                                <button id="density-commercial-filter-toggle" type="button" role="switch" aria-checked="false" class="density-commercial-toggle" data-commercial-filter-toggle data-commercial-filter-context="density" title="Alternar entre todo el tráfico OpenShips y los buques viables por DWT">
+                                    <span class="density-commercial-toggle__track" aria-hidden="true">
+                                        <span class="density-commercial-toggle__thumb"></span>
+                                    </span>
+                                    <span class="density-commercial-toggle__copy">
+                                        <strong>Filtro Comercial</strong>
+                                        <small id="density-commercial-filter-status" data-commercial-filter-status>DEBUG DWT · OFF</small>
+                                    </span>
+                                </button>
                                 <input type="text" id="ais-vessel-search" placeholder="Buscar buque por nombre o IMO..." class="bg-slate-950 border border-slate-800 text-slate-200 rounded-lg px-3 py-1.5 text-xs w-full sm:w-64 focus:outline-none focus:border-indigo-500" />
                                 <button id="btn-ais-vessel-search" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors shrink-0">Buscar</button>
                             </div>
@@ -12218,17 +12227,6 @@
                                     </div>
                                 </div>
                             </div>
-                            <aside id="density-commercial-matches-panel" class="density-commercial-panel hidden" aria-label="Top 5 matches comerciales">
-                                <header class="density-commercial-panel__header">
-                                    <div>
-                                        <p class="density-commercial-panel__eyebrow">Mapa → Auditoría → Cierre</p>
-                                        <h4>Top Matches</h4>
-                                    </div>
-                                    <span class="density-commercial-panel__badge">DWT Fit</span>
-                                </header>
-                                <p id="density-commercial-matches-summary" class="density-commercial-panel__summary">Analizando flota OpenShips...</p>
-                                <div id="density-commercial-matches-list" class="density-commercial-panel__list" aria-live="polite"></div>
-                            </aside>
                             <aside id="density-due-diligence-panel" class="density-due-diligence-panel hidden" aria-hidden="true" aria-label="Ficha técnica Due Diligence">
                                 <button id="density-due-diligence-close" type="button" class="density-due-diligence-panel__close" aria-label="Cerrar ficha técnica">
                                     <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -12268,7 +12266,7 @@
                         <div class="collapsible-section-header flex items-center justify-between">
                             <h3 data-collapsible-title data-i18n="density_live_vessels_title" class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                                 <i class="fa-solid fa-list text-emerald-400"></i>
-                                BUQUES DETECTADOS EN TIEMPO REAL (AIS LIVE)
+                                BUQUES DETECTADOS EN TIEMPO REAL (OPENSHIPS)
                             </h3>
                             <div class="collapsible-section-actions">
                                 <span id="ais-list-timestamp" class="text-[10px] text-slate-500"></span>
@@ -13597,6 +13595,15 @@
                     </h2>
                     <p class="text-slate-500 text-sm mt-1">Búsqueda jerárquica y ordenamiento inteligente de buques según disponibilidad, especificaciones técnicas, rentabilidad y riesgos.</p>
                 </div>
+                <button id="matching-commercial-filter-toggle" type="button" role="switch" aria-checked="false" class="density-commercial-toggle" data-commercial-filter-toggle data-commercial-filter-context="matching" title="Usar el mismo filtro DWT global de la pestaña Densidad">
+                    <span class="density-commercial-toggle__track" aria-hidden="true">
+                        <span class="density-commercial-toggle__thumb"></span>
+                    </span>
+                    <span class="density-commercial-toggle__copy">
+                        <strong>Filtro Comercial</strong>
+                        <small data-commercial-filter-status>DEBUG DWT · OFF</small>
+                    </span>
+                </button>
             </div>
 
             <!-- Main Split Dashboard -->
@@ -14242,8 +14249,8 @@
             "density_map_title": { es: "MAPA DE DENSIDAD", en: "DENSITY MAP", fr: "CARTE DE DENSITÉ" },
             "MAPA DE DENSIDAD": { es: "MAPA DE DENSIDAD", en: "DENSITY MAP", fr: "CARTE DE DENSITÉ" },
 
-            "density_live_vessels_title": { es: "BUQUES DETECTADOS EN TIEMPO REAL (AIS LIVE)", en: "REAL-TIME DETECTED VESSELS (AIS LIVE)", fr: "NAVIRES DÉTECTÉS EN TEMPS RÉEL (AIS LIVE)" },
-            "BUQUES DETECTADOS EN TIEMPO REAL (AIS LIVE)": { es: "BUQUES DETECTADOS EN TIEMPO REAL (AIS LIVE)", en: "REAL-TIME DETECTED VESSELS (AIS LIVE)", fr: "NAVIRES DÉTECTÉS EN TEMPS RÉEL (AIS LIVE)" },
+            "density_live_vessels_title": { es: "BUQUES DETECTADOS EN TIEMPO REAL (OPENSHIPS)", en: "REAL-TIME DETECTED VESSELS (OPENSHIPS)", fr: "NAVIRES DÉTECTÉS EN TEMPS RÉEL (OPENSHIPS)" },
+            "BUQUES DETECTADOS EN TIEMPO REAL (OPENSHIPS)": { es: "BUQUES DETECTADOS EN TIEMPO REAL (OPENSHIPS)", en: "REAL-TIME DETECTED VESSELS (OPENSHIPS)", fr: "NAVIRES DÉTECTÉS EN TEMPS RÉEL (OPENSHIPS)" },
 
             "databridge_sync_status": { es: "Estado de Sincronización", en: "Synchronization Status", fr: "Statut de Synchronisation" },
             "Estado de Sincronización": { es: "Estado de Sincronización", en: "Synchronization Status", fr: "Statut de Synchronisation" },
@@ -21282,6 +21289,7 @@
                 || window.SeaCharterStore?.getState?.()?.cargoQty
                 || (typeof State !== 'undefined' ? State.cargoQty : 0)
             );
+            window.GlobalStore?.setTargetCargoDwt?.(matchingQuantity, { source: 'matching-execution' });
             const matchingLoadPort = String(
                 effectiveRouteOverride?.pol
                 || document.getElementById('match-load-port')?.value
@@ -21622,11 +21630,22 @@
                         dwt: Number(matchingRequest.dwt) || 0
                     } : null
                 };
+                if (!isAppending && window.openShipsVesselsCacheLoaded === true && Array.isArray(window.openShipsVesselsCache)) {
+                    window.GlobalStore?.setCommercialVesselState?.({
+                        rawVessels: window.openShipsVesselsCache,
+                        targetCargoDwt: matchingQuantity
+                    }, { source: 'matching-open-ships-source' });
+                    window.refreshDensityCommercialFunnel?.({ refreshMap: false });
+                }
+                const commercialVesselState = window.GlobalStore?.getCommercialVesselState?.() || {};
+                const sharedOpenShipsCandidates = commercialVesselState.isGlobalDebugActive === true
+                    ? commercialVesselState.filteredVessels
+                    : commercialVesselState.rawVessels;
                 const openShipsCandidates = !isAppending
                     && payload.allowedSources.includes('OPENSHIPS')
                     && window.openShipsVesselsCacheLoaded === true
-                    && Array.isArray(window.openShipsVesselsCache)
-                    ? window.openShipsVesselsCache
+                    && Array.isArray(sharedOpenShipsCandidates)
+                    ? sharedOpenShipsCandidates
                     : [];
                 const data = await requestMatchingLocal('execute', openShipsCandidates, payload);
                 if (!data?.success) {
@@ -26217,6 +26236,8 @@
                 window.initializeMatchingGlobalTaxonomyControl?.();
                 window.GlobalTaxonomyProvider?.ensure({ notify: true, source: 'matching-tab-entry' });
                 syncCalculatorAndMatching('calculator');
+                window.GlobalStore?.setTargetCargoDwt?.(window.resolveGlobalTargetCargoDwt?.() || 0, { source: 'matching-tab-entry' });
+                window.refreshDensityCommercialFunnel?.({ refreshMap: false });
                 // Auto-redacta la orden de fletamento en el Traductor NLP a partir
                 // del estado global del Estimador (Pestaña 1).
                 autoFillNlpFromEstimator();
@@ -46659,15 +46680,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         };
 
         window.renderFilteredAisCounters = function(vesselsInput = window.getDerivedFilteredAisVessels()) {
-            void vesselsInput;
-            const renderFleet = Array.isArray(window.renderFleet) ? window.renderFleet : [];
-            const filteredCount = renderFleet.length;
+            const displayVessels = Array.isArray(vesselsInput) ? vesselsInput : [];
+            const filteredCount = displayVessels.length;
             const densityCountEl = document.getElementById('ais-density-count');
             if (densityCountEl) densityCountEl.textContent = String(filteredCount);
             const buquesCountEl = document.getElementById('buques-count');
             if (buquesCountEl) buquesCountEl.textContent = String(filteredCount);
             if (typeof window.renderAisTaxonomyBreakdown === 'function') {
-                window.renderAisTaxonomyBreakdown('ais-density-taxonomy-breakdown', renderFleet);
+                window.renderAisTaxonomyBreakdown('ais-density-taxonomy-breakdown', displayVessels);
             }
             return filteredCount;
         };
@@ -46867,12 +46887,31 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
         window.renderAisNearbyCount = renderAisNearbyCount;
 
+        function preserveCommercialVesselCoordinates(vessel) {
+            if (!vessel || typeof vessel !== 'object') return null;
+            const normalized = { ...vessel };
+            const latitude = Number(vessel.lat ?? vessel.latitude ?? vessel.LAT ?? vessel.MetaData?.latitude ?? vessel.MetaData?.lat);
+            const longitude = Number(vessel.lng ?? vessel.lon ?? vessel.longitude ?? vessel.LONG ?? vessel.LON ?? vessel.MetaData?.longitude ?? vessel.MetaData?.lon ?? vessel.MetaData?.lng);
+            if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+                normalized.lat = latitude;
+                normalized.lng = longitude;
+                normalized.lon = longitude;
+                normalized.latitude = latitude;
+                normalized.longitude = longitude;
+            }
+            return normalized;
+        }
+        window.preserveCommercialVesselCoordinates = preserveCommercialVesselCoordinates;
+
         // Global Store (Shared Memory) for logical synchronization
         const GlobalStore = {
             vessels: [],
             rawVessels: [],
             filteredVessels: [],
             filteredVesselsInitialized: false,
+            commercialFilterReady: false,
+            isGlobalDebugActive: false,
+            targetCargoDwt: 0,
             selectedTaxonomy: '',
             selectedTaxonomies: [],
             pol: '',
@@ -46902,6 +46941,52 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 	            activeVessel: null,
 	            calculatorVessel: null,
 	            dueDiligenceVessels: [],
+            getCommercialVesselState() {
+                return {
+                    rawVessels: Array.isArray(this.rawVessels) ? this.rawVessels : [],
+                    filteredVessels: Array.isArray(this.filteredVessels) ? this.filteredVessels : [],
+                    isGlobalDebugActive: this.isGlobalDebugActive === true,
+                    targetCargoDwt: Number(this.targetCargoDwt) || 0
+                };
+            },
+            setCommercialVesselState(nextState = {}, metadata = {}) {
+                if (Object.prototype.hasOwnProperty.call(nextState, 'rawVessels')) {
+                    const nextRawVessels = Array.isArray(nextState.rawVessels) ? nextState.rawVessels : [];
+                    if (nextRawVessels.length > 0 || !Array.isArray(this.rawVessels) || this.rawVessels.length === 0) {
+                        this.rawVessels = nextRawVessels
+                            .map(preserveCommercialVesselCoordinates)
+                            .filter(Boolean);
+                    }
+                }
+                if (Object.prototype.hasOwnProperty.call(nextState, 'filteredVessels')) {
+                    this.filteredVessels = (Array.isArray(nextState.filteredVessels) ? nextState.filteredVessels : [])
+                        .map(preserveCommercialVesselCoordinates)
+                        .filter(Boolean);
+                    this.filteredVesselsInitialized = true;
+                    this.commercialFilterReady = true;
+                }
+                if (Object.prototype.hasOwnProperty.call(nextState, 'isGlobalDebugActive')) {
+                    this.isGlobalDebugActive = nextState.isGlobalDebugActive === true;
+                }
+                if (Object.prototype.hasOwnProperty.call(nextState, 'targetCargoDwt')) {
+                    const targetCargoDwt = Number(nextState.targetCargoDwt);
+                    if (Number.isFinite(targetCargoDwt) && targetCargoDwt >= 0) this.targetCargoDwt = targetCargoDwt;
+                }
+                const state = this.getCommercialVesselState();
+                window.dispatchEvent(new CustomEvent('commercial-vessel-state-updated', {
+                    detail: { ...state, source: String(metadata.source || 'global-store') }
+                }));
+                return state;
+            },
+            setGlobalDebugActive(isActive, metadata = {}) {
+                return this.setCommercialVesselState({ isGlobalDebugActive: isActive === true }, metadata);
+            },
+            setIsGlobalDebugActive(isActive, metadata = {}) {
+                return this.setCommercialVesselState({ isGlobalDebugActive: isActive === true }, metadata);
+            },
+            setTargetCargoDwt(targetCargoDwt, metadata = {}) {
+                return this.setCommercialVesselState({ targetCargoDwt }, metadata);
+            },
             setVessels(newVessels) {
                 if (window.matchingAuditModeState?.enabled) return;
                 const incomingVessels = Array.isArray(newVessels) ? newVessels : [];
@@ -46970,6 +47055,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             resetFilteredVessels(metadata = {}) {
                 this.filteredVessels = [];
                 this.filteredVesselsInitialized = false;
+                this.commercialFilterReady = false;
                 this.selectedTaxonomy = metadata.taxonomy || '';
                 this.setAisMatchingState([], [], null, { source: 'density-filter-reset' });
                 if (typeof window.renderFilteredAisCounters === 'function') {
@@ -47009,6 +47095,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 this.nearbyCount = this.nearbyVessels.length;
                 this.aisMatchingProximityDebug = proximityDebug;
                 this.aisMatchingStateSource = String(metadata.source || 'calculator-proximity');
+                if (this.aisMatchingStateSource === 'matching-validation' && this.compatibleVessels.length > 0) {
+                    this.setCommercialVesselState({
+                        filteredVessels: this.compatibleVessels,
+                        isGlobalDebugActive: true
+                    }, { source: 'matching-validation' });
+                }
                 renderAisNearbyCount(this.nearbyCount);
                 window.dispatchEvent(new CustomEvent('ais:matching-state-updated', {
                     detail: {
@@ -48524,35 +48616,159 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return Array.from(vesselsByKey.values());
         }
 
+        function getDensityDisplayVessels() {
+            const densityStore = window.GlobalStore;
+            const {
+                rawVessels: storedRawVessels = [],
+                filteredVessels: storedFilteredVessels = [],
+                isGlobalDebugActive = false
+            } = densityStore?.getCommercialVesselState?.() || {};
+            const rawVessels = normalizeDensityVesselCollection(storedRawVessels);
+            const filteredVessels = normalizeDensityVesselCollection(storedFilteredVessels);
+            const setIsGlobalDebugActive = densityStore?.setIsGlobalDebugActive?.bind(densityStore);
+            const displayVessels = isGlobalDebugActive ? filteredVessels : rawVessels;
+            window.densityCommercialState = {
+                rawVessels,
+                filteredVessels,
+                isGlobalDebugActive,
+                setIsGlobalDebugActive
+            };
+            return displayVessels;
+        }
+        window.getDensityDisplayVessels = getDensityDisplayVessels;
+
+        function escapeDensityTableText(value) {
+            return String(value ?? '').replace(/[&<>"']/g, character => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[character]));
+        }
+
+        function renderDensityVesselsTable(vessels, options = {}) {
+            const displayVessels = Array.isArray(vessels) ? vessels : [];
+            const maxRows = Math.max(1, Number(options.maxRows) || 200);
+            const visibleRows = displayVessels.slice(0, maxRows);
+            const tbody = document.getElementById('ais-vessels-tbody');
+            if (!tbody) return visibleRows;
+            tbody.innerHTML = '';
+            if (visibleRows.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-500">${window.GlobalStore?.isGlobalDebugActive === true ? 'No hay barcos compatibles' : 'No se detectaron buques AIS activos.'}</td></tr>`;
+                return visibleRows;
+            }
+            visibleRows.forEach(vessel => {
+                const latitude = Number(vessel.latitude ?? vessel.lat);
+                const longitude = Number(vessel.longitude ?? vessel.lng ?? vessel.lon);
+                const vesselName = vessel.vesselName || vessel.vessel_name || vessel.name || vessel.ShipName || 'Buque sin nombre';
+                const imo = vessel.imo || vessel.IMO || '-';
+                const speed = Number(vessel.speed ?? vessel.sog ?? vessel.SOG);
+                const vesselClass = vessel.vesselClass || vessel.vesselType || vessel.shipType || vessel.ShipType || 'Unknown';
+                const navigationStatus = vessel.statusLabel || vessel.navigationStatus || vessel.navigationalStatus || vessel.NavigationalStatus || '-';
+                const position = Number.isFinite(latitude) && Number.isFinite(longitude)
+                    ? `${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`
+                    : 'Posición N/D';
+                const row = document.createElement('tr');
+                row.className = 'border-b border-slate-800/40 hover:bg-slate-900/30 transition-colors cursor-pointer';
+                row.onclick = () => {
+                    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+                        window.selectShip?.(vesselName, vessel.mmsi, latitude, longitude, imo, vessel.destination, vessel);
+                    }
+                };
+                row.innerHTML = `
+                    <td class="py-3 px-3 font-semibold text-slate-200">${escapeDensityTableText(vesselName)}</td>
+                    <td class="py-3 px-3 text-slate-400 mono">${escapeDensityTableText(imo)}</td>
+                    <td class="py-3 px-3 text-slate-400 mono">${escapeDensityTableText(position)}</td>
+                    <td class="py-3 px-3 text-slate-400 mono">${Number.isFinite(speed) ? `${speed.toFixed(1)} kn` : '-'}<span class="text-[10px] text-emerald-400 block">${escapeDensityTableText(navigationStatus)}</span></td>
+                    <td class="py-3 px-3"><span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700">${escapeDensityTableText(vesselClass)}</span></td>
+                    <td class="py-3 px-3"><span class="text-[10px] text-slate-500">${Number(vessel.dwt) > 0 ? `${Number(vessel.dwt).toLocaleString('es-ES')} DWT` : 'DWT N/D'}</span></td>`;
+                tbody.appendChild(row);
+            });
+            window.GlobalStore?.setRenderedAisVessels?.(visibleRows, { source: 'density-display-vessels' });
+            return visibleRows;
+        }
+        window.renderDensityVesselsTable = renderDensityVesselsTable;
+
+        function syncDensityDisplayConsumers(options = {}) {
+            const displayVessels = getDensityDisplayVessels();
+            window.setRenderFleet(displayVessels);
+            window.renderFilteredAisCounters?.(displayVessels);
+            renderDensityVesselsTable(displayVessels, options);
+            if (options.updateGlobe !== false && window.GlobalFleetGlobe?.getInstance?.('density')) {
+                window.GlobalFleetGlobe.updateVessels(displayVessels, 'density');
+            }
+            return displayVessels;
+        }
+        window.syncDensityDisplayConsumers = syncDensityDisplayConsumers;
+
+        function resolveGlobalTargetCargoDwt() {
+            const store = window.GlobalStore;
+            const matchingRequest = store?.matchingRequest || window.matchingRequest || null;
+            const calculatedCargo = store?.calculatedState?.cargo || window.CalculatedState?.cargo || {};
+            const candidates = [
+                document.getElementById('cargo-qty')?.value,
+                document.getElementById('match-quantity')?.value,
+                matchingRequest?.cargo?.quantity,
+                matchingRequest?.quantity,
+                calculatedCargo?.quantity,
+                window.SeaCharterStore?.getState?.()?.cargoQty,
+                typeof State !== 'undefined' ? State.cargoQty : 0,
+                typeof State !== 'undefined' ? State.cargo : 0,
+                store?.targetCargoDwt
+            ];
+            for (const candidate of candidates) {
+                const numericValue = Number(String(candidate ?? '').replace(/[^0-9.-]/g, ''));
+                if (Number.isFinite(numericValue) && numericValue > 0) return numericValue;
+            }
+            return 0;
+        }
+        window.resolveGlobalTargetCargoDwt = resolveGlobalTargetCargoDwt;
+
         function getDensityMapSourceVessels() {
             const store = window.GlobalStore;
             const openShipsData = normalizeDensityVesselCollection(window.openShipsVesselsCache);
-            if (typeof window.useCommercialFilter === 'function' && (openShipsData.length > 0 || window.openShipsVesselsCacheLoaded === true)) {
-                const targetCargoDwt = parseFloat(document.getElementById('cargo-qty')?.value || State?.cargo || State?.cargoQty || 0) || 0;
-                const commercialState = window.useCommercialFilter(openShipsData, {
+            const persistedRawVessels = normalizeDensityVesselCollection(store?.rawVessels);
+            const sourceVessels = openShipsData.length > 0 ? openShipsData : persistedRawVessels;
+            const targetCargoDwt = window.resolveGlobalTargetCargoDwt?.() || 0;
+            store?.setCommercialVesselState?.({
+                rawVessels: sourceVessels,
+                targetCargoDwt
+            }, { source: 'density-source' });
+            const hasCommittedMatchingSnapshot = store?.aisMatchingStateSource === 'matching-validation'
+                && Array.isArray(store?.filteredVessels)
+                && store.filteredVessels.length > 0;
+            if (hasCommittedMatchingSnapshot) {
+                const displayVessels = getDensityDisplayVessels();
+                return window.setRenderFleet(displayVessels);
+            }
+            if (typeof window.useCommercialFilter === 'function' && (sourceVessels.length > 0 || window.openShipsVesselsCacheLoaded === true)) {
+                const commercialState = window.useCommercialFilter(sourceVessels, {
                     targetCargoDwt,
                     capacityTolerance: 1.05,
                     polCoordinates: getDensityPolCoordinates(),
                     polName: String(document.getElementById('port-pol')?.value || State?.pol || '').trim(),
-                    limit: 5
+                    limit: 6
                 });
-                window.commercialDensityMatchState = commercialState;
-                window.dispatchEvent(new CustomEvent('density:commercial-matches-updated', { detail: commercialState }));
-                return window.setRenderFleet(commercialState.filteredVessels);
+                const matchingFilteredVessels = normalizeDensityVesselCollection(
+                    Array.isArray(store?.compatibleVessels) && store.compatibleVessels.length > 0
+                        ? store.compatibleVessels
+                        : (Array.isArray(store?.matchingVessels) ? store.matchingVessels : [])
+                );
+                const safeFilteredVessels = commercialState.filteredVessels.length > 0
+                    ? commercialState.filteredVessels
+                    : matchingFilteredVessels;
+                const nextCommercialState = {
+                    rawVessels: sourceVessels,
+                    targetCargoDwt: commercialState.targetCargoDwt || targetCargoDwt,
+                };
+                if (!commercialState.requiresCargo) {
+                    nextCommercialState.filteredVessels = safeFilteredVessels;
+                } else if (matchingFilteredVessels.length > 0) {
+                    nextCommercialState.filteredVessels = matchingFilteredVessels;
+                }
+                store?.setCommercialVesselState?.(nextCommercialState, { source: 'density-commercial-filter' });
+                const displayVessels = getDensityDisplayVessels();
+                return window.setRenderFleet(displayVessels);
             }
-            const matchingSource = String(store?.aisMatchingStateSource || '');
-            const hasCommittedLocalMatches = matchingSource === 'matching-validation'
-                && Array.isArray(store?.nearbyVessels) && store.nearbyVessels.length > 0;
-            const filtered = store?.getFilteredVessels?.();
-            const committedMatches = normalizeDensityVesselCollection(hasCommittedLocalMatches ? store.nearbyVessels : []);
-            if (committedMatches.length > 0) return window.setRenderFleet(committedMatches);
-
-            const filteredVessels = normalizeDensityVesselCollection(
-                store?.filteredVesselsInitialized && Array.isArray(filtered) ? filtered : []
-            );
-            if (filteredVessels.length > 0) return window.setRenderFleet(filteredVessels);
-
-            return window.setRenderFleet(openShipsData);
+            const displayVessels = getDensityDisplayVessels();
+            return window.setRenderFleet(displayVessels);
         }
         window.getDensityMapSourceVessels = getDensityMapSourceVessels;
 
@@ -48630,14 +48846,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         }
                         mapContainer.dataset.renderKey = 'mounted';
                         if (window.GlobalFleetGlobe) {
-                            const openShipsData = densityPolCoordinates
+                            const displayVessels = densityPolCoordinates
                                 ? getDensityMapSourceVessels()
                                 : [];
                             aisMap = window.GlobalFleetGlobe.mount({
                                 key: 'density',
                                 containerId: 'ais-map',
-                                vesselsData: openShipsData,
-                                renderKey: JSON.stringify(openShipsData),
+                                vesselsData: displayVessels,
+                                renderKey: JSON.stringify(displayVessels),
                                 initialView: densityPolCoordinates
                                     ? { lat: densityPolCoordinates.lat, lng: densityPolCoordinates.lon, altitude: 0.15 }
                                     : { lat: 20, lng: 0, altitude: 2.45 },
@@ -48647,8 +48863,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                                 autoRotate: true
                             });
                             window.mapaAIS = aisMap;
-                            syncDensityActiveVessel(openShipsData);
-                            window.renderFilteredAisCounters?.(openShipsData);
+                            syncDensityActiveVessel(displayVessels);
+                            window.renderFilteredAisCounters?.(displayVessels);
+                            window.renderDensityVesselsTable?.(displayVessels);
                             if (State?.routeGeometry) {
                                 try { window.GlobalFleetGlobe.setRouteResult(State.routeGeometry, 'density', { focus: false }); } catch (_) {}
                             } else {
@@ -48767,8 +48984,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return Number(val);
             }
 
-            const renderFleet = getDensityMapSourceVessels();
-            const visibleRenderFleet = getDensityPolCoordinates() ? renderFleet : [];
+            getDensityMapSourceVessels();
+            const displayVessels = getDensityDisplayVessels();
+            const visibleRenderFleet = getDensityPolCoordinates() ? displayVessels : [];
             const renderableById = new Map();
             visibleRenderFleet.forEach((vessel, index) => {
                 if (!vessel || typeof vessel !== 'object') return;
@@ -48789,10 +49007,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const uniqueRenderableVessels = Array.from(renderableById.values());
 
             if (window.GlobalFleetGlobe?.getInstance('density') === aisMap) {
-                window.setRenderFleet(uniqueRenderableVessels);
-                window.GlobalFleetGlobe.updateVessels(window.renderFleet, 'density');
-                syncDensityActiveVessel(window.renderFleet);
-                window.renderFilteredAisCounters?.(window.renderFleet);
+                window.setRenderFleet(displayVessels);
+                window.GlobalFleetGlobe.updateVessels(displayVessels, 'density');
+                syncDensityActiveVessel(displayVessels);
+                window.renderFilteredAisCounters?.(displayVessels);
+                window.renderDensityVesselsTable?.(displayVessels);
                 aisMarkers = uniqueRenderableVessels
                     .filter((vessel) => Number.isFinite(Number(vessel.latitude ?? vessel.lat)) && Number.isFinite(Number(vessel.longitude ?? vessel.lon ?? vessel.lng)))
                     .map((vessel) => ({
@@ -51575,9 +51794,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (window.GlobalStore) {
                     const selectedTaxonomies = getSelectedFleetTaxonomies();
                     window.GlobalStore.polPrimaryVessels = primaryVisibleVessels;
-                    window.GlobalStore.setFilteredVessels(primaryVisibleVessels, {
-                        taxonomy: selectedTaxonomies.join('|')
-                    });
+                    if (window.GlobalStore.commercialFilterReady !== true) {
+                        window.GlobalStore.setFilteredVessels(primaryVisibleVessels, {
+                            taxonomy: selectedTaxonomies.join('|')
+                        });
+                    }
                     window.GlobalStore.setRenderedAisVessels(primaryVisibleVessels, { source: 'density-table' });
                 }
                 window.lastVesselsInArea = primaryVisibleVessels;

@@ -46,20 +46,59 @@ test('distance to POL is used only when DWT deltas are tied', () => {
   assert.equal(result.topMatches[0].vesselName, 'Near Twin');
 });
 
-test('density map consumes the commercial OpenShips result before rendering', () => {
-  assert.match(indexSource, /window\.useCommercialFilter\(openShipsData/);
+test('density map toggles between complete OpenShips traffic and strict commercial matches', () => {
+  assert.match(indexSource, /window\.useCommercialFilter\(sourceVessels/);
   assert.match(indexSource, /capacityTolerance: 1\.05/);
-  assert.match(indexSource, /return window\.setRenderFleet\(commercialState\.filteredVessels\)/);
-  assert.match(indexSource, /const openShipsData = densityPolCoordinates[\s\S]*\? getDensityMapSourceVessels\(\)/);
+  assert.match(indexSource, /limit: 6/);
+  assert.match(indexSource, /const displayVessels = isGlobalDebugActive \? filteredVessels : rawVessels/);
+  assert.match(indexSource, /vesselsData: displayVessels/);
+  assert.match(indexSource, /renderFilteredAisCounters\?\.\(displayVessels\)/);
+  assert.match(indexSource, /renderDensityVesselsTable\?\.\(displayVessels\)/);
+  assert.match(funnelSource, /\[data-commercial-filter-toggle\]/);
+  assert.match(funnelSource, /setIsGlobalDebugActive/);
+  assert.match(funnelSource, /setIsGlobalDebugActive\?\.\(!isGlobalDebugActive/);
+  assert.match(funnelSource, /DEBUG DWT · \$\{active \? 'ON' : 'OFF'\}/);
+  assert.match(indexSource, /const displayVessels = densityPolCoordinates[\s\S]*\? getDensityMapSourceVessels\(\)/);
 });
 
-test('Top Matches panel launches Due Diligence and never links directly to calculator', () => {
-  assert.match(indexSource, /id="density-commercial-matches-panel"/);
-  assert.match(funnelSource, /data-density-commercial-match="true"/);
-  assert.match(funnelSource, /data-due-diligence-button/);
-  assert.doesNotMatch(funnelSource, /switchTab\('estimator'\)/);
-  assert.match(cssSource, /\.density-commercial-panel \{/);
+test('Densidad and Coincidencia bind to the same global commercial state', () => {
+  assert.match(indexSource, /id="density-commercial-filter-toggle"[\s\S]*data-commercial-filter-toggle/);
+  assert.match(indexSource, /id="matching-commercial-filter-toggle"[\s\S]*data-commercial-filter-toggle/);
+  assert.match(indexSource, /isGlobalDebugActive: false/);
+  assert.match(indexSource, /targetCargoDwt: 0/);
+  assert.match(indexSource, /setCommercialVesselState\(nextState = \{\}/);
+  assert.match(indexSource, /commercial-vessel-state-updated/);
+  assert.match(indexSource, /window\.GlobalStore\?\.setTargetCargoDwt\?\.\(matchingQuantity/);
+  assert.match(indexSource, /sharedOpenShipsCandidates = commercialVesselState\.isGlobalDebugActive === true/);
+  assert.match(indexSource, /setIsGlobalDebugActive\(isActive/);
+});
+
+test('density removes Top 6 and renders the shared display fleet only in the native table', () => {
+  assert.doesNotMatch(indexSource, /density-commercial-matches-panel|Top 6 Matches/);
+  assert.doesNotMatch(funnelSource, /renderCommercialMatches|density-commercial-card|EmptyState/);
+  assert.doesNotMatch(cssSource, /\.density-commercial-panel|\.density-commercial-card|\.density-commercial-empty/);
+  assert.match(indexSource, /function renderDensityVesselsTable\(vessels/);
+  assert.match(indexSource, /const visibleRows = displayVessels\.slice\(0, maxRows\)/);
+  assert.match(indexSource, /id="ais-vessels-tbody"/);
   assert.match(cssSource, /\.density-due-diligence-panel \{/);
+});
+
+test('empty commercial results reuse the matching snapshot instead of blanking density', () => {
+  assert.match(indexSource, /const matchingFilteredVessels = normalizeDensityVesselCollection/);
+  assert.match(indexSource, /commercialState\.filteredVessels\.length > 0[\s\S]*\? commercialState\.filteredVessels[\s\S]*: matchingFilteredVessels/);
+  assert.match(indexSource, /commercialFilterReady: false/);
+  assert.match(indexSource, /if \(window\.GlobalStore\.commercialFilterReady !== true\)/);
+});
+
+test('matching-validation becomes the authoritative Density snapshot', () => {
+  assert.match(indexSource, /this\.aisMatchingStateSource === 'matching-validation'[\s\S]*filteredVessels: this\.compatibleVessels[\s\S]*isGlobalDebugActive: true/);
+  assert.match(indexSource, /const hasCommittedMatchingSnapshot = store\?\.aisMatchingStateSource === 'matching-validation'/);
+  assert.match(indexSource, /if \(hasCommittedMatchingSnapshot\) \{[\s\S]*const displayVessels = getDensityDisplayVessels\(\)[\s\S]*return window\.setRenderFleet\(displayVessels\)/);
+});
+
+test('Density table identifies OpenShips as its live source', () => {
+  assert.match(indexSource, /BUQUES DETECTADOS EN TIEMPO REAL \(OPENSHIPS\)/);
+  assert.doesNotMatch(indexSource, /BUQUES DETECTADOS EN TIEMPO REAL \(AIS LIVE\)/);
 });
 
 test('persisted Due Diligence exposes the calculator handoff only after database success', () => {
@@ -72,4 +111,3 @@ test('persisted Due Diligence exposes the calculator handoff only after database
   assert.match(dueDiligenceSource, /globalScope\.switchTab\('estimator'\)/);
   assert.match(indexSource, /window\.applyResolvedVesselToCalculator = applyResolvedVesselToCalculator/);
 });
-
