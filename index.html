@@ -13796,19 +13796,21 @@
                         </div>
                         <div class="mt-3 overflow-x-auto pb-1" aria-label="Consola secuencial de estados">
                             <div id="matching-sequential-status-console" class="grid min-w-[980px] grid-cols-5 gap-2 text-xs">
-                                <div id="matching-route-status-block" class="min-h-[78px] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600 transition-colors duration-200" data-telemetry-state="pending">
+                                <div id="matching-route-status-block" class="min-h-[96px] rounded-xl border border-slate-200 bg-gradient-to-br from-white to-teal-50/70 px-3 py-2.5 text-slate-600 shadow-sm transition-colors duration-200" data-telemetry-state="pending">
                                     <div class="flex items-center gap-1.5 font-black text-slate-700">
-                                        <i id="matching-route-status-icon" class="fa-regular fa-circle text-slate-400" data-telemetry-icon aria-hidden="true"></i>
-                                        <strong>Ruta Sincronizada</strong>
+                                        <i id="matching-route-status-icon" class="fa-solid fa-route text-teal-600" data-telemetry-icon aria-hidden="true"></i>
+                                        <strong>Ruta y Ventana (Laycan)</strong>
                                     </div>
-                                    <span id="matching-route-status-text" class="mt-1 block text-[11px] font-semibold leading-snug" data-telemetry-value>Inactivo</span>
+                                    <span id="matching-route-status-text" class="mt-2 block text-[11px] font-black leading-snug text-slate-800" data-telemetry-value>Ruta no configurada</span>
+                                    <span id="matching-laycan-status-text" class="mt-1 flex items-center gap-1.5 text-[10px] font-semibold leading-snug text-slate-500"><i class="fa-regular fa-calendar" aria-hidden="true"></i> Laycan pendiente</span>
                                 </div>
-                                <div id="matching-laycan-status-block" class="min-h-[78px] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600 transition-colors duration-200" data-telemetry-state="pending">
+                                <div id="matching-cargo-status-block" class="min-h-[96px] rounded-xl border border-slate-200 bg-gradient-to-br from-white to-cyan-50/70 px-3 py-2.5 text-slate-600 shadow-sm transition-colors duration-200" data-telemetry-state="pending">
                                     <div class="flex items-center gap-1.5 font-black text-slate-700">
-                                        <i id="matching-laycan-status-icon" class="fa-regular fa-circle text-slate-400" data-telemetry-icon aria-hidden="true"></i>
-                                        <strong>Laycan</strong>
+                                        <i id="matching-cargo-status-icon" class="fa-solid fa-boxes-stacked text-cyan-700" data-telemetry-icon aria-hidden="true"></i>
+                                        <strong>Carga y Operativa</strong>
                                     </div>
-                                    <span id="matching-laycan-status-text" class="mt-1 block text-[11px] font-semibold leading-snug" data-telemetry-value>Inactivo</span>
+                                    <span id="matching-cargo-type-text" class="mt-2 block text-[11px] font-black leading-snug text-slate-800" data-telemetry-value>Cantidad y mercancía pendientes</span>
+                                    <span id="matching-cargo-rates-text" class="mt-1 block text-[10px] font-semibold leading-snug text-slate-500">Ritmos pendientes</span>
                                 </div>
                                 <div id="matching-fleet-status-block" class="min-h-[78px] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600 transition-colors duration-200" data-telemetry-state="pending">
                                     <div class="flex items-center gap-1.5 font-black text-slate-700">
@@ -13894,8 +13896,8 @@
                         </div>
                         <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 mb-4">
                             <label class="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-slate-600 cursor-pointer">
-                                <input type="checkbox" id="hide-technical-problems-toggle" class="rounded border-slate-300 text-[#004e64] focus:ring-[#004e64]" disabled aria-disabled="true" aria-checked="false">
-                                <span>Filtro técnico estricto · desactivado</span>
+                                <input type="checkbox" id="hide-technical-problems-toggle" class="rounded border-slate-300 text-[#004e64] focus:ring-[#004e64]" aria-disabled="false" aria-checked="false">
+                                <span id="strict-technical-filter-label">Filtro técnico estricto · desactivado</span>
                             </label>
                             <div class="flex flex-wrap items-center gap-2">
                                 <button id="debug-dwt-filter-toggle" type="button" onclick="toggleMatchingDwtDebugMode()" aria-pressed="false" class="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-800 transition hover:bg-amber-100 focus:ring-2 focus:ring-amber-300">
@@ -15182,7 +15184,7 @@
             nplDataOrigin: "Externo",
             portBallast: "", pol: "", pod: "", portBallastCoordinates: null, polCoordinates: null, podCoordinates: null,
             distBallast: 0, distLaden: 0, totalDays: 0,
-            cargo: 0, stowageFactor: 1.20, cargoTolerance: 0, loadRate: 0, dischRate: 0,
+            cargo: 0, cargoQuantity: 0, stowageFactor: 1.20, cargoTolerance: 0, loadRate: 0, dischRate: 0, dischargeRate: 0,
             cargoType: "",
             cargoProduct: "",
             cargoTypeCode: "100",
@@ -15205,6 +15207,8 @@
             stevedoringCosts: 0, pdaMisc: 0,
             cargoSurcharge: 0, marginOwner: DEFAULT_OWNER_MARGIN_PERCENT,
             marginCharterer: DEFAULT_CHARTERER_MARGIN_PERCENT, commPct: 0,
+            laycan: { laydays: "", cancelling: "" },
+            laydays: "", cancelling: "",
             laycanDate: "", laycanTime: "", cancellingDate: "", cancellingTime: "",
             totalMiles: 0,
             smartAdjustments: {
@@ -15220,6 +15224,109 @@
                 tugTotalCost: 0
             }
         };
+
+        function normalizeActiveVoyageState(partial = {}, baseState = State) {
+            const source = partial && typeof partial === 'object' ? partial : {};
+            const base = baseState && typeof baseState === 'object' ? baseState : {};
+            const firstText = (...values) => values
+                .map(value => String(value || '').trim())
+                .find(Boolean) || '';
+            const firstPositiveNumber = (...values) => values
+                .map(Number)
+                .find(value => Number.isFinite(value) && value > 0) || 0;
+            const laydays = firstText(
+                source.laydays,
+                source.laycan?.laydays,
+                source.laycan?.start,
+                source.laycanDate,
+                base.laydays,
+                base.laycan?.laydays,
+                base.laycanDate
+            );
+            const cancelling = firstText(
+                source.cancelling,
+                source.laycan?.cancelling,
+                source.laycan?.end,
+                source.cancellingDate,
+                base.cancelling,
+                base.laycan?.cancelling,
+                base.cancellingDate
+            );
+            const cargoQuantity = firstPositiveNumber(
+                source.cargoQuantity,
+                source.cargo?.quantity,
+                source.cargoQty,
+                source.cargo,
+                base.cargoQuantity,
+                base.cargoQty,
+                base.cargo
+            );
+            const cargoType = firstText(
+                source.cargo?.typeLabel,
+                source.cargo?.cargoDescription,
+                source.cargoProduct,
+                source.cargoType,
+                source.cargoTypeManual,
+                base.cargoProduct,
+                base.cargoType,
+                base.cargoTypeManual
+            );
+            const loadRate = firstPositiveNumber(
+                source.loadRate,
+                source.cargo?.loadRate,
+                source.ritmoRealPol,
+                base.loadRate,
+                base.ritmoRealPol
+            );
+            const dischargeRate = firstPositiveNumber(
+                source.dischargeRate,
+                source.cargo?.dischargeRate,
+                source.dischRate,
+                source.ritmoRealPod,
+                base.dischargeRate,
+                base.dischRate,
+                base.ritmoRealPod
+            );
+            return {
+                ...source,
+                laycan: { laydays, cancelling },
+                laydays,
+                cancelling,
+                laycanDate: laydays,
+                cancellingDate: cancelling,
+                cargoQuantity,
+                cargo: cargoQuantity,
+                cargoQty: cargoQuantity,
+                cargoType,
+                loadRate,
+                dischargeRate,
+                dischRate: dischargeRate
+            };
+        }
+        window.normalizeActiveVoyageState = normalizeActiveVoyageState;
+
+        function readValidatedCargoOperationState() {
+            const readPositive = (...values) => values
+                .map(Number)
+                .find(value => Number.isFinite(value) && value > 0) || 0;
+            const selectedProduct = String(document.getElementById('cargo-product')?.value || '').trim();
+            const selectedCargoCode = document.getElementById('cargo-type-manual')?.value || window.CargoTypeSelector?.readSelectedId?.() || '';
+            const cargoType = selectedProduct
+                || window.getCargoTaxonomyLabel?.(selectedCargoCode)
+                || String(document.getElementById('cargo-type')?.value || '').trim()
+                || State.cargoType
+                || 'Otros';
+            const effectiveLoadRate = typeof calcularRitmoEfectivo === 'function' ? calcularRitmoEfectivo('pol') : 0;
+            const effectiveDischargeRate = typeof calcularRitmoEfectivo === 'function' ? calcularRitmoEfectivo('pod') : 0;
+            return normalizeActiveVoyageState({
+                cargoQuantity: readPositive(document.getElementById('cargo-qty')?.value, State.cargoQuantity, State.cargo),
+                cargoType,
+                cargoProduct: selectedProduct,
+                loadRate: readPositive(effectiveLoadRate, document.getElementById('rate-load')?.value, document.getElementById('ritmo_nominal_pol')?.value, State.loadRate),
+                dischargeRate: readPositive(effectiveDischargeRate, document.getElementById('rate-disch')?.value, document.getElementById('ritmo_nominal_pod')?.value, State.dischargeRate, State.dischRate)
+            });
+        }
+        window.readValidatedCargoOperationState = readValidatedCargoOperationState;
 
         function normalizeRoutePortCoordinates(value) {
             if (!value) return null;
@@ -15324,10 +15431,17 @@
                 return State;
             },
             set(partial = {}, options = {}) {
+                const normalizedPartial = normalizeActiveVoyageState(partial, State);
                 let changed = false;
-                for (const key in partial) {
-                    if (State[key] !== partial[key]) {
-                        State[key] = partial[key];
+                for (const key in normalizedPartial) {
+                    const currentValue = State[key];
+                    const nextValue = normalizedPartial[key];
+                    const equalObjects = currentValue && nextValue
+                        && typeof currentValue === 'object'
+                        && typeof nextValue === 'object'
+                        && JSON.stringify(currentValue) === JSON.stringify(nextValue);
+                    if (currentValue !== nextValue && !equalObjects) {
+                        State[key] = nextValue;
                         changed = true;
                     }
                 }
@@ -15686,8 +15800,18 @@
             const cancellingTime = document.getElementById('gc-cancel-time')?.value || '';
             const nextState = {};
 
-            if (laycanDate) nextState.laycanDate = laycanDate;
-            if (cancellingDate) nextState.cancellingDate = cancellingDate;
+            if (laycanDate) {
+                nextState.laydays = laycanDate;
+                nextState.laycanDate = laycanDate;
+            }
+            if (cancellingDate) {
+                nextState.cancelling = cancellingDate;
+                nextState.cancellingDate = cancellingDate;
+            }
+            nextState.laycan = {
+                laydays: laycanDate || State.laydays || State.laycanDate,
+                cancelling: cancellingDate || State.cancelling || State.cancellingDate
+            };
             nextState.laycanTime = laycanTime;
             nextState.cancellingTime = cancellingTime;
 
@@ -15726,18 +15850,20 @@
             const preferredCancellingDate = preferAsbatankvoy
                 ? firstNonEmpty(asbCancellingDate, gcCancellingDate)
                 : firstNonEmpty(gcCancellingDate, asbCancellingDate);
-            return {
+            return normalizeActiveVoyageState({
                 portBallast: firstNonEmpty(document.getElementById('port-ballast')?.value, document.getElementById('map-port-ballast')?.value, State.portBallast),
                 pol: firstNonEmpty(document.getElementById('port-pol')?.value, document.getElementById('map-port-pol')?.value, State.pol),
                 pod: firstNonEmpty(document.getElementById('port-pod')?.value, document.getElementById('map-port-pod')?.value, State.pod),
+                laydays: firstNonEmpty(preferredLaycanDate, validMapLaycanDate, State.laydays, State.laycanDate),
                 laycanDate: firstNonEmpty(preferredLaycanDate, validMapLaycanDate, State.laycanDate),
                 laycanTime: preferAsbatankvoy ? (asbLaycanTime || gcLaycanTime) : (gcLaycanTime || asbLaycanTime),
+                cancelling: firstNonEmpty(preferredCancellingDate, validMapCancellingDate, State.cancelling, State.cancellingDate),
                 cancellingDate: firstNonEmpty(preferredCancellingDate, validMapCancellingDate, State.cancellingDate),
                 cancellingTime: preferAsbatankvoy ? (asbCancellingTime || gcCancellingTime) : (gcCancellingTime || asbCancellingTime),
                 distBallast: parseFloat(document.getElementById('dist-ballast')?.value) || 0,
                 distLaden: parseFloat(document.getElementById('dist-laden')?.value) || 0,
                 totalMiles: parseFloat(document.getElementById('dist-total')?.value) || 0
-            };
+            });
         }
 
         function updateRouteSummary() {
@@ -18134,7 +18260,8 @@
             const block = document.getElementById(blockId);
             const style = SEQUENTIAL_TELEMETRY_STYLES[state] || SEQUENTIAL_TELEMETRY_STYLES.pending;
             if (!block) return false;
-            block.className = `min-h-[78px] rounded-lg border px-3 py-2 transition-colors duration-200 ${style.block}`;
+            const isOperationalSummary = block.id === 'matching-route-status-block' || block.id === 'matching-cargo-status-block';
+            block.className = `${isOperationalSummary ? 'min-h-[96px] rounded-xl px-3 py-2.5 shadow-sm' : 'min-h-[78px] rounded-lg px-3 py-2'} border transition-colors duration-200 ${style.block}`;
             block.classList.toggle('status-green', state === 'success');
             block.dataset.telemetryState = state;
             const icon = block.querySelector('[data-telemetry-icon]');
@@ -18175,8 +18302,7 @@
             document.documentElement.dataset.syncStatus = synchronized ? 'synced' : 'local-only';
 
             if (synchronized) {
-                updateSequentialTelemetryBlock('matching-route-status-block', 'success', `${formState.POL} ➔ ${formState.POD}`);
-                updateSequentialTelemetryBlock('matching-laycan-status-block', 'success', formState.Laycan);
+                syncMatchingRouteSummary?.(window.GlobalStore?.calculatedState || window.CalculatedState || null);
                 updateSequentialTelemetryBlock(
                     'matching-fleet-status-block',
                     'success',
@@ -18219,13 +18345,20 @@
         }
         window.evaluateReactiveSyncStatus = evaluateReactiveSyncStatus;
 
-        window.SeaCharterStore?.subscribe?.(() => evaluateReactiveSyncStatus());
+        window.SeaCharterStore?.subscribe?.(() => {
+            evaluateReactiveSyncStatus();
+            syncMatchingRouteSummary?.(window.GlobalStore?.calculatedState || window.CalculatedState || null);
+        });
         window.addEventListener('DOMContentLoaded', () => {
-            ['port-pol', 'map-port-pol', 'port-pod', 'map-port-pod', 'gc-laycan-date', 'map-laycan-date'].forEach((id) => {
+            ['port-pol', 'map-port-pol', 'port-pod', 'map-port-pod', 'gc-laycan-date', 'map-laycan-date', 'gc-cancel-date', 'map-cancelling-date'].forEach((id) => {
                 const input = document.getElementById(id);
                 if (!input || input.dataset.reactiveSyncBound === 'true') return;
-                input.addEventListener('input', () => evaluateReactiveSyncStatus());
-                input.addEventListener('change', () => evaluateReactiveSyncStatus());
+                const publishRouteState = () => {
+                    SeaCharterStore.set(readRouteStateFromCalculator(), { force: true });
+                    evaluateReactiveSyncStatus();
+                };
+                input.addEventListener('input', publishRouteState);
+                input.addEventListener('change', publishRouteState);
                 input.dataset.reactiveSyncBound = 'true';
             });
             evaluateReactiveSyncStatus();
@@ -18364,11 +18497,10 @@
                 routeReady ? 'success' : 'pending',
                 `${pol || 'Pendiente'} ➔ ${pod || 'Pendiente'}`
             );
-            updateSequentialTelemetryBlock(
-                'matching-laycan-status-block',
-                laycanReady ? 'success' : 'pending',
-                laycan || 'Pendiente'
-            );
+            const matchingLaycanStatusText = document.getElementById('matching-laycan-status-text');
+            if (matchingLaycanStatusText) {
+                matchingLaycanStatusText.innerHTML = `<i class="fa-regular fa-calendar" aria-hidden="true"></i> ${laycan || 'Laycan pendiente'}`;
+            }
             if (syncBadge) {
                 syncBadge.textContent = routeReady && laycanReady ? 'Sincronizado' : 'Pendiente';
                 syncBadge.className = routeReady && laycanReady
@@ -19793,17 +19925,77 @@
         window.matchingLocalInFlightRequests = window.matchingLocalInFlightRequests || new Map();
         window.matchingStrictTechnicalFilter = false;
 
+        window.getMatchingContractOperationalState = function(candidateState = null) {
+            const calculatedState = candidateState
+                || window.GlobalStore?.calculatedState
+                || window.CalculatedState
+                || {};
+            const matchingRequest = calculatedState.matchingRequest
+                || window.GlobalStore?.matchingRequest
+                || window.matchingRequest
+                || {};
+            const storeState = window.SeaCharterStore?.getState?.() || {};
+            const globalState = typeof State !== 'undefined' && State ? State : {};
+            const firstPositiveNumber = (...values) => values
+                .map(Number)
+                .find(value => Number.isFinite(value) && value > 0) || 0;
+            const firstText = (...values) => values
+                .map(value => String(value || '').trim())
+                .find(Boolean) || '';
+            return {
+                cargoType: firstText(
+                    storeState.cargoType,
+                    storeState.cargoProduct,
+                    calculatedState.cargo?.typeLabel,
+                    calculatedState.cargo?.cargoDescription,
+                    matchingRequest.cargo?.cargoDescription,
+                    matchingRequest.cargo?.specification,
+                    storeState.cargoTypeManual,
+                    globalState.cargoProduct,
+                    globalState.cargoType,
+                    globalState.cargoTypeManual
+                ),
+                quantityMt: firstPositiveNumber(
+                    storeState.cargoQuantity,
+                    storeState.cargoQty,
+                    storeState.cargo,
+                    calculatedState.cargo?.quantity,
+                    calculatedState.cargo?.cargoQuantity,
+                    calculatedState.cargoQuantity,
+                    calculatedState.cargoQty,
+                    calculatedState.targetCargoMT,
+                    matchingRequest.cargo?.quantity,
+                    matchingRequest.cargo?.cargoQuantity,
+                    globalState.cargoQty,
+                    globalState.cargo,
+                    document.getElementById('cargo-qty')?.value,
+                    document.getElementById('match-quantity')?.value
+                ),
+                loadRateMt: firstPositiveNumber(
+                    storeState.loadRate,
+                    calculatedState.cargo?.loadRate,
+                    calculatedState.loadRate,
+                    matchingRequest.cargo?.loadRate,
+                    globalState.loadRate,
+                    document.getElementById('rate-load')?.value,
+                    document.getElementById('ritmo_nominal_pol')?.value
+                ),
+                dischargeRateMt: firstPositiveNumber(
+                    storeState.dischargeRate,
+                    storeState.dischRate,
+                    calculatedState.cargo?.dischargeRate,
+                    calculatedState.dischargeRate,
+                    matchingRequest.cargo?.dischargeRate,
+                    globalState.dischargeRate,
+                    globalState.dischRate,
+                    document.getElementById('rate-disch')?.value,
+                    document.getElementById('ritmo_nominal_pod')?.value
+                )
+            };
+        };
+
         window.getCommercialTargetCargoDwt = function() {
-            const candidates = [
-                document.getElementById('match-quantity')?.value,
-                document.getElementById('cargo-qty')?.value,
-                window.GlobalStore?.matchingRequest?.cargo?.quantity,
-                window.GlobalStore?.calculatedState?.cargoQty,
-                window.SeaCharterStore?.getState?.()?.cargoQty,
-                typeof State !== 'undefined' ? State.cargoQty : null
-            ];
-            const target = candidates.map(Number).find(value => Number.isFinite(value) && value > 0);
-            return target || 0;
+            return window.getMatchingContractOperationalState().quantityMt;
         };
 
         window.buildCommercialVesselRank = function({ vesselDwt, targetCargoDwt, laycanCompliant, transitHours, distanceNm }) {
@@ -21396,7 +21588,7 @@
                         sourceTaxonomies: selectedVesselTaxonomies.slice()
                     },
                     searchMode: 'local_database',
-                    strictTechnicalFilter: false,
+                    strictTechnicalFilter: window.matchingStrictTechnicalFilter === true,
                     debugIncludeUnknownDwt: window.matchingDebugIncludeUnknownDwt === true,
                     matchRadiusNm: (window.AIS_PROSPECTION_RADII_NM && Number(window.AIS_PROSPECTION_RADII_NM.POL)) || 2000,
                     allowedSources: getAllowedMatchingSources(),
@@ -21628,8 +21820,22 @@
 
                 const matches = deduplicatedMatches;
                 Object.freeze(matches);
-                const strictTechnicalFilter = false;
-                const viableMatches = matches.slice();
+                const strictTechnicalFilter = window.matchingStrictTechnicalFilter === true;
+                const strictRequiredDwt = quantity > 0 ? quantity * 1.05 : 0;
+                const viableMatches = matches
+                    .filter((match) => {
+                        if (!strictTechnicalFilter || strictRequiredDwt <= 0) return true;
+                        const dwt = Number(match?.vessel?.dwt ?? match?.ais?.dwt);
+                        return !Number.isFinite(dwt) || dwt <= 0 || dwt >= strictRequiredDwt;
+                    })
+                    .sort((left, right) => {
+                        if (!strictTechnicalFilter) return 0;
+                        const leftDwt = Number(left?.vessel?.dwt ?? left?.ais?.dwt);
+                        const rightDwt = Number(right?.vessel?.dwt ?? right?.ais?.dwt);
+                        const leftUnknown = !Number.isFinite(leftDwt) || leftDwt <= 0;
+                        const rightUnknown = !Number.isFinite(rightDwt) || rightDwt <= 0;
+                        return Number(leftUnknown) - Number(rightUnknown);
+                    });
                 Object.freeze(viableMatches);
                 const technicalWarningCount = Math.max(
                     Number(data.technicalWarningCount) || 0,
@@ -21731,7 +21937,11 @@
                         const hasKnownDwt = Number.isFinite(vesselDwt) && vesselDwt > 0;
                         const dwtAssessmentStatus = m.dwtAssessment?.status || v.dwtAssessment?.status || comp.dwtAssessment?.status || (!hasKnownDwt ? 'UNKNOWN' : requiredCargo > 0 && vesselDwt < requiredCargo ? 'INSUFFICIENT' : 'SUFFICIENT');
                         const isOversized = hasKnownDwt && requiredCargo > 0 && vesselDwt > requiredCargo * maxDwtTolerance;
-                        const isUndersized = dwtAssessmentStatus === 'INSUFFICIENT';
+                        const isBelowStrictSafetyDwt = strictTechnicalFilter
+                            && requiredCargo > 0
+                            && hasKnownDwt
+                            && vesselDwt < requiredCargo * 1.05;
+                        const isUndersized = dwtAssessmentStatus === 'INSUFFICIENT' || isBelowStrictSafetyDwt;
                         const isDwtUnknown = dwtAssessmentStatus === 'UNKNOWN';
                         const isValidCapacity = dwtAssessmentStatus === 'SUFFICIENT' && (requiredCargo <= 0 || vesselDwt <= requiredCargo * maxDwtTolerance);
                         const commercialRank = m.commercialRank || window.buildCommercialVesselRank({
@@ -21786,7 +21996,7 @@
                         const declaredVesselType = comp.declaredVesselType || v.vesselType || v.vessel_type || v.vesselClass || v.specialtyType || 'Desconocido';
                         const vesselTypeCompatible = comp.taxonomyCompatible !== false;
                         const dwtPenaltyBadge = isDwtUnknown
-                            ? '<span data-missing-technical-warning="true" class="bg-red-50 text-red-700 border border-red-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-circle-xmark"></i> DWT Desconocido</span>'
+                            ? '<span data-missing-technical-warning="true" class="bg-amber-50 text-amber-800 border border-amber-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1" title="Requiere Due Diligence para verificar DWT"><i class="fa-solid fa-shield-halved"></i> Requiere Due Diligence para verificar DWT</span>'
                             : isUndersized
                                 ? '<span class="bg-red-50 text-red-700 border border-red-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-circle-xmark"></i> DWT Insuficiente</span>'
                                 : '';
@@ -22099,7 +22309,7 @@
                                 <i class="fa-solid fa-circle-info"></i> Ver Ficha Técnica / View Data Sheet
                              </a>` : '';
                         const cardHtml = `
-                            <div class="matching-vessel-card border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : 'border-red-200 bg-red-50/40 opacity-80 cursor-pointer'} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-requires-due-diligence="${requiresDueDiligence}" data-vessel-imo="${v.imo || ''}" data-source-origin="${sourceOriginLabel}" data-map-focus-id="${mapFocusId}" onclick="handleMatchingVesselCardClick(event)">
+                            <div class="matching-vessel-card border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : `border-red-200 bg-red-50/40 ${isDwtUnknown ? 'opacity-65' : 'opacity-80'} cursor-pointer`} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-requires-due-diligence="${requiresDueDiligence}" data-vessel-imo="${v.imo || ''}" data-source-origin="${sourceOriginLabel}" data-map-focus-id="${mapFocusId}" onclick="handleMatchingVesselCardClick(event)">
                                 <!-- Rank Ribbon -->
                                 <div class="absolute top-4 right-5 flex items-center gap-2">
                                     ${estimatedDwtBadge}
@@ -22506,7 +22716,8 @@
             const route = {
                 pol,
                 pod,
-                laycan: readRouteValue(routeOverride?.laycan) || readRouteValue(calculatedRoute?.laycan) || readRouteValue(routeContext?.laycan) || readRouteValue(routeState.laycanDate) || readRouteValue(document.getElementById('match-laycan-start')?.value),
+                laydays: readRouteValue(routeOverride?.laydays) || readRouteValue(routeOverride?.laycan) || readRouteValue(calculatedRoute?.laydays) || readRouteValue(calculatedRoute?.laycan) || readRouteValue(routeContext?.laydays) || readRouteValue(routeContext?.laycan) || readRouteValue(routeState.laydays) || readRouteValue(routeState.laycanDate) || readRouteValue(document.getElementById('match-laycan-start')?.value),
+                cancelling: readRouteValue(routeOverride?.cancelling) || readRouteValue(calculatedRoute?.cancelling) || readRouteValue(routeContext?.cancelling) || readRouteValue(routeState.cancelling) || readRouteValue(routeState.cancellingDate) || readRouteValue(document.getElementById('match-laycan-end')?.value),
                 pol_coordinates: polCoordinates,
                 pod_coordinates: podCoordinates,
                 lat: {
@@ -22518,6 +22729,7 @@
                     pod: podCoordinates?.lon ?? null
                 }
             };
+            route.laycan = route.laydays;
             return route;
         }
         window.getMatchingExecutionRouteOverride = getMatchingExecutionRouteOverride;
@@ -22762,9 +22974,16 @@
 
         const technicalProblemsToggle = document.getElementById('hide-technical-problems-toggle');
         if (technicalProblemsToggle) {
-            technicalProblemsToggle.checked = false;
-            technicalProblemsToggle.disabled = true;
-            technicalProblemsToggle.setAttribute('aria-checked', 'false');
+            technicalProblemsToggle.checked = window.matchingStrictTechnicalFilter === true;
+            technicalProblemsToggle.disabled = false;
+            technicalProblemsToggle.setAttribute('aria-checked', technicalProblemsToggle.checked ? 'true' : 'false');
+            technicalProblemsToggle.addEventListener('change', () => {
+                window.matchingStrictTechnicalFilter = technicalProblemsToggle.checked === true;
+                technicalProblemsToggle.setAttribute('aria-checked', window.matchingStrictTechnicalFilter ? 'true' : 'false');
+                const label = document.getElementById('strict-technical-filter-label');
+                if (label) label.textContent = `Filtro técnico estricto · ${window.matchingStrictTechnicalFilter ? 'activado' : 'desactivado'}`;
+                rerunMatchingAfterFilterChange();
+            });
         }
 
         document.querySelectorAll('.matching-source-toggle').forEach((toggle) => {
@@ -22824,7 +23043,9 @@
                 ...route,
                 pol: String(route.pol || '').trim(),
                 pod: String(route.pod || '').trim(),
-                laycan: String(route.laycan || calculatedState.laycan?.start || '').trim()
+                laydays: String(route.laydays || calculatedState.laycan?.laydays || calculatedState.laycan?.start || route.laycan || '').trim(),
+                cancelling: String(route.cancelling || calculatedState.laycan?.cancelling || calculatedState.laycan?.end || '').trim(),
+                laycan: String(route.laydays || calculatedState.laycan?.laydays || calculatedState.laycan?.start || route.laycan || '').trim()
             };
         }
         window.getActiveMatchingCalculationRoute = getActiveMatchingCalculationRoute;
@@ -22919,11 +23140,56 @@
         window.clearMatchingCandidateState = clearMatchingCandidateState;
 
         function syncMatchingRouteSummary(calculatedState = null) {
-            const route = getActiveMatchingCalculationRoute(calculatedState);
+            const storeRoute = window.SeaCharterStore?.getState?.() || {};
+            const route = getActiveMatchingCalculationRoute(calculatedState) || (
+                storeRoute.pol && storeRoute.pod
+                    ? {
+                        pol: String(storeRoute.pol).trim(),
+                        pod: String(storeRoute.pod).trim(),
+                        laydays: String(storeRoute.laydays || storeRoute.laycan?.laydays || storeRoute.laycanDate || '').trim(),
+                        cancelling: String(storeRoute.cancelling || storeRoute.laycan?.cancelling || storeRoute.cancellingDate || '').trim(),
+                        laycan: String(storeRoute.laydays || storeRoute.laycan?.laydays || storeRoute.laycanDate || '').trim()
+                    }
+                    : null
+            );
+            const operation = window.getMatchingContractOperationalState?.(calculatedState) || {};
             const badge = document.getElementById('matching-route-sync-badge');
+            const laycanText = document.getElementById('matching-laycan-status-text');
+            const cargoRatesText = document.getElementById('matching-cargo-rates-text');
+            const formatNumber = value => Number(value) > 0
+                ? Number(value).toLocaleString('es-ES', { maximumFractionDigits: 0 })
+                : 'Pendiente';
+            const formatContractDate = value => {
+                const normalized = String(value || '').trim();
+                if (!normalized) return '';
+                const isoDate = /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? `${normalized}T00:00:00Z` : normalized;
+                const parsed = new Date(isoDate);
+                if (Number.isNaN(parsed.getTime())) return normalized;
+                const formatted = new Intl.DateTimeFormat('es-ES', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                    timeZone: 'UTC'
+                }).format(parsed).replace(/\./g, '');
+                return formatted.replace(/(^|\s)([a-záéíóúñ])/g, (_, prefix, letter) => `${prefix}${letter.toUpperCase()}`);
+            };
+            const cargoReady = Boolean(operation.cargoType || operation.quantityMt || operation.loadRateMt || operation.dischargeRateMt);
+            const cargoSummary = operation.quantityMt > 0 && operation.cargoType
+                ? `${formatNumber(operation.quantityMt)} MT de ${operation.cargoType}`
+                : operation.cargoType || (operation.quantityMt > 0 ? `${formatNumber(operation.quantityMt)} MT` : 'Cantidad y mercancía pendientes');
+            updateSequentialTelemetryBlock?.(
+                'matching-cargo-status-block',
+                cargoReady ? 'success' : 'pending',
+                cargoSummary
+            );
+            if (cargoRatesText) {
+                cargoRatesText.textContent = operation.loadRateMt > 0 || operation.dischargeRateMt > 0
+                    ? `Carga: ${formatNumber(operation.loadRateMt)} / Descarga: ${formatNumber(operation.dischargeRateMt)}`
+                    : 'Ritmos pendientes';
+            }
             if (!route) {
                 updateSequentialTelemetryBlock?.('matching-route-status-block', 'pending', 'Ruta no configurada');
-                updateSequentialTelemetryBlock?.('matching-laycan-status-block', 'pending', 'Esperando cálculo activo');
+                if (laycanText) laycanText.innerHTML = '<i class="fa-regular fa-calendar" aria-hidden="true"></i> Laycan pendiente';
                 if (badge) {
                     badge.textContent = 'Inactivo';
                     badge.className = 'rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase text-slate-500';
@@ -22931,7 +23197,8 @@
                 return false;
             }
             updateSequentialTelemetryBlock?.('matching-route-status-block', 'success', `${route.pol} ➔ ${route.pod}`);
-            updateSequentialTelemetryBlock?.('matching-laycan-status-block', route.laycan ? 'success' : 'pending', route.laycan || 'Laycan pendiente');
+            const laycanRange = [formatContractDate(route.laydays), formatContractDate(route.cancelling)].filter(Boolean).join(' - ');
+            if (laycanText) laycanText.innerHTML = `<i class="fa-regular fa-calendar" aria-hidden="true"></i> ${laycanRange || 'Laycan pendiente'}`;
             if (badge) {
                 badge.textContent = 'Sincronizado';
                 badge.className = 'rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-[10px] font-black uppercase text-teal-700';
@@ -23320,13 +23587,43 @@
                 clearMatchingCandidateState();
             }
             const session = getPipelineSessionContext();
+            const voyageState = normalizeActiveVoyageState({
+                ...(calculation?.cargo || {}),
+                cargoQuantity: calculation?.cargo?.cargoQuantity ?? calculation?.cargo?.quantity,
+                cargoType: calculation?.cargo?.typeLabel ?? calculation?.cargo?.cargoDescription,
+                laycan: calculation?.laycan,
+                laydays: calculation?.laycan?.laydays ?? calculation?.laycan?.start ?? calculation?.route?.laydays ?? calculation?.route?.laycan,
+                cancelling: calculation?.laycan?.cancelling ?? calculation?.laycan?.end ?? calculation?.route?.cancelling
+            });
+            const normalizedRoute = {
+                ...(calculation?.route || {}),
+                laydays: voyageState.laydays,
+                cancelling: voyageState.cancelling,
+                laycan: voyageState.laydays
+            };
             const calculatedState = {
                 ...(calculation || {}),
+                route: normalizedRoute,
+                laycan: { laydays: voyageState.laydays, cancelling: voyageState.cancelling },
+                cargo: {
+                    ...(calculation?.cargo || {}),
+                    quantity: voyageState.cargoQuantity,
+                    cargoQuantity: voyageState.cargoQuantity,
+                    typeLabel: voyageState.cargoType,
+                    cargoDescription: voyageState.cargoType,
+                    loadRate: voyageState.loadRate,
+                    dischargeRate: voyageState.dischargeRate
+                },
+                cargoQuantity: voyageState.cargoQuantity,
+                cargoType: voyageState.cargoType,
+                loadRate: voyageState.loadRate,
+                dischargeRate: voyageState.dischargeRate,
                 sessionId: session.sessionId,
                 sessionStartedAt: session.startedAt,
                 cachedAt: new Date().toISOString()
             };
             window.CalculatedState = calculatedState;
+            window.SeaCharterStore?.set?.(voyageState, { force: true });
             if (window.GlobalStore) {
                 window.GlobalStore.calculatedState = calculatedState;
                 window.GlobalStore.calculationSessionId = session.sessionId;
@@ -23347,6 +23644,16 @@
         function applyCalculatedStateToMatchingContext(calculatedState) {
             if (!isCalculatedStateCurrent(calculatedState)) return false;
             const route = calculatedState.route || {};
+            const voyageState = normalizeActiveVoyageState({
+                ...(calculatedState.cargo || {}),
+                cargoQuantity: calculatedState.cargo?.cargoQuantity ?? calculatedState.cargo?.quantity ?? calculatedState.cargoQuantity,
+                cargoType: calculatedState.cargo?.typeLabel ?? calculatedState.cargo?.cargoDescription ?? calculatedState.cargoType,
+                laycan: calculatedState.laycan,
+                laydays: calculatedState.laycan?.laydays ?? calculatedState.laycan?.start ?? route.laydays ?? route.laycan,
+                cancelling: calculatedState.laycan?.cancelling ?? calculatedState.laycan?.end ?? route.cancelling,
+                loadRate: calculatedState.cargo?.loadRate ?? calculatedState.loadRate,
+                dischargeRate: calculatedState.cargo?.dischargeRate ?? calculatedState.dischargeRate
+            });
             const polCoordinates = calculatedState.pol_coordinates || route.pol_coordinates || { lat: route.lat?.pol, lon: route.lon?.pol };
             const podCoordinates = calculatedState.pod_coordinates || route.pod_coordinates || { lat: route.lat?.pod, lon: route.lon?.pod };
             const geopoliticalRoute = {
@@ -23356,11 +23663,11 @@
                 lat: { pol: polCoordinates.lat ?? null, pod: podCoordinates.lat ?? null },
                 lon: { pol: polCoordinates.lon ?? null, pod: podCoordinates.lon ?? null }
             };
-            if (route.pol || route.pod || route.laycan) {
+            if (route.pol || route.pod || voyageState.laydays || voyageState.cancelling) {
                 window.SeaCharterStore?.set?.({
                     pol: route.pol,
                     pod: route.pod,
-                    laycanDate: route.laycan,
+                    ...voyageState,
                     pol_coordinates: polCoordinates,
                     pod_coordinates: podCoordinates,
                     geopoliticalRoute
@@ -23370,24 +23677,28 @@
                 window.coreProMatchingRouteContext = {
                     pol: { lat: polCoordinates.lat ?? null, lon: polCoordinates.lon ?? null },
                     pod: { lat: podCoordinates.lat ?? null, lon: podCoordinates.lon ?? null },
-                    laycan: route.laycan || ''
+                    laycan: voyageState.laydays || '',
+                    laydays: voyageState.laydays || '',
+                    cancelling: voyageState.cancelling || ''
                 };
             }
             setInputValue('match-load-port', route.pol);
             setInputValue('match-unload-port', route.pod);
-            setInputValue('match-laycan-start', route.laycan);
+            setInputValue('match-laycan-start', voyageState.laydays);
+            setInputValue('match-laycan-end', voyageState.cancelling);
             setInputValue('match-load-lat', polCoordinates.lat);
             setInputValue('match-load-lon', polCoordinates.lon);
             setInputValue('match-unload-lat', podCoordinates.lat);
             setInputValue('match-unload-lon', podCoordinates.lon);
-            setInputValue('match-cargo-type', calculatedState.cargo?.type);
-            setInputValue('match-quantity', calculatedState.cargo?.quantity);
+            setInputValue('match-cargo-type', calculatedState.cargo?.type || calculatedState.cargo?.typeId);
+            setInputValue('match-quantity', voyageState.cargoQuantity);
             setInputValue('match-freight-rate', calculatedState.freight?.owner);
             if (calculatedState.matchingRequest) persistMatchingRequest(calculatedState.matchingRequest);
             if (window.GlobalStore) {
                 window.GlobalStore.calculatedState = calculatedState;
                 window.GlobalStore.calculationSessionId = calculatedState.sessionId;
             }
+            syncMatchingRouteSummary(calculatedState);
             return true;
         }
         window.applyCalculatedStateToMatchingContext = applyCalculatedStateToMatchingContext;
@@ -23466,7 +23777,8 @@
             return [
                 route?.pol,
                 route?.pod,
-                route?.laycan,
+                route?.laydays || route?.laycan,
+                route?.cancelling,
                 route?.lat?.pol,
                 route?.lon?.pol,
                 route?.lat?.pod,
@@ -24722,6 +25034,10 @@
                     }
                     const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
                     const cargoTypeId = document.getElementById('cargo-type-manual')?.value || window.CargoTypeSelector?.readSelectedId?.() || '100';
+                    const validatedCargoState = readValidatedCargoOperationState();
+                    SeaCharterStore.set(validatedCargoState, { force: true });
+                    const loadRate = validatedCargoState.loadRate;
+                    const dischargeRate = validatedCargoState.dischargeRate;
                     const loadMethod = document.getElementById('metodo_carga')?.value || '';
                     const dischargeMethod = document.getElementById('metodo_descarga_pod')?.value || loadMethod;
                     const grabRequired = loadMethod === 'cuchara_grab' || dischargeMethod === 'cuchara_grab';
@@ -24894,6 +25210,9 @@
                             typeLabel: window.getCargoTaxonomyLabel?.(cargoTypeId) || 'Otros',
                             specification: window.getCargoTaxonomyLabel?.(cargoTypeId) || 'Otros',
                             quantity: cargoQty,
+                            cargoQuantity: cargoQty,
+                            loadRate,
+                            dischargeRate,
                             stowageFactor: Math.max(0, Number(document.getElementById('cargo-sf')?.value) || 0),
                             requiredVolumeCbm: cargoQty * Math.max(0, Number(document.getElementById('cargo-sf')?.value) || 0),
                             loadMethod,
@@ -28723,6 +29042,7 @@
             if (typeof recalcularDiasPuerto === 'function') {
                 recalcularDiasPuerto();
             }
+            SeaCharterStore.set(readValidatedCargoOperationState(), { force: true });
             if (typeof actualizarModuloCamionTolva === 'function') {
                 actualizarModuloCamionTolva();
             }
@@ -30624,6 +30944,16 @@
                 ? window.getMatchingExecutionRouteOverride()
                 : {});
             const state = typeof State !== 'undefined' && State ? State : {};
+            const voyageState = normalizeActiveVoyageState({
+                ...(calculation.cargo || {}),
+                cargoQuantity: calculation.cargo?.cargoQuantity ?? calculation.cargo?.quantity,
+                cargoType: calculation.cargo?.typeLabel ?? calculation.cargo?.cargoDescription,
+                laycan: calculation.laycan,
+                laydays: calculation.laycan?.laydays ?? calculation.laycan?.start ?? route?.laydays ?? route?.laycan,
+                cancelling: calculation.laycan?.cancelling ?? calculation.laycan?.end ?? route?.cancelling,
+                loadRate: calculation.cargo?.loadRate,
+                dischargeRate: calculation.cargo?.dischargeRate
+            });
             const readNumber = id => {
                 const value = Number(document.getElementById(id)?.value);
                 return Number.isFinite(value) ? value : 0;
@@ -30641,15 +30971,19 @@
                 route: {
                     pol: String(route?.pol || '').trim(),
                     pod: String(route?.pod || '').trim(),
-                    laycan: String(route?.laycan || '').trim(),
+                    laydays: voyageState.laydays,
+                    cancelling: voyageState.cancelling,
+                    laycan: voyageState.laydays,
                     pol_coordinates: { lat: Number(polCoordinates.lat), lon: Number(polCoordinates.lon) },
                     pod_coordinates: { lat: Number(podCoordinates.lat), lon: Number(podCoordinates.lon) },
                     lat: { pol: Number(polCoordinates.lat), pod: Number(podCoordinates.lat) },
                     lon: { pol: Number(polCoordinates.lon), pod: Number(podCoordinates.lon) }
                 },
                 laycan: {
-                    start: String(route?.laycan || document.getElementById('gc-laycan-date')?.value || '').trim(),
-                    end: String(document.getElementById('gc-cancel-date')?.value || document.getElementById('match-laycan-end')?.value || '').trim()
+                    laydays: voyageState.laydays,
+                    cancelling: voyageState.cancelling,
+                    start: voyageState.laydays,
+                    end: voyageState.cancelling
                 },
                 cargo: {
                     cargoCode: String(document.getElementById('cargo-type-manual')?.value || window.CargoTypeSelector?.readSelectedId?.() || '100'),
@@ -30657,15 +30991,18 @@
                     type: String(document.getElementById('cargo-type-manual')?.value || window.CargoTypeSelector?.readSelectedId?.() || '100'),
                     specification: String(window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value) || 'Otros'),
                     typeId: String(document.getElementById('cargo-type-manual')?.value || window.CargoTypeSelector?.readSelectedId?.() || '100'),
-                    quantity: Number(calculation.cargo?.quantity) || readNumber('cargo-qty'),
+                    quantity: voyageState.cargoQuantity || readNumber('cargo-qty'),
+                    cargoQuantity: voyageState.cargoQuantity || readNumber('cargo-qty'),
                     stowageFactor: readNumber('cargo-sf'),
-                    requiredVolumeCbm: (Number(calculation.cargo?.quantity) || readNumber('cargo-qty')) * readNumber('cargo-sf'),
+                    requiredVolumeCbm: (voyageState.cargoQuantity || readNumber('cargo-qty')) * readNumber('cargo-sf'),
                     loadMethod: String(document.getElementById('metodo_carga')?.value || ''),
                     dischargeMethod: String(document.getElementById('metodo_descarga_pod')?.value || document.getElementById('metodo_carga')?.value || ''),
                     gearedRequired: document.getElementById('match-geared-required')?.checked === true || metodoRequiereGruasBuque(document.getElementById('metodo_carga')?.value) || metodoRequiereGruasBuque(document.getElementById('metodo_descarga_pod')?.value),
                     grabRequired: document.getElementById('metodo_carga')?.value === 'cuchara_grab' || document.getElementById('metodo_descarga_pod')?.value === 'cuchara_grab',
                     requiredGrabCapacityCbm: readNumber('grab-capacity-cbm'),
-                    requiredCraneSwlMt: readNumber('crane-swl-mt')
+                    requiredCraneSwlMt: readNumber('crane-swl-mt'),
+                    loadRate: voyageState.loadRate || readNumber('rate-load') || readNumber('ritmo_nominal_pol'),
+                    dischargeRate: voyageState.dischargeRate || readNumber('rate-disch') || readNumber('ritmo_nominal_pod')
                 },
                 freight: {
                     owner: Number(calculation.freight?.owner) || readNumber('freight-rate'),
@@ -30686,19 +31023,37 @@
                 return Number.isFinite(value) ? value : 0;
             };
             const state = typeof State !== 'undefined' && State ? State : {};
+            const routeState = readRouteStateFromCalculator();
+            const cargoState = readValidatedCargoOperationState();
+            const laydays = String(routeState.laydays || routeState.laycanDate || route?.laydays || route?.laycan || '').trim();
+            const cancelling = String(routeState.cancelling || routeState.cancellingDate || route?.cancelling || '').trim();
             const calculationId = window.crypto?.randomUUID?.()
                 || `calculation-${Date.now()}-${Math.random().toString(16).slice(2)}`;
             return {
                 calculationId,
                 trigger: role === 'owner' ? 'owner-freight' : 'charterer-freight',
                 calculatedAt: new Date().toISOString(),
-                route,
+                route: {
+                    ...(route || {}),
+                    laydays,
+                    cancelling,
+                    laycan: laydays
+                },
+                laycan: { laydays, cancelling },
                 cargo: {
                     type: String(document.getElementById('cargo-type-manual')?.value || window.CargoTypeSelector?.readSelectedId?.() || '100'),
                     typeId: String(document.getElementById('cargo-type-manual')?.value || window.CargoTypeSelector?.readSelectedId?.() || '100'),
                     typeLabel: String(window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value) || 'Otros'),
-                    quantity: readNumber('cargo-qty')
+                    cargoDescription: cargoState.cargoType,
+                    quantity: cargoState.cargoQuantity,
+                    cargoQuantity: cargoState.cargoQuantity,
+                    loadRate: cargoState.loadRate,
+                    dischargeRate: cargoState.dischargeRate
                 },
+                cargoQuantity: cargoState.cargoQuantity,
+                cargoType: cargoState.cargoType,
+                loadRate: cargoState.loadRate,
+                dischargeRate: cargoState.dischargeRate,
                 freight: {
                     owner: readNumber('freight-rate'),
                     charterer: readNumber('freight-sell'),
@@ -43928,7 +44283,11 @@ Example:
                 alert(message);
                 return;
             }
-            const calculationData = { ...State };
+            const calculationData = normalizeActiveVoyageState({
+                ...State,
+                ...readRouteStateFromCalculator(),
+                ...readValidatedCargoOperationState()
+            });
             
             const payload = {
                 unique_reference: uniqueReference,
@@ -43977,8 +44336,33 @@ Example:
                     const quote = result.data;
                     loadedHistoricalQuote = quote;
                     
-                    // Restablecer el State con los datos de cálculo históricos
-                    Object.assign(State, quote.calculation_data);
+                    // Restablecer el viaje activo desde Neon usando el modelo canónico compartido.
+                    const hydratedVoyageState = normalizeActiveVoyageState(quote.calculation_data || {});
+                    SeaCharterStore.set({ ...(quote.calculation_data || {}), ...hydratedVoyageState }, { force: true });
+                    const hydratedCalculation = injectCalculatedState({
+                        calculationId: String(quote.id || quote.unique_reference || searchRef),
+                        contractReference: String(quote.unique_reference || searchRef),
+                        route: {
+                            pol: hydratedVoyageState.pol || '',
+                            pod: hydratedVoyageState.pod || '',
+                            laydays: hydratedVoyageState.laydays,
+                            cancelling: hydratedVoyageState.cancelling,
+                            laycan: hydratedVoyageState.laydays,
+                            pol_coordinates: hydratedVoyageState.pol_coordinates || hydratedVoyageState.polCoordinates || null,
+                            pod_coordinates: hydratedVoyageState.pod_coordinates || hydratedVoyageState.podCoordinates || null
+                        },
+                        laycan: hydratedVoyageState.laycan,
+                        cargo: {
+                            type: hydratedVoyageState.cargoTypeCode || '100',
+                            typeId: hydratedVoyageState.cargoTypeCode || '100',
+                            typeLabel: hydratedVoyageState.cargoType,
+                            cargoDescription: hydratedVoyageState.cargoType,
+                            quantity: hydratedVoyageState.cargoQuantity,
+                            cargoQuantity: hydratedVoyageState.cargoQuantity,
+                            loadRate: hydratedVoyageState.loadRate,
+                            dischargeRate: hydratedVoyageState.dischargeRate
+                        }
+                    });
                     
                     // Sincronizar estado de cláusulas de contrato cargadas
                     syncClausesFromState();
@@ -43995,11 +44379,17 @@ Example:
                     setVal('dist-laden', State.distLaden);
                     setVal('spd-ballast', State.spdBallast !== undefined ? State.spdBallast : 11);
                     setVal('spd-laden', State.spdLaden !== undefined ? State.spdLaden : 11);
-                    setVal('cargo-qty', State.cargo);
+                    setVal('cargo-qty', State.cargoQuantity || State.cargo);
                     restoreCargoSelection(State.cargoType, State.cargoProduct);
                     setVal('charter-party-standard', State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON'));
                     setVal('rate-load', State.loadRate !== undefined ? State.loadRate : 1000);
-                    setVal('rate-disch', State.dischRate !== undefined ? State.dischRate : 1500);
+                    setVal('rate-disch', State.dischargeRate !== undefined ? State.dischargeRate : (State.dischRate !== undefined ? State.dischRate : 1500));
+                    setVal('gc-laycan-date', State.laydays || State.laycanDate);
+                    setVal('gc-cancel-date', State.cancelling || State.cancellingDate);
+                    setVal('map-laycan-date', State.laydays || State.laycanDate);
+                    setVal('map-cancelling-date', State.cancelling || State.cancellingDate);
+                    setVal('match-laycan-start', State.laydays || State.laycanDate);
+                    setVal('match-laycan-end', State.cancelling || State.cancellingDate);
                     setVal('factor-clima', State.weatherMarginDays !== undefined ? State.weatherMarginDays : (State.daysMargin !== undefined ? State.daysMargin : 0));
                     setVal('days-margin', State.weatherMarginDays !== undefined ? State.weatherMarginDays : (State.daysMargin !== undefined ? State.daysMargin : 0));
                     setVal('cons-sea', State.consSea !== undefined ? State.consSea : 0);
@@ -44032,6 +44422,7 @@ Example:
                     if (document.getElementById('vessel-badge')) {
                         document.getElementById('vessel-badge').innerText = State.class || "Coaster";
                     }
+                    syncMatchingRouteSummary(hydratedCalculation);
                     
                     // Habilitar botón de impresión histórica
                     document.getElementById('btn-print-historical').removeAttribute('disabled');
@@ -51471,7 +51862,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 window.externalRadarSweepState.requestedAt = new Date().toISOString();
                 window.GlobalStore?.setAisDataAvailability?.(false, { source: 'manual-sweep-start' });
                 updateSequentialTelemetryBlock('matching-route-status-block', 'processing', 'Barrido externo solicitado');
-                updateSequentialTelemetryBlock('matching-laycan-status-block', 'processing', 'Barrido externo solicitado');
                 updateSequentialTelemetryBlock('matching-fleet-status-block', 'processing', 'Barrido externo solicitado');
                 window.aisAvailabilitySweepUi.status = 'requesting';
                 window.aisAvailabilitySweepUi.isLoading = true;
@@ -51536,7 +51926,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 	                    const degradedSweep = completion.degraded === true || completion.liveConnection === false;
 	                    const completionLabel = degradedSweep ? 'AISStream no disponible · usando base local' : 'Barrido externo completado';
 	                    updateSequentialTelemetryBlock('matching-route-status-block', degradedSweep ? 'warning' : 'success', completionLabel);
-	                    updateSequentialTelemetryBlock('matching-laycan-status-block', degradedSweep ? 'warning' : 'success', completionLabel);
 	                    updateSequentialTelemetryBlock('matching-fleet-status-block', degradedSweep ? 'warning' : 'success', `${window.aisAvailabilitySweepUi.vesselCount} buques disponibles`);
 	                    window.dispatchEvent(new CustomEvent('AIS_SWEEP_COMPLETE', { detail: completion }));
 	                    if (typeof calculateAndDisplayAisFreight === 'function') {
@@ -51549,7 +51938,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 	                        ? error.message
 	                        : 'No se pudo completar la captura AIS.';
 	                    updateSequentialTelemetryBlock('matching-route-status-block', 'error', finalErrorMessage);
-	                    updateSequentialTelemetryBlock('matching-laycan-status-block', 'error', finalErrorMessage);
 	                    updateSequentialTelemetryBlock('matching-fleet-status-block', 'error', finalErrorMessage);
 	                } finally {
 	                    window.aisAvailabilitySweepUi.isLoading = false;

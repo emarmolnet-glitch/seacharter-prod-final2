@@ -7,7 +7,7 @@ const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 test('synchronization panel renders five horizontal telemetry blocks', () => {
   assert.match(source, /id="matching-sequential-status-console"[^>]*min-w-\[980px\][^>]*grid-cols-5/);
   assert.match(source, /id="matching-route-status-block"/);
-  assert.match(source, /id="matching-laycan-status-block"/);
+  assert.match(source, /id="matching-cargo-status-block"/);
   assert.match(source, /id="matching-fleet-status-block"/);
   assert.match(source, /id="matching-execution-success-stick"/);
   assert.match(source, /id="matching-databridge-status-block"/);
@@ -22,12 +22,12 @@ test('telemetry renderer changes presentation classes without mutating applicati
   assert.doesNotMatch(rendererSource, /fetch\s*\(|GlobalStore|SeaCharterStore|localStorage/);
 });
 
-test('route and laycan blocks listen to the existing SEA_ROUTE_DEFINED event', () => {
+test('route and laycan summary listens to the existing SEA_ROUTE_DEFINED event', () => {
   const routeStart = source.indexOf("window.addEventListener('SEA_ROUTE_DEFINED'");
   const routeEnd = source.indexOf('function getCoreProMatchingRequestContext', routeStart);
   const routeSource = source.slice(routeStart, routeEnd);
   assert.match(routeSource, /'matching-route-status-block',[\s\S]*routeReady \? 'success' : 'pending'/);
-  assert.match(routeSource, /'matching-laycan-status-block',[\s\S]*laycanReady \? 'success' : 'pending'/);
+  assert.match(routeSource, /matching-laycan-status-text/);
 });
 
 test('fleet telemetry consumes the derived filtered array and clean taxonomy labels', () => {

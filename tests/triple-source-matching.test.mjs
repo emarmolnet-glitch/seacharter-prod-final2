@@ -102,11 +102,11 @@ test('scoring preserves vessel key and combined source origins', () => {
 test('strict technical filtering exposes DWT assessment and compact-card penalties', () => {
   assert.match(filterSource, /strictTechnicalFilter/);
   assert.match(filterSource, /status: "UNKNOWN", label: "DWT Desconocido"/);
-  assert.match(filterSource, /status: "INSUFFICIENT", label: "DWT Insuficiente"/);
+  assert.match(filterSource, /status: "INSUFFICIENT", label: "DWT Insuficiente \(margen operativo 5%\)"/);
   assert.match(indexSource, /DWT Desconocido/);
   assert.match(indexSource, /DWT Insuficiente/);
   assert.match(indexSource, /Vessel Type:/);
-  assert.match(indexSource, /strictTechnicalFilter: false/);
+  assert.match(indexSource, /strictTechnicalFilter: window\.matchingStrictTechnicalFilter === true/);
   assert.match(indexSource, /Modo Debug Filtros/);
   assert.match(indexSource, /debugIncludeUnknownDwt: window\.matchingDebugIncludeUnknownDwt === true/);
   assert.match(filterSource, /debugUnknownDwtAllowed/);
