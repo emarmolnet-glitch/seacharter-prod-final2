@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const netlifyConfigSource = await readFile(new URL('../netlify.toml', import.meta.url), 'utf8');
 
-const [indexSource, scriptSource, stylesSource, executiveSource, endpointSource, activeVoyageEndpointSource, vesselEndpointSource, migrationSource, schemaSource] = await Promise.all([
+const [indexSource, scriptSource, stylesSource, executiveSource, endpointSource, activeVoyageEndpointSource, vesselEndpointSource, migrationSource, schemaSource, trackingStoreSource] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../tracking-live.js', import.meta.url), 'utf8'),
   readFile(new URL('../calculator_view.css', import.meta.url), 'utf8'),
@@ -14,6 +14,7 @@ const [indexSource, scriptSource, stylesSource, executiveSource, endpointSource,
   readFile(new URL('../netlify/functions/vessel-live-profile.ts', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/database/migrations/20260803120000_create_voyages_tracking/migration.sql', import.meta.url), 'utf8'),
   readFile(new URL('../db/schema.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../src/stores/tracking-store.js', import.meta.url), 'utf8'),
 ]);
 
 test('tracking header switches between GIS and the executive laytime dashboard', () => {
@@ -64,7 +65,7 @@ test('tracking open and close events synchronize the active header module', () =
 });
 
 test('tracking uses a split GIS workspace with the complete commercial input', () => {
-  assert.match(scriptSource, /Input geográfico/);
+  assert.match(scriptSource, /Tracking contractual/);
   assert.match(scriptSource, /tracking-input-ballast/);
   assert.match(scriptSource, /tracking-input-pol/);
   assert.match(scriptSource, /tracking-input-pod/);
@@ -82,7 +83,7 @@ test('tracking uses a split GIS workspace with the complete commercial input', (
   assert.match(stylesSource, /\.tracking-map-stage/);
 });
 
-test('tracking GIS HUD and AIS card start empty and render only voyage data', () => {
+test('tracking GIS HUD starts empty and supports voyage or basic AIS data', () => {
   assert.match(scriptSource, /<strong id="tracking-map-route-label"><\/strong>/);
   assert.match(scriptSource, /<span id="tracking-map-route-distance"><\/span>/);
   assert.match(scriptSource, /<article class="tracking-ais-card ecosystem-panel" id="tracking-ais-card" hidden aria-hidden="true">/);
@@ -92,10 +93,11 @@ test('tracking GIS HUD and AIS card start empty and render only voyage data', ()
   assert.match(scriptSource, /<span class="tracking-ais-navigation" id="tracking-ais-navigation"><\/span>/);
   assert.match(scriptSource, /function setTrackingAisCardVisibility\(visible\)/);
   assert.match(scriptSource, /card\.hidden = !visible/);
-  assert.match(scriptSource, /if \(!hasVoyageData\) \{[\s\S]*tracking-ais-vessel'[\s\S]*textContent = ''/);
+  assert.match(scriptSource, /const hasVesselContext = hasTrackingVoyageData\(\) \|\| Boolean\(trackingState\.basicVessel\)/);
+  assert.match(scriptSource, /if \(!hasVesselContext\) \{[\s\S]*tracking-ais-vessel'[\s\S]*textContent = ''/);
   assert.match(scriptSource, /const routeOrigin = pol\.name \|\| pol\.id \|\| ''/);
   assert.match(scriptSource, /const vesselName = contract\.vesselName \|\| trackingState\.activeVoyage\?\.vesselName \|\| 'Sin buque'/);
-  assert.match(scriptSource, /document\.getElementById\('tracking-ais-position'\)\.textContent = position \?/);
+  assert.match(scriptSource, /Destino AIS:/);
   assert.doesNotMatch(scriptSource, /BEJAIA \(DZ\)|AVEIRO \(PT\)|TEST VESSEL ALPHA/);
 });
 
@@ -157,15 +159,20 @@ test('laytime fetching runs once per contract reference and stops after errors',
   assert.doesNotMatch(scriptSource, /async function loadLaytimeStatements/);
 });
 
-test('tracking keeps route calculation available for an active voyage without a contract reference', () => {
-  assert.match(scriptSource, /Referencia contractual <small>OPCIONAL<\/small>/);
+test('tracking exposes independent premium and basic search triggers', () => {
+  assert.match(scriptSource, /Referencia contractual <small>PREMIUM<\/small>/);
+  assert.match(scriptSource, /Buque \/ IMO \/ MMSI <small>BÁSICO<\/small>/);
+  assert.match(scriptSource, /function onSearchReference\(event\)/);
+  assert.match(scriptSource, /function onSearchVessel\(event\)/);
+  assert.match(scriptSource, /trackingState\.contractRef = ''/);
+  assert.match(scriptSource, /trackingStore\.getState\(\)\.clearContract\(\)/);
+  assert.match(scriptSource, /tracking-reference-search-form/);
+  assert.match(scriptSource, /tracking-vessel-search-form/);
+  assert.doesNotMatch(scriptSource, /contractLookupTimer = window\.setTimeout\(\(\) => loadTrackingContract/);
+  assert.doesNotMatch(scriptSource, /vesselInput\?\.addEventListener\('input', scheduleTrackingVesselLookup\)/);
   assert.match(scriptSource, /function renderManualTrackingState/);
-  assert.match(scriptSource, /if \(!contractRef\)/);
-  assert.match(scriptSource, /if \(!trackingState\.data\) renderManualTrackingState\(totalDistance\)/);
-  assert.match(scriptSource, /Ruta del viaje activo calculada/);
-  assert.match(scriptSource, /No hay un viaje activo en Neon para calcular la ruta/);
-  assert.match(scriptSource, /Vincula un contrato para activar alertas operativas/);
-  assert.doesNotMatch(scriptSource, /Sin contrato sincronizado/);
+  assert.match(stylesSource, /tracking-flow-status\[data-mode="premium"\]/);
+  assert.match(stylesSource, /tracking-flow-status\[data-mode="basic"\]/);
 });
 
 test('tracking routes the vessel profile API to its physical Netlify Function', () => {
@@ -173,7 +180,7 @@ test('tracking routes the vessel profile API to its physical Netlify Function', 
   assert.match(netlifyConfigSource, /from = "\/api\/v1\/\*"[\s\S]*to = "\/.netlify\/functions\/:splat"/);
 });
 
-test('tracking resolves vessel master and AIS only for an active voyage', () => {
+test('tracking resolves vessel master and AIS without requiring a contract', () => {
   assert.match(scriptSource, /vesselLookupTimer/);
   assert.match(scriptSource, /function normalizeTrackingVesselQuery/);
   assert.match(scriptSource, /NOVI\b/);
@@ -188,9 +195,22 @@ test('tracking resolves vessel master and AIS only for an active voyage', () => 
   assert.match(scriptSource, /speedKnots/);
   assert.match(scriptSource, /course/);
   assert.match(scriptSource, /heading/);
-  assert.match(scriptSource, /if \(!hasTrackingVoyageData\(\)\)/);
-  assert.match(scriptSource, /El mapa, el panel AIS y las alertas permanecen vacíos/);
-  assert.doesNotMatch(scriptSource, /AIS disponible al vincular contrato/);
+  assert.doesNotMatch(scriptSource, /async function loadTrackingVessel\(rawQuery, silent = false\) \{\s*if \(!hasTrackingVoyageData\(\)\)/);
+  assert.match(scriptSource, /POL, POD y carga son opcionales/);
+  assert.match(scriptSource, /OpenShips centra el mapa/);
+});
+
+test('tracking hydrates premium fields and publishes changes through Zustand', () => {
+  assert.match(scriptSource, /import \{ trackingStore \} from '\.\/src\/stores\/tracking-store\.js'/);
+  assert.match(scriptSource, /function setContractFieldsReadOnly\(isReadOnly\)/);
+  assert.match(scriptSource, /control\.readOnly = isReadOnly/);
+  assert.match(scriptSource, /trackingStore\.getState\(\)\.hydrateContract\(payload\)/);
+  assert.match(scriptSource, /bindTrackingStoreToGlobe/);
+  assert.match(scriptSource, /trackingStore\.subscribe/);
+  assert.match(scriptSource, /syncTrackingMap\(state\.contractPayload\)/);
+  assert.match(trackingStoreSource, /createStore/);
+  assert.match(trackingStoreSource, /mode: 'premium'/);
+  assert.match(trackingStoreSource, /\? 'premium' : 'basic'/);
 });
 
 test('tracking keeps AIS and alert panels below the globe rotation control', () => {
