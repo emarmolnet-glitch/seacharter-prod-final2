@@ -5,6 +5,7 @@ import { defineConfig } from "vite";
 const legacyAssets = [
   "_headers",
   "_redirects",
+  "contract-reference.js",
   "npl-data-analysis-engine.js",
   "npl-secret-module.js",
   "GlobalFleetGlobe.js",

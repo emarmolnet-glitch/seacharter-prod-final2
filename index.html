@@ -6,6 +6,53 @@
     <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * wss: https:; img-src * data: blob:; style-src * 'unsafe-inline';">
     <title>SeaCharter Core PRO - Flujo Completo RODAHMAR</title>
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <script>
+        (function installContractReferenceSafetyNet(globalObject) {
+            if (globalObject.ContractRefManager) return;
+
+            const normalizeReference = (value) => String(value || '').trim().toUpperCase();
+            const getActiveContractRef = function() {
+                try {
+                    const params = new URLSearchParams(globalObject.location?.search || '');
+                    return normalizeReference(
+                        params.get('ref')
+                        || params.get('contract_ref')
+                        || globalObject.sessionStorage?.getItem('active_contract_ref')
+                        || ''
+                    );
+                } catch (_error) {
+                    return '';
+                }
+            };
+            const setActiveContractRef = function(reference) {
+                const normalized = normalizeReference(reference);
+                if (!normalized) return getActiveContractRef();
+                try {
+                    globalObject.sessionStorage?.setItem('active_contract_ref', normalized);
+                } catch (_error) {}
+                try {
+                    const url = new URL(globalObject.location.href);
+                    url.searchParams.set('ref', normalized);
+                    url.searchParams.delete('contract_ref');
+                    globalObject.history?.replaceState?.(globalObject.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+                } catch (_error) {}
+                return normalized;
+            };
+            const fallbackManager = {
+                ensureUrlReference: function() {
+                    const reference = getActiveContractRef();
+                    return reference ? setActiveContractRef(reference) : '';
+                },
+                getActiveContractRef,
+                setActiveContractRef,
+            };
+
+            globalObject.ContractRefManager = fallbackManager;
+            globalObject.ContractReference = globalObject.ContractReference || fallbackManager;
+            globalObject.getActiveContractRef = globalObject.getActiveContractRef || getActiveContractRef;
+            globalObject.setActiveContractRef = globalObject.setActiveContractRef || setActiveContractRef;
+        })(window);
+    </script>
     <!-- Tailwind CSS -->
     <script>
         window.process = window.process || { env: {} };
@@ -118,6 +165,7 @@
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="./public/components.js"></script>
+    <script src="/contract-reference.js"></script>
     <script src="./npl-data-analysis-engine.js"></script>
     <script src="./npl-secret-module.js"></script>
     <script type="module" src="./public/ConnectionStatusBar.js"></script>
@@ -15752,8 +15800,16 @@
             if (State.pol) setInputValue('match-pol', State.pol);
             if (State.pod) setInputValue('match-pod', State.pod);
             updateRouteSummary();
-            if (typeof syncGencon === 'function') syncGencon();
-            if (typeof syncAsbatankvoy === 'function') syncAsbatankvoy();
+            try {
+                if (typeof syncGencon === 'function') syncGencon();
+            } catch (error) {
+                console.warn('[Contract Reference] GENCON sync continued in safe mode.', error);
+            }
+            try {
+                if (typeof syncAsbatankvoy === 'function') syncAsbatankvoy();
+            } catch (error) {
+                console.warn('[Contract Reference] ASBATANKVOY sync continued in safe mode.', error);
+            }
             if (typeof window.updateAisLaycanAndDeadlineBoxes === 'function') {
                 window.updateAisLaycanAndDeadlineBoxes();
             }
@@ -17548,26 +17604,18 @@
             }
 
             setTimeout(() => {
-                // Generar referencia única de contrato dinámica para cada sesión de la aplicación (RDM/YYYY-MMDD-XXXX)
-                const now = new Date();
-                const year = now.getFullYear();
-                const month = String(now.getMonth() + 1).padStart(2, '0');
-                const day = String(now.getDate()).padStart(2, '0');
-                
-                const suffixGC = Math.random().toString(36).substring(2, 6).toUpperCase();
-                const suffixASB = Math.random().toString(36).substring(2, 6).toUpperCase();
-                
-                const dynamicRefGC = `RDM/GC/${year}-${month}${day}-${suffixGC}`;
-                const dynamicRefASB = `RDM/ASB/${year}-${month}${day}-${suffixASB}`;
+                const activeContractRef = getSafeActiveContractRef();
 
                 const gcRefEl = document.getElementById('gc-ref');
                 if (gcRefEl) {
-                    gcRefEl.value = dynamicRefGC;
+                    gcRefEl.value = activeContractRef;
                 }
                 const asbRefEl = document.getElementById('asb-ref');
                 if (asbRefEl) {
-                    asbRefEl.value = dynamicRefASB;
+                    asbRefEl.value = activeContractRef;
                 }
+                const quickRefEl = document.getElementById('quick-ref');
+                if (quickRefEl) quickRefEl.value = activeContractRef;
 
                 initMap();
                 mountRouteMap('map-host');
@@ -17580,16 +17628,6 @@
                 updateCargoUnit();
                 syncGencon();
                 syncAsbatankvoy();
-
-                const quickRefEl = document.getElementById('quick-ref');
-                const cpStandard = State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
-                if (quickRefEl) {
-                    if (cpStandard === 'ASBATANKVOY') {
-                        if (asbRefEl) quickRefEl.value = asbRefEl.value;
-                    } else {
-                        if (gcRefEl) quickRefEl.value = gcRefEl.value;
-                    }
-                }
 
                 SeaCharterStore.set(readRouteStateFromCalculator());
                 syncGlobalStateToForms();
@@ -25542,6 +25580,17 @@
 
         // --- AISLAMIENTO STRICTO DE TABS ---
         function switchTab(tabId) {
+            const targetView = document.getElementById(`view-${tabId}`);
+            if (!targetView) {
+                console.warn(`[Navigation] Unknown tab ignored: ${tabId}`);
+                return false;
+            }
+            try {
+                const referenceManager = window.ContractReference || window.ContractRefManager;
+                referenceManager?.ensureUrlReference?.();
+            } catch (error) {
+                console.warn('[Contract Reference] Navigation continued without URL synchronization.', error);
+            }
             const openingReadOnlyDensityMap = tabId === 'ais';
             const leavingReadOnlyDensityMap = window.aisDensityReadOnly === true && !openingReadOnlyDensityMap;
             if (leavingReadOnlyDensityMap) {
@@ -25552,18 +25601,28 @@
             if (openingReadOnlyDensityMap) {
                 window.aisRadarUserActivated = window.RadarGlobalControl?.getState().mode === 'live';
             }
-            SeaCharterStore.set(readRouteStateFromCalculator());
-            syncGlobalStateToForms();
+            try {
+                if (window.SeaCharterStore?.set && typeof readRouteStateFromCalculator === 'function') {
+                    window.SeaCharterStore.set(readRouteStateFromCalculator());
+                }
+            } catch (error) {
+                console.warn('[Navigation] Route state synchronization was skipped.', error);
+            }
+            try {
+                if (typeof syncGlobalStateToForms === 'function') syncGlobalStateToForms();
+            } catch (error) {
+                console.warn('[Navigation] Form synchronization was skipped.', error);
+            }
             document.querySelectorAll('.view-section').forEach(el => {
                 el.classList.remove('active-block', 'active-flex');
             });
-            updateNavigationContext(tabId);
-            updateMobileModuleNavLabel(tabId);
+            if (typeof updateNavigationContext === 'function') updateNavigationContext(tabId);
+            if (typeof updateMobileModuleNavLabel === 'function') updateMobileModuleNavLabel(tabId);
 
             if (tabId === 'auditor') {
-                document.getElementById('view-auditor').classList.add('active-flex');
+                targetView.classList.add('active-flex');
             } else {
-                document.getElementById(`view-${tabId}`).classList.add('active-block');
+                targetView.classList.add('active-block');
             }
 
             // Toggle visibility of top header session-actions
@@ -25572,9 +25631,9 @@
                 sessionActions.classList.remove('hidden');
                 sessionActions.classList.add('flex');
             }
-            closeMobileSessionMenu();
-            closeMobileModuleNav();
-            closeAdvancedModulesMenu();
+            if (typeof closeMobileSessionMenu === 'function') closeMobileSessionMenu();
+            if (typeof closeMobileModuleNav === 'function') closeMobileModuleNav();
+            if (typeof closeAdvancedModulesMenu === 'function') closeAdvancedModulesMenu();
 
             if (tabId === 'matching') {
                 window.initializeMatchingGlobalTaxonomyControl?.();
@@ -25625,8 +25684,12 @@
             if(tabId === 'estimator') {
                 updateRouteSummary();
             }
-            if(tabId === 'gencon') syncGencon();
-            if(tabId === 'asbatankvoy') syncAsbatankvoy();
+            if (tabId === 'gencon' && typeof syncGencon === 'function') {
+                try { syncGencon(); } catch (error) { console.warn('[Navigation] GENCON opened in safe mode.', error); }
+            }
+            if (tabId === 'asbatankvoy' && typeof syncAsbatankvoy === 'function') {
+                try { syncAsbatankvoy(); } catch (error) { console.warn('[Navigation] ASBATANKVOY opened in safe mode.', error); }
+            }
             if(tabId === 'ais') {
                 if (aisTabInitTimer) {
                     clearTimeout(aisTabInitTimer);
@@ -25663,7 +25726,8 @@
                 destroyAisMap();
             }
             window.syncDataBridgeRadarTransport?.('tab-change');
-            syncPrintPolicyClass();
+            if (typeof syncPrintPolicyClass === 'function') syncPrintPolicyClass();
+            return true;
         }
 
         function closeMobileSessionMenu() {
@@ -36915,10 +36979,11 @@
             const freightType = getVal('asb-freight-type') || 'Worldscale';
             const surchargeVal = parseFloat(getVal('asb-surcharge-val')) || 0;
 
-            u('.lbl-ref', getVal('asb-ref'));
+            const activeReference = syncActiveContractReference(getVal('asb-ref'));
+            u('.lbl-ref', activeReference);
             const quickRefEl = document.getElementById('quick-ref');
-            if (quickRefEl && quickRefEl.value !== getVal('asb-ref')) {
-                quickRefEl.value = getVal('asb-ref');
+            if (quickRefEl && quickRefEl.value !== activeReference) {
+                quickRefEl.value = activeReference;
             }
             u('.lbl-date', getVal('asb-date'));
             u('.lbl-place', getVal('asb-place'));
@@ -37365,10 +37430,11 @@
             const surchargeVal = parseFloat(getVal('gc-surcharge-val')) || 0;
             updateGenconRiskPanel();
 
-            u('.lbl-ref', getVal('gc-ref'));
+            const activeReference = syncActiveContractReference(getVal('gc-ref'));
+            u('.lbl-ref', activeReference);
             const quickRefEl = document.getElementById('quick-ref');
-            if (quickRefEl && quickRefEl.value !== getVal('gc-ref')) {
-                quickRefEl.value = getVal('gc-ref');
+            if (quickRefEl && quickRefEl.value !== activeReference) {
+                quickRefEl.value = activeReference;
             }
             u('.lbl-date', getVal('gc-date'));
             u('.lbl-place', getVal('gc-place'));
@@ -37487,25 +37553,56 @@
         }
 
         function syncQuickRef(val) {
-            const cpStandard = State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
-            const quickRefEl = document.getElementById('quick-ref');
-            if (cpStandard === 'ASBATANKVOY') {
-                const asbRefEl = document.getElementById('asb-ref');
-                if (asbRefEl && asbRefEl.value !== val) {
-                    asbRefEl.value = val;
-                    syncAsbatankvoy();
-                }
-            } else {
-                const gcRefEl = document.getElementById('gc-ref');
-                if (gcRefEl && gcRefEl.value !== val) {
-                    gcRefEl.value = val;
-                    syncGencon();
-                }
+            const activeReference = syncActiveContractReference(val);
+            try {
+                if (typeof syncGencon === 'function') syncGencon();
+            } catch (error) {
+                console.warn('[Contract Reference] GENCON update was skipped.', error);
             }
-            if (quickRefEl && quickRefEl.value !== val) {
-                quickRefEl.value = val;
+            try {
+                if (typeof syncAsbatankvoy === 'function') syncAsbatankvoy();
+            } catch (error) {
+                console.warn('[Contract Reference] ASBATANKVOY update was skipped.', error);
+            }
+            return activeReference;
+        }
+
+        function getSafeActiveContractRef() {
+            try {
+                const referenceManager = window.ContractReference || window.ContractRefManager;
+                return referenceManager?.getActiveContractRef?.() || window.getActiveContractRef?.() || '';
+            } catch (error) {
+                console.warn('[Contract Reference] Active reference was unavailable.', error);
+                return '';
             }
         }
+
+        function syncActiveContractReference(value) {
+            let activeReference = String(value || '').trim().toUpperCase();
+            try {
+                const referenceManager = window.ContractReference || window.ContractRefManager;
+                activeReference = referenceManager?.setActiveContractRef?.(activeReference)
+                    || window.setActiveContractRef?.(activeReference)
+                    || activeReference
+                    || getSafeActiveContractRef();
+            } catch (error) {
+                console.warn('[Contract Reference] Reference update continued in safe mode.', error);
+            }
+            ['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'].forEach((id) => {
+                const input = document.getElementById(id);
+                if (input && input.value !== activeReference) input.value = activeReference;
+            });
+            return activeReference;
+        }
+
+        window.addEventListener('contract-reference:changed', (event) => {
+            const reference = event.detail?.reference;
+            if (!reference) return;
+            ['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'].forEach((id) => {
+                const input = document.getElementById(id);
+                if (input && input.value !== reference) input.value = reference;
+            });
+        });
 
         function updateChartererNegotiationSimulator() {
             if (typeof isInputInteraction === 'function' && isInputInteraction()) {
@@ -41183,7 +41280,7 @@ Example:
             // Calculamos datos locales adicionales para la previsualización interactiva
             const getVal = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
             const getTxt = (id) => { const el = document.getElementById(id); return el ? el.innerText : ''; };
-            const ref = cpStandard === 'ASBATANKVOY' ? getVal('asb-ref') : getVal('gc-ref');
+            const ref = getSafeActiveContractRef();
             const estId = ref ? `EST-${ref}` : `RDM-EST-${Math.floor(Math.random() * 9000 + 1000)}`;
             const calculatedFondeoCost = Number(State.smartAdjustments?.anchorageBunkerCost ?? State.fuelBreakdown?.anchorage?.cost ?? 0);
             const bunkerFondeoTons = Number(State.fuelBreakdown?.anchorage?.tons || 0);
@@ -41773,7 +41870,7 @@ Example:
                 document.getElementById('print-est-id').innerText = datosCotizacion.referencia_unica;
             } else {
                 const cpStandard = State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
-                const ref = cpStandard === 'ASBATANKVOY' ? getVal('asb-ref') : getVal('gc-ref');
+                const ref = getSafeActiveContractRef();
                 document.getElementById('print-est-id').innerText = ref ? `EST-${ref}` : `RDM-EST-${Math.floor(Math.random() * 9000 + 1000)}`;
             }
 
@@ -42897,8 +42994,7 @@ Example:
         function buildMasterAuditHeaderHTML(title, subtitle, jurisdictionLabel = '') {
             const currentDate = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const cpStandard = State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
-            const refEl = cpStandard === 'ASBATANKVOY' ? document.getElementById('asb-ref') : document.getElementById('gc-ref');
-            const ref = refEl ? refEl.value : '';
+            const ref = getSafeActiveContractRef();
             const fullRefId = `SeaCharter Core PRO - (${ref || 'RDM/2026-0604'})`;
             return `
                 <div class="master-audit-header">
@@ -43802,7 +43898,7 @@ Example:
             } else {
                 const getVal = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
                 const cpStandard = State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
-                const ref = cpStandard === 'ASBATANKVOY' ? getVal('asb-ref') : getVal('gc-ref');
+                const ref = getSafeActiveContractRef();
                 reference = ref ? `EST-${ref}` : `RDM-EST-${Math.floor(Math.random() * 9000 + 1000)}`;
                 issueDate = new Date().toISOString().split('T')[0];
                 
@@ -44342,7 +44438,7 @@ ADDITIONAL NOTES:
             document.getElementById('recapInput').value = addendumText;
             document.getElementById('errorBox').classList.add('hidden');
             showToast("✅ Datos del Addendum GENCON importados correctamente.");
-            const refVal = getVal('gc-ref') || 'RDM/2026-0604';
+            const refVal = getSafeActiveContractRef();
             showDocPreview('addendum', `GENCON (${refVal})`);
             markMasterReportTrigger('legalAddendumLoaded', {
                 standard: 'GENCON',
@@ -44415,7 +44511,7 @@ ADDITIONAL NOTES:
             document.getElementById('recapInput').value = addendumText;
             document.getElementById('errorBox').classList.add('hidden');
             showToast("✅ Datos del Addendum ASBATANKVOY importados correctamente.");
-            const refVal = getVal('asb-ref') || 'RDM/2026-0604';
+            const refVal = getSafeActiveContractRef();
             showDocPreview('addendum', `ASBATANKVOY (${refVal})`);
             markMasterReportTrigger('legalAddendumLoaded', {
                 standard: 'ASBATANKVOY',
@@ -45550,8 +45646,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 document.getElementById('resEmail').value = toAuditText(result.email);
 
                 // Actualizar identificador de referencia y rellenar vista imprimible
-                const refEl = cpStandard === 'ASBATANKVOY' ? document.getElementById('asb-ref') : document.getElementById('gc-ref');
-                const ref = refEl ? refEl.value : '';
+                const ref = getSafeActiveContractRef();
                 const fullRefId = `SeaCharter Core PRO - (${ref || 'RDM/2026-0604'})`;
                 document.getElementById('audit-report-ref-id').innerText = fullRefId;
 
@@ -45637,8 +45732,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function printAuditReport() {
             const originalTitle = document.title;
             const cpStandard = State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
-            const refEl = cpStandard === 'ASBATANKVOY' ? document.getElementById('asb-ref') : document.getElementById('gc-ref');
-            const ref = refEl ? refEl.value : '';
+            const ref = getSafeActiveContractRef();
             const fullRefId = `SeaCharter Core PRO - (${ref || 'RDM/2026-0604'})`;
             
             // Sincronizar referencia más reciente antes de imprimir
@@ -55635,7 +55729,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const tmPorViaje = shipments > 0 ? totalTm / shipments : 0;
             const now = new Date();
             const cpStandard = State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
-            const ref = cpStandard === 'ASBATANKVOY' ? getVal('asb-ref') : getVal('gc-ref');
+            const ref = getSafeActiveContractRef();
             const estId = ref ? `EST-${ref}` : `RDM-COA-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
             const classAnalysis = buildExecutiveShipClassAnalysis();
             const operationalTerms = getExecutiveOperationalTerms();

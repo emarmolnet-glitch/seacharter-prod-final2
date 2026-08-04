@@ -195,6 +195,10 @@ function createTrackingOverlay() {
             </section>
         </main>`;
     document.body.appendChild(overlay);
+    const referenceManager = window.ContractReference || window.ContractRefManager;
+    const activeContractRef = referenceManager?.getActiveContractRef?.() || window.getActiveContractRef?.() || '';
+    const contractInput = document.getElementById('tracking-live-contract-ref');
+    if (contractInput) contractInput.value = activeContractRef;
 
     document.getElementById('tracking-live-close')?.addEventListener('click', closeTrackingLive);
     document.getElementById('tracking-live-refresh')?.addEventListener('click', () => {
@@ -703,6 +707,8 @@ async function loadTrackingContract(rawRef, silent = false) {
         return;
     }
     trackingState.contractRef = contractRef;
+    const referenceManager = window.ContractReference || window.ContractRefManager;
+    referenceManager?.setActiveContractRef?.(contractRef) || window.setActiveContractRef?.(contractRef);
     trackingState.loading = true;
     document.getElementById('tracking-live-contract-ref').value = contractRef;
     document.getElementById('tracking-live-refresh')?.classList.add('is-spinning');
@@ -741,7 +747,15 @@ async function loadTrackingContract(rawRef, silent = false) {
             inputMessage.textContent = 'No se pudo actualizar el contrato; se mantienen los últimos datos disponibles.';
             inputMessage.dataset.state = 'warning';
         } else {
-            clearTrackingContract(`${error?.message || 'No fue posible recuperar el seguimiento operativo.'} Puedes continuar en modo ruta libre.`);
+            trackingState.data = null;
+            window.clearInterval(trackingState.pollTimer);
+            trackingState.pollTimer = null;
+            renderManualTrackingState();
+            const contractInput = document.getElementById('tracking-live-contract-ref');
+            if (contractInput) contractInput.value = contractRef;
+            const inputMessage = document.getElementById('tracking-input-message');
+            inputMessage.textContent = `${error?.message || 'No fue posible recuperar el seguimiento operativo.'} La referencia se conserva para reintentar.`;
+            inputMessage.dataset.state = 'warning';
         }
     } finally {
         trackingState.loading = false;
@@ -761,7 +775,8 @@ function openTrackingLive(contractRef = '') {
         window.GlobalFleetGlobe?.resize?.(TRACKING_MAP_KEY);
     });
     document.dispatchEvent(new CustomEvent('tracking-live:open'));
-    const normalized = normalizeTrackingRef(contractRef);
+    const referenceManager = window.ContractReference || window.ContractRefManager;
+    const normalized = normalizeTrackingRef(contractRef || referenceManager?.getActiveContractRef?.() || window.getActiveContractRef?.());
     if (normalized) loadTrackingContract(normalized);
     else {
         clearTrackingContract();
