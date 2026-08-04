@@ -4,15 +4,40 @@ import test from 'node:test';
 
 const netlifyConfigSource = await readFile(new URL('../netlify.toml', import.meta.url), 'utf8');
 
-const [indexSource, scriptSource, stylesSource, endpointSource, vesselEndpointSource, migrationSource, schemaSource] = await Promise.all([
+const [indexSource, scriptSource, stylesSource, executiveSource, endpointSource, vesselEndpointSource, migrationSource, schemaSource] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../tracking-live.js', import.meta.url), 'utf8'),
   readFile(new URL('../calculator_view.css', import.meta.url), 'utf8'),
+  readFile(new URL('../src/components/DashboardExecutive.jsx', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/functions/voyage-tracking.ts', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/functions/vessel-live-profile.ts', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/database/migrations/20260803120000_create_voyages_tracking/migration.sql', import.meta.url), 'utf8'),
   readFile(new URL('../db/schema.ts', import.meta.url), 'utf8'),
 ]);
+
+test('tracking header switches between GIS and the executive laytime dashboard', () => {
+  assert.match(scriptSource, /import DashboardExecutive from '\.\/src\/components\/DashboardExecutive\.jsx'/);
+  assert.match(scriptSource, /activeTab: 'gis'/);
+  assert.match(scriptSource, /data-tracking-tab="gis"/);
+  assert.match(scriptSource, /data-tracking-tab="executive"/);
+  assert.match(scriptSource, /React\.createElement\(DashboardExecutive, \{ contractData:/);
+  assert.match(scriptSource, /reference: 'RDM\/2026-0604'/);
+  assert.match(scriptSource, /name: 'NERMIN KARABEKIR'/);
+  assert.match(scriptSource, /name: 'Bejaia'/);
+  assert.match(scriptSource, /name: 'Aveiro'/);
+  assert.match(scriptSource, /allowedHours: 72/);
+  assert.match(scriptSource, /demurrageRateUSD: 8500/);
+  assert.match(executiveSource, /Dashboard Ejecutivo & Laytime/);
+  assert.match(executiveSource, /min-h-full bg-\[#0B3040\] text-slate-100[^\n]*pb-16/);
+  assert.match(executiveSource, /bg-white border border-slate-200/);
+  assert.match(executiveSource, /text-cyan-600/);
+  assert.match(executiveSource, /text-emerald-600/);
+  assert.match(executiveSource, /Auditoría de Plancha & Tiempos de Puerto/);
+  assert.match(executiveSource, /allowedHours: 72/);
+  assert.match(executiveSource, /estimatedDemurrageUSD/);
+  assert.match(stylesSource, /\.tracking-live-tab\.is-active/);
+  assert.match(stylesSource, /\.tracking-executive-view[^}]*background: #0b3040/);
+});
 
 test('primary navigation exposes Tracking as an integrated dialog module', () => {
   assert.match(indexSource, /\{ id: 'tracking', label: 'Tracking', presentation: 'dialog' \}/);
