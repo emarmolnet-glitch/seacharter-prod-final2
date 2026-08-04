@@ -40,5 +40,5 @@ test('matching button reads refreshed taxonomy state instead of requiring anothe
   const syncSource = source.slice(syncStart, syncEnd);
 
   assert.match(syncSource, /refreshMatchingTaxonomySelectionState\(\{ syncControl: false \}\)/);
-  assert.match(syncSource, /button\.disabled = matchingSelectionPending \|\| \(!hasMatchingRequest && count === 0 && !hasLocalTaxonomyQuery\)/);
+  assert.match(syncSource, /button\.disabled = !hasActiveCalculation \|\| matchingSelectionPending \|\| count === 0/);
 });

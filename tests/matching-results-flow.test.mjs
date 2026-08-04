@@ -18,7 +18,8 @@ test('matching response arrays map directly into component state', () => {
 });
 
 test('classified fleet remains local after visual validation', () => {
-  const stateIndex = indexSource.indexOf('window.matchingResultsState =');
+  const matchingCommitIndex = indexSource.indexOf('window.lastMatchingEngineResults = matches');
+  const stateIndex = indexSource.indexOf('window.matchingResultsState =', matchingCommitIndex);
   const badgeIndex = indexSource.indexOf('resultsBadge.innerText = `${viableMatches.length}', stateIndex);
   const completionIndex = indexSource.indexOf("new CustomEvent('MATCHING_EXECUTION_SUCCESS'", stateIndex);
   assert.ok(stateIndex >= 0 && badgeIndex > stateIndex && completionIndex > badgeIndex);

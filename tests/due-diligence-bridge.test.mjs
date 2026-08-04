@@ -91,7 +91,7 @@ test('Due Diligence uses one external search and persists only after acceptance'
   assert.match(entrySource, /event\.stopImmediatePropagation\(\)/);
   assert.match(entrySource, /const responsePayload = await fetchDueDiligence/);
   assert.match(entrySource, /data-due-diligence-button\]\[data-due-diligence-mode\]/);
-  assert.match(entrySource, /\[data-matching-result-card="true"\], \[data-vessel-recommendation="true"\]/);
+  assert.match(entrySource, /\[data-matching-result-card="true"\], \[data-matching-cache-card="true"\], \[data-vessel-recommendation="true"\]/);
   assert.doesNotMatch(entrySource, /fetchLocalDueDiligence|usesLocalCache/);
   assert.match(entrySource, /Consultando fuentes externas/);
   assert.match(entrySource, /persistDueDiligenceVessel\(vessel/);
@@ -103,33 +103,47 @@ test('Due Diligence uses one external search and persists only after acceptance'
   assert.match(entrySource, /No se pudo guardar en Neon\. El Store no fue modificado\./);
   assert.match(entrySource, /BUQUE NO COMERCIAL DETECTADO/);
   assert.match(entrySource, /accept\.disabled = commerciallyBlocked/);
-  assert.match(entrySource, /aria-modal/);
-  assert.match(entrySource, /Comparación externa/);
-  assert.match(entrySource, /\['Campo', 'Actual', 'Externo', 'Estado'\]/);
-  assert.match(entrySource, /Factor de Estiba \(SF\)/);
-  assert.match(entrySource, /selectedProduct\?\.sf/);
-  assert.match(entrySource, /Calado calculado/);
-  assert.match(entrySource, /SeaCharterReactiveCostState\?\.state\?\.calado_actual/);
-  assert.match(entrySource, /SeaCharterVoyageCostEngine\?\.estimateDraft/);
-  assert.match(entrySource, /Algoritmo Core PRO/);
-  assert.doesNotMatch(entrySource, /label: 'Factor de Estiba \(SF\)'[\s\S]{0,260}N\/D/);
-  assert.doesNotMatch(entrySource, /label: 'Calado calculado'[\s\S]{0,260}N\/D/);
-  assert.match(entrySource, /\{ field: 'beamMeters', label: 'Manga' \}/);
+  assert.match(entrySource, /dueDiligenceDataByVessel = new Map\(\)/);
+  assert.match(entrySource, /function setDueDiligenceData\(identity, responsePayload, technical\)/);
+  assert.match(entrySource, /globalScope\.dueDiligenceDataByVessel = \{/);
+  assert.match(entrySource, /vessel:due-diligence-data/);
+  assert.match(entrySource, /Panel de validación Due Diligence/);
+  assert.match(entrySource, /\{ label: 'DWT'/);
+  assert.match(entrySource, /\{ label: 'Bandera'/);
+  assert.match(entrySource, /\{ label: 'Año de construcción'/);
+  assert.match(entrySource, /\{ label: 'Tipo de buque'/);
   assert.match(entrySource, /const safeProposals = Array\.isArray\(proposals\)/);
   assert.match(entrySource, /const pendingTechnical = pending\.technical && typeof pending\.technical === 'object'/);
-  assert.match(entrySource, /flex max-h-\[90vh\][^']*flex-col overflow-hidden/);
-  assert.match(entrySource, /min-h-0 flex-1[^']*overflow-y-auto/);
-  assert.match(entrySource, /body\.dataset\.dueDiligenceScrollBody = 'true'/);
   assert.match(entrySource, /footer\.dataset\.dueDiligenceFooter = 'true'/);
-  assert.match(entrySource, /footer\.className = 'shrink-0 border-t/);
-  assert.match(entrySource, /reject\.textContent = 'Rechazar'/);
-  assert.match(entrySource, /panel\.append\(body\);[\s\S]*panel\.append\(footer\)/);
+  assert.match(entrySource, /reject\.textContent = 'Descartar'/);
+  assert.match(entrySource, /Validar y Guardar en Master \(Neon DB\)/);
+  assert.match(entrySource, /Gross Tonnage \(GT\)/);
+  assert.match(entrySource, /Beam \/ Manga/);
+  assert.match(entrySource, /Call Sign/);
+  assert.match(entrySource, /Last Port/);
+  assert.match(entrySource, /dataFields\.forEach/);
+  assert.match(entrySource, /dueDiligenceTechnicalGrid/);
+  assert.match(entrySource, /review\.append\(header, dictionary, footer\)/);
   assert.doesNotMatch(entrySource, /\/api\/scrape-vessel/);
   assert.doesNotMatch(entrySource, /IndexedDB|localStorage|saveEditedVesselParams|saveVesselToIndexedDB/);
   assert.doesNotMatch(entrySource, /ais:vessels-updated/);
   assert.match(indexSource, /dueDiligenceExternalOnlyActive === true/);
   assert.match(indexSource, /dueDiligenceSuppressLocalPersistenceUntil/);
   assert.match(backendSource, /path: "\/api\/vessel-due-diligence"/);
+});
+
+test('Due Diligence stores successful payloads by normalized IMO', () => {
+  const { bridge, events, window } = loadBridge();
+  const stored = bridge.setDueDiligenceData(
+    { imo: 'IMO 9876543', name: 'REAL VESSEL' },
+    { success: true, persisted: false, source: 'VesselFinder' },
+    { imo: '9876543', dwt: 42_000, flag: 'Spain', yearBuilt: 2018, vesselType: 'General Cargo' },
+  );
+
+  assert.equal(stored.persisted, false);
+  assert.equal(bridge.dueDiligenceDataByVessel.get('9876543').data.dwt, 42_000);
+  assert.equal(window.dueDiligenceDataByVessel['9876543'].payload.source, 'VesselFinder');
+  assert.ok(events.some(event => event.type === 'vessel:due-diligence-data'));
 });
 
 test('Data Bridge source aliases and V2 metadata render the corporate badge', () => {
@@ -161,7 +175,9 @@ test('fetchDueDiligence posts identity and normalizes the complete technical pay
         return new Response(JSON.stringify({
           success: true,
           data: {
+            vessel_name: 'NERMIN KARABEKIR',
             imo_number: '9876543',
+            mmsi: '224123456',
             dwt: 10_953,
             flag: 'Barbados',
             vessel_type: 'General Cargo',
@@ -169,6 +185,12 @@ test('fetchDueDiligence posts identity and normalizes the complete technical pay
             gross_tonnage: 7_580,
             loa_meters: 138.4,
             beam_meters: 21.5,
+            draft: 8.7,
+            call_sign: '8PXY4',
+            last_port: 'Valencia',
+            eta: '2026-08-05T12:30:00Z',
+            destination: 'Aveiro',
+            navigation_status: 'Under way using engine',
           },
         }), {
           status: 200,
@@ -185,7 +207,9 @@ test('fetchDueDiligence posts identity and normalizes the complete technical pay
     externalOnly: true,
   });
   assert.deepEqual(result.data, {
+    vesselName: 'NERMIN KARABEKIR',
     imo: '9876543',
+    mmsi: '224123456',
     dwt: 10_953,
     flag: 'Barbados',
     vesselType: 'General Cargo',
@@ -193,7 +217,14 @@ test('fetchDueDiligence posts identity and normalizes the complete technical pay
     grossTonnage: 7_580,
     loaMeters: 138.4,
     beamMeters: 21.5,
+    draftMeters: 8.7,
+    callSign: '8PXY4',
+    lastPort: 'Valencia',
+    eta: '2026-08-05T12:30:00Z',
+    destination: 'Aveiro',
+    navigationStatus: 'Under way using engine',
   });
+  assert.equal(result.rawData.gross_tonnage, 7_580);
 });
 
 test('backend external audit bypasses Neon cache and waits for explicit acceptance', () => {
@@ -207,7 +238,9 @@ test('backend external audit bypasses Neon cache and waits for explicit acceptan
 
 test('frontend normalization recognizes external labels for flag, length, and vessel type', () => {
   const normalized = serviceModule.normalizeDueDiligenceData({
+    'Vessel Name': 'NERMIN KARABEKIR',
     IMO: '9876543',
+    MMSI: '224123456',
     DWT: '10,953 MT',
     Flag: 'Barbados',
     'Vessel Type': 'General Cargo',
@@ -215,9 +248,17 @@ test('frontend normalization recognizes external labels for flag, length, and ve
     'Gross Tonnage': '7,580',
     LENGTH: '138.4 m',
     Beam: '21.5 m',
+    Draught: '8.7 m',
+    'Call Sign': '8PXY4',
+    'Last Port': 'Valencia',
+    ETA: '2026-08-05T12:30:00Z',
+    Destination: 'Aveiro',
+    'Navigation Status': 'Under way using engine',
   });
   assert.deepEqual(normalized, {
+    vesselName: 'NERMIN KARABEKIR',
     imo: '9876543',
+    mmsi: '224123456',
     dwt: 10_953,
     flag: 'Barbados',
     vesselType: 'General Cargo',
@@ -225,6 +266,12 @@ test('frontend normalization recognizes external labels for flag, length, and ve
     grossTonnage: 7_580,
     loaMeters: 138.4,
     beamMeters: 21.5,
+    draftMeters: 8.7,
+    callSign: '8PXY4',
+    lastPort: 'Valencia',
+    eta: '2026-08-05T12:30:00Z',
+    destination: 'Aveiro',
+    navigationStatus: 'Under way using engine',
   });
 
   const { bridge } = loadBridge();
@@ -233,7 +280,9 @@ test('frontend normalization recognizes external labels for flag, length, and ve
     'Ship Type': 'Bulk Carrier',
     LOA: '179.9 m',
   }) }, {
+    vesselName: '',
     imo: '',
+    mmsi: '',
     dwt: null,
     flag: 'Malta',
     vesselType: 'Bulk Carrier',
@@ -242,6 +291,11 @@ test('frontend normalization recognizes external labels for flag, length, and ve
     loaMeters: 179.9,
     beamMeters: null,
     draft: null,
+    callSign: '',
+    lastPort: '',
+    eta: '',
+    destination: '',
+    navigationStatus: '',
     sourceUrl: '',
   });
 });

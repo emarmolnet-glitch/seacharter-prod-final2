@@ -45,5 +45,5 @@ test('cached matches hydrate the table, badge, button and shared state', () => {
 test('live matching cache refreshes the active density map without a new request', () => {
   assert.match(source, /console\.info\('\[AIS Matching\] Buques Cercanos en POL', proximityDebug\);[\s\S]*densityMapView\?\.classList\.contains\('active-block'\)[\s\S]*runDensityMapPreflightChecklist\(\)/);
   assert.match(source, /class="matching-vessel-card[^\n]*data-matching-result-card="true"/);
-  assert.match(source, /currentDistanceToLoadPort: ais\.currentDistanceToLoadPort \?\? source\.distanceToPol \?\? source\.currentDistanceToLoadPort/);
+  assert.match(source, /currentDistanceToLoadPort: ais\.currentDistanceToLoadPort \?\? source\.distanceToPol \?\? source\.distance_to_pol_nm \?\? source\.distance_to_pol \?\? source\.currentDistanceToLoadPort/);
 });

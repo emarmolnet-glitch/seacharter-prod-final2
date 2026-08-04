@@ -17,6 +17,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         { field: 'beamMeters', label: 'Manga' },
     ]);
     const pendingProposals = new Map();
+    const dueDiligenceDataByVessel = new Map();
 
     function readText(value) {
         return value === null || value === undefined ? '' : String(value).trim();
@@ -82,7 +83,9 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
     function normalizeTechnicalRecord(record) {
         const meta = getMeta(record);
         return {
+            vesselName: readText(readLabeledValue(record, ['Vessel Name', 'Ship Name', 'VesselName', 'ShipName', 'Name']) || readLabeledValue(meta, ['Vessel Name', 'Ship Name', 'ShipName'])),
             imo: normalizeImo(readLabeledValue(record, ['IMO Number', 'IMO', 'Numero IMO']) || readLabeledValue(meta, ['IMO Number', 'IMO'])),
+            mmsi: normalizeMmsi(readLabeledValue(record, ['MMSI']) || readLabeledValue(meta, ['MMSI'])),
             dwt: readPositiveNumber(readLabeledValue(record, ['DWT', 'Deadweight']) || readLabeledValue(meta, ['DWT', 'Deadweight'])),
             flag: readText(readLabeledValue(record, ['Flag', 'Bandera', 'Country']) || readLabeledValue(meta, ['Flag', 'Bandera', 'Country'])),
             vesselType: readText(readLabeledValue(record, ['Vessel Type', 'Ship Type', 'VesselType', 'ShipType', 'Type']) || readLabeledValue(meta, ['Vessel Type', 'Ship Type', 'VesselType', 'ShipType', 'Type'])),
@@ -90,8 +93,13 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             grossTonnage: readPositiveNumber(readLabeledValue(record, ['Gross Tonnage', 'GrossTonnage', 'GT']) || readLabeledValue(meta, ['Gross Tonnage', 'GrossTonnage', 'GT'])),
             loaMeters: readPositiveNumber(readLabeledValue(record, ['LOA Meters', 'LOA', 'Length', 'Length Overall']) || readLabeledValue(meta, ['LOA Meters', 'LOA', 'Length', 'Length Overall'])),
             beamMeters: readPositiveNumber(readLabeledValue(record, ['Beam Meters', 'Beam', 'Breadth', 'Manga']) || readLabeledValue(meta, ['Beam Meters', 'Beam', 'Breadth', 'Manga'])),
-            draft: readPositiveNumber(record?.draft || record?.calado || record?.draught || meta.draft || meta.Draft),
-            sourceUrl: readText(record?.sourceUrl),
+            draft: readPositiveNumber(readLabeledValue(record, ['Draft', 'Draught', 'Draft Meters', 'Calado']) || readLabeledValue(meta, ['Draft', 'Draught', 'Calado'])),
+            callSign: readText(readLabeledValue(record, ['Call Sign', 'CallSign', 'Callsign']) || readLabeledValue(meta, ['Call Sign', 'CallSign'])),
+            lastPort: readText(readLabeledValue(record, ['Last Port', 'LastPort', 'Last Port of Call', 'Previous Port']) || readLabeledValue(meta, ['Last Port', 'LastPort'])),
+            eta: readText(readLabeledValue(record, ['ETA', 'Estimated Time of Arrival', 'Arrival Time']) || readLabeledValue(meta, ['ETA'])),
+            destination: readText(readLabeledValue(record, ['Destination', 'Current Destination']) || readLabeledValue(meta, ['Destination'])),
+            navigationStatus: readText(readLabeledValue(record, ['Navigation Status', 'Navigational Status', 'Nav Status']) || readLabeledValue(meta, ['Navigation Status', 'Nav Status'])),
+            sourceUrl: readText(record?.sourceUrl || record?.source_url),
         };
     }
 
@@ -108,7 +116,11 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
 
     function readExternalScrapeRecord(payload) {
         if (!payload || typeof payload !== 'object') return {};
-        return payload.vessel
+        return payload.rawData?.vessel
+            || payload.rawData?.record
+            || payload.rawData?.records?.[0]
+            || payload.rawData
+            || payload.vessel
             || payload.record
             || payload.records?.[0]
             || payload.data?.vessel
@@ -419,6 +431,29 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             || readText(identity?.name || identity?.vesselName).toLowerCase();
     }
 
+    function setDueDiligenceData(identity, responsePayload, technical) {
+        const key = proposalKey(identity);
+        if (!key) return null;
+        const stateEntry = {
+            identity: { ...(identity && typeof identity === 'object' ? identity : {}) },
+            payload: responsePayload && typeof responsePayload === 'object' ? responsePayload : {},
+            data: { ...(technical && typeof technical === 'object' ? technical : {}) },
+            persisted: responsePayload?.persisted === true,
+            receivedAt: new Date().toISOString(),
+        };
+        dueDiligenceDataByVessel.set(key, stateEntry);
+        globalScope.dueDiligenceDataByVessel = {
+            ...(globalScope.dueDiligenceDataByVessel && typeof globalScope.dueDiligenceDataByVessel === 'object'
+                ? globalScope.dueDiligenceDataByVessel
+                : {}),
+            [key]: stateEntry,
+        };
+        globalScope.dispatchEvent(new CustomEvent('vessel:due-diligence-data', {
+            detail: { key, ...stateEntry },
+        }));
+        return stateEntry;
+    }
+
     function findMatchingResult(identity) {
         const collections = [
             globalScope.matchingResultsState?.vessels,
@@ -457,101 +492,6 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             return [{ field, label, currentValue, proposedValue, changed }];
         });
         return { current, match, proposals, changedCount: proposals.filter(proposal => proposal.changed).length };
-    }
-
-    function firstPositiveNumber(values) {
-        for (const value of values) {
-            const number = readPositiveNumber(value);
-            if (number) return number;
-        }
-        return null;
-    }
-
-    function readCalculationInput(id) {
-        return readPositiveNumber(globalScope.document?.getElementById(id)?.value);
-    }
-
-    function estimateAlgorithmicDraft(dwt, cargoQuantity) {
-        const vesselDwt = readPositiveNumber(dwt);
-        if (!vesselDwt) return null;
-        const cargoTons = Math.max(0, Number(cargoQuantity) || 0);
-        const engineEstimate = globalScope.SeaCharterVoyageCostEngine?.estimateDraft;
-        if (typeof engineEstimate === 'function') {
-            return readPositiveNumber(engineEstimate(vesselDwt, cargoTons));
-        }
-        const maxSummerDraft = (vesselDwt * 0.00015) + 5.5;
-        const ballastDraft = maxSummerDraft * 0.45;
-        return ballastDraft + ((maxSummerDraft - ballastDraft) * (cargoTons / vesselDwt));
-    }
-
-    function readActiveCalculationContext(technical = {}) {
-        const calculatedStateCandidate = globalScope.GlobalStore?.calculatedState || globalScope.CalculatedState || {};
-        const calculatedState = typeof globalScope.isCalculatedStateCurrent !== 'function'
-            || globalScope.isCalculatedStateCurrent(calculatedStateCandidate)
-            ? calculatedStateCandidate
-            : {};
-        const matchingRequest = calculatedState.matchingRequest
-            || globalScope.GlobalStore?.matchingRequest
-            || globalScope.matchingRequest
-            || {};
-        const storeState = globalScope.SeaCharterStore?.getState?.() || {};
-        const selectedProduct = globalScope.getSelectedCargoProduct?.() || null;
-        const stowageFactor = firstPositiveNumber([
-            selectedProduct?.sf,
-            matchingRequest?.cargo?.stowageFactor,
-            calculatedState?.cargo?.stowageFactor,
-            storeState.stowageFactor,
-            globalScope.GlobalStore?.stowageFactor,
-            readCalculationInput('cargo-sf'),
-        ]);
-        const cargoQuantity = firstPositiveNumber([
-            matchingRequest?.cargo?.quantity,
-            calculatedState?.cargo?.quantity,
-            storeState.cargo,
-            globalScope.GlobalStore?.cargo,
-            readCalculationInput('cargo-qty'),
-        ]) || 0;
-        const vesselDwt = firstPositiveNumber([
-            technical?.dwt,
-            globalScope.GlobalStore?.calculatorVessel?.dwt,
-            globalScope.GlobalStore?.activeVessel?.dwt,
-            matchingRequest?.dwt,
-            readCalculationInput('vessel-dwt'),
-        ]);
-        const calculatedDraft = firstPositiveNumber([
-            globalScope.SeaCharterReactiveCostState?.state?.calado_actual,
-            calculatedState?.operational?.caladoActual,
-            calculatedState?.operational?.currentDraft,
-            calculatedState?.calado_actual,
-            readCalculationInput('current-draft'),
-            estimateAlgorithmicDraft(vesselDwt, cargoQuantity),
-        ]);
-        const cargoLabel = readText(
-            selectedProduct?.nombre
-            || matchingRequest?.cargo?.cargoDescription
-            || matchingRequest?.cargo?.typeLabel
-            || calculatedState?.cargo?.typeLabel
-            || globalScope.document?.getElementById('cargo-product')?.value,
-        ) || 'Taxonomía activa';
-        return { stowageFactor, cargoLabel, calculatedDraft };
-    }
-
-    function appendCalculationRow(body, { label, currentValue, sourceValue, stateText }) {
-        const row = globalScope.document.createElement('div');
-        row.className = 'grid grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50/60 px-3 py-2.5 text-[11px]';
-        const field = globalScope.document.createElement('strong');
-        field.textContent = label;
-        const current = globalScope.document.createElement('span');
-        current.className = 'truncate font-black text-cyan-950';
-        current.textContent = currentValue;
-        const source = globalScope.document.createElement('span');
-        source.className = 'truncate text-cyan-800';
-        source.textContent = sourceValue;
-        const state = globalScope.document.createElement('span');
-        state.className = 'rounded-full bg-cyan-200 px-2 py-0.5 text-[9px] font-black uppercase text-cyan-900';
-        state.textContent = stateText;
-        row.append(field, current, source, state);
-        body.append(row);
     }
 
     function isNonCommercialVesselType(vesselType) {
@@ -604,130 +544,97 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
 
     function renderProposalReview(card, key, proposals, technical = {}) {
         const review = card?.querySelector('[data-due-diligence-review]');
-        if (!review || !globalScope.document) return;
+        if (!review || !globalScope.document) return false;
         const safeTechnical = technical && typeof technical === 'object' ? technical : {};
         const safeProposals = Array.isArray(proposals) ? proposals.filter(proposal => proposal && typeof proposal === 'object') : [];
-        const calculationContext = readActiveCalculationContext(safeTechnical);
+        const pending = pendingProposals.get(key);
+        const commerciallyBlocked = pending?.commerciallyBlocked === true || isNonCommercialVesselType(safeTechnical.vesselType);
+        const dataFields = [
+            { label: 'Nombre del buque', value: readText(safeTechnical.vesselName) || pending?.identity?.name || 'Sin dato', featured: true },
+            { label: 'IMO', value: readText(safeTechnical.imo) || 'Sin dato', mono: true },
+            { label: 'MMSI', value: readText(safeTechnical.mmsi) || pending?.identity?.mmsi || 'Sin dato', mono: true },
+            { label: 'DWT', value: safeTechnical.dwt ? `${Number(safeTechnical.dwt).toLocaleString()} MT` : 'Sin dato', featured: true },
+            { label: 'Gross Tonnage (GT)', value: safeTechnical.grossTonnage ? Number(safeTechnical.grossTonnage).toLocaleString() : 'Sin dato', featured: true },
+            { label: 'LOA', value: safeTechnical.loaMeters ? `${Number(safeTechnical.loaMeters).toLocaleString()} m` : 'Sin dato' },
+            { label: 'Beam / Manga', value: safeTechnical.beamMeters ? `${Number(safeTechnical.beamMeters).toLocaleString()} m` : 'Sin dato' },
+            { label: 'Calado', value: safeTechnical.draft ? `${Number(safeTechnical.draft).toLocaleString()} m` : 'Sin dato' },
+            { label: 'Bandera', value: readText(safeTechnical.flag) || 'Sin dato' },
+            { label: 'Año de construcción', value: safeTechnical.yearBuilt ? String(safeTechnical.yearBuilt) : 'Sin dato' },
+            { label: 'Tipo de buque', value: readText(safeTechnical.vesselType) || 'Sin dato', featured: true },
+            { label: 'Call Sign', value: readText(safeTechnical.callSign) || 'Sin dato', mono: true },
+            { label: 'Last Port', value: readText(safeTechnical.lastPort) || 'Sin dato' },
+            { label: 'ETA', value: readText(safeTechnical.eta) || 'Sin dato', mono: true },
+            { label: 'Destino', value: readText(safeTechnical.destination) || 'Sin dato' },
+            { label: 'Estado de navegación', value: readText(safeTechnical.navigationStatus) || 'Sin dato' },
+        ];
+
         review.replaceChildren();
-        review.className = 'fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-slate-950/70 p-3 sm:p-4 backdrop-blur-sm';
-        review.setAttribute('role', 'dialog');
-        review.setAttribute('aria-modal', 'true');
-        review.setAttribute('aria-label', 'Comparación de Due Diligence');
+        review.className = 'mt-3 overflow-hidden rounded-xl border border-cyan-200 bg-white shadow-[0_12px_30px_-24px_rgba(8,145,178,0.8)]';
+        review.setAttribute('role', 'region');
+        review.setAttribute('aria-label', 'Panel de validación Due Diligence');
+        review.dataset.dueDiligenceExpanded = 'true';
 
-        const panel = globalScope.document.createElement('div');
-        panel.className = 'flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-cyan-300 bg-white shadow-2xl';
         const header = globalScope.document.createElement('div');
-        header.className = 'flex shrink-0 items-center justify-between border-b border-cyan-100 bg-gradient-to-r from-cyan-50 to-sky-50 px-5 py-4';
-
-        const title = globalScope.document.createElement('div');
-        title.className = 'space-y-0.5';
-        const titleText = globalScope.document.createElement('p');
-        titleText.className = 'text-sm font-black uppercase tracking-wide text-cyan-950';
-        titleText.textContent = 'Due Diligence · Comparación externa';
+        header.className = 'flex items-start justify-between gap-3 border-b border-cyan-100 bg-gradient-to-r from-cyan-50 via-white to-emerald-50 px-4 py-3';
+        const heading = globalScope.document.createElement('div');
+        const title = globalScope.document.createElement('p');
+        title.className = 'text-[11px] font-black uppercase tracking-[0.12em] text-cyan-950';
+        title.textContent = 'Due Diligence · Validación técnica';
         const subtitle = globalScope.document.createElement('p');
-        subtitle.className = 'text-[11px] font-semibold text-cyan-700';
-        subtitle.textContent = 'Valores actuales en Core PRO frente a datos encontrados en fuentes públicas.';
-        const sessionSummary = globalScope.document.createElement('p');
-        sessionSummary.className = 'text-[10px] font-black text-cyan-900';
-        sessionSummary.textContent = [
-            calculationContext.stowageFactor ? `SF ${calculationContext.stowageFactor.toFixed(2)} m³/MT` : '',
-            calculationContext.calculatedDraft ? `Calado calculado ${calculationContext.calculatedDraft.toFixed(2)} m` : '',
-        ].filter(Boolean).join(' · ');
-        title.append(titleText, subtitle, sessionSummary);
-        header.append(title);
-        panel.append(header);
+        subtitle.className = 'mt-1 text-[10px] font-semibold text-slate-500';
+        subtitle.textContent = `${safeProposals.length} campo${safeProposals.length === 1 ? '' : 's'} contrastado${safeProposals.length === 1 ? '' : 's'} con fuentes externas.`;
+        heading.append(title, subtitle);
+        const stateBadge = globalScope.document.createElement('span');
+        stateBadge.className = 'shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-amber-800';
+        stateBadge.textContent = 'Pendiente de guardar';
+        header.append(heading, stateBadge);
 
-        const body = globalScope.document.createElement('div');
-        body.className = 'min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-5';
-        body.dataset.dueDiligenceScrollBody = 'true';
+        const dictionary = globalScope.document.createElement('dl');
+        dictionary.className = 'grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3';
+        dictionary.dataset.dueDiligenceTechnicalGrid = 'true';
+        dataFields.forEach(field => {
+            const item = globalScope.document.createElement('div');
+            item.className = field.featured
+                ? 'min-w-0 rounded-lg border border-cyan-200 bg-cyan-50/60 px-3 py-2.5'
+                : 'min-w-0 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5';
+            const label = globalScope.document.createElement('dt');
+            label.className = 'text-[9px] font-black uppercase tracking-[0.1em] text-slate-500';
+            label.textContent = field.label;
+            const value = globalScope.document.createElement('dd');
+            value.className = `${field.mono ? 'font-mono ' : ''}mt-1 break-words text-[12px] font-black leading-snug ${field.value === 'Sin dato' ? 'text-slate-400' : 'text-slate-900'}`;
+            value.textContent = field.value;
+            item.append(label, value);
+            dictionary.append(item);
+        });
 
-        const extractedType = readText(safeTechnical.vesselType) || 'Sin dato';
-        const typeSummary = globalScope.document.createElement('div');
-        typeSummary.className = 'flex items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px]';
-        const typeLabel = globalScope.document.createElement('strong');
-        typeLabel.textContent = 'Tipo de Buque';
-        const typeValue = globalScope.document.createElement('span');
-        typeValue.className = 'font-black text-slate-800';
-        typeValue.textContent = extractedType;
-        typeSummary.append(typeLabel, typeValue);
-        body.append(typeSummary);
-
-        const commerciallyBlocked = isNonCommercialVesselType(extractedType);
         if (commerciallyBlocked) {
-            const warning = globalScope.document.createElement('div');
-            warning.className = 'rounded border border-red-300 bg-red-50 px-2 py-2 text-[10px] font-black text-red-800';
-            warning.textContent = `❌ BUQUE NO COMERCIAL DETECTADO: ${extractedType}`;
-            body.append(warning);
+            const warning = globalScope.document.createElement('p');
+            warning.className = 'mx-3 mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[10px] font-black text-red-800';
+            warning.textContent = `BUQUE NO COMERCIAL DETECTADO: ${safeTechnical.vesselType || 'tipo no apto'}`;
+            dictionary.append(warning);
         }
-
-        const columns = globalScope.document.createElement('div');
-        columns.className = 'grid grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 border-b border-slate-200 px-3 pb-2 text-[9px] font-black uppercase tracking-wider text-slate-400';
-        ['Campo', 'Actual', 'Externo', 'Estado'].forEach(value => {
-            const column = globalScope.document.createElement('span');
-            column.textContent = value;
-            columns.append(column);
-        });
-        body.append(columns);
-
-        if (calculationContext.stowageFactor) {
-            appendCalculationRow(body, {
-                label: 'Factor de Estiba (SF)',
-                currentValue: `${calculationContext.stowageFactor.toFixed(2)} m³/MT`,
-                sourceValue: calculationContext.cargoLabel,
-                stateText: 'Taxonomía',
-            });
-        }
-        if (calculationContext.calculatedDraft) {
-            appendCalculationRow(body, {
-                label: 'Calado calculado',
-                currentValue: `${calculationContext.calculatedDraft.toFixed(2)} m`,
-                sourceValue: safeTechnical.draft ? `${Number(safeTechnical.draft).toFixed(2)} m externo` : 'Algoritmo Core PRO',
-                stateText: 'Sesión',
-            });
-        }
-
-        safeProposals.forEach(proposal => {
-            const row = globalScope.document.createElement('div');
-            row.className = `grid grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border px-3 py-2.5 text-[11px] ${proposal.changed ? 'border-amber-200 bg-amber-50/60' : 'border-emerald-100 bg-emerald-50/40'}`;
-            const label = globalScope.document.createElement('strong');
-            label.textContent = proposal.label;
-            const current = globalScope.document.createElement('span');
-            current.className = `truncate ${proposal.changed ? 'text-slate-500 line-through' : 'text-slate-700'}`;
-            current.textContent = proposalValue(proposal.field, proposal.currentValue);
-            const proposed = globalScope.document.createElement('span');
-            proposed.className = 'truncate font-black text-cyan-900';
-            proposed.textContent = proposalValue(proposal.field, proposal.proposedValue);
-            const state = globalScope.document.createElement('span');
-            state.className = `rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${proposal.changed ? 'bg-amber-200 text-amber-900' : 'bg-emerald-200 text-emerald-900'}`;
-            state.textContent = proposal.changed ? 'Cambio' : 'Coincide';
-            row.append(label, current, proposed, state);
-            body.append(row);
-        });
 
         const footer = globalScope.document.createElement('footer');
-        footer.className = 'shrink-0 border-t border-slate-200 bg-white px-5 py-4 shadow-[0_-8px_20px_-16px_rgba(15,23,42,0.45)]';
+        footer.className = 'grid grid-cols-1 gap-2 border-t border-slate-100 bg-slate-50/70 px-3 py-3 sm:grid-cols-[auto_minmax(0,1fr)]';
         footer.dataset.dueDiligenceFooter = 'true';
-        const actions = globalScope.document.createElement('div');
-        actions.className = 'grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3';
         const reject = globalScope.document.createElement('button');
         reject.type = 'button';
         reject.dataset.dueDiligenceReject = key;
-        reject.className = 'rounded border border-slate-300 bg-white px-2 py-1.5 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50';
-        reject.textContent = 'Rechazar';
+        reject.className = 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-[10px] font-black uppercase text-slate-600 transition hover:bg-slate-100';
+        reject.textContent = 'Descartar';
         const accept = globalScope.document.createElement('button');
         accept.type = 'button';
         accept.dataset.dueDiligenceAccept = key;
         accept.disabled = commerciallyBlocked;
         accept.setAttribute('aria-disabled', String(commerciallyBlocked));
         accept.className = commerciallyBlocked
-            ? 'cursor-not-allowed rounded bg-red-200 px-2 py-1.5 text-[10px] font-black uppercase text-red-700 opacity-70'
-            : 'rounded bg-emerald-600 px-2 py-1.5 text-[10px] font-black uppercase text-white hover:bg-emerald-500';
-        accept.textContent = 'Aceptar Datos';
-        actions.append(reject, accept);
-        footer.append(actions);
-        panel.append(body);
-        panel.append(footer);
-        review.append(panel);
+            ? 'cursor-not-allowed rounded-lg bg-red-200 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-red-700 opacity-70'
+            : 'rounded-lg bg-emerald-700 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-white shadow-sm transition hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-400';
+        accept.textContent = 'Validar y Guardar en Master (Neon DB)';
+        footer.append(reject, accept);
+
+        review.append(header, dictionary, footer);
+        return true;
     }
 
     function recalculateFinancialEngine(identity, technical) {
@@ -917,7 +824,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
     }
 
     async function runVesselDueDiligence(button, encodedIdentity) {
-        const card = button?.closest('[data-matching-result-card="true"], [data-vessel-recommendation="true"]');
+        const card = button?.closest('[data-matching-result-card="true"], [data-matching-cache-card="true"], [data-vessel-recommendation="true"]');
         const status = card?.querySelector('[data-due-diligence-status]');
         const originalHtml = button?.innerHTML || '';
         let identity;
@@ -958,10 +865,12 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
                 imo_number: dueDiligenceData.imo_number || dueDiligenceData.imo || imo,
             });
             const review = buildProposals(identity, technical);
-            if (review.proposals.length === 0) {
+            const hasAuditableData = Boolean(technical.imo || technical.dwt || technical.grossTonnage || technical.flag || technical.yearBuilt || technical.vesselType || technical.callSign || technical.lastPort || technical.eta);
+            if (!hasAuditableData) {
                 throw new Error('La búsqueda externa no devolvió campos técnicos auditables.');
             }
-            const key = proposalKey(identity);
+            const key = proposalKey({ ...identity, imo: technical.imo || identity.imo });
+            setDueDiligenceData({ ...identity, imo: technical.imo || identity.imo }, responsePayload, technical);
             pendingProposals.set(key, {
                 identity: { ...identity },
                 technical: { ...technical },
@@ -1004,7 +913,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             event.stopPropagation();
             event.stopImmediatePropagation();
             const actionButton = acceptButton || rejectButton;
-            const card = actionButton.closest('[data-matching-result-card="true"], [data-vessel-recommendation="true"]');
+            const card = actionButton.closest('[data-matching-result-card="true"], [data-matching-cache-card="true"], [data-vessel-recommendation="true"]');
             const key = acceptButton?.dataset.dueDiligenceAccept || rejectButton?.dataset.dueDiligenceReject || '';
             if (acceptButton) void acceptPendingProposal(key, card, acceptButton);
             else rejectPendingProposal(key, card);
@@ -1032,6 +941,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         mergeTechnicalFields,
         mergeNonEmptyRecords,
         normalizeTechnicalRecord,
+        dueDiligenceDataByVessel,
         pendingProposals,
         proposalKey,
         recalculateFinancialEngine,
@@ -1040,5 +950,6 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         rejectPendingProposal,
         readExternalScrapeRecord,
         run: runVesselDueDiligence,
+        setDueDiligenceData,
     });
 })(window);

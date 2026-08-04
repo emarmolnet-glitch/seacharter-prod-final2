@@ -23,7 +23,7 @@ test('resetTotalEstimation clears evaluated vessel cache and global fleet states
   assert.match(resetSource, /setAisMatchingState\(\[\], \[\], null, \{ source: 'reset-estimation' \}\)/);
 
   // Verify global window variable resets
-  assert.match(resetSource, /window\['matchingResultsState'\] = null/);
+  assert.match(resetSource, /window\.matchingResultsState = \{ vessels: \[\], count: 0/);
   assert.match(resetSource, /window\.lastMatchingEngineResults = \[\]/);
   assert.match(resetSource, /window\.lastClassifiedVessels = \[\]/);
   assert.match(resetSource, /window\.lastRenderedAisAuditVessels = \[\]/);

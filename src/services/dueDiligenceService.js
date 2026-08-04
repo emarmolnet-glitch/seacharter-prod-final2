@@ -47,7 +47,9 @@ function readLabeledValue(record, labels) {
 export function normalizeDueDiligenceData(result = {}) {
   const data = result?.data && typeof result.data === 'object' ? result.data : result;
   return {
+    vesselName: readText(readLabeledValue(data, ['Vessel Name', 'Ship Name', 'VesselName', 'ShipName', 'Name'])),
     imo: normalizeImo(readLabeledValue(data, ['IMO Number', 'IMO', 'Numero IMO'])),
+    mmsi: normalizeMmsi(readLabeledValue(data, ['MMSI'])),
     dwt: readPositiveNumber(readLabeledValue(data, ['DWT', 'Deadweight'])),
     flag: readText(readLabeledValue(data, ['Flag', 'Bandera', 'Country'])),
     vesselType: readText(readLabeledValue(data, ['Vessel Type', 'Ship Type', 'VesselType', 'ShipType', 'Type'])),
@@ -55,6 +57,12 @@ export function normalizeDueDiligenceData(result = {}) {
     grossTonnage: readPositiveNumber(readLabeledValue(data, ['Gross Tonnage', 'GrossTonnage', 'GT'])),
     loaMeters: readPositiveNumber(readLabeledValue(data, ['LOA Meters', 'LOA', 'Length', 'Length Overall'])),
     beamMeters: readPositiveNumber(readLabeledValue(data, ['Beam Meters', 'Beam', 'Breadth', 'Manga'])),
+    draftMeters: readPositiveNumber(readLabeledValue(data, ['Draft', 'Draught', 'Draft Meters', 'Calado'])),
+    callSign: readText(readLabeledValue(data, ['Call Sign', 'CallSign', 'Callsign'])),
+    lastPort: readText(readLabeledValue(data, ['Last Port', 'LastPort', 'Last Port of Call', 'Previous Port'])),
+    eta: readText(readLabeledValue(data, ['ETA', 'Estimated Time of Arrival', 'Arrival Time'])),
+    destination: readText(readLabeledValue(data, ['Destination', 'Current Destination'])),
+    navigationStatus: readText(readLabeledValue(data, ['Navigation Status', 'Navigational Status', 'Nav Status'])),
   };
 }
 
@@ -94,9 +102,12 @@ export async function fetchDueDiligence(
   if (!response.ok || result.success === false || result.ok === false) {
     throw new Error(result.error || `No se pudo completar Due Diligence (HTTP ${response.status}).`);
   }
+  const rawData = result?.data && typeof result.data === 'object' ? result.data : result;
+  const normalizedData = normalizeDueDiligenceData(result);
   return {
     ...result,
-    data: normalizeDueDiligenceData(result),
+    rawData,
+    data: normalizedData,
   };
 }
 

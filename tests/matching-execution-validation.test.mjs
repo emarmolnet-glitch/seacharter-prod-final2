@@ -303,7 +303,7 @@ test('manual matching preserves the active route while reading stale calculated 
   assert.deepEqual(receivedRoute.pod_coordinates, { lat: 40.64, lon: -8.65 });
 });
 
-test('Null Island route context recovers the matching coordinates from session storage', async () => {
+test('Null Island route context never recovers coordinates from stale session storage', async () => {
   const blockStart = source.indexOf('function getMatchingExecutionRouteOverride');
   const blockEnd = source.indexOf('window.runMatchingEngine = runMatchingEngine;', blockStart)
     + 'window.runMatchingEngine = runMatchingEngine;'.length;
@@ -366,9 +366,9 @@ test('Null Island route context recovers the matching coordinates from session s
   );
 
   const result = await windowMock.handleMatchingExecutionClick({ preventDefault() {} });
-  assert.equal(result, true);
-  assert.deepEqual(receivedRoute.pol_coordinates, storedRoute.pol_coordinates);
-  assert.deepEqual(receivedRoute.pod_coordinates, storedRoute.pod_coordinates);
+  assert.equal(result, false);
+  assert.equal(receivedRoute, null);
+  assert.equal(elements.get('matching-execution-validation').dataset.missingFields, 'route-coordinates');
 });
 
 test('empty and Null Island coordinates stop execution with actionable feedback', async () => {
@@ -512,7 +512,7 @@ test('cache hydration remains distinct from a successful matching execution', ()
   const cacheStart = source.indexOf('function renderCachedMatchingResults');
   const cacheEnd = source.indexOf('function runDensityMapPreflightChecklist', cacheStart);
   const cacheSource = source.slice(cacheStart, cacheEnd);
-  assert.match(cacheSource, /resultsList\.dataset\.matchingExecutionState = 'cache-only'/);
+  assert.match(cacheSource, /resultsList\.dataset\.matchingExecutionState = String\(options\.executionState \|\| 'cache-only'\)/);
   assert.doesNotMatch(cacheSource, /MATCHING_EXECUTION_SUCCESS/);
 
   assert.match(source, /window\.addEventListener\('MATCHING_EXECUTION_SUCCESS',[\s\S]*resultsList\.dataset\.matchingExecutionState = 'success'[\s\S]*updateMatchingExecutionSuccessStick\(matches\)/);

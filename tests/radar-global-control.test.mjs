@@ -31,14 +31,17 @@ test('global radar preserves the requested LIVE, FROZEN, and LOADING visual lang
   assert.match(source, /Radar: FROZEN/);
 });
 
-test('activating radar from matching rehydrates matchingRequest before starting data flow', () => {
+test('matching radar executes a POL-scoped sweep without requiring a full calculation', () => {
   const componentStart = source.indexOf('window.RadarGlobalControl = (() => {');
   const componentEnd = source.indexOf('window.startRadarLive = async function', componentStart);
   const componentSource = source.slice(componentStart, componentEnd);
+  assert.match(componentSource, /EJECUTAR BARRIDO RADAR/);
+  assert.match(componentSource, /Escaneando zona\.\.\./);
+  assert.match(componentSource, /window\.getMatchingRadarPolContext\?\.\(\)\.valid === true/);
+  assert.match(componentSource, /context === 'matching'[\s\S]*window\.executeMatchingRadarSweep\?\.\(\)/);
   assert.match(componentSource, /fetchMatchingRequestFromGlobalStore/);
-  assert.match(componentSource, /await window\.rehydrateCalculatedState\(\)/);
+  assert.doesNotMatch(componentSource, /requiresMatchingRoute && !window\.requireActiveMatchingRoute/);
   assert.match(componentSource, /window\.startRadarLive\(\{ source: `\$\{source\}-global-control`, refresh: true, matchingRequest \}\)/);
-  assert.ok(componentSource.indexOf('fetchMatchingRequestFromGlobalStore') < componentSource.indexOf('window.startRadarLive'));
 });
 
 test('leaving the radar map freezes LIVE mode and cleans up the on-demand transport', () => {

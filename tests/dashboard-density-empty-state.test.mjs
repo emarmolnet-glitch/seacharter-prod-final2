@@ -31,8 +31,9 @@ test('density module blocks automatic AIS reads until POL coordinates exist', ()
   assert.match(helperSource, /window\.GlobalStore\?\.polCoordinates/);
   assert.match(helperSource, /if \(!getDensityPolCoordinates\(\)\) return \[\]/);
   assert.ok(updaterStart >= 0 && updaterEnd > updaterStart);
-  assert.match(updaterSource, /const polCoordinates = window\.getDensityPolCoordinates\?\.\(\) \|\| null/);
-  assert.match(updaterSource, /if \(!polCoordinates\) \{[\s\S]*return \[\];[\s\S]*fetch\('\/api\/openships\/live-status'/);
+  assert.match(updaterSource, /const matchingPolContext = options\.polContext \|\| window\.getMatchingRadarPolContext\?\.\(\) \|\| null/);
+  assert.match(updaterSource, /const polCoordinates = matchingPolContext\?\.coordinates \|\| window\.getDensityPolCoordinates\?\.\(\) \|\| null/);
+  assert.match(updaterSource, /if \(!polCoordinates\) \{[\s\S]*return \[\];[\s\S]*fetch\(`\/api\/openships\/live-status\?\$\{params\.toString\(\)\}`/);
 });
 
 test('density globe starts from a neutral global camera without a POL', () => {

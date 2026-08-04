@@ -44,11 +44,11 @@ test('current-session matching cache prevents synchronization and AIS resets', (
   assert.match(source, /window\.forceResetAisDensityResults/);
 });
 
-test('empty local query preserves cache belonging to the current session', () => {
-  assert.match(source, /const preservedSessionMatches = typeof window\.hasCurrentSessionMatchingCache/);
-  assert.match(source, /preservedAfterEmptyQuery: true/);
-  assert.match(source, /renderCachedMatchingResults\(preservedSessionMatches\)/);
-  assert.match(source, /return preservedSessionMatches/);
+test('empty local query clears previous matching candidates', () => {
+  assert.doesNotMatch(source, /preservedAfterEmptyQuery: true|cache-preserved/);
+  assert.match(source, /if \(rawMatches\.length === 0\)[\s\S]*window\.lastMatchingEngineResults = \[\]/);
+  assert.match(source, /window\.GlobalStore\.matchingVessels = \[\]/);
+  assert.match(source, /window\.showMatchingEmptyState\?\.\(\)/);
 });
 
 test('calculation state endpoint supports rehydration reads without a new migration', () => {
