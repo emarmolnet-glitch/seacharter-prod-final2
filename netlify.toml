@@ -34,6 +34,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/v1/voyage/tracking/*"
+  to = "/.netlify/functions/voyage-tracking"
+  status = 200
+
+[[redirects]]
   from = "/api/v1/*"
   to = "/.netlify/functions/:splat"
   status = 200
