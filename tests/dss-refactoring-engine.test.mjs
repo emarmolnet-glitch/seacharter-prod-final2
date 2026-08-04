@@ -371,9 +371,10 @@ test('PARTE 5: Critical DSS Bug Fixes - State Purge, Rate Clamping (min 1500 MT/
     }
   };
 
+  const neutralCancellingDate = new Date(Date.now() + (12 * 86400000));
   const globalState = {
-    laycanEnd: '2026-08-09',
-    cancellingDate: '2026-08-09'
+    laycanEnd: neutralCancellingDate.toISOString(),
+    cancellingDate: neutralCancellingDate.toISOString()
   };
 
   const fakeWin = {
@@ -419,7 +420,8 @@ test('PARTE 5: Critical DSS Bug Fixes - State Purge, Rate Clamping (min 1500 MT/
 
   // 3. Test Laycan Visual Sync in Escenario Alerta:
   assert.equal(elements['badge-laycan-status'].textContent, 'NEUTRAL', 'Card 1 in Escenario Alerta must display NEUTRAL status');
-  assert.equal(elements['val-laycan-cancelling'].textContent, '09/08/2026', 'Card 1 in Escenario Alerta must display global cancelling date (09/08/2026)');
+  const expectedCancellingLabel = neutralCancellingDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  assert.equal(elements['val-laycan-cancelling'].textContent, expectedCancellingLabel, 'Card 1 in Escenario Alerta must display the global cancelling date');
 });
 
 test('PARTE 6: Reactive dssFormState, Two-Way Data Binding, and Card Synchronization', () => {
@@ -722,5 +724,3 @@ test('PARTE 7: Refactorización Interfaz DSS - Tab Situación Actual, Paneles Co
   assert.equal(elements['input-pol'].disabled, false, 'input-pol must be enabled in simulation scenario');
   assert.equal(elements['input-cargoQty'].disabled, false, 'input-cargoQty must be enabled in simulation scenario');
   });
-
-

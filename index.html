@@ -11,6 +11,12 @@
             if (globalObject.ContractRefManager) return;
 
             const normalizeReference = (value) => String(value || '').trim().toUpperCase();
+            const generateVoyageRef = function() {
+                const randomValues = new Uint32Array(1);
+                if (globalObject.crypto?.getRandomValues) globalObject.crypto.getRandomValues(randomValues);
+                else randomValues[0] = Math.floor(Math.random() * 0xFFFFFFFF);
+                return `RDM/${new Date().getFullYear()}-${String(randomValues[0] % 10000).padStart(4, '0')}`;
+            };
             const getActiveContractRef = function() {
                 try {
                     const params = new URLSearchParams(globalObject.location?.search || '');
@@ -18,10 +24,10 @@
                         params.get('ref')
                         || params.get('contract_ref')
                         || globalObject.sessionStorage?.getItem('active_contract_ref')
-                        || ''
+                        || generateVoyageRef()
                     );
                 } catch (_error) {
-                    return '';
+                    return generateVoyageRef();
                 }
             };
             const setActiveContractRef = function(reference) {
@@ -44,6 +50,11 @@
                     return reference ? setActiveContractRef(reference) : '';
                 },
                 getActiveContractRef,
+                generateReference: generateVoyageRef,
+                generateVoyageRef,
+                createNewReference: function() {
+                    return setActiveContractRef(generateVoyageRef());
+                },
                 setActiveContractRef,
             };
 
@@ -51,6 +62,7 @@
             globalObject.ContractReference = globalObject.ContractReference || fallbackManager;
             globalObject.getActiveContractRef = globalObject.getActiveContractRef || getActiveContractRef;
             globalObject.setActiveContractRef = globalObject.setActiveContractRef || setActiveContractRef;
+            globalObject.generateVoyageRef = globalObject.generateVoyageRef || generateVoyageRef;
         })(window);
     </script>
     <!-- Tailwind CSS -->
@@ -7485,7 +7497,7 @@
             <div id="header-voyage-ref-container" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-xs font-mono shadow-2xs shrink-0" title="Referencia Única del Viaje / Contrato">
                 <i class="fa-solid fa-hashtag text-[10px] text-slate-400"></i>
                 <span class="text-slate-400 font-sans text-[10px] uppercase font-bold tracking-wider">Ref:</span>
-                <input type="text" id="quick-ref" class="bg-transparent font-mono text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 w-36 transition-all" value="RDM/GC/2026-0727-XXXX" oninput="syncQuickRef(this.value)" title="Referencia Única del Viaje / Contrato">
+                <input type="text" id="quick-ref" class="bg-transparent font-mono text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 w-36 transition-all" value="" oninput="syncQuickRef(this.value)" title="Referencia Única del Viaje / Contrato">
             </div>
             <div class="tools-dropdown-container">
                 <button
@@ -9705,22 +9717,22 @@
         <!-- ========================================== -->
         <!-- MÓDULO DECISIONES: SISTEMA DE SOPORTE (DSS)-->
         <!-- ========================================== -->
-        <div id="view-decisiones" class="view-section absolute inset-0 overflow-y-auto p-4 md:p-6 scroll-smooth bg-slate-900 text-slate-100">
+        <div id="view-decisiones" class="view-section absolute inset-0 overflow-y-auto p-4 md:p-6 scroll-smooth bg-slate-900 text-sm text-slate-100">
             <div class="w-full px-4 md:px-8 space-y-6">
 
                 <!-- CABECERA CON RESUMEN DEL VIAJE Y CONTROL DE ESTADO -->
                 <header class="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 shadow-xl flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3">
                     <div class="flex flex-col md:flex-row md:items-center gap-3 flex-wrap">
                         <span class="text-xs text-slate-400 font-mono shrink-0">Audit Engine</span>
-                        <h1 class="text-xl md:text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2 shrink-0 bg-transparent">
+                        <h1 class="text-base font-bold tracking-tight text-slate-800 flex items-center gap-2 shrink-0 bg-transparent">
                             <span>Sistema de Soporte de Decisiones (DSS)</span>
                         </h1>
                         <span class="hidden md:inline text-slate-600">|</span>
                         <p id="voyage-summary-subtitle" class="text-xs md:text-sm text-slate-300 font-medium">
-                            POL: <span id="summary-pol" class="text-indigo-400 font-bold">Rotterdam</span> ➔ 
-                            POD: <span id="summary-pod" class="text-indigo-400 font-bold">Houston</span> | 
-                            <span id="summary-qty" class="text-emerald-400 font-bold">50,000 MT</span> de 
-                            <span id="summary-commodity" class="text-slate-200">Siderúrgico / Carga General</span>
+                            POL: <span id="summary-pol" class="text-indigo-400 font-bold">—</span> ➔
+                            POD: <span id="summary-pod" class="text-indigo-400 font-bold">—</span> |
+                            <span id="summary-qty" class="text-emerald-400 font-bold">0 MT</span> ·
+                            <span id="summary-commodity" class="text-slate-200">Esperando datos de ruta</span>
                         </p>
                     </div>
 
@@ -9759,6 +9771,11 @@
                     </div>
                 </header>
 
+                <div id="dss-empty-state" class="rounded-xl border border-dashed border-slate-600 bg-slate-800/70 px-5 py-10 text-center text-sm text-slate-300">
+                    <strong class="block text-base text-white">Esperando datos de ruta</strong>
+                    <span class="mt-2 block">Define POL, POD y cantidad de carga en Mapa o Calculadora para activar Decisiones.</span>
+                </div>
+
                 <!-- PANEL INTERACTIVO DE SIMULACIÓN DE PARÁMETROS (DESPLEGABLE / ACORDEONES) -->
                 <section id="panel-parametros" class="hidden bg-white border border-slate-200 rounded-2xl p-5 shadow-xl transition-all text-slate-800 duration-300 ease-in-out overflow-hidden">
                     <!-- HEADER GENERAL CON BOTÓN TOGGLE / CHEVRON -->
@@ -9787,15 +9804,15 @@
                                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                                     <div>
                                         <label class="block text-slate-600 font-semibold mb-1">Puerto Origen (POL)</label>
-                                        <input type="text" id="input-pol" value="Rotterdam" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        <input type="text" id="input-pol" value="" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
                                     </div>
                                     <div>
                                         <label class="block text-slate-600 font-semibold mb-1">Puerto Destino (POD)</label>
-                                        <input type="text" id="input-pod" value="Houston" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        <input type="text" id="input-pod" value="" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
                                     </div>
                                     <div>
                                         <label class="block text-slate-600 font-semibold mb-1">Cantidad Carga (MT)</label>
-                                        <input type="number" id="input-cargoQty" value="50000" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        <input type="number" id="input-cargoQty" value="0" min="0" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
                                     </div>
                                     <div>
                                         <label class="block text-slate-600 font-semibold mb-1">Mercancía / Commodity</label>
@@ -9895,7 +9912,7 @@
                                     </div>
                                     <div>
                                         <label class="block text-slate-600 font-semibold mb-1" for="input-actualCargoIntake">Ajuste de Calado (Short Lift MT)</label>
-                                        <input type="number" id="input-actualCargoIntake" value="50000" step="100" min="1" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        <input type="number" id="input-actualCargoIntake" value="0" step="100" min="0" oninput="actualizarDesdeFormulario()" class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
                                     </div>
                                 </div>
                             </div>
@@ -10602,7 +10619,7 @@
         <!-- ========================================== -->
         <!-- MÓDULO 2: EDITOR GENCON 94 COMPLETO        -->
         <!-- ========================================== -->
-        <div id="view-gencon" class="view-section absolute inset-0 overflow-y-auto p-6 print-area bg-slate-100 text-slate-900">
+        <div id="view-gencon" class="view-section absolute inset-0 overflow-y-auto p-6 print-area bg-slate-100 text-sm text-slate-900">
             <div class="w-full max-w-none mx-auto space-y-6">
                 <!-- Panel de Controles -->
                 <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 no-print flex flex-col sm:flex-row gap-4 justify-between sm:items-center text-white shadow-lg">
@@ -10633,7 +10650,7 @@
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         <div>
                             <label class="font-bold">Ref Contrato</label>
-                            <input type="text" id="gc-ref" class="w-full border rounded px-2 py-1" value="RDM/2026-0604" oninput="syncGencon()">
+                            <input type="text" id="gc-ref" class="w-full border rounded px-2 py-1" value="" oninput="syncGencon()">
                         </div>
                         <div>
                             <label class="font-bold">Fecha</label>
@@ -11232,7 +11249,7 @@
         <!-- ========================================== -->
         <!-- MÓDULO 2b: EDITOR ASBATANKVOY COMPLETO     -->
         <!-- ========================================== -->
-        <div id="view-asbatankvoy" class="view-section absolute inset-0 overflow-y-auto p-6 print-area bg-slate-100 text-slate-900">
+        <div id="view-asbatankvoy" class="view-section absolute inset-0 overflow-y-auto p-6 print-area bg-slate-100 text-sm text-slate-900">
             <div class="w-full max-w-[95%] mx-auto space-y-6">
                 <!-- Panel de Controles -->
                 <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 no-print flex flex-col sm:flex-row gap-4 justify-between sm:items-center text-white shadow-lg">
@@ -11261,7 +11278,7 @@
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         <div>
                             <label class="font-bold">Ref Contrato</label>
-                            <input type="text" id="asb-ref" class="w-full border rounded px-2 py-1" value="RDM/2026-0604" oninput="syncAsbatankvoy()">
+                            <input type="text" id="asb-ref" class="w-full border rounded px-2 py-1" value="" oninput="syncAsbatankvoy()">
                         </div>
                         <div>
                             <label class="font-bold">Fecha</label>
@@ -12640,7 +12657,7 @@
             </div>
             <div style="text-align: right;">
                 <p style="font-size: 8pt; color: #64748b; margin: 0;"><strong>Fecha de Emisión:</strong> <span id="print-audit-date">08/06/2026</span></p>
-                <p style="font-size: 8pt; color: #64748b; margin: 2px 0 0 0;"><strong>ID Estimación:</strong> <span id="print-audit-est-id">SeaCharter Core PRO - (RDM/2026-0604)</span></p>
+                <p style="font-size: 8pt; color: #64748b; margin: 2px 0 0 0;"><strong>ID Estimación:</strong> <span id="print-audit-est-id"></span></p>
             </div>
         </div>
 
@@ -15154,6 +15171,7 @@
         window.DEFAULT_CHARTERER_MARGIN = DEFAULT_CHARTERER_MARGIN;
 
         const State = {
+            activeReference: window.generateVoyageRef?.() || '',
             vessel: "", dwt: 0, gt: 0, loa: 0, class: "", opex: 0, vesselDwtFixed: false,
             userHasEditedSpecialty: false,
             uploadedFile: null,
@@ -15425,6 +15443,14 @@
         }
 
         function resetTotalEstimation({ silent = false } = {}) {
+            const referenceManager = window.ContractReference || window.ContractRefManager;
+            const initialReference = String(State.activeReference || '').trim();
+            const nextActiveReference = silent && initialReference
+                ? referenceManager?.setActiveContractRef?.(initialReference) || initialReference
+                : referenceManager?.createNewReference?.()
+                    || referenceManager?.setActiveContractRef?.(window.generateVoyageRef?.() || '')
+                    || window.generateVoyageRef?.()
+                    || '';
             clearCalculatorLocalStorage();
             Object.keys(State).forEach((key) => {
                 if (key === 'uploadedFile') State[key] = null;
@@ -15435,6 +15461,7 @@
                 else State[key] = '';
             });
             Object.assign(State, {
+                activeReference: nextActiveReference,
                 vessel: '',
                 dwt: 0,
                 class: '',
@@ -15475,6 +15502,7 @@
             zeroIds.forEach((id) => setInputValue(id, 0));
             setInputValue('margin-owner', 0);
             setInputValue('margin-charterer', 0);
+            ['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'].forEach((id) => setInputValue(id, nextActiveReference));
             [
                 'port-ballast', 'port-pol', 'port-pod', 'map-port-ballast', 'map-port-pol',
                 'map-port-pod', 'eta-radar', 'gc-laycan-date', 'gc-laycan-time', 'gc-cancel-date',
@@ -24871,7 +24899,7 @@
             { id: 'map', label: 'Mapa' },
             { id: 'estimator', label: 'Calculadora' },
             { id: 'decisiones', label: 'Decisiones' },
-            { id: 'tracking', label: 'Tracking', presentation: 'dialog' },
+            { id: 'tracking', label: 'Tracking', presentation: 'module-overlay' },
             { id: 'ais', label: 'Densidad' },
             { id: 'matching', label: 'Coincidencia' },
             { id: 'gencon', label: 'Editor' },
@@ -24884,6 +24912,15 @@
         ];
         const MODULE_NAVIGATION = [...PRIMARY_MODULES, ...OPTIONAL_MODULES].map(module => module.id);
         let userPreferences = loadUserPreferences();
+        let activeNavigationModuleId = 'map';
+        let previousContentModuleId = 'map';
+
+        function getMountedContentModuleId() {
+            const activeView = Array.from(document.querySelectorAll('.view-section'))
+                .find(view => view.classList.contains('active-block') || view.classList.contains('active-flex'));
+            const moduleId = activeView?.id?.replace('view-', '') || '';
+            return MODULE_NAVIGATION.includes(moduleId) && moduleId !== 'tracking' ? moduleId : '';
+        }
 
         function loadUserPreferences() {
             if (typeof localStorage === 'undefined') return { ...DEFAULT_USER_PREFERENCES };
@@ -24925,7 +24962,7 @@
                     localStorage.setItem(USER_PREFERENCES_STORAGE_KEY, JSON.stringify(userPreferences));
                 }
                 renderNavbarModules();
-                updateNavigationContext(document.querySelector('.view-section.active-block, .view-section.active-flex')?.id?.replace('view-', '') || 'map');
+                updateNavigationContext(activeNavigationModuleId);
             } catch (error) {
                 console.warn('[UserPreferences] No se pudieron cargar las preferencias de cuenta.', error);
             }
@@ -24978,12 +25015,11 @@
             const localizedLabel = getLocalizedModuleLabel(moduleConfig.label);
             button.textContent = localizedLabel;
             button.setAttribute('aria-label', localizedLabel);
-            if (moduleConfig.presentation === 'dialog') {
-                button.setAttribute('aria-haspopup', 'dialog');
+            if (moduleConfig.presentation === 'module-overlay') {
                 button.setAttribute('aria-controls', 'tracking-live-overlay');
             }
             button.addEventListener('click', () => {
-                if (moduleConfig.presentation === 'dialog') {
+                if (moduleConfig.presentation === 'module-overlay') {
                     window.openTrackingLive?.();
                 } else {
                     switchTab(moduleConfig.id);
@@ -25020,7 +25056,7 @@
                     mobileMenu.appendChild(item);
                 });
             }
-            updateMobileModuleNavLabel(document.querySelector('.view-section.active-block, .view-section.active-flex')?.id?.replace('view-', '') || 'map');
+            updateMobileModuleNavLabel(activeNavigationModuleId);
         }
 
         function updateMobileModuleNavLabel(tabId) {
@@ -25174,7 +25210,7 @@
                         showContainerModules: Boolean(event.target.checked),
                     });
                     renderNavbarModules();
-                    updateNavigationContext(document.querySelector('.view-section.active-block, .view-section.active-flex')?.id?.replace('view-', '') || 'map');
+                    updateNavigationContext(activeNavigationModuleId);
                 });
             }
         }
@@ -25321,6 +25357,8 @@
         window.userPreferences = userPreferences;
 
         function updateNavigationContext(tabId) {
+            if (!MODULE_NAVIGATION.includes(tabId)) return;
+            activeNavigationModuleId = tabId;
             MODULE_NAVIGATION.forEach(moduleId => {
                 document.querySelectorAll(`[data-module-id="${moduleId}"]`).forEach(button => {
                     button.classList.remove('bg-blue-600', 'text-white', 'shadow');
@@ -25335,13 +25373,20 @@
             });
         }
 
-        function restoreActiveViewNavigation() {
-            const activeModuleId = document.querySelector('.view-section.active-block, .view-section.active-flex')?.id?.replace('view-', '') || 'map';
+        function restoreActiveViewNavigation(event) {
+            if (event?.detail?.restoreNavigation === false) return;
+            const previousView = document.getElementById(`view-${previousContentModuleId}`);
+            const previousStillMounted = previousView?.classList.contains('active-block') || previousView?.classList.contains('active-flex');
+            const activeModuleId = previousStillMounted
+                ? previousContentModuleId
+                : (getMountedContentModuleId() || 'map');
             updateNavigationContext(activeModuleId);
             updateMobileModuleNavLabel(activeModuleId);
         }
 
         document.addEventListener('tracking-live:open', () => {
+            const mountedModuleId = getMountedContentModuleId();
+            if (mountedModuleId) previousContentModuleId = mountedModuleId;
             updateNavigationContext('tracking');
             updateMobileModuleNavLabel('tracking');
             closeMobileModuleNav();
@@ -25585,6 +25630,9 @@
                 console.warn(`[Navigation] Unknown tab ignored: ${tabId}`);
                 return false;
             }
+            if (document.getElementById('tracking-live-overlay')?.classList.contains('is-open')) {
+                window.closeTrackingLive?.({ restoreNavigation: false });
+            }
             try {
                 const referenceManager = window.ContractReference || window.ContractRefManager;
                 referenceManager?.ensureUrlReference?.();
@@ -25618,6 +25666,7 @@
             });
             if (typeof updateNavigationContext === 'function') updateNavigationContext(tabId);
             if (typeof updateMobileModuleNavLabel === 'function') updateMobileModuleNavLabel(tabId);
+            previousContentModuleId = tabId;
 
             if (tabId === 'auditor') {
                 targetView.classList.add('active-flex');
@@ -33390,20 +33439,24 @@
          * MÓDULO DECISIONES - SISTEMA DE SOPORTE DE DECISIONES (DSS)
          */
         const estadoInicialDecisiones = Object.freeze({
-            pol: 'Rotterdam',
-            pod: 'Houston',
-            cargoQty: 50000,
-            commodity: 'Siderúrgico / Carga General',
-            laycanDaysLeft: 10,
-            estimatedVoyageDays: 8,
-            loadRate: 5000,
-            dischargeRate: 5000,
-            portDays: 20,
-            seaDays: 8,
-            fleteEstimado: 35,
-            breakEven: 25
+            pol: '',
+            pod: '',
+            cargoQty: 0,
+            commodity: '',
+            laycanDaysLeft: 0,
+            estimatedVoyageDays: 0,
+            loadRate: 0,
+            dischargeRate: 0,
+            portDays: 0,
+            seaDays: 0,
+            fleteEstimado: 0,
+            breakEven: 0
         });
         window.estadoInicialDecisiones = estadoInicialDecisiones;
+
+        function hasDecisionVoyageData(state = {}) {
+            return Boolean(String(state?.pol || '').trim() && String(state?.pod || '').trim() && Number(state?.cargoQty || state?.cargo) > 0);
+        }
 
         // ==========================================
         // PROVEEDOR DE ESTADO GLOBAL CANÓNICO — MÓDULOS 5, 7 y 10
@@ -33480,10 +33533,12 @@
 
         function syncDecisionesFromCalculator() {
             try {
-                const pol = document.getElementById('port-pol')?.value || document.getElementById('map-port-pol')?.value || '';
-                const pod = document.getElementById('port-pod')?.value || document.getElementById('map-port-pod')?.value || '';
-                const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || 0;
-                const commodity = document.getElementById('cargo-type-manual')?.value ? (window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value) || '') : '';
+                const voyageData = window.SeaCharterStore?.getState?.() || {};
+                const pol = String(voyageData?.pol || '').trim();
+                const pod = String(voyageData?.pod || '').trim();
+                const cargoQty = Math.max(0, Number(voyageData?.cargoQty || voyageData?.cargo) || 0);
+                const cargoCode = voyageData?.cargoTypeCode || voyageData?.cargoType || voyageData?.commodity || '';
+                const commodity = cargoCode ? (window.getCargoTaxonomyLabel?.(cargoCode) || String(cargoCode)) : '';
                 const laycanDaysLeft = parseFloat(document.getElementById('laycan-dias-libres')?.value) || 0;
                 const loadRate = (typeof calcularRitmoEfectivo === 'function' ? calcularRitmoEfectivo('pol') : 0)
                     || parseFloat(document.getElementById('rate-load')?.value) || parseFloat(document.getElementById('load-rate')?.value) || 0;
@@ -33506,10 +33561,11 @@
                     ? Number(State.portDays || State.totalPortDays || State.tPort)
                     : (parseFloat(document.getElementById('res-days-port')?.innerText) || 0);
 
-                if (pol && document.getElementById('input-pol')) document.getElementById('input-pol').value = pol;
-                if (pod && document.getElementById('input-pod')) document.getElementById('input-pod').value = pod;
-                if (cargoQty && document.getElementById('input-cargoQty')) document.getElementById('input-cargoQty').value = cargoQty;
-                if (commodity && document.getElementById('input-commodity')) document.getElementById('input-commodity').value = commodity;
+                if (document.getElementById('input-pol')) document.getElementById('input-pol').value = pol;
+                if (document.getElementById('input-pod')) document.getElementById('input-pod').value = pod;
+                if (document.getElementById('input-cargoQty')) document.getElementById('input-cargoQty').value = cargoQty;
+                if (document.getElementById('input-actualCargoIntake')) document.getElementById('input-actualCargoIntake').value = cargoQty;
+                if (document.getElementById('input-commodity')) document.getElementById('input-commodity').value = commodity;
                 if (laycanDaysLeft && document.getElementById('input-laycanDaysLeft')) document.getElementById('input-laycanDaysLeft').value = laycanDaysLeft;
                 if (loadRate && document.getElementById('input-loadRate')) document.getElementById('input-loadRate').value = loadRate;
                 if (dischargeRate && document.getElementById('input-dischargeRate')) document.getElementById('input-dischargeRate').value = dischargeRate;
@@ -33530,8 +33586,18 @@
                     window.dssFormState.breakEven = breakEven;
                     window.dssFormState.breakEvenUnitario = breakEven;
                 }
+
+                if (!hasDecisionVoyageData({ pol, pod, cargoQty })) {
+                    dssFormState = { ...estadoInicialDecisiones };
+                    window.dssFormState = dssFormState;
+                    generarAuditoriaOperativa(dssFormState);
+                    return;
+                }
             } catch (error) {
-                // Silencioso
+                dssFormState = { ...estadoInicialDecisiones };
+                window.dssFormState = dssFormState;
+                generarAuditoriaOperativa(dssFormState);
+                return;
             }
 
             actualizarDesdeFormulario();
@@ -33561,10 +33627,10 @@
             if (!activeState) return;
 
             const {
-                pol = 'Rotterdam',
-                pod = 'Houston',
+                pol = '',
+                pod = '',
                 cargoQty = 0,
-                commodity = 'Carga General',
+                commodity = '',
                 laycanDaysLeft = 0,
                 estimatedVoyageDays = 0,
                 loadRate = 1,
@@ -33579,10 +33645,17 @@
             const summaryQty = document.getElementById('summary-qty');
             const summaryCommodity = document.getElementById('summary-commodity');
 
-            if (summaryPol) summaryPol.textContent = pol;
-            if (summaryPod) summaryPod.textContent = pod;
+            const hasVoyageData = Boolean(String(pol || '').trim() || String(pod || '').trim() || Number(cargoQty) > 0);
+            const decisionesView = document.getElementById?.('view-decisiones');
+            const decisionesWorkspace = decisionesView?.firstElementChild;
+            const decisionesEmptyState = document.getElementById?.('dss-empty-state');
+            if (decisionesEmptyState?.classList) decisionesEmptyState.classList.toggle('hidden', hasVoyageData);
+            decisionesWorkspace?.classList?.toggle('dss-awaiting-data', !hasVoyageData);
+            if (summaryPol) summaryPol.textContent = pol || '—';
+            if (summaryPod) summaryPod.textContent = pod || '—';
             if (summaryQty) summaryQty.textContent = `${Number(cargoQty).toLocaleString('es-ES')} MT`;
-            if (summaryCommodity) summaryCommodity.textContent = commodity;
+            if (summaryCommodity) summaryCommodity.textContent = commodity || 'Esperando datos de ruta';
+            if (!hasVoyageData) return;
 
             const recomendaciones = [];
             const cargoTerms = determinarTerminoCargo(commodity);
@@ -34057,7 +34130,7 @@
         }
 
         function handleCommitConditions(currentState, executeSafeCommit) {
-            const targetIntake = Number(currentState?.actualCargoIntake || currentState?.targetCargoMT || currentState?.cargoQty || currentState?.cargo) || 50000;
+            const targetIntake = Number(currentState?.actualCargoIntake || currentState?.targetCargoMT || currentState?.cargoQty || currentState?.cargo) || 0;
             const ballastDays = Number(currentState?.ballastDays) || 0;
             const jwlaRiskActive = Boolean(currentState?.jwlaRiskActive);
             const jwlaPremiumUSD = Number(currentState?.jwlaPremiumUSD) || 0;
@@ -34241,7 +34314,7 @@
 
             const effectiveBallastVal = (state.ballastDays !== undefined && state.ballastDays !== null && Number(state.ballastDays) > 0)
                 ? Number(state.ballastDays)
-                : calculateAutoExportDeficitBallast(state.pod || 'Rotterdam', 0, { vesselSpeed: state.vesselSpeed || 12.0 }).ballastDays;
+                : calculateAutoExportDeficitBallast(state.pod || '', 0, { vesselSpeed: state.vesselSpeed || 12.0 }).ballastDays;
             setVal('input-ballastDays', effectiveBallastVal.toFixed(1));
             const jwlaCheckbox = document.getElementById('input-jwlaRiskActive');
             if (jwlaCheckbox) {
@@ -34250,7 +34323,7 @@
             setVal('input-jwlaPremiumUSD', state.jwlaPremiumUSD ?? 0);
 
             // Sincronización Bug Short Lift: resetear e igualar automáticamente al cambiar carga principal
-            const targetCargo = Number(state.targetCargoMT ?? state.cargoQty ?? state.cargo) || 50000;
+            const targetCargo = Number(state.targetCargoMT ?? state.cargoQty ?? state.cargo) || 0;
             const actualIntake = (state.actualCargoIntake !== undefined && state.actualCargoIntake !== null)
                 ? Number(state.actualCargoIntake)
                 : targetCargo;
@@ -34536,7 +34609,7 @@
                 options.cargoQty ??
                 (typeof State !== 'undefined' && State ? (State.cargoQty || State.actualCargoIntake) : null)
             );
-            const safeIntake = (realCargoQty > 0) ? realCargoQty : 50000;
+            const safeIntake = Math.max(1, realCargoQty);
 
             const pol = dssState.pol || options.pol || '';
             const pod = dssState.pod || options.pod || '';
@@ -34721,9 +34794,9 @@
             const inputJwlaPremiumUSD = document.getElementById('input-jwlaPremiumUSD');
             const inputActualCargoIntake = document.getElementById('input-actualCargoIntake');
 
-            const polVal = inputPol ? inputPol.value : 'Rotterdam';
-            const podVal = inputPod ? inputPod.value : 'Houston';
-            const cargoQty = inputCargoQty ? Number(inputCargoQty.value) : 50000;
+            const polVal = inputPol?.value || '';
+            const podVal = inputPod?.value || '';
+            const cargoQty = Number(inputCargoQty?.value) || 0;
             const loadRate = inputLoadRate ? Math.max(1, Number(inputLoadRate.value) || 1) : 5000;
             const dischargeRate = inputDischargeRate ? Math.max(1, Number(inputDischargeRate.value) || 1) : loadRate;
 
@@ -34973,9 +35046,9 @@
 
             // 2. Obtener baseState limpio desde globalState / DOM (sin arrastrar dssSimulationState previo)
             const globalState = typeof getDSSCurrentState === 'function' ? getDSSCurrentState() : {
-                pol: document.getElementById('input-pol')?.value || 'Rotterdam',
-                pod: document.getElementById('input-pod')?.value || 'Houston',
-                cargoQty: Number(document.getElementById('input-cargoQty')?.value) || 50000,
+                pol: document.getElementById('input-pol')?.value || '',
+                pod: document.getElementById('input-pod')?.value || '',
+                cargoQty: Number(document.getElementById('input-cargoQty')?.value) || 0,
                 commodity: document.getElementById('input-commodity')?.value || 'Siderúrgico / Carga General',
                 laycanDaysLeft: Number(document.getElementById('input-laycanDaysLeft')?.value) || 10,
                 estimatedVoyageDays: Number(document.getElementById('input-estimatedVoyageDays')?.value) || 8,
@@ -35175,10 +35248,10 @@
             const inputFleteEstimado = document.getElementById('input-fleteEstimado');
             const inputBreakEven = document.getElementById('input-breakEven');
 
-            const pol = inputPol?.value || document.getElementById('port-pol')?.value || 'Rotterdam';
-            const pod = inputPod?.value || document.getElementById('port-pod')?.value || 'Houston';
-            const cargoQty = parseFloat(inputCargoQty?.value) || parseFloat(document.getElementById('cargo-qty')?.value) || 50000;
-            const commodity = inputCommodity?.value || 'Siderúrgico / Carga General';
+            const pol = inputPol?.value || document.getElementById('port-pol')?.value || '';
+            const pod = inputPod?.value || document.getElementById('port-pod')?.value || '';
+            const cargoQty = parseFloat(inputCargoQty?.value) || parseFloat(document.getElementById('cargo-qty')?.value) || 0;
+            const commodity = inputCommodity?.value || '';
             const laycanDaysLeft = parseFloat(inputLaycanDaysLeft?.value) || parseFloat(document.getElementById('laycan-dias-libres')?.value) || 10;
             const mainEnginePortDays = (typeof State !== 'undefined' && State && (State.portDays || State.totalPortDays || State.tPort))
                 ? Number(State.portDays || State.totalPortDays || State.tPort)
@@ -35229,9 +35302,9 @@
 
         function buildAuditHTMLTemplate(state) {
             const safeState = state || {};
-            const pol = String(safeState.pol || 'Rotterdam');
-            const pod = String(safeState.pod || 'Houston');
-            const cargoQty = Number(safeState.cargoQty) || 50000;
+            const pol = String(safeState.pol || '');
+            const pod = String(safeState.pod || '');
+            const cargoQty = Number(safeState.cargoQty) || 0;
             const commodity = String(safeState.commodity || 'Siderúrgico / Carga General');
             const laycanDaysLeft = Number(safeState.laycanDaysLeft) || 10;
             const estimatedVoyageDays = Number(safeState.estimatedVoyageDays) || 8;
@@ -35507,10 +35580,10 @@
             const inputFleteEstimado = document.getElementById('input-fleteEstimado');
             const inputBreakEven = document.getElementById('input-breakEven');
 
-            const fallbackPol = inputPol?.value || document.getElementById('port-pol')?.value || (typeof State !== 'undefined' ? State.pol : '') || 'Rotterdam';
-            const fallbackPod = inputPod?.value || document.getElementById('port-pod')?.value || (typeof State !== 'undefined' ? State.pod : '') || 'Houston';
-            const fallbackCargoQty = parseFloat(inputCargoQty?.value) || parseFloat(document.getElementById('cargo-qty')?.value) || (typeof State !== 'undefined' ? parseFloat(State.cargo) : 0) || 50000;
-            const fallbackCommodity = inputCommodity?.value || (typeof State !== 'undefined' ? State.commodity : '') || 'Siderúrgico / Carga General';
+            const fallbackPol = inputPol?.value || document.getElementById('port-pol')?.value || (typeof State !== 'undefined' ? State.pol : '') || '';
+            const fallbackPod = inputPod?.value || document.getElementById('port-pod')?.value || (typeof State !== 'undefined' ? State.pod : '') || '';
+            const fallbackCargoQty = parseFloat(inputCargoQty?.value) || parseFloat(document.getElementById('cargo-qty')?.value) || (typeof State !== 'undefined' ? parseFloat(State.cargo) : 0) || 0;
+            const fallbackCommodity = inputCommodity?.value || (typeof State !== 'undefined' ? State.commodity : '') || '';
             const fallbackVesselName = document.getElementById('vessel-name')?.value || (typeof State !== 'undefined' ? State.vessel : '') || 'MV GEARED BULKER';
 
             const activeDss = (typeof dssSimulationState !== 'undefined' && dssSimulationState) 
@@ -35558,7 +35631,7 @@
                 ? parseFloat(activeDss.breakEven)
                 : (Number(canonicalFinancials?.breakEvenFreight) || parseFloat(inputBreakEven?.value) || 25);
 
-            const fallbackDwt = parseFloat(document.getElementById('vessel-dwt')?.value) || (typeof State !== 'undefined' ? parseFloat(State.dwt) : 0) || 50000;
+            const fallbackDwt = parseFloat(document.getElementById('vessel-dwt')?.value) || (typeof State !== 'undefined' ? parseFloat(State.dwt) : 0) || 0;
             const dwt = parseFloat(activeDss.dwt || activeDss.vesselDwt) || fallbackDwt;
 
             const qty = Math.max(1, cargoQty);
@@ -35592,9 +35665,9 @@
 
         function buildAuditHTMLTemplate(state) {
             const safeState = state || {};
-            const pol = String(safeState.pol || 'Rotterdam');
-            const pod = String(safeState.pod || 'Houston');
-            const cargoQty = Number(safeState.cargoQty) || 50000;
+            const pol = String(safeState.pol || '');
+            const pod = String(safeState.pod || '');
+            const cargoQty = Number(safeState.cargoQty) || 0;
             const commodity = String(safeState.commodity || 'Siderúrgico / Carga General');
             const laycanDaysLeft = Number(safeState.laycanDaysLeft) || 10;
             const estimatedVoyageDays = Number(safeState.estimatedVoyageDays) || 8;
@@ -35860,7 +35933,7 @@
             const safeState = state || {};
             const pol = String(safeState.pol || 'TBA');
             const pod = String(safeState.pod || 'TBA');
-            const cargoQty = Number(safeState.cargoQty) || 50000;
+            const cargoQty = Number(safeState.cargoQty) || 0;
             const commodity = String(safeState.commodity || 'CARGA GENERAL');
             const laycanDaysLeft = safeState.laycanDaysLeft !== undefined && safeState.laycanDaysLeft !== null ? safeState.laycanDaysLeft : 10;
             const loadRate = Number(safeState.loadRate) || 5000;
@@ -36225,7 +36298,7 @@
                 const updatedLoadRate = Math.max(1, Number(activeDss.loadRate) || (typeof State !== 'undefined' ? Number(State.loadRate) : 5000) || 5000);
                 const updatedDischargeRate = Math.max(1, Number(activeDss.dischargeRate) || (typeof State !== 'undefined' ? Number(State.dischRate) : updatedLoadRate) || updatedLoadRate);
                 const updatedFreightSell = Number(activeDss.fleteEstimado || activeDss.fleteUnitario || (typeof State !== 'undefined' ? State.freightSell : 35) || 35);
-                const cargoQty = Number(activeDss.cargoQty || (typeof State !== 'undefined' ? State.cargo : 50000) || 50000);
+                const cargoQty = Number(activeDss.cargoQty || (typeof State !== 'undefined' ? State.cargo : 0) || 0);
                 const updatedBallastDays = Number(activeDss.ballastDays) || 0;
                 const updatedJwlaRiskActive = Boolean(activeDss.jwlaRiskActive);
                 const updatedJwlaPremiumUSD = Number(activeDss.jwlaPremiumUSD) || 0;
@@ -36591,7 +36664,7 @@
                 safeState.cargoQty || 
                 0
             );
-            const dwt = (!isNaN(rawDwt) && rawDwt > 0) ? rawDwt : (Number(safeState.cargoQty) || 50000);
+            const dwt = (!isNaN(rawDwt) && rawDwt > 0) ? rawDwt : (Number(safeState.cargoQty) || 0);
             const formattedDwt = dwt.toLocaleString('en-US');
 
             const freightPerMT = (safeState.fleteEstimado / (safeState.cargoQty || 1)).toFixed(2);
@@ -36602,7 +36675,7 @@
                 '1. MAIN TERMS:',
                 `- OWNERS   : RODAHMAR SHIPPING SL (AS DISPONENT OWNERS)`,
                 `- VESSEL   : ${shipName} - ABT ${formattedDwt} MT DWT FULLY GEARED WITH 4 X 30 MT SWL CRANES AND ELECTRIC GRABS`,
-                `- CARGO    : ${(safeState.cargoQty || 50000).toLocaleString('en-US')} MT 5% MOLOO - ${String(safeState.commodity || 'CARGA GENERAL').toUpperCase()}`,
+                `- CARGO    : ${(Number(safeState.cargoQty) || 0).toLocaleString('en-US')} MT 5% MOLOO - ${String(safeState.commodity || 'CARGA GENERAL').toUpperCase()}`,
                 `- POL      : ${String(safeState.pol || 'TBA').toUpperCase()}`,
                 `- POD      : ${String(safeState.pod || 'TBA').toUpperCase()}`,
                 `- LAYCAN   : ${safeState.laycanDaysLeft !== undefined ? safeState.laycanDaysLeft : 10} DAYS NOTICE`,
@@ -37588,6 +37661,7 @@
             } catch (error) {
                 console.warn('[Contract Reference] Reference update continued in safe mode.', error);
             }
+            State.activeReference = activeReference;
             ['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'].forEach((id) => {
                 const input = document.getElementById(id);
                 if (input && input.value !== activeReference) input.value = activeReference;
@@ -37598,6 +37672,7 @@
         window.addEventListener('contract-reference:changed', (event) => {
             const reference = event.detail?.reference;
             if (!reference) return;
+            State.activeReference = reference;
             ['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'].forEach((id) => {
                 const input = document.getElementById(id);
                 if (input && input.value !== reference) input.value = reference;
@@ -41140,25 +41215,21 @@ Example:
                 return;
             }
 
-            // Generar una nueva referencia única basada en la fecha actual y un sufijo aleatorio
-            const now = new Date();
-            const yyyy = now.getFullYear();
-            const mm = String(now.getMonth() + 1).padStart(2, '0');
-            const dd = String(now.getDate()).padStart(2, '0');
-            const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-
             const cpStandard = State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
-            let newRef = "";
+            const newRef = syncActiveContractReference(
+                State.activeReference
+                || getSafeActiveContractRef()
+                || window.generateVoyageRef?.()
+                || ''
+            );
 
             if (cpStandard === 'ASBATANKVOY') {
-                newRef = `RDM/ASB/${yyyy}-${mm}${dd}-${randomSuffix}`;
                 const asbRefEl = document.getElementById('asb-ref');
                 if (asbRefEl) {
                     asbRefEl.value = newRef;
                 }
                 syncAsbatankvoy();
             } else {
-                newRef = `RDM/GC/${yyyy}-${mm}${dd}-${randomSuffix}`;
                 const gcRefEl = document.getElementById('gc-ref');
                 if (gcRefEl) {
                     gcRefEl.value = newRef;
@@ -42995,7 +43066,7 @@ Example:
             const currentDate = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const cpStandard = State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
             const ref = getSafeActiveContractRef();
-            const fullRefId = `SeaCharter Core PRO - (${ref || 'RDM/2026-0604'})`;
+            const fullRefId = `SeaCharter Core PRO - (${ref || '—'})`;
             return `
                 <div class="master-audit-header">
                     <div>
@@ -45647,7 +45718,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
                 // Actualizar identificador de referencia y rellenar vista imprimible
                 const ref = getSafeActiveContractRef();
-                const fullRefId = `SeaCharter Core PRO - (${ref || 'RDM/2026-0604'})`;
+                const fullRefId = `SeaCharter Core PRO - (${ref || '—'})`;
                 document.getElementById('audit-report-ref-id').innerText = fullRefId;
 
                 const currentDate = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -45733,7 +45804,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const originalTitle = document.title;
             const cpStandard = State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
             const ref = getSafeActiveContractRef();
-            const fullRefId = `SeaCharter Core PRO - (${ref || 'RDM/2026-0604'})`;
+            const fullRefId = `SeaCharter Core PRO - (${ref || '—'})`;
             
             // Sincronizar referencia más reciente antes de imprimir
             const auditReportRefEl = document.getElementById('audit-report-ref-id');
@@ -45746,7 +45817,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             try {
                 // Enviar copia del PDF del reporte de auditoría al servidor en segundo plano
-                savePDFToServer('audit-report-print-view', ref || 'RDM/2026-0604', 'audit');
+                savePDFToServer('audit-report-print-view', ref || 'sin-referencia', 'audit');
             } catch (err) {
                 console.error("Error autosaving audit PDF:", err);
             }
@@ -47641,7 +47712,28 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         let aisMapInitTimer = null;
+        function getDensityPolCoordinates() {
+            const candidates = [
+                State?.polCoordinates,
+                State?.pol_coordinates,
+                window.GlobalStore?.polCoordinates,
+                window.GlobalStore?.pol_coordinates,
+                window.coreProMatchingRouteContext?.polCoordinates,
+                window.coreProMatchingRouteContext?.pol_coordinates
+            ];
+            for (const candidate of candidates) {
+                const coordinates = normalizeRoutePortCoordinates(candidate);
+                if (coordinates) return coordinates;
+            }
+            const polName = String(document.getElementById('port-pol')?.value || State?.pol || '').trim();
+            return polName && typeof findPortData === 'function'
+                ? normalizeRoutePortCoordinates(findPortData(polName))
+                : null;
+        }
+        window.getDensityPolCoordinates = getDensityPolCoordinates;
+
         async function ensureOpenShipsDensitySnapshot() {
+            if (!getDensityPolCoordinates()) return [];
             if (Array.isArray(window.openShipsVesselsCache) && window.openShipsVesselsCache.length > 0) {
                 return window.openShipsVesselsCache;
             }
@@ -47653,9 +47745,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function initAisMap() {
             if (aisMapInitTimer) clearTimeout(aisMapInitTimer);
             aisMapInitTimer = setTimeout(async () => {
-                await ensureOpenShipsDensitySnapshot();
                 const densityView = document.getElementById('view-ais');
                 if (!densityView?.classList.contains('active-block')) return;
+                const densityPolCoordinates = getDensityPolCoordinates();
+                if (densityPolCoordinates) await ensureOpenShipsDensitySnapshot();
                 const doMount = () => {
                     try {
                         const mapContainer = document.getElementById('ais-map');
@@ -47672,17 +47765,22 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         }
                         mapContainer.dataset.renderKey = 'mounted';
                         if (window.GlobalFleetGlobe) {
-                            const densityVessels = getDensityMapSourceVessels();
+                            const openShipsData = densityPolCoordinates
+                                ? normalizeDensityVesselCollection(window.openShipsVesselsCache)
+                                : [];
                             aisMap = window.GlobalFleetGlobe.mount({
                                 key: 'density',
                                 containerId: 'ais-map',
-                                vesselsData: densityVessels,
-                                renderKey: JSON.stringify(densityVessels),
+                                vesselsData: openShipsData,
+                                renderKey: JSON.stringify(openShipsData),
+                                initialView: densityPolCoordinates
+                                    ? { lat: densityPolCoordinates.lat, lng: densityPolCoordinates.lon, altitude: 1.55 }
+                                    : { lat: 20, lng: 0, altitude: 2.45 },
                                 autoRotate: true
                             });
                             window.mapaAIS = aisMap;
-                            syncDensityActiveVessel(densityVessels);
-                            window.renderFilteredAisCounters?.(densityVessels);
+                            syncDensityActiveVessel(openShipsData);
+                            window.renderFilteredAisCounters?.(openShipsData);
                             if (State?.routeGeometry) {
                                 try { window.GlobalFleetGlobe.setRouteResult(State.routeGeometry, 'density', { focus: false }); } catch (_) {}
                             } else {
@@ -47802,9 +47900,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return Number(val);
             }
 
-            const renderFleet = getDensityMapSourceVessels();
+            const renderFleet = normalizeDensityVesselCollection(window.openShipsVesselsCache);
+            const visibleRenderFleet = getDensityPolCoordinates() ? renderFleet : [];
             const renderableById = new Map();
-            renderFleet.forEach((vessel, index) => {
+            visibleRenderFleet.forEach((vessel, index) => {
                 if (!vessel || typeof vessel !== 'object') return;
                 const latitude = parseNum(vessel.latitude ?? vessel.lat ?? vessel.LAT ?? vessel.latitud ?? vessel.MetaData?.latitude ?? vessel.MetaData?.lat);
                 const longitude = parseNum(vessel.longitude ?? vessel.lon ?? vessel.lng ?? vessel.LONG ?? vessel.LON ?? vessel.longitud ?? vessel.MetaData?.longitude ?? vessel.MetaData?.lon ?? vessel.MetaData?.lng);
@@ -61096,6 +61195,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const counter = document.getElementById('openships-live-counter');
             const statusPill = document.getElementById('openships-status-pill');
             const radarPing = document.getElementById('openships-radar-ping');
+            const polCoordinates = window.getDensityPolCoordinates?.() || null;
+            if (!polCoordinates) {
+                if (counter) counter.textContent = '0';
+                statusPill?.classList.remove('bg-emerald-900/80', 'border-emerald-700', 'bg-red-900/80', 'border-red-700');
+                radarPing?.classList.remove('animate-ping');
+                return [];
+            }
             if (window.openShipsRadarRequestInFlight) {
                 return window.openShipsRadarRequestPromise || [];
             }
