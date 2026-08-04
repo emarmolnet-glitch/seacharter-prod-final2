@@ -264,11 +264,29 @@ test('read-only success feedback and toast use the ingestion taxonomy summary', 
 });
 
 test('density map restores globally filtered vessels without refetching', () => {
-  const tabInitialization = indexSource.slice(indexSource.indexOf("if(tabId === 'ais')"), indexSource.indexOf("} else if (typeof destroyAisMap"));
+  const tabInitialization = indexSource.slice(indexSource.indexOf("if(tabId === 'ais')"), indexSource.indexOf('window.syncDataBridgeRadarTransport', indexSource.indexOf("if(tabId === 'ais')")));
   assert.doesNotMatch(tabInitialization, /resetAisDensityResults\(\)/);
   assert.match(tabInitialization, /getFilteredVessels\(\)/);
   assert.match(tabInitialization, /updateAisMarkers\(\)/);
   assert.doesNotMatch(tabInitialization, /loadValidatedAisDensityVessels\(\)/);
+});
+
+test('density tab remains mounted while CSS hides inactive views', () => {
+  const switchStart = indexSource.indexOf('function switchTab(tabId)');
+  const switchEnd = indexSource.indexOf('window.syncDataBridgeRadarTransport', switchStart);
+  const switchSource = indexSource.slice(switchStart, switchEnd);
+  assert.match(switchSource, /el\.classList\.toggle\('hidden', !isActiveView\)/);
+  assert.doesNotMatch(switchSource, /destroyAisMap\(\)/);
+});
+
+test('density globe colors and emphasizes commercial vessel types', () => {
+  assert.match(globeSource, /function getVesselColor\(vesselType\)/);
+  assert.match(globeSource, /general cargo.*bulk carrier/);
+  assert.match(globeSource, /COMMERCIAL_VESSEL_COLOR = '#10B981'/);
+  assert.match(globeSource, /TANKER_VESSEL_COLOR = '#F59E0B'/);
+  assert.match(globeSource, /NOISE_VESSEL_COLOR = '#EF4444'/);
+  assert.match(globeSource, /getVesselRadiusFactor\(vessel\).*1\.35/s);
+  assert.match(globeSource, /\.pointColor\(\(vessel\) => getVesselPointColor/);
 });
 
 test('density map navigation preserves the global background radar state', () => {
@@ -487,7 +505,9 @@ test('master globe waits for layout and reports mounting diagnostics', () => {
 
 test('all maps render independent AIS points without heatmaps or fixed labels', () => {
   assert.ok(globeSource.includes('.pointsData(view.vessels)'));
-  assert.ok(globeSource.includes("POINT_COLOR = 'rgba(0, 255, 255, 0.8)'"));
+  assert.ok(globeSource.includes("COMMERCIAL_VESSEL_COLOR = '#10B981'"));
+  assert.ok(globeSource.includes("TANKER_VESSEL_COLOR = '#F59E0B'"));
+  assert.ok(globeSource.includes("NOISE_VESSEL_COLOR = '#EF4444'"));
   assert.ok(globeSource.includes('POINT_ALTITUDE = 0.008'));
   assert.ok(globeSource.includes('cameraAltitude <= 0.45) return 0.075'));
   assert.ok(globeSource.includes('cameraAltitude >= 2.40) return 0.032'));

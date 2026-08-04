@@ -8,16 +8,16 @@
     const CAMERA_TRANSITION_MS = 700;
     const ACTIVE_VESSEL_FOCUS_ALTITUDE = 0.72;
     const ACTIVE_VESSEL_TRANSITION_MS = 1200;
-    const POINT_COLOR = 'rgba(0, 255, 255, 0.8)';
+    const COMMERCIAL_VESSEL_COLOR = '#10B981';
+    const TANKER_VESSEL_COLOR = '#F59E0B';
+    const NOISE_VESSEL_COLOR = '#EF4444';
     const POINT_HOVER_COLOR = '#FFFFFF';
     const POINT_ALTITUDE = 0.008;
     const POINT_HOVER_ALTITUDE = 0.016;
     const POINT_HOVER_RADIUS_FACTOR = 1.45;
     const VESSEL_MARKER_ALTITUDE = 0.012;
     const VESSEL_MARKER_BEARING_DISTANCE_DEG = 0.42;
-    const VESSEL_MARKER_COLOR = 'rgba(203, 213, 225, 0.92)';
     const VESSEL_ACTIVE_COLOR = '#2DD4BF';
-    const TRANSPARENT_POINT_COLOR = 'rgba(255, 255, 255, 0.001)';
     const PATH_STYLE = Object.freeze({ color: '#00FFFF', width: 2, simplify: true });
     const BALLAST_PATH_COLOR = '#F59E0B';
     const EARTH_IMAGE_URL = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
@@ -50,7 +50,7 @@
         return {
             lat: Math.max(-90, Math.min(90, lat ?? INITIAL_VIEW.lat)),
             lng: Math.max(-180, Math.min(180, lng ?? INITIAL_VIEW.lng)),
-            altitude: Math.max(0.35, altitude ?? INITIAL_VIEW.altitude),
+            altitude: Math.max(0.15, altitude ?? INITIAL_VIEW.altitude),
         };
     }
 
@@ -135,6 +135,21 @@
         return digits.length === length ? digits : '';
     }
 
+    function getVesselColor(vesselType) {
+        const normalizedType = String(vesselType || '').trim().toLowerCase();
+        if (normalizedType.includes('general cargo') || normalizedType.includes('bulk carrier')) {
+            return COMMERCIAL_VESSEL_COLOR;
+        }
+        if (normalizedType.includes('tanker') || /\b(liquid|gas|oil|chemical|lng|lpg)\b/.test(normalizedType)) {
+            return TANKER_VESSEL_COLOR;
+        }
+        return NOISE_VESSEL_COLOR;
+    }
+
+    function getVesselRadiusFactor(vessel) {
+        return getVesselColor(vessel?.vesselType) === COMMERCIAL_VESSEL_COLOR ? 1.35 : 1;
+    }
+
     function normalizeVessel(vessel, index = 0) {
         if (!vessel || typeof vessel !== 'object') return null;
         const scopes = getObjectScopes(vessel);
@@ -146,6 +161,7 @@
         const rawImo = firstValue(scopes, ['imo', 'IMO', 'imoNumber', 'imo_number', 'imo_no', 'IMO_Number']);
         const rawMmsi = firstValue(scopes, ['mmsi', 'MMSI', 'mmsiNumber', 'mmsi_number']);
         const rawDwt = firstValue(scopes, ['dwt', 'DWT', 'DWT_real', 'dwt_real', 'deadweight', 'deadweightTonnage', 'deadweight_tonnage']);
+        const rawVesselType = firstValue(scopes, ['vesselType', 'vessel_type', 'shipType', 'ship_type', 'ShipType', 'type', 'category', 'vesselClass', 'specialtyType']);
         const dwt = toFiniteNumber(rawDwt);
         const navigation = resolveVesselHeading(scopes);
         return {
@@ -159,6 +175,7 @@
             imo: normalizeVesselIdentifier(rawImo, 7) || 'N/A',
             mmsi: normalizeVesselIdentifier(rawMmsi, 9),
             dwt,
+            vesselType: rawVesselType ? String(rawVesselType).trim() : 'Other',
             heading: navigation.value,
             headingSource: navigation.source,
             hasHeading: navigation.value !== null,
@@ -224,20 +241,10 @@
         return 0.075 + (0.032 - 0.075) * progress;
     }
 
-    const DATABRIDGE_POINT_COLOR = '#00D2FF';
-    const RADAR_LIVE_POINT_COLOR = '#10B981';
-
     function getVesselPointColor(vessel, hoveredVessel, selectedVessel) {
         if (vessel === selectedVessel) return '#2DD4BF';
         if (vessel === hoveredVessel) return POINT_HOVER_COLOR;
-        const source = String(vessel?.data_source || vessel?.data_source_type || vessel?.source || '').toLowerCase();
-        if (source === 'databridge' || source === 'cartera' || source === 'en_cartera') {
-            return DATABRIDGE_POINT_COLOR;
-        }
-        if (source === 'radar_live' || source === 'radar' || source === 'live') {
-            return RADAR_LIVE_POINT_COLOR;
-        }
-        return POINT_COLOR;
+        return getVesselColor(vessel?.vesselType);
     }
 
     function formatDwt(value) {
@@ -295,6 +302,7 @@
 
     function createVesselMarkerElement(vessel, view) {
         const marker = document.createElement('div');
+        const vesselColor = getVesselColor(vessel.vesselType);
         marker.className = 'global-vessel-marker';
         marker.classList.add(vessel.hasHeading ? 'has-reported-heading' : 'is-heading-unknown');
         marker.dataset.headingSource = vessel.headingSource || 'unavailable';
@@ -314,9 +322,14 @@
                     <circle class="global-vessel-marker__unknown-core" cx="12" cy="12" r="3"/>
                 </svg>
             </span>`;
-        marker.style.setProperty('--vessel-marker-color', VESSEL_MARKER_COLOR);
+        marker.dataset.vesselCategory = vesselColor === COMMERCIAL_VESSEL_COLOR
+            ? 'commercial'
+            : vesselColor === TANKER_VESSEL_COLOR
+                ? 'tanker'
+                : 'noise';
+        marker.style.setProperty('--vessel-marker-color', vesselColor);
         marker.style.setProperty('--vessel-active-color', VESSEL_ACTIVE_COLOR);
-        marker.style.setProperty('--vessel-marker-scale', String(getVesselMarkerScale(view)));
+        marker.style.setProperty('--vessel-marker-scale', String(getVesselMarkerScale(view) * getVesselRadiusFactor(vessel)));
         view.vesselElements.set(vessel, marker);
         return marker;
     }
@@ -325,7 +338,7 @@
         if (!view?.globe || view.vesselElements.size === 0) return;
         const scale = getVesselMarkerScale(view);
         view.vesselElements.forEach((marker, vessel) => {
-            marker.style.setProperty('--vessel-marker-scale', String(scale));
+            marker.style.setProperty('--vessel-marker-scale', String(scale * getVesselRadiusFactor(vessel)));
             if (!Number.isFinite(vessel.heading)) {
                 marker.style.removeProperty('--vessel-screen-heading');
                 return;
@@ -540,7 +553,7 @@
     }
 
     function focusFirstVessel(view) {
-        if (view.hasFocusedVessel || !view.vessels.length) return;
+        if (!view.focusFirstVesselEnabled || view.hasFocusedVessel || !view.vessels.length) return;
         view.hasFocusedVessel = true;
         focusCoordinates(view.vessels[0].lat, view.vessels[0].lng, view.key, FOCUS_ALTITUDE, CAMERA_TRANSITION_MS);
     }
@@ -557,9 +570,12 @@
     function applyPointInteractionStyle(view) {
         if (!view?.globe) return;
         view.globe
-            .pointColor(() => TRANSPARENT_POINT_COLOR)
+            .pointColor((vessel) => getVesselPointColor(vessel, view.hoveredVessel, view.selectedVessel))
             .pointAltitude((vessel) => vessel === view.hoveredVessel || vessel === view.selectedVessel ? POINT_HOVER_ALTITUDE : POINT_ALTITUDE)
-            .pointRadius((vessel) => vessel === view.hoveredVessel || vessel === view.selectedVessel ? view.pointRadius * POINT_HOVER_RADIUS_FACTOR : view.pointRadius);
+            .pointRadius((vessel) => {
+                const radius = view.pointRadius * getVesselRadiusFactor(vessel);
+                return vessel === view.hoveredVessel || vessel === view.selectedVessel ? radius * POINT_HOVER_RADIUS_FACTOR : radius;
+            });
         view.vesselElements.forEach((marker, vessel) => {
             marker.classList.toggle('is-hovered', vessel === view.hoveredVessel);
             marker.classList.toggle('is-selected', vessel === view.selectedVessel);
@@ -807,6 +823,7 @@
             routePaths: [],
             portLabels: [],
             initialView,
+            initialViewDuration: Math.max(0, toFiniteNumber(options.initialViewDuration, 0) || 0),
             pointRadius: getPointRadius(initialView.altitude),
             hoveredVessel: null,
             selectedVessel: null,
@@ -815,6 +832,7 @@
             vesselOrientationFrameId: null,
             hoverStyleFrameId: null,
             autoRotate: options.autoRotate !== false,
+            focusFirstVesselEnabled: options.focusFirstVessel !== false,
             hasFocusedVessel: false,
             resizeObserver: null,
             rotationButton: null,
@@ -845,9 +863,12 @@
                 .htmlElementsData([])
                 .pointLat('lat')
                 .pointLng('lng')
-                .pointColor(() => TRANSPARENT_POINT_COLOR)
+                .pointColor((vessel) => getVesselPointColor(vessel, view.hoveredVessel, view.selectedVessel))
                 .pointAltitude((vessel) => vessel === view.hoveredVessel || vessel === view.selectedVessel ? POINT_HOVER_ALTITUDE : POINT_ALTITUDE)
-                .pointRadius((vessel) => vessel === view.hoveredVessel || vessel === view.selectedVessel ? view.pointRadius * POINT_HOVER_RADIUS_FACTOR : view.pointRadius)
+                .pointRadius((vessel) => {
+                    const radius = view.pointRadius * getVesselRadiusFactor(vessel);
+                    return vessel === view.hoveredVessel || vessel === view.selectedVessel ? radius * POINT_HOVER_RADIUS_FACTOR : radius;
+                })
                 .pointLabel(getTooltip)
                 .onPointHover((vessel) => {
                     if (view.hoveredVessel === vessel) return;
@@ -887,7 +908,7 @@
                 .labelDotRadius(() => 0.32)
                 .labelAltitude(() => 0.018)
                 .labelsData([]);
-            view.globe.pointOfView(view.initialView, 0);
+            view.globe.pointOfView(view.initialView, view.initialViewDuration);
             view.controls = view.globe.controls();
             view.controls.enableDamping = true;
             view.controls.dampingFactor = 0.08;
@@ -920,7 +941,9 @@
         if (key === DEFAULT_KEY) window.map = view.adapter;
         if (key === 'density') window.mapaAIS = view.adapter;
         const activeVessel = window.GlobalStore?.activeVessel || window.activeVessel;
-        if (activeVessel) window.setTimeout(() => focusActiveVesselWhenReady(activeVessel, key), 0);
+        if (activeVessel && options.focusActiveVesselOnMount !== false) {
+            window.setTimeout(() => focusActiveVesselWhenReady(activeVessel, key), 0);
+        }
         return view.adapter;
     }
 
@@ -987,11 +1010,13 @@
         resetCamera,
         setAutoRotate,
         toggleAutoRotate,
+        getVesselColor,
         getInstance: (key = DEFAULT_KEY) => getView(key)?.adapter || null,
         getVessels: (key = DEFAULT_KEY) => getView(key)?.vessels || [],
-        pointProps: Object.freeze({ color: POINT_COLOR, hoverColor: POINT_HOVER_COLOR, altitude: POINT_ALTITUDE, nearRadius: 0.075, farRadius: 0.032 })
+        pointProps: Object.freeze({ commercialColor: COMMERCIAL_VESSEL_COLOR, tankerColor: TANKER_VESSEL_COLOR, noiseColor: NOISE_VESSEL_COLOR, hoverColor: POINT_HOVER_COLOR, altitude: POINT_ALTITUDE, nearRadius: 0.075, farRadius: 0.032 })
     });
 
     window.GlobalFleetGlobe = globalFleetGlobe;
     window.GlobeMapView = globalFleetGlobe;
+    window.getVesselColor = getVesselColor;
 })(window, document);

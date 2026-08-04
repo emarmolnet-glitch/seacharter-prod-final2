@@ -148,7 +148,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <!-- Master Globe.gl renderer shared by Core PRO and Data Bridge (Loaded with defer for non-blocking FCP) -->
     <script defer src="https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js"></script>
-    <link rel="stylesheet" href="./assets/css/density-globe.css?v=20260802-ais-heading">
+    <link rel="stylesheet" href="./assets/css/density-globe.css?v=20260804-commercial-funnel">
     <link rel="stylesheet" href="./assets/css/contextual-feedback.css?v=20260717-ui-hotfix">
     <link rel="stylesheet" href="./ais-market-reference-widget.css?v=20260721">
     <script type="module" src="./cargo-taxonomy.mjs"></script>
@@ -184,6 +184,7 @@
     <script type="module" src="./stress-test-engine.js"></script>
     <script type="module" src="./src/route-configurator-entry.tsx"></script>
     <script type="module" src="./src/due-diligence-entry.js"></script>
+    <script type="module" src="./src/density-commercial-funnel.js"></script>
     <script src="./session-draft.js"></script>
     <script type="module" src="./dual-mode-overlay.js"></script>
 
@@ -12217,6 +12218,23 @@
                                     </div>
                                 </div>
                             </div>
+                            <aside id="density-commercial-matches-panel" class="density-commercial-panel hidden" aria-label="Top 5 matches comerciales">
+                                <header class="density-commercial-panel__header">
+                                    <div>
+                                        <p class="density-commercial-panel__eyebrow">Mapa → Auditoría → Cierre</p>
+                                        <h4>Top Matches</h4>
+                                    </div>
+                                    <span class="density-commercial-panel__badge">DWT Fit</span>
+                                </header>
+                                <p id="density-commercial-matches-summary" class="density-commercial-panel__summary">Analizando flota OpenShips...</p>
+                                <div id="density-commercial-matches-list" class="density-commercial-panel__list" aria-live="polite"></div>
+                            </aside>
+                            <aside id="density-due-diligence-panel" class="density-due-diligence-panel hidden" aria-hidden="true" aria-label="Ficha técnica Due Diligence">
+                                <button id="density-due-diligence-close" type="button" class="density-due-diligence-panel__close" aria-label="Cerrar ficha técnica">
+                                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                                </button>
+                                <div id="density-due-diligence-panel-content" class="density-due-diligence-panel__content"></div>
+                            </aside>
                             <aside id="global-opportunities-panel" class="global-opportunities-panel" hidden aria-label="Oportunidades globales de Data Bridge">
                                 <div class="global-opportunities-panel__header">
                                     <button id="global-opportunities-toggle" type="button" class="global-opportunities-panel__toggle" aria-expanded="true" aria-controls="global-opportunities-list" title="Plegar panel">
@@ -26169,6 +26187,8 @@
                 console.warn('[Navigation] Form synchronization was skipped.', error);
             }
             document.querySelectorAll('.view-section').forEach(el => {
+                const isActiveView = el === targetView;
+                el.classList.toggle('hidden', !isActiveView);
                 el.classList.remove('active-block', 'active-flex');
             });
             if (typeof updateNavigationContext === 'function') updateNavigationContext(tabId);
@@ -26176,8 +26196,10 @@
             previousContentModuleId = tabId;
 
             if (tabId === 'auditor') {
+                targetView.classList.remove('hidden');
                 targetView.classList.add('active-flex');
             } else {
+                targetView.classList.remove('hidden');
                 targetView.classList.add('active-block');
             }
 
@@ -26271,15 +26293,11 @@
                     }
                     runDensityMapPreflightChecklist();
                 }, 200);
-            } else if (typeof destroyAisMap === 'function') {
+            } else {
                 if (aisTabInitTimer) {
                     clearTimeout(aisTabInitTimer);
                     aisTabInitTimer = null;
                 }
-                // Strict conditional rendering: the Leaflet map only exists while the
-                // AIS tab is active. Leaving the tab unmounts it so it is always reborn
-                // into a container whose dimensions are already settled.
-                destroyAisMap();
             }
             window.syncDataBridgeRadarTransport?.('tab-change');
             if (typeof syncPrintPolicyClass === 'function') syncPrintPolicyClass();
@@ -30359,6 +30377,7 @@
             if (typeof refreshVesselCompatibilityWarning === 'function') refreshVesselCompatibilityWarning();
             return vessel;
         }
+        window.applyResolvedVesselToCalculator = applyResolvedVesselToCalculator;
 
         let pendingPdaVesselConfirmation = null;
 
@@ -48364,16 +48383,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             configurable: true
         });
 
-        // Conditional-rendering model (equivalent to React's `{ activeTab === 'ais'
-        // && <MapComponent key="ais-map" /> }`): instead of keeping a permanently
-        // mounted Leaflet instance hidden behind display:none and fighting its 0x0
-        // measurement with polling + a ResizeObserver, the map is torn down whenever
-        // the AIS tab is left (see destroyAisMap) and built FRESH every time the tab
-        // is opened. By the time initAisMap runs, switchTab() has already applied
-        // `active-block` (display:block) to the AIS view, so the #ais-map container is
-        // laid out with its real, final dimensions. That kills the 0x0 grey-map and
-        // empty-bounding-box bugs at the root, with no dependency on listeners that
-        // behave inconsistently in Production.
+        // The AIS view stays mounted and is hidden with CSS when another tab is active.
+        // Keeping the same map instance preserves its WebGL context, downloaded fleet,
+        // camera position, and user interaction state across tab changes.
         let aisMapAnimationFrameId = null;
 
         function getDensityVesselIdentity(vessel) {
@@ -48514,6 +48526,20 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function getDensityMapSourceVessels() {
             const store = window.GlobalStore;
+            const openShipsData = normalizeDensityVesselCollection(window.openShipsVesselsCache);
+            if (typeof window.useCommercialFilter === 'function' && (openShipsData.length > 0 || window.openShipsVesselsCacheLoaded === true)) {
+                const targetCargoDwt = parseFloat(document.getElementById('cargo-qty')?.value || State?.cargo || State?.cargoQty || 0) || 0;
+                const commercialState = window.useCommercialFilter(openShipsData, {
+                    targetCargoDwt,
+                    capacityTolerance: 1.05,
+                    polCoordinates: getDensityPolCoordinates(),
+                    polName: String(document.getElementById('port-pol')?.value || State?.pol || '').trim(),
+                    limit: 5
+                });
+                window.commercialDensityMatchState = commercialState;
+                window.dispatchEvent(new CustomEvent('density:commercial-matches-updated', { detail: commercialState }));
+                return window.setRenderFleet(commercialState.filteredVessels);
+            }
             const matchingSource = String(store?.aisMatchingStateSource || '');
             const hasCommittedLocalMatches = matchingSource === 'matching-validation'
                 && Array.isArray(store?.nearbyVessels) && store.nearbyVessels.length > 0;
@@ -48526,7 +48552,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             );
             if (filteredVessels.length > 0) return window.setRenderFleet(filteredVessels);
 
-            const openShipsData = normalizeDensityVesselCollection(window.openShipsVesselsCache);
             return window.setRenderFleet(openShipsData);
         }
         window.getDensityMapSourceVessels = getDensityMapSourceVessels;
@@ -48606,7 +48631,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         mapContainer.dataset.renderKey = 'mounted';
                         if (window.GlobalFleetGlobe) {
                             const openShipsData = densityPolCoordinates
-                                ? normalizeDensityVesselCollection(window.openShipsVesselsCache)
+                                ? getDensityMapSourceVessels()
                                 : [];
                             aisMap = window.GlobalFleetGlobe.mount({
                                 key: 'density',
@@ -48614,8 +48639,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                                 vesselsData: openShipsData,
                                 renderKey: JSON.stringify(openShipsData),
                                 initialView: densityPolCoordinates
-                                    ? { lat: densityPolCoordinates.lat, lng: densityPolCoordinates.lon, altitude: 1.55 }
+                                    ? { lat: densityPolCoordinates.lat, lng: densityPolCoordinates.lon, altitude: 0.15 }
                                     : { lat: 20, lng: 0, altitude: 2.45 },
+                                initialViewDuration: densityPolCoordinates ? 1000 : 0,
+                                focusFirstVessel: false,
+                                focusActiveVesselOnMount: false,
                                 autoRotate: true
                             });
                             window.mapaAIS = aisMap;
@@ -48696,9 +48724,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }, 800);
         }
 
-        // Unmount the Leaflet instance whenever the AIS tab is left. Leaflet's
-        // remove() detaches all handlers and frees the #ais-map container so it can be
-        // re-initialized cleanly on the next visit (mirrors a React unmount via key).
+        // Explicit cleanup remains available for full application teardown or recovery,
+        // but normal tab navigation deliberately keeps this instance alive.
         function destroyAisMap() {
             if (!aisMap) return;
             cancelAisMapAnimationFrame();
@@ -48740,7 +48767,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return Number(val);
             }
 
-            const renderFleet = normalizeDensityVesselCollection(window.openShipsVesselsCache);
+            const renderFleet = getDensityMapSourceVessels();
             const visibleRenderFleet = getDensityPolCoordinates() ? renderFleet : [];
             const renderableById = new Map();
             visibleRenderFleet.forEach((vessel, index) => {
@@ -62070,6 +62097,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         ? payload.vessels.filter(vessel => vessel && typeof vessel === 'object')
                         : [];
                     window.openShipsVesselsCacheLoaded = true;
+                    window.dispatchEvent(new CustomEvent('openships:snapshot-updated', {
+                        detail: { vessels: window.openShipsVesselsCache.slice(), polCoordinates }
+                    }));
                     if (window.openShipsVesselsCache.length > 0) {
                         window.stopSecondaryFleetPolling?.('openships-snapshot-loaded');
                     }

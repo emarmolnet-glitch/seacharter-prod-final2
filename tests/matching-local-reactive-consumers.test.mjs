@@ -47,15 +47,17 @@ test('local matching unlocks calculator without external AIS sweep availability'
   assert.match(calculatorSource, /calculateAndDisplayAisFreight\(\);[\s\S]*source === 'matching-validation'/);
 });
 
-test('density map prioritizes committed matching and active filters before OpenShips', () => {
+test('density map prioritizes the commercial OpenShips funnel before legacy local fallbacks', () => {
+  assert.match(mapSource, /const openShipsData = normalizeDensityVesselCollection\(window\.openShipsVesselsCache\);[\s\S]*window\.useCommercialFilter\(openShipsData/);
+  assert.match(mapSource, /return window\.setRenderFleet\(commercialState\.filteredVessels\)/);
   assert.match(mapSource, /const committedMatches = normalizeDensityVesselCollection\(hasCommittedLocalMatches \? store\.nearbyVessels : \[\]\);[\s\S]*if \(committedMatches\.length > 0\) return window\.setRenderFleet\(committedMatches\)/);
   assert.match(mapSource, /const filteredVessels = normalizeDensityVesselCollection\([\s\S]*store\?\.filteredVesselsInitialized[\s\S]*if \(filteredVessels\.length > 0\) return window\.setRenderFleet\(filteredVessels\)/);
-  assert.match(mapSource, /const openShipsData = normalizeDensityVesselCollection\(window\.openShipsVesselsCache\);[\s\S]*return window\.setRenderFleet\(openShipsData\)/);
+  assert.match(mapSource, /return window\.setRenderFleet\(openShipsData\)/);
+  assert.ok(mapSource.indexOf('window.useCommercialFilter(openShipsData') < mapSource.indexOf('if (committedMatches.length > 0)'));
   assert.ok(mapSource.indexOf('if (committedMatches.length > 0)') < mapSource.indexOf('if (filteredVessels.length > 0)'));
-  assert.ok(mapSource.indexOf('if (filteredVessels.length > 0)') < mapSource.indexOf('const openShipsData'));
   assert.doesNotMatch(mapSource, /mergeDensityVesselSources/);
   assert.doesNotMatch(mapSource, /backgroundAisData|aisLiveData|aisMatchingCache|listaBarcos|lastVesselsInArea|exploratoryVesselsCache|dataBridgeLocalCandidates|dataBridgeGlobalCandidates/);
-  assert.match(mapSource, /const densityVessels = getDensityMapSourceVessels\(\);[\s\S]*vesselsData: densityVessels/);
+  assert.match(mapSource, /const openShipsData = densityPolCoordinates[\s\S]*\? getDensityMapSourceVessels\(\)[\s\S]*vesselsData: openShipsData/);
   assert.match(markerSource, /function updateAisMarkers\(\) \{[\s\S]*const renderFleet = getDensityMapSourceVessels\(\)/);
   assert.doesNotMatch(markerSource, /normalizeDensityVesselCollection\(window\.openShipsVesselsCache\)/);
 });
