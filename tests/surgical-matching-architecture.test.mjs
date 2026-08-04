@@ -149,7 +149,8 @@ test('global radar control replaces the matching manual sweep button', () => {
 test('connection status and contextual radar have no automatic network startup', () => {
   assert.match(connectionStatusSource, /label: "Inactivo"/);
   assert.match(connectionStatusSource, /connection-status:unmount/);
-  assert.doesNotMatch(connectionStatusSource, /useEffect|setInterval|fetch\s*\(|verifyConnection/);
+  assert.match(connectionStatusSource, /connection-status:update/);
+  assert.doesNotMatch(connectionStatusSource, /setInterval|fetch\s*\(|verifyConnection/);
 
   const contextualStart = indexSource.indexOf('window.scheduleContextualAisRadarRefresh = function()');
   const contextualEnd = indexSource.indexOf('window.getAisRouteReadiness', contextualStart);
