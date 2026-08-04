@@ -95,7 +95,7 @@
     <script type="module" src="./cargo-taxonomy.mjs"></script>
     <script type="module" src="./vesselRecommendationService.js"></script>
     <script type="module" src="./AisMarketReferenceWidget.ts"></script>
-    <script defer src="./GlobalFleetGlobe.js?v=20260802-ais-heading"></script>
+    <script defer src="./GlobalFleetGlobe.js?v=20260804-vessel-selection"></script>
     <script type="module" src="./map_loader.js?v=20260802-ais-heading"></script>
     <script defer src="/aisstream-draft.js"></script>
     <!-- Maritime Routing Library -->
@@ -25611,6 +25611,14 @@
                     window.MapController?.attachRouteMap(map);
                     if (window.GlobalFleetGlobe) {
                         window.GlobalFleetGlobe.updateVessels(null, 'main');
+                        const activeVessel = window.GlobalStore?.activeVessel || window.activeVessel;
+                        if (activeVessel) {
+                            const mapVessels = window.GlobalFleetGlobe.getVessels('main');
+                            if (!findDensityVesselByIdentity(activeVessel, mapVessels)) {
+                                window.GlobalFleetGlobe.updateVessels([...mapVessels, activeVessel], 'main');
+                            }
+                            window.GlobalFleetGlobe.focusActiveVessel(activeVessel, 'main');
+                        }
                     }
                 });
             }
@@ -26970,7 +26978,7 @@
             };
 
             if (typeof window.selectShip === 'function') {
-                window.selectShip(
+                await window.selectShip(
                     activeVessel.vesselName,
                     activeVessel.mmsi,
                     activeVessel.lat,
@@ -47386,6 +47394,99 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }) || null;
         }
 
+        function normalizeVesselSelectionPayload(...sources) {
+            const records = sources
+                .flatMap(source => {
+                    if (!source || typeof source !== 'object') return [];
+                    return [
+                        source,
+                        source.vessel,
+                        source.ais,
+                        source.MetaData,
+                        source.metadata,
+                        source.position
+                    ].filter(value => value && typeof value === 'object');
+                });
+            const firstValue = keys => {
+                for (const record of records) {
+                    for (const key of keys) {
+                        const value = record[key];
+                        if (value !== undefined && value !== null && value !== '' && typeof value !== 'object') return value;
+                    }
+                }
+                return null;
+            };
+            const cleanIdentifier = value => {
+                const text = String(value ?? '').trim();
+                if (!text || /^(?:PENDING|PENDING_IMO|N\/A|NA|UNKNOWN|UNDEFINED|NULL|-+)$/i.test(text)) return '';
+                return text.replace(/\D/g, '');
+            };
+            const rawImo = cleanIdentifier(firstValue(['imo', 'IMO', 'imoNumber', 'imo_number', 'imo_no', 'IMO_Number']));
+            const rawMmsi = cleanIdentifier(firstValue(['mmsi', 'MMSI', 'mmsiNumber', 'mmsi_number']));
+            const rawName = String(firstValue(['name', 'vesselName', 'vessel_name', 'vessel', 'ShipName', 'shipName']) ?? '').trim();
+            const latitude = Number(firstValue(['lat', 'latitude', 'Latitude', 'AIS_Live_Lat', 'LAT']));
+            const longitude = Number(firstValue(['lon', 'lng', 'longitude', 'Longitude', 'AIS_Live_Lon', 'LON', 'LONG']));
+            return {
+                imo: rawImo.length === 7 ? rawImo : null,
+                mmsi: rawMmsi.length === 9 ? rawMmsi : null,
+                name: rawName || null,
+                lat: Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 ? latitude : null,
+                lon: Number.isFinite(longitude) && longitude >= -180 && longitude <= 180 ? longitude : null
+            };
+        }
+        window.normalizeVesselSelectionPayload = normalizeVesselSelectionPayload;
+
+        function findLocalVesselSelectionMatch(selection) {
+            const store = window.GlobalStore || {};
+            const candidates = [
+                ...(typeof getDensityMapSourceVessels === 'function' ? getDensityMapSourceVessels() : []),
+                ...(Array.isArray(store.rawVessels) ? store.rawVessels : []),
+                ...(Array.isArray(store.vessels) ? store.vessels : []),
+                ...(Array.isArray(store.renderedAisVessels) ? store.renderedAisVessels : []),
+                ...(Array.isArray(window.openShipsVesselsCache) ? window.openShipsVesselsCache : [])
+            ];
+            const targetName = String(selection?.name || '').trim().toLowerCase();
+            return candidates.find(candidate => {
+                const normalized = normalizeVesselSelectionPayload(candidate);
+                return (selection?.imo && normalized.imo === selection.imo)
+                    || (selection?.mmsi && normalized.mmsi === selection.mmsi)
+                    || (targetName && String(normalized.name || '').trim().toLowerCase() === targetName);
+            }) || null;
+        }
+
+        async function resolveVesselSelectionPayload(selectionSource) {
+            const initial = normalizeVesselSelectionPayload(selectionSource);
+            const localMatch = findLocalVesselSelectionMatch(initial);
+            const local = normalizeVesselSelectionPayload(localMatch);
+            let remoteVessel = null;
+            if (!initial.imo && !local.imo && (initial.mmsi || initial.name)) {
+                const query = initial.mmsi || initial.name;
+                try {
+                    const response = await fetch(`/api/v1/vessel/live-profile?q=${encodeURIComponent(query)}`, {
+                        headers: { Accept: 'application/json' }
+                    });
+                    const payload = await response.json().catch(() => ({}));
+                    if (response.ok && payload?.success && payload?.found !== false && payload?.vessel) {
+                        remoteVessel = payload.vessel;
+                    }
+                } catch (error) {
+                    console.warn('[Vessel Selection] IMO resolution unavailable; continuing with local AIS identity.', error?.message || error);
+                }
+            }
+            const remote = normalizeVesselSelectionPayload(remoteVessel);
+            const resolved = normalizeVesselSelectionPayload(
+                { imo: initial.imo || local.imo || remote.imo },
+                { mmsi: initial.mmsi || local.mmsi || remote.mmsi },
+                { name: initial.name || local.name || remote.name },
+                { lat: initial.lat ?? local.lat ?? remote.lat, lon: initial.lon ?? local.lon ?? remote.lon }
+            );
+            return {
+                source: Object.assign({}, localMatch || {}, selectionSource || {}, remoteVessel || {}),
+                selection: resolved
+            };
+        }
+        window.resolveVesselSelectionPayload = resolveVesselSelectionPayload;
+
         function normalizeDensityVesselCollection(source) {
             const vesselsByKey = new Map();
             const vessels = Array.isArray(source) ? source : [];
@@ -48040,30 +48141,34 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             // Global synchronization function to sync table row selection with calculator and map
             window.selectShip = function(name, mmsi, lat, lon, imo = null, destination = null, sourceVessel = null) {
+                return (async () => {
                 const completeSourceVessel = sourceVessel && typeof sourceVessel === 'object' ? sourceVessel : {};
                 const selectionProbe = { ...completeSourceVessel, name, vesselName: name, mmsi, imo, lat, lon, lng: lon, latitude: lat, longitude: lon };
-                const sharedDensityVessels = getDensityMapSourceVessels();
-                const selectedSourceVessel = findDensityVesselByIdentity(selectionProbe, sharedDensityVessels);
+                const { source: resolvedSourceVessel, selection } = await resolveVesselSelectionPayload(selectionProbe);
+                const normalizedName = selection.name || name || 'Buque seleccionado';
+                const normalizedLat = selection.lat;
+                const normalizedLon = selection.lon;
                 // Store user-selected ship securely and immutably
                 window.objetoCalculadoraPrincipal = Object.freeze({
-                    ...(selectedSourceVessel || {}),
+                    ...resolvedSourceVessel,
                     ...completeSourceVessel,
-                    vessel: name,
-                    vesselName: name,
-                    mmsi: mmsi,
-                    imo: imo,
-                    lat: lat,
-                    lon: lon,
-                    lng: lon,
-                    latitude: lat,
-                    longitude: lon,
+                    vessel: normalizedName,
+                    vesselName: normalizedName,
+                    name: normalizedName,
+                    mmsi: selection.mmsi,
+                    imo: selection.imo,
+                    lat: normalizedLat,
+                    lon: normalizedLon,
+                    lng: normalizedLon,
+                    latitude: normalizedLat,
+                    longitude: normalizedLon,
                     destination: destination
                 });
                 window.activeVessel = window.objetoCalculadoraPrincipal;
                 if (window.GlobalStore) window.GlobalStore.activeVessel = window.objetoCalculadoraPrincipal;
 
-                if (imo && imo !== 'N/A' && imo !== 'Unknown') {
-                    State.imo = imo;
+                if (selection.imo) {
+                    State.imo = selection.imo;
                 }
                 if (destination && destination !== 'N/A' && destination !== 'Unknown') {
                     State.destination = destination;
@@ -48077,7 +48182,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 // 1. Load name into the calculator (supports all possible identifiers)
                 const input = document.getElementById('nombre-buque-calculadora') || document.getElementById('name-of-ship-calculator') || document.getElementById('vessel-name');
                 if (input) {
-                    input.value = name;
+                    input.value = normalizedName;
                     // Trigger calculation & classification logic if present
                     if (typeof autoClassifySpecialtyFromInputs === 'function') {
                         autoClassifySpecialtyFromInputs();
@@ -48090,36 +48195,36 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 // 2. Automatically locate on the map
                 const mapAIS = window.mapaAIS || window.mapAIS || window.map;
                 const usesDensityGlobe = Boolean(window.GlobalFleetGlobe?.getInstance('density'));
-                if (mapAIS) {
+                if (mapAIS && Number.isFinite(normalizedLat) && Number.isFinite(normalizedLon)) {
                     if (usesDensityGlobe) {
                         updateAisMarkers();
                         window.GlobalFleetGlobe.selectVessel(window.objetoCalculadoraPrincipal, 'density');
                     } else if (typeof mapAIS.setView === 'function') {
-                        mapAIS.setView([lat, lon], 10); // Zooms in on the ship
+                        mapAIS.setView([normalizedLat, normalizedLon], 10); // Zooms in on the ship
 
                         // Automatically opens the popup
                         if (typeof mapAIS.eachLayer === 'function' && typeof L !== 'undefined' && L.Marker) {
                             mapAIS.eachLayer((layer) => {
-                                if (layer instanceof L.Marker && layer.getLatLng().lat === lat && layer.getLatLng().lng === lon) {
+                                if (layer instanceof L.Marker && layer.getLatLng().lat === normalizedLat && layer.getLatLng().lng === normalizedLon) {
                                     layer.openPopup();
                                 }
                             });
                         }
                     }
                 }
-                const quickInfoSource = findVesselQuickInfoSource({ name, vesselName: name, mmsi, imo, lat, lon, latitude: lat, longitude: lon });
+                const quickInfoSource = findVesselQuickInfoSource(window.objetoCalculadoraPrincipal);
                 const densityMapHost = document.getElementById('ais-map')?.parentElement;
-                if (densityMapHost) {
+                if (densityMapHost && Number.isFinite(normalizedLat) && Number.isFinite(normalizedLon)) {
                     showVesselQuickInfoOverlay({
                         host: densityMapHost,
                         map: usesDensityGlobe ? null : mapAIS,
                         mapType: usesDensityGlobe ? 'globe' : 'leaflet',
                         globeKey: 'density',
-                        lat,
-                        lon,
+                        lat: normalizedLat,
+                        lon: normalizedLon,
                         source: quickInfoSource,
-                        name,
-                        imo
+                        name: normalizedName,
+                        imo: selection.imo
                     });
                 }
                 if (typeof setVesselClassContext === 'function') {
@@ -48129,7 +48234,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     detail: { activeVessel: window.objetoCalculadoraPrincipal }
                 }));
                 if (typeof calculateAndDisplayAisFreight === 'function') calculateAndDisplayAisFreight();
-                console.log(`Selected: ${name} (${mmsi}) at coordinates ${lat}, ${lon}, IMO: ${imo}, Dest: ${destination}`);
+                console.log(`Selected: ${normalizedName} (${selection.mmsi || 'sin MMSI'}) at coordinates ${normalizedLat}, ${normalizedLon}, IMO: ${selection.imo || 'sin IMO'}, Dest: ${destination}`);
+                    return window.objetoCalculadoraPrincipal;
+                })();
             };
 
             window.contactShipowner = function(vesselName) {

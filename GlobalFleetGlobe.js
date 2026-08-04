@@ -117,6 +117,13 @@
         return heading !== null ? { value: heading, source: 'HDG' } : { value: null, source: null };
     }
 
+    function normalizeVesselIdentifier(value, length) {
+        const text = String(value ?? '').trim();
+        if (!text || /^(?:PENDING|PENDING_IMO|N\/A|NA|UNKNOWN|UNDEFINED|NULL|-+)$/i.test(text)) return '';
+        const digits = text.replace(/\D/g, '');
+        return digits.length === length ? digits : '';
+    }
+
     function normalizeVessel(vessel, index = 0) {
         if (!vessel || typeof vessel !== 'object') return null;
         const scopes = getObjectScopes(vessel);
@@ -138,8 +145,8 @@
             longitude: lng,
             name: rawName ? String(rawName).trim() : 'Buque sin nombre',
             vesselName: rawName ? String(rawName).trim() : 'Buque sin nombre',
-            imo: rawImo ? String(rawImo).trim() : 'N/A',
-            mmsi: rawMmsi ? String(rawMmsi).trim() : '',
+            imo: normalizeVesselIdentifier(rawImo, 7) || 'N/A',
+            mmsi: normalizeVesselIdentifier(rawMmsi, 9),
             dwt,
             heading: navigation.value,
             headingSource: navigation.source,
@@ -896,6 +903,8 @@
         if (options.restoreRouteState !== false) restoreGlobalRouteState(view);
         if (key === DEFAULT_KEY) window.map = view.adapter;
         if (key === 'density') window.mapaAIS = view.adapter;
+        const activeVessel = window.GlobalStore?.activeVessel || window.activeVessel;
+        if (activeVessel) window.setTimeout(() => focusActiveVesselWhenReady(activeVessel, key), 0);
         return view.adapter;
     }
 
@@ -905,27 +914,41 @@
 
     window.addEventListener('ais:filtered-vessels-updated', syncAllViews);
     window.addEventListener('databridge:filtered-vessels-updated', syncAllViews);
-    let activeVesselFocusTimer = null;
+    const activeVesselFocusTimers = new Map();
+    function ensureActiveVesselInView(vessel, key) {
+        const normalized = normalizeVessel(vessel);
+        const view = getView(key) || getView(DEFAULT_KEY);
+        if (!normalized || !view) return false;
+        if (!findMatchingVessel(view.vessels, normalized)) {
+            updateVessels([...view.vessels, normalized], view.key);
+        }
+        return focusActiveVessel(normalized, view.key);
+    }
+
     function focusActiveVesselWhenReady(vessel, key = 'density', attempt = 0) {
-        if (focusActiveVessel(vessel, key)) {
-            activeVesselFocusTimer = null;
+        if (ensureActiveVesselInView(vessel, key)) {
+            activeVesselFocusTimers.delete(key);
             return true;
         }
         if (attempt >= 5) {
-            activeVesselFocusTimer = null;
+            activeVesselFocusTimers.delete(key);
             return false;
         }
-        if (activeVesselFocusTimer) window.clearTimeout(activeVesselFocusTimer);
-        activeVesselFocusTimer = window.setTimeout(() => {
+        const activeTimer = activeVesselFocusTimers.get(key);
+        if (activeTimer) window.clearTimeout(activeTimer);
+        activeVesselFocusTimers.set(key, window.setTimeout(() => {
             focusActiveVesselWhenReady(vessel, key, attempt + 1);
-        }, 300);
+        }, 300));
         return false;
     }
     window.addEventListener('vessel-selection:changed', (event) => {
         const activeVessel = event?.detail?.activeVessel
             || window.GlobalStore?.activeVessel
             || window.activeVessel;
-        focusActiveVesselWhenReady(activeVessel, 'density');
+        if (getView('density')) focusActiveVesselWhenReady(activeVessel, 'density');
+        ['main', 'tracking'].forEach(key => {
+            if (getView(key)) focusActiveVesselWhenReady(activeVessel, key);
+        });
     });
     window.getGlobalFleetGlobeDiagnostics = () => ({
         diagnostics: window.globalFleetGlobeDiagnostics || null,

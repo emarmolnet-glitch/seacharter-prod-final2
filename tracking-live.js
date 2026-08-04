@@ -420,6 +420,36 @@ function syncBasicVesselMap(focus = false) {
     if (focus && mapVessel) window.GlobalFleetGlobe?.focusActiveVessel?.(mapVessel, TRACKING_MAP_KEY);
 }
 
+function hydrateTrackingFromActiveVessel(activeVessel, focus = false) {
+    if (!activeVessel || typeof activeVessel !== 'object') return false;
+    const normalized = typeof window.normalizeVesselSelectionPayload === 'function'
+        ? window.normalizeVesselSelectionPayload(activeVessel)
+        : {
+            imo: activeVessel.imo || null,
+            mmsi: activeVessel.mmsi || null,
+            name: activeVessel.name || activeVessel.vesselName || activeVessel.vessel || null,
+            lat: Number(activeVessel.lat ?? activeVessel.latitude),
+            lon: Number(activeVessel.lon ?? activeVessel.lng ?? activeVessel.longitude),
+        };
+    if (!normalized.name && !normalized.imo && !normalized.mmsi) return false;
+    const hasPosition = Number.isFinite(normalized.lat) && Number.isFinite(normalized.lon);
+    trackingState.basicVessel = {
+        ...activeVessel,
+        name: normalized.name || activeVessel.vesselName || 'Buque seleccionado',
+        imo: normalized.imo,
+        mmsi: normalized.mmsi,
+        position: hasPosition
+            ? { lat: normalized.lat, lng: normalized.lon, latitude: normalized.lat, longitude: normalized.lon }
+            : normalizeMapPoint(activeVessel.position),
+        positionSource: activeVessel.positionSource || activeVessel.source || 'shared_selection',
+    };
+    const input = document.getElementById('tracking-input-vessel');
+    if (input) input.value = trackingState.basicVessel.name || trackingState.basicVessel.mmsi || trackingState.basicVessel.imo || '';
+    syncBasicVesselMap(focus);
+    if (!trackingState.data) renderManualTrackingState();
+    return true;
+}
+
 function renderBasicVesselCard() {
     const vessel = trackingState.basicVessel;
     const position = getBasicVesselPosition();
@@ -726,6 +756,8 @@ function openTrackingLive(contractRef = '') {
     document.body.classList.add('tracking-live-open');
     window.requestAnimationFrame(() => {
         ensureTrackingMap();
+        const activeVessel = window.GlobalStore?.activeVessel || window.activeVessel;
+        hydrateTrackingFromActiveVessel(activeVessel, true);
         window.GlobalFleetGlobe?.resize?.(TRACKING_MAP_KEY);
     });
     document.dispatchEvent(new CustomEvent('tracking-live:open'));
@@ -736,6 +768,12 @@ function openTrackingLive(contractRef = '') {
         document.getElementById('tracking-input-pol')?.focus();
     }
 }
+
+window.addEventListener('vessel-selection:changed', (event) => {
+    const activeVessel = event?.detail?.activeVessel || window.GlobalStore?.activeVessel || window.activeVessel;
+    const trackingOpen = document.getElementById('tracking-live-overlay')?.classList.contains('is-open');
+    hydrateTrackingFromActiveVessel(activeVessel, trackingOpen);
+});
 
 function closeTrackingLive() {
     document.getElementById('tracking-live-overlay')?.classList.remove('is-open');
