@@ -604,7 +604,7 @@
         if (maritimePath.length > 1) maritimePath.routeType = 'laden';
         view.routePaths = [ballastPath, maritimePath].filter((path) => path.length > 1);
         view.portLabels = [createPortLabel('LASTRE', ports?.ballast, options?.ballastPortName), createPortLabel('POL', ports?.pol), createPortLabel('POD', ports?.pod)].filter(Boolean);
-        saveGlobalRouteState(ports, view.routePaths, options?.ballastPortName);
+        if (options?.persist !== false) saveGlobalRouteState(ports, view.routePaths, options?.ballastPortName);
         applyRoutes(view);
         if (view.routePaths.length) setAutoRotate(false, key);
         if (view.routePaths.length && options.focus !== false) fitRoute(view);
@@ -893,7 +893,7 @@
             if (container.parentElement) view.resizeObserver.observe(container.parentElement);
         }
         updateVessels(options.vesselsData ?? null, key);
-        restoreGlobalRouteState(view);
+        if (options.restoreRouteState !== false) restoreGlobalRouteState(view);
         if (key === DEFAULT_KEY) window.map = view.adapter;
         if (key === 'density') window.mapaAIS = view.adapter;
         return view.adapter;

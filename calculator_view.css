@@ -15,3 +15,220 @@
         overflow-y: auto !important;
     }
 }
+
+/* Tracking GIS comparte el sistema visual claro de MAPA y Calculadora. */
+body.tracking-live-open { overflow: hidden !important; }
+
+.tracking-live-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10020;
+    display: none;
+    color: #212529;
+    background: #f8fafc;
+}
+
+.tracking-live-overlay.is-open {
+    display: grid;
+    grid-template-rows: 68px minmax(0, 1fr);
+}
+
+.tracking-live-topbar {
+    z-index: 20;
+    display: grid;
+    grid-template-columns: minmax(300px, 1fr) auto minmax(300px, 1fr);
+    align-items: center;
+    gap: 1rem;
+    margin: 0 !important;
+    padding: 0 1.2rem;
+    border: 0 !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .06) !important;
+}
+
+.tracking-live-brand,
+.tracking-live-actions,
+.tracking-live-context { display: flex; align-items: center; }
+.tracking-live-brand { gap: .75rem; }
+.tracking-live-brand-mark { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid #cbd5e1; border-radius: .5rem; color: #002060; background: #f8fafc !important; }
+.tracking-live-eyebrow { color: #64748b; font-size: .65rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.tracking-live-brand h1 { margin: .2rem 0 0; color: #002060; font-size: 1rem; font-weight: 800; }
+.tracking-pro-badge { margin-left: .3rem; padding: .25rem .45rem; border: 1px solid #94a3b8; border-radius: .375rem; color: #002060; background: #fff !important; font-size: .6rem; font-weight: 800; letter-spacing: .08em; }
+.tracking-live-context { justify-content: center; gap: .8rem; color: #64748b; font-size: .72rem; }
+.tracking-live-connection { color: #0f766e; font-weight: 800; }
+.tracking-live-actions { justify-content: flex-end; gap: .5rem; }
+.tracking-live-refresh,
+.tracking-live-close { width: 36px !important; height: 36px !important; margin: 0 !important; }
+.tracking-live-refresh.is-spinning i,
+.tracking-route-button.is-loading i { animation: tracking-spin .8s linear infinite; }
+@keyframes tracking-spin { to { transform: rotate(360deg); } }
+
+.tracking-live-shell { min-height: 0; overflow-y: auto; background: #f8fafc; }
+.tracking-map-stage { position: relative; min-height: 690px; height: calc(100vh - 68px); overflow: hidden; background: #dbeafe; }
+.tracking-map-canvas { position: absolute; inset: 0; }
+.tracking-map-atmosphere { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(248,250,252,.3), transparent 42%, rgba(219,234,254,.15)); }
+
+.tracking-input-drawer {
+    top: 18px !important;
+    right: auto !important;
+    bottom: 18px;
+    left: 18px !important;
+    width: min(350px, calc(100vw - 36px)) !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border: 1px solid #e0e0e0 !important;
+    border-radius: .5rem !important;
+    background: #fff !important;
+    box-shadow: 0 12px 28px rgba(15,23,42,.12) !important;
+    transition: transform 180ms ease;
+}
+.tracking-input-drawer.is-collapsed { transform: translateX(calc(-100% - 18px)); }
+.tracking-drawer-toggle { position: absolute; top: 14px; right: -42px; width: 36px !important; height: 36px !important; }
+.tracking-input-drawer.is-collapsed .tracking-drawer-toggle i { transform: rotate(180deg); }
+.tracking-drawer-scroll { height: 100%; overflow-y: auto; padding: 1rem; }
+.tracking-drawer-heading > span,
+.tracking-section-heading > div > span { color: #64748b; font-size: .65rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.tracking-drawer-heading h2 { margin: .4rem 0; color: #002060; font-size: 1rem; font-weight: 800; line-height: 1.25; text-transform: uppercase; }
+.tracking-drawer-heading p { margin: 0 0 1rem; color: #64748b; font-size: .75rem; line-height: 1.5; }
+.tracking-contract-search > div { display: grid; grid-template-columns: minmax(0, 1fr) 40px; }
+.tracking-contract-search input { border-radius: .375rem 0 0 .375rem !important; }
+.tracking-contract-search button { min-width: 40px; border-radius: 0 .375rem .375rem 0 !important; }
+.tracking-input-grid { display: grid; gap: .75rem; margin-top: 1rem; }
+.tracking-input-grid .input-group { display: block; }
+.tracking-input-grid label > span { display: block; margin-bottom: .3rem; color: #334155; font-size: .75rem; font-weight: 700; }
+.tracking-input-grid small,
+.tracking-contract-search small { color: #64748b; font-size: .65rem; }
+.tracking-field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.tracking-route-button { display: flex; width: 100%; align-items: center; justify-content: center; gap: .5rem; margin-top: 1rem; padding: .55rem .75rem; font-size: .75rem; font-weight: 800; text-transform: uppercase; }
+.tracking-input-message { margin: .65rem 0 0; color: #64748b; font-size: .7rem; line-height: 1.4; }
+.tracking-input-message[data-state="error"] { color: #b91c1c; }
+.tracking-input-message[data-state="success"] { color: #047857; }
+.tracking-input-message[data-state="warning"] { color: #b45309; }
+
+.tracking-map-hud,
+.tracking-ais-card,
+.tracking-alerts-map-panel,
+.tracking-map-summary {
+    position: absolute;
+    margin: 0 !important;
+    border: 1px solid #e0e0e0 !important;
+    border-radius: .5rem !important;
+    background: #fff !important;
+    box-shadow: 0 12px 28px rgba(15,23,42,.12) !important;
+}
+.tracking-map-hud { top: 18px; left: 392px; display: grid; gap: .2rem; min-width: 250px; padding: .75rem 1rem; }
+.tracking-map-hud-label,
+.tracking-panel-kicker { color: #64748b; font-size: .62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.tracking-map-hud strong { color: #002060; font-size: .85rem; }
+.tracking-map-hud > span:last-child { color: #64748b; font-size: .7rem; }
+.tracking-ais-card { top: 70px; right: 18px; z-index: 6; display: grid; gap: .45rem; width: 280px; padding: 1rem; }
+.tracking-ais-card-head { display: flex; align-items: center; gap: .4rem; color: #64748b; font-size: .65rem; text-transform: uppercase; }
+.tracking-ais-card-head time { margin-left: auto; }
+.tracking-ais-pulse { width: 7px; height: 7px; border-radius: 50%; background: #10b981 !important; }
+.tracking-ais-card strong { color: #002060; font-size: .85rem; }
+.tracking-ais-details { color: #475569; font-size: .68rem; line-height: 1.35; }
+.tracking-ais-card > span { color: #64748b; font-size: .7rem; line-height: 1.4; }
+.tracking-ais-navigation { padding-top: .4rem; border-top: 1px solid #e2e8f0; color: #334155 !important; font-weight: 700; }
+.tracking-alerts-map-panel { top: 260px; right: 18px; z-index: 6; width: 290px; max-height: 250px; overflow: auto; padding: 1rem; }
+.tracking-panel-heading,
+.tracking-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.tracking-panel-title,
+.tracking-section-heading h2 { margin: .25rem 0 0; color: #002060; font-size: .9rem; font-weight: 800; }
+.tracking-alert-count { display: grid; min-width: 30px; height: 30px; place-items: center; border: 1px solid #cbd5e1; border-radius: 50%; color: #64748b; }
+.tracking-alert-count.has-alerts { color: #b91c1c; border-color: #fecaca; background: #fef2f2 !important; }
+.tracking-alert-list { display: grid; gap: .55rem; margin-top: .8rem; }
+.tracking-alert { display: grid; grid-template-columns: 9px 1fr; gap: .55rem; padding-top: .55rem; border-top: 1px solid #e2e8f0; }
+.tracking-alert-beacon { width: 8px; height: 8px; margin-top: .25rem; border-radius: 50%; background: #16a34a !important; }
+.tracking-alert[data-level="warning"] .tracking-alert-beacon { background: #d97706 !important; }
+.tracking-alert[data-level="critical"] .tracking-alert-beacon { background: #dc2626 !important; }
+.tracking-alert strong { color: #212529; font-size: .72rem; }
+.tracking-alert p,
+.tracking-alerts-empty { margin: .2rem 0 0; color: #64748b; font-size: .68rem; line-height: 1.4; }
+.tracking-map-summary { right: 18px; bottom: 18px; left: 392px; display: grid; grid-template-columns: minmax(210px, .8fr) minmax(0, 2fr); align-items: center; gap: 1rem; padding: 1rem; }
+.tracking-contract-identity { display: flex; align-items: center; gap: .75rem; }
+.tracking-contract-identity > span { padding: .35rem .5rem; border: 1px solid #cbd5e1; border-radius: .375rem; color: #002060; font-size: .62rem; font-weight: 800; }
+.tracking-contract-identity strong,
+.tracking-contract-identity small { display: block; }
+.tracking-contract-identity strong { color: #002060; font-size: .8rem; }
+.tracking-contract-identity small { margin-top: .2rem; color: #64748b; font-size: .68rem; }
+.tracking-metrics { display: grid; grid-template-columns: repeat(4, 1fr); }
+.tracking-metric { min-width: 0; padding: .15rem .75rem; border-left: 1px solid #e2e8f0; }
+.tracking-metric span { display: block; color: #64748b; font-size: .62rem; text-transform: uppercase; }
+.tracking-metric strong { display: block; margin-top: .35rem; color: #212529; font-size: .78rem; }
+.tracking-metric small { color: #64748b; }
+
+.tracking-analytics { display: grid; gap: 1rem; padding: 1.25rem; background: #f8fafc; }
+.tracking-traceability-panel,
+.tracking-asset-panel,
+.tracking-state-card { margin: 0 !important; border: 1px solid #e0e0e0 !important; border-radius: .5rem !important; background: #fff !important; box-shadow: none !important; }
+.tracking-section-heading { padding: 1rem 1.25rem; border-bottom: 1px solid #e2e8f0; }
+.tracking-section-heading p { margin: 0; color: #64748b; font-size: .7rem; }
+.tracking-phase-chip { padding: .4rem .6rem; border: 1px solid #cbd5e1; border-radius: .375rem; color: #64748b; font-size: .68rem; }
+.tracking-phase-chip strong { color: #002060; }
+.tracking-stepper { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .75rem; padding: 1rem; }
+.tracking-step { min-width: 0; margin: 0 !important; padding: .85rem; border: 1px solid #e2e8f0 !important; border-radius: .5rem !important; background: #fff !important; box-shadow: none !important; }
+.tracking-step[data-status="active"] { border-color: #60a5fa !important; box-shadow: 0 0 0 2px rgba(59,130,246,.1) !important; }
+.tracking-step-head { display: flex; justify-content: space-between; gap: .5rem; }
+.tracking-step-number { color: #002060; font-weight: 800; }
+.tracking-step-status { color: #64748b; font-size: .6rem; font-weight: 700; text-transform: uppercase; }
+.tracking-step h3 { min-height: 2.2rem; margin: .8rem 0; color: #212529; font-size: .78rem; line-height: 1.35; }
+.tracking-step-metrics { display: grid; gap: .45rem; }
+.tracking-step-metric { display: flex; justify-content: space-between; gap: .6rem; padding-top: .4rem; border-top: 1px solid #e2e8f0; color: #64748b; font-size: .65rem; }
+.tracking-step-metric strong { color: #212529; text-align: right; }
+.tracking-step-empty,
+.tracking-timeline-empty { color: #64748b; font-size: .7rem; }
+.tracking-timeline { padding: 1rem 1.25rem; }
+.tracking-event { display: grid; grid-template-columns: 100px 14px minmax(0, 1fr) auto; gap: .7rem; min-height: 56px; }
+.tracking-event-time { color: #212529; font-size: .68rem; font-weight: 700; }
+.tracking-event-node { position: relative; width: 9px; height: 9px; border: 2px solid #fff; border-radius: 50%; background: #002060 !important; box-shadow: 0 0 0 1px #002060; }
+.tracking-event:not(:last-child) .tracking-event-node::after { content: ""; position: absolute; top: 9px; left: 3px; width: 1px; height: 47px; background: #cbd5e1 !important; }
+.tracking-event-description { margin: 0; color: #212529; font-size: .72rem; }
+.tracking-event-source,
+.tracking-event-phase { color: #64748b; font-size: .62rem; text-transform: uppercase; }
+.tracking-state-card { display: flex; min-height: 160px; align-items: center; justify-content: center; gap: 1rem; padding: 2rem; }
+.tracking-state-orbit { display: grid; width: 52px; height: 52px; place-items: center; border: 1px solid #cbd5e1; border-radius: 50%; color: #002060; background: #f8fafc !important; }
+.tracking-state-card h2 { margin: 0; color: #002060; font-size: 1rem; }
+.tracking-state-card p { max-width: 640px; margin: .35rem 0 0; color: #64748b; font-size: .75rem; line-height: 1.5; }
+.tracking-skeleton-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.tracking-skeleton { height: 170px; border: 1px solid #e2e8f0; border-radius: .5rem; background: #fff !important; }
+.tracking-skeleton-wide { grid-column: 1 / -1; height: 110px; }
+
+@media (max-width: 1180px) {
+    .tracking-live-topbar { grid-template-columns: 1fr auto; }
+    .tracking-live-context,
+    .tracking-alerts-map-panel,
+    .tracking-contract-identity { display: none; }
+    .tracking-map-summary { grid-template-columns: 1fr; }
+    .tracking-stepper { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 760px) {
+    .tracking-live-overlay.is-open { grid-template-rows: 60px minmax(0, 1fr); }
+    .tracking-live-topbar { min-width: 0; padding: 0 .65rem; }
+    .tracking-live-brand-mark,
+    .tracking-pro-badge { display: none; }
+    .tracking-map-stage { height: auto; min-height: 920px; }
+    .tracking-input-drawer { top: 12px !important; right: 12px !important; bottom: auto; left: 12px !important; width: auto !important; max-height: 530px !important; }
+    .tracking-input-drawer.is-collapsed { transform: translateX(calc(-100% - 12px)); }
+    .tracking-map-hud { top: 555px; left: 12px; }
+    .tracking-ais-card { top: 625px; right: 12px; left: 12px; width: auto; }
+    .tracking-map-summary { right: 12px; bottom: 12px; left: 12px; grid-template-columns: 1fr; }
+    .tracking-metrics { grid-template-columns: 1fr 1fr; }
+    .tracking-field-pair,
+    .tracking-stepper,
+    .tracking-skeleton-grid { grid-template-columns: 1fr; }
+    .tracking-section-heading { align-items: flex-start; flex-direction: column; }
+    .tracking-event { grid-template-columns: 76px 12px minmax(0, 1fr); }
+    .tracking-event-phase { display: none; }
+    .tracking-skeleton-wide { grid-column: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tracking-live-refresh.is-spinning i,
+    .tracking-route-button.is-loading i { animation: none; }
+    .tracking-input-drawer { transition: none; }
+}

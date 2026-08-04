@@ -1,26 +1,14 @@
 import type { Config, Context } from "@netlify/functions";
-import { Pool } from "pg";
+import { sql } from "drizzle-orm";
+import { db } from "../../db/index.js";
+import { voyagesTracking } from "../../db/schema.js";
 
-type TrackingRow = Record<string, unknown>;
+type TrackingRow = typeof voyagesTracking.$inferSelect;
 type TrackingStatus = "complete" | "active" | "pending";
+type UnknownRecord = Record<string, unknown>;
 
 const ROUTE_PREFIX = "/api/v1/voyage/tracking/";
-const QUERY_TEXT =
-  "SELECT * FROM voyages_tracking WHERE contract_ref = $1 LIMIT 1";
-const NOT_FOUND_ERROR = "No fue posible recuperar el seguimiento operativo.";
-
-let pool: Pool | null = null;
-
-function getPool(): Pool {
-  if (!pool) {
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-    });
-  }
-
-  return pool;
-}
+const NOT_FOUND_ERROR = "No existe un viaje asociado a esta referencia contractual.";
 
 function errorResponse(status: number, error: string): Response {
   return Response.json({ success: false, error }, { status });
@@ -33,12 +21,10 @@ function getContractRef(request: Request, context: Context): string | null {
     ? pathname.slice(ROUTE_PREFIX.length)
     : params?.["*"] || params?.["0"] || "";
 
-  if (!encodedParam) {
-    return null;
-  }
+  if (!encodedParam) return null;
 
   try {
-    return decodeURIComponent(encodedParam).trim() || null;
+    return decodeURIComponent(encodedParam).trim().toUpperCase() || null;
   } catch (error) {
     console.error("[voyage-tracking] Contract reference decoding failed.", {
       requestId: context.requestId,
@@ -48,9 +34,9 @@ function getContractRef(request: Request, context: Context): string | null {
   }
 }
 
-function asObject(value: unknown): TrackingRow {
+function asObject(value: unknown): UnknownRecord {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as TrackingRow)
+    ? value as UnknownRecord
     : {};
 }
 
@@ -58,189 +44,167 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function hasValue(value: unknown): boolean {
-  return value !== null && value !== undefined && value !== "";
-}
-
-function getTrackingPhase(status: unknown): number {
-  const normalizedStatus = String(status || "").trim().toUpperCase();
-
-  if (normalizedStatus.includes("DISCHARG") || normalizedStatus.includes("CLOSED")) {
-    return 6;
-  }
-  if (normalizedStatus.includes("POD")) {
-    return 5;
-  }
-  if (normalizedStatus.includes("SAIL") || normalizedStatus.includes("TRANSIT")) {
-    return 4;
-  }
-  if (normalizedStatus.includes("LOAD")) {
-    return 3;
-  }
-  if (normalizedStatus.includes("NOR") || normalizedStatus.includes("LAYTIME")) {
-    return 2;
-  }
-
-  return 1;
-}
-
-function getMilestoneStatus(phase: number, currentPhase: number): TrackingStatus {
+function milestoneStatus(phase: number, currentPhase: number): TrackingStatus {
   if (phase < currentPhase) return "complete";
   if (phase === currentPhase) return "active";
   return "pending";
 }
 
-function buildMilestones(row: TrackingRow, currentPhase: number) {
-  const totalMt = row.cargo_quantity_mt ?? row.cargo_total_mt;
+function defaultMilestones(row: TrackingRow) {
+  const currentPhase = Math.min(6, Math.max(1, Number(row.currentPhase) || 1));
+  const totalMt = row.cargoQuantityMt;
 
   return [
     {
       phase: 1,
       title: "Aproximación al POL",
-      status: getMilestoneStatus(1, currentPhase),
+      status: milestoneStatus(1, currentPhase),
       metrics: {
-        distanceNm: row.pol_distance_nm,
-        eta: row.pol_eta_at,
-        cancellingAt: row.laycan_end,
+        previousPort: row.previousPortName,
+        eta: row.dynamicEtaAt,
+        cancellingAt: row.cancellingAt,
       },
     },
     {
       phase: 2,
       title: "NOR y plancha en POL",
-      status: getMilestoneStatus(2, currentPhase),
+      status: milestoneStatus(2, currentPhase),
       metrics: {
-        tenderedAt: row.nor_pol_tendered_at,
-        acceptedAt: row.nor_pol_accepted_at,
-        laytimeStartedAt: row.laytime_started_at,
+        tenderedAt: row.norPolTenderedAt,
+        acceptedAt: row.norPolAcceptedAt,
+        laytimeStartedAt: row.laytimeStartedAt,
       },
     },
     {
       phase: 3,
       title: "Operación de carga",
-      status: getMilestoneStatus(3, currentPhase),
+      status: milestoneStatus(3, currentPhase),
       metrics: {
-        loadedMt: row.loaded_quantity_mt ?? row.cargo_loaded_mt,
+        loadedMt: row.loadedQuantityMt,
         totalMt,
-        actualRateMtDay: row.actual_loading_rate_mt_day,
-        agreedRateMtDay: row.loading_rate_mt_day ?? row.load_rate_mt_day,
-        demurrageUsd: row.demurrage_usd,
+        actualRateMtDay: row.actualLoadingRateMtDay,
+        agreedRateMtDay: row.loadingRateMtDay,
+        demurrageUsd: row.demurrageUsd,
       },
     },
     {
       phase: 4,
       title: "Travesía marítima",
-      status: getMilestoneStatus(4, currentPhase),
+      status: milestoneStatus(4, currentPhase),
       metrics: {
-        remainingDistanceNm: row.remaining_distance_nm,
-        averageSpeedKnots: row.average_speed_knots,
-        eta: row.dynamic_eta_at ?? row.eta,
+        remainingDistanceNm: row.remainingDistanceNm,
+        averageSpeedKnots: row.averageSpeedKnots,
+        eta: row.dynamicEtaAt,
       },
     },
     {
       phase: 5,
       title: "Aproximación y NOR en POD",
-      status: getMilestoneStatus(5, currentPhase),
+      status: milestoneStatus(5, currentPhase),
       metrics: {
-        distanceNm: row.pod_distance_nm,
-        tenderedAt: row.nor_pod_tendered_at,
-        acceptedAt: row.nor_pod_accepted_at,
+        tenderedAt: row.norPodTenderedAt,
+        acceptedAt: row.norPodAcceptedAt,
+        destination: row.podName,
       },
     },
     {
       phase: 6,
       title: "Descarga y cierre",
-      status: getMilestoneStatus(6, currentPhase),
+      status: milestoneStatus(6, currentPhase),
       metrics: {
-        dischargedMt: row.discharged_quantity_mt ?? row.cargo_discharged_mt,
+        dischargedMt: row.dischargedQuantityMt,
         totalMt,
-        actualRateMtDay: row.actual_discharging_rate_mt_day,
-        portCostsUsd: row.port_costs_usd,
-        closedAt: row.closed_at,
+        actualRateMtDay: row.actualDischargeRateMtDay,
+        agreedRateMtDay: row.dischargeRateMtDay,
+        portCostsUsd: row.portCostsUsd,
+        closedAt: row.closedAt,
       },
     },
   ];
 }
 
+function point(name: string | null, code: string | null, latitude: number | null, longitude: number | null) {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { name, id: code, lat: latitude, lng: longitude, latitude, longitude };
+}
+
 function buildPayload(row: TrackingRow) {
-  const storedContract = asObject(row.contract);
-  const storedLive = asObject(row.live);
-  const currentPhase = Number(storedLive.phase) || getTrackingPhase(row.current_status);
-  const position =
-    hasValue(row.lat) && hasValue(row.lon)
-      ? { latitude: row.lat, longitude: row.lon }
-      : storedLive.position;
+  const storedMilestones = asArray(row.milestones);
+  const commercial = asObject(row.commercialDetails);
+  const previousPort = point(row.previousPortName, row.previousPortCode, row.previousPortLatitude, row.previousPortLongitude);
+  const pol = point(row.polName, row.polCode, row.polLatitude, row.polLongitude);
+  const pod = point(row.podName, row.podCode, row.podLatitude, row.podLongitude);
+  const aisPosition = point(row.vesselName, row.imoNumber, row.aisLatitude, row.aisLongitude);
 
   return {
-    ...row,
     success: true,
-    data: row,
+    generatedAt: new Date().toISOString(),
     contract: {
-      ...storedContract,
-      reference: storedContract.reference ?? row.contract_ref,
-      vesselName: storedContract.vesselName ?? row.vessel_name,
-      vesselMmsi: storedContract.vesselMmsi ?? row.vessel_mmsi,
-      cargoName:
-        storedContract.cargoName ?? row.cargo_type ?? row.cargo_name,
-      pol:
-        storedContract.pol ??
-        ({ id: row.pol_port, name: row.pol_port } as TrackingRow),
-      pod:
-        storedContract.pod ??
-        ({ id: row.pod_port, name: row.pod_port } as TrackingRow),
+      reference: row.contractRef,
+      status: row.currentStatus,
+      phase: row.currentPhase,
+      vesselName: row.vesselName,
+      vesselImo: row.imoNumber,
+      vesselMmsi: row.mmsi,
+      cargoName: row.cargoName,
+      cargoQuantityMt: row.cargoQuantityMt,
+      laydaysStartAt: row.laydaysStartAt,
+      cancellingAt: row.cancellingAt,
+      previousPort,
+      pol,
+      pod,
+      commercial,
     },
     live: {
-      ...storedLive,
-      phase: currentPhase,
-      status: storedLive.status ?? row.current_status,
-      position,
-      remainingDistanceNm:
-        storedLive.remainingDistanceNm ?? row.remaining_distance_nm,
-      averageSpeedKnots:
-        storedLive.averageSpeedKnots ?? row.average_speed_knots,
-      eta: storedLive.eta ?? row.dynamic_eta_at ?? row.eta,
+      phase: row.currentPhase,
+      status: row.currentStatus,
+      position: aisPosition,
+      aisUpdatedAt: row.aisUpdatedAt,
+      remainingDistanceNm: row.remainingDistanceNm,
+      averageSpeedKnots: row.averageSpeedKnots,
+      eta: row.dynamicEtaAt,
+      progressPct: row.routeProgressPct,
+      demurrageUsd: row.demurrageUsd,
+    },
+    route: {
+      ports: { ballast: previousPort, pol, pod },
+      ballast: asArray(row.ballastRoute),
+      laden: asArray(row.ladenRoute),
     },
     alerts: asArray(row.alerts),
-    milestones:
-      asArray(row.milestones).length > 0
-        ? asArray(row.milestones)
-        : buildMilestones(row, currentPhase),
-    timeline: asArray(row.timeline),
-    generatedAt: row.updated_at ?? row.created_at ?? new Date().toISOString(),
+    milestones: storedMilestones.length === 6 ? storedMilestones : defaultMilestones(row),
+    timeline: asArray(row.assetTrail),
   };
 }
 
-export default async function voyageTracking(
-  request: Request,
-  context: Context,
-): Promise<Response> {
+export default async (request: Request, context: Context) => {
   if (request.method !== "GET") {
-    return errorResponse(405, "Method not allowed");
+    return errorResponse(405, "Método no permitido.");
   }
 
   const contractRef = getContractRef(request, context);
-
-  if (!contractRef) {
-    return errorResponse(400, "Contract reference is required");
-  }
-
-  if (!process.env.DATABASE_URL) {
-    return errorResponse(500, "Configuration error: DATABASE_URL missing");
+  if (!contractRef || !/^[A-Z0-9][A-Z0-9/_-]{2,79}$/.test(contractRef)) {
+    return errorResponse(400, "La referencia contractual no es válida.");
   }
 
   try {
-    const result = await getPool().query<TrackingRow>(QUERY_TEXT, [contractRef]);
-    const row = result.rows[0];
+    const rows = await db
+      .select()
+      .from(voyagesTracking)
+      .where(sql`upper(${voyagesTracking.contractRef}) = ${contractRef}`)
+      .limit(1);
 
-    if (!row) {
-      return errorResponse(404, NOT_FOUND_ERROR);
-    }
-
-    return Response.json(buildPayload(row));
+    if (!rows[0]) return errorResponse(404, NOT_FOUND_ERROR);
+    return Response.json(buildPayload(rows[0]));
   } catch (error) {
-    console.error("[voyage-tracking] Database execution error:", error);
-    return errorResponse(500, "Error interno en la base de datos.");
+    console.error("[voyage-tracking] Lookup failed.", {
+      requestId: context.requestId,
+      contractRef,
+      error,
+    });
+    return errorResponse(500, "No fue posible recuperar el seguimiento operativo.");
   }
-}
+};
 
 export const config: Config = {
   path: "/api/v1/voyage/tracking/*",

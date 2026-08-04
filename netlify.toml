@@ -29,6 +29,16 @@
   status = 200
 
 [[redirects]]
+  from = "/api/v1/vessel/live-profile"
+  to = "/.netlify/functions/vessel-live-profile"
+  status = 200
+
+[[redirects]]
+  from = "/api/v1/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+[[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200

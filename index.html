@@ -7417,7 +7417,6 @@
     </style>
     <link href="./calculator_view.css" rel="stylesheet">
     <link href="./market-contacts.css" rel="stylesheet">
-    <link href="./tracking-live.css" rel="stylesheet">
 </head>
 <body class="theme-light h-screen flex flex-col overflow-hidden">
 
@@ -14956,6 +14955,7 @@
             }
             return data;
         }
+        window.findPortData = findPortData;
 
         function autoPopulateRouteLimits() {
             const pBallast = document.getElementById('port-ballast')?.value.trim() || '';
@@ -23879,7 +23879,8 @@
 
         const UNIVERSAL_PORT_INPUT_IDS = [
             'port-ballast', 'port-pol', 'port-pod',
-            'map-port-ballast', 'map-port-pol', 'map-port-pod'
+            'map-port-ballast', 'map-port-pol', 'map-port-pod',
+            'tracking-input-ballast', 'tracking-input-pol', 'tracking-input-pod'
         ];
         const NOMINATIM_SEARCH_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
         const NOMINATIM_DEBOUNCE_MS = 400;
@@ -24193,23 +24194,25 @@
                 delete input.dataset.selectedPortIndexNo;
             }
 
-            const role = getUniversalPortRole(input.id);
-            if (role === 'BALLAST') {
-                const coordinates = { lat: parseFloat(String(lat)), lon: parseFloat(String(lon)) };
-                SeaCharterStore.set({
-                    portBallast: label,
-                    portBallastCoordinates: coordinates,
-                    ballast_coordinates: coordinates
-                });
-                if (window.GlobalStore) {
-                    window.GlobalStore.portBallast = label;
-                    window.GlobalStore.portBallastCoordinates = coordinates;
-                    window.GlobalStore.ballast_coordinates = coordinates;
+            if (!input.id.startsWith('tracking-input-')) {
+                const role = getUniversalPortRole(input.id);
+                if (role === 'BALLAST') {
+                    const coordinates = { lat: parseFloat(String(lat)), lon: parseFloat(String(lon)) };
+                    SeaCharterStore.set({
+                        portBallast: label,
+                        portBallastCoordinates: coordinates,
+                        ballast_coordinates: coordinates
+                    });
+                    if (window.GlobalStore) {
+                        window.GlobalStore.portBallast = label;
+                        window.GlobalStore.portBallastCoordinates = coordinates;
+                        window.GlobalStore.ballast_coordinates = coordinates;
+                    }
+                } else {
+                    window.syncSelectedRoutePort?.(role, label);
                 }
-            } else {
-                window.syncSelectedRoutePort?.(role, label);
+                syncGlobalStateToForms();
             }
-            syncGlobalStateToForms();
             return true;
         }
 
@@ -24218,8 +24221,10 @@
             setPortSearchState(input, false);
             closePortAutocomplete(input);
             input.dispatchEvent(new Event('change', { bubbles: true }));
-            if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
-            if (typeof autoCalculateDistances === 'function') void autoCalculateDistances();
+            if (!input.id.startsWith('tracking-input-')) {
+                if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
+                if (typeof autoCalculateDistances === 'function') void autoCalculateDistances();
+            }
             window.dispatchEvent(new CustomEvent('port:suggestion-selected', {
                 detail: {
                     inputId: input.id,
@@ -24366,10 +24371,12 @@
             });
             input.addEventListener('blur', () => setTimeout(() => closePortAutocomplete(input), 120));
         }
+        window.bindUniversalPortAutocomplete = bindUniversalPortAutocomplete;
 
         function refreshPortDatalist() {
             UNIVERSAL_PORT_INPUT_IDS.forEach(id => bindUniversalPortAutocomplete(document.getElementById(id)));
         }
+        window.refreshPortDatalist = refreshPortDatalist;
 
         let toastDismissTimer = null;
 
@@ -26533,6 +26540,7 @@
                 errors: errores
             };
         }
+        window.calculateVoyageRouteService = calculateVoyageRouteService;
 
         function applyRouteServiceResult(result) {
             if (!result) return;
