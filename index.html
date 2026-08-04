@@ -958,6 +958,11 @@
             transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, background 180ms ease;
         }
 
+        #connection-status-root {
+            contain: layout style paint;
+            isolation: isolate;
+        }
+
         .connection-status-bar::before {
             content: "";
             position: absolute;
@@ -9502,7 +9507,7 @@
                         </div>
                     </div>
 
-                    <div id="shadow-estimator-modal" class="fixed inset-0 z-[10000] hidden items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm no-print" role="dialog" aria-modal="true" aria-labelledby="shadow-estimator-title">
+                    <div id="shadow-estimator-modal" class="fixed inset-0 z-[10000] hidden pointer-events-none items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm no-print" role="dialog" aria-modal="true" aria-labelledby="shadow-estimator-title">
                         <div class="w-full max-w-3xl overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
                             <div class="flex items-start justify-between gap-4 border-b border-slate-800 p-5">
                                 <div>
@@ -12748,7 +12753,7 @@
     </div>
 
     <!-- MODAL MANUAL DE USUARIO Y FAQ -->
-    <div id="faq-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] hidden flex items-start justify-center px-3 pb-4 pt-20 sm:px-6 sm:pb-6 sm:pt-24 no-print" role="dialog" aria-modal="true" aria-labelledby="faq-modal-title" onclick="if (event.target === this) closeFaqModal()">
+    <div id="faq-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] hidden pointer-events-none flex items-start justify-center px-3 pb-4 pt-20 sm:px-6 sm:pb-6 sm:pt-24 no-print" role="dialog" aria-modal="true" aria-labelledby="faq-modal-title" onclick="if (event.target === this) closeFaqModal()">
         <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[85vh] overflow-hidden text-slate-100">
             <!-- Modal Header -->
             <div class="flex items-center justify-between gap-4 px-5 py-4 border-b border-slate-800 bg-slate-950 shrink-0">
@@ -13285,7 +13290,7 @@
     </div>
 
     <!-- MODAL DE INTELIGENCIA ARTIFICIAL GENERAL -->
-    <div id="ai-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] hidden flex items-start justify-center px-4 pb-4 pt-20 sm:px-6 sm:pb-6 no-print">
+    <div id="ai-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] hidden pointer-events-none flex items-start justify-center px-4 pb-4 pt-20 sm:px-6 sm:pb-6 no-print">
         <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-11/12 max-w-7xl flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center gap-4 px-5 py-4 sm:px-6 border-b border-slate-800 shrink-0">
                 <h3 class="font-bold text-white flex items-center gap-2 min-w-0 pr-4" id="ai-modal-title"><i class="fa-solid fa-microchip text-indigo-400 shrink-0"></i> <span class="truncate">Asistente RODAHMAR IA</span></h3>
@@ -13303,7 +13308,7 @@
         </div>
     </div>
 
-    <div id="coa-preview-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[110] hidden items-center justify-center p-4 no-print" role="dialog" aria-modal="true" aria-labelledby="coa-preview-title">
+    <div id="coa-preview-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[110] hidden pointer-events-none items-center justify-center p-4 no-print" role="dialog" aria-modal="true" aria-labelledby="coa-preview-title">
         <div class="bg-white border border-slate-200 rounded-xl w-full max-w-3xl shadow-2xl overflow-hidden">
             <div class="p-4 border-b border-slate-200 flex items-center justify-between">
                 <div>
@@ -13339,7 +13344,7 @@
         </div>
     </div>
 
-    <div id="pda-vessel-confirmation-modal" class="fixed inset-0 z-[240] hidden items-center justify-center bg-slate-950/85 p-3 backdrop-blur-sm no-print" role="dialog" aria-modal="true" aria-labelledby="pda-vessel-confirmation-title">
+    <div id="pda-vessel-confirmation-modal" class="fixed inset-0 z-[240] hidden pointer-events-none items-center justify-center bg-slate-950/85 p-3 backdrop-blur-sm no-print" role="dialog" aria-modal="true" aria-labelledby="pda-vessel-confirmation-title">
         <div class="flex max-h-[85dvh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-[#25a18e]/35 bg-slate-950 shadow-2xl shadow-[#002b38]/60">
             <div class="flex shrink-0 items-start justify-between gap-4 rounded-t-xl border-b border-teal-800/60 bg-slate-900 px-6 py-4 text-white">
                 <div>
@@ -13390,7 +13395,7 @@
     </div>
 
     <!-- MODAL DE COMPARATIVA DE BUQUES (IA) -->
-    <div id="comparison-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4 no-print">
+    <div id="comparison-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] hidden pointer-events-none flex items-center justify-center p-4 no-print">
         <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh]">
             <div class="flex justify-between items-center p-4 border-b border-slate-800">
                 <h3 class="font-bold text-white flex items-center gap-2" id="comparison-modal-title">
@@ -13551,7 +13556,7 @@
     </div>
 
     <!-- MODAL HISTORIAL DE BUQUES AUDITADOS -->
-    <div id="vessels-list-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4 no-print">
+    <div id="vessels-list-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] hidden pointer-events-none flex items-center justify-center p-4 no-print">
         <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[85vh]">
             <div class="flex justify-between items-center p-4 border-b border-slate-800">
                 <h3 class="font-bold text-white flex items-center gap-2">
@@ -30720,13 +30725,13 @@
             document.getElementById('pda-vessel-confirmation-subtitle').textContent = `${actual.vessel_name || actual.vesselName || 'Buque'} · IMO ${actual.imo || actual.imo_number || 'N/D'} · Fuente ${source === 'global-store-fallback' ? 'Store local' : 'Data Bridge'}`;
             document.getElementById('pda-confirmation-error').classList.add('hidden');
             const modal = document.getElementById('pda-vessel-confirmation-modal');
-            modal.classList.remove('hidden');
+            modal.classList.remove('hidden', 'pointer-events-none');
             modal.classList.add('flex');
         }
 
         function closePdaVesselConfirmationModal() {
             const modal = document.getElementById('pda-vessel-confirmation-modal');
-            modal?.classList.add('hidden');
+            modal?.classList.add('hidden', 'pointer-events-none');
             modal?.classList.remove('flex');
             pendingPdaVesselConfirmation = null;
         }
@@ -33907,14 +33912,14 @@
                 setText(outputs.baseDays, snapshot.diasViaje1.toLocaleString('en-US', { maximumFractionDigits: 2 }));
                 setText(outputs.baseDaily, `${money(snapshot.opexDaily)} / dia`);
                 setText(outputs.autoSource, `PDA base: ${money(snapshot.pdaPolBase)}`);
-                modal.classList.remove('hidden');
+                modal.classList.remove('hidden', 'pointer-events-none');
                 modal.classList.add('flex');
                 renderResults();
                 fields.estimatedDays?.focus();
             };
 
             const closeModal = () => {
-                modal.classList.add('hidden');
+                modal.classList.add('hidden', 'pointer-events-none');
                 modal.classList.remove('flex');
                 clearLocalState();
             };
@@ -38713,12 +38718,12 @@
             }
             document.getElementById('ai-modal-content').classList.add('hidden');
             document.getElementById('ai-modal-loader').classList.remove('hidden');
-            document.getElementById('ai-modal').classList.remove('hidden');
+            document.getElementById('ai-modal').classList.remove('hidden', 'pointer-events-none');
         }
 
         function closeAIModal() {
             document.getElementById('ai-modal').classList.remove('light-mode');
-            document.getElementById('ai-modal').classList.add('hidden');
+            document.getElementById('ai-modal').classList.add('hidden', 'pointer-events-none');
         }
 
         // --- FUNCIONES DEL MODAL FAQ Y MANUAL DE USUARIO ---
@@ -38729,7 +38734,7 @@
                 if (typeof translatePage === 'function') {
                     translatePage(currentLang);
                 }
-                modal.classList.remove('hidden');
+                modal.classList.remove('hidden', 'pointer-events-none');
                 document.body.classList.add('overflow-hidden');
             }
         }
@@ -38738,7 +38743,7 @@
         function closeFaqModal() {
             const modal = document.getElementById('faq-modal');
             if (modal) {
-                modal.classList.add('hidden');
+                modal.classList.add('hidden', 'pointer-events-none');
                 document.body.classList.remove('overflow-hidden');
             }
         }
@@ -40504,11 +40509,11 @@
             document.getElementById('comparison-inputs').classList.remove('hidden');
             document.getElementById('comparison-trip-params').classList.remove('hidden');
 
-            document.getElementById('comparison-modal').classList.remove('hidden');
+            document.getElementById('comparison-modal').classList.remove('hidden', 'pointer-events-none');
         }
 
         function closeComparisonModal() {
-            document.getElementById('comparison-modal').classList.add('hidden');
+            document.getElementById('comparison-modal').classList.add('hidden', 'pointer-events-none');
         }
 
         // --- PERSISTENT HISTORY OF AUDITED VESSELS (NETLIFY DB) ---
@@ -40611,7 +40616,7 @@
 
         async function openListVesselsModal() {
             const modal = document.getElementById('vessels-list-modal');
-            modal.classList.remove('hidden');
+            modal.classList.remove('hidden', 'pointer-events-none');
             modal.classList.add('flex');
 
             const loader = document.getElementById('vessels-modal-loader');
@@ -40652,7 +40657,7 @@
 
         function closeListVesselsModal() {
             const modal = document.getElementById('vessels-list-modal');
-            modal.classList.add('hidden');
+            modal.classList.add('hidden', 'pointer-events-none');
             modal.classList.remove('flex');
         }
 
@@ -57083,7 +57088,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 `).join('');
             }
             if (modal) {
-                modal.classList.remove('hidden');
+                modal.classList.remove('hidden', 'pointer-events-none');
                 modal.classList.add('flex');
             }
         }
@@ -57091,7 +57096,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function cerrarPreviewReporteCOA() {
             const modal = document.getElementById('coa-preview-modal');
             if (!modal) return;
-            modal.classList.add('hidden');
+            modal.classList.add('hidden', 'pointer-events-none');
             modal.classList.remove('flex');
         }
 
@@ -58422,17 +58427,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const normalizedState = requestedState === 'secure' && dataBridgeNorTransportState !== 'connected'
                 ? 'fallback'
                 : requestedState;
-            const bar = document.querySelector('#connection-status-root .connection-status-bar');
-            const label = document.querySelector('#connection-status-root .connection-status-text');
-            const bridgeIcon = document.querySelector('#connection-status-root [data-connection-bridge-icon]');
-            const liveIcon = document.querySelector('#connection-status-root .connection-live-icon i');
-            if (!bar) return;
-            const labelText = DATA_BRIDGE_STATUS_LABELS[normalizedState] || DATA_BRIDGE_STATUS_LABELS.inactive;
-            bar.dataset.state = normalizedState;
-            bar.setAttribute('aria-label', `Core PRO ${labelText.toLowerCase()} con Data Bridge`);
-            if (label) label.textContent = labelText;
-            if (bridgeIcon) bridgeIcon.className = DATA_BRIDGE_STATUS_ICONS[normalizedState];
-            if (liveIcon) liveIcon.className = normalizedState === 'fallback' ? 'fa-solid fa-rotate' : DATA_BRIDGE_STATUS_ICONS[normalizedState];
+            if (window.__dataBridgeConnectionStatus === normalizedState) return;
+            window.__dataBridgeConnectionStatus = normalizedState;
+            window.dispatchEvent(new CustomEvent('connection-status:update', {
+                detail: { status: normalizedState }
+            }));
         }
 
         function openDataBridgeDashboard() {
@@ -62062,13 +62061,19 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             let isDragging = false;
             let startX = 0, startY = 0;
             let initialLeft = 0, initialTop = 0;
+            let pendingLeft = 0, pendingTop = 0;
+            let dragFrameId = 0;
 
-            header.addEventListener('mousedown', (e) => {
+            header.style.touchAction = 'none';
+
+            header.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0) return;
                 if (e.target.closest('#hud-toggle-btn')) return;
 
                 isDragging = true;
                 startX = e.clientX;
                 startY = e.clientY;
+                header.setPointerCapture(e.pointerId);
 
                 const rect = hud.getBoundingClientRect();
                 initialLeft = rect.left;
@@ -62078,12 +62083,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 hud.style.right = 'auto';
                 hud.style.left = initialLeft + 'px';
                 hud.style.top = initialTop + 'px';
-
-                document.addEventListener('mousemove', onMouseMove);
-                document.addEventListener('mouseup', onMouseUp);
             });
 
-            function onMouseMove(e) {
+            function applyDragPosition() {
+                dragFrameId = 0;
+                hud.style.left = pendingLeft + 'px';
+                hud.style.top = pendingTop + 'px';
+            }
+
+            function onPointerMove(e) {
                 if (!isDragging) return;
                 const dx = e.clientX - startX;
                 const dy = e.clientY - startY;
@@ -62096,16 +62104,24 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 newLeft = Math.max(0, Math.min(newLeft, maxLeft));
                 newTop = Math.max(0, Math.min(newTop, maxTop));
 
-                hud.style.left = newLeft + 'px';
-                hud.style.top = newTop + 'px';
+                pendingLeft = newLeft;
+                pendingTop = newTop;
+                if (!dragFrameId) dragFrameId = window.requestAnimationFrame(applyDragPosition);
             }
 
-            function onMouseUp() {
+            function onPointerUp(e) {
                 if (!isDragging) return;
                 isDragging = false;
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
+                if (dragFrameId) {
+                    window.cancelAnimationFrame(dragFrameId);
+                    applyDragPosition();
+                }
+                if (header.hasPointerCapture(e.pointerId)) header.releasePointerCapture(e.pointerId);
             }
+
+            header.addEventListener('pointermove', onPointerMove);
+            header.addEventListener('pointerup', onPointerUp);
+            header.addEventListener('pointercancel', onPointerUp);
         }
 
         function validarProgresoViaje() {

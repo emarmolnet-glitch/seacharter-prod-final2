@@ -46,11 +46,13 @@ test('defines validarProgresoViaje, toggleHudCollapse, and initDraggableHud func
   assert.match(indexSource, /window\.initDraggableHud = initDraggableHud/);
 });
 
-test('initDraggableHud neutralizes bottom/right and calculates left/top coordinates on mousedown', () => {
+test('initDraggableHud uses pointer capture and frame-coalesced positioning', () => {
   assert.match(indexSource, /hud\.style\.bottom = 'auto'/);
   assert.match(indexSource, /hud\.style\.right = 'auto'/);
-  assert.match(indexSource, /hud\.style\.left = newLeft \+ 'px'/);
-  assert.match(indexSource, /hud\.style\.top = newTop \+ 'px'/);
+  assert.match(indexSource, /header\.setPointerCapture\(e\.pointerId\)/);
+  assert.match(indexSource, /hud\.style\.left = pendingLeft \+ 'px'/);
+  assert.match(indexSource, /hud\.style\.top = pendingTop \+ 'px'/);
+  assert.match(indexSource, /requestAnimationFrame\(applyDragPosition\)/);
 });
 
 test('invokes validarProgresoViaje inside runEngine and binds blur event listeners', () => {

@@ -35,7 +35,18 @@ const STATUS_CONFIG = {
 };
 
 export function ConnectionStatusBar() {
-  const config = STATUS_CONFIG.fallback;
+  const [status, setStatus] = React.useState(() => window.__dataBridgeConnectionStatus || "fallback");
+  const config = STATUS_CONFIG[status] || STATUS_CONFIG.inactive;
+
+  React.useEffect(() => {
+    const handleStatusUpdate = (event) => {
+      const nextStatus = event.detail?.status;
+      if (STATUS_CONFIG[nextStatus]) setStatus(nextStatus);
+    };
+
+    window.addEventListener("connection-status:update", handleStatusUpdate);
+    return () => window.removeEventListener("connection-status:update", handleStatusUpdate);
+  }, []);
 
   return (
     React.createElement(
@@ -62,7 +73,7 @@ export function ConnectionStatusBar() {
           React.createElement("path", { className: "connection-pipe-track", d: "M3 9 C25 9 28 9 50 9 S75 9 97 9" }),
           React.createElement("path", { className: "connection-pipe-flow", d: "M3 9 C25 9 28 9 50 9 S75 9 97 9" }),
         ),
-        React.createElement("span", { className: "connection-live-icon" }, React.createElement("i", { className: "fa-solid fa-arrows-rotate" })),
+        React.createElement("span", { className: "connection-live-icon" }, React.createElement("i", { className: status === "fallback" ? "fa-solid fa-rotate" : config.icon })),
       ),
       React.createElement(
         "div",
