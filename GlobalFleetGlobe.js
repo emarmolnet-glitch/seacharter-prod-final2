@@ -43,6 +43,17 @@
         return null;
     }
 
+    function normalizeInitialView(value) {
+        const lat = toFiniteNumber(value?.lat, INITIAL_VIEW.lat);
+        const lng = toFiniteNumber(value?.lng, value?.lon, INITIAL_VIEW.lng);
+        const altitude = toFiniteNumber(value?.altitude, INITIAL_VIEW.altitude);
+        return {
+            lat: Math.max(-90, Math.min(90, lat ?? INITIAL_VIEW.lat)),
+            lng: Math.max(-180, Math.min(180, lng ?? INITIAL_VIEW.lng)),
+            altitude: Math.max(0.35, altitude ?? INITIAL_VIEW.altitude),
+        };
+    }
+
     function escapeHtml(value) {
         return String(value ?? '')
             .replace(/&/g, '&amp;')
@@ -203,7 +214,7 @@
 
     function getCameraAltitude(view) {
         const pointOfView = view?.globe?.pointOfView?.();
-        return toFiniteNumber(pointOfView?.altitude, INITIAL_VIEW.altitude) || INITIAL_VIEW.altitude;
+        return toFiniteNumber(pointOfView?.altitude, view?.initialView?.altitude, INITIAL_VIEW.altitude) || INITIAL_VIEW.altitude;
     }
 
     function getPointRadius(cameraAltitude) {
@@ -675,7 +686,7 @@
     function resetCamera(key = DEFAULT_KEY) {
         const view = getView(key);
         if (!view) return false;
-        view.globe.pointOfView(INITIAL_VIEW, CAMERA_TRANSITION_MS);
+        view.globe.pointOfView(view.initialView || INITIAL_VIEW, CAMERA_TRANSITION_MS);
         setAutoRotate(true, key);
         return true;
     }
@@ -750,6 +761,7 @@
 
     function mount(options = {}) {
         const key = options.key || DEFAULT_KEY;
+        const initialView = normalizeInitialView(options.initialView);
         const containerId = options.containerId || (key === 'density' ? 'ais-map' : 'map-container');
         const container = document.getElementById(containerId);
         if (!container) return null;
@@ -776,6 +788,9 @@
         const existing = getView(key);
         if (existing && existing.container === container) {
             updateVessels(options.vesselsData ?? null, key);
+            if (options.restoreRouteState === false) {
+                setRouteSegments({}, key, { focus: false, persist: false }, { ballast: [], laden: [] });
+            }
             resize(key);
             return existing.adapter;
         }
@@ -791,7 +806,8 @@
             vessels: [],
             routePaths: [],
             portLabels: [],
-            pointRadius: getPointRadius(INITIAL_VIEW.altitude),
+            initialView,
+            pointRadius: getPointRadius(initialView.altitude),
             hoveredVessel: null,
             selectedVessel: null,
             selectedVesselIdentity: null,
@@ -871,7 +887,7 @@
                 .labelDotRadius(() => 0.32)
                 .labelAltitude(() => 0.018)
                 .labelsData([]);
-            view.globe.pointOfView(INITIAL_VIEW, 0);
+            view.globe.pointOfView(view.initialView, 0);
             view.controls = view.globe.controls();
             view.controls.enableDamping = true;
             view.controls.dampingFactor = 0.08;

@@ -11,6 +11,7 @@ const viteSource = await readFile(new URL('../vite.config.js', import.meta.url),
 function loadUtility({ href = 'https://example.test/', sessionReference = '' } = {}) {
   const session = new Map(sessionReference ? [['active_contract_ref', sessionReference]] : []);
   const location = new URL(href);
+  let randomValue = 7;
   const window = {
     CustomEvent: class CustomEvent {
       constructor(type, options) {
@@ -18,7 +19,13 @@ function loadUtility({ href = 'https://example.test/', sessionReference = '' } =
         this.detail = options?.detail;
       }
     },
-    crypto: { getRandomValues: (values) => values.fill(7) },
+    crypto: {
+      getRandomValues(values) {
+        values.fill(randomValue);
+        randomValue += 1;
+        return values;
+      },
+    },
     dispatchEvent() {},
     history: {
       state: null,
@@ -67,9 +74,20 @@ test('fallback follows the maritime business format and persists immediately', (
   const { api, location, session } = loadUtility();
   const reference = api.getActiveContractRef();
 
-  assert.match(reference, /^RDM\/ASB\/\d{4}-[A-Z2-9]{4}$/);
+  assert.match(reference, /^RDM\/\d{4}-\d{4}$/);
   assert.equal(session.get('active_contract_ref'), reference);
   assert.equal(location.searchParams.get('ref'), reference);
+});
+
+test('new estimation creates and persists a different temporary reference', () => {
+  const { api, location, session } = loadUtility();
+  const initialReference = api.getActiveContractRef();
+  const nextReference = api.createNewReference();
+
+  assert.match(nextReference, /^RDM\/\d{4}-\d{4}$/);
+  assert.notEqual(nextReference, initialReference);
+  assert.equal(session.get('active_contract_ref'), nextReference);
+  assert.equal(location.searchParams.get('ref'), nextReference);
 });
 
 test('all contractual modules consume the centralized reference', () => {
@@ -77,6 +95,10 @@ test('all contractual modules consume the centralized reference', () => {
   assert.match(indexSource, /function getSafeActiveContractRef/);
   assert.match(indexSource, /window\.ContractReference \|\| window\.ContractRefManager/);
   assert.match(indexSource, /\['quick-ref', 'gc-ref', 'asb-ref', 'tracking-live-contract-ref'\]/);
+  assert.match(indexSource, /activeReference: window\.generateVoyageRef\?\.\(\) \|\| ''/);
+  assert.match(indexSource, /referenceManager\?\.createNewReference\?\.\(\)/);
+  assert.match(indexSource, /activeReference: nextActiveReference/);
+  assert.doesNotMatch(indexSource, /RDM\/2026-0604|RDM\/GC\/2026-0727-XXXX/);
   assert.doesNotMatch(indexSource, /dynamicRefGC|dynamicRefASB|suffixGC|suffixASB/);
 });
 

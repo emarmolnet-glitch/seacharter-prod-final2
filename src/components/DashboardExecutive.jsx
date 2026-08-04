@@ -15,57 +15,80 @@ function LoadingLine({ className = '' }) {
   return <span className={`block animate-pulse rounded bg-slate-200 ${className}`} aria-hidden="true" />;
 }
 
+function finiteNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function formatNumber(value, locale = 'en-US', options = {}) {
+  return finiteNumber(value).toLocaleString(locale, options);
+}
+
+function displayText(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function formatAlertDate(value) {
+  const date = new Date(value || '');
+  return Number.isNaN(date.getTime())
+    ? '—'
+    : date.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+function DashboardLoading() {
+  return (
+    <div className="min-h-full w-full space-y-6 bg-[#0B3040] p-6 text-slate-100" aria-busy="true" aria-label="Cargando Dashboard Ejecutivo">
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-lg">
+        <LoadingLine className="h-3 w-48" />
+        <LoadingLine className="mt-3 h-8 w-80 max-w-full" />
+        <LoadingLine className="mt-3 h-4 w-[34rem] max-w-full" />
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {[0, 1, 2, 3, 4, 5].map((item) => (
+          <div key={item} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <LoadingLine className="h-3 w-28" />
+            <LoadingLine className="mt-3 h-6 w-40" />
+            <LoadingLine className="mt-3 h-3 w-24" />
+          </div>
+        ))}
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <LoadingLine className="h-5 w-64 max-w-full" />
+        <LoadingLine className="mt-4 h-20 w-full" />
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardExecutive({ contractData }) {
   const voyageData = contractData?.voyage || null;
   const isLoading = Boolean(contractData?.isLoading);
   const loadError = contractData?.loadError || '';
   const [sofEvents, setSofEvents] = useState([]);
-  const [systemAlerts] = useState([
-    {
-      id: 'openships-geofence',
-      source: 'OpenShips · Geofencing',
-      title: 'Geocerca POL confirmada',
-      message: 'Geocerca alcanzada en POL. Posición de atraque confirmada vía OpenShips (alta fiabilidad). NOR (Notice of Readiness) emitido automáticamente a las 07:30 LT. Empieza cuenta atrás de 12h de Notice Time.',
-      tone: 'info',
-      detectedAt: '2026-08-04T07:30',
-      draftEvent: {
-        type: 'WAITING',
-        startTime: '2026-08-04T07:30',
-        endTime: '2026-08-04T19:30',
-        description: 'NOR emitido automáticamente tras confirmación de atraque en el puerto de carga. Notice Time contractual de 12 horas.'
-      }
-    },
-    {
-      id: 'iot-performance',
-      source: 'Operativa · IoT Portuario',
-      title: 'Alerta de Rendimiento',
-      message: "La báscula del puerto no registra entrada de camiones con la carga contractual desde hace 2 horas. Sugerencia: Añadir evento 'Waiting for cargo / Shortage' en el SOF para detener la plancha.",
-      tone: 'warning',
-      detectedAt: '2026-08-04T09:30',
-      draftEvent: {
-        type: 'WAITING',
-        startTime: '2026-08-04T07:30',
-        endTime: '2026-08-04T09:30',
-        description: 'Falta de carga/camiones: la báscula del puerto no registra entradas de la carga contractual durante 2 horas.'
-      }
-    }
-  ]);
+  const systemAlerts = Array.isArray(voyageData?.alerts) ? voyageData.alerts : [];
 
-  const laytime = contractData?.laytime || {
-    allowedHours: 72,
-    usedHours: 64.5,
-    status: 'En Control',
-    demurrageRateUSD: 8500,
-    estimatedDemurrageUSD: 0
-  };
+  if (isLoading) return <DashboardLoading />;
 
-  const allowedHours = Number(laytime.allowedHours) || 0;
-  const grossUsedHours = Number(laytime.usedHours) || 0;
-  const demurrageRateUSD = Number(laytime.demurrageRateUSD) || 0;
+  if (!voyageData) {
+    return (
+      <div className="flex min-h-full w-full items-center justify-center bg-[#0B3040] p-6 text-slate-100">
+        <div className="w-full max-w-xl rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-900 shadow-lg">
+          <h1 className="text-base font-bold">Sin viaje activo</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">El Dashboard Ejecutivo permanece vacío hasta que Neon devuelva un viaje válido.</p>
+          {loadError && <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">{loadError}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  const laytime = contractData?.laytime || {};
+  const allowedHours = finiteNumber(laytime?.allowedHours);
+  const grossUsedHours = finiteNumber(laytime?.usedHours);
+  const demurrageRateUSD = finiteNumber(laytime?.demurrageRateUSD);
   const rawTerms = String(laytime.laytimeRule || laytime.terms || contractData?.laytimeRule || 'SHINC').toUpperCase();
   const terms = ['SHINC', 'SHEX', 'FHEX'].includes(rawTerms) ? rawTerms : 'SHINC';
   const deductedHours = sofEvents.reduce(
-    (sum, event) => event.status === 'DRAFT' ? sum : sum + (Number(event.durationHours) || 0),
+    (sum, event) => event?.status === 'DRAFT' ? sum : sum + finiteNumber(event?.durationHours),
     0
   );
   const netUsedHours = Math.max(0, grossUsedHours - deductedHours);
@@ -73,17 +96,29 @@ export default function DashboardExecutive({ contractData }) {
   const demurrageHours = Math.max(0, -balanceHours);
   const estimatedDemurrageUSD = (demurrageHours / 24) * demurrageRateUSD;
   const isDelayed = demurrageHours > 0;
+  const vesselName = displayText(voyageData?.vesselName);
+  const vesselImo = displayText(voyageData?.imo);
+  const loadPort = displayText(voyageData?.loadPort);
+  const dischargePort = displayText(voyageData?.dischargePort);
+  const cargoType = displayText(voyageData?.cargoType);
+  const cargoUnit = displayText(voyageData?.cargoUnit);
+  const hasVesselData = Boolean(vesselName || vesselImo);
+  const hasRouteData = Boolean(loadPort && dischargePort);
+  const hasCargoData = Boolean(cargoType || Number.isFinite(Number(voyageData?.cargoQty)));
   const cargoQuantity = Number(voyageData?.cargoQty);
   const cargoQuantityLabel = Number.isFinite(cargoQuantity)
-    ? `${cargoQuantity.toLocaleString('es-ES', { maximumFractionDigits: 2 })} ${voyageData?.cargoUnit || 'MT'}`
+    ? `${formatNumber(cargoQuantity, 'es-ES', { maximumFractionDigits: 2 })}${cargoUnit ? ` ${cargoUnit}` : ''}`
     : '—';
   const operationalPhase = voyageData?.operationalPhaseLabel || phaseLabels[voyageData?.operationalPhase] || voyageData?.operationalPhase || '—';
-  const routeProgress = Math.min(100, Math.max(0, Number(voyageData?.routeProgressPct) || 0));
+  const routeProgress = hasRouteData ? Math.min(100, Math.max(0, finiteNumber(voyageData?.routeProgressPct))) : 0;
 
   const handleInjectAlert = (alert) => {
-    const startTime = new Date(alert.draftEvent.startTime);
-    const endTime = new Date(alert.draftEvent.endTime);
-    const durationHours = Math.max(0, (endTime - startTime) / (1000 * 60 * 60));
+    if (!alert?.draftEvent) return;
+    const startTime = new Date(alert.draftEvent.startTime || '');
+    const endTime = new Date(alert.draftEvent.endTime || '');
+    const durationHours = Number.isFinite(startTime.getTime()) && Number.isFinite(endTime.getTime())
+      ? Math.max(0, (endTime - startTime) / (1000 * 60 * 60))
+      : 0;
 
     setSofEvents((currentEvents) => {
       const alreadyInjected = currentEvents.some((event) => event.sourceAlertId === alert.id);
@@ -111,7 +146,7 @@ export default function DashboardExecutive({ contractData }) {
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-slate-900 break-inside-avoid print:rounded-none print:border-slate-300 print:shadow-none print:text-black">
         <div>
           <span className="text-xs font-semibold tracking-wider text-cyan-600 uppercase">Contrato Marítimo · Control Ejecutivo</span>
-          <h1 className="text-2xl font-bold text-slate-900 mt-1">Dashboard Ejecutivo & Laytime</h1>
+          <h1 className="text-lg font-bold text-slate-900 mt-1">Dashboard Ejecutivo & Laytime</h1>
           <p className="text-sm text-slate-600 mt-0.5">Visión consolidada del viaje, la exposición contractual y los hitos de plancha.</p>
         </div>
         <div className="flex items-stretch gap-2 print:block">
@@ -147,13 +182,19 @@ export default function DashboardExecutive({ contractData }) {
         </div>
 
         <div className="mt-4 grid gap-3">
-          {systemAlerts.map((alert) => {
-            const isWarning = alert.tone === 'warning';
+          {systemAlerts.length === 0 && (
+            <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+              Sin alertas activas para este viaje.
+            </div>
+          )}
+          {systemAlerts.map((alert, index) => {
+            const isWarning = ['warning', 'warn', 'medium'].includes(String(alert?.tone || alert?.level || alert?.severity || '').toLowerCase());
             const isInjected = sofEvents.some((event) => event.sourceAlertId === alert.id);
+            const canInject = Boolean(alert?.draftEvent);
 
             return (
               <article
-                key={alert.id}
+                key={alert?.id || `voyage-alert-${index}`}
                 className={`rounded-lg border p-4 break-inside-avoid print:bg-white ${
                   isWarning
                     ? 'border-amber-100 bg-amber-50/50 print:border-slate-300'
@@ -181,28 +222,30 @@ export default function DashboardExecutive({ contractData }) {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <h3 className={`text-sm font-bold ${isWarning ? 'text-amber-700' : 'text-cyan-700'}`}>
-                          {alert.title}
+                          {alert?.title || alert?.type || 'Aviso operativo'}
                         </h3>
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 print:text-slate-600">{alert.source}</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 print:text-slate-600">{alert?.source || 'Tracking'}</span>
                       </div>
-                      <p className="mt-2 text-sm leading-6 text-slate-700 print:text-black">{alert.message}</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-700 print:text-black">{alert?.message || alert?.detail || alert?.description || 'Sin detalle adicional.'}</p>
                       <span className="mt-2 block text-[10px] font-mono uppercase tracking-wider text-slate-500 print:text-slate-600">
-                        Detectado: {new Date(alert.detectedAt).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })} LT
+                        Detectado: {formatAlertDate(alert?.detectedAt || alert?.createdAt || alert?.created_at)} LT
                       </span>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleInjectAlert(alert)}
-                    disabled={isInjected}
-                    className={`print:hidden inline-flex shrink-0 items-center justify-center rounded-lg border px-3.5 py-2 text-xs font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 ${
-                      isInjected
-                        ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 shadow-none'
-                        : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    {isInjected ? 'Borrador inyectado' : '+ Inyectar en SOF'}
-                  </button>
+                  {canInject && (
+                    <button
+                      type="button"
+                      onClick={() => handleInjectAlert(alert)}
+                      disabled={isInjected}
+                      className={`print:hidden inline-flex shrink-0 items-center justify-center rounded-lg border px-3.5 py-2 text-xs font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 ${
+                        isInjected
+                          ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 shadow-none'
+                          : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {isInjected ? 'Borrador inyectado' : '+ Inyectar en SOF'}
+                    </button>
+                  )}
                 </div>
               </article>
             );
@@ -221,13 +264,15 @@ export default function DashboardExecutive({ contractData }) {
               <LoadingLine className="h-6 w-48" />
               <LoadingLine className="h-6 w-56" />
             </div>
-          ) : (
+          ) : hasVesselData ? (
             <>
-              <h2 className="text-lg font-bold text-slate-900 mt-1">{voyageData?.vesselName || '—'}</h2>
+              <h2 className="text-lg font-bold text-slate-900 mt-1">{vesselName || '—'}</h2>
               <span className="inline-block mt-2 px-2.5 py-1 bg-cyan-50 border border-cyan-200 text-cyan-700 text-xs rounded font-mono">
-                IMO {voyageData?.imo || '—'} · Seguimiento AIS Activo
+                {vesselImo ? `IMO ${vesselImo}` : 'IMO pendiente'} · Seguimiento AIS activo
               </span>
             </>
+          ) : (
+            <p className="mt-2 text-sm text-slate-500">Esperando datos del mapa</p>
           )}
         </div>
 
@@ -239,15 +284,17 @@ export default function DashboardExecutive({ contractData }) {
               <LoadingLine className="h-4 w-32" />
               <LoadingLine className="h-4 w-24" />
             </div>
-          ) : (
+          ) : hasRouteData ? (
             <div className="flex justify-between items-center text-xs text-slate-600 mb-2">
-              <span className="font-semibold text-slate-900">{voyageData?.loadPort || '—'}</span>
+              <span className="font-semibold text-slate-900">{loadPort}</span>
               <span className="text-cyan-600 font-mono font-semibold">{operationalPhase}</span>
-              <span className="font-semibold text-slate-900">{voyageData?.dischargePort || '—'}</span>
+              <span className="font-semibold text-slate-900">{dischargePort}</span>
             </div>
+          ) : (
+            <p className="mb-2 text-center text-sm text-slate-500">Esperando datos del mapa</p>
           )}
           <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
-            <div className={`bg-cyan-500 h-full rounded-full ${isLoading ? 'w-2/5 animate-pulse' : ''}`} style={isLoading ? undefined : { width: `${routeProgress}%` }}></div>
+            <div className={`bg-cyan-500 h-full rounded-full ${isLoading ? 'w-2/5 animate-pulse' : ''}`} style={isLoading ? undefined : { width: hasRouteData ? `${routeProgress}%` : '0%' }}></div>
           </div>
         </div>
 
@@ -262,11 +309,13 @@ export default function DashboardExecutive({ contractData }) {
               <LoadingLine className="h-5 w-32" />
               <LoadingLine className="h-3 w-20" />
             </div>
-          ) : (
+          ) : hasCargoData ? (
             <>
-              <p className="text-lg font-bold text-slate-900 mt-1">{voyageData?.cargoType || '—'}</p>
+              <p className="text-lg font-bold text-slate-900 mt-1">{cargoType || '—'}</p>
               <span className="text-xs text-slate-500">{cargoQuantityLabel}</span>
             </>
+          ) : (
+            <p className="mt-2 text-sm text-slate-500">Esperando datos del mapa</p>
           )}
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-sm break-inside-avoid print:break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
@@ -279,7 +328,7 @@ export default function DashboardExecutive({ contractData }) {
           ) : (
             <>
               <p className="text-lg font-bold text-cyan-600 mt-1">{operationalPhase}</p>
-              <span className="text-xs text-slate-500">Progreso de ruta: {routeProgress.toFixed(0)}%</span>
+              <span className="text-xs text-slate-500">{hasRouteData ? `Progreso de ruta: ${formatNumber(routeProgress, 'es-ES', { maximumFractionDigits: 0 })}%` : 'Esperando datos del mapa'}</span>
             </>
           )}
         </div>
@@ -288,14 +337,14 @@ export default function DashboardExecutive({ contractData }) {
           <p className={`text-lg font-bold mt-1 ${isDelayed ? 'text-amber-600' : 'text-emerald-600'}`}>
             {isDelayed ? 'Riesgo Demora' : 'En Control'}
           </p>
-          <span className="text-xs text-slate-500">{netUsedHours.toFixed(2)}h netas de {allowedHours.toFixed(2)}h</span>
+          <span className="text-xs text-slate-500">{formatNumber(netUsedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}h netas de {formatNumber(allowedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}h</span>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-sm break-inside-avoid print:break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
           <span className="text-xs text-slate-500 uppercase font-semibold">Exposición Demurrage</span>
           <p className={`text-lg font-bold mt-1 ${isDelayed ? 'text-rose-600' : 'text-slate-900'}`}>
-            {isDelayed ? `$${estimatedDemurrageUSD.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : 'USD 0'}
+            {isDelayed ? `$${formatNumber(estimatedDemurrageUSD, 'en-US', { maximumFractionDigits: 2 })}` : 'USD 0'}
           </p>
-          <span className="text-xs text-slate-500">Tarifa: ${demurrageRateUSD.toLocaleString('en-US')}/día</span>
+          <span className="text-xs text-slate-500">Tarifa: ${formatNumber(demurrageRateUSD)}/día</span>
         </div>
       </div>
 
@@ -320,18 +369,18 @@ export default function DashboardExecutive({ contractData }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
           <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg">
             <span className="text-xs text-slate-500 font-medium uppercase">Tiempo Permitido (Allowed)</span>
-            <p className="text-xl font-bold text-slate-900 mt-1">{allowedHours.toFixed(2)} Horas</p>
+            <p className="text-lg font-bold text-slate-900 mt-1">{formatNumber(allowedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Horas</p>
             <span className="text-xs text-slate-600">Basado en volumen contractual</span>
           </div>
           <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg">
             <span className="text-xs text-slate-500 font-medium uppercase">Tiempo Consumido (Used)</span>
-            <p className="text-xl font-bold text-cyan-600 mt-1">{netUsedHours.toFixed(2)} Horas</p>
-            <span className="text-xs text-slate-600">{grossUsedHours.toFixed(2)}h brutas − {deductedHours.toFixed(2)}h deducidas</span>
+            <p className="text-lg font-bold text-cyan-600 mt-1">{formatNumber(netUsedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Horas</p>
+            <span className="text-xs text-slate-600">{formatNumber(grossUsedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}h brutas − {formatNumber(deductedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}h deducidas</span>
           </div>
           <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg">
             <span className="text-xs text-slate-500 font-medium uppercase">Balance de Plancha</span>
-            <p className={`text-xl font-bold mt-1 ${balanceHours >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {balanceHours.toFixed(2)} Horas
+            <p className={`text-lg font-bold mt-1 ${balanceHours >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {formatNumber(balanceHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Horas
             </p>
             <span className="text-xs text-slate-600">
               {balanceHours >= 0 ? 'Margen disponible' : 'Exceso de plancha'}

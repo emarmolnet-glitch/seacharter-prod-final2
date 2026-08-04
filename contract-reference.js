@@ -39,19 +39,18 @@
         globalObject.history.replaceState(globalObject.history.state, '', `${url.pathname}${url.search}${url.hash}`);
     }
 
-    function generateReference() {
-        const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-        const randomValues = new Uint32Array(4);
+    function generateVoyageRef() {
+        const randomValues = new Uint32Array(1);
         if (globalObject.crypto?.getRandomValues) {
             globalObject.crypto.getRandomValues(randomValues);
         } else {
-            for (let index = 0; index < randomValues.length; index += 1) {
-                randomValues[index] = Math.floor(Math.random() * 0xFFFFFFFF);
-            }
+            randomValues[0] = Math.floor(Math.random() * 0xFFFFFFFF);
         }
-        const suffix = Array.from(randomValues, (value) => alphabet[value % alphabet.length]).join('');
-        return `RDM/ASB/${new Date().getFullYear()}-${suffix}`;
+        const suffix = String(randomValues[0] % 10000).padStart(4, '0');
+        return `RDM/${new Date().getFullYear()}-${suffix}`;
     }
+
+    const generateReference = generateVoyageRef;
 
     function persistReference(reference, notify = false) {
         const normalized = normalizeReference(reference);
@@ -65,7 +64,7 @@
     }
 
     function getActiveContractRef() {
-        return persistReference(readUrlReference() || readSessionReference() || generateReference());
+        return persistReference(readUrlReference() || readSessionReference() || generateVoyageRef());
     }
 
     function setActiveContractRef(reference) {
@@ -77,10 +76,16 @@
         return persistReference(getActiveContractRef());
     }
 
+    function createNewReference() {
+        return persistReference(generateVoyageRef(), true);
+    }
+
     const contractReferenceManager = Object.freeze({
         SESSION_KEY,
+        createNewReference,
         ensureUrlReference,
         generateReference,
+        generateVoyageRef,
         getActiveContractRef,
         normalizeReference,
         setActiveContractRef,
@@ -90,4 +95,5 @@
     globalObject.ContractReference = contractReferenceManager;
     globalObject.getActiveContractRef = getActiveContractRef;
     globalObject.setActiveContractRef = setActiveContractRef;
+    globalObject.generateVoyageRef = generateVoyageRef;
 })(window);

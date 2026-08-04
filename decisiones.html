@@ -10,7 +10,7 @@
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased p-4 md:p-8">
+<body class="bg-slate-900 text-sm text-slate-100 min-h-screen font-sans antialiased p-4 md:p-8">
 
     <div class="max-w-7xl mx-auto space-y-6">
 
@@ -23,14 +23,14 @@
                     </span>
                     <span class="text-xs text-slate-400 font-mono">DSS v2.4 · Audit Engine</span>
                 </div>
-                <h1 class="text-2xl md:text-3xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
+                <h1 class="text-base font-bold tracking-tight text-slate-800 flex items-center gap-2">
                     <span>Sistema de Soporte de Decisiones (DSS)</span>
                 </h1>
                 <p id="voyage-summary-subtitle" class="text-sm text-slate-300 font-medium">
-                    POL: <span id="summary-pol" class="text-indigo-400 font-bold">Rotterdam</span> ➔ 
-                    POD: <span id="summary-pod" class="text-indigo-400 font-bold">Houston</span> | 
-                    <span id="summary-qty" class="text-emerald-400 font-bold">50,000 MT</span> de 
-                    <span id="summary-commodity" class="text-slate-200">Siderúrgico / Carga General</span>
+                    POL: <span id="summary-pol" class="text-indigo-400 font-bold">—</span> ➔
+                    POD: <span id="summary-pod" class="text-indigo-400 font-bold">—</span> |
+                    <span id="summary-qty" class="text-emerald-400 font-bold">0 MT</span> ·
+                    <span id="summary-commodity" class="text-slate-200">Esperando datos de ruta</span>
                 </p>
             </div>
 
@@ -94,15 +94,15 @@
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                             <div>
                                 <label class="block text-slate-400 mb-1">Puerto Origen (POL)</label>
-                                <input type="text" id="input-pol" value="Rotterdam" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                                <input type="text" id="input-pol" value="" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
                             </div>
                             <div>
                                 <label class="block text-slate-400 mb-1">Puerto Destino (POD)</label>
-                                <input type="text" id="input-pod" value="Houston" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                                <input type="text" id="input-pod" value="" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
                             </div>
                             <div>
                                 <label class="block text-slate-400 mb-1">Cantidad Carga (MT)</label>
-                                <input type="number" id="input-cargoQty" value="50000" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                                <input type="number" id="input-cargoQty" value="0" min="0" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
                             </div>
                             <div>
                                 <label class="block text-slate-400 mb-1">Mercancía / Commodity</label>
@@ -202,7 +202,7 @@
                             </div>
                             <div>
                                 <label class="block text-slate-400 mb-1" for="input-actualCargoIntake">Ajuste de Calado (Short Lift MT)</label>
-                                <input type="number" id="input-actualCargoIntake" value="50000" step="100" min="1" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
+                                <input type="number" id="input-actualCargoIntake" value="0" step="100" min="0" oninput="actualizarDesdeFormulario()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
                             </div>
                         </div>
                     </div>
@@ -491,18 +491,18 @@
          * Estado inicial por defecto de la calculadora de fletes
          */
         const estadoInicial = {
-            pol: 'Rotterdam',
-            pod: 'Houston',
-            cargoQty: 50000,
-            commodity: 'Siderúrgico / Carga General',
-            laycanDaysLeft: 10,
-            estimatedVoyageDays: 8,
-            loadRate: 5000,
-            dischargeRate: 5000,
-            portDays: 20,
-            seaDays: 8,
-            fleteEstimado: 35,
-            breakEven: 25
+            pol: '',
+            pod: '',
+            cargoQty: 0,
+            commodity: '',
+            laycanDaysLeft: 0,
+            estimatedVoyageDays: 0,
+            loadRate: 0,
+            dischargeRate: 0,
+            portDays: 0,
+            seaDays: 0,
+            fleteEstimado: 0,
+            breakEven: 0
         };
 
         function determinarTerminoCargo(commodity) {
@@ -533,10 +533,10 @@
 
             // Extraer variables con valores por defecto de resguardo
             const {
-                pol = 'Rotterdam',
-                pod = 'Houston',
+                pol = '',
+                pod = '',
                 cargoQty = 0,
-                commodity = 'Carga General',
+                commodity = '',
                 laycanDaysLeft = 0,
                 estimatedVoyageDays = 0,
                 loadRate = 1,
@@ -548,10 +548,11 @@
             } = activeState;
 
             // --- 1. CABECERA Y RESUMEN DEL VIAJE ---
-            if (document.getElementById('summary-pol')) document.getElementById('summary-pol').textContent = pol;
-            if (document.getElementById('summary-pod')) document.getElementById('summary-pod').textContent = pod;
+            if (document.getElementById('summary-pol')) document.getElementById('summary-pol').textContent = pol || '—';
+            if (document.getElementById('summary-pod')) document.getElementById('summary-pod').textContent = pod || '—';
             if (document.getElementById('summary-qty')) document.getElementById('summary-qty').textContent = `${Number(cargoQty).toLocaleString('es-ES')} MT`;
-            if (document.getElementById('summary-commodity')) document.getElementById('summary-commodity').textContent = commodity;
+            if (document.getElementById('summary-commodity')) document.getElementById('summary-commodity').textContent = commodity || 'Esperando datos de ruta';
+            if (!String(pol || '').trim() && !String(pod || '').trim() && Number(cargoQty) <= 0) return;
 
             const recomendaciones = [];
             const cargoTerms = determinarTerminoCargo(commodity);
@@ -1023,7 +1024,7 @@
         }
 
         function handleCommitConditions(currentState, executeSafeCommit) {
-            const targetIntake = Number(currentState?.actualCargoIntake || currentState?.targetCargoMT || currentState?.cargoQty || currentState?.cargo) || 50000;
+            const targetIntake = Number(currentState?.actualCargoIntake || currentState?.targetCargoMT || currentState?.cargoQty || currentState?.cargo) || 0;
             const ballastDays = Number(currentState?.ballastDays) || 0;
             const jwlaRiskActive = Boolean(currentState?.jwlaRiskActive);
             const jwlaPremiumUSD = Number(currentState?.jwlaPremiumUSD) || 0;
@@ -1164,7 +1165,7 @@
 
             const effectiveBallastVal = (state.ballastDays !== undefined && state.ballastDays !== null && Number(state.ballastDays) > 0)
                 ? Number(state.ballastDays)
-                : calculateAutoExportDeficitBallast(state.pod || 'Rotterdam', 0, { vesselSpeed: state.vesselSpeed || 12.0 }).ballastDays;
+                : calculateAutoExportDeficitBallast(state.pod || '', 0, { vesselSpeed: state.vesselSpeed || 12.0 }).ballastDays;
             setVal('input-ballastDays', effectiveBallastVal.toFixed(1));
             const jwlaCheckbox = document.getElementById('input-jwlaRiskActive');
             if (jwlaCheckbox) {
@@ -1173,7 +1174,7 @@
             setVal('input-jwlaPremiumUSD', state.jwlaPremiumUSD ?? 0);
 
             // Sincronización Bug Short Lift: resetear e igualar automáticamente al cambiar carga principal
-            const targetCargo = Number(state.targetCargoMT ?? state.cargoQty ?? state.cargo) || 50000;
+            const targetCargo = Number(state.targetCargoMT ?? state.cargoQty ?? state.cargo) || 0;
             const actualIntake = (state.actualCargoIntake !== undefined && state.actualCargoIntake !== null)
                 ? Number(state.actualCargoIntake)
                 : targetCargo;
@@ -1630,8 +1631,8 @@
             const inputJwlaPremiumUSD = document.getElementById('input-jwlaPremiumUSD');
             const inputActualCargoIntake = document.getElementById('input-actualCargoIntake');
 
-            const polVal = inputPol ? inputPol.value : 'Rotterdam';
-            const podVal = inputPod ? inputPod.value : 'Houston';
+            const polVal = inputPol?.value || '';
+            const podVal = inputPod?.value || '';
             const cargoQty = inputCargoQty ? Number(inputCargoQty.value) : 50000;
             const loadRate = inputLoadRate ? Math.max(1, Number(inputLoadRate.value) || 1) : 5000;
             const dischargeRate = inputDischargeRate ? Math.max(1, Number(inputDischargeRate.value) || 1) : loadRate;
@@ -1893,9 +1894,9 @@
 
             // 2. Obtener baseState limpio desde globalState / DOM (sin arrastrar dssSimulationState previo)
             const globalState = typeof getDSSCurrentState === 'function' ? getDSSCurrentState() : {
-                pol: document.getElementById('input-pol')?.value || 'Rotterdam',
-                pod: document.getElementById('input-pod')?.value || 'Houston',
-                cargoQty: Number(document.getElementById('input-cargoQty')?.value) || 50000,
+                pol: document.getElementById('input-pol')?.value || '',
+                pod: document.getElementById('input-pod')?.value || '',
+                cargoQty: Number(document.getElementById('input-cargoQty')?.value) || 0,
                 commodity: document.getElementById('input-commodity')?.value || 'Siderúrgico / Carga General',
                 laycanDaysLeft: Number(document.getElementById('input-laycanDaysLeft')?.value) || 10,
                 estimatedVoyageDays: Number(document.getElementById('input-estimatedVoyageDays')?.value) || 8,
@@ -2092,9 +2093,9 @@
             const inputFleteEstimado = document.getElementById('input-fleteEstimado');
             const inputBreakEven = document.getElementById('input-breakEven');
 
-            const fallbackPol = inputPol?.value || document.getElementById('port-pol')?.value || 'Rotterdam';
-            const fallbackPod = inputPod?.value || document.getElementById('port-pod')?.value || 'Houston';
-            const fallbackCargoQty = parseFloat(inputCargoQty?.value) || parseFloat(document.getElementById('cargo-qty')?.value) || 50000;
+            const fallbackPol = inputPol?.value || document.getElementById('port-pol')?.value || '';
+            const fallbackPod = inputPod?.value || document.getElementById('port-pod')?.value || '';
+            const fallbackCargoQty = parseFloat(inputCargoQty?.value) || parseFloat(document.getElementById('cargo-qty')?.value) || 0;
             const fallbackCommodity = inputCommodity?.value || 'Siderúrgico / Carga General';
             const fallbackVesselName = document.getElementById('vessel-name')?.value || 'MV GEARED BULKER';
 
@@ -2137,7 +2138,7 @@
             const rawFleteVal = activeDss.fleteEstimado !== undefined ? parseFloat(activeDss.fleteEstimado) : (activeDss.fleteUnitario !== undefined ? parseFloat(activeDss.fleteUnitario) : (parseFloat(inputFleteEstimado?.value) || parseFloat(document.getElementById('freight-sell')?.value) || 35));
             const rawBreakEvenVal = activeDss.breakEven !== undefined ? parseFloat(activeDss.breakEven) : (parseFloat(inputBreakEven?.value) || parseFloat(document.getElementById('shadow-break-even-freight')?.value) || 25);
 
-            const fallbackDwt = parseFloat(document.getElementById('vessel-dwt')?.value) || (typeof State !== 'undefined' ? parseFloat(State.dwt) : 0) || 50000;
+            const fallbackDwt = parseFloat(document.getElementById('vessel-dwt')?.value) || (typeof State !== 'undefined' ? parseFloat(State.dwt) : 0) || 0;
             const dwt = parseFloat(activeDss.dwt || activeDss.vesselDwt) || fallbackDwt;
 
             const qty = Math.max(1, cargoQty);
@@ -2169,9 +2170,9 @@
 
         function buildAuditHTMLTemplate(state) {
             const safeState = state || {};
-            const pol = String(safeState.pol || 'Rotterdam');
-            const pod = String(safeState.pod || 'Houston');
-            const cargoQty = Number(safeState.cargoQty) || 50000;
+            const pol = String(safeState.pol || '');
+            const pod = String(safeState.pod || '');
+            const cargoQty = Number(safeState.cargoQty) || 0;
             const commodity = String(safeState.commodity || 'Siderúrgico / Carga General');
             const laycanDaysLeft = Number(safeState.laycanDaysLeft) || 10;
             const estimatedVoyageDays = Number(safeState.estimatedVoyageDays) || 8;
@@ -2437,7 +2438,7 @@
             const safeState = state || {};
             const pol = String(safeState.pol || 'TBA');
             const pod = String(safeState.pod || 'TBA');
-            const cargoQty = Number(safeState.cargoQty) || 50000;
+            const cargoQty = Number(safeState.cargoQty) || 0;
             const commodity = String(safeState.commodity || 'CARGA GENERAL');
             const laycanDaysLeft = safeState.laycanDaysLeft !== undefined && safeState.laycanDaysLeft !== null ? safeState.laycanDaysLeft : 10;
             const loadRate = Number(safeState.loadRate) || 5000;
