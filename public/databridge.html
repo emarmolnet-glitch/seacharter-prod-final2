@@ -841,11 +841,9 @@
             countdown = 30;
             SyncService.refresh();
 
-            setTimeout(async () => {
+            setTimeout(() => {
                 rateCount += Math.floor(Math.random() * 8) + 1;
                 rateCountEl.textContent = rateCount.toLocaleString();
-                await refreshDataBridgeMasterCount();
-
                 addLog(`[SUCCESS] ${getTimestamp()} - Se actualizaron ${Math.floor(Math.random() * 10) + 1} tarifas de fletes y ${Math.floor(Math.random() * 20) + 1} posiciones de buques.`);
                 addLog(`[INFO] ${getTimestamp()} - Transmisión de fletes a SeaCharter Core PRO finalizada con éxito.`);
                 
@@ -1001,24 +999,61 @@
             return new URL(pathname, `${CORE_PRO_API_ORIGIN}/`);
         }
 
-        async function refreshDataBridgeMasterCount() {
-            try {
-                const response = await fetch(createCoreProApiUrl('/api/databridge-master-stats'), {
-                    headers: { Accept: 'application/json' },
-                    cache: 'no-store'
-                });
-                const payload = await response.json();
-                if (!response.ok || payload?.success === false) {
-                    throw new Error(payload?.error || `HTTP ${response.status}`);
+        const DATA_BRIDGE_MASTER_STATS_INTERVAL_MS = 60000;
+        let dataBridgeMasterStatsRequest = null;
+        let dataBridgeMasterStatsController = null;
+        let dataBridgeMasterStatsTimer = null;
+
+        function refreshDataBridgeMasterCount() {
+            if (dataBridgeMasterStatsRequest) return dataBridgeMasterStatsRequest;
+            dataBridgeMasterStatsController = new AbortController();
+            const activeController = dataBridgeMasterStatsController;
+            dataBridgeMasterStatsRequest = (async () => {
+                try {
+                    const response = await fetch(createCoreProApiUrl('/api/databridge-master-stats'), {
+                        headers: { Accept: 'application/json' },
+                        cache: 'no-store',
+                        signal: activeController.signal
+                    });
+                    const payload = await response.json();
+                    if (!response.ok || payload?.success === false) {
+                        throw new Error(payload?.error || `HTTP ${response.status}`);
+                    }
+                    vesselCount = Number(payload?.totalVessels) || 0;
+                    vesselCountEl.textContent = vesselCount.toLocaleString();
+                    return vesselCount;
+                } catch (error) {
+                    if (error?.name !== 'AbortError') {
+                        vesselCountEl.textContent = vesselCount > 0 ? vesselCount.toLocaleString() : '—';
+                        console.warn('[Data Bridge] No se pudo cargar el histórico maestro.', error);
+                    }
+                    return vesselCount;
+                } finally {
+                    if (dataBridgeMasterStatsController === activeController) {
+                        dataBridgeMasterStatsController = null;
+                        dataBridgeMasterStatsRequest = null;
+                    }
                 }
-                vesselCount = Number(payload?.totalVessels) || 0;
-                vesselCountEl.textContent = vesselCount.toLocaleString();
-                return vesselCount;
-            } catch (error) {
-                vesselCountEl.textContent = vesselCount > 0 ? vesselCount.toLocaleString() : '—';
-                console.warn('[Data Bridge] No se pudo cargar el histórico maestro.', error);
-                return vesselCount;
+            })();
+            return dataBridgeMasterStatsRequest;
+        }
+
+        function startDataBridgeMasterStatsPolling() {
+            if (dataBridgeMasterStatsTimer) return;
+            void refreshDataBridgeMasterCount();
+            dataBridgeMasterStatsTimer = window.setInterval(() => {
+                if (document.visibilityState === 'visible') void refreshDataBridgeMasterCount();
+            }, DATA_BRIDGE_MASTER_STATS_INTERVAL_MS);
+        }
+
+        function stopDataBridgeMasterStatsPolling() {
+            if (dataBridgeMasterStatsTimer) {
+                window.clearInterval(dataBridgeMasterStatsTimer);
+                dataBridgeMasterStatsTimer = null;
             }
+            dataBridgeMasterStatsController?.abort();
+            dataBridgeMasterStatsController = null;
+            dataBridgeMasterStatsRequest = null;
         }
 
         window.GlobalStore = window.GlobalStore || {
@@ -1741,7 +1776,8 @@
 
         // Initialize
         populateInitialLogs();
-        refreshDataBridgeMasterCount();
+        startDataBridgeMasterStatsPolling();
+        window.addEventListener('pagehide', stopDataBridgeMasterStatsPolling, { once: true });
         syncDataBridgeMasterMap();
         SyncService.refresh();
         if (currentSyncId) {

@@ -1,6 +1,18 @@
-import React, { Suspense, lazy, useEffect, useState } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 
-// Lightweight Map Skeleton Fallback Component
+interface GlobeMapProps {
+  containerId: string;
+  globeKey?: string;
+}
+
+interface GlobalFleetGlobeApi {
+  mount?: (options: { containerId: string; key: string }) => unknown;
+}
+
+interface GlobeWindow extends Window {
+  GlobalFleetGlobe?: GlobalFleetGlobeApi;
+}
+
 export function MapSkeletonFallback({ title = 'Cargando Visor Cartográfico...' }: { title?: string }) {
   return (
     <div className="map-skeleton-container" aria-label="Cargando mapa en segundo plano">
@@ -15,66 +27,54 @@ export function MapSkeletonFallback({ title = 'Cargando Visor Cartográfico...' 
   );
 }
 
-// Internal Globe Component loaded lazily
-const GlobeCanvasContent = lazy(() => {
-  return new Promise<{ default: React.ComponentType<{ containerId: string; globeKey?: string }> }>((resolve) => {
-    // Dynamic import simulation / resolution for GlobalFleetGlobe
-    if (typeof window !== 'undefined' && window.GlobalFleetGlobe) {
-      resolve({
-        default: function GlobeCanvasWrapper({ containerId, globeKey = 'main' }: { containerId: string; globeKey?: string }) {
-          useEffect(() => {
-            if (window.GlobalFleetGlobe && typeof window.GlobalFleetGlobe.mount === 'function') {
-              window.GlobalFleetGlobe.mount({ containerId, key: globeKey });
-            }
-          }, [containerId, globeKey]);
+const GlobeCanvasContent = memo(function GlobeCanvasContent({ containerId, globeKey = 'main' }: GlobeMapProps) {
+  useEffect(() => {
+    const globeWindow = window as GlobeWindow;
+    let cancelled = false;
+    let checkTimer: number | undefined;
 
-          return <div id={containerId} className="density-globe-canvas h-full w-full rounded-lg border border-slate-200 bg-slate-950" />;
-        },
-      });
-    } else {
-      // Defer resolution until Globe.gl / GlobalFleetGlobe script is ready
-      const checkTimer = setInterval(() => {
-        if (typeof window !== 'undefined' && window.GlobalFleetGlobe) {
-          clearInterval(checkTimer);
-          resolve({
-            default: function GlobeCanvasWrapper({ containerId, globeKey = 'main' }: { containerId: string; globeKey?: string }) {
-              useEffect(() => {
-                if (window.GlobalFleetGlobe && typeof window.GlobalFleetGlobe.mount === 'function') {
-                  window.GlobalFleetGlobe.mount({ containerId, key: globeKey });
-                }
-              }, [containerId, globeKey]);
+    const mountGlobe = () => {
+      if (cancelled) return;
+      if (typeof globeWindow.GlobalFleetGlobe?.mount === 'function') {
+        globeWindow.GlobalFleetGlobe.mount({ containerId, key: globeKey });
+        return;
+      }
+      checkTimer = window.setTimeout(mountGlobe, 100);
+    };
 
-              return <div id={containerId} className="density-globe-canvas h-full w-full rounded-lg border border-slate-200 bg-slate-950" />;
-            },
-          });
-        }
-      }, 50);
-    }
-  });
+    mountGlobe();
+    return () => {
+      cancelled = true;
+      if (checkTimer !== undefined) window.clearTimeout(checkTimer);
+    };
+  }, [containerId, globeKey]);
+
+  return <div id={containerId} className="density-globe-canvas h-full w-full rounded-lg border border-slate-200 bg-slate-950" />;
 });
 
-export default function LazyGlobeMap({ containerId, globeKey = 'main' }: { containerId: string; globeKey?: string }) {
+const LazyGlobeMap = memo(function LazyGlobeMap({ containerId, globeKey = 'main' }: GlobeMapProps) {
   const [showGlobe, setShowGlobe] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    let idleCallbackId: number | undefined;
+    const timer = window.setTimeout(() => {
       if ('requestIdleCallback' in window) {
-        window.requestIdleCallback(() => setShowGlobe(true), { timeout: 1000 });
+        idleCallbackId = window.requestIdleCallback(() => setShowGlobe(true), { timeout: 1000 });
       } else {
         setShowGlobe(true);
       }
     }, 800);
 
-    return () => clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      if (idleCallbackId !== undefined && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(idleCallbackId);
+      }
+    };
   }, []);
 
-  if (!showGlobe) {
-    return <MapSkeletonFallback />;
-  }
+  if (!showGlobe) return <MapSkeletonFallback />;
+  return <GlobeCanvasContent containerId={containerId} globeKey={globeKey} />;
+});
 
-  return (
-    <Suspense fallback={<MapSkeletonFallback />}>
-      <GlobeCanvasContent containerId={containerId} globeKey={globeKey} />
-    </Suspense>
-  );
-}
+export default LazyGlobeMap;
