@@ -196,13 +196,14 @@ export default async (request: Request, context: Context) => {
 
     if (!rows[0]) return errorResponse(404, NOT_FOUND_ERROR);
     return Response.json(buildPayload(rows[0]));
-  } catch (error) {
-    console.error("[voyage-tracking] Lookup failed.", {
+  } catch (error: any) {
+    console.error("[voyage-tracking] Database query failed:", {
       requestId: context.requestId,
       contractRef,
-      error,
+      errorMessage: error?.message,
+      errorStack: error?.stack,
     });
-    return errorResponse(500, "No fue posible recuperar el seguimiento operativo.");
+    return errorResponse(500, `Error de base de datos: ${error?.message || "No fue posible recuperar el seguimiento operativo."}`);
   }
 };
 
