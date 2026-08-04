@@ -1,38 +1,56 @@
 import React, { useState } from 'react';
 import StatementOfFactsEditor from './StatementOfFactsEditor.jsx';
 
+const phaseLabels = {
+  APPROACHING_POL: 'Aproximación a puerto de carga',
+  AT_POL: 'En puerto de carga',
+  LOADING: 'En carga',
+  IN_TRANSIT: 'En tránsito',
+  AT_POD: 'En puerto de descarga',
+  DISCHARGING: 'En descarga',
+  COMPLETED: 'Completado'
+};
+
+function LoadingLine({ className = '' }) {
+  return <span className={`block animate-pulse rounded bg-slate-200 ${className}`} aria-hidden="true" />;
+}
+
 export default function DashboardExecutive({ contractData }) {
+  const voyageData = contractData?.voyage || null;
+  const isLoading = Boolean(contractData?.isLoading);
+  const loadError = contractData?.loadError || '';
   const [sofEvents, setSofEvents] = useState([]);
   const [systemAlerts] = useState([
     {
       id: 'openships-geofence',
       source: 'OpenShips · Geofencing',
       title: 'Geocerca POL confirmada',
-      message: 'Geocerca alcanzada en POL (BEJAIA). Posición de atraque confirmada vía OpenShips (alta fiabilidad). NOR (Notice of Readiness) emitido automáticamente a las 07:30 LT. Empieza cuenta atrás de 12h de Notice Time.',
+      message: 'Geocerca alcanzada en POL. Posición de atraque confirmada vía OpenShips (alta fiabilidad). NOR (Notice of Readiness) emitido automáticamente a las 07:30 LT. Empieza cuenta atrás de 12h de Notice Time.',
       tone: 'info',
       detectedAt: '2026-08-04T07:30',
       draftEvent: {
         type: 'WAITING',
         startTime: '2026-08-04T07:30',
         endTime: '2026-08-04T19:30',
-        description: 'NOR emitido automáticamente tras confirmación de atraque en BEJAIA. Notice Time contractual de 12 horas.'
+        description: 'NOR emitido automáticamente tras confirmación de atraque en el puerto de carga. Notice Time contractual de 12 horas.'
       }
     },
     {
       id: 'iot-performance',
       source: 'Operativa · IoT Portuario',
       title: 'Alerta de Rendimiento',
-      message: "La báscula del puerto no registra entrada de camiones (clinker) desde hace 2 horas. Sugerencia: Añadir evento 'Waiting for cargo / Shortage' en el SOF para detener la plancha.",
+      message: "La báscula del puerto no registra entrada de camiones con la carga contractual desde hace 2 horas. Sugerencia: Añadir evento 'Waiting for cargo / Shortage' en el SOF para detener la plancha.",
       tone: 'warning',
       detectedAt: '2026-08-04T09:30',
       draftEvent: {
         type: 'WAITING',
         startTime: '2026-08-04T07:30',
         endTime: '2026-08-04T09:30',
-        description: 'Falta de carga/camiones: la báscula del puerto no registra entradas de clinker durante 2 horas.'
+        description: 'Falta de carga/camiones: la báscula del puerto no registra entradas de la carga contractual durante 2 horas.'
       }
     }
   ]);
+
   const laytime = contractData?.laytime || {
     allowedHours: 72,
     usedHours: 64.5,
@@ -55,6 +73,12 @@ export default function DashboardExecutive({ contractData }) {
   const demurrageHours = Math.max(0, -balanceHours);
   const estimatedDemurrageUSD = (demurrageHours / 24) * demurrageRateUSD;
   const isDelayed = demurrageHours > 0;
+  const cargoQuantity = Number(voyageData?.cargoQty);
+  const cargoQuantityLabel = Number.isFinite(cargoQuantity)
+    ? `${cargoQuantity.toLocaleString('es-ES', { maximumFractionDigits: 2 })} ${voyageData?.cargoUnit || 'MT'}`
+    : '—';
+  const operationalPhase = voyageData?.operationalPhaseLabel || phaseLabels[voyageData?.operationalPhase] || voyageData?.operationalPhase || '—';
+  const routeProgress = Math.min(100, Math.max(0, Number(voyageData?.routeProgressPct) || 0));
 
   const handleInjectAlert = (alert) => {
     const startTime = new Date(alert.draftEvent.startTime);
@@ -81,7 +105,7 @@ export default function DashboardExecutive({ contractData }) {
   };
 
   return (
-    <div className="min-h-full bg-[#0B3040] text-slate-100 p-6 space-y-6 w-full pb-16 print:min-h-0 print:bg-white print:p-0 print:pb-0 print:text-black print:[&_button]:hidden">
+    <div className="min-h-full bg-[#0B3040] text-slate-100 p-6 space-y-6 w-full pb-16 print:h-auto print:min-h-full print:overflow-visible print:block print:bg-white print:p-0 print:pb-0 print:text-black print:[&_button]:hidden">
 
       {/* Cabecera Principal */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-slate-900 break-inside-avoid print:rounded-none print:border-slate-300 print:shadow-none print:text-black">
@@ -101,13 +125,17 @@ export default function DashboardExecutive({ contractData }) {
           </button>
           <div className="bg-slate-50 border border-slate-200 px-4 py-2 rounded-lg text-right print:border-slate-300 print:bg-white">
             <span className="block text-[10px] uppercase tracking-wider text-slate-500 print:text-slate-700">Referencia</span>
-            <span className="text-sm font-mono font-bold text-cyan-600 print:text-black">{contractData?.reference || 'RDM/2026-0604'}</span>
+            {isLoading ? (
+              <LoadingLine className="ml-auto mt-1 h-4 w-28" />
+            ) : (
+              <span className="text-sm font-mono font-bold text-cyan-600 print:text-black">{voyageData?.reference || contractData?.reference || '—'}</span>
+            )}
           </div>
         </div>
       </div>
 
       {/* Alertas del Sistema: Telemetría y Automatización */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 text-slate-900 shadow-sm break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
+      <section className="rounded-xl border border-slate-200 bg-white p-5 text-slate-900 shadow-sm break-inside-avoid print:break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
         <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <div>
             <h2 className="text-base font-bold text-slate-900 print:text-black">Alertas del Sistema (Telemetría)</h2>
@@ -186,23 +214,40 @@ export default function DashboardExecutive({ contractData }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Tarjeta Buque */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 text-slate-900 shadow-sm break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 text-slate-900 shadow-sm break-inside-avoid print:break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
           <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Buque Nominado</span>
-          <h2 className="text-lg font-bold text-slate-900 mt-1">{contractData?.live?.vesselName || 'NERMIN KARABEKIR'}</h2>
-          <span className="inline-block mt-2 px-2.5 py-1 bg-cyan-50 border border-cyan-200 text-cyan-700 text-xs rounded font-mono">
-            IMO 9591820 · Seguimiento AIS Activo
-          </span>
+          {isLoading ? (
+            <div className="mt-2 space-y-3">
+              <LoadingLine className="h-6 w-48" />
+              <LoadingLine className="h-6 w-56" />
+            </div>
+          ) : (
+            <>
+              <h2 className="text-lg font-bold text-slate-900 mt-1">{voyageData?.vesselName || '—'}</h2>
+              <span className="inline-block mt-2 px-2.5 py-1 bg-cyan-50 border border-cyan-200 text-cyan-700 text-xs rounded font-mono">
+                IMO {voyageData?.imo || '—'} · Seguimiento AIS Activo
+              </span>
+            </>
+          )}
         </div>
 
         {/* Tarjeta Ruta / Progreso */}
         <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-5 text-slate-900 shadow-sm flex flex-col justify-between break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
-          <div className="flex justify-between items-center text-xs text-slate-600 mb-2">
-            <span className="font-semibold text-slate-900">{contractData?.route?.pol?.name || 'BEJAIA (DZ)'}</span>
-            <span className="text-cyan-600 font-mono font-semibold">Tránsito Comercial</span>
-            <span className="font-semibold text-slate-900">{contractData?.route?.pod?.name || 'AVEIRO (PT)'}</span>
-          </div>
+          {isLoading ? (
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <LoadingLine className="h-4 w-24" />
+              <LoadingLine className="h-4 w-32" />
+              <LoadingLine className="h-4 w-24" />
+            </div>
+          ) : (
+            <div className="flex justify-between items-center text-xs text-slate-600 mb-2">
+              <span className="font-semibold text-slate-900">{voyageData?.loadPort || '—'}</span>
+              <span className="text-cyan-600 font-mono font-semibold">{operationalPhase}</span>
+              <span className="font-semibold text-slate-900">{voyageData?.dischargePort || '—'}</span>
+            </div>
+          )}
           <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
-            <div className="bg-cyan-500 h-full w-3/5 rounded-full"></div>
+            <div className={`bg-cyan-500 h-full rounded-full ${isLoading ? 'w-2/5 animate-pulse' : ''}`} style={isLoading ? undefined : { width: `${routeProgress}%` }}></div>
           </div>
         </div>
 
@@ -210,24 +255,42 @@ export default function DashboardExecutive({ contractData }) {
 
       {/* Métricas Clave (KPIs) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-sm break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-sm break-inside-avoid print:break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
           <span className="text-xs text-slate-500 uppercase font-semibold">Carga Contractual</span>
-          <p className="text-lg font-bold text-slate-900 mt-1">Cement / Clinker</p>
-          <span className="text-xs text-slate-500">10.000 MT</span>
+          {isLoading ? (
+            <div className="mt-2 space-y-2">
+              <LoadingLine className="h-5 w-32" />
+              <LoadingLine className="h-3 w-20" />
+            </div>
+          ) : (
+            <>
+              <p className="text-lg font-bold text-slate-900 mt-1">{voyageData?.cargoType || '—'}</p>
+              <span className="text-xs text-slate-500">{cargoQuantityLabel}</span>
+            </>
+          )}
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-sm break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-sm break-inside-avoid print:break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
           <span className="text-xs text-slate-500 uppercase font-semibold">Fase Operativa</span>
-          <p className="text-lg font-bold text-cyan-600 mt-1">En Tránsito</p>
-          <span className="text-xs text-slate-500">ETA calculada</span>
+          {isLoading ? (
+            <div className="mt-2 space-y-2">
+              <LoadingLine className="h-5 w-28" />
+              <LoadingLine className="h-3 w-20" />
+            </div>
+          ) : (
+            <>
+              <p className="text-lg font-bold text-cyan-600 mt-1">{operationalPhase}</p>
+              <span className="text-xs text-slate-500">Progreso de ruta: {routeProgress.toFixed(0)}%</span>
+            </>
+          )}
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-sm break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-sm break-inside-avoid print:break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
           <span className="text-xs text-slate-500 uppercase font-semibold">Estado Laytime</span>
           <p className={`text-lg font-bold mt-1 ${isDelayed ? 'text-amber-600' : 'text-emerald-600'}`}>
             {isDelayed ? 'Riesgo Demora' : 'En Control'}
           </p>
           <span className="text-xs text-slate-500">{netUsedHours.toFixed(2)}h netas de {allowedHours.toFixed(2)}h</span>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-sm break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-sm break-inside-avoid print:break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
           <span className="text-xs text-slate-500 uppercase font-semibold">Exposición Demurrage</span>
           <p className={`text-lg font-bold mt-1 ${isDelayed ? 'text-rose-600' : 'text-slate-900'}`}>
             {isDelayed ? `$${estimatedDemurrageUSD.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : 'USD 0'}
@@ -236,8 +299,14 @@ export default function DashboardExecutive({ contractData }) {
         </div>
       </div>
 
+      {loadError && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 print:hidden" role="status">
+          {loadError}
+        </div>
+      )}
+
       {/* Bloque Detallado: Auditoría de Plancha & Demoras (Statement of Facts) */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 text-slate-900 shadow-sm space-y-4 break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
+      <div className="bg-white border border-slate-200 rounded-xl p-6 text-slate-900 shadow-sm space-y-4 break-inside-avoid print:mt-4 print:break-before-auto print:border-slate-300 print:shadow-none print:text-black">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3">
           <div>
             <h2 className="text-base font-bold text-slate-900">Auditoría de Plancha & Tiempos de Puerto</h2>

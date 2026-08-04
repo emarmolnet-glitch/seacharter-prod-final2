@@ -166,7 +166,7 @@ export default function StatementOfFactsEditor({ events = [], onEventsChange, te
                 const isDraft = ev.status === 'DRAFT';
 
                 return (
-                  <tr key={ev.id} className={`break-inside-avoid ${isDraft ? 'bg-amber-50/50 hover:bg-amber-50/80' : 'hover:bg-slate-50'}`}>
+                  <tr key={ev.id} className={`break-inside-avoid print:break-inside-avoid ${isDraft ? 'bg-amber-50/50 hover:bg-amber-50/80' : 'hover:bg-slate-50'}`}>
                     <td className="p-3 font-medium text-slate-900">
                       <span className="block">{eventTypes.find(t => t.id === ev.type)?.label || ev.type}</span>
                       {isDraft && (
