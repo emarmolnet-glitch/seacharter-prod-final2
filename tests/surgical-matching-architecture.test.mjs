@@ -7,8 +7,8 @@ const localMatchingSource = await readFile(new URL('../netlify/functions/matchin
 const vesselsMasterSource = await readFile(new URL('../db/vessels-master.ts', import.meta.url), 'utf8');
 const connectionStatusSource = await readFile(new URL('../public/ConnectionStatusBar.js', import.meta.url), 'utf8');
 
-test('matching execution loads bounded source pages', () => {
-  assert.match(localMatchingSource, /listPaginatedMatchingSources\(/);
+test('matching execution paginates only after commercial filtering', () => {
+  assert.match(localMatchingSource, /findMatchingVessels\(\{/);
   assert.match(localMatchingSource, /requestedLimit/);
   assert.match(localMatchingSource, /requestedOffset/);
   assert.match(localMatchingSource, /pagination,/);
@@ -31,7 +31,7 @@ test('matching execution delegates triple-source reads without starting an exter
 
 test('local matching endpoint performs read-only filtered-source, exact, and pending audit reads', () => {
   assert.match(vesselsMasterSource, /FROM vessels_master/);
-  assert.match(localMatchingSource, /listPaginatedMatchingSources/);
+  assert.match(localMatchingSource, /findMatchingVessels/);
   assert.match(localMatchingSource, /normalizeAllowedMatchingSources/);
   assert.match(localMatchingSource, /serializeOpenShipsVessel/);
   assert.match(localMatchingSource, /runAiAisFilter\(scoringRequest\)/);

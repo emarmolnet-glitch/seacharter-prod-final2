@@ -1,6 +1,7 @@
 export function buildCommercialVesselRank({
   vesselDwt,
   targetCargoDwt,
+  estimatedBallastStatus,
   laycanCompliant,
   transitHours,
   distanceNm,
@@ -14,6 +15,7 @@ export function buildCommercialVesselRank({
     ? Math.floor(dwtDifferenceMt / similarityStepMt)
     : Number.MAX_SAFE_INTEGER;
   const laycanPriority = laycanCompliant === true ? 0 : laycanCompliant === false ? 2 : 1;
+  const ballastPriority = estimatedBallastStatus === true ? 0 : 1;
   const safeTransitHours = Number.isFinite(Number(transitHours)) && Number(transitHours) >= 0
     ? Number(transitHours)
     : Number.POSITIVE_INFINITY;
@@ -28,6 +30,8 @@ export function buildCommercialVesselRank({
     dwtDifferenceMt: Number.isFinite(dwtDifferenceMt) ? dwtDifferenceMt : null,
     dwtSimilarityBand,
     dwtFitPercent,
+    estimatedBallastStatus: estimatedBallastStatus === true,
+    ballastPriority,
     laycanCompliant: laycanCompliant === true,
     laycanPriority,
     transitHours: Number.isFinite(safeTransitHours) ? safeTransitHours : null,
@@ -37,7 +41,8 @@ export function buildCommercialVesselRank({
 
 export function compareCommercialVesselRanks(left, right) {
   return (left.dwtDifferenceMt ?? Number.POSITIVE_INFINITY) - (right.dwtDifferenceMt ?? Number.POSITIVE_INFINITY)
+    || left.ballastPriority - right.ballastPriority
     || left.laycanPriority - right.laycanPriority
-    || (left.transitHours ?? Number.POSITIVE_INFINITY) - (right.transitHours ?? Number.POSITIVE_INFINITY)
-    || (left.distanceNm ?? Number.POSITIVE_INFINITY) - (right.distanceNm ?? Number.POSITIVE_INFINITY);
+    || (left.distanceNm ?? Number.POSITIVE_INFINITY) - (right.distanceNm ?? Number.POSITIVE_INFINITY)
+    || (left.transitHours ?? Number.POSITIVE_INFINITY) - (right.transitHours ?? Number.POSITIVE_INFINITY);
 }

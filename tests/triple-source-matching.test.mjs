@@ -13,7 +13,7 @@ const [indexSource, matchingSource, matchingDbSource, mergeSource, filterSource,
 
 test('matching backend pages allowed sources and sends every page through Core PRO scoring', () => {
   assert.match(matchingSource, /normalizeAllowedMatchingSources\(matchingPayload\.allowedSources \|\| body\.allowedSources\)/);
-  assert.match(matchingSource, /listPaginatedMatchingSources\(/);
+  assert.match(matchingSource, /findMatchingVessels\(\{/);
   assert.match(matchingSource, /mergeTripleVesselSources\(\[\], dataBridgeVessels, aisVessels, openShipsVessels\)/);
   assert.match(matchingSource, /radarSnapshot: unifiedVessels/);
   assert.match(matchingSource, /searchMode: "filtered_source_database"/);
@@ -44,7 +44,7 @@ test('OpenShips live status returns a real POL-scoped vessel snapshot', () => {
   assert.match(indexSource, /window\.updateOpenShipsRadar = updateOpenShipsRadar/);
 });
 
-test('source query filters Data Bridge, AIS, and OpenShips before applying limit and offset', () => {
+test('source query enriches Data Bridge, AIS, and OpenShips before application pagination', () => {
   assert.match(matchingDbSource, /\(vm\.status = 'EN_CARTERA'[\s\S]*OR vm\.validation_status = 'VALIDADO'\)/);
   assert.match(matchingDbSource, /COALESCE\(vm\.status, ''\)[\s\S]*NOT IN \('PENDING', 'PENDING_AUDIT'\)/);
   assert.match(matchingDbSource, /COALESCE\(vm\.audit_status, ''\)[\s\S]*NOT IN \('PENDING', 'IN_DUE_DILIGENCE', 'REJECTED'\)/);
@@ -53,11 +53,10 @@ test('source query filters Data Bridge, AIS, and OpenShips before applying limit
   assert.match(matchingDbSource, /audit_status = 'VALIDATED'/);
   assert.match(matchingDbSource, /FROM ais_telemetry_buffer/);
   assert.match(matchingDbSource, /WHERE source_system = ANY\(\$1::text\[\]\)/);
-  assert.doesNotMatch(matchingDbSource, /active_source AS/);
-  assert.doesNotMatch(matchingDbSource, /WHERE source_system = \(SELECT source_system FROM active_source\)/);
-  assert.match(matchingDbSource, /LIMIT \$6[\s\S]*OFFSET \$7/);
-  assert.match(matchingDbSource, /ABS\(COALESCE\(payload->>'dwt', payload->>'DWT'\)::double precision - \$5\)/);
-  assert.match(matchingDbSource, /ROW_NUMBER\(\) OVER/);
+  assert.match(matchingDbSource, /LEFT JOIN LATERAL[\s\S]*FROM vessels_master/);
+  assert.match(matchingDbSource, /verified_dwt >= \$4/);
+  assert.match(matchingDbSource, /sortCandidates\(commercialCandidates\)/);
+  assert.match(matchingDbSource, /slice\(safeOffset, safeOffset \+ safeLimit\)/);
 });
 
 test('server identity uses IMO, MMSI, and normalized name plus DWT without collapsing raw OpenShips vessels', () => {
@@ -80,7 +79,7 @@ test('matching execution uses the unified backend response and exposes source ba
   const executionSource = indexSource.slice(executionStart, executionEnd);
   assert.match(executionSource, /const openShipsCandidates = !isAppending[\s\S]*payload\.allowedSources\.includes\('OPENSHIPS'\)/);
   assert.match(executionSource, /requestMatchingLocal\('execute', openShipsCandidates, payload\)/);
-  assert.match(matchingSource, /candidates\.map\(\(candidate\) => serializeOpenShipsVessel\(candidate\.source\)\)/);
+  assert.doesNotMatch(matchingSource, /candidates\.map\(\(candidate\) => serializeOpenShipsVessel\(candidate\.source\)\)/);
   assert.doesNotMatch(executionSource, /radarLiveRes|dataBridgeRes|Promise\.allSettled/);
   assert.match(indexSource, /sourceBadgesHtml/);
   assert.match(indexSource, /data-source-origin="\$\{sourceOriginLabel\}"/);

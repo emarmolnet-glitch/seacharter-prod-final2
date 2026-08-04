@@ -19995,10 +19995,11 @@
         };
 
         window.getCommercialTargetCargoDwt = function() {
-            return window.getMatchingContractOperationalState().quantityMt;
+            const quantityMt = window.getMatchingContractOperationalState().quantityMt;
+            return Number.isFinite(Number(quantityMt)) && Number(quantityMt) > 0 ? Number(quantityMt) * 1.05 : 0;
         };
 
-        window.buildCommercialVesselRank = function({ vesselDwt, targetCargoDwt, laycanCompliant, transitHours, distanceNm }) {
+        window.buildCommercialVesselRank = function({ vesselDwt, targetCargoDwt, estimatedBallastStatus, laycanCompliant, transitHours, distanceNm }) {
             const dwt = Number(vesselDwt);
             const target = Number(targetCargoDwt);
             const hasDwtFit = Number.isFinite(dwt) && dwt > 0 && Number.isFinite(target) && target > 0;
@@ -20010,6 +20011,8 @@
                 dwtDifferenceMt: Number.isFinite(dwtDifferenceMt) ? dwtDifferenceMt : null,
                 dwtSimilarityBand: Number.isFinite(dwtDifferenceMt) ? Math.floor(dwtDifferenceMt / similarityStepMt) : Number.MAX_SAFE_INTEGER,
                 dwtFitPercent: hasDwtFit ? Math.max(0, 100 - (dwtDifferenceMt / target) * 100) : null,
+                estimatedBallastStatus: estimatedBallastStatus === true,
+                ballastPriority: estimatedBallastStatus === true ? 0 : 1,
                 laycanCompliant: laycanCompliant === true,
                 laycanPriority: laycanCompliant === true ? 0 : laycanCompliant === false ? 2 : 1,
                 transitHours: Number.isFinite(Number(transitHours)) && Number(transitHours) >= 0 ? Number(transitHours) : null,
@@ -20019,9 +20022,10 @@
 
         window.compareCommercialVesselRanks = function(left, right) {
             return (left.dwtDifferenceMt ?? Infinity) - (right.dwtDifferenceMt ?? Infinity)
+                || left.ballastPriority - right.ballastPriority
                 || left.laycanPriority - right.laycanPriority
-                || (left.transitHours ?? Infinity) - (right.transitHours ?? Infinity)
-                || (left.distanceNm ?? Infinity) - (right.distanceNm ?? Infinity);
+                || (left.distanceNm ?? Infinity) - (right.distanceNm ?? Infinity)
+                || (left.transitHours ?? Infinity) - (right.transitHours ?? Infinity);
         };
 
         async function requestMatchingLocal(operation, candidates, matchingPayload = null) {
@@ -21789,7 +21793,8 @@
 
                     const buildRank = (match) => window.buildCommercialVesselRank({
                         vesselDwt: match.vessel?.dwt ?? match.ais?.dwt,
-                        targetCargoDwt: quantity,
+                        targetCargoDwt: quantity * 1.05,
+                        estimatedBallastStatus: match.estimatedBallastStatus === true || match.vessel?.estimatedBallastStatus === true || match.ais?.estimatedBallastStatus === true,
                         laycanCompliant: match.compatibility?.dateOk ?? match.commercialRank?.laycanCompliant,
                         transitHours: Number(match.routing?.daysToLoadPort) * 24,
                         distanceNm: getDistanceToPol(match)
@@ -21809,7 +21814,8 @@
                     match.commercialRank = {
                         ...window.buildCommercialVesselRank({
                             vesselDwt: match.vessel?.dwt ?? match.ais?.dwt,
-                            targetCargoDwt: quantity,
+                            targetCargoDwt: quantity * 1.05,
+                            estimatedBallastStatus: match.estimatedBallastStatus === true || match.vessel?.estimatedBallastStatus === true || match.ais?.estimatedBallastStatus === true,
                             laycanCompliant: match.compatibility?.dateOk ?? match.commercialRank?.laycanCompliant,
                             transitHours: Number(match.routing?.daysToLoadPort) * 24,
                             distanceNm
@@ -25990,6 +25996,7 @@
                     const commercialRank = window.buildCommercialVesselRank({
                         vesselDwt: vessel.dwt ?? ais.dwt,
                         targetCargoDwt,
+                        estimatedBallastStatus: match?.estimatedBallastStatus === true || vessel.estimatedBallastStatus === true || ais.estimatedBallastStatus === true,
                         laycanCompliant: match?.compatibility?.dateOk ?? match?.commercialRank?.laycanCompliant,
                         transitHours: Number(routing.daysToLoadPort) * 24,
                         distanceNm: ais.currentDistanceToLoadPort

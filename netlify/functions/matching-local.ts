@@ -5,7 +5,7 @@ import {
   type VesselMasterRow,
 } from "../../db/vessels-master.js";
 import {
-  listPaginatedMatchingSources,
+  findMatchingVessels,
   normalizeAllowedMatchingSources,
   type AisMatchingRow,
 } from "../../db/matching-sources.js";
@@ -90,6 +90,7 @@ function normalizeCandidate(value: unknown, index: number) {
 }
 
 function serializeMasterVessel(row: VesselMasterRow) {
+  const matchingRow = asRecord(row);
   const sourcePayload = parseRecord(row.source_payload);
   const message = parseRecord(sourcePayload.Message);
   const metadata = parseRecord(sourcePayload.MetaData || sourcePayload.metadata || message.MetaData);
@@ -180,6 +181,15 @@ function serializeMasterVessel(row: VesselMasterRow) {
     cacheStatus: "Caché Validada",
     cacheValidated: true,
     masterUpdatedAt: updatedAt && Number.isFinite(updatedAt.getTime()) ? updatedAt.toISOString() : null,
+    matchReason: textValue(matchingRow.matchReason) || null,
+    verifiedDwt: matchingRow.verifiedDwt === true,
+    dwtDifference: finiteNumberValue(matchingRow.dwtDifference, matchingRow.dwtDifferenceMt),
+    estimatedBallastStatus: matchingRow.estimatedBallastStatus === true,
+    laycanCompliant: matchingRow.laycanCompliant === true,
+    longDistanceTransitToPol: matchingRow.longDistanceTransitToPol === true,
+    commercialTransitCandidate: matchingRow.commercialTransitCandidate === true,
+    distanceToPolNm: finiteNumberValue(matchingRow.distance_nm),
+    verifiedDesignDraft: finiteNumberValue(matchingRow.verified_design_draft),
   };
 }
 
@@ -190,6 +200,7 @@ function toIsoString(value: Date | string | null) {
 }
 
 function serializeAisVessel(row: AisMatchingRow) {
+  const matchingRow = asRecord(row);
   const rawData = parseRecord(row.raw_data);
   return {
     ...rawData,
@@ -215,6 +226,17 @@ function serializeAisVessel(row: AisMatchingRow) {
     firstSeenAt: toIsoString(row.first_seen_at),
     lastSeenAt: toIsoString(row.last_seen_at),
     distanceToPolNm: Number(row.distance_nm),
+    dwt: finiteNumberValue(matchingRow.dwt, matchingRow.DWT),
+    DWT: finiteNumberValue(matchingRow.dwt, matchingRow.DWT),
+    dwtStatus: textValue(matchingRow.dwtStatus) || null,
+    matchReason: textValue(matchingRow.matchReason) || null,
+    verifiedDwt: matchingRow.verifiedDwt === true,
+    dwtDifference: finiteNumberValue(matchingRow.dwtDifference, matchingRow.dwtDifferenceMt),
+    estimatedBallastStatus: matchingRow.estimatedBallastStatus === true,
+    laycanCompliant: matchingRow.laycanCompliant === true,
+    longDistanceTransitToPol: matchingRow.longDistanceTransitToPol === true,
+    commercialTransitCandidate: matchingRow.commercialTransitCandidate === true,
+    verifiedDesignDraft: finiteNumberValue(matchingRow.verified_design_draft),
   };
 }
 
@@ -248,7 +270,7 @@ function serializeOpenShipsVessel(value: unknown) {
     shipType: vesselType,
     dwt,
     DWT: dwt,
-    dwtStatus: dwt ? "OPENSHIPS_REPORTED" : null,
+    dwtStatus: textValue(row.dwtStatus, rawData.dwtStatus) || (dwt ? "OPENSHIPS_REPORTED" : null),
     vesselTypeStatus: vesselType !== "Unknown" ? "OPENSHIPS_REPORTED" : null,
     latitude,
     lat: latitude,
@@ -263,6 +285,7 @@ function serializeOpenShipsVessel(value: unknown) {
     heading: finiteNumberValue(row.heading, rawData.heading),
     lastSeenAt: textValue(row.observed_at, row.fetched_at, row.updated_at) || null,
     distanceToPolNm: finiteNumberValue(row.distance_nm),
+    verifiedDesignDraft: finiteNumberValue(row.verified_design_draft, rawData.verified_design_draft),
   };
 }
 
@@ -394,15 +417,31 @@ export default async (req: Request) => {
       const allowedSources = normalizeAllowedMatchingSources(matchingPayload.allowedSources || body.allowedSources);
       const requestedLimit = finiteNumberValue(matchingPayload.limit, body.limit) || 50;
       const requestedOffset = finiteNumberValue(matchingPayload.offset, body.offset) || 0;
-      const sourcePage = await listPaginatedMatchingSources(
+      const route = asRecord(matchingPayload.route);
+      const suppliedPolData = asRecord(matchingPayload.polData || cargo.polData || route.polData);
+      const suppliedAliases = [
+        ...(Array.isArray(suppliedPolData.aliases) ? suppliedPolData.aliases : []),
+        ...(Array.isArray(cargo.loadingPortAliases) ? cargo.loadingPortAliases : []),
+        ...(Array.isArray(route.polAliases) ? route.polAliases : []),
+      ];
+      const sourcePage = await findMatchingVessels({
         allowedSources,
-        loadingPortLat,
-        loadingPortLon,
-        matchRadiusNm,
-        targetCargoDwt,
-        requestedLimit,
-        requestedOffset,
-      );
+        latitude: loadingPortLat,
+        longitude: loadingPortLon,
+        radiusNm: matchRadiusNm,
+        cargoQuantity: targetCargoDwt || 0,
+        targetDwt: finiteNumberValue(matchingPayload.targetDwt, cargo.targetDwt),
+        laycanStart: textValue(cargo.laycanStart, matchingPayload.laycanStart) || null,
+        laycanEnd: textValue(cargo.laycanEnd, matchingPayload.laycanEnd) || null,
+        polData: {
+          unLocode: textValue(suppliedPolData.unLocode, suppliedPolData.unlocode, suppliedPolData.locode, cargo.loadingPortUnlocode, route.polUnlocode),
+          officialName: textValue(suppliedPolData.officialName, cargo.loadingPortOfficialName, route.polOfficialName),
+          name: textValue(suppliedPolData.name, cargo.loadingPortName, route.pol),
+          aliases: suppliedAliases,
+        },
+        limit: requestedLimit,
+        offset: requestedOffset,
+      });
       const dataBridgeVessels = sourcePage.rows
         .filter((row) => row.source_system === "DATABRIDGE")
         .map((row) => serializeMasterVessel(row.payload as unknown as VesselMasterRow));
@@ -413,9 +452,6 @@ export default async (req: Request) => {
         ...sourcePage.rows
           .filter((row) => row.source_system === "OPENSHIPS")
           .map((row) => serializeOpenShipsVessel(row.payload)),
-        ...(allowedSources.includes("OPENSHIPS")
-          ? candidates.map((candidate) => serializeOpenShipsVessel(candidate.source))
-          : []),
       ];
       const openShipsEnrichment = await enrichOpenShipsTechnicalData(serializedOpenShipsVessels);
       const openShipsVessels = openShipsEnrichment.vessels;

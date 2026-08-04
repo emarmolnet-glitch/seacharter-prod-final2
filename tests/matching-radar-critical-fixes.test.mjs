@@ -19,16 +19,18 @@ test('strict technical filtering is user-controlled and enforces the five-percen
   assert.match(filterSource, /Requiere Due Diligence para verificar DWT/);
 });
 
-test('absolute DWT difference is the first real comparator and distance is last', () => {
+test('absolute DWT difference, ballast and laycan precede distance', () => {
   const comparatorStart = rankingSource.indexOf('export function compareCommercialVesselRanks');
   const comparator = rankingSource.slice(comparatorStart);
   const dwtIndex = comparator.indexOf('left.dwtDifferenceMt');
+  const ballastIndex = comparator.indexOf('left.ballastPriority');
   const laycanIndex = comparator.indexOf('left.laycanPriority');
   const transitIndex = comparator.indexOf('left.transitHours');
   const distanceIndex = comparator.indexOf('left.distanceNm');
-  assert.ok(dwtIndex >= 0 && dwtIndex < laycanIndex);
-  assert.ok(laycanIndex < transitIndex);
-  assert.ok(transitIndex < distanceIndex);
+  assert.ok(dwtIndex >= 0 && dwtIndex < ballastIndex);
+  assert.ok(ballastIndex < laycanIndex);
+  assert.ok(laycanIndex < distanceIndex);
+  assert.ok(distanceIndex < transitIndex);
   assert.doesNotMatch(comparator, /dwtSimilarityBand - right\.dwtSimilarityBand/);
   assert.doesNotMatch(indexSource.slice(indexSource.indexOf('deduplicatedMatches.sort')), /eligibilityB - eligibilityA/);
 });
@@ -41,5 +43,6 @@ test('initial render preserves incomplete and confirmed long-distance candidates
   assert.match(indexSource, /hasIncompleteRadarData:/);
   assert.match(indexSource, /incompleteRadarVessels/);
   assert.match(indexSource, /LONG_DISTANCE_POL/);
-  assert.match(matchingSources, /payload->>'longDistanceTransitToPol' = 'true'/);
+  assert.match(matchingSources, /matchReason: matchReason as MatchReason/);
+  assert.match(matchingSources, /longDistanceTransitToPol: matchReason === "INBOUND_TO_POL"/);
 });
