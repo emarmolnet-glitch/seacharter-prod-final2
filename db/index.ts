@@ -1,4 +1,4 @@
-import { drizzle } from "drizzle-orm/netlify-db";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool, type Pool as PgPool } from "pg";
 import * as schema from "./schema.js";
 
@@ -29,7 +29,7 @@ export function getPool() {
   return pool;
 }
 
-export const db = drizzle({ schema });
+export const db = drizzle({ client: getPool(), schema });
 
 export async function ensureApplicationSchema() {
   applicationSchemaReady ??= getPool().query(`
