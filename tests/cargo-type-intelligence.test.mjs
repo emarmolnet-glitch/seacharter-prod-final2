@@ -127,19 +127,19 @@ test('strict eligibility enforces required cranes and grab capacity', () => {
   assert.equal(equipped.eligible, true);
 });
 
-test('technical warnings remain visible because strict filtering is permanently disabled', () => {
+test('technical warnings remain visible for unknown DWT while strict filtering is configurable', () => {
   const toggleTag = indexSource.match(/<input[^>]*id="hide-technical-problems-toggle"[^>]*>/)?.[0] || '';
-  assert.match(toggleTag, /disabled/);
+  assert.doesNotMatch(toggleTag, /\sdisabled(?:\s|>)/);
   assert.match(toggleTag, /aria-checked="false"/);
   assert.doesNotMatch(toggleTag, /\schecked(?:\s|>)/);
   assert.match(indexSource, /Array\.isArray\(data\.technicalWarnings\)/);
-  assert.match(indexSource, /strictTechnicalFilter: false/);
-  assert.match(indexSource, /const strictTechnicalFilter = false;[\s\S]*const viableMatches = matches\.slice\(\)/);
+  assert.match(indexSource, /strictTechnicalFilter: window\.matchingStrictTechnicalFilter === true/);
+  assert.match(indexSource, /requiredCargo \* 1\.05/);
   assert.match(indexSource, /Array\.isArray\(m\.audit\?\.reasons\)/);
   assert.match(indexSource, /DWT Desconocido/);
   assert.match(indexSource, /DWT Insuficiente/);
-  assert.match(indexSource, /technicalProblemsToggle\.checked = false/);
-  assert.match(indexSource, /technicalProblemsToggle\.disabled = true/);
+  assert.match(indexSource, /technicalProblemsToggle\.disabled = false/);
+  assert.match(indexSource, /Requiere Due Diligence para verificar DWT/);
 });
 
 test('volumetric eligibility rejects vessels below required grain capacity', () => {

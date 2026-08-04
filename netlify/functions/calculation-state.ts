@@ -15,6 +15,44 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function normalizeCalculationContractFields(value: Record<string, unknown>) {
+  const route = isRecord(value.route) ? value.route : {};
+  const cargo = isRecord(value.cargo) ? value.cargo : {};
+  const laycan = isRecord(value.laycan) ? value.laycan : {};
+  const firstText = (...values: unknown[]) => {
+    const match = values.map((item) => String(item ?? "").trim()).find(Boolean);
+    return match || "";
+  };
+  const firstPositiveNumber = (...values: unknown[]) => {
+    const match = values.map(Number).find((item) => Number.isFinite(item) && item > 0);
+    return match || 0;
+  };
+  const laydays = firstText(laycan.laydays, laycan.start, route.laydays, route.laycan, value.laydays, value.laycanDate);
+  const cancelling = firstText(laycan.cancelling, laycan.end, route.cancelling, value.cancelling, value.cancellingDate);
+  const cargoQuantity = firstPositiveNumber(cargo.cargoQuantity, cargo.quantity, value.cargoQuantity, value.cargoQty, value.cargo);
+  const cargoType = firstText(cargo.typeLabel, cargo.cargoDescription, value.cargoType, value.cargoProduct, value.cargoTypeManual);
+  const loadRate = firstPositiveNumber(cargo.loadRate, value.loadRate);
+  const dischargeRate = firstPositiveNumber(cargo.dischargeRate, value.dischargeRate, value.dischRate);
+  return {
+    ...value,
+    route: { ...route, laydays, cancelling, laycan: laydays },
+    laycan: { laydays, cancelling },
+    cargo: {
+      ...cargo,
+      quantity: cargoQuantity,
+      cargoQuantity,
+      typeLabel: cargoType,
+      cargoDescription: cargoType,
+      loadRate,
+      dischargeRate,
+    },
+    cargoQuantity,
+    cargoType,
+    loadRate,
+    dischargeRate,
+  };
+}
+
 export default async (req: Request) => {
   const headers = {
     ...baseHeaders,
@@ -29,7 +67,8 @@ export default async (req: Request) => {
         .from(appConfig)
         .where(eq(appConfig.key, CALCULATION_STATE_CONFIG_KEY))
         .limit(1);
-      const calculation = row?.value ? JSON.parse(row.value) : null;
+      const parsedCalculation = row?.value ? JSON.parse(row.value) : null;
+      const calculation = isRecord(parsedCalculation) ? normalizeCalculationContractFields(parsedCalculation) : null;
       return Response.json({
         success: true,
         calculation,
@@ -51,10 +90,10 @@ export default async (req: Request) => {
     }
 
     const persistedAt = new Date().toISOString();
-    const persistedCalculation = {
+    const persistedCalculation = normalizeCalculationContractFields({
       ...body.calculation,
       persistedAt,
-    };
+    });
     const value = JSON.stringify(persistedCalculation);
     if (Buffer.byteLength(value, "utf8") > MAX_CALCULATION_PAYLOAD_BYTES) {
       return Response.json({ success: false, error: "Calculation payload is too large" }, { status: 413, headers });

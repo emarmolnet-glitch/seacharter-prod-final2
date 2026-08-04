@@ -79,10 +79,10 @@ test("the matching engine completes filtered-source validation without transmitt
   assert.match(coreProSource, /window\.addEventListener\('SEA_ROUTE_DEFINED'/);
   assert.match(coreProSource, /function parseStrictRouteCoordinate\(value\)[\s\S]*typeof value === 'string' && value\.trim\(\) === ''[\s\S]*coreProMatchingRouteContext = \{[\s\S]*lat: parseStrictRouteCoordinate\(lat\?\.pol\)[\s\S]*lon: parseStrictRouteCoordinate\(lon\?\.pod\)[\s\S]*window\.coreProMatchingRouteContext = coreProMatchingRouteContext/);
   assert.match(coreProSource, /id="matching-route-sync-panel"/);
-  assert.match(coreProSource, /id="matching-route-status-text"[^>]*>Inactivo/);
-  assert.match(coreProSource, /id="matching-laycan-status-text"[^>]*>Inactivo/);
-  assert.match(coreProSource, /<strong>Ruta Sincronizada<\/strong>/);
-  assert.match(coreProSource, /<strong>Laycan<\/strong>/);
+  assert.match(coreProSource, /id="matching-route-status-text"[^>]*>Ruta no configurada/);
+  assert.match(coreProSource, /id="matching-laycan-status-text"[^>]*>[^<]*<i[^>]*><\/i> Laycan pendiente/);
+  assert.match(coreProSource, /<strong>Ruta y Ventana \(Laycan\)<\/strong>/);
+  assert.match(coreProSource, /<strong>Carga y Operativa<\/strong>/);
   assert.match(coreProSource, /updateSequentialTelemetryBlock\([\s\S]*'matching-route-status-block',[\s\S]*`\$\{pol \|\| 'Pendiente'\} ➔ \$\{pod \|\| 'Pendiente'\}`/);
   assert.doesNotMatch(coreProSource, /routeSyncNotice/);
   assert.match(coreProSource, /SeaCharterStore\.set\(\{ pol, pod, laycanDate: laycan \}\)/);

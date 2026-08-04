@@ -7,13 +7,16 @@ const filterSource = readFileSync(new URL('../netlify/functions/ai-ais-filter.ts
 const rankingSource = readFileSync(new URL('../netlify/functions/_shared/commercial-vessel-ranking.mjs', import.meta.url), 'utf8');
 const matchingSources = readFileSync(new URL('../db/matching-sources.ts', import.meta.url), 'utf8');
 
-test('strict technical filtering is permanently false across UI and scoring', () => {
+test('strict technical filtering is user-controlled and enforces the five-percent DWT margin', () => {
   assert.match(indexSource, /window\.matchingStrictTechnicalFilter = false/);
-  assert.match(indexSource, /id="hide-technical-problems-toggle"[^>]*disabled[^>]*aria-checked="false"/);
-  assert.match(indexSource, /strictTechnicalFilter: false/);
-  assert.match(indexSource, /const strictTechnicalFilter = false;[\s\S]*const viableMatches = matches\.slice\(\)/);
-  assert.match(filterSource, /const strictTechnicalFilter = false/);
-  assert.match(filterSource, /const matches = evaluatedMatches\.slice\(\)/);
+  assert.match(indexSource, /id="hide-technical-problems-toggle"[^>]*aria-disabled="false"[^>]*aria-checked="false"/);
+  assert.match(indexSource, /strictTechnicalFilter: window\.matchingStrictTechnicalFilter === true/);
+  assert.match(indexSource, /const strictRequiredDwt = quantity > 0 \? quantity \* 1\.05 : 0/);
+  assert.match(indexSource, /return !Number\.isFinite\(dwt\) \|\| dwt <= 0 \|\| dwt >= strictRequiredDwt/);
+  assert.match(filterSource, /body\.strictTechnicalFilter === true/);
+  assert.match(filterSource, /const strictRequiredDwt = quantity > 0 \? quantity \* 1\.05 : 0/);
+  assert.match(filterSource, /match\.dwtAssessment\?\.status === "UNKNOWN"/);
+  assert.match(filterSource, /Requiere Due Diligence para verificar DWT/);
 });
 
 test('absolute DWT difference is the first real comparator and distance is last', () => {

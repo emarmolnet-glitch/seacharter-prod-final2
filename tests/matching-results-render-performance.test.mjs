@@ -39,10 +39,10 @@ test('matching results render progressively in observer-driven batches of fiftee
 
 test('read-only matching result arrays are shallow-frozen', () => {
   assert.match(executionSource, /const matches = deduplicatedMatches;[\s\S]*Object\.freeze\(matches\);/);
-  assert.match(executionSource, /const strictTechnicalFilter = false;[\s\S]*const viableMatches = matches\.slice\(\);[\s\S]*Object\.freeze\(viableMatches\);/);
+  assert.match(executionSource, /const strictTechnicalFilter = window\.matchingStrictTechnicalFilter === true;[\s\S]*const viableMatches = matches[\s\S]*Object\.freeze\(viableMatches\);/);
   assert.match(cachedRendererSource, /Object\.freeze\(Array\.isArray\(cachedMatches\) \? cachedMatches\.slice\(\) : \[\]\)/);
 });
 
 test('optimized rendering visually penalizes technically unsuitable vessel cards', () => {
-  assert.match(executionSource, /class="matching-vessel-card border \$\{isComp \? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : 'border-red-200 bg-red-50\/40 opacity-80 cursor-pointer'\} rounded-xl p-5 transition relative overflow-hidden"/);
+  assert.match(executionSource, /isDwtUnknown \? 'opacity-65' : 'opacity-80'/);
 });

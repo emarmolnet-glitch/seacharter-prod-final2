@@ -345,7 +345,8 @@ export default async (req: Request) => {
       cargo.tipo_carga,
     );
     const cargoCode = textValue(cargo.cargoCode, cargo.cargoTypeId, cargo.typeId, body.cargoCode, body.cargoTypeId) || "100";
-    const strictTechnicalFilter = false;
+    const strictTechnicalFilter = body.strictTechnicalFilter === true || cargo.strictTechnicalFilter === true;
+    const strictRequiredDwt = quantity > 0 ? quantity * 1.05 : 0;
     const debugIncludeUnknownDwt = body.debugIncludeUnknownDwt === true || cargo.debugIncludeUnknownDwt === true;
     const methodsRequireShipGear = [cargo.loadMethod, cargo.dischargeMethod].some((value) => {
       const method = textValue(value).toLowerCase();
@@ -443,8 +444,8 @@ export default async (req: Request) => {
           const activeDwtStatus = vessel.dwtStatus;
           const dwtAssessment = vessel.dwt === null || vessel.dwt <= 0
             ? { status: "UNKNOWN", label: "DWT Desconocido" }
-            : quantity > 0 && vessel.dwt < quantity
-              ? { status: "INSUFFICIENT", label: "DWT Insuficiente" }
+            : strictRequiredDwt > 0 && vessel.dwt < strictRequiredDwt
+              ? { status: "INSUFFICIENT", label: "DWT Insuficiente (margen operativo 5%)" }
               : { status: "SUFFICIENT", label: "DWT Validado" };
           const strictCriticalReasons = technicalEligibility.criticalReasons.filter((reason) => (
             reason !== "DWT no disponible para validar capacidad"
@@ -461,14 +462,20 @@ export default async (req: Request) => {
 
           const warningReason = hasTechnicalWarning
             ? [
-                ...(activeDwtStatus === null || !vessel.dwt ? ["Sin DWT verificado (dwtStatus: null)"] : []),
+                ...(activeDwtStatus === null || !vessel.dwt ? ["Requiere Due Diligence para verificar DWT"] : []),
                 ...technicalEligibility.criticalReasons,
                 ...(taxonomyCompatibility.compatible ? [] : [taxonomyCompatibility.reason]),
               ].filter(Boolean).join("; ") || "Advertencia técnica: Datos AIS incompletos"
             : null;
 
+          const hasKnownDwt = vessel.dwt !== null && vessel.dwt > 0;
+          const passesStrictDwtCapacity = !strictTechnicalFilter
+            || !hasKnownDwt
+            || strictRequiredDwt <= 0
+            || vessel.dwt >= strictRequiredDwt;
           const operationallyEligible = taxonomyCompatibility.compatible !== false
-            && (!strictTechnicalFilter || technicalEligibility.eligible || debugUnknownDwtAllowed);
+            && passesStrictDwtCapacity
+            && (!strictTechnicalFilter || technicalEligibility.eligible || !hasKnownDwt || debugUnknownDwtAllowed);
           const idealVessel = operationallyEligible && !hasTechnicalWarning && loadState.ballastReady;
           const commercialRank = buildCommercialVesselRank({
             vesselDwt: vessel.dwt,
@@ -666,7 +673,14 @@ export default async (req: Request) => {
     };
 
     const evaluatedMatches = evaluateVessels(1.15, false);
-    const matches = evaluatedMatches.slice();
+    const matches = evaluatedMatches
+      .filter((match) => !strictTechnicalFilter
+        || match.dwtAssessment?.status === "UNKNOWN"
+        || match.dwtAssessment?.status === "SUFFICIENT")
+      .sort((left, right) => {
+        if (!strictTechnicalFilter) return 0;
+        return Number(left.dwtAssessment?.status === "UNKNOWN") - Number(right.dwtAssessment?.status === "UNKNOWN");
+      });
     const technicalWarnings = evaluatedMatches.filter((match) => match.hasTechnicalWarning || !match.audit.operationallyEligible);
 
     return Response.json({
@@ -680,6 +694,7 @@ export default async (req: Request) => {
       operationalFilters: {
         gearedRequired,
         strictTechnicalFilter,
+        strictRequiredDwt,
         debugIncludeUnknownDwt,
         stowageFactor,
         requiredVolumeCbm,
