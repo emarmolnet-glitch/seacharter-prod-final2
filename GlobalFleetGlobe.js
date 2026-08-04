@@ -661,13 +661,28 @@
         return setRouteSegments(coordinates, key, { ...options, ballastPortName: ballastPort }, routes);
     }
 
+    function isViewVisible(view) {
+        return Boolean(view?.container?.isConnected && view.container.getClientRects().length);
+    }
+
     function resize(key = DEFAULT_KEY) {
         const view = getView(key);
-        if (!view) return;
-        const size = getContainerSize(view.container);
-        if (size.width <= 1 || size.height <= 1) return;
-        view.globe.width(size.width).height(size.height);
-        scheduleVesselMarkerOrientations(view);
+        if (!view || view.resizeFrameId) return;
+        view.resizeFrameId = requestAnimationFrame(() => {
+            view.resizeFrameId = null;
+            if (!isViewVisible(view)) return;
+            const size = getContainerSize(view.container);
+            if (size.width <= 1 || size.height <= 1) return;
+            if (view.pendingVesselSync) {
+                view.pendingVesselSync = false;
+                updateVessels(null, key);
+            }
+            if (size.width === view.lastWidth && size.height === view.lastHeight) return;
+            view.lastWidth = size.width;
+            view.lastHeight = size.height;
+            view.globe.width(size.width).height(size.height);
+            scheduleVesselMarkerOrientations(view);
+        });
     }
 
     function updateAutoRotateControl(view) {
@@ -751,6 +766,7 @@
         const view = getView(key);
         if (!view) return;
         view.resizeObserver?.disconnect();
+        if (view.resizeFrameId) cancelAnimationFrame(view.resizeFrameId);
         if (view.hoverStyleFrameId) cancelAnimationFrame(view.hoverStyleFrameId);
         if (view.vesselOrientationFrameId) cancelAnimationFrame(view.vesselOrientationFrameId);
         view.controls?.removeEventListener?.('change', view.handleControlsChange);
@@ -835,6 +851,10 @@
             focusFirstVesselEnabled: options.focusFirstVessel !== false,
             hasFocusedVessel: false,
             resizeObserver: null,
+            resizeFrameId: null,
+            lastWidth: 0,
+            lastHeight: 0,
+            pendingVesselSync: false,
             rotationButton: null,
             handleControlsChange: null,
             handleInteractionStart: null,
@@ -948,7 +968,13 @@
     }
 
     function syncAllViews() {
-        views.forEach((view) => updateVessels(null, view.key));
+        views.forEach((view) => {
+            if (!isViewVisible(view)) {
+                view.pendingVesselSync = true;
+                return;
+            }
+            updateVessels(null, view.key);
+        });
     }
 
     window.addEventListener('ais:filtered-vessels-updated', syncAllViews);

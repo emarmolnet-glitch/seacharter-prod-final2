@@ -423,12 +423,12 @@ test('Core PRO renders the globally filtered AIS fleet independently of route po
   assert.doesNotMatch(indexSource, /const renderableVessels = \(hasLoadingPort/);
 });
 
-test('filtered AIS state is global and immediately redraws every globe', () => {
+test('filtered AIS state redraws visible globes and defers hidden views', () => {
   assert.match(indexSource, /filteredVessels: \[\]/);
   assert.match(indexSource, /setFilteredVessels\(newFilteredVessels/);
   assert.match(indexSource, /ais:filtered-vessels-updated/);
   assert.ok(globeSource.includes("window.addEventListener('ais:filtered-vessels-updated', syncAllViews)"));
-  assert.ok(globeSource.includes('views.forEach((view) => updateVessels(null, view.key))'));
+  assert.match(globeSource, /views\.forEach\(\(view\) => \{[\s\S]*if \(!isViewVisible\(view\)\)[\s\S]*view\.pendingVesselSync = true[\s\S]*updateVessels\(null, view\.key\)/);
   assert.ok(globeSource.includes("key === 'density' && typeof window.getDensityMapSourceVessels === 'function'"));
   assert.ok(globeSource.includes('view.vessels = prepareVessels(Array.isArray(densityVessels) ? densityVessels : getFilteredVessels())'));
 });

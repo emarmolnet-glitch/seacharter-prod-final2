@@ -15496,11 +15496,24 @@
             notify() {
                 this.listeners.forEach((listener) => listener(State));
             },
-            subscribe(listener) {
-                this.listeners.add(listener);
-                return () => this.listeners.delete(listener);
-            }
-        };
+	            subscribe(selectorOrListener, maybeListener, equalityFn = Object.is) {
+	                if (typeof maybeListener !== 'function') {
+	                    this.listeners.add(selectorOrListener);
+	                    return () => this.listeners.delete(selectorOrListener);
+	                }
+	                const selector = selectorOrListener;
+	                let currentSlice = selector(State);
+	                const selectedListener = (state) => {
+	                    const nextSlice = selector(state);
+	                    if (equalityFn(currentSlice, nextSlice)) return;
+	                    const previousSlice = currentSlice;
+	                    currentSlice = nextSlice;
+	                    maybeListener(nextSlice, previousSlice);
+	                };
+	                this.listeners.add(selectedListener);
+	                return () => this.listeners.delete(selectedListener);
+	            }
+	        };
         window.SeaCharterStore = SeaCharterStore;
         window.SeaCharterSessionDraftController = window.SeaCharterSessionDraft?.initialize({
             store: SeaCharterStore,
@@ -17303,7 +17316,7 @@
             if (typeof renderNavbarModules === 'function') {
                 renderNavbarModules();
                 updateNavigationContext('map');
-                loadAccountUserPreferences();
+                void loadAccountUserPreferences();
             }
             if (typeof window.detenerRadar === 'function') {
                 window.detenerRadar();
@@ -18376,10 +18389,14 @@
         }
         window.evaluateReactiveSyncStatus = evaluateReactiveSyncStatus;
 
-        window.SeaCharterStore?.subscribe?.(() => {
-            evaluateReactiveSyncStatus();
-            syncMatchingRouteSummary?.(window.GlobalStore?.calculatedState || window.CalculatedState || null);
-        });
+	        window.SeaCharterStore?.subscribe?.(
+	            (state) => [state.pol, state.pod, state.laycanDate],
+	            () => {
+	            evaluateReactiveSyncStatus();
+	            syncMatchingRouteSummary?.(window.GlobalStore?.calculatedState || window.CalculatedState || null);
+	            },
+	            (current, next) => current.every((value, index) => Object.is(value, next[index]))
+	        );
         window.addEventListener('DOMContentLoaded', () => {
             ['port-pol', 'map-port-pol', 'port-pod', 'map-port-pod', 'gc-laycan-date', 'map-laycan-date', 'gc-cancel-date', 'map-cancelling-date'].forEach((id) => {
                 const input = document.getElementById(id);
@@ -25482,24 +25499,30 @@
             persistUserPreferences(userPreferences);
         }
 
-        async function loadAccountUserPreferences() {
-            try {
-                const response = await fetch('/api/user-preferences');
-                const payload = await response.json().catch(() => ({}));
-                if (!response.ok || payload.success === false || !payload.preferences) return;
-                userPreferences = {
-                    ...DEFAULT_USER_PREFERENCES,
-                    ...payload.preferences,
-                };
-                window.userPreferences = userPreferences;
-                if (typeof localStorage !== 'undefined') {
-                    localStorage.setItem(USER_PREFERENCES_STORAGE_KEY, JSON.stringify(userPreferences));
+        let accountUserPreferencesPromise = null;
+        function loadAccountUserPreferences() {
+            if (accountUserPreferencesPromise) return accountUserPreferencesPromise;
+            accountUserPreferencesPromise = (async () => {
+                try {
+                    const response = await fetch('/api/user-preferences');
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok || payload.success === false || !payload.preferences) return userPreferences;
+                    userPreferences = {
+                        ...DEFAULT_USER_PREFERENCES,
+                        ...payload.preferences,
+                    };
+                    window.userPreferences = userPreferences;
+                    if (typeof localStorage !== 'undefined') {
+                        localStorage.setItem(USER_PREFERENCES_STORAGE_KEY, JSON.stringify(userPreferences));
+                    }
+                    renderNavbarModules();
+                    updateNavigationContext(activeNavigationModuleId);
+                } catch (error) {
+                    console.warn('[UserPreferences] No se pudieron cargar las preferencias de cuenta.', error);
                 }
-                renderNavbarModules();
-                updateNavigationContext(activeNavigationModuleId);
-            } catch (error) {
-                console.warn('[UserPreferences] No se pudieron cargar las preferencias de cuenta.', error);
-            }
+                return userPreferences;
+            })();
+            return accountUserPreferencesPromise;
         }
 
         async function persistUserPreferences(preferences) {
@@ -25698,9 +25721,20 @@
                             )
                         });
                     },
-                    subscribe: (listener) => SeaCharterStore.subscribe((state) => {
-                        listener(selectDualModeReadOnlyState(state));
-                    }),
+	                    subscribe: (listener) => SeaCharterStore.subscribe(
+	                        selectDualModeReadOnlyState,
+	                        listener,
+	                        (current, next) => (
+	                            current.fleteJustoCalculado === next.fleteJustoCalculado
+	                            && current.toneladasTotales === next.toneladasTotales
+	                            && current.factorDeEstiba === next.factorDeEstiba
+	                            && current.toleranciaCarga === next.toleranciaCarga
+	                            && current.sessionDraft.precioFOB === next.sessionDraft.precioFOB
+	                            && current.sessionDraft.precioCIF === next.sessionDraft.precioCIF
+	                            && current.sessionDraft.margenBruto === next.sessionDraft.margenBruto
+	                            && current.sessionDraft.margenNeto === next.sessionDraft.margenNeto
+	                        )
+	                    ),
                     updateDualState: (dualState) => SeaCharterStore.set({
                         dualPrecioFOB: dualState.precioFOB,
                         dualPrecioCIF: dualState.precioCIF,
@@ -55675,21 +55709,27 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
         }
 
-        async function loadCoaClientProfiles() {
-            try {
-                const response = await fetch('/api/coa-client-profiles');
-                const payload = await response.json();
-                if (!response.ok || payload.success === false) throw new Error(payload.error || 'No se pudieron cargar perfiles COA.');
-                renderCoaClientProfiles(payload.profiles || []);
-            } catch (error) {
-                renderCoaClientProfiles(COA_CLIENT_PROFILES_FALLBACK);
-            }
-            const selected = (State.coaClientProfiles || []).find((profile) => profile.isDefault) || State.coaClientProfiles?.[0];
-            if (selected) {
-                const select = document.getElementById('coa-client-profile');
-                if (select) select.value = String(selected.id || selected.profileName);
-                applyCoaClientProfile(selected, { rerun: false });
-            }
+        let coaClientProfilesPromise = null;
+        function loadCoaClientProfiles() {
+            if (coaClientProfilesPromise) return coaClientProfilesPromise;
+            coaClientProfilesPromise = (async () => {
+                try {
+                    const response = await fetch('/api/coa-client-profiles');
+                    const payload = await response.json();
+                    if (!response.ok || payload.success === false) throw new Error(payload.error || 'No se pudieron cargar perfiles COA.');
+                    renderCoaClientProfiles(payload.profiles || []);
+                } catch (error) {
+                    renderCoaClientProfiles(COA_CLIENT_PROFILES_FALLBACK);
+                }
+                const selected = (State.coaClientProfiles || []).find((profile) => profile.isDefault) || State.coaClientProfiles?.[0];
+                if (selected) {
+                    const select = document.getElementById('coa-client-profile');
+                    if (select) select.value = String(selected.id || selected.profileName);
+                    applyCoaClientProfile(selected, { rerun: false });
+                }
+                return State.coaClientProfiles || [];
+            })();
+            return coaClientProfilesPromise;
         }
 
         function getSelectedCoaClientProfile() {
@@ -55775,7 +55815,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 });
                 const result = await response.json();
                 if (!response.ok || result.success === false) throw new Error(result.error || 'No se pudo guardar el perfil.');
-                await loadCoaClientProfiles();
+                const savedProfile = normalizeCoaProfile(result.profile || payload);
+                const profiles = [...(State.coaClientProfiles || [])];
+                const savedIndex = profiles.findIndex((profile) => String(profile.id || '') === String(savedProfile.id || ''));
+                if (savedIndex >= 0) profiles[savedIndex] = savedProfile;
+                else profiles.push(savedProfile);
+                renderCoaClientProfiles(profiles);
+                applyCoaClientProfile(savedProfile, { rerun: false });
                 if (typeof showToast === 'function') showToast('Perfil COA guardado.');
             } catch (error) {
                 if (typeof showToast === 'function') showToast('No se pudo guardar el perfil COA.');
@@ -60558,12 +60604,34 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             actualizarGrabCapacityVisibility();
             initVoyageEstimatorTooltips();
             hydrateBunkerIndexData();
-            loadCoaClientProfiles();
+            void loadCoaClientProfiles();
             hydrateFearnleysMarketData();
-            updateManualFearnleysOverrideUi();
-            if (!window.costPlusGlobalCostSubscription) {
-                window.costPlusGlobalCostSubscription = SeaCharterStore.subscribe(() => calculateCostPlusFreight());
-            }
+	            updateManualFearnleysOverrideUi();
+	            if (!window.costPlusGlobalCostSubscription) {
+	                const selectCostPlusState = (state) => [
+	                    state.totalCosts,
+	                    state.costTotal,
+	                    state.costBreakdown,
+	                    state.distBallast,
+	                    state.distLaden,
+	                    state.etsCost,
+	                    state.costCapex,
+	                    state.cargo,
+	                    state.marketBenchmark,
+	                    state.totalMiles,
+	                    state.priceSea,
+	                    state.pol,
+	                    state.pod,
+	                    state.etsRouteFactor,
+	                    state.cargoType,
+	                    state.costPlusStrategy
+	                ];
+	                window.costPlusGlobalCostSubscription = SeaCharterStore.subscribe(
+	                    selectCostPlusState,
+	                    () => calculateCostPlusFreight(),
+	                    (current, next) => current.every((value, index) => Object.is(value, next[index]))
+	                );
+	            }
             resetTotalEstimation({ silent: true });
             updateChartererNegotiationSimulator();
             updateVesselPricingRouter();
@@ -60695,7 +60763,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             SeaCharterStore.set(readRouteStateFromCalculator());
             syncGlobalStateToForms();
             calculateAdjustedEtaAndDays();
-        });
+        }, { once: true });
     </script>
 
     <!-- SUBTLE FOOTER -->

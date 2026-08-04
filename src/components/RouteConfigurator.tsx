@@ -35,7 +35,14 @@ interface CalculatorState {
 
 interface SeaCharterStore {
   getState?: () => CalculatorState;
-  subscribe?: (listener: (state: CalculatorState) => void) => (() => void) | void;
+  subscribe?: {
+    (listener: (state: CalculatorState) => void): (() => void) | void;
+    <Slice>(
+      selector: (state: CalculatorState) => Slice,
+      listener: (slice: Slice, previousSlice: Slice) => void,
+      equalityFn?: (left: Slice, right: Slice) => boolean,
+    ): (() => void) | void;
+  };
 }
 
 interface CalculatorWindow extends Window {
@@ -75,6 +82,21 @@ function readInitialSelection() {
   return podSelection.portName ? podSelection : readRouteSelection("POL");
 }
 
+function selectRouteState(state: CalculatorState) {
+  return { pol: state.pol, pod: state.pod, draft: state.draft };
+}
+
+function routeStateEqual(left: CalculatorState, right: CalculatorState) {
+  return left.pol === right.pol && left.pod === right.pod && left.draft === right.draft;
+}
+
+function routeSelectionEqual(left: RouteSelection, right: RouteSelection) {
+  return left.role === right.role
+    && left.portName === right.portName
+    && left.portIndexNo === right.portIndexNo
+    && left.vesselDraft === right.vesselDraft;
+}
+
 export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps) {
   const [selection, setSelection] = useState<RouteSelection>(readInitialSelection);
   const [validation, setValidation] = useState<DraftValidationResponse | null>(null);
@@ -86,7 +108,10 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
 
   const syncSelection = useCallback((role = activeRoleRef.current) => {
     activeRoleRef.current = role;
-    setSelection(readRouteSelection(role));
+    setSelection((currentSelection: RouteSelection) => {
+      const nextSelection = readRouteSelection(role);
+      return routeSelectionEqual(currentSelection, nextSelection) ? currentSelection : nextSelection;
+    });
   }, []);
 
   useEffect(() => {
@@ -128,7 +153,11 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
       window.removeEventListener("port:suggestion-selected", handleRouteEvent);
     });
 
-    const unsubscribe = calculatorWindow.SeaCharterStore?.subscribe?.(() => syncSelection());
+    const unsubscribe = calculatorWindow.SeaCharterStore?.subscribe?.(
+      selectRouteState,
+      () => syncSelection(),
+      routeStateEqual,
+    );
     if (typeof unsubscribe === "function") disposers.push(unsubscribe);
 
     return () => {
