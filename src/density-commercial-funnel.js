@@ -3,99 +3,56 @@ import { useCommercialFilter } from './commercial-filter.js';
 (function initializeDensityCommercialFunnel(globalScope) {
   'use strict';
 
-  function escapeHtml(value) {
-    return String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function readName(vessel) {
-    return String(vessel?.vesselName || vessel?.vessel_name || vessel?.name || vessel?.ShipName || 'Buque sin nombre').trim();
-  }
-
-  function readIdentity(vessel) {
-    return {
-      imo: String(vessel?.imo || vessel?.IMO || vessel?.imo_number || '').replace(/\D/g, ''),
-      mmsi: String(vessel?.mmsi || vessel?.MMSI || '').replace(/\D/g, ''),
-      name: readName(vessel),
-      latitude: Number(vessel?.latitude ?? vessel?.lat),
-      longitude: Number(vessel?.longitude ?? vessel?.lon ?? vessel?.lng),
-    };
-  }
-
-  function formatNumber(value) {
-    return Number(value || 0).toLocaleString('es-ES', { maximumFractionDigits: 0 });
-  }
-
-  function renderCommercialMatches(state = globalScope.commercialDensityMatchState || {}) {
-    const panel = globalScope.document?.getElementById('density-commercial-matches-panel');
-    const list = globalScope.document?.getElementById('density-commercial-matches-list');
-    const summary = globalScope.document?.getElementById('density-commercial-matches-summary');
-    if (!panel || !list || !summary) return [];
-    const matches = Array.isArray(state.topMatches) ? state.topMatches : [];
-    panel.classList.remove('hidden');
-    if (state.requiresCargo) {
-      summary.textContent = 'Define la cantidad de carga para activar el ranking.';
-      list.innerHTML = '<div class="density-commercial-empty"><strong>Falta la carga objetivo</strong><span>El embudo usa DWT mínimo del 105% y ordena por Delta DWT.</span></div>';
-      return [];
-    }
-    summary.textContent = `${formatNumber(state.sourceCount)} señales → ${formatNumber(state.viableCount)} candidatos viables`;
-    if (!matches.length) {
-      list.innerHTML = '<div class="density-commercial-empty"><strong>Sin matches viables</strong><span>No hay General Cargo o Bulk Carrier con capacidad y estado compatibles.</span></div>';
-      return [];
-    }
-    list.innerHTML = matches.map((vessel, index) => {
-      const identity = readIdentity(vessel);
-      const encodedIdentity = encodeURIComponent(JSON.stringify(identity));
-      const distance = Number(vessel?.commercialMatch?.distanceToPolNm);
-      const delta = Number(vessel?.commercialMatch?.deltaDwt) || 0;
-      const status = vessel?.commercialMatch?.atAnchor
-        ? 'At Anchor'
-        : vessel?.commercialMatch?.underwayToPol
-          ? 'Rumbo compatible con POL'
-          : (vessel?.navigationStatus || 'Estado AIS no confirmado');
-      return `
-        <article class="density-commercial-card" data-vessel-recommendation="true" data-density-commercial-match="true" data-commercial-rank="${index + 1}">
-          <button type="button" class="density-commercial-card__button" data-due-diligence-button data-due-diligence-mode="external-search" data-external-search="true" data-due-diligence-payload="${encodedIdentity}" aria-label="Auditar ${escapeHtml(readName(vessel))} mediante Due Diligence">
-            <span class="density-commercial-card__rank">0${index + 1}</span>
-            <span class="density-commercial-card__body">
-              <span class="density-commercial-card__name">${escapeHtml(readName(vessel))}</span>
-              <span class="density-commercial-card__status">${escapeHtml(status)}</span>
-              <span class="density-commercial-card__metrics">
-                <strong>${formatNumber(vessel.dwt)} DWT</strong>
-                <span>Δ ${formatNumber(delta)} MT</span>
-                <span>${Number.isFinite(distance) ? `${distance.toFixed(0)} NM a POL` : 'Distancia N/D'}</span>
-              </span>
-            </span>
-            <span class="density-commercial-card__action"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span>
-          </button>
-          <p data-due-diligence-status class="density-commercial-card__feedback" aria-live="polite"></p>
-        </article>`;
-    }).join('');
-    return matches;
+  function syncCommercialToggle() {
+    const active = globalScope.GlobalStore?.isGlobalDebugActive === true;
+    globalScope.document?.querySelectorAll('[data-commercial-filter-toggle]').forEach(toggle => {
+      toggle.classList.toggle('is-active', active);
+      toggle.setAttribute('aria-checked', String(active));
+      const status = toggle.querySelector('[data-commercial-filter-status]');
+      if (status) status.textContent = `DEBUG DWT · ${active ? 'ON' : 'OFF'}`;
+    });
   }
 
   function refreshCommercialFunnel({ refreshMap = true } = {}) {
-    const vessels = typeof globalScope.getDensityMapSourceVessels === 'function'
-      ? globalScope.getDensityMapSourceVessels()
-      : [];
-    renderCommercialMatches(globalScope.commercialDensityMatchState);
-    if (refreshMap && globalScope.GlobalFleetGlobe?.getInstance?.('density')) {
-      globalScope.GlobalFleetGlobe.updateVessels(vessels, 'density');
+    if (typeof globalScope.getDensityMapSourceVessels === 'function') {
+      globalScope.getDensityMapSourceVessels();
     }
-    return globalScope.commercialDensityMatchState || { filteredVessels: vessels, topMatches: vessels.slice(0, 5) };
+    const displayVessels = typeof globalScope.syncDensityDisplayConsumers === 'function'
+      ? globalScope.syncDensityDisplayConsumers({ updateGlobe: refreshMap })
+      : (globalScope.getDensityDisplayVessels?.() || []);
+    return {
+      ...(globalScope.GlobalStore?.getCommercialVesselState?.() || {}),
+      displayVessels
+    };
+  }
+
+  function toggleCommercialFilter() {
+    const isGlobalDebugActive = globalScope.GlobalStore?.isGlobalDebugActive === true;
+    const setIsGlobalDebugActive = globalScope.GlobalStore?.setIsGlobalDebugActive?.bind(globalScope.GlobalStore);
+    setIsGlobalDebugActive?.(!isGlobalDebugActive, { source: 'commercial-filter-toggle' });
+    syncCommercialToggle();
+    refreshCommercialFunnel();
+  }
+
+  function syncTargetCargoDwt() {
+    const targetCargoDwt = globalScope.resolveGlobalTargetCargoDwt?.() || 0;
+    globalScope.GlobalStore?.setTargetCargoDwt?.(targetCargoDwt, { source: 'commercial-cargo-input' });
+    return targetCargoDwt;
   }
 
   function scheduleRefresh() {
     globalScope.clearTimeout(globalScope.densityCommercialRefreshTimer);
-    globalScope.densityCommercialRefreshTimer = globalScope.setTimeout(() => refreshCommercialFunnel(), 120);
+    globalScope.densityCommercialRefreshTimer = globalScope.setTimeout(() => {
+      syncTargetCargoDwt();
+      refreshCommercialFunnel();
+    }, 120);
   }
 
   function initialize() {
-    renderCommercialMatches(globalScope.commercialDensityMatchState);
+    syncCommercialToggle();
+    globalScope.document?.querySelectorAll('[data-commercial-filter-toggle]').forEach(toggle => {
+      toggle.addEventListener('click', toggleCommercialFilter);
+    });
     globalScope.document?.getElementById('cargo-qty')?.addEventListener('input', scheduleRefresh);
     globalScope.document?.getElementById('port-pol')?.addEventListener('change', scheduleRefresh);
     globalScope.document?.getElementById('density-due-diligence-close')?.addEventListener('click', () => {
@@ -106,9 +63,9 @@ import { useCommercialFilter } from './commercial-filter.js';
   }
 
   globalScope.useCommercialFilter = useCommercialFilter;
-  globalScope.renderDensityCommercialMatches = renderCommercialMatches;
   globalScope.refreshDensityCommercialFunnel = refreshCommercialFunnel;
-  globalScope.addEventListener('density:commercial-matches-updated', event => renderCommercialMatches(event?.detail));
+  globalScope.toggleDensityCommercialFilter = toggleCommercialFilter;
+  globalScope.addEventListener('commercial-vessel-state-updated', syncCommercialToggle);
   globalScope.addEventListener('openships:snapshot-updated', scheduleRefresh);
   if (globalScope.document?.readyState === 'loading') {
     globalScope.document.addEventListener('DOMContentLoaded', initialize, { once: true });
@@ -116,4 +73,3 @@ import { useCommercialFilter } from './commercial-filter.js';
     initialize();
   }
 })(window);
-

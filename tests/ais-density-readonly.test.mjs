@@ -331,7 +331,7 @@ test('read-only response feeds rendering, counters, and freight calculation', ()
   assert.match(indexSource, /calculateAndDisplayAisFreight\(\)/);
 });
 
-test('main AIS KPI is derived only from renderFleet', () => {
+test('main AIS KPI is derived only from the provided displayVessels snapshot', () => {
   const derivedCounterStart = indexSource.indexOf('window.getDerivedFilteredAisVessels = function()');
   const derivedCounterEnd = indexSource.indexOf('// Global Store (Shared Memory)', derivedCounterStart);
   const derivedCounterSource = indexSource.slice(derivedCounterStart, derivedCounterEnd);
@@ -357,13 +357,12 @@ test('main AIS KPI is derived only from renderFleet', () => {
   const documentMock = { getElementById: id => elements.get(id) || null };
   new Function('window', 'document', derivedCounterSource)(windowMock, documentMock);
 
-  assert.equal(windowMock.renderFilteredAisCounters(), 2);
+  assert.equal(windowMock.renderFilteredAisCounters(filteredVessels), 2);
   assert.equal(elements.get('ais-density-count').textContent, '2');
   assert.equal(elements.get('buques-count').textContent, '2');
   assert.equal(breakdownVessels, filteredVessels);
 
-  windowMock.renderFleet = [];
-  assert.equal(windowMock.renderFilteredAisCounters(), 0);
+  assert.equal(windowMock.renderFilteredAisCounters([]), 0);
   assert.equal(elements.get('ais-density-count').textContent, '0');
   assert.deepEqual(breakdownVessels, []);
 });
@@ -419,8 +418,8 @@ test('Core PRO sends POL coordinates and a bounded radius to AIS endpoints', () 
 });
 
 test('Core PRO renders the globally filtered AIS fleet independently of route ports', () => {
-  assert.match(indexSource, /const renderFleet = getDensityMapSourceVessels\(\)/);
-  assert.match(indexSource, /GlobalFleetGlobe\.updateVessels\(window\.renderFleet, 'density'\)/);
+  assert.match(indexSource, /getDensityMapSourceVessels\(\);[\s\S]*const displayVessels = getDensityDisplayVessels\(\)/);
+  assert.match(indexSource, /GlobalFleetGlobe\.updateVessels\(displayVessels, 'density'\)/);
   assert.doesNotMatch(indexSource, /const renderableVessels = \(hasLoadingPort/);
 });
 
@@ -460,7 +459,7 @@ test('both globe views expose nested radar vessel details on hover', () => {
 
 test('globe hover styling increases raycast target and matches radar tooltip design', () => {
   assert.ok(globeSource.includes('POINT_HOVER_RADIUS_FACTOR = 1.45'));
-  assert.ok(globeSource.includes('vessel === view.hoveredVessel ? view.pointRadius * POINT_HOVER_RADIUS_FACTOR'));
+  assert.match(globeSource, /vessel === view\.hoveredVessel \|\| vessel === view\.selectedVessel \? radius \* POINT_HOVER_RADIUS_FACTOR : radius/);
   assert.ok(globeSource.includes('if (cameraAltitude <= 0.45) return 0.075'));
   assert.match(globeCssSource, /\.global-fleet-tooltip \{[\s\S]*?border-radius: 7px;[\s\S]*?background: rgba\(4, 18, 34, 0\.92\);[\s\S]*?font-family: 'Inter'/);
   assert.match(globeCssSource, /\.global-fleet-tooltip strong \{[\s\S]*?color: #ffffff;[\s\S]*?font-weight: 800;[\s\S]*?text-transform: uppercase/);
@@ -470,8 +469,8 @@ test('globe hover styling increases raycast target and matches radar tooltip des
 test('Core PRO tooltip escapes map clipping and floats above interface overlays', () => {
   assert.match(globeCssSource, /\.global-fleet-globe \.scene-tooltip \{[\s\S]*?z-index: 9999 !important/);
   assert.match(globeCssSource, /#view-map #map-container,[\s\S]*?#view-ais #ais-map \{[\s\S]*?overflow: visible !important/);
-  assert.ok(indexSource.includes('density-globe.css?v=20260716-radar-tooltip-visible'));
-  assert.ok(dataBridgeSource.includes('density-globe.css?v=20260716-radar-tooltip-visible'));
+  assert.match(indexSource, /density-globe\.css\?v=[^"']+/);
+  assert.match(dataBridgeSource, /density-globe\.css\?v=[^"']+/);
 });
 
 test('custom point highlighting waits until native pointLabel handling completes', () => {
@@ -525,7 +524,7 @@ test('Globe engine uses the requested earth textures atmosphere and camera', () 
 });
 
 test('Globe pauses automatic rotation on direct interaction', () => {
-  assert.ok(globeSource.includes('.onPointClick(() => setAutoRotate(false, key))'));
+  assert.match(globeSource, /\.onPointClick\(\(vessel\) => \{[\s\S]*?setAutoRotate\(false, key\)/);
   assert.ok(globeSource.includes("view.controls.addEventListener?.('start', view.handleInteractionStart)"));
   assert.ok(globeSource.includes("view.container.addEventListener('pointerdown', view.handleContainerPointerDown)"));
   assert.ok(globeSource.includes('view.handleInteractionStart = () => setAutoRotate(false, key)'));

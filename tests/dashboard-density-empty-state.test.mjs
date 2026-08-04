@@ -38,7 +38,7 @@ test('density module blocks automatic AIS reads until POL coordinates exist', ()
 
 test('density globe starts from a neutral global camera without a POL', () => {
   assert.match(indexSource, /initialView: densityPolCoordinates[\s\S]*\{ lat: 20, lng: 0, altitude: 2\.45 \}/);
-  assert.match(indexSource, /const openShipsData = densityPolCoordinates[\s\S]*\? getDensityMapSourceVessels\(\)[\s\S]*: \[\]/);
+  assert.match(indexSource, /const displayVessels = densityPolCoordinates[\s\S]*\? getDensityMapSourceVessels\(\)[\s\S]*: \[\]/);
   assert.match(indexSource, /setView\(\[20\.0, 0\.0\], 2\)/);
   assert.match(globeSource, /function normalizeInitialView\(value\)/);
   assert.match(globeSource, /const initialView = normalizeInitialView\(options\.initialView\)/);
