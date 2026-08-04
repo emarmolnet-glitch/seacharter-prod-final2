@@ -8,9 +8,9 @@ const saveHandlerStart = source.indexOf("document.getElementById('btn-save-taxon
 const saveHandlerEnd = source.indexOf('const initialTaxonomies =', saveHandlerStart);
 const saveHandlerSource = source.slice(saveHandlerStart, saveHandlerEnd);
 
-test('matching button starts locked until taxonomy or calculator context is available', () => {
+test('matching button stays locked until real vessel results are available', () => {
   assert.match(source, /id="btn-run-matching"[^>]*disabled[^>]*data-matching-ready="false"[^>]*data-ready-vessel-count="0"/);
-  assert.match(source, /matchingSelectionPending \|\| \(!hasMatchingRequest && count === 0 && !hasLocalTaxonomyQuery\)/);
+  assert.match(source, /!hasActiveCalculation \|\| matchingSelectionPending \|\| count === 0/);
   assert.match(source, /Guarda los cambios de taxonomía para activar el motor/);
 });
 
@@ -48,13 +48,13 @@ test('taxonomy change redraws the AIS table from the derived filtered array', ()
   assert.match(source, /const tbody = document\.getElementById\('ais-vessels-tbody'\)[\s\S]*primaryVisibleVessels\.forEach/);
 });
 
-test('matching engine listener enables a local database query without radar vessels', () => {
+test('matching engine listener prepares the query but keeps execution locked without radar vessels', () => {
   assert.match(source, /window\.addEventListener\('READY_FOR_MATCHING', handleReadyForMatching\)/);
   assert.match(source, /const matchingVessels = Array\.isArray\(store\.matchingSelection\?\.vessels\)/);
-  assert.match(source, /button\.dataset\.matchingReady = 'true'/);
-  assert.match(source, /button\.dataset\.readyVesselCount = String\(vesselCount\)/);
+  assert.match(source, /syncMatchingButtonWithCachedResults\(vesselCount\)/);
+  assert.match(source, /const hasActiveCalculation = Boolean\(window\.getActiveMatchingCalculationState\?\.\(\)\)/);
   assert.match(source, /resultsBadge\.innerText = 'Consulta triple lista'/);
-  assert.match(source, /Consulta unificada MASTER, DATABRIDGE y AIS_LIVE/);
+  assert.match(source, /Ejecute un barrido Radar para cargar buques antes de buscar coincidencias/);
   assert.match(source, /resultsBadge\.dataset\.counterSource = 'ready-for-matching'/);
 });
 

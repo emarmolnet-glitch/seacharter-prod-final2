@@ -30,10 +30,16 @@ test('OpenShips technical data is enriched by IMO before source merging', () => 
   assert.match(matchingSource, /openShipsEnrichment: openShipsEnrichment\.diagnostics/);
 });
 
-test('OpenShips live status returns the current vessel snapshot for density initialization', () => {
+test('OpenShips live status returns a real POL-scoped vessel snapshot', () => {
+  assert.match(openShipsStatusSource, /parseAisGeofence\(url\)/);
   assert.match(openShipsStatusSource, /SELECT DISTINCT ON \(COALESCE\(NULLIF\(mmsi::text, ''\), vessel_key\)\)/);
+  assert.match(openShipsStatusSource, /AS distance_nm/);
+  assert.match(openShipsStatusSource, /WHERE distance_nm <= \$8/);
   assert.match(openShipsStatusSource, /'source_origin', 'OPENSHIPS'/);
-  assert.match(openShipsStatusSource, /\{ recent_vessels: vessels\.length, vessels \}/);
+  assert.match(openShipsStatusSource, /source: "OPENSHIPS"/);
+  assert.match(openShipsStatusSource, /openshipsCount: vessels\.length/);
+  assert.match(openShipsStatusSource, /geofence: geofence/);
+  assert.match(indexSource, /fetch\(`\/api\/openships\/live-status\?\$\{params\.toString\(\)\}`/);
   assert.match(indexSource, /window\.openShipsVesselsCache = Array\.isArray\(payload\?\.vessels\)/);
   assert.match(indexSource, /window\.updateOpenShipsRadar = updateOpenShipsRadar/);
 });

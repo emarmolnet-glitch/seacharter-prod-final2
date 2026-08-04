@@ -46,8 +46,10 @@ test('local telemetry reads matching state without applying calculator context',
   const restoreSource = source.slice(restoreStart, restoreEnd);
 
   assert.match(pendingSource, /fetchMatchingRequestFromGlobalStore\([\s\S]*\{ applyToContext: false, persist: false \}/);
-  assert.match(pendingSource, /window\.getActiveMatchingRoutingRoute\?\.\(\)/);
-  assert.match(restoreSource, /window\.getActiveMatchingRoutingRoute\?\.\(\) \|\| calculatedState\.route/);
+  assert.match(pendingSource, /window\.getActiveMatchingCalculationState\?\.\(\)/);
+  assert.match(pendingSource, /window\.syncMatchingRouteSummary\?\.\(activeCalculation\)/);
+  assert.match(restoreSource, /window\.getActiveMatchingCalculationState\?\.\(\)/);
+  assert.match(restoreSource, /window\.clearMatchingCandidateState\?\.\(\)/);
 });
 
 test('calculator synchronization cannot replace an active spatial route', () => {
