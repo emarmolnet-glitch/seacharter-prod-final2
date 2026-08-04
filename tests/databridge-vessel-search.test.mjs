@@ -50,4 +50,7 @@ test('databridge-vessel-search function queries vessels_master for EN_CARTERA an
   assert.match(searchFunctionSource, /vessel_name ILIKE \$2/);
   assert.match(searchFunctionSource, /status = 'EN_CARTERA'/);
   assert.match(searchFunctionSource, /validation_status = 'VALIDADO'/);
+  assert.match(searchFunctionSource, /COALESCE\(status, ''\)[\s\S]*NOT IN \('PENDING', 'PENDING_AUDIT'\)/);
+  assert.match(searchFunctionSource, /COALESCE\(audit_status, ''\)[\s\S]*NOT IN \('PENDING', 'IN_DUE_DILIGENCE', 'REJECTED'\)/);
+  assert.match(searchFunctionSource, /COALESCE\(process_status, ''\)[\s\S]*NOT IN \('PENDING_REVIEW', 'DUE_DILIGENCE'\)/);
 });

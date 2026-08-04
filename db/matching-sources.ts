@@ -67,8 +67,11 @@ export async function listPaginatedMatchingSources(
           vm.fecha_ultima_actualizacion AS sort_at,
           NULL::double precision AS distance_nm
         FROM vessels_master vm
-        WHERE vm.status = 'EN_CARTERA'
-          OR vm.validation_status = 'VALIDADO'
+        WHERE (vm.status = 'EN_CARTERA'
+          OR vm.validation_status = 'VALIDADO')
+          AND UPPER(COALESCE(vm.status, '')) NOT IN ('PENDING', 'PENDING_AUDIT')
+          AND UPPER(COALESCE(vm.audit_status, '')) NOT IN ('PENDING', 'IN_DUE_DILIGENCE', 'REJECTED')
+          AND UPPER(COALESCE(vm.process_status, '')) NOT IN ('PENDING_REVIEW', 'DUE_DILIGENCE')
 
         UNION ALL
 
@@ -193,8 +196,11 @@ export async function listDataBridgePortfolioVessels(limit = 2000) {
     `
       SELECT ${DATA_BRIDGE_COLUMNS}
       FROM vessels_master
-      WHERE status = 'EN_CARTERA'
-        OR validation_status = 'VALIDADO'
+      WHERE (status = 'EN_CARTERA'
+        OR validation_status = 'VALIDADO')
+        AND UPPER(COALESCE(status, '')) NOT IN ('PENDING', 'PENDING_AUDIT')
+        AND UPPER(COALESCE(audit_status, '')) NOT IN ('PENDING', 'IN_DUE_DILIGENCE', 'REJECTED')
+        AND UPPER(COALESCE(process_status, '')) NOT IN ('PENDING_REVIEW', 'DUE_DILIGENCE')
       ORDER BY fecha_ultima_actualizacion DESC NULLS LAST
       LIMIT $1
     `,

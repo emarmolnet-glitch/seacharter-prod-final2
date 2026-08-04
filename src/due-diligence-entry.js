@@ -498,12 +498,26 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         return NON_COMMERCIAL_VESSEL_PATTERN.test(readText(vesselType));
     }
 
+    function getProposalReviewTarget(card = null) {
+        const sidePanel = globalScope.document?.getElementById('due-diligence-side-panel');
+        const sidePanelContent = globalScope.document?.getElementById('due-diligence-side-panel-content');
+        const isRankingRecommendation = card?.matches?.('[data-vessel-recommendation="true"]') === true;
+        if (isRankingRecommendation && sidePanel && sidePanelContent) {
+            return { review: sidePanelContent, panel: sidePanel };
+        }
+        return { review: card?.querySelector('[data-due-diligence-review]') || null, panel: null };
+    }
+
     function clearProposalReview(card, key) {
         if (key) pendingProposals.delete(key);
-        const review = card?.querySelector('[data-due-diligence-review]');
+        const { review, panel } = getProposalReviewTarget(card);
         if (review) {
             review.replaceChildren();
             review.classList.add('hidden');
+        }
+        if (panel) {
+            panel.classList.add('hidden');
+            panel.setAttribute('aria-hidden', 'true');
         }
     }
 
@@ -543,7 +557,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
     }
 
     function renderProposalReview(card, key, proposals, technical = {}) {
-        const review = card?.querySelector('[data-due-diligence-review]');
+        const { review, panel } = getProposalReviewTarget(card);
         if (!review || !globalScope.document) return false;
         const safeTechnical = technical && typeof technical === 'object' ? technical : {};
         const safeProposals = Array.isArray(proposals) ? proposals.filter(proposal => proposal && typeof proposal === 'object') : [];
@@ -569,28 +583,34 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         ];
 
         review.replaceChildren();
-        review.className = 'mt-3 overflow-hidden rounded-xl border border-cyan-200 bg-white shadow-[0_12px_30px_-24px_rgba(8,145,178,0.8)]';
+        review.className = 'min-w-0 w-full break-words bg-white';
         review.setAttribute('role', 'region');
         review.setAttribute('aria-label', 'Panel de validación Due Diligence');
         review.dataset.dueDiligenceExpanded = 'true';
+        if (panel) {
+            panel.classList.remove('hidden');
+            panel.setAttribute('aria-hidden', 'false');
+            panel.scrollTop = 0;
+        }
 
         const header = globalScope.document.createElement('div');
         header.className = 'flex items-start justify-between gap-3 border-b border-cyan-100 bg-gradient-to-r from-cyan-50 via-white to-emerald-50 px-4 py-3';
         const heading = globalScope.document.createElement('div');
+        heading.className = 'min-w-0 flex-1';
         const title = globalScope.document.createElement('p');
-        title.className = 'text-[11px] font-black uppercase tracking-[0.12em] text-cyan-950';
+        title.className = 'break-words text-[11px] font-black uppercase tracking-[0.12em] text-cyan-950';
         title.textContent = 'Due Diligence · Validación técnica';
         const subtitle = globalScope.document.createElement('p');
-        subtitle.className = 'mt-1 text-[10px] font-semibold text-slate-500';
+        subtitle.className = 'mt-1 break-words text-[10px] font-semibold text-slate-500';
         subtitle.textContent = `${safeProposals.length} campo${safeProposals.length === 1 ? '' : 's'} contrastado${safeProposals.length === 1 ? '' : 's'} con fuentes externas.`;
         heading.append(title, subtitle);
         const stateBadge = globalScope.document.createElement('span');
-        stateBadge.className = 'shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-amber-800';
+        stateBadge.className = 'max-w-[9rem] shrink-0 truncate rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-amber-800';
         stateBadge.textContent = 'Pendiente de guardar';
         header.append(heading, stateBadge);
 
         const dictionary = globalScope.document.createElement('dl');
-        dictionary.className = 'grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3';
+        dictionary.className = 'grid min-w-0 grid-cols-1 gap-2 p-3 sm:grid-cols-2';
         dictionary.dataset.dueDiligenceTechnicalGrid = 'true';
         dataFields.forEach(field => {
             const item = globalScope.document.createElement('div');
@@ -609,7 +629,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
 
         if (commerciallyBlocked) {
             const warning = globalScope.document.createElement('p');
-            warning.className = 'mx-3 mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[10px] font-black text-red-800';
+            warning.className = 'mx-3 mb-3 break-words rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[10px] font-black text-red-800 sm:col-span-2';
             warning.textContent = `BUQUE NO COMERCIAL DETECTADO: ${safeTechnical.vesselType || 'tipo no apto'}`;
             dictionary.append(warning);
         }
@@ -876,6 +896,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
                 technical: { ...technical },
                 proposals: review.proposals.map(proposal => ({ ...proposal })),
                 match: review.match,
+                card,
                 commerciallyBlocked: isNonCommercialVesselType(technical.vesselType),
             });
             renderProposalReview(card, key, review.proposals, technical);
@@ -913,8 +934,10 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             event.stopPropagation();
             event.stopImmediatePropagation();
             const actionButton = acceptButton || rejectButton;
-            const card = actionButton.closest('[data-matching-result-card="true"], [data-matching-cache-card="true"], [data-vessel-recommendation="true"]');
             const key = acceptButton?.dataset.dueDiligenceAccept || rejectButton?.dataset.dueDiligenceReject || '';
+            const card = actionButton.closest('[data-matching-result-card="true"], [data-matching-cache-card="true"], [data-vessel-recommendation="true"]')
+                || pendingProposals.get(key)?.card
+                || null;
             if (acceptButton) void acceptPendingProposal(key, card, acceptButton);
             else rejectPendingProposal(key, card);
             return;

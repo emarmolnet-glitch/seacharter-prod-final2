@@ -36,6 +36,9 @@ test('local matching click reads calculation context without replacing the activ
 test('current-session matching cache prevents synchronization and AIS resets', () => {
   assert.match(source, /function hasCurrentSessionMatchingCache\(\)/);
   assert.match(source, /cacheState\.sessionId === session\.sessionId/);
+  assert.match(source, /cachedCalculationId === currentCalculationId/);
+  assert.doesNotMatch(source, /cacheState\.sessionId = session\.sessionId/);
+  assert.match(source, /previousCalculationIdentity !== nextCalculationIdentity[\s\S]*clearMatchingCandidateState\(\)/);
   assert.match(source, /function enforceLocalOnlyMatchingMode\(options = \{\}\)/);
   assert.match(source, /!preserveSynchronization && typeof window\.keepRadarSynchronizationPending/);
   assert.match(source, /restoreMatchingSynchronizationFromCache/);

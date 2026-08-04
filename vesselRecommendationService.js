@@ -29,7 +29,11 @@ export async function fetchVesselRecommendations(cargoRequirements, options = {}
         buildRecommendationsUrl(cargoRequirements, options.baseUrl),
         {
             method: 'GET',
-            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+            headers: {
+                Accept: 'application/json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate'
+            },
             signal: options.signal
         }
     );

@@ -9,7 +9,7 @@ const [dashboardSource, indexSource, globeSource] = await Promise.all([
 ]);
 
 test('executive dashboard renders explicit empty states without legacy voyage defaults', () => {
-  assert.doesNotMatch(dashboardSource, /BEJAIA|AVEIRO|NERMIN KARABEKIR|10[.,]000 MT/i);
+  assert.doesNotMatch(dashboardSource, /BEJAIA|AVEIRO|TEST VESSEL ALPHA|10[.,]000 MT/i);
   assert.match(dashboardSource, /function displayText\(value\)/);
   assert.match(dashboardSource, /const hasVesselData = Boolean\(vesselName \|\| vesselImo\)/);
   assert.match(dashboardSource, /const hasRouteData = Boolean\(loadPort && dischargePort\)/);

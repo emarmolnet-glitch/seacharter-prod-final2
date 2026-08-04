@@ -8,9 +8,11 @@ const preflightStart = source.indexOf('function getCachedMatchingResultsForPrefl
 const preflightEnd = source.indexOf('// --- AISLAMIENTO STRICTO DE TABS ---', preflightStart);
 const preflightSource = source.slice(preflightStart, preflightEnd);
 
-test('density map preflight reads matching caches in priority order without HTTP', () => {
+test('density map preflight reads only the validated current-calculation cache without HTTP', () => {
   assert.ok(preflightStart >= 0 && preflightEnd > preflightStart);
-  assert.match(preflightSource, /window\.matchingResultsState\?\.vessels,[\s\S]*window\.lastMatchingEngineResults,[\s\S]*executionCache\.compatibleVessels,[\s\S]*executionCache\.nearbyVessels/);
+  assert.match(preflightSource, /window\.hasCurrentSessionMatchingCache\?\.\(\) !== true/);
+  assert.match(preflightSource, /const validatedMatches = Array\.isArray\(window\.matchingResultsState\?\.vessels\)/);
+  assert.doesNotMatch(preflightSource, /executionCache\.compatibleVessels|executionCache\.nearbyVessels/);
   assert.doesNotMatch(preflightSource, /fetch\s*\(/);
   assert.match(preflightSource, /return \{ hydrated, count: cachedMatches\.length, requested: false \}/);
 });
@@ -37,9 +39,9 @@ test('cached matches hydrate the table, badge, button and shared state', () => {
   assert.match(preflightSource, /resultsList\.dataset\.matchingHydrated = 'true'/);
   assert.match(preflightSource, /resultsBadge\.innerText = `\$\{cachedCount\} Buque/);
   assert.match(preflightSource, /button\.dataset\.matchingResultCount = String\(count\)/);
-  assert.match(preflightSource, /window\.GlobalStore\.matchingVessels = matches\.slice\(\)/);
-  assert.match(preflightSource, /window\.GlobalStore\.compatibleVessels = matches\.filter/);
-  assert.match(preflightSource, /window\.lastClassifiedVessels = matches\.map/);
+  assert.match(preflightSource, /window\.GlobalStore\.matchingVessels = renderedMatches\.slice\(\)/);
+  assert.match(preflightSource, /window\.GlobalStore\.compatibleVessels = renderedMatches\.filter/);
+  assert.match(preflightSource, /window\.lastClassifiedVessels = renderedMatches\.map/);
 });
 
 test('live matching cache refreshes the active density map without a new request', () => {
