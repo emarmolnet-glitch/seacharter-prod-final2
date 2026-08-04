@@ -18,19 +18,23 @@ test("Drizzle baseline stays ahead of the installed production migration", async
 });
 
 test("Drizzle metadata and generation strategy use the timestamp baseline", async () => {
-  const journal = JSON.parse(
-    await readFile(new URL("meta/_journal.json", migrationsUrl), "utf8"),
+  const baselineSnapshot = JSON.parse(
+    await readFile(
+      new URL(`${baselineTag}/snapshot.json`, migrationsUrl),
+      "utf8",
+    ),
   );
   const drizzleConfig = await readFile(
     new URL("../drizzle.config.ts", import.meta.url),
     "utf8",
   );
   const baselineSql = await readFile(
-    new URL(`${baselineTag}.sql`, migrationsUrl),
+    new URL(`${baselineTag}/migration.sql`, migrationsUrl),
     "utf8",
   );
 
-  assert.equal(journal.entries.at(-1)?.tag, baselineTag);
+  assert.equal(baselineSnapshot.version, "8");
+  assert.equal(baselineSnapshot.dialect, "postgres");
   assert.match(drizzleConfig, /prefix:\s*["']timestamp["']/);
   assert.match(baselineSql, /to_regclass/);
   assert.doesNotMatch(baselineSql, /CREATE TABLE/);

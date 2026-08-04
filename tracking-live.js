@@ -1,3 +1,5 @@
+import { calculateLaytime } from './laytime-engine.mjs';
+
 const TRACKING_POLL_INTERVAL = 30_000;
 const TRACKING_AIS_POLL_INTERVAL = 30_000;
 const TRACKING_MAP_KEY = 'tracking';
@@ -16,6 +18,8 @@ const trackingState = {
     basicVessel: null,
     routeDistance: null,
     routes: { ballast: [], laden: [] },
+    laytimeStatements: [],
+    laytimeIncidents: [],
 };
 
 function escapeTrackingHtml(value) {
@@ -52,6 +56,20 @@ function formatTrackingTime(value) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return String(value);
     return new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(date);
+}
+
+function toTrackingDateTimeLocal(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const offset = date.getTimezoneOffset() * 60_000;
+    return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function trackingLocalDateToIso(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function asTrackingArray(value) {
@@ -608,6 +626,8 @@ function renderManualTrackingState(totalDistance = trackingState.routeDistance) 
 function clearTrackingContract(message = 'Modo ruta libre activo. El contrato es opcional.') {
     trackingState.contractRef = '';
     trackingState.data = null;
+    trackingState.laytimeStatements = [];
+    trackingState.laytimeIncidents = [];
     window.clearInterval(trackingState.pollTimer);
     trackingState.pollTimer = null;
     syncBasicVesselMap();
@@ -641,7 +661,12 @@ function syncTrackingMap(data) {
 function renderTrackingMapChrome(data) {
     const contract = data.contract || {};
     const live = data.live || {};
-    const alerts = asTrackingArray(data.alerts);
+    const laytimeAlerts = trackingState.laytimeStatements
+        .filter((statement) => statement?.calculation?.status === 'ON_DEMURRAGE' || asTrackingArray(statement?.calculation?.missingCritical).length)
+        .map((statement) => statement.calculation.status === 'ON_DEMURRAGE'
+            ? { level: 'critical', title: `${statement.operation === 'LOAD' ? 'POL' : 'POD'} ON DEMURRAGE`, detail: `USD ${formatTrackingNumber(statement.calculation.demurrageUsd, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} acumulados. Balance ${statement.calculation.balanceLabel}.` }
+            : { level: 'warning', title: `Plancha ${statement.operation === 'LOAD' ? 'POL' : 'POD'} incompleta`, detail: `Faltan: ${asTrackingArray(statement.calculation.missingCritical).join(', ')}` });
+    const alerts = [...asTrackingArray(data.alerts), ...laytimeAlerts];
     const position = normalizeMapPoint(live.position);
     const pol = contract.pol || {};
     const pod = contract.pod || {};
@@ -677,10 +702,194 @@ function renderTrackingAnalytics(data) {
                 ${milestones.map((milestone) => `<article class="tracking-step ecosystem-panel" data-status="${escapeTrackingHtml(milestone.status)}"><div class="tracking-step-head"><span class="tracking-step-number">0${escapeTrackingHtml(milestone.phase)}</span><span class="tracking-step-status">${escapeTrackingHtml(trackingStatusLabel(milestone.status))}</span></div><h3>${escapeTrackingHtml(milestone.title)}</h3><div class="tracking-step-metrics">${renderMilestoneMetrics(milestone)}</div></article>`).join('')}
             </div>
         </section>
+        <section class="tracking-laytime-panel ecosystem-panel">
+            <div class="tracking-section-heading"><div><span>03 / Laytime desk</span><h2>Plancha y demoras</h2></div><p>Cálculo contractual por segundos · SHINC/SHEX · Weather Permitting</p></div>
+            <div id="tracking-laytime-workspace" class="tracking-laytime-workspace"><div class="tracking-laytime-loading">Cargando estado de plancha…</div></div>
+        </section>
         <section class="tracking-asset-panel ecosystem-panel">
-            <div class="tracking-section-heading"><div><span>03 / Auditable record</span><h2>Asset Trail</h2></div><p>Últimos eventos operativos · actualizado ${escapeTrackingHtml(formatTrackingDate(data.generatedAt))}</p></div>
+            <div class="tracking-section-heading"><div><span>04 / Auditable record</span><h2>Asset Trail</h2></div><p>Últimos eventos operativos · actualizado ${escapeTrackingHtml(formatTrackingDate(data.generatedAt))}</p></div>
             <div class="tracking-timeline">${timeline.length ? timeline.map(renderTrackingEvent).join('') : '<div class="tracking-timeline-empty">Los eventos de geofence, NOR, carga, travesía y descarga aparecerán aquí conforme sean registrados.</div>'}</div>
         </section>`;
+    void loadLaytimeStatements(data);
+}
+
+function laytimeStatementFor(operation) {
+    return trackingState.laytimeStatements.find((statement) => statement.operation === operation) || null;
+}
+
+function laytimeDefaultValue(data, operation, key) {
+    const statement = laytimeStatementFor(operation);
+    if (statement?.[key] !== null && statement?.[key] !== undefined) return statement[key];
+    const contract = data?.contract || {};
+    const commercial = contract.commercial || {};
+    const isLoad = operation === 'LOAD';
+    const defaults = {
+        quantityMt: contract.cargoQuantityMt || '',
+        rateMtDay: isLoad ? commercial.loadingRateMtDay : commercial.dischargeRateMtDay,
+        allowedHours: '',
+        laytimeRule: commercial.laytimeRule || commercial.laytimeTerms || 'SHINC',
+        weatherPermitting: commercial.weatherPermitting !== false,
+        onceOnDemurrage: true,
+        commencementDelayMinutes: commercial.commencementDelayMinutes || 0,
+        portTimeZone: '',
+        demurrageRateUsdDay: commercial.demurrageRateUsdDay || commercial.demurrageRate || data?.live?.demurrageRateUsdDay || '',
+        norTenderedAt: isLoad ? data?.milestones?.[1]?.metrics?.tenderedAt : data?.milestones?.[4]?.metrics?.tenderedAt,
+        norAcceptedAt: isLoad ? data?.milestones?.[1]?.metrics?.acceptedAt : data?.milestones?.[4]?.metrics?.acceptedAt,
+        laytimeCommencedAt: isLoad ? data?.milestones?.[1]?.metrics?.laytimeStartedAt : '',
+        operationStartedAt: '',
+        operationCompletedAt: isLoad ? data?.milestones?.[3]?.metrics?.completedAt : data?.milestones?.[5]?.metrics?.closedAt,
+        statementAsOfAt: new Date().toISOString(),
+    };
+    return defaults[key];
+}
+
+function renderLaytimeIncident(incident, index) {
+    return `<article class="tracking-laytime-incident"><div><strong>${escapeTrackingHtml(incident.reason || 'Incidencia operativa')}</strong><span>${escapeTrackingHtml(incident.category || 'OPERATIONAL')} · factor ${formatTrackingNumber(incident.countingFactor ?? 0, { maximumFractionDigits: 2 })}</span></div><time>${escapeTrackingHtml(formatTrackingDate(incident.startAt))} → ${escapeTrackingHtml(formatTrackingDate(incident.endAt))}</time><button type="button" data-laytime-remove-incident="${index}" aria-label="Eliminar incidencia"><i class="fa-solid fa-xmark"></i></button></article>`;
+}
+
+function refreshLaytimeIncidentList() {
+    const target = document.getElementById('tracking-laytime-incidents');
+    if (!target) return;
+    target.innerHTML = trackingState.laytimeIncidents.length
+        ? trackingState.laytimeIncidents.map(renderLaytimeIncident).join('')
+        : '<p>Sin periodos excluibles registrados.</p>';
+    target.querySelectorAll('[data-laytime-remove-incident]').forEach((button) => button.addEventListener('click', () => {
+        trackingState.laytimeIncidents.splice(Number(button.dataset.laytimeRemoveIncident), 1);
+        refreshLaytimeIncidentList();
+        previewLaytime();
+    }));
+}
+
+function collectLaytimeForm() {
+    const form = document.getElementById('tracking-laytime-form');
+    if (!form) return null;
+    const data = new FormData(form);
+    return {
+        operation: String(data.get('operation') || 'LOAD'),
+        quantityMt: Number(data.get('quantityMt')),
+        rateMtDay: data.get('rateMtDay') ? Number(data.get('rateMtDay')) : null,
+        allowedHours: data.get('allowedHours') ? Number(data.get('allowedHours')) : null,
+        laytimeRule: String(data.get('laytimeRule') || 'SHINC'),
+        weatherPermitting: data.get('weatherPermitting') === 'on',
+        onceOnDemurrage: data.get('onceOnDemurrage') === 'on',
+        commencementDelayMinutes: Number(data.get('commencementDelayMinutes') || 0),
+        portTimeZone: String(data.get('portTimeZone') || ''),
+        demurrageRateUsdDay: Number(data.get('demurrageRateUsdDay')),
+        norTenderedAt: trackingLocalDateToIso(data.get('norTenderedAt')),
+        norAcceptedAt: trackingLocalDateToIso(data.get('norAcceptedAt')),
+        laytimeCommencedAt: trackingLocalDateToIso(data.get('laytimeCommencedAt')),
+        operationStartedAt: trackingLocalDateToIso(data.get('operationStartedAt')),
+        operationCompletedAt: trackingLocalDateToIso(data.get('operationCompletedAt')),
+        statementAsOfAt: trackingLocalDateToIso(data.get('statementAsOfAt')) || new Date().toISOString(),
+        incidents: trackingState.laytimeIncidents,
+    };
+}
+
+function renderLaytimeResult(calculation) {
+    const target = document.getElementById('tracking-laytime-result');
+    if (!target) return;
+    const missing = asTrackingArray(calculation?.missingCritical);
+    const demurrage = Number(calculation?.demurrageUsd || 0);
+    target.dataset.status = calculation?.status || 'INCOMPLETE';
+    target.innerHTML = `
+        <div class="tracking-laytime-status"><span>${escapeTrackingHtml(String(calculation?.status || 'INCOMPLETE').replaceAll('_', ' '))}</span><strong>${demurrage > 0 ? `USD ${formatTrackingNumber(demurrage, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Sin demora devengada'}</strong></div>
+        <div class="tracking-laytime-kpis"><div><span>Allowed</span><strong>${escapeTrackingHtml(calculation?.allowedLabel || '—')}</strong></div><div><span>Used</span><strong>${escapeTrackingHtml(calculation?.usedLabel || '—')}</strong></div><div><span>Balance</span><strong>${escapeTrackingHtml(calculation?.balanceLabel || '—')}</strong></div><div><span>Excluido</span><strong>${escapeTrackingHtml(calculation?.excludedLabel || '—')}</strong></div></div>
+        ${calculation?.demurrageStartedAt ? `<p class="tracking-laytime-executive is-critical"><strong>ON DEMURRAGE:</strong> reloj de demora desde ${escapeTrackingHtml(formatTrackingDate(calculation.demurrageStartedAt))}. Coste acumulado pro rata USD ${formatTrackingNumber(demurrage, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.</p>` : '<p class="tracking-laytime-executive">La operación permanece dentro de la plancha permitida con el balance indicado.</p>'}
+        ${missing.length ? `<div class="tracking-laytime-missing"><strong>Datos críticos pendientes</strong><span>${missing.map((item) => escapeTrackingHtml(item.replaceAll('_', ' '))).join(' · ')}</span></div>` : ''}`;
+}
+
+function previewLaytime() {
+    const payload = collectLaytimeForm();
+    if (!payload) return;
+    renderLaytimeResult(calculateLaytime({ ...payload, asOfAt: payload.statementAsOfAt }));
+}
+
+function renderLaytimeWorkspace(data, operation = 'LOAD') {
+    const workspace = document.getElementById('tracking-laytime-workspace');
+    if (!workspace) return;
+    const statement = laytimeStatementFor(operation);
+    trackingState.laytimeIncidents = asTrackingArray(statement?.incidents).map((incident) => ({ ...incident }));
+    const value = (key) => laytimeDefaultValue(data, operation, key);
+    workspace.innerHTML = `
+        <form id="tracking-laytime-form" class="tracking-laytime-form">
+            <div class="tracking-laytime-fields">
+                <label><span>Operación</span><select name="operation"><option value="LOAD" ${operation === 'LOAD' ? 'selected' : ''}>Carga / POL</option><option value="DISCHARGE" ${operation === 'DISCHARGE' ? 'selected' : ''}>Descarga / POD</option></select></label>
+                <label><span>Tonelaje MT</span><input name="quantityMt" type="number" min="0.001" step="0.001" value="${escapeTrackingHtml(value('quantityMt'))}" required></label>
+                <label><span>Tasa MT/día</span><input name="rateMtDay" type="number" min="0" step="0.01" value="${escapeTrackingHtml(value('rateMtDay') || '')}" placeholder="Base contractual"></label>
+                <label><span>Allowed hours</span><input name="allowedHours" type="number" min="0" step="0.001" value="${escapeTrackingHtml(value('allowedHours') || '')}" placeholder="Opcional"></label>
+                <label><span>Régimen</span><select name="laytimeRule"><option value="SHINC" ${String(value('laytimeRule')).toUpperCase().includes('SHEX') ? '' : 'selected'}>SHINC</option><option value="SHEX" ${String(value('laytimeRule')).toUpperCase().includes('SHEX') ? 'selected' : ''}>SHEX</option></select></label>
+                <label><span>Demurrage USD/día</span><input name="demurrageRateUsdDay" type="number" min="0" step="0.01" value="${escapeTrackingHtml(value('demurrageRateUsdDay') || '')}" required></label>
+                <label><span>Delay tras NOR (min)</span><input name="commencementDelayMinutes" type="number" min="0" step="1" value="${escapeTrackingHtml(value('commencementDelayMinutes') || 0)}"></label>
+                <label><span>Zona horaria puerto</span><input name="portTimeZone" type="text" value="${escapeTrackingHtml(value('portTimeZone') || '')}" placeholder="Europe/Madrid para SHEX"></label>
+                <label><span>NOR tendered</span><input name="norTenderedAt" type="datetime-local" value="${toTrackingDateTimeLocal(value('norTenderedAt'))}"></label>
+                <label><span>NOR accepted</span><input name="norAcceptedAt" type="datetime-local" value="${toTrackingDateTimeLocal(value('norAcceptedAt'))}"></label>
+                <label><span>Laytime commenced</span><input name="laytimeCommencedAt" type="datetime-local" value="${toTrackingDateTimeLocal(value('laytimeCommencedAt'))}"></label>
+                <label><span>Operación iniciada</span><input name="operationStartedAt" type="datetime-local" value="${toTrackingDateTimeLocal(value('operationStartedAt'))}"></label>
+                <label><span>Operación finalizada</span><input name="operationCompletedAt" type="datetime-local" value="${toTrackingDateTimeLocal(value('operationCompletedAt'))}"></label>
+                <label><span>Statement as of</span><input name="statementAsOfAt" type="datetime-local" value="${toTrackingDateTimeLocal(value('statementAsOfAt'))}" required></label>
+            </div>
+            <div class="tracking-laytime-switches"><label><input name="weatherPermitting" type="checkbox" ${value('weatherPermitting') !== false ? 'checked' : ''}> Weather Permitting</label><label><input name="onceOnDemurrage" type="checkbox" ${value('onceOnDemurrage') !== false ? 'checked' : ''}> Once on demurrage, always on demurrage</label></div>
+            <div class="tracking-laytime-incident-entry"><div><label><span>Incidencia</span><input id="tracking-incident-reason" type="text" placeholder="Lluvia, avería de cinta, falta de camiones…"></label><label><span>Categoría</span><select id="tracking-incident-category"><option value="OPERATIONAL">Operativa</option><option value="WEATHER">Weather</option><option value="HOLIDAY">Holiday</option><option value="VESSEL">Vessel</option></select></label><label><span>Desde</span><input id="tracking-incident-start" type="datetime-local"></label><label><span>Hasta</span><input id="tracking-incident-end" type="datetime-local"></label><label><span>Factor</span><select id="tracking-incident-factor"><option value="0">0% cuenta</option><option value="0.5">50% cuenta</option><option value="1">100% cuenta</option></select></label></div><button id="tracking-add-incident" type="button"><i class="fa-solid fa-plus"></i> Añadir incidencia</button></div>
+            <div id="tracking-laytime-incidents" class="tracking-laytime-incidents">${trackingState.laytimeIncidents.length ? trackingState.laytimeIncidents.map(renderLaytimeIncident).join('') : '<p>Sin periodos excluibles registrados.</p>'}</div>
+            <div id="tracking-laytime-result" class="tracking-laytime-result"></div>
+            <div class="tracking-laytime-actions"><span id="tracking-laytime-message">${statement ? `Última liquidación guardada ${escapeTrackingHtml(formatTrackingDate(statement.updatedAt))}` : 'Liquidación aún no guardada.'}</span><button type="submit"><i class="fa-solid fa-floppy-disk"></i> Calcular y guardar</button></div>
+        </form>`;
+    const form = document.getElementById('tracking-laytime-form');
+    form?.addEventListener('input', previewLaytime);
+    form?.querySelector('[name="operation"]')?.addEventListener('change', (event) => renderLaytimeWorkspace(data, event.currentTarget.value));
+    document.getElementById('tracking-add-incident')?.addEventListener('click', () => {
+        const reason = document.getElementById('tracking-incident-reason')?.value.trim();
+        const category = document.getElementById('tracking-incident-category')?.value;
+        const startAt = document.getElementById('tracking-incident-start')?.value;
+        const endAt = document.getElementById('tracking-incident-end')?.value;
+        const countingFactor = Number(document.getElementById('tracking-incident-factor')?.value || 0);
+        if (!reason || !startAt || !endAt || new Date(endAt) <= new Date(startAt)) {
+            document.getElementById('tracking-laytime-message').textContent = 'Completa una incidencia con periodo cronológico válido.';
+            return;
+        }
+        trackingState.laytimeIncidents.push({ id: crypto.randomUUID?.() || `incident-${Date.now()}`, reason, category, startAt: trackingLocalDateToIso(startAt), endAt: trackingLocalDateToIso(endAt), countingFactor });
+        refreshLaytimeIncidentList();
+        previewLaytime();
+    });
+    refreshLaytimeIncidentList();
+    form?.addEventListener('submit', (event) => saveLaytimeStatement(event, data));
+    renderLaytimeResult(statement?.calculation || calculateLaytime(collectLaytimeForm()));
+}
+
+async function loadLaytimeStatements(data) {
+    if (!trackingState.contractRef) return;
+    try {
+        const response = await fetch(`/api/v1/voyage/laytime/${encodeURIComponent(trackingState.contractRef)}`, { headers: { Accept: 'application/json' } });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) throw new Error(payload.error || 'No fue posible recuperar la plancha.');
+        trackingState.laytimeStatements = asTrackingArray(payload.statements);
+        renderTrackingMapChrome(data);
+        renderLaytimeWorkspace(data, laytimeStatementFor('LOAD') ? 'LOAD' : laytimeStatementFor('DISCHARGE') ? 'DISCHARGE' : 'LOAD');
+    } catch (error) {
+        const workspace = document.getElementById('tracking-laytime-workspace');
+        if (workspace) workspace.innerHTML = `<div class="tracking-laytime-error">${escapeTrackingHtml(error?.message || 'No fue posible recuperar la plancha.')}</div>`;
+    }
+}
+
+async function saveLaytimeStatement(event, data) {
+    event.preventDefault();
+    const payload = collectLaytimeForm();
+    const message = document.getElementById('tracking-laytime-message');
+    if (!payload || !trackingState.contractRef) return;
+    message.textContent = 'Calculando y guardando liquidación…';
+    try {
+        const response = await fetch(`/api/v1/voyage/laytime/${encodeURIComponent(trackingState.contractRef)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(payload) });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.success) throw new Error(result.error || 'No fue posible guardar la plancha.');
+        const index = trackingState.laytimeStatements.findIndex((statement) => statement.operation === result.statement.operation);
+        if (index >= 0) trackingState.laytimeStatements[index] = result.statement;
+        else trackingState.laytimeStatements.push(result.statement);
+        renderTrackingMapChrome(data);
+        renderLaytimeWorkspace(data, result.statement.operation);
+        document.getElementById('tracking-laytime-message').textContent = 'Liquidación guardada y coste de demora actualizado.';
+    } catch (error) {
+        message.textContent = error?.message || 'No fue posible guardar la plancha.';
+    }
 }
 
 function renderTrackingLoading() {
