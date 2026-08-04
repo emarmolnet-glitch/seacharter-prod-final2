@@ -1100,7 +1100,11 @@
         try {
             const res = await fetch('/api/vessels', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                cache: 'no-store',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache, no-store, must-revalidate'
+                },
                 body: JSON.stringify({ vessel_name: name, mmsi, imo, destination })
             });
             const resData = await res.json();
@@ -1182,25 +1186,5 @@
         window.calculateDistanceToPort = calculateDistanceToPort;
         window.getGeofencedPortDisplay = getGeofencedPortDisplay;
         window.getActivePolInfo = getActivePolInfo;
-
-        window.ejecutarSimulacionRadarTest = function () {
-            console.log("🧪 Iniciando entorno de pruebas: Inyectando 5 buques mercantes...");
-            window.simulacionRadarActiva = true;
-
-            const buquesTest = [
-                { MMSI: 247324000, ShipName: "RODAHMAR CARRIER", AIS_Live_Lat: 36.14, AIS_Live_Lon: -5.35, DWT: 35000, GT: 22000, Draft: 9.5, statusLabel: "En navegación", destination: "ALBARRACÍN", is_estimated: false, isCompatible: true },
-                { MMSI: 224412000, ShipName: "TMM IBERIA TRADER", AIS_Live_Lat: 37.95, AIS_Live_Lon: 12.50, DWT: 42000, GT: 26000, Draft: 10.2, statusLabel: "En navegación", destination: "TAMPA", is_estimated: false, isCompatible: true },
-                { MMSI: 311000123, ShipName: "MED BULKER I", AIS_Live_Lat: 36.50, AIS_Live_Lon: 2.50, DWT: 55000, GT: 31000, Draft: 11.8, statusLabel: "En navegación", destination: "ARGELIA", is_estimated: false, isCompatible: true },
-                { MMSI: 477123400, ShipName: "ATLANTIC GYPSUM", AIS_Live_Lat: 39.50, AIS_Live_Lon: -9.50, DWT: 38000, GT: 24000, Draft: 8.9, statusLabel: "En navegación", destination: "AVEIRO", is_estimated: false, isCompatible: true },
-                { MMSI: 211987600, ShipName: "CEMENT QUEEN", AIS_Live_Lat: 41.35, AIS_Live_Lon: 2.20, DWT: 12000, GT: 85000, Draft: 6.5, statusLabel: "Fondeado", destination: "BARCELONA", is_estimated: false, isCompatible: false }
-            ];
-
-            if (typeof window.MapLoader && typeof window.MapLoader.emitHydrationUpdate === 'function') {
-                window.MapLoader.emitHydrationUpdate(buquesTest, { source: 'sandbox-test', hydrated: true });
-                console.log("✅ Estado global de hidratación actualizado con 5 buques de prueba.");
-            } else {
-                console.warn("⚠️ No se ha podido acceder a MapLoader.emitHydrationUpdate.");
-            }
-        };
     }
 })();

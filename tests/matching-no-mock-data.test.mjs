@@ -3,14 +3,27 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const mapLoaderSource = readFileSync(new URL('../map_loader.js', import.meta.url), 'utf8');
 
 test('matching starts empty and contains no legacy vessel fixtures', () => {
-  assert.doesNotMatch(source, /NERMIN KARABEKIR|VB COGNAC/i);
+  assert.doesNotMatch(source, /TEST VESSEL ALPHA|VB COGNAC/i);
+  assert.doesNotMatch(source, /BARCO FANTASMA/i);
+  assert.doesNotMatch(mapLoaderSource, /buquesTest|ejecutarSimulacionRadarTest|sandbox-test/i);
   assert.match(source, /matchingVessels: \[\]/);
   assert.match(source, /window\.matchingResultsState = \{ vessels: \[\], count: 0/);
   assert.match(source, /window\.lastMatchingEngineResults = \[\]/);
   assert.match(source, /window\.renderedMatchingVessels = \[\]/);
   assert.match(source, /window\.aisMatchingCache = \[\]/);
+  assert.match(source, /window\.openShipsVesselsCache = \[\]/);
+  assert.match(source, /window\.backgroundAisData = \[\]/);
+  assert.match(source, /window\.renderFleet = \[\]/);
+  assert.match(source, /window\.listaBarcos = \[\]/);
+});
+
+test('matching only submits an OpenShips cache loaded by the real endpoint', () => {
+  assert.match(source, /window\.openShipsVesselsCacheLoaded = false/);
+  assert.match(source, /window\.openShipsVesselsCacheLoaded === true[\s\S]*window\.openShipsVesselsCache/);
+  assert.match(source, /window\.openShipsVesselsCacheLoaded = true/);
 });
 
 test('matching empty state gives route-first instructions and renders no result rows', () => {

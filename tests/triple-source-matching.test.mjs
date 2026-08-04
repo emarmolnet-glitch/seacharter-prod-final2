@@ -45,7 +45,10 @@ test('OpenShips live status returns a real POL-scoped vessel snapshot', () => {
 });
 
 test('source query filters Data Bridge, AIS, and OpenShips before applying limit and offset', () => {
-  assert.match(matchingDbSource, /status = 'EN_CARTERA'[\s\S]*OR vm\.validation_status = 'VALIDADO'/);
+  assert.match(matchingDbSource, /\(vm\.status = 'EN_CARTERA'[\s\S]*OR vm\.validation_status = 'VALIDADO'\)/);
+  assert.match(matchingDbSource, /COALESCE\(vm\.status, ''\)[\s\S]*NOT IN \('PENDING', 'PENDING_AUDIT'\)/);
+  assert.match(matchingDbSource, /COALESCE\(vm\.audit_status, ''\)[\s\S]*NOT IN \('PENDING', 'IN_DUE_DILIGENCE', 'REJECTED'\)/);
+  assert.match(matchingDbSource, /COALESCE\(vm\.process_status, ''\)[\s\S]*NOT IN \('PENDING_REVIEW', 'DUE_DILIGENCE'\)/);
   assert.match(matchingDbSource, /FROM ais_vessels/);
   assert.match(matchingDbSource, /audit_status = 'VALIDATED'/);
   assert.match(matchingDbSource, /FROM ais_telemetry_buffer/);

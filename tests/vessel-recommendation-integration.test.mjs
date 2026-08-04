@@ -16,6 +16,8 @@ test('recommendation service sends cargo requirements to the Data Bridge endpoin
       fetchImpl: async (url, options) => {
         requestedUrl = String(url);
         assert.equal(options.method, 'GET');
+        assert.equal(options.cache, 'no-store');
+        assert.equal(options.headers['Cache-Control'], 'no-cache, no-store, must-revalidate');
         return new Response(JSON.stringify([{ vessel_name: 'Baltic Meridian' }]), {
           status: 200,
           headers: { 'content-type': 'application/json' },
@@ -32,10 +34,14 @@ test('recommendation service sends cargo requirements to the Data Bridge endpoin
   assert.equal(payload[0].vessel_name, 'Baltic Meridian');
 });
 
-test('matching UI requests and renders the Data Bridge recommendation fields', () => {
-  assert.match(indexSource, /vesselRecommendationService\.js/);
+test('matching UI renders Data Bridge ranking only from validated matching results', () => {
+  assert.doesNotMatch(indexSource, /vesselRecommendationService\.js/);
   assert.match(indexSource, /Encontrar Match \/ Find Vessels/);
-  assert.match(indexSource, /requestDataBridgeVesselRecommendations\(\{[\s\S]*targetDwt:[\s\S]*vesselType:[\s\S]*loadLat:[\s\S]*loadLon:/);
+  assert.doesNotMatch(indexSource, /requestDataBridgeVesselRecommendations|fetchVesselRecommendations/);
+  assert.match(indexSource, /function getValidatedDataBridgeRecommendationRows\(matches\)/);
+  assert.match(indexSource, /source_origins\.includes\('DATABRIDGE'\)/);
+  assert.match(indexSource, /syncDataBridgeRankingWithMatchingResults\?\.\(displayMatches\)/);
+  assert.match(indexSource, /syncDataBridgeRankingWithMatchingResults\?\.\(\[\]\)/);
   assert.match(indexSource, /\['distance_nm', 'distanceNm', 'distance_to_load_nm'\]/);
   assert.match(indexSource, /\['total_score', 'totalScore', 'score'\]/);
   assert.match(indexSource, /id="databridge-recommendations-body"/);
@@ -70,8 +76,8 @@ test('ranking checkbox activates the estimator and synchronized vessel detail', 
 
 test('ranking fills its container and exposes row-level Due Diligence', () => {
   assert.match(indexSource, /id="databridge-recommendations-panel" class="[^"]*w-full max-w-none/);
-  assert.match(indexSource, /id="databridge-recommendations-table" class="[^"]*w-full overflow-x-auto/);
-  assert.match(indexSource, /class="fleet-ranking-table w-full text-left"/);
+  assert.match(indexSource, /id="ranking-cards-canvas" class="hidden flex-1 min-w-0 overflow-auto" data-matching-result-count="0"/);
+  assert.match(indexSource, /class="fleet-ranking-table w-full min-w-\[1050px\] text-left"/);
   assert.doesNotMatch(indexSource, /fleet-ranking-table w-full min-w-\[1080px\]/);
   assert.match(indexSource, />Verificación</);
   assert.match(indexSource, /class="fleet-ranking-due-button/);

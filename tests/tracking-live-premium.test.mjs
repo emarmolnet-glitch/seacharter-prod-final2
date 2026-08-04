@@ -25,7 +25,7 @@ test('tracking header switches between GIS and the executive laytime dashboard',
   assert.match(scriptSource, /fetch\('\/api\/voyage\/active'/);
   assert.match(scriptSource, /activeVoyageLoading: false/);
   assert.match(scriptSource, /setTrackingFormLoading\(true\)/);
-  assert.doesNotMatch(scriptSource, /RDM\/2026-0604|NERMIN KARABEKIR|name: 'Bejaia'|name: 'Aveiro'/);
+  assert.doesNotMatch(scriptSource, /RDM\/2026-0604|TEST VESSEL ALPHA|name: 'Bejaia'|name: 'Aveiro'/);
   assert.match(activeVoyageEndpointSource, /path: "\/api\/voyage\/active"/);
   assert.match(activeVoyageEndpointSource, /from\(voyagesTracking\)/);
   assert.doesNotMatch(scriptSource, /allowedHours: 72|demurrageRateUSD: 8500/);
@@ -96,7 +96,7 @@ test('tracking GIS HUD and AIS card start empty and render only voyage data', ()
   assert.match(scriptSource, /const routeOrigin = pol\.name \|\| pol\.id \|\| ''/);
   assert.match(scriptSource, /const vesselName = contract\.vesselName \|\| trackingState\.activeVoyage\?\.vesselName \|\| 'Sin buque'/);
   assert.match(scriptSource, /document\.getElementById\('tracking-ais-position'\)\.textContent = position \?/);
-  assert.doesNotMatch(scriptSource, /BEJAIA \(DZ\)|AVEIRO \(PT\)|NERMIN KARABEKIR/);
+  assert.doesNotMatch(scriptSource, /BEJAIA \(DZ\)|AVEIRO \(PT\)|TEST VESSEL ALPHA/);
 });
 
 test('tracking opens with the temporary estimation reference and never auto-fetches a voyage', () => {

@@ -124,6 +124,16 @@ test('Due Diligence uses one external search and persists only after acceptance'
   assert.match(entrySource, /dataFields\.forEach/);
   assert.match(entrySource, /dueDiligenceTechnicalGrid/);
   assert.match(entrySource, /review\.append\(header, dictionary, footer\)/);
+  assert.match(indexSource, /id="ranking-due-diligence-layout" class="flex flex-row w-full h-full gap-4 overflow-hidden relative"/);
+  assert.match(indexSource, /id="ranking-cards-canvas" class="hidden flex-1 min-w-0 overflow-auto"/);
+  assert.match(indexSource, /id="due-diligence-side-panel" class="hidden w-\[450px\] flex-shrink-0 bg-white border-l shadow-lg overflow-y-auto z-10 transition-all duration-300"/);
+  assert.match(entrySource, /function getProposalReviewTarget\(card = null\)/);
+  assert.match(entrySource, /card\?\.matches\?\.\('\[data-vessel-recommendation="true"\]'\) === true/);
+  assert.match(entrySource, /panel\.classList\.remove\('hidden'\)/);
+  assert.match(entrySource, /panel\.classList\.add\('hidden'\)/);
+  assert.match(entrySource, /pendingProposals\.get\(key\)\?\.card/);
+  assert.match(entrySource, /break-words text-\[11px\]/);
+  assert.doesNotMatch(entrySource, /xl:grid-cols-3/);
   assert.doesNotMatch(entrySource, /\/api\/scrape-vessel/);
   assert.doesNotMatch(entrySource, /IndexedDB|localStorage|saveEditedVesselParams|saveVesselToIndexedDB/);
   assert.doesNotMatch(entrySource, /ais:vessels-updated/);
@@ -168,14 +178,14 @@ test('Vite bundles the ES module service and no loose ghost script remains', () 
 test('fetchDueDiligence posts identity and normalizes the complete technical payload', async () => {
   let request = null;
   const result = await serviceModule.fetchDueDiligence(
-    { imo: 'IMO PENDING', mmsi: '224123456', vesselName: 'NERMIN KARABEKIR' },
+    { imo: 'IMO PENDING', mmsi: '224123456', vesselName: 'TEST VESSEL ALPHA' },
     {
       fetchImpl: async (url, options) => {
         request = { url, options };
         return new Response(JSON.stringify({
           success: true,
           data: {
-            vessel_name: 'NERMIN KARABEKIR',
+            vessel_name: 'TEST VESSEL ALPHA',
             imo_number: '9876543',
             mmsi: '224123456',
             dwt: 10_953,
@@ -203,11 +213,11 @@ test('fetchDueDiligence posts identity and normalizes the complete technical pay
   assert.deepEqual(JSON.parse(request.options.body), {
     imo: '',
     mmsi: '224123456',
-    vesselName: 'NERMIN KARABEKIR',
+    vesselName: 'TEST VESSEL ALPHA',
     externalOnly: true,
   });
   assert.deepEqual(result.data, {
-    vesselName: 'NERMIN KARABEKIR',
+    vesselName: 'TEST VESSEL ALPHA',
     imo: '9876543',
     mmsi: '224123456',
     dwt: 10_953,
@@ -238,7 +248,7 @@ test('backend external audit bypasses Neon cache and waits for explicit acceptan
 
 test('frontend normalization recognizes external labels for flag, length, and vessel type', () => {
   const normalized = serviceModule.normalizeDueDiligenceData({
-    'Vessel Name': 'NERMIN KARABEKIR',
+    'Vessel Name': 'TEST VESSEL ALPHA',
     IMO: '9876543',
     MMSI: '224123456',
     DWT: '10,953 MT',
@@ -256,7 +266,7 @@ test('frontend normalization recognizes external labels for flag, length, and ve
     'Navigation Status': 'Under way using engine',
   });
   assert.deepEqual(normalized, {
-    vesselName: 'NERMIN KARABEKIR',
+    vesselName: 'TEST VESSEL ALPHA',
     imo: '9876543',
     mmsi: '224123456',
     dwt: 10_953,
@@ -302,7 +312,7 @@ test('frontend normalization recognizes external labels for flag, length, and ve
 
 test('persistDueDiligenceVessel sends the consolidated vessel through PUT', async () => {
   let request = null;
-  const vessel = { imo: '9876543', vesselName: 'NERMIN KARABEKIR', dwt: 10_953, audit_status: 'PENDING' };
+  const vessel = { imo: '9876543', vesselName: 'TEST VESSEL ALPHA', dwt: 10_953, audit_status: 'PENDING' };
   const result = await serviceModule.persistDueDiligenceVessel(vessel, {
     fetchImpl: async (url, options) => {
       request = { url, options };
@@ -517,8 +527,8 @@ test('store hydration updates matching and OpenShips records and clears missing-
 
 test('hydration re-evaluates DWT warnings against cargo quantity', () => {
   const match = {
-    vessel: { mmsi: '224123456', vesselName: 'NERMIN KARABEKIR', dwt: 0, dwtStatus: null, vesselType: 'General Cargo' },
-    ais: { mmsi: '224123456', vesselName: 'NERMIN KARABEKIR' },
+    vessel: { mmsi: '224123456', vesselName: 'TEST VESSEL ALPHA', dwt: 0, dwtStatus: null, vesselType: 'General Cargo' },
+    ais: { mmsi: '224123456', vesselName: 'TEST VESSEL ALPHA' },
     hasTechnicalWarning: true,
     compatibility: { taxonomyCompatible: true, draftOk: true, loaOk: true, dateOk: true, reasons: { capacity: 'DWT 0 MT inferior a la carga' } },
     technicalEligibility: {
@@ -537,7 +547,7 @@ test('hydration re-evaluates DWT warnings against cargo quantity', () => {
   });
 
   bridge.hydrateStores(
-    { mmsi: '224123456', name: 'NERMIN KARABEKIR' },
+    { mmsi: '224123456', name: 'TEST VESSEL ALPHA' },
     { imo: '9876543', dwt: 10_953, flag: 'Türkiye', yearBuilt: 2012, draft: 7.4 },
   );
 
@@ -556,14 +566,14 @@ test('proposal review persists first and hydrates the Store only after HTTP succ
   const match = {
     vessel: {
       mmsi: '224123456',
-      vesselName: 'NERMIN KARABEKIR',
+      vesselName: 'TEST VESSEL ALPHA',
       imo: 'PENDING',
       dwt: 0,
       flag: '',
       vesselType: 'Unknown',
       yearBuilt: null,
     },
-    ais: { mmsi: '224123456', vesselName: 'NERMIN KARABEKIR' },
+    ais: { mmsi: '224123456', vesselName: 'TEST VESSEL ALPHA' },
     hasTechnicalWarning: true,
     compatibility: { taxonomyCompatible: true, draftOk: true, loaOk: true, dateOk: true, reasons: {} },
     technicalEligibility: {
@@ -587,7 +597,7 @@ test('proposal review persists first and hydrates the Store only after HTTP succ
       return { success: true, vessel };
     },
   });
-  const identity = { mmsi: '224123456', name: 'NERMIN KARABEKIR' };
+  const identity = { mmsi: '224123456', name: 'TEST VESSEL ALPHA' };
   const technical = {
     imo: '9876543',
     dwt: 10_953,
@@ -626,8 +636,8 @@ test('proposal review persists first and hydrates the Store only after HTTP succ
 
 test('failed Neon persistence leaves the Store untouched and keeps proposals available', async () => {
   const match = {
-    vessel: { mmsi: '224123456', vesselName: 'NERMIN KARABEKIR', imo: 'PENDING', dwt: 0, vesselType: 'Unknown' },
-    ais: { mmsi: '224123456', vesselName: 'NERMIN KARABEKIR' },
+    vessel: { mmsi: '224123456', vesselName: 'TEST VESSEL ALPHA', imo: 'PENDING', dwt: 0, vesselType: 'Unknown' },
+    ais: { mmsi: '224123456', vesselName: 'TEST VESSEL ALPHA' },
     hasTechnicalWarning: true,
     compatibility: { taxonomyCompatible: true, draftOk: true, loaOk: true, dateOk: true, reasons: { capacity: 'DWT 0 MT inferior a la carga' } },
     technicalEligibility: {
@@ -647,7 +657,7 @@ test('failed Neon persistence leaves the Store untouched and keeps proposals ava
     __persistDueDiligenceVessel: async () => { throw new Error('Neon no disponible'); },
     showToast: (message, _spinner, variant) => notifications.push({ message, variant }),
   });
-  const identity = { mmsi: '224123456', name: 'NERMIN KARABEKIR' };
+  const identity = { mmsi: '224123456', name: 'TEST VESSEL ALPHA' };
   const technical = { imo: '9876543', dwt: 10_953, flag: 'Barbados', vesselType: 'General Cargo', yearBuilt: 2011 };
   const review = bridge.buildProposals(identity, technical);
   const key = bridge.proposalKey(identity);

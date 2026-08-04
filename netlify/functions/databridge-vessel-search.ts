@@ -88,7 +88,10 @@ export default async (req: Request) => {
             audit_source,
             source_payload
           FROM vessels_master
-          WHERE status = 'EN_CARTERA' OR validation_status = 'VALIDADO'
+          WHERE (status = 'EN_CARTERA' OR validation_status = 'VALIDADO')
+            AND UPPER(COALESCE(status, '')) NOT IN ('PENDING', 'PENDING_AUDIT')
+            AND UPPER(COALESCE(audit_status, '')) NOT IN ('PENDING', 'IN_DUE_DILIGENCE', 'REJECTED')
+            AND UPPER(COALESCE(process_status, '')) NOT IN ('PENDING_REVIEW', 'DUE_DILIGENCE')
           ORDER BY fecha_ultima_actualizacion DESC NULLS LAST
           LIMIT 1000
         `
