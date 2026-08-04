@@ -4,6 +4,8 @@ export type CommercialVesselRank = {
   dwtDifferenceMt: number | null;
   dwtSimilarityBand: number;
   dwtFitPercent: number | null;
+  estimatedBallastStatus: boolean;
+  ballastPriority: number;
   laycanCompliant: boolean;
   laycanPriority: number;
   transitHours: number | null;
@@ -13,6 +15,7 @@ export type CommercialVesselRank = {
 export function buildCommercialVesselRank(input: {
   vesselDwt?: unknown;
   targetCargoDwt?: unknown;
+  estimatedBallastStatus?: unknown;
   laycanCompliant?: unknown;
   transitHours?: unknown;
   distanceNm?: unknown;

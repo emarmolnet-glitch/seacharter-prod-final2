@@ -258,7 +258,7 @@ function normalizeVessel(value: unknown) {
   const destination = textValue(source.destination, source.Destination, source.current_destination, meta.Destination, staticData.Destination, staticData.PortOfDestination) || "N/A";
   const declaredEta = textValue(source.eta, source.ETA, source.Eta, source.estimatedEta, source.etaEstimated, source.eta_calculado, meta.eta, meta.ETA, meta.Eta, meta.estimatedEta, meta.etaEstimated);
   const lastPortOfCall = textValue(source.lastPortOfCall, source.last_port_of_call, source.ultimo_puerto, source.LastPort, source.LastPortOfCall, source.PreviousPort, source.DeparturePort, meta.lastPortOfCall, meta.ultimo_puerto, meta.LastPort, meta.LastPortOfCall, meta.PreviousPort, meta.DeparturePort) || "N/A";
-  const designDraft = nullableNumberValue(source.designDraft, source.maxDraft, source.MaximumStaticDraught, meta.designDraft, meta.maxDraft, meta.MaximumStaticDraught);
+  const designDraft = nullableNumberValue(source.verifiedDesignDraft, source.verified_design_draft, source.designDraft, source.maxDraft, source.MaximumStaticDraught, meta.designDraft, meta.maxDraft, meta.MaximumStaticDraught);
   const sourceOrigins = (Array.isArray(source.source_origins) ? source.source_origins : Array.isArray(source.sourceOrigins) ? source.sourceOrigins : [])
     .map((origin) => textValue(origin))
     .filter(Boolean);
@@ -267,8 +267,12 @@ function normalizeVessel(value: unknown) {
 
   const longDistanceTransitToPol = source.longDistanceTransitToPol === true || meta.longDistanceTransitToPol === true;
   const commercialTransitCandidate = source.commercialTransitCandidate === true || meta.commercialTransitCandidate === true;
+  const matchReason = textValue(source.matchReason, meta.matchReason) || null;
+  const verifiedDwt = source.verifiedDwt === true || meta.verifiedDwt === true;
+  const sourceDwtDifference = nullableNumberValue(source.dwtDifference, source.dwtDifferenceMt, meta.dwtDifference);
+  const estimatedBallastStatus = source.estimatedBallastStatus === true || meta.estimatedBallastStatus === true;
 
-  return { source, vesselName, mmsi, imo, shipType, dwt, dwtStatus, draft, designDraft, loa, beam, speed, destination, declaredEta, lastPortOfCall, latitude, longitude, hasValidPosition, longDistanceTransitToPol, commercialTransitCandidate, sourceOrigins, sourceOrigin, vesselKey, isOpenShipsSource };
+  return { source, vesselName, mmsi, imo, shipType, dwt, dwtStatus, draft, designDraft, loa, beam, speed, destination, declaredEta, lastPortOfCall, latitude, longitude, hasValidPosition, longDistanceTransitToPol, commercialTransitCandidate, matchReason, verifiedDwt, sourceDwtDifference, estimatedBallastStatus, sourceOrigins, sourceOrigin, vesselKey, isOpenShipsSource };
 }
 
 function parseLaycanEnd(value: unknown) {
@@ -479,7 +483,8 @@ export default async (req: Request) => {
           const idealVessel = operationallyEligible && !hasTechnicalWarning && loadState.ballastReady;
           const commercialRank = buildCommercialVesselRank({
             vesselDwt: vessel.dwt,
-            targetCargoDwt: quantity,
+            targetCargoDwt: strictRequiredDwt,
+            estimatedBallastStatus: vessel.estimatedBallastStatus,
             laycanCompliant: dateOk,
             transitHours: hoursToLoadPort,
             distanceNm: distance,
@@ -501,7 +506,11 @@ export default async (req: Request) => {
             dwtAssessment,
             commercialRank,
             dwtDifferenceMt: commercialRank.dwtDifferenceMt,
+            dwtDifference: commercialRank.dwtDifferenceMt,
             dwtFitPercent: commercialRank.dwtFitPercent,
+            matchReason: vessel.matchReason,
+            verifiedDwt: vessel.verifiedDwt,
+            estimatedBallastStatus: vessel.estimatedBallastStatus,
             debugUnknownDwtAllowed,
             isOversizedFallback,
             vessel: {
@@ -510,6 +519,10 @@ export default async (req: Request) => {
               imo: vessel.imo,
               mmsi: vessel.mmsi,
               dwt: vessel.dwt,
+              matchReason: vessel.matchReason,
+              verifiedDwt: vessel.verifiedDwt,
+              dwtDifference: commercialRank.dwtDifferenceMt,
+              estimatedBallastStatus: vessel.estimatedBallastStatus,
               dwtStatus: activeDwtStatus,
               dwtAssessment,
               vesselType: vessel.shipType,
@@ -564,6 +577,10 @@ export default async (req: Request) => {
               declaredEta: vessel.declaredEta || null,
               etaDriftHours,
               dwt: vessel.dwt,
+              matchReason: vessel.matchReason,
+              verifiedDwt: vessel.verifiedDwt,
+              dwtDifference: commercialRank.dwtDifferenceMt,
+              estimatedBallastStatus: vessel.estimatedBallastStatus,
               dwtStatus: activeDwtStatus,
               isOversizedFallback,
               hasTechnicalWarning,

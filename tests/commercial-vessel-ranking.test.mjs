@@ -31,10 +31,11 @@ test('DWT fit outranks geographic proximity', () => {
   assert.equal(distantButEfficient.dwtDifferenceMt, 1000);
 });
 
-test('laycan and transit resolve exact DWT ties before distance', () => {
+test('ballast and laycan resolve exact DWT ties before distance', () => {
   const slowerNearVessel = buildCommercialVesselRank({
     vesselDwt: 40500,
     targetCargoDwt: 40000,
+    estimatedBallastStatus: false,
     laycanCompliant: false,
     transitHours: 20,
     distanceNm: 100,
@@ -42,6 +43,7 @@ test('laycan and transit resolve exact DWT ties before distance', () => {
   const viableFarVessel = buildCommercialVesselRank({
     vesselDwt: 39500,
     targetCargoDwt: 40000,
+    estimatedBallastStatus: true,
     laycanCompliant: true,
     transitHours: 28,
     distanceNm: 300,
@@ -59,7 +61,8 @@ test('distance is only the final tie-breaker', () => {
 
 test('matching, source pagination and Radar expose the DWT commercial ranking', () => {
   assert.match(aiFilterSource, /compareCommercialVesselRanks\(a\.commercialRank, b\.commercialRank\)/);
-  assert.match(matchingSources, /ABS\(COALESCE\(payload->>'dwt', payload->>'DWT'\)::double precision - \$5\)/);
+  assert.match(matchingSources, /const dwtDifference = Math\.abs\(verifiedDwt - targetDwt\)/);
+  assert.match(matchingSources, /sortCandidates\(commercialCandidates\)/);
   assert.match(getVesselsSource, /targetCargoDwt/);
   assert.match(indexSource, /Math\.abs\(dwt - target\)/);
   assert.match(indexSource, /data-commercial-dwt-rank="true"/);

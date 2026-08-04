@@ -1,6 +1,15 @@
 import type { QueryResultRow } from "pg";
 import { getPool } from "./index.js";
 import type { VesselMasterRow } from "./vessels-master.js";
+import {
+  classifyCandidateMatch,
+  estimateArrivalDate,
+  estimateBallastStatus,
+  isLaycanCompliant,
+  sortCandidates,
+  type MatchReason,
+  type PortData,
+} from "../netlify/functions/_shared/commercial-vessel-search.mjs";
 
 export type AisMatchingRow = QueryResultRow & {
   storage_key: string;
@@ -33,6 +42,36 @@ export type PaginatedMatchingSources = {
   offset: number;
 };
 
+type CommercialPoolRow = QueryResultRow & {
+  source_system: MatchingSourceSystem;
+  payload: Record<string, unknown>;
+  sort_at: Date | string | null;
+  distance_nm: number | string | null;
+  verified_dwt: number | string;
+  design_draft: number | string | null;
+};
+
+type RankedCommercialCandidate = PaginatedMatchingSourceRow & {
+  dwtDifference: number;
+  estimatedBallastStatus: boolean;
+  laycanCompliant: boolean;
+  distanceNm: number | null;
+};
+
+export type FindMatchingVesselsRequest = {
+  allowedSources: MatchingSourceSystem[];
+  latitude: number | null;
+  longitude: number | null;
+  radiusNm: number;
+  cargoQuantity: number;
+  targetDwt?: number | null;
+  laycanStart?: string | null;
+  laycanEnd?: string | null;
+  polData: PortData;
+  limit?: number;
+  offset?: number;
+};
+
 const MATCHING_SOURCE_SYSTEMS = new Set<MatchingSourceSystem>(["DATABRIDGE", "AIS_LIVE", "OPENSHIPS"]);
 
 export function normalizeAllowedMatchingSources(value: unknown): MatchingSourceSystem[] {
@@ -43,35 +82,108 @@ export function normalizeAllowedMatchingSources(value: unknown): MatchingSourceS
   return normalized.length > 0 ? normalized : ["DATABRIDGE", "AIS_LIVE", "OPENSHIPS"];
 }
 
-export async function listPaginatedMatchingSources(
-  allowedSources: MatchingSourceSystem[],
-  latitude: number | null,
-  longitude: number | null,
-  radiusNm: number,
-  targetCargoDwt: number | null,
-  limit = 50,
-  offset = 0,
-): Promise<PaginatedMatchingSources> {
-  const safeSources = normalizeAllowedMatchingSources(allowedSources);
-  const safeLimit = Math.min(100, Math.max(1, Math.trunc(limit)));
-  const safeOffset = Math.min(100000, Math.max(0, Math.trunc(offset)));
-  const safeRadius = Math.min(5000, Math.max(1, radiusNm));
-  const safeLatitude = Number.isFinite(latitude) ? latitude : null;
-  const safeLongitude = Number.isFinite(longitude) ? longitude : null;
-  const result = await getPool().query<PaginatedMatchingSourceRow>(
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function firstValue(record: Record<string, unknown>, paths: string[][]) {
+  for (const path of paths) {
+    let value: unknown = record;
+    for (const key of path) value = asRecord(value)[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+  }
+  return null;
+}
+
+function finiteNumber(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function candidateDestination(payload: Record<string, unknown>) {
+  return firstValue(payload, [
+    ["destination"], ["Destination"], ["current_destination"], ["currentDestination"],
+    ["MetaData", "Destination"], ["metadata", "Destination"],
+    ["Message", "ShipStaticData", "Destination"], ["ShipStaticData", "Destination"],
+    ["Message", "ShipStaticData", "PortOfDestination"], ["ShipStaticData", "PortOfDestination"],
+  ]);
+}
+
+function candidateEta(payload: Record<string, unknown>) {
+  return firstValue(payload, [
+    ["eta"], ["ETA"], ["declaredEta"], ["estimatedEta"],
+    ["MetaData", "ETA"], ["Message", "ShipStaticData", "ETA"], ["ShipStaticData", "ETA"],
+  ]);
+}
+
+function candidateSpeed(payload: Record<string, unknown>) {
+  return firstValue(payload, [
+    ["speed_over_ground"], ["speed"], ["sog"], ["SOG"],
+    ["MetaData", "SOG"], ["Message", "PositionReport", "Sog"], ["PositionReport", "Sog"],
+  ]);
+}
+
+function candidateDraft(payload: Record<string, unknown>) {
+  return firstValue(payload, [
+    ["draught"], ["Draught"], ["draft"], ["Draft"],
+    ["MetaData", "Draught"], ["Message", "ShipStaticData", "MaximumStaticDraught"],
+    ["ShipStaticData", "MaximumStaticDraught"],
+  ]);
+}
+
+export async function findMatchingVessels(request: FindMatchingVesselsRequest): Promise<PaginatedMatchingSources> {
+  const safeSources = normalizeAllowedMatchingSources(request.allowedSources);
+  const safeLimit = Math.min(100, Math.max(1, Math.trunc(request.limit ?? 50)));
+  const safeOffset = Math.min(100000, Math.max(0, Math.trunc(request.offset ?? 0)));
+  const safeRadius = Math.min(5000, Math.max(1, request.radiusNm));
+  const safeLatitude = Number.isFinite(request.latitude) ? request.latitude : null;
+  const safeLongitude = Number.isFinite(request.longitude) ? request.longitude : null;
+  const cargoQuantity = Math.max(0, Number(request.cargoQuantity) || 0);
+  const minDwt = cargoQuantity * 1.05;
+  const targetDwt = Math.max(minDwt, Number(request.targetDwt) || minDwt);
+
+  if (safeLatitude === null || safeLongitude === null || minDwt <= 0) {
+    return { rows: [], totalCount: 0, limit: safeLimit, offset: safeOffset };
+  }
+
+  const result = await getPool().query<CommercialPoolRow>(
     `
-      WITH source_rows AS (
+      WITH openships_latest AS (
+        SELECT DISTINCT ON (COALESCE(NULLIF(os.mmsi::text, ''), os.vessel_key)) os.*
+        FROM ais_telemetry_buffer os
+        WHERE os.fetched_at >= NOW() - INTERVAL '24 hours'
+          AND os.latitude IS NOT NULL
+          AND os.longitude IS NOT NULL
+        ORDER BY COALESCE(NULLIF(os.mmsi::text, ''), os.vessel_key),
+          COALESCE(os.observed_at, os.fetched_at, os.updated_at) DESC NULLS LAST
+      ), source_rows AS (
         SELECT
           'DATABRIDGE'::text AS source_system,
-          to_jsonb(vm) AS payload,
+          to_jsonb(vm) || jsonb_build_object(
+            'distance_nm', 3440.065 * 2 * ASIN(SQRT(LEAST(1, GREATEST(0,
+              POWER(SIN(RADIANS(vm.latitude - $2) / 2), 2) +
+              COS(RADIANS($2)) * COS(RADIANS(vm.latitude)) *
+              POWER(SIN(RADIANS(vm.longitude - $3) / 2), 2)
+            ))))
+          ) AS payload,
           vm.fecha_ultima_actualizacion AS sort_at,
-          NULL::double precision AS distance_nm
+          3440.065 * 2 * ASIN(SQRT(LEAST(1, GREATEST(0,
+            POWER(SIN(RADIANS(vm.latitude - $2) / 2), 2) +
+            COS(RADIANS($2)) * COS(RADIANS(vm.latitude)) *
+            POWER(SIN(RADIANS(vm.longitude - $3) / 2), 2)
+          )))) AS distance_nm,
+          REGEXP_REPLACE(COALESCE(vm.imo_number::text, ''), '[^0-9]', '', 'g') AS source_imo,
+          COALESCE(vm.mmsi::text, '') AS source_mmsi,
+          vm.dwt::double precision AS source_dwt,
+          vm.draft_meters::double precision AS source_design_draft
         FROM vessels_master vm
         WHERE (vm.status = 'EN_CARTERA'
           OR vm.validation_status = 'VALIDADO')
           AND UPPER(COALESCE(vm.status, '')) NOT IN ('PENDING', 'PENDING_AUDIT')
           AND UPPER(COALESCE(vm.audit_status, '')) NOT IN ('PENDING', 'IN_DUE_DILIGENCE', 'REJECTED')
           AND UPPER(COALESCE(vm.process_status, '')) NOT IN ('PENDING_REVIEW', 'DUE_DILIGENCE')
+          AND vm.latitude IS NOT NULL
+          AND vm.longitude IS NOT NULL
 
         UNION ALL
 
@@ -95,7 +207,11 @@ export async function listPaginatedMatchingSources(
               COS(RADIANS($2)) * COS(RADIANS(av.latitude)) *
               POWER(SIN(RADIANS(av.longitude - $3) / 2), 2)
             )))
-          END AS distance_nm
+          END AS distance_nm,
+          REGEXP_REPLACE(COALESCE(av.imo_number::text, av.raw_data->>'imo', av.raw_data->>'IMO', ''), '[^0-9]', '', 'g') AS source_imo,
+          COALESCE(av.mmsi::text, av.raw_data->>'mmsi', av.raw_data->>'MMSI', '') AS source_mmsi,
+          NULL::double precision AS source_dwt,
+          NULL::double precision AS source_design_draft
         FROM ais_vessels av
         WHERE av.audit_status = 'VALIDATED'
 
@@ -131,52 +247,109 @@ export async function listPaginatedMatchingSources(
             ELSE 3440.065 * 2 * ASIN(SQRT(LEAST(1,
               POWER(SIN(RADIANS(os.latitude::double precision - $2) / 2), 2) +
               COS(RADIANS($2)) * COS(RADIANS(os.latitude::double precision)) *
-              POWER(SIN(RADIANS(os.longitude::double precision - $3) / 2), 2)
-            )))
-          END AS distance_nm
-        FROM ais_telemetry_buffer os
-        WHERE os.fetched_at >= NOW() - INTERVAL '24 hours'
-          AND os.latitude IS NOT NULL
-          AND os.longitude IS NOT NULL
-      ), filtered_sources AS (
-        SELECT *
+                POWER(SIN(RADIANS(os.longitude::double precision - $3) / 2), 2)
+              )))
+          END AS distance_nm,
+          REGEXP_REPLACE(COALESCE(
+            os.raw_data->>'imo',
+            os.raw_data->>'IMO',
+            os.raw_data#>>'{MetaData,IMO}',
+            os.raw_data#>>'{Message,ShipStaticData,ImoNumber}',
+            ''
+          ), '[^0-9]', '', 'g') AS source_imo,
+          COALESCE(os.mmsi::text, os.raw_data->>'mmsi', os.raw_data->>'MMSI', '') AS source_mmsi,
+          NULL::double precision AS source_dwt,
+          NULL::double precision AS source_design_draft
+        FROM openships_latest os
+      ), enriched_sources AS (
+        SELECT
+          source_rows.*,
+          COALESCE(verified_master.dwt, source_rows.source_dwt) AS verified_dwt,
+          COALESCE(verified_master.draft_meters, source_rows.source_design_draft) AS design_draft
         FROM source_rows
-        WHERE source_system = ANY($1::text[])
-          AND (
-            source_system = 'DATABRIDGE'
-            OR distance_nm <= $4
-            OR payload->>'longDistanceTransitToPol' = 'true'
-            OR payload#>>'{MetaData,longDistanceTransitToPol}' = 'true'
-            OR payload->>'commercialTransitCandidate' = 'true'
-            OR payload#>>'{MetaData,commercialTransitCandidate}' = 'true'
-          )
-      ), ranked_sources AS (
-        SELECT *, ROW_NUMBER() OVER (
-          PARTITION BY source_system
+        LEFT JOIN LATERAL (
+          SELECT vm.dwt, vm.draft_meters
+          FROM vessels_master vm
+          WHERE (source_rows.source_imo <> ''
+              AND REGEXP_REPLACE(COALESCE(vm.imo_number::text, ''), '[^0-9]', '', 'g') = source_rows.source_imo)
+            OR (source_rows.source_mmsi <> '' AND vm.mmsi::text = source_rows.source_mmsi)
           ORDER BY
-            CASE
-              WHEN $5::double precision IS NULL THEN NULL
-              WHEN COALESCE(payload->>'dwt', payload->>'DWT') ~ '^[0-9]+([.][0-9]+)?$'
-              THEN ABS(COALESCE(payload->>'dwt', payload->>'DWT')::double precision - $5)
-              ELSE NULL
-            END ASC NULLS LAST,
-            sort_at DESC NULLS LAST,
-            payload->>'mmsi',
-            payload->>'vessel_name'
-        ) AS source_position
-        FROM filtered_sources
+            CASE WHEN source_rows.source_imo <> ''
+              AND REGEXP_REPLACE(COALESCE(vm.imo_number::text, ''), '[^0-9]', '', 'g') = source_rows.source_imo
+              THEN 0 ELSE 1 END,
+            vm.fecha_ultima_actualizacion DESC NULLS LAST
+          LIMIT 1
+        ) verified_master ON TRUE
       )
-      SELECT source_system, payload, COUNT(*) OVER() AS total_count
-      FROM ranked_sources
-      ORDER BY source_position, source_system
-      LIMIT $6
-      OFFSET $7
+      SELECT source_system, payload, sort_at, distance_nm, verified_dwt, design_draft
+      FROM enriched_sources
+      WHERE source_system = ANY($1::text[])
+        AND verified_dwt IS NOT NULL
+        AND verified_dwt >= $4
     `,
-    [safeSources, safeLatitude, safeLongitude, safeRadius, targetCargoDwt, safeLimit, safeOffset],
+    [safeSources, safeLatitude, safeLongitude, minDwt],
   );
+
+  const commercialCandidates = result.rows.flatMap((row): RankedCommercialCandidate[] => {
+    const payload = asRecord(row.payload);
+    const distanceNm = finiteNumber(row.distance_nm);
+    const eta = candidateEta(payload);
+    const speedKnots = candidateSpeed(payload);
+    const matchReason = classifyCandidateMatch({
+      distanceNm,
+      radiusNm: safeRadius,
+      destination: candidateDestination(payload),
+      polData: request.polData,
+      eta,
+      speedKnots,
+      laycanEnd: request.laycanEnd,
+    });
+    if (!matchReason) return [];
+
+    const verifiedDwt = Number(row.verified_dwt);
+    const dwtDifference = Math.abs(verifiedDwt - targetDwt);
+    const estimatedArrival = estimateArrivalDate({ eta, distanceNm, speedKnots });
+    const estimatedBallastStatus = estimateBallastStatus(candidateDraft(payload), row.design_draft);
+    const laycanCompliant = isLaycanCompliant(estimatedArrival, request.laycanStart, request.laycanEnd);
+    const enrichedPayload = {
+      ...payload,
+      dwt: verifiedDwt,
+      DWT: verifiedDwt,
+      verifiedDwt: true,
+      dwtStatus: "VERIFIED_VESSELS_MASTER",
+      dwtDifference,
+      dwtDifferenceMt: dwtDifference,
+      estimatedBallastStatus,
+      laycanCompliant,
+      matchReason: matchReason as MatchReason,
+      longDistanceTransitToPol: matchReason === "INBOUND_TO_POL",
+      commercialTransitCandidate: matchReason === "INBOUND_TO_POL",
+      estimatedArrivalAt: estimatedArrival?.toISOString() ?? null,
+      distance_nm: distanceNm,
+      verified_design_draft: finiteNumber(row.design_draft),
+    };
+    return [{
+      source_system: row.source_system,
+      payload: enrichedPayload,
+      total_count: 0,
+      dwtDifference,
+      estimatedBallastStatus,
+      laycanCompliant,
+      distanceNm,
+    }];
+  });
+
+  const rankedCandidates = sortCandidates(commercialCandidates);
+  const totalCount = rankedCandidates.length;
+  const rows = rankedCandidates.slice(safeOffset, safeOffset + safeLimit).map((candidate) => ({
+    source_system: candidate.source_system,
+    payload: candidate.payload,
+    total_count: totalCount,
+  }));
+
   return {
-    rows: result.rows,
-    totalCount: Number(result.rows[0]?.total_count ?? safeOffset),
+    rows,
+    totalCount,
     limit: safeLimit,
     offset: safeOffset,
   };
