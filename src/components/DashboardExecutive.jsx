@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
+import StatementOfFactsEditor from './StatementOfFactsEditor.jsx';
 
 export default function DashboardExecutive({ contractData }) {
+  const [sofEvents, setSofEvents] = useState([]);
   const laytime = contractData?.laytime || {
     allowedHours: 72,
     usedHours: 64.5,
@@ -9,7 +11,17 @@ export default function DashboardExecutive({ contractData }) {
     estimatedDemurrageUSD: 0
   };
 
-  const isDelayed = laytime.status === 'En Demora' || laytime.usedHours > laytime.allowedHours;
+  const allowedHours = Number(laytime.allowedHours) || 0;
+  const grossUsedHours = Number(laytime.usedHours) || 0;
+  const demurrageRateUSD = Number(laytime.demurrageRateUSD) || 0;
+  const rawTerms = String(laytime.laytimeRule || laytime.terms || contractData?.laytimeRule || 'SHINC').toUpperCase();
+  const terms = ['SHINC', 'SHEX', 'FHEX'].includes(rawTerms) ? rawTerms : 'SHINC';
+  const deductedHours = sofEvents.reduce((sum, event) => sum + (Number(event.durationHours) || 0), 0);
+  const netUsedHours = Math.max(0, grossUsedHours - deductedHours);
+  const balanceHours = allowedHours - netUsedHours;
+  const demurrageHours = Math.max(0, -balanceHours);
+  const estimatedDemurrageUSD = (demurrageHours / 24) * demurrageRateUSD;
+  const isDelayed = demurrageHours > 0;
 
   return (
     <div className="min-h-full bg-[#0B3040] text-slate-100 p-6 space-y-6 w-full pb-16">
@@ -70,14 +82,14 @@ export default function DashboardExecutive({ contractData }) {
           <p className={`text-lg font-bold mt-1 ${isDelayed ? 'text-amber-600' : 'text-emerald-600'}`}>
             {isDelayed ? 'Riesgo Demora' : 'En Control'}
           </p>
-          <span className="text-xs text-slate-500">{laytime.usedHours}h consumidas de {laytime.allowedHours}h</span>
+          <span className="text-xs text-slate-500">{netUsedHours.toFixed(2)}h netas de {allowedHours.toFixed(2)}h</span>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-sm">
           <span className="text-xs text-slate-500 uppercase font-semibold">Exposición Demurrage</span>
           <p className={`text-lg font-bold mt-1 ${isDelayed ? 'text-rose-600' : 'text-slate-900'}`}>
-            {isDelayed ? `$${laytime.estimatedDemurrageUSD.toLocaleString()}` : 'USD 0'}
+            {isDelayed ? `$${estimatedDemurrageUSD.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : 'USD 0'}
           </p>
-          <span className="text-xs text-slate-500">Tarifa: ${laytime.demurrageRateUSD}/día</span>
+          <span className="text-xs text-slate-500">Tarifa: ${demurrageRateUSD.toLocaleString('en-US')}/día</span>
         </div>
       </div>
 
@@ -89,32 +101,34 @@ export default function DashboardExecutive({ contractData }) {
             <p className="text-xs text-slate-500">Control estricto de plancha SHINC/SHEX y cálculo de sobreestadías</p>
           </div>
           <span className="px-3 py-1 bg-slate-100 border border-slate-200 text-slate-700 text-xs rounded-lg font-mono font-semibold">
-            Regla: SHINC
+            Regla: {terms}
           </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
           <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg">
             <span className="text-xs text-slate-500 font-medium uppercase">Tiempo Permitido (Allowed)</span>
-            <p className="text-xl font-bold text-slate-900 mt-1">{laytime.allowedHours} Horas</p>
+            <p className="text-xl font-bold text-slate-900 mt-1">{allowedHours.toFixed(2)} Horas</p>
             <span className="text-xs text-slate-600">Basado en volumen contractual</span>
           </div>
           <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg">
             <span className="text-xs text-slate-500 font-medium uppercase">Tiempo Consumido (Used)</span>
-            <p className="text-xl font-bold text-cyan-600 mt-1">{laytime.usedHours} Horas</p>
-            <span className="text-xs text-slate-600">Calculado desde NOR aceptada</span>
+            <p className="text-xl font-bold text-cyan-600 mt-1">{netUsedHours.toFixed(2)} Horas</p>
+            <span className="text-xs text-slate-600">{grossUsedHours.toFixed(2)}h brutas − {deductedHours.toFixed(2)}h deducidas</span>
           </div>
           <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg">
             <span className="text-xs text-slate-500 font-medium uppercase">Balance de Plancha</span>
-            <p className={`text-xl font-bold mt-1 ${laytime.allowedHours - laytime.usedHours >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {(laytime.allowedHours - laytime.usedHours).toFixed(1)} Horas
+            <p className={`text-xl font-bold mt-1 ${balanceHours >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {balanceHours.toFixed(2)} Horas
             </p>
             <span className="text-xs text-slate-600">
-              {laytime.allowedHours - laytime.usedHours >= 0 ? 'Margen disponible' : 'Exceso de plancha'}
+              {balanceHours >= 0 ? 'Margen disponible' : 'Exceso de plancha'}
             </span>
           </div>
         </div>
       </div>
+
+      <StatementOfFactsEditor onEventsChange={setSofEvents} terms={terms} />
 
     </div>
   );
