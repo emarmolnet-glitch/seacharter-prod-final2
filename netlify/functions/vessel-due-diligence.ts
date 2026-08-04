@@ -601,6 +601,21 @@ export default async (req: Request) => {
   }
 
   const result = await runSourceWaterfall(identity, deadlineAt, externalOnly ? emptyVesselData() : cachedData);
+  let grossTonnageRecoveredFromMaster = false;
+  if (externalOnly && !Number(result.data.gross_tonnage)) {
+    try {
+      cachedRecord = await findVesselTechnicalRecord(
+        identity.imo ? Number(identity.imo) : null,
+        identity.mmsi || null,
+        identity.vesselName || null,
+      );
+      const grossTonnageFallback = cachedRecordToVesselData(cachedRecord);
+      grossTonnageRecoveredFromMaster = Number(grossTonnageFallback.gross_tonnage) > 0;
+      mergeFirstValues(result.data, grossTonnageFallback);
+    } catch (error) {
+      console.error("[vessel-due-diligence] Gross tonnage fallback lookup failed", error);
+    }
+  }
   if (!externalOnly && result.extracted && hasUsefulTechnicalData(result.data)) {
     try {
       await upsertVesselTechnicalRecord(vesselDataToTechnicalRecord(result.data, identity));
@@ -623,6 +638,8 @@ export default async (req: Request) => {
       mode: externalOnly ? "public-source-audit" : "public-source-waterfall",
       provider: result.provider,
       status: result.status,
+      grossTonnageRecoveredFromMaster,
+      grossTonnageRequired: !Number(result.data.gross_tonnage),
       persisted: !externalOnly && result.extracted && hasUsefulTechnicalData(result.data),
       requiresAcceptance: externalOnly,
       attempts: result.attempts,

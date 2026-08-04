@@ -649,12 +649,13 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         const safeProposals = Array.isArray(proposals) ? proposals.filter(proposal => proposal && typeof proposal === 'object') : [];
         const pending = pendingProposals.get(key);
         const commerciallyBlocked = pending?.commerciallyBlocked === true || isNonCommercialVesselType(safeTechnical.vesselType);
+        const grossTonnageRequired = !readPositiveNumber(safeTechnical.grossTonnage);
         const dataFields = [
             { label: 'Nombre del buque', value: readText(safeTechnical.vesselName) || pending?.identity?.name || 'Sin dato', featured: true },
             { label: 'IMO', value: readText(safeTechnical.imo) || 'Sin dato', mono: true },
             { label: 'MMSI', value: readText(safeTechnical.mmsi) || pending?.identity?.mmsi || 'Sin dato', mono: true },
             { label: 'DWT', value: safeTechnical.dwt ? `${Number(safeTechnical.dwt).toLocaleString()} MT` : 'Sin dato', featured: true },
-            { label: 'Gross Tonnage (GT)', value: safeTechnical.grossTonnage ? Number(safeTechnical.grossTonnage).toLocaleString() : 'Sin dato', featured: true },
+            { label: 'Gross Tonnage (GT)', value: safeTechnical.grossTonnage ? Number(safeTechnical.grossTonnage).toLocaleString() : 'REQUERIDO', featured: true, required: grossTonnageRequired },
             { label: 'LOA', value: safeTechnical.loaMeters ? `${Number(safeTechnical.loaMeters).toLocaleString()} m` : 'Sin dato' },
             { label: 'Beam / Manga', value: safeTechnical.beamMeters ? `${Number(safeTechnical.beamMeters).toLocaleString()} m` : 'Sin dato' },
             { label: 'Calado', value: safeTechnical.draft ? `${Number(safeTechnical.draft).toLocaleString()} m` : 'Sin dato' },
@@ -700,14 +701,16 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         dictionary.dataset.dueDiligenceTechnicalGrid = 'true';
         dataFields.forEach(field => {
             const item = globalScope.document.createElement('div');
-            item.className = field.featured
+            item.className = field.required
+                ? 'min-w-0 rounded-lg border-2 border-amber-400 bg-amber-50 px-3 py-2.5 shadow-sm'
+                : field.featured
                 ? 'min-w-0 rounded-lg border border-cyan-200 bg-cyan-50/60 px-3 py-2.5'
                 : 'min-w-0 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5';
             const label = globalScope.document.createElement('dt');
             label.className = 'text-[9px] font-black uppercase tracking-[0.1em] text-slate-500';
             label.textContent = field.label;
             const value = globalScope.document.createElement('dd');
-            value.className = `${field.mono ? 'font-mono ' : ''}mt-1 break-words text-[12px] font-black leading-snug ${field.value === 'Sin dato' ? 'text-slate-400' : 'text-slate-900'}`;
+            value.className = `${field.mono ? 'font-mono ' : ''}mt-1 break-words text-[12px] font-black leading-snug ${field.required ? 'text-amber-700' : field.value === 'Sin dato' ? 'text-slate-400' : 'text-slate-900'}`;
             value.textContent = field.value;
             item.append(label, value);
             dictionary.append(item);
@@ -717,6 +720,12 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             const warning = globalScope.document.createElement('p');
             warning.className = 'mx-3 mb-3 break-words rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[10px] font-black text-red-800 sm:col-span-2';
             warning.textContent = `BUQUE NO COMERCIAL DETECTADO: ${safeTechnical.vesselType || 'tipo no apto'}`;
+            dictionary.append(warning);
+        }
+        if (grossTonnageRequired) {
+            const warning = globalScope.document.createElement('p');
+            warning.className = 'mx-3 mb-3 break-words rounded-lg border-2 border-amber-400 bg-amber-50 px-3 py-2 text-[10px] font-black text-amber-900 sm:col-span-2';
+            warning.textContent = 'GT REQUERIDO: no fue posible recuperarlo de fuentes externas ni de vessels_master. Es obligatorio para calcular costes portuarios.';
             dictionary.append(warning);
         }
 
@@ -731,12 +740,12 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         const accept = globalScope.document.createElement('button');
         accept.type = 'button';
         accept.dataset.dueDiligenceAccept = key;
-        accept.disabled = commerciallyBlocked;
-        accept.setAttribute('aria-disabled', String(commerciallyBlocked));
-        accept.className = commerciallyBlocked
+        accept.disabled = commerciallyBlocked || grossTonnageRequired;
+        accept.setAttribute('aria-disabled', String(commerciallyBlocked || grossTonnageRequired));
+        accept.className = commerciallyBlocked || grossTonnageRequired
             ? 'cursor-not-allowed rounded-lg bg-red-200 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-red-700 opacity-70'
             : 'rounded-lg bg-emerald-700 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-white shadow-sm transition hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-400';
-        accept.textContent = 'Validar y Guardar en Master (Neon DB)';
+        accept.textContent = grossTonnageRequired ? 'GT REQUERIDO PARA VALIDAR' : 'Validar y Guardar en Master (Neon DB)';
         footer.append(reject, accept);
 
         review.append(header, dictionary, footer);
@@ -792,6 +801,11 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             notify(`Buque no comercial bloqueado: ${pendingTechnical.vesselType || 'tipo no apto'}.`, 'error');
             return false;
         }
+        const densityCommercialFlow = card?.matches?.('[data-density-commercial-match="true"]') === true;
+        if (densityCommercialFlow && !readPositiveNumber(pendingTechnical.grossTonnage)) {
+            notify('GT REQUERIDO: completa el Gross Tonnage antes de validar el buque.', 'error');
+            return false;
+        }
         if (acceptButton) {
             acceptButton.disabled = true;
             acceptButton.setAttribute('aria-busy', 'true');
@@ -814,19 +828,28 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             const hydratedMatch = hydrateStores(pendingIdentity, pendingTechnical);
             const resolvedMatch = hydratedMatch || currentMatch || findMatchingResult(pendingIdentity);
             updateCard(card, pendingIdentity, pendingTechnical, resolvedMatch);
-            const densityCommercialFlow = card?.matches?.('[data-density-commercial-match="true"]') === true;
             const financialRecalculated = densityCommercialFlow ? false : recalculateFinancialEngine(pendingIdentity, pendingTechnical);
-            if (densityCommercialFlow) renderCalculatorHandoff(card, key, verifiedVessel);
-            else clearProposalReview(card, key);
+            if (densityCommercialFlow) {
+                renderCalculatorHandoff(card, key, verifiedVessel);
+                if (typeof globalScope.applyResolvedVesselToCalculator === 'function') {
+                    globalScope.applyResolvedVesselToCalculator(
+                        verifiedVessel,
+                        verifiedVessel.vessel_name || verifiedVessel.vesselName || pendingIdentity.name || '',
+                    );
+                }
+                if (typeof globalScope.switchTab === 'function') globalScope.switchTab('estimator');
+            } else clearProposalReview(card, key);
             if (status) {
                 status.textContent = densityCommercialFlow
-                    ? 'Buque validado en Master. Continúa desde la ficha técnica.'
+                    ? 'Buque validado en Master. Redirigiendo a Calculadora...'
                     : financialRecalculated
                     ? 'Perfil guardado en Neon. PDAs y márgenes recalculados.'
                     : 'Perfil técnico guardado en Neon y disponible para el estimador.';
                 status.className = 'text-[10px] font-bold text-emerald-700';
             }
-            notify('Due Diligence guardada correctamente en Neon.');
+            notify(densityCommercialFlow
+                ? 'Buque validado. Redirigiendo a Calculadora...'
+                : 'Due Diligence guardada correctamente en Neon.');
             return true;
         } catch (error) {
             const status = card?.querySelector('[data-due-diligence-status]');
@@ -937,7 +960,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
     }
 
     async function runVesselDueDiligence(button, encodedIdentity) {
-        const card = button?.closest('[data-matching-result-card="true"], [data-matching-cache-card="true"], [data-vessel-recommendation="true"]');
+        const card = button?.closest('[data-matching-result-card="true"], [data-matching-cache-card="true"], [data-vessel-recommendation="true"], [data-density-commercial-match="true"]');
         const status = card?.querySelector('[data-due-diligence-status]');
         const originalHtml = button?.innerHTML || '';
         let identity;
@@ -1047,7 +1070,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             event.stopImmediatePropagation();
             const actionButton = acceptButton || rejectButton;
             const key = acceptButton?.dataset.dueDiligenceAccept || rejectButton?.dataset.dueDiligenceReject || '';
-            const card = actionButton.closest('[data-matching-result-card="true"], [data-matching-cache-card="true"], [data-vessel-recommendation="true"]')
+            const card = actionButton.closest('[data-matching-result-card="true"], [data-matching-cache-card="true"], [data-vessel-recommendation="true"], [data-density-commercial-match="true"]')
                 || pendingProposals.get(key)?.card
                 || null;
             if (acceptButton) void acceptPendingProposal(key, card, acceptButton);

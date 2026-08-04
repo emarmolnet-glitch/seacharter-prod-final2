@@ -81,6 +81,10 @@ test('density removes Top 6 and renders the shared display fleet only in the nat
   assert.match(indexSource, /const visibleRows = displayVessels\.slice\(0, maxRows\)/);
   assert.match(indexSource, /id="ais-vessels-tbody"/);
   assert.match(cssSource, /\.density-due-diligence-panel \{/);
+  assert.match(cssSource, /inset: 12px auto 12px 12px/);
+  assert.match(cssSource, /z-index: 50/);
+  assert.match(cssSource, /width: min\(440px, calc\(100% - 24px\)\)/);
+  assert.match(cssSource, /transform: translateX\(-18px\)/);
 });
 
 test('empty commercial results reuse the matching snapshot instead of blanking density', () => {
@@ -99,6 +103,13 @@ test('matching-validation becomes the authoritative Density snapshot', () => {
 test('Density table identifies OpenShips as its live source', () => {
   assert.match(indexSource, /BUQUES DETECTADOS EN TIEMPO REAL \(OPENSHIPS\)/);
   assert.doesNotMatch(indexSource, /BUQUES DETECTADOS EN TIEMPO REAL \(AIS LIVE\)/);
+  assert.match(indexSource, /<th class="py-2\.5 px-3">GT<\/th>/);
+  assert.match(indexSource, /<th class="py-2\.5 px-3">DWT<\/th>/);
+  assert.match(indexSource, /<th class="py-2\.5 px-3">LOA<\/th>/);
+  assert.match(indexSource, /<th class="py-2\.5 px-3">Bandera<\/th>/);
+  assert.match(indexSource, /<th class="py-2\.5 px-3">Año<\/th>/);
+  assert.match(indexSource, /onclick="event\.stopPropagation\(\)" data-due-diligence-button/);
+  assert.match(indexSource, /row\.dataset\.densityCommercialMatch = 'true'/);
 });
 
 test('persisted Due Diligence exposes the calculator handoff only after database success', () => {
@@ -109,5 +120,7 @@ test('persisted Due Diligence exposes the calculator handoff only after database
   assert.match(dueDiligenceSource, /Continuar a Calculadora de Costes/);
   assert.match(dueDiligenceSource, /globalScope\.applyResolvedVesselToCalculator\(vessel/);
   assert.match(dueDiligenceSource, /globalScope\.switchTab\('estimator'\)/);
+  assert.match(dueDiligenceSource, /Buque validado\. Redirigiendo a Calculadora\.\.\./);
+  assert.match(dueDiligenceSource, /GT REQUERIDO PARA VALIDAR/);
   assert.match(indexSource, /window\.applyResolvedVesselToCalculator = applyResolvedVesselToCalculator/);
 });
