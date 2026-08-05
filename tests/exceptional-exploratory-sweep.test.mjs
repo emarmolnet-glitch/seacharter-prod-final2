@@ -4,26 +4,31 @@ import test from 'node:test';
 
 const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 
-test('index.html includes independent UI for Barrido Exploratorio Excepcional with light mode styling', () => {
-  assert.match(indexSource, /id="exceptional-exploratory-sweep-panel"/);
-  assert.match(indexSource, /id="exceptional-vessel-category-select"/);
-  assert.match(indexSource, /id="btn-explorar-categoria"/);
-  assert.match(indexSource, /id="exceptional-sweep-result"/);
-  assert.match(indexSource, /bg-blue-50/);
-  assert.match(indexSource, /border-l-4/);
-  assert.match(indexSource, /border-l-blue-500/);
-  assert.match(indexSource, /text-slate-800/);
-  assert.match(indexSource, /text-blue-700/);
+test('index.html removes the Barrido Exploratorio Excepcional controls from Density', () => {
+  assert.doesNotMatch(indexSource, /id="exceptional-exploratory-sweep-panel"/);
+  assert.doesNotMatch(indexSource, /id="exceptional-vessel-category-select"/);
+  assert.doesNotMatch(indexSource, /id="btn-explorar-categoria"/);
+  assert.doesNotMatch(indexSource, /id="exceptional-sweep-result"/);
+  assert.doesNotMatch(indexSource, /Barrido Exploratorio Excepcional \(Sondear Zona\)/);
 });
 
-test('index.html contains category options for Coaster, Mini Bulker, Handysize, Handymax, Supramax, Ultramax, Panamax', () => {
-  assert.match(indexSource, /value="Coaster"/);
-  assert.match(indexSource, /value="Mini Bulker"/);
-  assert.match(indexSource, /value="Handysize"/);
-  assert.match(indexSource, /value="Handymax"/);
-  assert.match(indexSource, /value="Supramax"/);
-  assert.match(indexSource, /value="Ultramax"/);
-  assert.match(indexSource, /value="Panamax"/);
+test('all primary Density panels are expanded by default', () => {
+  const panelTitles = [
+    'ANÁLISIS DE DENSIDAD DE FLOTA',
+    'ALGORITMO DE FLETE JUSTO AIS',
+    'CENTRO DE MAPA DENSIDAD',
+    'MAPA DE DENSIDAD',
+    'BUQUES DETECTADOS EN TIEMPO REAL (OPENSHIPS)',
+  ];
+
+  panelTitles.forEach((title) => {
+    const titleIndex = indexSource.indexOf(title);
+    const panelStart = indexSource.lastIndexOf('data-collapsible-section', titleIndex);
+    const panelMarkup = indexSource.slice(panelStart, titleIndex);
+
+    assert.ok(titleIndex >= 0, `Missing Density panel: ${title}`);
+    assert.match(panelMarkup, /data-default-open="true"/, `${title} should be open by default`);
+  });
 });
 
 test('matchExceptionalCategory classifies vessels correctly by DWT and class name', () => {

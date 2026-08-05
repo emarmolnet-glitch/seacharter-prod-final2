@@ -11942,7 +11942,7 @@
                 <!-- Left panel: Density Summary & Profitability Predictor -->
                 <div class="lg:col-span-1 flex flex-col gap-6">
                     <!-- Card: KPI Metrics -->
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="false">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="true">
                         <div class="collapsible-section-header">
                         <h3 data-collapsible-title data-i18n="density_fleet_analysis_title" class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                             <i class="fa-solid fa-calculator text-blue-400"></i>
@@ -11992,7 +11992,7 @@
                     </div>
 
                     <!-- Card: Pricing Predictor Engine -->
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="false">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="true">
                         <div class="collapsible-section-header">
                         <h3 data-collapsible-title class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                             <i class="fa-solid fa-coins text-yellow-400"></i>
@@ -12079,7 +12079,7 @@
 
                 <!-- Right panel: Interactive Vessels List and Map view -->
                 <div class="lg:col-span-2 flex flex-col gap-6">
-                    <div id="density-map-center-panel" class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="false">
+                    <div id="density-map-center-panel" class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="true">
                         <div class="collapsible-section-header">
                         <h3 data-collapsible-title data-i18n="density_map_center_title" class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                             <i class="fa-solid fa-satellite-dish text-amber-400"></i>
@@ -12125,62 +12125,9 @@
                             <span id="fleet-intel-count" class="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-amber-300">0 buques</span>
                         </div>
 
-                        <!-- BARRIDO EXPLORATORIO EXCEPCIONAL -->
-                        <div id="exceptional-exploratory-sweep-panel" class="mt-4 pt-4 border-t border-slate-800/80">
-                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-                                <label id="label-exceptional-vessel-category" class="text-[11px] font-extrabold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-compass text-amber-400"></i>
-                                    Barrido Exploratorio Excepcional (Sondear Zona)
-                                </label>
-                                <span class="text-[9px] text-slate-500 font-semibold">Herramienta de visibilidad de mercado puro (Bypass de carga)</span>
-                            </div>
-                            
-                            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                                <div class="flex-1">
-                                    <select id="exceptional-vessel-category-select" aria-label="Categoría de buque para barrido exploratorio" class="w-full bg-slate-950 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-amber-500 font-medium">
-                                        <option value="Coaster">Coaster (&lt; 5.000 DWT)</option>
-                                        <option value="Mini Bulker">Mini Bulker (5.000 - 15.000 DWT)</option>
-                                        <option value="Handysize" selected>Handysize (15.000 - 35.000 DWT)</option>
-                                        <option value="Handymax">Handymax (35.000 - 50.000 DWT)</option>
-                                        <option value="Supramax">Supramax (50.000 - 60.000 DWT)</option>
-                                        <option value="Ultramax">Ultramax (60.000 - 65.000 DWT)</option>
-                                        <option value="Panamax">Panamax (65.000 - 85.000 DWT)</option>
-                                    </select>
-                                </div>
-                                <button type="button" id="btn-explorar-categoria" onclick="window.ejecutarBarridoExploratorioExcepcional()" class="bg-amber-600 hover:bg-amber-500 text-slate-950 font-black px-4 py-2 rounded-lg text-xs transition-all flex items-center justify-center gap-2 shadow-md shrink-0 cursor-pointer">
-                                    <i class="fa-solid fa-radar text-sm"></i>
-                                    <span>Explorar Categoría</span>
-                                </button>
-                            </div>
-
-                            <div id="exceptional-category-pills" class="flex flex-wrap gap-1.5 mt-2.5">
-                                <button type="button" onclick="window.selectExceptionalCategoryPill('Coaster')" class="exceptional-pill px-2.5 py-1 text-[10px] font-bold rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-500/60 hover:text-amber-300 transition">Coaster</button>
-                                <button type="button" onclick="window.selectExceptionalCategoryPill('Mini Bulker')" class="exceptional-pill px-2.5 py-1 text-[10px] font-bold rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-500/60 hover:text-amber-300 transition">Mini Bulker</button>
-                                <button type="button" onclick="window.selectExceptionalCategoryPill('Handysize')" class="exceptional-pill px-2.5 py-1 text-[10px] font-bold rounded-full border border-amber-500/80 bg-amber-500/10 text-amber-300 transition font-black">Handysize</button>
-                                <button type="button" onclick="window.selectExceptionalCategoryPill('Handymax')" class="exceptional-pill px-2.5 py-1 text-[10px] font-bold rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-500/60 hover:text-amber-300 transition">Handymax</button>
-                                <button type="button" onclick="window.selectExceptionalCategoryPill('Supramax')" class="exceptional-pill px-2.5 py-1 text-[10px] font-bold rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-500/60 hover:text-amber-300 transition">Supramax</button>
-                                <button type="button" onclick="window.selectExceptionalCategoryPill('Ultramax')" class="exceptional-pill px-2.5 py-1 text-[10px] font-bold rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-500/60 hover:text-amber-300 transition">Ultramax</button>
-                                <button type="button" onclick="window.selectExceptionalCategoryPill('Panamax')" class="exceptional-pill px-2.5 py-1 text-[10px] font-bold rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-500/60 hover:text-amber-300 transition">Panamax</button>
-                            </div>
-
-                            <div id="exceptional-sweep-result" class="mt-3 hidden p-3 bg-blue-50 border border-blue-200 border-l-4 border-l-blue-500 rounded-lg text-xs text-slate-800 shadow-sm flex items-center justify-between transition-all" aria-live="polite">
-                                <div class="flex items-center gap-2.5">
-                                    <div class="p-2 rounded-md bg-blue-100 text-blue-600">
-                                        <i class="fa-solid fa-binoculars text-base"></i>
-                                    </div>
-                                    <div>
-                                        <span id="exceptional-sweep-message" class="font-medium text-slate-800 block"></span>
-                                        <span id="exceptional-sweep-subtext" class="text-[10px] text-blue-700 block mt-0.5">Visibilidad de mercado puro (aislado de Coincidencia / Data Bridge)</span>
-                                    </div>
-                                </div>
-                                <button type="button" onclick="document.getElementById('exceptional-sweep-result').classList.add('hidden')" class="text-slate-400 hover:text-slate-700 p-1 text-xs" title="Cerrar resultado">
-                                    <i class="fa-solid fa-xmark"></i>
-                                </button>
-                            </div>
-                        </div>
                     </div>
                     <!-- Map Card -->
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="false">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="true">
                         <div class="collapsible-section-header flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <h3 data-collapsible-title data-i18n="density_map_title" class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                                 <i class="fa-solid fa-map-location-dot text-indigo-400"></i>
@@ -12247,7 +12194,7 @@
                     </div>
 
                     <!-- Vessels List -->
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="false">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="true">
                         <div class="collapsible-section-header flex items-center justify-between">
                             <h3 data-collapsible-title data-i18n="density_live_vessels_title" class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                                 <i class="fa-solid fa-list text-emerald-400"></i>
