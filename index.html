@@ -29108,11 +29108,60 @@
             await autoFillPDA('pod', false, { deferEngine: true });
         }
 
-        function synchronizeMasterRouteCalculations() {
+        function resolveMasterVesselCalculationBranch() {
+            const vesselDwt = parseFloat(document.getElementById('vessel-dwt')?.value) || Number(State.dwt) || 0;
+            const pricingClass = typeof getVesselClass === 'function'
+                ? getVesselClass(vesselDwt)
+                : { categoryName: getCentralizedVesselClass(), type: 'Cost-Plus' };
+            const centralizedClass = typeof getCentralizedVesselClass === 'function'
+                ? getCentralizedVesselClass()
+                : '';
+            const classificationSource = centralizedClass
+                && centralizedClass !== 'Desconocido'
+                && centralizedClass !== 'Unknown'
+                ? centralizedClass
+                : pricingClass.categoryName;
+            const normalizedClass = classificationSource
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toUpperCase();
+            const isHandysize = normalizedClass.includes('HANDYSIZE');
+            const isCoasterOrMiniBulker = normalizedClass.includes('COASTER')
+                || normalizedClass.includes('MINI-BULKER')
+                || normalizedClass.includes('MINI BULKER')
+                || normalizedClass.includes('MINIBULKER');
+
+            return {
+                vesselDwt,
+                categoryName: pricingClass.categoryName,
+                mode: isHandysize || (!isCoasterOrMiniBulker && pricingClass.type === 'TCE Inverso')
+                    ? 'FEARNLEYS_TCE'
+                    : 'COST_PLUS_ROUTE'
+            };
+        }
+
+        async function synchronizeMasterRouteCalculations() {
             if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
             if (typeof calculateAdjustedEtaAndDays === 'function') calculateAdjustedEtaAndDays();
             if (typeof runEngine === 'function') runEngine();
-            if (typeof syncCostPlusFromRoute === 'function') syncCostPlusFromRoute(false);
+
+            const branch = resolveMasterVesselCalculationBranch();
+            if (branch.mode === 'FEARNLEYS_TCE') {
+                if (typeof syncInverseTceFromVoyage === 'function') {
+                    syncInverseTceFromVoyage(State.cargo, State.daysSea, State.daysPort);
+                }
+                await handleFetchFearnleysTce({ managedByMaster: true });
+                if (typeof calculateInverseTce === 'function') calculateInverseTce();
+                return branch;
+            }
+
+            const synchronized = typeof syncCostPlusFromRoute === 'function'
+                ? syncCostPlusFromRoute(false)
+                : false;
+            if (!synchronized) {
+                throw new Error(`No se pudieron sincronizar los cálculos de ruta para ${branch.categoryName}.`);
+            }
+            return branch;
         }
 
         function calculateMasterFreightAndDemurrage() {
@@ -29137,14 +29186,13 @@
                     await validarYCalcularSeccion2({ deferDependentCalculations: true, showFeedback: false });
                     await consultCurrentCostsAndPdasForMaster();
                     await recalculateAdjustedAndSave({ managedByMaster: true });
-                    synchronizeMasterRouteCalculations();
+                    await synchronizeMasterRouteCalculations();
                     calculateMasterFreightAndDemurrage();
                     executeBatchedCalculationsCore();
+                    if (typeof evaluateReactiveSyncStatus === 'function') evaluateReactiveSyncStatus();
                     return { ...State };
                 });
 
-                if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
-                if (typeof evaluateReactiveSyncStatus === 'function') evaluateReactiveSyncStatus();
                 if (typeof showToast === 'function') {
                     showToast('Operación completa calculada: costes, PDAs, ajustes, ruta, fletes y demoras.', 'success');
                 }
@@ -60069,21 +60117,25 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
         }
 
-        async function handleFetchFearnleysTce() {
-            if (isFetchingFearnleysTce) return;
+        async function handleFetchFearnleysTce(options = {}) {
+            const managedByMaster = options.managedByMaster === true;
+            if (isFetchingFearnleysTce) {
+                if (managedByMaster) throw new Error('La consulta a Fearnleys ya está en curso.');
+                return null;
+            }
 
             isManualFearnleysOverride = false;
             updateManualFearnleysOverrideUi();
             const localCache = readFearnleysMarketData(currentVesselPricingCategory);
             if (localCache) {
                 applyFearnleysMarketData(localCache, true);
-                return;
+                return localCache;
             }
 
             const button = document.getElementById('btn-fetch-fearnleys-tce');
             const status = document.getElementById('inverse-tce-status');
             isFetchingFearnleysTce = true;
-            if (button) {
+            if (button && !managedByMaster) {
                 button.disabled = true;
                 button.textContent = 'Consultando reporte...';
             }
@@ -60110,11 +60162,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 };
                 writeFearnleysMarketData(nextCacheEntry);
                 applyFearnleysMarketData(nextCacheEntry, Boolean(payload.cacheHit));
+                return nextCacheEntry;
             } catch (error) {
                 updateFearnleysWeekLabel('No se pudo actualizar el índice de Fearnleys.');
+                if (managedByMaster) throw error;
+                return null;
             } finally {
                 isFetchingFearnleysTce = false;
-                if (button) {
+                if (button && !managedByMaster) {
                     button.disabled = false;
                     button.textContent = '✨ Consultar Fearnleys IA';
                 }
