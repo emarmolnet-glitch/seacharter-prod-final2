@@ -46730,7 +46730,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const lon = parseFloat(
                 v.longitude ?? v.lon ?? v.lng ?? v.Longitude ?? v.AIS_Live_Lon ?? sourcePayload.longitude ?? sourcePayload.lon ?? sourcePayload.lng ?? sourcePayload.AIS_Live_Lon ?? meta.AIS_Live_Lon ?? meta.longitude ?? meta.Port_Registro_Lon ?? position.Longitude ?? position.longitude
             );
-            const speed = parseFloat(v.speed ?? sourcePayload.speed ?? meta.speed ?? position.Sog ?? position.sog ?? 0) || 0;
+            const speed = typeof window.readRealVesselSpeed === 'function'
+                ? window.readRealVesselSpeed({ ...v, source_payload: sourcePayload, MetaData: meta, PositionReport: position })
+                : (() => {
+                    const rawSpeed = v.speed ?? v.sog ?? v.SOG ?? sourcePayload.speed ?? sourcePayload.sog ?? sourcePayload.SOG ?? meta.speed ?? meta.sog ?? meta.SOG ?? position.Sog ?? position.sog ?? position.SOG;
+                    const parsedSpeed = rawSpeed === null || rawSpeed === undefined || rawSpeed === '' ? Number.NaN : Number(rawSpeed);
+                    return Number.isFinite(parsedSpeed) && parsedSpeed >= 0 ? parsedSpeed : null;
+                })();
             const rawDwtVal = v.DWT || v.dwt || sourcePayload.DWT || sourcePayload.dwt || meta.DWT || meta.dwt;
             const dwt = (rawDwtVal !== undefined && rawDwtVal !== null && rawDwtVal !== "N/A" && rawDwtVal !== "Unknown")
                 ? parseFloat(rawDwtVal)
@@ -46759,15 +46765,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 longitude: Number.isFinite(lon) ? lon : undefined,
                 lat: Number.isFinite(lat) ? lat : undefined,
                 lon: Number.isFinite(lon) ? lon : undefined,
-                speed,
+                speed: speed === null ? undefined : speed,
                 shipType: shipTypeVal,
                 ShipType: v.ShipType || shipTypeVal,
                 vesselClass: v.vesselClass || classification.vClass,
                 dwt: classification.dwt !== undefined ? classification.dwt : dwt,
                 NavigationalStatus: statusVal,
-                statusLabel: v.statusLabel || (speed >= 1 ? "Navegando" : "En Puerto"),
                 timestamp: v.timestamp || v.lastSeen || v.created_at || v.createdAt || Date.now()
             };
+            const inferredStatusLabel = typeof window.inferSpatialVesselStatus === 'function'
+                ? window.inferSpatialVesselStatus(normalizedVessel, getDensityReferencePortCoordinates())
+                : (v.statusLabel || statusVal || 'Estado N/D');
+            normalizedVessel.statusLabel = inferredStatusLabel === 'Estado N/D' ? undefined : inferredStatusLabel;
             return typeof hydrateRadarVesselCargoType === 'function'
                 ? hydrateRadarVesselCargoType(normalizedVessel)
                 : normalizedVessel;
@@ -48700,9 +48709,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const longitude = Number(vessel.longitude ?? vessel.lng ?? vessel.lon);
                 const vesselName = vessel.vesselName || vessel.vessel_name || vessel.name || vessel.ShipName || 'Buque sin nombre';
                 const imo = vessel.imo || vessel.IMO || '-';
-                const speed = Number(vessel.speed ?? vessel.sog ?? vessel.SOG);
+                const speed = typeof window.readRealVesselSpeed === 'function'
+                    ? window.readRealVesselSpeed(vessel)
+                    : Number.NaN;
                 const vesselClass = vessel.vesselClass || vessel.vesselType || vessel.shipType || vessel.ShipType || 'Unknown';
-                const navigationStatus = vessel.statusLabel || vessel.navigationStatus || vessel.navigationalStatus || vessel.NavigationalStatus || '-';
+                const navigationStatus = typeof window.inferSpatialVesselStatus === 'function'
+                    ? window.inferSpatialVesselStatus(vessel, getDensityReferencePortCoordinates())
+                    : (vessel.statusLabel || vessel.navigationStatus || vessel.navigationalStatus || vessel.NavigationalStatus || 'Estado N/D');
                 const grossTonnage = readDensityPositiveNumber(vessel, ['grossTonnage', 'gross_tonnage', 'gt', 'GT']);
                 const dwt = readDensityPositiveNumber(vessel, ['dwt', 'DWT', 'deadweight']);
                 const loaMeters = readDensityPositiveNumber(vessel, ['loaMeters', 'loa_meters', 'loa', 'LOA', 'lengthOverall', 'length_overall', 'length']);
@@ -48729,7 +48742,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     <td class="py-3 px-3 font-semibold text-slate-200">${escapeDensityTableText(vesselName)}${commercialRankHtml}</td>
                     <td class="py-3 px-3 text-slate-400 mono">${escapeDensityTableText(imo)}</td>
                     <td class="py-3 px-3 text-slate-400 mono">${escapeDensityTableText(position)}</td>
-                    <td class="py-3 px-3 text-slate-400 mono">${Number.isFinite(speed) ? `${speed.toFixed(1)} kn` : '-'}<span class="text-[10px] text-emerald-400 block">${escapeDensityTableText(navigationStatus)}</span></td>
+                    <td class="py-3 px-3 text-slate-400 mono">${Number.isFinite(speed) ? `${speed.toFixed(1)} kn` : 'N/D'}<span class="text-[10px] text-emerald-400 block">${escapeDensityTableText(navigationStatus)}</span></td>
                     <td class="py-3 px-3"><span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700">${escapeDensityTableText(vesselClass)}</span></td>
                     <td class="py-3 px-3 font-bold ${grossTonnage ? 'text-cyan-300' : 'text-amber-400'}">${grossTonnage ? grossTonnage.toLocaleString('es-ES') : 'REQUERIDO'}</td>
                     <td class="py-3 px-3 text-slate-300 mono">${dwt ? dwt.toLocaleString('es-ES') : 'N/D'}</td>
@@ -48875,6 +48888,31 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 : null;
         }
         window.getDensityPolCoordinates = getDensityPolCoordinates;
+
+        function getDensityReferencePortCoordinates() {
+            const routeState = State?.geopoliticalRoute && typeof State.geopoliticalRoute === 'object'
+                ? State.geopoliticalRoute
+                : {};
+            const candidates = [
+                getDensityPolCoordinates(),
+                State?.podCoordinates,
+                State?.pod_coordinates,
+                routeState?.polCoordinates,
+                routeState?.podCoordinates,
+                window.GlobalStore?.podCoordinates,
+                window.GlobalStore?.pod_coordinates,
+                window.coreProMatchingRouteContext?.podCoordinates,
+                window.coreProMatchingRouteContext?.pod_coordinates
+            ];
+            const uniqueCoordinates = new Map();
+            candidates.forEach(candidate => {
+                const coordinates = normalizeRoutePortCoordinates(candidate);
+                if (!coordinates) return;
+                uniqueCoordinates.set(`${coordinates.lat.toFixed(6)}:${coordinates.lon.toFixed(6)}`, coordinates);
+            });
+            return Array.from(uniqueCoordinates.values());
+        }
+        window.getDensityReferencePortCoordinates = getDensityReferencePortCoordinates;
 
         async function ensureOpenShipsDensitySnapshot() {
             if (!getDensityPolCoordinates()) return [];

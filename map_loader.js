@@ -309,7 +309,78 @@
                   Math.cos(vLat * Math.PI / 180) * Math.cos(pLat * Math.PI / 180) *
                   Math.sin(dLon / 2) * Math.sin(dLon / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return Math.round(R * c);
+        return Number((R * c).toFixed(3));
+    }
+
+    function getVesselDataScopes(vessel) {
+        if (!vessel || typeof vessel !== 'object') return [];
+        const sourcePayload = parseAisSourcePayload(vessel.source_payload || vessel.sourcePayload);
+        const message = vessel.Message || vessel.message || sourcePayload.Message || sourcePayload.message || {};
+        const metadata = vessel.MetaData || vessel.metadata || message.MetaData || message.metadata || sourcePayload.MetaData || sourcePayload.metadata || {};
+        const position = vessel.PositionReport
+            || vessel.StandardClassBPositionReport
+            || vessel.ExtendedClassBPositionReport
+            || vessel.position
+            || message.PositionReport
+            || message.StandardClassBPositionReport
+            || message.ExtendedClassBPositionReport
+            || message.position
+            || sourcePayload.PositionReport
+            || sourcePayload.StandardClassBPositionReport
+            || sourcePayload.ExtendedClassBPositionReport
+            || sourcePayload.position
+            || {};
+        return [vessel, sourcePayload, message, metadata, position];
+    }
+
+    function readVesselField(vessel, aliases) {
+        for (const scope of getVesselDataScopes(vessel)) {
+            for (const alias of aliases) {
+                const value = scope?.[alias];
+                if (value !== undefined && value !== null && String(value).trim() !== '') return value;
+            }
+        }
+        return null;
+    }
+
+    function readRealVesselSpeed(vessel) {
+        const rawSpeed = readVesselField(vessel, ['speed_over_ground', 'speedOverGround', 'speed', 'Speed', 'sog', 'Sog', 'SOG']);
+        if (rawSpeed === null) return null;
+        const speed = Number(String(rawSpeed).replace(',', '.'));
+        return Number.isFinite(speed) && speed >= 0 ? speed : null;
+    }
+
+    function inferSpatialVesselStatus(vessel, referencePorts = [], options = {}) {
+        const destinationDisplay = readVesselField(vessel, ['destinationDisplay', 'destination_display']);
+        if (destinationDisplay && /\ben\s+ruta\b/i.test(String(destinationDisplay))) return 'Navegando';
+
+        const directStatus = readVesselField(vessel, [
+            'navigation_status', 'navigationStatus', 'navigational_status',
+            'navigationalStatus', 'NavigationalStatus', 'status_navigation', 'statusNavigation', 'statusLabel'
+        ]);
+        const normalizedDirectStatus = String(directStatus ?? '').trim();
+        if (normalizedDirectStatus && !['-', 'N/D', 'ESTADO N/D'].includes(normalizedDirectStatus.toUpperCase())) {
+            return normalizedDirectStatus;
+        }
+
+        const latitude = Number(readVesselField(vessel, ['latitude', 'lat', 'Latitude', 'AIS_Live_Lat', 'LAT']));
+        const longitude = Number(readVesselField(vessel, ['longitude', 'lon', 'lng', 'Longitude', 'AIS_Live_Lon', 'LON', 'LONG']));
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return 'Estado N/D';
+
+        const ports = (Array.isArray(referencePorts) ? referencePorts : [referencePorts])
+            .map(port => ({
+                lat: Number(port?.lat ?? port?.latitude ?? port?.Latitude),
+                lon: Number(port?.lon ?? port?.lng ?? port?.longitude ?? port?.Longitude)
+            }))
+            .filter(port => Number.isFinite(port.lat) && Number.isFinite(port.lon));
+        if (ports.length === 0) return 'Estado N/D';
+
+        const nearestDistanceNm = ports.reduce((nearest, port) => {
+            const distanceNm = calculateDistanceToPort(latitude, longitude, port.lat, port.lon);
+            return distanceNm === null ? nearest : Math.min(nearest, distanceNm);
+        }, Infinity);
+        const portRadiusNm = Number.isFinite(Number(options.portRadiusNm)) ? Number(options.portRadiusNm) : 3;
+        return nearestDistanceNm < portRadiusNm ? 'En Puerto / Fondeado' : 'En tránsito (Alta mar)';
     }
 
     function isValidPortText(val) {
@@ -479,7 +550,7 @@
         const normalizedGt = normalizeNumeric(read(['GT', 'gt', 'grossTonnage', 'gross_tonnage']));
         const normalizedDwt = normalizeNumeric(read(['DWT_real', 'dwt_real', 'DWT', 'dwt', 'deadweight', 'deadweight_tonnage']));
         const normalizedDraft = normalizeNumeric(read(['Draft', 'draft', 'maxDraft', 'max_draft', 'draft_meters']));
-        const speed = normalizeNumeric(read(['speed', 'sog', 'Sog', 'SOG'])) || 0;
+        const speed = readRealVesselSpeed(ship);
         const navigation = resolveAisNavigationCourse(scopes);
         const destination = firstDefined(read(['destination', 'Destination', 'current_destination', 'plannedDestination', 'destino_actual', 'destino', 'dest', 'Dest']), 'N/A');
         const lastPortOfCall = firstDefined(read(['lastPortOfCall', 'last_port_of_call', 'ultimo_puerto', 'LastPort', 'lastPort', 'DeparturePort']), 'N/A');
@@ -521,7 +592,7 @@
             dwt: normalizedDwt === null ? undefined : normalizedDwt,
             Draft: normalizedDraft === null ? undefined : normalizedDraft,
             draft: normalizedDraft === null ? undefined : normalizedDraft,
-            speed,
+            speed: speed === null ? undefined : speed,
             course: navigation.cog === null ? undefined : navigation.cog,
             cog: navigation.cog === null ? undefined : navigation.cog,
             COG: navigation.cog === null ? undefined : navigation.cog,
@@ -1169,6 +1240,8 @@
         searchNodes,
         getSearchNodesForPort,
         calculateDistanceToPort,
+        readRealVesselSpeed,
+        inferSpatialVesselStatus,
         getGeofencedPortDisplay,
         getActivePolInfo,
         _aisStreamState: aisStreamState,
@@ -1184,6 +1257,8 @@
         window.styleConfig = MAP_STYLE_CONFIG;
         window.SEA_MAP_STYLE_CONFIG = MAP_STYLE_CONFIG;
         window.calculateDistanceToPort = calculateDistanceToPort;
+        window.readRealVesselSpeed = readRealVesselSpeed;
+        window.inferSpatialVesselStatus = inferSpatialVesselStatus;
         window.getGeofencedPortDisplay = getGeofencedPortDisplay;
         window.getActivePolInfo = getActivePolInfo;
     }

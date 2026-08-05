@@ -17,6 +17,35 @@ test('calculateDistanceToPort calculates correct Haversine distance in nautical 
     assert.equal(mapLoader.calculateDistanceToPort(36.14, 'invalid', 36.14, -5.35), null);
 });
 
+test('inferSpatialVesselStatus classifies vessels by the nearest known port', () => {
+    const port = { lat: 36.14, lon: -5.35 };
+
+    assert.equal(
+        mapLoader.inferSpatialVesselStatus({ latitude: 36.15, longitude: -5.35 }, [port]),
+        'En Puerto / Fondeado'
+    );
+    assert.equal(
+        mapLoader.inferSpatialVesselStatus({ latitude: 36.25, longitude: -5.35 }, [port]),
+        'En tránsito (Alta mar)'
+    );
+});
+
+test('inferSpatialVesselStatus prioritizes an En ruta destination display', () => {
+    const status = mapLoader.inferSpatialVesselStatus({
+        latitude: 36.14,
+        longitude: -5.35,
+        destinationDisplay: 'En ruta (a 0 NM de Gibraltar)',
+        navigational_status: 'Moored'
+    }, [{ lat: 36.14, lon: -5.35 }]);
+
+    assert.equal(status, 'Navegando');
+});
+
+test('readRealVesselSpeed preserves real zero and rejects missing speed', () => {
+    assert.equal(mapLoader.readRealVesselSpeed({ PositionReport: { Sog: 0 } }), 0);
+    assert.equal(mapLoader.readRealVesselSpeed({ latitude: 36.14, longitude: -5.35 }), null);
+});
+
 test('getGeofencedPortDisplay extracts reported AIS Destination and appends distance to POL', () => {
     const vessel = {
         latitude: 36.14,
