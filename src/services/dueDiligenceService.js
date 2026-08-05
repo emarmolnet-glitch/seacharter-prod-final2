@@ -113,15 +113,15 @@ export async function fetchDueDiligence(
 
 export async function persistDueDiligenceVessel(
   vessel,
-  { endpoint = DEFAULT_PERSISTENCE_ENDPOINT, fetchImpl = globalThis.fetch, signal } = {},
+  { endpoint = DEFAULT_PERSISTENCE_ENDPOINT, fetchImpl = globalThis.fetch, signal, action = 'save' } = {},
 ) {
   if (typeof fetchImpl !== 'function') {
     throw new Error('No hay un cliente HTTP disponible para guardar Due Diligence.');
   }
   const response = await fetchImpl(endpoint, {
-    method: 'PUT',
+    method: action === 'discard' ? 'PATCH' : 'PUT',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ vessel }),
+    body: JSON.stringify({ vessel, action }),
     signal,
   });
   const rawText = await response.text();
@@ -137,6 +137,10 @@ export async function persistDueDiligenceVessel(
     throw new Error(result.error || `No se pudo guardar el buque en Neon (HTTP ${response.status}).`);
   }
   return result;
+}
+
+export async function discardDueDiligenceVessel(vessel, options = {}) {
+  return persistDueDiligenceVessel(vessel, { ...options, action: 'discard' });
 }
 
 export const DUE_DILIGENCE_ENDPOINT = DEFAULT_ENDPOINT;

@@ -46905,10 +46905,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 	            activeVessel: null,
 	            calculatorVessel: null,
 	            dueDiligenceVessels: [],
+	            discardedVesselImos: [],
+	            discardedVesselMmsis: [],
             getCommercialVesselState() {
                 return {
                     rawVessels: Array.isArray(this.rawVessels) ? this.rawVessels : [],
                     filteredVessels: Array.isArray(this.filteredVessels) ? this.filteredVessels : [],
+                    discardedVesselImos: Array.isArray(this.discardedVesselImos) ? this.discardedVesselImos : [],
+                    discardedVesselMmsis: Array.isArray(this.discardedVesselMmsis) ? this.discardedVesselMmsis : [],
                     isGlobalDebugActive: this.isGlobalDebugActive === true,
                     targetCargoDwt: Number(this.targetCargoDwt) || 0
                 };
@@ -46950,6 +46954,37 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             },
             setTargetCargoDwt(targetCargoDwt, metadata = {}) {
                 return this.setCommercialVesselState({ targetCargoDwt }, metadata);
+            },
+            markVesselDiscarded(identity = {}, metadata = {}) {
+                const safeIdentity = identity && typeof identity === 'object' ? identity : { imo: identity };
+                const normalizedImo = String(safeIdentity.imo || '').replace(/\D/g, '').slice(-7);
+                const normalizedMmsi = String(safeIdentity.mmsi || '').replace(/\D/g, '');
+                const hasImo = normalizedImo.length === 7;
+                const hasMmsi = normalizedMmsi.length === 9;
+                if (!hasImo && !hasMmsi) return this.getCommercialVesselState();
+                const discardedImos = new Set(Array.isArray(this.discardedVesselImos) ? this.discardedVesselImos : []);
+                const discardedMmsis = new Set(Array.isArray(this.discardedVesselMmsis) ? this.discardedVesselMmsis : []);
+                if (hasImo) discardedImos.add(normalizedImo);
+                if (hasMmsi) discardedMmsis.add(normalizedMmsi);
+                this.discardedVesselImos = Array.from(discardedImos);
+                this.discardedVesselMmsis = Array.from(discardedMmsis);
+                const keepVessel = vessel => {
+                    const metadataRecord = vessel?.MetaData && typeof vessel.MetaData === 'object' ? vessel.MetaData : {};
+                    const vesselImo = String(vessel?.imo ?? vessel?.IMO ?? vessel?.imo_number ?? vessel?.imoNumber ?? metadataRecord.imo ?? metadataRecord.IMO ?? '')
+                        .replace(/\D/g, '')
+                        .slice(-7);
+                    const vesselMmsi = String(vessel?.mmsi ?? vessel?.MMSI ?? metadataRecord.mmsi ?? metadataRecord.MMSI ?? '')
+                        .replace(/\D/g, '');
+                    return !((hasImo && vesselImo === normalizedImo) || (hasMmsi && vesselMmsi === normalizedMmsi));
+                };
+                ['rawVessels', 'filteredVessels', 'vessels', 'renderedAisVessels', 'matchingVessels', 'compatibleVessels'].forEach(collection => {
+                    if (Array.isArray(this[collection])) this[collection] = this[collection].filter(keepVessel);
+                });
+                const state = this.getCommercialVesselState();
+                window.dispatchEvent(new CustomEvent('commercial-vessel-state-updated', {
+                    detail: { ...state, source: String(metadata.source || 'vessel-discarded') }
+                }));
+                return state;
             },
             setVessels(newVessels) {
                 if (window.matchingAuditModeState?.enabled) return;
@@ -48590,14 +48625,30 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const rawVessels = normalizeDensityVesselCollection(storedRawVessels);
             const filteredVessels = normalizeDensityVesselCollection(storedFilteredVessels);
             const setIsGlobalDebugActive = densityStore?.setIsGlobalDebugActive?.bind(densityStore);
+            const discardedImos = new Set(
+                (Array.isArray(densityStore?.discardedVesselImos) ? densityStore.discardedVesselImos : [])
+                    .map(value => String(value || '').replace(/\D/g, '').slice(-7))
+                    .filter(value => value.length === 7)
+            );
+            const discardedMmsis = new Set(
+                (Array.isArray(densityStore?.discardedVesselMmsis) ? densityStore.discardedVesselMmsis : [])
+                    .map(value => String(value || '').replace(/\D/g, ''))
+                    .filter(value => value.length === 9)
+            );
             const displayVessels = isGlobalDebugActive ? filteredVessels : rawVessels;
+            const visibleVessels = displayVessels.filter(vessel => {
+                const identity = getDensityVesselIdentity(vessel);
+                const discardedByImo = Boolean(identity?.imo && discardedImos.has(identity.imo));
+                const discardedByMmsi = Boolean(identity?.mmsi && discardedMmsis.has(identity.mmsi));
+                return !discardedByImo && !discardedByMmsi;
+            });
             window.densityCommercialState = {
                 rawVessels,
                 filteredVessels,
                 isGlobalDebugActive,
                 setIsGlobalDebugActive
             };
-            return displayVessels;
+            return visibleVessels;
         }
         window.getDensityDisplayVessels = getDensityDisplayVessels;
 
