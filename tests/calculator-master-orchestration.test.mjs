@@ -19,7 +19,7 @@ test('master calculation preserves the required sequential workflow', () => {
   const validation = source.indexOf('await validarYCalcularSeccion2');
   const costsAndPdas = source.indexOf('await consultCurrentCostsAndPdasForMaster');
   const adjustments = source.indexOf('await recalculateAdjustedAndSave');
-  const route = source.indexOf('synchronizeMasterRouteCalculations();');
+  const route = source.indexOf('await synchronizeMasterRouteCalculations();');
   const freightAndDemurrage = source.indexOf('calculateMasterFreightAndDemurrage();');
 
   assert.ok(validation >= 0);
@@ -28,6 +28,21 @@ test('master calculation preserves the required sequential workflow', () => {
   assert.ok(adjustments < route);
   assert.ok(route < freightAndDemurrage);
   assert.doesNotMatch(source, /useEffect\s*\(/);
+});
+
+test('master calculation branches by vessel class without chained effects', () => {
+  assert.match(indexSource, /function resolveMasterVesselCalculationBranch\(\)/);
+  assert.match(indexSource, /normalizedClass\.includes\('HANDYSIZE'\)/);
+  assert.match(indexSource, /normalizedClass\.includes\('COASTER'\)/);
+  assert.match(indexSource, /normalizedClass\.includes\('MINI-BULKER'\)/);
+  assert.match(indexSource, /branch\.mode === 'FEARNLEYS_TCE'[\s\S]*await handleFetchFearnleysTce\(\{ managedByMaster: true \}\)/);
+  assert.match(indexSource, /syncCostPlusFromRoute\(false\)/);
+});
+
+test('Fearnleys failures propagate to the master orchestrator', () => {
+  assert.match(indexSource, /async function handleFetchFearnleysTce\(options = \{\}\)/);
+  assert.match(indexSource, /const managedByMaster = options\.managedByMaster === true/);
+  assert.match(indexSource, /catch \(error\) \{[\s\S]*if \(managedByMaster\) throw error/);
 });
 
 test('master calculation batches store notifications across awaited work', () => {
