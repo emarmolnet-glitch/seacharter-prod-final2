@@ -117,13 +117,13 @@ test('section 2 uses local state buffering and a confirmation button strictly at
   assert.match(indexSource, /function updateSection2LocalState\(id, value\)/);
   assert.match(indexSource, /window\.section2LocalState/);
 
-  // 2. Confirm confirmation button exists with ID btn-validate-section2 and calls validarYCalcularSeccion2()
+  // 2. Confirm confirmation button exists with ID btn-validate-section2 and calls the master orchestrator
   assert.match(indexSource, /id="btn-validate-section2"/);
-  assert.match(indexSource, /onclick="validarYCalcularSeccion2\(\)"/);
+  assert.match(indexSource, /onclick="handleMasterValidationAndCalculate\(event\)"/);
   assert.match(indexSource, /Validar Especificaciones \/ Calcular/);
 
   // 3. Confirm validarYCalcularSeccion2 updates State and triggers global calculation functions
-  assert.match(indexSource, /function validarYCalcularSeccion2\(\)/);
+  assert.match(indexSource, /async function validarYCalcularSeccion2\(options = \{\}\)/);
   assert.match(indexSource, /if \(typeof runEngine === 'function'\) runEngine\(\);/);
 
   // 4. Confirm inputs in section 2 use updateSection2LocalState instead of runEngine on input
@@ -206,4 +206,3 @@ test('Centralized Vessel Classification and Synchronized Helper Text in Section 
   // Test dynamic cycles for centralized vessel class
   assert.equal(context.getCiclosForMethod('Cuchara (Grab) - Grúa Barco', 'Mini-Bulker'), 12);
 });
-

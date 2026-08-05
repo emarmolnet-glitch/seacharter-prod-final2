@@ -8412,7 +8412,7 @@
 
                         <!-- Confirmation / Validation Button for Section 2 -->
                         <div class="mt-5 flex justify-end pt-3 border-t border-slate-800/80">
-                            <button id="btn-validate-section2" type="button" onclick="validarYCalcularSeccion2()" class="w-full md:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs uppercase tracking-wider px-6 py-3 rounded-lg shadow-lg hover:shadow-indigo-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                            <button id="btn-validate-section2" type="button" onclick="handleMasterValidationAndCalculate(event)" class="w-full md:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs uppercase tracking-wider px-6 py-3 rounded-lg shadow-lg hover:shadow-indigo-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-wait disabled:opacity-70" aria-live="polite">
                                 <i class="fa-solid fa-calculator text-sm"></i>
                                 <span>Validar Especificaciones / Calcular</span>
                             </button>
@@ -15414,6 +15414,18 @@
                 this.isBatching = true;
                 try {
                     fn();
+                } finally {
+                    this.isBatching = wasBatching;
+                    if (!wasBatching) {
+                        this.notify();
+                    }
+                }
+            },
+            async batchAsync(fn) {
+                const wasBatching = this.isBatching;
+                this.isBatching = true;
+                try {
+                    return await fn();
                 } finally {
                     this.isBatching = wasBatching;
                     if (!wasBatching) {
@@ -28383,6 +28395,8 @@
 
         // --- LÓGICA DE NEGOCIO Y CASCADA DE GASTOS ---
         function autoScaleVesselAndCosts() {
+            const options = arguments[0] || {};
+            const deferDependentCalculations = options.deferDependentCalculations === true;
             const cargo = parseFloat(document.getElementById('cargo-qty').value) || 0;
             const vesselName = (document.getElementById('vessel-name').value || '').trim();
             const isRealVessel = vesselName && vesselName.toUpperCase() !== 'TBN';
@@ -28399,13 +28413,15 @@
                 document.getElementById('vessel-dwt').value = suggestedDWT;
             }
 
-            handleDWTChange();
-            if (typeof debouncedAutoFillPDA === 'function') {
-                debouncedAutoFillPDA('pol', false);
-                debouncedAutoFillPDA('pod', false);
-            } else if (typeof autoFillPDA === 'function') {
-                autoFillPDA('pol', false);
-                autoFillPDA('pod', false);
+            handleDWTChange(false, !deferDependentCalculations);
+            if (!deferDependentCalculations) {
+                if (typeof debouncedAutoFillPDA === 'function') {
+                    debouncedAutoFillPDA('pol', false);
+                    debouncedAutoFillPDA('pod', false);
+                } else if (typeof autoFillPDA === 'function') {
+                    autoFillPDA('pol', false);
+                    autoFillPDA('pod', false);
+                }
             }
             updateCargoUnit();
         }
@@ -28988,7 +29004,9 @@
         }
         window.updateSection2LocalState = updateSection2LocalState;
 
-        function validarYCalcularSeccion2() {
+        async function validarYCalcularSeccion2(options = {}) {
+            const deferDependentCalculations = options.deferDependentCalculations === true;
+            const showFeedback = options.showFeedback !== false;
             const el = (id) => document.getElementById(id);
             const num = (id) => parseFloat(el(id)?.value) || 0;
             const val = (id) => el(id)?.value || '';
@@ -29041,42 +29059,108 @@
             });
 
             if (typeof handleDWTChange === 'function') {
-                handleDWTChange(true, true);
+                handleDWTChange(true, !deferDependentCalculations);
             }
             if (typeof autoScaleVesselAndCosts === 'function') {
-                autoScaleVesselAndCosts();
-            }
-            if (typeof debouncedAutoFillPDA === 'function') {
-                debouncedAutoFillPDA('pol', false);
-                debouncedAutoFillPDA('pod', false);
-            } else if (typeof autoFillPDA === 'function') {
-                autoFillPDA('pol', false);
-                autoFillPDA('pod', false);
-            }
-            if (typeof recalcularDiasPuerto === 'function') {
-                recalcularDiasPuerto();
+                autoScaleVesselAndCosts({ deferDependentCalculations });
             }
             SeaCharterStore.set(readValidatedCargoOperationState(), { force: true });
             if (typeof actualizarModuloCamionTolva === 'function') {
-                actualizarModuloCamionTolva();
+                actualizarModuloCamionTolva({ rerun: !deferDependentCalculations });
             }
-            if (typeof calculateAdjustedEtaAndDays === 'function') {
-                calculateAdjustedEtaAndDays();
+            if (!deferDependentCalculations) {
+                if (typeof debouncedAutoFillPDA === 'function') {
+                    debouncedAutoFillPDA('pol', false);
+                    debouncedAutoFillPDA('pod', false);
+                } else if (typeof autoFillPDA === 'function') {
+                    await autoFillPDA('pol', false);
+                    await autoFillPDA('pod', false);
+                }
+                if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
+                if (typeof calculateAdjustedEtaAndDays === 'function') calculateAdjustedEtaAndDays();
+                if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
+                if (typeof runEngine === 'function') runEngine();
+                if (typeof evaluateReactiveSyncStatus === 'function') evaluateReactiveSyncStatus();
             }
-            if (typeof syncCalculatorAndMatching === 'function') {
-                syncCalculatorAndMatching('calculator');
-            }
-            if (typeof runEngine === 'function') {
-                runEngine();
-            }
-            if (typeof evaluateReactiveSyncStatus === 'function') {
-                evaluateReactiveSyncStatus();
-            }
-            if (typeof showToast === 'function') {
+            if (showFeedback && typeof showToast === 'function') {
                 showToast('Especificaciones del buque y carga validadas correctamente.', 'success');
             }
+            return readValidatedCargoOperationState();
         }
         window.validarYCalcularSeccion2 = validarYCalcularSeccion2;
+
+        let isCalculatingMaster = false;
+
+        function setMasterCalculationLoading(isLoading) {
+            const button = document.getElementById('btn-validate-section2');
+            if (!button) return;
+            if (!button.dataset.defaultContent) button.dataset.defaultContent = button.innerHTML;
+            button.disabled = isLoading;
+            button.setAttribute('aria-busy', String(isLoading));
+            button.innerHTML = isLoading
+                ? '<i class="fa-solid fa-spinner fa-spin text-sm"></i><span>Calculando operación completa...</span>'
+                : button.dataset.defaultContent;
+        }
+
+        async function consultCurrentCostsAndPdasForMaster() {
+            await autoFillBunkers({ managedByMaster: true });
+            await autoFillPDA('pol', false, { deferEngine: true });
+            await autoFillPDA('pod', false, { deferEngine: true });
+        }
+
+        function synchronizeMasterRouteCalculations() {
+            if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
+            if (typeof calculateAdjustedEtaAndDays === 'function') calculateAdjustedEtaAndDays();
+            if (typeof runEngine === 'function') runEngine();
+            if (typeof syncCostPlusFromRoute === 'function') syncCostPlusFromRoute(false);
+        }
+
+        function calculateMasterFreightAndDemurrage() {
+            if (typeof useAlgorithmicFreight === 'function') {
+                useAlgorithmicFreight('owner', { deferEngine: true });
+                useAlgorithmicFreight('charterer', { deferEngine: true });
+            }
+            if (typeof sugerirDemoraAutomatica === 'function') {
+                sugerirDemoraAutomatica(false, { deferEngine: true });
+            }
+        }
+
+        async function handleMasterValidationAndCalculate(event = null) {
+            event?.preventDefault?.();
+            if (isCalculatingMaster) return null;
+
+            isCalculatingMaster = true;
+            setMasterCalculationLoading(true);
+
+            try {
+                const calculationResult = await SeaCharterStore.batchAsync(async () => {
+                    await validarYCalcularSeccion2({ deferDependentCalculations: true, showFeedback: false });
+                    await consultCurrentCostsAndPdasForMaster();
+                    await recalculateAdjustedAndSave({ managedByMaster: true });
+                    synchronizeMasterRouteCalculations();
+                    calculateMasterFreightAndDemurrage();
+                    executeBatchedCalculationsCore();
+                    return { ...State };
+                });
+
+                if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
+                if (typeof evaluateReactiveSyncStatus === 'function') evaluateReactiveSyncStatus();
+                if (typeof showToast === 'function') {
+                    showToast('Operación completa calculada: costes, PDAs, ajustes, ruta, fletes y demoras.', 'success');
+                }
+                return calculationResult;
+            } catch (error) {
+                console.error('Error en el cálculo maestro de la operación:', error);
+                if (typeof showToast === 'function') {
+                    showToast(`No se pudo completar el cálculo maestro: ${error?.message || 'error inesperado'}`, 'error');
+                }
+                return null;
+            } finally {
+                isCalculatingMaster = false;
+                setMasterCalculationLoading(false);
+            }
+        }
+        window.handleMasterValidationAndCalculate = handleMasterValidationAndCalculate;
 
         function handleDWTChange(isManual = false, triggerEngine = true) {
             if (isManual) {
@@ -29109,7 +29193,7 @@
                 syncNavigationStrategyEffect();
             }
 
-            autoCalculateDemurrage(false);
+            autoCalculateDemurrage(false, { deferEngine: !triggerEngine });
             autoClassifySpecialtyFromInputs();
 
             const specialty = (document.getElementById('gc-add-specialty')?.value || '').trim();
@@ -29118,12 +29202,14 @@
 
             document.getElementById('opex-daily').value = totalOpexDaily;
 
-            if (typeof debouncedAutoFillPDA === 'function') {
-                debouncedAutoFillPDA('pol', false);
-                debouncedAutoFillPDA('pod', false);
-            } else if (typeof autoFillPDA === 'function') {
-                autoFillPDA('pol', false);
-                autoFillPDA('pod', false);
+            if (triggerEngine) {
+                if (typeof debouncedAutoFillPDA === 'function') {
+                    debouncedAutoFillPDA('pol', false);
+                    debouncedAutoFillPDA('pod', false);
+                } else if (typeof autoFillPDA === 'function') {
+                    autoFillPDA('pol', false);
+                    autoFillPDA('pod', false);
+                }
             }
 
             if (triggerEngine && typeof runEngine === 'function') {
@@ -29253,7 +29339,7 @@
             }, 1000);
         }
 
-        function sugerirDemoraAutomatica(showToastMsg = false) {
+        function sugerirDemoraAutomatica(showToastMsg = false, options = {}) {
             const tceActual = leerTceActualParaDemora();
             if (!Number.isFinite(tceActual) || tceActual <= 0) {
                 if (showToastMsg) showToast('Calcula primero el TCE del viaje para sugerir Demurrage.');
@@ -29279,7 +29365,7 @@
             if (window.AppCalculadora && typeof window.AppCalculadora.recalcularCostes === 'function') {
                 window.AppCalculadora.recalcularCostes();
             }
-            if (typeof runEngine === 'function') runEngine();
+            if (!options.deferEngine && typeof runEngine === 'function') runEngine();
 
             if (showToastMsg) {
                 showToast(`Demurrage sugerido por TCE: $${demoraSugerida.toLocaleString('en-US')}/día`);
@@ -29287,8 +29373,8 @@
             return demoraSugerida;
         }
 
-        function autoCalculateDemurrage(showToastMsg = false) {
-            return sugerirDemoraAutomatica(showToastMsg);
+        function autoCalculateDemurrage(showToastMsg = false, options = {}) {
+            return sugerirDemoraAutomatica(showToastMsg, options);
         }
 
         function autoCalculateSeasonalMargin() {
@@ -29944,7 +30030,7 @@
 	            status.innerHTML = `<i class="fa-solid ${official ? 'fa-circle-check' : 'fa-chart-line'}"></i><span>${official ? 'Cálculo Oficial' : 'Estimación Algorítmica Global'}</span>`;
 	        }
 
-	        async function autoFillPDA(type, showNotification = true) {
+        async function autoFillPDA(type, showNotification = true, options = {}) {
 	            const timers = (typeof window !== 'undefined' && window.autoFillPdaDebounceTimers)
 	                ? window.autoFillPdaDebounceTimers
 	                : null;
@@ -30065,7 +30151,7 @@
                 const sourceLabel = calculationMode === 'official' ? 'Cálculo Oficial' : 'Estimación Algorítmica Global';
                 showToast(`PDA ${type.toUpperCase()}: $${finalCalculatedPda.toLocaleString('en-US')} · ${sourceLabel}${extraSurcharges}<br><span class="text-[10px] text-emerald-300 mt-1 block font-mono">Nav/Maniobra: $${Math.round(navManiobra)} | Tasas: $${Math.round(tasasAutoridad)} | Agencia/Misc: $${Math.round(agenciaVarios)} | Muelle: $${Math.round(muelleEstadia)}${sourceTag}</span>`);
             }
-            if (typeof runEngine === 'function') runEngine();
+            if (!options.deferEngine && typeof runEngine === 'function') runEngine();
 	        }
 
         async function autoFillVesselSpecs() {
@@ -30873,19 +30959,20 @@
             }
         }
 
-        async function autoFillBunkers() {
+        async function autoFillBunkers(options = {}) {
             if (isFetchingBunker) return;
 
             const btn = document.getElementById('btn-consult-bunker');
             const originalText = btn ? btn.innerHTML : '';
+            const managedByMaster = options.managedByMaster === true;
             isFetchingBunker = true;
 
-            if (btn) {
+            if (btn && !managedByMaster) {
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Consultando...';
                 btn.disabled = true;
             }
 
-            showToast("Actualizando VLSFO, IFO 380 y MGO del día...", true);
+            if (!managedByMaster) showToast("Actualizando VLSFO, IFO 380 y MGO del día...", true);
 
             try {
                 const response = await fetch(`/api/get-bunker-prices?ts=${Date.now()}`, {
@@ -30919,17 +31006,17 @@
                 }
 
                 applyBunkerIndexData(nextCache);
-                showToast("Precios sincronizados en tiempo real con BunkerIndex (Índice Mundo)");
+                if (!managedByMaster) showToast("Precios sincronizados en tiempo real con BunkerIndex (Índice Mundo)");
             } catch (error) {
                 updateBunkerIndexCacheLabel('');
 
                 const fallbackData = { vlsfo: 840.00, ifo380: 650.00, mgo: 1300.00, date: getTodayBunkerLabel() };
                 applyBunkerIndexData(fallbackData);
 
-                showToast("Sin conexión a BunkerIndex. Aplicando precios algorítmicos de seguridad. Ajuste manualmente si es necesario.");
+                if (!managedByMaster) showToast("Sin conexión a BunkerIndex. Aplicando precios algorítmicos de seguridad. Ajuste manualmente si es necesario.");
             } finally {
                 isFetchingBunker = false;
-                if (btn) {
+                if (btn && !managedByMaster) {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
                 }
@@ -30943,15 +31030,19 @@
             globalThis.autoFillBunkers = autoFillBunkers;
         }
 
-        function useAlgorithmicFreight(role) {
+        function useAlgorithmicFreight(role, options = {}) {
             if (role === 'owner') {
                 const finalVal = State.sugOwner || 0;
-                document.getElementById('freight-rate').value = finalVal.toFixed(2);
+                const roundedValue = Math.round(finalVal * 4) / 4;
+                document.getElementById('freight-rate').value = roundedValue.toFixed(2);
+                State.freightRate = roundedValue;
             } else {
                 const finalVal = State.sugCharterer || 0;
-                document.getElementById('freight-sell').value = finalVal.toFixed(2);
+                const roundedValue = Math.round(finalVal * 4) / 4;
+                document.getElementById('freight-sell').value = roundedValue.toFixed(2);
+                State.freightSell = roundedValue;
             }
-            runEngine();
+            if (!options.deferEngine) runEngine();
         }
 
         function buildMatchingRequest(calculation = {}) {
@@ -55578,6 +55669,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function actualizarModuloCamionTolva() {
+            const options = arguments[0] || {};
+            const rerun = options.rerun !== false;
             const modulo = document.getElementById('modulo-camion-tolva-pol');
             if (!modulo) return;
             const isCamionTolva = getMetodoEstibaActual() === 'camion_tolva';
@@ -55596,7 +55689,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 maximumFractionDigits: 1
             });
             if (ritmoEl) ritmoEl.textContent = Math.round(ritmoSugerido).toLocaleString('en-US');
-            aplicarRitmoCamionTolvaPol({ rerun: isCamionTolva });
+            aplicarRitmoCamionTolvaPol({ rerun: rerun && isCamionTolva });
         }
 
         function aplicarRitmoCamionTolvaPol(options = {}) {
@@ -58921,10 +59014,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             alertEl.innerText = message;
         }
 
-        async function recalculateAdjustedAndSave() {
+        async function recalculateAdjustedAndSave(options = {}) {
             const btn = document.getElementById('btn-recalculate-adjusted');
             const originalHtml = btn ? btn.innerHTML : '';
-            if (btn) {
+            const managedByMaster = options.managedByMaster === true;
+            if (btn && !managedByMaster) {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
             }
@@ -58933,15 +59027,19 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const pol = (document.getElementById('port-pol')?.value || '').trim();
                 const pod = (document.getElementById('port-pod')?.value || '').trim();
                 if (!pol || !pod) {
-                    setSmartAdjustmentAlert('Define Puerto de Carga (POL) y Puerto de Descarga (POD) antes de recalcular ajustes.', 'error');
-                    return;
+                    const error = new Error('Define Puerto de Carga (POL) y Puerto de Descarga (POD) antes de calcular la operación.');
+                    if (managedByMaster) throw error;
+                    setSmartAdjustmentAlert(error.message, 'error');
+                    return false;
                 }
 
                 if (typeof autoCalculateDistances === 'function') {
                     const routeResult = await autoCalculateDistances();
                     if (!routeResult || !routeResult.routes?.laden) {
-                        setSmartAdjustmentAlert('No se pudo calcular la distancia marítima entre POL y POD. Revisa que ambos puertos existan en la base o usa geocodificación.', 'error');
-                        return;
+                        const error = new Error('No se pudo calcular la distancia marítima entre POL y POD. Revisa ambos puertos.');
+                        if (managedByMaster) throw error;
+                        setSmartAdjustmentAlert(error.message, 'error');
+                        return false;
                     }
                 }
 
@@ -58949,7 +59047,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     ? applyPortIntelligenceToSmartCalculations()
                     : false;
 
-                if (typeof runEngine === 'function') {
+                if (!managedByMaster && typeof runEngine === 'function') {
                     runEngine();
                 }
                 calculateAdjustedEtaAndDays();
@@ -58961,12 +59059,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const sourceText = usedPortIntelligence
                     ? 'Se aplicaron ajustes algorítmicos por puerto de carga y descarga.'
                     : 'No había inteligencia portuaria específica; se recalculó con distancia de ruta y valores actuales.';
-                setSmartAdjustmentAlert(`${sourceText} Ruta POL/POD: ${Math.round(distLaden).toLocaleString('en-US')} NM. ETA final: ${adjustedEta}. Duración ajustada: ${adjustedDays}.`, 'success');
+                if (!managedByMaster) {
+                    setSmartAdjustmentAlert(`${sourceText} Ruta POL/POD: ${Math.round(distLaden).toLocaleString('en-US')} NM. ETA final: ${adjustedEta}. Duración ajustada: ${adjustedDays}.`, 'success');
+                }
+                return true;
             } catch (error) {
                 console.error('Error recalculando ajustes inteligentes:', error);
+                if (managedByMaster) throw error;
                 setSmartAdjustmentAlert('Error al recalcular ajustes inteligentes. Revisa los puertos, distancias y parámetros del viaje.', 'error');
+                return false;
             } finally {
-                if (btn) {
+                if (btn && !managedByMaster) {
                     btn.disabled = false;
                     btn.innerHTML = originalHtml;
                 }
