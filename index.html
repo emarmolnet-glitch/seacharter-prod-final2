@@ -29115,7 +29115,40 @@
             if (typeof syncCostPlusFromRoute === 'function') syncCostPlusFromRoute(false);
         }
 
-        function calculateMasterFreightAndDemurrage() {
+        function getMasterVesselPricingClass(validatedState = {}) {
+            const validatedDwt = Number(validatedState.dwt);
+            const inputDwt = Number(document.getElementById('vessel-dwt')?.value);
+            const effectiveDwt = Number.isFinite(validatedDwt) && validatedDwt > 0 ? validatedDwt : inputDwt;
+            return typeof getVesselClass === 'function'
+                ? getVesselClass(effectiveDwt)
+                : { categoryName: getCentralizedVesselClass(), type: effectiveDwt < 15000 ? 'Cost-Plus' : 'TCE Inverso' };
+        }
+
+        async function executeMasterPricingBranch(validatedState) {
+            const vesselClass = getMasterVesselPricingClass(validatedState);
+
+            if (vesselClass.type === 'TCE Inverso') {
+                currentVesselPricingCategory = vesselClass.categoryName;
+                if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
+                if (typeof calculateAdjustedEtaAndDays === 'function') calculateAdjustedEtaAndDays();
+                if (typeof runEngine === 'function') runEngine();
+                if (typeof syncInverseTceFromVoyage === 'function') {
+                    syncInverseTceFromVoyage(State.cargo, State.daysSea, State.daysPort);
+                }
+                if (typeof syncInverseBunkerCostFromVoyage === 'function') syncInverseBunkerCostFromVoyage();
+                await handleFetchFearnleysTce({
+                    managedByMaster: true,
+                    vesselCategory: vesselClass.categoryName
+                });
+                if (typeof calculateInverseTce === 'function') calculateInverseTce();
+                return { vesselClass, pricingBranch: 'fearnleys' };
+            }
+
+            synchronizeMasterRouteCalculations();
+            return { vesselClass, pricingBranch: 'cost-plus-route' };
+        }
+
+        function calculateMasterFreightAndDemurrage(vesselClass) {
             if (typeof useAlgorithmicFreight === 'function') {
                 useAlgorithmicFreight('owner', { deferEngine: true });
                 useAlgorithmicFreight('charterer', { deferEngine: true });
@@ -29123,6 +29156,14 @@
             if (typeof sugerirDemoraAutomatica === 'function') {
                 sugerirDemoraAutomatica(false, { deferEngine: true });
             }
+            if (typeof runEngine === 'function') runEngine();
+            if (vesselClass?.type === 'TCE Inverso') {
+                if (typeof calculateInverseTce === 'function') calculateInverseTce();
+            } else if (typeof calculateCostPlusFreight === 'function') {
+                calculateCostPlusFreight();
+            }
+            if (typeof updateChartererNegotiationSimulator === 'function') updateChartererNegotiationSimulator();
+            if (typeof updateCBAMModuleView === 'function') updateCBAMModuleView();
         }
 
         async function handleMasterValidationAndCalculate(event = null) {
@@ -29134,17 +29175,19 @@
 
             try {
                 const calculationResult = await SeaCharterStore.batchAsync(async () => {
-                    await validarYCalcularSeccion2({ deferDependentCalculations: true, showFeedback: false });
+                    const validatedState = await validarYCalcularSeccion2({ deferDependentCalculations: true, showFeedback: false });
                     await consultCurrentCostsAndPdasForMaster();
                     await recalculateAdjustedAndSave({ managedByMaster: true });
-                    synchronizeMasterRouteCalculations();
-                    calculateMasterFreightAndDemurrage();
-                    executeBatchedCalculationsCore();
-                    return { ...State };
+                    const pricingResult = await executeMasterPricingBranch(validatedState);
+                    calculateMasterFreightAndDemurrage(pricingResult.vesselClass);
+                    if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
+                    if (typeof evaluateReactiveSyncStatus === 'function') evaluateReactiveSyncStatus();
+                    return {
+                        state: { ...State },
+                        ...pricingResult
+                    };
                 });
 
-                if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
-                if (typeof evaluateReactiveSyncStatus === 'function') evaluateReactiveSyncStatus();
                 if (typeof showToast === 'function') {
                     showToast('Operación completa calculada: costes, PDAs, ajustes, ruta, fletes y demoras.', 'success');
                 }
@@ -60069,28 +60112,31 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
         }
 
-        async function handleFetchFearnleysTce() {
+        async function handleFetchFearnleysTce(options = {}) {
             if (isFetchingFearnleysTce) return;
 
+            const managedByMaster = options.managedByMaster === true;
+            const requestedVesselCategory = options.vesselCategory || currentVesselPricingCategory;
+            currentVesselPricingCategory = requestedVesselCategory;
             isManualFearnleysOverride = false;
             updateManualFearnleysOverrideUi();
-            const localCache = readFearnleysMarketData(currentVesselPricingCategory);
+            const localCache = readFearnleysMarketData(requestedVesselCategory);
             if (localCache) {
                 applyFearnleysMarketData(localCache, true);
-                return;
+                return localCache;
             }
 
             const button = document.getElementById('btn-fetch-fearnleys-tce');
             const status = document.getElementById('inverse-tce-status');
             isFetchingFearnleysTce = true;
-            if (button) {
+            if (button && !managedByMaster) {
                 button.disabled = true;
                 button.textContent = 'Consultando reporte...';
             }
             if (status) status.textContent = 'IA';
 
             try {
-                const response = await fetch(`/api/fearnleys-tce?vesselCategory=${encodeURIComponent(currentVesselPricingCategory)}`, {
+                const response = await fetch(`/api/fearnleys-tce?vesselCategory=${encodeURIComponent(requestedVesselCategory)}`, {
                     cache: 'no-store'
                 });
                 const payload = await response.json();
@@ -60099,7 +60145,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
 
                 const nextCacheEntry = {
-                    vesselCategory: currentVesselPricingCategory,
+                    vesselCategory: requestedVesselCategory,
                     weekId: String(payload.weekId),
                     weekNumber: Number(payload.weekNumber),
                     year: Number(payload.year),
@@ -60110,11 +60156,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 };
                 writeFearnleysMarketData(nextCacheEntry);
                 applyFearnleysMarketData(nextCacheEntry, Boolean(payload.cacheHit));
+                return nextCacheEntry;
             } catch (error) {
                 updateFearnleysWeekLabel('No se pudo actualizar el índice de Fearnleys.');
+                if (managedByMaster) throw error;
+                return null;
             } finally {
                 isFetchingFearnleysTce = false;
-                if (button) {
+                if (button && !managedByMaster) {
                     button.disabled = false;
                     button.textContent = '✨ Consultar Fearnleys IA';
                 }
