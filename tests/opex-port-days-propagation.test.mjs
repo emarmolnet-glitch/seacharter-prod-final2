@@ -135,7 +135,6 @@ test('runEngine dynamically propagates lower port loading rate into T_port, tota
     updateDemurrageExposureAlert: () => demurrageExposureState,
     syncEtsRouteSelectorFromPorts: () => {},
     syncInverseTceFromVoyage: () => {},
-    validarProgresoViaje: () => ({ impact: 0, steps: [] }),
     notifyPendingDraftRecalculation: () => {},
   };
 
@@ -148,7 +147,6 @@ test('runEngine dynamically propagates lower port loading rate into T_port, tota
   vm.runInNewContext(`
     globalThis.navigationStrategy = 'ECO';
     globalThis.navigationStrategyMode = 'ECO';
-    function validarProgresoViaje() { return { impact: 0, steps: [] }; }
     function getPortPdaBreakdown() { return []; }
     function updateHistoricalRiskEngine() { return { impact: 0 }; }
     ${runEngineCode};
@@ -257,7 +255,6 @@ test('runEngine incorporates demurrage exposure penalty days directly into T_por
     updateDemurrageExposureAlert: () => demurrageState,
     syncEtsRouteSelectorFromPorts: () => {},
     syncInverseTceFromVoyage: () => {},
-    validarProgresoViaje: () => ({ impact: 0, steps: [] }),
     notifyPendingDraftRecalculation: () => {},
   };
 
@@ -270,7 +267,6 @@ test('runEngine incorporates demurrage exposure penalty days directly into T_por
   vm.runInNewContext(`
     globalThis.navigationStrategy = 'ECO';
     globalThis.navigationStrategyMode = 'ECO';
-    function validarProgresoViaje() { return { impact: 0, steps: [] }; }
     function getPortPdaBreakdown() { return []; }
     function updateHistoricalRiskEngine() { return { impact: 0 }; }
     ${runEngineCode};
