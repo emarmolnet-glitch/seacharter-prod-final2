@@ -1,21 +1,3 @@
-/* Mobile and Tablet responsive overrides (@media max-width: 768px) */
-@media (max-width: 768px) {
-    /* Checklist Flotante (Validation Stepper HUD) mobile positioning */
-    #validation-stepper-hud {
-        bottom: 12px !important;
-        right: 12px !important;
-        top: auto !important;
-        left: auto !important;
-        width: min(260px, calc(100vw - 24px)) !important;
-        max-height: 45vh !important;
-        z-index: 40 !important;
-    }
-    #validation-stepper-hud #hud-body {
-        max-height: 35vh !important;
-        overflow-y: auto !important;
-    }
-}
-
 /* Tracking GIS comparte el sistema visual claro de MAPA y Calculadora. */
 body.tracking-live-open { overflow: hidden !important; }
 
