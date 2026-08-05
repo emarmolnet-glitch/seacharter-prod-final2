@@ -150,7 +150,9 @@ test('OpenShips polling treats vessels_master as the authoritative technical sou
   assert.match(openShipsStatusSource, /\.\.\.vessel,[\s\S]*\.\.\.masterFields/);
   assert.match(openShipsStatusSource, /technicalDataSource: "VESSELS_MASTER"/);
   assert.match(openShipsStatusSource, /DWT: dwt/);
-  assert.match(openShipsStatusSource, /String\(master\.status \|\| ""\)\.toLowerCase\(\) === "discarded"/);
+  assert.match(openShipsStatusSource, /AS is_discarded/);
+  assert.match(openShipsStatusSource, /UPPER\(COALESCE\(status, ''\)\) = 'DISCARDED'/);
+  assert.match(openShipsStatusSource, /master\.is_discarded === true/);
   assert.match(indexSource, /discardedVesselImos: \[\]/);
   assert.match(indexSource, /discardedVesselMmsis: \[\]/);
   assert.match(indexSource, /markVesselDiscarded\(identity = \{\}, metadata = \{\}\)/);

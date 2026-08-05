@@ -339,7 +339,7 @@ test('persistDueDiligenceVessel sends the consolidated vessel through PUT', asyn
 
 test('discardDueDiligenceVessel marks the vessel through PATCH', async () => {
   let request = null;
-  const vessel = { imo: '9876543', vesselName: 'WRONG VESSEL' };
+  const vessel = { imo: '9876543', vesselName: 'AUDITED VESSEL', dwt: 48_500, vesselType: 'Oil Tanker' };
   const result = await serviceModule.discardDueDiligenceVessel(vessel, {
     fetchImpl: async (url, options) => {
       request = { url, options };
@@ -352,7 +352,10 @@ test('discardDueDiligenceVessel marks the vessel through PATCH', async () => {
 
   assert.equal(request.url, '/api/vessel-due-diligence-save');
   assert.equal(request.options.method, 'PATCH');
-  assert.deepEqual(JSON.parse(request.options.body), { vessel, action: 'discard' });
+  assert.deepEqual(JSON.parse(request.options.body), {
+    vessel: { ...vessel, status: 'discarded' },
+    action: 'discard',
+  });
   assert.equal(result.discarded, true);
 });
 
@@ -392,6 +395,8 @@ test('discarding a Density vessel without IMO falls back to MMSI and removes it 
   assert.equal(await bridge.discardPendingVessel(key), true);
   assert.equal(persistedVessel.imo, '');
   assert.equal(persistedVessel.mmsi, '224123456');
+  assert.equal(persistedVessel.dwt, 9_500);
+  assert.equal(persistedVessel.status, 'discarded');
   assert.equal(window.GlobalStore.rawVessels.length, 0);
   assert.equal(window.GlobalStore.filteredVessels.length, 0);
   assert.equal(window.openShipsVesselsCache.length, 0);
@@ -409,15 +414,14 @@ test('persistence backend consolidates normalized technical fields by IMO or MMS
   assert.match(persistenceBackendSource, /status = 'DISCARDED'/);
   assert.match(persistenceBackendSource, /audit_status = 'REJECTED'/);
   assert.match(persistenceBackendSource, /Se requiere un IMO o MMSI válido para descartar el buque/);
-  assert.match(persistenceBackendSource, /\(\$1::integer IS NOT NULL AND imo_number = \$1::integer\)[\s\S]*mmsi = \$2::text/);
   assert.match(persistenceBackendSource, /async function upsertDiscardedVessel/);
+  assert.match(persistenceBackendSource, /prepareVesselTechnicalPersistence\(record\)/);
   assert.match(persistenceBackendSource, /ON CONFLICT \(imo_number\) DO UPDATE SET/);
-  assert.match(persistenceBackendSource, /ON CONFLICT \(mmsi\) DO UPDATE SET/);
-  assert.match(persistenceBackendSource, /VALUES \(NULL, \$1::text, \$2::text, 'DISCARDED'/);
-  assert.match(persistenceBackendSource, /status = EXCLUDED\.status/);
-  assert.match(persistenceBackendSource, /code\?: string \}\)\?\.code !== "23505"/);
-  assert.match(persistenceBackendSource, /const retried = await updateDiscardedVesselByIdentity/);
-  assert.doesNotMatch(persistenceBackendSource, /mmsi = COALESCE\(EXCLUDED\.mmsi, vessels_master\.mmsi\)/);
+  assert.match(persistenceBackendSource, /dwt = COALESCE\(EXCLUDED\.dwt, vessels_master\.dwt\)/);
+  assert.match(persistenceBackendSource, /vessel_type = COALESCE\(EXCLUDED\.vessel_type, vessels_master\.vessel_type\)/);
+  assert.match(persistenceBackendSource, /gross_tonnage = COALESCE\(EXCLUDED\.gross_tonnage, vessels_master\.gross_tonnage\)/);
+  assert.match(persistenceBackendSource, /status = 'DISCARDED'/);
+  assert.match(persistenceBackendSource, /requestedStatus === "discarded"/);
   assert.match(technicalCacheSource, /ON CONFLICT \(imo_number\) DO UPDATE SET/);
   assert.match(technicalCacheSource, /gross_tonnage = COALESCE\(EXCLUDED\.gross_tonnage, vessels_master\.gross_tonnage\)/);
   assert.match(technicalCacheSource, /net_tonnage = COALESCE\(EXCLUDED\.net_tonnage, vessels_master\.net_tonnage\)/);
@@ -431,7 +435,7 @@ test('persistence backend consolidates normalized technical fields by IMO or MMS
   assert.match(technicalMigrationSource, /ADD COLUMN IF NOT EXISTS year_built INT/);
   assert.match(persistenceBackendSource, /SELECT COUNT\(\*\)::integer AS total FROM vessels_master/);
   assert.match(persistenceBackendSource, /masterVesselCount:/);
-  assert.match(persistenceBackendSource, /import \{ sanitizeVesselTechnicalRecord \}/);
+  assert.match(persistenceBackendSource, /prepareVesselTechnicalPersistence,[\s\S]*sanitizeVesselTechnicalRecord/);
   assert.match(persistenceBackendSource, /const sanitizedVessel = sanitizeVesselTechnicalRecord\(\{/);
   assert.match(technicalCacheSource, /prepareVesselTechnicalPersistence\(record\)/);
   assert.match(persistenceBackendSource, /NON_COMMERCIAL_VESSEL_PATTERN\.test\(vesselType\)/);

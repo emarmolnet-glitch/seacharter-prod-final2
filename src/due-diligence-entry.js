@@ -534,11 +534,11 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         const ais = match?.ais && typeof match.ais === 'object' ? match.ais : {};
         return mergeNonEmptyRecords(mergeNonEmptyRecords(mergeNonEmptyRecords(ais, vessel), safeIdentity), {
             ...safeTechnical,
-            imo: safeTechnical.imo,
-            imo_number: safeTechnical.imo,
-            vesselName: vessel.vesselName || vessel.vessel_name || safeIdentity.name || safeIdentity.vesselName,
-            vessel_name: vessel.vessel_name || vessel.vesselName || safeIdentity.name || safeIdentity.vesselName,
-            mmsi: vessel.mmsi || ais.mmsi || safeIdentity.mmsi,
+            imo: safeTechnical.imo || safeIdentity.imo,
+            imo_number: safeTechnical.imo || safeIdentity.imo,
+            vesselName: safeTechnical.vesselName || safeIdentity.name || safeIdentity.vesselName || vessel.vesselName || vessel.vessel_name,
+            vessel_name: safeTechnical.vesselName || safeIdentity.name || safeIdentity.vesselName || vessel.vessel_name || vessel.vesselName,
+            mmsi: safeTechnical.mmsi || safeIdentity.mmsi || vessel.mmsi || ais.mmsi,
             latitude: vessel.latitude ?? ais.latitude ?? safeIdentity.latitude ?? null,
             longitude: vessel.longitude ?? ais.longitude ?? safeIdentity.longitude ?? null,
             vesselType: safeTechnical.vesselType,
@@ -986,7 +986,12 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         }
         try {
             const currentMatch = pending.match || findMatchingResult(pendingIdentity);
-            const vessel = buildPersistenceVessel(pendingIdentity, { ...pendingTechnical, imo, mmsi }, currentMatch);
+            const vessel = buildPersistenceVessel(pendingIdentity, {
+                ...pendingTechnical,
+                imo,
+                mmsi,
+                status: 'discarded',
+            }, currentMatch);
             await discardDueDiligenceVessel(vessel, {
                 fetchImpl: typeof globalScope.fetch === 'function' ? globalScope.fetch.bind(globalScope) : undefined,
             });
