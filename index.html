@@ -183,6 +183,7 @@
     <script type="module" src="./voyage-cost-engine.js"></script>
     <script type="module" src="./stress-test-engine.js"></script>
     <script type="module" src="./src/route-configurator-entry.tsx"></script>
+    <script type="module" src="./src/dss-empty-state-entry.tsx"></script>
     <script type="module" src="./src/due-diligence-entry.js"></script>
     <script type="module" src="./src/density-commercial-funnel.js"></script>
     <script src="./session-draft.js"></script>
@@ -9758,10 +9759,7 @@
                     </div>
                 </header>
 
-                <div id="dss-empty-state" class="rounded-xl border border-dashed border-slate-600 bg-slate-800/70 px-5 py-10 text-center text-sm text-slate-300">
-                    <strong class="block text-base text-white">Esperando datos de ruta</strong>
-                    <span class="mt-2 block">Define POL, POD y cantidad de carga en Mapa o Calculadora para activar Decisiones.</span>
-                </div>
+                <div id="dss-empty-state" class="rounded-xl border border-dashed border-slate-600 bg-slate-800/70 px-5 py-10 text-center text-sm" style="color: white !important;"></div>
 
                 <!-- PANEL INTERACTIVO DE SIMULACIÓN DE PARÁMETROS (DESPLEGABLE / ACORDEONES) -->
                 <section id="panel-parametros" class="hidden bg-white border border-slate-200 rounded-2xl p-5 shadow-xl transition-all text-slate-800 duration-300 ease-in-out overflow-hidden">
