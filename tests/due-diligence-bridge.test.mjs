@@ -45,14 +45,15 @@ function loadBridge(windowOverrides = {}) {
     decodeURIComponent,
   };
   const executableEntrySource = entrySource.replace(
-    /import \{ fetchDueDiligence, persistDueDiligenceVessel \} from '.\/services\/dueDiligenceService\.js';/,
-    'const fetchDueDiligence = window.__fetchDueDiligence; const persistDueDiligenceVessel = window.__persistDueDiligenceVessel;',
+    /import \{ discardDueDiligenceVessel, fetchDueDiligence, persistDueDiligenceVessel \} from '.\/services\/dueDiligenceService\.js';/,
+    'const discardDueDiligenceVessel = window.__discardDueDiligenceVessel; const fetchDueDiligence = window.__fetchDueDiligence; const persistDueDiligenceVessel = window.__persistDueDiligenceVessel;',
   ).replace(
     /import \{ evaluateCargoVesselEligibility \} from '\.\.\/cargo-taxonomy\.mjs';/,
     'const evaluateCargoVesselEligibility = window.__evaluateCargoVesselEligibility;',
   );
   window.__fetchDueDiligence ||= async () => ({ success: true, data: {} });
   window.__persistDueDiligenceVessel ||= async vessel => ({ success: true, vessel });
+  window.__discardDueDiligenceVessel ||= async vessel => ({ success: true, discarded: true, vessel });
   window.__evaluateCargoVesselEligibility = cargoTaxonomyModule.evaluateCargoVesselEligibility;
   vm.runInNewContext(executableEntrySource, context);
   return { bridge: window.VesselDueDiligenceBridge, events, window };
@@ -84,8 +85,8 @@ test('matching cards gate Calculator but expose external Due Diligence for every
   assert.match(indexSource, /data-matching-render-error="true"/);
 });
 
-test('Due Diligence uses one external search and persists only after acceptance', () => {
-  assert.match(entrySource, /import \{ fetchDueDiligence, persistDueDiligenceVessel \} from '.\/services\/dueDiligenceService\.js'/);
+test('Due Diligence uses one external search and explicit persistence actions', () => {
+  assert.match(entrySource, /import \{ discardDueDiligenceVessel, fetchDueDiligence, persistDueDiligenceVessel \} from '.\/services\/dueDiligenceService\.js'/);
   assert.match(entrySource, /addEventListener\('click', handleDueDiligenceClick, true\)/);
   assert.match(entrySource, /event\.preventDefault\(\)/);
   assert.match(entrySource, /event\.stopImmediatePropagation\(\)/);
@@ -115,6 +116,10 @@ test('Due Diligence uses one external search and persists only after acceptance'
   assert.match(entrySource, /const safeProposals = Array\.isArray\(proposals\)/);
   assert.match(entrySource, /const pendingTechnical = pending\.technical && typeof pending\.technical === 'object'/);
   assert.match(entrySource, /footer\.dataset\.dueDiligenceFooter = 'true'/);
+  assert.match(entrySource, /discard\.textContent = 'Descartar Buque'/);
+  assert.match(entrySource, /save\.textContent = 'Guardar Datos'/);
+  assert.match(entrySource, /calculate\.textContent = 'Calcular Flete'/);
+  assert.match(entrySource, /discardDueDiligenceVessel\(vessel/);
   assert.match(entrySource, /reject\.textContent = 'Descartar'/);
   assert.match(entrySource, /Validar y Guardar en Master \(Neon DB\)/);
   assert.match(entrySource, /Gross Tonnage \(GT\)/);
@@ -328,8 +333,71 @@ test('persistDueDiligenceVessel sends the consolidated vessel through PUT', asyn
 
   assert.equal(request.url, '/api/vessel-due-diligence-save');
   assert.equal(request.options.method, 'PUT');
-  assert.deepEqual(JSON.parse(request.options.body), { vessel });
+  assert.deepEqual(JSON.parse(request.options.body), { vessel, action: 'save' });
   assert.equal(result.success, true);
+});
+
+test('discardDueDiligenceVessel marks the vessel through PATCH', async () => {
+  let request = null;
+  const vessel = { imo: '9876543', vesselName: 'WRONG VESSEL' };
+  const result = await serviceModule.discardDueDiligenceVessel(vessel, {
+    fetchImpl: async (url, options) => {
+      request = { url, options };
+      return new Response(JSON.stringify({ success: true, discarded: true, vessel }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+  });
+
+  assert.equal(request.url, '/api/vessel-due-diligence-save');
+  assert.equal(request.options.method, 'PATCH');
+  assert.deepEqual(JSON.parse(request.options.body), { vessel, action: 'discard' });
+  assert.equal(result.discarded, true);
+});
+
+test('discarding a Density vessel without IMO falls back to MMSI and removes it immediately', async () => {
+  const rawVessel = {
+    imo: '',
+    mmsi: '224123456',
+    vesselName: 'RESOLUTE 1',
+    latitude: 36.1234,
+    longitude: -5.4321,
+  };
+  let persistedVessel = null;
+  let densityRefreshes = 0;
+  const { bridge, events, window } = loadBridge({
+    openShipsVesselsCache: [{ ...rawVessel }],
+    GlobalStore: {
+      rawVessels: [{ ...rawVessel }],
+      filteredVessels: [{ ...rawVessel }],
+      vessels: [{ ...rawVessel }],
+      renderedAisVessels: [{ ...rawVessel }],
+    },
+    __discardDueDiligenceVessel: async vessel => {
+      persistedVessel = vessel;
+      return { success: true, discarded: true, vessel: { mmsi: vessel.mmsi, status: 'DISCARDED' } };
+    },
+    syncDensityDisplayConsumers: () => { densityRefreshes += 1; },
+  });
+  const identity = { imo: '', mmsi: '224123456', name: 'RESOLUTE 1' };
+  const key = bridge.proposalKey(identity);
+  bridge.pendingProposals.set(key, {
+    identity,
+    technical: { vesselName: 'RESOLUTE 1', mmsi: '224123456', dwt: 9_500 },
+    proposals: [],
+    match: { vessel: { ...rawVessel }, ais: { ...rawVessel } },
+  });
+
+  assert.equal(await bridge.discardPendingVessel(key), true);
+  assert.equal(persistedVessel.imo, '');
+  assert.equal(persistedVessel.mmsi, '224123456');
+  assert.equal(window.GlobalStore.rawVessels.length, 0);
+  assert.equal(window.GlobalStore.filteredVessels.length, 0);
+  assert.equal(window.openShipsVesselsCache.length, 0);
+  assert.deepEqual(window.GlobalStore.discardedVesselMmsis, ['224123456']);
+  assert.equal(densityRefreshes, 1);
+  assert.ok(events.some(event => event.type === 'vessel:discarded' && event.detail.mmsi === '224123456'));
 });
 
 test('persistence backend consolidates normalized technical fields by IMO or MMSI', () => {
@@ -338,6 +406,18 @@ test('persistence backend consolidates normalized technical fields by IMO or MMS
   assert.match(persistenceBackendSource, /loa_meters/);
   assert.match(persistenceBackendSource, /Se requiere IMO o MMSI válido/);
   assert.match(persistenceBackendSource, /upsertVesselTechnicalRecord/);
+  assert.match(persistenceBackendSource, /status = 'DISCARDED'/);
+  assert.match(persistenceBackendSource, /audit_status = 'REJECTED'/);
+  assert.match(persistenceBackendSource, /Se requiere un IMO o MMSI válido para descartar el buque/);
+  assert.match(persistenceBackendSource, /\(\$1::integer IS NOT NULL AND imo_number = \$1::integer\)[\s\S]*mmsi = \$2::text/);
+  assert.match(persistenceBackendSource, /async function upsertDiscardedVessel/);
+  assert.match(persistenceBackendSource, /ON CONFLICT \(imo_number\) DO UPDATE SET/);
+  assert.match(persistenceBackendSource, /ON CONFLICT \(mmsi\) DO UPDATE SET/);
+  assert.match(persistenceBackendSource, /VALUES \(NULL, \$1::text, \$2::text, 'DISCARDED'/);
+  assert.match(persistenceBackendSource, /status = EXCLUDED\.status/);
+  assert.match(persistenceBackendSource, /code\?: string \}\)\?\.code !== "23505"/);
+  assert.match(persistenceBackendSource, /const retried = await updateDiscardedVesselByIdentity/);
+  assert.doesNotMatch(persistenceBackendSource, /mmsi = COALESCE\(EXCLUDED\.mmsi, vessels_master\.mmsi\)/);
   assert.match(technicalCacheSource, /ON CONFLICT \(imo_number\) DO UPDATE SET/);
   assert.match(technicalCacheSource, /gross_tonnage = COALESCE\(EXCLUDED\.gross_tonnage, vessels_master\.gross_tonnage\)/);
   assert.match(technicalCacheSource, /net_tonnage = COALESCE\(EXCLUDED\.net_tonnage, vessels_master\.net_tonnage\)/);
@@ -357,7 +437,7 @@ test('persistence backend consolidates normalized technical fields by IMO or MMS
   assert.match(persistenceBackendSource, /NON_COMMERCIAL_VESSEL_PATTERN\.test\(vesselType\)/);
   assert.match(persistenceBackendSource, /console\.error\("\[vessel-due-diligence-save\] PostgreSQL persistence failed", error\)/);
   assert.match(persistenceBackendSource, /return json\(\{ success: false, error: errorMessage \}, 500, headers\)/);
-  assert.doesNotMatch(persistenceBackendSource, /source_provenance|audit_status|audit_source|validation_status|system_identity|source_payload|fecha_ultima_actualizacion/);
+  assert.doesNotMatch(persistenceBackendSource, /source_provenance|audit_source|validation_status|system_identity|source_payload/);
   assert.doesNotMatch(persistenceBackendSource, /\bsource\b\s*[,)!=]/);
 });
 
@@ -488,6 +568,52 @@ test('accepted external data recalculates PDAs and financial margins for the act
   assert.deepEqual(pdaCalls.map(call => call[0]), ['pol', 'pod']);
   assert.equal(engineCalls, 1);
   assert.ok(events.some(event => event.type === 'vessel:financial-recalculated'));
+});
+
+test('Density optimistic save replaces raw AIS technical values without touching Calculator state', () => {
+  const rawVessel = {
+    imo: '9876543',
+    mmsi: '224123456',
+    vesselName: 'OPENSHIPS RAW',
+    dwt: 9_000,
+    latitude: 36.1234,
+    longitude: -5.4321,
+  };
+  let densityRefreshes = 0;
+  const { bridge, events, window } = loadBridge({
+    openShipsVesselsCache: [{ ...rawVessel }],
+    GlobalStore: {
+      rawVessels: [{ ...rawVessel }],
+      filteredVessels: [{ ...rawVessel }],
+      vessels: [{ ...rawVessel }],
+      renderedAisVessels: [{ ...rawVessel }],
+      calculatorVessel: null,
+      activeVessel: null,
+    },
+    syncDensityDisplayConsumers: options => {
+      densityRefreshes += 1;
+      assert.deepEqual({ ...options }, { updateGlobe: false });
+    },
+  });
+
+  assert.equal(bridge.mergeVerifiedVesselIntoDensityState({
+    imo_number: '9876543',
+    mmsi: '224123456',
+    vessel_name: 'MASTER VESSEL',
+    dwt: 42_000,
+    vessel_type: 'Bulk Carrier',
+    gross_tonnage: 25_000,
+  }), true);
+
+  assert.equal(window.GlobalStore.rawVessels[0].dwt, 42_000);
+  assert.equal(window.GlobalStore.filteredVessels[0].DWT, 42_000);
+  assert.equal(window.openShipsVesselsCache[0].vesselType, 'Bulk Carrier');
+  assert.equal(window.GlobalStore.rawVessels[0].latitude, 36.1234);
+  assert.equal(window.GlobalStore.rawVessels[0].longitude, -5.4321);
+  assert.equal(window.GlobalStore.calculatorVessel, null);
+  assert.equal(window.GlobalStore.activeVessel, null);
+  assert.equal(densityRefreshes, 1);
+  assert.ok(events.some(event => event.type === 'vessel:density-optimistic-update'));
 });
 
 test('store hydration updates matching and OpenShips records and clears missing-data warnings', () => {

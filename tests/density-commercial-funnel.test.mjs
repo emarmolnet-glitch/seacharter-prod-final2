@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [filterSource, funnelSource, dueDiligenceSource, indexSource, cssSource] = await Promise.all([
+const [filterSource, funnelSource, dueDiligenceSource, indexSource, cssSource, openShipsStatusSource] = await Promise.all([
   readFile(new URL('../src/commercial-filter.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/density-commercial-funnel.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/due-diligence-entry.js', import.meta.url), 'utf8'),
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../assets/css/density-globe.css', import.meta.url), 'utf8'),
+  readFile(new URL('../netlify/functions/openships-live-status.ts', import.meta.url), 'utf8'),
 ]);
 
 const filterModule = await import(`data:text/javascript;base64,${Buffer.from(filterSource).toString('base64')}`);
@@ -112,15 +113,42 @@ test('Density table identifies OpenShips as its live source', () => {
   assert.match(indexSource, /row\.dataset\.densityCommercialMatch = 'true'/);
 });
 
-test('persisted Due Diligence exposes the calculator handoff only after database success', () => {
+test('Due Diligence separates discard, save, and calculator handoff actions', () => {
   const persistenceIndex = dueDiligenceSource.indexOf('const persistenceResult = await persistDueDiligenceVessel');
-  const handoffIndex = dueDiligenceSource.indexOf('renderCalculatorHandoff(card, key, verifiedVessel)', persistenceIndex);
-  assert.ok(persistenceIndex >= 0 && handoffIndex > persistenceIndex);
+  const storeIndex = dueDiligenceSource.indexOf('commitVerifiedVesselToGlobalState(verifiedVessel)', persistenceIndex);
+  const calculatorIndex = dueDiligenceSource.indexOf("globalScope.switchTab('estimator')", storeIndex);
+  assert.ok(persistenceIndex >= 0 && storeIndex > persistenceIndex && calculatorIndex > storeIndex);
   assert.match(dueDiligenceSource, /commitVerifiedVesselToGlobalState/);
-  assert.match(dueDiligenceSource, /Continuar a Calculadora de Costes/);
-  assert.match(dueDiligenceSource, /globalScope\.applyResolvedVesselToCalculator\(vessel/);
+  assert.match(dueDiligenceSource, /Descartar Buque/);
+  assert.match(dueDiligenceSource, /Guardar Datos/);
+  assert.match(dueDiligenceSource, /Calcular Flete/);
+  assert.match(dueDiligenceSource, /discard\.type = 'button'/);
+  assert.match(dueDiligenceSource, /discard\.disabled = !normalizeImo[\s\S]*&& !normalizeMmsi/);
+  assert.match(dueDiligenceSource, /save\.type = 'button'/);
+  assert.match(dueDiligenceSource, /globalScope\.applyResolvedVesselToCalculator/);
   assert.match(dueDiligenceSource, /globalScope\.switchTab\('estimator'\)/);
-  assert.match(dueDiligenceSource, /Buque validado\. Redirigiendo a Calculadora\.\.\./);
-  assert.match(dueDiligenceSource, /GT REQUERIDO PARA VALIDAR/);
+  assert.match(dueDiligenceSource, /if \(!densityCommercialFlow \|\| calculateFreight\) commitVerifiedVesselToGlobalState/);
+  assert.match(dueDiligenceSource, /discardDueDiligenceVessel\(vessel/);
+  assert.match(dueDiligenceSource, /mergeVerifiedVesselIntoDensityState\(verifiedVessel\)/);
+  assert.match(dueDiligenceSource, /syncDensityDisplayConsumers\?\.\(\{ updateGlobe: false \}\)/);
+  assert.match(dueDiligenceSource, /vessel:density-optimistic-update/);
   assert.match(indexSource, /window\.applyResolvedVesselToCalculator = applyResolvedVesselToCalculator/);
+});
+
+test('OpenShips polling treats vessels_master as the authoritative technical source', () => {
+  assert.match(openShipsStatusSource, /FROM vessels_master/);
+  assert.match(openShipsStatusSource, /imo_number = ANY\(\$1::integer\[\]\)/);
+  assert.match(openShipsStatusSource, /mmsi = ANY\(\$2::text\[\]\)/);
+  assert.match(openShipsStatusSource, /function mergeMasterTechnicalData/);
+  assert.match(openShipsStatusSource, /\.\.\.vessel,[\s\S]*\.\.\.masterFields/);
+  assert.match(openShipsStatusSource, /technicalDataSource: "VESSELS_MASTER"/);
+  assert.match(openShipsStatusSource, /DWT: dwt/);
+  assert.match(openShipsStatusSource, /String\(master\.status \|\| ""\)\.toLowerCase\(\) === "discarded"/);
+  assert.match(indexSource, /discardedVesselImos: \[\]/);
+  assert.match(indexSource, /discardedVesselMmsis: \[\]/);
+  assert.match(indexSource, /markVesselDiscarded\(identity = \{\}, metadata = \{\}\)/);
+  assert.match(indexSource, /const discardedImos = new Set/);
+  assert.match(indexSource, /const discardedMmsis = new Set/);
+  assert.match(indexSource, /discardedByImo[\s\S]*discardedByMmsi/);
+  assert.match(indexSource, /return !discardedByImo && !discardedByMmsi/);
 });

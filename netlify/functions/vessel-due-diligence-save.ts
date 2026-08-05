@@ -70,6 +70,94 @@ function cleanCoordinate(value: unknown, minimum: number, maximum: number) {
   return numeric !== null && numeric >= minimum && numeric <= maximum ? numeric : null;
 }
 
+type DiscardedVesselRow = {
+  imo_number: number | null;
+  mmsi: string | null;
+  vessel_name: string | null;
+  status: string;
+};
+
+const DISCARD_RETURNING_COLUMNS = "imo_number, mmsi, vessel_name, status";
+
+async function updateDiscardedVesselByIdentity(
+  imoNumber: string | null,
+  mmsi: string | null,
+  vesselName: string | null,
+) {
+  return getPool().query<DiscardedVesselRow>(
+    `
+      UPDATE vessels_master
+      SET vessel_name = COALESCE($3::text, vessel_name),
+          status = 'DISCARDED',
+          audit_status = 'REJECTED',
+          process_status = 'DISCARDED',
+          updated_at = NOW(),
+          fecha_ultima_actualizacion = NOW()
+      WHERE ($1::integer IS NOT NULL AND imo_number = $1::integer)
+         OR ($2::text IS NOT NULL AND mmsi = $2::text)
+      RETURNING ${DISCARD_RETURNING_COLUMNS}
+    `,
+    [imoNumber ? Number(imoNumber) : null, mmsi, vesselName],
+  );
+}
+
+async function upsertDiscardedVessel(
+  imoNumber: string | null,
+  mmsi: string | null,
+  vesselName: string | null,
+) {
+  const updated = await updateDiscardedVesselByIdentity(imoNumber, mmsi, vesselName);
+  if (updated.rows.length > 0) {
+    return (imoNumber && updated.rows.find((row) => String(row.imo_number) === imoNumber)) || updated.rows[0];
+  }
+
+  try {
+    const inserted = imoNumber
+      ? await getPool().query<DiscardedVesselRow>(
+          `
+            INSERT INTO vessels_master (
+              imo_number, mmsi, vessel_name, status, audit_status, process_status,
+              updated_at, fecha_ultima_actualizacion
+            )
+            VALUES ($1::integer, $2::text, $3::text, 'DISCARDED', 'REJECTED', 'DISCARDED', NOW(), NOW())
+            ON CONFLICT (imo_number) DO UPDATE SET
+              vessel_name = COALESCE(EXCLUDED.vessel_name, vessels_master.vessel_name),
+              status = EXCLUDED.status,
+              audit_status = EXCLUDED.audit_status,
+              process_status = EXCLUDED.process_status,
+              updated_at = NOW(),
+              fecha_ultima_actualizacion = NOW()
+            RETURNING ${DISCARD_RETURNING_COLUMNS}
+          `,
+          [Number(imoNumber), mmsi, vesselName],
+        )
+      : await getPool().query<DiscardedVesselRow>(
+          `
+            INSERT INTO vessels_master (
+              imo_number, mmsi, vessel_name, status, audit_status, process_status,
+              updated_at, fecha_ultima_actualizacion
+            )
+            VALUES (NULL, $1::text, $2::text, 'DISCARDED', 'REJECTED', 'DISCARDED', NOW(), NOW())
+            ON CONFLICT (mmsi) DO UPDATE SET
+              vessel_name = COALESCE(EXCLUDED.vessel_name, vessels_master.vessel_name),
+              status = EXCLUDED.status,
+              audit_status = EXCLUDED.audit_status,
+              process_status = EXCLUDED.process_status,
+              updated_at = NOW(),
+              fecha_ultima_actualizacion = NOW()
+            RETURNING ${DISCARD_RETURNING_COLUMNS}
+          `,
+          [mmsi, vesselName],
+        );
+    return inserted.rows[0];
+  } catch (error) {
+    if ((error as { code?: string })?.code !== "23505") throw error;
+    const retried = await updateDiscardedVesselByIdentity(imoNumber, mmsi, vesselName);
+    if (retried.rows.length === 0) throw error;
+    return (imoNumber && retried.rows.find((row) => String(row.imo_number) === imoNumber)) || retried.rows[0];
+  }
+}
+
 export default async (req: Request) => {
   const headers = corsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
@@ -80,9 +168,23 @@ export default async (req: Request) => {
   const body = await req.json().catch(() => null);
   const bodyRecord = asRecord(body);
   const vessel = asRecord(bodyRecord.vessel || bodyRecord);
+  const action = cleanText(bodyRecord.action)?.toLowerCase() || "save";
   const imoNumber = cleanImo(readFirst(vessel, ["imo", "IMO", "imo_number", "imoNumber"]));
   const vesselName = cleanText(readFirst(vessel, ["vesselName", "vessel_name", "name", "ShipName"]));
   const mmsi = cleanMmsi(readFirst(vessel, ["mmsi", "MMSI"]));
+  if (action === "discard") {
+    if (!imoNumber && !mmsi) {
+      return json({ success: false, error: "Se requiere un IMO o MMSI válido para descartar el buque." }, 400, headers);
+    }
+    try {
+      const discardedVessel = await upsertDiscardedVessel(imoNumber || null, mmsi, vesselName);
+      return json({ success: true, discarded: true, vessel: discardedVessel }, 200, headers);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown database error";
+      console.error("[vessel-due-diligence-save] Vessel discard failed", error);
+      return json({ success: false, error: errorMessage }, 500, headers);
+    }
+  }
   if (!imoNumber && !mmsi) {
     return json({ success: false, error: "Se requiere IMO o MMSI válido para persistir Due Diligence." }, 400, headers);
   }

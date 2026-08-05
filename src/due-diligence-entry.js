@@ -1,4 +1,4 @@
-import { fetchDueDiligence, persistDueDiligenceVessel } from './services/dueDiligenceService.js';
+import { discardDueDiligenceVessel, fetchDueDiligence, persistDueDiligenceVessel } from './services/dueDiligenceService.js';
 import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
 
 (function initializeVesselDueDiligenceBridge(globalScope) {
@@ -607,30 +607,79 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         return vessel;
     }
 
-    function renderCalculatorHandoff(card, key, vessel) {
-        const { review, panel } = getProposalReviewTarget(card);
-        if (!review || !globalScope.document) return false;
-        const stateBadge = review.querySelector('header span');
-        if (stateBadge) {
-            stateBadge.className = 'max-w-[10rem] shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-emerald-800';
-            stateBadge.textContent = 'Validado en Master';
+    function mergeVerifiedVesselIntoDensityState(vessel) {
+        if (!vessel || typeof vessel !== 'object') return false;
+        const identity = {
+            imo: vessel.imo || vessel.imo_number,
+            mmsi: vessel.mmsi,
+            name: vessel.vesselName || vessel.vessel_name || vessel.name,
+        };
+        const technical = normalizeTechnicalRecord(vessel);
+        const mergeCollection = collection => {
+            if (!Array.isArray(collection)) return collection;
+            return collection.map(candidate => {
+                if (!vesselIdentityMatches(candidate, identity)) return candidate;
+                const merged = {
+                    ...candidate,
+                    MetaData: candidate?.MetaData && typeof candidate.MetaData === 'object'
+                        ? { ...candidate.MetaData }
+                        : {},
+                };
+                mergeTechnicalFields(merged, technical);
+                return mergeNonEmptyRecords(merged, {
+                    vesselName: vessel.vesselName || vessel.vessel_name,
+                    vessel_name: vessel.vessel_name || vessel.vesselName,
+                    mmsi: vessel.mmsi,
+                    masterValidated: true,
+                    masterValidatedAt: new Date().toISOString(),
+                    technicalDataSource: 'VESSELS_MASTER',
+                });
+            });
+        };
+        const store = globalScope.GlobalStore;
+        if (store) {
+            ['rawVessels', 'filteredVessels', 'vessels', 'renderedAisVessels'].forEach(collection => {
+                store[collection] = mergeCollection(store[collection]);
+            });
         }
-        const footer = review.querySelector('[data-due-diligence-footer]');
-        if (!footer) return false;
-        footer.replaceChildren();
-        footer.className = 'grid gap-2 border-t border-emerald-100 bg-emerald-50/70 px-3 py-3';
-        const confirmation = globalScope.document.createElement('p');
-        confirmation.className = 'text-[10px] font-bold leading-relaxed text-emerald-900';
-        confirmation.textContent = 'Auditoría técnica guardada. El buque verificado está listo para cargar sus datos en el estimador.';
-        const continueButton = globalScope.document.createElement('button');
-        continueButton.type = 'button';
-        continueButton.dataset.dueDiligenceContinue = encodeURIComponent(JSON.stringify(vessel));
-        continueButton.className = 'inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-3 text-[10px] font-black uppercase tracking-[0.08em] text-white shadow-lg transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400';
-        continueButton.innerHTML = '<span>Continuar a Calculadora de Costes</span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i>';
-        footer.append(confirmation, continueButton);
-        pendingProposals.delete(key);
-        panel?.classList.remove('hidden');
-        panel?.setAttribute('aria-hidden', 'false');
+        globalScope.openShipsVesselsCache = mergeCollection(globalScope.openShipsVesselsCache);
+        globalScope.syncDensityDisplayConsumers?.({ updateGlobe: false });
+        globalScope.dispatchEvent(new CustomEvent('vessel:density-optimistic-update', {
+            detail: { vessel: { ...vessel }, identity },
+        }));
+        return true;
+    }
+
+    function removeDiscardedVesselFromDensity(identity = {}) {
+        const safeIdentity = identity && typeof identity === 'object' ? identity : { imo: identity };
+        const normalizedImo = normalizeImo(safeIdentity.imo);
+        const normalizedMmsi = normalizeMmsi(safeIdentity.mmsi);
+        if (!normalizedImo && !normalizedMmsi) return false;
+        const matchesDiscardedIdentity = vessel => {
+            const vesselImo = normalizeImo(vessel?.imo || vessel?.IMO || vessel?.imo_number || vessel?.MetaData?.IMO);
+            const vesselMmsi = normalizeMmsi(vessel?.mmsi || vessel?.MMSI || vessel?.MetaData?.MMSI);
+            return Boolean(
+                (normalizedImo && vesselImo === normalizedImo)
+                || (normalizedMmsi && vesselMmsi === normalizedMmsi)
+            );
+        };
+        const store = globalScope.GlobalStore;
+        if (typeof store?.markVesselDiscarded === 'function') {
+            store.markVesselDiscarded({ imo: normalizedImo, mmsi: normalizedMmsi }, { source: 'due-diligence-discard' });
+        } else if (store) {
+            if (normalizedImo) store.discardedVesselImos = Array.from(new Set([...(store.discardedVesselImos || []), normalizedImo]));
+            if (normalizedMmsi) store.discardedVesselMmsis = Array.from(new Set([...(store.discardedVesselMmsis || []), normalizedMmsi]));
+            ['rawVessels', 'filteredVessels', 'vessels', 'renderedAisVessels'].forEach(collection => {
+                if (Array.isArray(store[collection])) store[collection] = store[collection].filter(vessel => !matchesDiscardedIdentity(vessel));
+            });
+        }
+        if (Array.isArray(globalScope.openShipsVesselsCache)) {
+            globalScope.openShipsVesselsCache = globalScope.openShipsVesselsCache.filter(vessel => !matchesDiscardedIdentity(vessel));
+        }
+        globalScope.syncDensityDisplayConsumers?.();
+        globalScope.dispatchEvent(new CustomEvent('vessel:discarded', {
+            detail: { imo: normalizedImo, mmsi: normalizedMmsi },
+        }));
         return true;
     }
 
@@ -730,8 +779,44 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         }
 
         const footer = globalScope.document.createElement('footer');
-        footer.className = 'grid grid-cols-1 gap-2 border-t border-slate-100 bg-slate-50/70 px-3 py-3 sm:grid-cols-[auto_minmax(0,1fr)]';
+        const densityCommercialFlow = card?.matches?.('[data-density-commercial-match="true"]') === true;
+        footer.className = densityCommercialFlow
+            ? 'grid grid-cols-1 gap-2 border-t border-slate-100 bg-slate-50/70 px-3 py-3 sm:grid-cols-3'
+            : 'grid grid-cols-1 gap-2 border-t border-slate-100 bg-slate-50/70 px-3 py-3 sm:grid-cols-[auto_minmax(0,1fr)]';
         footer.dataset.dueDiligenceFooter = 'true';
+        if (densityCommercialFlow) {
+            const discard = globalScope.document.createElement('button');
+            discard.type = 'button';
+            discard.dataset.dueDiligenceDiscardVessel = key;
+            discard.disabled = !normalizeImo(safeTechnical.imo || pending?.identity?.imo)
+                && !normalizeMmsi(safeTechnical.mmsi || pending?.identity?.mmsi);
+            discard.setAttribute('aria-disabled', String(discard.disabled));
+            discard.className = discard.disabled
+                ? 'cursor-not-allowed rounded-lg bg-red-100 px-3 py-2 text-[10px] font-black uppercase text-red-400 opacity-70'
+                : 'rounded-lg bg-red-700 px-3 py-2 text-[10px] font-black uppercase text-white transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400';
+            discard.textContent = 'Descartar Buque';
+
+            const save = globalScope.document.createElement('button');
+            save.type = 'button';
+            save.dataset.dueDiligenceSave = key;
+            save.disabled = commerciallyBlocked || grossTonnageRequired;
+            save.setAttribute('aria-disabled', String(save.disabled));
+            save.className = save.disabled
+                ? 'cursor-not-allowed rounded-lg bg-slate-200 px-3 py-2 text-[10px] font-black uppercase text-slate-400 opacity-70'
+                : 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-[10px] font-black uppercase text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400';
+            save.textContent = 'Guardar Datos';
+
+            const calculate = globalScope.document.createElement('button');
+            calculate.type = 'button';
+            calculate.dataset.dueDiligenceCalculate = key;
+            calculate.disabled = commerciallyBlocked || grossTonnageRequired;
+            calculate.setAttribute('aria-disabled', String(calculate.disabled));
+            calculate.className = calculate.disabled
+                ? 'cursor-not-allowed rounded-lg bg-emerald-200 px-3 py-2 text-[10px] font-black uppercase text-emerald-700 opacity-70'
+                : 'rounded-lg bg-emerald-700 px-3 py-2 text-[10px] font-black uppercase text-white shadow-sm transition hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-400';
+            calculate.textContent = 'Calcular Flete';
+            footer.append(discard, save, calculate);
+        } else {
         const reject = globalScope.document.createElement('button');
         reject.type = 'button';
         reject.dataset.dueDiligenceReject = key;
@@ -747,6 +832,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             : 'rounded-lg bg-emerald-700 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-white shadow-sm transition hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-400';
         accept.textContent = grossTonnageRequired ? 'GT REQUERIDO PARA VALIDAR' : 'Validar y Guardar en Master (Neon DB)';
         footer.append(reject, accept);
+        }
 
         review.append(header, dictionary, footer);
         return true;
@@ -788,7 +874,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         return true;
     }
 
-    async function acceptPendingProposal(key, card = null, acceptButton = null) {
+    async function acceptPendingProposal(key, card = null, acceptButton = null, { calculateFreight = false } = {}) {
         const pending = pendingProposals.get(key);
         if (!pending) return false;
         const pendingIdentity = pending.identity && typeof pending.identity === 'object' ? pending.identity : {};
@@ -816,21 +902,31 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             const vessel = buildPersistenceVessel(pendingIdentity, pendingTechnical, currentMatch);
             const status = card?.querySelector('[data-due-diligence-status]');
             if (status) {
-                status.textContent = 'Guardando el buque en Neon antes de actualizar el Store...';
+                status.textContent = calculateFreight
+                    ? 'Guardando el buque en Neon antes de abrir la Calculadora...'
+                    : 'Guardando los datos técnicos en Neon...';
                 status.className = 'text-[10px] font-bold text-cyan-700';
             }
             const persistenceResult = await persistDueDiligenceVessel(vessel, {
                 fetchImpl: typeof globalScope.fetch === 'function' ? globalScope.fetch.bind(globalScope) : undefined,
             });
-            const verifiedVessel = commitVerifiedVesselToGlobalState(
-                normalizePersistedVessel(persistenceResult, vessel, pendingTechnical),
-            );
-            const hydratedMatch = hydrateStores(pendingIdentity, pendingTechnical);
-            const resolvedMatch = hydratedMatch || currentMatch || findMatchingResult(pendingIdentity);
-            updateCard(card, pendingIdentity, pendingTechnical, resolvedMatch);
-            const financialRecalculated = densityCommercialFlow ? false : recalculateFinancialEngine(pendingIdentity, pendingTechnical);
+            const verifiedVessel = normalizePersistedVessel(persistenceResult, vessel, pendingTechnical);
             if (densityCommercialFlow) {
-                renderCalculatorHandoff(card, key, verifiedVessel);
+                try {
+                    mergeVerifiedVesselIntoDensityState(verifiedVessel);
+                } catch (densitySyncError) {
+                    console.warn('[Due Diligence] Optimistic Density sync failed.', densitySyncError);
+                }
+            }
+            if (!densityCommercialFlow || calculateFreight) commitVerifiedVesselToGlobalState(verifiedVessel);
+            if (!densityCommercialFlow || calculateFreight) {
+                const hydratedMatch = hydrateStores(pendingIdentity, pendingTechnical);
+                const resolvedMatch = hydratedMatch || currentMatch || findMatchingResult(pendingIdentity);
+                updateCard(card, pendingIdentity, pendingTechnical, resolvedMatch);
+            }
+            const financialRecalculated = densityCommercialFlow ? false : recalculateFinancialEngine(pendingIdentity, pendingTechnical);
+            clearProposalReview(card, key);
+            if (densityCommercialFlow && calculateFreight) {
                 if (typeof globalScope.applyResolvedVesselToCalculator === 'function') {
                     globalScope.applyResolvedVesselToCalculator(
                         verifiedVessel,
@@ -838,17 +934,21 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
                     );
                 }
                 if (typeof globalScope.switchTab === 'function') globalScope.switchTab('estimator');
-            } else clearProposalReview(card, key);
+            }
             if (status) {
-                status.textContent = densityCommercialFlow
-                    ? 'Buque validado en Master. Redirigiendo a Calculadora...'
+                status.textContent = densityCommercialFlow && calculateFreight
+                    ? 'Buque guardado. Abriendo la Calculadora...'
+                    : densityCommercialFlow
+                    ? 'Datos técnicos guardados en Neon.'
                     : financialRecalculated
                     ? 'Perfil guardado en Neon. PDAs y márgenes recalculados.'
                     : 'Perfil técnico guardado en Neon y disponible para el estimador.';
                 status.className = 'text-[10px] font-bold text-emerald-700';
             }
-            notify(densityCommercialFlow
-                ? 'Buque validado. Redirigiendo a Calculadora...'
+            notify(densityCommercialFlow && calculateFreight
+                ? 'Buque guardado. Abriendo la Calculadora...'
+                : densityCommercialFlow
+                ? 'Datos técnicos guardados correctamente.'
                 : 'Due Diligence guardada correctamente en Neon.');
             return true;
         } catch (error) {
@@ -861,9 +961,46 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
                 acceptButton.disabled = false;
                 acceptButton.setAttribute('aria-disabled', 'false');
                 acceptButton.removeAttribute('aria-busy');
-                acceptButton.textContent = 'Aceptar Datos';
+                acceptButton.textContent = calculateFreight ? 'Calcular Flete' : 'Guardar Datos';
             }
             notify(error instanceof Error ? error.message : 'No se pudo guardar el buque en Neon.', 'error');
+            return false;
+        }
+    }
+
+    async function discardPendingVessel(key, card = null, discardButton = null) {
+        const pending = pendingProposals.get(key);
+        if (!pending) return false;
+        const pendingIdentity = pending.identity && typeof pending.identity === 'object' ? pending.identity : {};
+        const pendingTechnical = pending.technical && typeof pending.technical === 'object' ? pending.technical : {};
+        const imo = normalizeImo(pendingTechnical.imo || pendingIdentity.imo);
+        const mmsi = normalizeMmsi(pendingTechnical.mmsi || pendingIdentity.mmsi);
+        if (!imo && !mmsi) {
+            notify('Se requiere un IMO o MMSI válido para descartar el buque.', 'error');
+            return false;
+        }
+        if (discardButton) {
+            discardButton.disabled = true;
+            discardButton.setAttribute('aria-busy', 'true');
+            discardButton.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Descartando...';
+        }
+        try {
+            const currentMatch = pending.match || findMatchingResult(pendingIdentity);
+            const vessel = buildPersistenceVessel(pendingIdentity, { ...pendingTechnical, imo, mmsi }, currentMatch);
+            await discardDueDiligenceVessel(vessel, {
+                fetchImpl: typeof globalScope.fetch === 'function' ? globalScope.fetch.bind(globalScope) : undefined,
+            });
+            removeDiscardedVesselFromDensity({ imo, mmsi });
+            clearProposalReview(card, key);
+            notify('Buque descartado y excluido del radar OpenShips.');
+            return true;
+        } catch (error) {
+            if (discardButton) {
+                discardButton.disabled = false;
+                discardButton.removeAttribute('aria-busy');
+                discardButton.textContent = 'Descartar Buque';
+            }
+            notify(error instanceof Error ? error.message : 'No se pudo descartar el buque.', 'error');
             return false;
         }
     }
@@ -1043,23 +1180,21 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
     }
 
     function handleDueDiligenceClick(event) {
-        const continueButton = event?.target?.closest?.('[data-due-diligence-continue]');
-        if (continueButton) {
+        const discardVesselButton = event?.target?.closest?.('[data-due-diligence-discard-vessel]');
+        const saveButton = event?.target?.closest?.('[data-due-diligence-save]');
+        const calculateButton = event?.target?.closest?.('[data-due-diligence-calculate]');
+        if (discardVesselButton || saveButton || calculateButton) {
             event.preventDefault();
             event.stopPropagation();
             event.stopImmediatePropagation();
-            try {
-                const vessel = JSON.parse(decodeURIComponent(continueButton.dataset.dueDiligenceContinue || '%7B%7D'));
-                if (typeof globalScope.applyResolvedVesselToCalculator === 'function') {
-                    globalScope.applyResolvedVesselToCalculator(vessel, vessel.vessel_name || vessel.vesselName || '');
-                } else if (globalScope.GlobalStore) {
-                    globalScope.GlobalStore.activeVessel = vessel;
-                    globalScope.GlobalStore.calculatorVessel = vessel;
-                }
-                if (typeof globalScope.switchTab === 'function') globalScope.switchTab('estimator');
-            } catch (error) {
-                notify(error instanceof Error ? error.message : 'No se pudo abrir la Calculadora.', 'error');
-            }
+            const actionButton = discardVesselButton || saveButton || calculateButton;
+            const key = discardVesselButton?.dataset.dueDiligenceDiscardVessel
+                || saveButton?.dataset.dueDiligenceSave
+                || calculateButton?.dataset.dueDiligenceCalculate
+                || '';
+            const card = actionButton.closest('[data-density-commercial-match="true"]') || pendingProposals.get(key)?.card || null;
+            if (discardVesselButton) void discardPendingVessel(key, card, discardVesselButton);
+            else void acceptPendingProposal(key, card, actionButton, { calculateFreight: Boolean(calculateButton) });
             return;
         }
         const acceptButton = event?.target?.closest?.('[data-due-diligence-accept]');
@@ -1097,9 +1232,11 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         buildPersistenceVessel,
         isNonCommercialVesselType,
         mergeTechnicalFields,
+        mergeVerifiedVesselIntoDensityState,
         mergeNonEmptyRecords,
         normalizeTechnicalRecord,
         dueDiligenceDataByVessel,
+        discardPendingVessel,
         pendingProposals,
         proposalKey,
         recalculateFinancialEngine,
