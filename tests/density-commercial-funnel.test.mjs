@@ -113,6 +113,13 @@ test('Density table identifies OpenShips as its live source', () => {
   assert.match(indexSource, /row\.dataset\.densityCommercialMatch = 'true'/);
 });
 
+test('Density table infers spatial status and never fabricates missing speed', () => {
+  assert.match(indexSource, /window\.inferSpatialVesselStatus\(vessel, getDensityReferencePortCoordinates\(\)\)/);
+  assert.match(indexSource, /window\.readRealVesselSpeed\(vessel\)/);
+  assert.match(indexSource, /Number\.isFinite\(speed\) \? `\$\{speed\.toFixed\(1\)\} kn` : 'N\/D'/);
+  assert.doesNotMatch(indexSource, /statusLabel: v\.statusLabel \|\| \(speed >= 1 \? "Navegando" : "En Puerto"\)/);
+});
+
 test('Due Diligence separates discard, save, and calculator handoff actions', () => {
   const persistenceIndex = dueDiligenceSource.indexOf('const persistenceResult = await persistDueDiligenceVessel');
   const storeIndex = dueDiligenceSource.indexOf('commitVerifiedVesselToGlobalState(verifiedVessel)', persistenceIndex);
