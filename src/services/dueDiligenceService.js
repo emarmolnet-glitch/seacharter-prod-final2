@@ -118,10 +118,14 @@ export async function persistDueDiligenceVessel(
   if (typeof fetchImpl !== 'function') {
     throw new Error('No hay un cliente HTTP disponible para guardar Due Diligence.');
   }
+  const normalizedAction = action === 'discard' ? 'discard' : 'save';
+  const payloadVessel = normalizedAction === 'discard'
+    ? { ...vessel, status: 'discarded' }
+    : vessel;
   const response = await fetchImpl(endpoint, {
-    method: action === 'discard' ? 'PATCH' : 'PUT',
+    method: normalizedAction === 'discard' ? 'PATCH' : 'PUT',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ vessel, action }),
+    body: JSON.stringify({ vessel: payloadVessel, action: normalizedAction }),
     signal,
   });
   const rawText = await response.text();

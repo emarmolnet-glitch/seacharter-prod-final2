@@ -25,6 +25,7 @@ type MasterVesselRow = QueryResultRow & {
   status: string | null;
   audit_status: string | null;
   process_status: string | null;
+  is_discarded: boolean;
   updated_at: string | Date | null;
 };
 
@@ -256,7 +257,11 @@ export default async (req: Request) => {
           SELECT
             imo_number, mmsi, vessel_name, dwt, vessel_type, draft_meters, flag,
             call_sign, year_built, gross_tonnage, net_tonnage, loa_meters,
-            beam_meters, has_gears, status, audit_status, process_status, updated_at
+            beam_meters, has_gears, status, audit_status, process_status,
+            (UPPER(COALESCE(status, '')) = 'DISCARDED'
+              OR UPPER(COALESCE(process_status, '')) = 'DISCARDED'
+              OR UPPER(COALESCE(audit_status, '')) IN ('REJECTED', 'DISCARDED')) AS is_discarded,
+            updated_at
           FROM vessels_master
           WHERE imo_number = ANY($1::integer[])
              OR mmsi = ANY($2::text[])
@@ -273,7 +278,7 @@ export default async (req: Request) => {
     const vessels = rawVessels.flatMap((vessel) => {
       const master = masterByImo.get(vesselImo(vessel)) || masterByMmsi.get(vesselMmsi(vessel));
       if (!master) return [vessel];
-      if (String(master.status || "").toLowerCase() === "discarded") return [];
+      if (master.is_discarded === true) return [];
       return [mergeMasterTechnicalData(vessel, master)];
     });
 

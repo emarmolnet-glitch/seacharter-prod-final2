@@ -1,7 +1,13 @@
 import type { Config } from "@netlify/functions";
 import { getPool } from "../../db/index.js";
-import { upsertVesselTechnicalRecord } from "../../db/vessel-technical-cache.js";
-import { sanitizeVesselTechnicalRecord } from "../../db/vessel-technical-normalizer.mjs";
+import {
+  upsertVesselTechnicalRecord,
+  type VesselTechnicalRecord,
+} from "../../db/vessel-technical-cache.js";
+import {
+  prepareVesselTechnicalPersistence,
+  sanitizeVesselTechnicalRecord,
+} from "../../db/vessel-technical-normalizer.mjs";
 
 const NON_COMMERCIAL_VESSEL_PATTERN = /yacht|passenger|ferry|pleasure|cruise|military/i;
 
@@ -74,88 +80,126 @@ type DiscardedVesselRow = {
   imo_number: number | null;
   mmsi: string | null;
   vessel_name: string | null;
+  dwt: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  vessel_type: string | null;
+  draft_meters: number | null;
+  flag: string | null;
+  call_sign: string | null;
+  year_built: number | null;
+  gross_tonnage: number | string | null;
+  net_tonnage: number | string | null;
+  loa_meters: number | string | null;
+  beam_meters: number | string | null;
+  last_port: string | null;
+  eta: string | null;
   status: string;
+  audit_status: string;
+  process_status: string;
 };
 
-const DISCARD_RETURNING_COLUMNS = "imo_number, mmsi, vessel_name, status";
+const DISCARD_RETURNING_COLUMNS = `
+  imo_number, mmsi, vessel_name, dwt, latitude, longitude, vessel_type,
+  draft_meters, flag, call_sign, year_built, gross_tonnage, net_tonnage,
+  loa_meters, beam_meters, last_port, eta, status, audit_status, process_status
+`;
 
-async function updateDiscardedVesselByIdentity(
-  imoNumber: string | null,
-  mmsi: string | null,
-  vesselName: string | null,
-) {
-  return getPool().query<DiscardedVesselRow>(
-    `
-      UPDATE vessels_master
-      SET vessel_name = COALESCE($3::text, vessel_name),
-          status = 'DISCARDED',
-          audit_status = 'REJECTED',
-          process_status = 'DISCARDED',
-          updated_at = NOW(),
-          fecha_ultima_actualizacion = NOW()
-      WHERE ($1::integer IS NOT NULL AND imo_number = $1::integer)
-         OR ($2::text IS NOT NULL AND mmsi = $2::text)
-      RETURNING ${DISCARD_RETURNING_COLUMNS}
-    `,
-    [imoNumber ? Number(imoNumber) : null, mmsi, vesselName],
-  );
-}
-
-async function upsertDiscardedVessel(
-  imoNumber: string | null,
-  mmsi: string | null,
-  vesselName: string | null,
-) {
-  const updated = await updateDiscardedVesselByIdentity(imoNumber, mmsi, vesselName);
-  if (updated.rows.length > 0) {
-    return (imoNumber && updated.rows.find((row) => String(row.imo_number) === imoNumber)) || updated.rows[0];
-  }
-
-  try {
-    const inserted = imoNumber
-      ? await getPool().query<DiscardedVesselRow>(
-          `
-            INSERT INTO vessels_master (
-              imo_number, mmsi, vessel_name, status, audit_status, process_status,
-              updated_at, fecha_ultima_actualizacion
-            )
-            VALUES ($1::integer, $2::text, $3::text, 'DISCARDED', 'REJECTED', 'DISCARDED', NOW(), NOW())
-            ON CONFLICT (imo_number) DO UPDATE SET
-              vessel_name = COALESCE(EXCLUDED.vessel_name, vessels_master.vessel_name),
-              status = EXCLUDED.status,
-              audit_status = EXCLUDED.audit_status,
-              process_status = EXCLUDED.process_status,
-              updated_at = NOW(),
-              fecha_ultima_actualizacion = NOW()
+async function upsertDiscardedVessel(record: VesselTechnicalRecord) {
+  const { vessel, parameters } = prepareVesselTechnicalPersistence(record);
+  const result = vessel.imoNumber
+    ? await getPool().query<DiscardedVesselRow>(
+        `
+          INSERT INTO vessels_master (
+            imo_number, mmsi, vessel_name, dwt, latitude, longitude, vessel_type,
+            draft_meters, flag, call_sign, year_built, gross_tonnage, net_tonnage,
+            loa_meters, beam_meters, last_port, eta,
+            status, audit_status, process_status, updated_at, fecha_ultima_actualizacion
+          )
+          VALUES (
+            $1::integer, $2::text, $3::text, $4::integer, $5::double precision,
+            $6::double precision, $7::text, $8::double precision, $9::text,
+            $10::text, $11::integer, $12::double precision, $13::double precision,
+            $14::double precision, $15::double precision, $16::text,
+            NULLIF($17::text, '')::timestamptz,
+            'DISCARDED', 'REJECTED', 'DISCARDED', NOW(), NOW()
+          )
+          ON CONFLICT (imo_number) DO UPDATE SET
+            mmsi = COALESCE(EXCLUDED.mmsi, vessels_master.mmsi),
+            vessel_name = COALESCE(EXCLUDED.vessel_name, vessels_master.vessel_name),
+            dwt = COALESCE(EXCLUDED.dwt, vessels_master.dwt),
+            latitude = COALESCE(EXCLUDED.latitude, vessels_master.latitude),
+            longitude = COALESCE(EXCLUDED.longitude, vessels_master.longitude),
+            vessel_type = COALESCE(EXCLUDED.vessel_type, vessels_master.vessel_type),
+            draft_meters = COALESCE(EXCLUDED.draft_meters, vessels_master.draft_meters),
+            flag = COALESCE(EXCLUDED.flag, vessels_master.flag),
+            call_sign = COALESCE(EXCLUDED.call_sign, vessels_master.call_sign),
+            year_built = COALESCE(EXCLUDED.year_built, vessels_master.year_built),
+            gross_tonnage = COALESCE(EXCLUDED.gross_tonnage, vessels_master.gross_tonnage),
+            net_tonnage = COALESCE(EXCLUDED.net_tonnage, vessels_master.net_tonnage),
+            loa_meters = COALESCE(EXCLUDED.loa_meters, vessels_master.loa_meters),
+            beam_meters = COALESCE(EXCLUDED.beam_meters, vessels_master.beam_meters),
+            last_port = COALESCE(EXCLUDED.last_port, vessels_master.last_port),
+            eta = COALESCE(EXCLUDED.eta, vessels_master.eta),
+            status = 'DISCARDED',
+            audit_status = 'REJECTED',
+            process_status = 'DISCARDED',
+            updated_at = NOW(),
+            fecha_ultima_actualizacion = NOW()
+          RETURNING ${DISCARD_RETURNING_COLUMNS}
+        `,
+        parameters,
+      )
+    : await getPool().query<DiscardedVesselRow>(
+        `
+          WITH updated_vessel AS (
+            UPDATE vessels_master
+            SET vessel_name = COALESCE($3::text, vessel_name),
+                dwt = COALESCE($4::integer, dwt),
+                latitude = COALESCE($5::double precision, latitude),
+                longitude = COALESCE($6::double precision, longitude),
+                vessel_type = COALESCE($7::text, vessel_type),
+                draft_meters = COALESCE($8::double precision, draft_meters),
+                flag = COALESCE($9::text, flag),
+                call_sign = COALESCE($10::text, call_sign),
+                year_built = COALESCE($11::integer, year_built),
+                gross_tonnage = COALESCE($12::double precision, gross_tonnage),
+                net_tonnage = COALESCE($13::double precision, net_tonnage),
+                loa_meters = COALESCE($14::double precision, loa_meters),
+                beam_meters = COALESCE($15::double precision, beam_meters),
+                last_port = COALESCE($16::text, last_port),
+                eta = COALESCE(NULLIF($17::text, '')::timestamptz, eta),
+                status = 'DISCARDED', audit_status = 'REJECTED', process_status = 'DISCARDED',
+                updated_at = NOW(), fecha_ultima_actualizacion = NOW()
+            WHERE mmsi = $2::text
             RETURNING ${DISCARD_RETURNING_COLUMNS}
-          `,
-          [Number(imoNumber), mmsi, vesselName],
-        )
-      : await getPool().query<DiscardedVesselRow>(
-          `
+          ), inserted_vessel AS (
             INSERT INTO vessels_master (
-              imo_number, mmsi, vessel_name, status, audit_status, process_status,
-              updated_at, fecha_ultima_actualizacion
+              imo_number, mmsi, vessel_name, dwt, latitude, longitude, vessel_type,
+              draft_meters, flag, call_sign, year_built, gross_tonnage, net_tonnage,
+              loa_meters, beam_meters, last_port, eta,
+              status, audit_status, process_status, updated_at, fecha_ultima_actualizacion
             )
-            VALUES (NULL, $1::text, $2::text, 'DISCARDED', 'REJECTED', 'DISCARDED', NOW(), NOW())
-            ON CONFLICT (mmsi) DO UPDATE SET
-              vessel_name = COALESCE(EXCLUDED.vessel_name, vessels_master.vessel_name),
-              status = EXCLUDED.status,
-              audit_status = EXCLUDED.audit_status,
-              process_status = EXCLUDED.process_status,
-              updated_at = NOW(),
-              fecha_ultima_actualizacion = NOW()
+            SELECT
+              $1::integer, $2::text, $3::text, $4::integer, $5::double precision,
+              $6::double precision, $7::text, $8::double precision, $9::text,
+              $10::text, $11::integer, $12::double precision, $13::double precision,
+              $14::double precision, $15::double precision, $16::text,
+              NULLIF($17::text, '')::timestamptz,
+              'DISCARDED', 'REJECTED', 'DISCARDED', NOW(), NOW()
+            WHERE NOT EXISTS (SELECT 1 FROM updated_vessel)
             RETURNING ${DISCARD_RETURNING_COLUMNS}
-          `,
-          [mmsi, vesselName],
-        );
-    return inserted.rows[0];
-  } catch (error) {
-    if ((error as { code?: string })?.code !== "23505") throw error;
-    const retried = await updateDiscardedVesselByIdentity(imoNumber, mmsi, vesselName);
-    if (retried.rows.length === 0) throw error;
-    return (imoNumber && retried.rows.find((row) => String(row.imo_number) === imoNumber)) || retried.rows[0];
-  }
+          )
+          SELECT * FROM updated_vessel
+          UNION ALL
+          SELECT * FROM inserted_vessel
+          LIMIT 1
+        `,
+        parameters,
+      );
+
+  if (!result.rows[0]) throw new Error("No se pudo persistir el descarte del buque.");
+  return result.rows[0];
 }
 
 export default async (req: Request) => {
@@ -168,25 +212,17 @@ export default async (req: Request) => {
   const body = await req.json().catch(() => null);
   const bodyRecord = asRecord(body);
   const vessel = asRecord(bodyRecord.vessel || bodyRecord);
-  const action = cleanText(bodyRecord.action)?.toLowerCase() || "save";
+  const requestedStatus = cleanText(readFirst(vessel, ["status", "auditStatus", "audit_status"]))?.toLowerCase();
+  const requestedAction = cleanText(bodyRecord.action)?.toLowerCase() || "save";
+  const action = requestedAction === "discard" || requestedStatus === "discarded" ? "discard" : "save";
   const imoNumber = cleanImo(readFirst(vessel, ["imo", "IMO", "imo_number", "imoNumber"]));
   const vesselName = cleanText(readFirst(vessel, ["vesselName", "vessel_name", "name", "ShipName"]));
   const mmsi = cleanMmsi(readFirst(vessel, ["mmsi", "MMSI"]));
-  if (action === "discard") {
-    if (!imoNumber && !mmsi) {
-      return json({ success: false, error: "Se requiere un IMO o MMSI válido para descartar el buque." }, 400, headers);
-    }
-    try {
-      const discardedVessel = await upsertDiscardedVessel(imoNumber || null, mmsi, vesselName);
-      return json({ success: true, discarded: true, vessel: discardedVessel }, 200, headers);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown database error";
-      console.error("[vessel-due-diligence-save] Vessel discard failed", error);
-      return json({ success: false, error: errorMessage }, 500, headers);
-    }
-  }
   if (!imoNumber && !mmsi) {
-    return json({ success: false, error: "Se requiere IMO o MMSI válido para persistir Due Diligence." }, 400, headers);
+    const message = action === "discard"
+      ? "Se requiere un IMO o MMSI válido para descartar el buque."
+      : "Se requiere IMO o MMSI válido para persistir Due Diligence.";
+    return json({ success: false, error: message }, 400, headers);
   }
 
   const dwt = cleanInteger(readFirst(vessel, ["dwt", "DWT", "deadweight"]));
@@ -219,29 +255,39 @@ export default async (req: Request) => {
   ]));
   const lastPort = readFirst(vessel, ["last_port", "lastPort", "lastPortOfCall", "ultimo_puerto"]);
   const eta = readFirst(vessel, ["eta", "ETA", "estimatedTimeOfArrival"]);
+  const sanitizedVessel = sanitizeVesselTechnicalRecord({
+    imoNumber: imoNumber ? Number(imoNumber) : null,
+    mmsi,
+    vesselName,
+    dwt,
+    latitude,
+    longitude,
+    vesselType,
+    draftMeters,
+    flag,
+    callSign,
+    yearBuilt,
+    grossTonnage,
+    netTonnage,
+    loaMeters,
+    beamMeters,
+    lastPort,
+    eta,
+  });
+  if (action === "discard") {
+    try {
+      const discardedVessel = await upsertDiscardedVessel(sanitizedVessel);
+      return json({ success: true, discarded: true, vessel: discardedVessel }, 200, headers);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown database error";
+      console.error("[vessel-due-diligence-save] Vessel discard failed", error);
+      return json({ success: false, error: errorMessage }, 500, headers);
+    }
+  }
   if (vesselType && NON_COMMERCIAL_VESSEL_PATTERN.test(vesselType)) {
     return json({ success: false, error: `Buque no comercial detectado: ${vesselType}` }, 422, headers);
   }
   try {
-    const sanitizedVessel = sanitizeVesselTechnicalRecord({
-      imoNumber: imoNumber ? Number(imoNumber) : null,
-      mmsi,
-      vesselName,
-      dwt,
-      latitude,
-      longitude,
-      vesselType,
-      draftMeters,
-      flag,
-      callSign,
-      yearBuilt,
-      grossTonnage,
-      netTonnage,
-      loaMeters,
-      beamMeters,
-      lastPort,
-      eta,
-    });
     const savedVessel = await upsertVesselTechnicalRecord(sanitizedVessel);
     const pool = getPool();
     const countResult = await pool.query<{ total: number }>(
