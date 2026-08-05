@@ -1,8 +1,52 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import vm from 'node:vm';
 
 const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+const branchStart = indexSource.indexOf('function resolveMasterVesselCalculationBranch');
+const branchEnd = indexSource.indexOf('function calculateMasterFreightAndDemurrage', branchStart);
+const branchSource = indexSource.slice(branchStart, branchEnd);
+
+function createBranchHarness({ vesselDwt, centralizedClass, pricingClass }) {
+  const calls = {
+    fearnleys: 0,
+    inverseSync: 0,
+    inverseCalculation: 0,
+    normalRouteSync: 0
+  };
+  const context = {
+    document: {
+      getElementById(id) {
+        return id === 'vessel-dwt' ? { value: String(vesselDwt) } : null;
+      }
+    },
+    State: { dwt: vesselDwt, cargo: 12000, daysSea: 4, daysPort: 2 },
+    getVesselClass: () => pricingClass,
+    getCentralizedVesselClass: () => centralizedClass,
+    recalcularDiasPuerto() {},
+    calculateAdjustedEtaAndDays() {},
+    runEngine() {},
+    syncInverseTceFromVoyage() {
+      calls.inverseSync += 1;
+    },
+    async handleFetchFearnleysTce(options) {
+      assert.equal(options?.managedByMaster, true);
+      calls.fearnleys += 1;
+    },
+    calculateInverseTce() {
+      calls.inverseCalculation += 1;
+    },
+    syncCostPlusFromRoute(showFeedback) {
+      assert.equal(showFeedback, false);
+      calls.normalRouteSync += 1;
+      return true;
+    }
+  };
+
+  vm.runInNewContext(`${branchSource}\nglobalThis.masterBranch = { resolveMasterVesselCalculationBranch, synchronizeMasterRouteCalculations };`, context);
+  return { calls, masterBranch: context.masterBranch };
+}
 
 test('section 2 button runs the complete calculation orchestrator', () => {
   assert.match(indexSource, /id="btn-validate-section2"[^>]*onclick="handleMasterValidationAndCalculate\(event\)"/);
@@ -30,13 +74,44 @@ test('master calculation preserves the required sequential workflow', () => {
   assert.doesNotMatch(source, /useEffect\s*\(/);
 });
 
-test('master calculation branches by vessel class without chained effects', () => {
-  assert.match(indexSource, /function resolveMasterVesselCalculationBranch\(\)/);
-  assert.match(indexSource, /normalizedClass\.includes\('HANDYSIZE'\)/);
-  assert.match(indexSource, /normalizedClass\.includes\('COASTER'\)/);
-  assert.match(indexSource, /normalizedClass\.includes\('MINI-BULKER'\)/);
-  assert.match(indexSource, /branch\.mode === 'FEARNLEYS_TCE'[\s\S]*await handleFetchFearnleysTce\(\{ managedByMaster: true \}\)/);
-  assert.match(indexSource, /syncCostPlusFromRoute\(false\)/);
+test('step 4 triggers the inverse TCE button handler for Handysize and larger vessels', async () => {
+  for (const vessel of [
+    { vesselDwt: 25000, centralizedClass: 'HANDYSIZE', categoryName: 'Handysize / Small Tanker' },
+    { vesselDwt: 55000, centralizedClass: 'SUPRAMAX', categoryName: 'Supramax / MR' }
+  ]) {
+    const harness = createBranchHarness({
+      ...vessel,
+      pricingClass: { categoryName: vessel.categoryName, type: 'TCE Inverso' }
+    });
+
+    const branch = await harness.masterBranch.synchronizeMasterRouteCalculations();
+
+    assert.equal(branch.mode, 'FEARNLEYS_TCE');
+    assert.equal(harness.calls.fearnleys, 1);
+    assert.equal(harness.calls.inverseSync, 1);
+    assert.equal(harness.calls.inverseCalculation, 1);
+    assert.equal(harness.calls.normalRouteSync, 0);
+  }
+});
+
+test('step 4 triggers the normal route synchronization handler for smaller vessels', async () => {
+  for (const vessel of [
+    { vesselDwt: 3500, centralizedClass: 'COASTER', categoryName: 'Coaster' },
+    { vesselDwt: 10000, centralizedClass: 'MINI-BULKER', categoryName: 'Mini-Bulker' }
+  ]) {
+    const harness = createBranchHarness({
+      ...vessel,
+      pricingClass: { categoryName: vessel.categoryName, type: 'Cost-Plus' }
+    });
+
+    const branch = await harness.masterBranch.synchronizeMasterRouteCalculations();
+
+    assert.equal(branch.mode, 'COST_PLUS_ROUTE');
+    assert.equal(harness.calls.normalRouteSync, 1);
+    assert.equal(harness.calls.fearnleys, 0);
+    assert.equal(harness.calls.inverseSync, 0);
+    assert.equal(harness.calls.inverseCalculation, 0);
+  }
 });
 
 test('Fearnleys failures propagate to the master orchestrator', () => {
