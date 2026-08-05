@@ -29125,16 +29125,29 @@
                 .normalize('NFD')
                 .replace(/[\u0300-\u036f]/g, '')
                 .toUpperCase();
-            const isHandysize = normalizedClass.includes('HANDYSIZE');
             const isCoasterOrMiniBulker = normalizedClass.includes('COASTER')
                 || normalizedClass.includes('MINI-BULKER')
                 || normalizedClass.includes('MINI BULKER')
                 || normalizedClass.includes('MINIBULKER');
+            const isHandysizeOrLarger = vesselDwt >= 15000
+                || pricingClass.type === 'TCE Inverso'
+                || [
+                    'HANDYSIZE',
+                    'SUPRAMAX',
+                    'ULTRAMAX',
+                    'PANAMAX',
+                    'KAMSARMAX',
+                    'CAPE',
+                    'AFRAMAX',
+                    'SUEZMAX',
+                    'VLOC',
+                    'VLCC'
+                ].some((vesselClass) => normalizedClass.includes(vesselClass));
 
             return {
                 vesselDwt,
                 categoryName: pricingClass.categoryName,
-                mode: isHandysize || (!isCoasterOrMiniBulker && pricingClass.type === 'TCE Inverso')
+                mode: !isCoasterOrMiniBulker && isHandysizeOrLarger
                     ? 'FEARNLEYS_TCE'
                     : 'COST_PLUS_ROUTE'
             };
