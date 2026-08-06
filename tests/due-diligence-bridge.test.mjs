@@ -436,7 +436,9 @@ test('persistence backend consolidates normalized technical fields by IMO or MMS
   assert.match(persistenceBackendSource, /SELECT COUNT\(\*\)::integer AS total FROM vessels_master/);
   assert.match(persistenceBackendSource, /await getPool\(\)\.connect\(\)/);
   assert.match(persistenceBackendSource, /await client\.query\("BEGIN"\)/);
-  assert.match(persistenceBackendSource, /upsertVesselTechnicalRecord\(sanitizedVessel, client\)/);
+  assert.match(persistenceBackendSource, /const savedVesselStatus = action === "save" \? "EN_CARTERA" : null/);
+  assert.match(persistenceBackendSource, /upsertVesselTechnicalRecord\(sanitizedVessel, client, savedVesselStatus\)/);
+  assert.match(technicalCacheSource, /status = EXCLUDED\.status/);
   assert.match(persistenceBackendSource, /await client\.query\("COMMIT"\)/);
   assert.match(persistenceBackendSource, /client\.query\("ROLLBACK"\)/);
   assert.match(technicalCacheSource, /queryClient: Pick<PoolClient, "query"> = getPool\(\)/);

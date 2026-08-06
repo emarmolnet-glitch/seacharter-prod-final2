@@ -293,7 +293,8 @@ export default async (req: Request) => {
       return json({ success: true, discarded: true, vessel: discardedVessel }, 200, headers);
     }
 
-    const savedVessel = await upsertVesselTechnicalRecord(sanitizedVessel, client);
+    const savedVesselStatus = action === "save" ? "EN_CARTERA" : null;
+    const savedVessel = await upsertVesselTechnicalRecord(sanitizedVessel, client, savedVesselStatus);
     const countResult = await client.query<{ total: string }>(
       `SELECT COUNT(*)::integer AS total FROM vessels_master`,
     );
