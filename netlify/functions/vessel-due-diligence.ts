@@ -1,5 +1,7 @@
 import type { Config } from "@netlify/functions";
+import type { QueryResultRow } from "pg";
 import * as cheerio from "cheerio";
+import { getPool } from "../../db/index.js";
 import {
   findVesselTechnicalRecord,
   hasCachedMandatoryTechnicalData,
@@ -8,6 +10,7 @@ import {
 } from "../../db/vessel-technical-cache.js";
 import { mappedVesselField, parseVesselAttribute } from "./_shared/vessel-field-mappings.mjs";
 import { extractVesselFinderDetailUrl, extractVesselFinderFields } from "./_shared/vesselfinder-extractor.mjs";
+import { extractValidatedImoFromSearchTexts } from "./_shared/vessel-imo-search.mjs";
 
 type VesselData = {
   imo_number: string | null;
@@ -48,6 +51,13 @@ type SourceResult = {
 type DirectSource = {
   provider: string;
   buildUrls: (identity: LookupIdentity) => URL[];
+};
+
+type OpenShipsLookupRow = QueryResultRow & {
+  mmsi: string | null;
+  vessel_name: string | null;
+  vessel_type: string | null;
+  raw_data: unknown;
 };
 
 const INTERNAL_DEADLINE_MS = 25_000;
@@ -144,6 +154,36 @@ function hasValidImoChecksum(imo: string) {
   const digits = imo.split("").map(Number);
   const checksum = digits.slice(0, 6).reduce((sum, digit, index) => sum + digit * (7 - index), 0) % 10;
   return checksum === digits[6];
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function collectRecordScopes(value: unknown, depth = 0): Record<string, unknown>[] {
+  if (depth > 4 || !value || typeof value !== "object") return [];
+  if (Array.isArray(value)) return value.flatMap((item) => collectRecordScopes(item, depth + 1));
+  const record = value as Record<string, unknown>;
+  return [record, ...Object.values(record).flatMap((item) => collectRecordScopes(item, depth + 1))];
+}
+
+function firstScopeValue(scopes: Record<string, unknown>[], keys: string[]) {
+  for (const scope of scopes) {
+    for (const key of keys) {
+      const value = scope[key];
+      if (value !== undefined && value !== null && value !== "") return value;
+    }
+  }
+  return null;
+}
+
+function vesselNamesMatch(expected: string, actual: string | null) {
+  const normalizedExpected = normalizedIdentityText(expected);
+  const normalizedActual = normalizedIdentityText(actual);
+  if (!normalizedExpected || !normalizedActual) return false;
+  if (normalizedExpected === normalizedActual) return true;
+  const tokens = normalizedExpected.split(" ").filter((token) => token.length >= 2);
+  return tokens.length > 0 && tokens.every((token) => normalizedActual.includes(token));
 }
 
 function buildIdentity(body: Record<string, unknown>): LookupIdentity | null {
@@ -332,7 +372,9 @@ function extractVesselData(html: string, identity: LookupIdentity, provider: str
   if (provider === "VesselFinder") {
     const vesselFinderData = extractVesselFinderFields(html, identity);
     for (const field of ["flag", "call_sign", "vessel_type", "loa_meters", "beam_meters", "net_tonnage", "last_port", "eta"] as const) {
-      if (vesselFinderData[field] !== null) data[field] = vesselFinderData[field];
+      if (vesselFinderData[field] !== null) {
+        (data[field] as VesselData[typeof field]) = vesselFinderData[field];
+      }
     }
   }
   return data;
@@ -373,7 +415,7 @@ function cachedRecordToVesselData(record: VesselTechnicalRecord | null): VesselD
     net_tonnage: Number(record?.netTonnage) > 0 ? Number(record?.netTonnage) : null,
     dwt: Number(record?.dwt) > 0 ? Number(record?.dwt) : null,
     last_port: record?.lastPort || null,
-    eta: record?.eta || null,
+    eta: record?.eta instanceof Date ? record.eta.toISOString() : record?.eta || null,
   };
 }
 
@@ -452,10 +494,130 @@ async function fetchDirectSource(
   return { status: hasUsefulTechnicalData(combined) ? "success" : "empty", data: combined };
 }
 
+async function fetchOpenShipsSource(identity: LookupIdentity, deadlineAt: number): Promise<SourceResult> {
+  if (Date.now() >= deadlineAt) return { status: "timeout", data: emptyVesselData() };
+  try {
+    const result = await getPool().query<OpenShipsLookupRow>(
+      `
+        SELECT mmsi::text, vessel_name, vessel_type, raw_data
+        FROM ais_telemetry_buffer
+        WHERE fetched_at >= NOW() - INTERVAL '24 hours'
+          AND (
+            ($1 <> '' AND mmsi::text = $1)
+            OR ($2 <> '' AND lower(vessel_name) = lower($2))
+            OR ($2 <> '' AND vessel_name ILIKE '%' || $2 || '%')
+          )
+        ORDER BY
+          CASE WHEN $1 <> '' AND mmsi::text = $1 THEN 0 ELSE 1 END,
+          CASE WHEN $2 <> '' AND lower(vessel_name) = lower($2) THEN 0 ELSE 1 END,
+          COALESCE(observed_at, fetched_at) DESC NULLS LAST
+        LIMIT 5
+      `,
+      [identity.mmsi, identity.vesselName],
+    );
+
+    for (const row of result.rows) {
+      const identityMatches = (identity.mmsi && row.mmsi === identity.mmsi)
+        || (identity.vesselName && vesselNamesMatch(identity.vesselName, row.vessel_name));
+      if (!identityMatches) continue;
+      const scopes = collectRecordScopes(asRecord(row.raw_data));
+      const imo = normalizeImo(firstScopeValue(scopes, ["imo", "IMO", "imo_number", "imoNumber"]));
+      if (!imo || !hasValidImoChecksum(imo)) continue;
+      const data = emptyVesselData();
+      data.imo_number = imo;
+      data.vessel_name = cleanText(row.vessel_name || firstScopeValue(scopes, ["vessel_name", "vesselName", "ShipName", "name"]));
+      data.flag = cleanText(firstScopeValue(scopes, ["flag", "Flag"]));
+      data.call_sign = cleanText(firstScopeValue(scopes, ["call_sign", "callSign", "CallSign"]));
+      data.vessel_type = cleanText(row.vessel_type || firstScopeValue(scopes, ["vessel_type", "vesselType", "ShipType", "shipType"]));
+      data.year_built = valueForField("year_built", firstScopeValue(scopes, ["year_built", "yearBuilt", "YearBuilt", "built"])) as number | null;
+      data.loa_meters = cleanNumber(firstScopeValue(scopes, ["loa_meters", "loaMeters", "length", "Length", "LOA"]));
+      data.beam_meters = cleanNumber(firstScopeValue(scopes, ["beam_meters", "beamMeters", "beam", "Beam"]));
+      data.gross_tonnage = cleanNumber(firstScopeValue(scopes, ["gross_tonnage", "grossTonnage", "GrossTonnage", "GT"]));
+      data.net_tonnage = cleanNumber(firstScopeValue(scopes, ["net_tonnage", "netTonnage", "NetTonnage", "NT"]));
+      data.dwt = cleanNumber(firstScopeValue(scopes, ["dwt", "DWT", "deadweight", "Deadweight"]));
+      data.last_port = cleanText(firstScopeValue(scopes, ["last_port", "lastPort", "LastPort"]));
+      data.eta = cleanText(firstScopeValue(scopes, ["eta", "ETA"]));
+      return { status: "success", data };
+    }
+    return { status: "empty", data: emptyVesselData() };
+  } catch (error) {
+    console.error("[vessel-due-diligence] OpenShips fallback failed", error);
+    return { status: "error", data: emptyVesselData() };
+  }
+}
+
+async function fetchGoogleSearchSource(identity: LookupIdentity, deadlineAt: number): Promise<SourceResult> {
+  const data = emptyVesselData();
+  if (!identity.vesselName) return { status: "empty", data };
+  const remainingMs = deadlineAt - Date.now();
+  if (remainingMs <= 0) return { status: "timeout", data };
+  const query = `${identity.vesselName} vessel IMO number`;
+  const searchTexts: string[] = [];
+  const apiKey = process.env.GOOGLE_CUSTOM_SEARCH_API_KEY || process.env.GOOGLE_SEARCH_API_KEY;
+  const searchEngineId = process.env.GOOGLE_CUSTOM_SEARCH_ENGINE_ID || process.env.GOOGLE_CSE_ID;
+
+  try {
+    if (apiKey && searchEngineId) {
+      const apiUrl = new URL("https://www.googleapis.com/customsearch/v1");
+      apiUrl.searchParams.set("key", apiKey);
+      apiUrl.searchParams.set("cx", searchEngineId);
+      apiUrl.searchParams.set("q", query);
+      const response = await fetch(apiUrl, {
+        headers: { accept: "application/json" },
+        signal: AbortSignal.timeout(Math.min(SOURCE_TIMEOUT_MS, remainingMs)),
+      });
+      if (response.ok) {
+        const payload = await response.json() as { items?: Array<{ title?: string; snippet?: string }> };
+        for (const item of payload.items || []) searchTexts.push(`${item.title || ""} ${item.snippet || ""}`.trim());
+      }
+    }
+
+    if (searchTexts.length === 0 && Date.now() < deadlineAt) {
+      const searchUrl = new URL("https://www.google.com/search");
+      searchUrl.searchParams.set("q", query);
+      searchUrl.searchParams.set("num", "10");
+      searchUrl.searchParams.set("hl", "en");
+      const response = await fetch(searchUrl, {
+        headers: {
+          "user-agent": "Mozilla/5.0 (compatible; SeaCharterCorePRO/1.0; +https://www.netlify.com/)",
+          accept: "text/html,application/xhtml+xml",
+          "accept-language": "en-US,en;q=0.9",
+        },
+        signal: AbortSignal.timeout(Math.max(1, Math.min(SOURCE_TIMEOUT_MS, deadlineAt - Date.now()))),
+      });
+      if (!response.ok) return { status: "error", data };
+      const html = await response.text();
+      if (isBlockedPage(html)) return { status: "blocked", data };
+      const $ = cheerio.load(html);
+      $("div.MjjYud, div.g, div[data-snhf], .VwiC3b, .BNeawe, article").each((_, element) => {
+        const text = cleanText($(element).text());
+        if (text) searchTexts.push(text);
+      });
+      if (searchTexts.length === 0) {
+        const bodyText = cleanText($("body").text());
+        if (bodyText) searchTexts.push(bodyText);
+      }
+    }
+
+    const imo = extractValidatedImoFromSearchTexts(searchTexts, identity.vesselName);
+    if (!imo) return { status: "empty", data };
+    data.imo_number = imo;
+    data.vessel_name = identity.vesselName;
+    return { status: "success", data };
+  } catch (error) {
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      return { status: "timeout", data };
+    }
+    console.error("[vessel-due-diligence] Google Search fallback failed", error);
+    return { status: "error", data };
+  }
+}
+
 async function runSourceWaterfall(identity: LookupIdentity, deadlineAt: number, cachedData: VesselData) {
   const attempts: SearchAttempt[] = [];
   const combinedData = cachedData;
   const successfulProviders: string[] = [];
+  let imoProvider: string | null = combinedData.imo_number ? "vessels_master" : null;
 
   for (const source of DIRECT_SOURCES) {
     if (Date.now() >= deadlineAt) break;
@@ -463,14 +625,36 @@ async function runSourceWaterfall(identity: LookupIdentity, deadlineAt: number, 
     attempts.push({ provider: source.provider, status: result.status, queryType: identityQueryType(identity) });
     if (result.status === "success") {
       successfulProviders.push(source.provider);
+      const hadImo = Boolean(combinedData.imo_number);
       mergeFirstValues(combinedData, result.data);
+      if (!hadImo && combinedData.imo_number) imoProvider = source.provider;
       if (hasCompleteDueDiligenceData(combinedData) && hasMandatoryTechnicalData(combinedData)) break;
+    }
+  }
+
+  if (!combinedData.imo_number && Date.now() < deadlineAt) {
+    const result = await fetchOpenShipsSource(identity, deadlineAt);
+    attempts.push({ provider: "OpenShips", status: result.status, queryType: identityQueryType(identity) });
+    if (result.status === "success") {
+      successfulProviders.push("OpenShips");
+      mergeFirstValues(combinedData, result.data);
+      imoProvider = "OpenShips";
+    }
+  }
+
+  if (!combinedData.imo_number && Date.now() < deadlineAt) {
+    const result = await fetchGoogleSearchSource(identity, deadlineAt);
+    attempts.push({ provider: "GoogleSearch", status: result.status, queryType: identityQueryType(identity) });
+    if (result.status === "success") {
+      successfulProviders.push("GoogleSearch");
+      mergeFirstValues(combinedData, result.data);
+      imoProvider = "GoogleSearch";
     }
   }
 
   const timedOut = Date.now() >= deadlineAt || attempts.some((attempt) => attempt.status === "timeout");
   return {
-    provider: successfulProviders.length ? successfulProviders.join(" + ") : null,
+    provider: imoProvider || (successfulProviders.length ? successfulProviders.join(" + ") : null),
     status: successfulProviders.length ? "success" : timedOut ? "timeout" : attempts.at(-1)?.status ?? "empty",
     data: combinedData,
     attempts,
@@ -566,6 +750,7 @@ export default async (req: Request) => {
         status: "success",
         attempts: [],
         timedOut: false,
+        persisted: true,
         partial: Object.values(cachedData).some((value) => value === null),
         identity: {
           queryType: identityQueryType(identity),
@@ -577,7 +762,7 @@ export default async (req: Request) => {
       },
     }, 200, headers);
   }
-  if (!externalOnly && hasCachedMandatoryTechnicalData(cachedRecord)) {
+  if (!externalOnly && cachedData.imo_number && hasCachedMandatoryTechnicalData(cachedRecord)) {
     return json({
       success: true,
       data: normalizedResponseData(cachedData),
@@ -588,6 +773,7 @@ export default async (req: Request) => {
         status: "success",
         attempts: [],
         timedOut: false,
+        persisted: true,
         partial: Object.values(cachedData).some((value) => value === null),
         identity: {
           queryType: identityQueryType(identity),
@@ -616,9 +802,12 @@ export default async (req: Request) => {
       console.error("[vessel-due-diligence] Gross tonnage fallback lookup failed", error);
     }
   }
-  if (!externalOnly && result.extracted && hasUsefulTechnicalData(result.data)) {
+  let persisted = false;
+  const hasPersistentIdentity = Boolean(normalizeImo(result.data.imo_number || identity.imo) || identity.mmsi);
+  if (result.extracted && hasUsefulTechnicalData(result.data) && hasPersistentIdentity) {
     try {
       await upsertVesselTechnicalRecord(vesselDataToTechnicalRecord(result.data, identity));
+      persisted = true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown database error";
       console.error("[vessel-due-diligence] Automatic technical persistence failed", error);
@@ -640,7 +829,7 @@ export default async (req: Request) => {
       status: result.status,
       grossTonnageRecoveredFromMaster,
       grossTonnageRequired: !Number(result.data.gross_tonnage),
-      persisted: !externalOnly && result.extracted && hasUsefulTechnicalData(result.data),
+      persisted,
       requiresAcceptance: externalOnly,
       attempts: result.attempts,
       timedOut: result.timedOut,

@@ -39,7 +39,7 @@ type VesselTechnicalRow = QueryResultRow & {
   loa_meters: number | string | null;
   beam_meters: number | string | null;
   last_port: string | null;
-  eta: string | null;
+  eta: string | Date | null;
 };
 
 const RETURNING_COLUMNS = `

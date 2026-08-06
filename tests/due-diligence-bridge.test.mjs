@@ -15,6 +15,7 @@ const [indexSource, entrySource, serviceSource, backendSource, persistenceBacken
 ]);
 const serviceModule = await import(`data:text/javascript;base64,${Buffer.from(serviceSource).toString('base64')}`);
 const cargoTaxonomyModule = await import(new URL('../cargo-taxonomy.mjs', import.meta.url));
+const imoSearchModule = await import(new URL('../netlify/functions/_shared/vessel-imo-search.mjs', import.meta.url));
 
 function loadBridge(windowOverrides = {}) {
   const events = [];
@@ -246,16 +247,48 @@ test('fetchDueDiligence posts identity and normalizes the complete technical pay
   assert.equal(result.rawData.gross_tonnage, 7_580);
 });
 
-test('backend external audit bypasses Neon cache and waits for explicit acceptance', () => {
+test('backend external audit bypasses cache reads and persists resolved external data', () => {
   assert.match(backendSource, /body\?\.externalOnly === true/);
   assert.match(backendSource, /if \(!externalOnly\) \{[\s\S]*findVesselTechnicalRecord/);
   assert.match(backendSource, /externalOnly \? emptyVesselData\(\) : cachedData/);
-  assert.match(backendSource, /if \(!externalOnly && result\.extracted/);
+  assert.match(backendSource, /if \(result\.extracted && hasUsefulTechnicalData\(result\.data\) && hasPersistentIdentity\)/);
+  assert.match(backendSource, /await upsertVesselTechnicalRecord\(vesselDataToTechnicalRecord\(result\.data, identity\)\)/);
+  assert.match(backendSource, /persisted,/);
   assert.match(backendSource, /mode: externalOnly \? "public-source-audit"/);
   assert.match(backendSource, /requiresAcceptance: externalOnly/);
   assert.match(backendSource, /externalOnly && !Number\(result\.data\.gross_tonnage\)/);
   assert.match(backendSource, /grossTonnageRecoveredFromMaster/);
   assert.match(backendSource, /grossTonnageRequired: !Number\(result\.data\.gross_tonnage\)/);
+});
+
+test('backend appends OpenShips and Google Search after the existing public sources', () => {
+  const vesselFinderIndex = backendSource.indexOf('provider: "VesselFinder"');
+  const balticShippingIndex = backendSource.indexOf('provider: "BalticShipping"');
+  const openShipsIndex = backendSource.indexOf('provider: "OpenShips"');
+  const googleSearchIndex = backendSource.indexOf('provider: "GoogleSearch"');
+  assert.ok(vesselFinderIndex >= 0);
+  assert.ok(balticShippingIndex > vesselFinderIndex);
+  assert.ok(openShipsIndex > balticShippingIndex);
+  assert.ok(googleSearchIndex > openShipsIndex);
+  assert.match(backendSource, /FROM ais_telemetry_buffer/);
+  assert.match(backendSource, /`\$\{identity\.vesselName\} vessel IMO number`/);
+});
+
+test('Google Search IMO extraction requires vessel context and a valid checksum', () => {
+  assert.equal(
+    imoSearchModule.extractValidatedImoFromSearchTexts(
+      ['TEST VESSEL ALPHA — IMO number 9876543 — vessel details'],
+      'TEST VESSEL ALPHA',
+    ),
+    '9876543',
+  );
+  assert.equal(
+    imoSearchModule.extractValidatedImoFromSearchTexts(
+      ['OTHER VESSEL — IMO number 9876543', 'TEST VESSEL ALPHA — IMO number 9876540'],
+      'TEST VESSEL ALPHA',
+    ),
+    null,
+  );
 });
 
 test('frontend normalization recognizes external labels for flag, length, and vessel type', () => {
@@ -466,7 +499,9 @@ test('backend reads vessels_master first and persists successful waterfall extra
   assert.match(backendSource, /attempts: \[\]/);
   assert.match(backendSource, /runSourceWaterfall\(identity, deadlineAt, externalOnly \? emptyVesselData\(\) : cachedData\)/);
   assert.match(backendSource, /await upsertVesselTechnicalRecord\(vesselDataToTechnicalRecord\(result\.data, identity\)\)/);
-  assert.match(backendSource, /persisted: !externalOnly && result\.extracted && hasUsefulTechnicalData\(result\.data\)/);
+  assert.match(backendSource, /let persisted = false/);
+  assert.match(backendSource, /persisted = true/);
+  assert.match(backendSource, /persisted,/);
 });
 
 test('backend accepts IMO, MMSI, or vessel name and searches the four public providers', () => {
