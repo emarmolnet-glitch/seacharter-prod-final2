@@ -921,16 +921,25 @@
 }
 
 .density-due-diligence-panel {
-  position: absolute;
-  inset: 12px auto 12px 12px;
-  z-index: 50;
-  width: min(440px, calc(100% - 24px));
+  position: sticky;
+  top: 16px;
+  z-index: 10;
+  align-self: flex-start;
+  width: 100%;
+  max-height: calc(100vh - 32px);
   overflow-y: auto;
   border: 1px solid rgba(14, 116, 144, 0.28);
   border-radius: 18px;
   background: #ffffff;
-  box-shadow: 24px 0 70px rgba(2, 8, 23, 0.52), 0 20px 40px rgba(2, 8, 23, 0.28);
+  box-shadow: 0 22px 48px rgba(2, 8, 23, 0.24), 0 8px 18px rgba(2, 8, 23, 0.16);
+  scrollbar-color: #67e8f9 #e2e8f0;
+  scrollbar-width: thin;
   animation: densityDueDiligenceEnter 220ms ease-out both;
+}
+
+.density-due-diligence-panel:focus-visible {
+  outline: 3px solid rgba(34, 211, 238, 0.5);
+  outline-offset: 3px;
 }
 
 .density-due-diligence-panel__close {
@@ -956,17 +965,18 @@
 }
 
 @keyframes densityDueDiligenceEnter {
-  from { opacity: 0; transform: translateX(-18px); }
-  to { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1023px) {
   .density-commercial-toggle__copy strong {
     max-width: 86px;
   }
 
   .density-due-diligence-panel {
-    inset: 8px;
-    width: auto;
+    position: relative;
+    top: auto;
+    max-height: none;
   }
 }

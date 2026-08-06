@@ -133,6 +133,10 @@ test('Due Diligence uses one external search and explicit persistence actions', 
   assert.match(indexSource, /id="ranking-cards-canvas" class="hidden flex-1 min-w-0 overflow-auto"/);
   assert.match(indexSource, /id="due-diligence-side-panel" class="hidden w-\[450px\] flex-shrink-0 bg-white border-l shadow-lg overflow-y-auto z-10 transition-all duration-300"/);
   assert.match(entrySource, /function getProposalReviewTarget\(card = null\)/);
+  assert.match(entrySource, /function renderProposalLoading\(card, identity = \{\}\)/);
+  assert.match(entrySource, /if \(densityCommercialFlow\) renderProposalLoading\(card, identity\)/);
+  assert.match(entrySource, /densityAuditRequest === activeDensityAuditRequest/);
+  assert.match(entrySource, /target\.panel\.focus\?\.\(\{ preventScroll: true \}\)/);
   assert.match(entrySource, /card\?\.matches\?\.\('\[data-vessel-recommendation="true"\]'\) === true/);
   assert.match(entrySource, /panel\.classList\.remove\('hidden'\)/);
   assert.match(entrySource, /panel\.classList\.add\('hidden'\)/);
