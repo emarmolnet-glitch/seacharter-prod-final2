@@ -62,6 +62,7 @@ type OpenShipsLookupRow = QueryResultRow & {
 
 const INTERNAL_DEADLINE_MS = 25_000;
 const SOURCE_TIMEOUT_MS = 7_000;
+const GOOGLE_FALLBACK_RESERVE_MS = SOURCE_TIMEOUT_MS;
 const FIELD_NAMES = [
   "imo_number",
   "vessel_name",
@@ -541,7 +542,7 @@ async function fetchOpenShipsSource(identity: LookupIdentity, deadlineAt: number
     }
     return { status: "empty", data: emptyVesselData() };
   } catch (error) {
-    console.error("[vessel-due-diligence] OpenShips fallback failed", error);
+    console.warn("[vessel-due-diligence] OpenShips fallback failed", error);
     return { status: "error", data: emptyVesselData() };
   }
 }
@@ -608,8 +609,27 @@ async function fetchGoogleSearchSource(identity: LookupIdentity, deadlineAt: num
     if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
       return { status: "timeout", data };
     }
-    console.error("[vessel-due-diligence] Google Search fallback failed", error);
+    console.warn("[vessel-due-diligence] Google Search fallback failed", error);
     return { status: "error", data };
+  }
+}
+
+async function runSourceBeforeDeadline(operation: () => Promise<SourceResult>, deadlineAt: number): Promise<SourceResult> {
+  const remainingMs = deadlineAt - Date.now();
+  if (remainingMs <= 0) return { status: "timeout", data: emptyVesselData() };
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation(),
+      new Promise<SourceResult>((resolve) => {
+        timeoutId = setTimeout(
+          () => resolve({ status: "timeout", data: emptyVesselData() }),
+          remainingMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 }
 
@@ -618,10 +638,17 @@ async function runSourceWaterfall(identity: LookupIdentity, deadlineAt: number, 
   const combinedData = cachedData;
   const successfulProviders: string[] = [];
   let imoProvider: string | null = combinedData.imo_number ? "vessels_master" : null;
+  const nonGoogleDeadlineAt = deadlineAt - GOOGLE_FALLBACK_RESERVE_MS;
 
   for (const source of DIRECT_SOURCES) {
-    if (Date.now() >= deadlineAt) break;
-    const result = await fetchDirectSource(source, identity, deadlineAt);
+    if (Date.now() >= nonGoogleDeadlineAt) break;
+    let result: SourceResult;
+    try {
+      result = await fetchDirectSource(source, identity, nonGoogleDeadlineAt);
+    } catch (error) {
+      console.warn(`[vessel-due-diligence] ${source.provider} scraper failed`, error);
+      result = { status: "error", data: emptyVesselData() };
+    }
     attempts.push({ provider: source.provider, status: result.status, queryType: identityQueryType(identity) });
     if (result.status === "success") {
       successfulProviders.push(source.provider);
@@ -632,8 +659,17 @@ async function runSourceWaterfall(identity: LookupIdentity, deadlineAt: number, 
     }
   }
 
-  if (!combinedData.imo_number && Date.now() < deadlineAt) {
-    const result = await fetchOpenShipsSource(identity, deadlineAt);
+  if (!combinedData.imo_number) {
+    let result: SourceResult;
+    try {
+      result = await runSourceBeforeDeadline(
+        () => fetchOpenShipsSource(identity, nonGoogleDeadlineAt),
+        nonGoogleDeadlineAt,
+      );
+    } catch (error) {
+      console.warn("[vessel-due-diligence] OpenShips scraper failed", error);
+      result = { status: "error", data: emptyVesselData() };
+    }
     attempts.push({ provider: "OpenShips", status: result.status, queryType: identityQueryType(identity) });
     if (result.status === "success") {
       successfulProviders.push("OpenShips");
@@ -642,8 +678,14 @@ async function runSourceWaterfall(identity: LookupIdentity, deadlineAt: number, 
     }
   }
 
-  if (!combinedData.imo_number && Date.now() < deadlineAt) {
-    const result = await fetchGoogleSearchSource(identity, deadlineAt);
+  if (!combinedData.imo_number) {
+    let result: SourceResult;
+    try {
+      result = await fetchGoogleSearchSource(identity, deadlineAt);
+    } catch (error) {
+      console.warn("[vessel-due-diligence] Google Search fallback failed", error);
+      result = { status: "error", data: emptyVesselData() };
+    }
     attempts.push({ provider: "GoogleSearch", status: result.status, queryType: identityQueryType(identity) });
     if (result.status === "success") {
       successfulProviders.push("GoogleSearch");
@@ -653,6 +695,9 @@ async function runSourceWaterfall(identity: LookupIdentity, deadlineAt: number, 
   }
 
   const timedOut = Date.now() >= deadlineAt || attempts.some((attempt) => attempt.status === "timeout");
+  const allSourcesFailed = !combinedData.imo_number
+    && attempts.length > 0
+    && attempts.every((attempt) => attempt.status !== "success");
   return {
     provider: imoProvider || (successfulProviders.length ? successfulProviders.join(" + ") : null),
     status: successfulProviders.length ? "success" : timedOut ? "timeout" : attempts.at(-1)?.status ?? "empty",
@@ -660,6 +705,7 @@ async function runSourceWaterfall(identity: LookupIdentity, deadlineAt: number, 
     attempts,
     timedOut,
     extracted: successfulProviders.length > 0,
+    allSourcesFailed,
   };
 }
 
@@ -801,6 +847,27 @@ export default async (req: Request) => {
     } catch (error) {
       console.error("[vessel-due-diligence] Gross tonnage fallback lookup failed", error);
     }
+  }
+  if (result.allSourcesFailed) {
+    return json({
+      success: false,
+      error: "No fue posible resolver el buque en ninguna fuente pública, incluida Google Search.",
+      data: normalizedResponseData(result.data),
+      meta: {
+        mode: externalOnly ? "public-source-audit" : "public-source-waterfall",
+        provider: result.provider,
+        status: result.status,
+        attempts: result.attempts,
+        timedOut: result.timedOut,
+        identity: {
+          queryType: identityQueryType(identity),
+          imo: identity.imo || null,
+          mmsi: identity.mmsi || null,
+          vesselName: identity.vesselName || null,
+        },
+        elapsedMs: Date.now() - requestStartedAt,
+      },
+    }, result.timedOut ? 504 : 502, headers);
   }
   let persisted = false;
   const hasPersistentIdentity = Boolean(normalizeImo(result.data.imo_number || identity.imo) || identity.mmsi);

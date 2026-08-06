@@ -538,6 +538,16 @@ test('backend accepts IMO, MMSI, or vessel name and searches the four public pro
   assert.match(persistenceBackendSource, /eta: savedVessel\.eta/);
 });
 
+test('public-source waterfall isolates scraper failures and always reaches Google for unresolved IMO', () => {
+  assert.match(backendSource, /const GOOGLE_FALLBACK_RESERVE_MS = SOURCE_TIMEOUT_MS/);
+  assert.match(backendSource, /try \{\s+result = await fetchDirectSource\(source, identity, nonGoogleDeadlineAt\);[\s\S]*?console\.warn\(`\[vessel-due-diligence\] \$\{source\.provider\} scraper failed`/);
+  assert.match(backendSource, /result = await runSourceBeforeDeadline\(\s*\(\) => fetchOpenShipsSource\(identity, nonGoogleDeadlineAt\),\s*nonGoogleDeadlineAt/);
+  assert.match(backendSource, /if \(!combinedData\.imo_number\) \{\s+let result: SourceResult;\s+try \{\s+result = await fetchGoogleSearchSource\(identity, deadlineAt\);/);
+  assert.doesNotMatch(backendSource, /if \(!combinedData\.imo_number && Date\.now\(\) < deadlineAt\) \{\s+const result = await fetchGoogleSearchSource/);
+  assert.match(backendSource, /const allSourcesFailed = !combinedData\.imo_number[\s\S]*attempts\.every\(\(attempt\) => attempt\.status !== "success"\)/);
+  assert.match(backendSource, /if \(result\.allSourcesFailed\) \{[\s\S]*success: false,[\s\S]*incluida Google Search/);
+});
+
 test('external Data Bridge response envelopes resolve to the scraped vessel record', () => {
   const { bridge } = loadBridge();
   const vessel = { imo: '9876543', dwt: 42_000 };
