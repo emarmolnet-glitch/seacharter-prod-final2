@@ -107,8 +107,15 @@ export async function findVesselTechnicalRecord(
 export async function upsertVesselTechnicalRecord(
   record: VesselTechnicalRecord,
   queryClient: Pick<PoolClient, "query"> = getPool(),
+  status: string | null = null,
 ) {
   const { vessel, parameters } = prepareVesselTechnicalPersistence(record);
+  const normalizedStatus = status?.trim() || null;
+  const queryParameters = normalizedStatus ? [...parameters, normalizedStatus] : parameters;
+  const statusColumnSql = normalizedStatus ? ", status" : "";
+  const statusValueSql = normalizedStatus ? ", $18::text" : "";
+  const statusUpdateSql = normalizedStatus ? "status = EXCLUDED.status," : "";
+  const directStatusUpdateSql = normalizedStatus ? "status = $18::text," : "";
   if (!vessel.imoNumber && !vessel.mmsi) {
     throw new Error("Se requiere IMO o MMSI válido para persistir los datos técnicos.");
   }
@@ -117,7 +124,7 @@ export async function upsertVesselTechnicalRecord(
     INSERT INTO vessels_master (
       imo_number, mmsi, vessel_name, dwt, latitude, longitude, vessel_type,
       draft_meters, flag, call_sign, year_built, gross_tonnage, net_tonnage,
-      loa_meters, beam_meters, last_port, eta,
+      loa_meters, beam_meters, last_port, eta${statusColumnSql},
       updated_at, fecha_ultima_actualizacion
     )
     VALUES (
@@ -125,7 +132,7 @@ export async function upsertVesselTechnicalRecord(
       $6::double precision, $7::text, $8::double precision, $9::text,
       $10::text, $11::integer, $12::double precision, $13::double precision,
       $14::double precision, $15::double precision, $16::text,
-      NULLIF($17::text, '')::timestamptz, NOW(), NOW()
+      NULLIF($17::text, '')::timestamptz${statusValueSql}, NOW(), NOW()
     )
     ON CONFLICT (imo_number) DO UPDATE SET
       mmsi = COALESCE(EXCLUDED.mmsi, vessels_master.mmsi),
@@ -144,6 +151,7 @@ export async function upsertVesselTechnicalRecord(
       beam_meters = COALESCE(EXCLUDED.beam_meters, vessels_master.beam_meters),
       last_port = COALESCE(EXCLUDED.last_port, vessels_master.last_port),
       eta = COALESCE(EXCLUDED.eta, vessels_master.eta),
+      ${statusUpdateSql}
       updated_at = NOW(),
       fecha_ultima_actualizacion = NOW()
     RETURNING ${RETURNING_COLUMNS}
@@ -178,6 +186,7 @@ export async function upsertVesselTechnicalRecord(
           beam_meters = COALESCE($15::double precision, vessels_master.beam_meters),
           last_port = COALESCE($16::text, vessels_master.last_port),
           eta = COALESCE(NULLIF($17::text, '')::timestamptz, vessels_master.eta),
+          ${directStatusUpdateSql}
           updated_at = NOW(),
           fecha_ultima_actualizacion = NOW()
         WHERE id = (SELECT id FROM matched_vessel)
@@ -187,7 +196,7 @@ export async function upsertVesselTechnicalRecord(
         INSERT INTO vessels_master (
           imo_number, mmsi, vessel_name, dwt, latitude, longitude, vessel_type,
           draft_meters, flag, call_sign, year_built, gross_tonnage, net_tonnage,
-          loa_meters, beam_meters, last_port, eta,
+          loa_meters, beam_meters, last_port, eta${statusColumnSql},
           updated_at, fecha_ultima_actualizacion
         )
         SELECT
@@ -195,7 +204,7 @@ export async function upsertVesselTechnicalRecord(
           $6::double precision, $7::text, $8::double precision, $9::text,
           $10::text, $11::integer, $12::double precision, $13::double precision,
           $14::double precision, $15::double precision, $16::text,
-          NULLIF($17::text, '')::timestamptz, NOW(), NOW()
+          NULLIF($17::text, '')::timestamptz${statusValueSql}, NOW(), NOW()
         WHERE NOT EXISTS (SELECT 1 FROM updated_vessel)
         ON CONFLICT (imo_number) DO UPDATE SET
           mmsi = COALESCE(EXCLUDED.mmsi, vessels_master.mmsi),
@@ -214,6 +223,7 @@ export async function upsertVesselTechnicalRecord(
           beam_meters = COALESCE(EXCLUDED.beam_meters, vessels_master.beam_meters),
           last_port = COALESCE(EXCLUDED.last_port, vessels_master.last_port),
           eta = COALESCE(EXCLUDED.eta, vessels_master.eta),
+          ${statusUpdateSql}
           updated_at = NOW(),
           fecha_ultima_actualizacion = NOW()
         RETURNING ${RETURNING_COLUMNS}
@@ -226,7 +236,7 @@ export async function upsertVesselTechnicalRecord(
 
   const result = await queryClient.query<VesselTechnicalRow>(
     vessel.imoNumber ? upsertByImoSql : upsertByMmsiSql,
-    parameters,
+    queryParameters,
   );
 
   if (!result.rows[0]) throw new Error("No se pudo consolidar el buque en vessels_master.");
