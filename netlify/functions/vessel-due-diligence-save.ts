@@ -1,4 +1,5 @@
 import type { Config } from "@netlify/functions";
+import type { PoolClient } from "pg";
 import { getPool } from "../../db/index.js";
 import {
   upsertVesselTechnicalRecord,
@@ -287,12 +288,15 @@ export default async (req: Request) => {
   if (vesselType && NON_COMMERCIAL_VESSEL_PATTERN.test(vesselType)) {
     return json({ success: false, error: `Buque no comercial detectado: ${vesselType}` }, 422, headers);
   }
+  let client: PoolClient | null = null;
   try {
-    const savedVessel = await upsertVesselTechnicalRecord(sanitizedVessel);
-    const pool = getPool();
-    const countResult = await pool.query<{ total: number }>(
+    client = await getPool().connect();
+    await client.query("BEGIN");
+    const savedVessel = await upsertVesselTechnicalRecord(sanitizedVessel, client);
+    const countResult = await client.query<{ total: string }>(
       `SELECT COUNT(*)::integer AS total FROM vessels_master`,
     );
+    await client.query("COMMIT");
     return json({
       success: true,
       vessel: {
@@ -317,9 +321,12 @@ export default async (req: Request) => {
       masterVesselCount: Number(countResult.rows[0]?.total || 0),
     }, 200, headers);
   } catch (error) {
+    if (client) await client.query("ROLLBACK").catch(() => undefined);
     const errorMessage = error instanceof Error ? error.message : "Unknown database error";
     console.error("[vessel-due-diligence-save] PostgreSQL persistence failed", error);
     return json({ success: false, error: errorMessage }, 500, headers);
+  } finally {
+    client?.release();
   }
 };
 
