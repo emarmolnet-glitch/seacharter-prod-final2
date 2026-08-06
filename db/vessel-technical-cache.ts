@@ -1,4 +1,4 @@
-import type { QueryResultRow } from "pg";
+import type { PoolClient, QueryResultRow } from "pg";
 import { getPool } from "./index.js";
 import { prepareVesselTechnicalPersistence } from "./vessel-technical-normalizer.mjs";
 
@@ -104,7 +104,10 @@ export async function findVesselTechnicalRecord(
   return result.rows[0] ? toRecord(result.rows[0]) : null;
 }
 
-export async function upsertVesselTechnicalRecord(record: VesselTechnicalRecord) {
+export async function upsertVesselTechnicalRecord(
+  record: VesselTechnicalRecord,
+  queryClient: Pick<PoolClient, "query"> = getPool(),
+) {
   const { vessel, parameters } = prepareVesselTechnicalPersistence(record);
   if (!vessel.imoNumber && !vessel.mmsi) {
     throw new Error("Se requiere IMO o MMSI válido para persistir los datos técnicos.");
@@ -221,7 +224,7 @@ export async function upsertVesselTechnicalRecord(record: VesselTechnicalRecord)
       LIMIT 1
   `;
 
-  const result = await getPool().query<VesselTechnicalRow>(
+  const result = await queryClient.query<VesselTechnicalRow>(
     vessel.imoNumber ? upsertByImoSql : upsertByMmsiSql,
     parameters,
   );

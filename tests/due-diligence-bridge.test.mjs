@@ -434,6 +434,13 @@ test('persistence backend consolidates normalized technical fields by IMO or MMS
   assert.match(technicalMigrationSource, /ADD COLUMN IF NOT EXISTS loa_meters NUMERIC/);
   assert.match(technicalMigrationSource, /ADD COLUMN IF NOT EXISTS year_built INT/);
   assert.match(persistenceBackendSource, /SELECT COUNT\(\*\)::integer AS total FROM vessels_master/);
+  assert.match(persistenceBackendSource, /await getPool\(\)\.connect\(\)/);
+  assert.match(persistenceBackendSource, /await client\.query\("BEGIN"\)/);
+  assert.match(persistenceBackendSource, /upsertVesselTechnicalRecord\(sanitizedVessel, client\)/);
+  assert.match(persistenceBackendSource, /await client\.query\("COMMIT"\)/);
+  assert.match(persistenceBackendSource, /client\.query\("ROLLBACK"\)/);
+  assert.match(technicalCacheSource, /queryClient: Pick<PoolClient, "query"> = getPool\(\)/);
+  assert.match(technicalCacheSource, /const result = await queryClient\.query<VesselTechnicalRow>/);
   assert.match(persistenceBackendSource, /masterVesselCount:/);
   assert.match(persistenceBackendSource, /prepareVesselTechnicalPersistence,[\s\S]*sanitizeVesselTechnicalRecord/);
   assert.match(persistenceBackendSource, /const sanitizedVessel = sanitizeVesselTechnicalRecord\(\{/);
