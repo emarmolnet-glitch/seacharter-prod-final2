@@ -106,10 +106,10 @@ const DISCARD_RETURNING_COLUMNS = `
   loa_meters, beam_meters, last_port, eta, status, audit_status, process_status
 `;
 
-async function upsertDiscardedVessel(record: VesselTechnicalRecord) {
+async function upsertDiscardedVessel(record: VesselTechnicalRecord, client: PoolClient) {
   const { vessel, parameters } = prepareVesselTechnicalPersistence(record);
   const result = vessel.imoNumber
-    ? await getPool().query<DiscardedVesselRow>(
+    ? await client.query<DiscardedVesselRow>(
         `
           INSERT INTO vessels_master (
             imo_number, mmsi, vessel_name, dwt, latitude, longitude, vessel_type,
@@ -151,7 +151,7 @@ async function upsertDiscardedVessel(record: VesselTechnicalRecord) {
         `,
         parameters,
       )
-    : await getPool().query<DiscardedVesselRow>(
+    : await client.query<DiscardedVesselRow>(
         `
           WITH updated_vessel AS (
             UPDATE vessels_master
@@ -275,28 +275,31 @@ export default async (req: Request) => {
     lastPort,
     eta,
   });
-  if (action === "discard") {
-    try {
-      const discardedVessel = await upsertDiscardedVessel(sanitizedVessel);
-      return json({ success: true, discarded: true, vessel: discardedVessel }, 200, headers);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown database error";
-      console.error("[vessel-due-diligence-save] Vessel discard failed", error);
-      return json({ success: false, error: errorMessage }, 500, headers);
-    }
-  }
-  if (vesselType && NON_COMMERCIAL_VESSEL_PATTERN.test(vesselType)) {
+  if (action !== "discard" && vesselType && NON_COMMERCIAL_VESSEL_PATTERN.test(vesselType)) {
     return json({ success: false, error: `Buque no comercial detectado: ${vesselType}` }, 422, headers);
   }
+
   let client: PoolClient | null = null;
+  let transactionOpen = false;
   try {
     client = await getPool().connect();
     await client.query("BEGIN");
+    transactionOpen = true;
+
+    if (action === "discard") {
+      const discardedVessel = await upsertDiscardedVessel(sanitizedVessel, client);
+      await client.query("COMMIT");
+      transactionOpen = false;
+      return json({ success: true, discarded: true, vessel: discardedVessel }, 200, headers);
+    }
+
     const savedVessel = await upsertVesselTechnicalRecord(sanitizedVessel, client);
     const countResult = await client.query<{ total: string }>(
       `SELECT COUNT(*)::integer AS total FROM vessels_master`,
     );
     await client.query("COMMIT");
+    transactionOpen = false;
+
     return json({
       success: true,
       vessel: {
@@ -321,12 +324,18 @@ export default async (req: Request) => {
       masterVesselCount: Number(countResult.rows[0]?.total || 0),
     }, 200, headers);
   } catch (error) {
-    if (client) await client.query("ROLLBACK").catch(() => undefined);
+    if (client && transactionOpen) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("[vessel-due-diligence-save] PostgreSQL rollback failed", rollbackError);
+      }
+    }
     const errorMessage = error instanceof Error ? error.message : "Unknown database error";
     console.error("[vessel-due-diligence-save] PostgreSQL persistence failed", error);
     return json({ success: false, error: errorMessage }, 500, headers);
   } finally {
-    client?.release();
+    if (client) client.release();
   }
 };
 
