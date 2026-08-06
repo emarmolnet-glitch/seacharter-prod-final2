@@ -82,10 +82,15 @@ test('density removes Top 6 and renders the shared display fleet only in the nat
   assert.match(indexSource, /const visibleRows = displayVessels\.slice\(0, maxRows\)/);
   assert.match(indexSource, /id="ais-vessels-tbody"/);
   assert.match(cssSource, /\.density-due-diligence-panel \{/);
-  assert.match(cssSource, /inset: 12px auto 12px 12px/);
-  assert.match(cssSource, /z-index: 50/);
-  assert.match(cssSource, /width: min\(440px, calc\(100% - 24px\)\)/);
-  assert.match(cssSource, /transform: translateX\(-18px\)/);
+  assert.match(cssSource, /position: sticky/);
+  assert.match(cssSource, /top: 16px/);
+  assert.match(cssSource, /max-height: calc\(100vh - 32px\)/);
+  assert.match(cssSource, /transform: translateY\(12px\)/);
+  const leftPanelIndex = indexSource.indexOf('id="density-due-diligence-panel"');
+  const mapPanelIndex = indexSource.indexOf('id="density-map-center-panel"');
+  const globeStageIndex = indexSource.indexOf('class="density-globe-stage relative"');
+  assert.ok(leftPanelIndex > 0 && leftPanelIndex < mapPanelIndex);
+  assert.ok(globeStageIndex > mapPanelIndex && !indexSource.slice(globeStageIndex, indexSource.indexOf('id="global-opportunities-panel"')).includes('id="density-due-diligence-panel"'));
 });
 
 test('empty commercial results reuse the matching snapshot instead of blanking density', () => {

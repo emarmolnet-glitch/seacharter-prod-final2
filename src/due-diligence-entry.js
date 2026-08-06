@@ -18,6 +18,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
     ]);
     const pendingProposals = new Map();
     const dueDiligenceDataByVessel = new Map();
+    let activeDensityAuditRequest = 0;
 
     function readText(value) {
         return value === null || value === undefined ? '' : String(value).trim();
@@ -514,6 +515,82 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         return { review: card?.querySelector('[data-due-diligence-review]') || null, panel: null };
     }
 
+    function revealProposalReview(card, { focus = false } = {}) {
+        const target = getProposalReviewTarget(card);
+        if (!target.review) return target;
+        target.review.classList.remove('hidden');
+        if (target.panel) {
+            target.panel.classList.remove('hidden');
+            target.panel.setAttribute('aria-hidden', 'false');
+            if (focus) {
+                globalScope.requestAnimationFrame?.(() => {
+                    const rect = target.panel.getBoundingClientRect?.();
+                    const viewportHeight = Number(globalScope.innerHeight) || 0;
+                    const outsideViewport = rect && viewportHeight > 0 && (rect.bottom <= 0 || rect.top >= viewportHeight);
+                    if (outsideViewport) target.panel.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+                    target.panel.focus?.({ preventScroll: true });
+                });
+            }
+        }
+        return target;
+    }
+
+    function renderProposalLoading(card, identity = {}) {
+        const { review } = revealProposalReview(card, { focus: true });
+        if (!review || !globalScope.document) return false;
+        const vesselName = readText(identity.name || identity.vesselName) || 'Buque seleccionado';
+        const imo = normalizeImo(identity.imo);
+        review.className = 'min-w-0 w-full break-words bg-white';
+        review.setAttribute('role', 'status');
+        review.setAttribute('aria-label', `Consultando Due Diligence de ${vesselName}`);
+        review.innerHTML = `
+            <div class="border-b border-cyan-100 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950 px-4 py-4 pr-12 text-white">
+                <p class="text-[9px] font-black uppercase tracking-[0.18em] text-cyan-300">Due Diligence · Auditoría en vivo</p>
+                <h4 class="mt-1 break-words text-base font-black leading-tight">${vesselName.replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character])}</h4>
+                <p class="mt-1 font-mono text-[10px] text-slate-300">${imo ? `IMO ${imo}` : 'IMO pendiente de validación'}</p>
+            </div>
+            <div class="space-y-3 p-4">
+                <div class="flex items-center gap-3 rounded-xl border border-cyan-100 bg-cyan-50 px-3 py-3 text-cyan-900">
+                    <i class="fa-solid fa-satellite-dish fa-spin text-cyan-600" aria-hidden="true"></i>
+                    <div>
+                        <p class="text-[11px] font-black">Consultando fuentes externas</p>
+                        <p class="mt-0.5 text-[10px] leading-relaxed text-cyan-800">El dossier se actualiza aquí al completar la verificación técnica.</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2" aria-hidden="true">
+                    <span class="h-14 animate-pulse rounded-lg bg-slate-100"></span>
+                    <span class="h-14 animate-pulse rounded-lg bg-slate-100"></span>
+                    <span class="h-14 animate-pulse rounded-lg bg-slate-100"></span>
+                    <span class="h-14 animate-pulse rounded-lg bg-slate-100"></span>
+                </div>
+            </div>`;
+        return true;
+    }
+
+    function renderProposalError(card, identity = {}, error) {
+        const { review } = revealProposalReview(card, { focus: true });
+        if (!review || !globalScope.document) return false;
+        const vesselName = readText(identity.name || identity.vesselName) || 'Buque seleccionado';
+        const message = error instanceof Error ? error.message : 'No se pudo completar la Due Diligence.';
+        review.className = 'min-w-0 w-full break-words bg-white';
+        review.setAttribute('role', 'alert');
+        review.replaceChildren();
+        const content = globalScope.document.createElement('div');
+        content.className = 'p-4 pr-12';
+        const eyebrow = globalScope.document.createElement('p');
+        eyebrow.className = 'text-[9px] font-black uppercase tracking-[0.18em] text-rose-600';
+        eyebrow.textContent = 'Due Diligence · Consulta interrumpida';
+        const title = globalScope.document.createElement('h4');
+        title.className = 'mt-1 break-words text-base font-black text-slate-900';
+        title.textContent = vesselName;
+        const detail = globalScope.document.createElement('p');
+        detail.className = 'mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[10px] font-bold leading-relaxed text-rose-800';
+        detail.textContent = message;
+        content.append(eyebrow, title, detail);
+        review.append(content);
+        return true;
+    }
+
     function clearProposalReview(card, key) {
         if (key) pendingProposals.delete(key);
         const { review, panel } = getProposalReviewTarget(card);
@@ -692,7 +769,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
     }
 
     function renderProposalReview(card, key, proposals, technical = {}) {
-        const { review, panel } = getProposalReviewTarget(card);
+        const { review, panel } = revealProposalReview(card);
         if (!review || !globalScope.document) return false;
         const safeTechnical = technical && typeof technical === 'object' ? technical : {};
         const safeProposals = Array.isArray(proposals) ? proposals.filter(proposal => proposal && typeof proposal === 'object') : [];
@@ -1103,6 +1180,8 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
 
     async function runVesselDueDiligence(button, encodedIdentity) {
         const card = button?.closest('[data-matching-result-card="true"], [data-matching-cache-card="true"], [data-vessel-recommendation="true"], [data-density-commercial-match="true"]');
+        const densityCommercialFlow = card?.matches?.('[data-density-commercial-match="true"]') === true;
+        const densityAuditRequest = densityCommercialFlow ? ++activeDensityAuditRequest : 0;
         const status = card?.querySelector('[data-due-diligence-status]');
         const originalHtml = button?.innerHTML || '';
         let identity;
@@ -1112,6 +1191,8 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             if (status) status.textContent = 'No se pudo leer la identidad del buque.';
             return false;
         }
+
+        if (densityCommercialFlow) renderProposalLoading(card, identity);
 
         if (button) {
             button.disabled = true;
@@ -1157,7 +1238,9 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
                 card,
                 commerciallyBlocked: isNonCommercialVesselType(technical.vesselType),
             });
-            renderProposalReview(card, key, review.proposals, technical);
+            if (!densityCommercialFlow || densityAuditRequest === activeDensityAuditRequest) {
+                renderProposalReview(card, key, review.proposals, technical);
+            }
             if (status) {
                 status.textContent = review.changedCount > 0
                     ? `${review.changedCount} cambios encontrados. Revísalos antes de actualizar Neon.`
@@ -1167,6 +1250,9 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             if (button) button.innerHTML = originalHtml;
             return true;
         } catch (error) {
+            if (densityCommercialFlow && densityAuditRequest === activeDensityAuditRequest) {
+                renderProposalError(card, identity, error);
+            }
             if (status) {
                 status.textContent = error instanceof Error ? error.message : 'No se pudo completar la Due Diligence.';
                 status.className = 'text-[10px] font-bold text-rose-700';
