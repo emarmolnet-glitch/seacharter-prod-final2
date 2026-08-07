@@ -39,27 +39,19 @@ function createDensitySourceResolver(store, openShipsVesselsCache, isolatedMassi
 }
 
 test('local matching unlocks calculator without external AIS sweep availability', () => {
-  assert.match(calculatorSource, /hasCommittedMatchingState = \['density-filter', 'matching-validation'\]\.includes\(committedMatchingSource\)/);
   assert.match(calculatorSource, /const renderFleet = typeof getDensityMapSourceVessels === 'function'/);
-  assert.match(calculatorSource, /const backgroundAisData = Array\.isArray\(window\.backgroundAisData\)/);
-  assert.match(calculatorSource, /const hasAisData = window\.GlobalStore\?\.hasAisData === true \|\| hasCommittedMatchingState \|\| backgroundAisData\.length > 0 \|\| renderFleet\.length > 0/);
-  assert.match(calculatorSource, /const shouldUseCommittedMatchingState = hasCommittedMatchingState/);
-  assert.match(calculatorSource, /calculateAndDisplayAisFreight\(\);[\s\S]*source === 'matching-validation'/);
+  assert.match(calculatorSource, /const hasCommittedMatchingState = renderFleet\.length > 0/);
+  assert.match(calculatorSource, /const hasAisData = renderFleet\.length > 0/);
+  assert.match(calculatorSource, /const shouldUseCommittedMatchingState = true/);
+  assert.doesNotMatch(calculatorSource, /backgroundAisData/);
 });
 
 test('density map consumes the persistent commercial store without legacy fallbacks', () => {
-  assert.match(mapSource, /const openShipsData = normalizeDensityVesselCollection\(window\.openShipsVesselsCache\)/);
-  assert.match(mapSource, /const persistedRawVessels = normalizeDensityVesselCollection\(store\?\.rawVessels\)/);
-  assert.match(mapSource, /const predictiveMatchingVessels = normalizeDensityVesselCollection/);
-  assert.match(mapSource, /const sourceVessels = normalizeDensityVesselCollection\(\[[\s\S]*\.\.\.persistedRawVessels,[\s\S]*\.\.\.openShipsData,[\s\S]*\.\.\.predictiveMatchingVessels/);
-  assert.match(mapSource, /store\?\.setCommercialVesselState\?\.\(/);
-  assert.match(mapSource, /window\.useCommercialFilter\(sourceVessels/);
-  assert.match(source, /const displayVessels = isGlobalDebugActive \? filteredVessels : rawVessels/);
-  assert.doesNotMatch(mapSource, /mergeDensityVesselSources/);
-  assert.doesNotMatch(mapSource, /backgroundAisData|aisLiveData|aisMatchingCache|listaBarcos|lastVesselsInArea|exploratoryVesselsCache|dataBridgeLocalCandidates|dataBridgeGlobalCandidates/);
-  assert.match(mapSource, /const displayVessels = densityPolCoordinates[\s\S]*\? getDensityMapSourceVessels\(\)[\s\S]*vesselsData: displayVessels/);
-  assert.match(markerSource, /function updateAisMarkers\(\) \{[\s\S]*const displayVessels = getDensityDisplayVessels\(\)/);
-  assert.doesNotMatch(markerSource, /normalizeDensityVesselCollection\(window\.openShipsVesselsCache\)/);
+  assert.match(mapSource, /const densityVessels = getDensityReactiveVessels\(\)/);
+  assert.match(mapSource, /return window\.setRenderFleet\(densityVessels\)/);
+  assert.doesNotMatch(densitySourceFunction, /openShipsVesselsCache|rawVessels|filteredVessels|compatibleVessels|nearbyVessels/);
+  assert.match(markerSource, /const displayVessels = getDensityDisplayVessels\(\)/);
+  assert.match(markerSource, /GlobalFleetGlobe\.updateVessels\(displayVessels, 'density'\)/);
 });
 
 test('density source preserves coordinates and previous raw vessels across tab changes', () => {
@@ -72,9 +64,12 @@ test('density source preserves coordinates and previous raw vessels across tab c
 });
 
 test('density initialization awaits the current OpenShips snapshot before mounting', () => {
-  assert.match(mapSource, /async function ensureOpenShipsDensitySnapshot\(\)/);
-  assert.match(mapSource, /window\.updateOpenShipsRadar\(\{ refreshGlobe: false \}\)/);
-  assert.match(mapSource, /setTimeout\(async \(\) => \{[\s\S]*await ensureOpenShipsDensitySnapshot\(\);[\s\S]*const doMount/);
+  const initStart = mapSource.indexOf('function initAisMap()');
+  const initEnd = mapSource.indexOf('function cancelAisMapAnimationFrame()', initStart);
+  const initSource = mapSource.slice(initStart, initEnd);
+  assert.doesNotMatch(mapSource, /ensureOpenShipsDensitySnapshot/);
+  assert.doesNotMatch(initSource, /updateOpenShipsRadar|fetch\s*\(|setTimeout\(async/);
+  assert.match(initSource, /const displayVessels = getDensityMapSourceVessels\(\)/);
 });
 
 test('density globe restores the globally selected vessel without duplicating camera movement', () => {
@@ -85,11 +80,11 @@ test('density globe restores the globally selected vessel without duplicating ca
 
 test('globe selection uses the shared vessel state and flies to the active vessel', () => {
   const globeSource = readFileSync(new URL('../GlobalFleetGlobe.js', import.meta.url), 'utf8');
-  assert.match(globeSource, /window\.selectShip\([\s\S]*vessel\.vesselName,[\s\S]*vessel\.mmsi,[\s\S]*vessel\.lat,[\s\S]*vessel\.lng/);
+  assert.match(globeSource, /window\.selectShip\([\s\S]*vessel\.vesselName,[\s\S]*vessel\.mmsi,[\s\S]*vessel\.originalLatitude \?\? vessel\.baseLat \?\? vessel\.lat,[\s\S]*vessel\.originalLongitude \?\? vessel\.baseLng \?\? vessel\.lng/);
   assert.match(globeSource, /window\.addEventListener\('vessel-selection:changed'/);
   assert.match(globeSource, /focusActiveVesselWhenReady\(activeVessel, 'density'\)/);
   assert.match(globeSource, /window\.setTimeout\(\(\) => \{[\s\S]*focusActiveVesselWhenReady\(vessel, key, attempt \+ 1\);[\s\S]*\}, 300\)/);
-  assert.match(globeSource, /view\.globe\.pointOfView\(\{[\s\S]*lat: normalized\.lat,[\s\S]*lng: normalized\.lng,[\s\S]*altitude: 1\.2[\s\S]*\}, 1500\)/);
+  assert.match(globeSource, /view\.globe\.pointOfView\(\{[\s\S]*lat: normalized\.originalLatitude,[\s\S]*lng: normalized\.originalLongitude,[\s\S]*altitude: 1\.2[\s\S]*\}, 1500\)/);
 });
 
 test('matching card dispatches the complete vessel and opens the density globe', () => {

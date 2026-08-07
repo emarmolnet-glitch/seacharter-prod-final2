@@ -6,7 +6,6 @@ import test from 'node:test';
 const require = createRequire(import.meta.url);
 const mapLoader = require('../map_loader.js');
 const globeSource = readFileSync(new URL('../GlobalFleetGlobe.js', import.meta.url), 'utf8');
-const globeCss = readFileSync(new URL('../assets/css/density-globe.css', import.meta.url), 'utf8');
 
 test('AIS normalization prioritizes COG over HDG from nested position reports', () => {
   const vessel = mapLoader.normalizeShipFields({
@@ -52,13 +51,12 @@ test('AIS normalization preserves an explicit unknown-direction state', () => {
   assert.equal(vessel.hasHeading, false);
 });
 
-test('3D globe projects geographic course and uses a non-directional unknown marker', () => {
+test('3D globe renders native Three.js heading vectors without image fallbacks', () => {
   assert.match(globeSource, /const course = findValidAisDirection[\s\S]*if \(course !== null\)[\s\S]*const heading = findValidAisDirection/);
-  assert.match(globeSource, /JSON\.parse\(nestedValue\)/);
-  assert.match(globeSource, /destinationPoint\(vessel\.lat, vessel\.lng, vessel\.heading\)/);
-  assert.match(globeSource, /getScreenCoords\?\.\(destination\.lat, destination\.lng/);
-  assert.match(globeSource, /vessel\.hasHeading \? 'has-reported-heading' : 'is-heading-unknown'/);
-  assert.match(globeSource, /if \(!Number\.isFinite\(vessel\.heading\)\)/);
-  assert.match(globeCss, /\.global-vessel-marker\.is-heading-unknown/);
-  assert.match(globeCss, /\.global-vessel-marker__unknown-ring/);
+  assert.match(globeSource, /new THREE\.ConeGeometry\(VESSEL_VECTOR_RADIUS, VESSEL_VECTOR_LENGTH, VESSEL_VECTOR_SEGMENTS\)/);
+  assert.match(globeSource, /headingRadians[\s\S]*Math\.cos\(headingRadians\)[\s\S]*Math\.sin\(headingRadians\)/);
+  assert.match(globeSource, /new THREE\.Matrix4\(\)\.makeBasis\(side, direction, normal\)/);
+  assert.match(globeSource, /\.customThreeObject\([\s\S]*\.customLayerData\(\[\]\)/);
+  assert.doesNotMatch(globeSource, /\.htmlElement\(|\.htmlElementsData\(/);
+  assert.doesNotMatch(globeSource, /applyVesselDecluttering|getDeclutterBucketKey|OVERLAP_BUCKET_DEGREES/);
 });

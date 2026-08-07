@@ -32,7 +32,7 @@ test('Radar LIVE activation loads audited ais_vessels into isolated fair-freight
   assert.match(toggleSource, /liveMode: true/);
   assert.match(toggleSource, /selectedTaxonomy: selectedTaxonomy \|\| 'All Cargo'/);
   assert.match(toggleSource, /Radar LIVE actualizado con/);
-  assert.match(loaderSource, /window\.getAuditAisEndpoint\(selectedTaxonomy\)/);
+  assert.match(loaderSource, /window\.getAuditAisEndpoint\(selectedTaxonomy, \{ refresh: options\.refresh === true, radarContext \}\)/);
   assert.match(loaderSource, /await fetch\(endpoint/);
   assert.match(loaderSource, /window\.setBackgroundAisData\(validatedVessels\)/);
   assert.match(loaderSource, /new CustomEvent\('ais:background-data-updated'/);
@@ -175,6 +175,7 @@ test('parent taxonomies aggregate their real child vessel types without cross-fi
     getFilteredVessels: () => currentFilteredVessels,
   };
   windowMock.renderFleet = currentFilteredVessels;
+  windowMock.getDensityReactiveVessels = () => currentFilteredVessels;
   windowMock.renderAisTaxonomyBreakdown = () => {};
   const counterStart = indexSource.indexOf('window.getDerivedFilteredAisVessels = function()');
   const counterEnd = indexSource.indexOf('window.reiniciarMemoriaBarridoAIS', counterStart);
@@ -272,38 +273,37 @@ test('read-only success feedback and toast use the ingestion taxonomy summary', 
 });
 
 test('density map restores globally filtered vessels without refetching', () => {
-  const tabInitialization = indexSource.slice(indexSource.indexOf("if(tabId === 'ais')"), indexSource.indexOf('window.syncDataBridgeRadarTransport', indexSource.indexOf("if(tabId === 'ais')")));
-  assert.doesNotMatch(tabInitialization, /resetAisDensityResults\(\)/);
-  assert.match(tabInitialization, /getFilteredVessels\(\)/);
-  assert.match(tabInitialization, /updateAisMarkers\(\)/);
-  assert.doesNotMatch(tabInitialization, /loadValidatedAisDensityVessels\(\)/);
+  const switchStart = indexSource.indexOf('function switchTab(tabId)');
+  const switchEnd = indexSource.indexOf('function closeMobileSessionMenu()', switchStart);
+  const switchSource = indexSource.slice(switchStart, switchEnd);
+  assert.match(switchSource, /renderDensitySnapshotFromGlobalStore/);
+  assert.doesNotMatch(switchSource, /fetch\s*\(|updateOpenShipsRadar|loadValidatedAisDensityVessels|runDensityMapPreflightChecklist|calculateAndDisplayAisFreight/);
+  assert.match(indexSource, /function renderDensitySnapshotFromGlobalStore\(\)[\s\S]*getDensityReactiveVessels\(\)[\s\S]*GlobalFleetGlobe\?\.updateVessels/);
 });
 
 test('density tab remains mounted while CSS hides inactive views', () => {
   const switchStart = indexSource.indexOf('function switchTab(tabId)');
-  const switchEnd = indexSource.indexOf('window.syncDataBridgeRadarTransport', switchStart);
+  const switchEnd = indexSource.indexOf('function closeMobileSessionMenu()', switchStart);
   const switchSource = indexSource.slice(switchStart, switchEnd);
-  assert.match(switchSource, /el\.classList\.toggle\('hidden', !isActiveView\)/);
-  assert.doesNotMatch(switchSource, /destroyAisMap\(\)/);
+  assert.match(switchSource, /view\.classList\.toggle\('hidden', !isActiveView\)/);
+  assert.doesNotMatch(switchSource, /destroyAisMap\(\)|initAisMap\(\)|clearRadarSnapshot/);
 });
 
-test('density globe colors and emphasizes commercial vessel types', () => {
-  assert.match(globeSource, /function getVesselColor\(vesselType\)/);
-  assert.match(globeSource, /general cargo.*bulk carrier/);
+test('density globe renders native corporate tactical vectors', () => {
   assert.match(globeSource, /COMMERCIAL_VESSEL_COLOR = '#10B981'/);
-  assert.match(globeSource, /TANKER_VESSEL_COLOR = '#F59E0B'/);
-  assert.match(globeSource, /NOISE_VESSEL_COLOR = '#EF4444'/);
-  assert.match(globeSource, /getVesselRadiusFactor\(vessel\).*1\.35/s);
-  assert.match(globeSource, /\.pointColor\(\(vessel\) => getVesselPointColor/);
+  assert.match(globeSource, /new THREE\.ConeGeometry/);
+  assert.match(globeSource, /color: COMMERCIAL_VESSEL_COLOR/);
+  assert.match(globeSource, /VESSEL_VECTOR_FLAT_SCALE = 0\.16/);
+  assert.match(globeSource, /\.customLayerData\(\[\]\)/);
+  assert.doesNotMatch(globeSource, /vessel-vector|VESSEL_VECTOR_GLYPH|htmlElementsData|htmlElement\(/);
 });
 
 test('density map navigation preserves the global background radar state', () => {
   const switchStart = indexSource.indexOf('function switchTab(tabId)');
-  const switchEnd = indexSource.indexOf("if (tabId === 'auditor')", switchStart);
+  const switchEnd = indexSource.indexOf('function closeMobileSessionMenu()', switchStart);
   const switchSource = indexSource.slice(switchStart, switchEnd);
-  assert.match(switchSource, /window\.aisDensityReadOnly = openingReadOnlyDensityMap/);
-  assert.match(switchSource, /window\.RadarGlobalControl\?\.getState\(\)\.mode === 'live'/);
-  assert.doesNotMatch(switchSource, /stopAisRadarPolling|stopAisProxyPolling|isLiveTrackingEnabled = false/);
+  assert.doesNotMatch(switchSource, /RadarGlobalControl|deactivateDataBridgeLiveTracking|syncDataBridgeRadarTransport|aisDensityReadOnly|isLiveTrackingEnabled/);
+  assert.match(switchSource, /targetView\.classList\.add\(tabId === 'auditor' \? 'active-flex' : 'active-block'\)/);
 });
 
 test('map loader defaults to the audit read endpoint', () => {
@@ -354,6 +354,7 @@ test('main AIS KPI is derived only from the provided displayVessels snapshot', (
   let breakdownVessels = null;
   const windowMock = {
     renderFleet: filteredVessels,
+    getDensityReactiveVessels: () => filteredVessels,
     GlobalStore: {
       filteredVesselsInitialized: true,
       getFilteredVessels: () => filteredVessels
@@ -370,9 +371,9 @@ test('main AIS KPI is derived only from the provided displayVessels snapshot', (
   assert.equal(elements.get('buques-count').textContent, '2');
   assert.equal(breakdownVessels, filteredVessels);
 
-  assert.equal(windowMock.renderFilteredAisCounters([]), 0);
-  assert.equal(elements.get('ais-density-count').textContent, '0');
-  assert.deepEqual(breakdownVessels, []);
+  assert.equal(windowMock.renderFilteredAisCounters([]), 2);
+  assert.equal(elements.get('ais-density-count').textContent, '2');
+  assert.equal(breakdownVessels, filteredVessels);
 });
 
 test('empty taxonomy selection stays empty instead of falling back to All Cargo', () => {
@@ -409,9 +410,13 @@ test('vessel filter decodes text and applies taxonomy after the batch lookup', (
   assert.doesNotMatch(filterFunctionSource, /INSERT|UPDATE|DELETE/);
 });
 
-test('selected taxonomy is only loaded after an explicit read action', () => {
-  assert.match(indexSource, /getAuditAisEndpoint\(selectedTaxonomy\)/);
-  assert.match(indexSource, /executeReadOnlyAisRefresh/);
+test('selected taxonomy schedules one debounced Radar refresh', () => {
+  const bindingStart = indexSource.indexOf('function bindReactiveRadarInputs()');
+  const bindingEnd = indexSource.indexOf('window.bindReactiveRadarInputs = bindReactiveRadarInputs;', bindingStart);
+  const bindingSource = indexSource.slice(bindingStart, bindingEnd);
+  assert.match(bindingSource, /mode: 'manual-only'/);
+  assert.doesNotMatch(bindingSource, /addEventListener|scheduleAisMatchingRefresh|executeMatchingRadarSweep/);
+  assert.match(indexSource, /host\.querySelector\('\[data-radar-global-button\]'\)\?\.addEventListener\('click',[\s\S]*executeMatchingRadarSweep/);
 });
 
 test('All Cargo uses the general audit endpoint as an explicit reset', () => {
@@ -438,8 +443,9 @@ test('filtered AIS state redraws visible globes and defers hidden views', () => 
   assert.match(indexSource, /ais:filtered-vessels-updated/);
   assert.ok(globeSource.includes("window.addEventListener('ais:filtered-vessels-updated', syncAllViews)"));
   assert.match(globeSource, /views\.forEach\(\(view\) => \{[\s\S]*if \(!isViewVisible\(view\)\)[\s\S]*view\.pendingVesselSync = true[\s\S]*updateVessels\(null, view\.key\)/);
-  assert.ok(globeSource.includes("key === 'density' && typeof window.getDensityMapSourceVessels === 'function'"));
-  assert.ok(globeSource.includes('view.vessels = prepareVessels(Array.isArray(densityVessels) ? densityVessels : getFilteredVessels())'));
+  assert.match(globeSource, /const centralRadarVessels = getCentralRadarVessels\(\)/);
+  assert.match(globeSource, /Array\.isArray\(centralRadarVessels\) \? centralRadarVessels : requestedVessels/);
+  assert.doesNotMatch(globeSource, /key === 'density'[\s\S]*getDensityMapSourceVessels/);
 });
 
 test('Core PRO and Data Bridge share Globe.gl 2.46.1', () => {
@@ -455,24 +461,23 @@ test('Core PRO and Data Bridge share Globe.gl 2.46.1', () => {
 });
 
 test('both globe views expose nested radar vessel details on hover', () => {
-  assert.ok(globeSource.includes('.pointLabel(getTooltip)'));
-  assert.match(globeSource, /function getTooltip\(vessel\) \{[\s\S]*?return `<div class="global-fleet-tooltip">/);
-  assert.ok(globeSource.includes('.onPointHover((vessel) => {'));
+  assert.match(globeSource, /function getGlobePointLabel\(vessel\)/);
+  assert.match(globeSource, /\.customLayerLabel\(\(vessel\) => safeVesselTacticalLabel\(view, vessel\)\)/);
   assert.ok(globeSource.includes("'radarData'"));
   assert.ok(globeSource.includes("'source_payload'"));
-  assert.match(globeSource, /DWT · \$\{escapeHtml\(formatDwt\(vessel\?\.dwt\)\)\}/);
-  assert.match(globeSource, /IMO · \$\{escapeHtml\(imo && imo !== 'N\/A' \? imo : 'IMO no disponible'\)\}/);
+  assert.ok(globeSource.includes('· IMO'));
   assert.ok(globeSource.includes("'Buque sin nombre'"));
-  assert.ok(globeSource.includes("'DWT no disponible'"));
+  assert.match(globeSource, /global-fleet-tooltip--tactical/);
+  assert.doesNotMatch(globeSource, /onLabelHover|label\?\.vessel/);
 });
 
-test('globe hover styling increases raycast target and matches radar tooltip design', () => {
-  assert.ok(globeSource.includes('POINT_HOVER_RADIUS_FACTOR = 1.45'));
-  assert.match(globeSource, /vessel === view\.hoveredVessel \|\| vessel === view\.selectedVessel \? radius \* POINT_HOVER_RADIUS_FACTOR : radius/);
-  assert.ok(globeSource.includes('if (cameraAltitude <= 0.45) return 0.075'));
-  assert.match(globeCssSource, /\.global-fleet-tooltip \{[\s\S]*?border-radius: 7px;[\s\S]*?background: rgba\(4, 18, 34, 0\.92\);[\s\S]*?font-family: 'Inter'/);
-  assert.match(globeCssSource, /\.global-fleet-tooltip strong \{[\s\S]*?color: #ffffff;[\s\S]*?font-weight: 800;[\s\S]*?text-transform: uppercase/);
-  assert.match(globeCssSource, /\.global-fleet-tooltip span \{[\s\S]*?color: #32d6c3/);
+test('globe hover styling preserves flat tactical geometry and matches radar tooltip design', () => {
+  assert.ok(globeSource.includes('SURFACE_ALTITUDE = 0'));
+  assert.match(globeSource, /mesh\.scale\.set\(1, 1, VESSEL_VECTOR_FLAT_SCALE\)/);
+  assert.match(globeSource, /\.customLayerLabel\(\(vessel\) => safeVesselTacticalLabel/);
+  assert.match(globeSource, /Distancia al POL/);
+  assert.match(globeSource, /ETA al POL/);
+  assert.doesNotMatch(globeSource, /VESSEL_VECTOR_GLYPH|vessel-vector|FIXED_POINT_RADIUS|POINT_HOVER_RADIUS_FACTOR|htmlElementsData/);
 });
 
 test('Core PRO tooltip escapes map clipping and floats above interface overlays', () => {
@@ -482,11 +487,11 @@ test('Core PRO tooltip escapes map clipping and floats above interface overlays'
   assert.match(dataBridgeSource, /density-globe\.css\?v=[^"']+/);
 });
 
-test('custom point highlighting waits until native pointLabel handling completes', () => {
-  assert.ok(globeSource.includes('function schedulePointInteractionStyle(view)'));
-  assert.ok(globeSource.includes('view.hoverStyleFrameId = requestAnimationFrame(() => {'));
-  assert.ok(globeSource.includes('schedulePointInteractionStyle(view)'));
-  assert.doesNotMatch(globeSource, /\.onPointHover\(\(vessel\) => \{[\s\S]{0,180}applyPointInteractionStyle\(view\)/);
+test('custom tactical highlighting uses the shared vessel interaction handler', () => {
+  assert.doesNotMatch(globeSource, /scheduleTacticalLabelRefresh|hoverStyleFrameId|onLabelHover/);
+  assert.match(globeSource, /function handleVesselClick\(view, vessel\)[\s\S]*setSelectedVessel\(view, vessel\)[\s\S]*setAutoRotate\(false, view\.key\)/);
+  assert.match(globeSource, /\.onCustomLayerClick\(\(vessel\) => handleVesselClick\(view, vessel\)\)/);
+  assert.match(globeSource, /renderVesselLayer\(view, view\.vessels\)/);
 });
 
 test('Globe View containers have explicit visible dimensions and responsive rules', () => {
@@ -511,15 +516,13 @@ test('master globe waits for layout and reports mounting diagnostics', () => {
   assert.ok(globeSource.includes('globalFleetGlobeLastError'));
 });
 
-test('all maps render independent AIS points without heatmaps or fixed labels', () => {
-  assert.ok(globeSource.includes('.pointsData(view.vessels)'));
-  assert.ok(globeSource.includes("COMMERCIAL_VESSEL_COLOR = '#10B981'"));
-  assert.ok(globeSource.includes("TANKER_VESSEL_COLOR = '#F59E0B'"));
-  assert.ok(globeSource.includes("NOISE_VESSEL_COLOR = '#EF4444'"));
-  assert.ok(globeSource.includes('POINT_ALTITUDE = 0.008'));
-  assert.ok(globeSource.includes('cameraAltitude <= 0.45) return 0.075'));
-  assert.ok(globeSource.includes('cameraAltitude >= 2.40) return 0.032'));
-  assert.doesNotMatch(globeSource, /ColumnLayer|TextLayer|ScatterplotLayer|heatmap|cluster/i);
+test('all maps render independent AIS tactical vectors without heatmaps', () => {
+  assert.ok(globeSource.includes('.customLayerData([])'));
+  assert.ok(globeSource.includes('new THREE.ConeGeometry'));
+  assert.ok(globeSource.includes('color: COMMERCIAL_VESSEL_COLOR'));
+  assert.ok(globeSource.includes('renderVesselLayer(view, view.vessels)'));
+  assert.ok(globeSource.includes('.arcDashAnimateTime(2600)'));
+  assert.doesNotMatch(globeSource, /ColumnLayer|TextLayer|ScatterplotLayer|heatmap|cluster|htmlElementsData/i);
 });
 
 test('Globe engine uses the requested earth textures atmosphere and camera', () => {
@@ -527,13 +530,14 @@ test('Globe engine uses the requested earth textures atmosphere and camera', () 
   assert.ok(globeSource.includes('earth-topology.png'));
   assert.ok(globeSource.includes(".atmosphereColor('#39D7E8')"));
   assert.ok(globeSource.includes('.atmosphereAltitude(0.16)'));
-  assert.ok(globeSource.includes('lat: 12, lng: -24, altitude: 2.15'));
+  assert.ok(globeSource.includes('lat: 24, lng: -24, altitude: 2.5'));
   assert.ok(globeSource.includes('dampingFactor = 0.08'));
   assert.ok(globeSource.includes('autoRotateSpeed = 0.45'));
 });
 
 test('Globe pauses automatic rotation on direct interaction', () => {
-  assert.match(globeSource, /\.onPointClick\(\(vessel\) => \{[\s\S]*?setAutoRotate\(false, key\)/);
+  assert.match(globeSource, /\.onCustomLayerClick\(\(vessel\) => handleVesselClick\(view, vessel\)\)/);
+  assert.match(globeSource, /function handleVesselClick\(view, vessel\)[\s\S]*setAutoRotate\(false, view\.key\)/);
   assert.ok(globeSource.includes("view.controls.addEventListener?.('start', view.handleInteractionStart)"));
   assert.ok(globeSource.includes("view.container.addEventListener('pointerdown', view.handleContainerPointerDown)"));
   assert.ok(globeSource.includes('view.handleInteractionStart = () => setAutoRotate(false, key)'));
@@ -585,9 +589,10 @@ test('Globe filters invalid ballast geometry at the pathsData rendering boundary
   const helperStart = globeSource.indexOf('function applyRoutes(view)');
   const helperEnd = globeSource.indexOf('function saveGlobalRouteState', helperStart);
   const helperSource = globeSource.slice(helperStart, helperEnd);
-  const applyRoutes = new Function('PATH_STYLE', 'BALLAST_PATH_COLOR', `${helperSource}; return applyRoutes;`)(
+  const applyRoutes = new Function('PATH_STYLE', 'BALLAST_PATH_COLOR', 'getTacticalLabels', `${helperSource}; return applyRoutes;`)(
     { color: '#00FFFF', width: 2 },
-    '#F59E0B'
+    '#F59E0B',
+    view => view.portLabels
   );
   let renderedPaths = null;
   const globe = {};
@@ -617,12 +622,11 @@ test('Main map controls stay below the header and reset in fullscreen mode', () 
 });
 
 test('Globe renders and restores white LASTRE, POL, and POD labels', () => {
-  assert.ok(globeSource.includes("createPortLabel('LASTRE', ports?.ballast, options?.ballastPortName)"));
-  assert.ok(globeSource.includes("createPortLabel('LASTRE', state?.ports?.ballast, state?.ballastPortName)"));
-  assert.ok(globeSource.includes("createPortLabel('POL', ports?.pol)"));
-  assert.ok(globeSource.includes("createPortLabel('POD', ports?.pod)"));
-  assert.ok(globeSource.includes('.labelsData(view.portLabels)'));
-  assert.ok(globeSource.includes(".labelColor(() => '#FFFFFF')"));
+  assert.match(globeSource, /function createPortLabel\(role, port, explicitName = ''\)/);
+  assert.match(globeSource, /text: role \+ ' · ' \+ name/);
+  assert.match(globeSource, /\.labelColor\(\(\) => '#FFFFFF'\)/);
+  assert.match(globeSource, /view\.portLabels = \[createPortLabel\('LASTRE'[\s\S]*createPortLabel\('POL'[\s\S]*createPortLabel\('POD'/);
+  assert.match(globeSource, /function getTacticalLabels\(view\)[\s\S]*view\?\.portLabels/);
 });
 
 test('GlobalStore retains normalized port and maritime path state', () => {
@@ -630,7 +634,7 @@ test('GlobalStore retains normalized port and maritime path state', () => {
   assert.ok(globeSource.includes('saveGlobalRouteState(ports, view.routePaths, options?.ballastPortName)'));
   assert.ok(globeSource.includes('ballastPortName: String(ballastPortName'));
   assert.ok(globeSource.includes('restoreGlobalRouteState(view)'));
-  assert.ok(globeSource.includes('.pointsData(view.vessels)'));
+  assert.ok(globeSource.includes('applyTacticalLabels(view)'));
 });
 
 test('AIS normalization accepts nested payloads and rejects invalid coordinates', () => {
@@ -640,14 +644,15 @@ test('AIS normalization accepts nested payloads and rejects invalid coordinates'
   assert.ok(globeSource.includes('focusFirstVessel'));
 });
 
-test('vessel tooltip exposes name, DWT, and IMO with safe fallbacks', () => {
-  assert.ok(globeSource.includes('function getTooltip'));
+test('vessel tooltip exposes name, distance, ETA, DWT, and IMO with safe fallbacks', () => {
+  assert.match(globeSource, /function safeVesselTacticalLabel\(view, vessel\)/);
   assert.ok(globeSource.includes('Buque sin nombre'));
-  assert.ok(globeSource.includes('DWT no disponible'));
-  assert.ok(globeSource.includes('.pointLabel(getTooltip)'));
-  assert.match(globeCssSource, /\.global-fleet-tooltip strong \{[\s\S]*?color: #ffffff;[\s\S]*?text-shadow:/);
-  assert.ok(globeSource.includes('IMO no disponible'));
-  assert.match(globeCssSource, /\.global-fleet-tooltip span \{[\s\S]*?color: #32d6c3/);
+  assert.ok(globeSource.includes('IMO '));
+  assert.ok(globeSource.includes('DWT '));
+  assert.ok(globeSource.includes('Distancia al POL'));
+  assert.ok(globeSource.includes('ETA al POL'));
+  assert.match(globeSource, /\.customLayerLabel\(\(vessel\) => safeVesselTacticalLabel\(view, vessel\)\)/);
+  assert.doesNotMatch(globeSource, /htmlElementsData|htmlElement\(/);
 });
 
 test('Data Bridge publishes its audit fleet through filteredVessels', () => {

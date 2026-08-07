@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, ensureApplicationSchema } from "../../db/index.js";
 import { appConfig } from "../../db/schema.js";
 import { createCorsHeaders } from "./_shared/cors.js";
+import { createResponseCacheHeaders, getOrSetCachedJson } from "./_shared/response-cache.js";
 
 const DATA_BRIDGE_CONNECTION_CONFIG_KEY = "databridge_connection_state";
 const baseHeaders = {
@@ -30,7 +31,7 @@ function normalizeConnectionState(value: string | null | undefined) {
   }
 }
 
-export default async (req: Request) => {
+async function loadFreshDataBridgeConnectionState(req: Request) {
   const headers = {
     ...baseHeaders,
     ...createCorsHeaders(req, "GET, OPTIONS"),
@@ -58,6 +59,37 @@ export default async (req: Request) => {
   } catch (error) {
     console.error("[databridge-connection-state] Failed to read persisted state.", error);
     return Response.json({ success: false, error: "Connection state is unavailable" }, { status: 500, headers });
+  }
+}
+
+export default async (req: Request) => {
+  if (req.method !== "GET") return loadFreshDataBridgeConnectionState(req);
+  try {
+    const cached = await getOrSetCachedJson({
+      namespace: "databridge-connection-state-v1",
+      key: { scope: "current" },
+      ttlMs: 60 * 1000,
+      staleTtlMs: 10 * 60 * 1000,
+      producer: async () => {
+        const response = await loadFreshDataBridgeConnectionState(req);
+        const body = await response.json();
+        if (response.status >= 500) throw new Error("Data Bridge state origin unavailable");
+        return { body, status: response.status };
+      },
+    });
+    return Response.json(cached.value.body, {
+      status: cached.value.status,
+      headers: {
+        ...createResponseCacheHeaders(cached, 60, 600),
+        ...createCorsHeaders(req, "GET, OPTIONS"),
+      },
+    });
+  } catch (error) {
+    console.error("[databridge-connection-state] Cache and origin unavailable.", error instanceof Error ? error.message : String(error));
+    return Response.json({ success: false, error: "Connection state is temporarily unavailable" }, {
+      status: 503,
+      headers: { "cache-control": "no-store", ...createCorsHeaders(req, "GET, OPTIONS") },
+    });
   }
 };
 

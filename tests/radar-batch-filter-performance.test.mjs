@@ -31,7 +31,7 @@ test('All Cargo radar injects master profiles in one backend batch', () => {
 });
 
 test('radar table renders supplied vessel properties without lookup requests', () => {
-  const renderStart = indexSource.indexOf('function renderDensityVesselsTable(vessels');
+  const renderStart = indexSource.indexOf('function renderDensityVesselsTable(_vessels');
   const renderEnd = indexSource.indexOf('window.renderDensityVesselsTable = renderDensityVesselsTable', renderStart);
   const renderSource = indexSource.slice(renderStart, renderEnd);
   assert.match(renderSource, /readDensityPositiveNumber\(vessel, \['grossTonnage', 'gross_tonnage'/);

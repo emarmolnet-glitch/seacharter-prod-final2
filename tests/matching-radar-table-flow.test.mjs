@@ -26,8 +26,8 @@ test('matching radar fetches AIS and OpenShips then commits dynamic results', ()
   const handlerSource = source.slice(handlerStart, handlerEnd);
 
   assert.match(handlerSource, /window\.addEventListener\('ais:matching-state-updated', captureMatchingState\)/);
-  assert.match(handlerSource, /Promise\.all\(\[[\s\S]*window\.startRadarLive\(\{ source: 'matching-radar-sweep', refresh: true \}\)/);
-  assert.match(handlerSource, /window\.updateOpenShipsRadar\?\.\(\{ refreshGlobe: false, polContext \}\)/);
+  assert.match(handlerSource, /Promise\.all\(\[[\s\S]*window\.startRadarLive\(\{ source: 'matching-radar-sweep', refresh: true, radarContext \}\)/);
+  assert.match(handlerSource, /window\.updateOpenShipsRadar\?\.\(\{ refreshGlobe: false, refresh: true, polContext, radarContext \}\)/);
   assert.match(handlerSource, /window\.aisMatchingExecutionState\.forceNextExecution = true/);
   assert.match(handlerSource, /calculateAndDisplayAisFreight\(\)/);
   assert.match(handlerSource, /latestMatchingDetail\?\.nearbyVessels/);
@@ -36,7 +36,7 @@ test('matching radar fetches AIS and OpenShips then commits dynamic results', ()
   assert.match(processorSource, /normalizeMatchingRadarCandidates\(\[\.\.\.polScopedAisVessels, \.\.\.openShipsVessels, \.\.\.predictiveVessels\]\)/);
   assert.match(processorSource, /window\.matchingRadarDataSources = \{/);
   assert.match(processorSource, /window\.matchingResultsState = \{[\s\S]*vessels: matches\.slice\(\)/);
-  assert.match(processorSource, /window\.GlobalStore\.matchingVessels = matches\.slice\(\)/);
+  assert.match(processorSource, /window\.GlobalStore\.setRadarVessels\?\.\(matches, \{[\s\S]*source: 'matching-radar-sweep'/);
   assert.match(processorSource, /renderCachedMatchingResults\(matches, \{[\s\S]*allowPolOnly: true/);
   assert.match(processorSource, /resultSourceLabel: 'Ranking Radar AIS \/ OpenShips'/);
   assert.match(processorSource, /showDueDiligence: true/);

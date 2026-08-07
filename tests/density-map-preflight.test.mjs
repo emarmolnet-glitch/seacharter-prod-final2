@@ -8,23 +8,23 @@ const preflightStart = source.indexOf('function getCachedMatchingResultsForPrefl
 const preflightEnd = source.indexOf('// --- AISLAMIENTO STRICTO DE TABS ---', preflightStart);
 const preflightSource = source.slice(preflightStart, preflightEnd);
 
-test('density map preflight reads only the validated current-calculation cache without HTTP', () => {
+test('density map preflight falls back to the persistent global fleet without HTTP', () => {
   assert.ok(preflightStart >= 0 && preflightEnd > preflightStart);
-  assert.match(preflightSource, /window\.hasCurrentSessionMatchingCache\?\.\(\) !== true/);
-  assert.match(preflightSource, /const validatedMatches = Array\.isArray\(window\.matchingResultsState\?\.vessels\)/);
+  assert.match(preflightSource, /const localMatches = Array\.isArray\(window\.matchingResultsState\?\.vessels\)/);
+  assert.match(preflightSource, /const globalMatches = Array\.isArray\(window\.GlobalStore\?\.matchingVessels\)/);
+  assert.match(preflightSource, /const validatedMatches = localMatches\.length > 0 \? localMatches : globalMatches/);
   assert.doesNotMatch(preflightSource, /executionCache\.compatibleVessels|executionCache\.nearbyVessels/);
   assert.doesNotMatch(preflightSource, /fetch\s*\(/);
   assert.match(preflightSource, /return \{ hydrated, count: cachedMatches\.length, requested: false \}/);
 });
 
 test('density map mount validates cached matches after local map initialization', () => {
-  const mountStart = source.indexOf('aisTabInitTimer = setTimeout(() =>');
-  const mountEnd = source.indexOf('}, 200);', mountStart);
-  const mountSource = source.slice(mountStart, mountEnd);
-  const freightIndex = mountSource.indexOf('calculateAndDisplayAisFreight();');
-  const preflightIndex = mountSource.indexOf('runDensityMapPreflightChecklist();');
-
-  assert.ok(freightIndex >= 0 && preflightIndex > freightIndex);
+  const switchStart = source.indexOf('function switchTab(tabId)');
+  const switchEnd = source.indexOf('function closeMobileSessionMenu()', switchStart);
+  const switchSource = source.slice(switchStart, switchEnd);
+  assert.match(switchSource, /renderDensitySnapshotFromGlobalStore/);
+  assert.doesNotMatch(switchSource, /runDensityMapPreflightChecklist|calculateAndDisplayAisFreight|fetch\s*\(/);
+  assert.match(source, /function renderDensitySnapshotFromGlobalStore\(\)[\s\S]*renderDensityVesselsTable\?\.\(matchingVessels\)/);
 });
 
 test('preflight exits when the classified fleet already contains the cached cards', () => {
@@ -39,7 +39,7 @@ test('cached matches hydrate the table, badge, button and shared state', () => {
   assert.match(preflightSource, /resultsList\.dataset\.matchingHydrated = 'true'/);
   assert.match(preflightSource, /resultsBadge\.innerText = `\$\{cachedCount\} Buque/);
   assert.match(preflightSource, /button\.dataset\.matchingResultCount = String\(count\)/);
-  assert.match(preflightSource, /window\.GlobalStore\.matchingVessels = renderedMatches\.slice\(\)/);
+  assert.match(preflightSource, /window\.GlobalStore\.setMatchingFleet\?\.\(renderedMatches,[\s\S]*source: 'matching-ui'[\s\S]*origin: 'matching-cache'/);
   assert.match(preflightSource, /window\.GlobalStore\.compatibleVessels = renderedMatches\.filter/);
   assert.match(preflightSource, /window\.lastClassifiedVessels = renderedMatches\.map/);
 });

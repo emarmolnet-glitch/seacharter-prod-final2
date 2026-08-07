@@ -22,8 +22,10 @@ test('matching engine exposes and initializes its own taxonomy selector', () => 
   assert.match(source, /id="matching-global-taxonomy-select"/);
   assert.match(source, /id="matching-global-taxonomy-status"/);
   assert.match(source, /source: 'matching-engine-selector'/);
-  assert.match(source, /window\.initializeMatchingGlobalTaxonomyControl\?\.\(\)/);
-  assert.match(source, /window\.GlobalTaxonomyProvider\?\.ensure\(\{ notify: true, source: 'matching-tab-entry' \}\)/);
+  assert.match(source, /document\.addEventListener\('DOMContentLoaded', initializeMatchingGlobalTaxonomyControl/);
+  const switchStart = source.indexOf('function switchTab(tabId)');
+  const switchEnd = source.indexOf('function closeMobileSessionMenu()', switchStart);
+  assert.doesNotMatch(source.slice(switchStart, switchEnd), /initializeMatchingGlobalTaxonomyControl|GlobalTaxonomyProvider/);
 });
 
 test('matching validation obtains taxonomy from the provider before blocking execution', () => {

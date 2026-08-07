@@ -110,10 +110,12 @@ test('production build copies the contract manager before the SPA fallback can h
 });
 
 test('tab navigation tolerates missing reference and form auxiliaries', () => {
-  assert.match(indexSource, /if \(!targetView\)/);
-  assert.match(indexSource, /Navigation continued without URL synchronization/);
-  assert.match(indexSource, /Form synchronization was skipped/);
-  assert.match(indexSource, /typeof syncPrintPolicyClass === 'function'/);
+  const switchStart = indexSource.indexOf('function switchTab(tabId)');
+  const switchEnd = indexSource.indexOf('function closeMobileSessionMenu()', switchStart);
+  const switchSource = indexSource.slice(switchStart, switchEnd);
+  assert.match(switchSource, /if \(!targetView\)/);
+  assert.doesNotMatch(switchSource, /ContractReference|ContractRefManager|syncGlobalStateToForms|SeaCharterStore|syncPrintPolicyClass/);
+  assert.match(switchSource, /return true/);
 });
 
 test('tracking preserves the entered reference when the API fails', () => {

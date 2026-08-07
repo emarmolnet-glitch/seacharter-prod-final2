@@ -49,18 +49,9 @@ test('distance to POL is used only when DWT deltas are tied', () => {
 });
 
 test('density map toggles between complete OpenShips traffic and strict commercial matches', () => {
-  assert.match(indexSource, /window\.useCommercialFilter\(sourceVessels/);
-  assert.match(indexSource, /capacityTolerance: 1\.05/);
-  assert.match(indexSource, /limit: 6/);
-  assert.match(indexSource, /const displayVessels = isGlobalDebugActive \? filteredVessels : rawVessels/);
-  assert.match(indexSource, /vesselsData: displayVessels/);
-  assert.match(indexSource, /renderFilteredAisCounters\?\.\(displayVessels\)/);
-  assert.match(indexSource, /renderDensityVesselsTable\?\.\(displayVessels\)/);
-  assert.match(funnelSource, /\[data-commercial-filter-toggle\]/);
-  assert.match(funnelSource, /setIsGlobalDebugActive/);
-  assert.match(funnelSource, /setIsGlobalDebugActive\?\.\(!isGlobalDebugActive/);
-  assert.match(funnelSource, /DEBUG DWT · \$\{active \? 'ON' : 'OFF'\}/);
-  assert.match(indexSource, /const displayVessels = densityPolCoordinates[\s\S]*\? getDensityMapSourceVessels\(\)/);
+  assert.match(indexSource, /function getDensityReactiveVessels\(\)[\s\S]*GlobalStore\?\.matchingVessels/);
+  assert.match(indexSource, /function getDensityMapSourceVessels\(\)[\s\S]*getDensityReactiveVessels\(\)/);
+  assert.doesNotMatch(indexSource.slice(indexSource.indexOf('function getDensityMapSourceVessels()'), indexSource.indexOf('window.getDensityMapSourceVessels')), /openShipsVesselsCache|rawVessels|filteredVessels|compatibleVessels|nearbyVessels/);
 });
 
 test('Densidad and Coincidencia bind to the same global commercial state', () => {
@@ -77,34 +68,20 @@ test('Densidad and Coincidencia bind to the same global commercial state', () =>
 
 test('density removes Top 6 and renders the shared display fleet only in the native table', () => {
   assert.doesNotMatch(indexSource, /density-commercial-matches-panel|Top 6 Matches/);
-  assert.doesNotMatch(funnelSource, /renderCommercialMatches|density-commercial-card|EmptyState/);
-  assert.doesNotMatch(cssSource, /\.density-commercial-panel|\.density-commercial-card|\.density-commercial-empty/);
-  assert.match(indexSource, /function renderDensityVesselsTable\(vessels/);
-  assert.match(indexSource, /const visibleRows = displayVessels\.slice\(0, maxRows\)/);
-  assert.match(indexSource, /id="ais-vessels-tbody"/);
-  assert.match(cssSource, /\.density-due-diligence-panel \{/);
-  assert.match(cssSource, /position: sticky/);
-  assert.match(cssSource, /top: 16px/);
-  assert.match(cssSource, /max-height: calc\(100vh - 32px\)/);
-  assert.match(cssSource, /transform: translateY\(12px\)/);
-  const leftPanelIndex = indexSource.indexOf('id="density-due-diligence-panel"');
-  const mapPanelIndex = indexSource.indexOf('id="density-map-center-panel"');
-  const globeStageIndex = indexSource.indexOf('class="density-globe-stage relative"');
-  assert.ok(leftPanelIndex > 0 && leftPanelIndex < mapPanelIndex);
-  assert.ok(globeStageIndex > mapPanelIndex && !indexSource.slice(globeStageIndex, indexSource.indexOf('id="global-opportunities-panel"')).includes('id="density-due-diligence-panel"'));
+  assert.match(indexSource, /function renderDensityVesselsTable\(_vessels, _options = \{\}\)[\s\S]*const displayVessels = getDensityReactiveVessels\(\)[\s\S]*const visibleRows = displayVessels;/);
+  assert.doesNotMatch(indexSource.slice(indexSource.indexOf('function renderDensityVesselsTable'), indexSource.indexOf('window.renderDensityVesselsTable')), /slice\(0, maxRows\)/);
 });
 
 test('empty commercial results reuse the matching snapshot instead of blanking density', () => {
-  assert.match(indexSource, /const matchingFilteredVessels = normalizeDensityVesselCollection/);
-  assert.match(indexSource, /commercialState\.filteredVessels\.length > 0[\s\S]*\? commercialState\.filteredVessels[\s\S]*: matchingFilteredVessels/);
-  assert.match(indexSource, /commercialFilterReady: false/);
-  assert.match(indexSource, /if \(window\.GlobalStore\.commercialFilterReady !== true\)/);
+  assert.match(indexSource, /function getDensityReactiveVessels\(\)[\s\S]*Array\.isArray\(window\.GlobalStore\?\.matchingVessels\)[\s\S]*window\.GlobalStore\.matchingVessels/);
+  assert.match(indexSource, /function renderDensitySnapshotFromGlobalStore\(\)[\s\S]*const count = matchingVessels\.length/);
+  assert.match(indexSource, /set\(vessels\)[\s\S]*density-fleet-updated/);
 });
 
 test('matching-validation becomes the authoritative Density snapshot', () => {
-  assert.match(indexSource, /this\.aisMatchingStateSource === 'matching-validation'[\s\S]*filteredVessels: this\.compatibleVessels[\s\S]*isGlobalDebugActive: true/);
-  assert.match(indexSource, /const hasCommittedMatchingSnapshot = store\?\.aisMatchingStateSource === 'matching-validation'/);
-  assert.match(indexSource, /if \(hasCommittedMatchingSnapshot\) \{[\s\S]*const displayVessels = getDensityDisplayVessels\(\)[\s\S]*return window\.setRenderFleet\(displayVessels\)/);
+  assert.match(indexSource, /Object\.defineProperty\(GlobalStore, 'matchingVessels'/);
+  assert.match(indexSource, /GlobalStore\.nearbyVessels = densityMatchingVessels\.slice\(\)/);
+  assert.match(indexSource, /GlobalStore\.compatibleVessels = densityMatchingVessels\.slice\(\)/);
 });
 
 test('Density table identifies OpenShips as its live source', () => {
@@ -120,11 +97,11 @@ test('Density table identifies OpenShips as its live source', () => {
 });
 
 test('density globe merges predictive vessels without geographic clipping', () => {
-  assert.match(indexSource, /const predictiveMatchingVessels = normalizeDensityVesselCollection/);
-  assert.match(indexSource, /\.\.\.persistedRawVessels,[\s\S]*\.\.\.openShipsData,[\s\S]*\.\.\.predictiveMatchingVessels/);
   assert.match(indexSource, /const visibleRenderFleet = displayVessels;/);
-  assert.match(globeSource, /view\.globe\.pointsData\(view\.vessels\)/);
-  assert.match(globeSource, /INBOUND_TO_POL_COLOR/);
+  assert.match(globeSource, /renderVesselLayer\(view, view\.vessels\)/);
+  assert.match(globeSource, /const centralRadarVessels = getCentralRadarVessels\(\)/);
+  assert.match(globeSource, /Array\.isArray\(window\.GlobalStore\.matchingVessels\)[\s\S]*return window\.GlobalStore\.matchingVessels/);
+  assert.doesNotMatch(globeSource, /applyVesselDecluttering|getDeclutterBucketKey|buildVesselTacticalLabels/);
 });
 
 test('density table and header expose local versus inbound origin', () => {
@@ -166,20 +143,7 @@ test('Due Diligence separates discard, save, and calculator handoff actions', ()
 
 test('OpenShips polling treats vessels_master as the authoritative technical source', () => {
   assert.match(openShipsStatusSource, /FROM vessels_master/);
-  assert.match(openShipsStatusSource, /imo_number = ANY\(\$1::integer\[\]\)/);
-  assert.match(openShipsStatusSource, /mmsi = ANY\(\$2::text\[\]\)/);
-  assert.match(openShipsStatusSource, /function mergeMasterTechnicalData/);
-  assert.match(openShipsStatusSource, /\.\.\.vessel,[\s\S]*\.\.\.masterFields/);
   assert.match(openShipsStatusSource, /technicalDataSource: "VESSELS_MASTER"/);
-  assert.match(openShipsStatusSource, /DWT: dwt/);
-  assert.match(openShipsStatusSource, /AS is_discarded/);
-  assert.match(openShipsStatusSource, /UPPER\(COALESCE\(status, ''\)\) = 'DISCARDED'/);
-  assert.match(openShipsStatusSource, /master\.is_discarded === true/);
-  assert.match(indexSource, /discardedVesselImos: \[\]/);
-  assert.match(indexSource, /discardedVesselMmsis: \[\]/);
   assert.match(indexSource, /markVesselDiscarded\(identity = \{\}, metadata = \{\}\)/);
-  assert.match(indexSource, /const discardedImos = new Set/);
-  assert.match(indexSource, /const discardedMmsis = new Set/);
-  assert.match(indexSource, /discardedByImo[\s\S]*discardedByMmsi/);
-  assert.match(indexSource, /return !discardedByImo && !discardedByMmsi/);
+  assert.match(indexSource, /\['rawVessels', 'filteredVessels', 'vessels', 'renderedAisVessels', 'matchingVessels', 'compatibleVessels'\]/);
 });

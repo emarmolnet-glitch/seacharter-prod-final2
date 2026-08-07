@@ -35,7 +35,9 @@ test('local matching click reads calculation context without replacing the activ
 
 test('current-session matching cache prevents synchronization and AIS resets', () => {
   assert.match(source, /function hasCurrentSessionMatchingCache\(\)/);
-  assert.match(source, /cacheState\.sessionId === session\.sessionId/);
+  assert.match(source, /const cachedFleet = Array\.isArray\(cacheState\.vessels\)[\s\S]*: globalFleet/);
+  assert.match(source, /const cachedSessionId = String\(cacheState\.sessionId \|\| window\.GlobalStore\?\.matchingCacheSessionId \|\| ''\)\.trim\(\)/);
+  assert.match(source, /cachedSessionId === session\.sessionId/);
   assert.match(source, /cachedCalculationId === currentCalculationId/);
   assert.doesNotMatch(source, /cacheState\.sessionId = session\.sessionId/);
   assert.match(source, /previousCalculationIdentity !== nextCalculationIdentity[\s\S]*clearMatchingCandidateState\(\)/);
@@ -47,11 +49,21 @@ test('current-session matching cache prevents synchronization and AIS resets', (
   assert.match(source, /window\.forceResetAisDensityResults/);
 });
 
-test('empty local query clears previous matching candidates', () => {
-  assert.doesNotMatch(source, /preservedAfterEmptyQuery: true|cache-preserved/);
-  assert.match(source, /if \(rawMatches\.length === 0\)[\s\S]*window\.lastMatchingEngineResults = \[\]/);
-  assert.match(source, /window\.GlobalStore\.matchingVessels = \[\]/);
-  assert.match(source, /window\.showMatchingEmptyState\?\.\(\)/);
+test('empty local writes and route cleanup preserve the persistent global fleet', () => {
+  assert.match(source, /function clearMatchingCandidateState\(\)[\s\S]*persistentFleet\.length > 0[\s\S]*restoreMatchingViewFromGlobalFleet\?\.\(\{ source: 'candidate-clear-guard' \}\)/);
+  assert.match(source, /function showMatchingEmptyState\(\)[\s\S]*persistentFleet\.length > 0[\s\S]*restoreMatchingViewFromGlobalFleet\?\.\(\{ source: 'empty-state-guard' \}\)/);
+  assert.match(source, /window\.setRenderedMatchingVessels\?\.\(\[\], \{ source: 'matching-empty' \}\)/);
+  assert.match(source, /function setRenderedMatchingVessels\(vessels, metadata = \{\}\)[\s\S]*const canonicalVessels = window\.GlobalStore\?\.setMatchingFleet/);
+});
+
+test('matching tab entry rehydrates its table from the canonical global fleet', () => {
+  assert.match(source, /function restoreMatchingViewFromGlobalFleet\(options = \{\}\)/);
+  assert.match(source, /window\.matchingResultsState = \{[\s\S]*vessels: persistentFleet\.slice\(\)/);
+  assert.match(source, /renderCachedMatchingResults\(persistentFleet, \{[\s\S]*executionState: 'global-store-restored'/);
+  assert.match(source, /window\.addEventListener\('radar-fleet-updated',[\s\S]*source: 'radar-fleet-event'/);
+  const switchStart = source.indexOf('function switchTab(tabId)');
+  const switchEnd = source.indexOf('function closeMobileSessionMenu()', switchStart);
+  assert.doesNotMatch(source.slice(switchStart, switchEnd), /restoreMatchingViewFromGlobalFleet/);
 });
 
 test('calculation state endpoint supports rehydration reads without a new migration', () => {

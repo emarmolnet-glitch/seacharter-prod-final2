@@ -2,6 +2,7 @@ import type { Config } from "@netlify/functions";
 import type { QueryResultRow } from "pg";
 import { getPool } from "../../db/index.js";
 import { parseAisGeofence } from "./ais-geofence.js";
+import { createResponseCacheHeaders, getOrSetCachedJson } from "./_shared/response-cache.js";
 
 type OpenShipsStatusRow = QueryResultRow & {
   vessel: Record<string, unknown>;
@@ -141,7 +142,7 @@ function mergeMasterTechnicalData(vessel: Record<string, unknown>, master: Maste
   };
 }
 
-export default async (req: Request) => {
+async function loadFreshOpenShipsStatus(req: Request) {
   if (req.method !== "GET") {
     return Response.json(
       { error: "Method not allowed" },
@@ -325,6 +326,38 @@ export default async (req: Request) => {
       { error: "Unable to load OpenShips live status." },
       { status: 500, headers: { "cache-control": "no-store" } },
     );
+  }
+}
+
+export default async (req: Request) => {
+  if (req.method !== "GET") return loadFreshOpenShipsStatus(req);
+  const url = new URL(req.url);
+  const geofence = parseAisGeofence(url);
+  const radarContext = String(url.searchParams.get("radarContext") || "default").trim().slice(0, 96);
+  const forceRefresh = url.searchParams.get("refresh") === "1";
+  try {
+    const cached = await getOrSetCachedJson({
+      namespace: "openships-live-status-v1",
+      key: geofence
+        ? { latitude: geofence.latitude, longitude: geofence.longitude, radiusNm: geofence.radiusNm, limit: geofence.limit, radarContext }
+        : { scope: "global", radarContext },
+      ttlMs: 5 * 60 * 1000,
+      bypassRead: forceRefresh,
+      staleTtlMs: 30 * 60 * 1000,
+      producer: async () => {
+        const response = await loadFreshOpenShipsStatus(req);
+        const body = await response.json();
+        if (response.status >= 500) throw new Error("OpenShips snapshot origin unavailable");
+        return { body, status: response.status };
+      },
+    });
+    return Response.json(cached.value.body, {
+      status: cached.value.status,
+      headers: createResponseCacheHeaders(cached, 300, 1_800),
+    });
+  } catch (error) {
+    console.error("[openships-live-status] Cache and origin unavailable.", error instanceof Error ? error.message : String(error));
+    return Response.json({ error: "OpenShips live status is temporarily unavailable." }, { status: 503, headers: { "cache-control": "no-store" } });
   }
 };
 

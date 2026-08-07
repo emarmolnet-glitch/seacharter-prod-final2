@@ -438,7 +438,7 @@ test('empty and Null Island coordinates stop execution with actionable feedback'
   assert.equal(feedback.classList.contains('hidden'), false);
 });
 
-test('valid clicks synchronize the complete global fleet before core execution', async () => {
+test('valid clicks synchronize the execution selection without replacing the rendered fleet', async () => {
   const blockStart = source.indexOf('function getMatchingExecutionRouteOverride');
   const blockEnd = source.indexOf('window.runMatchingEngine = runMatchingEngine;', blockStart)
     + 'window.runMatchingEngine = runMatchingEngine;'.length;
@@ -502,7 +502,7 @@ test('valid clicks synchronize the complete global fleet before core execution',
   const result = await windowMock.handleMatchingExecutionClick({ preventDefault() {} });
   assert.equal(result, true);
   assert.equal(coreFleetCount, 750);
-  assert.equal(windowMock.GlobalStore.matchingVessels.length, 750);
+  assert.equal(windowMock.GlobalStore.matchingVessels.length, 0);
   assert.equal(windowMock.GlobalStore.matchingSelection.vesselCount, 750);
   assert.equal(windowMock.GlobalStore.matchingSelection.vessels[0], fleet[0]);
   assert.equal(resultsList.dataset.executionFleetCount, '750');

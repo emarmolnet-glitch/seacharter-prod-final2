@@ -1,5 +1,6 @@
 import type { Config } from "@netlify/functions";
 import { seaRoute, type SeaRouteFeature } from "searoute-ts";
+import { createResponseCacheHeaders, getOrSetCachedJson } from "./_shared/response-cache.js";
 
 type RoutePoint = {
   name?: string;
@@ -117,29 +118,42 @@ export default async (req: Request) => {
       }, { status: 400 });
     }
 
-    const route = seaRoute(
-      [origin.lon, origin.lat],
-      [destination.lon, destination.lat],
-      {
-        units: "nauticalmiles",
-        appendOriginDestination: true,
-        returnPassages: true,
-        maxSnapDistanceKm: 250,
+    const cachedRoute = await getOrSetCachedJson({
+      namespace: "maritime-routes-v1",
+      key: {
+        origin: { lat: origin.lat, lon: origin.lon },
+        destination: { lat: destination.lat, lon: destination.lon },
       },
-    );
+      ttlMs: 24 * 60 * 60 * 1000,
+      staleTtlMs: 7 * 24 * 60 * 60 * 1000,
+      producer: async () => {
+        const route = seaRoute(
+          [origin.lon, origin.lat],
+          [destination.lon, destination.lat],
+          {
+            units: "nauticalmiles",
+            appendOriginDestination: true,
+            returnPassages: true,
+            maxSnapDistanceKm: 250,
+          },
+        );
+        const routedCoordinates = extractLineCoordinates(route);
+        const coordinates = pinEndpoints(routedCoordinates, origin, destination);
+        const distance = Number(route.properties?.length);
+        return {
+          success: routedCoordinates.length > 1 && coordinates.length > 1 && Number.isFinite(distance),
+          distance: Number.isFinite(distance) ? distance : 0,
+          coordinates,
+          nodes: [origin, destination],
+          passages: route.properties?.passages || [],
+          units: route.properties?.units || "nauticalmiles",
+          coordinateOrder: "latLon",
+        };
+      },
+    });
 
-    const routedCoordinates = extractLineCoordinates(route);
-    const coordinates = pinEndpoints(routedCoordinates, origin, destination);
-    const distance = Number(route.properties?.length);
-
-    return Response.json({
-      success: routedCoordinates.length > 1 && coordinates.length > 1 && Number.isFinite(distance),
-      distance: Number.isFinite(distance) ? distance : 0,
-      coordinates,
-      nodes: [origin, destination],
-      passages: route.properties?.passages || [],
-      units: route.properties?.units || "nauticalmiles",
-      coordinateOrder: "latLon",
+    return Response.json(cachedRoute.value, {
+      headers: createResponseCacheHeaders(cachedRoute, 86_400, 604_800),
     });
   } catch (err) {
     console.error("[route] Maritime route calculation failed.", err);

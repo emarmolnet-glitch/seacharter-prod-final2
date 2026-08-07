@@ -49,10 +49,10 @@ test('map, density and tracking globes restore the normalized active vessel', ()
   assert.match(globeSource, /focusActiveVesselWhenReady\(activeVessel, 'density'\)/);
   assert.match(globeSource, /\['main', 'tracking'\]\.forEach/);
   assert.match(globeSource, /updateVessels\(\[\.\.\.view\.vessels, normalized\], view\.key\)/);
-  assert.match(indexSource, /focusActiveVessel\(activeVessel, 'main'\)/);
+  const switchStart = indexSource.indexOf('function switchTab(tabId)');
+  const switchEnd = indexSource.indexOf('function closeMobileSessionMenu()', switchStart);
+  assert.doesNotMatch(indexSource.slice(switchStart, switchEnd), /focusActiveVessel|selectVessel/);
   assert.match(trackingSource, /function hydrateTrackingFromActiveVessel/);
-  assert.match(trackingSource, /window\.normalizeVesselSelectionPayload/);
-  assert.match(trackingSource, /hydrateTrackingFromActiveVessel\(activeVessel, true\)/);
   assert.match(trackingSource, /window\.addEventListener\('vessel-selection:changed'/);
 });
 

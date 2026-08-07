@@ -2,6 +2,7 @@ import type { Config } from "@netlify/functions";
 import type { QueryResultRow } from "pg";
 import { getPool } from "../../db/index.js";
 import { missingAisGeofenceResponse, parseAisGeofence } from "./ais-geofence.js";
+import { createResponseCacheHeaders, getOrSetCachedJson } from "./_shared/response-cache.js";
 
 type AisCandidateRow = QueryResultRow & {
   storage_key: string;
@@ -130,7 +131,7 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export default async (req: Request) => {
+async function loadFreshVesselsFilter(req: Request) {
   if (req.method !== "GET") {
     return Response.json({ success: false, error: "Method not allowed" }, { status: 405 });
   }
@@ -258,6 +259,38 @@ export default async (req: Request) => {
       { success: false, error: errorMessage, message: "No se pudo cargar el snapshot AIS." },
       { status: 503, headers: { "cache-control": "no-store" } },
     );
+  }
+}
+
+export default async (req: Request) => {
+  if (req.method !== "GET") return loadFreshVesselsFilter(req);
+  const url = new URL(req.url);
+  const vesselType = decodeFilterValue(url.searchParams.get("vesselType") || "");
+  const geofence = parseAisGeofence(url);
+  const radarContext = String(url.searchParams.get("radarContext") || "default").trim().slice(0, 96);
+  const forceRefresh = url.searchParams.get("refresh") === "1";
+  if (!vesselType || !geofence) return loadFreshVesselsFilter(req);
+  try {
+    const cached = await getOrSetCachedJson({
+      namespace: "vessels-filter-v1",
+      key: { vesselType, latitude: geofence.latitude, longitude: geofence.longitude, radiusNm: geofence.radiusNm, limit: geofence.limit, radarContext },
+      ttlMs: 5 * 60 * 1000,
+      bypassRead: forceRefresh,
+      staleTtlMs: 30 * 60 * 1000,
+      producer: async () => {
+        const response = await loadFreshVesselsFilter(req);
+        const body = await response.json();
+        if (response.status >= 500) throw new Error("Vessel filter origin unavailable");
+        return { body, status: response.status };
+      },
+    });
+    return Response.json(cached.value.body, {
+      status: cached.value.status,
+      headers: createResponseCacheHeaders(cached, 300, 1_800),
+    });
+  } catch (error) {
+    console.error("[vessels-filter] Cache and origin unavailable.", error instanceof Error ? error.message : String(error));
+    return Response.json({ success: false, error: "Vessel snapshot temporarily unavailable" }, { status: 503, headers: { "cache-control": "no-store" } });
   }
 };
 

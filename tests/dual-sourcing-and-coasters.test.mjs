@@ -54,15 +54,14 @@ test('Triple-Sourcing: client merge deduplicates by IMO or name plus DWT and pri
   assert.equal(fallbackMerged[0].latitude, 10);
 });
 
-test('Map Visual Differentiation: GlobalFleetGlobe applies semantic vessel colors and keeps source badges', async (t) => {
+test('Map Visual Differentiation: GlobalFleetGlobe uses native Three.js tactical vectors', async (t) => {
   const globeSource = await readFile(new URL('../GlobalFleetGlobe.js', import.meta.url), 'utf8');
 
-  assert.match(globeSource, /COMMERCIAL_VESSEL_COLOR/, 'GlobalFleetGlobe should define the commercial vessel color');
-  assert.match(globeSource, /TANKER_VESSEL_COLOR/, 'GlobalFleetGlobe should define the tanker vessel color');
-  assert.match(globeSource, /NOISE_VESSEL_COLOR/, 'GlobalFleetGlobe should define the non-commercial vessel color');
-  assert.match(globeSource, /getVesselPointColor/, 'GlobalFleetGlobe should define getVesselPointColor');
-  assert.match(globeSource, /🏷️ En Cartera \(Data Bridge\)/, 'Tooltip should display Data Bridge badge');
-  assert.match(globeSource, /📡 Descubrimiento en Vivo \(Radar\)/, 'Tooltip should display Radar Live badge');
+  assert.match(globeSource, /new THREE\.ConeGeometry/);
+  assert.match(globeSource, /VESSEL_VECTOR_FLAT_SCALE = 0\.16/);
+  assert.match(globeSource, /color: COMMERCIAL_VESSEL_COLOR/);
+  assert.match(globeSource, /\.customLayerData\(\[\]\)/);
+  assert.doesNotMatch(globeSource, /htmlElementsData|htmlElement\(|🏷️|📡/, 'Markers should not depend on image or SVG fallbacks');
 });
 
 test('Coasters, Minibulkers, and Class B Transponders: Classification in cargo-taxonomy.mjs', async (t) => {
