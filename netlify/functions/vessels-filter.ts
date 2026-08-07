@@ -3,7 +3,7 @@ import type { QueryResultRow } from "pg";
 import { getPool } from "../../db/index.js";
 import { missingAisGeofenceResponse, parseAisGeofence } from "./ais-geofence.js";
 
-type FilteredVesselRow = QueryResultRow & {
+type AisCandidateRow = QueryResultRow & {
   storage_key: string;
   imo_number: string;
   mmsi: string | null;
@@ -19,6 +19,22 @@ type FilteredVesselRow = QueryResultRow & {
   distance_nm: number;
 };
 
+type MasterProfileRow = QueryResultRow & {
+  imo_number: number | string | null;
+  mmsi: string | null;
+  vessel_type: string | null;
+  gross_tonnage: number | string | null;
+  loa_meters: number | string | null;
+  beam_meters: number | string | null;
+  flag: string | null;
+  year_built: number | string | null;
+  status: string | null;
+  audit_status: string | null;
+  process_status: string | null;
+};
+
+const DISCARDED_STATES = new Set(["DISCARDED", "REJECTED", "DESCARTADO", "INVALID", "INVALIDO", "INVÁLIDO"]);
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -33,9 +49,68 @@ function decodeFilterValue(value: string): string {
   }
 }
 
+function normalizeImo(value: unknown): string {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits.length >= 7 ? digits.slice(-7) : "";
+}
+
+function normalizeMmsi(value: unknown): string {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits.length === 9 ? digits : "";
+}
+
 function toIsoString(value: Date | string): string {
-  const date = value instanceof Date ? value : new Date(value);
-  return date.toISOString();
+  return new Date(value).toISOString();
+}
+
+function optionalNumber(value: number | string | null): number | undefined {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
+}
+
+function isDiscarded(row: MasterProfileRow): boolean {
+  return [row.status, row.audit_status, row.process_status]
+    .some((value) => DISCARDED_STATES.has(String(value ?? "").trim().toUpperCase()));
+}
+
+function matchesRequestedType(value: unknown, requestedType: string): boolean {
+  return String(value ?? "").toLocaleLowerCase().includes(requestedType.toLocaleLowerCase());
+}
+
+function mapAisVessel(row: AisCandidateRow, master: MasterProfileRow | null) {
+  const effectiveVesselType = master?.vessel_type?.trim() || row.vessel_type;
+  return {
+    ...asRecord(row.raw_data),
+    storageKey: row.storage_key,
+    imoNumber: row.imo_number,
+    IMO: row.imo_number,
+    mmsi: row.mmsi,
+    MMSI: row.mmsi,
+    vesselName: row.vessel_name,
+    vessel_type: effectiveVesselType,
+    vesselType: effectiveVesselType,
+    vesselClass: effectiveVesselType,
+    shipType: effectiveVesselType,
+    gross_tonnage: optionalNumber(master?.gross_tonnage ?? null),
+    grossTonnage: optionalNumber(master?.gross_tonnage ?? null),
+    loa_meters: optionalNumber(master?.loa_meters ?? null),
+    loaMeters: optionalNumber(master?.loa_meters ?? null),
+    beam_meters: optionalNumber(master?.beam_meters ?? null),
+    beamMeters: optionalNumber(master?.beam_meters ?? null),
+    flag: master?.flag || undefined,
+    year_built: optionalNumber(master?.year_built ?? null),
+    yearBuilt: optionalNumber(master?.year_built ?? null),
+    vesselTechnicalProfileVerified: Boolean(master),
+    vesselClassSource: master ? "VESSELS_MASTER" : "AIS_FEED",
+    latitude: row.latitude,
+    longitude: row.longitude,
+    source: row.source,
+    audit_status: row.audit_status,
+    auditStatus: row.audit_status,
+    firstSeenAt: toIsoString(row.first_seen_at),
+    lastSeenAt: toIsoString(row.last_seen_at),
+    distanceToPolNm: Number(row.distance_nm),
+  };
 }
 
 function getErrorMessage(error: unknown): string {
@@ -49,39 +124,36 @@ export default async (req: Request) => {
 
   try {
     const url = new URL(req.url);
-    const rawVesselType = url.searchParams.get("vesselType") || "";
-    const vesselType = decodeFilterValue(rawVesselType);
+    const vesselType = decodeFilterValue(url.searchParams.get("vesselType") || "");
     const geofence = parseAisGeofence(url);
-
     if (!vesselType) {
-      return Response.json(
-        { success: false, error: "El parámetro vesselType es obligatorio." },
-        { status: 400 },
-      );
+      return Response.json({ success: false, error: "El parámetro vesselType es obligatorio." }, { status: 400 });
     }
     if (!geofence) return missingAisGeofenceResponse();
 
-    const result = await getPool().query<FilteredVesselRow>(
+    const candidateLimit = Math.min(5000, Math.max(geofence.limit, geofence.limit * 4));
+    const pool = getPool();
+    const aisResult = await pool.query<AisCandidateRow>(
       `
         WITH candidates AS (
-          SELECT *,
+          SELECT
+            av.*,
             3440.065 * 2 * ASIN(SQRT(LEAST(1,
-              POWER(SIN(RADIANS(latitude - $1) / 2), 2) +
-              COS(RADIANS($1)) * COS(RADIANS(latitude)) *
-              POWER(SIN(RADIANS(longitude - $2) / 2), 2)
+              POWER(SIN(RADIANS(av.latitude - $1) / 2), 2) +
+              COS(RADIANS($1)) * COS(RADIANS(av.latitude)) *
+              POWER(SIN(RADIANS(av.longitude - $2) / 2), 2)
             ))) AS distance_nm
-          FROM ais_vessels
-          WHERE latitude BETWEEN $3 AND $4
-            AND (($7 = FALSE AND longitude BETWEEN $5 AND $6)
-              OR ($7 = TRUE AND (longitude >= $5 OR longitude <= $6)))
-            AND audit_status = 'VALIDATED'
-            AND vessel_type ILIKE '%' || $9 || '%'
+          FROM ais_vessels av
+          WHERE av.latitude BETWEEN $3 AND $4
+            AND (($7 = FALSE AND av.longitude BETWEEN $5 AND $6)
+              OR ($7 = TRUE AND (av.longitude >= $5 OR av.longitude <= $6)))
+            AND av.audit_status = 'VALIDATED'
         )
         SELECT *
         FROM candidates
         WHERE distance_nm <= $8
         ORDER BY distance_nm ASC, last_seen_at DESC
-        LIMIT $10
+        LIMIT $9
       `,
       [
         geofence.latitude,
@@ -92,36 +164,69 @@ export default async (req: Request) => {
         geofence.maxLongitude,
         geofence.crossesAntimeridian,
         geofence.radiusNm,
-        vesselType,
-        geofence.limit,
+        candidateLimit,
       ],
     );
 
-    const vessels = result.rows.map((row) => ({
-      ...asRecord(row.raw_data),
-      storageKey: row.storage_key,
-      imoNumber: row.imo_number,
-      IMO: row.imo_number,
-      mmsi: row.mmsi,
-      MMSI: row.mmsi,
-      vesselName: row.vessel_name,
-      vessel_type: row.vessel_type,
-      vesselType: row.vessel_type,
-      latitude: row.latitude,
-      longitude: row.longitude,
-      source: row.source,
-      audit_status: row.audit_status,
-      auditStatus: row.audit_status,
-      firstSeenAt: toIsoString(row.first_seen_at),
-      lastSeenAt: toIsoString(row.last_seen_at),
-      distanceToPolNm: Number(row.distance_nm),
-    }));
+    const rawRows = aisResult.rows;
+    const imoNumbers = Array.from(new Set(rawRows.map((row) => normalizeImo(row.imo_number)).filter(Boolean))).map(Number);
+    const mmsiNumbers = Array.from(new Set(rawRows.map((row) => normalizeMmsi(row.mmsi)).filter(Boolean)));
+    let masterRows: MasterProfileRow[] = [];
+    let degraded = false;
+    let warning = "";
+
+    if (imoNumbers.length > 0 || mmsiNumbers.length > 0) {
+      try {
+        const masterResult = await pool.query<MasterProfileRow>(
+          `
+            SELECT
+              imo_number, mmsi, vessel_type, gross_tonnage, loa_meters,
+              beam_meters, flag, year_built, status, audit_status, process_status
+            FROM vessels_master
+            WHERE imo_number = ANY($1::integer[])
+               OR (mmsi IS NOT NULL AND mmsi = ANY($2::text[]))
+          `,
+          [imoNumbers, mmsiNumbers],
+        );
+        masterRows = masterResult.rows;
+      } catch (error) {
+        degraded = true;
+        warning = `vessels_master no disponible: ${getErrorMessage(error)}`;
+        console.warn("[vessels-filter] Batch master lookup failed; returning raw AIS snapshot.", warning);
+      }
+    }
+
+    const masterByImo = new Map<string, MasterProfileRow>();
+    const masterByMmsi = new Map<string, MasterProfileRow>();
+    masterRows.forEach((row) => {
+      const imo = normalizeImo(row.imo_number);
+      const mmsi = normalizeMmsi(row.mmsi);
+      if (imo) masterByImo.set(imo, row);
+      if (mmsi) masterByMmsi.set(mmsi, row);
+    });
+
+    const vessels = rawRows
+      .flatMap((row) => {
+        const master = masterByImo.get(normalizeImo(row.imo_number)) || masterByMmsi.get(normalizeMmsi(row.mmsi)) || null;
+        if (!degraded && master && isDiscarded(master)) return [];
+        if (!degraded && !matchesRequestedType(master?.vessel_type || row.vessel_type, vesselType)) return [];
+        return [mapAisVessel(row, degraded ? null : master)];
+      })
+      .slice(0, geofence.limit);
 
     return Response.json({
       success: true,
       source: "ais_vessels",
       auditStatus: "VALIDATED",
-      filterApplied: true,
+      filterApplied: !degraded,
+      degraded,
+      warning: warning || undefined,
+      batchLookup: {
+        imoCount: imoNumbers.length,
+        mmsiCount: mmsiNumbers.length,
+        masterRows: masterRows.length,
+        queryCount: imoNumbers.length > 0 || mmsiNumbers.length > 0 ? 1 : 0,
+      },
       geofence: {
         polLat: geofence.latitude,
         polLon: geofence.longitude,
@@ -130,14 +235,15 @@ export default async (req: Request) => {
       count: vessels.length,
       vessels,
     }, {
+      status: degraded ? 206 : 200,
       headers: { "cache-control": "no-store" },
     });
   } catch (error) {
     const errorMessage = getErrorMessage(error);
-    console.error("[vessels-filter] Unable to filter AIS vessels.", errorMessage);
+    console.error("[vessels-filter] Unable to load AIS candidate snapshot.", errorMessage);
     return Response.json(
-      { success: false, error: errorMessage, message: "No se pudieron filtrar los buques." },
-      { status: 500 },
+      { success: false, error: errorMessage, message: "No se pudo cargar el snapshot AIS." },
+      { status: 503, headers: { "cache-control": "no-store" } },
     );
   }
 };

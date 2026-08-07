@@ -122,12 +122,16 @@ function classifyVesselDesign(shipType, vessel) {
   const isGeneralCargoWord = /\b(cargo|vessel|freighter|ship|merchant|motor vessel|mv)\b/.test(declaredType);
 
   const dwtVal = optionalNumber(findNestedValue(vessel, ["dwt", "DWT", "dwt_ajustado", "capacity"]));
+  const isTanker = /\b(tanker|oil tanker|chemical tanker|product tanker|crude|lng|lpg)\b/.test(declaredType);
+  const isContainer = /\b(container|containership|feeder)\b/.test(declaredType);
+  const isRoro = /\b(ro ro|roro|vehicle carrier)\b/.test(declaredType);
+  const hasExplicitNonDryDesign = isTanker || isContainer || isRoro;
   const isCoasterKeyword = /\b(coaster|cabotage|cabotaje|costero)\b/.test(declaredType);
-  const isCoasterDwt = dwtVal !== null && dwtVal >= 1000 && dwtVal <= 10000;
+  const isCoasterDwt = dwtVal !== null && dwtVal >= 1000 && dwtVal <= 10000 && !hasExplicitNonDryDesign;
   const isCoaster = isCoasterKeyword || isCoasterDwt;
 
   const isMinibulkerKeyword = /\b(mini bulker|minibulker|mini-bulker)\b/.test(declaredType);
-  const isMinibulkerDwt = dwtVal !== null && dwtVal > 10000 && dwtVal <= 15000;
+  const isMinibulkerDwt = dwtVal !== null && dwtVal > 10000 && dwtVal <= 15000 && !hasExplicitNonDryDesign;
   const isMinibulker = isMinibulkerKeyword || isMinibulkerDwt;
 
   const isBulk = /\b(bulk carrier|bulker|dry bulk|handysize|handymax|supramax|ultramax|panamax|capesize|coaster|mini bulker|minibulker|mini-bulker)\b/.test(declaredType)
@@ -137,18 +141,15 @@ function classifyVesselDesign(shipType, vessel) {
     || isAisCargoCode || isGeneralCargoWord || isCoaster || isMinibulker || isClassB;
   const isMultipurpose = /\b(multipurpose|multi purpose|mpp|mpv|heavy lift|open hatch)\b/.test(declaredType)
     || isAisCargoCode || isGeneralCargoWord || isCoaster || isMinibulker || isClassB;
-  const isTanker = /\b(tanker|oil tanker|chemical tanker|product tanker|crude|lng|lpg)\b/.test(declaredType);
-  const isContainer = /\b(container|containership|feeder)\b/.test(declaredType);
-  const isRoro = /\b(ro ro|roro|vehicle carrier)\b/.test(declaredType);
   const isNonCargo = /\b(passenger|cruise|tug|fishing|pleasure|yacht|offshore supply|naval|warship)\b/.test(declaredType)
     && !(isCoaster || isMinibulker);
 
   return {
     declaredType: declaredType || "cargo",
-    bulk: isBulk || isGeneralCargoWord,
+    bulk: (isBulk || isGeneralCargoWord) && !hasExplicitNonDryDesign,
     cement: isCement,
-    general: isGeneral,
-    multipurpose: isMultipurpose || isGeneralCargoWord,
+    general: isGeneral && !hasExplicitNonDryDesign,
+    multipurpose: (isMultipurpose || isGeneralCargoWord) && !hasExplicitNonDryDesign,
     coaster: isCoaster,
     minibulker: isMinibulker,
     isClassB,

@@ -2,6 +2,7 @@ import type { Config } from "@netlify/functions";
 import { calculateCargoIntelligenceBoost, estimateDwtFromDimensions, evaluateCargoVesselEligibility } from "../../cargo-taxonomy.mjs";
 import { calculateTaxonomyTechnicalScore } from "./_shared/taxonomy-compatibility.mjs";
 import { buildCommercialVesselRank, compareCommercialVesselRanks } from "./_shared/commercial-vessel-ranking.mjs";
+import { overrideVesselClassesFromMaster } from "./_shared/verified-vessel-classes.js";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -378,7 +379,20 @@ export default async (req: Request) => {
       return Response.json({ success: false, error: "Invalid loading port coordinates", data: [] }, { status: 400, headers: jsonHeaders });
     }
 
-    const vessels_buffer = vessels
+    const verifiedSnapshot = await overrideVesselClassesFromMaster(vessels);
+    if (verifiedSnapshot.degraded) {
+      return Response.json({
+        success: true,
+        degraded: true,
+        filterApplied: false,
+        warning: "No se pudo consultar vessels_master; se devuelve el snapshot bruto del radar.",
+        data: vessels,
+        nearbyVessels: vessels,
+        snapshot: { frozenAt: body.frozenAt || new Date().toISOString(), vesselCount: vessels.length },
+      }, { status: 206, headers: jsonHeaders });
+    }
+    const verifiedSnapshotVessels = verifiedSnapshot.vessels;
+    const vessels_buffer = verifiedSnapshotVessels
       .map(normalizeVessel)
       .filter((vessel): vessel is NonNullable<ReturnType<typeof normalizeVessel>> => Boolean(vessel))
       .filter((vessel) => vesselMatchesAnyTaxonomy(vessel, vesselClassValues)

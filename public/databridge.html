@@ -1266,6 +1266,9 @@
                     type: rawType,
                     draft: Number(v.draft || v.Draft || metadata.draft) || 0,
                     dwt: Number(v.dwt || v.DWT || metadata.dwt) || 0,
+                    gross_tonnage: Number(v.gross_tonnage || v.grossTonnage || v.gt || metadata.gross_tonnage || metadata.GT) || null,
+                    loa_meters: Number(v.loa_meters || v.loaMeters || v.loa || v.LOA || metadata.loa_meters || metadata.LOA) || null,
+                    beam_meters: Number(v.beam_meters || v.beamMeters || v.beam || v.breadth || metadata.beam_meters || metadata.Beam) || null,
                     latitude: Number(v.latitude ?? v.lat ?? v.AIS_Live_Lat ?? metadata.latitude ?? metadata.lat),
                     longitude: Number(v.longitude ?? v.lon ?? v.lng ?? v.AIS_Live_Lon ?? metadata.longitude ?? metadata.lon ?? metadata.lng),
                     flag: v.flag || v.bandera || metadata.Flag || "Panama",
@@ -1284,7 +1287,7 @@
                     })(),
                     tipo_buque: v.tipo_buque || rawType,
                     ano_construccion: (function() {
-                        const yr = v.ano_construccion || v.builtYear || v.built_year || v.built || v.year_built;
+                        const yr = v.ano_construccion || v.yearBuilt || v.builtYear || v.built_year || v.built || v.year_built || metadata.Year_Built;
                         if (!yr) return null;
                         const parsed = parseInt(yr, 10);
                         return isNaN(parsed) ? null : parsed;
@@ -1570,6 +1573,10 @@
                 const displayOriginalEta = escapeHtml(originalEta);
                 const inputDwtValue = escapeHtml(vessel.dwt || 0);
                 const inputFlagValue = escapeHtml(vessel.flag || vessel.bandera || 'Panama');
+                const displayGrossTonnage = vessel.gross_tonnage ? Number(vessel.gross_tonnage).toLocaleString('es-ES') : 'N/A';
+                const displayLoa = vessel.loa_meters ? `${Number(vessel.loa_meters).toLocaleString('es-ES')} m` : 'N/A';
+                const displayBeam = vessel.beam_meters ? `${Number(vessel.beam_meters).toLocaleString('es-ES')} m` : 'N/A';
+                const displayYearBuilt = vessel.ano_construccion || vessel.year_built || 'N/A';
 
                 let deltaColorClass = 'text-emerald-700 bg-white border-emerald-200';
                 if (etaDelta.includes('+')) {
@@ -1589,6 +1596,19 @@
                     </div>
 
                     ${renderAuditFlowColumns(vessel, safeImo)}
+
+                    <section class="rounded-lg border border-slate-200 bg-white px-3 py-2.5" aria-label="Especificaciones Técnicas">
+                        <div class="mb-2 flex items-center justify-between gap-2">
+                            <span class="text-[9px] font-black uppercase tracking-[0.14em] text-slate-500">Especificaciones Técnicas</span>
+                            <span class="text-[9px] font-bold text-emerald-700" data-master-profile-status="${safeImo}">${vessel.gross_tonnage || vessel.loa_meters ? 'Ficha maestra disponible' : 'Consultando vessels_master'}</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[10px]">
+                            <div class="flex items-center justify-between gap-2"><span class="text-slate-500">GT</span><strong class="console-font text-slate-800" data-master-field="gross_tonnage" data-master-imo="${safeImo}">${displayGrossTonnage}</strong></div>
+                            <div class="flex items-center justify-between gap-2"><span class="text-slate-500">LOA</span><strong class="console-font text-slate-800" data-master-field="loa_meters" data-master-imo="${safeImo}">${displayLoa}</strong></div>
+                            <div class="flex items-center justify-between gap-2"><span class="text-slate-500">Manga</span><strong class="console-font text-slate-800" data-master-field="beam_meters" data-master-imo="${safeImo}">${displayBeam}</strong></div>
+                            <div class="flex items-center justify-between gap-2"><span class="text-slate-500">Año</span><strong class="console-font text-slate-800" data-master-field="year_built" data-master-imo="${safeImo}">${displayYearBuilt}</strong></div>
+                        </div>
+                    </section>
 
                     <div class="grid grid-cols-2 gap-2 border-t border-b border-slate-200/60 py-2.5 text-[10px] text-slate-600">
                         <div class="flex items-center gap-1 col-span-2">
@@ -1658,6 +1678,55 @@
 
             badge.textContent = `${pendingAudits.length} BUQUE${pendingAudits.length === 1 ? '' : 'S'}`;
             syncDataBridgeMasterMap();
+            hydrateDataBridgeMasterProfiles(safeVesselsList).catch(error => {
+                console.warn('[Data Bridge] No se pudo hidratar la ficha técnica maestra.', error);
+            });
+        }
+
+        async function hydrateDataBridgeMasterProfiles(vesselsList) {
+            const imos = Array.from(new Set((Array.isArray(vesselsList) ? vesselsList : [])
+                .map(vessel => String(vessel?.imo || vessel?.numero_imo || '').replace(/\D/g, ''))
+                .filter(imo => imo.length === 7)));
+            if (imos.length === 0) return [];
+            const response = await fetch(createCoreProApiUrl('/api/vessels-master-classes'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({ imos }),
+                cache: 'no-store'
+            });
+            const payload = await response.json();
+            if (!response.ok || payload?.success === false) throw new Error(payload?.error || `HTTP ${response.status}`);
+            const profiles = Array.isArray(payload?.profiles) ? payload.profiles : (Array.isArray(payload?.classes) ? payload.classes : []);
+            profiles.forEach(profile => {
+                const imo = String(profile?.imo || profile?.imo_number || '').replace(/\D/g, '');
+                const vessel = pendingAudits.find(candidate => String(candidate?.imo || candidate?.numero_imo || '').replace(/\D/g, '') === imo);
+                if (!vessel) return;
+                Object.assign(vessel, {
+                    gross_tonnage: profile.gross_tonnage ?? profile.grossTonnage ?? vessel.gross_tonnage,
+                    loa_meters: profile.loa_meters ?? profile.loaMeters ?? vessel.loa_meters,
+                    beam_meters: profile.beam_meters ?? profile.beamMeters ?? vessel.beam_meters,
+                    ano_construccion: profile.year_built ?? profile.yearBuilt ?? vessel.ano_construccion,
+                    year_built: profile.year_built ?? profile.yearBuilt ?? vessel.year_built,
+                    flag: profile.flag || vessel.flag,
+                    bandera: profile.flag || vessel.bandera,
+                });
+                const values = {
+                    gross_tonnage: vessel.gross_tonnage ? Number(vessel.gross_tonnage).toLocaleString('es-ES') : 'N/A',
+                    loa_meters: vessel.loa_meters ? `${Number(vessel.loa_meters).toLocaleString('es-ES')} m` : 'N/A',
+                    beam_meters: vessel.beam_meters ? `${Number(vessel.beam_meters).toLocaleString('es-ES')} m` : 'N/A',
+                    year_built: vessel.ano_construccion || vessel.year_built || 'N/A',
+                };
+                Object.entries(values).forEach(([field, value]) => {
+                    const element = document.querySelector(`[data-master-field="${field}"][data-master-imo="${imo}"]`);
+                    if (element) element.textContent = String(value);
+                });
+                const flagInput = document.getElementById(`input-flag-${imo}`);
+                if (flagInput && profile.flag) flagInput.value = profile.flag;
+                const status = document.querySelector(`[data-master-profile-status="${imo}"]`);
+                if (status) status.textContent = 'Ficha maestra sincronizada';
+            });
+            syncDataBridgeMasterMap();
+            return profiles;
         }
 
         async function submitAudit(cardId, imo, name, type, draft, originalEta, status) {
@@ -1671,6 +1740,7 @@
 
             const dwtVal = parseFloat(inputDwt) || 0;
             const flagVal = inputFlag || 'Panama';
+            const masterVessel = pendingAudits.find(vessel => String(vessel?.imo || '') === String(imo)) || {};
 
             // Calculate delay delta compared to original radar signal
             let deltaDays = 0;
@@ -1706,6 +1776,10 @@
                         dwt: dwtVal,
                         status: status,
                         flag: flagVal,
+                        gross_tonnage: masterVessel.gross_tonnage ?? null,
+                        loa_meters: masterVessel.loa_meters ?? null,
+                        beam_meters: masterVessel.beam_meters ?? null,
+                        year_built: masterVessel.ano_construccion ?? masterVessel.year_built ?? null,
                         delta_historico: deltaDays
                     })
                 });

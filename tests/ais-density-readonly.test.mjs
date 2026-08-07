@@ -40,13 +40,21 @@ test('Radar LIVE activation loads audited ais_vessels into isolated fair-freight
   assert.doesNotMatch(loaderSource, /new CustomEvent\('ais:vessels-updated'/);
 });
 
-test('density endpoints query ais_vessels directly without a compatibility view', () => {
+test('density filter enriches AIS rows with one batch master lookup', () => {
   assert.match(auditFunctionSource, /FROM ais_vessels/);
   assert.match(filterFunctionSource, /FROM ais_vessels/);
   assert.match(auditFunctionSource, /source: "ais_vessels"/);
   assert.match(filterFunctionSource, /source: "ais_vessels"/);
   assert.doesNotMatch(auditFunctionSource, /FROM vessels_master/);
-  assert.doesNotMatch(filterFunctionSource, /FROM vessels_master/);
+  assert.match(filterFunctionSource, /FROM vessels_master/);
+  assert.match(filterFunctionSource, /imo_number = ANY\(\$1::integer\[\]\)/);
+  assert.doesNotMatch(filterFunctionSource, /JOIN LATERAL/);
+  assert.match(filterFunctionSource, /const masterByImo = new Map/);
+  assert.match(filterFunctionSource, /status: degraded \? 206 : 200/);
+  assert.match(filterFunctionSource, /gross_tonnage/);
+  assert.match(filterFunctionSource, /loa_meters/);
+  assert.match(filterFunctionSource, /beam_meters/);
+  assert.match(filterFunctionSource, /year_built/);
 });
 
 test('database ingestion summary groups the raw payload taxonomy before normalization', () => {
@@ -392,9 +400,10 @@ test('POL matching cache invalidates when filtered taxonomy composition changes'
   assert.match(indexSource, /\|\| \(!geographicInputsChanged && filteredSourceChanged\)/);
 });
 
-test('vessel filter decodes text and uses a parameterized ILIKE query', () => {
+test('vessel filter decodes text and applies taxonomy after the batch lookup', () => {
   assert.match(filterFunctionSource, /decodeURIComponent\(/);
-  assert.match(filterFunctionSource, /vessel_type ILIKE '%' \|\| \$9 \|\| '%'/);
+  assert.match(filterFunctionSource, /matchesRequestedType\(master\?\.vessel_type \|\| row\.vessel_type, vesselType\)/);
+  assert.match(filterFunctionSource, /WHERE imo_number = ANY\(\$1::integer\[\]\)/);
   assert.match(filterFunctionSource, /distance_nm <= \$8/);
   assert.match(filterFunctionSource, /path: "\/api\/vessels-filter"/);
   assert.doesNotMatch(filterFunctionSource, /INSERT|UPDATE|DELETE/);
@@ -814,7 +823,8 @@ test('filter endpoint reads the exact vesselType parameter and matches audit res
   assert.match(filterFunctionSource, /searchParams\.get\("vesselType"\)/);
   assert.doesNotMatch(filterFunctionSource, /searchParams\.get\("taxonomy"\)/);
   assert.match(filterFunctionSource, /auditStatus: "VALIDATED"/);
-  assert.match(filterFunctionSource, /filterApplied: true/);
+  assert.match(filterFunctionSource, /filterApplied: !degraded/);
+  assert.match(filterFunctionSource, /status: degraded \? 206 : 200/);
   assert.match(filterFunctionSource, /count: vessels\.length,[\s\S]*vessels/);
 });
 

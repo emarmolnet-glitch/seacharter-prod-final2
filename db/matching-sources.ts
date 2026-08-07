@@ -47,8 +47,17 @@ type CommercialPoolRow = QueryResultRow & {
   payload: Record<string, unknown>;
   sort_at: Date | string | null;
   distance_nm: number | string | null;
-  verified_dwt: number | string;
-  design_draft: number | string | null;
+  source_imo: string | null;
+  source_mmsi: string | null;
+  source_dwt: number | string | null;
+  source_design_draft: number | string | null;
+};
+
+type MatchingMasterProfileRow = QueryResultRow & {
+  imo_number: number | string | null;
+  mmsi: string | null;
+  dwt: number | string | null;
+  draft_meters: number | string | null;
 };
 
 type RankedCommercialCandidate = PaginatedMatchingSourceRow & {
@@ -141,12 +150,14 @@ export async function findMatchingVessels(request: FindMatchingVesselsRequest): 
   const cargoQuantity = Math.max(0, Number(request.cargoQuantity) || 0);
   const minDwt = cargoQuantity * 1.05;
   const targetDwt = Math.max(minDwt, Number(request.targetDwt) || minDwt);
+  const candidateLimit = Math.min(5000, Math.max(1000, (safeOffset + safeLimit) * 20));
 
   if (safeLatitude === null || safeLongitude === null || minDwt <= 0) {
     return { rows: [], totalCount: 0, limit: safeLimit, offset: safeOffset };
   }
 
-  const result = await getPool().query<CommercialPoolRow>(
+  const pool = getPool();
+  const result = await pool.query<CommercialPoolRow>(
     `
       WITH openships_latest AS (
         SELECT DISTINCT ON (COALESCE(NULLIF(os.mmsi::text, ''), os.vessel_key)) os.*
@@ -261,37 +272,58 @@ export async function findMatchingVessels(request: FindMatchingVesselsRequest): 
           NULL::double precision AS source_dwt,
           NULL::double precision AS source_design_draft
         FROM openships_latest os
-      ), enriched_sources AS (
-        SELECT
-          source_rows.*,
-          COALESCE(verified_master.dwt, source_rows.source_dwt) AS verified_dwt,
-          COALESCE(verified_master.draft_meters, source_rows.source_design_draft) AS design_draft
-        FROM source_rows
-        LEFT JOIN LATERAL (
-          SELECT vm.dwt, vm.draft_meters
-          FROM vessels_master vm
-          WHERE (source_rows.source_imo <> ''
-              AND REGEXP_REPLACE(COALESCE(vm.imo_number::text, ''), '[^0-9]', '', 'g') = source_rows.source_imo)
-            OR (source_rows.source_mmsi <> '' AND vm.mmsi::text = source_rows.source_mmsi)
-          ORDER BY
-            CASE WHEN source_rows.source_imo <> ''
-              AND REGEXP_REPLACE(COALESCE(vm.imo_number::text, ''), '[^0-9]', '', 'g') = source_rows.source_imo
-              THEN 0 ELSE 1 END,
-            vm.fecha_ultima_actualizacion DESC NULLS LAST
-          LIMIT 1
-        ) verified_master ON TRUE
       )
-      SELECT source_system, payload, sort_at, distance_nm, verified_dwt, design_draft
-      FROM enriched_sources
+      SELECT source_system, payload, sort_at, distance_nm, source_imo, source_mmsi, source_dwt, source_design_draft
+      FROM source_rows
       WHERE source_system = ANY($1::text[])
-        AND verified_dwt IS NOT NULL
-        AND verified_dwt >= $4
+      ORDER BY sort_at DESC NULLS LAST
+      LIMIT $4
     `,
-    [safeSources, safeLatitude, safeLongitude, minDwt],
+    [safeSources, safeLatitude, safeLongitude, candidateLimit],
   );
+
+  const imoNumbers = Array.from(new Set(result.rows
+    .map((row) => String(row.source_imo || "").replace(/\D/g, ""))
+    .filter((imo) => imo.length === 7))).map(Number);
+  const mmsiNumbers = Array.from(new Set(result.rows
+    .map((row) => String(row.source_mmsi || "").replace(/\D/g, ""))
+    .filter((mmsi) => mmsi.length === 9)));
+  let masterRows: MatchingMasterProfileRow[] = [];
+  let masterLookupDegraded = false;
+  if (imoNumbers.length > 0 || mmsiNumbers.length > 0) {
+    try {
+      masterRows = (await pool.query<MatchingMasterProfileRow>(
+        `
+          SELECT imo_number, mmsi, dwt, draft_meters
+          FROM vessels_master
+          WHERE imo_number = ANY($1::integer[])
+             OR (mmsi IS NOT NULL AND mmsi = ANY($2::text[]))
+          ORDER BY fecha_ultima_actualizacion DESC NULLS LAST
+        `,
+        [imoNumbers, mmsiNumbers],
+      )).rows;
+    } catch (error) {
+      masterLookupDegraded = true;
+      console.warn("[matching-sources] Batch master lookup failed; raw source rows preserved.", error instanceof Error ? error.message : String(error));
+    }
+  }
+  const masterByImo = new Map<string, MatchingMasterProfileRow>();
+  const masterByMmsi = new Map<string, MatchingMasterProfileRow>();
+  masterRows.forEach((row) => {
+    const imo = String(row.imo_number || "").replace(/\D/g, "");
+    const mmsi = String(row.mmsi || "").replace(/\D/g, "");
+    if (imo && !masterByImo.has(imo)) masterByImo.set(imo, row);
+    if (mmsi && !masterByMmsi.has(mmsi)) masterByMmsi.set(mmsi, row);
+  });
 
   const commercialCandidates = result.rows.flatMap((row): RankedCommercialCandidate[] => {
     const payload = asRecord(row.payload);
+    const sourceImo = String(row.source_imo || "").replace(/\D/g, "");
+    const sourceMmsi = String(row.source_mmsi || "").replace(/\D/g, "");
+    const master = masterByImo.get(sourceImo) || masterByMmsi.get(sourceMmsi) || null;
+    const verifiedDwt = finiteNumber(master?.dwt ?? row.source_dwt ?? firstValue(payload, [["dwt"], ["DWT"]]));
+    const designDraft = finiteNumber(master?.draft_meters ?? row.source_design_draft);
+    if (!masterLookupDegraded && (verifiedDwt === null || verifiedDwt < minDwt)) return [];
     const distanceNm = finiteNumber(row.distance_nm);
     const eta = candidateEta(payload);
     const speedKnots = candidateSpeed(payload);
@@ -306,17 +338,18 @@ export async function findMatchingVessels(request: FindMatchingVesselsRequest): 
     });
     if (!matchReason) return [];
 
-    const verifiedDwt = Number(row.verified_dwt);
-    const dwtDifference = Math.abs(verifiedDwt - targetDwt);
+    const scoringDwt = verifiedDwt ?? 0;
+    const dwtDifference = Math.abs(scoringDwt - targetDwt);
     const estimatedArrival = estimateArrivalDate({ eta, distanceNm, speedKnots });
-    const estimatedBallastStatus = estimateBallastStatus(candidateDraft(payload), row.design_draft);
+    const estimatedBallastStatus = estimateBallastStatus(candidateDraft(payload), designDraft);
     const laycanCompliant = isLaycanCompliant(estimatedArrival, request.laycanStart, request.laycanEnd);
     const enrichedPayload = {
       ...payload,
-      dwt: verifiedDwt,
-      DWT: verifiedDwt,
-      verifiedDwt: true,
-      dwtStatus: "VERIFIED_VESSELS_MASTER",
+      dwt: verifiedDwt ?? firstValue(payload, [["dwt"], ["DWT"]]),
+      DWT: verifiedDwt ?? firstValue(payload, [["DWT"], ["dwt"]]),
+      verifiedDwt: Boolean(master && verifiedDwt !== null),
+      dwtStatus: master && verifiedDwt !== null ? "VERIFIED_VESSELS_MASTER" : "SOURCE_FALLBACK",
+      masterLookupDegraded,
       dwtDifference,
       dwtDifferenceMt: dwtDifference,
       estimatedBallastStatus,
@@ -326,7 +359,7 @@ export async function findMatchingVessels(request: FindMatchingVesselsRequest): 
       commercialTransitCandidate: matchReason === "INBOUND_TO_POL",
       estimatedArrivalAt: estimatedArrival?.toISOString() ?? null,
       distance_nm: distanceNm,
-      verified_design_draft: finiteNumber(row.design_draft),
+      verified_design_draft: designDraft,
     };
     return [{
       source_system: row.source_system,
