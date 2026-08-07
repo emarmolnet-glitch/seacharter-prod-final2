@@ -58,7 +58,7 @@ test('Data Bridge polls the deployed connection-state endpoint without route-pos
   const pollSource = sliceFunction(indexSource, 'async function pollDataBridgeConnectionState()', 'function startDataBridgeHttpPolling(options = {})');
   const startSource = sliceFunction(indexSource, 'function startDataBridgeHttpPolling(options = {})', 'function stopDataBridgeHttpPolling()');
   assert.match(indexSource, /DATA_BRIDGE_HTTP_POLL_ENDPOINT = DATA_BRIDGE_CONNECTION_STATE_ENDPOINT/);
-  assert.match(pollSource, /nativeFetch\(DATA_BRIDGE_HTTP_POLL_ENDPOINT/);
+  assert.match(pollSource, /CoreNetworkGuard\.fetch\('databridge-status', DATA_BRIDGE_HTTP_POLL_ENDPOINT/);
   assert.match(startSource, /transport: 'http-polling'/);
   assert.doesNotMatch(indexSource, /route-position|DATA_BRIDGE_ROUTE_POSITION_DISABLED_SESSION_KEY/);
   assert.doesNotMatch(pollSource, /shouldBlockSecondaryFleetSources/);
@@ -66,8 +66,9 @@ test('Data Bridge polls the deployed connection-state endpoint without route-pos
 
 test('Data Bridge HTTP polling starts before the initial OpenShips request', () => {
   const domReady = sliceFunction(indexSource, "document.addEventListener('DOMContentLoaded', async () => {", "window.addEventListener('message'",);
-  const openShipsRead = domReady.indexOf("await window.updateOpenShipsRadar({ refreshGlobe: false })");
-  const dataBridgeStart = domReady.indexOf('startDataBridgeHttpPolling({ immediate: false })');
-  assert.ok(dataBridgeStart >= 0 && openShipsRead > dataBridgeStart);
-  assert.match(domReady, /window\.hasPriorityOpenShipsData\?\.\(\)[\s\S]*window\.stopSecondaryFleetPolling/);
+  assert.doesNotMatch(domReady, /startDataBridgeHttpPolling/);
+  assert.doesNotMatch(domReady, /updateOpenShipsRadar/);
+  assert.match(domReady, /stopDataBridgeHttpPolling\(\)/);
+  assert.match(domReady, /updateDataBridgeTransportStatus\('disconnected'\)/);
+  assert.match(indexSource, /window\.startOpenShipsRadarPolling = startOpenShipsRadarPolling;[\s\S]*stopOpenShipsRadarPolling\(\)/);
 });

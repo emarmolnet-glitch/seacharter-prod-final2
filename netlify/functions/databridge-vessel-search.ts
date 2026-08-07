@@ -1,6 +1,7 @@
 import type { Config } from "@netlify/functions";
 import type { QueryResultRow } from "pg";
 import { getPool } from "../../db/index.js";
+import { createResponseCacheHeaders, getOrSetCachedJson } from "./_shared/response-cache.js";
 
 type VesselMasterRow = QueryResultRow & {
   id?: number | string;
@@ -39,7 +40,7 @@ function cleanString(value: unknown): string {
   return String(value ?? "").trim();
 }
 
-export default async (req: Request) => {
+async function loadFreshDataBridgeVesselSearch(req: Request) {
   if (req.method !== "GET" && req.method !== "POST") {
     return Response.json({ success: false, error: "Method not allowed" }, { status: 405 });
   }
@@ -267,6 +268,34 @@ export default async (req: Request) => {
       { success: false, vessel: null, vessels: [], data: [], message: "Buque no encontrado en Data Bridge", error: errorMessage },
       { status: 500 },
     );
+  }
+}
+
+export default async (req: Request) => {
+  if (req.method !== "GET" && req.method !== "POST") return loadFreshDataBridgeVesselSearch(req);
+  const requestKey = req.method === "GET"
+    ? Object.fromEntries(Array.from(new URL(req.url).searchParams.entries()).sort(([left], [right]) => left.localeCompare(right)))
+    : await req.clone().json().catch(() => ({}));
+  try {
+    const cached = await getOrSetCachedJson({
+      namespace: "databridge-vessel-search-v1",
+      key: { method: req.method, request: requestKey },
+      ttlMs: 5 * 60 * 1000,
+      staleTtlMs: 30 * 60 * 1000,
+      producer: async () => {
+        const response = await loadFreshDataBridgeVesselSearch(req);
+        const body = await response.json();
+        if (response.status >= 500) throw new Error("Data Bridge vessel search origin unavailable");
+        return { body, status: response.status };
+      },
+    });
+    return Response.json(cached.value.body, {
+      status: cached.value.status,
+      headers: createResponseCacheHeaders(cached, 300, 1_800),
+    });
+  } catch (error) {
+    console.error("[databridge-vessel-search] Cache and origin unavailable.", error instanceof Error ? error.message : String(error));
+    return Response.json({ success: false, error: "Data Bridge vessel search temporarily unavailable" }, { status: 503, headers: { "cache-control": "no-store" } });
   }
 };
 

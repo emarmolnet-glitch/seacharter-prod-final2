@@ -68,21 +68,14 @@ test('matching tab synchronizes live calculator state before radar initializatio
   const syncStart = source.indexOf('function syncCalculatorAndMatching');
   const syncEnd = source.indexOf('window.syncMatchingViewFromGlobalOperationalState = syncMatchingViewFromGlobalOperationalState;', syncStart);
   const syncSource = source.slice(syncStart, syncEnd);
-  const tabStart = source.indexOf("if (tabId === 'matching')");
-  const tabEnd = source.indexOf("if (tabId === 'cbam')", tabStart);
-  const tabSource = source.slice(tabStart, tabEnd);
+  const switchStart = source.indexOf('function switchTab(tabId)');
+  const switchEnd = source.indexOf('function closeMobileSessionMenu()', switchStart);
+  const switchSource = source.slice(switchStart, switchEnd);
 
   assert.match(syncSource, /function syncCalculatorAndMatching\(source, options = \{\}\)/);
-  assert.match(syncSource, /options\.force !== true && typeof isInputInteraction/);
   assert.match(syncSource, /const routeState = readRouteStateFromCalculator\(\)/);
   assert.match(syncSource, /const cargoState = readValidatedCargoOperationState\(\)/);
-  assert.match(syncSource, /setInputValue\('match-laycan-start', synchronizedState\.laydays\)/);
-  assert.match(syncSource, /setInputValue\('match-laycan-end', synchronizedState\.cancelling\)/);
-  assert.match(syncSource, /syncCalculatorAndMatching\('calculator', \{ force: true \}\)/);
-  assert.match(syncSource, /laydays: synchronizedState\.laydays/);
-  assert.match(syncSource, /cancelling: synchronizedState\.cancelling/);
-  assert.ok(tabSource.indexOf('syncMatchingViewFromGlobalOperationalState') < tabSource.indexOf('initializeMatchingGlobalTaxonomyControl'));
-  assert.doesNotMatch(tabSource, /syncCalculatorAndMatching\('calculator'\)/);
+  assert.doesNotMatch(switchSource, /syncMatchingViewFromGlobalOperationalState|initializeMatchingGlobalTaxonomyControl|syncCalculatorAndMatching/);
 });
 
 test('matching button remains available when calculator context exists without radar readiness', () => {

@@ -53,10 +53,8 @@ test('matching radar runs predictive destination matching beside radial sources'
 
 test('leaving the radar map freezes LIVE mode and cleans up the on-demand transport', () => {
   const switchStart = source.indexOf('function switchTab(tabId)');
-  const switchEnd = source.indexOf("if (tabId === 'auditor')", switchStart);
+  const switchEnd = source.indexOf('function closeMobileSessionMenu()', switchStart);
   const switchSource = source.slice(switchStart, switchEnd);
-  assert.match(switchSource, /leavingReadOnlyDensityMap/);
-  assert.match(switchSource, /window\.RadarGlobalControl\?\.freeze\?\.\('map-view-exit'\)/);
-  assert.match(switchSource, /window\.deactivateDataBridgeLiveTracking\?\.\('map-view-exit'\)/);
-  assert.doesNotMatch(switchSource, /window\.isLiveTrackingEnabled =/);
+  assert.doesNotMatch(switchSource, /RadarGlobalControl|freeze\?\.|deactivateDataBridgeLiveTracking|syncDataBridgeRadarTransport/);
+  assert.match(switchSource, /classList\.toggle\('hidden', !isActiveView\)/);
 });

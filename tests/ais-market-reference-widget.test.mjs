@@ -92,7 +92,7 @@ test('AIS market rates remain pending until AIS data or an active vessel confirm
   assert.match(indexSource, /hasAisData: false/);
   assert.match(indexSource, /setAisDataAvailability\?\.\(true,[\s\S]*manual-sweep-complete/);
   assert.match(indexSource, /const hasActiveVessel = Boolean\(selectedActiveVessel && typeof selectedActiveVessel === 'object'\)/);
-  assert.match(indexSource, /const hasAisData = window\.GlobalStore\?\.hasAisData === true \|\| hasCommittedMatchingState \|\| backgroundAisData\.length > 0 \|\| renderFleet\.length > 0 \|\| hasActiveVessel;/);
+  assert.match(indexSource, /const hasAisData = renderFleet\.length > 0;/);
   assert.match(indexSource, /if \(nearbyCount <= 0 && !hasActiveVessel\) \{[\s\S]*renderPendingAisMarketReference\(\);[\s\S]*return;/);
 });
 
@@ -110,9 +110,9 @@ test('validated AIS candidates flow through GlobalStore into the calculator mark
   assert.match(indexSource, /setFilteredVessels\(newFilteredVessels, metadata = \{\}\)[\s\S]*this\.setAisMatchingState\(this\.filteredVessels, this\.filteredVessels, null,[\s\S]*source: 'density-filter'/);
   assert.match(indexSource, /MATCHING_EXECUTION_SUCCESS[\s\S]*const eligibleMatches = Array\.isArray\(event\?\.detail\?\.eligibleMatches\)[\s\S]*const committedEligibleVessels = eligibleMatches\.map[\s\S]*setAisMatchingState\?\.\(committedEligibleVessels, committedEligibleVessels, null,[\s\S]*source: 'matching-validation'/);
   assert.match(indexSource, /this\.nearbyCount = this\.nearbyVessels\.length[\s\S]*new CustomEvent\('ais:matching-state-updated'/);
-  assert.match(indexSource, /hasCommittedMatchingState = \['density-filter', 'matching-validation'\]\.includes\(committedMatchingSource\)/);
-  assert.match(indexSource, /shouldUseCommittedMatchingState = hasCommittedMatchingState/);
-  assert.ok(indexSource.indexOf('const shouldUseCommittedMatchingState') < indexSource.indexOf('let nearbyCount = shouldUseCommittedMatchingState'));
+  assert.match(indexSource, /const hasCommittedMatchingState = renderFleet\.length > 0/);
+  assert.match(indexSource, /const shouldUseCommittedMatchingState = true/);
+  assert.ok(indexSource.indexOf('const shouldUseCommittedMatchingState') < indexSource.indexOf('let nearbyCount = renderFleet.length'));
   assert.match(indexSource, /window\.addEventListener\('ais:matching-state-updated',[\s\S]*source === 'calculator-proximity'[\s\S]*calculateAndDisplayAisFreight\(\)/);
 });
 

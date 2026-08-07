@@ -2,6 +2,7 @@ import type { Config } from "@netlify/functions";
 import type { QueryResultRow } from "pg";
 import { getPool } from "../../db/index.js";
 import { missingAisGeofenceResponse, parseAisGeofence, type AisGeofence } from "./ais-geofence.js";
+import { createResponseCacheHeaders, getOrSetCachedJson } from "./_shared/response-cache.js";
 import { overrideVesselClassesFromMaster } from "./_shared/verified-vessel-classes.js";
 
 const VALIDATED_AUDIT_STATUS = "VALIDATED";
@@ -111,7 +112,7 @@ async function selectAuditVessels(geofence: AisGeofence) {
   }
 }
 
-export default async (req: Request) => {
+async function loadFreshAuditVessels(req: Request) {
   if (req.method !== "GET") {
     return Response.json({ success: false, error: "Method not allowed" }, { status: 405 });
   }
@@ -179,6 +180,37 @@ export default async (req: Request) => {
       },
       { status: 500 },
     );
+  }
+}
+
+export default async (req: Request) => {
+  if (req.method !== "GET") return loadFreshAuditVessels(req);
+  const url = new URL(req.url);
+  const geofence = parseAisGeofence(url);
+  const radarContext = String(url.searchParams.get("radarContext") || "default").trim().slice(0, 96);
+  const forceRefresh = url.searchParams.get("refresh") === "1";
+  if (!geofence) return loadFreshAuditVessels(req);
+  try {
+    const cached = await getOrSetCachedJson({
+      namespace: "audit-vessels-v1",
+      key: { latitude: geofence.latitude, longitude: geofence.longitude, radiusNm: geofence.radiusNm, limit: geofence.limit, radarContext },
+      ttlMs: 5 * 60 * 1000,
+      bypassRead: forceRefresh,
+      staleTtlMs: 30 * 60 * 1000,
+      producer: async () => {
+        const response = await loadFreshAuditVessels(req);
+        const body = await response.json();
+        if (response.status >= 500) throw new Error("Audit vessel origin unavailable");
+        return { body, status: response.status };
+      },
+    });
+    return Response.json(cached.value.body, {
+      status: cached.value.status,
+      headers: createResponseCacheHeaders(cached, 300, 1_800),
+    });
+  } catch (error) {
+    console.error("[audit-vessels] Cache and origin unavailable.", error instanceof Error ? error.message : String(error));
+    return Response.json({ success: false, error: "Audit vessel snapshot temporarily unavailable" }, { status: 503, headers: { "cache-control": "no-store" } });
   }
 };
 

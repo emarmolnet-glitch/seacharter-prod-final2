@@ -14,12 +14,14 @@ test('matching button stays locked until real vessel results are available', () 
   assert.match(source, /Guarda los cambios de taxonomía para activar el motor/);
 });
 
-test('GlobalStore commits selected taxonomies and the filtered vessel snapshot', () => {
+test('GlobalStore commits taxonomy selection without replacing the rendered matching fleet', () => {
   assert.match(source, /selectedTaxonomies: \[\],[\s\S]*matchingReady: false,[\s\S]*matchingSelectionPending: false,[\s\S]*matchingSelection: null/);
   assert.match(source, /commitMatchingSelection\(taxonomies, vessels = this\.filteredVessels\)/);
   assert.match(source, /window\.getUnifiedMacroMatchingVessels\(vessels\)/);
   assert.match(source, /this\.selectedTaxonomies = selectedTaxonomies/);
-  assert.match(source, /this\.matchingVessels = matchingVessels/);
+  const commitStart = source.indexOf('commitMatchingSelection(taxonomies');
+  const commitEnd = source.indexOf('let densityMatchingVessels', commitStart);
+  assert.doesNotMatch(source.slice(commitStart, commitEnd), /this\.matchingVessels\s*=/);
   assert.match(source, /this\.matchingSelection = \{[\s\S]*commitId,[\s\S]*taxonomies: selectedTaxonomies\.slice\(\),[\s\S]*vessels: matchingVessels\.slice\(\),[\s\S]*vesselCount: matchingVessels\.length/);
 });
 
@@ -46,7 +48,7 @@ test('save action commits the exact array returned by the table redraw', () => {
 test('taxonomy change redraws the AIS table from the derived filtered array', () => {
   assert.match(source, /document\.getElementById\('fleet-intel-vessel-type'\)\?\.addEventListener\('change',[\s\S]*const selectedTaxonomies = getSelectedFleetTaxonomies\(\)[\s\S]*const filteredVessels = typeof window\.reapplyCentralFiltersAndRedraw[\s\S]*setVesselClassContext\(selectedTaxonomies, filteredVessels\)/);
   assert.match(source, /window\.renderDensityVesselsTable\?\.\(primaryVisibleVessels\)/);
-  assert.match(source, /function renderDensityVesselsTable\(vessels/);
+  assert.match(source, /function renderDensityVesselsTable\(_vessels, _options = \{\}\)/);
 });
 
 test('matching engine listener prepares the query but keeps execution locked without radar vessels', () => {

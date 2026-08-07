@@ -367,7 +367,6 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         matchingState.technicalWarningCount = matchingState.vessels.filter(match => match?.hasTechnicalWarning === true || match?.hasWarning === true).length;
         matchingState.cachedAt = new Date().toISOString();
         if (globalScope.GlobalStore) {
-            globalScope.GlobalStore.matchingVessels = matchingState.vessels.slice();
             globalScope.GlobalStore.compatibleVessels = matchingState.eligibleVessels.map(match => ({
                 imo: match?.vessel?.imo || '',
                 vesselName: match?.vessel?.vesselName || match?.vessel?.vessel_name || '',

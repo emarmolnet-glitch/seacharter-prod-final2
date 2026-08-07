@@ -39,7 +39,7 @@ test('OpenShips live status returns a real POL-scoped vessel snapshot', () => {
   assert.match(openShipsStatusSource, /source: "OPENSHIPS"/);
   assert.match(openShipsStatusSource, /openshipsCount: vessels\.length/);
   assert.match(openShipsStatusSource, /geofence: geofence/);
-  assert.match(indexSource, /fetch\(`\/api\/openships\/live-status\?\$\{params\.toString\(\)\}`/);
+  assert.match(indexSource, /const openShipsEndpoint = `\/api\/openships\/live-status\?\$\{params\.toString\(\)\}`[\s\S]*CoreNetworkGuard\.fetch\('openships-radar'/);
   assert.match(indexSource, /window\.openShipsVesselsCache = Array\.isArray\(payload\?\.vessels\)/);
   assert.match(indexSource, /window\.updateOpenShipsRadar = updateOpenShipsRadar/);
 });

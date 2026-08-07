@@ -72,6 +72,76 @@ test('arrival after cancelling is rejected by both declared and projected ETA', 
   assert.equal(result.candidate, false);
 });
 
+test('declared AIS ETA before laycan start is rejected as authoritative', () => {
+  const result = evaluateCommercialTransitToPol({
+    destination: 'BILBAO',
+    polName: 'Bilbao',
+    aisEta: '2026-08-08T08:00:00Z',
+    laycanStart: '2026-08-10',
+    laycanEnd: '2026-08-12',
+    distanceNm: 900,
+    speedKnots: 12,
+    now: new Date('2026-08-03T00:00:00Z'),
+  });
+
+  assert.equal(result.declaredEtaFeasible, false);
+  assert.equal(result.etaWithinLaycan, false);
+  assert.equal(result.candidate, false);
+});
+
+test('calculated early arrival remains viable when eco-speed reaches laycan start', () => {
+  const result = evaluateCommercialTransitToPol({
+    destination: 'BILBAO',
+    polName: 'Bilbao',
+    laycanStart: '2026-08-10',
+    laycanEnd: '2026-08-12',
+    distanceNm: 1000,
+    speedKnots: 12,
+    now: new Date('2026-08-03T00:00:00Z'),
+  });
+
+  assert.equal(result.projectedArrivalTooEarly, true);
+  assert.equal(result.ecoSpeedFeasible, true);
+  assert.equal(result.arrivalStrategy, 'ECO_SPEED');
+  assert.equal(result.etaWithinLaycan, true);
+  assert.equal(result.candidate, true);
+});
+
+test('calculated early arrival remains viable with a bounded idle period', () => {
+  const result = evaluateCommercialTransitToPol({
+    destination: 'BILBAO',
+    polName: 'Bilbao',
+    laycanStart: '2026-08-07',
+    laycanEnd: '2026-08-09',
+    distanceNm: 400,
+    speedKnots: 12,
+    now: new Date('2026-08-03T00:00:00Z'),
+  });
+
+  assert.equal(result.ecoSpeedFeasible, false);
+  assert.equal(result.idleFeasible, true);
+  assert.equal(result.arrivalStrategy, 'IDLE');
+  assert.equal(result.candidate, true);
+});
+
+test('calculated arrival that needs excessive idle time is rejected', () => {
+  const result = evaluateCommercialTransitToPol({
+    destination: 'BILBAO',
+    polName: 'Bilbao',
+    laycanStart: '2026-08-10',
+    laycanEnd: '2026-08-12',
+    distanceNm: 100,
+    speedKnots: 12,
+    now: new Date('2026-08-03T00:00:00Z'),
+  });
+
+  assert.equal(result.projectedArrivalTooEarly, true);
+  assert.equal(result.ecoSpeedFeasible, false);
+  assert.equal(result.idleFeasible, false);
+  assert.equal(result.etaWithinLaycan, false);
+  assert.equal(result.candidate, false);
+});
+
 test('radar request and rendering preserve commercial transit candidates outside the visual radius', () => {
   assert.match(indexSource, /captureRadiusNm = 6500/);
   assert.match(indexSource, /matchingMode: '1'/);

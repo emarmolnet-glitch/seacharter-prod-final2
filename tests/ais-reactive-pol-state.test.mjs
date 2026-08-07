@@ -31,6 +31,13 @@ test('POL selection mutates route coordinates and clears stale nearby state', ()
   assert.match(source, /syncSelectedRoutePort\?\.\(portInputId === 'port-pod' \? 'POD' : 'POL', portInputEl\.value\)/);
 });
 
+test('matching Radar prioritizes the edited POL over stale store coordinates', () => {
+  assert.match(source, /const inputPol = String\(document\.getElementById\('port-pol'\)\?\.value \|\| ''\)\.trim\(\)/);
+  assert.match(source, /const pol = inputPol \|\| reactivePol/);
+  assert.match(source, /namesMatch \? window\.GlobalStore\?\.polCoordinates : null/);
+  assert.match(source, /pol: String\(document\.getElementById\('port-pol'\)\?\.value \|\| window\.GlobalStore\?\.pol/);
+});
+
 test('density map and AIS sweep endpoint consume reactive POL coordinates', () => {
   assert.match(operationalPortSource, /window\.GlobalStore\?\.\[coordinateKey\]/);
   assert.match(operationalPortSource, /const routeState = SeaCharterStore\.getState\(\)/);

@@ -68,8 +68,8 @@ test('matching cards gate Calculator but expose external Due Diligence for every
   assert.match(indexSource, /data-external-search="true"/);
   assert.match(indexSource, /Due Diligence · Buscar datos externos/);
   assert.match(indexSource, /data-due-diligence-payload="\$\{dueDiligenceIdentity\}"/);
-  assert.match(indexSource, /const hasDueDiligenceIdentity = isValidImo/);
-  assert.match(indexSource, /\^\\d\{9\}\$.*v\.mmsi/);
+  assert.match(indexSource, /const hasDueDiligenceIdentity = window\.hasDueDiligenceIdentity\?\.\(v\) === true/);
+  assert.match(indexSource, /window\.hasDueDiligenceIdentity = function\(vessel\)/);
   assert.match(indexSource, /Due Diligence sin identidad/);
   assert.match(indexSource, /Se requiere al menos IMO, MMSI o nombre del buque/);
   assert.match(indexSource, /data-calculator-apply-button[\s\S]*requiresDueDiligence \? 'disabled aria-disabled="true"'/);

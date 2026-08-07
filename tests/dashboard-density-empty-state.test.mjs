@@ -19,35 +19,27 @@ test('executive dashboard renders explicit empty states without legacy voyage de
 });
 
 test('density module blocks automatic AIS reads until POL coordinates exist', () => {
-  const helperStart = indexSource.indexOf('function getDensityPolCoordinates()');
-  const helperEnd = indexSource.indexOf('function initAisMap()', helperStart);
-  const helperSource = indexSource.slice(helperStart, helperEnd);
-  const updaterStart = indexSource.indexOf('async function updateOpenShipsRadar(options = {})');
-  const updaterEnd = indexSource.indexOf('window.updateOpenShipsRadar = updateOpenShipsRadar', updaterStart);
-  const updaterSource = indexSource.slice(updaterStart, updaterEnd);
-
-  assert.ok(helperStart >= 0 && helperEnd > helperStart);
-  assert.match(helperSource, /State\?\.polCoordinates/);
-  assert.match(helperSource, /window\.GlobalStore\?\.polCoordinates/);
-  assert.match(helperSource, /if \(!getDensityPolCoordinates\(\)\) return \[\]/);
-  assert.ok(updaterStart >= 0 && updaterEnd > updaterStart);
-  assert.match(updaterSource, /const matchingPolContext = options\.polContext \|\| window\.getMatchingRadarPolContext\?\.\(\) \|\| null/);
-  assert.match(updaterSource, /const polCoordinates = matchingPolContext\?\.coordinates \|\| window\.getDensityPolCoordinates\?\.\(\) \|\| null/);
-  assert.match(updaterSource, /if \(!polCoordinates\) \{[\s\S]*return \[\];[\s\S]*fetch\(`\/api\/openships\/live-status\?\$\{params\.toString\(\)\}`/);
+  const initStart = indexSource.indexOf('function initAisMap()');
+  const initEnd = indexSource.indexOf('function destroyAisMap()', initStart);
+  const initSource = indexSource.slice(initStart, initEnd);
+  assert.ok(initStart >= 0 && initEnd > initStart);
+  assert.doesNotMatch(initSource, /fetch\s*\(|updateOpenShipsRadar|ensureOpenShipsDensitySnapshot/);
+  assert.match(initSource, /const displayVessels = getDensityMapSourceVessels\(\)/);
+  assert.match(indexSource, /function getDensityReactiveVessels\(\)[\s\S]*GlobalStore\?\.matchingVessels/);
 });
 
 test('density globe starts from a neutral global camera without a POL', () => {
-  assert.match(indexSource, /initialView: densityPolCoordinates[\s\S]*\{ lat: 20, lng: 0, altitude: 2\.45 \}/);
-  assert.match(indexSource, /const displayVessels = densityPolCoordinates[\s\S]*\? getDensityMapSourceVessels\(\)[\s\S]*: \[\]/);
-  assert.match(indexSource, /setView\(\[20\.0, 0\.0\], 2\)/);
+  assert.match(indexSource, /initialView: densityPolCoordinates[\s\S]*\{ lat: 24, lng: -24, altitude: 2\.5 \}/);
+  assert.match(indexSource, /const displayVessels = getDensityMapSourceVessels\(\)/);
+  assert.doesNotMatch(indexSource, /const displayVessels = densityPolCoordinates[\s\S]*: \[\]/);
   assert.match(globeSource, /function normalizeInitialView\(value\)/);
   assert.match(globeSource, /const initialView = normalizeInitialView\(options\.initialView\)/);
   assert.match(globeSource, /view\.globe\.pointOfView\(view\.initialView, view\.initialViewDuration\)/);
 });
 
-test('density globe flies close to the POL only on its initial mount', () => {
-  assert.match(indexSource, /\{ lat: densityPolCoordinates\.lat, lng: densityPolCoordinates\.lon, altitude: 0\.15 \}/);
-  assert.match(indexSource, /initialViewDuration: densityPolCoordinates \? 1000 : 0/);
+test('density globe keeps a panoramic POL-centered camera on its initial mount', () => {
+  assert.match(indexSource, /\{ lat: densityPolCoordinates\.lat, lng: densityPolCoordinates\.lon, altitude: 2\.5 \}/);
+  assert.match(indexSource, /initialViewDuration: densityPolCoordinates \? 700 : 0/);
   assert.match(indexSource, /focusFirstVessel: false/);
   assert.match(indexSource, /focusActiveVesselOnMount: false/);
   assert.match(globeSource, /altitude: Math\.max\(0\.15, altitude \?\? INITIAL_VIEW\.altitude\)/);

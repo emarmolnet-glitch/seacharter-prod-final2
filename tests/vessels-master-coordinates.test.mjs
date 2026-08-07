@@ -76,11 +76,12 @@ test('local flat report preserves valid coordinates for the Data Bridge POST', (
   assert.doesNotMatch(netlifyConfigSource, /from = "\/api\/databridge-core-pro-sync"/);
 });
 
-test('matching success event remains bound to the local result array', () => {
+test('matching success event publishes the canonical rendered fleet', () => {
   const matchingStateIndex = indexSource.indexOf('window.matchingResultsState =');
   const successEventIndex = indexSource.indexOf("new CustomEvent('MATCHING_EXECUTION_SUCCESS'", matchingStateIndex);
   assert.ok(matchingStateIndex >= 0 && successEventIndex > matchingStateIndex);
-  assert.match(indexSource, /matches: window\.matchingResultsState\?\.vessels \|\| matches/);
+  assert.match(indexSource, /const displayMatches = setRenderedMatchingVessels\(viableMatches, \{ source: 'matching-execution' \}\)/);
+  assert.match(indexSource, /matches: displayMatches,[\s\S]*eligibleMatches: displayMatches,[\s\S]*count: displayMatches\.length/);
   assert.match(indexSource, /window\.lastLocalMatchingAuditVessels = serializedMatchingPayload/);
   assert.match(indexSource, /updateSequentialTelemetryBlock\([\s\S]*'matching-execution-success-stick',[\s\S]*vessels\.length > 0 \? 'success' : 'pending'/);
 });

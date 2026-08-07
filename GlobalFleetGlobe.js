@@ -3,7 +3,7 @@
 
     const views = new Map();
     const DEFAULT_KEY = 'main';
-    const INITIAL_VIEW = Object.freeze({ lat: 12, lng: -24, altitude: 2.15 });
+    const INITIAL_VIEW = Object.freeze({ lat: 24, lng: -24, altitude: 2.5 });
     const FOCUS_ALTITUDE = 1.8;
     const CAMERA_TRANSITION_MS = 700;
     const ACTIVE_VESSEL_FOCUS_ALTITUDE = 0.72;
@@ -12,13 +12,12 @@
     const TANKER_VESSEL_COLOR = '#F59E0B';
     const NOISE_VESSEL_COLOR = '#EF4444';
     const POINT_HOVER_COLOR = '#FFFFFF';
-    const POINT_ALTITUDE = 0.008;
-    const POINT_HOVER_ALTITUDE = 0.016;
-    const POINT_HOVER_RADIUS_FACTOR = 1.45;
-    const VESSEL_MARKER_ALTITUDE = 0.012;
-    const VESSEL_MARKER_BEARING_DISTANCE_DEG = 0.42;
-    const VESSEL_ACTIVE_COLOR = '#2DD4BF';
-    const INBOUND_TO_POL_COLOR = '#38BDF8';
+    const SURFACE_ALTITUDE = 0;
+    const VESSEL_VECTOR_RADIUS = 0.72;
+    const VESSEL_VECTOR_LENGTH = 2.6;
+    const VESSEL_VECTOR_SEGMENTS = 24;
+    const VESSEL_VECTOR_FLAT_SCALE = 0.16;
+    const VESSEL_VECTOR_SURFACE_OFFSET = 0.08;
     const PATH_STYLE = Object.freeze({ color: '#00FFFF', width: 2, simplify: true });
     const BALLAST_PATH_COLOR = '#F59E0B';
     const EARTH_IMAGE_URL = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
@@ -53,15 +52,6 @@
             lng: Math.max(-180, Math.min(180, lng ?? INITIAL_VIEW.lng)),
             altitude: Math.max(0.15, altitude ?? INITIAL_VIEW.altitude),
         };
-    }
-
-    function escapeHtml(value) {
-        return String(value ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
     }
 
     function getObjectScopes(value) {
@@ -125,6 +115,7 @@
 
     const COORDINATE_KEY_PAIRS = Object.freeze([
         ['AIS_Live_Lat', 'AIS_Live_Lon'],
+        ['originalLatitude', 'originalLongitude'],
         ['latitude', 'longitude'],
         ['Latitude', 'Longitude'],
         ['lat', 'lng'],
@@ -215,10 +206,6 @@
         return isInboundToPolVessel(vessel) ? INBOUND_TO_POL_COLOR : getVesselColor(vessel?.vesselType);
     }
 
-    function getVesselRadiusFactor(vessel) {
-        return getVesselColor(vessel?.vesselType) === COMMERCIAL_VESSEL_COLOR ? 1.35 : 1;
-    }
-
     function normalizeVessel(vessel, index = 0) {
         if (!vessel || typeof vessel !== 'object') return null;
         const scopes = getObjectScopes(vessel);
@@ -238,6 +225,10 @@
             lng,
             latitude: lat,
             longitude: lng,
+            baseLat: lat,
+            baseLng: lng,
+            originalLatitude: lat,
+            originalLongitude: lng,
             name: rawName ? String(rawName).trim() : 'Buque sin nombre',
             vesselName: rawName ? String(rawName).trim() : 'Buque sin nombre',
             imo: normalizeVesselIdentifier(rawImo, 7) || 'N/A',
@@ -245,6 +236,7 @@
             dwt,
             vesselType: rawVesselType ? String(rawVesselType).trim() : 'Other',
             heading: navigation.value,
+            course: navigation.source === 'COG' ? navigation.value : null,
             headingSource: navigation.source,
             hasHeading: navigation.value !== null,
             inboundToPol: isInboundToPolVessel(vessel),
@@ -264,12 +256,33 @@
         return Object.values(input).flatMap(extractVesselRecords);
     }
 
-    function prepareVessels(input) {
-        return extractVesselRecords(input).map(normalizeVessel).filter(Boolean);
+    function isRenderableVesselPoint(vessel) {
+        return vessel
+            && Number.isFinite(vessel.lat)
+            && Number.isFinite(vessel.lng)
+            && vessel.lat >= -90
+            && vessel.lat <= 90
+            && vessel.lng >= -180
+            && vessel.lng <= 180;
+    }
+
+    function prepareVessels(input, cameraAltitude = INITIAL_VIEW.altitude) {
+        if (!Array.isArray(input) && (!input || typeof input !== 'object')) return [];
+        try {
+            const vessels = extractVesselRecords(input)
+                .map(normalizeVessel)
+                .filter(isRenderableVesselPoint);
+            return vessels;
+        } catch (error) {
+            console.warn('[GlobalFleetGlobe] Payload AIS descartado por formato inválido.', error);
+            return [];
+        }
     }
 
     function getFilteredVessels() {
         if (!window.GlobalStore) return [];
+        const centralRadarVessels = getCentralRadarVessels();
+        if (centralRadarVessels !== null) return centralRadarVessels;
         if (typeof window.GlobalStore.getFilteredVessels === 'function' && window.GlobalStore.filteredVesselsInitialized) {
             const filtered = window.GlobalStore.getFilteredVessels();
             if (Array.isArray(filtered) && filtered.length > 0) return filtered;
@@ -305,138 +318,318 @@
         return toFiniteNumber(pointOfView?.altitude, view?.initialView?.altitude, INITIAL_VIEW.altitude) || INITIAL_VIEW.altitude;
     }
 
-    function getPointRadius(cameraAltitude) {
-        if (cameraAltitude <= 0.45) return 0.075;
-        if (cameraAltitude >= 2.40) return 0.032;
-        const progress = (cameraAltitude - 0.45) / (2.40 - 0.45);
-        return 0.075 + (0.032 - 0.075) * progress;
+    function getCentralRadarVessels() {
+        if (!window.GlobalStore) return null;
+        if (Array.isArray(window.GlobalStore.matchingVessels)
+            && window.GlobalStore.matchingVessels.length > 0) {
+            return window.GlobalStore.matchingVessels;
+        }
+        if (window.GlobalStore.radarSnapshotStatus === 'empty' && window.GlobalStore.radarSnapshotAt) return [];
+        return null;
     }
 
-    function getVesselPointColor(vessel, hoveredVessel, selectedVessel) {
-        if (vessel === selectedVessel) return '#2DD4BF';
-        if (vessel === hoveredVessel) return POINT_HOVER_COLOR;
-        return getVesselDisplayColor(vessel);
-    }
-
-    function formatDwt(value) {
-        const dwt = toFiniteNumber(value);
-        return Number.isFinite(dwt) && dwt > 0 ? `${Math.round(dwt).toLocaleString('es-ES')} DWT` : 'DWT no disponible';
-    }
-
-    function getTooltip(vessel) {
+    function getGlobePointLabel(vessel) {
         const name = String(vessel?.name || vessel?.vesselName || 'Buque sin nombre').trim() || 'Buque sin nombre';
         const imo = String(vessel?.imo || '').trim();
-        const source = String(vessel?.data_source || vessel?.data_source_type || vessel?.source || '').toLowerCase();
-        const isDataBridge = source === 'databridge' || source === 'cartera' || source === 'en_cartera';
-        const isRadarLive = source === 'radar_live' || source === 'radar' || source === 'live';
-        const isInboundToPol = isInboundToPolVessel(vessel);
-        const sourceLabel = isDataBridge
-            ? '🏷️ En Cartera (Data Bridge)'
-            : isRadarLive
-            ? '📡 Descubrimiento en Vivo (Radar)'
-            : '';
-        const sourceBadge = sourceLabel
-            ? `<span class="fleet-source-badge" style="display:block;margin-top:3px;font-size:10px;font-weight:800;color:${isDataBridge ? '#38bdf8' : '#34d399'};">${escapeHtml(sourceLabel)}</span>`
-            : '';
-        const inboundBadge = isInboundToPol
-            ? '<span class="fleet-source-badge" style="display:block;margin-top:3px;font-size:10px;font-weight:900;color:#38bdf8;">Inbound to POL · búsqueda global</span>'
-            : '';
-        return `<div class="global-fleet-tooltip"><strong>${escapeHtml(name)}</strong>${inboundBadge}${sourceBadge}<span>DWT · ${escapeHtml(formatDwt(vessel?.dwt))}</span><span>IMO · ${escapeHtml(imo && imo !== 'N/A' ? imo : 'IMO no disponible')}</span></div>`;
+        return imo && imo !== 'N/A' ? `${name} · IMO ${imo}` : name;
     }
 
-    function schedulePointInteractionStyle(view) {
-        if (!view?.globe || view.hoverStyleFrameId) return;
-        view.hoverStyleFrameId = requestAnimationFrame(() => {
-            view.hoverStyleFrameId = null;
-            applyPointInteractionStyle(view);
-        });
+    function escapeTooltipText(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
-    function destinationPoint(lat, lng, bearing, angularDistanceDeg = VESSEL_MARKER_BEARING_DISTANCE_DEG) {
-        const latitude = toRadians(lat);
-        const longitude = toRadians(lng);
-        const direction = toRadians(bearing);
-        const distance = toRadians(angularDistanceDeg);
-        const destinationLatitude = Math.asin(
-            Math.sin(latitude) * Math.cos(distance)
-            + Math.cos(latitude) * Math.sin(distance) * Math.cos(direction)
-        );
-        const destinationLongitude = longitude + Math.atan2(
-            Math.sin(direction) * Math.sin(distance) * Math.cos(latitude),
-            Math.cos(distance) - Math.sin(latitude) * Math.sin(destinationLatitude)
-        );
-        return { lat: toDegrees(destinationLatitude), lng: toDegrees(destinationLongitude) };
+    function resolvePolCoordinates(view) {
+        const portLabel = Array.isArray(view?.portLabels)
+            ? view.portLabels.find(label => label?.role === 'POL')
+            : null;
+        const routeStatePol = window.GlobalStore?.globeRouteState?.ports?.pol;
+        const matchingRequestPol = window.GlobalStore?.matchingRequest?.polCoordinates
+            || window.GlobalStore?.matchingRequest?.pol_coordinates
+            || window.matchingRequest?.polCoordinates
+            || window.matchingRequest?.pol_coordinates;
+        const candidates = [
+            portLabel,
+            window.GlobalStore?.polCoordinates,
+            window.GlobalStore?.pol_coordinates,
+            matchingRequestPol,
+            routeStatePol
+        ];
+        for (const candidate of candidates) {
+            const coordinates = normalizeRoutePoint(candidate);
+            if (coordinates) return coordinates;
+        }
+        return null;
     }
 
-    function getVesselMarkerScale(view) {
-        const altitude = getCameraAltitude(view);
-        if (altitude <= 0.55) return 1.08;
-        if (altitude >= 2.35) return 0.62;
-        return 1.08 - ((altitude - 0.55) / 1.8) * 0.46;
+    function haversineDistanceNm(origin, destination) {
+        const start = normalizeRoutePoint(origin);
+        const end = normalizeRoutePoint(destination);
+        if (!start || !end) return null;
+        const earthRadiusNm = 3440.065;
+        const deltaLat = toRadians(end.lat - start.lat);
+        const deltaLng = toRadians(end.lng - start.lng);
+        const startLat = toRadians(start.lat);
+        const endLat = toRadians(end.lat);
+        const haversine = Math.sin(deltaLat / 2) ** 2
+            + Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) ** 2;
+        return earthRadiusNm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(Math.max(0, 1 - haversine)));
     }
 
-    function createVesselMarkerElement(vessel, view) {
-        const marker = document.createElement('div');
-        const vesselColor = getVesselDisplayColor(vessel);
-        marker.className = 'global-vessel-marker';
-        marker.classList.add(vessel.hasHeading ? 'has-reported-heading' : 'is-heading-unknown');
-        marker.dataset.headingSource = vessel.headingSource || 'unavailable';
-        marker.setAttribute('aria-hidden', 'true');
-        marker.innerHTML = vessel.hasHeading ? `
-            <span class="global-vessel-marker__glyph">
-                <span class="global-vessel-marker__radar-cone" aria-hidden="true"></span>
-                <svg viewBox="0 0 24 52" focusable="false" aria-hidden="true">
-                    <path class="global-vessel-marker__hull" d="M12 1 20 10v31l-4 10H8L4 41V10L12 1Z"/>
-                    <path class="global-vessel-marker__hold" d="M7 14h10v9H7zm0 11h10v9H7z"/>
-                    <path class="global-vessel-marker__deck" d="M8 37h8v8H8z"/>
-                </svg>
-            </span>` : `
-            <span class="global-vessel-marker__glyph">
-                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                    <circle class="global-vessel-marker__unknown-ring" cx="12" cy="12" r="8.5"/>
-                    <circle class="global-vessel-marker__unknown-core" cx="12" cy="12" r="3"/>
-                </svg>
-            </span>`;
-        marker.dataset.vesselCategory = vessel.inboundToPol === true
-            ? 'inbound-to-pol'
-            : vesselColor === COMMERCIAL_VESSEL_COLOR
-                ? 'commercial'
-                : vesselColor === TANKER_VESSEL_COLOR
-                    ? 'tanker'
-                    : 'noise';
-        marker.style.setProperty('--vessel-marker-color', vesselColor);
-        marker.style.setProperty('--vessel-active-color', VESSEL_ACTIVE_COLOR);
-        marker.style.setProperty('--vessel-marker-scale', String(getVesselMarkerScale(view) * getVesselRadiusFactor(vessel)));
-        view.vesselElements.set(vessel, marker);
-        return marker;
+    function getVesselTacticalMetrics(view, vessel) {
+        const scopes = getObjectScopes(vessel);
+        const polCoordinates = resolvePolCoordinates(view);
+        const explicitDistance = toFiniteNumber(firstValue(scopes, [
+            'currentDistanceToLoadPort', 'distanceToPol', 'distanceToPOL', 'distance_to_pol_nm',
+            'distance_to_pol', 'distanceNmToPol', 'distance_nm_to_pol'
+        ]));
+        const distanceNm = Number.isFinite(explicitDistance)
+            ? explicitDistance
+            : haversineDistanceNm(vessel, polCoordinates);
+        const explicitEtaDays = toFiniteNumber(firstValue(scopes, [
+            'etaToPolDays', 'estimatedDaysToPol', 'daysToPol', 'eta_days', 'transitDaysToPol'
+        ]));
+        const explicitEtaHours = toFiniteNumber(firstValue(scopes, [
+            'etaToPolHours', 'estimatedHoursToPol', 'hoursToPol', 'eta_hours'
+        ]));
+        const speedKnots = toFiniteNumber(firstValue(scopes, [
+            'speed', 'sog', 'SOG', 'speedOverGround', 'speed_over_ground', 'SpeedOverGround'
+        ]));
+        let etaDays = Number.isFinite(explicitEtaDays) ? explicitEtaDays : null;
+        if (!Number.isFinite(etaDays) && Number.isFinite(explicitEtaHours)) etaDays = explicitEtaHours / 24;
+        if (!Number.isFinite(etaDays) && Number.isFinite(distanceNm) && Number.isFinite(speedKnots) && speedKnots > 0.5) {
+            etaDays = distanceNm / speedKnots / 24;
+        }
+        return { polCoordinates, distanceNm, etaDays, speedKnots };
     }
 
-    function updateVesselMarkerOrientations(view) {
-        if (!view?.globe || view.vesselElements.size === 0) return;
-        const scale = getVesselMarkerScale(view);
-        view.vesselElements.forEach((marker, vessel) => {
-            marker.style.setProperty('--vessel-marker-scale', String(scale * getVesselRadiusFactor(vessel)));
-            if (!Number.isFinite(vessel.heading)) {
-                marker.style.removeProperty('--vessel-screen-heading');
-                return;
+    function formatEtaDays(etaDays) {
+        if (!Number.isFinite(etaDays) || etaDays < 0) return 'N/D';
+        if (etaDays < 1) return `${Math.max(1, Math.round(etaDays * 24))} h`;
+        return `${etaDays.toFixed(etaDays < 10 ? 1 : 0)} d`;
+    }
+
+    function getVesselTacticalLabel(view, vessel) {
+        const metrics = getVesselTacticalMetrics(view, vessel);
+        const name = escapeTooltipText(vessel?.name || vessel?.vesselName || 'Buque sin nombre');
+        const distance = Number.isFinite(metrics.distanceNm)
+            ? `${Math.round(metrics.distanceNm).toLocaleString('en-US')} NM`
+            : 'N/D';
+        const heading = Number.isFinite(vessel?.heading)
+            ? `${Math.round(vessel.heading)}° ${escapeTooltipText(vessel.headingSource || '')}`.trim()
+            : 'N/D';
+        const imo = String(vessel?.imo || '').trim();
+        const dwt = Number(vessel?.dwt);
+        const registry = [
+            imo && imo !== 'N/A' ? `IMO ${escapeTooltipText(imo)}` : '',
+            Number.isFinite(dwt) && dwt > 0 ? `DWT ${Math.round(dwt).toLocaleString('en-US')}` : ''
+        ].filter(Boolean).join(' · ');
+        return `<div class="global-fleet-tooltip global-fleet-tooltip--tactical"><strong>${name}</strong>${registry ? `<span>${registry}</span>` : ''}<span>Distancia al POL · ${distance}</span><span>ETA al POL · ${formatEtaDays(metrics.etaDays)}</span><span>Rumbo · ${heading}</span></div>`;
+    }
+
+    function createVesselThreeObject(view, vessel) {
+        const THREE = window.THREE;
+        if (!hasCompatibleThreeNamespace()) return null;
+        try {
+            const geometry = new THREE.ConeGeometry(VESSEL_VECTOR_RADIUS, VESSEL_VECTOR_LENGTH, VESSEL_VECTOR_SEGMENTS);
+            const material = new THREE.MeshStandardMaterial({
+                color: COMMERCIAL_VESSEL_COLOR,
+                emissive: COMMERCIAL_VESSEL_COLOR,
+                emissiveIntensity: 0.34,
+                roughness: 0.38,
+                metalness: 0.08,
+                transparent: true,
+                opacity: 0.96,
+                depthWrite: true
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.scale.set(1, 1, VESSEL_VECTOR_FLAT_SCALE);
+            const group = new THREE.Group();
+            group.add(mesh);
+            group.userData.vessel = vessel;
+            updateVesselThreeObject(view, group, vessel);
+            return group;
+        } catch (error) {
+            console.warn('[GlobalFleetGlobe] No se pudo crear el cono direccional.', error);
+            return new THREE.Group();
+        }
+    }
+
+    function updateVesselThreeObject(view, object, vessel) {
+        const THREE = window.THREE;
+        if (!object || !hasCompatibleThreeNamespace() || typeof view?.globe?.getCoords !== 'function') return object;
+        try {
+        const centerCoordinates = view.globe.getCoords(vessel.lat, vessel.lng, SURFACE_ALTITUDE);
+        const northLatitude = vessel.lat >= 89.95 ? vessel.lat - 0.05 : vessel.lat + 0.05;
+        const eastLongitude = vessel.lng >= 179.95 ? vessel.lng - 0.05 : vessel.lng + 0.05;
+        const northCoordinates = view.globe.getCoords(northLatitude, vessel.lng, SURFACE_ALTITUDE);
+        const eastCoordinates = view.globe.getCoords(vessel.lat, eastLongitude, SURFACE_ALTITUDE);
+        const center = new THREE.Vector3(centerCoordinates.x, centerCoordinates.y, centerCoordinates.z);
+        const normal = center.clone().normalize();
+        const north = new THREE.Vector3(northCoordinates.x, northCoordinates.y, northCoordinates.z)
+            .sub(center)
+            .projectOnPlane(normal)
+            .normalize();
+        const east = new THREE.Vector3(eastCoordinates.x, eastCoordinates.y, eastCoordinates.z)
+            .sub(center)
+            .projectOnPlane(normal)
+            .normalize();
+        const headingRadians = toRadians(Number.isFinite(vessel.heading) ? vessel.heading : 0);
+        const direction = north.multiplyScalar(Math.cos(headingRadians))
+            .add(east.multiplyScalar(Math.sin(headingRadians)))
+            .normalize();
+        const side = direction.clone().cross(normal).normalize();
+        const rotationBasis = new THREE.Matrix4().makeBasis(side, direction, normal);
+        object.position.copy(center).addScaledVector(normal, VESSEL_VECTOR_SURFACE_OFFSET);
+        object.quaternion.setFromRotationMatrix(rotationBasis);
+        object.userData.vessel = vessel;
+        return object;
+        } catch (error) {
+            if (window.globalFleetVectorUpdateWarningShown !== true) {
+                window.globalFleetVectorUpdateWarningShown = true;
+                console.warn('[GlobalFleetGlobe] Se omitió una actualización de rumbo incompatible.', error);
             }
-            const origin = view.globe.getScreenCoords?.(vessel.lat, vessel.lng, VESSEL_MARKER_ALTITUDE);
-            const destination = destinationPoint(vessel.lat, vessel.lng, vessel.heading);
-            const projectedHeading = view.globe.getScreenCoords?.(destination.lat, destination.lng, VESSEL_MARKER_ALTITUDE);
-            if (!origin || !projectedHeading) return;
-            const deltaX = Number(projectedHeading.x) - Number(origin.x);
-            const deltaY = Number(projectedHeading.y) - Number(origin.y);
-            if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY) || (Math.abs(deltaX) < 0.01 && Math.abs(deltaY) < 0.01)) return;
-            marker.style.setProperty('--vessel-screen-heading', `${Math.atan2(deltaY, deltaX) * 180 / Math.PI + 90}deg`);
+            return object;
+        }
+    }
+
+    function buildVesselPolArcs(view) {
+        const polCoordinates = resolvePolCoordinates(view);
+        if (!polCoordinates) return [];
+        return (Array.isArray(view?.vessels) ? view.vessels : []).map(vessel => {
+            const metrics = getVesselTacticalMetrics(view, vessel);
+            return {
+                vessel,
+                startLat: vessel.lat,
+                startLng: vessel.lng,
+                endLat: polCoordinates.lat,
+                endLng: polCoordinates.lng,
+                color: 'rgba(16, 185, 129, 0.38)',
+                distanceNm: metrics.distanceNm,
+                etaDays: metrics.etaDays
+            };
         });
     }
 
-    function scheduleVesselMarkerOrientations(view) {
-        if (!view?.globe || view.vesselOrientationFrameId) return;
-        view.vesselOrientationFrameId = requestAnimationFrame(() => {
-            view.vesselOrientationFrameId = null;
-            updateVesselMarkerOrientations(view);
-        });
+    function applyVesselPolArcs(view) {
+        if (!view?.globe || typeof view.globe.arcsData !== 'function') return;
+        view.globe.arcsData(typeof buildVesselPolArcs === 'function' ? buildVesselPolArcs(view) : []);
+    }
+
+    function handleVesselClick(view, vessel) {
+        if (!vessel) return;
+        setSelectedVessel(view, vessel);
+        setAutoRotate(false, view.key);
+        if (typeof window.selectShip === 'function') {
+            window.selectShip(
+                vessel.vesselName,
+                vessel.mmsi,
+                vessel.originalLatitude ?? vessel.baseLat ?? vessel.lat,
+                vessel.originalLongitude ?? vessel.baseLng ?? vessel.lng,
+                vessel.imo,
+                vessel.destination
+            );
+        }
+    }
+
+    function safeVesselTacticalLabel(view, vessel) {
+        try {
+            return getVesselTacticalLabel(view, vessel);
+        } catch (error) {
+            if (window.globalFleetTooltipWarningShown !== true) {
+                window.globalFleetTooltipWarningShown = true;
+                console.warn('[GlobalFleetGlobe] Tooltip táctico degradado a texto seguro.', error);
+            }
+            return escapeTooltipText(vessel?.name || vessel?.vesselName || 'Buque sin nombre');
+        }
+    }
+
+    function hasCompatibleThreeNamespace() {
+        const THREE = window.THREE;
+        return Boolean(THREE
+            && typeof THREE.ConeGeometry === 'function'
+            && typeof THREE.MeshStandardMaterial === 'function'
+            && typeof THREE.Mesh === 'function'
+            && typeof THREE.Group === 'function'
+            && typeof THREE.Vector3 === 'function'
+            && typeof THREE.Matrix4 === 'function');
+    }
+
+    function configureVesselPointFallback(view, reason = 'three-unavailable') {
+        if (!view?.globe) return false;
+        view.renderMode = 'points';
+        view.vectorFallbackReason = reason;
+        view.globe.customLayerData?.([]);
+        view.globe
+            .pointResolution(32)
+            .pointsMerge(false)
+            .pointLat('lat')
+            .pointLng('lng')
+            .pointColor(() => COMMERCIAL_VESSEL_COLOR)
+            .pointAltitude(SURFACE_ALTITUDE)
+            .pointRadius(0.15)
+            .pointLabel((vessel) => safeVesselTacticalLabel(view, vessel))
+            .onPointHover((vessel) => {
+                view.hoveredVessel = vessel || null;
+                view.container.style.cursor = vessel ? 'pointer' : 'grab';
+            })
+            .onPointClick((vessel) => handleVesselClick(view, vessel))
+            .pointsTransitionDuration(0)
+            .pointsData([]);
+        return true;
+    }
+
+    function configureVesselVectorLayer(view) {
+        if (!view?.globe || !hasCompatibleThreeNamespace()) return false;
+        try {
+            view.renderMode = 'vectors';
+            view.vectorFallbackReason = null;
+            view.globe.pointsData?.([]);
+            view.globe
+                .customThreeObject((vessel) => createVesselThreeObject(view, vessel))
+                .customThreeObjectUpdate((object, vessel) => updateVesselThreeObject(view, object, vessel))
+                .customLayerLabel((vessel) => safeVesselTacticalLabel(view, vessel))
+                .onCustomLayerHover((vessel) => {
+                    view.hoveredVessel = vessel || null;
+                    view.container.style.cursor = vessel ? 'pointer' : 'grab';
+                })
+                .onCustomLayerClick((vessel) => handleVesselClick(view, vessel))
+                .customLayerData([]);
+            return true;
+        } catch (error) {
+            console.warn('[GlobalFleetGlobe] Capa Three.js no compatible; se activa el fallback WebGL.', error);
+            view.renderMode = 'points';
+            view.vectorFallbackReason = 'three-layer-configuration-error';
+            return false;
+        }
+    }
+
+    function renderVesselLayer(view, vessels) {
+        if (!view?.globe) return 'unmounted';
+        if (view.renderMode === 'vectors') {
+            try {
+                view.globe.customLayerData(vessels);
+                return 'vectors';
+            } catch (error) {
+                console.warn('[GlobalFleetGlobe] Error en geometría direccional; se conserva el globo con puntos nativos.', error);
+                configureVesselPointFallback(view, 'three-render-error');
+            }
+        }
+        view.globe.pointsData(vessels);
+        return 'points';
+    }
+
+    function getTacticalLabels(view) {
+        return Array.isArray(view?.portLabels) ? view.portLabels : [];
+    }
+
+    function applyTacticalLabels(view) {
+        if (!view?.globe) return;
+        view.globe.labelsData(getTacticalLabels(view));
     }
 
     function normalizeRoutePoint(point) {
@@ -500,7 +693,16 @@
         const rawName = String(explicitName || port?.name || port?.portName || '').trim();
         if (role === 'LASTRE' && (!rawName || rawName.toUpperCase().includes('TBA') || (coordinates.lat === 0 && coordinates.lng === 0))) return null;
         const name = rawName || (role === 'POL' ? 'ORIGEN' : 'DESTINO');
-        return { ...coordinates, role, text: role + ' · ' + name };
+        return {
+            ...coordinates,
+            type: 'port',
+            role,
+            text: role + ' · ' + name,
+            rotation: 0,
+            altitude: 0.018,
+            size: 1.05,
+            dotRadius: 0.32
+        };
     }
 
     function applyRoutes(view) {
@@ -514,7 +716,7 @@
             return Boolean(ballastPortName) && !ballastPortName.includes('TBA') && !originIsZero;
         });
         view.globe
-            .arcsData([])
+            .arcsData(typeof buildVesselPolArcs === 'function' ? buildVesselPolArcs(view) : [])
             .pathPoints((coordinates) => coordinates)
             .pathPointLat('lat')
             .pathPointLng('lng')
@@ -523,7 +725,7 @@
             .pathStroke(() => PATH_STYLE.width)
             .pathTransitionDuration(0)
             .pathsData(renderableRoutePaths)
-            .labelsData(view.portLabels);
+            .labelsData(getTacticalLabels(view));
     }
 
     function saveGlobalRouteState(ports, routePaths, ballastPortName = '') {
@@ -593,7 +795,7 @@
         if (!normalized || !view) return false;
         view.selectedVessel = findMatchingVessel(view.vessels, normalized);
         view.selectedVesselIdentity = getVesselIdentity(normalized);
-        applyPointInteractionStyle(view);
+        applyTacticalLabels(view);
         return Boolean(view.selectedVessel);
     }
 
@@ -602,7 +804,7 @@
         const view = getView(key) || getView(DEFAULT_KEY);
         if (!normalized || !view) return false;
         selectVessel(normalized, key);
-        return focusCoordinates(normalized.lat, normalized.lng, key);
+        return focusCoordinates(normalized.originalLatitude, normalized.originalLongitude, key);
     }
 
     function focusActiveVessel(vessel, key = 'density') {
@@ -612,14 +814,14 @@
         selectVessel(normalized, view.key);
         setAutoRotate(false, view.key);
         view.globe.pointOfView({
-            lat: normalized.lat,
-            lng: normalized.lng,
+            lat: normalized.originalLatitude,
+            lng: normalized.originalLongitude,
             altitude: 1.2
         }, 1500);
         return true;
     }
 
-    function getScreenCoordinates(lat, lng, key = 'density', altitude = POINT_ALTITUDE) {
+    function getScreenCoordinates(lat, lng, key = 'density', altitude = SURFACE_ALTITUDE) {
         const view = getView(key) || getView(DEFAULT_KEY);
         const normalized = normalizeRoutePoint({ lat, lng });
         if (!view || !normalized || typeof view.globe?.getScreenCoords !== 'function') return null;
@@ -635,58 +837,42 @@
         focusCoordinates(view.vessels[0].lat, view.vessels[0].lng, view.key, FOCUS_ALTITUDE, CAMERA_TRANSITION_MS);
     }
 
-    function refreshPointRadius(view) {
-        if (!view?.globe) return;
-        scheduleVesselMarkerOrientations(view);
-        const radius = getPointRadius(getCameraAltitude(view));
-        if (Math.abs(radius - view.pointRadius) < 0.0005) return;
-        view.pointRadius = radius;
-        applyPointInteractionStyle(view);
-    }
-
-    function applyPointInteractionStyle(view) {
-        if (!view?.globe) return;
-        view.globe
-            .pointColor((vessel) => getVesselPointColor(vessel, view.hoveredVessel, view.selectedVessel))
-            .pointAltitude((vessel) => vessel === view.hoveredVessel || vessel === view.selectedVessel ? POINT_HOVER_ALTITUDE : POINT_ALTITUDE)
-            .pointRadius((vessel) => {
-                const radius = view.pointRadius * getVesselRadiusFactor(vessel);
-                return vessel === view.hoveredVessel || vessel === view.selectedVessel ? radius * POINT_HOVER_RADIUS_FACTOR : radius;
-            });
-        view.vesselElements.forEach((marker, vessel) => {
-            marker.classList.toggle('is-hovered', vessel === view.hoveredVessel);
-            marker.classList.toggle('is-selected', vessel === view.selectedVessel);
-        });
-    }
-
     function updateVessels(_vessels, key = DEFAULT_KEY) {
         const view = getView(key);
         if (!view) return [];
+        const previousVessels = Array.isArray(view.vessels) ? view.vessels.slice() : [];
         view.hoveredVessel = null;
         const selectedVessel = view.selectedVesselIdentity || view.selectedVessel;
-        if (_vessels !== null && _vessels !== undefined) {
-            view.vessels = prepareVessels(_vessels);
-        } else {
-            const densityVessels = key === 'density' && typeof window.getDensityMapSourceVessels === 'function'
-                ? window.getDensityMapSourceVessels()
-                : null;
-            view.vessels = prepareVessels(Array.isArray(densityVessels) ? densityVessels : getFilteredVessels());
-        }
+        const centralRadarVessels = getCentralRadarVessels();
+        const requestedVessels = _vessels !== null && _vessels !== undefined
+            ? _vessels
+            : getFilteredVessels();
+        view.vessels = prepareVessels(
+            Array.isArray(centralRadarVessels) ? centralRadarVessels : requestedVessels,
+            getCameraAltitude(view)
+        );
         view.selectedVessel = findMatchingVessel(view.vessels, selectedVessel);
         try {
-            if (view.globe && typeof view.globe.pointsData === 'function') {
-                view.globe.pointsData(view.vessels);
-            }
-            if (view.globe && typeof view.globe.htmlElementsData === 'function') {
-                view.vesselElements.clear();
-                view.globe.htmlElementsData(view.vessels);
-                scheduleVesselMarkerOrientations(view);
-            }
+            view.lastVesselRenderMode = renderVesselLayer(view, view.vessels);
+            applyVesselPolArcs(view);
+            applyTacticalLabels(view);
         } catch (error) {
-            console.error('[GlobalFleetGlobe] Error al renderizar marcadores de buques en el globo:', error);
+            console.error('[GlobalFleetGlobe] Error al renderizar marcadores de buques; se conserva el último snapshot válido:', error);
+            view.vessels = previousVessels;
+            try {
+                view.lastVesselRenderMode = renderVesselLayer(view, previousVessels);
+                applyVesselPolArcs(view);
+                applyTacticalLabels(view);
+            } catch (_) {}
         }
-        applyPointInteractionStyle(view);
-        refreshPointRadius(view);
+        window.globalFleetGlobeLastRender = {
+            key,
+            vesselCount: view.vessels.length,
+            renderedAt: Date.now(),
+            status: view.vessels.length > 0 ? 'rendered' : 'empty-safe',
+            renderMode: view.lastVesselRenderMode || view.renderMode || 'points',
+            vectorFallbackReason: view.vectorFallbackReason || null
+        };
         focusFirstVessel(view);
         return view.vessels;
     }
@@ -758,7 +944,6 @@
             view.lastWidth = size.width;
             view.lastHeight = size.height;
             view.globe.width(size.width).height(size.height);
-            scheduleVesselMarkerOrientations(view);
         });
     }
 
@@ -844,8 +1029,6 @@
         if (!view) return;
         view.resizeObserver?.disconnect();
         if (view.resizeFrameId) cancelAnimationFrame(view.resizeFrameId);
-        if (view.hoverStyleFrameId) cancelAnimationFrame(view.hoverStyleFrameId);
-        if (view.vesselOrientationFrameId) cancelAnimationFrame(view.vesselOrientationFrameId);
         view.controls?.removeEventListener?.('change', view.handleControlsChange);
         view.controls?.removeEventListener?.('start', view.handleInteractionStart);
         view.container.removeEventListener?.('pointerdown', view.handleContainerPointerDown);
@@ -917,13 +1100,12 @@
             portLabels: [],
             initialView,
             initialViewDuration: Math.max(0, toFiniteNumber(options.initialViewDuration, 0) || 0),
-            pointRadius: getPointRadius(initialView.altitude),
             hoveredVessel: null,
             selectedVessel: null,
             selectedVesselIdentity: null,
-            vesselElements: new Map(),
-            vesselOrientationFrameId: null,
-            hoverStyleFrameId: null,
+            renderMode: 'points',
+            lastVesselRenderMode: null,
+            vectorFallbackReason: null,
             autoRotate: options.autoRotate !== false,
             focusFirstVesselEnabled: options.focusFirstVessel !== false,
             hasFocusedVessel: false,
@@ -949,45 +1131,19 @@
                 .bumpImageUrl(EARTH_TOPOLOGY_URL)
                 .atmosphereColor('#39D7E8')
                 .atmosphereAltitude(0.16)
-                .htmlLat('lat')
-                .htmlLng('lng')
-                .htmlAltitude(() => VESSEL_MARKER_ALTITUDE)
-                .htmlElement((vessel) => createVesselMarkerElement(vessel, view))
-                .htmlElementVisibilityModifier((element, isVisible) => {
-                    element.classList.toggle('is-globe-visible', Boolean(isVisible));
-                })
-                .htmlTransitionDuration(0)
-                .htmlElementsData([])
-                .pointLat('lat')
-                .pointLng('lng')
-                .pointColor((vessel) => getVesselPointColor(vessel, view.hoveredVessel, view.selectedVessel))
-                .pointAltitude((vessel) => vessel === view.hoveredVessel || vessel === view.selectedVessel ? POINT_HOVER_ALTITUDE : POINT_ALTITUDE)
-                .pointRadius((vessel) => {
-                    const radius = view.pointRadius * getVesselRadiusFactor(vessel);
-                    return vessel === view.hoveredVessel || vessel === view.selectedVessel ? radius * POINT_HOVER_RADIUS_FACTOR : radius;
-                })
-                .pointLabel(getTooltip)
-                .onPointHover((vessel) => {
-                    if (view.hoveredVessel === vessel) return;
-                    view.hoveredVessel = vessel || null;
-                    schedulePointInteractionStyle(view);
-                })
-                .onPointClick((vessel) => {
-                    setSelectedVessel(view, vessel);
-                    setAutoRotate(false, key);
-                    applyPointInteractionStyle(view);
-                    if (typeof window.selectShip === 'function') {
-                        window.selectShip(
-                            vessel.vesselName,
-                            vessel.mmsi,
-                            vessel.lat,
-                            vessel.lng,
-                            vessel.imo,
-                            vessel.destination
-                        );
-                    }
-                })
-                .pointsTransitionDuration(0)
+                .arcStartLat('startLat')
+                .arcStartLng('startLng')
+                .arcEndLat('endLat')
+                .arcEndLng('endLng')
+                .arcColor('color')
+                .arcAltitudeAutoScale(0.18)
+                .arcStroke(0.22)
+                .arcDashLength(0.28)
+                .arcDashGap(0.9)
+                .arcDashInitialGap((arc) => ((Number(arc?.vessel?.sourceIndex) || 0) % 10) / 10)
+                .arcDashAnimateTime(2600)
+                .arcLabel((arc) => getVesselTacticalLabel(view, arc?.vessel))
+                .arcsTransitionDuration(0)
                 .arcsData([])
                 .pathPoints((coordinates) => coordinates)
                 .pathPointLat('lat')
@@ -1001,23 +1157,30 @@
                 .labelLng('lng')
                 .labelText('text')
                 .labelColor(() => '#FFFFFF')
-                .labelSize(() => 1.05)
-                .labelDotRadius(() => 0.32)
-                .labelAltitude(() => 0.018)
+                .labelSize((label) => label?.size || 1.05)
+                .labelDotRadius((label) => label?.dotRadius || 0)
+                .labelAltitude((label) => Number.isFinite(Number(label?.altitude)) ? Number(label.altitude) : SURFACE_ALTITUDE)
+                .labelRotation((label) => Number.isFinite(Number(label?.rotation)) ? Number(label.rotation) : 0)
+                .labelResolution(8)
+                .labelLabel((label) => label?.text || '')
+                .labelsTransitionDuration(0)
                 .labelsData([]);
+            if (!configureVesselVectorLayer(view)) {
+                configureVesselPointFallback(view, hasCompatibleThreeNamespace() ? 'three-layer-configuration-error' : 'three-unavailable');
+            }
             view.globe.pointOfView(view.initialView, view.initialViewDuration);
             view.controls = view.globe.controls();
             view.controls.enableDamping = true;
             view.controls.dampingFactor = 0.08;
             view.controls.autoRotate = view.autoRotate;
             view.controls.autoRotateSpeed = 0.45;
-            view.handleControlsChange = () => refreshPointRadius(view);
+            view.handleControlsChange = null;
             view.handleInteractionStart = () => setAutoRotate(false, key);
             view.handleContainerPointerDown = (event) => {
                 if (event.target?.closest?.('.global-fleet-rotation-toggle')) return;
                 setAutoRotate(false, key);
             };
-            view.controls.addEventListener?.('change', view.handleControlsChange);
+            if (view.handleControlsChange) view.controls.addEventListener?.('change', view.handleControlsChange);
             view.controls.addEventListener?.('start', view.handleInteractionStart);
             view.container.addEventListener('pointerdown', view.handleContainerPointerDown);
             createAutoRotateControl(view);
@@ -1056,6 +1219,7 @@
 
     window.addEventListener('ais:filtered-vessels-updated', syncAllViews);
     window.addEventListener('databridge:filtered-vessels-updated', syncAllViews);
+    window.addEventListener('radar-fleet-updated', syncAllViews);
     const activeVesselFocusTimers = new Map();
     function ensureActiveVesselInView(vessel, key) {
         const normalized = normalizeVessel(vessel);
@@ -1117,7 +1281,16 @@
         normalizeVessels: prepareVessels,
         getInstance: (key = DEFAULT_KEY) => getView(key)?.adapter || null,
         getVessels: (key = DEFAULT_KEY) => getView(key)?.vessels || [],
-        pointProps: Object.freeze({ commercialColor: COMMERCIAL_VESSEL_COLOR, tankerColor: TANKER_VESSEL_COLOR, noiseColor: NOISE_VESSEL_COLOR, hoverColor: POINT_HOVER_COLOR, altitude: POINT_ALTITUDE, nearRadius: 0.075, farRadius: 0.032 })
+        tacticalProps: Object.freeze({
+            commercialColor: COMMERCIAL_VESSEL_COLOR,
+            tankerColor: TANKER_VESSEL_COLOR,
+            noiseColor: NOISE_VESSEL_COLOR,
+            hoverColor: POINT_HOVER_COLOR,
+            altitude: SURFACE_ALTITUDE,
+            vectorRadius: VESSEL_VECTOR_RADIUS,
+            vectorLength: VESSEL_VECTOR_LENGTH,
+            vectorSegments: VESSEL_VECTOR_SEGMENTS
+        })
     });
 
     window.GlobalFleetGlobe = globalFleetGlobe;

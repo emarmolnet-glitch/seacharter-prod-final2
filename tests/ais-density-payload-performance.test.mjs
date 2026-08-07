@@ -64,7 +64,7 @@ test('matching audit payload returns and snapshots serializable vessel objects',
 });
 
 test('density badge binds strictly to the filtered vessel array length', () => {
-  assert.match(counterSource, /const displayVessels = Array\.isArray\(vesselsInput\) \? vesselsInput : \[\]/);
+  assert.match(counterSource, /const displayVessels = typeof window\.getDensityReactiveVessels === 'function'[\s\S]*window\.getDensityReactiveVessels\(\)/);
   assert.match(counterSource, /const filteredCount = displayVessels\.length/);
   assert.doesNotMatch(counterSource, /AIS_DUAL_SWEEP_LIMIT|persistedTotal|limit/);
   assert.doesNotMatch(indexSource, /limit: '750'/);

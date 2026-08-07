@@ -3,6 +3,8 @@ import { normalizePortDestination } from "./commercial-vessel-search.mjs";
 const DEFAULT_SERVICE_SPEED_KNOTS = 11.5;
 const MIN_SERVICE_SPEED_KNOTS = 6;
 const MAX_SERVICE_SPEED_KNOTS = 22;
+const MIN_ECO_SPEED_KNOTS = 6;
+const MAX_OPERATIONAL_IDLE_HOURS = 72;
 const SEA_ROUTE_FACTOR = 1.12;
 
 export const LONG_DISTANCE_TRANSIT_LABEL = "Inbound to POL";
@@ -52,6 +54,12 @@ function cancellingDeadline(value, referenceDate) {
   return parsed;
 }
 
+function isWithinLaycan(eta, start, end) {
+  if (!eta || !start || !end) return false;
+  const etaTime = eta.getTime();
+  return etaTime >= start.getTime() && etaTime <= end.getTime();
+}
+
 export function evaluateCommercialTransitToPol({
   destination,
   polName,
@@ -82,14 +90,43 @@ export function evaluateCommercialTransitToPol({
     ? (remainingDistanceNm * SEA_ROUTE_FACTOR) / effectiveSpeedKnots
     : null;
   const projectedEta = transitHours === null ? null : new Date(now.getTime() + transitHours * 3600000);
-  const earliestUsefulArrival = now.getTime() - 12 * 3600000;
-  const windowEnd = end?.getTime() ?? null;
-  const declaredEtaFeasible = Boolean(explicitEta && windowEnd !== null
-    && explicitEta.getTime() >= earliestUsefulArrival && explicitEta.getTime() <= windowEnd);
-  const transitFeasible = Boolean(projectedEta && windowEnd !== null
-    && projectedEta.getTime() >= earliestUsefulArrival && projectedEta.getTime() <= windowEnd);
-  const effectiveEta = declaredEtaFeasible ? explicitEta : (transitFeasible ? projectedEta : (explicitEta || projectedEta));
-  const etaWithinLaycan = declaredEtaFeasible || transitFeasible;
+  const declaredEtaFeasible = isWithinLaycan(explicitEta, start, end);
+  const projectedEtaWithinLaycan = isWithinLaycan(projectedEta, start, end);
+  const projectedArrivalTooEarly = Boolean(projectedEta && start && projectedEta.getTime() < start.getTime());
+  const hoursUntilLaycanStart = start ? Math.max(0, (start.getTime() - now.getTime()) / 3600000) : null;
+  const routeDistanceNm = Number.isFinite(remainingDistanceNm) && remainingDistanceNm >= 0
+    ? remainingDistanceNm * SEA_ROUTE_FACTOR
+    : null;
+  const requiredEcoSpeedKnots = projectedArrivalTooEarly && routeDistanceNm !== null && hoursUntilLaycanStart > 0
+    ? routeDistanceNm / hoursUntilLaycanStart
+    : null;
+  const ecoSpeedFeasible = Boolean(
+    requiredEcoSpeedKnots !== null
+    && requiredEcoSpeedKnots >= MIN_ECO_SPEED_KNOTS
+    && requiredEcoSpeedKnots < effectiveSpeedKnots,
+  );
+  const ecoTransitHours = routeDistanceNm !== null ? routeDistanceNm / MIN_ECO_SPEED_KNOTS : null;
+  const ecoArrival = ecoTransitHours === null ? null : new Date(now.getTime() + ecoTransitHours * 3600000);
+  const idleHours = projectedArrivalTooEarly && start && ecoArrival && ecoArrival.getTime() < start.getTime()
+    ? (start.getTime() - ecoArrival.getTime()) / 3600000
+    : null;
+  const idleFeasible = Boolean(idleHours !== null && idleHours >= 0 && idleHours <= MAX_OPERATIONAL_IDLE_HOURS);
+  const adjustedProjectedEta = projectedEtaWithinLaycan
+    ? projectedEta
+    : ((ecoSpeedFeasible || idleFeasible) && start ? start : null);
+  const arrivalStrategy = projectedEtaWithinLaycan
+    ? "DIRECT"
+    : ecoSpeedFeasible
+      ? "ECO_SPEED"
+      : idleFeasible
+        ? "IDLE"
+        : null;
+  const transitFeasible = Boolean(adjustedProjectedEta && isWithinLaycan(adjustedProjectedEta, start, end));
+  const hasExplicitEta = explicitEta !== null;
+  const etaWithinLaycan = hasExplicitEta ? declaredEtaFeasible : transitFeasible;
+  const effectiveEta = hasExplicitEta
+    ? explicitEta
+    : (transitFeasible ? adjustedProjectedEta : projectedEta);
   const longDistance = Number.isFinite(remainingDistanceNm) && remainingDistanceNm > visualRadiusNm;
   const candidate = destinationConfirmed && etaWithinLaycan;
 
@@ -99,11 +136,19 @@ export function evaluateCommercialTransitToPol({
     declaredEtaFeasible,
     etaWithinLaycan,
     transitFeasible,
+    projectedEtaWithinLaycan,
+    projectedArrivalTooEarly,
+    ecoSpeedFeasible,
+    idleFeasible,
     longDistance,
     label: candidate && longDistance ? LONG_DISTANCE_TRANSIT_LABEL : null,
+    arrivalStrategy,
     effectiveSpeedKnots,
+    requiredEcoSpeedKnots,
+    idleHours,
     transitHours,
     projectedEta: projectedEta ? projectedEta.toISOString() : null,
+    adjustedProjectedEta: adjustedProjectedEta ? adjustedProjectedEta.toISOString() : null,
     effectiveEta: effectiveEta ? effectiveEta.toISOString() : null,
     laycanStart: start ? start.toISOString() : null,
     laycanEnd: end ? end.toISOString() : null,

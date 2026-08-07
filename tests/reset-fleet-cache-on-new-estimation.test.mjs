@@ -15,7 +15,7 @@ test('resetTotalEstimation clears evaluated vessel cache and global fleet states
   assert.match(resetSource, /forceResetAisDensityResults\(\)|resetAisDensityResults/);
 
   // Verify GlobalStore fleet resets
-  assert.match(resetSource, /window\.GlobalStore\.matchingVessels = \[\]/);
+  assert.match(resetSource, /window\.GlobalStore\.setMatchingFleet\?\.\(\[\], \{ source: 'reset-estimation', allowClear: true \}\)/);
   assert.match(resetSource, /window\.GlobalStore\.compatibleVessels = \[\]/);
   assert.match(resetSource, /window\.GlobalStore\.nearbyVessels = \[\]/);
   assert.match(resetSource, /window\.GlobalStore\.filteredVessels = \[\]/);
