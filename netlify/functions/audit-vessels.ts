@@ -2,6 +2,7 @@ import type { Config } from "@netlify/functions";
 import type { QueryResultRow } from "pg";
 import { getPool } from "../../db/index.js";
 import { missingAisGeofenceResponse, parseAisGeofence, type AisGeofence } from "./ais-geofence.js";
+import { overrideVesselClassesFromMaster } from "./_shared/verified-vessel-classes.js";
 
 const VALIDATED_AUDIT_STATUS = "VALIDATED";
 
@@ -121,7 +122,7 @@ export default async (req: Request) => {
     if (!geofence) return missingAisGeofenceResponse();
     const { rows, filterApplied } = await selectAuditVessels(geofence);
 
-    const vessels = rows.map((row) => ({
+    const rawVessels = rows.map((row) => ({
       ...asRecord(row.raw_data),
       storageKey: row.storage_key,
       imoNumber: row.imo_number,
@@ -140,12 +141,22 @@ export default async (req: Request) => {
       lastSeenAt: toIsoString(row.last_seen_at),
       distanceToPolNm: Number(row.distance_nm),
     }));
+    const masterSnapshot = await overrideVesselClassesFromMaster(rawVessels);
+    const vessels = masterSnapshot.vessels;
 
     return Response.json({
       success: true,
       source: "ais_vessels",
       auditStatus: filterApplied ? VALIDATED_AUDIT_STATUS : null,
       filterApplied,
+      masterEnrichmentApplied: !masterSnapshot.degraded,
+      degraded: masterSnapshot.degraded,
+      warning: masterSnapshot.warning || undefined,
+      batchLookup: {
+        queryCount: rawVessels.length > 0 ? 1 : 0,
+        requested: rawVessels.length,
+        masterRows: masterSnapshot.matched,
+      },
       geofence: {
         polLat: geofence.latitude,
         polLon: geofence.longitude,
@@ -154,6 +165,7 @@ export default async (req: Request) => {
       count: vessels.length,
       vessels,
     }, {
+      status: masterSnapshot.degraded ? 206 : 200,
       headers: { "cache-control": "no-store" },
     });
   } catch (error) {

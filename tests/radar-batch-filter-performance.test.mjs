@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [filterSource, openShipsSource, sharedSource, aiFilterSource, matchingSources] = await Promise.all([
+const [filterSource, auditSource, indexSource, openShipsSource, sharedSource, aiFilterSource, matchingSources] = await Promise.all([
   readFile(new URL('../netlify/functions/vessels-filter.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../netlify/functions/audit-vessels.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/functions/openships-live-status.ts', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/functions/_shared/verified-vessel-classes.ts', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/functions/ai-ais-filter.ts', import.meta.url), 'utf8'),
@@ -19,6 +21,24 @@ test('radar master enrichment uses one batch query and in-memory indexes', () =>
   assert.match(filterSource, /const masterByMmsi = new Map/);
   assert.match(filterSource, /rawRows[\s\S]*flatMap/);
   assert.doesNotMatch(filterSource, /flatMap\([\s\S]{0,800}(?:getPool\(\)|\.query<)/);
+});
+
+test('All Cargo radar injects master profiles in one backend batch', () => {
+  assert.match(auditSource, /overrideVesselClassesFromMaster\(rawVessels\)/);
+  assert.match(auditSource, /masterEnrichmentApplied/);
+  assert.match(auditSource, /batchLookup/);
+  assert.doesNotMatch(auditSource, /for[\s\S]{0,500}FROM vessels_master/);
+});
+
+test('radar table renders supplied vessel properties without lookup requests', () => {
+  const renderStart = indexSource.indexOf('function renderDensityVesselsTable(vessels');
+  const renderEnd = indexSource.indexOf('window.renderDensityVesselsTable = renderDensityVesselsTable', renderStart);
+  const renderSource = indexSource.slice(renderStart, renderEnd);
+  assert.match(renderSource, /readDensityPositiveNumber\(vessel, \['grossTonnage', 'gross_tonnage'/);
+  assert.match(renderSource, /vessel\.vesselTechnicalProfileVerified === true/);
+  assert.doesNotMatch(renderSource, /fetch\s*\(/);
+  assert.doesNotMatch(renderSource, /hydrateVerifiedVesselClasses/);
+  assert.doesNotMatch(indexSource, /\/api\/vessels\/lookup/);
 });
 
 test('matching source enrichment also avoids correlated master lookups', () => {

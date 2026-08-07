@@ -465,6 +465,7 @@ test('persistence backend consolidates normalized technical fields by IMO or MMS
   assert.match(persistenceBackendSource, /path: "\/api\/vessel-due-diligence-save"/);
   assert.match(persistenceBackendSource, /gross_tonnage/);
   assert.match(persistenceBackendSource, /loa_meters/);
+  assert.match(persistenceBackendSource, /beam_meters/);
   assert.match(persistenceBackendSource, /Se requiere IMO o MMSI válido/);
   assert.match(persistenceBackendSource, /upsertVesselTechnicalRecord/);
   assert.match(persistenceBackendSource, /status = 'DISCARDED'/);
@@ -494,6 +495,10 @@ test('persistence backend consolidates normalized technical fields by IMO or MMS
   assert.match(persistenceBackendSource, /await client\.query\("BEGIN"\)/);
   assert.match(persistenceBackendSource, /const savedVesselStatus = action === "save" \? "EN_CARTERA" : null/);
   assert.match(persistenceBackendSource, /upsertVesselTechnicalRecord\(sanitizedVessel, client, savedVesselStatus\)/);
+  assert.match(persistenceBackendSource, /SET status = 'EN_CARTERA'/);
+  assert.match(persistenceBackendSource, /audit_status = 'VALIDATED'/);
+  assert.match(persistenceBackendSource, /process_status = 'COMPLETED'/);
+  assert.match(persistenceBackendSource, /RETURNING status, audit_status, process_status/);
   assert.match(technicalCacheSource, /status = EXCLUDED\.status/);
   assert.match(persistenceBackendSource, /await client\.query\("COMMIT"\)/);
   assert.match(persistenceBackendSource, /client\.query\("ROLLBACK"\)/);

@@ -100,6 +100,12 @@ type DiscardedVesselRow = {
   process_status: string;
 };
 
+type ValidatedVesselStateRow = {
+  status: string;
+  audit_status: string;
+  process_status: string;
+};
+
 const DISCARD_RETURNING_COLUMNS = `
   imo_number, mmsi, vessel_name, dwt, latitude, longitude, vessel_type,
   draft_meters, flag, call_sign, year_built, gross_tonnage, net_tonnage,
@@ -212,7 +218,14 @@ export default async (req: Request) => {
 
   const body = await req.json().catch(() => null);
   const bodyRecord = asRecord(body);
-  const vessel = asRecord(bodyRecord.vessel || bodyRecord);
+  const vessel = {
+    ...bodyRecord,
+    ...asRecord(bodyRecord.data),
+    ...asRecord(bodyRecord.technical),
+    ...asRecord(bodyRecord.technicalData),
+    ...asRecord(bodyRecord.dueDiligence),
+    ...asRecord(bodyRecord.vessel),
+  };
   const requestedStatus = cleanText(readFirst(vessel, ["status", "auditStatus", "audit_status"]))?.toLowerCase();
   const requestedAction = cleanText(bodyRecord.action)?.toLowerCase() || "save";
   const action = requestedAction === "discard" || requestedStatus === "discarded" ? "discard" : "save";
@@ -295,6 +308,22 @@ export default async (req: Request) => {
 
     const savedVesselStatus = action === "save" ? "EN_CARTERA" : null;
     const savedVessel = await upsertVesselTechnicalRecord(sanitizedVessel, client, savedVesselStatus);
+    const validatedStateResult = await client.query<ValidatedVesselStateRow>(
+      `
+        UPDATE vessels_master
+        SET status = 'EN_CARTERA',
+            audit_status = 'VALIDATED',
+            process_status = 'COMPLETED',
+            updated_at = NOW(),
+            fecha_ultima_actualizacion = NOW()
+        WHERE ($1::integer IS NOT NULL AND imo_number = $1::integer)
+           OR ($1::integer IS NULL AND $2::text IS NOT NULL AND mmsi = $2::text)
+        RETURNING status, audit_status, process_status
+      `,
+      [savedVessel.imoNumber, savedVessel.mmsi],
+    );
+    const validatedState = validatedStateResult.rows[0];
+    if (!validatedState) throw new Error("No se pudo validar el estado final del buque guardado.");
     const countResult = await client.query<{ total: string }>(
       `SELECT COUNT(*)::integer AS total FROM vessels_master`,
     );
@@ -321,6 +350,9 @@ export default async (req: Request) => {
         beam_meters: savedVessel.beamMeters,
         last_port: savedVessel.lastPort,
         eta: savedVessel.eta,
+        status: validatedState.status,
+        audit_status: validatedState.audit_status,
+        process_status: validatedState.process_status,
       },
       masterVesselCount: Number(countResult.rows[0]?.total || 0),
     }, 200, headers);

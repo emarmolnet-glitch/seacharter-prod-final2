@@ -172,14 +172,14 @@ test('el motor de aptitud descarta un tanker verificado en una ruta de carga sec
 
 test('el radar de Core PRO prioriza la ficha técnica verificada', () => {
   assert.match(indexSource, /src\/vessel-master-class-registry\.js/);
-  assert.match(indexSource, /const verifiedProfile = window\.VesselMasterClassRegistry\?\.getVerifiedVesselClassRecord\?\.\(vessel\)/);
-  assert.match(indexSource, /readDensityPositiveNumber\(verifiedProfile, \['grossTonnage', 'gross_tonnage'\]\)/);
-  assert.match(indexSource, /readDensityPositiveNumber\(verifiedProfile, \['loaMeters', 'loa_meters'\]\)/);
-  assert.match(indexSource, /readDensityTechnicalValue\(verifiedProfile, \['flag'\]\)/);
-  assert.match(indexSource, /readDensityTechnicalValue\(verifiedProfile, \['yearBuilt', 'year_built'\]\)/);
+  assert.match(indexSource, /readDensityPositiveNumber\(vessel, \['grossTonnage', 'gross_tonnage', 'gt', 'GT'\]\)/);
+  assert.match(indexSource, /readDensityPositiveNumber\(vessel, \['loaMeters', 'loa_meters'/);
+  assert.match(indexSource, /readDensityTechnicalValue\(vessel, \['flag', 'Flag', 'bandera', 'country'\]\)/);
+  assert.match(indexSource, /readDensityTechnicalValue\(vessel, \['yearBuilt', 'year_built', 'builtYear', 'built_year'\]\)/);
   assert.match(indexSource, /data-vessel-class-source="VESSELS_MASTER"/);
-  assert.match(indexSource, /verifiedProfile\?\.vesselClass[\s\S]*translateAisVesselClass/);
-  assert.match(indexSource, /hydrateVerifiedVesselClasses\(visibleRows\)/);
+  assert.match(indexSource, /vessel\.vesselTechnicalProfileVerified === true/);
+  assert.doesNotMatch(indexSource, /hydrateVerifiedVesselClasses\(visibleRows\)/);
+  assert.doesNotMatch(indexSource, /\/api\/vessels\/lookup/);
   assert.match(indexSource, /window\.applyVerifiedVesselClass\(radarVessel\)/);
   assert.match(dueDiligenceSource, /recordVerifiedVesselClass\?\.\(verifiedVessel\)/);
   assert.match(dueDiligenceSource, /applyVerifiedVesselClass\?\.\(verifiedVessel\)/);
