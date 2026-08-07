@@ -18,6 +18,7 @@
     const VESSEL_MARKER_ALTITUDE = 0.012;
     const VESSEL_MARKER_BEARING_DISTANCE_DEG = 0.42;
     const VESSEL_ACTIVE_COLOR = '#2DD4BF';
+    const INBOUND_TO_POL_COLOR = '#38BDF8';
     const PATH_STYLE = Object.freeze({ color: '#00FFFF', width: 2, simplify: true });
     const BALLAST_PATH_COLOR = '#F59E0B';
     const EARTH_IMAGE_URL = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
@@ -96,19 +97,6 @@
         return null;
     }
 
-    function firstFiniteNumber(scopes, keys) {
-        for (const scope of scopes) {
-            if (!scope || typeof scope !== 'object') continue;
-            for (const key of keys) {
-                if (scope[key] !== undefined && scope[key] !== null && scope[key] !== '') {
-                    const number = toFiniteNumber(scope[key]);
-                    if (Number.isFinite(number)) return number;
-                }
-            }
-        }
-        return null;
-    }
-
     function findValidAisDirection(scopes, keys, unavailableValue) {
         for (const scope of scopes) {
             if (!scope || typeof scope !== 'object') continue;
@@ -135,6 +123,72 @@
         return digits.length === length ? digits : '';
     }
 
+    const COORDINATE_KEY_PAIRS = Object.freeze([
+        ['AIS_Live_Lat', 'AIS_Live_Lon'],
+        ['latitude', 'longitude'],
+        ['Latitude', 'Longitude'],
+        ['lat', 'lng'],
+        ['lat', 'lon'],
+        ['lat', 'long'],
+        ['LAT', 'LON'],
+        ['LAT', 'LONG'],
+        ['Port_Registro_Lat', 'Port_Registro_Lon'],
+        ['latitud', 'longitud']
+    ]);
+
+    function readCoordinatePair(scope) {
+        if (!scope || typeof scope !== 'object' || Array.isArray(scope)) return null;
+        for (const [latKey, lngKey] of COORDINATE_KEY_PAIRS) {
+            let lat = toFiniteNumber(scope[latKey]);
+            let lng = toFiniteNumber(scope[lngKey]);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+            let axisOrder = 'lat-lng';
+            if (Math.abs(lat) > 90 && Math.abs(lat) <= 180 && Math.abs(lng) <= 90) {
+                [lat, lng] = [lng, lat];
+                axisOrder = 'lng-lat-corrected';
+            }
+            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
+            if (Math.abs(lat) < 0.0001 && Math.abs(lng) < 0.0001) continue;
+            return { lat, lng, axisOrder, source: `${latKey}/${lngKey}` };
+        }
+        return null;
+    }
+
+    function resolveVesselCoordinates(vessel) {
+        const sourcePayload = vessel?.source_payload || vessel?.sourcePayload;
+        const message = vessel?.Message;
+        const sourceMessage = sourcePayload?.Message;
+        const scopes = [
+            vessel,
+            vessel?.ais,
+            vessel?.AIS,
+            vessel?.PositionReport,
+            vessel?.position,
+            message?.PositionReport,
+            message?.StandardClassBPositionReport,
+            message?.ExtendedClassBPositionReport,
+            vessel?.MetaData,
+            vessel?.metadata,
+            sourcePayload,
+            sourcePayload?.ais,
+            sourcePayload?.PositionReport,
+            sourcePayload?.position,
+            sourceMessage?.PositionReport,
+            sourceMessage?.StandardClassBPositionReport,
+            sourceMessage?.ExtendedClassBPositionReport,
+            sourcePayload?.MetaData,
+            sourcePayload?.metadata
+        ];
+        const visited = new Set();
+        for (const scope of scopes) {
+            if (!scope || typeof scope !== 'object' || visited.has(scope)) continue;
+            visited.add(scope);
+            const coordinates = readCoordinatePair(scope);
+            if (coordinates) return coordinates;
+        }
+        return null;
+    }
+
     function getVesselColor(vesselType) {
         const normalizedType = String(vesselType || '').trim().toLowerCase();
         if (normalizedType.includes('general cargo') || normalizedType.includes('bulk carrier')) {
@@ -146,6 +200,21 @@
         return NOISE_VESSEL_COLOR;
     }
 
+    function isInboundToPolVessel(vessel) {
+        const scopes = getObjectScopes(vessel);
+        const matchReason = String(firstValue(scopes, ['matchReason', 'match_reason', 'searchVector', 'search_vector', 'aisRadarZone']) || '').toUpperCase();
+        return matchReason === 'INBOUND_TO_POL'
+            || matchReason === 'DESTINATION_GLOBAL'
+            || matchReason === 'LONG_DISTANCE_POL'
+            || scopes.some(scope => scope.inboundToPol === true
+                || scope.predictiveMatch === true
+                || scope.longDistanceTransitToPol === true);
+    }
+
+    function getVesselDisplayColor(vessel) {
+        return isInboundToPolVessel(vessel) ? INBOUND_TO_POL_COLOR : getVesselColor(vessel?.vesselType);
+    }
+
     function getVesselRadiusFactor(vessel) {
         return getVesselColor(vessel?.vesselType) === COMMERCIAL_VESSEL_COLOR ? 1.35 : 1;
     }
@@ -153,10 +222,9 @@
     function normalizeVessel(vessel, index = 0) {
         if (!vessel || typeof vessel !== 'object') return null;
         const scopes = getObjectScopes(vessel);
-        const lat = firstFiniteNumber(scopes, ['lat', 'latitude', 'Latitude', 'AIS_Live_Lat', 'LAT', 'latitud']);
-        const lng = firstFiniteNumber(scopes, ['lng', 'lon', 'long', 'longitude', 'Longitude', 'AIS_Live_Lon', 'LON', 'LONG', 'longitud']);
-        if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
-        if (Math.abs(lat) < 0.0001 && Math.abs(lng) < 0.0001) return null;
+        const coordinates = resolveVesselCoordinates(vessel);
+        if (!coordinates) return null;
+        const { lat, lng } = coordinates;
         const rawName = firstValue(scopes, ['name', 'vesselName', 'VesselName', 'vessel_name', 'ShipName', 'shipName', 'ship_name', 'NAME']);
         const rawImo = firstValue(scopes, ['imo', 'IMO', 'imoNumber', 'imo_number', 'imo_no', 'IMO_Number']);
         const rawMmsi = firstValue(scopes, ['mmsi', 'MMSI', 'mmsiNumber', 'mmsi_number']);
@@ -179,6 +247,9 @@
             heading: navigation.value,
             headingSource: navigation.source,
             hasHeading: navigation.value !== null,
+            inboundToPol: isInboundToPolVessel(vessel),
+            coordinateAxisOrder: coordinates.axisOrder,
+            coordinateSource: coordinates.source,
             sourceIndex: index
         };
     }
@@ -244,7 +315,7 @@
     function getVesselPointColor(vessel, hoveredVessel, selectedVessel) {
         if (vessel === selectedVessel) return '#2DD4BF';
         if (vessel === hoveredVessel) return POINT_HOVER_COLOR;
-        return getVesselColor(vessel?.vesselType);
+        return getVesselDisplayColor(vessel);
     }
 
     function formatDwt(value) {
@@ -258,6 +329,7 @@
         const source = String(vessel?.data_source || vessel?.data_source_type || vessel?.source || '').toLowerCase();
         const isDataBridge = source === 'databridge' || source === 'cartera' || source === 'en_cartera';
         const isRadarLive = source === 'radar_live' || source === 'radar' || source === 'live';
+        const isInboundToPol = isInboundToPolVessel(vessel);
         const sourceLabel = isDataBridge
             ? '🏷️ En Cartera (Data Bridge)'
             : isRadarLive
@@ -266,7 +338,10 @@
         const sourceBadge = sourceLabel
             ? `<span class="fleet-source-badge" style="display:block;margin-top:3px;font-size:10px;font-weight:800;color:${isDataBridge ? '#38bdf8' : '#34d399'};">${escapeHtml(sourceLabel)}</span>`
             : '';
-        return `<div class="global-fleet-tooltip"><strong>${escapeHtml(name)}</strong>${sourceBadge}<span>DWT · ${escapeHtml(formatDwt(vessel?.dwt))}</span><span>IMO · ${escapeHtml(imo && imo !== 'N/A' ? imo : 'IMO no disponible')}</span></div>`;
+        const inboundBadge = isInboundToPol
+            ? '<span class="fleet-source-badge" style="display:block;margin-top:3px;font-size:10px;font-weight:900;color:#38bdf8;">Inbound to POL · búsqueda global</span>'
+            : '';
+        return `<div class="global-fleet-tooltip"><strong>${escapeHtml(name)}</strong>${inboundBadge}${sourceBadge}<span>DWT · ${escapeHtml(formatDwt(vessel?.dwt))}</span><span>IMO · ${escapeHtml(imo && imo !== 'N/A' ? imo : 'IMO no disponible')}</span></div>`;
     }
 
     function schedulePointInteractionStyle(view) {
@@ -302,7 +377,7 @@
 
     function createVesselMarkerElement(vessel, view) {
         const marker = document.createElement('div');
-        const vesselColor = getVesselColor(vessel.vesselType);
+        const vesselColor = getVesselDisplayColor(vessel);
         marker.className = 'global-vessel-marker';
         marker.classList.add(vessel.hasHeading ? 'has-reported-heading' : 'is-heading-unknown');
         marker.dataset.headingSource = vessel.headingSource || 'unavailable';
@@ -322,11 +397,13 @@
                     <circle class="global-vessel-marker__unknown-core" cx="12" cy="12" r="3"/>
                 </svg>
             </span>`;
-        marker.dataset.vesselCategory = vesselColor === COMMERCIAL_VESSEL_COLOR
-            ? 'commercial'
-            : vesselColor === TANKER_VESSEL_COLOR
-                ? 'tanker'
-                : 'noise';
+        marker.dataset.vesselCategory = vessel.inboundToPol === true
+            ? 'inbound-to-pol'
+            : vesselColor === COMMERCIAL_VESSEL_COLOR
+                ? 'commercial'
+                : vesselColor === TANKER_VESSEL_COLOR
+                    ? 'tanker'
+                    : 'noise';
         marker.style.setProperty('--vessel-marker-color', vesselColor);
         marker.style.setProperty('--vessel-active-color', VESSEL_ACTIVE_COLOR);
         marker.style.setProperty('--vessel-marker-scale', String(getVesselMarkerScale(view) * getVesselRadiusFactor(vessel)));
@@ -1037,6 +1114,7 @@
         setAutoRotate,
         toggleAutoRotate,
         getVesselColor,
+        normalizeVessels: prepareVessels,
         getInstance: (key = DEFAULT_KEY) => getView(key)?.adapter || null,
         getVessels: (key = DEFAULT_KEY) => getView(key)?.vessels || [],
         pointProps: Object.freeze({ commercialColor: COMMERCIAL_VESSEL_COLOR, tankerColor: TANKER_VESSEL_COLOR, noiseColor: NOISE_VESSEL_COLOR, hoverColor: POINT_HOVER_COLOR, altitude: POINT_ALTITUDE, nearRadius: 0.075, farRadius: 0.032 })

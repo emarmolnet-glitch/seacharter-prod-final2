@@ -2,6 +2,7 @@ import type { QueryResultRow } from "pg";
 import { getPool } from "./index.js";
 import type { VesselMasterRow } from "./vessels-master.js";
 import {
+  buildPortDestinationAliases,
   classifyCandidateMatch,
   estimateArrivalDate,
   estimateBallastStatus,
@@ -51,6 +52,7 @@ type CommercialPoolRow = QueryResultRow & {
   source_mmsi: string | null;
   source_dwt: number | string | null;
   source_design_draft: number | string | null;
+  destination_text: string | null;
 };
 
 type MatchingMasterProfileRow = QueryResultRow & {
@@ -151,6 +153,9 @@ export async function findMatchingVessels(request: FindMatchingVesselsRequest): 
   const minDwt = cargoQuantity * 1.05;
   const targetDwt = Math.max(minDwt, Number(request.targetDwt) || minDwt);
   const candidateLimit = Math.min(5000, Math.max(1000, (safeOffset + safeLimit) * 20));
+  const destinationAliases = buildPortDestinationAliases(request.polData)
+    .map((alias) => alias.replace(/[^A-Z0-9]+/g, ""))
+    .filter((alias) => alias.length >= 3);
 
   if (safeLatitude === null || safeLongitude === null || minDwt <= 0) {
     return { rows: [], totalCount: 0, limit: safeLimit, offset: safeOffset };
@@ -186,7 +191,8 @@ export async function findMatchingVessels(request: FindMatchingVesselsRequest): 
           REGEXP_REPLACE(COALESCE(vm.imo_number::text, ''), '[^0-9]', '', 'g') AS source_imo,
           COALESCE(vm.mmsi::text, '') AS source_mmsi,
           vm.dwt::double precision AS source_dwt,
-          vm.draft_meters::double precision AS source_design_draft
+          vm.draft_meters::double precision AS source_design_draft,
+          COALESCE(vm.current_destination, vm.source_payload->>'destination', vm.source_payload->>'Destination') AS destination_text
         FROM vessels_master vm
         WHERE (vm.status = 'EN_CARTERA'
           OR vm.validation_status = 'VALIDADO')
@@ -222,7 +228,15 @@ export async function findMatchingVessels(request: FindMatchingVesselsRequest): 
           REGEXP_REPLACE(COALESCE(av.imo_number::text, av.raw_data->>'imo', av.raw_data->>'IMO', ''), '[^0-9]', '', 'g') AS source_imo,
           COALESCE(av.mmsi::text, av.raw_data->>'mmsi', av.raw_data->>'MMSI', '') AS source_mmsi,
           NULL::double precision AS source_dwt,
-          NULL::double precision AS source_design_draft
+          NULL::double precision AS source_design_draft,
+          COALESCE(
+            av.raw_data->>'destination',
+            av.raw_data->>'Destination',
+            av.raw_data->>'current_destination',
+            av.raw_data#>>'{MetaData,Destination}',
+            av.raw_data#>>'{Message,ShipStaticData,Destination}',
+            av.raw_data#>>'{ShipStaticData,Destination}'
+          ) AS destination_text
         FROM ais_vessels av
         WHERE av.audit_status = 'VALIDATED'
 
@@ -270,16 +284,39 @@ export async function findMatchingVessels(request: FindMatchingVesselsRequest): 
           ), '[^0-9]', '', 'g') AS source_imo,
           COALESCE(os.mmsi::text, os.raw_data->>'mmsi', os.raw_data->>'MMSI', '') AS source_mmsi,
           NULL::double precision AS source_dwt,
-          NULL::double precision AS source_design_draft
+          NULL::double precision AS source_design_draft,
+          COALESCE(
+            os.raw_data->>'destination',
+            os.raw_data->>'Destination',
+            os.raw_data->>'current_destination',
+            os.raw_data#>>'{MetaData,Destination}',
+            os.raw_data#>>'{Message,ShipStaticData,Destination}',
+            os.raw_data#>>'{ShipStaticData,Destination}'
+          ) AS destination_text
         FROM openships_latest os
       )
-      SELECT source_system, payload, sort_at, distance_nm, source_imo, source_mmsi, source_dwt, source_design_draft
+      SELECT source_system, payload, sort_at, distance_nm, source_imo, source_mmsi, source_dwt, source_design_draft, destination_text
       FROM source_rows
       WHERE source_system = ANY($1::text[])
+        AND (
+          distance_nm <= $5
+          OR EXISTS (
+            SELECT 1
+            FROM unnest($6::text[]) AS destination_alias
+            WHERE REGEXP_REPLACE(
+              TRANSLATE(
+                UPPER(COALESCE(destination_text, '')),
+                'ÁÀÂÄÃÅÉÈÊËÍÌÎÏÓÒÔÖÕÚÙÛÜÇÑ',
+                'AAAAAAEEEEIIIIOOOOOUUUUCN'
+              ),
+              '[^A-Z0-9]', '', 'g'
+            ) LIKE '%' || destination_alias || '%'
+          )
+        )
       ORDER BY sort_at DESC NULLS LAST
       LIMIT $4
     `,
-    [safeSources, safeLatitude, safeLongitude, candidateLimit],
+    [safeSources, safeLatitude, safeLongitude, candidateLimit, safeRadius, destinationAliases],
   );
 
   const imoNumbers = Array.from(new Set(result.rows
@@ -357,6 +394,10 @@ export async function findMatchingVessels(request: FindMatchingVesselsRequest): 
       matchReason: matchReason as MatchReason,
       longDistanceTransitToPol: matchReason === "INBOUND_TO_POL",
       commercialTransitCandidate: matchReason === "INBOUND_TO_POL",
+      inboundToPol: matchReason === "INBOUND_TO_POL",
+      predictiveMatch: matchReason === "INBOUND_TO_POL",
+      operationalLabel: matchReason === "INBOUND_TO_POL" ? "Inbound to POL" : null,
+      searchVector: matchReason === "INBOUND_TO_POL" ? "DESTINATION_GLOBAL" : "RADIAL",
       estimatedArrivalAt: estimatedArrival?.toISOString() ?? null,
       distance_nm: distanceNm,
       verified_design_draft: designDraft,

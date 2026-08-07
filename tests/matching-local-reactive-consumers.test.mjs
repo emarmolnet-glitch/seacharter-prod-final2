@@ -50,7 +50,8 @@ test('local matching unlocks calculator without external AIS sweep availability'
 test('density map consumes the persistent commercial store without legacy fallbacks', () => {
   assert.match(mapSource, /const openShipsData = normalizeDensityVesselCollection\(window\.openShipsVesselsCache\)/);
   assert.match(mapSource, /const persistedRawVessels = normalizeDensityVesselCollection\(store\?\.rawVessels\)/);
-  assert.match(mapSource, /const sourceVessels = openShipsData\.length > 0 \? openShipsData : persistedRawVessels/);
+  assert.match(mapSource, /const predictiveMatchingVessels = normalizeDensityVesselCollection/);
+  assert.match(mapSource, /const sourceVessels = normalizeDensityVesselCollection\(\[[\s\S]*\.\.\.persistedRawVessels,[\s\S]*\.\.\.openShipsData,[\s\S]*\.\.\.predictiveMatchingVessels/);
   assert.match(mapSource, /store\?\.setCommercialVesselState\?\.\(/);
   assert.match(mapSource, /window\.useCommercialFilter\(sourceVessels/);
   assert.match(source, /const displayVessels = isGlobalDebugActive \? filteredVessels : rawVessels/);

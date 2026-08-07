@@ -11956,6 +11956,7 @@
                                 <div>
                                     <p class="text-[10px] text-slate-400 font-bold uppercase">Buques detectados</p>
                                     <h4 id="ais-density-count" class="text-3xl font-black text-blue-500 mt-1 mono">--</h4>
+                                    <p id="ais-density-origin-breakdown" class="mt-1 text-[10px] font-bold text-slate-400" aria-live="polite">Sin desglose disponible</p>
                                     <div id="ais-density-taxonomy-breakdown" class="ais-taxonomy-breakdown mt-2" aria-live="polite" aria-label="Total de buques detectados por macro-categoría"></div>
                                     <span id="buques-count" class="hidden">--</span>
                                     <span id="ais-storage-progress" class="block text-[10px] text-slate-500 font-bold mono mt-1">0% / 1000</span>
@@ -12204,6 +12205,7 @@
                                 BUQUES DETECTADOS EN TIEMPO REAL (OPENSHIPS)
                             </h3>
                             <div class="collapsible-section-actions">
+                                <span id="ais-detected-origin-summary" class="hidden rounded-full border border-slate-700 bg-slate-950 px-2.5 py-1 text-[10px] font-black text-slate-300" aria-live="polite"></span>
                                 <span id="ais-list-timestamp" class="text-[10px] text-slate-500"></span>
                             </div>
                         </div>
@@ -22189,6 +22191,13 @@
                         // Active Matching Projections & Position Badges
                         const projectionBadge = m.ais.positionProjected ? 
                             '<span class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1" title="Posición proyectada matemáticamente al inicio del laycan mediante velocidad y rumbo AIS"><i class="fa-solid fa-wand-magic-sparkles animate-pulse"></i> Proyección AIS</span>' : '';
+                        const inboundToPol = m.matchReason === 'INBOUND_TO_POL'
+                            || v.matchReason === 'INBOUND_TO_POL'
+                            || m.ais?.matchReason === 'INBOUND_TO_POL'
+                            || m.ais?.longDistanceTransitToPol === true;
+                        const inboundToPolBadge = inboundToPol
+                            ? '<span data-inbound-to-pol="true" class="bg-sky-50 text-sky-800 border border-sky-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1" title="Destino AIS compatible con el POL y llegada viable antes del cancelling"><i class="fa-solid fa-compass"></i> Inbound to POL</span>'
+                            : '';
 
                         // Check if vessel is within dynamic radius of load port
                         const distanceToPol = m.ais.currentDistanceToLoadPort !== undefined 
@@ -22341,6 +22350,7 @@
                                     ${dwtPenaltyBadge}
                                     ${debugDwtBadge}
                                     ${vesselTypePenaltyBadge}
+                                    ${inboundToPolBadge}
                                     ${projectionBadge}
                                     ${within300Badge}
                                     ${compBadge}
@@ -46905,8 +46915,20 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.renderFilteredAisCounters = function(vesselsInput = window.getDerivedFilteredAisVessels()) {
             const displayVessels = Array.isArray(vesselsInput) ? vesselsInput : [];
             const filteredCount = displayVessels.length;
+            const originBreakdown = typeof window.getDensityRadarOriginBreakdown === 'function'
+                ? window.getDensityRadarOriginBreakdown(displayVessels)
+                : { localCount: filteredCount, globalCount: 0 };
             const densityCountEl = document.getElementById('ais-density-count');
             if (densityCountEl) densityCountEl.textContent = String(filteredCount);
+            const originBreakdownEl = document.getElementById('ais-density-origin-breakdown');
+            if (originBreakdownEl) {
+                originBreakdownEl.textContent = `${originBreakdown.localCount} en radio local | ${originBreakdown.globalCount} globales en tránsito`;
+            }
+            const detectedOriginSummaryEl = document.getElementById('ais-detected-origin-summary');
+            if (detectedOriginSummaryEl) {
+                detectedOriginSummaryEl.textContent = `${filteredCount} Buques Detectados (${originBreakdown.localCount} en radio local | ${originBreakdown.globalCount} globales en tránsito)`;
+                detectedOriginSummaryEl.classList.toggle('hidden', filteredCount === 0);
+            }
             const buquesCountEl = document.getElementById('buques-count');
             if (buquesCountEl) buquesCountEl.textContent = String(filteredCount);
             if (typeof window.renderAisTaxonomyBreakdown === 'function') {
@@ -46966,6 +46988,68 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return true;
         }
 
+        function resolveRadarVesselCoordinatePair(vessel, sourcePayload = {}, metadata = {}, position = {}) {
+            const message = vessel?.Message || {};
+            const sourceMessage = sourcePayload?.Message || {};
+            const scopes = [
+                vessel,
+                vessel?.ais,
+                vessel?.AIS,
+                vessel?.PositionReport,
+                vessel?.position,
+                message?.PositionReport,
+                message?.StandardClassBPositionReport,
+                message?.ExtendedClassBPositionReport,
+                metadata,
+                sourcePayload,
+                sourcePayload?.ais,
+                sourcePayload?.PositionReport,
+                sourcePayload?.position,
+                sourceMessage?.PositionReport,
+                sourceMessage?.StandardClassBPositionReport,
+                sourceMessage?.ExtendedClassBPositionReport,
+                sourcePayload?.MetaData,
+                sourcePayload?.metadata,
+                position
+            ].filter(scope => scope && typeof scope === 'object');
+            const keyPairs = [
+                ['AIS_Live_Lat', 'AIS_Live_Lon'],
+                ['latitude', 'longitude'],
+                ['Latitude', 'Longitude'],
+                ['lat', 'lng'],
+                ['lat', 'lon'],
+                ['lat', 'long'],
+                ['LAT', 'LON'],
+                ['LAT', 'LONG'],
+                ['Port_Registro_Lat', 'Port_Registro_Lon'],
+                ['latitud', 'longitud']
+            ];
+            const visited = new Set();
+            for (const scope of scopes) {
+                if (visited.has(scope)) continue;
+                visited.add(scope);
+                for (const [latKey, lonKey] of keyPairs) {
+                    const rawLatitude = scope[latKey];
+                    const rawLongitude = scope[lonKey];
+                    if (rawLatitude === null || rawLatitude === undefined || rawLatitude === ''
+                        || rawLongitude === null || rawLongitude === undefined || rawLongitude === '') continue;
+                    let latitude = Number(String(rawLatitude).replace(',', '.'));
+                    let longitude = Number(String(rawLongitude).replace(',', '.'));
+                    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+                    let axisOrder = 'lat-lng';
+                    if (Math.abs(latitude) > 90 && Math.abs(latitude) <= 180 && Math.abs(longitude) <= 90) {
+                        [latitude, longitude] = [longitude, latitude];
+                        axisOrder = 'lng-lat-corrected';
+                    }
+                    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) continue;
+                    if (Math.abs(latitude) < 0.0001 && Math.abs(longitude) < 0.0001) continue;
+                    return { latitude, longitude, axisOrder, source: `${latKey}/${lonKey}` };
+                }
+            }
+            return null;
+        }
+        window.resolveRadarVesselCoordinatePair = resolveRadarVesselCoordinatePair;
+
         window.normalizeAisVesselForRadar = function(v) {
             if (!v || typeof v !== 'object') return null;
             let sourcePayload = v.source_payload || v.sourcePayload || {};
@@ -46983,12 +47067,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const mmsi = v.mmsi || v.MMSI || sourcePayload.mmsi || sourcePayload.MMSI || meta.MMSI || "N/A";
             const imo = v.imo || v.IMO || v.imoNumber || v.imo_number || sourcePayload.imo || sourcePayload.IMO || sourcePayload.imo_number || meta.IMO || mmsi || "N/A";
             const destination = v.destination || v.Destination || v.current_destination || sourcePayload.destination || sourcePayload.Destination || meta.Destination || "N/A";
-            const lat = parseFloat(
-                v.latitude ?? v.lat ?? v.Latitude ?? v.AIS_Live_Lat ?? sourcePayload.latitude ?? sourcePayload.lat ?? sourcePayload.AIS_Live_Lat ?? meta.AIS_Live_Lat ?? meta.latitude ?? meta.Port_Registro_Lat ?? position.Latitude ?? position.latitude
-            );
-            const lon = parseFloat(
-                v.longitude ?? v.lon ?? v.lng ?? v.Longitude ?? v.AIS_Live_Lon ?? sourcePayload.longitude ?? sourcePayload.lon ?? sourcePayload.lng ?? sourcePayload.AIS_Live_Lon ?? meta.AIS_Live_Lon ?? meta.longitude ?? meta.Port_Registro_Lon ?? position.Longitude ?? position.longitude
-            );
+            const coordinatePair = resolveRadarVesselCoordinatePair(v, sourcePayload, meta, position);
+            const lat = coordinatePair?.latitude;
+            const lon = coordinatePair?.longitude;
             const speed = typeof window.readRealVesselSpeed === 'function'
                 ? window.readRealVesselSpeed({ ...v, source_payload: sourcePayload, MetaData: meta, PositionReport: position })
                 : (() => {
@@ -47024,6 +47105,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 longitude: Number.isFinite(lon) ? lon : undefined,
                 lat: Number.isFinite(lat) ? lat : undefined,
                 lon: Number.isFinite(lon) ? lon : undefined,
+                coordinateAxisOrder: coordinatePair?.axisOrder || null,
+                coordinateSource: coordinatePair?.source || null,
                 speed: speed === null ? undefined : speed,
                 shipType: shipTypeVal,
                 ShipType: v.ShipType || shipTypeVal,
@@ -48208,8 +48291,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const nearbyVessels = Array.isArray(response.nearbyVessels) ? response.nearbyVessels : [];
             const aisVessels = Array.isArray(response.aisVessels) ? response.aisVessels : [];
             const openShipsVessels = Array.isArray(response.openShipsVessels) ? response.openShipsVessels : [];
+            const predictiveVessels = Array.isArray(response.predictiveVessels) ? response.predictiveVessels : [];
             const polScopedAisVessels = nearbyVessels.length > 0 ? nearbyVessels : aisVessels;
-            const matches = normalizeMatchingRadarCandidates([...polScopedAisVessels, ...openShipsVessels])
+            const matches = normalizeMatchingRadarCandidates([...polScopedAisVessels, ...openShipsVessels, ...predictiveVessels])
                 .sort((first, second) => {
                     const firstDistance = Number(first?.ais?.currentDistanceToLoadPort);
                     const secondDistance = Number(second?.ais?.currentDistanceToLoadPort);
@@ -48239,6 +48323,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 window.GlobalStore.matchingVessels = matches.slice();
                 window.GlobalStore.compatibleVessels = matches.slice();
             }
+            window.getDensityMapSourceVessels?.();
+            window.syncDensityDisplayConsumers?.({ updateGlobe: true });
             window.setRenderedMatchingVessels?.(matches, { source: 'matching-radar-sweep' });
             window.syncMatchingButtonWithCachedResults?.(matches.length);
 
@@ -48297,9 +48383,72 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.addEventListener('ais:matching-state-updated', captureMatchingState);
 
             window.matchingRadarSweepPromise = (async () => {
-                const [aisVessels, openShipsVessels] = await Promise.all([
+                const routeState = window.SeaCharterStore?.getState?.() || {};
+                const currentCalculation = window.getActiveMatchingCalculationState?.() || window.GlobalStore?.calculatedState || null;
+                const currentMatchingRequest = window.fetchMatchingRequestFromGlobalStore?.(currentCalculation, { applyToContext: false, persist: false }) || {};
+                const laycanStart = String(
+                    currentMatchingRequest?.cargo?.laycanStart
+                    || currentMatchingRequest?.laycan?.start
+                    || routeState.laydays
+                    || routeState.laycanDate
+                    || document.getElementById('match-laycan-start')?.value
+                    || document.getElementById('gc-laycan-date')?.value
+                    || document.getElementById('map-laycan-date')?.value
+                    || ''
+                ).trim();
+                const laycanEnd = String(
+                    currentMatchingRequest?.cargo?.laycanEnd
+                    || currentMatchingRequest?.laycan?.end
+                    || routeState.cancelling
+                    || routeState.cancellingDate
+                    || document.getElementById('match-laycan-end')?.value
+                    || document.getElementById('gc-cancel-date')?.value
+                    || document.getElementById('map-cancelling-date')?.value
+                    || ''
+                ).trim();
+                const cargoQuantity = Number(
+                    currentMatchingRequest?.cargo?.quantity
+                    || currentMatchingRequest?.cargo?.cargoQuantity
+                    || currentCalculation?.cargo?.quantity
+                    || currentCalculation?.cargoQuantity
+                    || document.getElementById('cargo-qty')?.value
+                    || 0
+                );
+                const predictivePayload = {
+                    ...currentMatchingRequest,
+                    route: {
+                        ...(currentMatchingRequest?.route || {}),
+                        pol: polContext.pol,
+                        pol_coordinates: { lat: polContext.coordinates.lat, lon: polContext.coordinates.lon }
+                    },
+                    cargo: {
+                        ...(currentMatchingRequest?.cargo || {}),
+                        loadingPortName: polContext.pol,
+                        loadingPortLat: polContext.coordinates.lat,
+                        loadingPortLon: polContext.coordinates.lon,
+                        quantity: Number.isFinite(cargoQuantity) ? cargoQuantity : 0,
+                        cargoQuantity: Number.isFinite(cargoQuantity) ? cargoQuantity : 0,
+                        laycanStart,
+                        laycanEnd
+                    },
+                    laycanStart,
+                    laycanEnd,
+                    matchRadiusNm: Number(window.AIS_PROSPECTION_RADII_NM?.POL) || 2000,
+                    allowedSources: typeof getAllowedMatchingSources === 'function'
+                        ? getAllowedMatchingSources()
+                        : ['DATABRIDGE', 'AIS_LIVE', 'OPENSHIPS'],
+                    limit: 100,
+                    offset: 0
+                };
+                const [aisVessels, openShipsVessels, predictiveResult] = await Promise.all([
                     window.startRadarLive({ source: 'matching-radar-sweep', refresh: true }),
-                    window.updateOpenShipsRadar?.({ refreshGlobe: false, polContext }) || Promise.resolve([])
+                    window.updateOpenShipsRadar?.({ refreshGlobe: false, polContext }) || Promise.resolve([]),
+                    laycanEnd && cargoQuantity > 0
+                        ? window.requestMatchingLocal?.('execute', [], predictivePayload).catch(error => {
+                            console.warn('[Matching Radar] Predictive destination query degraded.', error);
+                            return { data: [], matches: [] };
+                        })
+                        : Promise.resolve({ data: [], matches: [] })
                 ]);
                 const radarStateAfterLoad = window.RadarGlobalControl?.getState?.() || {};
                 if (radarStateAfterLoad.status === 'error') {
@@ -48317,20 +48466,24 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const nearbyVessels = Array.isArray(latestMatchingDetail?.nearbyVessels)
                     ? latestMatchingDetail.nearbyVessels
                     : (Array.isArray(window.GlobalStore?.nearbyVessels) ? window.GlobalStore.nearbyVessels : []);
+                const predictiveVessels = Array.isArray(predictiveResult?.data)
+                    ? predictiveResult.data
+                    : (Array.isArray(predictiveResult?.matches) ? predictiveResult.matches : []);
                 const { matches } = processMatchingRadarResponse({
                     polContext,
                     aisVessels,
                     openShipsVessels,
-                    nearbyVessels
+                    nearbyVessels,
+                    predictiveVessels
                 });
 
                 if (matches.length === 0) {
                     if (typeof showToast === 'function') {
-                        showToast(`El barrido Radar no encontró buques cercanos a ${polContext.pol}.`, false, 'warning');
+                        showToast(`El barrido Radar no encontró buques cercanos ni inbound a ${polContext.pol}.`, false, 'warning');
                     }
                 } else {
                     if (typeof showToast === 'function') {
-                        showToast(`${matches.length} buque${matches.length === 1 ? '' : 's'} encontrado${matches.length === 1 ? '' : 's'} cerca de ${polContext.pol}.`, false, 'success');
+                        showToast(`${matches.length} buque${matches.length === 1 ? '' : 's'} encontrado${matches.length === 1 ? '' : 's'} en radio o inbound a ${polContext.pol}.`, false, 'success');
                     }
                 }
                 window.RadarGlobalControl?.setState?.({ mode: 'live', status: 'idle', source: 'matching-radar-sweep', liveAt: new Date().toISOString() });
@@ -48939,6 +49092,27 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : null;
         }
 
+        function isDensityInboundToPolVessel(vessel) {
+            const scopes = [vessel, vessel?.ais, vessel?.MetaData, vessel?.metadata, vessel?.commercialTransit]
+                .filter(scope => scope && typeof scope === 'object');
+            const matchingSignals = scopes.flatMap(scope => [scope.matchReason, scope.match_reason, scope.searchVector, scope.search_vector, scope.aisRadarZone])
+                .map(value => String(value || '').trim().toUpperCase());
+            return matchingSignals.includes('INBOUND_TO_POL')
+                || matchingSignals.includes('DESTINATION_GLOBAL')
+                || matchingSignals.includes('LONG_DISTANCE_POL')
+                || scopes.some(scope => scope.inboundToPol === true
+                    || scope.predictiveMatch === true
+                    || scope.longDistanceTransitToPol === true);
+        }
+        window.isDensityInboundToPolVessel = isDensityInboundToPolVessel;
+
+        function getDensityRadarOriginBreakdown(vessels) {
+            const rows = Array.isArray(vessels) ? vessels : [];
+            const globalCount = rows.filter(isDensityInboundToPolVessel).length;
+            return { totalCount: rows.length, localCount: Math.max(0, rows.length - globalCount), globalCount };
+        }
+        window.getDensityRadarOriginBreakdown = getDensityRadarOriginBreakdown;
+
         function buildDensityDueDiligencePayload(vessel, vesselName, imo, latitude, longitude) {
             return encodeURIComponent(JSON.stringify({
                 imo: imo === '-' ? '' : imo,
@@ -48997,6 +49171,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const position = Number.isFinite(latitude) && Number.isFinite(longitude)
                     ? `${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`
                     : 'Posición N/D';
+                const inboundToPol = isDensityInboundToPolVessel(vessel);
+                const positionOriginBadge = inboundToPol
+                    ? '<span data-density-origin="global-inbound" class="mt-1 inline-flex items-center gap-1 rounded-full border border-sky-400/50 bg-sky-400/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-sky-300"><i class="fa-solid fa-earth-americas" aria-hidden="true"></i> Inbound to POL</span>'
+                    : '<span data-density-origin="local-radius" class="mt-1 inline-flex items-center gap-1 rounded-full border border-slate-600 bg-slate-800/80 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-slate-300"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> Local</span>';
                 const row = document.createElement('tr');
                 row.className = 'border-b border-slate-800/40 hover:bg-slate-900/30 transition-colors cursor-pointer';
                 row.dataset.densityCommercialMatch = 'true';
@@ -49008,7 +49186,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 row.innerHTML = `
                     <td class="py-3 px-3 font-semibold text-slate-200">${escapeDensityTableText(vesselName)}${commercialRankHtml}</td>
                     <td class="py-3 px-3 text-slate-400 mono">${escapeDensityTableText(imo)}</td>
-                    <td class="py-3 px-3 text-slate-400 mono">${escapeDensityTableText(position)}</td>
+                    <td class="py-3 px-3 text-slate-400 mono"><span class="block">${escapeDensityTableText(position)}</span>${positionOriginBadge}</td>
                     <td class="py-3 px-3 text-slate-400 mono">${Number.isFinite(speed) ? `${speed.toFixed(1)} kn` : 'N/D'}<span class="text-[10px] text-emerald-400 block">${escapeDensityTableText(navigationStatus)}</span></td>
 	                    <td class="py-3 px-3"><span${hasMasterProfile ? ' data-vessel-class-source="VESSELS_MASTER"' : ''} class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700">${escapeDensityTableText(vesselClass)}</span></td>
                     <td class="py-3 px-3 font-bold ${grossTonnage ? 'text-cyan-300' : 'text-amber-400'}">${grossTonnage ? grossTonnage.toLocaleString('es-ES') : 'REQUERIDO'}</td>
@@ -49068,7 +49246,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const store = window.GlobalStore;
             const openShipsData = normalizeDensityVesselCollection(window.openShipsVesselsCache);
             const persistedRawVessels = normalizeDensityVesselCollection(store?.rawVessels);
-            const sourceVessels = openShipsData.length > 0 ? openShipsData : persistedRawVessels;
+            const predictiveMatchingVessels = normalizeDensityVesselCollection([
+                ...(Array.isArray(store?.matchingVessels) ? store.matchingVessels : []),
+                ...(Array.isArray(store?.compatibleVessels) ? store.compatibleVessels : []),
+                ...(Array.isArray(store?.nearbyVessels) ? store.nearbyVessels : [])
+            ]);
+            const sourceVessels = normalizeDensityVesselCollection([
+                ...persistedRawVessels,
+                ...openShipsData,
+                ...predictiveMatchingVessels
+            ]);
             const targetCargoDwt = window.resolveGlobalTargetCargoDwt?.() || 0;
             store?.setCommercialVesselState?.({
                 rawVessels: sourceVessels,
@@ -49354,7 +49541,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             getDensityMapSourceVessels();
             const displayVessels = getDensityDisplayVessels();
-            const visibleRenderFleet = getDensityPolCoordinates() ? displayVessels : [];
+            const visibleRenderFleet = displayVessels;
             const renderableById = new Map();
             visibleRenderFleet.forEach((vessel, index) => {
                 if (!vessel || typeof vessel !== 'object') return;

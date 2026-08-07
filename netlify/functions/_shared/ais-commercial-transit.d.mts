@@ -13,6 +13,7 @@ export function parseMaritimeDate(value: unknown, referenceDate?: Date): Date | 
 export type CommercialTransitEvaluation = {
   candidate: boolean;
   destinationConfirmed: boolean;
+  declaredEtaFeasible: boolean;
   etaWithinLaycan: boolean;
   transitFeasible: boolean;
   longDistance: boolean;

@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [filterSource, funnelSource, dueDiligenceSource, indexSource, cssSource, openShipsStatusSource] = await Promise.all([
+const [filterSource, funnelSource, dueDiligenceSource, indexSource, cssSource, openShipsStatusSource, globeSource] = await Promise.all([
   readFile(new URL('../src/commercial-filter.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/density-commercial-funnel.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/due-diligence-entry.js', import.meta.url), 'utf8'),
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../assets/css/density-globe.css', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/functions/openships-live-status.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../GlobalFleetGlobe.js', import.meta.url), 'utf8'),
 ]);
 
 const filterModule = await import(`data:text/javascript;base64,${Buffer.from(filterSource).toString('base64')}`);
@@ -116,6 +117,22 @@ test('Density table identifies OpenShips as its live source', () => {
   assert.match(indexSource, /<th class="py-2\.5 px-3">Año<\/th>/);
   assert.match(indexSource, /onclick="event\.stopPropagation\(\)" data-due-diligence-button/);
   assert.match(indexSource, /row\.dataset\.densityCommercialMatch = 'true'/);
+});
+
+test('density globe merges predictive vessels without geographic clipping', () => {
+  assert.match(indexSource, /const predictiveMatchingVessels = normalizeDensityVesselCollection/);
+  assert.match(indexSource, /\.\.\.persistedRawVessels,[\s\S]*\.\.\.openShipsData,[\s\S]*\.\.\.predictiveMatchingVessels/);
+  assert.match(indexSource, /const visibleRenderFleet = displayVessels;/);
+  assert.match(globeSource, /view\.globe\.pointsData\(view\.vessels\)/);
+  assert.match(globeSource, /INBOUND_TO_POL_COLOR/);
+});
+
+test('density table and header expose local versus inbound origin', () => {
+  assert.match(indexSource, /data-density-origin="local-radius"/);
+  assert.match(indexSource, /data-density-origin="global-inbound"/);
+  assert.match(indexSource, /Inbound to POL/);
+  assert.match(indexSource, /globales en tránsito/);
+  assert.match(indexSource, /getDensityRadarOriginBreakdown/);
 });
 
 test('Density table infers spatial status and never fabricates missing speed', () => {

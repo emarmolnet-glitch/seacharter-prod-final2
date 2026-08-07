@@ -44,6 +44,13 @@ test('matching radar executes a POL-scoped sweep without requiring a full calcul
   assert.match(componentSource, /window\.startRadarLive\(\{ source: `\$\{source\}-global-control`, refresh: true, matchingRequest \}\)/);
 });
 
+test('matching radar runs predictive destination matching beside radial sources', () => {
+  assert.match(source, /const \[aisVessels, openShipsVessels, predictiveResult\] = await Promise\.all/);
+  assert.match(source, /requestMatchingLocal\?\.\('execute', \[\], predictivePayload\)/);
+  assert.match(source, /predictiveVessels/);
+  assert.match(source, /\.\.\.polScopedAisVessels, \.\.\.openShipsVessels, \.\.\.predictiveVessels/);
+});
+
 test('leaving the radar map freezes LIVE mode and cleans up the on-demand transport', () => {
   const switchStart = source.indexOf('function switchTab(tabId)');
   const switchEnd = source.indexOf("if (tabId === 'auditor')", switchStart);
