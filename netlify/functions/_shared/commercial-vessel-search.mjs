@@ -85,6 +85,15 @@ export function estimateArrivalDate({ eta, distanceNm, speedKnots, now = new Dat
   return new Date(now.getTime() + (distance / speed) * 60 * 60 * 1000);
 }
 
+function cancellingDeadline(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) date.setUTCHours(23, 59, 59, 999);
+  return date;
+}
+
 export function isLaycanCompliant(eta, laycanStart, laycanEnd) {
   const etaDate = eta instanceof Date ? eta : eta ? new Date(eta) : null;
   const start = laycanStart ? new Date(laycanStart) : null;
@@ -95,13 +104,23 @@ export function isLaycanCompliant(eta, laycanStart, laycanEnd) {
 }
 
 export function isInboundEtaCoherent({ eta, distanceNm, speedKnots, laycanEnd, now = new Date() }) {
-  const arrival = estimateArrivalDate({ eta, distanceNm, speedKnots, now });
-  if (!arrival) return false;
-  const end = laycanEnd ? new Date(laycanEnd) : null;
-  const latestUsefulArrival = end && Number.isFinite(end.getTime())
-    ? new Date(end.getTime() + 7 * 24 * 60 * 60 * 1000)
-    : new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000);
-  return arrival >= new Date(now.getTime() - 12 * 60 * 60 * 1000) && arrival <= latestUsefulArrival;
+  const earliestUsefulArrival = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+  const latestUsefulArrival = cancellingDeadline(laycanEnd);
+  if (!latestUsefulArrival) return false;
+  const declaredArrival = eta ? new Date(eta) : null;
+  const declaredFeasible = Boolean(
+    declaredArrival
+    && Number.isFinite(declaredArrival.getTime())
+    && declaredArrival >= earliestUsefulArrival
+    && declaredArrival <= latestUsefulArrival,
+  );
+  const projectedArrival = estimateArrivalDate({ distanceNm, speedKnots, now });
+  const projectedFeasible = Boolean(
+    projectedArrival
+    && projectedArrival >= earliestUsefulArrival
+    && projectedArrival <= latestUsefulArrival,
+  );
+  return declaredFeasible || projectedFeasible;
 }
 
 export function classifyCandidateMatch({

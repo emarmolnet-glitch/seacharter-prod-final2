@@ -1,11 +1,11 @@
+import { normalizePortDestination } from "./commercial-vessel-search.mjs";
+
 const DEFAULT_SERVICE_SPEED_KNOTS = 11.5;
 const MIN_SERVICE_SPEED_KNOTS = 6;
 const MAX_SERVICE_SPEED_KNOTS = 22;
 const SEA_ROUTE_FACTOR = 1.12;
-const LAYCAN_EARLY_TOLERANCE_HOURS = 24;
-const LAYCAN_LATE_TOLERANCE_HOURS = 12;
 
-export const LONG_DISTANCE_TRANSIT_LABEL = "En tránsito de larga distancia hacia POL";
+export const LONG_DISTANCE_TRANSIT_LABEL = "Inbound to POL";
 
 export function normalizePortIdentity(value) {
   return String(value || "")
@@ -17,21 +17,10 @@ export function normalizePortIdentity(value) {
     .trim();
 }
 
-function meaningfulPortTokens(value) {
-  return normalizePortIdentity(value).split(" ").filter((token) => token.length >= 3);
-}
-
 export function destinationMatchesPol(destination, polName, compatiblePorts = []) {
   const normalizedDestination = normalizePortIdentity(destination);
   if (!normalizedDestination || ["n a", "not available", "unknown", "for orders"].includes(normalizedDestination)) return false;
-
-  return [polName, ...compatiblePorts].some((candidate) => {
-    const normalizedCandidate = normalizePortIdentity(candidate);
-    if (!normalizedCandidate) return false;
-    if (normalizedDestination.includes(normalizedCandidate) || normalizedCandidate.includes(normalizedDestination)) return true;
-    const candidateTokens = meaningfulPortTokens(normalizedCandidate);
-    return candidateTokens.length > 0 && candidateTokens.every((token) => normalizedDestination.includes(token));
-  });
+  return normalizePortDestination(destination, { name: polName, aliases: compatiblePorts });
 }
 
 export function parseMaritimeDate(value, referenceDate = new Date()) {
@@ -56,6 +45,13 @@ export function parseMaritimeDate(value, referenceDate = new Date()) {
   return Number.isFinite(directTimestamp) ? new Date(directTimestamp) : null;
 }
 
+function cancellingDeadline(value, referenceDate) {
+  const parsed = parseMaritimeDate(value, referenceDate);
+  if (!parsed) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim())) parsed.setUTCHours(23, 59, 59, 999);
+  return parsed;
+}
+
 export function evaluateCommercialTransitToPol({
   destination,
   polName,
@@ -71,7 +67,7 @@ export function evaluateCommercialTransitToPol({
 }) {
   const destinationConfirmed = destinationMatchesPol(destination, polName, compatiblePorts);
   const start = parseMaritimeDate(laycanStart, now);
-  const end = parseMaritimeDate(laycanEnd || laycanStart, now);
+  const end = cancellingDeadline(laycanEnd || laycanStart, now);
   const explicitEta = parseMaritimeDate(aisEta, now);
   const remainingDistanceNm = Number(distanceNm);
   const reportedSpeed = Number(speedKnots);
@@ -86,18 +82,21 @@ export function evaluateCommercialTransitToPol({
     ? (remainingDistanceNm * SEA_ROUTE_FACTOR) / effectiveSpeedKnots
     : null;
   const projectedEta = transitHours === null ? null : new Date(now.getTime() + transitHours * 3600000);
-  const effectiveEta = explicitEta || projectedEta;
-  const windowStart = start ? start.getTime() - LAYCAN_EARLY_TOLERANCE_HOURS * 3600000 : null;
-  const windowEnd = end ? end.getTime() + LAYCAN_LATE_TOLERANCE_HOURS * 3600000 : null;
-  const etaWithinLaycan = Boolean(effectiveEta && windowStart !== null && windowEnd !== null
-    && effectiveEta.getTime() >= windowStart && effectiveEta.getTime() <= windowEnd);
-  const transitFeasible = Boolean(projectedEta && windowEnd !== null && projectedEta.getTime() <= windowEnd);
+  const earliestUsefulArrival = now.getTime() - 12 * 3600000;
+  const windowEnd = end?.getTime() ?? null;
+  const declaredEtaFeasible = Boolean(explicitEta && windowEnd !== null
+    && explicitEta.getTime() >= earliestUsefulArrival && explicitEta.getTime() <= windowEnd);
+  const transitFeasible = Boolean(projectedEta && windowEnd !== null
+    && projectedEta.getTime() >= earliestUsefulArrival && projectedEta.getTime() <= windowEnd);
+  const effectiveEta = declaredEtaFeasible ? explicitEta : (transitFeasible ? projectedEta : (explicitEta || projectedEta));
+  const etaWithinLaycan = declaredEtaFeasible || transitFeasible;
   const longDistance = Number.isFinite(remainingDistanceNm) && remainingDistanceNm > visualRadiusNm;
-  const candidate = destinationConfirmed && etaWithinLaycan && transitFeasible;
+  const candidate = destinationConfirmed && etaWithinLaycan;
 
   return {
     candidate,
     destinationConfirmed,
+    declaredEtaFeasible,
     etaWithinLaycan,
     transitFeasible,
     longDistance,

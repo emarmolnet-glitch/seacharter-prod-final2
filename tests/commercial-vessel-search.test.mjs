@@ -33,6 +33,33 @@ test('classifies near and coherent inbound candidates independently of radius', 
     speedKnots: 10,
     now,
   }), 'INBOUND_TO_POL');
+  assert.equal(classifyCandidateMatch({
+    distanceNm: 900,
+    radiusNm: 300,
+    destination: 'DZBJA',
+    polData,
+    eta: '2026-08-11T00:00:00Z',
+    laycanEnd: '2026-08-10',
+    speedKnots: 12,
+    now,
+  }), 'INBOUND_TO_POL');
+  assert.equal(classifyCandidateMatch({
+    distanceNm: 900,
+    radiusNm: 300,
+    destination: 'DZBJA',
+    polData,
+    eta: '2026-08-11T00:00:00Z',
+    laycanEnd: '2026-08-05',
+    speedKnots: 5,
+    now,
+  }), null);
+});
+
+test('global source query filters radial or fuzzy destination rows before limiting', () => {
+  assert.match(matchingSources, /distance_nm <= \$5/);
+  assert.match(matchingSources, /FROM unnest\(\$6::text\[\]\) AS destination_alias/);
+  assert.match(matchingSources, /destination_text/);
+  assert.match(matchingSources, /searchVector: matchReason === "INBOUND_TO_POL" \? "DESTINATION_GLOBAL" : "RADIAL"/);
 });
 
 test('ranking prioritizes DWT, ballast, laycan and distance in that order', () => {

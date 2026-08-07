@@ -33,7 +33,7 @@ test('matching radar fetches AIS and OpenShips then commits dynamic results', ()
   assert.match(handlerSource, /latestMatchingDetail\?\.nearbyVessels/);
   assert.match(handlerSource, /processMatchingRadarResponse\(\{[\s\S]*openShipsVessels,[\s\S]*nearbyVessels/);
 
-  assert.match(processorSource, /normalizeMatchingRadarCandidates\(\[\.\.\.polScopedAisVessels, \.\.\.openShipsVessels\]\)/);
+  assert.match(processorSource, /normalizeMatchingRadarCandidates\(\[\.\.\.polScopedAisVessels, \.\.\.openShipsVessels, \.\.\.predictiveVessels\]\)/);
   assert.match(processorSource, /window\.matchingRadarDataSources = \{/);
   assert.match(processorSource, /window\.matchingResultsState = \{[\s\S]*vessels: matches\.slice\(\)/);
   assert.match(processorSource, /window\.GlobalStore\.matchingVessels = matches\.slice\(\)/);
