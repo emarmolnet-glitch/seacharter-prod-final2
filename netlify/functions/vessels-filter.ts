@@ -23,6 +23,8 @@ type MasterProfileRow = QueryResultRow & {
   imo_number: number | string | null;
   mmsi: string | null;
   vessel_type: string | null;
+  dwt: number | string | null;
+  draft_meters: number | string | null;
   gross_tonnage: number | string | null;
   loa_meters: number | string | null;
   beam_meters: number | string | null;
@@ -91,6 +93,9 @@ function mapAisVessel(row: AisCandidateRow, master: MasterProfileRow | null) {
     vesselType: effectiveVesselType,
     vesselClass: effectiveVesselType,
     shipType: effectiveVesselType,
+    dwt: optionalNumber(master?.dwt ?? null) ?? asRecord(row.raw_data).dwt,
+    draft_meters: optionalNumber(master?.draft_meters ?? null),
+    draftMeters: optionalNumber(master?.draft_meters ?? null),
     gross_tonnage: optionalNumber(master?.gross_tonnage ?? null),
     grossTonnage: optionalNumber(master?.gross_tonnage ?? null),
     loa_meters: optionalNumber(master?.loa_meters ?? null),
@@ -100,6 +105,14 @@ function mapAisVessel(row: AisCandidateRow, master: MasterProfileRow | null) {
     flag: master?.flag || undefined,
     year_built: optionalNumber(master?.year_built ?? null),
     yearBuilt: optionalNumber(master?.year_built ?? null),
+    master_status: master?.status || undefined,
+    masterStatus: master?.status || undefined,
+    portfolio_status: master?.status || undefined,
+    portfolioStatus: master?.status || undefined,
+    master_audit_status: master?.audit_status || undefined,
+    masterAuditStatus: master?.audit_status || undefined,
+    master_process_status: master?.process_status || undefined,
+    masterProcessStatus: master?.process_status || undefined,
     vesselTechnicalProfileVerified: Boolean(master),
     vesselClassSource: master ? "VESSELS_MASTER" : "AIS_FEED",
     latitude: row.latitude,
@@ -180,7 +193,7 @@ export default async (req: Request) => {
         const masterResult = await pool.query<MasterProfileRow>(
           `
             SELECT
-              imo_number, mmsi, vessel_type, gross_tonnage, loa_meters,
+              imo_number, mmsi, vessel_type, dwt, draft_meters, gross_tonnage, loa_meters,
               beam_meters, flag, year_built, status, audit_status, process_status
             FROM vessels_master
             WHERE imo_number = ANY($1::integer[])

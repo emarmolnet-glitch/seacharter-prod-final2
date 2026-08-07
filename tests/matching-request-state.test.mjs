@@ -50,9 +50,39 @@ test('matching engine rehydrates matchingRequest before local validation and exe
   assert.match(source, /setInputValue\('match-cargo-type', normalizedCargo\.cargoCode\)/);
   assert.match(source, /setInputValue\('match-quantity', request\.cargo\?\.quantity\)/);
   assert.match(executionSource, /const matchingRequest = typeof window\.fetchMatchingRequestFromGlobalStore/);
-  assert.match(executionSource, /const effectiveRouteOverride = routeOverride \|\| matchingRequest\?\.route \|\| null/);
+  assert.match(executionSource, /window\.syncMatchingViewFromGlobalOperationalState\?\.\(\{ persist: true \}\)/);
+  assert.match(executionSource, /const effectiveRouteOverride = matchingRequest\?\.route \|\| routeOverride \|\| null/);
+  const cargoSelectionSource = executionSource.slice(
+    executionSource.indexOf('const matchingCargoType'),
+    executionSource.indexOf('const matchingQuantity'),
+  );
+  assert.ok(cargoSelectionSource.indexOf('matchingRequest?.cargo?.cargoCode') < cargoSelectionSource.indexOf("document.getElementById('match-cargo-type')?.value"));
+  assert.ok(executionSource.indexOf('matchingRequest?.cargo?.quantity') < executionSource.indexOf("document.getElementById('match-quantity')?.value"));
+  assert.ok(executionSource.indexOf('matchingRequest?.laycan?.start') < executionSource.indexOf("document.getElementById('match-laycan-start')?.value"));
+  assert.doesNotMatch(cargoSelectionSource, /'100'/);
   assert.match(executionSource, /source: matchingRequest\?\.endpoint \|\| '\/api\/matching-local'/);
   assert.doesNotMatch(executionSource, /source: matchingRequest\.endpoint/);
+});
+
+test('matching tab synchronizes live calculator state before radar initialization', () => {
+  const syncStart = source.indexOf('function syncCalculatorAndMatching');
+  const syncEnd = source.indexOf('window.syncMatchingViewFromGlobalOperationalState = syncMatchingViewFromGlobalOperationalState;', syncStart);
+  const syncSource = source.slice(syncStart, syncEnd);
+  const tabStart = source.indexOf("if (tabId === 'matching')");
+  const tabEnd = source.indexOf("if (tabId === 'cbam')", tabStart);
+  const tabSource = source.slice(tabStart, tabEnd);
+
+  assert.match(syncSource, /function syncCalculatorAndMatching\(source, options = \{\}\)/);
+  assert.match(syncSource, /options\.force !== true && typeof isInputInteraction/);
+  assert.match(syncSource, /const routeState = readRouteStateFromCalculator\(\)/);
+  assert.match(syncSource, /const cargoState = readValidatedCargoOperationState\(\)/);
+  assert.match(syncSource, /setInputValue\('match-laycan-start', synchronizedState\.laydays\)/);
+  assert.match(syncSource, /setInputValue\('match-laycan-end', synchronizedState\.cancelling\)/);
+  assert.match(syncSource, /syncCalculatorAndMatching\('calculator', \{ force: true \}\)/);
+  assert.match(syncSource, /laydays: synchronizedState\.laydays/);
+  assert.match(syncSource, /cancelling: synchronizedState\.cancelling/);
+  assert.ok(tabSource.indexOf('syncMatchingViewFromGlobalOperationalState') < tabSource.indexOf('initializeMatchingGlobalTaxonomyControl'));
+  assert.doesNotMatch(tabSource, /syncCalculatorAndMatching\('calculator'\)/);
 });
 
 test('matching button remains available when calculator context exists without radar readiness', () => {

@@ -6,12 +6,19 @@ type VerifiedVesselProfile = {
   imo: string | null;
   mmsi: string | null;
   vesselClass: string;
+  dwt: number | null;
+  draftMeters: number | null;
   grossTonnage: number | null;
   loaMeters: number | null;
   beamMeters: number | null;
   flag: string | null;
   yearBuilt: number | null;
+  status: string | null;
+  auditStatus: string | null;
+  processStatus: string | null;
 };
+
+const MAX_MASTER_IDENTIFIERS = 5000;
 
 function asRecord(value: unknown): AnyRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as AnyRecord : {};
@@ -77,18 +84,23 @@ function applyProfile(vessel: unknown, profile: VerifiedVesselProfile): AnyRecor
     });
     metadata.ShipType = profile.vesselClass;
   }
+  if (profile.dwt) Object.assign(fields, { dwt: profile.dwt, DWT: profile.dwt, deadweight: profile.dwt });
+  if (profile.draftMeters) Object.assign(fields, { draftMeters: profile.draftMeters, draft_meters: profile.draftMeters, draft: profile.draftMeters });
   if (profile.grossTonnage) Object.assign(fields, { grossTonnage: profile.grossTonnage, gross_tonnage: profile.grossTonnage, gt: profile.grossTonnage });
   if (profile.loaMeters) Object.assign(fields, { loaMeters: profile.loaMeters, loa_meters: profile.loaMeters, loa: profile.loaMeters });
   if (profile.beamMeters) Object.assign(fields, { beamMeters: profile.beamMeters, beam_meters: profile.beamMeters, beam: profile.beamMeters });
   if (profile.flag) Object.assign(fields, { flag: profile.flag, bandera: profile.flag });
   if (profile.yearBuilt) Object.assign(fields, { yearBuilt: profile.yearBuilt, year_built: profile.yearBuilt, builtYear: profile.yearBuilt });
+  if (profile.status) Object.assign(fields, { masterStatus: profile.status, master_status: profile.status, portfolioStatus: profile.status, portfolio_status: profile.status });
+  if (profile.auditStatus) Object.assign(fields, { masterAuditStatus: profile.auditStatus, master_audit_status: profile.auditStatus });
+  if (profile.processStatus) Object.assign(fields, { masterProcessStatus: profile.processStatus, master_process_status: profile.processStatus });
   return { ...source, ...fields, MetaData: metadata };
 }
 
 export async function overrideVesselClassesFromMaster(vessels: unknown[]) {
   const list = Array.isArray(vessels) ? vessels : [];
-  const imos = Array.from(new Set(list.map(readImo).filter(Boolean))).map(Number).slice(0, 500);
-  const mmsis = Array.from(new Set(list.map(readMmsi).filter(Boolean))).slice(0, 500);
+  const imos = Array.from(new Set(list.map(readImo).filter(Boolean))).map(Number).slice(0, MAX_MASTER_IDENTIFIERS);
+  const mmsis = Array.from(new Set(list.map(readMmsi).filter(Boolean))).slice(0, MAX_MASTER_IDENTIFIERS);
   if (imos.length === 0 && mmsis.length === 0) return { vessels: list, matched: 0, degraded: false, warning: "" };
 
   try {
@@ -96,14 +108,21 @@ export async function overrideVesselClassesFromMaster(vessels: unknown[]) {
       imo_number: number | string | null;
       mmsi: string | null;
       vessel_type: string | null;
+      dwt: number | string | null;
+      draft_meters: number | string | null;
       gross_tonnage: number | string | null;
       loa_meters: number | string | null;
       beam_meters: number | string | null;
       flag: string | null;
       year_built: number | string | null;
+      status: string | null;
+      audit_status: string | null;
+      process_status: string | null;
     }>(
       `
-        SELECT imo_number, mmsi, vessel_type, gross_tonnage, loa_meters, beam_meters, flag, year_built
+        SELECT
+          imo_number, mmsi, vessel_type, dwt, draft_meters, gross_tonnage,
+          loa_meters, beam_meters, flag, year_built, status, audit_status, process_status
         FROM vessels_master
         WHERE imo_number = ANY($1::integer[])
            OR (mmsi IS NOT NULL AND mmsi = ANY($2::text[]))
@@ -118,11 +137,16 @@ export async function overrideVesselClassesFromMaster(vessels: unknown[]) {
         imo: imo.length === 7 ? imo : null,
         mmsi: mmsi.length === 9 ? mmsi : null,
         vesselClass: String(row.vessel_type ?? "").trim(),
+        dwt: numberOrNull(row.dwt),
+        draftMeters: numberOrNull(row.draft_meters),
         grossTonnage: numberOrNull(row.gross_tonnage),
         loaMeters: numberOrNull(row.loa_meters),
         beamMeters: numberOrNull(row.beam_meters),
         flag: row.flag || null,
         yearBuilt: numberOrNull(row.year_built),
+        status: row.status || null,
+        auditStatus: row.audit_status || null,
+        processStatus: row.process_status || null,
       };
       if (profile.imo) profiles.set(`imo:${profile.imo}`, profile);
       if (profile.mmsi) profiles.set(`mmsi:${profile.mmsi}`, profile);

@@ -184,6 +184,8 @@ test('calculator save persists editable master fields and keeps GT locally', () 
   assert.match(saveSource, /document\.getElementById\('vessel-identity-gt'\)/);
   assert.match(saveSource, /document\.getElementById\('vessel-identity-loa'\)/);
   assert.match(saveSource, /document\.getElementById\('vessel-identity-year'\)/);
+  assert.match(saveSource, /storedTechnicalVessel\.beam_meters/);
+  assert.match(saveSource, /beam_meters: beam/);
   assert.match(saveSource, /fetch\('\/api\/vessel-due-diligence-save'/);
   assert.match(saveSource, /method: 'PUT'/);
   assert.match(saveSource, /body: JSON\.stringify\(\{ vessel: payload \}\)/);

@@ -17,6 +17,17 @@ test('matching header consolidates route, laycan and cargo operations', () => {
   assert.match(indexSource, /laycanRange = \[formatContractDate\(route\.laydays\), formatContractDate\(route\.cancelling\)\]/);
 });
 
+test('matching header prefers live calculator operations over cached matching values', () => {
+  const operationStart = indexSource.indexOf('window.getMatchingContractOperationalState = function');
+  const operationEnd = indexSource.indexOf('window.getCommercialTargetCargoDwt', operationStart);
+  const operationSource = indexSource.slice(operationStart, operationEnd);
+
+  assert.match(operationSource, /const liveCargoState = typeof readValidatedCargoOperationState === 'function'/);
+  assert.ok(operationSource.indexOf('liveCargoState.loadRate') < operationSource.indexOf('storeState.loadRate'));
+  assert.ok(operationSource.indexOf('liveCargoState.dischargeRate') < operationSource.indexOf('storeState.dischargeRate'));
+  assert.ok(operationSource.indexOf("document.getElementById('cargo-qty')?.value") < operationSource.indexOf('matchingRequest.cargo?.quantity'));
+});
+
 test('active voyage store publishes canonical laycan and cargo fields', () => {
   assert.match(indexSource, /laycan: \{ laydays: "", cancelling: "" \}/);
   assert.match(indexSource, /function normalizeActiveVoyageState\(partial = \{\}, baseState = State\)/);

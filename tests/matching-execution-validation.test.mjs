@@ -174,6 +174,8 @@ test('global route hydration supplies POL and POD to validation and core executi
   assert.deepEqual(receivedRoute, {
     pol: 'ORAN (DZ)',
     pod: 'BANJUL (GM)',
+    laydays: '2026-07-20',
+    cancelling: '',
     laycan: '2026-07-20',
     pol_coordinates: { lat: 35.6971, lon: -0.6308 },
     pod_coordinates: { lat: 13.4549, lon: -16.579 },
