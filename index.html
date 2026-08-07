@@ -184,6 +184,7 @@
     <script type="module" src="./stress-test-engine.js"></script>
     <script type="module" src="./src/route-configurator-entry.tsx"></script>
     <script type="module" src="./src/dss-empty-state-entry.tsx"></script>
+    <script type="module" src="./src/vessel-master-class-registry.js"></script>
     <script type="module" src="./src/due-diligence-entry.js"></script>
     <script type="module" src="./src/density-commercial-funnel.js"></script>
     <script src="./session-draft.js"></script>
@@ -46931,9 +46932,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 ? window.inferSpatialVesselStatus(normalizedVessel, getDensityReferencePortCoordinates())
                 : (v.statusLabel || statusVal || 'Estado N/D');
             normalizedVessel.statusLabel = inferredStatusLabel === 'Estado N/D' ? undefined : inferredStatusLabel;
-            return typeof hydrateRadarVesselCargoType === 'function'
+            const radarVessel = typeof hydrateRadarVesselCargoType === 'function'
                 ? hydrateRadarVesselCargoType(normalizedVessel)
                 : normalizedVessel;
+            return typeof window.applyVerifiedVesselClass === 'function'
+                ? window.applyVerifiedVesselClass(radarVessel)
+                : radarVessel;
         };
 
         window.actualizarVistaRadar = function() {
@@ -48866,15 +48870,29 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const speed = typeof window.readRealVesselSpeed === 'function'
                     ? window.readRealVesselSpeed(vessel)
                     : Number.NaN;
-                const vesselClass = vessel.vesselClass || vessel.vesselType || vessel.shipType || vessel.ShipType || 'Unknown';
+                const verifiedProfile = window.VesselMasterClassRegistry?.getVerifiedVesselClassRecord?.(vessel) || null;
+                const feedVesselClass = readDensityTechnicalValue(vessel, [
+                    'vesselClass', 'vessel_class', 'vesselType', 'vessel_type',
+                    'shipType', 'ship_type', 'ShipType', 'type'
+                ]) || '';
+                const vesselClass = verifiedProfile?.vesselClass
+                    || window.VesselMasterClassRegistry?.translateAisVesselClass?.(feedVesselClass)
+                    || feedVesselClass
+                    || 'Unknown';
                 const navigationStatus = typeof window.inferSpatialVesselStatus === 'function'
                     ? window.inferSpatialVesselStatus(vessel, getDensityReferencePortCoordinates())
                     : (vessel.statusLabel || vessel.navigationStatus || vessel.navigationalStatus || vessel.NavigationalStatus || 'Estado N/D');
-                const grossTonnage = readDensityPositiveNumber(vessel, ['grossTonnage', 'gross_tonnage', 'gt', 'GT']);
+                const grossTonnage = readDensityPositiveNumber(verifiedProfile, ['grossTonnage', 'gross_tonnage'])
+                    || readDensityPositiveNumber(vessel, ['grossTonnage', 'gross_tonnage', 'gt', 'GT']);
                 const dwt = readDensityPositiveNumber(vessel, ['dwt', 'DWT', 'deadweight']);
-                const loaMeters = readDensityPositiveNumber(vessel, ['loaMeters', 'loa_meters', 'loa', 'LOA', 'lengthOverall', 'length_overall', 'length']);
-                const flag = readDensityTechnicalValue(vessel, ['flag', 'Flag', 'bandera', 'country']) || '-';
-                const yearBuilt = readDensityTechnicalValue(vessel, ['yearBuilt', 'year_built', 'builtYear', 'built_year']) || '-';
+                const loaMeters = readDensityPositiveNumber(verifiedProfile, ['loaMeters', 'loa_meters'])
+                    || readDensityPositiveNumber(vessel, ['loaMeters', 'loa_meters', 'loa', 'LOA', 'lengthOverall', 'length_overall', 'length']);
+                const flag = readDensityTechnicalValue(verifiedProfile, ['flag'])
+                    || readDensityTechnicalValue(vessel, ['flag', 'Flag', 'bandera', 'country'])
+                    || '-';
+                const yearBuilt = readDensityTechnicalValue(verifiedProfile, ['yearBuilt', 'year_built'])
+                    || readDensityTechnicalValue(vessel, ['yearBuilt', 'year_built', 'builtYear', 'built_year'])
+                    || '-';
                 const dueDiligencePayload = buildDensityDueDiligencePayload(vessel, vesselName, imo, latitude, longitude);
                 const commercialRank = Number(vessel.commercialRank?.position);
                 const dwtDifference = Number(vessel.commercialRank?.dwtDifferenceMt);
@@ -48897,7 +48915,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     <td class="py-3 px-3 text-slate-400 mono">${escapeDensityTableText(imo)}</td>
                     <td class="py-3 px-3 text-slate-400 mono">${escapeDensityTableText(position)}</td>
                     <td class="py-3 px-3 text-slate-400 mono">${Number.isFinite(speed) ? `${speed.toFixed(1)} kn` : 'N/D'}<span class="text-[10px] text-emerald-400 block">${escapeDensityTableText(navigationStatus)}</span></td>
-                    <td class="py-3 px-3"><span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700">${escapeDensityTableText(vesselClass)}</span></td>
+                    <td class="py-3 px-3"><span${verifiedProfile?.vesselClass ? ' data-vessel-class-source="VESSELS_MASTER"' : ''} class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700">${escapeDensityTableText(vesselClass)}</span></td>
                     <td class="py-3 px-3 font-bold ${grossTonnage ? 'text-cyan-300' : 'text-amber-400'}">${grossTonnage ? grossTonnage.toLocaleString('es-ES') : 'REQUERIDO'}</td>
                     <td class="py-3 px-3 text-slate-300 mono">${dwt ? dwt.toLocaleString('es-ES') : 'N/D'}</td>
                     <td class="py-3 px-3 text-slate-300 mono">${loaMeters ? `${loaMeters.toLocaleString('es-ES')} m` : 'N/D'}</td>
@@ -48912,6 +48930,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 tbody.appendChild(row);
             });
             window.GlobalStore?.setRenderedAisVessels?.(visibleRows, { source: 'density-display-vessels' });
+            if (options.hydrateVerifiedProfiles !== false && typeof window.VesselMasterClassRegistry?.hydrateVerifiedVesselClasses === 'function') {
+                window.VesselMasterClassRegistry.hydrateVerifiedVesselClasses(visibleRows)
+                    .then(result => {
+                        if (result?.changed) window.syncDensityDisplayConsumers?.({ updateGlobe: false, hydrateVerifiedProfiles: false });
+                    })
+                    .catch(() => {});
+            }
             return visibleRows;
         }
         window.renderDensityVesselsTable = renderDensityVesselsTable;

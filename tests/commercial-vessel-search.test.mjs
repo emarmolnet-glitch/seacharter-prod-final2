@@ -47,10 +47,12 @@ test('ranking prioritizes DWT, ballast, laycan and distance in that order', () =
 });
 
 test('database search verifies and filters DWT before slicing the ranked page', () => {
-  const dwtFilterIndex = matchingSources.indexOf('verified_dwt >= $4');
+  const dwtFilterIndex = matchingSources.indexOf('verifiedDwt < minDwt');
   const rankingIndex = matchingSources.indexOf('sortCandidates(commercialCandidates)');
   const paginationIndex = matchingSources.indexOf('.slice(safeOffset, safeOffset + safeLimit)');
-  assert.match(matchingSources, /LEFT JOIN LATERAL[\s\S]*FROM vessels_master/);
+  assert.doesNotMatch(matchingSources, /LEFT JOIN LATERAL/);
+  assert.match(matchingSources, /WHERE imo_number = ANY\(\$1::integer\[\]\)/);
+  assert.match(matchingSources, /const masterByImo = new Map/);
   assert.ok(dwtFilterIndex >= 0 && dwtFilterIndex < rankingIndex && rankingIndex < paginationIndex);
   assert.match(matchingSources, /const minDwt = cargoQuantity \* 1\.05/);
   assert.match(matchingEndpoint, /findMatchingVessels\(\{/);

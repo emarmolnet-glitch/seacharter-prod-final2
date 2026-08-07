@@ -121,7 +121,14 @@ export async function persistDueDiligenceVessel(
   const normalizedAction = action === 'discard' ? 'discard' : 'save';
   const payloadVessel = normalizedAction === 'discard'
     ? { ...vessel, status: 'discarded' }
-    : vessel;
+    : {
+        ...vessel,
+        gross_tonnage: vessel?.gross_tonnage ?? vessel?.grossTonnage ?? vessel?.gt ?? null,
+        loa_meters: vessel?.loa_meters ?? vessel?.loaMeters ?? vessel?.loa ?? vessel?.LOA ?? null,
+        beam_meters: vessel?.beam_meters ?? vessel?.beamMeters ?? vessel?.beam ?? vessel?.breadth ?? null,
+        year_built: vessel?.year_built ?? vessel?.yearBuilt ?? vessel?.builtYear ?? vessel?.built_year ?? null,
+        flag: vessel?.flag ?? vessel?.Flag ?? vessel?.bandera ?? null,
+      };
   const response = await fetchImpl(endpoint, {
     method: normalizedAction === 'discard' ? 'PATCH' : 'PUT',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },

@@ -152,8 +152,9 @@ export default async (req: Request) => {
   try {
     const url = new URL(req.url);
     const geofence = parseAisGeofence(url);
+    const pool = getPool();
     const result = geofence
-      ? await getPool().query<OpenShipsStatusRow>(`
+      ? await pool.query<OpenShipsStatusRow>(`
       WITH latest AS (
         SELECT DISTINCT ON (COALESCE(NULLIF(mmsi::text, ''), vessel_key))
           vessel_key,
@@ -220,7 +221,7 @@ export default async (req: Request) => {
         geofence.radiusNm,
         geofence.limit,
       ])
-      : await getPool().query<OpenShipsStatusRow>(`
+      : await pool.query<OpenShipsStatusRow>(`
       SELECT DISTINCT ON (COALESCE(NULLIF(mmsi::text, ''), vessel_key))
         COALESCE(raw_data, '{}'::jsonb) || jsonb_build_object(
           'storage_key', vessel_key,
@@ -252,8 +253,12 @@ export default async (req: Request) => {
       .filter((vessel) => vessel && typeof vessel === "object");
     const imoNumbers = Array.from(new Set(rawVessels.map(vesselImo).filter(Boolean))).map(Number);
     const mmsiNumbers = Array.from(new Set(rawVessels.map(vesselMmsi).filter(Boolean)));
-    const masterRows = imoNumbers.length > 0 || mmsiNumbers.length > 0
-      ? (await getPool().query<MasterVesselRow>(`
+    let masterRows: MasterVesselRow[] = [];
+    let degraded = false;
+    let warning = "";
+    if (imoNumbers.length > 0 || mmsiNumbers.length > 0) {
+      try {
+        masterRows = (await pool.query<MasterVesselRow>(`
           SELECT
             imo_number, mmsi, vessel_name, dwt, vessel_type, draft_meters, flag,
             call_sign, year_built, gross_tonnage, net_tonnage, loa_meters,
@@ -265,8 +270,13 @@ export default async (req: Request) => {
           FROM vessels_master
           WHERE imo_number = ANY($1::integer[])
              OR mmsi = ANY($2::text[])
-        `, [imoNumbers, mmsiNumbers])).rows
-      : [];
+        `, [imoNumbers, mmsiNumbers])).rows;
+      } catch (error) {
+        degraded = true;
+        warning = error instanceof Error ? error.message : String(error);
+        console.warn("[openships-live-status] Batch master lookup failed; raw OpenShips snapshot preserved.", warning);
+      }
+    }
     const masterByImo = new Map<string, MasterVesselRow>();
     const masterByMmsi = new Map<string, MasterVesselRow>();
     masterRows.forEach((row) => {
@@ -276,6 +286,7 @@ export default async (req: Request) => {
       if (mmsi) masterByMmsi.set(mmsi, row);
     });
     const vessels = rawVessels.flatMap((vessel) => {
+      if (degraded) return [vessel];
       const master = masterByImo.get(vesselImo(vessel)) || masterByMmsi.get(vesselMmsi(vessel));
       if (!master) return [vessel];
       if (master.is_discarded === true) return [];
@@ -286,6 +297,15 @@ export default async (req: Request) => {
       {
         success: true,
         source: "OPENSHIPS",
+        degraded,
+        filterApplied: !degraded,
+        warning: degraded ? "vessels_master no disponible; se devuelve el snapshot bruto de OpenShips." : undefined,
+        batchLookup: {
+          imoCount: imoNumbers.length,
+          mmsiCount: mmsiNumbers.length,
+          masterRows: masterRows.length,
+          queryCount: imoNumbers.length > 0 || mmsiNumbers.length > 0 ? 1 : 0,
+        },
         recent_vessels: vessels.length,
         count: vessels.length,
         openshipsCount: vessels.length,
@@ -294,7 +314,7 @@ export default async (req: Request) => {
           : null,
         vessels,
       },
-      { headers: { "cache-control": "no-store" } },
+      { status: degraded ? 206 : 200, headers: { "cache-control": "no-store" } },
     );
   } catch (error) {
     console.error(

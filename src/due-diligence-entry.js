@@ -156,12 +156,26 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             meta.flag = technical.flag;
         }
         if (technical.vesselType) {
+            target.vesselClass = technical.vesselType;
+            target.vessel_class = technical.vesselType;
             target.vesselType = technical.vesselType;
             target.vessel_type = technical.vesselType;
             target.shipType = technical.vesselType;
             target.ship_type = technical.vesselType;
+            target.ShipType = technical.vesselType;
+            target.type = technical.vesselType;
+            target.tipo_buque = technical.vesselType;
+            target.radarCategory = technical.vesselType;
+            target.verifiedVesselClass = technical.vesselType;
+            target.vesselClassVerified = true;
+            target.vesselClassSource = 'VESSELS_MASTER';
+            meta.vesselClass = technical.vesselType;
+            meta.vessel_class = technical.vesselType;
             meta.vesselType = technical.vesselType;
             meta.vessel_type = technical.vesselType;
+            meta.shipType = technical.vesselType;
+            meta.ship_type = technical.vesselType;
+            meta.ShipType = technical.vesselType;
         }
         if (technical.yearBuilt) {
             target.yearBuilt = technical.yearBuilt;
@@ -635,6 +649,12 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         const persisted = persistenceResult?.vessel && typeof persistenceResult.vessel === 'object'
             ? persistenceResult.vessel
             : {};
+        const validatedVesselType = persisted.vessel_type
+            || persisted.vesselType
+            || technical.vesselType
+            || fallbackVessel?.vessel_type
+            || fallbackVessel?.vesselType
+            || '';
         const vessel = mergeNonEmptyRecords(fallbackVessel, {
             ...persisted,
             ...technical,
@@ -643,8 +663,19 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             mmsi: persisted.mmsi || technical.mmsi || fallbackVessel?.mmsi,
             vesselName: persisted.vessel_name || persisted.vesselName || technical.vesselName || fallbackVessel?.vesselName,
             vessel_name: persisted.vessel_name || persisted.vesselName || technical.vesselName || fallbackVessel?.vessel_name,
-            vesselType: persisted.vessel_type || persisted.vesselType || technical.vesselType || fallbackVessel?.vesselType,
-            vessel_type: persisted.vessel_type || persisted.vesselType || technical.vesselType || fallbackVessel?.vessel_type,
+            vesselClass: validatedVesselType,
+            vessel_class: validatedVesselType,
+            vesselType: validatedVesselType,
+            vessel_type: validatedVesselType,
+            shipType: validatedVesselType,
+            ship_type: validatedVesselType,
+            ShipType: validatedVesselType,
+            type: validatedVesselType,
+            tipo_buque: validatedVesselType,
+            radarCategory: validatedVesselType,
+            verifiedVesselClass: validatedVesselType,
+            vesselClassVerified: Boolean(validatedVesselType),
+            vesselClassSource: validatedVesselType ? 'VESSELS_MASTER' : fallbackVessel?.vesselClassSource,
             yearBuilt: persisted.year_built || persisted.yearBuilt || technical.yearBuilt || fallbackVessel?.yearBuilt,
             year_built: persisted.year_built || persisted.yearBuilt || technical.yearBuilt || fallbackVessel?.year_built,
             grossTonnage: persisted.gross_tonnage || persisted.grossTonnage || technical.grossTonnage || fallbackVessel?.grossTonnage,
@@ -987,7 +1018,10 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             const persistenceResult = await persistDueDiligenceVessel(vessel, {
                 fetchImpl: typeof globalScope.fetch === 'function' ? globalScope.fetch.bind(globalScope) : undefined,
             });
-            const verifiedVessel = normalizePersistedVessel(persistenceResult, vessel, pendingTechnical);
+            let verifiedVessel = normalizePersistedVessel(persistenceResult, vessel, pendingTechnical);
+            const classRegistry = globalScope.VesselMasterClassRegistry;
+            classRegistry?.recordVerifiedVesselClass?.(verifiedVessel);
+            verifiedVessel = classRegistry?.applyVerifiedVesselClass?.(verifiedVessel) || verifiedVessel;
             if (densityCommercialFlow) {
                 try {
                     mergeVerifiedVesselIntoDensityState(verifiedVessel);

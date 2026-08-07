@@ -53,8 +53,10 @@ test('source query enriches Data Bridge, AIS, and OpenShips before application p
   assert.match(matchingDbSource, /audit_status = 'VALIDATED'/);
   assert.match(matchingDbSource, /FROM ais_telemetry_buffer/);
   assert.match(matchingDbSource, /WHERE source_system = ANY\(\$1::text\[\]\)/);
-  assert.match(matchingDbSource, /LEFT JOIN LATERAL[\s\S]*FROM vessels_master/);
-  assert.match(matchingDbSource, /verified_dwt >= \$4/);
+  assert.doesNotMatch(matchingDbSource, /LEFT JOIN LATERAL/);
+  assert.match(matchingDbSource, /WHERE imo_number = ANY\(\$1::integer\[\]\)/);
+  assert.match(matchingDbSource, /const masterByImo = new Map/);
+  assert.match(matchingDbSource, /verifiedDwt < minDwt/);
   assert.match(matchingDbSource, /sortCandidates\(commercialCandidates\)/);
   assert.match(matchingDbSource, /slice\(safeOffset, safeOffset \+ safeLimit\)/);
 });

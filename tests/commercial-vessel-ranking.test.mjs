@@ -61,7 +61,7 @@ test('distance is only the final tie-breaker', () => {
 
 test('matching, source pagination and Radar expose the DWT commercial ranking', () => {
   assert.match(aiFilterSource, /compareCommercialVesselRanks\(a\.commercialRank, b\.commercialRank\)/);
-  assert.match(matchingSources, /const dwtDifference = Math\.abs\(verifiedDwt - targetDwt\)/);
+  assert.match(matchingSources, /const dwtDifference = Math\.abs\(scoringDwt - targetDwt\)/);
   assert.match(matchingSources, /sortCandidates\(commercialCandidates\)/);
   assert.match(getVesselsSource, /targetCargoDwt/);
   assert.match(indexSource, /Math\.abs\(dwt - target\)/);

@@ -357,7 +357,17 @@ test('frontend normalization recognizes external labels for flag, length, and ve
 
 test('persistDueDiligenceVessel sends the consolidated vessel through PUT', async () => {
   let request = null;
-  const vessel = { imo: '9876543', vesselName: 'TEST VESSEL ALPHA', dwt: 10_953, audit_status: 'PENDING' };
+  const vessel = {
+    imo: '9876543',
+    vesselName: 'TEST VESSEL ALPHA',
+    dwt: 10_953,
+    audit_status: 'PENDING',
+    grossTonnage: 8_765,
+    loaMeters: 139.5,
+    beamMeters: 21.8,
+    yearBuilt: 2011,
+    flag: 'Barbados',
+  };
   const result = await serviceModule.persistDueDiligenceVessel(vessel, {
     fetchImpl: async (url, options) => {
       request = { url, options };
@@ -370,7 +380,16 @@ test('persistDueDiligenceVessel sends the consolidated vessel through PUT', asyn
 
   assert.equal(request.url, '/api/vessel-due-diligence-save');
   assert.equal(request.options.method, 'PUT');
-  assert.deepEqual(JSON.parse(request.options.body), { vessel, action: 'save' });
+  assert.deepEqual(JSON.parse(request.options.body), {
+    vessel: {
+      ...vessel,
+      gross_tonnage: 8_765,
+      loa_meters: 139.5,
+      beam_meters: 21.8,
+      year_built: 2011,
+    },
+    action: 'save',
+  });
   assert.equal(result.success, true);
 });
 
@@ -637,6 +656,11 @@ test('Density optimistic save replaces raw AIS technical values without touching
     imo: '9876543',
     mmsi: '224123456',
     vesselName: 'OPENSHIPS RAW',
+    vesselClass: '70',
+    vesselType: '70',
+    shipType: '70',
+    ShipType: '70',
+    MetaData: { ShipType: '70', vesselClass: '70' },
     dwt: 9_000,
     latitude: 36.1234,
     longitude: -5.4321,
@@ -669,7 +693,15 @@ test('Density optimistic save replaces raw AIS technical values without touching
 
   assert.equal(window.GlobalStore.rawVessels[0].dwt, 42_000);
   assert.equal(window.GlobalStore.filteredVessels[0].DWT, 42_000);
-  assert.equal(window.openShipsVesselsCache[0].vesselType, 'Bulk Carrier');
+  ['vesselClass', 'vesselType', 'vessel_type', 'shipType', 'ship_type', 'ShipType', 'type'].forEach(alias => {
+    assert.equal(window.GlobalStore.rawVessels[0][alias], 'Bulk Carrier', `alias ${alias} no actualizado`);
+  });
+  assert.equal(window.GlobalStore.filteredVessels[0].vesselClass, 'Bulk Carrier');
+  assert.equal(window.GlobalStore.vessels[0].vesselClass, 'Bulk Carrier');
+  assert.equal(window.GlobalStore.renderedAisVessels[0].vesselClass, 'Bulk Carrier');
+  assert.equal(window.openShipsVesselsCache[0].vesselClass, 'Bulk Carrier');
+  assert.equal(window.openShipsVesselsCache[0].MetaData.ShipType, 'Bulk Carrier');
+  assert.equal(window.GlobalStore.rawVessels[0].vesselClassSource, 'VESSELS_MASTER');
   assert.equal(window.GlobalStore.rawVessels[0].latitude, 36.1234);
   assert.equal(window.GlobalStore.rawVessels[0].longitude, -5.4321);
   assert.equal(window.GlobalStore.calculatorVessel, null);
@@ -795,13 +827,18 @@ test('proposal review persists first and hydrates the Store only after HTTP succ
     flag: 'Barbados',
     vesselType: 'General Cargo',
     yearBuilt: 2011,
+    grossTonnage: 8_765,
+    loaMeters: 139.5,
+    beamMeters: 21.8,
   };
   const review = bridge.buildProposals(identity, technical);
   const key = bridge.proposalKey(identity);
   bridge.pendingProposals.set(key, { identity, technical, proposals: review.proposals, match: review.match });
 
   assert.equal(match.vessel.dwt, 0);
-  assert.deepEqual(Array.from(review.proposals, proposal => proposal.field), ['imo', 'dwt', 'flag', 'vesselType', 'yearBuilt']);
+  assert.deepEqual(Array.from(review.proposals, proposal => proposal.field), [
+    'imo', 'dwt', 'flag', 'vesselType', 'yearBuilt', 'grossTonnage', 'loaMeters', 'beamMeters',
+  ]);
   assert.deepEqual(bridge.pendingProposals.get(key).technical, technical);
 
   const acceptance = bridge.acceptPendingProposal(key);
@@ -820,6 +857,11 @@ test('proposal review persists first and hydrates the Store only after HTTP succ
   assert.equal(match.hasTechnicalWarning, false);
   assert.equal(persistedVessel.imo, '9876543');
   assert.equal(persistedVessel.dwt, 10_953);
+  assert.equal(persistedVessel.gross_tonnage, 8_765);
+  assert.equal(persistedVessel.loa_meters, 139.5);
+  assert.equal(persistedVessel.beam_meters, 21.8);
+  assert.equal(persistedVessel.year_built, 2011);
+  assert.equal(persistedVessel.flag, 'Barbados');
   assert.equal('audit_status' in persistedVessel, false);
   assert.equal('source_provenance' in persistedVessel, false);
   assert.equal(bridge.pendingProposals.has(key), false);
