@@ -58,7 +58,7 @@ test('circuits are isolated by service and critical Radar requests are auto-clas
 });
 
 test('polling, bunker caching and Globe fallback use resilient contracts', () => {
-  assert.match(indexSource, /DATA_BRIDGE_HTTP_POLL_INTERVAL_MS = 60_000/);
+  assert.match(indexSource, /DATA_BRIDGE_HTTP_POLL_INTERVAL_MS = 10_000/);
   assert.match(indexSource, /OPENSHIPS_RADAR_POLL_INTERVAL_MS = 120_000/);
   assert.match(indexSource, /getBackoffDelay\([\s\S]*DATA_BRIDGE_HTTP_POLL_MAX_INTERVAL_MS/);
   assert.match(indexSource, /getBackoffDelay\([\s\S]*OPENSHIPS_RADAR_POLL_MAX_INTERVAL_MS/);

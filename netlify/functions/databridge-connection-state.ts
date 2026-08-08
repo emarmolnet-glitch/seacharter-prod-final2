@@ -64,12 +64,14 @@ async function loadFreshDataBridgeConnectionState(req: Request) {
 
 export default async (req: Request) => {
   if (req.method !== "GET") return loadFreshDataBridgeConnectionState(req);
+  const forceRefresh = new URL(req.url).searchParams.has("refresh");
+  if (forceRefresh) return loadFreshDataBridgeConnectionState(req);
   try {
     const cached = await getOrSetCachedJson({
       namespace: "databridge-connection-state-v1",
       key: { scope: "current" },
-      ttlMs: 60 * 1000,
-      staleTtlMs: 10 * 60 * 1000,
+      ttlMs: 10 * 1000,
+      staleTtlMs: 60 * 1000,
       producer: async () => {
         const response = await loadFreshDataBridgeConnectionState(req);
         const body = await response.json();
@@ -80,7 +82,7 @@ export default async (req: Request) => {
     return Response.json(cached.value.body, {
       status: cached.value.status,
       headers: {
-        ...createResponseCacheHeaders(cached, 60, 600),
+        ...createResponseCacheHeaders(cached, 10, 60),
         ...createCorsHeaders(req, "GET, OPTIONS"),
       },
     });

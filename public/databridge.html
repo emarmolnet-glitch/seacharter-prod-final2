@@ -1812,6 +1812,9 @@
                 };
 
                 await saveVesselToIndexedDB(vesselRecord);
+				if (apiSuccess && window.parent !== window) {
+					window.parent.postMessage({ type: 'SEACHARTER_DATABRIDGE_MUTATION', resource: 'vessel-audit' }, window.location.origin);
+				}
 
                 if (status === 'Approved') {
                     if (apiSuccess) {

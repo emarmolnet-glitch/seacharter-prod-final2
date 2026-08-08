@@ -96,6 +96,7 @@ export async function syncDualTradingChartering(rawData = {}, options = {}) {
         });
         const responseStatus = `${response?.status ?? ''} ${response?.statusText ?? ''}`.trim();
         logger.log('[DEBUG] Respuesta de Gatekeeper:', response, responseStatus);
+        if (response?.status === 200) void globalThis.revalidateDataBridgeConnectionState?.();
         return response?.status === 200;
     } catch (error) {
         recordSyncFailure('post', error);

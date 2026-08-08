@@ -9,16 +9,16 @@ const STATUS_CONFIG = {
     bridgeTitle: "Data Bridge inactivo",
   },
   secure: {
-    label: "LIVE TRACKING",
+    label: "SYNC: ACTIVE",
     state: "secure",
-    icon: "fa-solid fa-satellite-dish",
-    bridgeTitle: "Radar conectado en tiempo real por WebSocket",
+    icon: "fa-solid fa-circle-check",
+    bridgeTitle: "Data Bridge online mediante sincronización REST HTTP",
   },
   fallback: {
-    label: "SYNC HTTP · 30S",
+    label: "SYNC HTTP · 10S",
     state: "fallback",
     icon: "fa-solid fa-arrows-rotate",
-    bridgeTitle: "Sincronización silenciosa mediante polling HTTP cada 30 segundos",
+    bridgeTitle: "Comprobando disponibilidad REST de Data Bridge",
   },
   unauthorized: {
     label: "Unauthorized",
@@ -35,7 +35,7 @@ const STATUS_CONFIG = {
 };
 
 export function ConnectionStatusBar() {
-  const [status, setStatus] = React.useState(() => window.__dataBridgeConnectionStatus || "fallback");
+  const [status, setStatus] = React.useState(() => window.__dataBridgeConnectionStatus || "inactive");
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.inactive;
 
   React.useEffect(() => {
