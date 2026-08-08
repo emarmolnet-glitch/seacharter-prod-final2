@@ -2,6 +2,8 @@ export type OpenShipsVessel = Record<string, unknown>;
 
 export type OpenShipsFetchOptions = {
   env?: Record<string, string | undefined>;
+  latitude: number;
+  longitude: number;
   limit?: number;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;

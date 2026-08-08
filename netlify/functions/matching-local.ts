@@ -517,7 +517,11 @@ export default async (req: Request) => {
       if (allowedSources.includes("OPENSHIPS") && loadingPortLat !== null && loadingPortLon !== null) {
         openShipsFetchDiagnostics = { requested: true, success: false, count: 0 };
         try {
-          const liveOpenShips = await fetchOpenShipsLive({ limit: 5000 });
+          const liveOpenShips = await fetchOpenShipsLive({
+            latitude: loadingPortLat,
+            longitude: loadingPortLon,
+            limit: 5000,
+          });
           serializedOpenShipsVessels = prepareOpenShipsCommercialCandidates(
             liveOpenShips.vessels.map(serializeOpenShipsVessel),
             {
