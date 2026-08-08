@@ -22,8 +22,9 @@
         },
         stop() {
             const loader = getMapLoader();
-            if (loader && typeof loader.stopAisProxyPolling === 'function') {
-                return loader.stopAisProxyPolling();
+            if (loader && typeof loader.closeAisStreamSocket === 'function') {
+                loader.closeAisStreamSocket();
+                return { stopped: true, reason: 'tracking-socket-closed' };
             }
             return { stopped: true, reason: 'ais-connection-inactive' };
         },

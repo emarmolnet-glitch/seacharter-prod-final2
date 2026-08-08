@@ -149,6 +149,7 @@
         apiKey: '',
         currentBounds: null,
         boundsKey: '',
+        shouldReconnect: false,
         options: {}
     };
     const aisProxyPollingState = {
@@ -898,11 +899,16 @@
     function getAisStreamSubscriptionPayload() {
         const key = getAisStreamApiKey();
         if (!key) return null;
-        return {
+        const payload = {
             APIKey: key,
-            BoundingBoxes: obtenerBoundingBoxesActuales(),
+            BoundingBoxes: Array.isArray(aisStreamState.options.boundingBoxes)
+                ? aisStreamState.options.boundingBoxes
+                : obtenerBoundingBoxesActuales(),
             FilterMessageTypes: ["PositionReport", "ShipStaticData"]
         };
+        const mmsi = String(aisStreamState.options.mmsi || '').replace(/\D/g, '');
+        if (mmsi.length === 9) payload.FiltersShipMMSI = [mmsi];
+        return payload;
     }
 
     function getAisStreamApiKey() {
@@ -1024,6 +1030,7 @@
     }
 
     function closeAisStreamSocket() {
+        aisStreamState.shouldReconnect = false;
         if (aisStreamState.reconnectTimer) {
             clearTimeout(aisStreamState.reconnectTimer);
             aisStreamState.reconnectTimer = null;
@@ -1037,9 +1044,17 @@
     function startPersistentAisStream(endpoint, apiKey, mapInstance, options) {
         closeAisStreamSocket();
 
+        if (endpoint && typeof endpoint === 'object') {
+            options = endpoint;
+            endpoint = options.endpoint;
+            apiKey = options.apiKey;
+            mapInstance = options.map;
+        }
+
         aisStreamState.endpoint = endpoint || aisStreamState.endpoint || 'wss://stream.aisstream.io/v0/stream';
         aisStreamState.apiKey = apiKey || getAisStreamApiKey();
         aisStreamState.options = options || {};
+        aisStreamState.shouldReconnect = true;
 
         if (mapInstance) {
             bindAisMapMovementSync(mapInstance);
@@ -1048,9 +1063,14 @@
 
         const payload = getAisStreamSubscriptionPayload();
         if (!payload || !payload.APIKey) {
-            console.warn('[SeaCharter AIS] Missing AISStream API Key; falling back to proxy polling.');
-            startAisProxyPolling('/api/audit-vessels', mapInstance);
-            return;
+            aisStreamState.shouldReconnect = false;
+            console.warn('[SeaCharter AIS] Missing browser AISStream API Key; Tracking live socket was not started.');
+            return { started: false, reason: 'missing-client-api-key' };
+        }
+        if (!Array.isArray(payload.FiltersShipMMSI) || payload.FiltersShipMMSI.length !== 1) {
+            aisStreamState.shouldReconnect = false;
+            console.warn('[SeaCharter AIS] Tracking requires one valid MMSI before opening AISStream.');
+            return { started: false, reason: 'tracking-mmsi-required' };
         }
 
         try {
@@ -1067,6 +1087,9 @@
                     if (!data) return;
                     const ship = normalizeShipFields(data);
                     if (ship) {
+                        window.dispatchEvent(new CustomEvent('tracking:aisstream-update', {
+                            detail: { vessel: ship, mmsi: ship.mmsi, source: 'aisstream-client' }
+                        }));
                         emitHydrationUpdate([ship], { source: 'aisstream-live', mmsi: ship.mmsi });
                     }
                 } catch (_) {}
@@ -1078,7 +1101,7 @@
 
             ws.onclose = () => {
                 aisStreamState.ws = null;
-                if (!aisStreamState.reconnectTimer) {
+                if (aisStreamState.shouldReconnect && !aisStreamState.reconnectTimer) {
                     aisStreamState.reconnectTimer = setTimeout(() => {
                         aisStreamState.reconnectTimer = null;
                         startPersistentAisStream(aisStreamState.endpoint, aisStreamState.apiKey, aisStreamState.boundMap, aisStreamState.options);
@@ -1086,9 +1109,11 @@
                 }
             };
         } catch (err) {
-            console.warn('[SeaCharter AIS] WebSocket creation failed; falling back to proxy polling.', err);
-            startAisProxyPolling('/api/audit-vessels', mapInstance);
+            aisStreamState.shouldReconnect = false;
+            console.warn('[SeaCharter AIS] Tracking WebSocket creation failed.', err);
+            return { started: false, reason: 'websocket-creation-failed' };
         }
+        return { started: true, mmsi: payload.FiltersShipMMSI[0] };
     }
 
     const activeMarkers = new Map();

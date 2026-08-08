@@ -4,9 +4,8 @@ import test from 'node:test';
 
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
-test('RadarGlobalControl mounts the same reusable control in map and matching', () => {
-  assert.equal((source.match(/data-radar-global-control/g) || []).length >= 3, true);
-  assert.match(source, /data-radar-global-control data-radar-context="map"/);
+test('RadarGlobalControl mounts the reusable control in matching', () => {
+  assert.equal((source.match(/data-radar-global-control/g) || []).length >= 1, true);
   assert.match(source, /data-radar-global-control data-radar-context="matching"/);
   assert.match(source, /document\.querySelectorAll\('\[data-radar-global-control\]'\)/);
   assert.doesNotMatch(source, /id="btn-freeze-radar"/);
@@ -45,7 +44,8 @@ test('matching radar executes a POL-scoped sweep without requiring a full calcul
 });
 
 test('matching radar runs predictive destination matching beside radial sources', () => {
-  assert.match(source, /const \[aisVessels, openShipsVessels, predictiveResult\] = await Promise\.all/);
+  assert.match(source, /const \[openShipsVessels, predictiveResult\] = await Promise\.all/);
+  assert.match(source, /const aisVessels = \[\]/);
   assert.match(source, /requestMatchingLocal\?\.\('execute', \[\], predictivePayload\)/);
   assert.match(source, /predictiveVessels/);
   assert.match(source, /\.\.\.polScopedAisVessels, \.\.\.openShipsVessels, \.\.\.predictiveVessels/);
@@ -55,8 +55,8 @@ test('matching radar binds the taxonomy selector to GlobalStore and every source
   assert.match(source, /window\.GlobalStore\.selectedTaxonomies = normalizedValues\.slice\(\)/);
   assert.match(source, /selectedTaxonomies: selectedTaxonomies\.slice\(\)/);
   assert.match(source, /taxonomyMode: 'strict'/);
-  assert.match(source, /window\.startRadarLive\(\{ source: 'matching-radar-sweep', refresh: true, radarContext, selectedTaxonomies \}\)/);
-  assert.match(source, /window\.updateOpenShipsRadar\?\.\(\{ refreshGlobe: false, refresh: true, polContext, radarContext, selectedTaxonomies \}\)/);
+  assert.match(source, /window\.startRadarLive\(\{ source: 'matching-radar-sweep', refresh: true, radarContext, selectedTaxonomies, polContext \}\)/);
+  assert.match(source, /window\.updateOpenShipsRadar\(\{[\s\S]*selectedTaxonomies/);
   assert.match(source, /params\.set\('taxonomies', JSON\.stringify\(selectedTaxonomies\)\)/);
 });
 

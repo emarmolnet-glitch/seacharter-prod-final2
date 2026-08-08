@@ -11,10 +11,9 @@ test("get-vessels.ts has early input filter for AISStream messages restricting S
   assert.match(getVesselsSource, /numericType < 70 \|\| numericType > 79/);
 });
 
-test("ais-ingest.ts has early input filter for AISStream messages restricting ShipType to 70-79", () => {
-  assert.match(aisIngestSource, /ShipStaticData/);
-  assert.match(aisIngestSource, /ShipType/);
-  assert.match(aisIngestSource, /numericType < 70 \|\| numericType > 79/);
+test("ais-ingest.ts disables backend AISStream ingestion", () => {
+  assert.match(aisIngestSource, /AISSTREAM_BACKEND_DISABLED/);
+  assert.doesNotMatch(aisIngestSource, /new WebSocket|from "ws"/);
 });
 
 test("early input filter logic drops non-cargo vessels (codes outside 70-79) and retains cargo vessels (70-79)", () => {

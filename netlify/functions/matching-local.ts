@@ -11,6 +11,8 @@ import {
 } from "../../db/matching-sources.js";
 import runAiAisFilter from "./ai-ais-filter.js";
 import { mergeTripleVesselSources } from "./_shared/vessel-source-merge.js";
+import { classifyCandidateMatch } from "./_shared/commercial-vessel-search.mjs";
+import { fetchOpenShipsLive } from "./_shared/openships-rest.mjs";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -53,6 +55,64 @@ function numericValue(...values: unknown[]) {
     if (Number.isFinite(numeric) && numeric > 0) return numeric;
   }
   return null;
+}
+
+function haversineNm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const radiusNm = 3440.065;
+  const toRadians = (value: number) => value * Math.PI / 180;
+  const deltaLat = toRadians(lat2 - lat1);
+  const deltaLon = toRadians(lon2 - lon1);
+  const a = Math.sin(deltaLat / 2) ** 2
+    + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(deltaLon / 2) ** 2;
+  return radiusNm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0, 1 - a)));
+}
+
+function readVesselValue(vessel: AnyRecord, keys: string[]) {
+  const metadata = asRecord(vessel.MetaData || vessel.metadata);
+  for (const key of keys) {
+    const value = vessel[key] ?? metadata[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+  }
+  return null;
+}
+
+function prepareOpenShipsCommercialCandidates(
+  vessels: AnyRecord[],
+  options: {
+    latitude: number;
+    longitude: number;
+    radiusNm: number;
+    laycanEnd: string | null;
+    polData: AnyRecord;
+  },
+) {
+  return vessels.flatMap((vessel) => {
+    const latitude = finiteNumberValue(vessel.latitude, vessel.lat);
+    const longitude = finiteNumberValue(vessel.longitude, vessel.lon, vessel.lng);
+    const distanceNm = latitude !== null && longitude !== null
+      ? haversineNm(options.latitude, options.longitude, latitude, longitude)
+      : null;
+    const matchReason = classifyCandidateMatch({
+      distanceNm,
+      radiusNm: options.radiusNm,
+      destination: readVesselValue(vessel, ["destination", "Destination", "current_destination", "currentDestination"]),
+      polData: options.polData,
+      eta: readVesselValue(vessel, ["eta", "ETA", "declaredEta", "estimatedEta"]),
+      speedKnots: finiteNumberValue(vessel.speed_over_ground, vessel.speed, vessel.sog, vessel.SOG),
+      laycanEnd: options.laycanEnd,
+    });
+    if (!matchReason) return [];
+    return [{
+      ...vessel,
+      distance_nm: distanceNm,
+      distanceToPolNm: distanceNm,
+      matchReason,
+      inboundToPol: matchReason === "INBOUND_TO_POL",
+      longDistanceTransitToPol: matchReason === "INBOUND_TO_POL",
+      commercialTransitCandidate: matchReason === "INBOUND_TO_POL",
+      searchVector: matchReason === "INBOUND_TO_POL" ? "DESTINATION_GLOBAL" : "RADIAL",
+    }];
+  });
 }
 
 const UNKNOWN_TECHNICAL_VALUES = new Set(["", "n/a", "na", "n/d", "n d", "nd", "unknown", "desconocido", "null", "undefined"]);
@@ -424,35 +484,64 @@ export default async (req: Request) => {
         ...(Array.isArray(cargo.loadingPortAliases) ? cargo.loadingPortAliases : []),
         ...(Array.isArray(route.polAliases) ? route.polAliases : []),
       ];
-      const sourcePage = await findMatchingVessels({
-        allowedSources,
-        latitude: loadingPortLat,
-        longitude: loadingPortLon,
-        radiusNm: matchRadiusNm,
-        cargoQuantity: targetCargoDwt || 0,
-        targetDwt: finiteNumberValue(matchingPayload.targetDwt, cargo.targetDwt),
-        laycanStart: textValue(cargo.laycanStart, matchingPayload.laycanStart) || null,
-        laycanEnd: textValue(cargo.laycanEnd, matchingPayload.laycanEnd) || null,
-        polData: {
-          unLocode: textValue(suppliedPolData.unLocode, suppliedPolData.unlocode, suppliedPolData.locode, cargo.loadingPortUnlocode, route.polUnlocode),
-          officialName: textValue(suppliedPolData.officialName, cargo.loadingPortOfficialName, route.polOfficialName),
-          name: textValue(suppliedPolData.name, cargo.loadingPortName, route.pol),
-          aliases: suppliedAliases,
-        },
-        limit: requestedLimit,
-        offset: requestedOffset,
-      });
+      const polData = {
+        unLocode: textValue(suppliedPolData.unLocode, suppliedPolData.unlocode, suppliedPolData.locode, cargo.loadingPortUnlocode, route.polUnlocode),
+        officialName: textValue(suppliedPolData.officialName, cargo.loadingPortOfficialName, route.polOfficialName),
+        name: textValue(suppliedPolData.name, cargo.loadingPortName, route.pol),
+        aliases: suppliedAliases,
+      };
+      const databaseSources = allowedSources.filter((source) => source !== "OPENSHIPS");
+      const sourcePage = databaseSources.length > 0
+        ? await findMatchingVessels({
+          allowedSources: databaseSources,
+          latitude: loadingPortLat,
+          longitude: loadingPortLon,
+          radiusNm: matchRadiusNm,
+          cargoQuantity: targetCargoDwt || 0,
+          targetDwt: finiteNumberValue(matchingPayload.targetDwt, cargo.targetDwt),
+          laycanStart: textValue(cargo.laycanStart, matchingPayload.laycanStart) || null,
+          laycanEnd: textValue(cargo.laycanEnd, matchingPayload.laycanEnd) || null,
+          polData,
+          limit: requestedLimit,
+          offset: requestedOffset,
+        })
+        : { rows: [], totalCount: 0, limit: Math.min(100, Math.max(1, Math.trunc(requestedLimit))), offset: Math.max(0, Math.trunc(requestedOffset)) };
       const dataBridgeVessels = sourcePage.rows
         .filter((row) => row.source_system === "DATABRIDGE")
         .map((row) => serializeMasterVessel(row.payload as unknown as VesselMasterRow));
       const aisVessels = sourcePage.rows
         .filter((row) => row.source_system === "AIS_LIVE")
         .map((row) => serializeAisVessel(row.payload as unknown as AisMatchingRow));
-      const serializedOpenShipsVessels = [
-        ...sourcePage.rows
-          .filter((row) => row.source_system === "OPENSHIPS")
-          .map((row) => serializeOpenShipsVessel(row.payload)),
-      ];
+      let openShipsFetchDiagnostics: AnyRecord = { requested: false, success: false, count: 0 };
+      let serializedOpenShipsVessels: AnyRecord[] = [];
+      if (allowedSources.includes("OPENSHIPS") && loadingPortLat !== null && loadingPortLon !== null) {
+        openShipsFetchDiagnostics = { requested: true, success: false, count: 0 };
+        try {
+          const liveOpenShips = await fetchOpenShipsLive({ limit: 5000 });
+          serializedOpenShipsVessels = prepareOpenShipsCommercialCandidates(
+            liveOpenShips.vessels.map(serializeOpenShipsVessel),
+            {
+              latitude: loadingPortLat,
+              longitude: loadingPortLon,
+              radiusNm: matchRadiusNm,
+              laycanEnd: textValue(cargo.laycanEnd, matchingPayload.laycanEnd) || null,
+              polData,
+            },
+          );
+          openShipsFetchDiagnostics = {
+            requested: true,
+            success: true,
+            count: serializedOpenShipsVessels.length,
+            providerCount: liveOpenShips.count,
+            fetchedAt: liveOpenShips.fetchedAt,
+            cache: "disabled",
+          };
+        } catch (error) {
+          const code = error instanceof Error && "code" in error ? String(error.code) : "OPENSHIPS_UNAVAILABLE";
+          openShipsFetchDiagnostics = { requested: true, success: false, count: 0, error: code, cache: "disabled" };
+          console.warn("[matching-local] Live OpenShips REST source unavailable.", code);
+        }
+      }
       const openShipsEnrichment = await enrichOpenShipsTechnicalData(serializedOpenShipsVessels);
       const openShipsVessels = openShipsEnrichment.vessels;
       const unifiedVessels = mergeTripleVesselSources([], dataBridgeVessels, aisVessels, openShipsVessels);
@@ -478,6 +567,7 @@ export default async (req: Request) => {
           source: "filtered_sources",
           sourceCounts,
           openShipsEnrichment: openShipsEnrichment.diagnostics,
+          openShipsFetch: openShipsFetchDiagnostics,
           allowedSources,
           pagination,
           readOnly: true,
@@ -514,6 +604,7 @@ export default async (req: Request) => {
         source: "filtered_sources",
         sourceCounts,
         openShipsEnrichment: openShipsEnrichment.diagnostics,
+        openShipsFetch: openShipsFetchDiagnostics,
         allowedSources,
         pagination,
         readOnly: true,

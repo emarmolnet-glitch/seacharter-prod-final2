@@ -164,15 +164,7 @@ export async function findMatchingVessels(request: FindMatchingVesselsRequest): 
   const pool = getPool();
   const result = await pool.query<CommercialPoolRow>(
     `
-      WITH openships_latest AS (
-        SELECT DISTINCT ON (COALESCE(NULLIF(os.mmsi::text, ''), os.vessel_key)) os.*
-        FROM ais_telemetry_buffer os
-        WHERE os.fetched_at >= NOW() - INTERVAL '24 hours'
-          AND os.latitude IS NOT NULL
-          AND os.longitude IS NOT NULL
-        ORDER BY COALESCE(NULLIF(os.mmsi::text, ''), os.vessel_key),
-          COALESCE(os.observed_at, os.fetched_at, os.updated_at) DESC NULLS LAST
-      ), source_rows AS (
+      WITH source_rows AS (
         SELECT
           'DATABRIDGE'::text AS source_system,
           to_jsonb(vm) || jsonb_build_object(
@@ -240,60 +232,6 @@ export async function findMatchingVessels(request: FindMatchingVesselsRequest): 
         FROM ais_vessels av
         WHERE av.audit_status = 'VALIDATED'
 
-        UNION ALL
-
-        SELECT
-          'OPENSHIPS'::text AS source_system,
-          COALESCE(os.raw_data, '{}'::jsonb) || jsonb_build_object(
-            'storage_key', os.vessel_key,
-            'vessel_key', os.vessel_key,
-            'mmsi', os.mmsi,
-            'vessel_name', os.vessel_name,
-            'latitude', os.latitude,
-            'longitude', os.longitude,
-            'speed_over_ground', os.speed_over_ground,
-            'course_over_ground', os.course_over_ground,
-            'heading', os.heading,
-            'vessel_type', os.vessel_type,
-            'observed_at', os.observed_at,
-            'fetched_at', os.fetched_at,
-            'distance_nm', CASE
-              WHEN $2::double precision IS NULL OR $3::double precision IS NULL THEN 0
-              ELSE 3440.065 * 2 * ASIN(SQRT(LEAST(1,
-                POWER(SIN(RADIANS(os.latitude::double precision - $2) / 2), 2) +
-                COS(RADIANS($2)) * COS(RADIANS(os.latitude::double precision)) *
-                POWER(SIN(RADIANS(os.longitude::double precision - $3) / 2), 2)
-              )))
-            END
-          ) AS payload,
-          COALESCE(os.observed_at, os.fetched_at, os.updated_at) AS sort_at,
-          CASE
-            WHEN $2::double precision IS NULL OR $3::double precision IS NULL THEN 0
-            ELSE 3440.065 * 2 * ASIN(SQRT(LEAST(1,
-              POWER(SIN(RADIANS(os.latitude::double precision - $2) / 2), 2) +
-              COS(RADIANS($2)) * COS(RADIANS(os.latitude::double precision)) *
-                POWER(SIN(RADIANS(os.longitude::double precision - $3) / 2), 2)
-              )))
-          END AS distance_nm,
-          REGEXP_REPLACE(COALESCE(
-            os.raw_data->>'imo',
-            os.raw_data->>'IMO',
-            os.raw_data#>>'{MetaData,IMO}',
-            os.raw_data#>>'{Message,ShipStaticData,ImoNumber}',
-            ''
-          ), '[^0-9]', '', 'g') AS source_imo,
-          COALESCE(os.mmsi::text, os.raw_data->>'mmsi', os.raw_data->>'MMSI', '') AS source_mmsi,
-          NULL::double precision AS source_dwt,
-          NULL::double precision AS source_design_draft,
-          COALESCE(
-            os.raw_data->>'destination',
-            os.raw_data->>'Destination',
-            os.raw_data->>'current_destination',
-            os.raw_data#>>'{MetaData,Destination}',
-            os.raw_data#>>'{Message,ShipStaticData,Destination}',
-            os.raw_data#>>'{ShipStaticData,Destination}'
-          ) AS destination_text
-        FROM openships_latest os
       )
       SELECT source_system, payload, sort_at, distance_nm, source_imo, source_mmsi, source_dwt, source_design_draft, destination_text
       FROM source_rows

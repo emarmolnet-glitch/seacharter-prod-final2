@@ -188,6 +188,7 @@
     <script type="module" src="./src/vessel-master-class-registry.js"></script>
     <script type="module" src="./src/due-diligence-entry.js"></script>
     <script type="module" src="./src/density-commercial-funnel.js"></script>
+    <script type="module" src="./src/tracking-aisstream-entry.tsx"></script>
     <script src="./session-draft.js"></script>
     <script type="module" src="./dual-mode-overlay.js"></script>
 
@@ -21530,17 +21531,7 @@
                     }, { source: 'matching-open-ships-source' });
                     window.refreshDensityCommercialFunnel?.({ refreshMap: false });
                 }
-                const commercialVesselState = window.GlobalStore?.getCommercialVesselState?.() || {};
-                const sharedOpenShipsCandidates = commercialVesselState.isGlobalDebugActive === true
-                    ? commercialVesselState.filteredVessels
-                    : commercialVesselState.rawVessels;
-                const openShipsCandidates = !isAppending
-                    && payload.allowedSources.includes('OPENSHIPS')
-                    && window.openShipsVesselsCacheLoaded === true
-                    && Array.isArray(sharedOpenShipsCandidates)
-                    ? sharedOpenShipsCandidates
-                    : [];
-                const data = await requestMatchingLocal('execute', openShipsCandidates, payload);
+                const data = await requestMatchingLocal('execute', [], payload);
                 if (!data?.success) {
                     throw new Error(data.error || 'No se pudo consultar vessels_master.');
                 }
@@ -48921,9 +48912,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     limit: 100,
                     offset: 0
                 };
-                const [aisVessels, openShipsVessels, predictiveResult] = await Promise.all([
-                    window.startRadarLive({ source: 'matching-radar-sweep', refresh: true, radarContext, selectedTaxonomies }),
-                    window.updateOpenShipsRadar?.({ refreshGlobe: false, refresh: true, polContext, radarContext, selectedTaxonomies }) || Promise.resolve([]),
+                const [openShipsVessels, predictiveResult] = await Promise.all([
+                    window.startRadarLive({ source: 'matching-radar-sweep', refresh: true, radarContext, selectedTaxonomies, polContext }),
                     laycanEnd && cargoQuantity > 0
                         ? window.requestMatchingLocal?.('execute', [], predictivePayload).catch(error => {
                             console.warn('[Matching Radar] Predictive destination query degraded.', error);
@@ -48931,6 +48921,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         })
                         : Promise.resolve({ data: [], matches: [] })
                 ]);
+                const aisVessels = [];
                 const radarStateAfterLoad = window.RadarGlobalControl?.getState?.() || {};
                 if (radarStateAfterLoad.status === 'error') {
                     throw new Error('El servicio AIS no pudo completar el barrido Radar.');
@@ -49005,15 +48996,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             window.radarLiveLoadPromise = (async () => {
                 const selectedTaxonomies = getActiveRadarTaxonomies(options.selectedTaxonomies);
-                const selectedTaxonomy = typeof window.getSelectedAisVesselTypeFilter === 'function'
-                    ? window.getSelectedAisVesselTypeFilter()
-                    : '';
-                const vessels = await window.loadValidatedAisDensityVessels({
-                    throwOnError: true,
-                    liveMode: true,
+                const vessels = await window.updateOpenShipsRadar({
+                    refreshGlobe: true,
                     refresh: options.refresh === true,
+                    polContext: options.polContext || window.getMatchingRadarPolContext?.(),
                     radarContext: requestSignature,
-                    selectedTaxonomy: selectedTaxonomy || 'All Cargo',
                     selectedTaxonomies
                 });
                 window.RadarGlobalControl.setState({ mode: 'live', status: 'idle', source: options.source || 'radar-live', liveAt: new Date().toISOString() });
@@ -49039,13 +49026,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return vessels;
             })().catch(error => {
                 window.RadarGlobalControl.setState({ mode: 'frozen', status: 'error', frozenAt: new Date().toISOString(), source: options.source || 'radar-live' });
-                const message = error && error.message ? error.message : 'No se pudieron cargar los datos AIS auditados.';
+                const message = error && error.message ? error.message : 'No se pudo completar la consulta REST en vivo de OpenShips.';
                 if (typeof showToast === 'function') showToast(message, false, 'error');
-                const cachedVessels = (window.GlobalStore && typeof window.GlobalStore.getRawVessels === 'function' ? window.GlobalStore.getRawVessels() : []) || window.listaBarcos || [];
-                if (cachedVessels.length > 0 && typeof window.reapplyCentralFiltersAndRedraw === 'function') {
-                    window.reapplyCentralFiltersAndRedraw();
-                }
-                return cachedVessels;
+                window.openShipsVesselsCache = [];
+                window.openShipsVesselsCacheLoaded = false;
+                return [];
             }).finally(() => {
                 if (window.radarLiveLoadSignature === requestSignature) {
                     window.radarLiveLoadPromise = null;
@@ -62555,6 +62540,16 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const selectedTaxonomies = window.getActiveRadarTaxonomies?.(options.selectedTaxonomies) || [];
                     params.set('taxonomyMode', 'strict');
                     params.set('taxonomies', JSON.stringify(selectedTaxonomies));
+                    const laycanStart = document.getElementById('match-laycan-start')?.value
+                        || document.getElementById('gc-laycan-date')?.value
+                        || document.getElementById('asb-laycan-date')?.value
+                        || '';
+                    const laycanEnd = document.getElementById('match-laycan-end')?.value
+                        || document.getElementById('gc-cancel-date')?.value
+                        || document.getElementById('asb-cancel-date')?.value
+                        || laycanStart;
+                    if (laycanStart) params.set('laycanStart', laycanStart);
+                    if (laycanEnd) params.set('laycanEnd', laycanEnd);
                     if (options.refresh === true) {
                         params.set('refresh', '1');
                         params.set('cacheBust', String(Date.now()));
@@ -62595,15 +62590,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     }
                     return window.openShipsVesselsCache;
                 } catch (error) {
-                    console.warn('[OpenShips Radar] Estado temporalmente no disponible; se conserva el último snapshot válido.', error);
-                    const cachedVessels = Array.isArray(window.openShipsVesselsCache)
-                        ? window.openShipsVesselsCache.filter(vessel => vessel && typeof vessel === 'object')
-                        : [];
-                    if (counter) counter.innerText = cachedVessels.length > 0 ? String(cachedVessels.length) : 'ERR';
+                    console.warn('[OpenShips Radar] Consulta REST en vivo no disponible; no se reutiliza ningún snapshot anterior.', error);
+                    window.openShipsVesselsCache = [];
+                    window.openShipsVesselsCacheLoaded = false;
+                    window.lastOpenShipsRadarPayload = null;
+                    if (counter) counter.innerText = 'ERR';
                     statusPill?.classList.remove('bg-emerald-900/80', 'border-emerald-700');
                     statusPill?.classList.add('bg-red-900/80', 'border-red-700');
                     radarPing?.classList.remove('animate-ping');
-                    return cachedVessels;
+                    throw error;
                 } finally {
                     window.openShipsInitialReadCompleted = true;
                     if (window.openShipsRadarRequestSignature === requestSignature) {
