@@ -1,5 +1,5 @@
 const COMMON_PORT_ALIAS_GROUPS = [
-  ["DZBJA", "BJA", "BJA ANCH", "BEJAIA", "BEJAIA ANCH", "BEJAIA ANCHORAGE", "BÉJAÏA", "BOUGIE"],
+  ["BEJAIA", "BJA", "DZ BJA", "DZBJA", "BÉJAÏA", "BJA ANCH", "BEJAIA ANCH", "BEJAIA ANCHORAGE", "BOUGIE"],
 ];
 
 function finiteNumber(value) {

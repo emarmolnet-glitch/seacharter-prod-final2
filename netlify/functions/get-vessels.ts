@@ -1,5 +1,4 @@
 import type { Config } from "@netlify/functions";
-import WebSocket from "ws";
 import { countVessels, isCargoShipType, readVessels, readVesselsNearPoint, upsertVessels, type VesselRecord } from "./vessel-store.js";
 import { filterVesselsByTaxonomies, parseRequestedTaxonomies } from "./ais-taxonomy.js";
 import { upsertRadarVesselsMaster } from "../../db/vessels-master-sync.js";
@@ -7,17 +6,9 @@ import { evaluateCommercialTransitToPol, LONG_DISTANCE_TRANSIT_LABEL } from "./_
 import { buildCommercialVesselRank, compareCommercialVesselRanks } from "./_shared/commercial-vessel-ranking.mjs";
 
 type VesselMessage = Record<string, unknown>;
-type LiveCollectionResult = {
-  vessels: VesselMessage[];
-  completion: "target" | "timeout" | "closed" | "error";
-};
 declare const process: { env: Record<string, string | undefined> };
 
-const AIS_STREAM_URL = "wss://stream.aisstream.io/v0/stream";
-const DEFAULT_TIMEOUT_MS = 6000;
-const MAX_TIMEOUT_MS = 6000;
 const DEFAULT_QUANTITY = 1000;
-const MAX_AIS_STREAM_COLLECTION = 1000;
 const MAX_QUANTITY = 1000;
 const STORED_LOOKUP_LIMIT = 1000;
 const HANDYSIZE_MIN_DWT = 25000;
@@ -1043,108 +1034,6 @@ function mergeDefinedVesselFields(current: VesselMessage | undefined, incoming: 
   return merged;
 }
 
-function collectVessels(url: URL, apiKey: string): Promise<LiveCollectionResult> {
-  const quantity = Math.min(MAX_QUANTITY, Math.max(1, numberParam(url, ["quantity", "limit"], DEFAULT_QUANTITY)));
-  const collectionTarget = Math.min(quantity, MAX_AIS_STREAM_COLLECTION);
-  const timeoutMs = Math.min(MAX_TIMEOUT_MS, Math.max(2500, numberParam(url, ["timeoutMs"], DEFAULT_TIMEOUT_MS)));
-  const bounds = getRequestedBoundingBoxes(url);
-  if (!bounds) {
-    return Promise.reject(new Error("AIS POL/POD bounding boxes are required."));
-  }
-
-  return new Promise<LiveCollectionResult>((resolve, reject) => {
-    const vesselsByKey = new Map<string, VesselMessage>();
-    const ws = new WebSocket(AIS_STREAM_URL, {
-      handshakeTimeout: Math.min(timeoutMs, 5000),
-      perMessageDeflate: false,
-      family: 4,
-    });
-    let settled = false;
-    let timer: ReturnType<typeof setTimeout>;
-
-    const finish = (completion: LiveCollectionResult["completion"], error?: Error) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-
-      try {
-        ws.close();
-      } catch (_) {}
-
-      if (error && vesselsByKey.size === 0) {
-        reject(error);
-        return;
-      }
-
-      resolve({
-        vessels: Array.from(vesselsByKey.values()).slice(0, collectionTarget),
-        completion,
-      });
-    };
-
-    timer = setTimeout(() => {
-      console.log(`AIS stream live capture timed out after ${timeoutMs}ms with ${vesselsByKey.size} vessels.`);
-      finish("timeout");
-    }, timeoutMs);
-
-    ws.on("open", () => {
-      const subscriptionMessage: Record<string, unknown> = {
-        APIKey: apiKey,
-        BoundingBoxes: bounds,
-        FilterMessageTypes: [
-          "PositionReport",
-          "StandardClassBPositionReport",
-          "ExtendedClassBPositionReport",
-          "ShipStaticData",
-        ],
-      };
-      const debugSubscriptionMessage = { ...subscriptionMessage, APIKey: apiKey ? "[redacted]" : "" };
-      console.log(JSON.stringify(debugSubscriptionMessage));
-      ws.send(JSON.stringify(subscriptionMessage));
-    });
-
-    ws.on("message", (data: { toString: () => string }) => {
-      try {
-        const rawMessage = JSON.parse(data.toString()) as Record<string, unknown>;
-
-        const rawShipType = (rawMessage?.Message as Record<string, unknown> | undefined)?.ShipStaticData
-          ? ((rawMessage.Message as Record<string, unknown>).ShipStaticData as Record<string, unknown>)?.Type
-          : (rawMessage?.MetaData as Record<string, unknown> | undefined)?.ShipType;
-
-        const shipType = rawShipType ?? (rawMessage?.Message as Record<string, unknown> | undefined)?.ShipType ?? (rawMessage?.MetaData as Record<string, unknown> | undefined)?.shipType;
-
-        if (shipType !== undefined && shipType !== null) {
-          const numericType = Number(shipType);
-          if (Number.isFinite(numericType) && (numericType < 70 || numericType > 79)) {
-            return;
-          }
-        }
-
-        const message = normalizeVesselMessage(rawMessage as VesselMessage);
-        const key = getVesselKey(message);
-        if (!key) return;
-        vesselsByKey.set(key, mergeDefinedVesselFields(vesselsByKey.get(key), message));
-        if (vesselsByKey.size >= collectionTarget) finish("target");
-      } catch (_) {}
-    });
-
-    ws.on("error", (error: Error & { code?: string }) => {
-      console.error("AIS stream websocket error:", {
-        code: error.code || null,
-        message: error.message,
-      });
-      const diagnosticCode = error.code ? ` (${error.code})` : "";
-      finish("error", new Error(`AIS stream connection failed${diagnosticCode}.`));
-    });
-
-    ws.on("close", (code: number, reason: Buffer) => {
-      const reasonText = reason?.toString() || "";
-      console.warn("AIS stream websocket closed:", JSON.stringify({ code, reason: reasonText || null, collected: vesselsByKey.size }));
-      finish("closed");
-    });
-  });
-}
-
 export async function handleGetVessels(req: Request) {
   const url = new URL(req.url);
   const strictTaxonomyMode = url.searchParams.get("taxonomyMode") === "strict";
@@ -1199,126 +1088,32 @@ export async function handleGetVessels(req: Request) {
     }, { status: 400 });
   }
 
-  if (!apiKey) {
-    if (forceLive) {
-      return vesselsResponse(
-        {
-          vessels: [],
-          message: "Data recolectada: 0 buques recibidos del barrido en vivo",
-          warning: "AIS stream API key is not configured on the server.",
-          updatedAt: cacheUpdatedAt,
-          source: "live-error-empty",
-        },
-        { status: 401 },
-      );
-    }
-
-    const storedVessels = await readStoredVesselMessages(requestedQuantity, url);
-    if (storedVessels.length > 0) {
-      vesselCache = storedVessels;
-      cacheUpdatedAt = Date.now();
-    }
-
-    const filtered = filterSelectiveVessels(url, vesselCache);
+  if (forceLive) {
     return vesselsResponse({
-      vessels: filtered,
-      message: `Data recolectada: ${filtered.length} buques filtrados con éxito`,
-      warning: "AIS stream API key is not configured on the server.",
-      updatedAt: cacheUpdatedAt,
-      source: vesselCache.length ? "stored-cache" : "empty-fallback",
-    });
+      success: false,
+      vessels: [],
+      source: "aisstream-client-only",
+      error: "AISSTREAM_BACKEND_DISABLED",
+      message: "Los barridos AISStream desde backend están deshabilitados. Radar usa OpenShips REST y Tracking abre AISStream en el navegador.",
+    }, { status: 410 });
   }
 
-  try {
-    const liveResult = await collectVessels(url, apiKey);
-    const liveVessels = liveResult.vessels;
-    const storedVessels = await readStoredVesselMessages(Math.max(requestedQuantity, STORED_LOOKUP_LIMIT), url);
-    const completedLiveVessels = completeIncomingVesselsFromStore(storedVessels, liveVessels, url);
-    const acceptedLiveVessels = strictTaxonomyMode
-      ? filterVesselsByTaxonomies(completedLiveVessels, requestedTaxonomies)
-      : completedLiveVessels;
-    const vessels = completedLiveVessels.length > 0
-      ? mergeVesselMessageLists(storedVessels, liveVessels)
-      : [];
-    let persistenceResult = { persistedCount: 0, masterPersistedCount: 0, databaseVesselCount: await countVessels() };
-
-    if (acceptedLiveVessels.length > 0) {
-      vesselCache = vessels;
-      cacheUpdatedAt = Date.now();
-      persistenceResult = await persistVesselMessages(acceptedLiveVessels);
-    } else if (!forceLive && vesselCache.length === 0) {
-      vesselCache = storedVessels;
-      if (vesselCache.length > 0) cacheUpdatedAt = Date.now();
-    }
-
-    const responseVessels = filterSelectiveVessels(
-      url,
-      forceLive ? acceptedLiveVessels : (vessels.length ? vessels : vesselCache),
-    );
-    const source = vessels.length
-      ? "aisstream-live"
-      : forceLive && liveResult.completion === "timeout"
-        ? "live-timeout-empty"
-        : forceLive
-          ? "live-empty"
-          : "stored-cache";
-    return vesselsResponse(
-      {
-        vessels: responseVessels,
-        updatedAt: cacheUpdatedAt,
-        source,
-        persistedCount: persistenceResult.persistedCount,
-        databaseVesselCount: persistenceResult.databaseVesselCount,
-        selectedTaxonomies: strictTaxonomyMode ? requestedTaxonomies : undefined,
-        discardedByTaxonomy: strictTaxonomyMode ? Math.max(0, completedLiveVessels.length - acceptedLiveVessels.length) : 0,
-        message: forceLive
-          ? `Data recolectada: ${responseVessels.length} buques recibidos del barrido en vivo`
-          : `Data recolectada: ${responseVessels.length} buques filtrados con éxito`,
-      },
-      {
-        headers: {
-          "x-ais-persisted-count": String(persistenceResult.persistedCount),
-          "x-ais-target-count": String(requestedQuantity),
-        },
-      },
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "AIS stream request failed.";
-    const storedVessels = await readStoredVesselMessages(Math.max(requestedQuantity, STORED_LOOKUP_LIMIT), url);
-    const acceptedStoredVessels = strictTaxonomyMode
-      ? filterVesselsByTaxonomies(storedVessels, requestedTaxonomies)
-      : storedVessels;
-    if (storedVessels.length > 0) {
-      vesselCache = storedVessels;
-      cacheUpdatedAt = Date.now();
-    }
-    const filtered = filterSelectiveVessels(url, acceptedStoredVessels);
-    const databaseVesselCount = await countVessels();
-
-    return vesselsResponse({
-      ok: true,
-      vessels: filtered,
-      message: filtered.length > 0
-        ? `AISStream no está disponible; se cargaron ${filtered.length} buques validados desde la base de datos.`
-        : "AISStream no está disponible y no hay buques validados para los filtros y la zona solicitados.",
-      warning: message,
-      degraded: true,
-      liveConnection: false,
-      availableVesselCount: filtered.length,
-      persistedCount: 0,
-      masterPersistedCount: 0,
-      databaseVesselCount,
-      selectedTaxonomies: strictTaxonomyMode ? requestedTaxonomies : undefined,
-      updatedAt: cacheUpdatedAt,
-      source: filtered.length > 0 ? "stored-fallback" : "stored-fallback-empty",
-    }, {
-      headers: {
-        "x-ais-persisted-count": "0",
-        "x-ais-target-count": String(requestedQuantity),
-        "x-ais-degraded": "true",
-      },
-    });
-  }
+  const storedVessels = await readStoredVesselMessages(Math.max(requestedQuantity, STORED_LOOKUP_LIMIT), url);
+  const acceptedStoredVessels = strictTaxonomyMode
+    ? filterVesselsByTaxonomies(storedVessels, requestedTaxonomies)
+    : storedVessels;
+  vesselCache = acceptedStoredVessels;
+  cacheUpdatedAt = storedVessels.length > 0 ? Date.now() : 0;
+  const filtered = filterSelectiveVessels(url, acceptedStoredVessels);
+  return vesselsResponse({
+    success: true,
+    vessels: filtered,
+    source: "stored-read-only",
+    liveConnection: false,
+    selectedTaxonomies: strictTaxonomyMode ? requestedTaxonomies : undefined,
+    updatedAt: cacheUpdatedAt,
+    message: `Se devolvieron ${filtered.length} registros históricos; AISStream en vivo está reservado a Tracking cliente.`,
+  });
 }
 
 export default handleGetVessels;

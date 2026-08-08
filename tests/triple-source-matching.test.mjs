@@ -32,26 +32,28 @@ test('OpenShips technical data is enriched by IMO before source merging', () => 
 
 test('OpenShips live status returns a real POL-scoped vessel snapshot', () => {
   assert.match(openShipsStatusSource, /parseAisGeofence\(url\)/);
-  assert.match(openShipsStatusSource, /SELECT DISTINCT ON \(COALESCE\(NULLIF\(mmsi::text, ''\), vessel_key\)\)/);
-  assert.match(openShipsStatusSource, /AS distance_nm/);
-  assert.match(openShipsStatusSource, /WHERE distance_nm <= \$8/);
-  assert.match(openShipsStatusSource, /'source_origin', 'OPENSHIPS'/);
-  assert.match(openShipsStatusSource, /source: "OPENSHIPS"/);
+  assert.match(openShipsStatusSource, /fetchOpenShipsLive/);
+  assert.match(openShipsStatusSource, /classifyCandidateMatch/);
+  assert.match(openShipsStatusSource, /cache: "disabled"/);
+  assert.doesNotMatch(openShipsStatusSource, /ais_telemetry_buffer|getOrSetCachedJson/);
+  assert.match(openShipsStatusSource, /source: "OPENSHIPS_REST_LIVE"/);
   assert.match(openShipsStatusSource, /openshipsCount: vessels\.length/);
-  assert.match(openShipsStatusSource, /geofence: geofence/);
+  assert.match(openShipsStatusSource, /geofence: \{ polLat: geofence\.latitude/);
   assert.match(indexSource, /const openShipsEndpoint = `\/api\/openships\/live-status\?\$\{params\.toString\(\)\}`[\s\S]*CoreNetworkGuard\.fetch\('openships-radar'/);
   assert.match(indexSource, /window\.openShipsVesselsCache = Array\.isArray\(payload\?\.vessels\)/);
   assert.match(indexSource, /window\.updateOpenShipsRadar = updateOpenShipsRadar/);
 });
 
-test('source query enriches Data Bridge, AIS, and OpenShips before application pagination', () => {
+test('database source query excludes stale OpenShips buffers and enriches local sources before pagination', () => {
   assert.match(matchingDbSource, /\(vm\.status = 'EN_CARTERA'[\s\S]*OR vm\.validation_status = 'VALIDADO'\)/);
   assert.match(matchingDbSource, /COALESCE\(vm\.status, ''\)[\s\S]*NOT IN \('PENDING', 'PENDING_AUDIT'\)/);
   assert.match(matchingDbSource, /COALESCE\(vm\.audit_status, ''\)[\s\S]*NOT IN \('PENDING', 'IN_DUE_DILIGENCE', 'REJECTED'\)/);
   assert.match(matchingDbSource, /COALESCE\(vm\.process_status, ''\)[\s\S]*NOT IN \('PENDING_REVIEW', 'DUE_DILIGENCE'\)/);
   assert.match(matchingDbSource, /FROM ais_vessels/);
   assert.match(matchingDbSource, /audit_status = 'VALIDATED'/);
-  assert.match(matchingDbSource, /FROM ais_telemetry_buffer/);
+  assert.doesNotMatch(matchingDbSource, /ais_telemetry_buffer/);
+  assert.match(matchingSource, /fetchOpenShipsLive\(\{ limit: 5000 \}\)/);
+  assert.match(matchingSource, /prepareOpenShipsCommercialCandidates/);
   assert.match(matchingDbSource, /WHERE source_system = ANY\(\$1::text\[\]\)/);
   assert.doesNotMatch(matchingDbSource, /LEFT JOIN LATERAL/);
   assert.match(matchingDbSource, /WHERE imo_number = ANY\(\$1::integer\[\]\)/);
@@ -79,8 +81,8 @@ test('matching execution uses the unified backend response and exposes source ba
   const executionStart = indexSource.indexOf('async function executeMatchingEngine');
   const executionEnd = indexSource.indexOf('function getMatchingExecutionRouteOverride', executionStart);
   const executionSource = indexSource.slice(executionStart, executionEnd);
-  assert.match(executionSource, /const openShipsCandidates = !isAppending[\s\S]*payload\.allowedSources\.includes\('OPENSHIPS'\)/);
-  assert.match(executionSource, /requestMatchingLocal\('execute', openShipsCandidates, payload\)/);
+  assert.doesNotMatch(executionSource, /openShipsCandidates/);
+  assert.match(executionSource, /requestMatchingLocal\('execute', \[\], payload\)/);
   assert.doesNotMatch(matchingSource, /candidates\.map\(\(candidate\) => serializeOpenShipsVessel\(candidate\.source\)\)/);
   assert.doesNotMatch(executionSource, /radarLiveRes|dataBridgeRes|Promise\.allSettled/);
   assert.match(indexSource, /sourceBadgesHtml/);
