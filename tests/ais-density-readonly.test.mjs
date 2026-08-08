@@ -32,7 +32,8 @@ test('Radar LIVE activation loads audited ais_vessels into isolated fair-freight
   assert.match(toggleSource, /liveMode: true/);
   assert.match(toggleSource, /selectedTaxonomy: selectedTaxonomy \|\| 'All Cargo'/);
   assert.match(toggleSource, /Radar LIVE actualizado con/);
-  assert.match(loaderSource, /window\.getAuditAisEndpoint\(selectedTaxonomy, \{ refresh: options\.refresh === true, radarContext \}\)/);
+  assert.match(loaderSource, /window\.getAuditAisEndpoint\(selectedTaxonomy, \{ refresh: options\.refresh === true, radarContext, selectedTaxonomies \}\)/);
+  assert.match(loaderSource, /taxonomyMode: 'strict'/);
   assert.match(loaderSource, /await fetch\(endpoint/);
   assert.match(loaderSource, /window\.setBackgroundAisData\(validatedVessels\)/);
   assert.match(loaderSource, /new CustomEvent\('ais:background-data-updated'/);
