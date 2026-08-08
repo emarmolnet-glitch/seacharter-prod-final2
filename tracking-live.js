@@ -2,6 +2,7 @@ import { calculateLaytime } from './laytime-engine.mjs';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import DashboardExecutive from './src/components/DashboardExecutive.jsx';
+import { calculateDynamicEta, calculateLaytimeProjection } from './src/executive-predictive-metrics.mjs';
 import { trackingStore } from './src/stores/tracking-store.js';
 import { normalizeAisDestination } from './src/tracking-destination.mjs';
 
@@ -209,6 +210,21 @@ function getExecutiveContractData() {
     const cargoQty = Number.isFinite(Number(contract.cargoQuantityMt)) ? Number(contract.cargoQuantityMt) : activeVoyage.cargoQty;
     const operationalPhase = live.status || activeVoyage.operationalPhase || '';
     const routeProgressPct = Number.isFinite(Number(live.progressPct)) ? Number(live.progressPct) : activeVoyage.routeProgressPct;
+    const remainingDistanceNm = Number.isFinite(Number(live.remainingDistanceNm))
+        ? Number(live.remainingDistanceNm)
+        : Number.isFinite(Number(trackingState.routeDistance)) ? Number(trackingState.routeDistance) : null;
+    const currentSpeedKnots = [
+        trackingState.basicVessel?.speedKnots,
+        trackingState.basicVessel?.speed,
+        live.speedKnots,
+        live.averageSpeedKnots,
+    ].map(Number).find((value) => Number.isFinite(value) && value > 0) ?? null;
+    const liveMetrics = calculateDynamicEta({
+        remainingDistanceNm,
+        speedKnots: currentSpeedKnots,
+        calculatedAt: new Date(),
+    });
+    const laytimeProjection = calculateLaytimeProjection(trackingState.laytimeStatements, liveMetrics.dynamicEtaAt);
     const hasVoyageData = Boolean(trackingState.activeVoyage || source.contract);
     const voyageAlerts = hasVoyageData ? asTrackingArray(source.alerts || activeVoyage.alerts) : [];
     return {
@@ -240,9 +256,15 @@ function getExecutiveContractData() {
             operationalPhase,
             operationalPhaseLabel: activeVoyage.operationalPhaseLabel || '',
             routeProgressPct,
+            laydaysStartAt: contract.laydaysStartAt || activeVoyage.laydaysStartAt || null,
+            cancellingAt: contract.cancellingAt || activeVoyage.cancellingAt || null,
+            live: {
+                ...liveMetrics,
+                aisUpdatedAt: trackingState.basicVessel?.timestamp || live.aisUpdatedAt || null,
+            },
             alerts: voyageAlerts,
         } : null,
-        laytime: source.laytime || activeVoyage.laytime || {},
+        laytime: laytimeProjection || source.laytime || activeVoyage.laytime || {},
         isLoading: trackingState.activeVoyageLoading || trackingState.loading,
         loadError: trackingState.activeVoyageError,
     };
@@ -457,6 +479,7 @@ function bindTrackingStoreToGlobe() {
         if (state.vessel !== previousState.vessel) {
             trackingState.basicVessel = state.vessel;
             syncBasicVesselMap(Boolean(state.vessel));
+            renderExecutiveDashboard();
         }
     });
 }
@@ -1300,6 +1323,7 @@ async function ensureLaytimeStatements(data) {
         trackingState.laytimeErrorRef = '';
         trackingState.laytimeError = '';
         renderTrackingMapChrome(data);
+        renderExecutiveDashboard();
         renderLaytimeWorkspace(data, laytimeStatementFor('LOAD') ? 'LOAD' : laytimeStatementFor('DISCHARGE') ? 'DISCHARGE' : 'LOAD');
     } catch (error) {
         if (error?.name === 'AbortError' || normalizeTrackingRef(trackingState.contractRef) !== contractRef) return;
@@ -1331,6 +1355,7 @@ async function saveLaytimeStatement(event, data) {
         trackingState.laytimeErrorRef = '';
         trackingState.laytimeError = '';
         renderTrackingMapChrome(data);
+        renderExecutiveDashboard();
         renderLaytimeWorkspace(data, result.statement.operation);
         document.getElementById('tracking-laytime-message').textContent = 'Liquidación guardada y coste de demora actualizado.';
     } catch (error) {
