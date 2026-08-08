@@ -31056,17 +31056,18 @@
                     ? await window.CoreNetworkGuard.fetch('bunker-prices', bunkerEndpoint, bunkerRequest, { cooldownMs: 60_000 })
                     : await fetch(bunkerEndpoint, bunkerRequest);
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json().catch(() => null);
+                if (!response.ok || data?.ok === false) {
+                    const extractionError = data?.error || 'Error extrayendo Bunkers';
+                    const extractionDetails = data?.details ? `: ${data.details}` : '';
+                    throw new Error(`${extractionError}${extractionDetails}`);
                 }
-
-                const data = await response.json();
 
                 const vlsfo = Number(data.vlsfo);
                 const ifo380 = Number(data.ifo380);
                 const mgo = Number(data.mgo);
 
-                if (!Number.isFinite(vlsfo) || !Number.isFinite(ifo380) || !Number.isFinite(mgo)) {
+                if (![vlsfo, ifo380, mgo].every((price) => Number.isFinite(price) && price > 0)) {
                     throw new Error('La respuesta de Bunkerindex no contiene precios válidos.');
                 }
 
@@ -31086,16 +31087,10 @@
                 applyBunkerIndexData(nextCache);
                 if (!managedByMaster) showToast("Precios sincronizados en tiempo real con BunkerIndex (Índice Mundo)");
             } catch (error) {
-                const staleCache = readBunkerIndexCache({ allowStale: true });
-                if (staleCache) {
-                    applyBunkerIndexData(staleCache);
-                    if (!managedByMaster) showToast('BunkerIndex está temporalmente limitado. Se mantiene el último precio válido en caché.');
-                } else {
-                    updateBunkerIndexCacheLabel('');
-                    const fallbackData = { vlsfo: 840.00, ifo380: 650.00, mgo: 1300.00, date: getTodayBunkerLabel() };
-                    applyBunkerIndexData(fallbackData);
-                    if (!managedByMaster) showToast("Sin conexión a BunkerIndex. Aplicando precios algorítmicos de seguridad. Ajuste manualmente si es necesario.");
-                }
+                console.error('Error extrayendo Bunkers:', error);
+                updateBunkerIndexErrorLabel('Error extrayendo Bunkers');
+                if (managedByMaster) throw error;
+                showToast(`Error extrayendo Bunkers: ${error?.message || 'fallo desconocido'}`, 'error');
             } finally {
                 isFetchingBunker = false;
                 if (btn && !managedByMaster) {

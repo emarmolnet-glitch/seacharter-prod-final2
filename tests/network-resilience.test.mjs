@@ -7,6 +7,8 @@ const resilienceSource = readFileSync(new URL('../network-resilience.js', import
 const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const distIndexSource = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
 const bunkerFunctionSource = readFileSync(new URL('../netlify/functions/get-bunker-prices.js', import.meta.url), 'utf8');
+const packageSource = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
+const netlifyConfigSource = readFileSync(new URL('../netlify.toml', import.meta.url), 'utf8');
 const globeSource = readFileSync(new URL('../GlobalFleetGlobe.js', import.meta.url), 'utf8');
 
 function loadGuard(fetchImpl) {
@@ -63,11 +65,24 @@ test('polling, bunker caching and Globe fallback use resilient contracts', () =>
   assert.match(indexSource, /getBackoffDelay\([\s\S]*DATA_BRIDGE_HTTP_POLL_MAX_INTERVAL_MS/);
   assert.match(indexSource, /getBackoffDelay\([\s\S]*OPENSHIPS_RADAR_POLL_MAX_INTERVAL_MS/);
   assert.match(indexSource, /BUNKER_INDEX_CACHE_MAX_AGE_MS = 24 \* 60 \* 60 \* 1000/);
-  assert.match(indexSource, /se conserva el último snapshot válido/);
   assert.match(indexSource, /network-resilience\.js\?v=20260807-circuit-breaker/);
   assert.match(distIndexSource, /network-resilience\.js\?v=20260807-circuit-breaker/);
   assert.match(bunkerFunctionSource, /Netlify-CDN-Cache-Control/);
   assert.match(bunkerFunctionSource, /stale-while-revalidate=86400/);
+  assert.match(bunkerFunctionSource, /SCRAPER_API_URL/);
+  assert.match(bunkerFunctionSource, /export const handler = async \(event, context\)/);
+  assert.doesNotMatch(bunkerFunctionSource, /export default/);
+  assert.match(bunkerFunctionSource, /statusCode: status/);
+  assert.match(bunkerFunctionSource, /\.tablePrices1-div > table\.tablePrices1/);
+  assert.match(bunkerFunctionSource, /a\[href\$=\"indices\/world\.php\"\]/);
+  assert.match(bunkerFunctionSource, /Error extrayendo Bunkers/);
+  assert.match(packageSource, /"cheerio": "\^1\.2\.0"/);
+  assert.match(netlifyConfigSource, /functions = "netlify\/functions"/);
+  assert.match(netlifyConfigSource, /to = "\/\.netlify\/functions\/get-bunker-prices"/);
+  assert.match(indexSource, /updateBunkerIndexErrorLabel\('Error extrayendo Bunkers'\)/);
+  assert.match(distIndexSource, /updateBunkerIndexErrorLabel\('Error extrayendo Bunkers'\)/);
+  assert.doesNotMatch(indexSource, /vlsfo:\s*840\.00/);
+  assert.doesNotMatch(distIndexSource, /vlsfo:\s*840\.00/);
   assert.match(globeSource, /function isRenderableVesselPoint\(vessel\)/);
   assert.match(globeSource, /renderVesselLayer\(view, previousVessels\)/);
   assert.match(globeSource, /status: view\.vessels\.length > 0 \? 'rendered' : 'empty-safe'/);
