@@ -43,6 +43,54 @@ test("draft validation flags drafts above the NGA safe depth", async () => {
   assert.equal(result.status, "OVERSIZED");
 });
 
+test("draft validation prioritizes the calculated operational draft over maximum design draft", async () => {
+  const { validatePortDraft } = await loadDraftValidationModule();
+  const result = validatePortDraft({
+    portName: "Valencia",
+    portDepthCode: "K",
+    actualDraft: 6.39,
+    maxDraft: 9.4,
+  });
+
+  assert.equal(result.vesselDraft, 6.39);
+  assert.equal(result.actualDraft, 6.39);
+  assert.equal(result.maxDraft, 9.4);
+  assert.equal(result.draftBasis, "ACTUAL");
+  assert.equal(result.status, "CLEARED");
+  assert.match(result.message, /calado operativo calculado \(6\.39 m\)/i);
+  assert.match(result.message, /límite seguro NGA de Valencia \(7\.9 m\)/i);
+});
+
+test("draft validation falls back to maximum draft only when operational draft is zero", async () => {
+  const { validatePortDraft } = await loadDraftValidationModule();
+  const result = validatePortDraft({
+    portName: "Valencia",
+    portDepthCode: "K",
+    actualDraft: 0,
+    maxDraft: 9.4,
+  });
+
+  assert.equal(result.vesselDraft, 9.4);
+  assert.equal(result.actualDraft, null);
+  assert.equal(result.draftBasis, "MAXIMUM");
+  assert.equal(result.status, "OVERSIZED");
+});
+
+test("draft validation accepts calculated draft when an empty actual draft is represented as zero", async () => {
+  const { validatePortDraft } = await loadDraftValidationModule();
+  const result = validatePortDraft({
+    portName: "Valencia",
+    portDepthCode: "K",
+    actualDraft: 0,
+    calculatedDraft: 6.39,
+    maxDraft: 9.4,
+  });
+
+  assert.equal(result.vesselDraft, 6.39);
+  assert.equal(result.draftBasis, "ACTUAL");
+  assert.equal(result.status, "CLEARED");
+});
+
 test("unknown depth codes use the conservative zero-meter limit", async () => {
   const { validatePortDraft } = await loadDraftValidationModule();
   const result = validatePortDraft({
