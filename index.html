@@ -62692,7 +62692,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     logOpenShipsWarnings(payload);
                     if (!response.ok) {
                         const upstreamStatus = Number(payload?.upstream?.httpStatus);
-                        if (upstreamStatus === 403 && payload?.clientFallback?.allowed === true) {
+                        if ([400, 403].includes(upstreamStatus) && payload?.clientFallback?.allowed === true) {
                             payload = await fetchOpenShipsFromBrowser(
                                 payload.clientFallback,
                                 selectedTaxonomies,

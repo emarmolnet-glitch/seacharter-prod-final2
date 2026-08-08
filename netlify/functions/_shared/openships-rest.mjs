@@ -1,6 +1,8 @@
 const DEFAULT_LIMIT = 5000;
 const MAX_LIMIT = 10000;
 const DEFAULT_TIMEOUT_MS = 15000;
+const OPENSHIPS_POSITION_PATH = "/external/vessels/position/box";
+const OPENSHIPS_RADIUS_DEGREES = 50;
 const SENSITIVE_QUERY_PARAM = /(?:api[-_]?key|token|secret|authorization|signature|credential|password)/i;
 
 function asRecord(value) {
@@ -73,6 +75,25 @@ async function readUpstreamError(response, secrets = []) {
 function withDiagnostics(error, diagnostics) {
   error.diagnostics = diagnostics;
   return error;
+}
+
+function clamp(value, minimum, maximum) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function createOpenShipsPositionUrl(endpoint, latitude, longitude) {
+  const url = new URL(endpoint);
+  const basePath = url.pathname.replace(/\/+$/, "");
+  if (!basePath.endsWith(OPENSHIPS_POSITION_PATH)) {
+    url.pathname = `${basePath}${OPENSHIPS_POSITION_PATH}`;
+  }
+  url.searchParams.delete("box");
+  url.searchParams.delete("bbox");
+  url.searchParams.set("minLat", String(clamp(latitude - OPENSHIPS_RADIUS_DEGREES, -90, 90)));
+  url.searchParams.set("maxLat", String(clamp(latitude + OPENSHIPS_RADIUS_DEGREES, -90, 90)));
+  url.searchParams.set("minLon", String(clamp(longitude - OPENSHIPS_RADIUS_DEGREES, -180, 180)));
+  url.searchParams.set("maxLon", String(clamp(longitude + OPENSHIPS_RADIUS_DEGREES, -180, 180)));
+  return url;
 }
 
 export function normalizeOpenShipsVessel(value, index = 0) {
@@ -179,11 +200,15 @@ export async function fetchOpenShipsLive(options = {}) {
 
   const limit = Math.min(MAX_LIMIT, Math.max(1, Math.trunc(Number(options.limit) || DEFAULT_LIMIT)));
   const timeoutMs = Math.max(1000, Math.min(30000, Number(options.timeoutMs) || DEFAULT_TIMEOUT_MS));
-  const url = new URL(endpoint);
-  const bboxParam = String(env.OPENSHIPS_BBOX_PARAM || "bbox").trim();
-  const globalBbox = String(env.OPENSHIPS_GLOBAL_BBOX || "-180,-90,180,90").trim();
+  const latitude = finiteNumber(options.latitude);
+  const longitude = finiteNumber(options.longitude);
+  if (latitude === null || latitude < -90 || latitude > 90 || longitude === null || longitude < -180 || longitude > 180) {
+    const error = new Error("Valid POL coordinates are required for the OpenShips request");
+    error.code = "OPENSHIPS_INVALID_COORDINATES";
+    throw error;
+  }
+  const url = createOpenShipsPositionUrl(endpoint, latitude, longitude);
   const limitParam = String(env.OPENSHIPS_LIMIT_PARAM || "limit").trim();
-  if (bboxParam && !url.searchParams.has(bboxParam)) url.searchParams.set(bboxParam, globalBbox);
   if (limitParam && !url.searchParams.has(limitParam)) url.searchParams.set(limitParam, String(limit));
 
   const apiKey = String(env.OPENSHIPS_API_KEY || env.OPENSHIPS_API_TOKEN || "").trim();
@@ -221,7 +246,9 @@ export async function fetchOpenShipsLive(options = {}) {
         statusText,
         message: upstreamMessage,
         requestUrl,
-        clientFallback: response.status === 403 ? clientFallback : { allowed: false, reason: `HTTP ${response.status} is not eligible for browser fallback` },
+        clientFallback: response.status === 400 || response.status === 403
+          ? clientFallback
+          : { allowed: false, reason: `HTTP ${response.status} is not eligible for browser fallback` },
       });
     }
     let payload;
@@ -235,7 +262,7 @@ export async function fetchOpenShipsLive(options = {}) {
         statusText: String(response.statusText || "").trim(),
         message: parseError instanceof Error ? parseError.message : "JSON parsing failed",
         requestUrl,
-        clientFallback: { allowed: false, reason: "Browser fallback is reserved for HTTP 403" },
+        clientFallback: { allowed: false, reason: "Browser fallback is reserved for HTTP 400 or 403" },
       });
     }
     const providerRows = extractProviderRows(payload);
@@ -263,7 +290,7 @@ export async function fetchOpenShipsLive(options = {}) {
         statusText: "Timeout",
         message: timeoutError.message,
         requestUrl,
-        clientFallback: { allowed: false, reason: "Browser fallback is reserved for HTTP 403" },
+        clientFallback: { allowed: false, reason: "Browser fallback is reserved for HTTP 400 or 403" },
       });
     }
     if (error && typeof error === "object" && !("diagnostics" in error)) {
@@ -272,7 +299,7 @@ export async function fetchOpenShipsLive(options = {}) {
         statusText: "Network Error",
         message: error instanceof Error ? error.message : "OpenShips network request failed",
         requestUrl,
-        clientFallback: { allowed: false, reason: "Browser fallback is reserved for HTTP 403" },
+        clientFallback: { allowed: false, reason: "Browser fallback is reserved for HTTP 400 or 403" },
       };
     }
     throw error;

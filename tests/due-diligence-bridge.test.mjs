@@ -479,7 +479,10 @@ test('persistence backend consolidates normalized technical fields by IMO or MMS
   assert.match(persistenceBackendSource, /gross_tonnage = COALESCE\(EXCLUDED\.gross_tonnage, vessels_master\.gross_tonnage\)/);
   assert.match(persistenceBackendSource, /status = 'DISCARDED'/);
   assert.match(persistenceBackendSource, /requestedStatus === "discarded"/);
-  assert.match(technicalCacheSource, /ON CONFLICT \(imo_number\) DO UPDATE SET/);
+  assert.match(technicalCacheSource, /const conflictColumn = vessel\.mmsi \? "mmsi" : "imo_number"/);
+  assert.match(technicalCacheSource, /ORDER BY CASE WHEN mmsi = \$2::text THEN 0 ELSE 1 END/);
+  assert.match(technicalCacheSource, /ON CONFLICT \(\$\{conflictColumn\}\) DO UPDATE SET/);
+  assert.match(technicalCacheSource, /imo_conflict\.imo_number = EXCLUDED\.imo_number/);
   assert.match(technicalCacheSource, /gross_tonnage = COALESCE\(EXCLUDED\.gross_tonnage, vessels_master\.gross_tonnage\)/);
   assert.match(technicalCacheSource, /net_tonnage = COALESCE\(EXCLUDED\.net_tonnage, vessels_master\.net_tonnage\)/);
   assert.match(technicalCacheSource, /loa_meters = COALESCE\(EXCLUDED\.loa_meters, vessels_master\.loa_meters\)/);
@@ -513,6 +516,17 @@ test('persistence backend consolidates normalized technical fields by IMO or MMS
   assert.match(persistenceBackendSource, /return json\(\{ success: false, error: errorMessage \}, 500, headers\)/);
   assert.doesNotMatch(persistenceBackendSource, /source_provenance|audit_source|validation_status|system_identity|source_payload/);
   assert.doesNotMatch(persistenceBackendSource, /\bsource\b\s*[,)!=]/);
+});
+
+test('technical consolidation resolves duplicate MMSI through the unified upsert', () => {
+  assert.match(technicalCacheSource, /const conflictColumn = vessel\.mmsi \? "mmsi" : "imo_number"/);
+  assert.match(technicalCacheSource, /WHERE \(\$1::integer IS NOT NULL AND imo_number = \$1::integer\)[\s\S]*OR \(\$2::text IS NOT NULL AND mmsi = \$2::text\)/);
+  assert.match(technicalCacheSource, /ORDER BY CASE WHEN mmsi = \$2::text THEN 0 ELSE 1 END/);
+  assert.match(technicalCacheSource, /ON CONFLICT \(\$\{conflictColumn\}\) DO UPDATE SET/);
+  assert.match(technicalCacheSource, /last_port = COALESCE\(EXCLUDED\.last_port, vessels_master\.last_port\)/);
+  assert.match(technicalCacheSource, /eta = COALESCE\(EXCLUDED\.eta, vessels_master\.eta\)/);
+  assert.match(technicalCacheSource, /updated_at = NOW\(\)/);
+  assert.doesNotMatch(technicalCacheSource, /vessel\.imoNumber \? upsertByImoSql : upsertByMmsiSql/);
 });
 
 test('backend reads vessels_master first and persists successful waterfall extraction', () => {
@@ -556,7 +570,7 @@ test('backend accepts IMO, MMSI, or vessel name and searches the four public pro
   assert.match(backendSource, /data: normalizedResponseData\(result\.data\)/);
   assert.match(technicalCacheSource, /last_port = COALESCE\(\$16::text, vessels_master\.last_port\)/);
   assert.match(technicalCacheSource, /NULLIF\(\$17::text, ''\)::timestamptz/);
-  assert.match(technicalCacheSource, /ON CONFLICT \(imo_number\) DO UPDATE SET/);
+  assert.match(technicalCacheSource, /ON CONFLICT \(\$\{conflictColumn\}\) DO UPDATE SET/);
   assert.match(technicalCacheSource, /eta = COALESCE\(EXCLUDED\.eta, vessels_master\.eta\)/);
   assert.match(persistenceBackendSource, /last_port: savedVessel\.lastPort/);
   assert.match(persistenceBackendSource, /eta: savedVessel\.eta/);

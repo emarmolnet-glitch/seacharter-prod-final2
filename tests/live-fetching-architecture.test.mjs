@@ -14,17 +14,24 @@ const [openShipsEndpoint, matchingDb, getVessels, aisIngest, trackingBridge, map
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
 ]);
 
-test('OpenShips REST adapter requests a global bbox and normalizes provider rows', async () => {
+test('OpenShips REST adapter requests a regional position box and normalizes provider rows', async () => {
   let requestedUrl = '';
   const result = await fetchOpenShipsLive({
     env: { OPENSHIPS_API_URL: 'https://provider.invalid/vessels' },
+    latitude: 36.75,
+    longitude: 5.08,
     limit: 10,
     fetchImpl: async (url) => {
       requestedUrl = String(url);
       return new Response(JSON.stringify({ vessels: [{ MMSI: '123456789', ShipName: 'LIVE ONE', Latitude: 10, Longitude: 20, Destination: 'DZ BJA' }] }), { status: 200 });
     },
   });
-  assert.match(requestedUrl, /bbox=-180%2C-90%2C180%2C90/);
+  assert.match(requestedUrl, /\/vessels\/external\/vessels\/position\/box\?/);
+  assert.match(requestedUrl, /minLat=-13\.25/);
+  assert.match(requestedUrl, /maxLat=86\.75/);
+  assert.match(requestedUrl, /minLon=-44\.92/);
+  assert.match(requestedUrl, /maxLon=55\.08/);
+  assert.doesNotMatch(requestedUrl, /[?&](?:box|bbox)=/);
   assert.equal(result.count, 1);
   assert.equal(result.vessels[0].mmsi, '123456789');
   assert.equal(result.vessels[0].source, 'OPENSHIPS');
@@ -38,6 +45,8 @@ test('OpenShips REST adapter exposes HTTP 403 diagnostics and a safe browser fal
     await assert.rejects(
       fetchOpenShipsLive({
         env: { OPENSHIPS_API_URL: 'https://provider.invalid/vessels' },
+        latitude: 36.75,
+        longitude: 5.08,
         limit: 25,
         fetchImpl: async () => new Response(JSON.stringify({ message: 'Access Denied' }), {
           status: 403,
@@ -54,7 +63,7 @@ test('OpenShips REST adapter exposes HTTP 403 diagnostics and a safe browser fal
   } finally {
     console.log = originalLog;
   }
-  assert.match(logs.join('\n'), /\[OpenShips Fetch\] Requesting: https:\/\/provider\.invalid\/vessels\?/);
+  assert.match(logs.join('\n'), /\[OpenShips Fetch\] Requesting: https:\/\/provider\.invalid\/vessels\/external\/vessels\/position\/box\?/);
 });
 
 test('OpenShips diagnostics never expose configured API credentials', async () => {
@@ -69,6 +78,8 @@ test('OpenShips diagnostics never expose configured API credentials', async () =
           OPENSHIPS_API_KEY: 'sensitive-test-key',
           OPENSHIPS_API_KEY_QUERY_PARAM: 'api_key',
         },
+        latitude: 36.75,
+        longitude: 5.08,
         fetchImpl: async () => new Response('Forbidden', { status: 403, statusText: 'Forbidden' }),
       }),
       error => error?.diagnostics?.clientFallback?.allowed === false
@@ -103,12 +114,12 @@ test('radar paths contain no stale OpenShips database reads or response cache', 
   assert.match(indexSource, /no se reutiliza ningún snapshot anterior/);
 });
 
-test('OpenShips failures reach the browser and trigger only the safe 403 fallback', () => {
+test('OpenShips failures reach the browser and trigger only the safe 400 or 403 fallback', () => {
   assert.match(openShipsEndpoint, /warnings: \[warning\]/);
   assert.match(openShipsEndpoint, /clientFallback: diagnostics\.clientFallback/);
   assert.match(indexSource, /const prefix = Number\.isFinite\(status\) \? '\[OpenShips Error\]'/);
   assert.match(indexSource, /console\.warn\(`\$\{prefix\} \$\{statusLabel\}/);
-  assert.match(indexSource, /upstreamStatus === 403 && payload\?\.clientFallback\?\.allowed === true/);
+  assert.match(indexSource, /\[400, 403\]\.includes\(upstreamStatus\) && payload\?\.clientFallback\?\.allowed === true/);
   assert.match(indexSource, /fetchOpenShipsFromBrowser/);
   assert.match(indexSource, /OPENSHIPS_BROWSER_FALLBACK/);
 });

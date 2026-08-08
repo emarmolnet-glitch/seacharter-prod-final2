@@ -120,56 +120,30 @@ export async function upsertVesselTechnicalRecord(
     throw new Error("Se requiere IMO o MMSI válido para persistir los datos técnicos.");
   }
 
-  const upsertByImoSql = `
-    INSERT INTO vessels_master (
-      imo_number, mmsi, vessel_name, dwt, latitude, longitude, vessel_type,
-      draft_meters, flag, call_sign, year_built, gross_tonnage, net_tonnage,
-      loa_meters, beam_meters, last_port, eta${statusColumnSql},
-      updated_at, fecha_ultima_actualizacion
-    )
-    VALUES (
-      $1::integer, $2::text, $3::text, $4::integer, $5::double precision,
-      $6::double precision, $7::text, $8::double precision, $9::text,
-      $10::text, $11::integer, $12::double precision, $13::double precision,
-      $14::double precision, $15::double precision, $16::text,
-      NULLIF($17::text, '')::timestamptz${statusValueSql}, NOW(), NOW()
-    )
-    ON CONFLICT (imo_number) DO UPDATE SET
-      mmsi = COALESCE(EXCLUDED.mmsi, vessels_master.mmsi),
-      vessel_name = COALESCE(EXCLUDED.vessel_name, vessels_master.vessel_name),
-      dwt = COALESCE(EXCLUDED.dwt, vessels_master.dwt),
-      latitude = COALESCE(EXCLUDED.latitude, vessels_master.latitude),
-      longitude = COALESCE(EXCLUDED.longitude, vessels_master.longitude),
-      vessel_type = COALESCE(EXCLUDED.vessel_type, vessels_master.vessel_type),
-      draft_meters = COALESCE(EXCLUDED.draft_meters, vessels_master.draft_meters),
-      flag = COALESCE(EXCLUDED.flag, vessels_master.flag),
-      call_sign = COALESCE(EXCLUDED.call_sign, vessels_master.call_sign),
-      year_built = COALESCE(EXCLUDED.year_built, vessels_master.year_built),
-      gross_tonnage = COALESCE(EXCLUDED.gross_tonnage, vessels_master.gross_tonnage),
-      net_tonnage = COALESCE(EXCLUDED.net_tonnage, vessels_master.net_tonnage),
-      loa_meters = COALESCE(EXCLUDED.loa_meters, vessels_master.loa_meters),
-      beam_meters = COALESCE(EXCLUDED.beam_meters, vessels_master.beam_meters),
-      last_port = COALESCE(EXCLUDED.last_port, vessels_master.last_port),
-      eta = COALESCE(EXCLUDED.eta, vessels_master.eta),
-      ${statusUpdateSql}
-      updated_at = NOW(),
-      fecha_ultima_actualizacion = NOW()
-    RETURNING ${RETURNING_COLUMNS}
-  `;
-
-  const upsertByMmsiSql = `
+  const conflictColumn = vessel.mmsi ? "mmsi" : "imo_number";
+  const consolidatedUpsertSql = `
       WITH matched_vessel AS (
         SELECT id
         FROM vessels_master
         WHERE ($1::integer IS NOT NULL AND imo_number = $1::integer)
            OR ($2::text IS NOT NULL AND mmsi = $2::text)
-        ORDER BY CASE WHEN imo_number = $1::integer THEN 0 ELSE 1 END
+        ORDER BY CASE WHEN mmsi = $2::text THEN 0 ELSE 1 END
         LIMIT 1
       ),
       updated_vessel AS (
         UPDATE vessels_master
         SET
-          imo_number = COALESCE($1::integer, vessels_master.imo_number),
+          imo_number = CASE
+            WHEN $1::integer IS NULL OR vessels_master.imo_number = $1::integer
+              THEN COALESCE($1::integer, vessels_master.imo_number)
+            WHEN EXISTS (
+              SELECT 1
+              FROM vessels_master AS imo_conflict
+              WHERE imo_conflict.imo_number = $1::integer
+                AND imo_conflict.id <> vessels_master.id
+            ) THEN vessels_master.imo_number
+            ELSE $1::integer
+          END,
           mmsi = COALESCE($2::text, vessels_master.mmsi),
           vessel_name = COALESCE($3::text, vessels_master.vessel_name),
           dwt = COALESCE($4::integer, vessels_master.dwt),
@@ -206,7 +180,18 @@ export async function upsertVesselTechnicalRecord(
           $14::double precision, $15::double precision, $16::text,
           NULLIF($17::text, '')::timestamptz${statusValueSql}, NOW(), NOW()
         WHERE NOT EXISTS (SELECT 1 FROM updated_vessel)
-        ON CONFLICT (imo_number) DO UPDATE SET
+        ON CONFLICT (${conflictColumn}) DO UPDATE SET
+          imo_number = CASE
+            WHEN EXCLUDED.imo_number IS NULL OR vessels_master.imo_number = EXCLUDED.imo_number
+              THEN COALESCE(EXCLUDED.imo_number, vessels_master.imo_number)
+            WHEN EXISTS (
+              SELECT 1
+              FROM vessels_master AS imo_conflict
+              WHERE imo_conflict.imo_number = EXCLUDED.imo_number
+                AND imo_conflict.id <> vessels_master.id
+            ) THEN vessels_master.imo_number
+            ELSE EXCLUDED.imo_number
+          END,
           mmsi = COALESCE(EXCLUDED.mmsi, vessels_master.mmsi),
           vessel_name = COALESCE(EXCLUDED.vessel_name, vessels_master.vessel_name),
           dwt = COALESCE(EXCLUDED.dwt, vessels_master.dwt),
@@ -235,7 +220,7 @@ export async function upsertVesselTechnicalRecord(
   `;
 
   const result = await queryClient.query<VesselTechnicalRow>(
-    vessel.imoNumber ? upsertByImoSql : upsertByMmsiSql,
+    consolidatedUpsertSql,
     queryParameters,
   );
 

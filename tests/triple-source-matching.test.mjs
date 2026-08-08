@@ -52,7 +52,7 @@ test('database source query excludes stale OpenShips buffers and enriches local 
   assert.match(matchingDbSource, /FROM ais_vessels/);
   assert.match(matchingDbSource, /audit_status = 'VALIDATED'/);
   assert.doesNotMatch(matchingDbSource, /ais_telemetry_buffer/);
-  assert.match(matchingSource, /fetchOpenShipsLive\(\{ limit: 5000 \}\)/);
+  assert.match(matchingSource, /fetchOpenShipsLive\(\{[\s\S]*latitude: loadingPortLat,[\s\S]*longitude: loadingPortLon,[\s\S]*limit: 5000/);
   assert.match(matchingSource, /prepareOpenShipsCommercialCandidates/);
   assert.match(matchingDbSource, /WHERE source_system = ANY\(\$1::text\[\]\)/);
   assert.doesNotMatch(matchingDbSource, /LEFT JOIN LATERAL/);

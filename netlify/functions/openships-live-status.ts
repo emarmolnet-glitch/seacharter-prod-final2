@@ -88,6 +88,8 @@ export default async (req: Request) => {
   try {
     const requestedProviderLimit = Number(url.searchParams.get("providerLimit"));
     const live = await fetchOpenShipsLive({
+      latitude: geofence.latitude,
+      longitude: geofence.longitude,
       limit: Number.isFinite(requestedProviderLimit) ? requestedProviderLimit : 5000,
     });
     const taxonomyVessels = taxonomies.length > 0
