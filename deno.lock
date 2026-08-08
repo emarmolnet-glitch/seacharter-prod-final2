@@ -11,13 +11,41 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:@neondatabase/serverless@^1.1.0",
         "npm:@netlify/blobs@^10.7.9",
+        "npm:@netlify/database@^1.1.0",
         "npm:@netlify/functions@^2.6.0",
+        "npm:@sparticuz/chromium@147",
         "npm:@turf/distance@^7.3.0",
+        "npm:@types/node@^26.1.0",
+        "npm:@types/pg@^8.20.0",
+        "npm:@types/react-dom@^19.2.4",
+        "npm:@types/react@^19.2.18",
+        "npm:@types/ws@^8.18.1",
+        "npm:autoprefixer@^10.4.18",
         "npm:cheerio@^1.2.0",
+        "npm:drizzle-kit@^1.0.0-beta.22",
+        "npm:drizzle-orm@^1.0.0-beta.22",
         "npm:geojson-path-finder@^2.1.0",
+        "npm:jspdf@^2.5.2",
+        "npm:mammoth@^1.12.0",
+        "npm:openai@^6.45.0",
+        "npm:pdf-parse@^2.4.5",
+        "npm:pg@^8.22.0",
+        "npm:postcss@^8.4.35",
+        "npm:puppeteer-core@^24.43.1",
+        "npm:puppeteer@^24.43.1",
+        "npm:react-dom@^19.2.8",
+        "npm:react@^19.2.8",
         "npm:searoute-ts@2",
-        "npm:ws@^8.18.0"
+        "npm:sharp@~0.34.5",
+        "npm:tailwindcss@^3.4.1",
+        "npm:typescript@^6.0.3",
+        "npm:vite@5",
+        "npm:ws@^8.18.0",
+        "npm:xlsx@~0.18.5",
+        "npm:zod@^3.23.8",
+        "npm:zustand@^5.0.14"
       ]
     }
   }

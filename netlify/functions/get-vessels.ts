@@ -1,6 +1,6 @@
 import type { Config } from "@netlify/functions";
-import { countVessels, isCargoShipType, readVessels, readVesselsNearPoint, upsertVessels, type VesselRecord } from "./vessel-store.js";
-import { filterVesselsByTaxonomies, parseRequestedTaxonomies } from "./ais-taxonomy.js";
+import { countVessels, isCargoShipType, readVessels, readVesselsNearPoint, upsertVessels, type VesselRecord } from "./_shared/vessel-store.js";
+import { filterVesselsByTaxonomies, parseRequestedTaxonomies } from "./_shared/ais-taxonomy.js";
 import { upsertRadarVesselsMaster } from "../../db/vessels-master-sync.js";
 import { evaluateCommercialTransitToPol, LONG_DISTANCE_TRANSIT_LABEL } from "./_shared/ais-commercial-transit.mjs";
 import { buildCommercialVesselRank, compareCommercialVesselRanks } from "./_shared/commercial-vessel-ranking.mjs";

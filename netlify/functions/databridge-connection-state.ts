@@ -1,4 +1,3 @@
-import type { Config } from "@netlify/functions";
 import { eq } from "drizzle-orm";
 import { db, ensureApplicationSchema } from "../../db/index.js";
 import { appConfig } from "../../db/schema.js";
@@ -93,8 +92,4 @@ export default async (req: Request) => {
       headers: { "cache-control": "no-store", ...createCorsHeaders(req, "GET, OPTIONS") },
     });
   }
-};
-
-export const config: Config = {
-  path: "/api/databridge-connection-state",
 };

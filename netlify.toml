@@ -16,6 +16,15 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+[dev]
+  command = "npm run dev"
+  targetPort = 5173
+  port = 8889
+
 [build.environment]
   NODE_ENV = "production"
 
@@ -28,31 +37,26 @@
   from = "/api/syncPull/*"
   to = "/.netlify/functions/sync-pull/:splat"
   status = 200
-  force = true
 
 [[redirects]]
   from = "/api/v1/vessel/live-profile"
   to = "/.netlify/functions/vessel-live-profile"
   status = 200
-  force = true
 
 [[redirects]]
   from = "/api/v1/voyage/tracking/*"
   to = "/.netlify/functions/voyage-tracking"
   status = 200
-  force = true
 
 [[redirects]]
   from = "/api/v1/*"
   to = "/.netlify/functions/:splat"
   status = 200
-  force = true
 
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
-  force = true
 
 [[redirects]]
   from = "/route"

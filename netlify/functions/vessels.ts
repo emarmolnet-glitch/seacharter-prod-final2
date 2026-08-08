@@ -1,5 +1,5 @@
 import type { Config } from "@netlify/functions";
-import { isCargoShipType, readVessels, sortByLastSeen, upsertVessels, type VesselRecord } from "./vessel-store.js";
+import { isCargoShipType, readVessels, sortByLastSeen, upsertVessels, type VesselRecord } from "./_shared/vessel-store.js";
 
 function toApiVessel(row: VesselRecord) {
   return {

@@ -34,6 +34,8 @@ test('explicit Data Bridge actions bypass only the local network interceptor wra
 test('connection indicator restores the persisted verified state without exposing browser secrets', () => {
   assert.match(indexSource, /DATA_BRIDGE_VERIFIED_SESSION_KEY/);
   assert.match(indexSource, /DATA_BRIDGE_CONNECTION_STATE_ENDPOINT = '\/api\/databridge-connection-state'/);
+  assert.match(indexSource, /DATA_BRIDGE_CONNECTION_STATE_FUNCTION_ENDPOINT = '\/\.netlify\/functions\/databridge-connection-state'/);
+  assert.match(indexSource, /response\.status === 404[\s\S]*DATA_BRIDGE_CONNECTION_STATE_FUNCTION_ENDPOINT/);
   assert.match(indexSource, /function restorePersistentDataBridgeConnection\(\)/);
   assert.match(indexSource, /await verifyDataBridgeConnection\(null, \{ silent: true, restoring: true \}\)/);
   assert.match(indexSource, /function setDataBridgeVerifiedConnection\(isVerified\)/);
@@ -51,7 +53,7 @@ test('verified Data Bridge state is persisted in Netlify Database AppConfig', ()
   assert.doesNotMatch(verifySource, /persistDataBridgeConnectionState\(false\)/);
   assert.match(persistedStateSource, /ensureApplicationSchema\(\)/);
   assert.match(persistedStateSource, /\.from\(appConfig\)/);
-  assert.match(persistedStateSource, /path: "\/api\/databridge-connection-state"/);
+  assert.doesNotMatch(persistedStateSource, /export const config|path:/);
   assert.match(persistedStateSource, /searchParams\.has\("refresh"\)/);
   assert.match(persistedStateSource, /ttlMs: 10 \* 1000/);
   assert.doesNotMatch(persistedStateSource, /secret|token|authorization/i);

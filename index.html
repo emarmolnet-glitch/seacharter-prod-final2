@@ -58452,6 +58452,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 	        const HAS_VALID_DATA_BRIDGE_API_URL = isValidDataBridgeApiUrl(DATA_BRIDGE_API_URL);
         const DATA_BRIDGE_VERIFY_ENDPOINT = '/api/verify-connection';
         const DATA_BRIDGE_CONNECTION_STATE_ENDPOINT = '/api/databridge-connection-state';
+        const DATA_BRIDGE_CONNECTION_STATE_FUNCTION_ENDPOINT = '/.netlify/functions/databridge-connection-state';
         const TENDER_NOR_ENDPOINT = '/api/v1/voyage/tender-nor';
 	        const DATA_BRIDGE_HTTP_POLL_ENDPOINT = DATA_BRIDGE_CONNECTION_STATE_ENDPOINT;
 	        const DATA_BRIDGE_HTTP_POLL_INTERVAL_MS = 10_000;
@@ -58717,12 +58718,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         signal: dataBridgeHttpPollingController.signal
                     };
                     const dataBridgeFetch = window.__coreProNativeFetch || window.fetch;
-                    const response = window.CoreNetworkGuard && !forceRefresh
+                    let response = window.CoreNetworkGuard && !forceRefresh
                         ? await window.CoreNetworkGuard.fetch('databridge-status', requestUrl, pollRequest, {
                             cooldownMs: DATA_BRIDGE_HTTP_POLL_INTERVAL_MS,
                             fetchImpl: dataBridgeFetch
                         })
                         : await dataBridgeFetch(requestUrl, pollRequest);
+	                if (response.status === 404) {
+	                    const fallbackUrl = forceRefresh
+	                        ? `${DATA_BRIDGE_CONNECTION_STATE_FUNCTION_ENDPOINT}?refresh=${Date.now()}`
+	                        : DATA_BRIDGE_CONNECTION_STATE_FUNCTION_ENDPOINT;
+	                    response = await dataBridgeFetch(fallbackUrl, pollRequest);
+	                }
 	                if (!response.ok) throw new Error(`HTTP ${response.status}`);
 	                if (!response.headers.get('content-type')?.includes('application/json')) {
 	                    throw new Error('Invalid Payload');
@@ -58898,10 +58905,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         async function restorePersistentDataBridgeConnection() {
             try {
                 const dataBridgeFetch = window.__coreProNativeFetch || window.fetch;
-                const response = await dataBridgeFetch(DATA_BRIDGE_CONNECTION_STATE_ENDPOINT, {
+                const requestOptions = {
                     method: 'GET',
                     headers: { Accept: 'application/json' }
-                });
+                };
+                let response = await dataBridgeFetch(DATA_BRIDGE_CONNECTION_STATE_ENDPOINT, requestOptions);
+                if (response.status === 404) {
+                    response = await dataBridgeFetch(DATA_BRIDGE_CONNECTION_STATE_FUNCTION_ENDPOINT, requestOptions);
+                }
                 const payload = await response.json().catch(() => ({}));
                 const connection = payload?.connection || {};
                 window.dataBridgePersistentConnectionState = {

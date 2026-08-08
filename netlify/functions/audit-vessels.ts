@@ -1,7 +1,7 @@
 import type { Config } from "@netlify/functions";
 import type { QueryResultRow } from "pg";
 import { getPool } from "../../db/index.js";
-import { missingAisGeofenceResponse, parseAisGeofence, type AisGeofence } from "./ais-geofence.js";
+import { missingAisGeofenceResponse, parseAisGeofence, type AisGeofence } from "./_shared/ais-geofence.js";
 import { createResponseCacheHeaders, getOrSetCachedJson } from "./_shared/response-cache.js";
 import { overrideVesselClassesFromMaster } from "./_shared/verified-vessel-classes.js";
 
