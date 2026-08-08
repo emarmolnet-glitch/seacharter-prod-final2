@@ -51,6 +51,34 @@ test('matching radar runs predictive destination matching beside radial sources'
   assert.match(source, /\.\.\.polScopedAisVessels, \.\.\.openShipsVessels, \.\.\.predictiveVessels/);
 });
 
+test('matching radar binds the taxonomy selector to GlobalStore and every source payload', () => {
+  assert.match(source, /window\.GlobalStore\.selectedTaxonomies = normalizedValues\.slice\(\)/);
+  assert.match(source, /selectedTaxonomies: selectedTaxonomies\.slice\(\)/);
+  assert.match(source, /taxonomyMode: 'strict'/);
+  assert.match(source, /window\.startRadarLive\(\{ source: 'matching-radar-sweep', refresh: true, radarContext, selectedTaxonomies \}\)/);
+  assert.match(source, /window\.updateOpenShipsRadar\?\.\(\{ refreshGlobe: false, refresh: true, polContext, radarContext, selectedTaxonomies \}\)/);
+  assert.match(source, /params\.set\('taxonomies', JSON\.stringify\(selectedTaxonomies\)\)/);
+});
+
+test('matching radar enforces the strict cargo interceptor before rendering or storing results', () => {
+  const interceptorStart = source.indexOf('function applyStrictRadarTaxonomyFilter');
+  const interceptorEnd = source.indexOf('function renderRadarTaxonomyFilterFeedback', interceptorStart);
+  const interceptorSource = source.slice(interceptorStart, interceptorEnd);
+  assert.match(source, /'tanker', 'chemical', 'oil', 'dredger', 'passenger', 'ferry'/);
+  assert.match(source, /'vehicles carrier', 'vehicle carrier', 'ro ro', 'roro', 'container ship'/);
+  assert.match(interceptorSource, /selectedTaxonomies\.length === 1 && selectedTaxonomies\[0\] === 'category:cargo'/);
+  assert.match(source, /const taxonomyFilter = applyStrictRadarTaxonomyFilter\(enrichedCandidates, response\.selectedTaxonomies\)/);
+  assert.match(source, /const taxonomyFilter = typeof window\.applyStrictRadarTaxonomyFilter === 'function'[\s\S]*window\.GlobalStore\?\.setMatchingFleet/);
+  assert.match(source, /source: taxonomyRejectedAll \? 'taxonomy-filter' : 'matching-ui'/);
+  assert.match(source, /source === 'taxonomy-filter'/);
+});
+
+test('matching radar reports taxonomy exclusions in the shared integrity banner', () => {
+  assert.match(source, /buques descartados por incompatibilidad de taxonomía \(Filtro Activo:/);
+  assert.match(source, /console\.log\(`\[Radar Taxonomía\] \$\{message\}`\)/);
+  assert.match(source, /window\.renderRadarTaxonomyFilterFeedback\?\.\(taxonomyFilter\)/);
+});
+
 test('leaving the radar map freezes LIVE mode and cleans up the on-demand transport', () => {
   const switchStart = source.indexOf('function switchTab(tabId)');
   const switchEnd = source.indexOf('function closeMobileSessionMenu()', switchStart);

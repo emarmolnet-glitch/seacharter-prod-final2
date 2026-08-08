@@ -18761,9 +18761,15 @@
         window.getDataBridgeTransmissionVessels = getDataBridgeTransmissionVessels;
 
         function setRenderedMatchingVessels(vessels, metadata = {}) {
-            const requestedVessels = Array.isArray(vessels) ? vessels.slice() : [];
+            const incomingVessels = Array.isArray(vessels) ? vessels.slice() : [];
+            const taxonomyFilter = typeof window.applyStrictRadarTaxonomyFilter === 'function'
+                ? window.applyStrictRadarTaxonomyFilter(incomingVessels)
+                : { vessels: incomingVessels };
+            const requestedVessels = Array.isArray(taxonomyFilter.vessels) ? taxonomyFilter.vessels : [];
+            const taxonomyRejectedAll = incomingVessels.length > 0 && requestedVessels.length === 0;
             const canonicalVessels = window.GlobalStore?.setMatchingFleet?.(requestedVessels, {
-                source: 'matching-ui',
+                source: taxonomyRejectedAll ? 'taxonomy-filter' : 'matching-ui',
+                allowClear: taxonomyRejectedAll,
                 origin: String(metadata.source || 'matching-ui')
             }) || requestedVessels;
             const renderedVessels = Array.isArray(canonicalVessels) ? canonicalVessels.slice() : [];
@@ -21501,6 +21507,9 @@
                         values: selectedVesselTaxonomies.slice(),
                         sourceTaxonomies: selectedVesselTaxonomies.slice()
                     },
+                    selectedTaxonomies: selectedVesselTaxonomies.slice(),
+                    taxonomies: selectedVesselTaxonomies.slice(),
+                    taxonomyMode: 'strict',
                     searchMode: 'local_database',
                     strictTechnicalFilter: window.matchingStrictTechnicalFilter === true,
                     debugIncludeUnknownDwt: window.matchingDebugIncludeUnknownDwt === true,
@@ -47361,7 +47370,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const explicitClear = metadata.allowClear === true
                     && (source === 'manual-map-clear'
                         || source === 'new-radar-sweep'
-                        || source === 'reset-estimation');
+                        || source === 'reset-estimation'
+                        || source === 'taxonomy-filter');
                 if (nextVessels.length === 0 && currentVessels.length > 0 && !explicitClear) {
                     window.dispatchEvent(new CustomEvent('matching-fleet-empty-write-preserved', {
                         detail: {
@@ -47762,6 +47772,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     || writeSource === 'manual-map-clear'
                     || writeSource === 'new-radar-sweep'
                     || writeSource === 'matching-ui'
+                    || writeSource === 'taxonomy-filter'
                     || writeSource === 'reset-estimation';
                 if (!authorizedWrite) {
                     window.dispatchEvent(new CustomEvent('matching-fleet-write-rejected', {
@@ -48538,6 +48549,97 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
         window.normalizeMatchingRadarCandidates = normalizeMatchingRadarCandidates;
 
+        const RADAR_CARGO_BLOCKED_TERMS = Object.freeze([
+            'tanker', 'chemical', 'oil', 'dredger', 'passenger', 'ferry'
+        ]);
+        const RADAR_CARGO_REFINED_BLOCKED_TERMS = Object.freeze([
+            'vehicles carrier', 'vehicle carrier', 'ro ro', 'roro', 'container ship'
+        ]);
+
+        function getActiveRadarTaxonomies(explicitTaxonomies = []) {
+            const candidates = [
+                explicitTaxonomies,
+                window.GlobalStore?.selectedTaxonomies,
+                typeof window.getSelectedFleetTaxonomies === 'function' ? window.getSelectedFleetTaxonomies() : [],
+                window.GlobalStore?.matchingSelection?.taxonomies
+            ];
+            const selected = candidates.find(values => Array.isArray(values) && values.length > 0) || [];
+            return Array.from(new Set(selected.map(value => String(value || '').trim()).filter(Boolean)));
+        }
+        window.getActiveRadarTaxonomies = getActiveRadarTaxonomies;
+
+        function getRadarTaxonomyTypeText(candidate) {
+            const source = candidate && typeof candidate === 'object' ? candidate : {};
+            const records = [source, source.vessel, source.ais, source.MetaData, source.metadata, source.vessel?.MetaData, source.ais?.MetaData]
+                .filter(record => record && typeof record === 'object');
+            const values = records.flatMap(record => [
+                record.vessel_type, record.vesselType, record.vessel_class, record.vesselClass,
+                record.clase, record.class, record.ship_type, record.shipType, record.ShipType,
+                record.tipo, record.tipo_buque, record.type, record.specialtyType
+            ]);
+            return values
+                .filter(value => value !== undefined && value !== null && String(value).trim())
+                .map(value => String(value))
+                .join(' ')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function hasRadarTaxonomyTerm(typeText, term) {
+            return ` ${typeText} `.includes(` ${term} `);
+        }
+
+        function applyStrictRadarTaxonomyFilter(vessels, explicitTaxonomies = []) {
+            const source = Array.isArray(vessels) ? vessels : [];
+            const selectedTaxonomies = getActiveRadarTaxonomies(explicitTaxonomies);
+            const cargoOnly = selectedTaxonomies.length === 1 && selectedTaxonomies[0] === 'category:cargo';
+            const filteredVessels = source.filter(candidate => {
+                const typeText = getRadarTaxonomyTypeText(candidate);
+                if (cargoOnly) {
+                    if (RADAR_CARGO_BLOCKED_TERMS.some(term => hasRadarTaxonomyTerm(typeText, term))) return false;
+                    if (RADAR_CARGO_REFINED_BLOCKED_TERMS.some(term => hasRadarTaxonomyTerm(typeText, term))) return false;
+                    if (typeof window.filterVessels !== 'function') return false;
+                    return window.filterVessels([{ vessel_type: typeText }], ['category:cargo']).length > 0;
+                }
+                if (selectedTaxonomies.includes('type:vehicles_carrier') && (hasRadarTaxonomyTerm(typeText, 'vehicles carrier') || hasRadarTaxonomyTerm(typeText, 'vehicle carrier'))) return true;
+                if (selectedTaxonomies.includes('type:ro_ro') && (hasRadarTaxonomyTerm(typeText, 'ro ro') || hasRadarTaxonomyTerm(typeText, 'roro'))) return true;
+                if (selectedTaxonomies.length === 0 || typeof window.filterVessels !== 'function') return false;
+                return window.filterVessels([{ vessel_type: typeText }], selectedTaxonomies).length > 0;
+            });
+            return {
+                vessels: filteredVessels,
+                discardedCount: Math.max(0, source.length - filteredVessels.length),
+                selectedTaxonomies
+            };
+        }
+        window.applyStrictRadarTaxonomyFilter = applyStrictRadarTaxonomyFilter;
+
+        function renderRadarTaxonomyFilterFeedback(filterResult = {}) {
+            const discardedCount = Math.max(0, Number(filterResult.discardedCount) || 0);
+            const selectedTaxonomies = Array.isArray(filterResult.selectedTaxonomies) ? filterResult.selectedTaxonomies : [];
+            const selectedLabels = typeof window.getFleetTaxonomyLabels === 'function'
+                ? window.getFleetTaxonomyLabels(selectedTaxonomies)
+                : selectedTaxonomies;
+            const filterLabel = selectedLabels.length > 0 ? selectedLabels.join(', ') : selectedTaxonomies.join(', ');
+            const message = `${discardedCount} buques descartados por incompatibilidad de taxonomía (Filtro Activo: [${filterLabel || 'Sin selección'}])`;
+            console.log(`[Radar Taxonomía] ${message}`);
+            const banner = document.getElementById('matching-source-integrity');
+            if (banner) {
+                banner.classList.remove('hidden');
+                banner.className = `mb-4 rounded-lg border px-3 py-2 text-[11px] ${discardedCount > 0
+                    ? 'border-amber-300 bg-amber-50 text-amber-900'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`;
+                const separator = banner.textContent?.trim() ? ' ' : '';
+                banner.innerHTML += `${separator}<strong>Filtro AIS estricto:</strong> ${escapeHtml(message)}.`;
+            }
+            return message;
+        }
+        window.renderRadarTaxonomyFilterFeedback = renderRadarTaxonomyFilterFeedback;
+
         function expandMatchingResultsRanking() {
             const ranking = document.querySelector('#matching-results-panel .matching-results-collapsible');
             if (!ranking) return false;
@@ -48644,9 +48746,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const openShipsVessels = Array.isArray(response.openShipsVessels) ? response.openShipsVessels : [];
             const predictiveVessels = Array.isArray(response.predictiveVessels) ? response.predictiveVessels : [];
             const polScopedAisVessels = nearbyVessels.length > 0 ? nearbyVessels : aisVessels;
-            const matches = (await window.enrichMatchingVesselIdentities(
+            const enrichedCandidates = await window.enrichMatchingVesselIdentities(
                 normalizeMatchingRadarCandidates([...polScopedAisVessels, ...openShipsVessels, ...predictiveVessels])
-            )).sort((first, second) => {
+            );
+            const taxonomyFilter = applyStrictRadarTaxonomyFilter(enrichedCandidates, response.selectedTaxonomies);
+            const matches = taxonomyFilter.vessels.sort((first, second) => {
                     const firstDistance = Number(first?.ais?.currentDistanceToLoadPort);
                     const secondDistance = Number(second?.ais?.currentDistanceToLoadPort);
                     if (Number.isFinite(firstDistance) && Number.isFinite(secondDistance)) return firstDistance - secondDistance;
@@ -48686,7 +48790,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (matches.length === 0) {
                 window.showMatchingEmptyState?.();
                 window.renderMatchingSourceCounts?.([]);
-                return { matches, sourceCounts };
+                return { matches, sourceCounts, taxonomyFilter };
             }
 
             window.expandMatchingResultsRanking?.();
@@ -48701,7 +48805,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             });
             renderMatchingRadarSourceIntegrity(sourceCounts, matches.length, polContext);
             window.syncMatchingButtonWithCachedResults?.(matches.length);
-            return { matches, sourceCounts };
+            return { matches, sourceCounts, taxonomyFilter };
         }
         window.processMatchingRadarResponse = processMatchingRadarResponse;
 
@@ -48712,6 +48816,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     showToast('Configure un Puerto de Carga (POL) válido antes de ejecutar el barrido Radar.', false, 'error');
                 }
                 window.RadarGlobalControl?.render?.();
+                return [];
+            }
+            const selectedTaxonomies = getActiveRadarTaxonomies();
+            if (selectedTaxonomies.length === 0) {
+                if (typeof showToast === 'function') {
+                    showToast('Selecciona al menos una macro-categoría AIS antes de ejecutar el Radar.', false, 'warning');
+                }
                 return [];
             }
             const sweepRadarContext = String(window.getRadarRequestContextSignature?.() || 'radar-default');
@@ -48795,6 +48906,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     },
                     laycanStart,
                     laycanEnd,
+                    selectedTaxonomies: selectedTaxonomies.slice(),
+                    taxonomies: selectedTaxonomies.slice(),
+                    taxonomyMode: 'strict',
+                    vesselClassContext: {
+                        value: selectedTaxonomies.slice(),
+                        values: selectedTaxonomies.slice(),
+                        sourceTaxonomies: selectedTaxonomies.slice()
+                    },
                     matchRadiusNm: Number(window.AIS_PROSPECTION_RADII_NM?.POL) || 2000,
                     allowedSources: typeof getAllowedMatchingSources === 'function'
                         ? getAllowedMatchingSources()
@@ -48803,8 +48922,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     offset: 0
                 };
                 const [aisVessels, openShipsVessels, predictiveResult] = await Promise.all([
-                    window.startRadarLive({ source: 'matching-radar-sweep', refresh: true, radarContext }),
-                    window.updateOpenShipsRadar?.({ refreshGlobe: false, refresh: true, polContext, radarContext }) || Promise.resolve([]),
+                    window.startRadarLive({ source: 'matching-radar-sweep', refresh: true, radarContext, selectedTaxonomies }),
+                    window.updateOpenShipsRadar?.({ refreshGlobe: false, refresh: true, polContext, radarContext, selectedTaxonomies }) || Promise.resolve([]),
                     laycanEnd && cargoQuantity > 0
                         ? window.requestMatchingLocal?.('execute', [], predictivePayload).catch(error => {
                             console.warn('[Matching Radar] Predictive destination query degraded.', error);
@@ -48831,12 +48950,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const predictiveVessels = Array.isArray(predictiveResult?.data)
                     ? predictiveResult.data
                     : (Array.isArray(predictiveResult?.matches) ? predictiveResult.matches : []);
-                const { matches } = await processMatchingRadarResponse({
+                const { matches, taxonomyFilter } = await processMatchingRadarResponse({
                     polContext,
                     aisVessels,
                     openShipsVessels,
                     nearbyVessels,
-                    predictiveVessels
+                    predictiveVessels,
+                    selectedTaxonomies
                 });
 
                 if (matches.length === 0) {
@@ -48849,6 +48969,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     }
                 }
                 window.RadarGlobalControl?.setState?.({ mode: 'live', status: 'idle', source: 'matching-radar-sweep', liveAt: new Date().toISOString() });
+                window.renderRadarTaxonomyFilterFeedback?.(taxonomyFilter);
                 return matches;
             })().catch(error => {
                 window.showMatchingEmptyState?.();
@@ -48883,6 +49004,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (typeof window.setAisRadarStatus === 'function') window.setAisRadarStatus('updating');
 
             window.radarLiveLoadPromise = (async () => {
+                const selectedTaxonomies = getActiveRadarTaxonomies(options.selectedTaxonomies);
                 const selectedTaxonomy = typeof window.getSelectedAisVesselTypeFilter === 'function'
                     ? window.getSelectedAisVesselTypeFilter()
                     : '';
@@ -48891,7 +49013,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     liveMode: true,
                     refresh: options.refresh === true,
                     radarContext: requestSignature,
-                    selectedTaxonomy: selectedTaxonomy || 'All Cargo'
+                    selectedTaxonomy: selectedTaxonomy || 'All Cargo',
+                    selectedTaxonomies
                 });
                 window.RadarGlobalControl.setState({ mode: 'live', status: 'idle', source: options.source || 'radar-live', liveAt: new Date().toISOString() });
                 if (typeof showToast === 'function') {
@@ -49121,13 +49244,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const selectedTaxonomy = typeof options.selectedTaxonomy === 'string'
                     ? options.selectedTaxonomy.trim()
                     : window.getSelectedAisVesselTypeFilter();
+                const selectedTaxonomies = getActiveRadarTaxonomies(options.selectedTaxonomies);
                 if (!selectedTaxonomy) {
                     window.resetAisDensityResults();
                     return [];
                 }
                 const radarContext = String(options.radarContext || window.getRadarRequestContextSignature?.() || 'radar-default');
                 const endpoint = typeof window.getAuditAisEndpoint === 'function'
-                    ? window.getAuditAisEndpoint(selectedTaxonomy, { refresh: options.refresh === true, radarContext })
+                    ? window.getAuditAisEndpoint(selectedTaxonomy, { refresh: options.refresh === true, radarContext, selectedTaxonomies })
                     : '';
                 if (!endpoint) {
                     window.resetAisDensityResults();
@@ -49140,7 +49264,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     },
-                    body: JSON.stringify({ q: '', vessels: options.vessels || [] })
+                    body: JSON.stringify({
+                        q: '',
+                        vessels: options.vessels || [],
+                        selectedTaxonomies,
+                        taxonomies: selectedTaxonomies,
+                        taxonomyMode: 'strict'
+                    })
                 }).catch(() => null);
 
                 const response = await fetch(endpoint, {
@@ -50669,6 +50799,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     limit: String(Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000),
                     radarContext: String(options.radarContext || window.getRadarRequestContextSignature?.() || 'radar-default')
                 });
+                const selectedTaxonomies = getActiveRadarTaxonomies(options.selectedTaxonomies);
+                params.set('taxonomyMode', 'strict');
+                params.set('taxonomies', JSON.stringify(selectedTaxonomies));
                 if (options.refresh === true) {
                     params.set('refresh', '1');
                     params.set('cacheBust', String(Date.now()));
@@ -51192,6 +51325,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         localStorage.removeItem('ais_filter_vessel_types');
                         localStorage.removeItem(FLEET_INTEL_FILTER_KEY);
                     }
+                }
+                if (window.GlobalStore) {
+                    window.GlobalStore.selectedTaxonomies = normalizedValues.slice();
+                    window.GlobalStore.selectedTaxonomy = normalizedValues[0] || '';
                 }
                 updateFleetTaxonomyMultiSelectUi();
                 if (options.markPending !== false && window.GlobalStore?.markMatchingSelectionPending?.(normalizedValues)) {
@@ -62415,6 +62552,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         limit: String(Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000),
                         radarContext: requestSignature
                     });
+                    const selectedTaxonomies = window.getActiveRadarTaxonomies?.(options.selectedTaxonomies) || [];
+                    params.set('taxonomyMode', 'strict');
+                    params.set('taxonomies', JSON.stringify(selectedTaxonomies));
                     if (options.refresh === true) {
                         params.set('refresh', '1');
                         params.set('cacheBust', String(Date.now()));
