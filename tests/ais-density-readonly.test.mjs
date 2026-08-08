@@ -267,9 +267,9 @@ test('ingestion reduce groups by each vessel declared type without cross-field c
   );
 });
 
-test('read-only success feedback and toast use the ingestion taxonomy summary', () => {
-  assert.match(indexSource, /state\.taxonomySummary\?\.message \|\| `Consulta completada:/);
-  assert.match(indexSource, /showToast\([\s\S]*?state\.taxonomySummary\?\.message/);
+test('read-only density synchronization publishes no success toast', () => {
+  assert.doesNotMatch(indexSource, /showToast\([\s\S]*?state\.taxonomySummary\?\.message/);
+  assert.doesNotMatch(indexSource, /updateAisAvailabilitySweepFeedback/);
 });
 
 test('density map restores globally filtered vessels without refetching', () => {
@@ -322,14 +322,15 @@ test('audit endpoint returns the database error message for diagnostics', () => 
   assert.match(auditFunctionSource, /error: errorMessage/);
 });
 
-test('external radar sweep only runs from the explicit manual command', () => {
-  assert.match(indexSource, /const MANUAL_EXTERNAL_RADAR_SWEEP_TOKEN = Symbol\('manual-external-radar-sweep'\)/);
-  assert.match(indexSource, /if \(executionToken !== MANUAL_EXTERNAL_RADAR_SWEEP_TOKEN\) return false/);
-  assert.match(indexSource, /window\.ejecutarBarridoManual = async function\(event = null\)/);
-  assert.match(indexSource, /return window\.executeSweepAIS\(MANUAL_EXTERNAL_RADAR_SWEEP_TOKEN\)/);
-  assert.match(indexSource, /refreshAisBtn\.addEventListener\('click', window\.ejecutarBarridoManual\)/);
-  assert.match(indexSource, /window\.externalRadarSweepState\.activated = true/);
-  assert.doesNotMatch(indexSource, /if \(window\.aisDensityReadOnly \|\| window\.matchingAuditModeState\?\.enabled\) \{[\s\S]*?return window\.executeReadOnlyAisRefresh\(\)/);
+test('density exposes no radar command and consumes the matching snapshot only', () => {
+  const densityStart = indexSource.indexOf('<div id="view-ais"');
+  const densityEnd = indexSource.indexOf('<div id="view-matching"', densityStart);
+  const densitySource = indexSource.slice(densityStart, densityEnd);
+
+  assert.doesNotMatch(densitySource, /btn-refresh-ais|Barrido de Radar Externo|trigger-ais-sweep/);
+  assert.doesNotMatch(indexSource, /ejecutarBarridoManual|executeSweepAIS|waitForManualAisSweepCompletion/);
+  assert.match(indexSource, /data-radar-global-control data-radar-context="matching"/);
+  assert.match(indexSource, /window\.executeMatchingRadarSweep = async function\(\)/);
 });
 
 test('read-only response feeds rendering, counters, and freight calculation', () => {

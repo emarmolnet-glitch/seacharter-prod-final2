@@ -142,8 +142,8 @@ test('LOCAL-ONLY interceptor blocks DataBridge and connection verification route
 test('global radar control replaces the matching manual sweep button', () => {
   assert.match(indexSource, /data-radar-global-control data-radar-context="matching"/);
   assert.doesNotMatch(indexSource, /id="btn-manual-radar-sweep"/);
-  assert.match(indexSource, /window\.ejecutarBarridoManual = async function\(event = null\)/);
-  assert.match(indexSource, /return window\.executeSweepAIS\(MANUAL_EXTERNAL_RADAR_SWEEP_TOKEN\)/);
+  assert.doesNotMatch(indexSource, /id="btn-refresh-ais"|ejecutarBarridoManual|executeSweepAIS/);
+  assert.match(indexSource, /window\.executeMatchingRadarSweep = async function\(\)/);
 });
 
 test('connection status and contextual radar have no automatic network startup', () => {

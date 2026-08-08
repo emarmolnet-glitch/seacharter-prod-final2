@@ -84,24 +84,13 @@ test('AISStream connection failures fall back to validated database vessels', ()
   assert.match(getVesselsSource, /degraded: true/);
   assert.match(getVesselsSource, /liveConnection: false/);
   assert.match(getVesselsSource, /availableVesselCount: filtered\.length/);
-  assert.match(indexSource, /completion\.availableVesselCount \?\? completion\.masterPersistedCount/);
-  assert.match(indexSource, /AISStream no disponible · usando base local/);
   assert.match(indexSource, /SEQUENTIAL_TELEMETRY_STYLES = \{[\s\S]*?warning: \{/);
 });
 
-test('manual sweep UI waits for completion instead of resetting after HTTP 202', () => {
-  assert.match(indexSource, /waitForManualAisSweepCompletion/);
-  assert.match(indexSource, /matchesRequestedScan/);
-  assert.match(indexSource, /AIS_SWEEP_COMPLETE/);
-  assert.match(indexSource, /Barrido AIS completado:/);
-  const pollingStart = indexSource.indexOf('window.waitForManualAisSweepCompletion');
-  const pollingEnd = indexSource.indexOf('window.executeSweepAIS', pollingStart);
-  const pollingSource = indexSource.slice(pollingStart, pollingEnd);
-  assert.match(pollingSource, /while \(true\)/);
-  assert.match(pollingSource, /\['COMPLETE', 'COMPLETED'\]/);
-  assert.match(pollingSource, /\['ERROR', 'FAILED'\]/);
-  assert.match(pollingSource, /AisSweepFailedError/);
-  assert.doesNotMatch(pollingSource, /timeoutMs|excedió el tiempo de espera/);
+test('density has no client path to dispatch the external sweep endpoint', () => {
+  assert.doesNotMatch(indexSource, /fetch\(['"]\/api\/trigger-ais-sweep/);
+  assert.doesNotMatch(indexSource, /btn-refresh-ais|ejecutarBarridoManual|executeSweepAIS/);
+  assert.match(indexSource, /window\.executeMatchingRadarSweep = async function\(\)/);
 });
 
 test('additive migration restores compatibility columns without modifying applied migrations', () => {

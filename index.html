@@ -3986,94 +3986,6 @@
             border-color: #E2E8F0 !important;
         }
 
-        #view-ais #btn-refresh-ais,
-        #btn-refresh-ais {
-            background-color: #1E3A8A !important;
-            border-color: #1E3A8A !important;
-            color: #FFFFFF !important;
-        }
-
-        #view-ais #btn-refresh-ais *,
-        #view-ais #btn-refresh-ais:hover *,
-        #btn-refresh-ais *,
-        #btn-refresh-ais:hover * {
-            color: #FFFFFF !important;
-        }
-
-        #view-ais #btn-refresh-ais:hover,
-        #btn-refresh-ais:hover {
-            background-color: #172554 !important;
-            border-color: #172554 !important;
-            color: #FFFFFF !important;
-        }
-
-        #view-ais #btn-refresh-ais:disabled {
-            cursor: not-allowed !important;
-            opacity: 0.82;
-        }
-
-        #view-ais .ais-toolbar-actions {
-            column-gap: 16px;
-            row-gap: 10px;
-        }
-
-        #view-ais #btn-refresh-ais {
-            flex: 0 0 auto;
-            justify-content: center;
-            min-width: 236px;
-            white-space: nowrap;
-        }
-
-        #view-ais #ais-refresh-label {
-            display: inline-block;
-            min-width: 184px;
-            text-align: center;
-        }
-
-        .ais-availability-spinner {
-            width: 14px;
-            height: 14px;
-            border: 2px solid rgba(255, 255, 255, 0.38);
-            border-top-color: #ffffff;
-            border-radius: 999px;
-            animation: aisAvailabilitySpin 0.8s linear infinite;
-            display: inline-block;
-            flex: 0 0 auto;
-        }
-
-        .ais-availability-monitor {
-            display: none;
-            align-items: center;
-            gap: 8px;
-            width: 100%;
-            border: 1px solid rgba(59, 130, 246, 0.36);
-            background: rgba(15, 23, 42, 0.92);
-            color: #dbeafe;
-            border-radius: 10px;
-            padding: 8px 10px;
-            font-size: 11px;
-            font-weight: 800;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
-        }
-
-        .ais-availability-monitor.active {
-            display: flex;
-        }
-
-        .ais-availability-monitor.done {
-            border-color: rgba(16, 185, 129, 0.42);
-            color: #bbf7d0;
-        }
-
-        .ais-availability-monitor.done .ais-availability-spinner {
-            display: none;
-            animation: none;
-        }
-
-        @keyframes aisAvailabilitySpin {
-            to { transform: rotate(360deg); }
-        }
-
         #view-ais button.bg-emerald-600 {
             background-color: #059669 !important;
             border-color: #059669 !important;
@@ -11926,16 +11838,6 @@
                             </button>
                             <button type="button" id="btn-modo-oceanico" class="px-3 py-1.5 text-[11px] font-bold rounded-md bg-blue-600 text-white transition-all cursor-pointer">Dual</button>
                         </div>
-                    </div>
-                </div>
-                <div class="ais-toolbar-actions flex flex-col sm:flex-row items-stretch sm:items-center">
-                    <button type="button" id="btn-refresh-ais" style="color: #FFFFFF !important;" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-lg text-xs transition flex items-center gap-2 shadow-lg">
-                        <i id="ais-refresh-icon" class="fa-solid fa-rotate" style="color: #FFFFFF !important;"></i>
-                        <span id="ais-refresh-label">Barrido de Radar Manual</span>
-                    </button>
-                    <div id="ais-availability-monitor" class="ais-availability-monitor" role="status" aria-live="polite" aria-atomic="true">
-                        <span class="ais-availability-spinner" aria-hidden="true"></span>
-                        <span id="ais-availability-status">Inactivo · Usa Barrido de Radar Manual para autorizar una captura externa.</span>
                     </div>
                 </div>
             </div>
@@ -20511,9 +20413,6 @@
                 control.style.opacity = state.enabled || state.loading ? '0.5' : '';
                 control.style.cursor = state.enabled || state.loading ? 'not-allowed' : '';
             });
-            if (typeof window.updateAisAvailabilitySweepFeedback === 'function') {
-                window.updateAisAvailabilitySweepFeedback();
-            }
         }
 
         const MATCHING_RESULTS_INITIAL_VISIBLE_COUNT = 15;
@@ -52904,303 +52803,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return window.GlobalStore ? window.GlobalStore.getRawVessels() : [];
             };
 
-            window.aisAvailabilitySweepUi = Object.assign({
-                status: 'idle',
-                isLoading: false,
-                requestedAt: null,
-                vesselCount: 0,
-                databaseVesselCount: null,
-                taxonomySummary: null,
-                pollingWarning: null,
-                error: null
-            }, window.aisAvailabilitySweepUi || {});
 
-            const AIS_SWEEP_IDLE_LABEL = 'Barrido de Radar Externo';
-            const AIS_SWEEP_IDLE_MESSAGE = 'Inactivo: Core PRO opera solo con vessels_master hasta ejecutar este comando.';
-
-            const resetAisAvailabilitySweepFeedback = function(errorMessage = null) {
-                const state = window.aisAvailabilitySweepUi;
-                const btn = document.getElementById('btn-refresh-ais');
-                const icon = document.getElementById('ais-refresh-icon');
-                const label = document.getElementById('ais-refresh-label');
-                const monitor = document.getElementById('ais-availability-monitor');
-                const status = document.getElementById('ais-availability-status');
-                const hasError = typeof errorMessage === 'string' && errorMessage.trim().length > 0;
-
-                state.status = hasError ? 'error' : 'idle';
-                state.isLoading = false;
-                state.error = hasError ? errorMessage : null;
-
-                if (btn) btn.disabled = false;
-                if (icon) icon.classList.remove('fa-spin');
-                if (label) label.textContent = AIS_SWEEP_IDLE_LABEL;
-                if (monitor) {
-                    monitor.classList.toggle('active', hasError);
-                    monitor.classList.remove('done');
-                }
-                if (status) status.textContent = hasError ? errorMessage : AIS_SWEEP_IDLE_MESSAGE;
-            };
-            window.resetAisAvailabilitySweepFeedback = resetAisAvailabilitySweepFeedback;
-
-            window.updateAisAvailabilitySweepFeedback = function() {
-                const state = window.aisAvailabilitySweepUi;
-                const btn = document.getElementById('btn-refresh-ais');
-                const icon = document.getElementById('ais-refresh-icon');
-                const label = document.getElementById('ais-refresh-label');
-                const monitor = document.getElementById('ais-availability-monitor');
-                const status = document.getElementById('ais-availability-status');
-	                const isRequesting = state.isLoading === true;
-	                const isSent = state.status === 'sent';
-	                const isProcessing = state.status === 'processing';
-	                const hasError = state.status === 'error';
-
-                const auditMode = !!window.matchingAuditModeState?.enabled;
-                const readOnlyMode = window.aisDensityReadOnly === true || auditMode;
-                if (btn) btn.disabled = isRequesting;
-                if (icon) icon.classList.toggle('fa-spin', isRequesting);
-                if (label) {
-	                    label.textContent = isRequesting
-	                        ? (isProcessing ? 'Sincronizando Core PRO...' : (readOnlyMode ? 'Consultando base de datos...' : 'Enviando solicitud...'))
-	                        : (isSent ? 'Datos actualizados' : AIS_SWEEP_IDLE_LABEL);
-                }
-                if (monitor) {
-	                    monitor.classList.toggle('active', isRequesting || isProcessing || isSent || hasError);
-                    monitor.classList.toggle('done', isSent);
-                }
-                if (status) {
-	                    status.textContent = isRequesting
-	                        ? (isProcessing
-	                            ? (state.pollingWarning || 'Barrido en curso: guardando AIS y sincronizando buques válidos con vessels_master...')
-	                            : (readOnlyMode
-	                                ? 'Consultando registros AIS mediante GET, sin modificar la base de datos...'
-	                                : 'El backend está capturando AISStream y guardando buques en Neon...'))
-	                        : (isSent
-                            ? (readOnlyMode
-                                ? (state.taxonomySummary?.message || `Consulta completada: ${Number(state.vesselCount) || 0} buques cargados desde la base de datos.`)
-                                : `Captura completada: ${Number(state.vesselCount) || 0} buques actualizados en Neon${Number.isFinite(Number(state.databaseVesselCount)) ? `; ${Number(state.databaseVesselCount)} buques almacenados en total.` : '.'}`)
-                            : (hasError ? state.error : AIS_SWEEP_IDLE_MESSAGE));
-                }
-            };
-
-            window.executeReadOnlyAisRefresh = async function() {
-                const state = window.aisAvailabilitySweepUi;
-                if (state.isLoading) return [];
-                const selectedTaxonomy = window.getSelectedAisVesselTypeFilter();
-                if (!selectedTaxonomy) return [];
-
-                state.status = 'requesting';
-                state.isLoading = true;
-                state.error = null;
-                state.taxonomySummary = null;
-                window.updateAisAvailabilitySweepFeedback();
-
-                try {
-                    const vessels = await window.loadValidatedAisDensityVessels({
-                        throwOnError: true,
-                        selectedTaxonomy
-                    });
-                    state.status = 'sent';
-                    state.vesselCount = vessels.length;
-                    state.databaseVesselCount = Number.isFinite(Number(window.aisDatabaseVesselCount))
-                        ? Number(window.aisDatabaseVesselCount)
-                        : vessels.length;
-                    state.taxonomySummary = window.lastAisIngestionTaxonomySummary;
-                    state.requestedAt = new Date().toISOString();
-                    if (typeof showToast === 'function') {
-                        showToast(
-                            state.taxonomySummary?.message || `Consulta completada: ${vessels.length} buques cargados desde la base de datos.`,
-                            false,
-                            'success'
-                        );
-                    }
-                    return vessels;
-                } catch (error) {
-                    state.status = 'error';
-                    state.error = error && error.message
-                        ? error.message
-                        : 'No se pudieron consultar los buques auditados.';
-                    if (typeof showToast === 'function') {
-                        showToast(state.error, false, 'error');
-                    }
-                    return [];
-                } finally {
-                    state.isLoading = false;
-                    window.updateAisAvailabilitySweepFeedback();
-                }
-            };
-
-	            const MANUAL_EXTERNAL_RADAR_SWEEP_TOKEN = Symbol('manual-external-radar-sweep');
-
-	            window.waitForManualAisSweepCompletion = async function(scanId) {
-	                const completedStatuses = new Set(['COMPLETE', 'COMPLETED']);
-	                const failedStatuses = new Set(['ERROR', 'FAILED']);
-	                while (true) {
-	                    const statusUrl = new URL('/api/trigger-ais-sweep', window.location.origin);
-	                    statusUrl.searchParams.set('scanId', scanId);
-	                    try {
-	                        const response = await fetch(statusUrl, {
-	                            method: 'GET',
-	                            headers: { Accept: 'application/json' },
-	                            cache: 'no-store'
-	                        });
-	                        const payload = await response.json().catch(() => ({}));
-	                        if (response.ok && payload.matchesRequestedScan !== false) {
-	                            const scanStatus = String(payload.scanStatus || '').toUpperCase();
-	                            if (completedStatuses.has(scanStatus)) return payload;
-	                            if (failedStatuses.has(scanStatus)) {
-	                                const terminalError = new Error(payload.error || 'El barrido AIS terminó con error.');
-	                                terminalError.name = 'AisSweepFailedError';
-	                                throw terminalError;
-	                            }
-	                            window.aisAvailabilitySweepUi.status = 'processing';
-	                            window.aisAvailabilitySweepUi.pollingWarning = null;
-	                            window.aisAvailabilitySweepUi.vesselCount = Number(payload.masterPersistedCount ?? payload.persistedCount) || 0;
-	                            window.aisAvailabilitySweepUi.databaseVesselCount = Number.isFinite(Number(payload.databaseVesselCount))
-	                                ? Number(payload.databaseVesselCount)
-	                                : null;
-	                            window.updateAisAvailabilitySweepFeedback();
-	                        } else {
-	                            window.aisAvailabilitySweepUi.status = 'processing';
-	                            window.aisAvailabilitySweepUi.pollingWarning = 'Esperando confirmación del backend; el barrido sigue activo.';
-	                            window.updateAisAvailabilitySweepFeedback();
-	                        }
-	                    } catch (error) {
-	                        if (error instanceof Error && error.name === 'AisSweepFailedError') throw error;
-	                        window.aisAvailabilitySweepUi.status = 'processing';
-	                        window.aisAvailabilitySweepUi.pollingWarning = 'Conexión temporalmente interrumpida; se sigue consultando el mismo barrido.';
-	                        window.updateAisAvailabilitySweepFeedback();
-	                    }
-	                    await new Promise(resolve => setTimeout(resolve, 1500));
-	                }
-	            };
-
-	            window.executeSweepAIS = async function(executionToken = null) {
-                if (executionToken !== MANUAL_EXTERNAL_RADAR_SWEEP_TOKEN) return false;
-                const btn = document.getElementById('btn-refresh-ais');
-                if (!btn) return;
-                if (window.aisAvailabilitySweepUi.isLoading) return;
-                window.externalRadarSweepState.activated = true;
-                window.externalRadarSweepState.requestedAt = new Date().toISOString();
-                window.GlobalStore?.setAisDataAvailability?.(false, { source: 'manual-sweep-start' });
-                updateSequentialTelemetryBlock('matching-route-status-block', 'processing', 'Barrido externo solicitado');
-                updateSequentialTelemetryBlock('matching-fleet-status-block', 'processing', 'Barrido externo solicitado');
-                window.aisAvailabilitySweepUi.status = 'requesting';
-                window.aisAvailabilitySweepUi.isLoading = true;
-                window.aisAvailabilitySweepUi.error = null;
-                window.aisAvailabilitySweepUi.pollingWarning = null;
-                window.updateAisAvailabilitySweepFeedback();
-                window.aisRadarUserActivated = true;
-                let completedSuccessfully = false;
-                let finalErrorMessage = null;
-
-                try {
-                    if (typeof window.isAisRouteReady === 'function' && !window.isAisRouteReady()) {
-                        throw new Error('Es necesario completar POL, POD y laycan antes del barrido AIS.');
-                    }
-                    const selectedTaxonomies = typeof getSelectedFleetTaxonomies === 'function'
-                        ? getSelectedFleetTaxonomies()
-                        : [];
-                    if (selectedTaxonomies.length === 0) {
-                        throw new Error('Selecciona al menos una taxonomía de buque antes de iniciar el barrido AIS.');
-                    }
-                    const endpoint = typeof window.getRouteAisSweepEndpoint === 'function'
-                        ? window.getRouteAisSweepEndpoint(window.AIS_DUAL_SWEEP_LIMIT || 1000)
-                        : '';
-                    if (!endpoint) {
-                        throw new Error('No se pudieron determinar las coordenadas del POL para el barrido AIS.');
-                    }
-
-                    const captureUrl = new URL(endpoint, window.location.origin);
-                    const query = Object.fromEntries(captureUrl.searchParams.entries());
-                    const response = await fetch('/api/trigger-ais-sweep', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                        body: JSON.stringify({ query })
-                    });
-                    const payload = await response.json().catch(() => ({}));
-                    if (!response.ok) {
-                        throw new Error(payload.error || `El barrido AIS no pudo iniciarse (HTTP ${response.status}).`);
-                    }
-                    if (response.status !== 202 || payload.accepted !== true) {
-                        throw new Error('El backend no confirmó la ejecución asíncrona del barrido AIS.');
-                    }
-
-	                    const scanId = String(payload.scanId || payload.requestId || '').trim();
-	                    if (!scanId) throw new Error('El backend no devolvió el identificador del barrido AIS.');
-	                    window.aisAvailabilitySweepUi.status = 'processing';
-	                    window.aisAvailabilitySweepUi.requestedAt = payload.requestedAt || new Date().toISOString();
-	                    window.updateAisAvailabilitySweepFeedback();
-
-	                    const completion = await window.waitForManualAisSweepCompletion(scanId);
-	                    window.aisAvailabilitySweepUi.status = 'sent';
-	                    window.aisAvailabilitySweepUi.vesselCount = Number(completion.availableVesselCount ?? completion.masterPersistedCount ?? completion.persistedCount) || 0;
-	                    window.aisAvailabilitySweepUi.databaseVesselCount = Number.isFinite(Number(completion.databaseVesselCount))
-	                        ? Number(completion.databaseVesselCount)
-	                        : null;
-	                    window.aisAvailabilitySweepUi.requestedAt = completion.requestedAt || window.aisAvailabilitySweepUi.requestedAt;
-	                    window.aisAvailabilitySweepUi.lastCompletion = completion;
-	                    window.GlobalStore?.setAisDataAvailability?.(true, {
-	                        source: 'manual-sweep-complete',
-	                        completedAt: completion.completedAt || new Date().toISOString(),
-	                        requestedAt: completion.requestedAt
-	                    });
-	                    const degradedSweep = completion.degraded === true || completion.liveConnection === false;
-	                    const completionLabel = degradedSweep ? 'AISStream no disponible · usando base local' : 'Barrido externo completado';
-	                    updateSequentialTelemetryBlock('matching-route-status-block', degradedSweep ? 'warning' : 'success', completionLabel);
-	                    updateSequentialTelemetryBlock('matching-fleet-status-block', degradedSweep ? 'warning' : 'success', `${window.aisAvailabilitySweepUi.vesselCount} buques disponibles`);
-	                    window.dispatchEvent(new CustomEvent('AIS_SWEEP_COMPLETE', { detail: completion }));
-	                    if (typeof calculateAndDisplayAisFreight === 'function') {
-	                        calculateAndDisplayAisFreight();
-	                    }
-	                    completedSuccessfully = true;
-                } catch (error) {
-                    console.error('Error durante la captura AIS de servidor:', error);
-	                    finalErrorMessage = error && error.message
-	                        ? error.message
-	                        : 'No se pudo completar la captura AIS.';
-	                    updateSequentialTelemetryBlock('matching-route-status-block', 'error', finalErrorMessage);
-	                    updateSequentialTelemetryBlock('matching-fleet-status-block', 'error', finalErrorMessage);
-	                } finally {
-	                    window.aisAvailabilitySweepUi.isLoading = false;
-	                    if (completedSuccessfully) {
-	                        window.updateAisAvailabilitySweepFeedback();
-	                    } else {
-	                        resetAisAvailabilitySweepFeedback(finalErrorMessage);
-	                    }
-	                    if (typeof showToast === 'function') {
-	                        const state = window.aisAvailabilitySweepUi;
-	                        if (completedSuccessfully) {
-	                            const degradedSweep = window.aisAvailabilitySweepUi?.lastCompletion?.degraded === true;
-                            showToast(
-                                degradedSweep
-                                    ? `AISStream no disponible: ${Number(state.vesselCount) || 0} buques cargados desde la base local.`
-                                    : `Barrido AIS completado: ${Number(state.vesselCount) || 0} buques sincronizados con Core PRO.`,
-                                false,
-                                degradedSweep ? 'warning' : 'success'
-                            );
-                        } else {
-                            showToast(finalErrorMessage || 'No se pudo completar la captura AIS.', false, 'error');
-                        }
-                    }
-                }
-            };
-
-            window.ejecutarBarridoManual = async function(event = null) {
-                event?.preventDefault?.();
-                window.setCoreProOperationMode?.(window.CORE_PRO_OPERATION_MODES?.MANUAL_RADAR || 'MANUAL-RADAR');
-                window.RadarGlobalControl?.setState({ mode: 'live', status: 'idle', source: 'manual-external-sweep' });
-                return window.executeSweepAIS(MANUAL_EXTERNAL_RADAR_SWEEP_TOKEN);
-            };
-
-            window.executeAISSweep = window.executeSweepAIS;
-            window.executeAISScan = window.executeSweepAIS;
-            window.ejecutarBarridoAIS = window.executeSweepAIS;
-
-            const refreshAisBtn = document.getElementById('btn-refresh-ais');
-            if (refreshAisBtn && refreshAisBtn.dataset.scanRequestBound !== 'true') {
-                refreshAisBtn.dataset.scanRequestBound = 'true';
-                refreshAisBtn.addEventListener('click', window.ejecutarBarridoManual);
-            }
         })();
 
         function performAisSearch() {
@@ -54710,7 +54313,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             // Prefer shared/cached radar data, including the last snapshot while FROZEN.
             let cachedVessels = typeof window.getCachedAisVessels === 'function' ? window.getCachedAisVessels() : [];
             if (cachedVessels.length === 0) {
-                alert("No hay datos locales en caché. Ejecuta 'Barrido de Radar Externo' manualmente si deseas consultar fuentes externas.");
+                alert("No hay datos locales en caché. Ejecuta el radar desde la pestaña Coincidencia para consultar fuentes externas.");
                 return;
             }
 
@@ -59506,6 +59109,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     last_updated: Date.now()
                 };
 
+                const persistedFields = [
+                    'name', 'type', 'draft', 'dwt', 'gt', 'loa', 'flag', 'year_built',
+                    'spd_ballast', 'spd_laden', 'cons_sea', 'cons_port', 'source', 'status',
+                    'delta_historico', 't_fondeo', 't_remolcadores'
+                ];
+                const hasChanges = !existing || persistedFields.some((field) => existing[field] !== merged[field]);
+                if (!hasChanges) return false;
+
                 return new Promise((resolve, reject) => {
                     const transaction = db.transaction('vessels', 'readwrite');
                     const store = transaction.objectStore('vessels');
@@ -59609,10 +59220,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 t_fondeo: fondeoVal,
                 t_remolcadores: remolcadoresVal
             };
-            await saveVesselToIndexedDB(vesselData);
-            if (typeof showToast === 'function') {
-                showToast("💾 Parámetros de buque guardados en IndexedDB.");
-            }
+            return saveVesselToIndexedDB(vesselData);
         }
 
         function calculateAdjustedEtaAndDays() {

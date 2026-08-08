@@ -204,4 +204,16 @@ test('IndexedDB preserves canonical vessel identity and technical fields', () =>
   assert.match(saveSource, /year_built: vessel\.year_built \|\| vessel\.built_year \|\| vessel\.yearBuilt/);
   assert.match(saveSource, /spd_ballast:/);
   assert.match(saveSource, /cons_port:/);
+  assert.match(saveSource, /const hasChanges = !existing \|\| persistedFields\.some/);
+  assert.match(saveSource, /if \(!hasChanges\) return false/);
+});
+
+test('reactive vessel parameter autosave stays silent', () => {
+  const saveStart = indexSource.indexOf('async function saveEditedVesselParams()');
+  const saveEnd = indexSource.indexOf('function calculateAdjustedEtaAndDays()', saveStart);
+  const saveSource = indexSource.slice(saveStart, saveEnd);
+
+  assert.match(saveSource, /return saveVesselToIndexedDB\(vesselData\)/);
+  assert.doesNotMatch(saveSource, /showToast|notify|alert\s*\(/);
+  assert.doesNotMatch(indexSource, /Parámetros de buque guardados en IndexedDB/);
 });
