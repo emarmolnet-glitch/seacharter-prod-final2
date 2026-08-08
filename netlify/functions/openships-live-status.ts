@@ -1,6 +1,6 @@
 import type { Config } from "@netlify/functions";
-import { filterVesselsByTaxonomies, parseRequestedTaxonomies } from "./ais-taxonomy.js";
-import { parseAisGeofence } from "./ais-geofence.js";
+import { filterVesselsByTaxonomies, parseRequestedTaxonomies } from "./_shared/ais-taxonomy.js";
+import { parseAisGeofence } from "./_shared/ais-geofence.js";
 import {
   buildPortDestinationAliases,
   classifyCandidateMatch,

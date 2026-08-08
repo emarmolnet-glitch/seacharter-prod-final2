@@ -1,7 +1,7 @@
 import { getStore } from "@netlify/blobs";
 import { count, desc, sql } from "drizzle-orm";
-import { db, getPool } from "../../db/index.js";
-import { aisVessels } from "../../db/schema.js";
+import { db, getPool } from "../../../db/index.js";
+import { aisVessels } from "../../../db/schema.js";
 
 export type VesselRecord = {
   imoNumber: string;

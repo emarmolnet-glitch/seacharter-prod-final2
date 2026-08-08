@@ -34,7 +34,7 @@ test('external redirects no longer bypass the controlled proxy function', () => 
   assert.match(proxySource, /path: "\/api\/databridge\/\*"/);
 });
 
-test('Netlify API rewrites are forced and precede the SPA fallback', () => {
+test('Netlify API rewrites preserve function-native routes and precede the SPA fallback', () => {
   const apiRewriteIndex = netlifyConfig.indexOf('from = "/api/*"');
   const spaFallbackIndex = netlifyConfig.indexOf('from = "/*"');
   const apiRewriteBlock = netlifyConfig.slice(apiRewriteIndex, netlifyConfig.indexOf('[[redirects]]', apiRewriteIndex + 1));
@@ -43,7 +43,7 @@ test('Netlify API rewrites are forced and precede the SPA fallback', () => {
   assert.ok(spaFallbackIndex > apiRewriteIndex);
   assert.match(apiRewriteBlock, /to = "\/\.netlify\/functions\/:splat"/);
   assert.match(apiRewriteBlock, /status = 200/);
-  assert.match(apiRewriteBlock, /force = true/);
-  assert.match(rootRedirects, /^\/api\/\* \/\.netlify\/functions\/:splat 200!$/m);
+  assert.doesNotMatch(apiRewriteBlock, /force = true/);
+  assert.match(rootRedirects, /^\/api\/\* \/\.netlify\/functions\/:splat 200$/m);
   assert.ok(rootRedirects.indexOf('/api/*') < rootRedirects.indexOf('/* /index.html 200'));
 });

@@ -2,7 +2,7 @@ import type { Config } from "@netlify/functions";
 import { db } from "../../db/index.js";
 import { appConfig } from "../../db/schema.js";
 import { handleGetVessels } from "./get-vessels.js";
-import { parseRequestedTaxonomies } from "./ais-taxonomy.js";
+import { parseRequestedTaxonomies } from "./_shared/ais-taxonomy.js";
 
 const SCAN_STATUS_KEY = "scan_status";
 const SCAN_STATUS_RUNNING = "RUNNING";

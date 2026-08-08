@@ -1,4 +1,3 @@
-import type { Config } from "@netlify/functions";
 import type { QueryResultRow } from "pg";
 import { getPool } from "../../db/index.js";
 
@@ -29,9 +28,4 @@ export default async (req: Request) => {
     console.error("[databridge-master-stats] Query failed", error);
     return Response.json({ success: false, error: message }, { status: 500 });
   }
-};
-
-export const config: Config = {
-  path: "/api/databridge-master-stats",
-  method: ["GET"],
 };

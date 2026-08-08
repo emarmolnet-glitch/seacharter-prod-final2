@@ -999,6 +999,14 @@
             return new URL(pathname, `${CORE_PRO_API_ORIGIN}/`);
         }
 
+        async function fetchCoreProApiWithFunctionFallback(apiPath, functionPath, options) {
+            let response = await fetch(createCoreProApiUrl(apiPath), options);
+            if (response.status === 404) {
+                response = await fetch(createCoreProApiUrl(functionPath), options);
+            }
+            return response;
+        }
+
         const DATA_BRIDGE_MASTER_STATS_INTERVAL_MS = 60000;
         let dataBridgeMasterStatsRequest = null;
         let dataBridgeMasterStatsController = null;
@@ -1010,11 +1018,15 @@
             const activeController = dataBridgeMasterStatsController;
             dataBridgeMasterStatsRequest = (async () => {
                 try {
-                    const response = await fetch(createCoreProApiUrl('/api/databridge-master-stats'), {
+                    const response = await fetchCoreProApiWithFunctionFallback(
+                        '/api/databridge-master-stats',
+                        '/.netlify/functions/databridge-master-stats',
+                        {
                         headers: { Accept: 'application/json' },
                         cache: 'no-store',
                         signal: activeController.signal
-                    });
+                        }
+                    );
                     if (!response.headers.get('content-type')?.includes('application/json')) {
                         throw new Error('Invalid Payload');
                     }

@@ -10,7 +10,7 @@ const [statsSource, dataBridgeSource] = await Promise.all([
 test('Data Bridge master stats counts vessels_master without optional source columns', () => {
   assert.match(statsSource, /COUNT\(\*\)::integer AS total_vessels/);
   assert.match(statsSource, /FROM vessels_master/);
-  assert.match(statsSource, /path: "\/api\/databridge-master-stats"/);
+  assert.doesNotMatch(statsSource, /export const config|path:/);
   assert.doesNotMatch(statsSource, /source\s*=|origen\s*=|source_provenance|audit_status/);
 });
 
@@ -19,6 +19,8 @@ test('Data Bridge historical counter uses PostgreSQL instead of random vessel va
   assert.match(dataBridgeSource, /Total Histórico Data Bridge/);
   assert.match(dataBridgeSource, /function refreshDataBridgeMasterCount\(\)/);
   assert.match(dataBridgeSource, /\/api\/databridge-master-stats/);
+  assert.match(dataBridgeSource, /\/\.netlify\/functions\/databridge-master-stats/);
+  assert.match(dataBridgeSource, /function fetchCoreProApiWithFunctionFallback\(apiPath, functionPath, options\)/);
   assert.match(dataBridgeSource, /response\.headers\.get\('content-type'\)\?\.includes\('application\/json'\)/);
   assert.match(dataBridgeSource, /throw new Error\('Invalid Payload'\)/);
   assert.match(dataBridgeSource, /payload\?\.success !== true/);
