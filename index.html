@@ -148,7 +148,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <!-- Master Globe.gl renderer shared by Core PRO and Data Bridge (Loaded with defer for non-blocking FCP) -->
     <script defer src="https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js"></script>
-    <link rel="stylesheet" href="./assets/css/density-globe.css?v=20260807-dot-declutter">
+    <link rel="stylesheet" href="/assets/css/density-globe.css?v=20260808-main-globe-recovery">
     <link rel="stylesheet" href="./assets/css/contextual-feedback.css?v=20260717-ui-hotfix">
     <link rel="stylesheet" href="./ais-market-reference-widget.css?v=20260721">
     <script src="./network-resilience.js?v=20260807-circuit-breaker"></script>
@@ -3819,23 +3819,6 @@
             border: 1px solid #E2E8F0 !important;
         }
 
-        #ais-map {
-            position: absolute !important;
-            inset: 0 !important;
-            z-index: 0 !important;
-            display: block !important;
-            width: 100% !important;
-            height: 450px !important;
-            min-height: 450px !important;
-            overflow: hidden !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            border: 1px solid #E0E0E0 !important;
-            border-radius: 8px !important;
-            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12) !important;
-            background-color: #dbeafe !important;
-        }
-
         .global-opportunities-panel {
             position: absolute;
             top: 56px;
@@ -3858,6 +3841,24 @@
 
         .global-opportunities-panel[hidden] {
             display: none !important;
+        }
+
+        .global-opportunities-panel.density-audit-opportunities {
+            position: relative;
+            inset: auto;
+            z-index: auto;
+            width: 100%;
+            max-height: 24rem;
+            margin-top: 1rem;
+            transform: none;
+        }
+
+        .global-opportunities-panel.density-audit-opportunities.is-collapsed {
+            transform: none;
+        }
+
+        .global-opportunities-panel.density-audit-opportunities.is-collapsed .global-opportunities-panel__body {
+            display: none;
         }
 
         .global-opportunities-panel.is-collapsed {
@@ -7747,10 +7748,10 @@
         <!-- ========================================== -->
         <!-- MÓDULO 1: MAPA Y ESTADO GEOGRÁFICO         -->
         <!-- ========================================== -->
-        <div id="view-map" class="view-section active-block absolute inset-0 overflow-y-auto p-6 scroll-smooth">
-            <div id="map-command-shell" class="map-command-shell">
-                <div id="map-host" class="density-globe-stage min-h-[450px] h-[520px] w-full rounded-lg border border-[#e0e0e0] bg-blue-100 overflow-hidden shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
-                    <div id="map-container" class="density-globe-canvas h-full w-full rounded-lg border border-slate-200 bg-slate-950 relative overflow-hidden" data-globe-renderer>
+        <div id="view-map" class="view-section active-block absolute inset-0 min-h-[600px] xl:min-h-[800px] overflow-y-auto p-6 scroll-smooth">
+            <div id="map-command-shell" class="map-command-shell relative w-full h-full min-h-[600px] xl:min-h-[800px] overflow-hidden">
+                <div id="map-host" class="density-globe-stage absolute inset-0 w-full h-full min-h-[600px] xl:min-h-[800px] rounded-lg border border-[#e0e0e0] bg-blue-100 overflow-hidden shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
+                    <div id="map-container" class="density-globe-canvas absolute inset-0 w-full h-full min-h-[600px] xl:min-h-[800px] rounded-lg border border-slate-200 bg-slate-950 overflow-hidden" data-globe-renderer>
                         <div id="map-skeleton" class="map-skeleton-container" aria-label="Cargando visor cartográfico">
                             <div class="map-skeleton-globe">
                                 <div class="map-skeleton-pulse"></div>
@@ -11907,7 +11908,7 @@
                 <div>
                     <h2 class="text-xl font-bold [#view-ais_&]:!text-white flex items-center gap-2">
                         <i class="fa-solid fa-satellite-dish text-blue-500 animate-pulse"></i>
-                        Mapa Densidad
+                        Dashboard Densidad
                     </h2>
                     <p class="[#view-ais_&]:!text-white text-sm mt-1">Consulta AIS de solo lectura para predicción de disponibilidad y cálculo de flete justo.</p>
                     
@@ -11940,9 +11941,9 @@
             </div>
 
             <!-- Dashboard grids -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 <!-- Left panel: Density Summary & Profitability Predictor -->
-                <div class="lg:col-span-1 flex flex-col gap-6">
+                <div class="lg:col-span-4 flex flex-col gap-6">
                     <!-- Card: KPI Metrics -->
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="true">
                         <div class="collapsible-section-header">
@@ -12088,13 +12089,13 @@
                     </aside>
                 </div>
 
-                <!-- Right panel: Interactive Vessels List and Map view -->
-                <div class="lg:col-span-2 flex flex-col gap-6">
+                <!-- Right panel: Fleet audit controls and detected vessels -->
+                <div class="lg:col-span-8 flex flex-col gap-6 min-w-0">
                     <div id="density-map-center-panel" class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="true">
                         <div class="collapsible-section-header">
                         <h3 data-collapsible-title data-i18n="density_map_center_title" class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                             <i class="fa-solid fa-satellite-dish text-amber-400"></i>
-                            CENTRO DE MAPA DENSIDAD
+                            CENTRO DE AUDITORÍA DE DENSIDAD
                         </h3>
                         </div>
                         <div class="w-full">
@@ -12137,12 +12138,12 @@
                         </div>
 
                     </div>
-                    <!-- Map Card -->
+                    <!-- Fleet audit controls -->
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm" data-collapsible-section data-default-open="true">
                         <div class="collapsible-section-header flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <h3 data-collapsible-title data-i18n="density_map_title" class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                                <i class="fa-solid fa-map-location-dot text-indigo-400"></i>
-                                MAPA DE DENSIDAD
+                                <i class="fa-solid fa-filter-circle-dollar text-indigo-400"></i>
+                                FILTROS DE AUDITORÍA DE FLOTA
                             </h3>
                             <div class="collapsible-section-actions flex items-center gap-2">
                                 <button id="density-commercial-filter-toggle" type="button" role="switch" aria-checked="false" class="density-commercial-toggle" data-commercial-filter-toggle data-commercial-filter-context="density" title="Alternar entre todo el tráfico OpenShips y los buques viables por DWT">
@@ -12158,44 +12159,21 @@
                                 <button id="btn-ais-vessel-search" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors shrink-0">Buscar</button>
                             </div>
                         </div>
-                        <div class="density-globe-stage relative" style="height: 450px; min-height: 450px;">
-                            <div id="ais-map" class="density-globe-canvas rounded-lg border border-slate-800 bg-slate-950 relative overflow-hidden" data-globe-renderer>
-                                <div id="ais-map-skeleton" class="map-skeleton-container" aria-label="Cargando radar AIS">
-                                    <div class="map-skeleton-globe">
-                                        <div class="map-skeleton-pulse"></div>
+                        <aside id="global-opportunities-panel" class="global-opportunities-panel density-audit-opportunities" hidden aria-label="Oportunidades globales de Data Bridge">
+                            <div class="global-opportunities-panel__header">
+                                <button id="global-opportunities-toggle" type="button" class="global-opportunities-panel__toggle" aria-expanded="true" aria-controls="global-opportunities-list" title="Plegar panel">
+                                    <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                                </button>
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <p class="truncate text-[10px] font-black uppercase tracking-[0.12em] text-[#1E3A8A]">Oportunidades globales</p>
+                                        <span id="global-opportunities-count" class="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-800">0</span>
                                     </div>
-                                    <div class="map-skeleton-status">
-                                        <span class="map-skeleton-pulse"></span>
-                                        <span>Cargando Radar AIS...</span>
-                                    </div>
+                                    <p class="mt-0.5 truncate text-[10px] text-slate-500">Candidatos óptimos fuera del barrido actual</p>
                                 </div>
                             </div>
-                            <aside id="global-opportunities-panel" class="global-opportunities-panel" hidden aria-label="Oportunidades globales de Data Bridge">
-                                <div class="global-opportunities-panel__header">
-                                    <button id="global-opportunities-toggle" type="button" class="global-opportunities-panel__toggle" aria-expanded="true" aria-controls="global-opportunities-list" title="Plegar panel">
-                                        <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-                                    </button>
-                                    <div class="min-w-0 flex-1">
-                                        <div class="flex items-center justify-between gap-2">
-                                            <p class="truncate text-[10px] font-black uppercase tracking-[0.12em] text-[#1E3A8A]">Oportunidades globales</p>
-                                            <span id="global-opportunities-count" class="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-800">0</span>
-                                        </div>
-                                        <p class="mt-0.5 truncate text-[10px] text-slate-500">Candidatos óptimos fuera del barrido actual</p>
-                                    </div>
-                                </div>
-                                <div id="global-opportunities-list" class="global-opportunities-panel__body" role="list"></div>
-                            </aside>
-                            <!-- Floating button on map -->
-                            <div style="position: absolute; top: 10px; right: 10px; z-index: 1000; display: flex; align-items: center; gap: 8px;">
-                                <button id="btn-center-map" onclick="window.centrarEnZonaDeCarga()" style="background-color: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 4px; transition: background-color 0.2s;">
-                                    <i class="fa-solid fa-crosshairs"></i> Centrar en zona de carga
-                                </button>
-                                <div data-radar-global-control data-radar-context="map"></div>
-                                <button id="btn-clear-ais-map" onclick="window.clearAisMapSearch()" style="background-color: #0f172a; color: white; border: 1px solid rgba(255,255,255,0.18); padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 4px; transition: background-color 0.2s;">
-                                    <i class="fa-solid fa-broom"></i> Limpiar Mapa
-                                </button>
-                            </div>
-                        </div>
+                            <div id="global-opportunities-list" class="global-opportunities-panel__body" role="list"></div>
+                        </aside>
                     </div>
 
                     <!-- Vessels List -->
@@ -14184,10 +14162,10 @@
             "density_fleet_analysis_title": { es: "ANÁLISIS DE DENSIDAD DE FLOTA", en: "FLEET DENSITY ANALYSIS", fr: "ANALYSE DE DENSITÉ DE LA FLOTTE" },
             "ANÁLISIS DE DENSIDAD DE FLOTA": { es: "ANÁLISIS DE DENSIDAD DE FLOTA", en: "FLEET DENSITY ANALYSIS", fr: "ANALYSE DE DENSITÉ DE LA FLOTTE" },
 
-            "density_map_center_title": { es: "CENTRO DE MAPA DENSIDAD", en: "DENSITY MAP CENTER", fr: "CENTRE DE CARTE DE DENSITÉ" },
-            "CENTRO DE MAPA DENSIDAD": { es: "CENTRO DE MAPA DENSIDAD", en: "DENSITY MAP CENTER", fr: "CENTRE DE CARTE DE DENSITÉ" },
+            "density_map_center_title": { es: "CENTRO DE AUDITORÍA DE DENSIDAD", en: "DENSITY AUDIT CENTER", fr: "CENTRE D’AUDIT DE DENSITÉ" },
+            "CENTRO DE MAPA DENSIDAD": { es: "CENTRO DE AUDITORÍA DE DENSIDAD", en: "DENSITY AUDIT CENTER", fr: "CENTRE D’AUDIT DE DENSITÉ" },
 
-            "density_map_title": { es: "MAPA DE DENSIDAD", en: "DENSITY MAP", fr: "CARTE DE DENSITÉ" },
+            "density_map_title": { es: "FILTROS DE AUDITORÍA DE FLOTA", en: "FLEET AUDIT FILTERS", fr: "FILTRES D’AUDIT DE FLOTTE" },
             "MAPA DE DENSIDAD": { es: "MAPA DE DENSIDAD", en: "DENSITY MAP", fr: "CARTE DE DENSITÉ" },
 
             "density_live_vessels_title": { es: "BUQUES DETECTADOS EN TIEMPO REAL (OPENSHIPS)", en: "REAL-TIME DETECTED VESSELS (OPENSHIPS)", fr: "NAVIRES DÉTECTÉS EN TEMPS RÉEL (OPENSHIPS)" },
