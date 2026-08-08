@@ -9,6 +9,9 @@ interface ValidateDraftRequestBody {
   portIndexNo?: unknown;
   portName?: unknown;
   vesselDraft?: unknown;
+  actualDraft?: unknown;
+  calculatedDraft?: unknown;
+  maxDraft?: unknown;
 }
 
 interface WpiPortRow {
@@ -38,6 +41,14 @@ function errorResponse(status: number, message: string) {
   return Response.json({ error: message }, { status });
 }
 
+function firstPositiveDraft(...values: unknown[]) {
+  for (const value of values) {
+    const draft = Number(value);
+    if (Number.isFinite(draft) && draft > 0) return draft;
+  }
+  return null;
+}
+
 export default async function validateDraftHandler(request: Request) {
   if (request.method !== "POST") {
     return errorResponse(405, "Método no permitido.");
@@ -52,15 +63,16 @@ export default async function validateDraftHandler(request: Request) {
 
   const portIndexNo = Number(body.portIndexNo);
   const portName = typeof body.portName === "string" ? body.portName.trim() : "";
-  const vesselDraft = Number(body.vesselDraft);
+  const actualDraft = firstPositiveDraft(body.actualDraft, body.calculatedDraft);
+  const maxDraft = firstPositiveDraft(body.maxDraft, body.vesselDraft);
 
   const hasPortIndex = Number.isInteger(portIndexNo) && portIndexNo > 0;
   if (!hasPortIndex && !portName) {
     return errorResponse(400, "Debe indicarse portIndexNo o portName para validar el puerto activo.");
   }
 
-  if (!Number.isFinite(vesselDraft) || vesselDraft < 0) {
-    return errorResponse(400, "vesselDraft debe ser un número mayor o igual que cero.");
+  if (actualDraft === null && maxDraft === null) {
+    return errorResponse(400, "Debe indicarse un calado actual calculado o un calado máximo válido.");
   }
 
   try {
@@ -94,7 +106,8 @@ export default async function validateDraftHandler(request: Request) {
       ...validatePortDraft({
         portName: port.port_name,
         portDepthCode: port.cargodepth,
-        vesselDraft,
+        actualDraft,
+        maxDraft,
       }),
       portIndexNo: port.index_no,
     });

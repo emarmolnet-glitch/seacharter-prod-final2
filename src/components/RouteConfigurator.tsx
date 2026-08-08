@@ -6,6 +6,9 @@ export interface DraftValidationResponse {
   portDepthCode: string;
   safeDepthMeters: number;
   vesselDraft: number;
+  actualDraft: number | null;
+  maxDraft: number | null;
+  draftBasis: "ACTUAL" | "MAXIMUM";
   status: "CLEARED" | "OVERSIZED";
   message: string;
 }
@@ -17,6 +20,8 @@ interface RouteSelection {
   portName: string;
   portIndexNo?: number;
   vesselDraft: number;
+  actualDraft: number;
+  maxDraft: number;
 }
 
 interface RouteConfiguratorProps {
@@ -25,12 +30,48 @@ interface RouteConfiguratorProps {
 
 interface ApiErrorResponse {
   error?: string;
+  reference?: string;
 }
 
 interface CalculatorState {
   pol?: string;
   pod?: string;
   draft?: number;
+  laydays?: string;
+  laycanDate?: string;
+  cancelling?: string;
+  cancellingDate?: string;
+  polCoordinates?: unknown;
+  podCoordinates?: unknown;
+  cargoQuantity?: number;
+  cargoQty?: number;
+  cargo?: number;
+  cargoType?: string;
+  cargoProduct?: string;
+}
+
+type UnknownRecord = Record<string, unknown>;
+
+interface ContractReferenceManager {
+  getActiveContractRef?: () => string;
+}
+
+interface CharterPartyPayload {
+  contractRef: string;
+  imoNumber: string;
+  vesselName: string;
+  mmsi?: string;
+  polName: string;
+  polLatitude?: number;
+  polLongitude?: number;
+  podName: string;
+  podLatitude?: number;
+  podLongitude?: number;
+  laydaysStartAt: string;
+  cancellingAt: string;
+  cargoName: string;
+  cargoQuantityMt: number;
+  draftValidation: DraftValidationResponse;
 }
 
 interface SeaCharterStore {
@@ -47,6 +88,116 @@ interface SeaCharterStore {
 
 interface CalculatorWindow extends Window {
   SeaCharterStore?: SeaCharterStore;
+  ContractRefManager?: ContractReferenceManager;
+  GlobalStore?: UnknownRecord;
+  activeVessel?: UnknownRecord;
+  objetoCalculadoraPrincipal?: UnknownRecord;
+  coreProMatchingRouteContext?: UnknownRecord;
+  readValidatedCargoOperationState?: () => UnknownRecord;
+}
+
+function asRecord(value: unknown): UnknownRecord {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as UnknownRecord : {};
+}
+
+function readTextValue(...ids: string[]) {
+  for (const id of ids) {
+    const element = document.getElementById(id) as HTMLInputElement | HTMLSelectElement | null;
+    const value = String(element?.value || "").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+function firstText(...values: unknown[]) {
+  return values.map((value) => String(value ?? "").trim()).find(Boolean) || "";
+}
+
+function readCoordinates(value: unknown) {
+  const coordinates = asRecord(value);
+  const latitude = Number(coordinates.lat ?? coordinates.latitude ?? coordinates.Latitude);
+  const longitude = Number(coordinates.lon ?? coordinates.lng ?? coordinates.longitude ?? coordinates.Longitude);
+  return Number.isFinite(latitude) && Number.isFinite(longitude)
+    ? { latitude, longitude }
+    : {};
+}
+
+function readCharterPartyPayload(validation: DraftValidationResponse): CharterPartyPayload {
+  const calculatorWindow = window as CalculatorWindow;
+  const calculatorState = calculatorWindow.SeaCharterStore?.getState?.() || {};
+  const globalStore = asRecord(calculatorWindow.GlobalStore);
+  const activeVessel = asRecord(
+    globalStore.calculatorVessel
+      || globalStore.activeVessel
+      || calculatorWindow.activeVessel
+      || calculatorWindow.objetoCalculadoraPrincipal,
+  );
+  const cargoState = asRecord(calculatorWindow.readValidatedCargoOperationState?.());
+  const routeContext = asRecord(calculatorWindow.coreProMatchingRouteContext);
+  const polCoordinates = readCoordinates(
+    calculatorState.polCoordinates || globalStore.polCoordinates || routeContext.polCoordinates,
+  );
+  const podCoordinates = readCoordinates(
+    calculatorState.podCoordinates || globalStore.podCoordinates || routeContext.podCoordinates,
+  );
+  const imoNumber = firstText(
+    readTextValue("vessel-identity-imo"),
+    activeVessel.imo,
+    activeVessel.IMO,
+    activeVessel.imoNumber,
+    activeVessel.imo_number,
+  ).replace(/\D/g, "");
+  const vesselName = firstText(
+    activeVessel.vesselName,
+    activeVessel.vessel_name,
+    activeVessel.ShipName,
+    activeVessel.name,
+    imoNumber ? `Buque IMO ${imoNumber}` : "",
+  );
+  const cargoQuantityMt = Number(
+    readTextValue("cargo-qty")
+      || cargoState.cargoQuantity
+      || calculatorState.cargoQuantity
+      || calculatorState.cargoQty
+      || calculatorState.cargo
+      || 0,
+  );
+
+  return {
+    contractRef: firstText(
+      calculatorWindow.ContractRefManager?.getActiveContractRef?.(),
+      readTextValue("quick-ref", "gc-ref", "asb-ref"),
+    ).toUpperCase(),
+    imoNumber,
+    vesselName,
+    mmsi: firstText(activeVessel.mmsi, activeVessel.MMSI) || undefined,
+    polName: firstText(readTextValue("port-pol"), calculatorState.pol),
+    polLatitude: polCoordinates.latitude,
+    polLongitude: polCoordinates.longitude,
+    podName: firstText(readTextValue("port-pod"), calculatorState.pod),
+    podLatitude: podCoordinates.latitude,
+    podLongitude: podCoordinates.longitude,
+    laydaysStartAt: firstText(
+      calculatorState.laydays,
+      calculatorState.laycanDate,
+      readTextValue("map-laycan-date", "gc-laycan-date", "asb-laycan-date"),
+    ),
+    cancellingAt: firstText(
+      calculatorState.cancelling,
+      calculatorState.cancellingDate,
+      readTextValue("map-cancelling-date", "gc-cancel-date", "asb-cancel-date"),
+    ),
+    cargoName: firstText(
+      cargoState.cargoProduct,
+      cargoState.cargoType,
+      calculatorState.cargoProduct,
+      calculatorState.cargoType,
+      readTextValue("cargo-product", "cargo-type"),
+      "Carga contractual",
+    ),
+    cargoQuantityMt: Number.isFinite(cargoQuantityMt) && cargoQuantityMt > 0 ? cargoQuantityMt : 0,
+    draftValidation: validation,
+  };
 }
 
 function readPortInput(role: PortRole) {
@@ -62,18 +213,24 @@ function readRouteSelection(role: PortRole): RouteSelection {
   const calculatorWindow = window as CalculatorWindow;
   const calculatorState = calculatorWindow.SeaCharterStore?.getState?.() || {};
   const portInput = readPortInput(role);
-  const vesselDraftInput = document.getElementById("vessel-draft") as HTMLInputElement | null;
+  const actualDraftInput = document.getElementById("current-draft") as HTMLInputElement | null;
+  const maxDraftInput = document.getElementById("vessel-draft") as HTMLInputElement | null;
   const statePortName = role === "POD" ? calculatorState.pod : calculatorState.pol;
-  const inputDraft = Number(vesselDraftInput?.value);
+  const actualDraft = Number(actualDraftInput?.value);
+  const maxDraft = Number(maxDraftInput?.value);
   const stateDraft = Number(calculatorState.draft);
+  const normalizedActualDraft = Number.isFinite(actualDraft) && actualDraft > 0 ? actualDraft : 0;
+  const normalizedMaxDraft = Number.isFinite(maxDraft) && maxDraft > 0
+    ? maxDraft
+    : (Number.isFinite(stateDraft) && stateDraft > 0 ? stateDraft : 0);
 
   return {
     role,
     portName: String(portInput?.value || statePortName || "").trim(),
     portIndexNo: readPortIndex(portInput),
-    vesselDraft: Number.isFinite(inputDraft) && inputDraft > 0
-      ? inputDraft
-      : (Number.isFinite(stateDraft) ? stateDraft : 0),
+    vesselDraft: normalizedActualDraft || normalizedMaxDraft,
+    actualDraft: normalizedActualDraft,
+    maxDraft: normalizedMaxDraft,
   };
 }
 
@@ -94,14 +251,18 @@ function routeSelectionEqual(left: RouteSelection, right: RouteSelection) {
   return left.role === right.role
     && left.portName === right.portName
     && left.portIndexNo === right.portIndexNo
-    && left.vesselDraft === right.vesselDraft;
+    && left.vesselDraft === right.vesselDraft
+    && left.actualDraft === right.actualDraft
+    && left.maxDraft === right.maxDraft;
 }
 
 export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps) {
   const [selection, setSelection] = useState<RouteSelection>(readInitialSelection);
   const [validation, setValidation] = useState<DraftValidationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const activeRoleRef = useRef<PortRole>(selection.role);
   const hasValidatedRef = useRef(false);
   const requestControllerRef = useRef<AbortController | null>(null);
@@ -133,13 +294,20 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
       });
     });
 
-    const vesselDraftInput = document.getElementById("vessel-draft");
+    const draftInputs = [
+      document.getElementById("current-draft"),
+      document.getElementById("vessel-draft"),
+    ].filter((input): input is HTMLElement => Boolean(input));
     const handleDraftChange = () => syncSelection();
-    vesselDraftInput?.addEventListener("input", handleDraftChange);
-    vesselDraftInput?.addEventListener("change", handleDraftChange);
+    draftInputs.forEach((input) => {
+      input.addEventListener("input", handleDraftChange);
+      input.addEventListener("change", handleDraftChange);
+    });
     disposers.push(() => {
-      vesselDraftInput?.removeEventListener("input", handleDraftChange);
-      vesselDraftInput?.removeEventListener("change", handleDraftChange);
+      draftInputs.forEach((input) => {
+        input.removeEventListener("input", handleDraftChange);
+        input.removeEventListener("change", handleDraftChange);
+      });
     });
 
     const handleRouteEvent = (event: Event) => {
@@ -193,6 +361,8 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
           portName: selection.portName,
           portIndexNo: selection.portIndexNo,
           vesselDraft: selection.vesselDraft,
+          actualDraft: selection.actualDraft || null,
+          maxDraft: selection.maxDraft || null,
         }),
       });
 
@@ -218,26 +388,64 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
   useEffect(() => {
     setValidation(null);
     setError(null);
+    setSuccessMessage(null);
     requestControllerRef.current?.abort();
 
     if (!hasValidatedRef.current || !selection.portName || selection.vesselDraft <= 0) return;
     const timer = window.setTimeout(() => void validateActivePort(), 450);
     return () => window.clearTimeout(timer);
-  }, [selection.portIndexNo, selection.portName, selection.role, selection.vesselDraft, validateActivePort]);
+  }, [selection.actualDraft, selection.maxDraft, selection.portIndexNo, selection.portName, selection.role, selection.vesselDraft, validateActivePort]);
 
-  const confirmCharterParty = () => {
+  const confirmCharterParty = async () => {
     if (!validation || validation.status !== "CLEARED") return;
 
-    onConfirm?.(validation);
-    window.dispatchEvent(new CustomEvent("seacharter:charter-party-confirmed", {
-      detail: validation,
-    }));
+    setIsSaving(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const payload = readCharterPartyPayload(validation);
+      const missingFields = [
+        ["referencia contractual", payload.contractRef],
+        ["IMO del buque", payload.imoNumber],
+        ["POL", payload.polName],
+        ["POD", payload.podName],
+        ["fecha de Laydays", payload.laydaysStartAt],
+        ["fecha de Cancelling", payload.cancellingAt],
+      ].filter(([, value]) => !value).map(([label]) => label);
+      if (missingFields.length > 0) {
+        throw new Error(`Faltan datos obligatorios: ${missingFields.join(", ")}.`);
+      }
+
+      const response = await fetch("/api/v1/charter-party", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const responseBody = await response.json().catch(() => ({})) as ApiErrorResponse;
+      if (!response.ok) {
+        throw new Error(responseBody.error || `No fue posible guardar el Charter Party (HTTP ${response.status}).`);
+      }
+
+      const savedReference = responseBody.reference || payload.contractRef;
+      setSuccessMessage(`Charter Party ${savedReference} generado y guardado con éxito`);
+      onConfirm?.(validation);
+      window.dispatchEvent(new CustomEvent("seacharter:charter-party-confirmed", {
+        detail: { ...validation, reference: savedReference },
+      }));
+    } catch (requestError) {
+      setError(requestError instanceof Error
+        ? requestError.message
+        : "No fue posible guardar el Charter Party.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const isCleared = validation?.status === "CLEARED";
   const validationStatusLabel = isCleared ? "CALADO OK" : "OVERSIZED";
   const canValidate = Boolean(selection.portName && selection.vesselDraft > 0 && !isLoading);
-  const canConfirm = Boolean(isCleared && !isLoading);
+  const canConfirm = Boolean(isCleared && !isLoading && !isSaving);
 
   return (
     <section className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
@@ -249,7 +457,9 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
             <span className="font-bold text-slate-800">{selection.role}</span>
             {" · "}{selection.portName || "Sin puerto seleccionado"}
             {selection.portIndexNo ? ` · NGA #${selection.portIndexNo}` : ""}
-            {" · Calado "}{selection.vesselDraft > 0 ? `${selection.vesselDraft.toFixed(1)} m` : "pendiente"}
+            {selection.actualDraft > 0
+              ? ` · Calado operativo ${selection.actualDraft.toFixed(2)} m`
+              : ` · Calado máximo ${selection.maxDraft > 0 ? `${selection.maxDraft.toFixed(2)} m` : "pendiente"}`}
           </p>
         </div>
 
@@ -279,8 +489,14 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
         )}
 
         {error && (
-          <div role="alert" className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-[inset_3px_0_0_rgba(15,118,110,0.65)]">
+          <div role="alert" className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800 shadow-[inset_3px_0_0_rgba(185,28,28,0.75)]">
             {error}
+          </div>
+        )}
+
+        {successMessage && (
+          <div role="status" className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 shadow-[inset_3px_0_0_rgba(5,150,105,0.75)]">
+            {successMessage}
           </div>
         )}
 
@@ -312,7 +528,7 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
             <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-200 pt-3 text-xs sm:grid-cols-3">
               <div><dt className="text-slate-500">Código NGA</dt><dd className="mt-0.5 font-bold text-slate-800">{validation.portDepthCode || "VACÍO"}</dd></div>
               <div><dt className="text-slate-500">Profundidad segura</dt><dd className="mt-0.5 font-bold text-slate-800">{validation.safeDepthMeters.toFixed(1)} m</dd></div>
-              <div><dt className="text-slate-500">Calado del buque</dt><dd className="mt-0.5 font-bold text-slate-800">{validation.vesselDraft.toFixed(1)} m</dd></div>
+              <div><dt className="text-slate-500">{validation.draftBasis === "ACTUAL" ? "Calado operativo calculado" : "Calado máximo (fallback)"}</dt><dd className="mt-0.5 font-bold text-slate-800">{validation.vesselDraft.toFixed(2)} m</dd></div>
             </dl>
             <p className="mt-3 border-t border-slate-200 pt-3 text-xs leading-relaxed text-slate-600">{validation.message}</p>
           </div>
@@ -320,11 +536,11 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
 
         <button
           type="button"
-          onClick={confirmCharterParty}
+          onClick={() => void confirmCharterParty()}
           disabled={!canConfirm}
           className="w-full rounded-lg border border-teal-800 bg-teal-800 px-4 py-3 text-xs font-extrabold uppercase tracking-[0.12em] text-white transition hover:border-teal-700 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-600/30 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
         >
-          Confirmar y Generar Charter Party
+          {isSaving ? "Guardando Charter Party..." : "Confirmar y Generar Charter Party"}
         </button>
       </div>
     </section>

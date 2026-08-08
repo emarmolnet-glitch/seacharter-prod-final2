@@ -21,12 +21,16 @@ export const NGA_CARGO_DEPTH_METERS = Object.freeze({
 } as const);
 
 export type DraftValidationStatus = "CLEARED" | "OVERSIZED";
+export type DraftValidationBasis = "ACTUAL" | "MAXIMUM";
 
 export interface DraftValidationResult {
   portName: string;
   portDepthCode: string;
   safeDepthMeters: number;
   vesselDraft: number;
+  actualDraft: number | null;
+  maxDraft: number | null;
+  draftBasis: DraftValidationBasis;
   status: DraftValidationStatus;
   message: string;
 }
@@ -47,26 +51,47 @@ function normalizeCargoDepthCode(value: unknown): CargoDepthCode {
     : "UNKNOWN";
 }
 
+function firstPositiveDraft(...values: unknown[]) {
+  for (const value of values) {
+    const draft = Number(value);
+    if (Number.isFinite(draft) && draft > 0) return draft;
+  }
+  return null;
+}
+
 export function validatePortDraft(input: {
   portName: string;
   portDepthCode: unknown;
-  vesselDraft: number;
+  vesselDraft?: number;
+  actualDraft?: number | null;
+  calculatedDraft?: number | null;
+  maxDraft?: number | null;
 }): DraftValidationResult {
   const portDepthCode = normalizeCargoDepthCode(input.portDepthCode);
   const safeDepthMeters = NGA_CARGO_DEPTH_METERS[portDepthCode];
-  const status: DraftValidationStatus = input.vesselDraft > safeDepthMeters
+  const actualDraft = firstPositiveDraft(input.actualDraft, input.calculatedDraft);
+  const maxDraft = firstPositiveDraft(input.maxDraft, input.vesselDraft);
+  const draftBasis: DraftValidationBasis = actualDraft !== null ? "ACTUAL" : "MAXIMUM";
+  const vesselDraft = actualDraft ?? maxDraft ?? 0;
+  const status: DraftValidationStatus = vesselDraft > safeDepthMeters
     ? "OVERSIZED"
     : "CLEARED";
+  const draftDescription = draftBasis === "ACTUAL"
+    ? "calado operativo calculado"
+    : "calado máximo del buque";
 
   const message = status === "CLEARED"
-    ? `${input.portName}: el calado del buque (${input.vesselDraft.toFixed(1)} m) está dentro del límite seguro NGA (${safeDepthMeters.toFixed(1)} m).`
-    : `${input.portName}: el calado del buque (${input.vesselDraft.toFixed(1)} m) supera el límite seguro NGA (${safeDepthMeters.toFixed(1)} m).`;
+    ? `Calado OK: El ${draftDescription} (${vesselDraft.toFixed(2)} m) está dentro del límite seguro NGA de ${input.portName} (${safeDepthMeters.toFixed(1)} m).`
+    : `${input.portName}: el ${draftDescription} (${vesselDraft.toFixed(2)} m) supera el límite seguro NGA (${safeDepthMeters.toFixed(1)} m).`;
 
   return {
     portName: input.portName,
     portDepthCode,
     safeDepthMeters,
-    vesselDraft: input.vesselDraft,
+    vesselDraft,
+    actualDraft,
+    maxDraft,
+    draftBasis,
     status,
     message,
   };
