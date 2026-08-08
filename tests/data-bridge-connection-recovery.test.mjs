@@ -68,6 +68,10 @@ test('connected Data Bridge menu action opens the deployment root', () => {
 test('Data Bridge starts directly with HTTP polling and never initializes WebSocket', () => {
   assert.match(indexSource, /id="databridge-http-polling"/);
   assert.match(indexSource, /DATA_BRIDGE_HTTP_POLL_ENDPOINT = DATA_BRIDGE_CONNECTION_STATE_ENDPOINT/);
+  assert.match(indexSource, /response\.headers\.get\('content-type'\)\?\.includes\('application\/json'\)/);
+  assert.match(indexSource, /payload\?\.success === true/);
+  assert.match(indexSource, /typeof payload\.connection\.connected === 'boolean'/);
+  assert.match(indexSource, /payload\.connection\.connected \? 'connected' : 'disconnected'/);
   assert.match(indexSource, /DATA_BRIDGE_HTTP_POLL_INTERVAL_MS = 10_000/);
   assert.match(indexSource, /function startDataBridgeHttpPolling\(options = \{\}\)/);
   assert.match(indexSource, /window\.setTimeout\([\s\S]*DATA_BRIDGE_HTTP_POLL_INTERVAL_MS/);

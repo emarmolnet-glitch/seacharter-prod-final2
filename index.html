@@ -19973,6 +19973,7 @@
                     body: requestKey
                 });
                 const payload = await response.json();
+                if (typeof window.logOpenShipsWarnings === 'function') window.logOpenShipsWarnings(payload);
                 if (!response.ok || payload.success === false) {
                     throw new Error(payload.error || 'No se pudo consultar vessels_master.');
                 }
@@ -58723,9 +58724,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         })
                         : await dataBridgeFetch(requestUrl, pollRequest);
 	                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+	                if (!response.headers.get('content-type')?.includes('application/json')) {
+	                    throw new Error('Invalid Payload');
+	                }
 	                const payload = await response.json();
+	                const hasExpectedHealthPayload = payload?.success === true
+	                    && payload?.connection
+	                    && typeof payload.connection === 'object'
+	                    && typeof payload.connection.connected === 'boolean';
+	                if (!hasExpectedHealthPayload) throw new Error('Invalid Payload');
 	                dataBridgeHttpPollingFailures = 0;
-	                updateDataBridgeTransportStatus('connected');
+	                updateDataBridgeTransportStatus(payload.connection.connected ? 'connected' : 'disconnected');
 	                processDataBridgeHttpPollingPayload(payload);
                     return payload;
                 } catch (error) {
@@ -62528,6 +62537,97 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         const OPENSHIPS_RADAR_POLL_MAX_INTERVAL_MS = 10 * 60_000;
         window.openShipsRadarPollingActive = false;
 
+        function logOpenShipsWarnings(payload) {
+            const warnings = Array.isArray(payload?.warnings) ? payload.warnings : [];
+            warnings.forEach(warning => {
+                const status = Number(warning?.httpStatus);
+                const statusLabel = Number.isFinite(status)
+                    ? `HTTP ${status}${warning?.statusText ? ` ${warning.statusText}` : ''}`
+                    : String(warning?.code || 'OPENSHIPS_WARNING');
+                const prefix = Number.isFinite(status) ? '[OpenShips Error]' : '[OpenShips Warning]';
+                console.warn(`${prefix} ${statusLabel} - ${warning?.message || 'Unknown upstream error'}`, warning);
+            });
+        }
+        window.logOpenShipsWarnings = logOpenShipsWarnings;
+
+        function extractOpenShipsBrowserRows(payload) {
+            if (Array.isArray(payload)) return payload;
+            if (!payload || typeof payload !== 'object') return [];
+            return [payload.vessels, payload.ships, payload.results, payload.data, payload.items, payload.features]
+                .find(Array.isArray) || [];
+        }
+
+        function normalizeOpenShipsBrowserRow(value) {
+            if (!value || typeof value !== 'object') return null;
+            const properties = value.properties && typeof value.properties === 'object' ? value.properties : {};
+            const coordinates = Array.isArray(value.geometry?.coordinates) ? value.geometry.coordinates : [];
+            const merged = { ...value, ...properties };
+            const latitude = Number(merged.latitude ?? merged.lat ?? merged.Latitude ?? coordinates[1]);
+            const longitude = Number(merged.longitude ?? merged.lon ?? merged.lng ?? merged.Longitude ?? coordinates[0]);
+            const candidate = {
+                ...merged,
+                latitude: Number.isFinite(latitude) ? latitude : undefined,
+                longitude: Number.isFinite(longitude) ? longitude : undefined,
+                lat: Number.isFinite(latitude) ? latitude : undefined,
+                lon: Number.isFinite(longitude) ? longitude : undefined,
+                source: 'OPENSHIPS',
+                source_origin: 'OPENSHIPS',
+                source_origins: ['OPENSHIPS'],
+                data_source: 'OPENSHIPS',
+                providerPayload: value,
+                source_payload: value
+            };
+            return typeof window.normalizeAisVesselForRadar === 'function'
+                ? window.normalizeAisVesselForRadar(candidate)
+                : candidate;
+        }
+
+        async function fetchOpenShipsFromBrowser(clientFallback, selectedTaxonomies, polCoordinates, radiusNm) {
+            if (clientFallback?.allowed !== true || !clientFallback?.url) {
+                throw new Error(clientFallback?.reason || 'OpenShips browser fallback is unavailable');
+            }
+            console.warn(`[OpenShips Fallback] Requesting from browser: ${clientFallback.url}`);
+            const browserFetch = window.__coreProNativeFetch || window.fetch;
+            const response = await browserFetch(clientFallback.url, {
+                method: 'GET',
+                headers: { Accept: 'application/json' },
+                cache: 'no-store'
+            });
+            if (!response.ok) throw new Error(`OpenShips browser fallback failed (HTTP ${response.status})`);
+            if (!response.headers.get('content-type')?.includes('json')) {
+                throw new Error('OpenShips browser fallback returned a non-JSON payload');
+            }
+            const providerPayload = await response.json();
+            const providerRows = extractOpenShipsBrowserRows(providerPayload);
+            const normalizedRows = providerRows.map(normalizeOpenShipsBrowserRow).filter(Boolean);
+            const taxonomyResult = typeof window.applyStrictRadarTaxonomyFilter === 'function'
+                ? window.applyStrictRadarTaxonomyFilter(normalizedRows, selectedTaxonomies)
+                : { vessels: normalizedRows };
+            const effectiveRadiusNm = Math.max(1, Number(radiusNm) || 2000);
+            const vessels = (Array.isArray(taxonomyResult.vessels) ? taxonomyResult.vessels : [])
+                .filter(vessel => {
+                    const latitude = Number(vessel?.latitude ?? vessel?.lat);
+                    const longitude = Number(vessel?.longitude ?? vessel?.lon ?? vessel?.lng);
+                    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
+                    return typeof haversine !== 'function'
+                        || haversine(polCoordinates.lat, polCoordinates.lon, latitude, longitude) <= effectiveRadiusNm;
+                });
+            return {
+                success: true,
+                source: 'OPENSHIPS_BROWSER_FALLBACK',
+                fallback: true,
+                providerCount: providerRows.length,
+                recent_vessels: vessels.length,
+                count: vessels.length,
+                openshipsCount: vessels.length,
+                vessels,
+                warnings: [{
+                    code: 'OPENSHIPS_BROWSER_FALLBACK_ACTIVE',
+                    message: `Netlify received HTTP 403; the browser fallback recovered ${providerRows.length} provider rows and retained ${vessels.length} vessels within the active taxonomy and radius.`
+                }]
+            };
+        }
+
         async function updateOpenShipsRadar(options = {}) {
             const counter = document.getElementById('openships-live-counter');
             const statusPill = document.getElementById('openships-status-pill');
@@ -62582,9 +62682,23 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const response = window.CoreNetworkGuard
                         ? await window.CoreNetworkGuard.fetch('openships-radar', openShipsEndpoint, openShipsRequest, { cooldownMs: 60_000 })
                         : await fetch(openShipsEndpoint, openShipsRequest);
-                    if (!response.ok) throw new Error(`OpenShips status request failed (${response.status})`);
+                    let payload = await response.json().catch(() => null);
+                    logOpenShipsWarnings(payload);
+                    if (!response.ok) {
+                        const upstreamStatus = Number(payload?.upstream?.httpStatus);
+                        if (upstreamStatus === 403 && payload?.clientFallback?.allowed === true) {
+                            payload = await fetchOpenShipsFromBrowser(
+                                payload.clientFallback,
+                                selectedTaxonomies,
+                                polCoordinates,
+                                params.get('radiusNm')
+                            );
+                            logOpenShipsWarnings(payload);
+                        } else {
+                            throw new Error(payload?.message || `OpenShips status request failed (${response.status})`);
+                        }
+                    }
 
-                    const payload = await response.json();
                     const recentVessels = Number(payload?.recent_vessels);
                     if (!Number.isFinite(recentVessels)) throw new Error('Invalid OpenShips status response');
                     window.lastOpenShipsRadarPayload = payload;

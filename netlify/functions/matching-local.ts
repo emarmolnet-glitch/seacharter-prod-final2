@@ -538,8 +538,26 @@ export default async (req: Request) => {
           };
         } catch (error) {
           const code = error instanceof Error && "code" in error ? String(error.code) : "OPENSHIPS_UNAVAILABLE";
-          openShipsFetchDiagnostics = { requested: true, success: false, count: 0, error: code, cache: "disabled" };
-          console.warn("[matching-local] Live OpenShips REST source unavailable.", code);
+          const diagnostics = error && typeof error === "object" && "diagnostics" in error
+            ? asRecord((error as { diagnostics?: unknown }).diagnostics)
+            : {};
+          const warning = {
+            code,
+            message: diagnostics.message ?? (error instanceof Error ? error.message : "OpenShips REST request failed"),
+            httpStatus: diagnostics.httpStatus ?? null,
+            statusText: diagnostics.statusText ?? null,
+            requestUrl: diagnostics.requestUrl ?? null,
+          };
+          openShipsFetchDiagnostics = {
+            requested: true,
+            success: false,
+            count: 0,
+            error: code,
+            upstream: warning,
+            warnings: [warning],
+            cache: "disabled",
+          };
+          console.warn("[matching-local] Live OpenShips REST source unavailable.", warning);
         }
       }
       const openShipsEnrichment = await enrichOpenShipsTechnicalData(serializedOpenShipsVessels);
@@ -568,6 +586,7 @@ export default async (req: Request) => {
           sourceCounts,
           openShipsEnrichment: openShipsEnrichment.diagnostics,
           openShipsFetch: openShipsFetchDiagnostics,
+          warnings: Array.isArray(openShipsFetchDiagnostics.warnings) ? openShipsFetchDiagnostics.warnings : [],
           allowedSources,
           pagination,
           readOnly: true,
@@ -605,6 +624,7 @@ export default async (req: Request) => {
         sourceCounts,
         openShipsEnrichment: openShipsEnrichment.diagnostics,
         openShipsFetch: openShipsFetchDiagnostics,
+        warnings: Array.isArray(openShipsFetchDiagnostics.warnings) ? openShipsFetchDiagnostics.warnings : [],
         allowedSources,
         pagination,
         readOnly: true,
