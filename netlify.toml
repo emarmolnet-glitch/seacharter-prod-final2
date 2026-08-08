@@ -8,6 +8,7 @@
   from = "/api/get-bunker-prices"
   to = "/.netlify/functions/get-bunker-prices"
   status = 200
+  force = true
 
 [build]
   # Compile the application only; database lifecycle is managed externally.
@@ -27,26 +28,31 @@
   from = "/api/syncPull/*"
   to = "/.netlify/functions/sync-pull/:splat"
   status = 200
+  force = true
 
 [[redirects]]
   from = "/api/v1/vessel/live-profile"
   to = "/.netlify/functions/vessel-live-profile"
   status = 200
+  force = true
 
 [[redirects]]
   from = "/api/v1/voyage/tracking/*"
   to = "/.netlify/functions/voyage-tracking"
   status = 200
+  force = true
 
 [[redirects]]
   from = "/api/v1/*"
   to = "/.netlify/functions/:splat"
   status = 200
+  force = true
 
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
+  force = true
 
 [[redirects]]
   from = "/route"
@@ -63,4 +69,7 @@
   to = "/public/databridge.html"
   status = 200
 
- 
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

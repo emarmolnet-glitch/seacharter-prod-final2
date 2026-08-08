@@ -19,7 +19,11 @@ test('Data Bridge historical counter uses PostgreSQL instead of random vessel va
   assert.match(dataBridgeSource, /Total Histórico Data Bridge/);
   assert.match(dataBridgeSource, /function refreshDataBridgeMasterCount\(\)/);
   assert.match(dataBridgeSource, /\/api\/databridge-master-stats/);
-  assert.match(dataBridgeSource, /vesselCount = Number\(payload\?\.totalVessels\) \|\| 0/);
+  assert.match(dataBridgeSource, /response\.headers\.get\('content-type'\)\?\.includes\('application\/json'\)/);
+  assert.match(dataBridgeSource, /throw new Error\('Invalid Payload'\)/);
+  assert.match(dataBridgeSource, /payload\?\.success !== true/);
+  assert.match(dataBridgeSource, /Number\.isFinite\(totalVessels\)/);
+  assert.match(dataBridgeSource, /vesselCount = totalVessels/);
   assert.match(dataBridgeSource, /DATA_BRIDGE_MASTER_STATS_INTERVAL_MS = 60000/);
   assert.match(dataBridgeSource, /if \(dataBridgeMasterStatsRequest\) return dataBridgeMasterStatsRequest/);
   assert.match(dataBridgeSource, /window\.clearInterval\(dataBridgeMasterStatsTimer\)/);

@@ -8,6 +8,19 @@ import {
 import { fetchOpenShipsLive } from "./_shared/openships-rest.mjs";
 
 type Vessel = Record<string, unknown>;
+type OpenShipsDiagnostics = {
+  httpStatus?: number | null;
+  statusText?: string;
+  message?: string;
+  requestUrl?: string;
+  clientFallback?: Record<string, unknown>;
+};
+
+function readOpenShipsDiagnostics(error: unknown): OpenShipsDiagnostics {
+  if (!error || typeof error !== "object" || !("diagnostics" in error)) return {};
+  const diagnostics = (error as { diagnostics?: unknown }).diagnostics;
+  return diagnostics && typeof diagnostics === "object" ? diagnostics as OpenShipsDiagnostics : {};
+}
 
 function finiteNumber(value: unknown) {
   const numeric = Number(value);
@@ -104,6 +117,19 @@ export default async (req: Request) => {
         fetched_at: live.fetchedAt,
       }];
     });
+    const warnings = live.count === 0
+      ? [{
+        code: "OPENSHIPS_EMPTY_PROVIDER_PAYLOAD",
+        message: `OpenShips returned JSON but no vessel rows were recognized. Top-level keys: ${live.providerDiagnostics.topLevelKeys.join(", ") || "none"}`,
+        requestUrl: live.providerDiagnostics.requestUrl,
+      }]
+      : vessels.length === 0
+        ? [{
+          code: "OPENSHIPS_FILTERED_EMPTY",
+          message: `OpenShips returned ${live.count} vessels, but none matched the active taxonomy, geofence, destination, or laycan filters.`,
+          requestUrl: live.providerDiagnostics.requestUrl,
+        }]
+        : [];
 
     return Response.json({
       success: true,
@@ -117,18 +143,31 @@ export default async (req: Request) => {
       openshipsCount: vessels.length,
       geofence: { polLat: geofence.latitude, polLon: geofence.longitude, radiusNm: geofence.radiusNm },
       destinationAliases: polData.aliases,
+      providerDiagnostics: live.providerDiagnostics,
+      warnings,
       vessels,
     }, { headers: { "cache-control": "no-store, no-cache, must-revalidate" } });
   } catch (error) {
     const code = error instanceof Error && "code" in error ? String(error.code) : "OPENSHIPS_UNAVAILABLE";
     const message = error instanceof Error ? error.message : "OpenShips REST request failed";
-    console.error("[openships-live-status] Live REST request failed.", { code, message });
+    const diagnostics = readOpenShipsDiagnostics(error);
+    const warning = {
+      code,
+      message: diagnostics.message || message,
+      httpStatus: diagnostics.httpStatus ?? null,
+      statusText: diagnostics.statusText || null,
+      requestUrl: diagnostics.requestUrl || null,
+    };
+    console.error("[openships-live-status] Live REST request failed.", warning);
     return Response.json({
       success: false,
       source: "OPENSHIPS_REST_LIVE",
       cache: "disabled",
       error: code,
       message,
+      upstream: warning,
+      warnings: [warning],
+      clientFallback: diagnostics.clientFallback || { allowed: false, reason: "Browser fallback unavailable" },
       vessels: [],
       count: 0,
     }, { status: code === "OPENSHIPS_NOT_CONFIGURED" ? 503 : 502, headers: { "cache-control": "no-store" } });

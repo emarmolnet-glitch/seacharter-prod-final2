@@ -1,6 +1,7 @@
 const DEFAULT_LIMIT = 5000;
 const MAX_LIMIT = 10000;
 const DEFAULT_TIMEOUT_MS = 15000;
+const SENSITIVE_QUERY_PARAM = /(?:api[-_]?key|token|secret|authorization|signature|credential|password)/i;
 
 function asRecord(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -25,6 +26,53 @@ function extractProviderRows(payload) {
   const record = asRecord(payload);
   const candidates = [record.vessels, record.ships, record.results, record.data, record.items, record.features];
   return candidates.find(Array.isArray) || [];
+}
+
+function redactOpenShipsUrl(url) {
+  const redacted = new URL(url);
+  if (redacted.username) redacted.username = "[redacted]";
+  if (redacted.password) redacted.password = "[redacted]";
+  for (const key of redacted.searchParams.keys()) {
+    if (SENSITIVE_QUERY_PARAM.test(key)) redacted.searchParams.set(key, "[redacted]");
+  }
+  return redacted.toString();
+}
+
+function createClientFallback(url, apiKey) {
+  const hasEmbeddedCredentials = Boolean(url.username || url.password)
+    || Array.from(url.searchParams.keys()).some((key) => SENSITIVE_QUERY_PARAM.test(key));
+  if (apiKey || hasEmbeddedCredentials) {
+    return { allowed: false, reason: "OpenShips credentials are server-only" };
+  }
+  if (url.protocol !== "https:") {
+    return { allowed: false, reason: "Browser fallback requires an HTTPS provider URL" };
+  }
+  return { allowed: true, method: "GET", url: url.toString() };
+}
+
+async function readUpstreamError(response, secrets = []) {
+  const fallback = String(response.statusText || "Upstream request rejected").trim();
+  try {
+    const rawBody = String(await response.text()).replace(/\s+/g, " ").trim().slice(0, 500);
+    if (!rawBody) return fallback;
+    let message = rawBody;
+    try {
+      const parsed = JSON.parse(rawBody);
+      const record = asRecord(parsed);
+      message = String(record.error || record.message || record.detail || record.title || rawBody);
+    } catch {
+      message = rawBody.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    }
+    for (const secret of secrets.filter(Boolean)) message = message.replaceAll(secret, "[redacted]");
+    return message.slice(0, 500) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function withDiagnostics(error, diagnostics) {
+  error.diagnostics = diagnostics;
+  return error;
 }
 
 export function normalizeOpenShipsVessel(value, index = 0) {
@@ -141,6 +189,7 @@ export async function fetchOpenShipsLive(options = {}) {
   const apiKey = String(env.OPENSHIPS_API_KEY || env.OPENSHIPS_API_TOKEN || "").trim();
   const keyQueryParam = String(env.OPENSHIPS_API_KEY_QUERY_PARAM || "").trim();
   const headers = { Accept: "application/json" };
+  const clientFallback = createClientFallback(url, apiKey);
   if (apiKey && keyQueryParam) {
     url.searchParams.set(keyQueryParam, apiKey);
   } else if (apiKey) {
@@ -151,6 +200,8 @@ export async function fetchOpenShipsLive(options = {}) {
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const requestUrl = redactOpenShipsUrl(url);
+  console.log(`[OpenShips Fetch] Requesting: ${requestUrl}`);
   try {
     const response = await (options.fetchImpl || fetch)(url, {
       method: "GET",
@@ -159,12 +210,36 @@ export async function fetchOpenShipsLive(options = {}) {
       cache: "no-store",
     });
     if (!response.ok) {
-      const error = new Error(`OpenShips REST request failed with HTTP ${response.status}`);
+      const upstreamMessage = await readUpstreamError(response, [apiKey]);
+      const statusText = String(response.statusText || "").trim();
+      const statusLabel = `HTTP ${response.status}${statusText ? ` ${statusText}` : ""}`;
+      const error = new Error(`OpenShips REST request failed: ${statusLabel}${upstreamMessage ? ` - ${upstreamMessage}` : ""}`);
       error.code = "OPENSHIPS_HTTP_ERROR";
-      throw error;
+      error.status = response.status;
+      throw withDiagnostics(error, {
+        httpStatus: response.status,
+        statusText,
+        message: upstreamMessage,
+        requestUrl,
+        clientFallback: response.status === 403 ? clientFallback : { allowed: false, reason: `HTTP ${response.status} is not eligible for browser fallback` },
+      });
     }
-    const payload = await response.json();
-    const vessels = extractProviderRows(payload)
+    let payload;
+    try {
+      payload = await response.json();
+    } catch (parseError) {
+      const error = new Error("OpenShips REST returned an invalid JSON payload");
+      error.code = "OPENSHIPS_INVALID_JSON";
+      throw withDiagnostics(error, {
+        httpStatus: response.status,
+        statusText: String(response.statusText || "").trim(),
+        message: parseError instanceof Error ? parseError.message : "JSON parsing failed",
+        requestUrl,
+        clientFallback: { allowed: false, reason: "Browser fallback is reserved for HTTP 403" },
+      });
+    }
+    const providerRows = extractProviderRows(payload);
+    const vessels = providerRows
       .slice(0, limit)
       .map(normalizeOpenShipsVessel);
     return {
@@ -172,12 +247,33 @@ export async function fetchOpenShipsLive(options = {}) {
       count: vessels.length,
       fetchedAt: new Date().toISOString(),
       providerMeta: asRecord(payload).meta || asRecord(payload).pagination || null,
+      providerDiagnostics: {
+        payloadType: Array.isArray(payload) ? "array" : typeof payload,
+        topLevelKeys: Object.keys(asRecord(payload)).slice(0, 20),
+        extractedRows: providerRows.length,
+        requestUrl,
+      },
     };
   } catch (error) {
     if (error?.name === "AbortError") {
       const timeoutError = new Error("OpenShips REST request timed out");
       timeoutError.code = "OPENSHIPS_TIMEOUT";
-      throw timeoutError;
+      throw withDiagnostics(timeoutError, {
+        httpStatus: null,
+        statusText: "Timeout",
+        message: timeoutError.message,
+        requestUrl,
+        clientFallback: { allowed: false, reason: "Browser fallback is reserved for HTTP 403" },
+      });
+    }
+    if (error && typeof error === "object" && !("diagnostics" in error)) {
+      error.diagnostics = {
+        httpStatus: null,
+        statusText: "Network Error",
+        message: error instanceof Error ? error.message : "OpenShips network request failed",
+        requestUrl,
+        clientFallback: { allowed: false, reason: "Browser fallback is reserved for HTTP 403" },
+      };
     }
     throw error;
   } finally {

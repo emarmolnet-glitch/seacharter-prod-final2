@@ -1015,11 +1015,15 @@
                         cache: 'no-store',
                         signal: activeController.signal
                     });
+                    if (!response.headers.get('content-type')?.includes('application/json')) {
+                        throw new Error('Invalid Payload');
+                    }
                     const payload = await response.json();
-                    if (!response.ok || payload?.success === false) {
+                    const totalVessels = Number(payload?.totalVessels);
+                    if (!response.ok || payload?.success !== true || !Number.isFinite(totalVessels) || totalVessels < 0) {
                         throw new Error(payload?.error || `HTTP ${response.status}`);
                     }
-                    vesselCount = Number(payload?.totalVessels) || 0;
+                    vesselCount = totalVessels;
                     vesselCountEl.textContent = vesselCount.toLocaleString();
                     return vesselCount;
                 } catch (error) {
