@@ -65,7 +65,7 @@ export default function DashboardExecutive({ contractData }) {
   const isLoading = Boolean(contractData?.isLoading);
   const loadError = contractData?.loadError || '';
   const [sofEvents, setSofEvents] = useState([]);
-  const systemAlerts = Array.isArray(voyageData?.alerts) ? voyageData.alerts : [];
+  const baseSystemAlerts = Array.isArray(voyageData?.alerts) ? voyageData.alerts : [];
 
   if (isLoading) return <DashboardLoading />;
 
@@ -84,6 +84,7 @@ export default function DashboardExecutive({ contractData }) {
   const laytime = contractData?.laytime || {};
   const allowedHours = finiteNumber(laytime?.allowedHours);
   const grossUsedHours = finiteNumber(laytime?.usedHours);
+  const grossProjectedHours = finiteNumber(laytime?.projectedUsedHours, grossUsedHours);
   const demurrageRateUSD = finiteNumber(laytime?.demurrageRateUSD);
   const rawTerms = String(laytime.laytimeRule || laytime.terms || contractData?.laytimeRule || 'SHINC').toUpperCase();
   const terms = ['SHINC', 'SHEX', 'FHEX'].includes(rawTerms) ? rawTerms : 'SHINC';
@@ -92,9 +93,16 @@ export default function DashboardExecutive({ contractData }) {
     0
   );
   const netUsedHours = Math.max(0, grossUsedHours - deductedHours);
-  const balanceHours = allowedHours - netUsedHours;
-  const demurrageHours = Math.max(0, -balanceHours);
-  const estimatedDemurrageUSD = (demurrageHours / 24) * demurrageRateUSD;
+  const projectedUsedHours = Math.max(0, grossProjectedHours - deductedHours);
+  const aggregateProjectedExtraHours = Math.max(0, projectedUsedHours - allowedHours);
+  const baseProjectedExtraHours = Math.max(0, finiteNumber(laytime?.projectedExtraHours, aggregateProjectedExtraHours));
+  const demurrageHours = Math.max(0, baseProjectedExtraHours - deductedHours);
+  const balanceHours = demurrageHours > 0 ? -demurrageHours : allowedHours - projectedUsedHours;
+  const baseProjectedDemurrageUSD = Math.max(0, finiteNumber(laytime?.projectedDemurrageUSD));
+  const effectiveDemurrageRateUSD = baseProjectedExtraHours > 0 && baseProjectedDemurrageUSD > 0
+    ? (baseProjectedDemurrageUSD * 24) / baseProjectedExtraHours
+    : demurrageRateUSD;
+  const estimatedDemurrageUSD = (demurrageHours / 24) * effectiveDemurrageRateUSD;
   const isDelayed = demurrageHours > 0;
   const vesselName = displayText(voyageData?.vesselName);
   const vesselImo = displayText(voyageData?.imo);
@@ -111,6 +119,24 @@ export default function DashboardExecutive({ contractData }) {
     : '—';
   const operationalPhase = voyageData?.operationalPhaseLabel || phaseLabels[voyageData?.operationalPhase] || voyageData?.operationalPhase || '—';
   const routeProgress = hasRouteData ? Math.min(100, Math.max(0, finiteNumber(voyageData?.routeProgressPct))) : 0;
+  const remainingDistanceNm = finiteNumber(voyageData?.live?.remainingDistanceNm, null);
+  const speedKnots = finiteNumber(voyageData?.live?.speedKnots, null);
+  const dynamicEta = new Date(voyageData?.live?.dynamicEtaAt || '');
+  const cancellingDate = new Date(voyageData?.cancellingAt || '');
+  const hasDynamicEta = !Number.isNaN(dynamicEta.getTime());
+  const hasCancellingDate = !Number.isNaN(cancellingDate.getTime());
+  const cancellationRisk = hasDynamicEta && hasCancellingDate && dynamicEta.getTime() > cancellingDate.getTime();
+  const contractStatus = cancellationRisk ? 'Riesgo de Cancelación' : isDelayed ? 'Riesgo Demora' : 'En Control';
+  const projectedCompletionAt = laytime?.projectedCompletionAt;
+  const predictiveAlert = cancellationRisk ? {
+    id: 'predictive-cancelling-risk',
+    level: 'critical',
+    title: 'NOR Tardío · Riesgo de Cancelación',
+    source: 'ETA matemática',
+    message: `La ETA dinámica ${formatAlertDate(dynamicEta)} supera la fecha de cancelación ${formatAlertDate(cancellingDate)}.`,
+    detectedAt: voyageData?.live?.aisUpdatedAt || new Date().toISOString()
+  } : null;
+  const systemAlerts = predictiveAlert ? [predictiveAlert, ...baseSystemAlerts] : baseSystemAlerts;
 
   const handleInjectAlert = (alert) => {
     if (!alert?.draftEvent) return;
@@ -169,6 +195,29 @@ export default function DashboardExecutive({ contractData }) {
         </div>
       </div>
 
+      <section className={`grid gap-px overflow-hidden rounded-xl border shadow-sm md:grid-cols-4 ${cancellationRisk ? 'border-rose-300 bg-rose-200' : 'border-slate-200 bg-slate-200'}`}>
+        <div className="bg-white p-4 text-slate-900">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Distancia restante</span>
+          <p className="mt-1 text-xl font-bold">{remainingDistanceNm === null ? '—' : `${formatNumber(remainingDistanceNm, 'es-ES', { maximumFractionDigits: 2 })} NM`}</p>
+          <span className="text-xs text-slate-500">Cálculo de ruta activo</span>
+        </div>
+        <div className="bg-white p-4 text-slate-900">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Velocidad AIS</span>
+          <p className="mt-1 text-xl font-bold">{speedKnots === null ? '—' : `${formatNumber(speedKnots, 'es-ES', { maximumFractionDigits: 2 })} kn`}</p>
+          <span className="text-xs text-slate-500">Telemetría viva</span>
+        </div>
+        <div className="bg-white p-4 text-slate-900">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">ETA dinámica</span>
+          <p className="mt-1 text-base font-bold">{hasDynamicEta ? formatAlertDate(dynamicEta) : 'Sin velocidad válida'}</p>
+          <span className="text-xs text-slate-500">Distancia ÷ velocidad AIS</span>
+        </div>
+        <div className={`${cancellationRisk ? 'bg-rose-700 text-white' : 'bg-emerald-700 text-white'} p-4`} role="status">
+          <span className="text-[10px] font-bold uppercase tracking-widest opacity-75">Control contractual</span>
+          <p className="mt-1 text-base font-bold">{contractStatus}</p>
+          <span className="text-xs opacity-80">Cancelling: {hasCancellingDate ? formatAlertDate(cancellingDate) : '—'}</span>
+        </div>
+      </section>
+
       {/* Alertas del Sistema: Telemetría y Automatización */}
       <section className="rounded-xl border border-slate-200 bg-white p-5 text-slate-900 shadow-sm break-inside-avoid print:break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
         <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -176,7 +225,7 @@ export default function DashboardExecutive({ contractData }) {
             <h2 className="text-base font-bold text-slate-900 print:text-black">Alertas del Sistema (Telemetría)</h2>
             <p className="mt-1 text-xs text-slate-500 print:text-slate-600">OpenShips, geofencing y señales IoT operativas</p>
           </div>
-          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-700">
+          <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-widest ${cancellationRisk ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
             {systemAlerts.length} activas
           </span>
         </div>
@@ -188,6 +237,7 @@ export default function DashboardExecutive({ contractData }) {
             </div>
           )}
           {systemAlerts.map((alert, index) => {
+            const isCritical = ['critical', 'danger', 'high'].includes(String(alert?.tone || alert?.level || alert?.severity || '').toLowerCase());
             const isWarning = ['warning', 'warn', 'medium'].includes(String(alert?.tone || alert?.level || alert?.severity || '').toLowerCase());
             const isInjected = sofEvents.some((event) => event.sourceAlertId === alert.id);
             const canInject = Boolean(alert?.draftEvent);
@@ -196,7 +246,9 @@ export default function DashboardExecutive({ contractData }) {
               <article
                 key={alert?.id || `voyage-alert-${index}`}
                 className={`rounded-lg border p-4 break-inside-avoid print:bg-white ${
-                  isWarning
+                  isCritical
+                    ? 'border-rose-200 bg-rose-50 print:border-slate-300'
+                    : isWarning
                     ? 'border-amber-100 bg-amber-50/50 print:border-slate-300'
                     : 'border-cyan-100 bg-cyan-50/50 print:border-slate-300'
                 }`}
@@ -204,11 +256,13 @@ export default function DashboardExecutive({ contractData }) {
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
                     <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${
-                      isWarning
+                      isCritical
+                        ? 'border-rose-200 bg-white text-rose-700 print:text-rose-700'
+                        : isWarning
                         ? 'border-amber-200 bg-white text-amber-700 print:text-amber-700'
                         : 'border-cyan-200 bg-white text-cyan-700 print:text-cyan-700'
                     }`}>
-                      {isWarning ? (
+                      {isWarning || isCritical ? (
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden="true">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 3.7 2.8 17a2 2 0 0 0 1.74 3h14.92A2 2 0 0 0 21.2 17L13.7 3.7a2 2 0 0 0-3.4 0Z" />
                         </svg>
@@ -221,7 +275,7 @@ export default function DashboardExecutive({ contractData }) {
                     </span>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <h3 className={`text-sm font-bold ${isWarning ? 'text-amber-700' : 'text-cyan-700'}`}>
+                        <h3 className={`text-sm font-bold ${isCritical ? 'text-rose-700' : isWarning ? 'text-amber-700' : 'text-cyan-700'}`}>
                           {alert?.title || alert?.type || 'Aviso operativo'}
                         </h3>
                         <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 print:text-slate-600">{alert?.source || 'Tracking'}</span>
@@ -332,19 +386,19 @@ export default function DashboardExecutive({ contractData }) {
             </>
           )}
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-sm break-inside-avoid print:break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
-          <span className="text-xs text-slate-500 uppercase font-semibold">Estado Laytime</span>
-          <p className={`text-lg font-bold mt-1 ${isDelayed ? 'text-amber-600' : 'text-emerald-600'}`}>
-            {isDelayed ? 'Riesgo Demora' : 'En Control'}
+        <div className={`rounded-xl border bg-white p-4 text-slate-900 shadow-sm break-inside-avoid print:break-inside-avoid print:border-slate-300 print:shadow-none print:text-black ${cancellationRisk ? 'border-rose-300' : 'border-slate-200'}`}>
+          <span className="text-xs text-slate-500 uppercase font-semibold">Estado Contractual</span>
+          <p className={`text-lg font-bold mt-1 ${cancellationRisk ? 'text-rose-700' : isDelayed ? 'text-amber-600' : 'text-emerald-600'}`}>
+            {contractStatus}
           </p>
-          <span className="text-xs text-slate-500">{formatNumber(netUsedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}h netas de {formatNumber(allowedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}h</span>
+          <span className="text-xs text-slate-500">{formatNumber(projectedUsedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}h proyectadas de {formatNumber(allowedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}h</span>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-4 text-slate-900 shadow-sm break-inside-avoid print:break-inside-avoid print:border-slate-300 print:shadow-none print:text-black">
           <span className="text-xs text-slate-500 uppercase font-semibold">Exposición Demurrage</span>
           <p className={`text-lg font-bold mt-1 ${isDelayed ? 'text-rose-600' : 'text-slate-900'}`}>
-            {isDelayed ? `$${formatNumber(estimatedDemurrageUSD, 'en-US', { maximumFractionDigits: 2 })}` : 'USD 0'}
+            ${formatNumber(estimatedDemurrageUSD, 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
           </p>
-          <span className="text-xs text-slate-500">Tarifa: ${formatNumber(demurrageRateUSD)}/día</span>
+          <span className="text-xs text-slate-500">{formatNumber(demurrageHours, 'es-ES', { maximumFractionDigits: 2 })}h extra · tarifa efectiva ${formatNumber(effectiveDemurrageRateUSD)}/día</span>
         </div>
       </div>
 
@@ -359,7 +413,7 @@ export default function DashboardExecutive({ contractData }) {
         <div className="flex justify-between items-center border-b border-slate-100 pb-3">
           <div>
             <h2 className="text-base font-bold text-slate-900">Auditoría de Plancha & Tiempos de Puerto</h2>
-            <p className="text-xs text-slate-500">Control estricto de plancha SHINC/SHEX y cálculo de sobreestadías</p>
+            <p className="text-xs text-slate-500">Proyección con ETA viva, tiempos pactados y cálculo de sobreestadías</p>
           </div>
           <span className="px-3 py-1 bg-slate-100 border border-slate-200 text-slate-700 text-xs rounded-lg font-mono font-semibold">
             Regla: {terms}
@@ -370,12 +424,12 @@ export default function DashboardExecutive({ contractData }) {
           <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg">
             <span className="text-xs text-slate-500 font-medium uppercase">Tiempo Permitido (Allowed)</span>
             <p className="text-lg font-bold text-slate-900 mt-1">{formatNumber(allowedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Horas</p>
-            <span className="text-xs text-slate-600">Basado en volumen contractual</span>
+            <span className="text-xs text-slate-600">Agregado desde laytime_statements</span>
           </div>
           <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg">
-            <span className="text-xs text-slate-500 font-medium uppercase">Tiempo Consumido (Used)</span>
-            <p className="text-lg font-bold text-cyan-600 mt-1">{formatNumber(netUsedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Horas</p>
-            <span className="text-xs text-slate-600">{formatNumber(grossUsedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}h brutas − {formatNumber(deductedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}h deducidas</span>
+            <span className="text-xs text-slate-500 font-medium uppercase">Tiempo Proyectado (Used)</span>
+            <p className="text-lg font-bold text-cyan-600 mt-1">{formatNumber(projectedUsedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Horas</p>
+            <span className="text-xs text-slate-600">{formatNumber(netUsedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}h reales · {formatNumber(deductedHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}h deducidas</span>
           </div>
           <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg">
             <span className="text-xs text-slate-500 font-medium uppercase">Balance de Plancha</span>
@@ -383,7 +437,7 @@ export default function DashboardExecutive({ contractData }) {
               {formatNumber(balanceHours, 'es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Horas
             </p>
             <span className="text-xs text-slate-600">
-              {balanceHours >= 0 ? 'Margen disponible' : 'Exceso de plancha'}
+              {balanceHours >= 0 ? 'Margen proyectado disponible' : `Exceso proyectado · ${formatAlertDate(projectedCompletionAt)}`}
             </span>
           </div>
         </div>
