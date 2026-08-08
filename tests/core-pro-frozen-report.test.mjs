@@ -95,7 +95,11 @@ test("the matching engine completes filtered-source validation without transmitt
   assert.match(coreProSource, /async function executeMatchingEngine\(routeOverride = null, executionToken = null\)/);
   assert.match(coreProSource, /effectiveRouteOverride\?\.pol \|\| loadSelect\.options/);
   assert.match(coreProSource, /readCoordinate\(routeContext\?\.pol\?\.lat, routeOverride\?\.lat\?\.pol, document\.getElementById\('match-load-lat'\)\?\.value\)/);
-  assert.match(coreProSource, /const laycanStart = String\(effectiveRouteOverride\?\.laycan \|\| document\.getElementById\('match-laycan-start'\)\.value \|\| todayIso\)/);
+  assert.match(coreProSource, /const laycanStart = String\(voyageParams\.laydays \|\| ''\)/);
+  assert.match(coreProSource, /const laycanEnd = String\(voyageParams\.cancelling \|\| ''\)/);
+  const executionStart = coreProSource.indexOf('async function executeMatchingEngine');
+  const executionEnd = coreProSource.indexOf('function getMatchingExecutionRouteOverride', executionStart);
+  assert.doesNotMatch(coreProSource.slice(executionStart, executionEnd), /fallbackLaycanEnd|todayIso/);
   assert.match(coreProSource, /coreProMatchingRouteContext\?\.laycan \|\| routeReadiness\.laycan/);
   assert.match(coreProSource, /new CustomEvent\('SEA_ROUTE_DEFINED', \{ detail: \{ pol, pod, laycan, lat, lon \} \}\)/);
 

@@ -359,6 +359,37 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         }, 0);
     }
 
+    function cloneVesselRecord(record) {
+        if (!record || typeof record !== 'object') return record;
+        return {
+            ...record,
+            MetaData: record.MetaData && typeof record.MetaData === 'object'
+                ? { ...record.MetaData }
+                : record.MetaData,
+        };
+    }
+
+    function mergeCollectionImmutable(collection, identity, technical, isMatchingCollection) {
+        if (!Array.isArray(collection)) return [];
+        return collection.map(item => {
+            const matches = isMatchingCollection
+                ? vesselIdentityMatches(item?.vessel, identity)
+                    || vesselIdentityMatches(item?.ais, identity)
+                    || vesselIdentityMatches(item, identity)
+                : vesselIdentityMatches(item, identity);
+            if (!matches) return item;
+            const merged = cloneVesselRecord(item);
+            if (isMatchingCollection) {
+                if (item.vessel && typeof item.vessel === 'object') merged.vessel = cloneVesselRecord(item.vessel);
+                if (item.ais && typeof item.ais === 'object') merged.ais = cloneVesselRecord(item.ais);
+                mergeMatch(merged, identity, technical);
+            } else {
+                mergeTechnicalFields(merged, technical);
+            }
+            return merged;
+        });
+    }
+
     function refreshMatchingDerivedState() {
         const matchingState = globalScope.matchingResultsState;
         if (!matchingState || !Array.isArray(matchingState.vessels)) return;
@@ -407,31 +438,35 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             const storedVessels = Array.isArray(globalScope.GlobalStore.dueDiligenceVessels)
                 ? globalScope.GlobalStore.dueDiligenceVessels
                 : [];
-            const existingIndex = storedVessels.findIndex(vessel => vesselIdentityMatches(vessel, identity));
-            if (existingIndex >= 0) storedVessels[existingIndex] = mergeNonEmptyRecords(storedVessels[existingIndex], dueDiligenceVessel);
-            else storedVessels.push(dueDiligenceVessel);
-            globalScope.GlobalStore.dueDiligenceVessels = storedVessels;
+            globalScope.GlobalStore.dueDiligenceVessels = [
+                ...storedVessels.filter(vessel => !vesselIdentityMatches(vessel, identity)),
+                mergeNonEmptyRecords(storedVessels.find(vessel => vesselIdentityMatches(vessel, identity)), dueDiligenceVessel),
+            ];
         }
-        const matchingCollections = [
-            globalScope.lastMatchingEngineResults,
-            globalScope.matchingResultsState?.vessels,
-            globalScope.matchingResultsState?.eligibleVessels,
-            globalScope.GlobalStore?.matchingVessels,
-        ];
-        const vesselCollections = [
-            globalScope.openShipsVesselsCache,
-            globalScope.GlobalStore?.rawVessels,
-            globalScope.GlobalStore?.vessels,
-            globalScope.GlobalStore?.filteredVessels,
-            globalScope.GlobalStore?.renderedAisVessels,
-        ];
-        matchingCollections.forEach(collection => {
-            if (!Array.isArray(collection)) return;
-            collection.forEach(item => {
-                if (mergeMatch(item, identity, technical) && !hydratedMatch) hydratedMatch = item;
+        globalScope.lastMatchingEngineResults = mergeCollectionImmutable(globalScope.lastMatchingEngineResults, identity, technical, true);
+        if (globalScope.matchingResultsState) {
+            globalScope.matchingResultsState = {
+                ...globalScope.matchingResultsState,
+                vessels: mergeCollectionImmutable(globalScope.matchingResultsState.vessels, identity, technical, true),
+                eligibleVessels: mergeCollectionImmutable(globalScope.matchingResultsState.eligibleVessels, identity, technical, true),
+            };
+        }
+        const store = globalScope.GlobalStore;
+        if (store) {
+            const nextMatchingVessels = mergeCollectionImmutable(store.matchingVessels, identity, technical, true);
+            hydratedMatch = nextMatchingVessels.find(item => vesselIdentityMatches(item?.vessel, identity)
+                || vesselIdentityMatches(item?.ais, identity)
+                || vesselIdentityMatches(item, identity)) || null;
+            if (typeof store.setMatchingFleet === 'function') {
+                store.setMatchingFleet(nextMatchingVessels, { source: 'matching-ui' });
+            } else {
+                store.matchingVessels = nextMatchingVessels;
+            }
+            ['rawVessels', 'vessels', 'filteredVessels', 'renderedAisVessels'].forEach(collection => {
+                store[collection] = mergeCollectionImmutable(store[collection], identity, technical, false);
             });
-        });
-        vesselCollections.forEach(collection => mergeCollection(collection, identity, technical, false));
+        }
+        globalScope.openShipsVesselsCache = mergeCollectionImmutable(globalScope.openShipsVesselsCache, identity, technical, false);
         refreshMatchingDerivedState();
         globalScope.dispatchEvent(new CustomEvent('vessel:due-diligence-hydrated', {
             detail: { identity: { ...identity }, technical: { ...technical } },
@@ -725,14 +760,24 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         const mergeCollection = collection => {
             if (!Array.isArray(collection)) return collection;
             return collection.map(candidate => {
-                if (!vesselIdentityMatches(candidate, identity)) return candidate;
+                const candidateMatches = vesselIdentityMatches(candidate, identity)
+                    || vesselIdentityMatches(candidate?.vessel, identity)
+                    || vesselIdentityMatches(candidate?.ais, identity);
+                if (!candidateMatches) return candidate;
                 const merged = {
                     ...candidate,
+                    ...vessel,
+                    latitude: vessel.latitude ?? candidate.latitude,
+                    longitude: vessel.longitude ?? candidate.longitude,
+                    lat: vessel.lat ?? candidate.lat,
+                    lng: vessel.lng ?? vessel.lon ?? candidate.lng ?? candidate.lon,
+                    lon: vessel.lon ?? vessel.lng ?? candidate.lon ?? candidate.lng,
                     MetaData: candidate?.MetaData && typeof candidate.MetaData === 'object'
                         ? { ...candidate.MetaData }
                         : {},
                 };
-                mergeTechnicalFields(merged, technical);
+                if (candidate?.vessel || candidate?.ais) mergeMatch(merged, identity, technical);
+                else mergeTechnicalFields(merged, technical);
                 return mergeNonEmptyRecords(merged, {
                     vesselName: vessel.vesselName || vessel.vessel_name,
                     vessel_name: vessel.vessel_name || vessel.vesselName,
@@ -748,6 +793,20 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             ['rawVessels', 'filteredVessels', 'vessels', 'renderedAisVessels'].forEach(collection => {
                 store[collection] = mergeCollection(store[collection]);
             });
+            const nextMatchingVessels = mergeCollection(store.matchingVessels);
+            if (typeof store.setMatchingFleet === 'function') {
+                store.setMatchingFleet(nextMatchingVessels, { source: 'matching-ui' });
+            } else {
+                store.matchingVessels = nextMatchingVessels;
+            }
+        }
+        globalScope.lastMatchingEngineResults = mergeCollection(globalScope.lastMatchingEngineResults);
+        if (globalScope.matchingResultsState) {
+            globalScope.matchingResultsState = {
+                ...globalScope.matchingResultsState,
+                vessels: mergeCollection(globalScope.matchingResultsState.vessels),
+                eligibleVessels: mergeCollection(globalScope.matchingResultsState.eligibleVessels),
+            };
         }
         globalScope.openShipsVesselsCache = mergeCollection(globalScope.openShipsVesselsCache);
         globalScope.syncDensityDisplayConsumers?.({ updateGlobe: false });
@@ -1356,6 +1415,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         buildPersistenceVessel,
         isNonCommercialVesselType,
         mergeTechnicalFields,
+        mergeCollectionImmutable,
         mergeVerifiedVesselIntoDensityState,
         mergeNonEmptyRecords,
         normalizeTechnicalRecord,

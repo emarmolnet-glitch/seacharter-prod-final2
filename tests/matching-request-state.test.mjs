@@ -51,14 +51,17 @@ test('matching engine rehydrates matchingRequest before local validation and exe
   assert.match(source, /setInputValue\('match-quantity', request\.cargo\?\.quantity\)/);
   assert.match(executionSource, /const matchingRequest = typeof window\.fetchMatchingRequestFromGlobalStore/);
   assert.match(executionSource, /window\.syncMatchingViewFromGlobalOperationalState\?\.\(\{ persist: true \}\)/);
-  assert.match(executionSource, /const effectiveRouteOverride = matchingRequest\?\.route \|\| routeOverride \|\| null/);
+  assert.match(executionSource, /const voyageParams = getGlobalVoyageParams\(\)/);
+  assert.match(executionSource, /const effectiveRouteOverride = \{[\s\S]*pol: voyageParams\.pol[\s\S]*pod: voyageParams\.pod/);
   const cargoSelectionSource = executionSource.slice(
     executionSource.indexOf('const matchingCargoType'),
     executionSource.indexOf('const matchingQuantity'),
   );
-  assert.ok(cargoSelectionSource.indexOf('matchingRequest?.cargo?.cargoCode') < cargoSelectionSource.indexOf("document.getElementById('match-cargo-type')?.value"));
-  assert.ok(executionSource.indexOf('matchingRequest?.cargo?.quantity') < executionSource.indexOf("document.getElementById('match-quantity')?.value"));
-  assert.ok(executionSource.indexOf('matchingRequest?.laycan?.start') < executionSource.indexOf("document.getElementById('match-laycan-start')?.value"));
+  assert.match(cargoSelectionSource, /voyageParams\.cargoTypeCode/);
+  assert.match(executionSource, /const matchingQuantity = Number\(voyageParams\.cargoQuantity\)/);
+  assert.match(executionSource, /const laycanStart = String\(voyageParams\.laydays \|\| ''\)/);
+  assert.match(executionSource, /const laycanEnd = String\(voyageParams\.cancelling \|\| ''\)/);
+  assert.doesNotMatch(executionSource, /fallbackLaycanEnd|todayIso/);
   assert.doesNotMatch(cargoSelectionSource, /'100'/);
   assert.match(executionSource, /source: matchingRequest\?\.endpoint \|\| '\/api\/matching-local'/);
   assert.doesNotMatch(executionSource, /source: matchingRequest\.endpoint/);

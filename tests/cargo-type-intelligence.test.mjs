@@ -19,18 +19,20 @@ test('cargo taxonomy exposes the standardized ten-value selector with Otros by d
   assert.match(indexSource, /MATCHING_CARGO_TYPE_STORAGE_KEY/);
   assert.match(indexSource, /data-cargo-type-selector="calculator"/);
   assert.match(indexSource, /MATCHING_CARGO_TYPE_STORAGE_KEY, JSON\.stringify\(\{[\s\S]*cargoCode: selected\.id,[\s\S]*cargoDescription: selected\.label/);
-  assert.match(indexSource, /cargo: normalizeMatchingCargoPayload\(request\.cargo\)/);
+  assert.match(indexSource, /cargo: normalizeMatchingCargoPayload\(\{[\s\S]*\.\.\.voyageParams\.cargo/);
 });
 
 test('master calculator payload maps the selected cargo strictly to its code', () => {
   const builderStart = indexSource.indexOf('function buildMatchingRequest');
   const builderEnd = indexSource.indexOf('window.buildMatchingRequest = buildMatchingRequest;', builderStart);
   const builderSource = indexSource.slice(builderStart, builderEnd);
-  assert.match(builderSource, /cargoCode: String\(document\.getElementById\('cargo-type-manual'\)\?\.value/);
-  assert.match(builderSource, /cargoDescription: String\(window\.getCargoTaxonomyLabel/);
-  assert.match(builderSource, /type: String\(document\.getElementById\('cargo-type-manual'\)\?\.value/);
-  assert.match(builderSource, /typeId: String\(document\.getElementById\('cargo-type-manual'\)\?\.value/);
-  assert.match(builderSource, /specification: String\(window\.getCargoTaxonomyLabel/);
+  assert.match(builderSource, /const voyageParams = getGlobalVoyageParams\(\)/);
+  assert.match(builderSource, /cargoCode: voyageParams\.cargoTypeCode/);
+  assert.match(builderSource, /cargoDescription: voyageParams\.cargoType/);
+  assert.match(builderSource, /type: voyageParams\.cargoTypeCode/);
+  assert.match(builderSource, /typeId: voyageParams\.cargoTypeCode/);
+  assert.match(builderSource, /specification: voyageParams\.cargoType/);
+  assert.doesNotMatch(builderSource, /document\.getElementById\('cargo-type-manual'\)/);
 });
 
 test('cargo intelligence applies the Rules of Gold signals', () => {

@@ -49,7 +49,7 @@ test('the canonical matching fleet rejects every secondary overwrite', () => {
 });
 
 test('a late one-vessel validation cannot replace a sixteen-vessel matching snapshot', () => {
-  const storeStart = indexSource.indexOf('function preserveCommercialVesselCoordinates');
+  const storeStart = indexSource.indexOf('function parseCommercialVesselCoordinate');
   const storeEnd = indexSource.indexOf('window.GlobalStore = GlobalStore;', storeStart)
     + 'window.GlobalStore = GlobalStore;'.length;
   const storeSource = indexSource.slice(storeStart, storeEnd);
@@ -68,6 +68,7 @@ test('a late one-vessel validation cannot replace a sixteen-vessel matching snap
     CustomEvent: CustomEventMock,
     console,
     Date,
+    getGlobalVoyageParams: () => ({}),
   });
 
   const matchingFleet = Array.from({ length: 16 }, (_, index) => ({
@@ -88,6 +89,34 @@ test('a late one-vessel validation cannot replace a sixteen-vessel matching snap
   assert.equal(window.GlobalStore.matchingVessels.length, 16);
   assert.equal(events.at(-1)?.type, 'matching-fleet-empty-write-preserved');
   assert.equal(events.at(-1)?.detail?.persistentVesselCount, 16);
+});
+
+test('the canonical matching fleet normalizes external coordinate keys and numeric strings', () => {
+  const storeStart = indexSource.indexOf('function parseCommercialVesselCoordinate');
+  const storeEnd = indexSource.indexOf('window.GlobalStore = GlobalStore;', storeStart)
+    + 'window.GlobalStore = GlobalStore;'.length;
+  const storeSource = indexSource.slice(storeStart, storeEnd);
+  const window = { dispatchEvent() {} };
+
+  vm.runInNewContext(storeSource, {
+    window,
+    CustomEvent: class {},
+    console,
+    Date,
+    parseFloat,
+    getGlobalVoyageParams: () => ({}),
+  });
+
+  window.GlobalStore.setMatchingFleet([
+    { vesselName: 'Uppercase API', LATITUDE: '36.5000', LONGITUDE: '-5.2000' },
+    { vesselName: 'Short API', LAT: '35,7500', LON: '-6,1250' },
+    { vesselName: 'Nested API', source_payload: { ais: { latitude: '34.25', lng: '-7.5' } } },
+  ], { source: 'matching-ui' });
+
+  const [uppercase, short, nested] = window.GlobalStore.matchingVessels;
+  assert.deepEqual([uppercase.lat, uppercase.lng, uppercase.latitude, uppercase.longitude], [36.5, -5.2, 36.5, -5.2]);
+  assert.deepEqual([short.lat, short.lng], [35.75, -6.125]);
+  assert.deepEqual([nested.lat, nested.lng], [34.25, -7.5]);
 });
 
 test('Density consumers render only the GlobalStore matching fleet', () => {
