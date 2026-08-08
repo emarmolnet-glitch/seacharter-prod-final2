@@ -81,7 +81,7 @@ function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
-function createOpenShipsPositionUrl(endpoint, latitude, longitude) {
+function createOpenShipsPositionUrl(endpoint, latitude, longitude, radiusDegrees = OPENSHIPS_RADIUS_DEGREES) {
   const url = new URL(endpoint);
   const basePath = url.pathname.replace(/\/+$/, "");
   if (!basePath.endsWith(OPENSHIPS_POSITION_PATH)) {
@@ -89,10 +89,10 @@ function createOpenShipsPositionUrl(endpoint, latitude, longitude) {
   }
   url.searchParams.delete("box");
   url.searchParams.delete("bbox");
-  url.searchParams.set("minLat", String(clamp(latitude - OPENSHIPS_RADIUS_DEGREES, -90, 90)));
-  url.searchParams.set("maxLat", String(clamp(latitude + OPENSHIPS_RADIUS_DEGREES, -90, 90)));
-  url.searchParams.set("minLon", String(clamp(longitude - OPENSHIPS_RADIUS_DEGREES, -180, 180)));
-  url.searchParams.set("maxLon", String(clamp(longitude + OPENSHIPS_RADIUS_DEGREES, -180, 180)));
+  url.searchParams.set("minLat", String(clamp(latitude - radiusDegrees, -90, 90)));
+  url.searchParams.set("maxLat", String(clamp(latitude + radiusDegrees, -90, 90)));
+  url.searchParams.set("minLon", String(clamp(longitude - radiusDegrees, -180, 180)));
+  url.searchParams.set("maxLon", String(clamp(longitude + radiusDegrees, -180, 180)));
   return url;
 }
 
@@ -200,6 +200,7 @@ export async function fetchOpenShipsLive(options = {}) {
 
   const limit = Math.min(MAX_LIMIT, Math.max(1, Math.trunc(Number(options.limit) || DEFAULT_LIMIT)));
   const timeoutMs = Math.max(1000, Math.min(30000, Number(options.timeoutMs) || DEFAULT_TIMEOUT_MS));
+  const radiusDegrees = Math.max(1, Math.min(180, Number(options.radiusDegrees) || OPENSHIPS_RADIUS_DEGREES));
   const latitude = finiteNumber(options.latitude);
   const longitude = finiteNumber(options.longitude);
   if (latitude === null || latitude < -90 || latitude > 90 || longitude === null || longitude < -180 || longitude > 180) {
@@ -207,7 +208,7 @@ export async function fetchOpenShipsLive(options = {}) {
     error.code = "OPENSHIPS_INVALID_COORDINATES";
     throw error;
   }
-  const url = createOpenShipsPositionUrl(endpoint, latitude, longitude);
+  const url = createOpenShipsPositionUrl(endpoint, latitude, longitude, radiusDegrees);
   const limitParam = String(env.OPENSHIPS_LIMIT_PARAM || "limit").trim();
   if (limitParam && !url.searchParams.has(limitParam)) url.searchParams.set(limitParam, String(limit));
 

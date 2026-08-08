@@ -239,6 +239,15 @@ test('tracking reuses MAPA port search and maritime routing services', () => {
   assert.doesNotMatch(scriptSource, /async function fetchMaritimeRoute/);
 });
 
+test('basic tracking resolves AIS destinations and draws an ephemeral route without a contract', () => {
+  assert.match(scriptSource, /normalizeAisDestination/);
+  assert.match(scriptSource, /applyBasicAisDestination/);
+  assert.match(scriptSource, /fetch\('\/api\/route'/);
+  assert.match(scriptSource, /ruta efímera/);
+  assert.match(scriptSource, /OPENSHIPS_REST_LIVE|OpenShips/);
+  assert.doesNotMatch(scriptSource, /No hay un viaje activo en Neon para calcular la ruta/);
+});
+
 test('tracking endpoint uses the shared Postgres client and returns map and dashboard payloads', () => {
   assert.match(endpointSource, /import \{ db \} from "\.\.\/\.\.\/db\/index\.js"/);
   assert.match(endpointSource, /voyagesTracking/);
@@ -254,14 +263,20 @@ test('tracking endpoint uses the shared Postgres client and returns map and dash
 });
 
 test('vessel live profile combines master data with the latest AIS position', () => {
+  assert.match(vesselEndpointSource, /new WebSocketClient\(endpoint\)/);
+  assert.match(vesselEndpointSource, /FiltersShipMMSI: \[mmsi\]/);
+  assert.match(vesselEndpointSource, /AISSTREAM_LIVE/);
+  assert.match(vesselEndpointSource, /liveFetchAttempted/);
   assert.match(vesselEndpointSource, /FROM vessels_master/);
   assert.match(vesselEndpointSource, /FROM ais_telemetry_buffer/);
   assert.match(vesselEndpointSource, /FROM ais_vessels/);
-  assert.match(vesselEndpointSource, /fetched_at >= NOW\(\) - INTERVAL '24 hours'/);
+  assert.doesNotMatch(vesselEndpointSource, /fetched_at >= NOW\(\) - INTERVAL '24 hours'/);
+  assert.match(vesselEndpointSource, /raw_data#>>'\{MetaData,IMO\}'/);
+  assert.match(vesselEndpointSource, /masterPosition/);
   assert.match(vesselEndpointSource, /speed_over_ground/);
   assert.match(vesselEndpointSource, /course_over_ground/);
   assert.match(vesselEndpointSource, /telemetryLive/);
-  assert.match(vesselEndpointSource, /"OPENSHIPS"/);
+  assert.match(vesselEndpointSource, /"OPENSHIPS_(?:REST_LIVE|BUFFER)"/);
   assert.match(vesselEndpointSource, /last_seen_at DESC/);
   assert.match(vesselEndpointSource, /positionSource/);
   assert.match(vesselEndpointSource, /found: false/);
@@ -273,7 +288,7 @@ test('vessel live profile combines master data with the latest AIS position', ()
   assert.match(vesselEndpointSource, /timestamp: positionUpdatedAt/);
   assert.doesNotMatch(vesselEndpointSource, /status: 404/);
   assert.match(vesselEndpointSource, /path: "\/api\/v1\/vessel\/live-profile"/);
-  assert.doesNotMatch(vesselEndpointSource, /password|api_key|secret/i);
+  assert.doesNotMatch(vesselEndpointSource, /(?:password|secret)\s*[:=]\s*["'][^"']+|APIKey:\s*["'][^"']+/i);
 });
 
 test('voyages_tracking schema persists GIS, AIS, commercial and audit data', () => {

@@ -60,6 +60,24 @@ test('OpenShips clamps the regional coordinates and does not duplicate the endpo
   assert.equal(requestUrl.searchParams.get('maxLon'), '180');
 });
 
+test('OpenShips supports a global live lookup box for identifier searches without a seed position', async () => {
+  const capture = createFetchCapture();
+
+  await fetchOpenShipsLive({
+    env: { OPENSHIPS_API_URL: 'https://api.openships.test/v1' },
+    latitude: 0,
+    longitude: 0,
+    radiusDegrees: 180,
+    fetchImpl: capture.fetchImpl,
+  });
+
+  const requestUrl = capture.requests[0];
+  assert.equal(requestUrl.searchParams.get('minLat'), '-90');
+  assert.equal(requestUrl.searchParams.get('maxLat'), '90');
+  assert.equal(requestUrl.searchParams.get('minLon'), '-180');
+  assert.equal(requestUrl.searchParams.get('maxLon'), '180');
+});
+
 test('OpenShips exposes the corrected regional URL to the browser fallback after HTTP 400', async () => {
   await assert.rejects(
     fetchOpenShipsLive({
