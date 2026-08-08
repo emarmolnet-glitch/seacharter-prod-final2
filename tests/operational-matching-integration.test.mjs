@@ -42,7 +42,9 @@ test('section two injects standardized tooltips for contractual and CBAM fields'
 
 test('matching payload carries stowage volume and ship gear requirements', () => {
   assert.match(indexSource, /stowageFactor: readNumber\('cargo-sf'\)/);
-  assert.match(indexSource, /requiredVolumeCbm: \(Number\(calculation\.cargo\?\.quantity\) \|\| readNumber\('cargo-qty'\)\) \* readNumber\('cargo-sf'\)/);
+  assert.match(indexSource, /requiredVolumeCbm: voyageParams\.cargoQuantity \* readNumber\('cargo-sf'\)/);
+  assert.match(indexSource, /loadRate: voyageParams\.loadRate/);
+  assert.match(indexSource, /dischargeRate: voyageParams\.dischargeRate/);
   assert.match(indexSource, /metodoRequiereGruasBuque\(document\.getElementById\('metodo_carga'\)\?\.value\)/);
 });
 

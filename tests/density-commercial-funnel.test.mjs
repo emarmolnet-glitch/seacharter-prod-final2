@@ -119,6 +119,15 @@ test('Density table infers spatial status and never fabricates missing speed', (
   assert.doesNotMatch(indexSource, /statusLabel: v\.statusLabel \|\| \(speed >= 1 \? "Navegando" : "En Puerto"\)/);
 });
 
+test('Density table binds persisted Due Diligence keys before stale AIS aliases', () => {
+  assert.match(indexSource, /\['gross_tonnage', 'gt', 'grossTonnage', 'GT'\]/);
+  assert.match(indexSource, /\[\s*'vessel_type', 'clase', 'type', 'vesselClass', 'vessel_class'/);
+  assert.match(indexSource, /\['loa_meters', 'loa', 'loaMeters', 'LOA'/);
+  assert.match(indexSource, /\['year_built', 'year', 'yearBuilt', 'builtYear', 'built_year'\]/);
+  assert.match(indexSource, /grossTonnage \? grossTonnage\.toLocaleString\('es-ES'\) : 'REQUERIDO'/);
+  assert.match(indexSource, /loaMeters \? `\$\{loaMeters\.toLocaleString\('es-ES'\)\} m` : 'N\/D'/);
+});
+
 test('Due Diligence separates discard, save, and calculator handoff actions', () => {
   const persistenceIndex = dueDiligenceSource.indexOf('const persistenceResult = await persistDueDiligenceVessel');
   const storeIndex = dueDiligenceSource.indexOf('commitVerifiedVesselToGlobalState(verifiedVessel)', persistenceIndex);

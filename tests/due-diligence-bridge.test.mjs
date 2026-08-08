@@ -678,6 +678,7 @@ test('Density optimistic save replaces raw AIS technical values without touching
       filteredVessels: [{ ...rawVessel }],
       vessels: [{ ...rawVessel }],
       renderedAisVessels: [{ ...rawVessel }],
+      matchingVessels: [{ vessel: { ...rawVessel } }],
       calculatorVessel: null,
       activeVessel: null,
     },
@@ -694,6 +695,8 @@ test('Density optimistic save replaces raw AIS technical values without touching
     dwt: 42_000,
     vessel_type: 'Bulk Carrier',
     gross_tonnage: 25_000,
+    loa_meters: 155.4,
+    year_built: 2016,
   }), true);
 
   assert.equal(window.GlobalStore.rawVessels[0].dwt, 42_000);
@@ -707,6 +710,13 @@ test('Density optimistic save replaces raw AIS technical values without touching
   assert.equal(window.openShipsVesselsCache[0].vesselClass, 'Bulk Carrier');
   assert.equal(window.openShipsVesselsCache[0].MetaData.ShipType, 'Bulk Carrier');
   assert.equal(window.GlobalStore.rawVessels[0].vesselClassSource, 'VESSELS_MASTER');
+  assert.equal(window.GlobalStore.rawVessels[0].gross_tonnage, 25_000);
+  assert.equal(window.GlobalStore.rawVessels[0].loa_meters, 155.4);
+  assert.equal(window.GlobalStore.rawVessels[0].year_built, 2016);
+  assert.equal(window.GlobalStore.matchingVessels[0].gross_tonnage, 25_000);
+  assert.equal(window.GlobalStore.matchingVessels[0].vessel_type, 'Bulk Carrier');
+  assert.equal(window.GlobalStore.matchingVessels[0].loa_meters, 155.4);
+  assert.equal(window.GlobalStore.matchingVessels[0].year_built, 2016);
   assert.equal(window.GlobalStore.rawVessels[0].latitude, 36.1234);
   assert.equal(window.GlobalStore.rawVessels[0].longitude, -5.4321);
   assert.equal(window.GlobalStore.calculatorVessel, null);
@@ -741,10 +751,13 @@ test('store hydration updates matching and OpenShips records and clears missing-
     { imo: '9876543', dwt: 42_000, flag: 'Spain', yearBuilt: 2018, draft: 9.4 },
   );
 
-  assert.equal(match.vessel.imo, '9876543');
-  assert.equal(match.vessel.dwt, 42_000);
-  assert.equal(match.hasTechnicalWarning, false);
-  assert.deepEqual(match.technicalEligibility.criticalReasons, []);
+  const hydratedMatch = window.GlobalStore.matchingVessels[0];
+  assert.notEqual(hydratedMatch, match);
+  assert.equal(match.vessel.imo, 'PENDING');
+  assert.equal(hydratedMatch.vessel.imo, '9876543');
+  assert.equal(hydratedMatch.vessel.dwt, 42_000);
+  assert.equal(hydratedMatch.hasTechnicalWarning, false);
+  assert.deepEqual(hydratedMatch.technicalEligibility.criticalReasons, []);
   assert.equal(rawVessel.latitude, 36.1234);
   assert.equal(rawVessel.longitude, -5.4321);
   assert.equal(window.GlobalStore.dueDiligenceVessels.length, 1);
@@ -779,12 +792,14 @@ test('hydration re-evaluates DWT warnings against cargo quantity', () => {
     { imo: '9876543', dwt: 10_953, flag: 'Türkiye', yearBuilt: 2012, draft: 7.4 },
   );
 
-  assert.equal(match.dwtAssessment.status, 'SUFFICIENT');
-  assert.equal(match.compatibility.capacityOk, true);
-  assert.equal(match.compatibility.reasons.capacity, 'OK');
-  assert.equal(match.hasTechnicalWarning, false);
-  assert.equal(match.audit.operationallyEligible, true);
-  assert.deepEqual(match.technicalEligibility.criticalReasons, []);
+  const hydratedMatch = window.GlobalStore.matchingVessels[0];
+  assert.notEqual(hydratedMatch, match);
+  assert.equal(hydratedMatch.dwtAssessment.status, 'SUFFICIENT');
+  assert.equal(hydratedMatch.compatibility.capacityOk, true);
+  assert.equal(hydratedMatch.compatibility.reasons.capacity, 'OK');
+  assert.equal(hydratedMatch.hasTechnicalWarning, false);
+  assert.equal(hydratedMatch.audit.operationallyEligible, true);
+  assert.deepEqual(hydratedMatch.technicalEligibility.criticalReasons, []);
   assert.equal(window.matchingResultsState.eligibleCount, 1);
   assert.equal(window.matchingResultsState.technicalWarningCount, 0);
   assert.equal(window.GlobalStore.compatibleVessels.length, 1);
@@ -815,7 +830,7 @@ test('proposal review persists first and hydrates the Store only after HTTP succ
   };
   let persistedVessel = null;
   let confirmPersistence;
-  const { bridge } = loadBridge({
+  const { bridge, window } = loadBridge({
     lastMatchingEngineResults: [match],
     matchingResultsState: { vessels: [match], eligibleVessels: [] },
     GlobalStore: { matchingVessels: [match], rawVessels: [], vessels: [], filteredVessels: [], renderedAisVessels: [] },
@@ -852,14 +867,17 @@ test('proposal review persists first and hydrates the Store only after HTTP succ
   assert.equal(match.vessel.imo, 'PENDING');
   confirmPersistence();
   assert.equal(await acceptance, true);
-  assert.equal(match.vessel.imo, '9876543');
-  assert.equal(match.vessel.dwt, 10_953);
-  assert.equal(match.vessel.flag, 'Barbados');
-  assert.equal(match.vessel.vesselType, 'General Cargo');
-  assert.equal(match.vessel.yearBuilt, 2011);
-  assert.equal(match.dwtAssessment.status, 'SUFFICIENT');
-  assert.equal(match.compatibility.capacityOk, true);
-  assert.equal(match.hasTechnicalWarning, false);
+  const hydratedMatch = window.GlobalStore.matchingVessels[0];
+  assert.notEqual(hydratedMatch, match);
+  assert.equal(match.vessel.imo, 'PENDING');
+  assert.equal(hydratedMatch.vessel.imo, '9876543');
+  assert.equal(hydratedMatch.vessel.dwt, 10_953);
+  assert.equal(hydratedMatch.vessel.flag, 'Barbados');
+  assert.equal(hydratedMatch.vessel.vesselType, 'General Cargo');
+  assert.equal(hydratedMatch.vessel.yearBuilt, 2011);
+  assert.equal(hydratedMatch.dwtAssessment.status, 'SUFFICIENT');
+  assert.equal(hydratedMatch.compatibility.capacityOk, true);
+  assert.equal(hydratedMatch.hasTechnicalWarning, false);
   assert.equal(persistedVessel.imo, '9876543');
   assert.equal(persistedVessel.dwt, 10_953);
   assert.equal(persistedVessel.gross_tonnage, 8_765);

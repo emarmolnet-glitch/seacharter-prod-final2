@@ -17,20 +17,23 @@ test('matching header consolidates route, laycan and cargo operations', () => {
   assert.match(indexSource, /laycanRange = \[formatContractDate\(route\.laydays\), formatContractDate\(route\.cancelling\)\]/);
 });
 
-test('matching header prefers live calculator operations over cached matching values', () => {
+test('matching header reads only canonical global voyage parameters', () => {
   const operationStart = indexSource.indexOf('window.getMatchingContractOperationalState = function');
   const operationEnd = indexSource.indexOf('window.getCommercialTargetCargoDwt', operationStart);
   const operationSource = indexSource.slice(operationStart, operationEnd);
 
-  assert.match(operationSource, /const liveCargoState = typeof readValidatedCargoOperationState === 'function'/);
-  assert.ok(operationSource.indexOf('liveCargoState.loadRate') < operationSource.indexOf('storeState.loadRate'));
-  assert.ok(operationSource.indexOf('liveCargoState.dischargeRate') < operationSource.indexOf('storeState.dischargeRate'));
-  assert.ok(operationSource.indexOf("document.getElementById('cargo-qty')?.value") < operationSource.indexOf('matchingRequest.cargo?.quantity'));
+  assert.match(operationSource, /const voyageParams = getGlobalVoyageParams\(\)/);
+  assert.match(operationSource, /quantityMt: Number\(voyageParams\.cargoQuantity\) \|\| 0/);
+  assert.match(operationSource, /loadRateMt: Number\(voyageParams\.loadRate\) \|\| 0/);
+  assert.match(operationSource, /dischargeRateMt: Number\(voyageParams\.dischargeRate\) \|\| 0/);
+  assert.doesNotMatch(operationSource, /document\.getElementById|matchingRequest|calculatedState/);
 });
 
 test('active voyage store publishes canonical laycan and cargo fields', () => {
   assert.match(indexSource, /laycan: \{ laydays: "", cancelling: "" \}/);
   assert.match(indexSource, /function normalizeActiveVoyageState\(partial = \{\}, baseState = State\)/);
+  assert.match(indexSource, /function buildCanonicalVoyageParams\(partial = \{\}, baseParams = null\)/);
+  assert.match(indexSource, /voyageParams: getGlobalVoyageParams\(\)/);
   assert.match(indexSource, /cargoQuantity,/);
   assert.match(indexSource, /dischargeRate,/);
   assert.match(indexSource, /SeaCharterStore\.set\(readValidatedCargoOperationState\(\), \{ force: true \}\)/);

@@ -15270,6 +15270,93 @@
         }
         window.normalizeActiveVoyageState = normalizeActiveVoyageState;
 
+        function buildCanonicalVoyageParams(partial = {}, baseParams = null) {
+            const base = baseParams && typeof baseParams === 'object'
+                ? baseParams
+                : (window.__coreProVoyageParams && typeof window.__coreProVoyageParams === 'object'
+                    ? window.__coreProVoyageParams
+                    : State);
+            const source = partial && typeof partial === 'object' ? partial : {};
+            const merged = {
+                ...base,
+                ...source,
+                laycan: { ...(base.laycan || {}), ...(source.laycan || {}) },
+                cargo: typeof source.cargo === 'object'
+                    ? { ...(typeof base.cargo === 'object' ? base.cargo : {}), ...source.cargo }
+                    : (typeof base.cargo === 'object' ? { ...base.cargo } : {})
+            };
+            const normalized = normalizeActiveVoyageState(merged, base);
+            const polCoordinates = normalizeRoutePortCoordinates(
+                source.polCoordinates || source.pol_coordinates || merged.polCoordinates || merged.pol_coordinates
+            );
+            const podCoordinates = normalizeRoutePortCoordinates(
+                source.podCoordinates || source.pod_coordinates || merged.podCoordinates || merged.pod_coordinates
+            );
+            const cargoTypeCode = String(
+                source.cargoTypeCode
+                || source.cargo?.cargoCode
+                || source.cargo?.typeId
+                || merged.cargoTypeCode
+                || merged.cargo?.cargoCode
+                || merged.cargo?.typeId
+                || ''
+            ).trim();
+            const cargo = {
+                ...(typeof merged.cargo === 'object' ? merged.cargo : {}),
+                cargoCode: cargoTypeCode,
+                typeId: cargoTypeCode,
+                type: cargoTypeCode,
+                cargoDescription: normalized.cargoType,
+                specification: normalized.cargoType,
+                quantity: normalized.cargoQuantity,
+                cargoQuantity: normalized.cargoQuantity,
+                loadRate: normalized.loadRate,
+                dischargeRate: normalized.dischargeRate
+            };
+            return {
+                ...normalized,
+                pol: String(merged.pol || '').trim(),
+                pod: String(merged.pod || '').trim(),
+                polCoordinates,
+                podCoordinates,
+                pol_coordinates: polCoordinates,
+                pod_coordinates: podCoordinates,
+                cargoTypeCode,
+                cargo,
+                laycan: {
+                    laydays: normalized.laydays,
+                    cancelling: normalized.cancelling,
+                    start: normalized.laydays,
+                    end: normalized.cancelling
+                }
+            };
+        }
+        window.buildCanonicalVoyageParams = buildCanonicalVoyageParams;
+
+        function getGlobalVoyageParams() {
+            const stored = window.GlobalStore?.voyageParams || window.__coreProVoyageParams;
+            return buildCanonicalVoyageParams(stored || State, stored || State);
+        }
+        window.getGlobalVoyageParams = getGlobalVoyageParams;
+
+        function updateGlobalVoyageParams(partial = {}, metadata = {}) {
+            const previous = window.GlobalStore?.voyageParams || window.__coreProVoyageParams || State;
+            const next = buildCanonicalVoyageParams(partial, previous);
+            window.__coreProVoyageParams = next;
+            if (window.GlobalStore) window.GlobalStore.voyageParams = next;
+            if (metadata.dispatch !== false) {
+                window.dispatchEvent(new CustomEvent('voyage-params-updated', {
+                    detail: {
+                        voyageParams: next,
+                        source: String(metadata.source || 'operational-store'),
+                        updatedAt: Date.now()
+                    }
+                }));
+            }
+            return next;
+        }
+        window.updateGlobalVoyageParams = updateGlobalVoyageParams;
+
         function readValidatedCargoOperationState() {
             const readPositive = (...values) => values
                 .map(Number)
@@ -15286,7 +15373,10 @@
             return normalizeActiveVoyageState({
                 cargoQuantity: readPositive(document.getElementById('cargo-qty')?.value, State.cargoQuantity, State.cargo),
                 cargoType,
+                cargoTypeCode: String(selectedCargoCode || State.cargoTypeCode || '').trim(),
                 cargoProduct: selectedProduct,
+                loadMethod: String(document.getElementById('metodo_carga')?.value || State.loadMethod || '').trim(),
+                dischargeMethod: String(document.getElementById('metodo_descarga_pod')?.value || State.dischargeMethod || '').trim(),
                 loadRate: readPositive(effectiveLoadRate, document.getElementById('rate-load')?.value, document.getElementById('ritmo_nominal_pol')?.value, State.loadRate),
                 dischargeRate: readPositive(effectiveDischargeRate, document.getElementById('rate-disch')?.value, document.getElementById('ritmo_nominal_pod')?.value, State.dischargeRate, State.dischRate)
             });
@@ -15410,6 +15500,10 @@
                         changed = true;
                     }
                 }
+                updateGlobalVoyageParams(State, {
+                    source: String(options.source || 'sea-charter-store'),
+                    dispatch: options.silent !== true
+                });
                 if (!changed && !options.force) return;
                 if (options.silent) return;
                 if (this.isBatching) return;
@@ -19925,82 +20019,12 @@
         window.matchingStrictTechnicalFilter = false;
 
         window.getMatchingContractOperationalState = function(candidateState = null) {
-            const calculatedState = candidateState
-                || window.GlobalStore?.calculatedState
-                || window.CalculatedState
-                || {};
-            const matchingRequest = calculatedState.matchingRequest
-                || window.GlobalStore?.matchingRequest
-                || window.matchingRequest
-                || {};
-            const liveCargoState = typeof readValidatedCargoOperationState === 'function'
-                ? readValidatedCargoOperationState()
-                : {};
-            const storeState = window.SeaCharterStore?.getState?.() || {};
-            const globalState = typeof State !== 'undefined' && State ? State : {};
-            const firstPositiveNumber = (...values) => values
-                .map(Number)
-                .find(value => Number.isFinite(value) && value > 0) || 0;
-            const firstText = (...values) => values
-                .map(value => String(value || '').trim())
-                .find(Boolean) || '';
+            const voyageParams = getGlobalVoyageParams();
             return {
-                cargoType: firstText(
-                    liveCargoState.cargoType,
-                    liveCargoState.cargoProduct,
-                    globalState.cargoProduct,
-                    globalState.cargoType,
-                    storeState.cargoType,
-                    storeState.cargoProduct,
-                    calculatedState.cargo?.typeLabel,
-                    calculatedState.cargo?.cargoDescription,
-                    matchingRequest.cargo?.cargoDescription,
-                    matchingRequest.cargo?.specification,
-                    storeState.cargoTypeManual,
-                    globalState.cargoTypeManual
-                ),
-                quantityMt: firstPositiveNumber(
-                    liveCargoState.cargoQuantity,
-                    liveCargoState.cargoQty,
-                    liveCargoState.cargo,
-                    document.getElementById('cargo-qty')?.value,
-                    storeState.cargoQuantity,
-                    storeState.cargoQty,
-                    storeState.cargo,
-                    calculatedState.cargo?.quantity,
-                    calculatedState.cargo?.cargoQuantity,
-                    calculatedState.cargoQuantity,
-                    calculatedState.cargoQty,
-                    calculatedState.targetCargoMT,
-                    matchingRequest.cargo?.quantity,
-                    matchingRequest.cargo?.cargoQuantity,
-                    globalState.cargoQty,
-                    globalState.cargo,
-                    document.getElementById('match-quantity')?.value
-                ),
-                loadRateMt: firstPositiveNumber(
-                    liveCargoState.loadRate,
-                    document.getElementById('rate-load')?.value,
-                    document.getElementById('ritmo_nominal_pol')?.value,
-                    storeState.loadRate,
-                    calculatedState.cargo?.loadRate,
-                    calculatedState.loadRate,
-                    matchingRequest.cargo?.loadRate,
-                    globalState.loadRate
-                ),
-                dischargeRateMt: firstPositiveNumber(
-                    liveCargoState.dischargeRate,
-                    liveCargoState.dischRate,
-                    document.getElementById('rate-disch')?.value,
-                    document.getElementById('ritmo_nominal_pod')?.value,
-                    storeState.dischargeRate,
-                    storeState.dischRate,
-                    calculatedState.cargo?.dischargeRate,
-                    calculatedState.dischargeRate,
-                    matchingRequest.cargo?.dischargeRate,
-                    globalState.dischargeRate,
-                    globalState.dischRate
-                )
+                cargoType: voyageParams.cargoType,
+                quantityMt: Number(voyageParams.cargoQuantity) || 0,
+                loadRateMt: Number(voyageParams.loadRate) || 0,
+                dischargeRateMt: Number(voyageParams.dischargeRate) || 0
             };
         };
 
@@ -21240,6 +21264,7 @@
             const isAppending = executionOptions.append === true;
             if (executionToken !== MATCHING_MANUAL_EXECUTION_TOKEN && executionToken !== MATCHING_AUTO_EXECUTION_TOKEN) return false;
             window.syncMatchingViewFromGlobalOperationalState?.({ persist: true });
+            const voyageParams = getGlobalVoyageParams();
             const matchingRequest = typeof window.fetchMatchingRequestFromGlobalStore === 'function'
                 ? window.fetchMatchingRequestFromGlobalStore(
                     window.GlobalStore?.calculatedState || window.CalculatedState,
@@ -21248,7 +21273,17 @@
                 : (window.GlobalStore?.matchingRequest || window.matchingRequest || null);
             const globalCalculationState = window.GlobalStore?.calculatedState || window.CalculatedState || {};
             const globalCargoState = globalCalculationState?.cargo || {};
-            const effectiveRouteOverride = matchingRequest?.route || routeOverride || null;
+            const effectiveRouteOverride = {
+                pol: voyageParams.pol,
+                pod: voyageParams.pod,
+                laydays: voyageParams.laydays,
+                cancelling: voyageParams.cancelling,
+                laycan: voyageParams.laydays,
+                pol_coordinates: voyageParams.polCoordinates,
+                pod_coordinates: voyageParams.podCoordinates,
+                lat: { pol: voyageParams.polCoordinates?.lat ?? null, pod: voyageParams.podCoordinates?.lat ?? null },
+                lon: { pol: voyageParams.polCoordinates?.lon ?? null, pod: voyageParams.podCoordinates?.lon ?? null }
+            };
             if (typeof window.enforceLocalOnlyMatchingMode === 'function') {
                 const preserveSynchronization = Boolean(
                     matchingRequest
@@ -21268,47 +21303,18 @@
                 ? window.GlobalStore.selectedTaxonomies.slice()
                 : (typeof getSelectedFleetTaxonomies === 'function' ? getSelectedFleetTaxonomies() : []);
             const matchingCargoType = String(
-                matchingRequest?.cargo?.cargoCode
-                || matchingRequest?.cargo?.typeId
-                || globalCargoState?.cargoCode
-                || globalCargoState?.typeId
-                || window.SeaCharterStore?.getState?.()?.cargoTypeCode
-                || (typeof State !== 'undefined' ? State.cargoTypeCode || State.cargoType : '')
-                || document.getElementById('match-cargo-type')?.value
+                voyageParams.cargoTypeCode
             ).trim();
-            const matchingQuantity = Number(
-                matchingRequest?.cargo?.quantity
-                || matchingRequest?.cargo?.cargoQuantity
-                || globalCargoState?.quantity
-                || globalCargoState?.cargoQuantity
-                || window.SeaCharterStore?.getState?.()?.cargoQty
-                || (typeof State !== 'undefined' ? State.cargoQty : 0)
-                || document.getElementById('match-quantity')?.value
-            );
+            const matchingQuantity = Number(voyageParams.cargoQuantity);
             window.GlobalStore?.setTargetCargoDwt?.(matchingQuantity, { source: 'matching-execution' });
             const matchingLoadPort = String(
-                effectiveRouteOverride?.pol
-                || document.getElementById('match-load-port')?.value
-                || globalCalculationState?.route?.pol
-                || window.GlobalStore?.pol
-                || ''
+                voyageParams.pol
             ).trim();
             const matchingUnloadPort = String(
-                effectiveRouteOverride?.pod
-                || document.getElementById('match-unload-port')?.value
-                || globalCalculationState?.route?.pod
-                || window.GlobalStore?.pod
-                || ''
+                voyageParams.pod
             ).trim();
             const matchingLaycan = String(
-                effectiveRouteOverride?.laydays
-                || effectiveRouteOverride?.laycan
-                || matchingRequest?.laycan?.laydays
-                || matchingRequest?.laycan?.start
-                || globalCalculationState?.route?.laycan
-                || window.SeaCharterStore?.getState?.()?.laycanDate
-                || document.getElementById('match-laycan-start')?.value
-                || ''
+                voyageParams.laydays
             ).trim();
             if (
                 selectedVesselTaxonomies.length === 0
@@ -21537,10 +21543,10 @@
                     || cargoTaxonomyItem?.label
                     || 'Otros'
                 ).trim();
-                const todayIso = new Date().toISOString().slice(0, 10);
-                const fallbackLaycanEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-                const laycanStart = String(effectiveRouteOverride?.laycan || document.getElementById('match-laycan-start').value || todayIso);
-                const laycanEnd = document.getElementById('match-laycan-end').value || fallbackLaycanEnd;
+                const laycanStart = String(voyageParams.laydays || '');
+                const laycanEnd = String(voyageParams.cancelling || '');
+                const loadRate = Number(voyageParams.loadRate);
+                const dischargeRate = Number(voyageParams.dischargeRate);
                 const maxDraft = parseFloat(document.getElementById('match-max-draft').value) || 12.5;
                 const maxLoa = parseFloat(document.getElementById('match-max-loa').value) || 200;
                 const loadMethod = String(matchingRequest?.cargo?.loadMethod || globalCargoState?.loadMethod || document.getElementById('metodo_carga')?.value || '').trim();
@@ -21604,6 +21610,8 @@
                         requiredVolumeCbm,
                         laycanStart,
                         laycanEnd,
+                        loadRate,
+                        dischargeRate,
                         maxDraft, maxLoa, gearedRequired, grabRequired, loadMethod, dischargeMethod,
                         requiredGrabCapacityCbm, requiredCraneSwlMt, freightRate, lumpsumFreight
                     },
@@ -23201,18 +23209,14 @@
         window.clearMatchingCandidateState = clearMatchingCandidateState;
 
         function syncMatchingRouteSummary(calculatedState = null) {
-            const storeRoute = window.SeaCharterStore?.getState?.() || {};
-            const route = getActiveMatchingCalculationRoute(calculatedState) || (
-                storeRoute.pol && storeRoute.pod
-                    ? {
-                        pol: String(storeRoute.pol).trim(),
-                        pod: String(storeRoute.pod).trim(),
-                        laydays: String(storeRoute.laydays || storeRoute.laycan?.laydays || storeRoute.laycanDate || '').trim(),
-                        cancelling: String(storeRoute.cancelling || storeRoute.laycan?.cancelling || storeRoute.cancellingDate || '').trim(),
-                        laycan: String(storeRoute.laydays || storeRoute.laycan?.laydays || storeRoute.laycanDate || '').trim()
-                    }
-                    : null
-            );
+            const voyageParams = getGlobalVoyageParams();
+            const route = voyageParams.pol && voyageParams.pod ? {
+                pol: voyageParams.pol,
+                pod: voyageParams.pod,
+                laydays: voyageParams.laydays,
+                cancelling: voyageParams.cancelling,
+                laycan: voyageParams.laydays
+            } : null;
             const operation = window.getMatchingContractOperationalState?.(calculatedState) || {};
             const badge = document.getElementById('matching-route-sync-badge');
             const laycanText = document.getElementById('matching-laycan-status-text');
@@ -23267,6 +23271,15 @@
             return true;
         }
         window.syncMatchingRouteSummary = syncMatchingRouteSummary;
+
+        window.addEventListener('voyage-params-updated', (event) => {
+            const voyageParams = event.detail?.voyageParams || getGlobalVoyageParams();
+            setInputValue('match-laycan-start', voyageParams.laydays);
+            setInputValue('match-laycan-end', voyageParams.cancelling);
+            setInputValue('match-quantity', voyageParams.cargoQuantity);
+            setInputValue('match-cargo-type', voyageParams.cargoTypeCode);
+            syncMatchingRouteSummary();
+        });
 
         function requireActiveMatchingRoute(calculatedState = null, options = {}) {
             const activeState = getActiveMatchingCalculationState(calculatedState);
@@ -23404,9 +23417,48 @@
         function persistMatchingRequest(request) {
             if (!request || typeof request !== 'object') return null;
             const session = getPipelineSessionContext();
+            const requestRoute = request.route || {};
+            const requestCargo = request.cargo || {};
+            const voyageParams = updateGlobalVoyageParams({
+                ...requestRoute,
+                polCoordinates: request.pol_coordinates || requestRoute.pol_coordinates,
+                podCoordinates: request.pod_coordinates || requestRoute.pod_coordinates,
+                laycan: request.laycan,
+                laydays: request.laycan?.laydays || request.laycan?.start || requestRoute.laydays || requestRoute.laycan,
+                cancelling: request.laycan?.cancelling || request.laycan?.end || requestRoute.cancelling,
+                cargoTypeCode: requestCargo.cargoCode || requestCargo.typeId || requestCargo.type,
+                cargoType: requestCargo.cargoDescription || requestCargo.specification || requestCargo.typeLabel,
+                cargoQuantity: requestCargo.quantity ?? requestCargo.cargoQuantity,
+                loadRate: requestCargo.loadRate,
+                dischargeRate: requestCargo.dischargeRate,
+                loadMethod: requestCargo.loadMethod,
+                dischargeMethod: requestCargo.dischargeMethod,
+                cargo: requestCargo
+            }, { source: 'matching-request', dispatch: false });
+            const canonicalRoute = {
+                ...requestRoute,
+                pol: voyageParams.pol,
+                pod: voyageParams.pod,
+                laydays: voyageParams.laydays,
+                cancelling: voyageParams.cancelling,
+                laycan: voyageParams.laydays,
+                pol_coordinates: voyageParams.polCoordinates,
+                pod_coordinates: voyageParams.podCoordinates,
+                lat: { pol: voyageParams.polCoordinates?.lat ?? null, pod: voyageParams.podCoordinates?.lat ?? null },
+                lon: { pol: voyageParams.polCoordinates?.lon ?? null, pod: voyageParams.podCoordinates?.lon ?? null }
+            };
             const matchingRequest = {
                 ...request,
-                cargo: normalizeMatchingCargoPayload(request.cargo),
+                route: canonicalRoute,
+                pol_coordinates: voyageParams.polCoordinates,
+                pod_coordinates: voyageParams.podCoordinates,
+                laycan: { ...voyageParams.laycan },
+                cargo: normalizeMatchingCargoPayload({
+                    ...requestCargo,
+                    ...voyageParams.cargo,
+                    loadMethod: voyageParams.loadMethod || requestCargo.loadMethod || '',
+                    dischargeMethod: voyageParams.dischargeMethod || requestCargo.dischargeMethod || ''
+                }),
                 endpoint: String(request.endpoint || '/api/matching-local'),
                 sessionId: session.sessionId,
                 sessionStartedAt: session.startedAt,
@@ -25339,27 +25391,29 @@
         function syncMatchingViewFromGlobalOperationalState(options = {}) {
             const routeState = readRouteStateFromCalculator();
             const cargoState = readValidatedCargoOperationState();
-            const synchronizedState = normalizeActiveVoyageState({
+            SeaCharterStore.set({
                 ...routeState,
                 ...cargoState
-            });
-            SeaCharterStore.set(synchronizedState, { force: true });
+            }, { force: true, source: 'matching-view-sync' });
+            const synchronizedState = getGlobalVoyageParams();
             setInputValue('match-laycan-start', synchronizedState.laydays);
             setInputValue('match-laycan-end', synchronizedState.cancelling);
             setInputValue('match-quantity', synchronizedState.cargoQuantity);
             syncCalculatorAndMatching('calculator', { force: true });
 
-            const synchronizedRoute = getMatchingExecutionRouteOverride({
-                ...routeState,
+            const synchronizedRoute = {
+                pol: synchronizedState.pol,
+                pod: synchronizedState.pod,
                 laydays: synchronizedState.laydays,
                 cancelling: synchronizedState.cancelling,
-                laycan: synchronizedState.laydays
-            });
+                laycan: synchronizedState.laydays,
+                pol_coordinates: synchronizedState.polCoordinates,
+                pod_coordinates: synchronizedState.podCoordinates,
+                lat: { pol: synchronizedState.polCoordinates?.lat ?? null, pod: synchronizedState.podCoordinates?.lat ?? null },
+                lon: { pol: synchronizedState.polCoordinates?.lon ?? null, pod: synchronizedState.podCoordinates?.lon ?? null }
+            };
             const currentMatchingRequest = window.GlobalStore?.matchingRequest || window.matchingRequest || {};
-            const cargoTypeId = document.getElementById('cargo-type-manual')?.value
-                || window.CargoTypeSelector?.readSelectedId?.()
-                || currentMatchingRequest.cargo?.typeId
-                || '';
+            const cargoTypeId = synchronizedState.cargoTypeCode;
             const matchingRequest = options.persist === false
                 ? currentMatchingRequest
                 : window.persistMatchingRequest?.({
@@ -25381,7 +25435,9 @@
                         quantity: synchronizedState.cargoQuantity,
                         cargoQuantity: synchronizedState.cargoQuantity,
                         loadRate: synchronizedState.loadRate,
-                        dischargeRate: synchronizedState.dischargeRate
+                        dischargeRate: synchronizedState.dischargeRate,
+                        loadMethod: synchronizedState.loadMethod || '',
+                        dischargeMethod: synchronizedState.dischargeMethod || ''
                     }
                 });
             syncMatchingRouteSummary({
@@ -31192,20 +31248,19 @@
         }
 
         function buildMatchingRequest(calculation = {}) {
-            const route = calculation.route || (typeof window.getMatchingExecutionRouteOverride === 'function'
-                ? window.getMatchingExecutionRouteOverride()
-                : {});
+            const voyageParams = getGlobalVoyageParams();
+            const route = {
+                pol: voyageParams.pol,
+                pod: voyageParams.pod,
+                laydays: voyageParams.laydays,
+                cancelling: voyageParams.cancelling,
+                laycan: voyageParams.laydays,
+                pol_coordinates: voyageParams.polCoordinates,
+                pod_coordinates: voyageParams.podCoordinates,
+                lat: { pol: voyageParams.polCoordinates?.lat ?? null, pod: voyageParams.podCoordinates?.lat ?? null },
+                lon: { pol: voyageParams.polCoordinates?.lon ?? null, pod: voyageParams.podCoordinates?.lon ?? null }
+            };
             const state = typeof State !== 'undefined' && State ? State : {};
-            const voyageState = normalizeActiveVoyageState({
-                ...(calculation.cargo || {}),
-                cargoQuantity: calculation.cargo?.cargoQuantity ?? calculation.cargo?.quantity,
-                cargoType: calculation.cargo?.typeLabel ?? calculation.cargo?.cargoDescription,
-                laycan: calculation.laycan,
-                laydays: calculation.laycan?.laydays ?? calculation.laycan?.start ?? route?.laydays ?? route?.laycan,
-                cancelling: calculation.laycan?.cancelling ?? calculation.laycan?.end ?? route?.cancelling,
-                loadRate: calculation.cargo?.loadRate,
-                dischargeRate: calculation.cargo?.dischargeRate
-            });
             const readNumber = id => {
                 const value = Number(document.getElementById(id)?.value);
                 return Number.isFinite(value) ? value : 0;
@@ -31223,38 +31278,38 @@
                 route: {
                     pol: String(route?.pol || '').trim(),
                     pod: String(route?.pod || '').trim(),
-                    laydays: voyageState.laydays,
-                    cancelling: voyageState.cancelling,
-                    laycan: voyageState.laydays,
+                    laydays: voyageParams.laydays,
+                    cancelling: voyageParams.cancelling,
+                    laycan: voyageParams.laydays,
                     pol_coordinates: { lat: Number(polCoordinates.lat), lon: Number(polCoordinates.lon) },
                     pod_coordinates: { lat: Number(podCoordinates.lat), lon: Number(podCoordinates.lon) },
                     lat: { pol: Number(polCoordinates.lat), pod: Number(podCoordinates.lat) },
                     lon: { pol: Number(polCoordinates.lon), pod: Number(podCoordinates.lon) }
                 },
                 laycan: {
-                    laydays: voyageState.laydays,
-                    cancelling: voyageState.cancelling,
-                    start: voyageState.laydays,
-                    end: voyageState.cancelling
+                    laydays: voyageParams.laydays,
+                    cancelling: voyageParams.cancelling,
+                    start: voyageParams.laydays,
+                    end: voyageParams.cancelling
                 },
                 cargo: {
-                    cargoCode: String(document.getElementById('cargo-type-manual')?.value || window.CargoTypeSelector?.readSelectedId?.() || '100'),
-                    cargoDescription: String(window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value) || 'Otros'),
-                    type: String(document.getElementById('cargo-type-manual')?.value || window.CargoTypeSelector?.readSelectedId?.() || '100'),
-                    specification: String(window.getCargoTaxonomyLabel?.(document.getElementById('cargo-type-manual')?.value) || 'Otros'),
-                    typeId: String(document.getElementById('cargo-type-manual')?.value || window.CargoTypeSelector?.readSelectedId?.() || '100'),
-                    quantity: voyageState.cargoQuantity || readNumber('cargo-qty'),
-                    cargoQuantity: voyageState.cargoQuantity || readNumber('cargo-qty'),
+                    cargoCode: voyageParams.cargoTypeCode,
+                    cargoDescription: voyageParams.cargoType,
+                    type: voyageParams.cargoTypeCode,
+                    specification: voyageParams.cargoType,
+                    typeId: voyageParams.cargoTypeCode,
+                    quantity: voyageParams.cargoQuantity,
+                    cargoQuantity: voyageParams.cargoQuantity,
                     stowageFactor: readNumber('cargo-sf'),
-                    requiredVolumeCbm: (voyageState.cargoQuantity || readNumber('cargo-qty')) * readNumber('cargo-sf'),
-                    loadMethod: String(document.getElementById('metodo_carga')?.value || ''),
-                    dischargeMethod: String(document.getElementById('metodo_descarga_pod')?.value || document.getElementById('metodo_carga')?.value || ''),
+                    requiredVolumeCbm: voyageParams.cargoQuantity * readNumber('cargo-sf'),
+                    loadMethod: voyageParams.loadMethod || '',
+                    dischargeMethod: voyageParams.dischargeMethod || '',
                     gearedRequired: document.getElementById('match-geared-required')?.checked === true || metodoRequiereGruasBuque(document.getElementById('metodo_carga')?.value) || metodoRequiereGruasBuque(document.getElementById('metodo_descarga_pod')?.value),
                     grabRequired: document.getElementById('metodo_carga')?.value === 'cuchara_grab' || document.getElementById('metodo_descarga_pod')?.value === 'cuchara_grab',
                     requiredGrabCapacityCbm: readNumber('grab-capacity-cbm'),
                     requiredCraneSwlMt: readNumber('crane-swl-mt'),
-                    loadRate: voyageState.loadRate || readNumber('rate-load') || readNumber('ritmo_nominal_pol'),
-                    dischargeRate: voyageState.dischargeRate || readNumber('rate-disch') || readNumber('ritmo_nominal_pod')
+                    loadRate: voyageParams.loadRate,
+                    dischargeRate: voyageParams.dischargeRate
                 },
                 freight: {
                     owner: Number(calculation.freight?.owner) || readNumber('freight-rate'),
@@ -47306,14 +47361,56 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
         window.renderAisNearbyCount = renderAisNearbyCount;
 
+        function parseCommercialVesselCoordinate(value) {
+            if (value === null || value === undefined || value === '') return null;
+            const parsed = parseFloat(typeof value === 'string' ? value.replace(',', '.').trim() : value);
+            return Number.isFinite(parsed) ? parsed : null;
+        }
+
+        function readCommercialVesselCoordinate(scopes, keys) {
+            for (const scope of scopes) {
+                if (!scope || typeof scope !== 'object') continue;
+                for (const key of keys) {
+                    const coordinate = parseCommercialVesselCoordinate(scope[key]);
+                    if (coordinate !== null) return coordinate;
+                }
+            }
+            return null;
+        }
+
         function preserveCommercialVesselCoordinates(vessel) {
             if (!vessel || typeof vessel !== 'object') return null;
             const normalized = typeof window.normalizeCommercialVesselIdentity === 'function'
                 ? window.normalizeCommercialVesselIdentity(vessel)
                 : { ...vessel };
-            const latitude = Number(normalized.originalLatitude ?? normalized.AIS_Live_Lat ?? normalized.lat ?? normalized.latitude ?? normalized.LAT ?? normalized.MetaData?.latitude ?? normalized.MetaData?.lat);
-            const longitude = Number(normalized.originalLongitude ?? normalized.AIS_Live_Lon ?? normalized.lng ?? normalized.lon ?? normalized.longitude ?? normalized.LONG ?? normalized.LON ?? normalized.MetaData?.longitude ?? normalized.MetaData?.lon ?? normalized.MetaData?.lng);
-            if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+            const sourcePayload = normalized.source_payload && typeof normalized.source_payload === 'object'
+                ? normalized.source_payload
+                : (normalized.sourcePayload && typeof normalized.sourcePayload === 'object' ? normalized.sourcePayload : null);
+            const scopes = [
+                normalized,
+                normalized.vessel,
+                normalized.ais,
+                normalized.AIS,
+                normalized.PositionReport,
+                normalized.position,
+                normalized.MetaData,
+                normalized.metadata,
+                sourcePayload,
+                sourcePayload?.vessel,
+                sourcePayload?.ais,
+                sourcePayload?.PositionReport,
+                sourcePayload?.position,
+                sourcePayload?.MetaData,
+                sourcePayload?.metadata
+            ].filter(Boolean);
+            const latitude = readCommercialVesselCoordinate(scopes, [
+                'originalLatitude', 'AIS_Live_Lat', 'lat', 'latitude', 'LAT', 'LATITUDE', 'Latitude'
+            ]);
+            const longitude = readCommercialVesselCoordinate(scopes, [
+                'originalLongitude', 'AIS_Live_Lon', 'lon', 'lng', 'longitude', 'LON', 'LONG', 'LONGITUDE', 'Longitude'
+            ]);
+            if (Number.isFinite(latitude) && latitude >= -90 && latitude <= 90
+                && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180) {
                 normalized.lat = latitude;
                 normalized.lng = longitude;
                 normalized.lon = longitude;
@@ -47351,6 +47448,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             auditVesselsSource: '',
             calculatedState: null,
             matchingRequest: null,
+            voyageParams: getGlobalVoyageParams(),
             geopoliticalRoute: null,
             radarState: null,
             calculationSessionId: '',
@@ -47371,6 +47469,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 	            dueDiligenceVessels: [],
 	            discardedVesselImos: [],
 	            discardedVesselMmsis: [],
+            setVoyageParams(partial = {}, metadata = {}) {
+                return updateGlobalVoyageParams(partial, {
+                    source: String(metadata.source || 'global-store')
+                });
+            },
+            getVoyageParams() {
+                return buildCanonicalVoyageParams(this.voyageParams, this.voyageParams);
+            },
             setMatchingFleet(vessels, metadata = {}) {
                 const source = String(metadata.source || 'matching-ui');
                 const nextVessels = Array.isArray(vessels) ? vessels.slice() : [];
@@ -49533,8 +49639,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     ? window.readRealVesselSpeed(vessel)
                     : Number.NaN;
 	                const feedVesselClass = readDensityTechnicalValue(vessel, [
-                    'vesselClass', 'vessel_class', 'vesselType', 'vessel_type',
-                    'shipType', 'ship_type', 'ShipType', 'type'
+                    'vessel_type', 'clase', 'type', 'vesselClass', 'vessel_class',
+                    'vesselType', 'shipType', 'ship_type', 'ShipType'
                 ]) || '';
 	                const vesselClass = window.VesselMasterClassRegistry?.translateAisVesselClass?.(feedVesselClass)
 	                    || feedVesselClass
@@ -49544,12 +49650,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const navigationStatus = typeof window.inferSpatialVesselStatus === 'function'
                     ? window.inferSpatialVesselStatus(vessel, getDensityReferencePortCoordinates())
                     : (vessel.statusLabel || vessel.navigationStatus || vessel.navigationalStatus || vessel.NavigationalStatus || 'Estado N/D');
-	                const grossTonnage = readDensityPositiveNumber(vessel, ['grossTonnage', 'gross_tonnage', 'gt', 'GT']);
+	                const grossTonnage = readDensityPositiveNumber(vessel, ['gross_tonnage', 'gt', 'grossTonnage', 'GT']);
 	                const dwt = readDensityPositiveNumber(vessel, ['dwt', 'DWT', 'deadweight']);
-	                const loaMeters = readDensityPositiveNumber(vessel, ['loaMeters', 'loa_meters', 'loa', 'LOA', 'lengthOverall', 'length_overall', 'length']);
+	                const loaMeters = readDensityPositiveNumber(vessel, ['loa_meters', 'loa', 'loaMeters', 'LOA', 'lengthOverall', 'length_overall', 'length']);
 	                const flag = readDensityTechnicalValue(vessel, ['flag', 'Flag', 'bandera', 'country'])
 	                    || '-';
-	                const yearBuilt = readDensityTechnicalValue(vessel, ['yearBuilt', 'year_built', 'builtYear', 'built_year'])
+	                const yearBuilt = readDensityTechnicalValue(vessel, ['year_built', 'year', 'yearBuilt', 'builtYear', 'built_year'])
 	                    || '-';
                 const dueDiligencePayload = buildDensityDueDiligencePayload(vessel, vesselName, imo, latitude, longitude);
                 const hasDueDiligenceIdentity = window.hasDueDiligenceIdentity?.(vessel) === true;
@@ -61406,6 +61512,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     syncGlobalStateToForms();
                     scheduleReactiveEngine();
                 });
+            });
+            ['cargo-qty', 'cargo-type', 'cargo-type-manual', 'cargo-product', 'rate-load', 'rate-disch', 'ritmo_nominal_pol', 'ritmo_nominal_pod', 'metodo_carga', 'metodo_descarga_pod'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const syncCargoVoyageParams = () => {
+                    SeaCharterStore.set(readValidatedCargoOperationState(), {
+                        force: true,
+                        source: `calculator-${id}`
+                    });
+                };
+                el.addEventListener('input', syncCargoVoyageParams);
+                el.addEventListener('change', syncCargoVoyageParams);
             });
             ['delta-historico', 'factor-clima', 't-fondeo'].forEach((id) => {
                 const el = document.getElementById(id);
