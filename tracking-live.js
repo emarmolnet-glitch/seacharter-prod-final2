@@ -3,6 +3,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import DashboardExecutive from './src/components/DashboardExecutive.jsx';
 import { trackingStore } from './src/stores/tracking-store.js';
+import { normalizeAisDestination } from './src/tracking-destination.mjs';
 
 const TRACKING_POLL_INTERVAL = 30_000;
 const TRACKING_AIS_POLL_INTERVAL = 30_000;
@@ -583,24 +584,86 @@ function getInputPort(field) {
     return point;
 }
 
-async function calculateTrackingRoute() {
+async function resolveTrackingPort(value) {
+    const name = String(value || '').trim();
+    if (!name) return null;
+    const localPort = typeof window.findPortData === 'function' ? window.findPortData(name) : null;
+    const localPoint = normalizeMapPoint(localPort && { ...localPort, name });
+    if (localPoint) return localPoint;
+    if (typeof window.searchNominatimPortSuggestions !== 'function') return null;
+    const suggestions = await window.searchNominatimPortSuggestions(name, { limit: 1 });
+    const result = suggestions?.[0];
+    return normalizeMapPoint(result && {
+        name: result.label || name,
+        lat: result.lat,
+        lon: result.lon,
+    });
+}
+
+async function applyBasicAisDestination(rawDestination) {
+    if (hasTrackingVoyageData()) return null;
+    const destination = normalizeAisDestination(rawDestination);
+    if (!destination) return null;
+    const podInput = document.getElementById('tracking-input-pod');
+    if (!podInput) return null;
+    podInput.value = destination.name;
+    if (destination.locode) podInput.dataset.locode = destination.locode;
+    else delete podInput.dataset.locode;
+    const point = await resolveTrackingPort(destination.searchQuery);
+    if (!point) return null;
+    setInputPort('tracking-input-pod', { ...point, name: destination.name });
+    if (destination.locode) podInput.dataset.locode = destination.locode;
+    return { ...point, name: destination.name, locode: destination.locode };
+}
+
+async function calculateEphemeralTrackingRoute(origin, destination, options = {}) {
+    const response = await fetch('/api/route', {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            origin: { name: origin.name, lat: origin.lat, lon: origin.lng },
+            destination: { name: destination.name, lat: destination.lat, lon: destination.lng },
+        }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.success || !Array.isArray(payload.coordinates)) {
+        throw new Error(payload.error || 'No fue posible calcular la ruta marítima efímera.');
+    }
+    const result = {
+        portBallast: '',
+        pol: origin.name,
+        pod: destination.name,
+        coordinates: { ballast: null, pol: origin, pod: destination },
+        routes: { ballast: null, laden: { ...payload, distance: Number(payload.distance || 0) } },
+        distBallast: 0,
+        distLaden: Number(payload.distance || 0),
+        totalMiles: Number(payload.distance || 0),
+    };
+    trackingState.routes = result.routes;
+    trackingState.routeDistance = result.totalMiles;
+    window.GlobalFleetGlobe?.setRouteResult?.(result, TRACKING_MAP_KEY, { focus: options.focus !== false, persist: false });
+    document.getElementById('tracking-map-route-label').textContent = `${origin.name} → ${destination.name}`;
+    document.getElementById('tracking-map-route-distance').textContent = `${formatTrackingNumber(result.totalMiles, { maximumFractionDigits: 0 })} NM · ruta efímera`;
+    renderManualTrackingState(result.totalMiles);
+    return result;
+}
+
+async function calculateTrackingRoute(options = {}) {
     ensureTrackingMap();
     const context = getManualTrackingContext();
     const message = document.getElementById('tracking-input-message');
     const button = document.getElementById('tracking-calculate-route');
-    if (!hasTrackingVoyageData()) {
-        clearTrackingMapVisuals();
-        renderManualTrackingState();
-        message.textContent = 'No hay un viaje activo en Neon para calcular la ruta.';
-        message.dataset.state = 'warning';
-        return;
-    }
-    if (!context.pol || !context.pod) {
-        message.textContent = 'Introduce Puerto de Carga (POL) y Puerto de Descarga (POD).';
+    const vesselPosition = getBasicVesselPosition();
+    const pod = getInputPort('pod') || await resolveTrackingPort(context.pod);
+    const useEphemeralRoute = !hasTrackingVoyageData() && vesselPosition && pod;
+    if (!useEphemeralRoute && (!context.pol || !context.pod)) {
+        message.textContent = vesselPosition
+            ? 'Introduce o resuelve el Puerto de Descarga (POD).'
+            : 'Introduce Puerto de Carga (POL) y Puerto de Descarga (POD).';
         message.dataset.state = 'error';
         return;
     }
-    if (typeof window.calculateVoyageRouteService !== 'function') {
+    if (!useEphemeralRoute && typeof window.calculateVoyageRouteService !== 'function') {
         message.textContent = 'El motor geográfico todavía no está disponible. Vuelve a intentarlo en unos segundos.';
         message.dataset.state = 'warning';
         return;
@@ -609,6 +672,14 @@ async function calculateTrackingRoute() {
     message.textContent = 'Calculando corredores marítimos…';
     message.dataset.state = 'loading';
     try {
+        if (useEphemeralRoute) {
+            const vesselName = trackingState.basicVessel?.name || context.vessel || 'Posición actual del buque';
+            const origin = { ...vesselPosition, name: vesselName };
+            const result = await calculateEphemeralTrackingRoute(origin, pod, options);
+            message.textContent = `POD resuelto y ruta efímera dibujada hasta ${result.pod}.`;
+            message.dataset.state = 'success';
+            return result;
+        }
         const result = await window.calculateVoyageRouteService({
             portBallast: context.ballast,
             pol: context.pol,
@@ -628,8 +699,9 @@ async function calculateTrackingRoute() {
         document.getElementById('tracking-map-route-label').textContent = result.pol && result.pod ? `${result.pol} → ${result.pod}` : '';
         document.getElementById('tracking-map-route-distance').textContent = `${formatTrackingNumber(totalDistance, { maximumFractionDigits: 0 })} NM · lastre + laden`;
         if (!trackingState.data) renderManualTrackingState(totalDistance);
-        message.textContent = trackingState.data ? 'Ruta actualizada; la analítica contractual continúa vinculada.' : 'Ruta del viaje activo calculada con el motor geográfico de MAPA.';
+        message.textContent = trackingState.data ? 'Ruta actualizada; la analítica contractual continúa vinculada.' : 'Ruta manual calculada con el motor geográfico de MAPA.';
         message.dataset.state = 'success';
+        return result;
     } catch (error) {
         message.textContent = error?.message || 'Error al calcular la ruta.';
         message.dataset.state = 'error';
@@ -855,12 +927,18 @@ async function loadTrackingVessel(rawQuery, silent = false) {
         if (!trackingState.data) {
             setTrackingFlowMode('basic');
             renderManualTrackingState();
+            const destinationPort = await applyBasicAisDestination(payload.vessel.destination);
+            if (destinationPort && getBasicVesselPosition()) {
+                await calculateTrackingRoute({ focus: !silent });
+            }
         } else {
             renderBasicVesselCard();
         }
         if (!silent) {
             const message = document.getElementById('tracking-input-message');
-            message.textContent = payload.vessel.destination
+            if (trackingState.routeDistance !== null && payload.vessel.destination && !trackingState.data) {
+                message.textContent = `Buque localizado en OpenShips · POD ${document.getElementById('tracking-input-pod')?.value || payload.vessel.destination} y ruta efímera actualizados.`;
+            } else message.textContent = payload.vessel.destination
                 ? `Buque localizado en OpenShips · destino AIS ${payload.vessel.destination}.`
                 : 'Buque localizado en OpenShips y centrado en el mapa.';
             message.dataset.state = 'success';

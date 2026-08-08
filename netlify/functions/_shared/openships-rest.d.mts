@@ -4,6 +4,7 @@ export type OpenShipsFetchOptions = {
   env?: Record<string, string | undefined>;
   latitude: number;
   longitude: number;
+  radiusDegrees?: number;
   limit?: number;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
