@@ -453,7 +453,7 @@ test('Core PRO and Data Bridge share Globe.gl 2.46.1', () => {
   assert.ok(dataBridgeSource.includes('globe.gl@2.46.1/dist/globe.gl.min.js'));
   assert.ok(indexSource.includes('GlobalFleetGlobe.js'));
   assert.ok(dataBridgeSource.includes('GlobalFleetGlobe.js'));
-  assert.ok(globeSource.includes('window.Globe({ animateIn: false, waitForGlobeReady: true })(container)'));
+  assert.ok(globeSource.includes('window.Globe({ animateIn: false, waitForGlobeReady: false })(container)'));
   assert.ok(globeSource.includes('window.GlobalFleetGlobe = globalFleetGlobe'));
   assert.ok(dataBridgeSource.includes("window.GlobalFleetGlobe?.mount({ key: 'bridge'"));
   assert.doesNotMatch(indexSource, /deck\.gl|map_view\.js/);

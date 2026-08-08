@@ -22,6 +22,7 @@
     const BALLAST_PATH_COLOR = '#F59E0B';
     const EARTH_IMAGE_URL = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
     const EARTH_TOPOLOGY_URL = 'https://unpkg.com/three-globe/example/img/earth-topology.png';
+    const GLOBE_FALLBACK_COLOR = '#1a202c';
     const NESTED_KEYS = ['vesselData', 'vessel_data', 'source_payload', 'sourcePayload', 'ais', 'AIS', 'radar', 'radarData', 'radar_data', 'response', 'results', 'records', 'items', 'payload', 'data', 'vessel', 'ship', 'position', 'PositionReport', 'details', 'registry', 'staticData', 'static_data', 'metadata', 'MetaData'];
 
     function toFiniteNumber(...values) {
@@ -311,6 +312,16 @@
             width: Math.max(0, Math.round(bounds.width || container?.clientWidth || 0)),
             height: Math.max(0, Math.round(bounds.height || container?.clientHeight || 0))
         };
+    }
+
+    function createFallbackGlobeMaterial() {
+        const THREE = window.THREE;
+        if (!THREE || typeof THREE.MeshPhongMaterial !== 'function') return null;
+        return new THREE.MeshPhongMaterial({
+            color: GLOBE_FALLBACK_COLOR,
+            shininess: 6,
+            specular: '#123447'
+        });
     }
 
     function getCameraAltitude(view) {
@@ -1123,10 +1134,13 @@
         };
         views.set(key, view);
         try {
-            view.globe = window.Globe({ animateIn: false, waitForGlobeReady: true })(container)
+            const fallbackGlobeMaterial = createFallbackGlobeMaterial();
+            const globe = window.Globe({ animateIn: false, waitForGlobeReady: false })(container)
                 .width(size.width)
                 .height(size.height)
-                .backgroundColor('rgba(0, 0, 0, 0)')
+                .backgroundColor('rgba(0, 0, 0, 0)');
+            if (fallbackGlobeMaterial) globe.globeMaterial(fallbackGlobeMaterial);
+            view.globe = globe
                 .globeImageUrl(EARTH_IMAGE_URL)
                 .bumpImageUrl(EARTH_TOPOLOGY_URL)
                 .atmosphereColor('#39D7E8')
