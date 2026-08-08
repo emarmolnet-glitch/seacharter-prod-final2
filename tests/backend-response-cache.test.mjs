@@ -46,7 +46,7 @@ test('critical endpoint TTLs protect expensive vessel snapshots and routes', () 
 test('frontend rate controls preserve cacheable reads and debounce user-driven matching', () => {
   for (const source of [indexSource, distIndexSource]) {
     assert.match(source, /AIS_MATCHING_DEBOUNCE_MS = 600/);
-    assert.match(source, /DATA_BRIDGE_HTTP_POLL_INTERVAL_MS = 60_000|OPENSHIPS_RADAR_POLL_INTERVAL_MS = 120_000/);
+    assert.match(source, /DATA_BRIDGE_HTTP_POLL_INTERVAL_MS = 10_000|DATA_BRIDGE_HTTP_POLL_INTERVAL_MS = 60_000|OPENSHIPS_RADAR_POLL_INTERVAL_MS = 120_000/);
     assert.doesNotMatch(source, /const openShipsRequest = \{[^\n]*cache: 'no-store'/);
     assert.doesNotMatch(source, /const res = await fetch\(endpoint, \{ cache: 'no-store', headers: \{ Accept: 'application\/json' \} \}\)/);
     assert.doesNotMatch(source, /fetch\('\/api\/databridge-vessel-search', \{\s*method: 'POST',\s*cache: 'no-store'/);
