@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [indexSource, trackingSource, trackingStyles, globeSource, decisionsSource, dssEmptyStateSource, tailwindConfigSource] = await Promise.all([
+const [indexSource, trackingSource, trackingStyles, globeSource, decisionsSource, decisionSupportModuleSource, tailwindConfigSource] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../tracking-live.js', import.meta.url), 'utf8'),
   readFile(new URL('../calculator_view.css', import.meta.url), 'utf8'),
   readFile(new URL('../GlobalFleetGlobe.js', import.meta.url), 'utf8'),
   readFile(new URL('../decisiones.html', import.meta.url), 'utf8'),
-  readFile(new URL('../src/components/DSSEmptyState.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../src/DecisionSupportModule.js', import.meta.url), 'utf8'),
   readFile(new URL('../tailwind.config.js', import.meta.url), 'utf8'),
 ]);
 
@@ -29,17 +29,20 @@ test('navigation tracks the mounted module explicitly when Tracking opens and cl
 });
 
 test('Decisiones starts empty and waits for global voyage data', () => {
-  assert.match(indexSource, /id="summary-pol"[^>]*>—</);
-  assert.match(indexSource, /id="summary-pod"[^>]*>—</);
-  assert.match(indexSource, /id="summary-qty"[^>]*>0 MT</);
-  assert.match(indexSource, /id="dss-empty-state"[^>]*style="color: white !important;"/);
-  assert.match(indexSource, /src="\.\/src\/dss-empty-state-entry\.tsx"/);
+  assert.match(indexSource, /import\('\.\/src\/DecisionSupportModule\.js'\)/);
+  assert.match(indexSource, /if \(tabId === 'decisiones'\) \{\s*ensureDecisionSupportModule\(targetView\);/);
+  assert.doesNotMatch(indexSource, /src="\.\/src\/dss-empty-state-entry\.tsx"/);
+  assert.doesNotMatch(indexSource, /id="summary-pol"[^>]*>—</);
+  assert.match(decisionSupportModuleSource, /id="summary-pol"[^>]*>—</);
+  assert.match(decisionSupportModuleSource, /id="summary-pod"[^>]*>—</);
+  assert.match(decisionSupportModuleSource, /id="summary-qty"[^>]*>0 MT</);
+  assert.match(decisionSupportModuleSource, /id="dss-empty-state"[^>]*style="color: white !important;"/);
   assert.match(tailwindConfigSource, /["']\.\/index\.html["']/);
-  assert.match(dssEmptyStateSource, /className="[^"]*text-white[^"]*font-semibold[^"]*"/);
-  assert.match(dssEmptyStateSource, /className="[^"]*text-gray-300[^"]*"/);
-  assert.match(dssEmptyStateSource, /Esperando datos de ruta/);
-  assert.match(dssEmptyStateSource, /Define POL, POD y cantidad de carga/);
-  assert.match(dssEmptyStateSource, /setProperty\("color", "#ffffff", "important"\)/);
+  assert.match(decisionSupportModuleSource, /class="[^"]*text-white[^"]*font-semibold[^"]*"/);
+  assert.match(decisionSupportModuleSource, /class="[^"]*text-gray-300[^"]*"/);
+  assert.match(decisionSupportModuleSource, /Esperando datos de ruta/);
+  assert.match(decisionSupportModuleSource, /Define POL, POD y cantidad de carga/);
+  assert.match(decisionSupportModuleSource, /window\.syncDecisionesFromCalculator\(\)/);
   assert.match(indexSource, /pol: '',\s*pod: '',\s*cargoQty: 0/);
   assert.match(indexSource, /window\.SeaCharterStore\?\.getState\?\.\(\)/);
   assert.doesNotMatch(decisionsSource, /id="summary-pol"[^>]*>Rotterdam</);

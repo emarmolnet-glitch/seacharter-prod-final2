@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const indexDocument = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const decisionSupportModule = readFileSync(new URL('../src/DecisionSupportModule.js', import.meta.url), 'utf8');
+const indexHtml = `${indexDocument}\n${decisionSupportModule}`;
 const decisionesHtml = readFileSync(new URL('../decisiones.html', import.meta.url), 'utf8');
 
 test('PARTE 1: DSS scenario logic performs shallow merge and stress test mutations without modifying context variables', () => {
