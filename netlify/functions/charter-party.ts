@@ -36,14 +36,15 @@ function cleanCoordinate(value: unknown, minimum: number, maximum: number) {
 function cleanTimestamp(value: unknown) {
   const text = cleanText(value, 40);
   if (!text) return null;
-  const timestamp = /^\d{4}-\d{2}-\d{2}$/.test(text)
+  const safeDate = /^\d{4}-\d{2}-\d{2}$/.test(text)
     ? new Date(`${text}T00:00:00.000Z`)
     : new Date(text);
-  return Number.isNaN(timestamp.getTime()) ? null : timestamp;
+  return Number.isNaN(safeDate.getTime()) ? null : safeDate;
 }
 
 function emptyStringsToNull<T>(value: T): T {
   if (value === "") return null as T;
+  if (value instanceof Date) return value;
   if (Array.isArray(value)) return value.map(emptyStringsToNull) as T;
   if (isRecord(value)) {
     return Object.fromEntries(
