@@ -11,6 +11,8 @@ type VesselMasterRow = QueryResultRow & {
   vessel_type: string | null;
   flag: string | null;
   dwt: number | null;
+  gross_tonnage: number | string | null;
+  year_built: number | string | null;
   latitude: number | null;
   longitude: number | null;
   current_destination: string | null;
@@ -287,6 +289,8 @@ export default async (request: Request, context: Context) => {
           vessel_type,
           flag,
           dwt,
+          gross_tonnage,
+          year_built,
           latitude,
           longitude,
           current_destination,
@@ -456,6 +460,8 @@ export default async (request: Request, context: Context) => {
       vesselType: textValue([liveAisStream || {}], ["vesselType", "vessel_type", "ShipType", "shipType"]) || openShips?.vessel_type || ais?.vessel_type || master?.vessel_type || textValue(scopes, ["ShipType", "vesselType", "vessel_type"]),
       flag: master?.flag || textValue(scopes, ["Flag", "flag"]),
       dwt: master?.dwt ?? numberValue(scopes, ["DWT", "dwt", "deadweight"]),
+      gt: master?.gross_tonnage ?? numberValue(scopes, ["GT", "gt", "GrossTonnage", "gross_tonnage"]),
+      yearBuilt: master?.year_built ?? numberValue(scopes, ["YearBuilt", "yearBuilt", "year_built", "builtYear"]),
       destination: textValue([liveAisStream || {}], ["Destination", "destination", "currentDestination"]) || master?.current_destination || textValue([vesselFinderSnapshot || {}], ["destination"]) || textValue(scopes, ["Destination", "destination", "currentDestination"]),
       lastPort: master?.last_port || textValue(scopes, ["LastPort", "lastPort", "last_port"]),
       eta: isoValue(master?.eta || null) || textValue(scopes, ["ETA", "eta"]),

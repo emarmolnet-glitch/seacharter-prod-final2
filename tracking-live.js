@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import DashboardExecutive from './src/components/DashboardExecutive.jsx';
 import { calculateDynamicEta, calculateLaytimeProjection } from './src/executive-predictive-metrics.mjs';
 import { trackingStore } from './src/stores/tracking-store.js';
+import { voyageStore, hasOperationalDraft } from './src/stores/voyage-store.js';
 import { normalizeAisDestination } from './src/tracking-destination.mjs';
 
 const TRACKING_POLL_INTERVAL = 30_000;
@@ -20,6 +21,7 @@ const CONTRACT_CONTROL_IDS = [
 ];
 
 const trackingState = {
+    flowMode: 'free',
     activeTab: 'gis',
     contractRef: '',
     loading: false,
@@ -126,7 +128,15 @@ function asTrackingArray(value) {
 }
 
 function hasTrackingVoyageData() {
-    return Boolean(trackingState.activeVoyage || trackingState.data?.contract);
+    return trackingState.flowMode === 'contract' && Boolean(trackingState.activeVoyage || trackingState.data?.contract);
+}
+
+function getVoyageDraft() {
+    return voyageStore.getState().draft;
+}
+
+function hasAuditDraft() {
+    return hasOperationalDraft(getVoyageDraft());
 }
 
 function normalizeMapPoint(value) {
@@ -336,7 +346,8 @@ function createTrackingOverlay() {
                     <button type="button" class="tracking-drawer-toggle map-icon-button" id="tracking-drawer-toggle" aria-label="Contraer panel de entrada"><i class="fa-solid fa-chevron-left"></i></button>
                     <div class="tracking-drawer-scroll">
                         <div class="tracking-drawer-heading"><span>01 / Voyage input</span><h2>Tracking contractual<br>o búsqueda libre</h2><p>Recupera un viaje completo por referencia o localiza directamente un buque mediante OpenShips.</p></div>
-                        <div class="tracking-flow-status" id="tracking-flow-status" data-mode="idle"><span class="tracking-flow-dot"></span><strong>Selecciona un flujo</strong><small>Premium por contrato · Básico por buque</small></div>
+                        <div class="tracking-flow-status" id="tracking-flow-status" data-mode="free"><span class="tracking-flow-dot"></span><strong>Observación libre</strong><small>Solo posición AIS, sin ruta ni datos comerciales</small></div>
+                        <button type="button" id="tracking-free-reset" class="tracking-route-button btn-light-action"><i class="fa-solid fa-location-dot"></i><span>Tracking Libre / Reset</span></button>
                         <form id="tracking-reference-search-form" class="tracking-contract-search input-group">
                             <label for="tracking-live-contract-ref">Referencia contractual <small>PREMIUM</small></label>
                             <div><input class="input-gc" id="tracking-live-contract-ref" type="text" autocomplete="off" spellcheck="false" maxlength="80" placeholder="SHM/RSB/2026-XXXX"><button type="submit" class="btn-light-action" aria-label="Buscar contrato"><i class="fa-solid fa-arrow-right"></i></button></div>
@@ -405,6 +416,7 @@ function createTrackingOverlay() {
             else renderManualTrackingState();
         }
     });
+    document.getElementById('tracking-free-reset')?.addEventListener('click', activateFreeTrackingMode);
     document.getElementById('tracking-reference-search-form')?.addEventListener('submit', onSearchReference);
     document.getElementById('tracking-vessel-search-form')?.addEventListener('submit', onSearchVessel);
     document.getElementById('tracking-live-contract-ref')?.addEventListener('input', (event) => {
@@ -436,12 +448,14 @@ function onSearchVessel(event) {
         const contractInput = document.getElementById('tracking-live-contract-ref');
         if (contractInput) contractInput.value = '';
         trackingStore.getState().clearContract();
-        setTrackingFlowMode('basic');
+        trackingStore.getState().setMode(trackingState.flowMode);
+        setTrackingFlowMode(trackingState.flowMode);
     }
     return loadTrackingVessel(query);
 }
 
 function handleTrackingPortChange() {
+    if (trackingState.flowMode === 'free') return;
     const context = getManualTrackingContext();
     if (!trackingState.data) renderManualTrackingState();
     if (context.pol && context.pod) {
@@ -522,7 +536,7 @@ function populateTrackingInputs(data) {
     document.getElementById('tracking-input-vessel').value = [contract.vesselName, contract.vesselImo && `IMO ${contract.vesselImo}`].filter(Boolean).join(' · ');
     document.getElementById('tracking-input-cargo').value = [contract.cargoName, Number.isFinite(Number(contract.cargoQuantityMt)) && `${formatTrackingNumber(contract.cargoQuantityMt)} MT`].filter(Boolean).join(' · ');
     setContractFieldsReadOnly(true);
-    setTrackingFlowMode('premium');
+    setTrackingFlowMode('contract');
 }
 
 function populateActiveVoyageInputs(voyage) {
@@ -537,19 +551,37 @@ function populateActiveVoyageInputs(voyage) {
     setContractFieldsReadOnly(Boolean(voyage));
 }
 
+function populateDraftVoyageInputs(draft = getVoyageDraft()) {
+    document.getElementById('tracking-live-contract-ref').value = '';
+    setInputPort('tracking-input-ballast', null);
+    setInputPort('tracking-input-pol', draft?.pol);
+    setInputPort('tracking-input-pod', draft?.pod);
+    document.getElementById('tracking-input-laydays').value = toDateInputValue(draft?.laycan?.laydays);
+    document.getElementById('tracking-input-cancelling').value = toDateInputValue(draft?.laycan?.cancelling);
+    document.getElementById('tracking-input-vessel').value = draft?.vessel?.imo || '';
+    document.getElementById('tracking-input-cargo').value = [draft?.cargo?.description, draft?.cargo?.quantityMt && `${formatTrackingNumber(draft.cargo.quantityMt)} MT`].filter(Boolean).join(' · ');
+    setContractFieldsReadOnly(false);
+}
+
 function setTrackingFlowMode(mode = 'idle') {
+    trackingState.flowMode = mode;
+    trackingStore.getState().setMode(mode);
     const status = document.getElementById('tracking-flow-status');
     const drawer = document.getElementById('tracking-input-drawer');
     if (status) {
         status.dataset.mode = mode;
-        status.querySelector('strong').textContent = mode === 'premium' ? 'Contrato sincronizado' : mode === 'basic' ? 'Búsqueda libre AIS' : 'Selecciona un flujo';
-        status.querySelector('small').textContent = mode === 'premium'
+        status.querySelector('strong').textContent = mode === 'contract' ? 'Ejecución contractual' : mode === 'audit' ? 'Auditoría pre-fixture' : 'Observación libre';
+        status.querySelector('small').textContent = mode === 'contract'
             ? 'Campos dictados por la referencia contractual'
-            : mode === 'basic'
-                ? 'POL, POD y carga son opcionales'
-                : 'Premium por contrato · Básico por buque';
+            : mode === 'audit'
+                ? 'Lastre real: posición viva → POL del DraftVoyage'
+                : 'Solo posición AIS, sin ruta ni datos comerciales';
     }
     if (drawer) drawer.dataset.flow = mode;
+    const routeButton = document.getElementById('tracking-calculate-route');
+    const routeButtonLabel = routeButton?.querySelector('span');
+    if (routeButton) routeButton.disabled = mode === 'free';
+    if (routeButtonLabel) routeButtonLabel.textContent = mode === 'audit' ? 'Calcular lastre real' : mode === 'contract' ? 'Actualizar ruta contractual' : 'Ruta desactivada en modo libre';
 }
 
 function setContractFieldsReadOnly(isReadOnly) {
@@ -644,31 +676,78 @@ async function calculateEphemeralTrackingRoute(origin, destination, options = {}
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            origin: { name: origin.name, lat: origin.lat, lon: origin.lng },
-            destination: { name: destination.name, lat: destination.lat, lon: destination.lng },
+            coordinates: [
+                [origin.lng, origin.lat],
+                [destination.lng, destination.lat],
+            ],
+            coordinateOrder: 'lonLat',
         }),
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.success || !Array.isArray(payload.coordinates)) {
-        throw new Error(payload.error || 'No fue posible calcular la ruta marítima efímera.');
+    if (!response.ok || !payload?.success || !Array.isArray(payload.coordinates) || payload.coordinates.length < 3) {
+        throw new Error('El motor marítimo no devolvió una polilínea navegable por agua.');
     }
+    const isBallastAudit = options.routeKind === 'ballast';
     const result = {
-        portBallast: '',
-        pol: origin.name,
-        pod: destination.name,
-        coordinates: { ballast: null, pol: origin, pod: destination },
-        routes: { ballast: null, laden: { ...payload, distance: Number(payload.distance || 0) } },
-        distBallast: 0,
-        distLaden: Number(payload.distance || 0),
+        portBallast: isBallastAudit ? `POS - ${origin.name}` : '',
+        pol: isBallastAudit ? `POL - ${destination.name}` : origin.name,
+        pod: isBallastAudit ? '' : destination.name,
+        coordinates: isBallastAudit
+            ? {
+                ballast: { ...origin, name: `POS - ${origin.name}` },
+                pol: { ...destination, name: `POL - ${destination.name}` },
+                pod: null,
+            }
+            : { ballast: null, pol: origin, pod: destination },
+        routes: isBallastAudit
+            ? { ballast: { ...payload, distance: Number(payload.distance || 0) }, laden: null }
+            : { ballast: null, laden: { ...payload, distance: Number(payload.distance || 0) } },
+        distBallast: isBallastAudit ? Number(payload.distance || 0) : 0,
+        distLaden: isBallastAudit ? 0 : Number(payload.distance || 0),
         totalMiles: Number(payload.distance || 0),
     };
     trackingState.routes = result.routes;
     trackingState.routeDistance = result.totalMiles;
     window.GlobalFleetGlobe?.setRouteResult?.(result, TRACKING_MAP_KEY, { focus: options.focus !== false, persist: false });
     document.getElementById('tracking-map-route-label').textContent = `${origin.name} → ${destination.name}`;
-    document.getElementById('tracking-map-route-distance').textContent = `${formatTrackingNumber(result.totalMiles, { maximumFractionDigits: 0 })} NM · ruta efímera`;
+    document.getElementById('tracking-map-route-distance').textContent = `${formatTrackingNumber(result.totalMiles, { maximumFractionDigits: 0 })} NM · ${isBallastAudit ? 'lastre auditado' : 'ruta efímera'}`;
     renderManualTrackingState(result.totalMiles);
     return result;
+}
+
+function hydrateDraftBallastRoute() {
+    const draft = getVoyageDraft();
+    const coordinates = Array.isArray(draft?.lastreCoordinates) ? draft.lastreCoordinates : [];
+    if (trackingState.flowMode !== 'audit' || coordinates.length < 3) return false;
+    const origin = normalizeMapPoint(coordinates[0]);
+    const destination = normalizeMapPoint(coordinates[coordinates.length - 1]);
+    if (!origin || !destination) return false;
+    const distance = Number(draft?.ballastDistanceNm || 0);
+    const vesselName = draft?.vessel?.name || 'Buque';
+    const polName = draft?.pol?.name || 'POL';
+    const result = {
+        portBallast: `POS - ${vesselName}`,
+        pol: `POL - ${polName}`,
+        pod: '',
+        coordinates: {
+            ballast: { ...origin, name: `POS - ${vesselName}` },
+            pol: { ...destination, name: `POL - ${polName}` },
+            pod: null,
+        },
+        routes: {
+            ballast: { coordinates, distance },
+            laden: null,
+        },
+        distBallast: distance,
+        distLaden: 0,
+        totalMiles: distance,
+    };
+    trackingState.routes = result.routes;
+    trackingState.routeDistance = distance;
+    window.GlobalFleetGlobe?.setRouteResult?.(result, TRACKING_MAP_KEY, { focus: true, persist: false });
+    document.getElementById('tracking-map-route-label').textContent = `${vesselName} → ${polName}`;
+    document.getElementById('tracking-map-route-distance').textContent = `${formatTrackingNumber(distance, { maximumFractionDigits: 0 })} NM · lastre auditado`;
+    return true;
 }
 
 async function calculateTrackingRoute(options = {}) {
@@ -677,6 +756,39 @@ async function calculateTrackingRoute(options = {}) {
     const message = document.getElementById('tracking-input-message');
     const button = document.getElementById('tracking-calculate-route');
     const vesselPosition = getBasicVesselPosition();
+    if (trackingState.flowMode === 'free') {
+        message.textContent = 'Tracking Libre solo geolocaliza la posición viva del buque.';
+        message.dataset.state = 'neutral';
+        return;
+    }
+    if (trackingState.flowMode === 'audit') {
+        const pol = getInputPort('pol') || await resolveTrackingPort(context.pol);
+        if (!vesselPosition || !pol) {
+            message.textContent = !vesselPosition ? 'Localiza un IMO para calcular el lastre real.' : 'El POL del DraftVoyage no tiene coordenadas válidas.';
+            message.dataset.state = 'warning';
+            return;
+        }
+        button?.classList.add('is-loading');
+        message.textContent = 'Calculando lastre real desde la posición viva hasta POL…';
+        message.dataset.state = 'loading';
+        try {
+            const result = await calculateEphemeralTrackingRoute({ ...vesselPosition, name: trackingState.basicVessel?.name || 'Posición viva' }, pol, { ...options, routeKind: 'ballast' });
+            voyageStore.getState().applyTrackingAudit({
+                ballastDistanceNm: result.distBallast,
+                lastreCoordinates: result.routes?.ballast?.coordinates,
+                vessel: trackingState.basicVessel,
+            });
+            message.textContent = `Lastre auditado: ${formatTrackingNumber(result.distBallast, { maximumFractionDigits: 0 })} NM hasta ${pol.name}. Datos devueltos al DraftVoyage.`;
+            message.dataset.state = 'success';
+            return result;
+        } catch (error) {
+            message.textContent = error?.message || 'No fue posible calcular el lastre real.';
+            message.dataset.state = 'error';
+            return;
+        } finally {
+            button?.classList.remove('is-loading');
+        }
+    }
     const pod = getInputPort('pod') || await resolveTrackingPort(context.pod);
     const useEphemeralRoute = !hasTrackingVoyageData() && vesselPosition && pod;
     if (!useEphemeralRoute && (!context.pol || !context.pod)) {
@@ -948,22 +1060,17 @@ async function loadTrackingVessel(rawQuery, silent = false) {
         startTrackingVesselPolling(payload.vessel.mmsi || payload.vessel.imo || payload.vessel.name || query);
         syncBasicVesselMap(!silent);
         if (!trackingState.data) {
-            setTrackingFlowMode('basic');
+            setTrackingFlowMode(trackingState.flowMode === 'audit' ? 'audit' : 'free');
             renderManualTrackingState();
-            const destinationPort = await applyBasicAisDestination(payload.vessel.destination);
-            if (destinationPort && getBasicVesselPosition()) {
-                await calculateTrackingRoute({ focus: !silent });
-            }
+            if (trackingState.flowMode === 'audit' && getBasicVesselPosition()) await calculateTrackingRoute({ focus: !silent });
         } else {
             renderBasicVesselCard();
         }
         if (!silent) {
             const message = document.getElementById('tracking-input-message');
-            if (trackingState.routeDistance !== null && payload.vessel.destination && !trackingState.data) {
-                message.textContent = `Buque localizado en OpenShips · POD ${document.getElementById('tracking-input-pod')?.value || payload.vessel.destination} y ruta efímera actualizados.`;
-            } else message.textContent = payload.vessel.destination
-                ? `Buque localizado en OpenShips · destino AIS ${payload.vessel.destination}.`
-                : 'Buque localizado en OpenShips y centrado en el mapa.';
+            if (trackingState.flowMode === 'audit' && trackingState.routeDistance !== null) {
+                message.textContent = 'Buque localizado y lastre real devuelto al DraftVoyage.';
+            } else message.textContent = 'Buque localizado y centrado en el mapa. Tracking Libre no calcula rutas.';
             message.dataset.state = 'success';
         }
     } catch (error) {
@@ -985,12 +1092,15 @@ async function loadTrackingVessel(rawQuery, silent = false) {
 
 function renderManualTrackingState(totalDistance = trackingState.routeDistance) {
     const hasVoyageData = hasTrackingVoyageData();
+    const auditMode = trackingState.flowMode === 'audit';
+    const auditDistance = Number(totalDistance ?? getVoyageDraft()?.ballastDistanceNm);
+    const aisSpeed = Number(trackingState.basicVessel?.speedKnots ?? trackingState.basicVessel?.speed);
     const context = getManualTrackingContext();
     const hasRoutePorts = hasVoyageData && Boolean(context.pol && context.pod);
-    const hasDistance = hasVoyageData && totalDistance !== null && Number.isFinite(Number(totalDistance));
+    const hasDistance = (hasVoyageData || auditMode) && Number.isFinite(auditDistance) && auditDistance > 0;
     const routeLabel = hasRoutePorts ? `${context.pol} → ${context.pod}` : '';
     const routeDistance = hasDistance
-        ? `${formatTrackingNumber(totalDistance, { maximumFractionDigits: 0 })} NM · ruta estimada`
+        ? `${formatTrackingNumber(auditDistance, { maximumFractionDigits: 0 })} NM · ruta estimada`
         : '';
 
     if (!hasVoyageData && !trackingState.basicVessel) {
@@ -998,26 +1108,26 @@ function renderManualTrackingState(totalDistance = trackingState.routeDistance) 
     }
 
     document.getElementById('tracking-live-connection').textContent = 'GIS disponible';
-    document.getElementById('tracking-live-last-sync').textContent = hasVoyageData ? 'Viaje activo' : trackingState.basicVessel ? 'OpenShips activo' : 'Sin viaje activo';
+    document.getElementById('tracking-live-last-sync').textContent = hasVoyageData ? 'Viaje activo' : auditMode ? 'DraftVoyage activo' : trackingState.basicVessel ? 'OpenShips activo' : 'Tracking Libre';
     document.getElementById('tracking-map-route-label').textContent = routeLabel;
     document.getElementById('tracking-map-route-distance').textContent = routeDistance;
     renderBasicVesselCard();
-    document.getElementById('tracking-contract-status').textContent = hasVoyageData ? 'VOYAGE' : trackingState.basicVessel ? 'BASIC AIS' : 'EMPTY';
-    document.getElementById('tracking-contract-ref-label').textContent = hasVoyageData ? (trackingState.activeVoyage?.reference || 'Viaje sin referencia') : trackingState.basicVessel?.name || 'Sin viaje activo';
+    document.getElementById('tracking-contract-status').textContent = hasVoyageData ? 'CONTRACT' : auditMode ? 'PRE-FIXTURE' : trackingState.basicVessel ? 'FREE AIS' : 'FREE';
+    document.getElementById('tracking-contract-ref-label').textContent = hasVoyageData ? (trackingState.activeVoyage?.reference || 'Viaje sin referencia') : auditMode ? 'DraftVoyage sin referencia' : trackingState.basicVessel?.name || 'Observación libre';
     document.getElementById('tracking-contract-subtitle').textContent = hasVoyageData
         ? [context.vessel || 'Buque por definir', context.cargo || 'Carga por definir'].join(' · ')
-        : trackingState.basicVessel?.destination ? `Destino AIS: ${trackingState.basicVessel.destination}` : 'Busca un buque o vincula una referencia contractual';
+        : auditMode ? 'Auditoría de lastre previa al fixture' : 'Busca un buque o vincula una referencia contractual';
     document.getElementById('tracking-live-metrics').innerHTML = `
-        <div class="tracking-metric"><span>Modo operativo</span><strong>${hasVoyageData ? 'Viaje activo' : 'Sin datos'}</strong></div>
-        <div class="tracking-metric"><span>Distancia estimada</span><strong>${hasDistance ? `${formatTrackingNumber(totalDistance, { maximumFractionDigits: 0 })} <small>NM</small>` : '—'}</strong></div>
+        <div class="tracking-metric"><span>Modo operativo</span><strong>${hasVoyageData ? 'Contrato' : auditMode ? 'Pre-Fixture' : 'Libre'}</strong></div>
+        <div class="tracking-metric"><span>Distancia estimada</span><strong>${hasDistance ? `${formatTrackingNumber(auditDistance, { maximumFractionDigits: 0 })} <small>NM</small>` : '—'}</strong></div>
         <div class="tracking-metric"><span>Buque</span><strong>${escapeTrackingHtml(trackingState.basicVessel?.name || context.vessel || '—')}</strong></div>
-        <div class="tracking-metric"><span>Velocidad AIS</span><strong>${trackingState.basicVessel?.speedKnots !== null && trackingState.basicVessel?.speedKnots !== undefined ? `${formatTrackingNumber(trackingState.basicVessel.speedKnots)} <small>kn</small>` : '—'}</strong></div>`;
+        <div class="tracking-metric"><span>Velocidad AIS</span><strong>${Number.isFinite(aisSpeed) ? `${formatTrackingNumber(aisSpeed)} <small>kn</small>` : '—'}</strong></div>`;
     const count = document.getElementById('tracking-alert-count');
     count.textContent = '0';
     count.classList.remove('has-alerts');
     document.getElementById('tracking-alert-list').innerHTML = '<div class="tracking-alerts-empty">Vincula un contrato para activar alertas operativas.</div>';
     document.getElementById('tracking-live-content').innerHTML = `
-        <div class="tracking-state-card ecosystem-panel is-manual"><span class="tracking-state-orbit"><i class="fa-solid fa-route"></i></span><div><h2>${hasVoyageData ? 'Viaje Activo' : trackingState.basicVessel ? 'Tracking AIS Básico' : 'Sin Viaje Activo'}</h2><p>${hasRoutePorts ? `La navegación ${escapeTrackingHtml(routeLabel)} utiliza los datos del contrato recuperado.` : trackingState.basicVessel ? `OpenShips centra el mapa en ${escapeTrackingHtml(trackingState.basicVessel.name || 'el buque')} sin exigir datos comerciales.` : 'Busca un buque libremente o introduce una referencia contractual.'}</p></div></div>`;
+        <div class="tracking-state-card ecosystem-panel is-manual"><span class="tracking-state-orbit"><i class="fa-solid fa-route"></i></span><div><h2>${hasVoyageData ? 'Viaje Activo' : auditMode ? 'Auditoría Pre-Fixture' : trackingState.basicVessel ? 'Tracking Libre' : 'Observación Libre'}</h2><p>${hasRoutePorts ? `La navegación ${escapeTrackingHtml(routeLabel)} utiliza los datos del contrato recuperado.` : auditMode ? 'El DraftVoyage aporta POL, POD, Laycan y carga; el IMO activa únicamente el cálculo de lastre real hasta POL.' : trackingState.basicVessel ? `OpenShips centra el mapa en ${escapeTrackingHtml(trackingState.basicVessel.name || 'el buque')} sin rutas ni datos comerciales.` : 'Introduce un IMO para geolocalizar un buque o carga una referencia contractual válida.'}</p></div></div>`;
 }
 
 function clearTrackingContract(message = 'Sin viaje activo. Esperando datos desde Neon.') {
@@ -1033,9 +1143,10 @@ function clearTrackingContract(message = 'Sin viaje activo. Esperando datos desd
     clearTrackingMapVisuals();
     const contractInput = document.getElementById('tracking-live-contract-ref');
     if (contractInput) contractInput.value = '';
-    populateActiveVoyageInputs(null);
+    if (hasAuditDraft()) populateDraftVoyageInputs();
+    else populateActiveVoyageInputs(null);
     setContractFieldsReadOnly(false);
-    setTrackingFlowMode('idle');
+    setTrackingFlowMode(hasAuditDraft() ? 'audit' : 'free');
     renderManualTrackingState();
     renderExecutiveDashboard();
     const inputMessage = document.getElementById('tracking-input-message');
@@ -1519,7 +1630,12 @@ async function loadTrackingContract(rawRef, silent = false) {
         } else {
             trackingState.data = null;
             setContractFieldsReadOnly(false);
-            setTrackingFlowMode('idle');
+            if (hasAuditDraft()) {
+                populateDraftVoyageInputs();
+                setTrackingFlowMode('audit');
+            } else {
+                setTrackingFlowMode('free');
+            }
             window.clearInterval(trackingState.pollTimer);
             trackingState.pollTimer = null;
             renderManualTrackingState();
@@ -1537,7 +1653,7 @@ async function loadTrackingContract(rawRef, silent = false) {
     }
 }
 
-function resetTrackingViewState({ activeReference = '' } = {}) {
+function resetTrackingViewState({ mode = 'free' } = {}) {
     window.clearTimeout(trackingState.contractLookupTimer);
     trackingState.contractLookupTimer = null;
     window.clearTimeout(trackingState.vesselLookupTimer);
@@ -1549,7 +1665,7 @@ function resetTrackingViewState({ activeReference = '' } = {}) {
     stopTrackingVesselPolling();
     stopLaytimeRequest({ clearStatements: true });
     trackingState.activeTab = 'gis';
-    trackingState.contractRef = normalizeTrackingRef(activeReference);
+    trackingState.contractRef = '';
     trackingState.loading = false;
     trackingState.data = null;
     trackingState.basicVessel = null;
@@ -1560,16 +1676,19 @@ function resetTrackingViewState({ activeReference = '' } = {}) {
     trackingState.activeVoyageLoading = false;
     trackingState.activeVoyageError = '';
     trackingStore.getState().reset();
-    populateActiveVoyageInputs(null);
+    if (mode === 'audit' && hasAuditDraft()) populateDraftVoyageInputs();
+    else populateActiveVoyageInputs(null);
     const contractInput = document.getElementById('tracking-live-contract-ref');
-    if (contractInput) contractInput.value = trackingState.contractRef;
+    if (contractInput) contractInput.value = '';
     setTrackingFormLoading(false);
     setContractFieldsReadOnly(false);
-    setTrackingFlowMode('idle');
+    setTrackingFlowMode(mode === 'audit' && hasAuditDraft() ? 'audit' : 'free');
     renderManualTrackingState();
     const inputMessage = document.getElementById('tracking-input-message');
     if (inputMessage) {
-        inputMessage.textContent = 'Introduce los datos del viaje para iniciar Tracking.';
+        inputMessage.textContent = trackingState.flowMode === 'audit'
+            ? 'DraftVoyage cargado. Introduce el IMO para auditar el lastre real.'
+            : 'Tracking Libre activo. Introduce un IMO para geolocalizar el buque.';
         inputMessage.dataset.state = 'neutral';
     }
     renderExecutiveDashboard();
@@ -1577,21 +1696,22 @@ function resetTrackingViewState({ activeReference = '' } = {}) {
 
 function openTrackingLive() {
     createTrackingOverlay();
-    const referenceManager = window.ContractReference || window.ContractRefManager;
-    const activeReference = referenceManager?.getActiveContractRef?.()
-        || window.getActiveContractRef?.()
-        || window.generateVoyageRef?.()
-        || '';
-    resetTrackingViewState({ activeReference });
+    resetTrackingViewState({ mode: hasAuditDraft() ? 'audit' : 'free' });
     const overlay = document.getElementById('tracking-live-overlay');
     overlay?.classList.add('is-open');
     setTrackingActiveTab(trackingState.activeTab);
     document.body.classList.add('tracking-live-open');
     window.requestAnimationFrame(() => {
         ensureTrackingMap();
+        hydrateDraftBallastRoute();
         window.GlobalFleetGlobe?.resize?.(TRACKING_MAP_KEY);
     });
     document.dispatchEvent(new CustomEvent('tracking-live:open'));
+}
+
+function activateFreeTrackingMode() {
+    resetTrackingViewState({ mode: 'free' });
+    clearTrackingMapVisuals();
 }
 
 window.addEventListener('vessel-selection:changed', (event) => {
