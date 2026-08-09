@@ -146,15 +146,12 @@
     </script>
     <!-- FontAwesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <!-- Master Globe.gl renderer shared by Core PRO and Data Bridge (Loaded with defer for non-blocking FCP) -->
-    <script defer src="https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js"></script>
-    <link rel="stylesheet" href="/assets/css/density-globe.css?v=20260808-main-globe-recovery">
+    <!-- El renderer cartográfico se carga bajo demanda al abrir Mapa, Radar AIS o Tracking. -->
     <link rel="stylesheet" href="./assets/css/contextual-feedback.css?v=20260717-ui-hotfix">
     <link rel="stylesheet" href="./ais-market-reference-widget.css?v=20260721">
     <script src="./network-resilience.js?v=20260807-circuit-breaker"></script>
     <script type="module" src="./cargo-taxonomy.mjs"></script>
     <script type="module" src="./AisMarketReferenceWidget.ts"></script>
-    <script defer src="./GlobalFleetGlobe.js?v=20260807-renderer-crashfix"></script>
     <script type="module" src="./map_loader.js?v=20260802-ais-heading"></script>
     <script defer src="/aisstream-draft.js"></script>
     <!-- Maritime Routing Library -->
@@ -17320,8 +17317,6 @@
                 const quickRefEl = document.getElementById('quick-ref');
                 if (quickRefEl) quickRefEl.value = activeContractRef;
 
-                initMap();
-                mountRouteMap('map-host');
                 refreshPortDatalist();
                 
                 // Formatear estado inicial
@@ -25897,7 +25892,9 @@
             targetView.classList.add(tabId === 'auditor' ? 'active-flex' : 'active-block');
             if (typeof updateNavigationContext === 'function') updateNavigationContext(tabId);
             if (typeof updateMobileModuleNavLabel === 'function') updateMobileModuleNavLabel(tabId);
+            const leavingRouteMap = previousContentModuleId === 'map' && tabId !== 'map';
             previousContentModuleId = tabId;
+            if (leavingRouteMap) destroyRouteMap();
 
             const sessionActions = document.getElementById('session-actions');
             if (sessionActions) {
@@ -25908,8 +25905,13 @@
             if (typeof closeMobileModuleNav === 'function') closeMobileModuleNav();
             if (typeof closeAdvancedModulesMenu === 'function') closeAdvancedModulesMenu();
 
+            if (tabId === 'map') {
+                ensureRouteMapReady('map-host');
+            }
             if (tabId === 'ais') {
-                window.requestAnimationFrame?.(() => window.renderDensitySnapshotFromGlobalStore?.());
+                void ensureMapCartographyLoaded().then(() => {
+                    window.requestAnimationFrame?.(() => window.renderDensitySnapshotFromGlobalStore?.());
+                });
             }
             if (tabId === 'decisiones') {
                 ensureDecisionSupportModule(targetView);
@@ -26309,7 +26311,46 @@
         }
 
         let routeMapInitTimer = null;
-        function initMap() {
+        let routeMapIdleCallbackId = null;
+        let mapCartographyPromise = null;
+
+        function ensureMapCartographyLoaded() {
+            if (!mapCartographyPromise) {
+                mapCartographyPromise = import('./src/map-cartography-loader.js')
+                    .then(({ ensureGlobalFleetGlobeLoaded }) => ensureGlobalFleetGlobeLoaded())
+                    .catch((error) => {
+                        mapCartographyPromise = null;
+                        console.error('[Map] No se pudo cargar el módulo cartográfico.', error);
+                        throw error;
+                    });
+            }
+            return mapCartographyPromise;
+        }
+
+        function destroyRouteMap() {
+            if (routeMapInitTimer) clearTimeout(routeMapInitTimer);
+            routeMapInitTimer = null;
+            if (routeMapMountFrameId) cancelAnimationFrame(routeMapMountFrameId);
+            routeMapMountFrameId = null;
+            if (routeMapIdleCallbackId !== null && 'cancelIdleCallback' in window) {
+                window.cancelIdleCallback(routeMapIdleCallbackId);
+            }
+            routeMapIdleCallbackId = null;
+            window.GlobalFleetGlobe?.destroy?.('main');
+            map = null;
+            window.map = null;
+        }
+
+        async function initMap() {
+            let mapView = document.getElementById('view-map');
+            if (!mapView || mapView.classList.contains('hidden')) return;
+            try {
+                await ensureMapCartographyLoaded();
+            } catch (_) {
+                return;
+            }
+            mapView = document.getElementById('view-map');
+            if (!mapView || mapView.classList.contains('hidden')) return;
             if (routeMapInitTimer) clearTimeout(routeMapInitTimer);
             routeMapInitTimer = setTimeout(() => {
                 const doMount = () => {
@@ -26355,7 +26396,10 @@
                     }
                 };
                 if ('requestIdleCallback' in window) {
-                    window.requestIdleCallback(doMount, { timeout: 1200 });
+                    routeMapIdleCallbackId = window.requestIdleCallback(() => {
+                        routeMapIdleCallbackId = null;
+                        doMount();
+                    }, { timeout: 1200 });
                 } else {
                     doMount();
                 }

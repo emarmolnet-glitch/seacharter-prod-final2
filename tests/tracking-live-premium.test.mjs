@@ -73,7 +73,7 @@ test('tracking uses a split GIS workspace with the complete commercial input', (
   assert.match(scriptSource, /tracking-input-cancelling/);
   assert.match(scriptSource, /tracking-input-vessel/);
   assert.match(scriptSource, /tracking-input-cargo/);
-  assert.match(scriptSource, /GlobalFleetGlobe\.mount/);
+  assert.match(scriptSource, /globeApi\.mount\?\./);
   assert.match(scriptSource, /calculateVoyageRouteService/);
   assert.match(scriptSource, /setRouteResult/);
   assert.match(scriptSource, /restoreRouteState: false/);

@@ -10,6 +10,11 @@ import { normalizeAisDestination } from './src/tracking-destination.mjs';
 const TRACKING_POLL_INTERVAL = 30_000;
 const TRACKING_AIS_POLL_INTERVAL = 30_000;
 const TRACKING_MAP_KEY = 'tracking';
+let trackingMapLoadPromise = null;
+let trackingMapMountFrameId = null;
+let trackingMapResizeFrameId = null;
+let trackingMapResizeTimerId = null;
+let trackingMapLifecycleToken = 0;
 const CONTRACT_CONTROL_IDS = [
     'tracking-input-ballast',
     'tracking-input-pol',
@@ -314,7 +319,11 @@ function setTrackingActiveTab(activeTab) {
     if (executiveActive) renderExecutiveDashboard();
     else {
         unmountExecutiveDashboard();
-        window.requestAnimationFrame(() => window.GlobalFleetGlobe?.resize?.(TRACKING_MAP_KEY));
+        if (trackingMapResizeFrameId !== null) window.cancelAnimationFrame(trackingMapResizeFrameId);
+        trackingMapResizeFrameId = window.requestAnimationFrame(() => {
+            trackingMapResizeFrameId = null;
+            window.GlobalFleetGlobe?.resize?.(TRACKING_MAP_KEY);
+        });
     }
 }
 
@@ -473,13 +482,28 @@ function toggleTrackingDrawer() {
     const drawer = document.getElementById('tracking-input-drawer');
     const collapsed = drawer?.classList.toggle('is-collapsed');
     document.getElementById('tracking-drawer-toggle')?.setAttribute('aria-label', collapsed ? 'Expandir panel de entrada' : 'Contraer panel de entrada');
-    window.setTimeout(() => window.GlobalFleetGlobe?.resize?.(TRACKING_MAP_KEY), 260);
+    if (trackingMapResizeTimerId !== null) window.clearTimeout(trackingMapResizeTimerId);
+    trackingMapResizeTimerId = window.setTimeout(() => {
+        trackingMapResizeTimerId = null;
+        window.GlobalFleetGlobe?.resize?.(TRACKING_MAP_KEY);
+    }, 260);
 }
 
-function ensureTrackingMap() {
-    if (trackingState.mapMounted || !window.GlobalFleetGlobe?.mount) return;
-    const instance = window.GlobalFleetGlobe.mount({ containerId: 'tracking-globe', key: TRACKING_MAP_KEY, vesselsData: [], restoreRouteState: false });
+async function ensureTrackingMap(lifecycleToken = trackingMapLifecycleToken) {
+    if (trackingState.mapMounted) return window.GlobalFleetGlobe?.getInstance?.(TRACKING_MAP_KEY) || null;
+    trackingMapLoadPromise ||= import('./src/map-cartography-loader.js')
+        .then(({ ensureGlobalFleetGlobeLoaded }) => ensureGlobalFleetGlobeLoaded())
+        .catch((error) => {
+            trackingMapLoadPromise = null;
+            console.error('[Tracking] No se pudo cargar el módulo cartográfico.', error);
+            throw error;
+        });
+    const globeApi = await trackingMapLoadPromise;
+    const trackingOverlayOpen = document.getElementById('tracking-live-overlay')?.classList.contains('is-open');
+    if (lifecycleToken !== trackingMapLifecycleToken || !trackingOverlayOpen) return null;
+    const instance = globeApi.mount?.({ containerId: 'tracking-globe', key: TRACKING_MAP_KEY, vesselsData: [], restoreRouteState: false });
     trackingState.mapMounted = Boolean(instance);
+    return instance || null;
 }
 
 let trackingStoreUnsubscribe = null;
@@ -1701,8 +1725,17 @@ function openTrackingLive() {
     overlay?.classList.add('is-open');
     setTrackingActiveTab(trackingState.activeTab);
     document.body.classList.add('tracking-live-open');
-    window.requestAnimationFrame(() => {
-        ensureTrackingMap();
+    const lifecycleToken = ++trackingMapLifecycleToken;
+    if (trackingMapMountFrameId !== null) window.cancelAnimationFrame(trackingMapMountFrameId);
+    trackingMapMountFrameId = window.requestAnimationFrame(async () => {
+        trackingMapMountFrameId = null;
+        let instance = null;
+        try {
+            instance = await ensureTrackingMap(lifecycleToken);
+        } catch (_) {
+            return;
+        }
+        if (!instance || lifecycleToken !== trackingMapLifecycleToken) return;
         hydrateDraftBallastRoute();
         window.GlobalFleetGlobe?.resize?.(TRACKING_MAP_KEY);
     });
@@ -1725,6 +1758,15 @@ function closeTrackingLive(options = {}) {
     const restoreNavigation = options?.restoreNavigation !== false;
     document.getElementById('tracking-live-overlay')?.classList.remove('is-open');
     document.body.classList.remove('tracking-live-open');
+    trackingMapLifecycleToken += 1;
+    if (trackingMapMountFrameId !== null) window.cancelAnimationFrame(trackingMapMountFrameId);
+    trackingMapMountFrameId = null;
+    if (trackingMapResizeFrameId !== null) window.cancelAnimationFrame(trackingMapResizeFrameId);
+    trackingMapResizeFrameId = null;
+    if (trackingMapResizeTimerId !== null) window.clearTimeout(trackingMapResizeTimerId);
+    trackingMapResizeTimerId = null;
+    window.GlobalFleetGlobe?.destroy?.(TRACKING_MAP_KEY);
+    trackingState.mapMounted = false;
     resetTrackingViewState();
     document.dispatchEvent(new CustomEvent('tracking-live:close', { detail: { restoreNavigation } }));
 }
