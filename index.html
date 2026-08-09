@@ -191,6 +191,7 @@
     <script type="module" src="./src/tracking-aisstream-entry.tsx"></script>
     <script src="./session-draft.js"></script>
     <script type="module" src="./src/voyage-draft-entry.js"></script>
+    <script type="module" src="./src/header-workflow-progress.js"></script>
     <script type="module" src="./dual-mode-overlay.js"></script>
 
     <style>
@@ -4676,6 +4677,40 @@
             color: #FFFFFF !important;
         }
 
+        header .module-tabs .tab-btn.is-workflow-complete:not(.bg-blue-600) {
+            border-color: #86AFA1 !important;
+            color: #176B56 !important;
+            background: #F2F8F5 !important;
+        }
+
+        header .module-tabs .tab-btn.is-workflow-complete.bg-blue-600 {
+            border-color: #6EE7B7 !important;
+        }
+
+        header .workflow-complete-indicator {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            width: 1rem;
+            height: 1rem;
+            margin-left: 0.35rem;
+            border-radius: 999px;
+            color: #176B56;
+            background: #DDF2E9;
+        }
+
+        header .tab-btn.bg-blue-600 .workflow-complete-indicator {
+            color: #065F46;
+            background: #A7F3D0;
+        }
+
+        header .workflow-complete-indicator svg {
+            width: 0.72rem;
+            height: 0.72rem;
+            stroke-width: 2.5;
+        }
+
         header .mobile-module-nav {
             display: none !important;
             position: relative !important;
@@ -4757,6 +4792,15 @@
             min-height: 42px !important;
             border-radius: 6px !important;
             font-size: 0.78rem !important;
+        }
+
+        header .mobile-module-nav-menu .tools-dropdown-action.is-workflow-complete {
+            color: #176B56 !important;
+            background: #F2F8F5 !important;
+        }
+
+        header .mobile-module-nav-menu .workflow-complete-indicator {
+            margin-left: auto;
         }
 
         header .mobile-module-nav-menu .tools-dropdown-action[aria-current="page"] {
