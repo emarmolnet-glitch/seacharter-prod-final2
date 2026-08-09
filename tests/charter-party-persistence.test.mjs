@@ -22,3 +22,13 @@ test("Charter Party endpoint validates contractual identity, route and laycan", 
   assert.match(functionSource, /cancellingAt/);
   assert.match(functionSource, /POL y POD deben tener coordenadas válidas antes de guardar/);
 });
+
+test("Charter Party endpoint receives a flat technical and ballast payload", () => {
+  assert.match(functionSource, /body\.ballastDistanceNm/);
+  assert.match(functionSource, /body\.vesselDwt/);
+  assert.match(functionSource, /body\.vesselGt/);
+  assert.match(functionSource, /body\.vesselFlag/);
+  assert.match(functionSource, /body\.vesselYearBuilt/);
+  assert.doesNotMatch(functionSource, /body\.vesselTechnical|body\.draftSnapshot/);
+  assert.doesNotMatch(functionSource, /draftValidationJson/);
+});

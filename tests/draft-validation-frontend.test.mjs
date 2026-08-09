@@ -57,6 +57,12 @@ test("Charter Party confirmation persists the required voyage fields and reports
   assert.match(routeConfiguratorSource, /podName:/);
   assert.match(routeConfiguratorSource, /laydaysStartAt:/);
   assert.match(routeConfiguratorSource, /cancellingAt:/);
+  assert.match(routeConfiguratorSource, /ballastDistanceNm:/);
+  assert.match(routeConfiguratorSource, /const sanitizedPayload: CharterPartyPayload = \{/);
+  assert.match(routeConfiguratorSource, /body: JSON\.stringify\(sanitizedPayload\)/);
+  assert.doesNotMatch(routeConfiguratorSource, /vesselDwt:|vesselGt:|vesselFlag:|vesselYearBuilt:|mmsi:/);
+  assert.doesNotMatch(routeConfiguratorSource, /draftValidationJson|JSON\.stringify\(validation\)/);
+  assert.match(routeConfiguratorSource, /voyageStore\.getState\(\)\.clearDraft\(\)/);
   assert.match(routeConfiguratorSource, /Charter Party \$\{savedReference\} generado y guardado con éxito/);
   assert.match(routeConfiguratorSource, /No fue posible guardar el Charter Party/);
 });

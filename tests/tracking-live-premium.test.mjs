@@ -101,7 +101,7 @@ test('tracking GIS HUD starts empty and supports voyage or basic AIS data', () =
   assert.doesNotMatch(scriptSource, /BEJAIA \(DZ\)|AVEIRO \(PT\)|TEST VESSEL ALPHA/);
 });
 
-test('tracking opens with the temporary estimation reference and never auto-fetches a voyage', () => {
+test('tracking opens from DraftVoyage or free mode and never auto-fetches a contract', () => {
   const overlayStart = scriptSource.indexOf('function createTrackingOverlay()');
   const overlayEnd = scriptSource.indexOf('function toggleTrackingDrawer', overlayStart);
   const overlaySource = scriptSource.slice(overlayStart, overlayEnd);
@@ -116,15 +116,15 @@ test('tracking opens with the temporary estimation reference and never auto-fetc
   assert.doesNotMatch(overlaySource, /getActiveContractRef/);
   assert.match(overlaySource, /if \(contractInput\) contractInput\.value = ''/);
   assert.ok(openStart >= 0 && openEnd > openStart);
-  assert.match(openSource, /const activeReference = referenceManager\?\.getActiveContractRef\?\.\(\)/);
-  assert.match(openSource, /resetTrackingViewState\(\{ activeReference \}\)/);
+  assert.match(openSource, /resetTrackingViewState\(\{ mode: hasAuditDraft\(\) \? 'audit' : 'free' \}\)/);
+  assert.doesNotMatch(openSource, /getActiveContractRef/);
   assert.doesNotMatch(openSource, /loadActiveVoyage|loadTrackingContract|fetch\(/);
-  assert.match(resetSource, /trackingState\.contractRef = normalizeTrackingRef\(activeReference\)/);
+  assert.match(resetSource, /trackingState\.contractRef = ''/);
   assert.match(resetSource, /trackingState\.data = null/);
   assert.match(resetSource, /trackingState\.basicVessel = null/);
   assert.match(resetSource, /trackingState\.routes = \{ ballast: \[\], laden: \[\] \}/);
   assert.match(resetSource, /trackingState\.activeVoyage = null/);
-  assert.match(resetSource, /contractInput\.value = trackingState\.contractRef/);
+  assert.match(resetSource, /contractInput\.value = ''/);
   assert.match(scriptSource, /function closeTrackingLive[\s\S]*resetTrackingViewState\(\)/);
 });
 
@@ -159,7 +159,7 @@ test('laytime fetching runs once per contract reference and stops after errors',
   assert.doesNotMatch(scriptSource, /async function loadLaytimeStatements/);
 });
 
-test('tracking exposes independent premium and basic search triggers', () => {
+test('tracking exposes independent contract, audit and free triggers', () => {
   assert.match(scriptSource, /Referencia contractual <small>PREMIUM<\/small>/);
   assert.match(scriptSource, /Buque \/ IMO \/ MMSI <small>BÁSICO<\/small>/);
   assert.match(scriptSource, /function onSearchReference\(event\)/);
@@ -171,8 +171,10 @@ test('tracking exposes independent premium and basic search triggers', () => {
   assert.doesNotMatch(scriptSource, /contractLookupTimer = window\.setTimeout\(\(\) => loadTrackingContract/);
   assert.doesNotMatch(scriptSource, /vesselInput\?\.addEventListener\('input', scheduleTrackingVesselLookup\)/);
   assert.match(scriptSource, /function renderManualTrackingState/);
-  assert.match(stylesSource, /tracking-flow-status\[data-mode="premium"\]/);
-  assert.match(stylesSource, /tracking-flow-status\[data-mode="basic"\]/);
+  assert.match(scriptSource, /Tracking Libre \/ Reset/);
+  assert.match(stylesSource, /tracking-flow-status\[data-mode="contract"\]/);
+  assert.match(stylesSource, /tracking-flow-status\[data-mode="audit"\]/);
+  assert.match(stylesSource, /tracking-flow-status\[data-mode="free"\]/);
 });
 
 test('tracking routes the vessel profile API to its physical Netlify Function', () => {
@@ -196,11 +198,11 @@ test('tracking resolves vessel master and AIS without requiring a contract', () 
   assert.match(scriptSource, /course/);
   assert.match(scriptSource, /heading/);
   assert.doesNotMatch(scriptSource, /async function loadTrackingVessel\(rawQuery, silent = false\) \{\s*if \(!hasTrackingVoyageData\(\)\)/);
-  assert.match(scriptSource, /POL, POD y carga son opcionales/);
+  assert.match(scriptSource, /Tracking Libre no calcula rutas/);
   assert.match(scriptSource, /OpenShips centra el mapa/);
 });
 
-test('tracking hydrates premium fields and publishes changes through Zustand', () => {
+test('tracking hydrates contractual fields and publishes changes through Zustand', () => {
   assert.match(scriptSource, /import \{ trackingStore \} from '\.\/src\/stores\/tracking-store\.js'/);
   assert.match(scriptSource, /function setContractFieldsReadOnly\(isReadOnly\)/);
   assert.match(scriptSource, /control\.readOnly = isReadOnly/);
@@ -209,8 +211,9 @@ test('tracking hydrates premium fields and publishes changes through Zustand', (
   assert.match(scriptSource, /trackingStore\.subscribe/);
   assert.match(scriptSource, /syncTrackingMap\(state\.contractPayload\)/);
   assert.match(trackingStoreSource, /createStore/);
-  assert.match(trackingStoreSource, /mode: 'premium'/);
-  assert.match(trackingStoreSource, /\? 'premium' : 'basic'/);
+  assert.match(trackingStoreSource, /mode: 'contract'/);
+  assert.match(trackingStoreSource, /mode: 'free'/);
+  assert.match(trackingStoreSource, /setMode/);
 });
 
 test('tracking keeps AIS and alert panels below the globe rotation control', () => {
@@ -239,11 +242,14 @@ test('tracking reuses MAPA port search and maritime routing services', () => {
   assert.doesNotMatch(scriptSource, /async function fetchMaritimeRoute/);
 });
 
-test('basic tracking resolves AIS destinations and draws an ephemeral route without a contract', () => {
+test('pre-fixture tracking draws an ephemeral ballast route while free mode stays position-only', () => {
   assert.match(scriptSource, /normalizeAisDestination/);
   assert.match(scriptSource, /applyBasicAisDestination/);
   assert.match(scriptSource, /fetch\('\/api\/route'/);
+  assert.match(scriptSource, /coordinateOrder: 'lonLat'/);
   assert.match(scriptSource, /ruta efímera/);
+  assert.match(scriptSource, /routeKind === 'ballast'/);
+  assert.match(scriptSource, /Tracking Libre solo geolocaliza/);
   assert.match(scriptSource, /OPENSHIPS_REST_LIVE|OpenShips/);
   assert.doesNotMatch(scriptSource, /No hay un viaje activo en Neon para calcular la ruta/);
 });

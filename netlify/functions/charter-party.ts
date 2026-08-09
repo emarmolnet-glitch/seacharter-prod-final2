@@ -71,11 +71,18 @@ export default async (request: Request, context: Context) => {
   }
 
   const cargoQuantityMt = Number(body.cargoQuantityMt);
-  const draftValidation = isRecord(body.draftValidation) ? body.draftValidation : {};
+  const ballastDistanceNm = Number(body.ballastDistanceNm);
+  const vesselDwt = Number(body.vesselDwt);
+  const vesselGt = Number(body.vesselGt);
+  const vesselYearBuilt = Number(body.vesselYearBuilt);
   const savedAt = new Date();
   const charterPartyDetails = {
     charterPartyGeneratedAt: savedAt.toISOString(),
-    draftValidation,
+    ballastDistanceNm: Number.isFinite(ballastDistanceNm) && ballastDistanceNm > 0 ? ballastDistanceNm : null,
+    vesselDwt: Number.isFinite(vesselDwt) && vesselDwt > 0 ? vesselDwt : null,
+    vesselGt: Number.isFinite(vesselGt) && vesselGt > 0 ? vesselGt : null,
+    vesselFlag: cleanText(body.vesselFlag, 80) || null,
+    vesselYearBuilt: Number.isFinite(vesselYearBuilt) && vesselYearBuilt > 0 ? Math.round(vesselYearBuilt) : null,
   };
   const values = {
     contractRef,

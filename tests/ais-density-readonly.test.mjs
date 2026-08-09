@@ -625,7 +625,9 @@ test('Main map controls stay below the header and reset in fullscreen mode', () 
 
 test('Globe renders and restores white LASTRE, POL, and POD labels', () => {
   assert.match(globeSource, /function createPortLabel\(role, port, explicitName = ''\)/);
-  assert.match(globeSource, /text: role \+ ' · ' \+ name/);
+  assert.match(globeSource, /\^POS\\s\*-\\s\*/);
+  assert.match(globeSource, /\^POL\\s\*-\\s\*/);
+  assert.match(globeSource, /: role \+ ' · ' \+ name/);
   assert.match(globeSource, /\.labelColor\(\(\) => '#FFFFFF'\)/);
   assert.match(globeSource, /view\.portLabels = \[createPortLabel\('LASTRE'[\s\S]*createPortLabel\('POL'[\s\S]*createPortLabel\('POD'/);
   assert.match(globeSource, /function getTacticalLabels\(view\)[\s\S]*view\?\.portLabels/);
@@ -848,9 +850,11 @@ test('Cost-Plus and negotiation consume the same global total cost basis', () =>
   assert.match(indexSource, /const sharedTotalCosts = State\.totalCosts/);
   assert.match(indexSource, /netProfitOwner = isZeroCalculation \? 0 : \(voyageRevenues - sharedTotalCosts\)/);
   assert.match(costPlusSource, /const sharedCostBasis = getSharedVoyageCostBasis\(\)/);
-  assert.match(costPlusSource, /const totalCosts = sharedCostBasis\.totalCosts/);
+  assert.match(costPlusSource, /if \(!sharedCostBasis \|\| !Number\.isFinite\(Number\(sharedCostBasis\?\.totalCosts\)\)\) return null/);
+  assert.match(costPlusSource, /const totalCosts = sharedCostBasis\?\.totalCosts/);
   assert.doesNotMatch(costPlusSource, /totalOpex \+ bunkerCost \+ portCosts/);
-  assert.match(syncSource, /SeaCharterStore\.set\(\{[\s\S]*totalCosts: sharedCostBasis\.totalCosts/);
+  assert.match(syncSource, /if \(!sharedCostBasis \|\| !Number\.isFinite\(Number\(sharedCostBasis\?\.totalCosts\)\)\) return false/);
+  assert.match(syncSource, /SeaCharterStore\.set\(\{[\s\S]*totalCosts: sharedCostBasis\?\.totalCosts/);
   assert.match(indexSource, /cost-plus-total-costs-breakdown/);
 });
 

@@ -190,6 +190,7 @@
     <script type="module" src="./src/density-commercial-funnel.js"></script>
     <script type="module" src="./src/tracking-aisstream-entry.tsx"></script>
     <script src="./session-draft.js"></script>
+    <script type="module" src="./src/voyage-draft-entry.js"></script>
     <script type="module" src="./dual-mode-overlay.js"></script>
 
     <style>
@@ -27134,7 +27135,6 @@
                 success: segmentCalculatedCount > 0 && !usedGeodesicFallback
             };
         }
-
         async function calculateVoyageRouteService(params = {}) {
             const pBallast = (params.portBallast ?? document.getElementById('port-ballast')?.value ?? '').trim();
             const pPol = (params.pol ?? document.getElementById('port-pol')?.value ?? '').trim();
@@ -60050,8 +60050,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function syncCostPlusFromRoute(showFeedback = false) {
+            const sharedCostBasis = typeof getSharedVoyageCostBasis === 'function' ? getSharedVoyageCostBasis() : null;
+            if (!sharedCostBasis || !Number.isFinite(Number(sharedCostBasis?.totalCosts))) return false;
             if (showFeedback && typeof runEngine === 'function') runEngine();
-            const sharedCostBasis = getSharedVoyageCostBasis();
             const routeTotalDays = Math.max(0, safeCalculationNumber(State.totalDays));
             const routeSeaDays = Math.max(0, safeCalculationNumber(State.daysSea));
             const routePortDays = Math.max(0, safeCalculationNumber(State.daysPort));
@@ -60090,11 +60091,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             });
 
             const costPlusResults = calculateCostPlusFreight();
+            if (!costPlusResults) return false;
             SeaCharterStore.set({
-                totalCosts: sharedCostBasis.totalCosts,
-                costPlusTotalCosts: costPlusResults.totalCosts,
-                costPlusMinFreightRate: costPlusResults.minFreightRate,
-                costPlusTargetRevenue: costPlusResults.targetRevenue,
+                totalCosts: sharedCostBasis?.totalCosts,
+                costPlusTotalCosts: costPlusResults?.totalCosts,
+                costPlusMinFreightRate: costPlusResults?.minFreightRate,
+                costPlusTargetRevenue: costPlusResults?.targetRevenue,
                 costPlusSyncedAt: Date.now()
             });
             if (showFeedback && typeof showToast === 'function') showToast('Cost-Plus sincronizado con la ruta');
@@ -60264,7 +60266,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const totalDays = daysSea + daysPort;
             const sharedCostBasis = getSharedVoyageCostBasis();
-            const totalCosts = sharedCostBasis.totalCosts;
+            if (!sharedCostBasis || !Number.isFinite(Number(sharedCostBasis?.totalCosts))) return null;
+            const totalCosts = sharedCostBasis?.totalCosts;
             const calculatedMargin = roundCalculationMoney(costPlusMarginType === 'fixed'
                 ? targetMargin
                 : totalCosts * (targetMargin / 100));
@@ -60423,11 +60426,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         const getVesselCategory = getVesselClass;
 
         function forceRefreshCalculations(showFeedback = false) {
+            const activeState = typeof State !== 'undefined' ? State : null;
+            if (!activeState || ![
+                activeState.totalCosts,
+                activeState.costTotal,
+                activeState.cargo,
+                activeState.opex,
+                activeState.totalBunkers
+            ].some((value) => Number.isFinite(Number(value)) && Number(value) > 0)) return false;
             if (typeof runEngine === 'function') runEngine();
             if (typeof calculateAdjustedEtaAndDays === 'function') calculateAdjustedEtaAndDays();
             if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
 
-            const activeState = typeof State !== 'undefined' ? State : {};
             syncInverseTceFromVoyage(
                 activeState.cargo || document.getElementById('cargo-qty')?.value,
                 activeState.daysSea,

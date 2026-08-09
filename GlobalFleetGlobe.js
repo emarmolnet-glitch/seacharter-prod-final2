@@ -708,7 +708,9 @@
             ...coordinates,
             type: 'port',
             role,
-            text: role + ' · ' + name,
+            text: (role === 'LASTRE' && /^POS\s*-\s*/i.test(name)) || (role === 'POL' && /^POL\s*-\s*/i.test(name))
+                ? name
+                : role + ' · ' + name,
             rotation: 0,
             altitude: 0.018,
             size: 1.05,

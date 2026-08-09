@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { voyageStore } from "../stores/voyage-store.js";
 
 export interface DraftValidationResponse {
   portIndexNo?: number;
@@ -48,19 +49,20 @@ interface CalculatorState {
   cargo?: number;
   cargoType?: string;
   cargoProduct?: string;
+  distBallast?: number;
 }
 
 type UnknownRecord = Record<string, unknown>;
 
 interface ContractReferenceManager {
   getActiveContractRef?: () => string;
+  setActiveContractRef?: (reference: string) => string;
 }
 
 interface CharterPartyPayload {
   contractRef: string;
   imoNumber: string;
   vesselName: string;
-  mmsi?: string;
   polName: string;
   polLatitude?: number;
   polLongitude?: number;
@@ -71,7 +73,7 @@ interface CharterPartyPayload {
   cancellingAt: string;
   cargoName: string;
   cargoQuantityMt: number;
-  draftValidation: DraftValidationResponse;
+  ballastDistanceNm: number;
 }
 
 interface SeaCharterStore {
@@ -94,6 +96,7 @@ interface CalculatorWindow extends Window {
   objetoCalculadoraPrincipal?: UnknownRecord;
   coreProMatchingRouteContext?: UnknownRecord;
   readValidatedCargoOperationState?: () => UnknownRecord;
+  resetTotalEstimation?: (options?: { silent?: boolean }) => void;
 }
 
 function asRecord(value: unknown): UnknownRecord {
@@ -125,9 +128,11 @@ function readCoordinates(value: unknown) {
 function readCharterPartyPayload(validation: DraftValidationResponse): CharterPartyPayload {
   const calculatorWindow = window as CalculatorWindow;
   const calculatorState = calculatorWindow.SeaCharterStore?.getState?.() || {};
+  const draftVoyage = voyageStore.getState().draft;
   const globalStore = asRecord(calculatorWindow.GlobalStore);
   const activeVessel = asRecord(
-    globalStore.calculatorVessel
+    draftVoyage.vessel
+      || globalStore.calculatorVessel
       || globalStore.activeVessel
       || calculatorWindow.activeVessel
       || calculatorWindow.objetoCalculadoraPrincipal,
@@ -162,6 +167,7 @@ function readCharterPartyPayload(validation: DraftValidationResponse): CharterPa
       || calculatorState.cargo
       || 0,
   );
+  const ballastDistanceNm = Number(draftVoyage.ballastDistanceNm ?? calculatorState.distBallast ?? 0);
 
   return {
     contractRef: firstText(
@@ -170,7 +176,6 @@ function readCharterPartyPayload(validation: DraftValidationResponse): CharterPa
     ).toUpperCase(),
     imoNumber,
     vesselName,
-    mmsi: firstText(activeVessel.mmsi, activeVessel.MMSI) || undefined,
     polName: firstText(readTextValue("port-pol"), calculatorState.pol),
     polLatitude: polCoordinates.latitude,
     polLongitude: polCoordinates.longitude,
@@ -196,7 +201,7 @@ function readCharterPartyPayload(validation: DraftValidationResponse): CharterPa
       "Carga contractual",
     ),
     cargoQuantityMt: Number.isFinite(cargoQuantityMt) && cargoQuantityMt > 0 ? cargoQuantityMt : 0,
-    draftValidation: validation,
+    ballastDistanceNm: Number.isFinite(ballastDistanceNm) && ballastDistanceNm > 0 ? ballastDistanceNm : 0,
   };
 }
 
@@ -405,6 +410,22 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
 
     try {
       const payload = readCharterPartyPayload(validation);
+      const sanitizedPayload: CharterPartyPayload = {
+        contractRef: payload.contractRef,
+        imoNumber: payload.imoNumber,
+        vesselName: payload.vesselName,
+        polName: payload.polName,
+        polLatitude: payload.polLatitude,
+        polLongitude: payload.polLongitude,
+        podName: payload.podName,
+        podLatitude: payload.podLatitude,
+        podLongitude: payload.podLongitude,
+        laydaysStartAt: payload.laydaysStartAt,
+        cancellingAt: payload.cancellingAt,
+        cargoName: payload.cargoName,
+        cargoQuantityMt: payload.cargoQuantityMt,
+        ballastDistanceNm: payload.ballastDistanceNm,
+      };
       const missingFields = [
         ["referencia contractual", payload.contractRef],
         ["IMO del buque", payload.imoNumber],
@@ -412,6 +433,7 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
         ["POD", payload.podName],
         ["fecha de Laydays", payload.laydaysStartAt],
         ["fecha de Cancelling", payload.cancellingAt],
+        ["distancia real de lastre", payload.ballastDistanceNm],
       ].filter(([, value]) => !value).map(([label]) => label);
       if (missingFields.length > 0) {
         throw new Error(`Faltan datos obligatorios: ${missingFields.join(", ")}.`);
@@ -420,7 +442,7 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
       const response = await fetch("/api/v1/charter-party", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(sanitizedPayload),
       });
       const responseBody = await response.json().catch(() => ({})) as ApiErrorResponse;
       if (!response.ok) {
@@ -428,6 +450,9 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
       }
 
       const savedReference = responseBody.reference || payload.contractRef;
+      calculatorWindow.resetTotalEstimation?.({ silent: true });
+      calculatorWindow.ContractRefManager?.setActiveContractRef?.(savedReference);
+      voyageStore.getState().clearDraft();
       setSuccessMessage(`Charter Party ${savedReference} generado y guardado con éxito`);
       onConfirm?.(validation);
       window.dispatchEvent(new CustomEvent("seacharter:charter-party-confirmed", {
