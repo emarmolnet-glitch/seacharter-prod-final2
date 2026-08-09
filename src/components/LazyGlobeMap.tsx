@@ -7,6 +7,8 @@ interface GlobeMapProps {
 
 interface GlobalFleetGlobeApi {
   mount?: (options: { containerId: string; key: string }) => unknown;
+  destroy?: (key?: string) => void;
+  resize?: (key?: string) => void;
 }
 
 interface GlobeWindow extends Window {
@@ -31,21 +33,40 @@ const GlobeCanvasContent = memo(function GlobeCanvasContent({ containerId, globe
   useEffect(() => {
     const globeWindow = window as GlobeWindow;
     let cancelled = false;
-    let checkTimer: number | undefined;
+    let mountTimerId: number | undefined;
+    let resizeFrameId: number | undefined;
+    let resizeObserver: ResizeObserver | undefined;
 
-    const mountGlobe = () => {
-      if (cancelled) return;
-      if (typeof globeWindow.GlobalFleetGlobe?.mount === 'function') {
-        globeWindow.GlobalFleetGlobe.mount({ containerId, key: globeKey });
-        return;
-      }
-      checkTimer = window.setTimeout(mountGlobe, 100);
+    const scheduleResize = () => {
+      if (resizeFrameId !== undefined) window.cancelAnimationFrame(resizeFrameId);
+      resizeFrameId = window.requestAnimationFrame(() => {
+        resizeFrameId = undefined;
+        globeWindow.GlobalFleetGlobe?.resize?.(globeKey);
+      });
     };
 
-    mountGlobe();
+    void import('../map-cartography-loader')
+      .then(({ ensureGlobalFleetGlobeLoaded }) => ensureGlobalFleetGlobeLoaded())
+      .then((globeApi) => {
+        if (cancelled) return;
+        mountTimerId = window.setTimeout(() => {
+          if (cancelled) return;
+          globeApi.mount?.({ containerId, key: globeKey });
+          const container = document.getElementById(containerId);
+          if (container && typeof ResizeObserver !== 'undefined') {
+            resizeObserver = new ResizeObserver(scheduleResize);
+            resizeObserver.observe(container);
+          }
+        }, 0);
+      })
+      .catch((error) => console.error('[LazyGlobeMap] No se pudo cargar el módulo cartográfico.', error));
+
     return () => {
       cancelled = true;
-      if (checkTimer !== undefined) window.clearTimeout(checkTimer);
+      if (mountTimerId !== undefined) window.clearTimeout(mountTimerId);
+      if (resizeFrameId !== undefined) window.cancelAnimationFrame(resizeFrameId);
+      resizeObserver?.disconnect();
+      globeWindow.GlobalFleetGlobe?.destroy?.(globeKey);
     };
   }, [containerId, globeKey]);
 

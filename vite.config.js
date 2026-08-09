@@ -47,6 +47,7 @@ function copyLegacyAssets() {
 export default defineConfig({
   plugins: [copyLegacyAssets()],
   build: {
+    assetsInlineLimit: 0,
     target: "es2022",
     cssCodeSplit: true,
     rollupOptions: {

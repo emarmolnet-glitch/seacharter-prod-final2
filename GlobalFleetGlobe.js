@@ -2,6 +2,8 @@
     'use strict';
 
     const views = new Map();
+    const pendingMountFrames = new Map();
+    const activeVesselFocusTimers = new Map();
     const DEFAULT_KEY = 'main';
     const INITIAL_VIEW = Object.freeze({ lat: 24, lng: -24, altitude: 2.5 });
     const FOCUS_ALTITUDE = 1.8;
@@ -1037,7 +1039,25 @@
         };
     }
 
+    function disposeSceneResources(globe) {
+        const scene = globe?.scene?.();
+        scene?.traverse?.((object) => {
+            object.geometry?.dispose?.();
+            const materials = Array.isArray(object.material) ? object.material : [object.material];
+            materials.filter(Boolean).forEach((material) => {
+                Object.values(material).forEach((value) => value?.isTexture && value.dispose?.());
+                material.dispose?.();
+            });
+        });
+    }
+
     function destroy(key = DEFAULT_KEY) {
+        const pendingMountFrameId = pendingMountFrames.get(key);
+        if (pendingMountFrameId) cancelAnimationFrame(pendingMountFrameId);
+        pendingMountFrames.delete(key);
+        const activeVesselFocusTimer = activeVesselFocusTimers.get(key);
+        if (activeVesselFocusTimer) window.clearTimeout(activeVesselFocusTimer);
+        activeVesselFocusTimers.delete(key);
         const view = getView(key);
         if (!view) return;
         view.resizeObserver?.disconnect();
@@ -1047,8 +1067,14 @@
         view.container.removeEventListener?.('pointerdown', view.handleContainerPointerDown);
         view.rotationButton?.removeEventListener?.('click', view.handleRotationToggle);
         view.rotationButton?.removeEventListener?.('pointerdown', view.handleRotationControlPointerDown);
+        const renderer = view.globe?.renderer?.();
         view.globe?._destructor?.();
+        disposeSceneResources(view.globe);
+        renderer?.renderLists?.dispose?.();
+        renderer?.dispose?.();
+        renderer?.forceContextLoss?.();
         view.container.replaceChildren();
+        delete view.container.dataset.renderKey;
         views.delete(key);
         if (key === DEFAULT_KEY) window.map = null;
         if (key === 'density') window.mapaAIS = null;
@@ -1087,9 +1113,17 @@
         }
         if (size.width <= 1 || size.height <= 1) {
             container.dataset.renderKey = 'loading';
-            requestAnimationFrame(() => mount(options));
+            const pendingMountFrameId = pendingMountFrames.get(key);
+            if (pendingMountFrameId) cancelAnimationFrame(pendingMountFrameId);
+            pendingMountFrames.set(key, requestAnimationFrame(() => {
+                pendingMountFrames.delete(key);
+                mount(options);
+            }));
             return null;
         }
+        const pendingMountFrameId = pendingMountFrames.get(key);
+        if (pendingMountFrameId) cancelAnimationFrame(pendingMountFrameId);
+        pendingMountFrames.delete(key);
         const existing = getView(key);
         if (existing && existing.container === container) {
             updateVessels(options.vesselsData ?? null, key);
@@ -1236,7 +1270,6 @@
     window.addEventListener('ais:filtered-vessels-updated', syncAllViews);
     window.addEventListener('databridge:filtered-vessels-updated', syncAllViews);
     window.addEventListener('radar-fleet-updated', syncAllViews);
-    const activeVesselFocusTimers = new Map();
     function ensureActiveVesselInView(vessel, key) {
         const normalized = normalizeVessel(vessel);
         const view = getView(key) || getView(DEFAULT_KEY);
