@@ -131,7 +131,15 @@ export default async (request: Request, context: Context) => {
       contractRef,
       message: error instanceof Error ? error.message : String(error),
     });
-    return errorResponse(request, 500, "No fue posible guardar el Charter Party en la base de datos.");
+    return Response.json({
+      success: false,
+      error: "Fallo DB",
+      details: error instanceof Error ? error.message : String(error),
+      meta: isRecord(error) ? error.meta ?? null : null,
+    }, {
+      status: 500,
+      headers: headersFor(request),
+    });
   }
 };
 
