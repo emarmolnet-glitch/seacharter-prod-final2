@@ -42,6 +42,17 @@ function cleanTimestamp(value: unknown) {
   return Number.isNaN(timestamp.getTime()) ? null : timestamp;
 }
 
+function emptyStringsToNull<T>(value: T): T {
+  if (value === "") return null as T;
+  if (Array.isArray(value)) return value.map(emptyStringsToNull) as T;
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nestedValue]) => [key, emptyStringsToNull(nestedValue)]),
+    ) as T;
+  }
+  return value;
+}
+
 export default async (request: Request, context: Context) => {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: headersFor(request) });
   if (request.method !== "POST") return errorResponse(request, 405, "Método no permitido.");
@@ -112,10 +123,11 @@ export default async (request: Request, context: Context) => {
       ...(isRecord(existing[0]?.commercialDetails) ? existing[0].commercialDetails : {}),
       ...charterPartyDetails,
     };
+    const persistenceValues = emptyStringsToNull({ ...values, commercialDetails });
 
     const [savedVoyage] = existing[0]
-      ? await db.update(voyagesTracking).set({ ...values, commercialDetails }).where(eq(voyagesTracking.id, existing[0].id)).returning()
-      : await db.insert(voyagesTracking).values({ ...values, commercialDetails }).returning();
+      ? await db.update(voyagesTracking).set(persistenceValues).where(eq(voyagesTracking.id, existing[0].id)).returning()
+      : await db.insert(voyagesTracking).values(persistenceValues).returning();
 
     return Response.json({
       success: true,
