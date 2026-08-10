@@ -14800,12 +14800,45 @@
         }
         window.getGlobalVoyageParams = getGlobalVoyageParams;
 
+        function shallowStoreValueEqual(currentValue, nextValue) {
+            if (Object.is(currentValue, nextValue)) return true;
+            if (!currentValue || !nextValue || typeof currentValue !== 'object' || typeof nextValue !== 'object') return false;
+            if (Array.isArray(currentValue) || Array.isArray(nextValue)) {
+                if (!Array.isArray(currentValue) || !Array.isArray(nextValue) || currentValue.length !== nextValue.length) return false;
+                return currentValue.every((value, index) => Object.is(value, nextValue[index]));
+            }
+            const currentKeys = Object.keys(currentValue);
+            const nextKeys = Object.keys(nextValue);
+            if (currentKeys.length !== nextKeys.length) return false;
+            return currentKeys.every((key) => Object.prototype.hasOwnProperty.call(nextValue, key)
+                && Object.is(currentValue[key], nextValue[key]));
+        }
+
+        function hasShallowStoreChanges(partial = {}, baseline = {}) {
+            if (!partial || typeof partial !== 'object') return false;
+            return Object.keys(partial).some((key) => !shallowStoreValueEqual(baseline[key], partial[key]));
+        }
+
+        function canonicalVoyageParamsEqual(current = {}, next = {}) {
+            const scalarFields = [
+                'portBallast', 'pol', 'pod', 'laydays', 'cancelling', 'laycanDate', 'cancellingDate',
+                'cargoQuantity', 'cargoQty', 'cargoType', 'cargoTypeCode', 'loadRate', 'dischargeRate', 'dischRate'
+            ];
+            return scalarFields.every((field) => Object.is(current?.[field], next?.[field]))
+                && shallowStoreValueEqual(current?.polCoordinates, next?.polCoordinates)
+                && shallowStoreValueEqual(current?.podCoordinates, next?.podCoordinates)
+                && shallowStoreValueEqual(current?.pol_coordinates, next?.pol_coordinates)
+                && shallowStoreValueEqual(current?.pod_coordinates, next?.pod_coordinates)
+                && shallowStoreValueEqual(current?.laycan, next?.laycan);
+        }
+
         function updateGlobalVoyageParams(partial = {}, metadata = {}) {
             const previous = window.GlobalStore?.voyageParams || window.__coreProVoyageParams || State;
             const next = buildCanonicalVoyageParams(partial, previous);
+            const canonicalChanged = !canonicalVoyageParamsEqual(previous, next);
             window.__coreProVoyageParams = next;
             if (window.GlobalStore) window.GlobalStore.voyageParams = next;
-            if (metadata.dispatch !== false) {
+            if (canonicalChanged && metadata.dispatch !== false) {
                 window.dispatchEvent(new CustomEvent('voyage-params-updated', {
                     detail: {
                         voyageParams: next,
@@ -14817,6 +14850,9 @@
             return next;
         }
         window.updateGlobalVoyageParams = updateGlobalVoyageParams;
+        if (!window.__coreProVoyageParams) {
+            window.__coreProVoyageParams = buildCanonicalVoyageParams(State, State);
+        }
 
         function readValidatedCargoOperationState() {
             const readPositive = (...values) => values
@@ -14943,32 +14979,66 @@
         const SeaCharterStore = {
             listeners: new Set(),
             isBatching: false,
+            committedState: { ...State },
+            pendingNotification: false,
+            pendingVoyageParamsUpdate: false,
+            pendingVoyageParamsDispatch: false,
+            pendingVoyageParamsSource: 'sea-charter-store',
+            pendingVoyageParamsPartial: {},
             getState() {
                 return State;
             },
             set(partial = {}, options = {}) {
+                if (!options.force && !hasShallowStoreChanges(partial, this.committedState)) return false;
                 const normalizedPartial = normalizeActiveVoyageState(partial, State);
-                let changed = false;
+                const changedEntries = [];
                 for (const key in normalizedPartial) {
-                    const currentValue = State[key];
                     const nextValue = normalizedPartial[key];
-                    const equalObjects = currentValue && nextValue
-                        && typeof currentValue === 'object'
-                        && typeof nextValue === 'object'
-                        && JSON.stringify(currentValue) === JSON.stringify(nextValue);
-                    if (currentValue !== nextValue && !equalObjects) {
+                    if (!shallowStoreValueEqual(this.committedState[key], nextValue)) {
                         State[key] = nextValue;
-                        changed = true;
+                        this.committedState[key] = nextValue;
+                        changedEntries.push([key, nextValue]);
                     }
                 }
-                updateGlobalVoyageParams(State, {
-                    source: String(options.source || 'sea-charter-store'),
-                    dispatch: options.silent !== true
-                });
-                if (!changed && !options.force) return;
-                if (options.silent) return;
-                if (this.isBatching) return;
+                const changed = changedEntries.length > 0;
+                if (!changed) return false;
+
+                if (changed) {
+                    const source = String(options.source || 'sea-charter-store');
+                    if (this.isBatching) {
+                        this.pendingVoyageParamsUpdate = true;
+                        this.pendingVoyageParamsDispatch = this.pendingVoyageParamsDispatch || options.silent !== true;
+                        this.pendingVoyageParamsSource = source;
+                        Object.assign(this.pendingVoyageParamsPartial, Object.fromEntries(changedEntries));
+                    } else {
+                        updateGlobalVoyageParams(Object.fromEntries(changedEntries), {
+                            source,
+                            dispatch: options.silent !== true
+                        });
+                    }
+                }
+                if (options.silent) return changed;
+                if (this.isBatching) {
+                    this.pendingNotification = true;
+                    return changed;
+                }
                 this.notify();
+                return changed;
+            },
+            flushBatch() {
+                if (this.pendingVoyageParamsUpdate) {
+                    updateGlobalVoyageParams(this.pendingVoyageParamsPartial, {
+                        source: this.pendingVoyageParamsSource,
+                        dispatch: this.pendingVoyageParamsDispatch
+                    });
+                }
+                const shouldNotify = this.pendingNotification;
+                this.pendingNotification = false;
+                this.pendingVoyageParamsUpdate = false;
+                this.pendingVoyageParamsDispatch = false;
+                this.pendingVoyageParamsSource = 'sea-charter-store';
+                this.pendingVoyageParamsPartial = {};
+                if (shouldNotify) this.notify();
             },
             batch(fn) {
                 const wasBatching = this.isBatching;
@@ -14977,9 +15047,7 @@
                     fn();
                 } finally {
                     this.isBatching = wasBatching;
-                    if (!wasBatching) {
-                        this.notify();
-                    }
+                    if (!wasBatching) this.flushBatch();
                 }
             },
             async batchAsync(fn) {
@@ -14989,9 +15057,7 @@
                     return await fn();
                 } finally {
                     this.isBatching = wasBatching;
-                    if (!wasBatching) {
-                        this.notify();
-                    }
+                    if (!wasBatching) this.flushBatch();
                 }
             },
             notify() {
@@ -24602,7 +24668,9 @@
                     if (typeof autoFillNlpFromEstimator === 'function') autoFillNlpFromEstimator();
 
                     const liveRouteState = readRouteStateFromCalculator();
-                    SeaCharterStore.set(liveRouteState, { force: true });
+                    if (options.deferStoreCommit !== true) {
+                        SeaCharterStore.set(liveRouteState, { force: true });
+                    }
                     setInputValue('match-laycan-start', liveRouteState.laydays || liveRouteState.laycanDate);
                     setInputValue('match-laycan-end', liveRouteState.cancelling || liveRouteState.cancellingDate);
 
@@ -24615,7 +24683,9 @@
                     }
                     const cargoTypeId = document.getElementById('cargo-type-manual')?.value || window.CargoTypeSelector?.readSelectedId?.() || '100';
                     const validatedCargoState = readValidatedCargoOperationState();
-                    SeaCharterStore.set(validatedCargoState, { force: true });
+                    if (options.deferStoreCommit !== true) {
+                        SeaCharterStore.set(validatedCargoState, { force: true });
+                    }
                     const cargoQty = validatedCargoState.cargoQuantity;
                     const loadRate = validatedCargoState.loadRate;
                     const dischargeRate = validatedCargoState.dischargeRate;
@@ -31979,27 +32049,70 @@
         function executeBatchedCalculationsCore() {
             const wasExecuting = isExecutingDebouncedBatch;
             isExecutingDebouncedBatch = true;
+            const performanceApi = typeof window !== 'undefined' ? window.performance : null;
+            performanceApi?.clearMarks?.('calculator-batch-start');
+            performanceApi?.clearMarks?.('calculator-batch-end');
+            performanceApi?.clearMeasures?.('calculator-batch-duration');
+            performanceApi?.mark?.('calculator-batch-start');
             try {
-                if (typeof window !== 'undefined' && window.SeaCharterStore && typeof window.SeaCharterStore.batch === 'function') {
-                    window.SeaCharterStore.batch(() => {
-                        if (typeof runEngine === 'function') runEngine();
-                        if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
-                        if (typeof calculateCostPlusFreight === 'function') calculateCostPlusFreight();
-                        if (typeof calculateInverseTce === 'function') calculateInverseTce();
-                        if (typeof updateChartererNegotiationSimulator === 'function') updateChartererNegotiationSimulator();
-                        if (typeof updateCBAMModuleView === 'function') updateCBAMModuleView();
-                        if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
-                    });
-                } else {
-                    if (typeof runEngine === 'function') runEngine();
-                    if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
-                    if (typeof calculateCostPlusFreight === 'function') calculateCostPlusFreight();
-                    if (typeof calculateInverseTce === 'function') calculateInverseTce();
-                    if (typeof updateChartererNegotiationSimulator === 'function') updateChartererNegotiationSimulator();
-                    if (typeof updateCBAMModuleView === 'function') updateCBAMModuleView();
-                    if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
+                const inputSnapshot = typeof readValidatedCargoOperationState === 'function'
+                    ? readValidatedCargoOperationState()
+                    : {};
+                const portTiming = typeof recalcularDiasPuerto === 'function'
+                    ? recalcularDiasPuerto(null, { deferEngine: true })
+                    : {};
+
+                if (typeof runEngine === 'function') runEngine({ deferStoreCommit: true });
+
+                if (typeof calculateCostPlusFreight === 'function') calculateCostPlusFreight();
+                if (typeof calculateInverseTce === 'function') calculateInverseTce();
+                if (typeof updateChartererNegotiationSimulator === 'function') updateChartererNegotiationSimulator();
+                if (typeof updateCBAMModuleView === 'function') updateCBAMModuleView();
+
+                const calculatorCommit = {
+                    ...inputSnapshot,
+                    portBallast: State.portBallast,
+                    pol: State.pol,
+                    pod: State.pod,
+                    distBallast: State.distBallast,
+                    distLaden: State.distLaden,
+                    totalMiles: State.totalMiles,
+                    totalCosts: State.totalCosts,
+                    costTotal: State.costTotal,
+                    costBreakdown: State.costBreakdown,
+                    voyageFinancials: State.voyageFinancials,
+                    breakEven: State.breakEven,
+                    breakEvenArmador: State.breakEvenArmador,
+                    baseVoyageCosts: State.baseVoyageCosts,
+                    cargo: State.cargo,
+                    stowageFactor: State.stowageFactor,
+                    cargoTolerance: State.cargoTolerance,
+                    sugOwner: State.sugOwner,
+                    etsCost: State.etsCost,
+                    laycanDate: State.laycanDate,
+                    laycanTime: State.laycanTime,
+                    cancellingDate: State.cancellingDate,
+                    cancellingTime: State.cancellingTime,
+                    daysPort: portTiming?.daysPort ?? State.daysPort,
+                    loadRate: portTiming?.loadRate ?? State.loadRate,
+                    dischargeRate: portTiming?.dischargeRate ?? State.dischRate,
+                    costPlusMinFreightRate: State.costPlusMinFreightRate,
+                    costPlusTotalCosts: State.costPlusTotalCosts,
+                    costPlusTargetRevenue: State.costPlusTargetRevenue,
+                    costPlusDemurrageRate: State.costPlusDemurrageRate
+                };
+
+                SeaCharterStore.set(calculatorCommit, { force: true, source: 'calculator-batch' });
+
+                if (typeof syncCalculatorAndMatching === 'function') {
+                    syncCalculatorAndMatching('calculator', { force: true, deferStoreCommit: true });
                 }
+                return calculatorCommit;
             } finally {
+                performanceApi?.mark?.('calculator-batch-end');
+                try {
+                    performanceApi?.measure?.('calculator-batch-duration', 'calculator-batch-start', 'calculator-batch-end');
+                } catch (_) {}
                 isExecutingDebouncedBatch = wasExecuting;
             }
         }
@@ -32075,6 +32188,8 @@
 
         // --- MOTOR PRINCIPAL ---
         function runEngine() {
+            const options = arguments[0] || {};
+            const deferStoreCommit = options.deferStoreCommit === true;
             if (typeof isInputInteraction === 'function' && isInputInteraction()) {
                 scheduleDebouncedCalculation(300);
                 return;
@@ -32127,12 +32242,14 @@
                 State.precioObjetivoArmador = 0;
                 State.precioObjetivoFletador = 0;
                 State.marketBenchmark = null;
-                SeaCharterStore.set({
-                    cargo: State.cargo,
-                    stowageFactor: State.stowageFactor,
-                    cargoTolerance: State.cargoTolerance,
-                    sugOwner: State.sugOwner
-                });
+                if (!deferStoreCommit) {
+                    SeaCharterStore.set({
+                        cargo: State.cargo,
+                        stowageFactor: State.stowageFactor,
+                        cargoTolerance: State.cargoTolerance,
+                        sugOwner: State.sugOwner
+                    });
+                }
                 if (typeof validateCoreTradingSafety === 'function') {
                     validateCoreTradingSafety({
                         totalBunkers: 0,
@@ -33396,7 +33513,7 @@
 
             refreshVesselCompatibilityWarning();
 
-            if (typeof SeaCharterStore !== 'undefined' && SeaCharterStore && typeof SeaCharterStore.set === 'function') {
+            if (!deferStoreCommit && typeof SeaCharterStore !== 'undefined' && SeaCharterStore && typeof SeaCharterStore.set === 'function') {
                 SeaCharterStore.set({
                     portBallast: State.portBallast,
                     pol: State.pol,
@@ -56767,6 +56884,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function recalcularDiasPuerto(targetSide = null) {
+            const options = arguments[1] || {};
+            const deferEngine = options.deferEngine === true;
             if (typeof isInputInteraction === 'function' && isInputInteraction()) {
                 scheduleDebouncedCalculation(300);
                 return;
@@ -56828,12 +56947,27 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             actualizarAlertaMetodoDescarga(metodoPod);
             actualizarCamposTipoCarga();
             actualizarGrabCapacityVisibility();
-            actualizarModuloCamionTolva();
+            actualizarModuloCamionTolva({ rerun: !deferEngine });
             updateDemurrageExposureAlert();
 
-            if (typeof runEngine === 'function') {
+            const loadRate = Math.max(0, parseFloat(document.getElementById('rate-load')?.value) || 0);
+            const dischargeRate = Math.max(0, parseFloat(document.getElementById('rate-disch')?.value) || 0);
+            const loadDays = loadRate > 0 ? cargoQty / loadRate : 0;
+            const dischargeDays = dischargeRate > 0 ? cargoQty / dischargeRate : 0;
+            const result = {
+                sides,
+                cargoQty,
+                loadRate,
+                dischargeRate,
+                loadDays,
+                dischargeDays,
+                daysPort: Math.max(0, loadDays + dischargeDays)
+            };
+
+            if (!deferEngine && typeof runEngine === 'function') {
                 runEngine();
             }
+            return result;
         }
 
         if (typeof window !== 'undefined') {

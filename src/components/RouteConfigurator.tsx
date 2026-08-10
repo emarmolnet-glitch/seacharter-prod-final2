@@ -450,8 +450,7 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
       }
 
       const savedReference = responseBody.reference || payload.contractRef;
-      calculatorWindow.resetTotalEstimation?.({ silent: true });
-      calculatorWindow.ContractRefManager?.setActiveContractRef?.(savedReference);
+      (window as CalculatorWindow).ContractRefManager?.setActiveContractRef?.(savedReference);
       voyageStore.getState().clearDraft();
       setSuccessMessage(`Charter Party ${savedReference} generado y guardado con éxito`);
       onConfirm?.(validation);
