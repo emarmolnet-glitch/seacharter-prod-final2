@@ -78,6 +78,46 @@ test('OpenShips supports a global live lookup box for identifier searches withou
   assert.equal(requestUrl.searchParams.get('maxLon'), '180');
 });
 
+test('OpenShips reuses successful identical searches from the in-memory cache', async () => {
+  const capture = createFetchCapture();
+  const options = {
+    env: { OPENSHIPS_API_URL: 'https://cache-hit.openships.test/v1' },
+    latitude: 25,
+    longitude: -30,
+    limit: 100,
+    fetchImpl: capture.fetchImpl,
+  };
+
+  const firstResult = await fetchOpenShipsLive(options);
+  const secondResult = await fetchOpenShipsLive(options);
+
+  assert.equal(capture.requests.length, 1);
+  assert.strictEqual(secondResult, firstResult);
+});
+
+test('OpenShips fetches identical searches again after the one-hour cache TTL expires', async () => {
+  const originalNow = Date.now;
+  let now = 1_700_000_000_000;
+  Date.now = () => now;
+  const capture = createFetchCapture();
+  const options = {
+    env: { OPENSHIPS_API_URL: 'https://cache-expiry.openships.test/v1' },
+    latitude: -12,
+    longitude: 42,
+    fetchImpl: capture.fetchImpl,
+  };
+
+  try {
+    await fetchOpenShipsLive(options);
+    now += 60 * 60 * 1000 + 1;
+    await fetchOpenShipsLive(options);
+  } finally {
+    Date.now = originalNow;
+  }
+
+  assert.equal(capture.requests.length, 2);
+});
+
 test('OpenShips exposes the corrected regional URL to the browser fallback after HTTP 400', async () => {
   await assert.rejects(
     fetchOpenShipsLive({

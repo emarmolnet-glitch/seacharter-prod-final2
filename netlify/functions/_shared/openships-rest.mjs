@@ -3,7 +3,9 @@ const MAX_LIMIT = 10000;
 const DEFAULT_TIMEOUT_MS = 15000;
 const OPENSHIPS_POSITION_PATH = "/external/vessels/position/box";
 const OPENSHIPS_RADIUS_DEGREES = 50;
+const VESSEL_CACHE_TTL_MS = 60 * 60 * 1000;
 const SENSITIVE_QUERY_PARAM = /(?:api[-_]?key|token|secret|authorization|signature|credential|password)/i;
+const vesselCache = new Map();
 
 function asRecord(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -211,6 +213,11 @@ export async function fetchOpenShipsLive(options = {}) {
   const url = createOpenShipsPositionUrl(endpoint, latitude, longitude, radiusDegrees);
   const limitParam = String(env.OPENSHIPS_LIMIT_PARAM || "limit").trim();
   if (limitParam && !url.searchParams.has(limitParam)) url.searchParams.set(limitParam, String(limit));
+  const cacheKey = redactOpenShipsUrl(url);
+  const cached = vesselCache.get(cacheKey);
+  const now = Date.now();
+  if (cached && now - cached.savedAt < VESSEL_CACHE_TTL_MS) return cached.result;
+  if (cached) vesselCache.delete(cacheKey);
 
   const apiKey = String(env.OPENSHIPS_API_KEY || env.OPENSHIPS_API_TOKEN || "").trim();
   const keyQueryParam = String(env.OPENSHIPS_API_KEY_QUERY_PARAM || "").trim();
@@ -270,7 +277,7 @@ export async function fetchOpenShipsLive(options = {}) {
     const vessels = providerRows
       .slice(0, limit)
       .map(normalizeOpenShipsVessel);
-    return {
+    const result = {
       vessels,
       count: vessels.length,
       fetchedAt: new Date().toISOString(),
@@ -282,6 +289,8 @@ export async function fetchOpenShipsLive(options = {}) {
         requestUrl,
       },
     };
+    vesselCache.set(cacheKey, { result, savedAt: Date.now() });
+    return result;
   } catch (error) {
     if (error?.name === "AbortError") {
       const timeoutError = new Error("OpenShips REST request timed out");
