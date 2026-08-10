@@ -27065,6 +27065,8 @@
                 portBallast: result.portBallast,
                 pol: result.pol,
                 pod: result.pod,
+                polIso: result.coordinates?.pol?.countryCode || '',
+                podIso: result.coordinates?.pod?.countryCode || '',
                 distBallast: result.distBallast,
                 distLaden: result.distLaden,
                 totalMiles: result.totalMiles,
@@ -27076,7 +27078,7 @@
                 window.MapController?.syncRouteResult(result);
             }
             updateRouteSummary();
-            (({ pol, pod, laycan, lat, lon }) => window.dispatchEvent(new CustomEvent('SEA_ROUTE_DEFINED', { detail: { pol, pod, laycan, lat, lon } })))({ pol: result.pol, pod: result.pod, laycan: State.laycanDate, lat: { pol: result.coordinates?.pol?.lat, pod: result.coordinates?.pod?.lat }, lon: { pol: result.coordinates?.pol?.lon, pod: result.coordinates?.pod?.lon } });
+            (({ pol, pod, polIso, podIso, laycan, lat, lon }) => window.dispatchEvent(new CustomEvent('SEA_ROUTE_DEFINED', { detail: { pol, pod, polIso, podIso, laycan, lat, lon } })))({ pol: result.pol, pod: result.pod, polIso: result.coordinates?.pol?.countryCode || '', podIso: result.coordinates?.pod?.countryCode || '', laycan: State.laycanDate, lat: { pol: result.coordinates?.pol?.lat, pod: result.coordinates?.pod?.lat }, lon: { pol: result.coordinates?.pol?.lon, pod: result.coordinates?.pod?.lon } });
         }
 
         const MATCHING_TARGET_SOURCE_ID = 'matching-target-live-ballast-source';

@@ -1,6 +1,32 @@
 import { getTradeMargin, type TradeMarginResult } from '../services/comtradeApi';
+import { findUnCountry } from '../data/unCountries';
+import { createCountryCombobox } from './CountryCombobox';
 
 type RadarStatus = 'green' | 'yellow' | 'red' | 'neutral';
+
+type RouteCountryState = {
+  destinationCountry?: string;
+  geopoliticalRoute?: RouteCountryState;
+  originCountry?: string;
+  pod?: string;
+  podIso?: string;
+  pol?: string;
+  polIso?: string;
+  routeGeometry?: {
+    coordinates?: {
+      pod?: { countryCode?: string };
+      pol?: { countryCode?: string };
+    };
+  };
+};
+
+type RouteAwareWindow = Window & typeof globalThis & {
+  GlobalStore?: RouteCountryState;
+  SeaCharterStore?: {
+    getState?: () => RouteCountryState;
+    subscribe?: (listener: (state: RouteCountryState) => void) => (() => void);
+  };
+};
 
 const MONEY_FORMATTER = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -53,6 +79,42 @@ function setText(root: HTMLElement, selector: string, value: string): void {
   if (element) element.textContent = value;
 }
 
+function readCountryIso(...values: unknown[]): string {
+  for (const value of values) {
+    const normalizedValue = String(value || '').trim().toUpperCase();
+    if (/^[A-Z]{2,3}$/.test(normalizedValue)) return normalizedValue;
+    const labelMatch = normalizedValue.match(/\(([A-Z]{2,3})\)\s*$/);
+    if (labelMatch) return labelMatch[1];
+    const country = findUnCountry(String(value || ''));
+    if (country) return country.iso3;
+  }
+  return '';
+}
+
+function getRouteCountryPair(state: RouteCountryState = {}): { exporterIso: string; importerIso: string } {
+  const route = state.geopoliticalRoute || {};
+  return {
+    exporterIso: readCountryIso(
+      state.originCountry,
+      state.polIso,
+      state.routeGeometry?.coordinates?.pol?.countryCode,
+      route.originCountry,
+      route.polIso,
+      state.pol,
+      route.pol,
+    ),
+    importerIso: readCountryIso(
+      state.destinationCountry,
+      state.podIso,
+      state.routeGeometry?.coordinates?.pod?.countryCode,
+      route.destinationCountry,
+      route.podIso,
+      state.pod,
+      route.pod,
+    ),
+  };
+}
+
 function renderComparison(root: HTMLElement, result: TradeMarginResult | null): void {
   const freight = readSeaCharterFreight();
   const margin = Number(result?.logisticsMarginPerMt || 0);
@@ -93,14 +155,22 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
       </header>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <label class="block">
-          <span class="block text-xs font-medium text-slate-500 mb-1">Mercado importador</span>
-          <input class="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5 transition-colors" data-comtrade-reporter value="USA" maxlength="3" autocomplete="off" aria-label="ISO del mercado importador">
-        </label>
-        <label class="block">
-          <span class="block text-xs font-medium text-slate-500 mb-1">Socio exportador</span>
-          <input class="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5 transition-colors" data-comtrade-partner value="WLD" maxlength="3" autocomplete="off" aria-label="ISO del socio exportador">
-        </label>
+        <div class="relative">
+          <label class="block text-xs font-medium text-slate-500 mb-1" for="comtrade-reporter-country">Mercado importador</label>
+          <div class="relative">
+            <input id="comtrade-reporter-country" class="bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5 pr-10 transition-colors" data-comtrade-reporter type="text" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="comtrade-reporter-options" placeholder="Buscar país o código ISO">
+            <i class="fa-solid fa-chevron-down pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" aria-hidden="true"></i>
+          </div>
+          <div id="comtrade-reporter-options" class="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-xl shadow-slate-900/10" data-comtrade-reporter-options role="listbox" hidden></div>
+        </div>
+        <div class="relative">
+          <label class="block text-xs font-medium text-slate-500 mb-1" for="comtrade-partner-country">Socio exportador</label>
+          <div class="relative">
+            <input id="comtrade-partner-country" class="bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5 pr-10 transition-colors" data-comtrade-partner type="text" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="comtrade-partner-options" placeholder="Buscar país o código ISO">
+            <i class="fa-solid fa-chevron-down pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" aria-hidden="true"></i>
+          </div>
+          <div id="comtrade-partner-options" class="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-xl shadow-slate-900/10" data-comtrade-partner-options role="listbox" hidden></div>
+        </div>
         <label class="block md:col-span-2">
           <span class="block text-xs font-medium text-slate-500 mb-1">Código SA</span>
           <select class="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5 transition-colors" data-comtrade-cmd aria-label="Código del Sistema Armonizado">
@@ -145,7 +215,7 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
       </div>
       <p class="mt-3 flex items-center gap-2 text-xs text-slate-400" data-comtrade-message>
         <i class="fa-solid fa-circle-info text-cyan-600" aria-hidden="true"></i>
-        Introduce códigos ISO-2/ISO-3. Usa WLD para el total mundial.
+        Busca por nombre, ISO-2, ISO-3 o código M49. La ruta activa completa ambos países automáticamente.
       </p>
     </section>
   `;
@@ -154,8 +224,33 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
   const partnerInput = root.querySelector<HTMLInputElement>('[data-comtrade-partner]');
   const cmdSelect = root.querySelector<HTMLSelectElement>('[data-comtrade-cmd]');
   const loadButton = root.querySelector<HTMLButtonElement>('[data-comtrade-load]');
+  const reporterCombobox = createCountryCombobox({
+    defaultIso: 'USA',
+    inputLabel: 'Mercado importador',
+    inputSelector: '[data-comtrade-reporter]',
+    listSelector: '[data-comtrade-reporter-options]',
+    root,
+  });
+  const partnerCombobox = createCountryCombobox({
+    defaultIso: 'WLD',
+    includeWorld: true,
+    inputLabel: 'Socio exportador',
+    inputSelector: '[data-comtrade-partner]',
+    listSelector: '[data-comtrade-partner-options]',
+    root,
+  });
   let latestResult: TradeMarginResult | null = null;
   let previousFreight = -1;
+  let previousRouteKey = '';
+
+  const syncRouteCountries = (state: RouteCountryState = {}) => {
+    const { exporterIso, importerIso } = getRouteCountryPair(state);
+    const routeKey = `${exporterIso}:${importerIso}`;
+    if (routeKey === ':' || routeKey === previousRouteKey) return;
+    const exporterSelected = exporterIso ? partnerCombobox.selectIso(exporterIso) : false;
+    const importerSelected = importerIso ? reporterCombobox.selectIso(importerIso) : false;
+    if (exporterSelected || importerSelected) previousRouteKey = routeKey;
+  };
 
   const refreshFreight = () => {
     const freight = readSeaCharterFreight();
@@ -171,7 +266,7 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
     setText(root, '[data-comtrade-message]', 'Consultando datos anuales de UN Comtrade…');
 
     try {
-      latestResult = await getTradeMargin(reporterInput.value, partnerInput.value, cmdSelect.value);
+      latestResult = await getTradeMargin(reporterCombobox.getValue(), partnerCombobox.getValue(), cmdSelect.value);
       renderComparison(root, latestResult);
       setText(root, '[data-comtrade-period]', `CIF − FOB · ${latestResult.period} · ${latestResult.netWeightMt.toLocaleString('en-US', { maximumFractionDigits: 0 })} TM`);
       setText(root, '[data-comtrade-message]', `Datos ${latestResult.source} almacenados localmente durante siete días.`);
@@ -191,6 +286,11 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
   const freightInput = document.getElementById('freight-sell');
   freightInput?.addEventListener('input', refreshFreight);
   freightInput?.addEventListener('change', refreshFreight);
+  const routeWindow = window as RouteAwareWindow;
+  const handleRouteDefined = (event: Event) => syncRouteCountries((event as CustomEvent<RouteCountryState>).detail || {});
+  window.addEventListener('SEA_ROUTE_DEFINED', handleRouteDefined);
+  const unsubscribeRouteStore = routeWindow.SeaCharterStore?.subscribe?.(syncRouteCountries);
+  syncRouteCountries(routeWindow.SeaCharterStore?.getState?.() || routeWindow.GlobalStore || {});
   const pollingId = window.setInterval(refreshFreight, 750);
   refreshFreight();
 
@@ -199,5 +299,9 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
     loadButton?.removeEventListener('click', loadMargin);
     freightInput?.removeEventListener('input', refreshFreight);
     freightInput?.removeEventListener('change', refreshFreight);
+    window.removeEventListener('SEA_ROUTE_DEFINED', handleRouteDefined);
+    unsubscribeRouteStore?.();
+    reporterCombobox.destroy();
+    partnerCombobox.destroy();
   };
 }
