@@ -2,6 +2,8 @@ const COMTRADE_PROXY_ENDPOINT = '/.netlify/functions/comtrade';
 const CACHE_PREFIX = 'seacharter:comtrade:v3';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const CONSOLIDATED_PERIODS = [2024, 2023] as const;
+const MAX_RATE_LIMIT_RETRIES = 2;
+const RATE_LIMIT_RETRY_DELAY_MS = 1200;
 
 const ISO3_TO_M49: Record<string, number> = {
   DZA: 12,
@@ -120,35 +122,48 @@ function normalizeCmdCode(value: string): string {
   return cmdCode;
 }
 
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(url);
-  } catch (error) {
-    console.error('[UN Comtrade] La petición al proxy no pudo completarse.', {
-      endpoint: COMTRADE_PROXY_ENDPOINT,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw new Error('No se pudo conectar con el servicio de UN Comtrade.');
+  for (let retryAttempt = 0; retryAttempt <= MAX_RATE_LIMIT_RETRIES; retryAttempt += 1) {
+    let response: Response;
+    try {
+      response = await fetch(url);
+    } catch (error) {
+      console.error('[UN Comtrade] La petición al proxy no pudo completarse.', {
+        endpoint: COMTRADE_PROXY_ENDPOINT,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new Error('No se pudo conectar con el servicio de UN Comtrade.');
+    }
+
+    const payload = await response.json().catch(() => ({})) as T & {
+      error?: string;
+      message?: string;
+      statusCode?: number;
+    };
+    const apiStatusCode = Number(payload.statusCode || 0);
+    const isRateLimited = response.status === 429 || apiStatusCode === 429;
+    if (isRateLimited && retryAttempt < MAX_RATE_LIMIT_RETRIES) {
+      await delay(RATE_LIMIT_RETRY_DELAY_MS);
+      continue;
+    }
+    if (!response.ok || apiStatusCode >= 400) {
+      const message = payload.message || payload.error || `UN Comtrade respondió con estado ${apiStatusCode || response.status}.`;
+      console.error('[UN Comtrade] Error del proxy o del servicio remoto.', {
+        endpoint: COMTRADE_PROXY_ENDPOINT,
+        httpStatus: response.status,
+        apiStatusCode: apiStatusCode || undefined,
+        message,
+      });
+      throw new Error(message);
+    }
+    return payload;
   }
 
-  const payload = await response.json().catch(() => ({})) as T & {
-    error?: string;
-    message?: string;
-    statusCode?: number;
-  };
-  const apiStatusCode = Number(payload.statusCode || 0);
-  if (!response.ok || apiStatusCode >= 400) {
-    const message = payload.message || payload.error || `UN Comtrade respondió con estado ${apiStatusCode || response.status}.`;
-    console.error('[UN Comtrade] Error del proxy o del servicio remoto.', {
-      endpoint: COMTRADE_PROXY_ENDPOINT,
-      httpStatus: response.status,
-      apiStatusCode: apiStatusCode || undefined,
-      message,
-    });
-    throw new Error(message);
-  }
-  return payload;
+  throw new Error('UN Comtrade agotó los reintentos disponibles.');
 }
 
 async function getReporterReferences(): Promise<ReporterReference[]> {

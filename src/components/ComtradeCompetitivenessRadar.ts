@@ -1,6 +1,6 @@
 import { getTradeMargin, type TradeMarginResult } from '../services/comtradeApi';
 import { findUnCountry } from '../data/unCountries';
-import { createCountryCombobox } from './CountryCombobox';
+import { createCountryCombobox, type CountryComboboxController } from './CountryCombobox';
 
 type RadarStatus = 'green' | 'yellow' | 'red' | 'neutral';
 
@@ -41,6 +41,27 @@ const STATUS_BADGE_CLASSES: Record<RadarStatus, string> = {
   red: 'flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg text-sm font-semibold w-full',
   neutral: 'flex items-center gap-2 bg-slate-50 border border-slate-200 text-slate-600 px-4 py-3 rounded-lg text-sm font-semibold w-full',
 };
+
+const COMTRADE_DEBOUNCE_MS = 1500;
+
+type DebouncedCallback = (() => void) & { cancel: () => void };
+
+function debounce(callback: () => void, waitMilliseconds: number): DebouncedCallback {
+  let timeoutId: number | undefined;
+  const debouncedCallback = (() => {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    timeoutId = window.setTimeout(() => {
+      timeoutId = undefined;
+      callback();
+    }, waitMilliseconds);
+  }) as DebouncedCallback;
+
+  debouncedCallback.cancel = () => {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    timeoutId = undefined;
+  };
+  return debouncedCallback;
+}
 
 function readSeaCharterFreight(): number {
   const freightInput = document.getElementById('freight-sell') as HTMLInputElement | null;
@@ -224,21 +245,8 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
   const partnerInput = root.querySelector<HTMLInputElement>('[data-comtrade-partner]');
   const cmdSelect = root.querySelector<HTMLSelectElement>('[data-comtrade-cmd]');
   const loadButton = root.querySelector<HTMLButtonElement>('[data-comtrade-load]');
-  const reporterCombobox = createCountryCombobox({
-    defaultIso: 'USA',
-    inputLabel: 'Mercado importador',
-    inputSelector: '[data-comtrade-reporter]',
-    listSelector: '[data-comtrade-reporter-options]',
-    root,
-  });
-  const partnerCombobox = createCountryCombobox({
-    defaultIso: 'WLD',
-    includeWorld: true,
-    inputLabel: 'Socio exportador',
-    inputSelector: '[data-comtrade-partner]',
-    listSelector: '[data-comtrade-partner-options]',
-    root,
-  });
+  let reporterCombobox: CountryComboboxController;
+  let partnerCombobox: CountryComboboxController;
   let latestResult: TradeMarginResult | null = null;
   let previousFreight = -1;
   let previousRouteKey = '';
@@ -282,7 +290,31 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
     }
   };
 
-  loadButton?.addEventListener('click', loadMargin);
+  const debouncedLoadMargin = debounce(() => void loadMargin(), COMTRADE_DEBOUNCE_MS);
+  const handleLoadClick = () => {
+    debouncedLoadMargin.cancel();
+    void loadMargin();
+  };
+  reporterCombobox = createCountryCombobox({
+    defaultIso: 'USA',
+    inputLabel: 'Mercado importador',
+    inputSelector: '[data-comtrade-reporter]',
+    listSelector: '[data-comtrade-reporter-options]',
+    onChange: debouncedLoadMargin,
+    root,
+  });
+  partnerCombobox = createCountryCombobox({
+    defaultIso: 'WLD',
+    includeWorld: true,
+    inputLabel: 'Socio exportador',
+    inputSelector: '[data-comtrade-partner]',
+    listSelector: '[data-comtrade-partner-options]',
+    onChange: debouncedLoadMargin,
+    root,
+  });
+
+  loadButton?.addEventListener('click', handleLoadClick);
+  cmdSelect?.addEventListener('change', debouncedLoadMargin);
   const freightInput = document.getElementById('freight-sell');
   freightInput?.addEventListener('input', refreshFreight);
   freightInput?.addEventListener('change', refreshFreight);
@@ -296,7 +328,9 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
 
   return () => {
     window.clearInterval(pollingId);
-    loadButton?.removeEventListener('click', loadMargin);
+    debouncedLoadMargin.cancel();
+    loadButton?.removeEventListener('click', handleLoadClick);
+    cmdSelect?.removeEventListener('change', debouncedLoadMargin);
     freightInput?.removeEventListener('input', refreshFreight);
     freightInput?.removeEventListener('change', refreshFreight);
     window.removeEventListener('SEA_ROUTE_DEFINED', handleRouteDefined);

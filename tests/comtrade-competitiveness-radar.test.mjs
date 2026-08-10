@@ -26,6 +26,10 @@ test('Comtrade service uses the Netlify proxy and seven-day browser cache', () =
   assert.match(serviceSource, /cifPricePerMt - fobPricePerMt/);
   assert.match(serviceSource, /getTradeRecords\(reporterCode, 0, normalizedCmdCode, 'M'\)/);
   assert.match(serviceSource, /getTradeRecords\(partnerCode, 0, normalizedCmdCode, 'X'\)/);
+  assert.match(serviceSource, /MAX_RATE_LIMIT_RETRIES = 2/);
+  assert.match(serviceSource, /RATE_LIMIT_RETRY_DELAY_MS = 1200/);
+  assert.match(serviceSource, /response\.status === 429 \|\| apiStatusCode === 429/);
+  assert.match(serviceSource, /await delay\(RATE_LIMIT_RETRY_DELAY_MS\)/);
 });
 
 test('competitiveness radar mounts inside commercial negotiation', () => {
@@ -34,6 +38,9 @@ test('competitiveness radar mounts inside commercial negotiation', () => {
   assert.match(entrySource, /ComtradeCompetitivenessRadar\(root\)/);
   assert.match(componentSource, /252310 · Clinker de cemento/);
   assert.match(componentSource, /data-comtrade-signal/);
+  assert.match(componentSource, /COMTRADE_DEBOUNCE_MS = 1500/);
+  assert.match(componentSource, /onChange: debouncedLoadMargin/);
+  assert.match(componentSource, /addEventListener\('change', debouncedLoadMargin\)/);
 });
 
 test('radar remains isolated from phase-one recalculation logic', () => {
