@@ -7709,14 +7709,14 @@
             <div id="map-command-shell" class="map-command-shell relative w-full h-full min-h-[600px] xl:min-h-[800px] overflow-hidden">
                 <div id="map-host" class="density-globe-stage absolute inset-0 w-full h-full min-h-[600px] xl:min-h-[800px] rounded-lg border border-[#e0e0e0] bg-blue-100 overflow-hidden shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
                     <div id="map-container" class="density-globe-canvas absolute inset-0 w-full h-full min-h-[600px] xl:min-h-[800px] rounded-lg border border-slate-200 bg-slate-950 overflow-hidden" data-globe-renderer>
-                        <div id="map-skeleton" class="map-skeleton-container" aria-label="Cargando visor cartográfico">
-                            <div class="map-skeleton-globe">
-                                <div class="map-skeleton-pulse"></div>
+                        <div id="map-skeleton" class="w-full h-full min-h-[600px] flex flex-col items-center justify-center bg-slate-900 text-white" role="status" aria-live="polite" aria-label="Iniciando visor cartográfico">
+                            <div class="relative mb-8 flex h-20 w-20 items-center justify-center" aria-hidden="true">
+                                <div class="absolute inset-0 rounded-full border border-cyan-400/20 shadow-[0_0_40px_rgba(34,211,238,0.18)]"></div>
+                                <div class="h-16 w-16 animate-spin rounded-full border-2 border-slate-700 border-r-blue-500 border-t-cyan-400"></div>
+                                <div class="absolute h-3 w-3 rounded-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.95)]"></div>
                             </div>
-                            <div class="map-skeleton-status">
-                                <span class="map-skeleton-pulse"></span>
-                                <span>Cargando Visor Cartográfico...</span>
-                            </div>
+                            <h2 class="text-2xl font-semibold tracking-[0.12em] text-white sm:text-3xl">SeaCharter Core PRO</h2>
+                            <p class="mt-3 px-6 text-center text-sm font-medium tracking-wide text-slate-300 sm:text-base">Iniciando Rodahmar Engine y visor cartográfico...</p>
                         </div>
                     </div>
                 </div>
