@@ -7,6 +7,8 @@ const EMPTY_DRAFT = Object.freeze({
     cargo: { description: '', quantityMt: 0 },
     ballastDistanceNm: null,
     lastreCoordinates: [],
+    distanceNm: null,
+    routeGeometry: null,
     vessel: null,
     updatedAt: null,
     lastSource: '',
@@ -86,6 +88,8 @@ export const voyageStore = createStore((set, get) => ({
                 quantityMt: cleanNumber(state.cargoQuantity || state.cargo),
             },
             ballastDistanceNm: cleanNumber(state.distBallast) || current.draft.ballastDistanceNm,
+            distanceNm: cleanNumber(state.totalMiles ?? state.distanceNm) || current.draft.distanceNm,
+            routeGeometry: state.routeGeometry || current.draft.routeGeometry,
             vessel: normalizeVessel({
                 name: state.vesselName || state.vessel,
                 imo: state.imo,
@@ -108,6 +112,20 @@ export const voyageStore = createStore((set, get) => ({
                 vessel: normalizeVessel(vessel) || current.draft.vessel,
                 updatedAt: new Date().toISOString(),
                 lastSource: 'tracking-audit',
+            },
+        };
+    }),
+    applyTrackingRoute: ({ distanceNm, routeGeometry, ballastDistanceNm, lastreCoordinates } = {}) => set((current) => {
+        const normalizedCoordinates = normalizeRouteCoordinates(lastreCoordinates);
+        return {
+            draft: {
+                ...current.draft,
+                ballastDistanceNm: cleanNumber(ballastDistanceNm) || current.draft.ballastDistanceNm,
+                lastreCoordinates: normalizedCoordinates.length > 2 ? normalizedCoordinates : current.draft.lastreCoordinates,
+                distanceNm: cleanNumber(distanceNm) || current.draft.distanceNm,
+                routeGeometry: routeGeometry && typeof routeGeometry === 'object' ? routeGeometry : current.draft.routeGeometry,
+                updatedAt: new Date().toISOString(),
+                lastSource: 'tracking-route',
             },
         };
     }),
