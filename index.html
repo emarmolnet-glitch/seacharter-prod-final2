@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <style> html, body { background-color: #0f172a !important; color: #f1f5f9 !important; margin: 0; padding: 0; } </style>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * wss: https:; img-src * data: blob:; style-src * 'unsafe-inline';">
@@ -149,7 +150,7 @@
     <!-- El renderer cartográfico se carga bajo demanda al abrir Mapa, Radar AIS o Tracking. -->
     <link rel="stylesheet" href="./assets/css/contextual-feedback.css?v=20260717-ui-hotfix">
     <link rel="stylesheet" href="./ais-market-reference-widget.css?v=20260721">
-    <script src="./network-resilience.js?v=20260807-circuit-breaker"></script>
+    <script defer src="./network-resilience.js?v=20260807-circuit-breaker"></script>
     <script type="module" src="./cargo-taxonomy.mjs"></script>
     <script type="module" src="./AisMarketReferenceWidget.ts"></script>
     <script type="module" src="./map_loader.js?v=20260802-ais-heading"></script>
@@ -173,10 +174,10 @@
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="./public/components.js"></script>
-    <script src="/contract-reference.js"></script>
-    <script src="./npl-data-analysis-engine.js"></script>
-    <script src="./npl-secret-module.js"></script>
+    <script defer src="./public/components.js"></script>
+    <script defer src="/contract-reference.js"></script>
+    <script defer src="./npl-data-analysis-engine.js"></script>
+    <script defer src="./npl-secret-module.js"></script>
     <script type="module" src="./public/ConnectionStatusBar.js"></script>
     <script type="module" src="./voyage-cost-engine.js"></script>
     <script type="module" src="./stress-test-engine.js"></script>
@@ -188,7 +189,7 @@
     <script type="module" src="./src/due-diligence-entry.js"></script>
     <script type="module" src="./src/density-commercial-funnel.js"></script>
     <script type="module" src="./src/tracking-aisstream-entry.tsx"></script>
-    <script src="./session-draft.js"></script>
+    <script defer src="./session-draft.js"></script>
     <script type="module" src="./src/voyage-draft-entry.js"></script>
     <script type="module" src="./src/header-workflow-progress.js"></script>
     <script type="module" src="./dual-mode-overlay.js"></script>
@@ -15082,13 +15083,17 @@
 	            }
 	        };
         window.SeaCharterStore = SeaCharterStore;
-        window.SeaCharterSessionDraftController = window.SeaCharterSessionDraft?.initialize({
-            store: SeaCharterStore,
-            hydrate: (sessionState) => {
-                SeaCharterStore.set(sessionState);
-                syncGlobalStateToForms();
-            }
-        });
+        const initializeSessionDraftController = () => {
+            window.SeaCharterSessionDraftController = window.SeaCharterSessionDraft?.initialize({
+                store: SeaCharterStore,
+                hydrate: (sessionState) => {
+                    SeaCharterStore.set(sessionState);
+                    syncGlobalStateToForms();
+                }
+            });
+        };
+        if (window.SeaCharterSessionDraft) initializeSessionDraftController();
+        else document.addEventListener('DOMContentLoaded', initializeSessionDraftController, { once: true });
 
         const CALCULATOR_LOCAL_STORAGE_KEYS = [
             'calculator_break_even',
@@ -26387,8 +26392,6 @@
             return Boolean(host && mapEl && host.contains(mapEl) && map);
         }
 
-        let routeMapInitTimer = null;
-        let routeMapIdleCallbackId = null;
         let mapCartographyPromise = null;
 
         function ensureMapCartographyLoaded() {
@@ -26405,14 +26408,8 @@
         }
 
         function destroyRouteMap() {
-            if (routeMapInitTimer) clearTimeout(routeMapInitTimer);
-            routeMapInitTimer = null;
             if (routeMapMountFrameId) cancelAnimationFrame(routeMapMountFrameId);
             routeMapMountFrameId = null;
-            if (routeMapIdleCallbackId !== null && 'cancelIdleCallback' in window) {
-                window.cancelIdleCallback(routeMapIdleCallbackId);
-            }
-            routeMapIdleCallbackId = null;
             window.GlobalFleetGlobe?.destroy?.('main');
             map = null;
             window.map = null;
@@ -26428,59 +26425,46 @@
             }
             mapView = document.getElementById('view-map');
             if (!mapView || mapView.classList.contains('hidden')) return;
-            if (routeMapInitTimer) clearTimeout(routeMapInitTimer);
-            routeMapInitTimer = setTimeout(() => {
-                const doMount = () => {
-                    try {
-                        const mapContainer = document.getElementById('map-container');
-                        if (!mapContainer) return;
-                        if (map) {
-                            try { resizeRouteMap(map); } catch (_) {}
-                            return;
-                        }
-                        const mapBounds = mapContainer.getBoundingClientRect();
-                        if (mapBounds.width <= 1 || mapBounds.height <= 1) {
-                            mapContainer.dataset.renderKey = 'loading';
-                            if (!routeMapMountFrameId) {
-                                routeMapMountFrameId = requestAnimationFrame(() => {
-                                    routeMapMountFrameId = null;
-                                    try { initMap(); } catch (err) { console.error('Error in rAF initMap:', err); }
-                                });
-                            }
-                            return;
-                        }
-                        mapContainer.dataset.renderKey = 'mounted';
-                        const filteredVessels = (window.GlobalStore?.filteredVesselsInitialized)
-                            ? (window.GlobalStore?.getFilteredVessels?.() || [])
-                            : [];
-                        const vessels = window.getCanonicalRadarRenderFleet?.(filteredVessels)
-                            || (Array.isArray(filteredVessels) ? filteredVessels : []);
-                        if (window.GlobalFleetGlobe) {
-                            map = window.GlobalFleetGlobe.mount({
-                                containerId: 'map-container',
-                                vesselsData: vessels,
-                                renderKey: JSON.stringify(vessels),
-                                focusFirstVessel: false,
-                                focusActiveVesselOnMount: false
-                            });
-                            window.map = map;
-                            if (State?.routeGeometry) {
-                                try { window.GlobalFleetGlobe.setRouteResult(State.routeGeometry, 'main', { focus: false }); } catch (_) {}
-                            }
-                        }
-                    } catch (err) {
-                        console.error('Safe map initialization caught error:', err);
-                    }
-                };
-                if ('requestIdleCallback' in window) {
-                    routeMapIdleCallbackId = window.requestIdleCallback(() => {
-                        routeMapIdleCallbackId = null;
-                        doMount();
-                    }, { timeout: 1200 });
-                } else {
-                    doMount();
+            try {
+                const mapContainer = document.getElementById('map-container');
+                if (!mapContainer) return;
+                if (map) {
+                    try { resizeRouteMap(map); } catch (_) {}
+                    return;
                 }
-            }, 800);
+                const mapBounds = mapContainer.getBoundingClientRect();
+                if (mapBounds.width <= 1 || mapBounds.height <= 1) {
+                    mapContainer.dataset.renderKey = 'loading';
+                    if (!routeMapMountFrameId) {
+                        routeMapMountFrameId = requestAnimationFrame(() => {
+                            routeMapMountFrameId = null;
+                            try { initMap(); } catch (err) { console.error('Error in rAF initMap:', err); }
+                        });
+                    }
+                    return;
+                }
+                mapContainer.dataset.renderKey = 'mounted';
+                const filteredVessels = (window.GlobalStore?.filteredVesselsInitialized)
+                    ? (window.GlobalStore?.getFilteredVessels?.() || [])
+                    : [];
+                const vessels = window.getCanonicalRadarRenderFleet?.(filteredVessels)
+                    || (Array.isArray(filteredVessels) ? filteredVessels : []);
+                if (window.GlobalFleetGlobe) {
+                    map = window.GlobalFleetGlobe.mount({
+                        containerId: 'map-container',
+                        vesselsData: vessels,
+                        renderKey: JSON.stringify(vessels),
+                        focusFirstVessel: false,
+                        focusActiveVesselOnMount: false
+                    });
+                    window.map = map;
+                    if (State?.routeGeometry) {
+                        try { window.GlobalFleetGlobe.setRouteResult(State.routeGeometry, 'main', { focus: false }); } catch (_) {}
+                    }
+                }
+            } catch (err) {
+                console.error('Safe map initialization caught error:', err);
+            }
         }
 
         async function getCoordinates(query) {
@@ -49552,7 +49536,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             aisMapAnimationFrameId = null;
         }
 
-        let aisMapInitTimer = null;
         function getDensityPolCoordinates() {
             const candidates = [
                 State?.polCoordinates,
@@ -49599,13 +49582,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.getDensityReferencePortCoordinates = getDensityReferencePortCoordinates;
 
         function initAisMap() {
-            if (aisMapInitTimer) clearTimeout(aisMapInitTimer);
-            aisMapInitTimer = setTimeout(() => {
-                const densityView = document.getElementById('view-ais');
-                if (!densityView?.classList.contains('active-block')) return;
-                const densityPolCoordinates = getDensityPolCoordinates();
-                const doMount = () => {
-                    try {
+            const densityView = document.getElementById('view-ais');
+            if (!densityView?.classList.contains('active-block')) return;
+            const densityPolCoordinates = getDensityPolCoordinates();
+            try {
                         const mapContainer = document.getElementById('ais-map');
                         if (!mapContainer) return;
                         const mapBounds = mapContainer.getBoundingClientRect();
@@ -49701,16 +49681,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                                 try { window.reapplyCentralFiltersAndRedraw(); } catch (_) {}
                             }
                         });
-                    } catch (err) {
-                        console.error('Safe AIS map initialization caught error:', err);
-                    }
-                };
-                if ('requestIdleCallback' in window) {
-                    window.requestIdleCallback(doMount, { timeout: 1200 });
-                } else {
-                    doMount();
-                }
-            }, 800);
+            } catch (err) {
+                console.error('Safe AIS map initialization caught error:', err);
+            }
         }
 
         // Explicit cleanup remains available for full application teardown or recovery,
