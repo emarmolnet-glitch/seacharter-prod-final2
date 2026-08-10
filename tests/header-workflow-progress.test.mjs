@@ -9,14 +9,33 @@ const [indexSource, progressSource] = await Promise.all([
 
 test('header workflow progress validates the DraftVoyage without mutating it', () => {
   assert.match(progressSource, /import \{ voyageStore \}/);
+  assert.match(progressSource, /import \{ trackingStore \}/);
   assert.match(progressSource, /draft\?\.pol\?\.name/);
   assert.match(progressSource, /draft\?\.pod\?\.name/);
   assert.match(progressSource, /draft\?\.laycan\?\.laydays/);
-  assert.match(progressSource, /draft\?\.cargo\?\.quantityMt/);
+  assert.match(progressSource, /calculator\?\.breakEven/);
+  assert.match(progressSource, /calculator\?\.freightRate/);
+  assert.match(progressSource, /decisions\?\.riskAuditGenerated/);
+  assert.match(progressSource, /tracking\?\.contractPayload/);
   assert.match(progressSource, /draft\?\.ballastDistanceNm/);
   assert.match(progressSource, /draft\?\.vessel\?\.name \|\| draft\?\.vessel\?\.imo/);
+  assert.match(progressSource, /calculator\?\.stowageFactor/);
+  assert.match(progressSource, /calculator\?\.requiredVolumeCbm/);
+  assert.match(progressSource, /globalStore\?\.matchingVessels/);
+  assert.match(progressSource, /matchingResults\?\.vessels/);
+  assert.match(progressSource, /calculator\?\.contractDraft/);
+  assert.match(progressSource, /workflow\?\.legalReportGenerated/);
+  assert.match(progressSource, /calculator\?\.riskScore/);
   assert.match(progressSource, /voyageStore\.subscribe/);
+  assert.match(progressSource, /trackingStore\.subscribe/);
+  assert.match(progressSource, /SeaCharterStore\?\.subscribe/);
   assert.doesNotMatch(progressSource, /updateFromCalculator|applyTrackingAudit|clearDraft|\.setState\s*\(/);
+});
+
+test('header workflow progress covers every primary navigation module', () => {
+  for (const moduleId of ['map', 'estimator', 'decisiones', 'tracking', 'ais', 'matching', 'gencon', 'auditor']) {
+    assert.match(progressSource, new RegExp(`\\b${moduleId}:`));
+  }
 });
 
 test('header workflow progress decorates desktop and mobile module buttons', () => {
