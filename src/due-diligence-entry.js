@@ -1119,6 +1119,9 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
                 : densityCommercialFlow
                 ? 'Datos técnicos guardados correctamente.'
                 : 'Due Diligence guardada correctamente en Neon.');
+            globalScope.HeaderWorkflowActions?.markDueDiligenceCompleted?.(
+                verifiedVessel.imo || verifiedVessel.imo_number || verifiedVessel.mmsi || verifiedVessel.vesselName || verifiedVessel.vessel_name
+            );
             return true;
         } catch (error) {
             const status = card?.querySelector('[data-due-diligence-status]');

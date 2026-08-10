@@ -1,6 +1,7 @@
-import { load } from "cheerio";
+import { extractBixWorldPrices, extractShipAndBunkerGlobalPrices } from "./_shared/bunker-price-parser.mjs";
 
 const BUNKER_INDEX_URL = "https://www.bunkerindex.com/";
+const SHIP_AND_BUNKER_URL = "https://shipandbunker.com/prices/av";
 const SCRAPER_TIMEOUT_MS = 25_000;
 const DIRECT_TIMEOUT_MS = 12_000;
 const browserHeaders = {
@@ -29,12 +30,6 @@ function jsonResponse(body, status = 200, cacheable = false) {
     },
     body: JSON.stringify(body),
   };
-}
-
-function parsePrice(str) {
-  if (!str) return null;
-  const match = String(str).replace(/,/g, "").trim().match(/(?:US\$|\$)?\s*(\d+(?:\.\d+)?)/i);
-  return match ? Number.parseFloat(match[1]) : null;
 }
 
 function createScrapingError(code, message, details = {}) {
@@ -84,7 +79,7 @@ async function readHtmlResponse(response, provider) {
   throw createScrapingError("INVALID_SCRAPER_PAYLOAD", `${provider} no devolvió HTML utilizable.`, { provider });
 }
 
-function buildConfiguredScraperRequest() {
+function buildConfiguredScraperRequest(targetUrl) {
   const configuredUrl = process.env.SCRAPER_API_URL;
   const token = process.env.SCRAPER_API_TOKEN;
   if (!configuredUrl || !token) return null;
@@ -99,13 +94,13 @@ function buildConfiguredScraperRequest() {
   const hostname = endpoint.hostname.toLowerCase();
   if (hostname.includes("scraperapi.com")) {
     endpoint.searchParams.set("api_key", token);
-    endpoint.searchParams.set("url", BUNKER_INDEX_URL);
+    endpoint.searchParams.set("url", targetUrl);
     endpoint.searchParams.set("render", "false");
     return { endpoint, init: { headers: { Accept: "text/html" } }, provider: "scraper-api" };
   }
   if (hostname.includes("scrapingbee.com")) {
     endpoint.searchParams.set("api_key", token);
-    endpoint.searchParams.set("url", BUNKER_INDEX_URL);
+    endpoint.searchParams.set("url", targetUrl);
     endpoint.searchParams.set("render_js", "false");
     return { endpoint, init: { headers: { Accept: "text/html" } }, provider: "scrapingbee" };
   }
@@ -122,16 +117,16 @@ function buildConfiguredScraperRequest() {
         "X-API-Key": token,
       },
       body: JSON.stringify({
-        url: BUNKER_INDEX_URL,
+        url: targetUrl,
         headers: browserHeaders,
-        waitForSelector: ".tablePrices1-div > table.tablePrices1",
+        waitForSelector: "body",
       }),
     },
   };
 }
 
-async function fetchThroughConfiguredScraper() {
-  const request = buildConfiguredScraperRequest();
+async function fetchThroughConfiguredScraper(targetUrl, sourceName) {
+  const request = buildConfiguredScraperRequest(targetUrl);
   if (!request) {
     throw createScrapingError("SCRAPER_NOT_CONFIGURED", "No hay un bypass de scraping configurado.", {
       provider: "configured-scraper",
@@ -153,13 +148,13 @@ async function fetchThroughConfiguredScraper() {
     );
   }
 
-  return readHtmlResponse(response, request.provider);
+  return readHtmlResponse(response, `${sourceName} vía ${request.provider}`);
 }
 
-async function fetchDirectly() {
+async function fetchDirectly(targetUrl, sourceName) {
   let response;
   try {
-    response = await fetch(BUNKER_INDEX_URL, {
+    response = await fetch(targetUrl, {
       headers: browserHeaders,
       redirect: "follow",
       signal: AbortSignal.timeout(DIRECT_TIMEOUT_MS),
@@ -168,69 +163,12 @@ async function fetchDirectly() {
     const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
     throw createScrapingError(
       timedOut ? "DIRECT_TIMEOUT" : "DIRECT_NETWORK_ERROR",
-      timedOut ? "BunkerIndex agotó el tiempo de espera." : "No se pudo conectar directamente con BunkerIndex.",
-      { provider: "direct" },
+      timedOut ? `${sourceName} agotó el tiempo de espera.` : `No se pudo conectar directamente con ${sourceName}.`,
+      { provider: `${sourceName}-direct` },
     );
   }
 
-  return readHtmlResponse(response, "BunkerIndex directo");
-}
-
-function extractBixWorldPrices(html) {
-  const $ = load(html);
-  const heading = $("h1,h2,h3,h4,h5,h6").filter((_, element) => {
-    return $(element).text().replace(/\s+/g, " ").trim().startsWith("BIX Indices");
-  }).first();
-  const bixTable = heading.closest(".well").children(".tablePrices1-div").children("table.tablePrices1").first();
-
-  if (!heading.length || !bixTable.length) {
-    throw createScrapingError("BIX_TABLE_NOT_FOUND", "No se encontró la tabla lateral BIX Indices.", {
-      provider: "bunkerindex-dom",
-    });
-  }
-
-  const headerNames = bixTable.children("tbody").children("tr").first().children("td,th").map((_, cell) => {
-    return $(cell).text().replace(/\s+/g, " ").trim().toUpperCase();
-  }).get();
-  const expectedHeaders = ["IFO 380", "VLSFO", "MGO"];
-  if (!expectedHeaders.every((header) => headerNames.includes(header))) {
-    throw createScrapingError("BIX_HEADERS_CHANGED", "Las columnas IFO 380, VLSFO y MGO no coinciden con BIX Indices.", {
-      provider: "bunkerindex-dom",
-    });
-  }
-
-  const worldRow = bixTable.children("tbody").children("tr").filter((_, row) => {
-    const indexCell = $(row).children("td").first();
-    const worldLink = indexCell.find('a[href$="indices/world.php"]').first();
-    return worldLink.text().replace(/\s+/g, " ").trim().toLowerCase() === "world";
-  }).first();
-  const priceCells = worldRow.children("td").eq(1).find("table").first().find("tr").first().children("td");
-
-  if (!worldRow.length || priceCells.length !== expectedHeaders.length) {
-    throw createScrapingError("BIX_WORLD_ROW_NOT_FOUND", "No se encontró la fila World completa en BIX Indices.", {
-      provider: "bunkerindex-dom",
-    });
-  }
-
-  const pricesByHeader = Object.fromEntries(expectedHeaders.map((header) => {
-    const priceCellIndex = headerNames.indexOf(header) - 1;
-    const cleanCell = priceCells.eq(priceCellIndex).clone();
-    cleanCell.find("span,img").remove();
-    return [header, parsePrice(cleanCell.text())];
-  }));
-  const prices = {
-    ifo380: pricesByHeader["IFO 380"],
-    vlsfo: pricesByHeader.VLSFO,
-    mgo: pricesByHeader.MGO,
-  };
-
-  if (!Object.values(prices).every((price) => Number.isFinite(price) && price > 0)) {
-    throw createScrapingError("BIX_PRICE_PARSE_ERROR", "La fila World no contiene tres precios válidos.", {
-      provider: "bunkerindex-dom",
-    });
-  }
-
-  return prices;
+  return readHtmlResponse(response, `${sourceName} directo`);
 }
 
 function summarizeAttempt(error) {
@@ -244,26 +182,43 @@ function summarizeAttempt(error) {
 
 async function scrapeBunkerPrices() {
   const attempts = [];
+  const scraperConfigured = Boolean(process.env.SCRAPER_API_URL && process.env.SCRAPER_API_TOKEN);
   const sources = [
-    { name: "scraper-api", fetchHtml: fetchThroughConfiguredScraper },
-    { name: "direct", fetchHtml: fetchDirectly },
+    {
+      name: "Bunker Index",
+      url: BUNKER_INDEX_URL,
+      parser: extractBixWorldPrices,
+      transports: scraperConfigured ? ["scraper", "direct"] : ["direct"],
+    },
+    {
+      name: "Ship & Bunker",
+      url: SHIP_AND_BUNKER_URL,
+      parser: extractShipAndBunkerGlobalPrices,
+      transports: scraperConfigured ? ["direct", "scraper"] : ["direct"],
+    },
   ];
 
   for (const source of sources) {
-    try {
-      const html = await source.fetchHtml();
-      const prices = extractBixWorldPrices(html);
-      const relevantAttempts = attempts.filter((attempt) => attempt.code !== "SCRAPER_NOT_CONFIGURED");
-      if (relevantAttempts.length > 0) {
-        console.warn("[get-bunker-prices] Se usó una fuente alternativa tras fallar el bypass.", relevantAttempts);
+    for (const transport of source.transports) {
+      try {
+        const html = transport === "scraper"
+          ? await fetchThroughConfiguredScraper(source.url, source.name)
+          : await fetchDirectly(source.url, source.name);
+        const prices = source.parser(html);
+        const relevantAttempts = attempts.filter((attempt) => attempt.code !== "SCRAPER_NOT_CONFIGURED");
+        if (relevantAttempts.length > 0) {
+          console.warn(`[get-bunker-prices] ${source.name} respondió tras fallar intentos anteriores.`, relevantAttempts);
+        }
+        return { ...prices, source: source.name, transport, attempts };
+      } catch (error) {
+        attempts.push(summarizeAttempt(Object.assign(error instanceof Error ? error : new Error("Error desconocido."), {
+          provider: error?.provider || `${source.name}-${transport}`,
+        })));
       }
-      return { ...prices, source: source.name, attempts };
-    } catch (error) {
-      attempts.push(summarizeAttempt(error));
     }
   }
 
-  throw createScrapingError("ALL_SOURCES_FAILED", "No se pudo extraer el índice World de BunkerIndex.", { attempts });
+  throw createScrapingError("ALL_SOURCES_FAILED", "No se pudieron extraer precios de Bunker Index ni Ship & Bunker.", { attempts });
 }
 
 export const handler = async (event, context) => {
@@ -287,6 +242,7 @@ export const handler = async (event, context) => {
       mgo: prices.mgo,
       index: "World",
       source: prices.source,
+      transport: prices.transport,
       sourceDate: fetchedAt.slice(0, 10),
       fetchedAt,
     }, 200, true);

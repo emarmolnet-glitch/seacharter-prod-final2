@@ -15180,6 +15180,10 @@
                     || referenceManager?.setActiveContractRef?.(window.generateVoyageRef?.() || '')
                     || window.generateVoyageRef?.()
                     || '';
+            if (!silent) {
+                window.HeaderWorkflowActions?.resetProgress?.();
+                window.TrackingStore?.getState?.().reset?.();
+            }
             clearCalculatorLocalStorage();
             Object.keys(State).forEach((key) => {
                 if (key === 'uploadedFile') State[key] = null;
@@ -36949,6 +36953,7 @@
                 if (typeof showToast === 'function') {
                     showToast('✅ Condiciones definitivas fijadas correctamente. Generando Fixture Recap PDF...');
                 }
+                window.HeaderWorkflowActions?.markFinalConditionsSet?.();
 
                 if (typeof generateFixtureRecapPDF === 'function') {
                     try {
@@ -36980,6 +36985,7 @@
 
                 window.isContractAccepted = true;
                 window.contractAcceptedType = type;
+                window.HeaderWorkflowActions?.markContractAccepted?.();
 
                 const containerId = type === 'asbatankvoy' ? 'view-asbatankvoy' : 'view-gencon';
                 const container = document.getElementById(containerId);
@@ -46298,6 +46304,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
                 document.getElementById('loadingState').classList.add('hidden');
                 document.getElementById('resultsContent').classList.remove('hidden');
+                window.HeaderWorkflowActions?.markAuditReportGenerated?.();
 
             } catch (error) {
                 console.error(error);
@@ -48208,7 +48215,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         host.querySelector('[data-radar-global-button]')?.addEventListener('click', () => {
                             const context = host.dataset.radarContext || 'global';
                             return context === 'matching'
-                                ? window.executeMatchingRadarSweep?.()
+                                ? window.executeMatchingRadarSweep?.({ trigger: 'user' })
                                 : window.RadarGlobalControl.toggle(context);
                         });
                         host.dataset.radarMounted = 'true';
@@ -48578,7 +48585,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
         window.processMatchingRadarResponse = processMatchingRadarResponse;
 
-        window.executeMatchingRadarSweep = async function() {
+        window.executeMatchingRadarSweep = async function(options = {}) {
+            const userTriggered = options?.trigger === 'user';
             const polContext = window.getMatchingRadarPolContext?.() || { valid: false, pol: '' };
             if (!polContext.valid) {
                 if (typeof showToast === 'function') {
@@ -48739,6 +48747,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
                 window.RadarGlobalControl?.setState?.({ mode: 'live', status: 'idle', source: 'matching-radar-sweep', liveAt: new Date().toISOString() });
                 window.renderRadarTaxonomyFilterFeedback?.(taxonomyFilter);
+                if (userTriggered) window.HeaderWorkflowActions?.markRadarSweepExecuted?.();
                 return matches;
             })().catch(error => {
                 window.showMatchingEmptyState?.();

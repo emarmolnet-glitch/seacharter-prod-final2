@@ -1,4 +1,5 @@
 import { createStore } from 'zustand/vanilla';
+import { subscribeWithSelector } from 'zustand/middleware';
 
 const EMPTY_DRAFT = Object.freeze({
     pol: null,
@@ -72,7 +73,7 @@ export function hasOperationalDraft(draft) {
     );
 }
 
-export const voyageStore = createStore((set, get) => ({
+export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
     draft: { ...EMPTY_DRAFT, laycan: { ...EMPTY_DRAFT.laycan }, cargo: { ...EMPTY_DRAFT.cargo } },
     updateFromCalculator: (state = {}) => set((current) => ({
         draft: {
@@ -133,6 +134,6 @@ export const voyageStore = createStore((set, get) => ({
         draft: { ...EMPTY_DRAFT, laycan: { ...EMPTY_DRAFT.laycan }, cargo: { ...EMPTY_DRAFT.cargo } },
     }),
     hasOperationalDraft: () => hasOperationalDraft(get().draft),
-}));
+})));
 
 export const useVoyageStore = voyageStore;

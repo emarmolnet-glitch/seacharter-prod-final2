@@ -4,6 +4,9 @@ export type TrackingStoreState = {
   mode: "free" | "audit" | "contract";
   contractPayload: Record<string, unknown> | null;
   vessel: Record<string, unknown> | null;
+  overlayOpen: boolean;
+  referenceValidated: boolean;
+  validatedReference: string;
   referenceLoading: boolean;
   vesselLoading: boolean;
   error: string;
@@ -15,6 +18,8 @@ export type TrackingStoreState = {
   setVessel: (vessel: Record<string, unknown>) => void;
   failVesselSearch: (error: unknown) => void;
   clearContract: () => void;
+  setOverlayOpen: (overlayOpen: boolean) => void;
+  resetSession: () => void;
   reset: () => void;
 };
 
