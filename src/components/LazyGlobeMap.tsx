@@ -17,24 +17,22 @@ interface GlobeWindow extends Window {
 
 export function MapSkeletonFallback() {
   return (
-    <div
-      className="w-full h-full min-h-[600px] flex flex-col items-center justify-center bg-slate-900 text-white"
-      role="status"
-      aria-live="polite"
-      aria-label="Iniciando visor cartográfico"
-    >
-      <div className="relative mb-8 flex h-20 w-20 items-center justify-center" aria-hidden="true">
-        <div className="absolute inset-0 rounded-full border border-cyan-400/20 shadow-[0_0_40px_rgba(34,211,238,0.18)]" />
-        <div className="h-16 w-16 animate-spin rounded-full border-2 border-slate-700 border-r-blue-500 border-t-cyan-400" />
-        <div className="absolute h-3 w-3 rounded-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.95)]" />
+    <div className="w-full h-full min-h-[600px] flex flex-col items-center justify-center bg-slate-900 text-slate-100">
+      {/* Efecto Radar / Spinner */}
+      <div className="relative flex items-center justify-center mb-8">
+        <div className="absolute inset-0 rounded-full border-4 border-cyan-500/30 animate-ping"></div>
+        <div className="h-16 w-16 rounded-full border-4 border-cyan-500 border-t-transparent animate-spin"></div>
+        <div className="absolute h-3 w-3 rounded-full bg-cyan-400"></div>
       </div>
 
-      <h2 className="text-2xl font-semibold tracking-[0.12em] text-white sm:text-3xl">
-        SeaCharter Core PRO
-      </h2>
-      <p className="mt-3 px-6 text-center text-sm font-medium tracking-wide text-slate-300 sm:text-base">
-        Iniciando Rodahmar Engine y visor cartográfico...
-      </p>
+      {/* Textos */}
+      <h2 className="text-2xl font-bold tracking-wide text-white">SeaCharter Core PRO</h2>
+      <p className="mt-3 text-sm text-cyan-400 animate-pulse font-medium">Iniciando motor cartográfico y datos AIS...</p>
+
+      {/* Barra de progreso simulada */}
+      <div className="mt-8 w-64 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+        <div className="h-full bg-cyan-500 w-full animate-pulse"></div>
+      </div>
     </div>
   );
 }
