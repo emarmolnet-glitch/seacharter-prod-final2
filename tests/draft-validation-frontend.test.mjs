@@ -50,6 +50,10 @@ test("NGA validation keeps a unified light corporate card in every state", () =>
 });
 
 test("Charter Party confirmation persists the required voyage fields and reports the result", () => {
+  const submitStart = routeConfiguratorSource.indexOf("const confirmCharterParty = async () =>");
+  const submitEnd = routeConfiguratorSource.indexOf("const isCleared =", submitStart);
+  const submitSource = routeConfiguratorSource.slice(submitStart, submitEnd);
+
   assert.match(routeConfiguratorSource, /fetch\("\/api\/v1\/charter-party", \{/);
   assert.match(routeConfiguratorSource, /contractRef:/);
   assert.match(routeConfiguratorSource, /imoNumber,/);
@@ -65,6 +69,8 @@ test("Charter Party confirmation persists the required voyage fields and reports
   assert.match(routeConfiguratorSource, /voyageStore\.getState\(\)\.clearDraft\(\)/);
   assert.match(routeConfiguratorSource, /Charter Party \$\{savedReference\} generado y guardado con éxito/);
   assert.match(routeConfiguratorSource, /No fue posible guardar el Charter Party/);
+  assert.doesNotMatch(submitSource, /calculatorWindow/);
+  assert.match(submitSource, /\(window as CalculatorWindow\)\.ContractRefManager\?\.setActiveContractRef\?\.\(savedReference\)/);
 });
 
 test("Data Bridge modal is exported globally and bound without inline handlers", () => {

@@ -121,7 +121,8 @@ test('Fearnleys failures propagate to the master orchestrator', () => {
 });
 
 test('master calculation batches store notifications across awaited work', () => {
-  assert.match(indexSource, /async batchAsync\(fn\)[\s\S]*this\.isBatching = true;[\s\S]*return await fn\(\);[\s\S]*this\.notify\(\)/);
+  assert.match(indexSource, /async batchAsync\(fn\)[\s\S]*this\.isBatching = true;[\s\S]*return await fn\(\);[\s\S]*this\.flushBatch\(\)/);
+  assert.match(indexSource, /flushBatch\(\)[\s\S]*if \(shouldNotify\) this\.notify\(\)/);
   assert.match(indexSource, /await SeaCharterStore\.batchAsync\(async \(\) => \{/);
   assert.match(indexSource, /await autoFillBunkers\(\{ managedByMaster: true \}\)/);
   assert.match(indexSource, /await autoFillPDA\('pol', false, \{ deferEngine: true \}\)/);
