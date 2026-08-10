@@ -1,14 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useStore } from "zustand";
 import { trackingStore } from "../stores/tracking-store.js";
 
 type TrackingState = ReturnType<typeof trackingStore.getState>;
 type Vessel = Record<string, unknown>;
-
-function useTrackingState() {
-  const [state, setState] = useState<TrackingState>(() => trackingStore.getState());
-  useEffect(() => trackingStore.subscribe((nextState: TrackingState) => setState(nextState)), []);
-  return state;
-}
 
 function normalizeMmsi(value: unknown) {
   const digits = String(value ?? "").replace(/\D/g, "");
@@ -31,22 +26,11 @@ function currentTrackingVessel(state: TrackingState) {
 }
 
 export default function TrackingAisStreamBridge() {
-  const state = useTrackingState();
-  const [trackingOpen, setTrackingOpen] = useState(false);
-  const vessel = currentTrackingVessel(state);
-  const mmsi = normalizeMmsi(vessel.mmsi ?? vessel.MMSI);
-
-  useEffect(() => {
-    const open = () => setTrackingOpen(true);
-    const close = () => setTrackingOpen(false);
-    document.addEventListener("tracking-live:open", open);
-    document.addEventListener("tracking-live:close", close);
-    setTrackingOpen(document.getElementById("tracking-live-overlay")?.classList.contains("is-open") === true);
-    return () => {
-      document.removeEventListener("tracking-live:open", open);
-      document.removeEventListener("tracking-live:close", close);
-    };
-  }, []);
+  const trackingOpen = useStore(trackingStore, (state) => state.overlayOpen);
+  const mmsi = useStore(trackingStore, (state) => {
+    const vessel = currentTrackingVessel(state);
+    return normalizeMmsi(vessel.mmsi ?? vessel.MMSI);
+  });
 
   useEffect(() => {
     if (!trackingOpen || !mmsi) {
@@ -69,11 +53,13 @@ export default function TrackingAisStreamBridge() {
       const detail = (event as CustomEvent).detail || {};
       const incoming = detail.vessel && typeof detail.vessel === "object" ? detail.vessel as Vessel : null;
       if (!incoming || normalizeMmsi(incoming.mmsi ?? incoming.MMSI) !== mmsi) return;
-      trackingStore.getState().setVessel({ ...vessel, ...incoming, positionSource: "AISSTREAM_CLIENT" });
+      const state = trackingStore.getState();
+      const vessel = currentTrackingVessel(state);
+      state.setVessel({ ...vessel, ...incoming, positionSource: "AISSTREAM_CLIENT" });
     };
     window.addEventListener("tracking:aisstream-update", handleUpdate);
     return () => window.removeEventListener("tracking:aisstream-update", handleUpdate);
-  }, [mmsi, vessel]);
+  }, [mmsi]);
 
   return null;
 }

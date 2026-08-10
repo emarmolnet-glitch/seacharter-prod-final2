@@ -1781,7 +1781,7 @@ function resetTrackingViewState({ mode = 'free' } = {}) {
     trackingState.activeVoyage = null;
     trackingState.activeVoyageLoading = false;
     trackingState.activeVoyageError = '';
-    trackingStore.getState().reset();
+    trackingStore.getState().resetSession();
     if (mode === 'audit' && hasAuditDraft()) populateDraftVoyageInputs();
     else populateActiveVoyageInputs(null);
     const contractInput = document.getElementById('tracking-live-contract-ref');
@@ -1805,6 +1805,7 @@ function openTrackingLive() {
     resetTrackingViewState({ mode: hasAuditDraft() ? 'audit' : 'free' });
     const overlay = document.getElementById('tracking-live-overlay');
     overlay?.classList.add('is-open');
+    trackingStore.getState().setOverlayOpen(true);
     setTrackingActiveTab(trackingState.activeTab);
     document.body.classList.add('tracking-live-open');
     const lifecycleToken = ++trackingMapLifecycleToken;
@@ -1839,6 +1840,7 @@ window.addEventListener('vessel-selection:changed', (event) => {
 function closeTrackingLive(options = {}) {
     const restoreNavigation = options?.restoreNavigation !== false;
     document.getElementById('tracking-live-overlay')?.classList.remove('is-open');
+    trackingStore.getState().setOverlayOpen(false);
     document.body.classList.remove('tracking-live-open');
     trackingMapLifecycleToken += 1;
     if (trackingMapMountFrameId !== null) window.cancelAnimationFrame(trackingMapMountFrameId);

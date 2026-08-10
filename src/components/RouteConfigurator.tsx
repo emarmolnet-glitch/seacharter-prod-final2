@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { voyageStore } from "../stores/voyage-store.js";
+import { workflowProgressStore } from "../stores/workflow-progress-store.js";
 
 export interface DraftValidationResponse {
   portIndexNo?: number;
@@ -451,6 +452,7 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
 
       const savedReference = responseBody.reference || payload.contractRef;
       (window as CalculatorWindow).ContractRefManager?.setActiveContractRef?.(savedReference);
+      workflowProgressStore.getState().markCharterPartyGenerated(savedReference);
       voyageStore.getState().clearDraft();
       setSuccessMessage(`Charter Party ${savedReference} generado y guardado con éxito`);
       onConfirm?.(validation);

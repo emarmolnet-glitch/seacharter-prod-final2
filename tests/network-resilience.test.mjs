@@ -73,8 +73,9 @@ test('polling, bunker caching and Globe fallback use resilient contracts', () =>
   assert.match(bunkerFunctionSource, /export const handler = async \(event, context\)/);
   assert.doesNotMatch(bunkerFunctionSource, /export default/);
   assert.match(bunkerFunctionSource, /statusCode: status/);
-  assert.match(bunkerFunctionSource, /\.tablePrices1-div > table\.tablePrices1/);
-  assert.match(bunkerFunctionSource, /a\[href\$=\"indices\/world\.php\"\]/);
+  assert.match(bunkerFunctionSource, /extractBixWorldPrices/);
+  assert.match(bunkerFunctionSource, /extractShipAndBunkerGlobalPrices/);
+  assert.match(bunkerFunctionSource, /https:\/\/shipandbunker\.com\/prices\/av/);
   assert.match(bunkerFunctionSource, /Error extrayendo Bunkers/);
   assert.match(packageSource, /"cheerio": "\^1\.2\.0"/);
   assert.match(netlifyConfigSource, /functions = "netlify\/functions"/);
