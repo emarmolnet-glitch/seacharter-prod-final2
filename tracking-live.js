@@ -225,9 +225,11 @@ function getExecutiveContractData() {
     const cargoQty = Number.isFinite(Number(contract.cargoQuantityMt)) ? Number(contract.cargoQuantityMt) : activeVoyage.cargoQty;
     const operationalPhase = live.status || activeVoyage.operationalPhase || '';
     const routeProgressPct = Number.isFinite(Number(live.progressPct)) ? Number(live.progressPct) : activeVoyage.routeProgressPct;
-    const remainingDistanceNm = Number.isFinite(Number(live.remainingDistanceNm))
-        ? Number(live.remainingDistanceNm)
-        : Number.isFinite(Number(trackingState.routeDistance)) ? Number(trackingState.routeDistance) : null;
+    const liveRemainingDistanceNm = Number(live.remainingDistanceNm);
+    const recalculatedDistanceNm = Number(trackingState.routeDistance);
+    const remainingDistanceNm = Number.isFinite(liveRemainingDistanceNm) && liveRemainingDistanceNm > 0
+        ? liveRemainingDistanceNm
+        : Number.isFinite(recalculatedDistanceNm) && recalculatedDistanceNm > 0 ? recalculatedDistanceNm : null;
     const currentSpeedKnots = [
         trackingState.basicVessel?.speedKnots,
         trackingState.basicVessel?.speed,
@@ -739,6 +741,83 @@ async function calculateEphemeralTrackingRoute(origin, destination, options = {}
     return result;
 }
 
+async function requestTrackingMaritimeLeg(origin, destination) {
+    const response = await fetch('/api/route', {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            origin: { name: origin.name, lat: origin.lat, lon: origin.lng },
+            destination: { name: destination.name, lat: destination.lat, lon: destination.lng },
+        }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    const distance = Number(payload?.distance);
+    const routeGeometry = asTrackingArray(payload?.coordinates);
+    if (!response.ok || !payload?.success || !Number.isFinite(distance) || distance <= 0 || routeGeometry.length < 3) {
+        throw new Error('El motor marítimo no devolvió distancia y geometría navegable válidas.');
+    }
+    return { ...payload, distance, coordinates: routeGeometry };
+}
+
+async function calculateContractualTrackingRoute(context) {
+    const [ballast, pol, pod] = await Promise.all([
+        context.ballast ? (getInputPort('ballast') || resolveTrackingPort(context.ballast)) : null,
+        getInputPort('pol') || resolveTrackingPort(context.pol),
+        getInputPort('pod') || resolveTrackingPort(context.pod),
+    ]);
+    if (!pol || !pod || (context.ballast && !ballast)) {
+        const unresolved = [context.ballast && !ballast ? 'LASTRE' : '', !pol ? 'POL' : '', !pod ? 'POD' : ''].filter(Boolean);
+        throw new Error(`No se localizaron coordenadas válidas para: ${unresolved.join(', ')}.`);
+    }
+
+    const [ballastRoute, ladenRoute] = await Promise.all([
+        ballast ? requestTrackingMaritimeLeg(ballast, pol) : null,
+        requestTrackingMaritimeLeg(pol, pod),
+    ]);
+    const distBallast = ballastRoute ? Number(ballastRoute.distance) : 0;
+    const distLaden = Number(ladenRoute.distance);
+    return {
+        portBallast: ballast?.name || '',
+        pol: pol.name || context.pol,
+        pod: pod.name || context.pod,
+        coordinates: { ballast, pol, pod },
+        routes: { ballast: ballastRoute, laden: ladenRoute },
+        distBallast,
+        distLaden,
+        totalMiles: distBallast + distLaden,
+        routeGeometry: ladenRoute.coordinates,
+        success: true,
+    };
+}
+
+function syncTrackingRouteStores(result) {
+    const totalDistance = Number(result?.totalMiles || 0);
+    if (!Number.isFinite(totalDistance) || totalDistance <= 0 || !result?.routes?.laden) {
+        throw new Error('La ruta calculada no contiene millas marítimas utilizables.');
+    }
+    trackingState.routes = result.routes;
+    trackingState.routeDistance = totalDistance;
+    window.SeaCharterStore?.set?.({
+        portBallast: result.portBallast,
+        pol: result.pol,
+        pod: result.pod,
+        polCoordinates: result.coordinates?.pol,
+        podCoordinates: result.coordinates?.pod,
+        distBallast: Number(result.distBallast || 0),
+        distLaden: Number(result.distLaden || 0),
+        totalMiles: totalDistance,
+        distanceNm: totalDistance,
+        routeGeometry: result,
+    }, { force: true, source: 'tracking-route-refresh' });
+    voyageStore.getState().applyTrackingRoute?.({
+        distanceNm: totalDistance,
+        routeGeometry: result,
+        ballastDistanceNm: result.distBallast,
+        lastreCoordinates: result.routes?.ballast?.coordinates,
+    });
+    renderExecutiveDashboard();
+}
+
 function hydrateDraftBallastRoute() {
     const draft = getVoyageDraft();
     const coordinates = Array.isArray(draft?.lastreCoordinates) ? draft.lastreCoordinates : [];
@@ -822,11 +901,6 @@ async function calculateTrackingRoute(options = {}) {
         message.dataset.state = 'error';
         return;
     }
-    if (!useEphemeralRoute && typeof window.calculateVoyageRouteService !== 'function') {
-        message.textContent = 'El motor geográfico todavía no está disponible. Vuelve a intentarlo en unos segundos.';
-        message.dataset.state = 'warning';
-        return;
-    }
     button?.classList.add('is-loading');
     message.textContent = 'Calculando corredores marítimos…';
     message.dataset.state = 'loading';
@@ -839,26 +913,34 @@ async function calculateTrackingRoute(options = {}) {
             message.dataset.state = 'success';
             return result;
         }
-        const result = await window.calculateVoyageRouteService({
-            portBallast: context.ballast,
-            pol: context.pol,
-            pod: context.pod,
-            geocode: true,
-        });
+        let result;
+        try {
+            result = await calculateContractualTrackingRoute(context);
+        } catch (routeError) {
+            if (typeof window.calculateVoyageRouteService !== 'function') throw routeError;
+            result = await window.calculateVoyageRouteService({
+                portBallast: context.ballast,
+                pol: context.pol,
+                pod: context.pod,
+                geocode: true,
+            });
+            const fallbackRoutes = [result?.routes?.ballast, result?.routes?.laden].filter(Boolean);
+            const hasNavigableGeometry = fallbackRoutes.every((route) => route?.success !== false && asTrackingArray(route?.coordinates).length >= 3);
+            if (!hasNavigableGeometry) throw routeError;
+        }
         if (!result?.coordinates?.pol || !result?.coordinates?.pod || !result?.routes?.laden) {
             throw new Error(result?.errors?.length ? `No se localizaron: ${result.errors.join(', ')}.` : 'No fue posible localizar POL y POD.');
         }
-        trackingState.routes = result.routes;
+        syncTrackingRouteStores(result);
         window.GlobalFleetGlobe?.setRouteResult?.(result, TRACKING_MAP_KEY, { focus: true, persist: false });
         const totalDistance = Number(result.totalMiles || 0);
-        trackingState.routeDistance = totalDistance;
         setInputPort('tracking-input-ballast', result.coordinates.ballast && { ...result.coordinates.ballast, name: result.portBallast });
         setInputPort('tracking-input-pol', { ...result.coordinates.pol, name: result.pol });
         setInputPort('tracking-input-pod', { ...result.coordinates.pod, name: result.pod });
         document.getElementById('tracking-map-route-label').textContent = result.pol && result.pod ? `${result.pol} → ${result.pod}` : '';
         document.getElementById('tracking-map-route-distance').textContent = `${formatTrackingNumber(totalDistance, { maximumFractionDigits: 0 })} NM · lastre + laden`;
         if (!trackingState.data) renderManualTrackingState(totalDistance);
-        message.textContent = trackingState.data ? 'Ruta actualizada; la analítica contractual continúa vinculada.' : 'Ruta manual calculada con el motor geográfico de MAPA.';
+        message.textContent = trackingState.data ? 'Ruta contractual, Dashboard y estado compartido actualizados.' : 'Ruta manual calculada y sincronizada con el estado compartido.';
         message.dataset.state = 'success';
         return result;
     } catch (error) {

@@ -20,7 +20,10 @@ test('DraftVoyage centralizes route, laycan, cargo and audited vessel data', () 
   assert.match(storeSource, /quantityMt/);
   assert.match(storeSource, /ballastDistanceNm/);
   assert.match(storeSource, /lastreCoordinates: \[\]/);
+  assert.match(storeSource, /distanceNm: null/);
+  assert.match(storeSource, /routeGeometry: null/);
   assert.match(storeSource, /applyTrackingAudit/);
+  assert.match(storeSource, /applyTrackingRoute/);
   assert.match(storeSource, /lastreCoordinates: normalizedCoordinates\.length > 2/);
   assert.match(entrySource, /window\.VoyageDraftStore = voyageStore/);
   assert.match(entrySource, /calculatorStore\.subscribe/);

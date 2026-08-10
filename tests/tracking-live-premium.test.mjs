@@ -242,6 +242,20 @@ test('tracking reuses MAPA port search and maritime routing services', () => {
   assert.doesNotMatch(scriptSource, /async function fetchMaritimeRoute/);
 });
 
+test('contract route refresh hydrates shared stores and executive metrics', () => {
+  assert.match(scriptSource, /async function requestTrackingMaritimeLeg\(origin, destination\)/);
+  assert.match(scriptSource, /origin: \{ name: origin\.name, lat: origin\.lat, lon: origin\.lng \}/);
+  assert.match(scriptSource, /destination: \{ name: destination\.name, lat: destination\.lat, lon: destination\.lng \}/);
+  assert.match(scriptSource, /routeGeometry = asTrackingArray\(payload\?\.coordinates\)/);
+  assert.match(scriptSource, /function syncTrackingRouteStores\(result\)/);
+  assert.match(scriptSource, /window\.SeaCharterStore\?\.set\?\.\(\{/);
+  assert.match(scriptSource, /voyageStore\.getState\(\)\.applyTrackingRoute\?\.\(\{/);
+  assert.match(scriptSource, /routeGeometry: result/);
+  assert.match(scriptSource, /liveRemainingDistanceNm > 0/);
+  assert.match(scriptSource, /recalculatedDistanceNm > 0/);
+  assert.match(scriptSource, /renderExecutiveDashboard\(\)/);
+});
+
 test('pre-fixture tracking draws an ephemeral ballast route while free mode stays position-only', () => {
   assert.match(scriptSource, /normalizeAisDestination/);
   assert.match(scriptSource, /applyBasicAisDestination/);
