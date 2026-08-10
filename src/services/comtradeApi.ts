@@ -1,5 +1,4 @@
-const COMTRADE_TRADE_ENDPOINT = 'https://comtradeapi.un.org/data/v1/get/C/A/HS';
-const COMTRADE_REPORTERS_ENDPOINT = 'https://comtradeapi.un.org/files/v1/app/reference/Reporters.json';
+const COMTRADE_PROXY_ENDPOINT = '/.netlify/functions/comtrade';
 const CACHE_PREFIX = 'seacharter:comtrade:v3';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const CONSOLIDATED_PERIODS = [2024, 2023] as const;
@@ -121,26 +120,16 @@ function normalizeCmdCode(value: string): string {
   return cmdCode;
 }
 
-function getApiKey(): string {
-  const apiKey = String(import.meta.env.VITE_UN_COMTRADE_API_KEY || '').trim();
-  if (!apiKey) {
-    throw new Error('Configura VITE_UN_COMTRADE_API_KEY en Netlify para consultar UN Comtrade.');
-  }
-  return apiKey;
-}
-
-async function fetchJson<T>(url: string, apiKey: string): Promise<T> {
-  const requestUrl = new URL(url);
-  requestUrl.searchParams.set('subscription-key', apiKey);
+async function fetchJson<T>(url: string): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(requestUrl.toString());
+    response = await fetch(url);
   } catch (error) {
-    console.error('[UN Comtrade] La petición no pudo completarse por un error de red o CORS.', {
-      endpoint: `${requestUrl.origin}${requestUrl.pathname}`,
+    console.error('[UN Comtrade] La petición al proxy no pudo completarse.', {
+      endpoint: COMTRADE_PROXY_ENDPOINT,
       error: error instanceof Error ? error.message : String(error),
     });
-    throw new Error('No se pudo conectar con UN Comtrade. Revisa la conectividad y la configuración de la API.');
+    throw new Error('No se pudo conectar con el servicio de UN Comtrade.');
   }
 
   const payload = await response.json().catch(() => ({})) as T & {
@@ -151,8 +140,8 @@ async function fetchJson<T>(url: string, apiKey: string): Promise<T> {
   const apiStatusCode = Number(payload.statusCode || 0);
   if (!response.ok || apiStatusCode >= 400) {
     const message = payload.message || payload.error || `UN Comtrade respondió con estado ${apiStatusCode || response.status}.`;
-    console.error('[UN Comtrade] Error de conexión o autorización.', {
-      endpoint: `${requestUrl.origin}${requestUrl.pathname}`,
+    console.error('[UN Comtrade] Error del proxy o del servicio remoto.', {
+      endpoint: COMTRADE_PROXY_ENDPOINT,
       httpStatus: response.status,
       apiStatusCode: apiStatusCode || undefined,
       message,
@@ -162,17 +151,18 @@ async function fetchJson<T>(url: string, apiKey: string): Promise<T> {
   return payload;
 }
 
-async function getReporterReferences(apiKey: string): Promise<ReporterReference[]> {
+async function getReporterReferences(): Promise<ReporterReference[]> {
   const cached = readCache<ReporterReference[]>('reporters');
   if (cached) return cached;
 
-  const response = await fetchJson<ReporterReferenceResponse>(COMTRADE_REPORTERS_ENDPOINT, apiKey);
+  const query = new URLSearchParams({ reference: 'reporters' });
+  const response = await fetchJson<ReporterReferenceResponse>(`${COMTRADE_PROXY_ENDPOINT}?${query}`);
   const reporters = Array.isArray(response.results) ? response.results : [];
   writeCache('reporters', reporters);
   return reporters;
 }
 
-async function resolveCountryCode(iso: string, apiKey: string): Promise<number> {
+async function resolveCountryCode(iso: string): Promise<number> {
   const normalizedIso = normalizeIso(iso);
   if (normalizedIso in ISO3_TO_M49) return ISO3_TO_M49[normalizedIso];
   if (normalizedIso === '0') return 0;
@@ -181,7 +171,7 @@ async function resolveCountryCode(iso: string, apiKey: string): Promise<number> 
     throw new Error(`Código de país no válido: ${normalizedIso || 'vacío'}.`);
   }
 
-  const reporters = await getReporterReferences(apiKey);
+  const reporters = await getReporterReferences();
   const match = reporters.find((reporter) => (
     reporter.reporterCodeIsoAlpha2?.toUpperCase() === normalizedIso
     || reporter.reporterCodeIsoAlpha3?.toUpperCase() === normalizedIso
@@ -191,7 +181,6 @@ async function resolveCountryCode(iso: string, apiKey: string): Promise<number> 
 }
 
 async function getTradeRecords(
-  apiKey: string,
   reporterCode: number,
   partnerCode: number,
   cmdCode: string,
@@ -203,17 +192,13 @@ async function getTradeRecords(
 
     if (!response) {
       const query = new URLSearchParams({
-        flowCode,
-        reporterCode: String(reporterCode),
-        partnerCode: String(partnerCode),
-        partner2Code: '0',
-        cmdCode,
+        flowcode: flowCode,
+        reportercode: String(reporterCode),
+        partnercode: String(partnerCode),
+        cmdcode: cmdCode,
         period: String(period),
-        customsCode: 'C00',
-        motCode: '0',
-        maxRecords: '500',
       });
-      response = await fetchJson<ComtradeResponse>(`${COMTRADE_TRADE_ENDPOINT}?${query}`, apiKey);
+      response = await fetchJson<ComtradeResponse>(`${COMTRADE_PROXY_ENDPOINT}?${query}`);
       writeCache(responseCacheKey, response);
     }
 
@@ -356,12 +341,11 @@ export async function getTradeMargin(
   const cached = readCache<TradeMarginResult>(cacheKey);
   if (cached) return cached;
 
-  const apiKey = getApiKey();
   const [reporterCode, partnerCode] = await Promise.all([
-    resolveCountryCode(normalizedReporter, apiKey),
-    resolveCountryCode(normalizedPartner, apiKey),
+    resolveCountryCode(normalizedReporter),
+    resolveCountryCode(normalizedPartner),
   ]);
-  const bilateralRecords = await getTradeRecords(apiKey, reporterCode, partnerCode, normalizedCmdCode, 'M');
+  const bilateralRecords = await getTradeRecords(reporterCode, partnerCode, normalizedCmdCode, 'M');
   let result: TradeMarginResult;
 
   if (hasExplicitCifFob(bilateralRecords)) {
@@ -369,10 +353,10 @@ export async function getTradeMargin(
   } else {
     const importerWorldRecords = partnerCode === 0
       ? bilateralRecords
-      : await getTradeRecords(apiKey, reporterCode, 0, normalizedCmdCode, 'M');
+      : await getTradeRecords(reporterCode, 0, normalizedCmdCode, 'M');
     const exporterWorldRecords = partnerCode === 0
       ? []
-      : await getTradeRecords(apiKey, partnerCode, 0, normalizedCmdCode, 'X');
+      : await getTradeRecords(partnerCode, 0, normalizedCmdCode, 'X');
     result = calculateWorldFallbackMargin(
       importerWorldRecords,
       exporterWorldRecords,
