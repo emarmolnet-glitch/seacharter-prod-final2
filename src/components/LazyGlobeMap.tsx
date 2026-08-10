@@ -17,23 +17,26 @@ interface GlobeWindow extends Window {
 
 export function MapSkeletonFallback() {
   return (
-    <div className="w-full h-full min-h-[600px] flex flex-col items-center justify-center bg-slate-900 text-slate-100">
-      {/* Efecto Radar / Spinner */}
-      <div className="relative flex items-center justify-center mb-8">
-        <div className="absolute inset-0 rounded-full border-4 border-cyan-500/30 animate-ping"></div>
-        <div className="h-16 w-16 rounded-full border-4 border-cyan-500 border-t-transparent animate-spin"></div>
-        <div className="absolute h-3 w-3 rounded-full bg-cyan-400"></div>
-      </div>
-
-      {/* Textos */}
-      <h2 className="text-2xl font-bold tracking-wide text-white">SeaCharter Core PRO</h2>
-      <p className="mt-3 text-sm text-cyan-400 animate-pulse font-medium">Iniciando motor cartográfico y datos AIS...</p>
-
-      {/* Barra de progreso simulada */}
-      <div className="mt-8 w-64 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-        <div className="h-full bg-cyan-500 w-full animate-pulse"></div>
-      </div>
-    </div>
+<div 
+  className="w-full h-full min-h-[600px] flex flex-col items-center justify-center bg-slate-900 text-slate-100"
+  style={{ backgroundColor: '#0f172a', color: '#f1f5f9' }}
+>
+  {/* Efecto Radar / Spinner */}
+  <div className="relative flex items-center justify-center mb-8">
+    <div className="absolute inset-0 rounded-full border-4 border-cyan-500/30 animate-ping"></div>
+    <div className="h-16 w-16 rounded-full border-4 border-cyan-500 border-t-transparent animate-spin"></div>
+    <div className="absolute h-3 w-3 rounded-full bg-cyan-400"></div>
+  </div>
+  
+  {/* Textos */}
+  <h2 className="text-2xl font-bold tracking-wide text-white">SeaCharter Core PRO</h2>
+  <p className="mt-3 text-sm text-cyan-400 animate-pulse font-medium">Iniciando motor cartográfico y datos AIS...</p>
+  
+  {/* Barra de progreso simulada */}
+  <div className="mt-8 w-64 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+    <div className="h-full bg-cyan-500 w-full animate-pulse"></div>
+  </div>
+</div>
   );
 }
 
