@@ -119,7 +119,7 @@ export default async (req: Request) => {
     }
 
     const cachedRoute = await getOrSetCachedJson({
-      namespace: "maritime-routes-v1",
+      namespace: "maritime-routes-v2",
       key: {
         origin: { lat: origin.lat, lon: origin.lon },
         destination: { lat: destination.lat, lon: destination.lon },
@@ -144,6 +144,18 @@ export default async (req: Request) => {
           success: routedCoordinates.length > 1 && coordinates.length > 1 && Number.isFinite(distance),
           distance: Number.isFinite(distance) ? distance : 0,
           coordinates,
+          geojson: {
+            type: "Feature",
+            properties: {
+              distance: Number.isFinite(distance) ? distance : 0,
+              units: route.properties?.units || "nauticalmiles",
+              passages: route.properties?.passages || [],
+            },
+            geometry: {
+              type: "LineString",
+              coordinates: coordinates.map(([lat, lon]) => [lon, lat]),
+            },
+          },
           nodes: [origin, destination],
           passages: route.properties?.passages || [],
           units: route.properties?.units || "nauticalmiles",

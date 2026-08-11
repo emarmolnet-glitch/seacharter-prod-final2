@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const netlifyConfigSource = await readFile(new URL('../netlify.toml', import.meta.url), 'utf8');
 
-const [indexSource, scriptSource, stylesSource, executiveSource, endpointSource, activeVoyageEndpointSource, vesselEndpointSource, migrationSource, schemaSource, trackingStoreSource] = await Promise.all([
+const [indexSource, scriptSource, stylesSource, executiveSource, endpointSource, activeVoyageEndpointSource, vesselEndpointSource, routeEndpointSource, migrationSource, schemaSource, trackingStoreSource] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../tracking-live.js', import.meta.url), 'utf8'),
   readFile(new URL('../calculator_view.css', import.meta.url), 'utf8'),
@@ -12,6 +12,7 @@ const [indexSource, scriptSource, stylesSource, executiveSource, endpointSource,
   readFile(new URL('../netlify/functions/voyage-tracking.ts', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/functions/voyage-active.ts', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/functions/vessel-live-profile.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../netlify/functions/route.ts', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/database/migrations/20260803120000_create_voyages_tracking/migration.sql', import.meta.url), 'utf8'),
   readFile(new URL('../db/schema.ts', import.meta.url), 'utf8'),
   readFile(new URL('../src/stores/tracking-store.js', import.meta.url), 'utf8'),
@@ -254,6 +255,22 @@ test('contract route refresh hydrates shared stores and executive metrics', () =
   assert.match(scriptSource, /liveRemainingDistanceNm > 0/);
   assert.match(scriptSource, /recalculatedDistanceNm > 0/);
   assert.match(scriptSource, /renderExecutiveDashboard\(\)/);
+  assert.match(scriptSource, /console\.log\('Coordinates:', \{ origin, destination \}\)/);
+  assert.match(scriptSource, /console\.log\('Routing Response:', payload\)/);
+  assert.match(scriptSource, /const aisPosition = getBasicVesselPosition\(\)/);
+  assert.match(scriptSource, /: contractBallast/);
+  assert.match(scriptSource, /setOperationalMetrics\?\.\(\{/);
+  assert.match(scriptSource, /await calculateTrackingRoute\(\{ focus: !silent, throwOnError: true \}\)/);
+  assert.match(scriptSource, /if \(options\.throwOnError\) throw error/);
+  assert.match(trackingStoreSource, /operationalMetrics: \{ \.\.\.EMPTY_OPERATIONAL_METRICS \}/);
+  assert.match(trackingStoreSource, /setOperationalMetrics:/);
+  assert.match(executiveSource, /useSyncExternalStore/);
+  assert.match(executiveSource, /operationalMetrics\?\.totalDistanceNm/);
+  assert.match(executiveSource, /operationalMetrics\?\.aisSpeedKnots/);
+  assert.match(routeEndpointSource, /namespace: "maritime-routes-v2"/);
+  assert.match(routeEndpointSource, /geojson: \{/);
+  assert.match(routeEndpointSource, /type: "LineString"/);
+  assert.match(routeEndpointSource, /coordinates: coordinates\.map\(\(\[lat, lon\]\) => \[lon, lat\]\)/);
 });
 
 test('pre-fixture tracking draws an ephemeral ballast route while free mode stays position-only', () => {
@@ -273,6 +290,8 @@ test('tracking endpoint uses the shared Postgres client and returns map and dash
   assert.match(endpointSource, /voyagesTracking/);
   assert.match(endpointSource, /path: "\/api\/v1\/voyage\/tracking\/\*"/);
   assert.match(endpointSource, /decodeURIComponent\(encodedParam\)/);
+  assert.match(endpointSource, /if \(!name && !code\) return null/);
+  assert.match(endpointSource, /lat: hasCoordinates \? latitude : null/);
   assert.match(endpointSource, /upper\(\$\{voyagesTracking\.contractRef\}\)/);
   assert.match(endpointSource, /contract:/);
   assert.match(endpointSource, /live:/);

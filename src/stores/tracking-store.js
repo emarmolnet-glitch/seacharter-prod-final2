@@ -1,6 +1,14 @@
 import { createStore } from 'zustand/vanilla';
 import { subscribeWithSelector } from 'zustand/middleware';
 
+const EMPTY_OPERATIONAL_METRICS = Object.freeze({
+    totalDistanceNm: null,
+    ballastDistanceNm: null,
+    ladenDistanceNm: null,
+    aisSpeedKnots: null,
+    aisUpdatedAt: null,
+});
+
 export const trackingStore = createStore(subscribeWithSelector((set) => ({
     mode: 'free',
     contractPayload: null,
@@ -11,8 +19,19 @@ export const trackingStore = createStore(subscribeWithSelector((set) => ({
     referenceLoading: false,
     vesselLoading: false,
     error: '',
+    operationalMetrics: { ...EMPTY_OPERATIONAL_METRICS },
     setMode: (mode) => set({ mode, error: '' }),
-    beginReferenceSearch: () => set({ mode: 'contract', referenceLoading: true, error: '' }),
+    beginReferenceSearch: () => set((state) => ({
+        mode: 'contract',
+        referenceLoading: true,
+        error: '',
+        operationalMetrics: {
+            ...state.operationalMetrics,
+            totalDistanceNm: null,
+            ballastDistanceNm: null,
+            ladenDistanceNm: null,
+        },
+    })),
     hydrateContract: (contractPayload) => set({
         mode: 'contract',
         contractPayload,
@@ -32,11 +51,25 @@ export const trackingStore = createStore(subscribeWithSelector((set) => ({
         vesselLoading: true,
         error: '',
     })),
-    setVessel: (vessel) => set((state) => ({
-        mode: state.contractPayload ? 'contract' : state.mode,
-        vessel,
-        vesselLoading: false,
-        error: '',
+    setVessel: (vessel) => set((state) => {
+        const speedKnots = Number(vessel?.speedKnots ?? vessel?.speed ?? vessel?.speedOverGround);
+        return {
+            mode: state.contractPayload ? 'contract' : state.mode,
+            vessel,
+            vesselLoading: false,
+            error: '',
+            operationalMetrics: {
+                ...state.operationalMetrics,
+                aisSpeedKnots: Number.isFinite(speedKnots) && speedKnots > 0 ? speedKnots : state.operationalMetrics.aisSpeedKnots,
+                aisUpdatedAt: vessel?.timestamp || vessel?.positionUpdatedAt || state.operationalMetrics.aisUpdatedAt,
+            },
+        };
+    }),
+    setOperationalMetrics: (metrics = {}) => set((state) => ({
+        operationalMetrics: {
+            ...state.operationalMetrics,
+            ...metrics,
+        },
     })),
     failVesselSearch: (error) => set({ vessel: null, vesselLoading: false, error: String(error || '') }),
     clearContract: () => set((state) => ({
@@ -56,6 +89,7 @@ export const trackingStore = createStore(subscribeWithSelector((set) => ({
         referenceLoading: false,
         vesselLoading: false,
         error: '',
+        operationalMetrics: { ...EMPTY_OPERATIONAL_METRICS },
     })),
     reset: () => set({
         mode: 'free',
@@ -67,6 +101,7 @@ export const trackingStore = createStore(subscribeWithSelector((set) => ({
         referenceLoading: false,
         vesselLoading: false,
         error: '',
+        operationalMetrics: { ...EMPTY_OPERATIONAL_METRICS },
     }),
 })));
 
