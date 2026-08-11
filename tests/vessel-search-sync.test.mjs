@@ -86,7 +86,7 @@ test('Apply to Estimator consolidates IMO and exposes the active calculator vess
   assert.match(applySource, /window\.GlobalStore\.calculatorVessel = vessel/);
 });
 
-test('calculator renders six editable technical badges in a full-width row between vessel speeds', () => {
+test('calculator renders seven editable technical badges in a full-width row between vessel speeds', () => {
   const badgesStart = indexSource.indexOf('id="vessel-identity-meta"');
   const badgesEnd = indexSource.indexOf('<div class="input-group">', badgesStart);
   const badgesSource = indexSource.slice(badgesStart, badgesEnd);
@@ -95,22 +95,24 @@ test('calculator renders six editable technical badges in a full-width row betwe
   assert.match(indexSource, /id="vessel-identity-dwt"/);
   assert.match(indexSource, /id="vessel-identity-gt"/);
   assert.match(indexSource, /id="vessel-identity-loa"/);
+  assert.match(indexSource, /id="vessel-identity-beam"/);
   assert.match(indexSource, /id="vessel-identity-year"/);
   assert.match(indexSource, /id="spd-ballast"[\s\S]*<\/div>\s*<\/div>\s*<!-- FILA DE ESPECIFICACIONES TÉCNICAS \(ANCHO COMPLETO\) -->\s*<div id="vessel-identity-meta"/);
   assert.match(indexSource, /id="vessel-identity-meta"[\s\S]*<div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">\s*<div class="input-group">\s*<label id="label-spd-laden"/);
   assert.match(badgesSource, /class="w-full flex flex-row items-center justify-between gap-4 mt-4 mb-4 col-span-full"/);
   const unifiedBadgeClass = 'flex-1 flex items-center bg-white border border-gray-300 rounded px-2 py-1 h-9 shadow-sm';
-  assert.equal(badgesSource.split(unifiedBadgeClass).length - 1, 6);
-  assert.equal(badgesSource.split('text-[10px] font-bold text-slate-500 mr-1 uppercase tracking-wider whitespace-nowrap').length - 1, 6);
-  assert.equal(badgesSource.split('w-full text-right text-xs text-slate-800 bg-transparent focus:outline-none').length - 1, 6);
+  assert.equal(badgesSource.split(unifiedBadgeClass).length - 1, 7);
+  assert.equal(badgesSource.split('text-[10px] font-bold text-slate-500 mr-1 uppercase tracking-wider whitespace-nowrap').length - 1, 7);
+  assert.equal(badgesSource.split('w-full text-right text-xs text-slate-800 bg-transparent focus:outline-none').length - 1, 7);
   assert.equal(badgesSource.split('placeholder="-"').length - 1, 3);
   assert.equal(badgesSource.split('placeholder="0"').length - 1, 2);
-  assert.equal(badgesSource.split('placeholder="0.0"').length - 1, 1);
-  assert.match(badgesSource, />GT:<\/span>[\s\S]*>LOA \(m\):<\/span>[\s\S]*>AÑO:<\/span>/);
+  assert.equal(badgesSource.split('placeholder="0.0"').length - 1, 2);
+  assert.match(badgesSource, />GT:<\/span>[\s\S]*>LOA \(m\):<\/span>[\s\S]*>BEAM \(m\):<\/span>[\s\S]*>AÑO:<\/span>/);
   assert.doesNotMatch(badgesSource, /class="grid grid-cols-5 gap-4 mt-3 w-full col-span-full px-2"|w-2\/3|placeholder="N\/A"/);
   assert.match(badgesSource, /handleManualVesselUpdate\('imo', this\.value\)/);
   assert.match(badgesSource, /handleManualVesselUpdate\('dwt', this\.value\)/);
   assert.match(badgesSource, /handleManualVesselUpdate\('flag', this\.value\)/);
+  assert.match(badgesSource, /handleManualVesselUpdate\('beam', this\.value\)/);
   assert.match(badgesSource, /handleManualVesselUpdate\('gt', this\.value\)/);
   assert.match(badgesSource, /handleManualVesselUpdate\('loa', this\.value\)/);
   assert.match(badgesSource, /handleManualVesselUpdate\('year_built', this\.value\)/);
@@ -164,11 +166,12 @@ test('manual DWT edits update calculator state and force compatibility recalcula
   assert.match(handlerSource, /updateSection2LocalState\('vessel-dwt'/);
   assert.match(handlerSource, /handleDWTChange\(true, false\)/);
   assert.match(handlerSource, /refreshVesselCompatibilityWarning\(\)/);
-  assert.match(handlerSource, /numericFields = new Set\(\['dwt', 'gt', 'loa', 'year_built'\]\)/);
+  assert.match(handlerSource, /numericFields = new Set\(\['dwt', 'gt', 'loa', 'beam', 'year_built'\]\)/);
   assert.match(handlerSource, /updatedVessel\.loa = loa/);
+  assert.match(handlerSource, /updatedVessel\.beam_meters = beam/);
   assert.match(handlerSource, /State\.gt = updatedVessel\.gt \|\| 0/);
   assert.match(handlerSource, /State\.loa = loa \|\| 0/);
-  assert.match(handlerSource, /field === 'gt' \|\| field === 'loa'/);
+  assert.match(handlerSource, /field === 'gt' \|\| field === 'loa' \|\| field === 'beam'/);
   assert.match(handlerSource, /window\.GlobalStore\.activeVessel = updatedVessel/);
   assert.match(handlerSource, /window\.GlobalStore\.calculatorVessel = updatedVessel/);
   assert.match(handlerSource, /scheduleReactiveEngine\(\)/);
@@ -183,12 +186,19 @@ test('calculator save persists editable master fields and keeps GT locally', () 
   assert.match(saveSource, /document\.getElementById\('vessel-identity-flag'\)/);
   assert.match(saveSource, /document\.getElementById\('vessel-identity-gt'\)/);
   assert.match(saveSource, /document\.getElementById\('vessel-identity-loa'\)/);
+  assert.match(saveSource, /document\.getElementById\('vessel-identity-beam'\)/);
   assert.match(saveSource, /document\.getElementById\('vessel-identity-year'\)/);
   assert.match(saveSource, /storedTechnicalVessel\.beam_meters/);
+  assert.match(saveSource, /mergeVesselTechnicalPersistenceState/);
+  assert.match(saveSource, /GROSS_TONNAGE: mergedTechnicalState\.gross_tonnage/);
+  assert.match(saveSource, /LOA_METERS: mergedTechnicalState\.loa_meters/);
+  assert.match(saveSource, /BEAM_METERS: mergedTechnicalState\.beam_meters/);
   assert.match(saveSource, /beam_meters: beam/);
   assert.match(saveSource, /fetch\('\/api\/vessel-due-diligence-save'/);
-  assert.match(saveSource, /method: 'PUT'/);
+  assert.match(saveSource, /method: 'PATCH'/);
+  assert.match(saveSource, /Object\.fromEntries\(Object\.entries\(payloadCandidate\)\.filter/);
   assert.match(saveSource, /body: JSON\.stringify\(\{ vessel: payload \}\)/);
+  assert.match(saveSource, /console\.log\('Payload enviado a DB:', payload\)/);
   assert.match(saveSource, /saveVesselToIndexedDB\(\{ \.\.\.savedVessel, imo, name: vesselName, gt, loa \}\)/);
   assert.doesNotMatch(saveSource, /const formattedName/);
 });
@@ -213,7 +223,7 @@ test('reactive vessel parameter autosave stays silent', () => {
   const saveEnd = indexSource.indexOf('function calculateAdjustedEtaAndDays()', saveStart);
   const saveSource = indexSource.slice(saveStart, saveEnd);
 
-  assert.match(saveSource, /return saveVesselToIndexedDB\(vesselData\)/);
+  assert.match(saveSource, /const saved = await saveVesselToIndexedDB\(vesselData\);[\s\S]*return saved/);
   assert.doesNotMatch(saveSource, /showToast|notify|alert\s*\(/);
   assert.doesNotMatch(indexSource, /Parámetros de buque guardados en IndexedDB/);
 });

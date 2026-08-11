@@ -11,6 +11,7 @@ import {
 } from "../../db/vessel-technical-normalizer.mjs";
 
 const NON_COMMERCIAL_VESSEL_PATTERN = /yacht|passenger|ferry|pleasure|cruise|military/i;
+const EMPTY_TECHNICAL_VALUES = new Set(["", "n/a", "na", "n/d", "nd", "unknown", "desconocido", "null", "undefined", "-", "--"]);
 
 function corsHeaders(req: Request) {
   return {
@@ -43,7 +44,7 @@ function readFirst(source: Record<string, unknown>, keys: string[]) {
 
 function cleanText(value: unknown) {
   const text = String(value ?? "").trim();
-  return text || null;
+  return EMPTY_TECHNICAL_VALUES.has(text.toLowerCase()) ? null : text || null;
 }
 
 function cleanImo(value: unknown) {
@@ -75,6 +76,59 @@ function cleanInteger(value: unknown) {
 function cleanCoordinate(value: unknown, minimum: number, maximum: number) {
   const numeric = cleanNumber(value);
   return numeric !== null && numeric >= minimum && numeric <= maximum ? numeric : null;
+}
+
+function cleanBoolean(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1 ? true : value === 0 ? false : null;
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["true", "1", "yes", "si", "sí", "y"].includes(normalized)) return true;
+  if (["false", "0", "no", "n"].includes(normalized)) return false;
+  return null;
+}
+
+function buildSupplementalTechnicalPatch(vessel: Record<string, unknown>) {
+  const patch: Record<string, unknown> = {};
+  const numericFields: Array<[string, string[]]> = [
+    ["spd_ballast", ["spd_ballast", "speed_ballast"]],
+    ["spd_laden", ["spd_laden", "speed_laden"]],
+    ["cons_sea", ["cons_sea", "consumption_sea"]],
+    ["cons_port", ["cons_port", "consumption_port"]],
+  ];
+  numericFields.forEach(([target, aliases]) => {
+    const value = cleanPositiveNumber(readFirst(vessel, aliases));
+    if (value !== null) patch[target] = value;
+  });
+  const vesselClass = cleanText(readFirst(vessel, ["vessel_class", "vesselClass", "specialty_type", "specialtyType"]));
+  const specialtyType = cleanText(readFirst(vessel, ["specialty_type", "specialtyType", "vessel_class", "vesselClass"]));
+  const hasScrubber = cleanBoolean(readFirst(vessel, ["has_scrubber", "hasScrubber", "scrubber"]));
+  if (vesselClass) patch.vessel_class = vesselClass;
+  if (specialtyType) patch.specialty_type = specialtyType;
+  if (hasScrubber !== null) {
+    patch.has_scrubber = hasScrubber;
+    patch.hasScrubber = hasScrubber;
+  }
+  return patch;
+}
+
+function getTechnicalProfileCompleteness(vessel: VesselTechnicalRecord) {
+  const fields = {
+    vesselName: cleanText(vessel.vesselName),
+    identity: vessel.imoNumber || cleanMmsi(vessel.mmsi),
+    dwt: cleanPositiveNumber(vessel.dwt),
+    grossTonnage: cleanPositiveNumber(vessel.grossTonnage),
+    loaMeters: cleanPositiveNumber(vessel.loaMeters),
+    beamMeters: cleanPositiveNumber(vessel.beamMeters),
+    flag: cleanText(vessel.flag),
+    yearBuilt: vessel.yearBuilt && vessel.yearBuilt >= 1800 ? vessel.yearBuilt : null,
+  };
+  const missingFields = Object.entries(fields).filter(([, value]) => value === null).map(([field]) => field);
+  return {
+    complete: missingFields.length === 0,
+    completedFields: Object.keys(fields).length - missingFields.length,
+    totalFields: Object.keys(fields).length,
+    missingFields,
+  };
 }
 
 type DiscardedVesselRow = {
@@ -242,14 +296,15 @@ export default async (req: Request) => {
   const dwt = cleanInteger(readFirst(vessel, ["dwt", "DWT", "deadweight"]));
   const latitude = cleanCoordinate(readFirst(vessel, ["latitude", "lat"]), -90, 90);
   const longitude = cleanCoordinate(readFirst(vessel, ["longitude", "lon", "lng"]), -180, 180);
-  const vesselType = cleanText(readFirst(vessel, ["vesselType", "vessel_type", "shipType", "ship_type"]));
+  const vesselType = cleanText(readFirst(vessel, ["vesselType", "vessel_type", "shipType", "ship_type", "vessel_class", "specialty_type"]));
   const draftMeters = cleanNumber(readFirst(vessel, ["draft", "Draft", "draft_meters", "calado"]));
-  const flag = readFirst(vessel, ["flag", "bandera"]);
+  const flag = cleanText(readFirst(vessel, ["flag", "bandera"]));
   const callSign = cleanText(readFirst(vessel, ["callSign", "call_sign", "call sign", "indicativo"]));
   const yearBuilt = cleanInteger(readFirst(vessel, ["yearBuilt", "builtYear", "year_built", "built_year"]));
-  const grossTonnage = cleanPositiveNumber(readFirst(vessel, ["gross_tonnage", "grossTonnage", "gt", "GT"]));
+  const grossTonnage = cleanPositiveNumber(readFirst(vessel, ["GROSS_TONNAGE", "gross_tonnage", "grossTonnage", "gt", "GT"]));
   const netTonnage = cleanPositiveNumber(readFirst(vessel, ["net_tonnage", "netTonnage", "nt", "NT"]));
   const loaMeters = cleanPositiveNumber(readFirst(vessel, [
+    "LOA_METERS",
     "loa_meters",
     "loaMeters",
     "loa",
@@ -261,6 +316,7 @@ export default async (req: Request) => {
     "lengthOverall",
   ]));
   const beamMeters = cleanPositiveNumber(readFirst(vessel, [
+    "BEAM_METERS",
     "beam_meters",
     "beamMeters",
     "beam",
@@ -308,19 +364,22 @@ export default async (req: Request) => {
 
     const savedVesselStatus = action === "save" ? "EN_CARTERA" : null;
     const savedVessel = await upsertVesselTechnicalRecord(sanitizedVessel, client, savedVesselStatus);
+    const profileCompleteness = getTechnicalProfileCompleteness(savedVessel);
+    const supplementalPatch = buildSupplementalTechnicalPatch(vessel);
     const validatedStateResult = await client.query<ValidatedVesselStateRow>(
       `
         UPDATE vessels_master
         SET status = 'EN_CARTERA',
-            audit_status = 'VALIDATED',
+            audit_status = $3::text,
             process_status = 'COMPLETED',
+            source_payload = COALESCE(source_payload, '{}'::jsonb) || $4::jsonb,
             updated_at = NOW(),
             fecha_ultima_actualizacion = NOW()
         WHERE ($1::integer IS NOT NULL AND imo_number = $1::integer)
            OR ($1::integer IS NULL AND $2::text IS NOT NULL AND mmsi = $2::text)
         RETURNING status, audit_status, process_status
       `,
-      [savedVessel.imoNumber, savedVessel.mmsi],
+      [savedVessel.imoNumber, savedVessel.mmsi, profileCompleteness.complete ? "VALIDATED" : "PARTIAL", JSON.stringify(supplementalPatch)],
     );
     const validatedState = validatedStateResult.rows[0];
     if (!validatedState) throw new Error("No se pudo validar el estado final del buque guardado.");
@@ -353,7 +412,11 @@ export default async (req: Request) => {
         status: validatedState.status,
         audit_status: validatedState.audit_status,
         process_status: validatedState.process_status,
+        profile_status: profileCompleteness.complete ? "COMPLETE" : "PARTIAL",
+        profile_completeness: profileCompleteness,
       },
+      partial: !profileCompleteness.complete,
+      profileCompleteness,
       masterVesselCount: Number(countResult.rows[0]?.total || 0),
     }, 200, headers);
   } catch (error) {

@@ -61,7 +61,8 @@ function loadBridge(windowOverrides = {}) {
 }
 
 test('matching cards gate Calculator but expose external Due Diligence for every identified vessel', () => {
-  assert.match(indexSource, /const requiresDueDiligence = isDwtUnknown \|\| !isValidImo/);
+  assert.match(indexSource, /const requiresIdentityDueDiligence = isDwtUnknown \|\| !isValidImo/);
+  assert.match(indexSource, /const requiresDueDiligence = requiresIdentityDueDiligence \|\| \(isDataBridgeVessel && !profileCompleteness\.complete\)/);
   assert.match(indexSource, /data-due-diligence-button/);
   assert.match(indexSource, /const dueDiligenceButtonHtml = hasDueDiligenceIdentity \? `/);
   assert.match(indexSource, /data-due-diligence-mode="external-search"/);
@@ -355,7 +356,7 @@ test('frontend normalization recognizes external labels for flag, length, and ve
   });
 });
 
-test('persistDueDiligenceVessel sends the consolidated vessel through PUT', async () => {
+test('persistDueDiligenceVessel sends canonical technical columns through PATCH', async () => {
   let request = null;
   const vessel = {
     imo: '9876543',
@@ -379,17 +380,16 @@ test('persistDueDiligenceVessel sends the consolidated vessel through PUT', asyn
   });
 
   assert.equal(request.url, '/api/vessel-due-diligence-save');
-  assert.equal(request.options.method, 'PUT');
-  assert.deepEqual(JSON.parse(request.options.body), {
-    vessel: {
-      ...vessel,
-      gross_tonnage: 8_765,
-      loa_meters: 139.5,
-      beam_meters: 21.8,
-      year_built: 2011,
-    },
-    action: 'save',
-  });
+  assert.equal(request.options.method, 'PATCH');
+  const requestBody = JSON.parse(request.options.body);
+  assert.equal(requestBody.action, 'save');
+  assert.equal(requestBody.vessel.GROSS_TONNAGE, 8_765);
+  assert.equal(requestBody.vessel.gross_tonnage, 8_765);
+  assert.equal(requestBody.vessel.LOA_METERS, 139.5);
+  assert.equal(requestBody.vessel.loa_meters, 139.5);
+  assert.equal(requestBody.vessel.BEAM_METERS, 21.8);
+  assert.equal(requestBody.vessel.beam_meters, 21.8);
+  assert.equal(requestBody.vessel.year_built, 2011);
   assert.equal(result.success, true);
 });
 
@@ -499,7 +499,9 @@ test('persistence backend consolidates normalized technical fields by IMO or MMS
   assert.match(persistenceBackendSource, /const savedVesselStatus = action === "save" \? "EN_CARTERA" : null/);
   assert.match(persistenceBackendSource, /upsertVesselTechnicalRecord\(sanitizedVessel, client, savedVesselStatus\)/);
   assert.match(persistenceBackendSource, /SET status = 'EN_CARTERA'/);
-  assert.match(persistenceBackendSource, /audit_status = 'VALIDATED'/);
+  assert.match(persistenceBackendSource, /audit_status = \$3::text/);
+  assert.match(persistenceBackendSource, /profileCompleteness\.complete \? "VALIDATED" : "PARTIAL"/);
+  assert.match(persistenceBackendSource, /source_payload = COALESCE\(source_payload, '\{\}'::jsonb\) \|\| \$4::jsonb/);
   assert.match(persistenceBackendSource, /process_status = 'COMPLETED'/);
   assert.match(persistenceBackendSource, /RETURNING status, audit_status, process_status/);
   assert.match(technicalCacheSource, /status = EXCLUDED\.status/);
@@ -514,7 +516,7 @@ test('persistence backend consolidates normalized technical fields by IMO or MMS
   assert.match(persistenceBackendSource, /NON_COMMERCIAL_VESSEL_PATTERN\.test\(vesselType\)/);
   assert.match(persistenceBackendSource, /console\.error\("\[vessel-due-diligence-save\] PostgreSQL persistence failed", error\)/);
   assert.match(persistenceBackendSource, /return json\(\{ success: false, error: errorMessage \}, 500, headers\)/);
-  assert.doesNotMatch(persistenceBackendSource, /source_provenance|audit_source|validation_status|system_identity|source_payload/);
+  assert.doesNotMatch(persistenceBackendSource, /source_provenance|audit_source|validation_status|system_identity/);
   assert.doesNotMatch(persistenceBackendSource, /\bsource\b\s*[,)!=]/);
 });
 

@@ -461,6 +461,48 @@
         .input-gc:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         .input-gc:disabled { background-color: #0f172a; color: #64748b; cursor: not-allowed; }
         .input-gc.bg-gray-100 { background-color: #f3f4f6; color: #0f172a; border-color: #cbd5e1; cursor: not-allowed; }
+        .data-bridge-hydrated {
+            border-color: rgba(34, 197, 94, 0.82) !important;
+            box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.14) !important;
+        }
+        #data-bridge-hydration-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            border: 1px solid rgba(34, 197, 94, 0.38);
+            border-radius: 999px;
+            background: rgba(20, 83, 45, 0.72);
+            color: #bbf7d0;
+            padding: 0.2rem 0.55rem;
+            font-size: 0.625rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+        }
+        #data-bridge-hydration-badge[hidden] { display: none; }
+        #vessel-profile-completeness-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            border: 1px solid transparent;
+            border-radius: 999px;
+            padding: 0.2rem 0.55rem;
+            font-size: 0.625rem;
+            font-weight: 900;
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+        }
+        #vessel-profile-completeness-badge[data-profile-state="partial"] {
+            border-color: rgba(251, 146, 60, 0.48);
+            background: rgba(124, 45, 18, 0.72);
+            color: #fed7aa;
+        }
+        #vessel-profile-completeness-badge[data-profile-state="complete"] {
+            border-color: rgba(34, 197, 94, 0.4);
+            background: rgba(20, 83, 45, 0.72);
+            color: #bbf7d0;
+        }
+        #vessel-profile-completeness-badge[hidden] { display: none; }
 
         /* Ritmo Real POD: el modo de cálculo (Auto/Manual) se lee de un golpe de vista.
            Auto = valor derivado y bloqueado; Manual = campo editable en verde. */
@@ -8090,6 +8132,11 @@
                                 <button id="btn-save-vessel-db" onclick="saveCurrentVesselToDB()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold px-2 py-0.5 rounded transition flex items-center gap-1" title="Guardar buque en la base de datos / Save vessel to database">
                                     <i class="fa-solid fa-floppy-disk"></i> Guardar / Save
                                 </button>
+                                <span id="data-bridge-hydration-badge" hidden role="status" aria-live="polite">
+                                    <i class="fa-solid fa-database" aria-hidden="true"></i>
+                                    <span>Datos recuperados de Data Bridge</span>
+                                </span>
+                                <span id="vessel-profile-completeness-badge" hidden data-profile-state="partial" role="status" aria-live="polite"></span>
                                 <span id="vessel-badge" class="bg-blue-900/50 text-blue-300 text-[10px] font-bold px-2 py-1 rounded border border-blue-700/50 uppercase tracking-widest">Desconocido</span>
                             </div>
                         </div>
@@ -8164,6 +8211,10 @@
                             <div class="flex-1 flex items-center bg-white border border-gray-300 rounded px-2 py-1 h-9 shadow-sm">
                                 <span class="text-[10px] font-bold text-slate-500 mr-1 uppercase tracking-wider whitespace-nowrap">LOA (m):</span>
                                 <input type="number" id="vessel-identity-loa" class="w-full text-right text-xs text-slate-800 bg-transparent focus:outline-none" value="" placeholder="0.0" aria-label="Eslora total LOA en metros" min="0" step="0.01" oninput="handleManualVesselUpdate('loa', this.value)">
+                            </div>
+                            <div class="flex-1 flex items-center bg-white border border-gray-300 rounded px-2 py-1 h-9 shadow-sm">
+                                <span class="text-[10px] font-bold text-slate-500 mr-1 uppercase tracking-wider whitespace-nowrap">BEAM (m):</span>
+                                <input type="number" id="vessel-identity-beam" class="w-full text-right text-xs text-slate-800 bg-transparent focus:outline-none" value="" placeholder="0.0" aria-label="Manga máxima BEAM en metros" min="0" step="0.01" oninput="handleManualVesselUpdate('beam', this.value)">
                             </div>
                             <div class="flex-1 flex items-center bg-white border border-gray-300 rounded px-2 py-1 h-9 shadow-sm">
                                 <span class="text-[10px] font-bold text-slate-500 mr-1 uppercase tracking-wider whitespace-nowrap">AÑO:</span>
@@ -21924,11 +21975,13 @@
                             ? `${Number(commercialRank.dwtFitPercent).toFixed(1)}% ajuste`
                             : 'Ajuste N/D';
                         const isValidImo = /^\d{7}$/.test(String(v.imo || '').replace(/\D/g, ''));
-                        const requiresDueDiligence = isDwtUnknown || !isValidImo;
+                        const profileCompleteness = getVesselProfileCompleteness(v);
+                        const requiresIdentityDueDiligence = isDwtUnknown || !isValidImo;
                         const hasDueDiligenceIdentity = window.hasDueDiligenceIdentity?.(v) === true;
                         const sourceMetadata = normalizeMatchingSourceMetadata(m, v, m.ais);
                         const sourceOrigins = [...sourceMetadata.source_origins];
                         const isDataBridgeVessel = sourceOrigins.includes('DATABRIDGE');
+                        const requiresDueDiligence = requiresIdentityDueDiligence || (isDataBridgeVessel && !profileCompleteness.complete);
                         if (sourceOrigins.length === 0) sourceOrigins.push('MASTER');
                         const sourceBadgeClasses = {
                             MASTER: 'border-slate-300 bg-slate-100 text-slate-700',
@@ -21945,6 +21998,11 @@
                         const sourceBadgesHtml = sourceOrigins.map(origin => `
                             <span class="inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-black tracking-wide ${sourceBadgeClasses[origin]}">${sourceBadgeLabels[origin]}</span>
                         `).join('');
+                        const profileStatusHtml = isDataBridgeVessel
+                            ? profileCompleteness.complete
+                                ? '<span data-vessel-profile-status="complete" class="inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-emerald-800"><i class="fa-solid fa-circle-check"></i> Ficha Completa</span>'
+                                : `<span data-vessel-profile-status="partial" class="inline-flex items-center gap-1 rounded border border-orange-300 bg-orange-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-orange-800" title="Campos pendientes: ${profileCompleteness.missingFields.join(', ')}"><i class="fa-solid fa-triangle-exclamation"></i> Perfil Parcial · ${profileCompleteness.completedFields}/${profileCompleteness.totalFields}</span>`
+                            : '';
                         const sourceOriginLabel = sourceOrigins.join(' + ');
 
                         const visibleRank = idx + 1;
@@ -22280,7 +22338,7 @@
                                 <i class="fa-solid fa-circle-info"></i> Ver Ficha Técnica / View Data Sheet
                              </a>` : '';
                         const cardHtml = `
-                            <div class="matching-vessel-card border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : `border-red-200 bg-red-50/40 ${isDwtUnknown ? 'opacity-65' : 'opacity-80'} cursor-pointer`} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-requires-due-diligence="${requiresDueDiligence}" data-vessel-imo="${v.imo || ''}" data-source-origin="${sourceOriginLabel}" data-map-focus-id="${mapFocusId}" onclick="handleMatchingVesselCardClick(event)">
+                            <div class="matching-vessel-card border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : `border-red-200 bg-red-50/40 ${isDwtUnknown ? 'opacity-65' : 'opacity-80'} cursor-pointer`} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-requires-due-diligence="${requiresDueDiligence}" data-vessel-profile-state="${profileCompleteness.complete ? 'complete' : 'partial'}" data-vessel-imo="${v.imo || ''}" data-source-origin="${sourceOriginLabel}" data-map-focus-id="${mapFocusId}" onclick="handleMatchingVesselCardClick(event)">
                                 <!-- Rank Ribbon -->
                                 <div class="absolute top-4 right-5 flex items-center gap-2">
                                     ${estimatedDwtBadge}
@@ -22331,6 +22389,7 @@
                                                 <i class="fa-solid fa-scale-balanced"></i> #${commercialRank.position || visibleRank} DWT · ${dwtDifferenceLabel} · ${dwtFitLabel}
                                             </span>
                                             ${sourceBadgesHtml}
+                                            ${profileStatusHtml}
                                         </div>
 
                                         <p class="text-[11px] text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-1">
@@ -24046,6 +24105,7 @@
             const dwt = Number(vessel?.dwt);
             const gt = parseFloat(vessel?.gt ?? vessel?.gross_tonnage ?? vessel?.grossTonnage);
             const loa = parseFloat(vessel?.loa ?? vessel?.loa_meters ?? vessel?.LOA ?? vessel?.length_overall ?? vessel?.lengthOverall);
+            const beam = parseFloat(vessel?.beam ?? vessel?.beam_meters ?? vessel?.beamMeters ?? vessel?.breadth);
             const yearBuilt = Number(vessel?.year_built ?? vessel?.built_year ?? vessel?.yearBuilt ?? vessel?.builtYear);
             const nameInput = document.getElementById('vessel-name') || document.getElementById('nombre-buque-calculadora');
             if (nameInput && vesselName) nameInput.value = vesselName;
@@ -24064,6 +24124,10 @@
             const calculatorLoaInput = document.getElementById('vessel-loa');
             if (calculatorLoaInput) calculatorLoaInput.value = loaValue ? String(loaValue) : '0';
             State.loa = loaValue || 0;
+            const beamValue = Number.isFinite(beam) && beam > 0 ? beam : null;
+            const beamInput = document.getElementById('vessel-identity-beam');
+            if (beamInput) beamInput.value = beamValue ? String(beamValue) : '';
+            State.beam = beamValue || 0;
             const yearInput = document.getElementById('vessel-identity-year');
             if (yearInput) yearInput.value = Number.isFinite(yearBuilt) && yearBuilt > 1800 ? String(Math.round(yearBuilt)) : '';
             return {
@@ -24073,13 +24137,14 @@
                 dwt: updateCalculatorDwtBadge(dwt),
                 gt: Number.isFinite(gt) && gt > 0 ? gt : null,
                 loa: loaValue,
+                beam: beamValue,
                 year_built: Number.isFinite(yearBuilt) && yearBuilt > 1800 ? yearBuilt : null
             };
         }
 
         function handleManualVesselUpdate(field, value) {
             const rawValue = String(value ?? '').trim();
-            const numericFields = new Set(['dwt', 'gt', 'loa', 'year_built']);
+            const numericFields = new Set(['dwt', 'gt', 'loa', 'beam', 'year_built']);
             const normalizedValue = numericFields.has(field)
                 ? (rawValue === '' ? null : Number(rawValue))
                 : rawValue;
@@ -24115,6 +24180,11 @@
                 State.loa = loa || 0;
                 const calculatorLoaInput = document.getElementById('vessel-loa');
                 if (calculatorLoaInput) calculatorLoaInput.value = loa ? String(loa) : '0';
+            } else if (field === 'beam') {
+                const beam = Number.isFinite(normalizedValue) && normalizedValue > 0 ? normalizedValue : null;
+                updatedVessel.beam = beam;
+                updatedVessel.beam_meters = beam;
+                State.beam = beam || 0;
             } else if (field === 'year_built') {
                 const yearBuilt = Number.isFinite(normalizedValue) && normalizedValue > 1800 ? Math.round(normalizedValue) : null;
                 updatedVessel.year_built = yearBuilt;
@@ -24128,7 +24198,7 @@
                 window.GlobalStore.activeVessel = updatedVessel;
                 window.GlobalStore.calculatorVessel = updatedVessel;
             }
-            if ((field === 'gt' || field === 'loa') && typeof debouncedAutoFillPDA === 'function') {
+            if ((field === 'gt' || field === 'loa' || field === 'beam') && typeof debouncedAutoFillPDA === 'function') {
                 debouncedAutoFillPDA('pol', false, 150);
                 debouncedAutoFillPDA('pod', false, 150);
             }
@@ -30510,6 +30580,61 @@
             }
         }
 
+        function normalizeVesselBoolean(value) {
+            if (typeof value === 'boolean') return value;
+            if (typeof value === 'number') return value === 1 ? true : value === 0 ? false : null;
+            const normalized = String(value ?? '').trim().toLowerCase();
+            if (['true', '1', 'yes', 'si', 'sí', 'y'].includes(normalized)) return true;
+            if (['false', '0', 'no', 'n'].includes(normalized)) return false;
+            return null;
+        }
+
+        const MISSING_VESSEL_TECHNICAL_VALUES = new Set(['', 'n/a', 'na', 'n/d', 'nd', 'unknown', 'desconocido', 'null', 'undefined', 'pending', 'pending_imo', '-', '--']);
+
+        function isMissingVesselTechnicalValue(value) {
+            if (value === null || value === undefined) return true;
+            return MISSING_VESSEL_TECHNICAL_VALUES.has(String(value).trim().toLowerCase());
+        }
+
+        function readVesselTechnicalField(vessel, aliases, options = {}) {
+            const source = vessel && typeof vessel === 'object' ? vessel : {};
+            const metadata = source.MetaData && typeof source.MetaData === 'object' ? source.MetaData : {};
+            for (const alias of aliases) {
+                const value = source[alias] ?? metadata[alias];
+                if (isMissingVesselTechnicalValue(value)) continue;
+                if (options.numeric === true) {
+                    const numeric = Number(value);
+                    if (Number.isFinite(numeric) && numeric > 0) return numeric;
+                    continue;
+                }
+                return String(value).trim();
+            }
+            return null;
+        }
+
+        function getVesselProfileCompleteness(vessel) {
+            const fields = {
+                vesselName: readVesselTechnicalField(vessel, ['vessel_name', 'vesselName', 'name', 'ShipName']),
+                identity: readVesselTechnicalField(vessel, ['imo', 'imo_number', 'IMO']) || readVesselTechnicalField(vessel, ['mmsi', 'MMSI']),
+                dwt: readVesselTechnicalField(vessel, ['dwt', 'DWT'], { numeric: true }),
+                grossTonnage: readVesselTechnicalField(vessel, ['gt', 'gross_tonnage', 'grossTonnage', 'GT'], { numeric: true }),
+                loa: readVesselTechnicalField(vessel, ['loa', 'loa_meters', 'loaMeters', 'LOA', 'length_overall'], { numeric: true }),
+                beam: readVesselTechnicalField(vessel, ['beam', 'beam_meters', 'beamMeters', 'breadth', 'Beam'], { numeric: true }),
+                flag: readVesselTechnicalField(vessel, ['flag', 'Flag', 'bandera']),
+                yearBuilt: readVesselTechnicalField(vessel, ['year_built', 'built_year', 'yearBuilt', 'builtYear', 'Year_Built'], { numeric: true }),
+            };
+            const missingFields = Object.entries(fields).filter(([, value]) => value === null).map(([field]) => field);
+            const completedFields = Object.keys(fields).length - missingFields.length;
+            return {
+                complete: missingFields.length === 0,
+                completedFields,
+                totalFields: Object.keys(fields).length,
+                missingFields,
+                fields,
+            };
+        }
+        window.getVesselProfileCompleteness = getVesselProfileCompleteness;
+
         function normalizeCalculatorStoreVessel(candidate) {
             if (!candidate || typeof candidate !== 'object') return null;
             const ais = candidate.ais && typeof candidate.ais === 'object' ? candidate.ais : {};
@@ -30518,7 +30643,7 @@
             const metadata = source.MetaData && typeof source.MetaData === 'object' ? source.MetaData : {};
             const imoDigits = String(source.imo || source.imo_number || source.numero_imo || source.IMO || metadata.IMO || '').replace(/\D/g, '');
             const mmsiDigits = String(source.mmsi || source.MMSI || metadata.MMSI || '').replace(/\D/g, '');
-            const vesselName = String(source.vessel_name || source.vesselName || source.name || source.ShipName || metadata.ShipName || '').trim();
+            const vesselName = readVesselTechnicalField(source, ['vessel_name', 'vesselName', 'name', 'ShipName']) || '';
             const dwt = Number(source.dwt ?? source.DWT ?? metadata.DWT);
             const yearBuilt = Number(source.year_built ?? source.built_year ?? source.yearBuilt ?? source.builtYear ?? source.ano_construccion ?? metadata.Year_Built);
             const gt = Number(source.gt ?? source.gross_tonnage ?? source.grossTonnage ?? metadata.GT);
@@ -30526,6 +30651,7 @@
             const loa = Number(source.loa ?? source.loa_meters ?? source.loaMeters ?? metadata.LOA);
             const beam = Number(source.beam ?? source.beam_meters ?? source.beamMeters ?? metadata.Beam);
             const dwcc = Number(source.dwcc ?? source.dwcc_mt ?? source.cargo_capacity ?? source.cargo_capacity_mt ?? source.deadweight_cargo_capacity ?? metadata.DWCC);
+            const hasScrubber = normalizeVesselBoolean(source.has_scrubber ?? source.hasScrubber ?? source.scrubber ?? metadata.HasScrubber);
             return {
                 ...source,
                 vessel_name: vesselName,
@@ -30543,12 +30669,14 @@
                 dwcc: Number.isFinite(dwcc) && dwcc > 0 ? dwcc : null,
                 year_built: Number.isFinite(yearBuilt) && yearBuilt > 1800 ? yearBuilt : null,
                 built_year: Number.isFinite(yearBuilt) && yearBuilt > 1800 ? yearBuilt : null,
-                flag: source.flag || source.Flag || metadata.Flag || null,
+                flag: readVesselTechnicalField(source, ['flag', 'Flag', 'bandera']),
                 draft: source.draft ?? source.draft_meters ?? source.Draft ?? null,
                 draft_meters: source.draft_meters ?? source.draft ?? source.Draft ?? null,
                 vessel_type: source.vessel_type || source.vesselType || source.shipType || null,
                 vessel_class: source.vessel_class || source.vesselClass || source.vessel_type || source.vesselType || null,
                 specialty_type: source.specialty_type || source.specialtyType || source.vessel_type || source.vesselType || null,
+                has_scrubber: hasScrubber,
+                hasScrubber,
             };
         }
 
@@ -30622,6 +30750,209 @@
             return vessel;
         }
         window.applyResolvedVesselToCalculator = applyResolvedVesselToCalculator;
+
+        const dataBridgeHydrationRequests = new Map();
+        let activeDataBridgeHydrationKey = '';
+        let dataBridgeHydrationSequence = 0;
+
+        function setDataBridgeHydrationBadge(visible, vesselName = '') {
+            const badge = document.getElementById('data-bridge-hydration-badge');
+            if (!badge) return;
+            const label = badge.querySelector('span');
+            if (label) label.textContent = vesselName
+                ? `Datos recuperados de Data Bridge · ${vesselName}`
+                : 'Datos recuperados de Data Bridge';
+            badge.hidden = !visible;
+        }
+
+        function setVesselProfileCompletenessBadge(completeness = null) {
+            const badge = document.getElementById('vessel-profile-completeness-badge');
+            if (!badge) return;
+            if (!completeness) {
+                badge.hidden = true;
+                badge.textContent = '';
+                return;
+            }
+            badge.hidden = false;
+            badge.dataset.profileState = completeness.complete ? 'complete' : 'partial';
+            badge.innerHTML = completeness.complete
+                ? '<i class="fa-solid fa-circle-check" aria-hidden="true"></i><span>Ficha Completa</span>'
+                : `<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i><span>Perfil Parcial · ${completeness.completedFields}/${completeness.totalFields}</span>`;
+            badge.title = completeness.complete
+                ? 'La ficha maestra contiene todos los campos técnicos principales.'
+                : `Falta Due Diligence: ${completeness.missingFields.join(', ')}`;
+        }
+
+        function clearDataBridgeHydrationFeedback() {
+            document.querySelectorAll('.data-bridge-hydrated').forEach(element => element.classList.remove('data-bridge-hydrated'));
+            setDataBridgeHydrationBadge(false);
+            setVesselProfileCompletenessBadge(null);
+        }
+
+        function markDataBridgeHydratedField(element) {
+            if (!element) return;
+            element.classList.add('data-bridge-hydrated');
+            if (element.closest('#vessel-identity-meta')) element.parentElement?.classList.add('data-bridge-hydrated');
+        }
+
+        function setDataBridgeHydratedValue(id, value, options = {}) {
+            const element = document.getElementById(id);
+            if (!element) return false;
+            const numeric = options.numeric === true;
+            const normalized = numeric ? Number(value) : String(value ?? '').trim();
+            const missing = numeric
+                ? !Number.isFinite(normalized) || normalized <= 0
+                : isMissingVesselTechnicalValue(normalized);
+            if (missing) {
+                if (options.clearWhenMissing === true) element.value = '';
+                element.classList.remove('data-bridge-hydrated');
+                if (element.closest('#vessel-identity-meta')) element.parentElement?.classList.remove('data-bridge-hydrated');
+                return false;
+            }
+            element.value = numeric && options.round === true ? String(Math.round(normalized)) : String(normalized);
+            markDataBridgeHydratedField(element);
+            return true;
+        }
+
+        function clearVesselScrubberSelection() {
+            const hiddenToggle = document.getElementById('vessel-has-scrubber');
+            const yesOption = document.getElementById('vessel-has-scrubber-yes');
+            const noOption = document.getElementById('vessel-has-scrubber-no');
+            const selector = yesOption?.closest('[role="radiogroup"]');
+            if (hiddenToggle) hiddenToggle.checked = false;
+            if (yesOption) yesOption.checked = false;
+            if (noOption) noOption.checked = false;
+            selector?.classList.remove('data-bridge-hydrated');
+            updateSection2LocalState('vessel-has-scrubber', null);
+        }
+
+        function applyDataBridgeHydrationToCalculator(rawVessel, selectedVessel = {}) {
+            clearDataBridgeHydrationFeedback();
+            const profileVessel = normalizeCalculatorStoreVessel(rawVessel) || {};
+            const selectedIdentity = normalizeCalculatorStoreVessel(selectedVessel) || {};
+            const mergedVessel = {
+                ...selectedVessel,
+                ...profileVessel,
+                vessel_name: profileVessel.vessel_name || selectedIdentity.vessel_name || '',
+                vesselName: profileVessel.vessel_name || selectedIdentity.vessel_name || '',
+                imo: profileVessel.imo || selectedIdentity.imo || null,
+                imo_number: profileVessel.imo || selectedIdentity.imo || null,
+                mmsi: profileVessel.mmsi || selectedIdentity.mmsi || null,
+            };
+            const vessel = applyResolvedVesselToCalculator(mergedVessel, mergedVessel.vessel_name || '');
+            const clearMissing = { clearWhenMissing: true };
+            const hydratedFields = [
+                setDataBridgeHydratedValue('nombre-buque-calculadora', vessel.vessel_name),
+                setDataBridgeHydratedValue('vessel-identity-imo', vessel.imo),
+                setDataBridgeHydratedValue('vessel-dwt', vessel.dwt, { ...clearMissing, numeric: true, round: true }),
+                setDataBridgeHydratedValue('vessel-identity-dwt', vessel.dwt, { ...clearMissing, numeric: true, round: true }),
+                setDataBridgeHydratedValue('vessel-identity-gt', vessel.gt || vessel.gross_tonnage, { ...clearMissing, numeric: true, round: true }),
+                setDataBridgeHydratedValue('vessel-loa', vessel.loa || vessel.loa_meters, { ...clearMissing, numeric: true }),
+                setDataBridgeHydratedValue('vessel-identity-loa', vessel.loa || vessel.loa_meters, { ...clearMissing, numeric: true }),
+                setDataBridgeHydratedValue('vessel-identity-beam', vessel.beam || vessel.beam_meters, { ...clearMissing, numeric: true }),
+                setDataBridgeHydratedValue('vessel-draft', vessel.draft || vessel.draft_meters, { ...clearMissing, numeric: true }),
+                setDataBridgeHydratedValue('vessel-net-tonnage', vessel.net_tonnage, { ...clearMissing, numeric: true, round: true }),
+                setDataBridgeHydratedValue('vessel-flag', vessel.flag, clearMissing),
+                setDataBridgeHydratedValue('vessel-identity-flag', vessel.flag, clearMissing),
+                setDataBridgeHydratedValue('vessel-identity-year', vessel.year_built, { ...clearMissing, numeric: true, round: true }),
+                setDataBridgeHydratedValue('spd-ballast', vessel.spd_ballast, { ...clearMissing, numeric: true }),
+                setDataBridgeHydratedValue('spd-laden', vessel.spd_laden, { ...clearMissing, numeric: true }),
+                setDataBridgeHydratedValue('cons-sea', vessel.cons_sea, { ...clearMissing, numeric: true }),
+                setDataBridgeHydratedValue('cons-port', vessel.cons_port, { ...clearMissing, numeric: true }),
+            ];
+            if (vessel.has_scrubber !== null && vessel.has_scrubber !== undefined && typeof setVesselScrubber === 'function') {
+                setVesselScrubber(vessel.has_scrubber, false);
+                markDataBridgeHydratedField(document.getElementById('vessel-has-scrubber-yes')?.closest('[role="radiogroup"]'));
+                hydratedFields.push(true);
+            } else {
+                clearVesselScrubberSelection();
+            }
+            if (vessel.vessel_class || vessel.vessel_type) {
+                State.class = vessel.vessel_class || vessel.vessel_type;
+                const classBadge = document.getElementById('vessel-badge');
+                if (classBadge) classBadge.textContent = State.class;
+            }
+            State.dwt = Number(vessel.dwt) || 0;
+            State.draft = Number(vessel.draft || vessel.draft_meters) || 0;
+            State.loa = Number(vessel.loa || vessel.loa_meters) || 0;
+            State.beam = Number(vessel.beam || vessel.beam_meters) || 0;
+            State.gt = Number(vessel.gt || vessel.gross_tonnage) || 0;
+            State.yearBuilt = Number(vessel.year_built) || null;
+            State.hasScrubber = vessel.has_scrubber ?? null;
+            State.vesselDwtFixed = State.dwt > 0;
+            updateSection2LocalState('vessel-dwt', State.dwt > 0 ? String(State.dwt) : '');
+            window.recordVerifiedVesselClass?.(vessel);
+            if (window.GlobalStore) {
+                window.GlobalStore.activeVessel = vessel;
+                window.GlobalStore.calculatorVessel = vessel;
+            }
+            if (typeof handleFlagOrPscChange === 'function' && vessel.flag) handleFlagOrPscChange();
+            if (typeof runEngine === 'function') runEngine();
+            const completeness = getVesselProfileCompleteness(vessel);
+            if (hydratedFields.some(Boolean)) setDataBridgeHydrationBadge(true, vessel.vessel_name || vessel.vesselName || '');
+            setVesselProfileCompletenessBadge(completeness);
+            vessel.profileCompleteness = completeness;
+            vessel.profileStatus = completeness.complete ? 'COMPLETE' : 'PARTIAL';
+            return vessel;
+        }
+
+        async function fetchDataBridgeVesselProfile(selectedVessel) {
+            const normalized = normalizeCalculatorStoreVessel(selectedVessel) || {};
+            const imo = String(normalized.imo || '').replace(/\D/g, '');
+            const mmsi = String(normalized.mmsi || '').replace(/\D/g, '');
+            const lookup = imo.length === 7 ? imo : (mmsi.length === 9 ? mmsi : '');
+            if (!lookup) return null;
+            const requestKey = imo.length === 7 ? `imo:${imo}` : `mmsi:${mmsi}`;
+            activeDataBridgeHydrationKey = requestKey;
+            if (!dataBridgeHydrationRequests.has(requestKey)) {
+                const request = fetch('/api/databridge-vessel-search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    body: JSON.stringify({ q: lookup, imo_number: imo || undefined, mmsi: mmsi || undefined })
+                }).then(async response => {
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok || payload?.success === false) throw new Error(payload?.error || `Data Bridge HTTP ${response.status}`);
+                    return payload?.vessel || null;
+                }).catch(error => {
+                    dataBridgeHydrationRequests.delete(requestKey);
+                    throw error;
+                });
+                dataBridgeHydrationRequests.set(requestKey, request);
+            }
+            const profile = await dataBridgeHydrationRequests.get(requestKey);
+            if (activeDataBridgeHydrationKey !== requestKey) return null;
+            return profile;
+        }
+
+        async function hydrateSelectedVesselFromDataBridge(selectedVessel) {
+            clearDataBridgeHydrationFeedback();
+            const hydrationSequence = ++dataBridgeHydrationSequence;
+            activeDataBridgeHydrationKey = '';
+            try {
+                const profile = await fetchDataBridgeVesselProfile(selectedVessel);
+                if (!profile || hydrationSequence !== dataBridgeHydrationSequence) return selectedVessel;
+                const livePosition = {
+                    lat: selectedVessel.lat,
+                    lon: selectedVessel.lon,
+                    lng: selectedVessel.lng,
+                    latitude: selectedVessel.latitude,
+                    longitude: selectedVessel.longitude,
+                    destination: selectedVessel.destination,
+                };
+                const hydratedVessel = applyDataBridgeHydrationToCalculator({ ...profile, ...livePosition }, selectedVessel);
+                window.objetoCalculadoraPrincipal = Object.freeze({ ...selectedVessel, ...hydratedVessel, ...livePosition });
+                window.activeVessel = window.objetoCalculadoraPrincipal;
+                if (window.GlobalStore) {
+                    window.GlobalStore.activeVessel = window.objetoCalculadoraPrincipal;
+                    window.GlobalStore.calculatorVessel = window.objetoCalculadoraPrincipal;
+                }
+                return window.objetoCalculadoraPrincipal;
+            } catch (error) {
+                console.warn('[Data Bridge Hydration] No se pudo recuperar el perfil técnico.', error?.message || error);
+                return selectedVessel;
+            }
+        }
+        window.hydrateSelectedVesselFromDataBridge = hydrateSelectedVesselFromDataBridge;
 
         let pendingPdaVesselConfirmation = null;
 
@@ -31038,11 +31369,6 @@
 
                 if (data.success && data.vessel) {
                     const vessel = normalizeCalculatorStoreVessel(data.vessel) || data.vessel;
-                    const fetchedDwt = Number(vessel.dwt);
-                    const hasValidatedTechnicalData = Number.isFinite(fetchedDwt) && fetchedDwt > 0;
-                    if (!hasValidatedTechnicalData) {
-                        throw new Error('El registro encontrado no contiene DWT válido.');
-                    }
                     openPdaVesselConfirmationModal(vessel, data.source || 'databridge');
                 } else {
                     // Aviso local exclusivo sin buscar fuera
@@ -40757,6 +41083,17 @@
             document.getElementById('comparison-modal').classList.add('hidden', 'pointer-events-none');
         }
 
+        function mergeVesselTechnicalPersistenceState(existingState = {}, editedState = {}) {
+            const mergedState = { ...(existingState && typeof existingState === 'object' ? existingState : {}) };
+            Object.entries(editedState && typeof editedState === 'object' ? editedState : {}).forEach(([field, value]) => {
+                if (value === null || value === undefined) return;
+                if (typeof value === 'number' && (!Number.isFinite(value) || value <= 0)) return;
+                if (typeof value === 'string' && isMissingVesselTechnicalValue(value)) return;
+                mergedState[field] = value;
+            });
+            return mergedState;
+        }
+
         // --- PERSISTENT HISTORY OF AUDITED VESSELS (NETLIFY DB) ---
         async function saveCurrentVesselToDB() {
             const vesselNameInput = document.getElementById('nombre-buque-calculadora') || document.getElementById('vessel-name');
@@ -40788,7 +41125,9 @@
 	            const loa = parseFloat(document.getElementById('vessel-identity-loa')?.value || document.getElementById('vessel-loa')?.value)
 	                || parseFloat(storedTechnicalVessel.loa_meters || storedTechnicalVessel.loaMeters || storedTechnicalVessel.loa)
 	                || null;
-	            const beam = parseFloat(storedTechnicalVessel.beam_meters || storedTechnicalVessel.beamMeters || storedTechnicalVessel.beam || storedTechnicalVessel.breadth) || null;
+	            const beam = parseFloat(document.getElementById('vessel-identity-beam')?.value)
+	                || parseFloat(storedTechnicalVessel.beam_meters || storedTechnicalVessel.beamMeters || storedTechnicalVessel.beam || storedTechnicalVessel.breadth)
+	                || null;
             const draft = State.draft || parseFloat(document.getElementById('vessel-draft')?.value) || null;
             const spd_ballast = parseFloat(document.getElementById('spd-ballast').value) || null;
             const spd_laden = parseFloat(document.getElementById('spd-laden').value) || null;
@@ -40797,27 +41136,49 @@
             const vessel_class = document.getElementById('vessel-badge').innerText.trim() || null;
             const specialty_type = document.getElementById('gc-add-specialty') ? document.getElementById('gc-add-specialty').value.trim() : null;
 
-            const payload = {
-                vessel_name: vesselName,
-                imo: imo,
-                flag: flag,
-                dwt: dwt,
-                gt: gt,
-                gross_tonnage: gt,
-	                loa: loa,
+	            const scrubberYes = document.getElementById('vessel-has-scrubber-yes')?.checked === true;
+	            const scrubberNo = document.getElementById('vessel-has-scrubber-no')?.checked === true;
+	            const hasScrubber = scrubberYes ? true : (scrubberNo ? false : null);
+	            const mergedTechnicalState = mergeVesselTechnicalPersistenceState({
+	                gross_tonnage: storedTechnicalVessel.gross_tonnage || storedTechnicalVessel.grossTonnage || storedTechnicalVessel.gt || null,
+	                loa_meters: storedTechnicalVessel.loa_meters || storedTechnicalVessel.loaMeters || storedTechnicalVessel.loa || null,
+	                beam_meters: storedTechnicalVessel.beam_meters || storedTechnicalVessel.beamMeters || storedTechnicalVessel.beam || storedTechnicalVessel.breadth || null,
+	            }, {
+	                gross_tonnage: gt,
 	                loa_meters: loa,
-	                beam: beam,
 	                beam_meters: beam,
+	            });
+	            const payloadCandidate = {
+	                vessel_name: vesselName,
+	                imo: imo,
+                flag: flag,
+	                dwt: dwt,
+	                gt: mergedTechnicalState.gross_tonnage,
+	                GROSS_TONNAGE: mergedTechnicalState.gross_tonnage,
+	                gross_tonnage: mergedTechnicalState.gross_tonnage,
+		                loa: mergedTechnicalState.loa_meters,
+		                LOA_METERS: mergedTechnicalState.loa_meters,
+		                loa_meters: mergedTechnicalState.loa_meters,
+		                beam: mergedTechnicalState.beam_meters,
+		                BEAM_METERS: mergedTechnicalState.beam_meters,
+		                beam_meters: mergedTechnicalState.beam_meters,
 	                draft: draft,
                 year_built: builtYear,
                 built_year: builtYear,
                 spd_ballast: spd_ballast,
                 spd_laden: spd_laden,
                 cons_sea: cons_sea,
-                cons_port: cons_port,
-                vessel_class: vessel_class,
-                specialty_type: specialty_type
-            };
+	                cons_port: cons_port,
+	                vessel_class: vessel_class,
+	                specialty_type: specialty_type,
+	                has_scrubber: hasScrubber
+	            };
+	            const payload = Object.fromEntries(Object.entries(payloadCandidate).filter(([, value]) => {
+	                if (value === null || value === undefined) return false;
+	                if (typeof value === 'number') return Number.isFinite(value) && value > 0;
+	                if (typeof value === 'boolean') return true;
+	                return !isMissingVesselTechnicalValue(value);
+	            }));
 
             // Call the local library saver to preserve the structured vessel specs locally
             if (payload && payload.vessel_name && payload.vessel_name.trim() !== '') {
@@ -40833,16 +41194,18 @@
                 btn.disabled = true;
             }
 
-            try {
-                const response = await fetch('/api/vessel-due-diligence-save', {
-                    method: 'PUT',
+	            try {
+	                console.log('Payload enviado a DB:', payload);
+	                const response = await fetch('/api/vessel-due-diligence-save', {
+                    method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ vessel: payload })
                 });
                 
                 const resData = await response.json();
                 if (response.ok && resData.success && resData.vessel) {
-                    showToast(`⚓ Buque "${vesselName}" guardado con éxito en la base de datos.`);
+                    const profileStatus = resData.partial === true ? 'Perfil Parcial · Due Diligence pendiente' : 'Ficha Completa';
+                    showToast(`⚓ Buque "${vesselName}" guardado. ${profileStatus}.`);
                     const savedVessel = normalizeCalculatorStoreVessel({ ...payload, ...resData.vessel, gt }) || payload;
                     State.imo = imo;
                     State.vessel = vesselName;
@@ -40852,6 +41215,7 @@
                         window.GlobalStore.calculatorVessel = savedVessel;
                     }
                     await saveVesselToIndexedDB({ ...savedVessel, imo, name: vesselName, gt, loa });
+                    setVesselProfileCompletenessBadge(resData.profileCompleteness || getVesselProfileCompleteness(savedVessel));
                 } else {
                     showToast(`⚠️ Error al guardar buque: ${resData.error || (resData.success ? 'No se devolvieron datos' : 'Desconocido')}`);
                 }
@@ -50600,6 +50964,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         runEngine();
                     }
                 }
+
+                await hydrateSelectedVesselFromDataBridge(window.objetoCalculadoraPrincipal);
 
                 // 2. Automatically locate on the map
                 const mapAIS = window.mapaAIS || window.mapAIS || window.map;

@@ -40,6 +40,15 @@ function cleanString(value: unknown): string {
   return String(value ?? "").trim();
 }
 
+function nullableBoolean(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1 ? true : value === 0 ? false : null;
+  const normalized = cleanString(value).toLowerCase();
+  if (["true", "1", "yes", "si", "sí", "y"].includes(normalized)) return true;
+  if (["false", "0", "no", "n"].includes(normalized)) return false;
+  return null;
+}
+
 async function loadFreshDataBridgeVesselSearch(req: Request) {
   if (req.method !== "GET" && req.method !== "POST") {
     return Response.json({ success: false, error: "Method not allowed" }, { status: 405 });
@@ -101,6 +110,7 @@ async function loadFreshDataBridgeVesselSearch(req: Request) {
       const mappedVessels = (allQueryResult.rows || []).map((row) => {
         const sourcePayload = asRecord(row.source_payload);
         const metadata = asRecord(sourcePayload.MetaData || sourcePayload.metadata);
+        const hasScrubber = nullableBoolean(sourcePayload.has_scrubber ?? sourcePayload.hasScrubber ?? sourcePayload.scrubber ?? metadata.HasScrubber);
         return {
           vessel_name: row.vessel_name || sourcePayload.vessel_name || metadata.ShipName || 'Buque Data Bridge',
           vesselName: row.vessel_name || sourcePayload.vessel_name || metadata.ShipName || 'Buque Data Bridge',
@@ -122,6 +132,8 @@ async function loadFreshDataBridgeVesselSearch(req: Request) {
           loa: row.loa_meters ?? (sourcePayload.loa_meters as number | null) ?? (sourcePayload.loa as number | null) ?? null,
           beam_meters: row.beam_meters ?? (sourcePayload.beam_meters as number | null) ?? (sourcePayload.beam as number | null) ?? null,
           beam: row.beam_meters ?? (sourcePayload.beam_meters as number | null) ?? (sourcePayload.beam as number | null) ?? null,
+          has_scrubber: hasScrubber,
+          hasScrubber,
           audit_status: row.audit_status || null,
           auditStatus: row.audit_status || null,
           audit_source: row.audit_source || null,
@@ -213,6 +225,7 @@ async function loadFreshDataBridgeVesselSearch(req: Request) {
     const row = queryResult.rows[0];
     const sourcePayload = asRecord(row.source_payload);
     const metadata = asRecord(sourcePayload.MetaData || sourcePayload.metadata);
+    const hasScrubber = nullableBoolean(sourcePayload.has_scrubber ?? sourcePayload.hasScrubber ?? sourcePayload.scrubber ?? metadata.HasScrubber);
 
     const vesselData = {
       vessel_name: row.vessel_name || sourcePayload.vessel_name || metadata.ShipName || searchTerm,
@@ -236,6 +249,8 @@ async function loadFreshDataBridgeVesselSearch(req: Request) {
       net_tonnage: row.net_tonnage ?? (sourcePayload.net_tonnage as number | null) ?? (sourcePayload.nt as number | null) ?? null,
       loa_meters: row.loa_meters ?? (sourcePayload.loa_meters as number | null) ?? (sourcePayload.loa as number | null) ?? null,
       beam_meters: row.beam_meters ?? (sourcePayload.beam_meters as number | null) ?? (sourcePayload.beam as number | null) ?? null,
+      has_scrubber: hasScrubber,
+      hasScrubber,
       owner_manager: row.owner_manager || null,
       has_gears: row.has_gears ?? null,
       status: row.status,
