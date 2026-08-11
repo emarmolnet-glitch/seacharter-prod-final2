@@ -277,6 +277,10 @@
     <link rel="stylesheet" href="./ais-market-reference-widget.css?v=20260721">
     <script defer src="./network-resilience.js?v=20260807-circuit-breaker"></script>
     <script type="module" src="./cargo-taxonomy.mjs"></script>
+    <script type="module">
+        import * as OpenTonnagePredictor from './open-tonnage-predictor.mjs';
+        window.OpenTonnagePredictor = OpenTonnagePredictor;
+    </script>
     <script type="module" src="./AisMarketReferenceWidget.ts"></script>
     <script type="module" src="./market-intelligence-panel.mjs?v=20260810"></script>
     <script type="module" src="./map_loader.js?v=20260802-ais-heading"></script>
@@ -2184,6 +2188,44 @@
             content-visibility: auto;
             contain-intrinsic-size: 1px 320px;
             will-change: transform, opacity;
+        }
+        .open-tonnage-toggle {
+            position: relative;
+            display: inline-flex;
+            width: 2.75rem;
+            height: 1.5rem;
+            flex: 0 0 auto;
+            border-radius: 999px;
+            background: #cbd5e1;
+            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+            transition: background-color 180ms ease, box-shadow 180ms ease;
+        }
+        .open-tonnage-toggle::after {
+            content: '';
+            width: 1.125rem;
+            height: 1.125rem;
+            margin: 0.1875rem;
+            border-radius: 999px;
+            background: #fff;
+            box-shadow: 0 2px 7px rgba(15, 23, 42, 0.28);
+            transition: transform 180ms ease;
+        }
+        #laycan-viable-only-toggle:checked + .open-tonnage-toggle {
+            background: #047857;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+        }
+        #laycan-viable-only-toggle:checked + .open-tonnage-toggle::after {
+            transform: translateX(1.25rem);
+        }
+        #laycan-viable-only-toggle:focus-visible + .open-tonnage-toggle {
+            outline: 2px solid #0f766e;
+            outline-offset: 3px;
+        }
+        .open-tonnage-card-viable {
+            border-left: 4px solid #059669 !important;
+        }
+        .open-tonnage-card-late {
+            border-left: 4px solid #e11d48 !important;
         }
 
         #ranking-cards-canvas {
@@ -13688,6 +13730,21 @@
                                 <span id="technical-problems-toggle-status" class="text-[10px] font-semibold text-slate-400">Todos los candidatos se muestran con sus advertencias técnicas</span>
                             </div>
                         </div>
+                        <div class="mb-4 overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-cyan-50 shadow-sm">
+                            <label for="laycan-viable-only-toggle" class="flex cursor-pointer items-center justify-between gap-4 px-4 py-3">
+                                <span class="flex min-w-0 items-center gap-3">
+                                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-700 text-white shadow-sm"><i class="fa-solid fa-route" aria-hidden="true"></i></span>
+                                    <span class="min-w-0">
+                                        <strong class="block text-[11px] font-black uppercase tracking-wide text-emerald-950">Mostrar solo buques viables para Laycan</strong>
+                                        <span id="laycan-viable-filter-status" class="mt-0.5 block text-[10px] font-semibold text-emerald-800" aria-live="polite">Clasificación Open Tonnage lista tras ejecutar Coincidencia</span>
+                                    </span>
+                                </span>
+                                <span class="inline-flex shrink-0 items-center gap-2">
+                                    <input type="checkbox" id="laycan-viable-only-toggle" class="peer sr-only" aria-checked="false">
+                                    <span class="open-tonnage-toggle" aria-hidden="true"></span>
+                                </span>
+                            </label>
+                        </div>
                         <div id="matching-source-integrity" class="hidden mb-4 rounded-lg border px-3 py-2 text-[11px]" role="status" aria-live="polite"></div>
 
                         <section id="databridge-recommendations-panel" class="hidden mb-5 w-full max-w-none overflow-hidden rounded-xl border border-cyan-200 bg-white shadow-sm" aria-labelledby="databridge-recommendations-title">
@@ -19994,6 +20051,52 @@
         }, window.matchingLocalState || {});
         window.matchingLocalInFlightRequests = window.matchingLocalInFlightRequests || new Map();
         window.matchingStrictTechnicalFilter = false;
+        window.matchingLaycanViableOnly = false;
+
+        function getLaycanViableMatchingVessels(vessels) {
+            const candidates = Array.isArray(vessels) ? vessels : [];
+            return candidates.filter(match => match?.openTonnageProjection?.viable === true);
+        }
+        window.getLaycanViableMatchingVessels = getLaycanViableMatchingVessels;
+
+        function applyMatchingLaycanViabilityFilter(options = {}) {
+            const enabled = window.matchingLaycanViableOnly === true;
+            const baseVessels = Array.isArray(window.matchingResultsState?.eligibleVessels)
+                ? window.matchingResultsState.eligibleVessels
+                : (window.matchingResultsState?.vessels || []);
+            const viableVessels = getLaycanViableMatchingVessels(baseVessels);
+            const displayedVessels = enabled ? viableVessels : baseVessels;
+
+            document.querySelectorAll('#matching-results-list [data-open-tonnage-viable]').forEach(card => {
+                const shouldHide = enabled && card.dataset.openTonnageViable !== 'true';
+                card.classList.toggle('hidden', shouldHide);
+                card.setAttribute('aria-hidden', shouldHide ? 'true' : 'false');
+            });
+
+            const status = document.getElementById('laycan-viable-filter-status');
+            if (status) {
+                status.textContent = baseVessels.length === 0
+                    ? 'Clasificación Open Tonnage lista tras ejecutar Coincidencia'
+                    : enabled
+                        ? `${viableVessels.length} de ${baseVessels.length} buques llegan al POL antes de Cancelling`
+                        : `${viableVessels.length} viables · ${Math.max(0, baseVessels.length - viableVessels.length)} fuera de fechas o con proyección incompleta`;
+            }
+
+            const badge = document.getElementById('match-results-badge');
+            if (badge && baseVessels.length > 0) {
+                badge.textContent = enabled
+                    ? `${viableVessels.length} viable${viableVessels.length === 1 ? '' : 's'} para Laycan`
+                    : `${baseVessels.length} candidato${baseVessels.length === 1 ? '' : 's'} · ${viableVessels.length} viable${viableVessels.length === 1 ? '' : 's'}`;
+                badge.classList.remove('hidden');
+            }
+
+            if (options.syncDataBridge !== false && typeof window.setRenderedMatchingVessels === 'function') {
+                const canonical = window.setRenderedMatchingVessels(displayedVessels, { source: enabled ? 'laycan-viability-filter' : 'matching-execution' });
+                window.syncDataBridgeRankingWithMatchingResults?.(canonical);
+            }
+            return displayedVessels;
+        }
+        window.applyMatchingLaycanViabilityFilter = applyMatchingLaycanViabilityFilter;
 
         window.getMatchingContractOperationalState = function(candidateState = null) {
             const voyageParams = getGlobalVoyageParams();
@@ -20665,6 +20768,7 @@
                     const template = document.createElement('template');
                     template.innerHTML = chunkHtml.join('');
                     container.insertBefore(template.content, sentinel);
+                    window.applyMatchingLaycanViabilityFilter?.({ syncDataBridge: false });
                 }
 
                 renderedSourceCount = visibleMatches.length;
@@ -20869,6 +20973,7 @@
                     vesselClass: vessel.vesselClass || vessel.vessel_class || source.vesselClass || source.ship_type || source.type || 'Bulk Carrier',
                     specialtyType: vessel.specialtyType || vessel.specialty_type || source.specialtyType || source.ship_type || source.type || '',
                     destination: vessel.destination || source.destination || source.Destination || ais.plannedDestination || ais.destination || 'N/A',
+                    verifiedDesignDraft: Number(vessel.verifiedDesignDraft ?? vessel.verified_design_draft ?? source.verifiedDesignDraft ?? source.verified_design_draft ?? ais.verifiedDesignDraft) || null,
                     hasCranes: Boolean(vessel.hasCranes),
                     photo: vessel.photo || '',
                     photoUrl: vessel.photoUrl || '',
@@ -20888,15 +20993,22 @@
                     lastPortOfCall: ais.lastPortOfCall || ais.ultimo_puerto || 'N/A',
                     ultimo_puerto: ais.ultimo_puerto || ais.lastPortOfCall || source.ultimo_puerto || 'N/A',
                     eta_puerto_carga: ais.eta_puerto_carga || source.eta_puerto_carga || routing.eta || 'N/A',
+                    eta: ais.eta || ais.ETA || source.eta || source.ETA || null,
+                    speed: Number(ais.speed ?? ais.sog ?? ais.SOG ?? source.speed ?? source.sog ?? source.SOG) || null,
                     eta_delta: ais.eta_delta || source.eta_delta || 'N/A',
                     dwt: ais.dwt || vessel.dwt || '',
-                    draft: ais.draft || vessel.draft || '',
+                    currentDraught: Number(ais.currentDraught ?? ais.currentDraft ?? ais.draught ?? source.currentDraught ?? source.currentDraft ?? source.draught ?? ais.draft ?? vessel.draft) || null,
+                    draught: Number(ais.draught ?? source.draught ?? ais.currentDraught ?? source.currentDraught) || null,
+                    draft: ais.draft || source.draft || vessel.draft || '',
+                    verifiedDesignDraft: Number(ais.verifiedDesignDraft ?? ais.verified_design_draft ?? vessel.verifiedDesignDraft ?? source.verifiedDesignDraft ?? source.verified_design_draft) || null,
                     loa: ais.loa || vessel.loa || '',
                     ...normalizeMatchingSourceMetadata(ais, source, vessel)
                 },
                 routing: {
                     eta: routing.eta || source.eta_puerto_carga || 'N/A',
-                    ballastDistanceNM: Number(routing.ballastDistanceNM) || 0
+                    ballastDistanceNM: Number(routing.ballastDistanceNM ?? source.ballastDistanceNM) || 0,
+                    daysToLoadPort: Number(routing.daysToLoadPort ?? source.daysToLoadPort) || 0,
+                    destinationToPolDistanceNm: Number(routing.destinationToPolDistanceNm ?? source.destinationToPolDistanceNm) || null
                 },
                 financials: {
                     netProfit: Number(financials.netProfit) || 0,
@@ -21835,6 +21947,29 @@
                     };
                 });
 
+                deduplicatedMatches.forEach((match, matchIndex) => {
+                    const projection = window.OpenTonnagePredictor?.predictOpenTonnage?.(match, {
+                        laycanStart,
+                        laycanEnd,
+                        operationsDays: 3,
+                        ballastThreshold: 0.6,
+                        defaultBallastSpeedKnots: 12,
+                    }) || {
+                        commercialStatus: 'UNKNOWN',
+                        laycanStatus: 'UNKNOWN',
+                        viable: false,
+                        confidence: 'LOW',
+                    };
+                    deduplicatedMatches[matchIndex] = {
+                        ...match,
+                        estimatedBallastStatus: projection.commercialStatus === 'IN_BALLAST',
+                        openTonnageProjection: projection,
+                        compatibility: {
+                            ...(match.compatibility || {}),
+                            dateOk: projection.arrivalAtPol ? projection.viable : match.compatibility?.dateOk,
+                        },
+                    };
+                });
                 const matches = deduplicatedMatches;
                 Object.freeze(matches);
                 const strictTechnicalFilter = window.matchingStrictTechnicalFilter === true;
@@ -21937,6 +22072,46 @@
                         const scores = { ...rawScores, overall: Number.isFinite(Number(rawScores.overall)) ? Number(rawScores.overall) : 0 };
                         const ais = rawAis;
                         m = { ...sourceMatch, vessel: v, ais, routing: route, financials: fin, compatibility: comp, scores };
+                        const openTonnage = m.openTonnageProjection || {
+                            commercialStatus: 'UNKNOWN',
+                            laycanStatus: 'UNKNOWN',
+                            viable: false,
+                            confidence: 'LOW',
+                        };
+                        const formatOpenTonnageDate = (value) => {
+                            const date = value ? new Date(value) : null;
+                            return date && Number.isFinite(date.getTime())
+                                ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(date)
+                                : 'N/D';
+                        };
+                        const openTonnageCommercialLabel = openTonnage.commercialStatus === 'IN_BALLAST'
+                            ? 'In Ballast · Potencialmente libre'
+                            : openTonnage.commercialStatus === 'LADEN'
+                                ? 'Laden · Ocupado temporalmente'
+                                : 'Estado de carga no concluyente';
+                        const openTonnageAvailabilityLabel = openTonnage.viable
+                            ? 'Disponible / Viable'
+                            : openTonnage.laycanStatus === 'LATE'
+                                ? 'Fuera de fechas'
+                                : 'Proyección incompleta';
+                        const openTonnageTone = openTonnage.viable
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+                            : openTonnage.laycanStatus === 'LATE'
+                                ? 'border-rose-200 bg-rose-50 text-rose-950'
+                                : 'border-amber-200 bg-amber-50 text-amber-950';
+                        const openTonnageIcon = openTonnage.viable ? 'fa-circle-check text-emerald-600' : openTonnage.laycanStatus === 'LATE' ? 'fa-calendar-xmark text-rose-600' : 'fa-circle-question text-amber-600';
+                        const openTonnageBannerHtml = `
+                            <div class="mt-3 rounded-lg border ${openTonnageTone} px-3 py-2" data-open-tonnage-summary="true">
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <span class="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-wide"><i class="fa-solid ${openTonnageIcon}" aria-hidden="true"></i>${openTonnageAvailabilityLabel}</span>
+                                    <span class="rounded-full border border-current/20 bg-white/70 px-2 py-0.5 text-[9px] font-black uppercase">${openTonnageCommercialLabel}</span>
+                                </div>
+                                <div class="mt-1.5 grid grid-cols-1 gap-1 text-[10px] font-semibold sm:grid-cols-3">
+                                    <span>Libre: <strong>${formatOpenTonnageDate(openTonnage.freeAt)}</strong></span>
+                                    <span>ETA POL: <strong>${formatOpenTonnageDate(openTonnage.arrivalAtPol)}</strong></span>
+                                    <span>Confianza: <strong>${openTonnage.confidence}</strong></span>
+                                </div>
+                            </div>`;
                         const currentLatitude = Number(ais.latitude ?? ais.lat);
                         const currentLongitude = Number(ais.longitude ?? ais.lon ?? ais.lng);
                         const projectedLatitude = Number(ais.projectedLatitude);
@@ -22338,7 +22513,7 @@
                                 <i class="fa-solid fa-circle-info"></i> Ver Ficha Técnica / View Data Sheet
                              </a>` : '';
                         const cardHtml = `
-                            <div class="matching-vessel-card border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : `border-red-200 bg-red-50/40 ${isDwtUnknown ? 'opacity-65' : 'opacity-80'} cursor-pointer`} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-requires-due-diligence="${requiresDueDiligence}" data-vessel-profile-state="${profileCompleteness.complete ? 'complete' : 'partial'}" data-vessel-imo="${v.imo || ''}" data-source-origin="${sourceOriginLabel}" data-map-focus-id="${mapFocusId}" onclick="handleMatchingVesselCardClick(event)">
+                            <div class="matching-vessel-card ${openTonnage.viable ? 'open-tonnage-card-viable' : openTonnage.laycanStatus === 'LATE' ? 'open-tonnage-card-late' : ''} border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : `border-red-200 bg-red-50/40 ${isDwtUnknown ? 'opacity-65' : 'opacity-80'} cursor-pointer`} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-open-tonnage-viable="${openTonnage.viable === true}" data-open-tonnage-status="${openTonnage.laycanStatus}" data-requires-due-diligence="${requiresDueDiligence}" data-vessel-profile-state="${profileCompleteness.complete ? 'complete' : 'partial'}" data-vessel-imo="${v.imo || ''}" data-source-origin="${sourceOriginLabel}" data-map-focus-id="${mapFocusId}" onclick="handleMatchingVesselCardClick(event)">
                                 <!-- Rank Ribbon -->
                                 <div class="absolute top-4 right-5 flex items-center gap-2">
                                     ${estimatedDwtBadge}
@@ -22402,6 +22577,7 @@
                                         <!-- Active Alert Banner (Layer 3 Optimization) -->
                                         ${activeAlertHtml}
                                         ${operatorNotificationHtml}
+                                        ${openTonnageBannerHtml}
 
                                         <!-- The Four Sequential Steps & Scores Details -->
                                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-slate-100">
@@ -22511,6 +22687,7 @@
                             ? `${technicalWarningCount} advertencia${technicalWarningCount === 1 ? '' : 's'} técnica${technicalWarningCount === 1 ? '' : 's'} · filtro ${strictTechnicalFilter ? 'estricto' : 'visual'}`
                             : 'Sin incompatibilidades técnicas críticas';
                     }
+                    window.applyMatchingLaycanViabilityFilter?.({ syncDataBridge: true });
                     const hiddenByUiCount = Math.max(0, matches.length - renderedCount);
                     if (sourceIntegrity && hiddenByUiCount > 0) {
                         sourceIntegrity.className = 'mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900';
@@ -23013,6 +23190,17 @@
                 const label = document.getElementById('strict-technical-filter-label');
                 if (label) label.textContent = `Filtro técnico estricto · ${window.matchingStrictTechnicalFilter ? 'activado' : 'desactivado'}`;
                 rerunMatchingAfterFilterChange();
+            });
+        }
+
+        const laycanViableOnlyToggle = document.getElementById('laycan-viable-only-toggle');
+        if (laycanViableOnlyToggle) {
+            laycanViableOnlyToggle.checked = window.matchingLaycanViableOnly === true;
+            laycanViableOnlyToggle.setAttribute('aria-checked', laycanViableOnlyToggle.checked ? 'true' : 'false');
+            laycanViableOnlyToggle.addEventListener('change', () => {
+                window.matchingLaycanViableOnly = laycanViableOnlyToggle.checked === true;
+                laycanViableOnlyToggle.setAttribute('aria-checked', window.matchingLaycanViableOnly ? 'true' : 'false');
+                window.applyMatchingLaycanViabilityFilter?.({ syncDataBridge: true });
             });
         }
 
