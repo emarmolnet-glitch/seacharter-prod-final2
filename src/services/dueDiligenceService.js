@@ -29,6 +29,58 @@ function readYear(value) {
   return match ? Number(match[0]) : null;
 }
 
+const EMPTY_PERSISTENCE_VALUES = new Set(['', 'n/a', 'na', 'n/d', 'nd', 'unknown', 'desconocido', 'null', 'undefined', '-', '--']);
+
+function isMeaningfulPersistenceValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0;
+  if (typeof value === 'boolean') return true;
+  return !EMPTY_PERSISTENCE_VALUES.has(readText(value).toLowerCase());
+}
+
+function mergeNonEmptyPersistenceState(existingProfile = {}, updates = {}) {
+  const merged = { ...(existingProfile && typeof existingProfile === 'object' ? existingProfile : {}) };
+  Object.entries(updates && typeof updates === 'object' ? updates : {}).forEach(([field, value]) => {
+    if (isMeaningfulPersistenceValue(value)) merged[field] = value;
+  });
+  return merged;
+}
+
+function readPersistenceValue(record, aliases) {
+  for (const alias of aliases) {
+    const value = record?.[alias];
+    if (isMeaningfulPersistenceValue(value)) return value;
+  }
+  return null;
+}
+
+export function buildDueDiligencePersistencePayload(existingProfile = {}, updates = {}) {
+  const merged = mergeNonEmptyPersistenceState(existingProfile, updates);
+  const grossTonnage = readPositiveNumber(readPersistenceValue(merged, ['GROSS_TONNAGE', 'gross_tonnage', 'grossTonnage', 'gt', 'GT']));
+  const loaMeters = readPositiveNumber(readPersistenceValue(merged, ['LOA_METERS', 'loa_meters', 'loaMeters', 'loa', 'LOA']));
+  const beamMeters = readPositiveNumber(readPersistenceValue(merged, ['BEAM_METERS', 'beam_meters', 'beamMeters', 'beam', 'breadth', 'Beam']));
+  const payload = { ...merged };
+  if (grossTonnage !== null) {
+    payload.GROSS_TONNAGE = grossTonnage;
+    payload.gross_tonnage = grossTonnage;
+    payload.grossTonnage = grossTonnage;
+    payload.gt = grossTonnage;
+  }
+  if (loaMeters !== null) {
+    payload.LOA_METERS = loaMeters;
+    payload.loa_meters = loaMeters;
+    payload.loaMeters = loaMeters;
+    payload.loa = loaMeters;
+  }
+  if (beamMeters !== null) {
+    payload.BEAM_METERS = beamMeters;
+    payload.beam_meters = beamMeters;
+    payload.beamMeters = beamMeters;
+    payload.beam = beamMeters;
+  }
+  return Object.fromEntries(Object.entries(payload).filter(([, value]) => isMeaningfulPersistenceValue(value)));
+}
+
 function normalizeFieldLabel(value) {
   return readText(value)
     .normalize('NFD')
@@ -113,7 +165,7 @@ export async function fetchDueDiligence(
 
 export async function persistDueDiligenceVessel(
   vessel,
-  { endpoint = DEFAULT_PERSISTENCE_ENDPOINT, fetchImpl = globalThis.fetch, signal, action = 'save' } = {},
+  { endpoint = DEFAULT_PERSISTENCE_ENDPOINT, fetchImpl = globalThis.fetch, signal, action = 'save', existingProfile = {} } = {},
 ) {
   if (typeof fetchImpl !== 'function') {
     throw new Error('No hay un cliente HTTP disponible para guardar Due Diligence.');
@@ -121,16 +173,14 @@ export async function persistDueDiligenceVessel(
   const normalizedAction = action === 'discard' ? 'discard' : 'save';
   const payloadVessel = normalizedAction === 'discard'
     ? { ...vessel, status: 'discarded' }
-    : {
+    : buildDueDiligencePersistencePayload(existingProfile, {
         ...vessel,
-        gross_tonnage: vessel?.gross_tonnage ?? vessel?.grossTonnage ?? vessel?.gt ?? null,
-        loa_meters: vessel?.loa_meters ?? vessel?.loaMeters ?? vessel?.loa ?? vessel?.LOA ?? null,
-        beam_meters: vessel?.beam_meters ?? vessel?.beamMeters ?? vessel?.beam ?? vessel?.breadth ?? null,
         year_built: vessel?.year_built ?? vessel?.yearBuilt ?? vessel?.builtYear ?? vessel?.built_year ?? null,
         flag: vessel?.flag ?? vessel?.Flag ?? vessel?.bandera ?? null,
-      };
+      });
+  console.log('Payload enviado a DB:', payloadVessel);
   const response = await fetchImpl(endpoint, {
-    method: normalizedAction === 'discard' ? 'PATCH' : 'PUT',
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ vessel: payloadVessel, action: normalizedAction }),
     signal,

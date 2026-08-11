@@ -32,15 +32,14 @@ test('searchLocalVesselDataBridge queries local backend endpoint and handles not
   assert.match(localSearchSource, /showToast\("Buque no encontrado en Data Bridge"\)/);
 });
 
-test('calculator search validates technical data and stages it for confirmation', () => {
+test('calculator search accepts partial technical data and stages it for confirmation', () => {
   const fetchIndex = localSearchSource.indexOf("fetch('/api/databridge-vessel-search'");
   const normalizeIndex = localSearchSource.indexOf('const vessel = normalizeCalculatorStoreVessel');
-  const validateIndex = localSearchSource.indexOf('const hasValidatedTechnicalData =');
   const confirmationIndex = localSearchSource.indexOf('openPdaVesselConfirmationModal');
   assert.ok(fetchIndex >= 0);
   assert.ok(fetchIndex < normalizeIndex);
-  assert.ok(normalizeIndex < validateIndex);
-  assert.ok(validateIndex < confirmationIndex);
+  assert.ok(normalizeIndex < confirmationIndex);
+  assert.doesNotMatch(localSearchSource, /hasValidatedTechnicalData|no contiene DWT válido/);
   assert.doesNotMatch(localSearchSource, /applyResolvedVesselToCalculator\(data\.vessel/);
 });
 

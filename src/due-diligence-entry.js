@@ -1075,6 +1075,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             }
             const persistenceResult = await persistDueDiligenceVessel(vessel, {
                 fetchImpl: typeof globalScope.fetch === 'function' ? globalScope.fetch.bind(globalScope) : undefined,
+                existingProfile: currentMatch?.vessel || currentMatch?.ais || currentMatch || {},
             });
             let verifiedVessel = normalizePersistedVessel(persistenceResult, vessel, pendingTechnical);
             const classRegistry = globalScope.VesselMasterClassRegistry;
