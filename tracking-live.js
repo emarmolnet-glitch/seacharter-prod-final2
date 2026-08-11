@@ -742,6 +742,7 @@ async function calculateEphemeralTrackingRoute(origin, destination, options = {}
 }
 
 async function requestTrackingMaritimeLeg(origin, destination) {
+    console.log('Coordinates:', { origin, destination });
     const response = await fetch('/api/route', {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -751,6 +752,7 @@ async function requestTrackingMaritimeLeg(origin, destination) {
         }),
     });
     const payload = await response.json().catch(() => ({}));
+    console.log('Routing Response:', payload);
     const distance = Number(payload?.distance);
     const routeGeometry = asTrackingArray(payload?.coordinates);
     if (!response.ok || !payload?.success || !Number.isFinite(distance) || distance <= 0 || routeGeometry.length < 3) {
@@ -760,13 +762,22 @@ async function requestTrackingMaritimeLeg(origin, destination) {
 }
 
 async function calculateContractualTrackingRoute(context) {
-    const [ballast, pol, pod] = await Promise.all([
+    const aisPosition = getBasicVesselPosition();
+    const [contractBallast, pol, pod] = await Promise.all([
         context.ballast ? (getInputPort('ballast') || resolveTrackingPort(context.ballast)) : null,
         getInputPort('pol') || resolveTrackingPort(context.pol),
         getInputPort('pod') || resolveTrackingPort(context.pod),
     ]);
-    if (!pol || !pod || (context.ballast && !ballast)) {
-        const unresolved = [context.ballast && !ballast ? 'LASTRE' : '', !pol ? 'POL' : '', !pod ? 'POD' : ''].filter(Boolean);
+    const ballast = aisPosition
+        ? {
+            ...aisPosition,
+            name: trackingState.basicVessel?.name || context.vessel || 'Posición AIS',
+            source: 'ais',
+        }
+        : contractBallast;
+    console.log('Coordinates:', { ballast, pol, pod });
+    if (!pol || !pod || (!aisPosition && context.ballast && !contractBallast)) {
+        const unresolved = [!aisPosition && context.ballast && !contractBallast ? 'LASTRE' : '', !pol ? 'POL' : '', !pod ? 'POD' : ''].filter(Boolean);
         throw new Error(`No se localizaron coordenadas válidas para: ${unresolved.join(', ')}.`);
     }
 
@@ -797,6 +808,13 @@ function syncTrackingRouteStores(result) {
     }
     trackingState.routes = result.routes;
     trackingState.routeDistance = totalDistance;
+    trackingStore.getState().setOperationalMetrics?.({
+        totalDistanceNm: totalDistance,
+        ballastDistanceNm: Number(result.distBallast || 0),
+        ladenDistanceNm: Number(result.distLaden || 0),
+        aisSpeedKnots: Number(trackingState.basicVessel?.speedKnots || trackingState.basicVessel?.speed || 0) || null,
+        aisUpdatedAt: trackingState.basicVessel?.timestamp || trackingState.basicVessel?.positionUpdatedAt || null,
+    });
     window.SeaCharterStore?.set?.({
         portBallast: result.portBallast,
         pol: result.pol,
@@ -946,6 +964,7 @@ async function calculateTrackingRoute(options = {}) {
     } catch (error) {
         message.textContent = error?.message || 'Error al calcular la ruta.';
         message.dataset.state = 'error';
+        if (options.throwOnError) throw error;
     } finally {
         button?.classList.remove('is-loading');
     }
@@ -1171,6 +1190,16 @@ async function loadTrackingVessel(rawQuery, silent = false) {
             if (trackingState.flowMode === 'audit' && getBasicVesselPosition()) await calculateTrackingRoute({ focus: !silent });
         } else {
             renderBasicVesselCard();
+            if (getBasicVesselPosition()) {
+                const routeMessage = document.getElementById('tracking-input-message');
+                const previousMessage = routeMessage?.textContent || '';
+                const previousState = routeMessage?.dataset.state || '';
+                await calculateTrackingRoute({ focus: !silent });
+                if (silent && routeMessage) {
+                    routeMessage.textContent = previousMessage;
+                    routeMessage.dataset.state = previousState;
+                }
+            }
         }
         if (!silent) {
             const message = document.getElementById('tracking-input-message');
@@ -1713,18 +1742,30 @@ async function loadTrackingContract(rawRef, silent = false) {
             destination: payload.contract?.pod?.name,
             positionSource: 'contract_tracking',
         };
+        trackingStore.getState().setOperationalMetrics?.({
+            aisSpeedKnots: Number(payload.live?.averageSpeedKnots) > 0 ? Number(payload.live.averageSpeedKnots) : null,
+            aisUpdatedAt: payload.live?.aisUpdatedAt || null,
+        });
         trackingState.routeDistance = null;
         populateTrackingInputs(payload);
         trackingStore.getState().hydrateContract(payload);
         renderTrackingMapChrome(payload);
         renderTrackingAnalytics(payload);
         renderExecutiveDashboard();
+        let routeError = null;
+        if (payload.contract?.pol && payload.contract?.pod) {
+            try {
+                await calculateTrackingRoute({ focus: !silent, throwOnError: true });
+            } catch (error) {
+                routeError = error;
+            }
+        }
         const vesselQuery = payload.contract?.vesselMmsi || payload.contract?.vesselImo || payload.contract?.vesselName;
         if (vesselQuery) void loadTrackingVessel(vesselQuery, true);
         document.getElementById('tracking-live-last-sync').textContent = `Sync ${formatTrackingTime(payload.generatedAt)}`;
         const message = document.getElementById('tracking-input-message');
-        message.textContent = 'Contrato, ruta y analítica sincronizados.';
-        message.dataset.state = 'success';
+        message.textContent = routeError?.message || 'Contrato, ruta y analítica sincronizados.';
+        message.dataset.state = routeError ? 'error' : 'success';
         window.clearInterval(trackingState.pollTimer);
         trackingState.pollTimer = window.setInterval(() => loadTrackingContract(contractRef, true), TRACKING_POLL_INTERVAL);
     } catch (error) {

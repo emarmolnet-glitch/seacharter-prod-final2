@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import StatementOfFactsEditor from './StatementOfFactsEditor.jsx';
+import { trackingStore } from '../stores/tracking-store.js';
 
 const phaseLabels = {
   APPROACHING_POL: 'Aproximación a puerto de carga',
@@ -16,6 +17,7 @@ function LoadingLine({ className = '' }) {
 }
 
 function finiteNumber(value, fallback = 0) {
+  if (value === null || value === undefined || value === '') return fallback;
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }
@@ -61,6 +63,11 @@ function DashboardLoading() {
 }
 
 export default function DashboardExecutive({ contractData }) {
+  const operationalMetrics = useSyncExternalStore(
+    trackingStore.subscribe,
+    () => trackingStore.getState().operationalMetrics,
+    () => trackingStore.getState().operationalMetrics
+  );
   const voyageData = contractData?.voyage || null;
   const isLoading = Boolean(contractData?.isLoading);
   const loadError = contractData?.loadError || '';
@@ -119,9 +126,17 @@ export default function DashboardExecutive({ contractData }) {
     : '—';
   const operationalPhase = voyageData?.operationalPhaseLabel || phaseLabels[voyageData?.operationalPhase] || voyageData?.operationalPhase || '—';
   const routeProgress = hasRouteData ? Math.min(100, Math.max(0, finiteNumber(voyageData?.routeProgressPct))) : 0;
-  const remainingDistanceNm = finiteNumber(voyageData?.live?.remainingDistanceNm, null);
-  const speedKnots = finiteNumber(voyageData?.live?.speedKnots, null);
-  const dynamicEta = new Date(voyageData?.live?.dynamicEtaAt || '');
+  const remainingDistanceNm = finiteNumber(
+    operationalMetrics?.totalDistanceNm,
+    finiteNumber(voyageData?.live?.remainingDistanceNm, null)
+  );
+  const speedKnots = finiteNumber(
+    operationalMetrics?.aisSpeedKnots,
+    finiteNumber(voyageData?.live?.speedKnots, null)
+  );
+  const dynamicEta = remainingDistanceNm > 0 && speedKnots > 0
+    ? new Date(Date.now() + (remainingDistanceNm / speedKnots) * 60 * 60 * 1000)
+    : new Date(voyageData?.live?.dynamicEtaAt || '');
   const cancellingDate = new Date(voyageData?.cancellingAt || '');
   const hasDynamicEta = !Number.isNaN(dynamicEta.getTime());
   const hasCancellingDate = !Number.isNaN(cancellingDate.getTime());

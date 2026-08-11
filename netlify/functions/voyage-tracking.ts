@@ -124,8 +124,16 @@ function defaultMilestones(row: TrackingRow) {
 }
 
 function point(name: string | null, code: string | null, latitude: number | null, longitude: number | null) {
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-  return { name, id: code, lat: latitude, lng: longitude, latitude, longitude };
+  if (!name && !code) return null;
+  const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude);
+  return {
+    name,
+    id: code,
+    lat: hasCoordinates ? latitude : null,
+    lng: hasCoordinates ? longitude : null,
+    latitude: hasCoordinates ? latitude : null,
+    longitude: hasCoordinates ? longitude : null,
+  };
 }
 
 function buildPayload(row: TrackingRow) {
