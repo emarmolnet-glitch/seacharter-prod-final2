@@ -6,6 +6,11 @@ const DATA_ALIASES = Object.freeze({
     mercadoCOA: 'coa',
     mercadoBackhaul: 'backhaul',
 });
+const TEMPORARY_MARKET_FACTORS = Object.freeze({
+    spot: 0.95,
+    coa: 0.75,
+    backhaul: 0.55,
+});
 
 export const MARKET_INTELLIGENCE_DEFAULTS = Object.freeze({
     fleteCalculado: 0,
@@ -33,6 +38,16 @@ function toCanonicalPatch(value) {
 
 export function normalizeMarketIntelligenceData(value) {
     return Object.freeze({ ...MARKET_INTELLIGENCE_DEFAULTS, ...toCanonicalPatch(value) });
+}
+
+export function calculateTemporaryMarketReferences(fleteCalculado) {
+    const freight = toRate(fleteCalculado) ?? 0;
+    return Object.freeze(Object.fromEntries(
+        Object.entries(TEMPORARY_MARKET_FACTORS).map(([key, factor]) => [
+            key,
+            Math.round((freight * factor + Number.EPSILON) * 100) / 100,
+        ]),
+    ));
 }
 
 export function evaluateMarketOffer(value) {
@@ -136,7 +151,15 @@ function renderAlert(root, audit) {
 
 export function createMarketIntelligencePanel(root, initialData = MARKET_INTELLIGENCE_DEFAULTS) {
     if (!(root instanceof HTMLElement)) return null;
-    let data = mergeData(MARKET_INTELLIGENCE_DEFAULTS, initialData);
+    const initialPatch = toCanonicalPatch(initialData);
+    let data = mergeData(MARKET_INTELLIGENCE_DEFAULTS, initialPatch);
+    const explicitMarketKeys = new Set(
+        Object.keys(TEMPORARY_MARKET_FACTORS).filter((key) => initialPatch[key] > 0),
+    );
+    const initialTemporaryReferences = calculateTemporaryMarketReferences(initialPatch.fleteCalculado);
+    Object.keys(TEMPORARY_MARKET_FACTORS).forEach((key) => {
+        if (!explicitMarketKeys.has(key)) data = mergeData(data, { [key]: initialTemporaryReferences[key] });
+    });
 
     const render = () => {
         const audit = evaluateMarketOffer(data);
@@ -150,7 +173,19 @@ export function createMarketIntelligencePanel(root, initialData = MARKET_INTELLI
     };
 
     const update = (nextData) => {
-        data = mergeData(data, nextData);
+        const patch = toCanonicalPatch(nextData);
+        Object.keys(TEMPORARY_MARKET_FACTORS).forEach((key) => {
+            if (!Object.prototype.hasOwnProperty.call(patch, key)) return;
+            if (patch[key] > 0) explicitMarketKeys.add(key);
+            else explicitMarketKeys.delete(key);
+        });
+        if (Object.prototype.hasOwnProperty.call(patch, 'fleteCalculado')) {
+            const temporaryReferences = calculateTemporaryMarketReferences(patch.fleteCalculado);
+            Object.keys(TEMPORARY_MARKET_FACTORS).forEach((key) => {
+                if (!explicitMarketKeys.has(key)) patch[key] = temporaryReferences[key];
+            });
+        }
+        data = mergeData(data, patch);
         return render();
     };
 
@@ -168,9 +203,12 @@ function mountPanel() {
     root.dataset.mounted = 'true';
 
     const configuredData = window.SeaCharterMarketIntelligenceData;
+    const pageSnapshot = readPageSnapshot();
     const controller = createMarketIntelligencePanel(root, {
         ...MARKET_INTELLIGENCE_DEFAULTS,
         ...(configuredData && typeof configuredData === 'object' ? configuredData : {}),
+        fleteCalculado: pageSnapshot.fleteCalculado,
+        ...(pageSnapshot.spot !== null ? { spot: pageSnapshot.spot } : {}),
     });
     if (!controller) return;
 
@@ -183,9 +221,11 @@ function mountPanel() {
     window.addEventListener('AIS_MARKET_RATES_UPDATED', (event) => {
         controller.update({ spot: event.detail?.standard });
     });
-    document.addEventListener('input', (event) => {
-        if (event.target?.id === 'freight-sell') controller.update({ fleteCalculado: event.target.value });
-    }, { passive: true });
+    const syncCalculatedFreight = () => {
+        controller.update({ fleteCalculado: readInputRate('freight-sell') });
+    };
+    document.addEventListener('input', syncCalculatedFreight, { passive: true });
+    document.addEventListener('change', syncCalculatedFreight, { passive: true });
 }
 
 if (typeof document !== 'undefined') {
