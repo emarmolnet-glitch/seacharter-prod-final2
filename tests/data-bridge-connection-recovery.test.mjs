@@ -87,6 +87,18 @@ test('Data Bridge connection state stays idle until the route action', () => {
   assert.doesNotMatch(indexSource, /route-position|databridge:route-position/);
 });
 
+test('manual route success reaches the modular Data Bridge state bridge', () => {
+  const manualRouteSource = indexSource.slice(
+    indexSource.indexOf('async function runOnDemandMapRouteWorkflow(button)'),
+    indexSource.indexOf('window.runOnDemandMapRouteWorkflow = runOnDemandMapRouteWorkflow;')
+  );
+  assert.match(manualRouteSource, /window\.updateDataBridgeTransportStatus\?\.\('connected'\)/);
+  assert.match(manualRouteSource, /window\.restorePersistentDataBridgeConnection\?\.\(\)/);
+  assert.doesNotMatch(manualRouteSource, /\bupdateDataBridgeTransportStatus\('connecting'\)/);
+  assert.match(indexSource, /window\.updateDataBridgeTransportStatus = updateDataBridgeTransportStatus/);
+  assert.match(indexSource, /window\.restorePersistentDataBridgeConnection = restorePersistentDataBridgeConnection/);
+});
+
 test('Data Bridge header uses corporate states without saturated red fills', () => {
   assert.match(indexSource, /data-state="fallback"/);
   assert.match(indexSource, /--connection-accent: #3B6480/);
