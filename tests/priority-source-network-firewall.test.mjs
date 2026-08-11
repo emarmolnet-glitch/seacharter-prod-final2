@@ -54,21 +54,22 @@ test('AIS proxy polling short-circuits before every fetch and interval', () => {
   assert.match(startSource, /window\.shouldBlockSecondaryFleetSources\?\.\(\)[\s\S]*stopAisProxyPolling\(\)[\s\S]*return \{ started: false/);
 });
 
-test('Data Bridge polls the deployed connection-state endpoint without route-position fallback', () => {
-  const pollSource = sliceFunction(indexSource, 'async function pollDataBridgeConnectionState(options = {})', 'function startDataBridgeHttpPolling(options = {})');
-  const startSource = sliceFunction(indexSource, 'function startDataBridgeHttpPolling(options = {})', 'function stopDataBridgeHttpPolling()');
-  assert.match(indexSource, /DATA_BRIDGE_HTTP_POLL_ENDPOINT = DATA_BRIDGE_CONNECTION_STATE_ENDPOINT/);
-  assert.match(pollSource, /CoreNetworkGuard\.fetch\('databridge-status', requestUrl/);
-  assert.match(pollSource, /forceRefresh[\s\S]*cache: forceRefresh \? 'no-store' : 'default'/);
-  assert.match(startSource, /transport: 'http-polling'/);
+test('Data Bridge reads connection state only inside the manual route workflow', () => {
+  const restoreSource = sliceFunction(indexSource, 'async function restorePersistentDataBridgeConnection()', 'function updateDataBridgeConnectionIndicator()');
+  const manualSource = sliceFunction(indexSource, 'async function runOnDemandMapRouteWorkflow(button)', 'window.runOnDemandMapRouteWorkflow = runOnDemandMapRouteWorkflow;');
+  assert.match(restoreSource, /DATA_BRIDGE_CONNECTION_STATE_ENDPOINT/);
+  assert.match(restoreSource, /response\.status === 404[\s\S]*DATA_BRIDGE_CONNECTION_STATE_FUNCTION_ENDPOINT/);
+  assert.match(manualSource, /restorePersistentDataBridgeConnection\(\)/);
+  assert.match(manualSource, /refreshDataBridgeMasterStatsOnDemand\(\)/);
+  assert.match(manualSource, /calculateVoyageRouteService\(\{ portBallast, pol, pod, geocode: true \}\)/);
+  assert.doesNotMatch(manualSource, /await Promise\.allSettled\(\[[\s\S]*restorePersistentDataBridgeConnection/);
+  assert.doesNotMatch(indexSource, /startDataBridgeHttpPolling|scheduleDataBridgeHttpPoll|pollDataBridgeConnectionState/);
   assert.doesNotMatch(indexSource, /route-position|DATA_BRIDGE_ROUTE_POSITION_DISABLED_SESSION_KEY/);
-  assert.doesNotMatch(pollSource, /shouldBlockSecondaryFleetSources/);
 });
 
-test('Data Bridge HTTP polling starts before the initial OpenShips request', () => {
+test('Data Bridge remains idle during initial page setup', () => {
   const domReady = sliceFunction(indexSource, "document.addEventListener('DOMContentLoaded', async () => {", "window.addEventListener('message'",);
-  assert.match(domReady, /startDataBridgeHttpPolling\(\{ immediate: true \}\)/);
+  assert.doesNotMatch(domReady, /restorePersistentDataBridgeConnection|startDataBridgeHttpPolling|fetch\s*\(/);
   assert.doesNotMatch(domReady, /updateOpenShipsRadar/);
-  assert.doesNotMatch(domReady, /stopDataBridgeHttpPolling\(\)/);
   assert.match(indexSource, /window\.startOpenShipsRadarPolling = startOpenShipsRadarPolling;[\s\S]*stopOpenShipsRadarPolling\(\)/);
 });

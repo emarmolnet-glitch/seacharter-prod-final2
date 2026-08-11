@@ -1007,10 +1007,8 @@
             return response;
         }
 
-        const DATA_BRIDGE_MASTER_STATS_INTERVAL_MS = 60000;
         let dataBridgeMasterStatsRequest = null;
         let dataBridgeMasterStatsController = null;
-        let dataBridgeMasterStatsTimer = null;
 
         function refreshDataBridgeMasterCount() {
             if (dataBridgeMasterStatsRequest) return dataBridgeMasterStatsRequest;
@@ -1053,24 +1051,7 @@
             })();
             return dataBridgeMasterStatsRequest;
         }
-
-        function startDataBridgeMasterStatsPolling() {
-            if (dataBridgeMasterStatsTimer) return;
-            void refreshDataBridgeMasterCount();
-            dataBridgeMasterStatsTimer = window.setInterval(() => {
-                if (document.visibilityState === 'visible') void refreshDataBridgeMasterCount();
-            }, DATA_BRIDGE_MASTER_STATS_INTERVAL_MS);
-        }
-
-        function stopDataBridgeMasterStatsPolling() {
-            if (dataBridgeMasterStatsTimer) {
-                window.clearInterval(dataBridgeMasterStatsTimer);
-                dataBridgeMasterStatsTimer = null;
-            }
-            dataBridgeMasterStatsController?.abort();
-            dataBridgeMasterStatsController = null;
-            dataBridgeMasterStatsRequest = null;
-        }
+        window.refreshDataBridgeMasterCountOnDemand = refreshDataBridgeMasterCount;
 
         window.GlobalStore = window.GlobalStore || {
             filteredVessels: [],
@@ -1869,15 +1850,7 @@
 
         // Initialize
         populateInitialLogs();
-        startDataBridgeMasterStatsPolling();
-        window.addEventListener('pagehide', stopDataBridgeMasterStatsPolling, { once: true });
         syncDataBridgeMasterMap();
-        SyncService.refresh();
-        if (currentSyncId) {
-            fetchCoreProFrozenReport(currentSyncId).catch((error) => {
-                addLog(`[ERROR] ${getTimestamp()} - No se pudo cargar el informe congelado de Core PRO: ${error.message}`);
-            });
-        }
     </script>
 </body>
 </html>

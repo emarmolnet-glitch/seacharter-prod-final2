@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [statsSource, dataBridgeSource] = await Promise.all([
+const [statsSource, dataBridgeSource, indexSource] = await Promise.all([
   readFile(new URL('../netlify/functions/databridge-master-stats.ts', import.meta.url), 'utf8'),
   readFile(new URL('../public/databridge.html', import.meta.url), 'utf8'),
+  readFile(new URL('../index.html', import.meta.url), 'utf8'),
 ]);
 
 test('Data Bridge master stats counts vessels_master without optional source columns', () => {
@@ -26,10 +27,10 @@ test('Data Bridge historical counter uses PostgreSQL instead of random vessel va
   assert.match(dataBridgeSource, /payload\?\.success !== true/);
   assert.match(dataBridgeSource, /Number\.isFinite\(totalVessels\)/);
   assert.match(dataBridgeSource, /vesselCount = totalVessels/);
-  assert.match(dataBridgeSource, /DATA_BRIDGE_MASTER_STATS_INTERVAL_MS = 60000/);
   assert.match(dataBridgeSource, /if \(dataBridgeMasterStatsRequest\) return dataBridgeMasterStatsRequest/);
-  assert.match(dataBridgeSource, /window\.clearInterval\(dataBridgeMasterStatsTimer\)/);
-  assert.match(dataBridgeSource, /window\.addEventListener\('pagehide', stopDataBridgeMasterStatsPolling, \{ once: true \}\)/);
+  assert.match(dataBridgeSource, /window\.refreshDataBridgeMasterCountOnDemand = refreshDataBridgeMasterCount/);
+  assert.match(indexSource, /async function runOnDemandMapRouteWorkflow\(button\)[\s\S]*refreshDataBridgeMasterStatsOnDemand\(\)/);
+  assert.doesNotMatch(dataBridgeSource, /startDataBridgeMasterStatsPolling|dataBridgeMasterStatsTimer|DATA_BRIDGE_MASTER_STATS_INTERVAL_MS/);
   assert.doesNotMatch(manualSyncSource, /refreshDataBridgeMasterCount\(\)/);
   assert.doesNotMatch(dataBridgeSource, /vesselCount \+= Math\.floor\(Math\.random\(\) \* 5\) - 2/);
 });

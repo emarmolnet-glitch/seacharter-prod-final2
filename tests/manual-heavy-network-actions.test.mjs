@@ -19,9 +19,15 @@ test('route, weather, and Radar requests stay idle until an explicit button clic
 
   assert.doesNotMatch(portSelection, /autoCalculateDistances|calculateVoyageRouteService|fetchMarineWeatherForRoute/);
   assert.doesNotMatch(reactiveInputs, /addEventListener|scheduleAisMatchingRefresh|executeMatchingRadarSweep/);
-  assert.doesNotMatch(dataBridgeReady, /startDataBridgeHttpPolling|updateOpenShipsRadar/);
-  assert.match(source, /id="btn-map-locate-route" onclick="applyMapRouteToCalculator\(true\)"/);
-  assert.match(source, /host\.querySelector\('\[data-radar-global-button\]'\)\?\.addEventListener\('click',[\s\S]*window\.executeMatchingRadarSweep\?\.\(\)/);
+  assert.doesNotMatch(dataBridgeReady, /restorePersistentDataBridgeConnection|startDataBridgeHttpPolling|updateOpenShipsRadar/);
+  assert.match(source, /id="btn-map-locate-route" onclick="runOnDemandMapRouteWorkflow\(this\)"/);
+  const manualRoute = sliceSource('async function runOnDemandMapRouteWorkflow(button)', 'window.runOnDemandMapRouteWorkflow = runOnDemandMapRouteWorkflow;');
+  assert.match(manualRoute, /map-port-pol[\s\S]*map-port-pod/);
+  assert.match(manualRoute, /calculateVoyageRouteService\(\{ portBallast, pol, pod, geocode: true \}\)/);
+  assert.match(manualRoute, /applyRouteServiceResult\(routeResult\)[\s\S]*renderMasterRouteMap\(routeResult\)[\s\S]*updateRouteSummary\(\)/);
+  assert.match(manualRoute, /finally \{[\s\S]*button\.disabled = false[\s\S]*button\.removeAttribute\('aria-busy'\)[\s\S]*button\.innerHTML = originalContent/);
+  assert.match(manualRoute, /void Promise\.allSettled\(\[[\s\S]*restorePersistentDataBridgeConnection\(\)[\s\S]*refreshDataBridgeMasterStatsOnDemand\(\)/);
+  assert.match(source, /host\.querySelector\('\[data-radar-global-button\]'\)\?\.addEventListener\('click',[\s\S]*window\.executeMatchingRadarSweep\?\.\(\{ trigger: 'user' \}\)/);
   assert.match(source, /window\.startOpenShipsRadarPolling = startOpenShipsRadarPolling;[\s\S]*stopOpenShipsRadarPolling\(\)/);
 });
 
