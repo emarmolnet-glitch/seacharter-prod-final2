@@ -13839,7 +13839,7 @@
                         </div>
 
                         <!-- RANKED CARDS CANVAS -->
-                        <div id="matching-results-list" class="hidden space-y-4 flex-1">
+                        <div id="matching-results-list" class="hidden max-h-[70vh] flex-1 space-y-4 overflow-y-auto pr-2">
                             <!-- Populated dynamically via JS -->
                         </div>
                         <div id="matching-load-more-container" class="hidden pt-4 text-center">
@@ -18910,7 +18910,7 @@
 
         function setRenderedMatchingVessels(vessels, metadata = {}) {
             const incomingVessels = Array.isArray(vessels) ? vessels.slice() : [];
-            const taxonomyFilter = typeof window.applyStrictRadarTaxonomyFilter === 'function'
+            const taxonomyFilter = metadata.applyTaxonomyFilter !== false && typeof window.applyStrictRadarTaxonomyFilter === 'function'
                 ? window.applyStrictRadarTaxonomyFilter(incomingVessels)
                 : { vessels: incomingVessels };
             const requestedVessels = Array.isArray(taxonomyFilter.vessels) ? taxonomyFilter.vessels : [];
@@ -20091,7 +20091,10 @@
             }
 
             if (options.syncDataBridge !== false && typeof window.setRenderedMatchingVessels === 'function') {
-                const canonical = window.setRenderedMatchingVessels(displayedVessels, { source: enabled ? 'laycan-viability-filter' : 'matching-execution' });
+                const canonical = window.setRenderedMatchingVessels(displayedVessels, {
+                    source: enabled ? 'laycan-viability-filter' : 'matching-execution',
+                    applyTaxonomyFilter: false
+                });
                 window.syncDataBridgeRankingWithMatchingResults?.(canonical);
             }
             return displayedVessels;
@@ -20616,12 +20619,8 @@
             });
         }
 
-        const MATCHING_RESULTS_INITIAL_VISIBLE_COUNT = 15;
-        const MATCHING_RESULTS_BATCH_SIZE = 15;
         const MATCHING_RESULTS_PAGE_SIZE = 50;
         let matchingResultsRenderCycle = 0;
-        let matchingResultsVisibleCount = MATCHING_RESULTS_INITIAL_VISIBLE_COUNT;
-        let matchingResultsObserver = null;
         window.matchingPaginationState = window.matchingPaginationState || {
             limit: MATCHING_RESULTS_PAGE_SIZE,
             offset: 0,
@@ -20684,9 +20683,6 @@
         window.updateMatchingLoadMoreControl = updateMatchingLoadMoreControl;
 
         function beginMatchingResultsRender() {
-            matchingResultsObserver?.disconnect();
-            matchingResultsObserver = null;
-            matchingResultsVisibleCount = MATCHING_RESULTS_INITIAL_VISIBLE_COUNT;
             matchingResultsRenderCycle += 1;
             return matchingResultsRenderCycle;
         }
@@ -20722,93 +20718,26 @@
         async function renderMatchingResultsInChunks(container, matches, renderCard, renderCycle) {
             container.replaceChildren();
             const totalMatches = matches.length;
-            let renderedSourceCount = 0;
-            let isRenderingBatch = false;
-
             if (totalMatches === 0) return true;
 
-            const sentinel = document.createElement('div');
-            sentinel.className = 'flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-4 py-3 text-[11px] font-bold text-slate-500';
-            sentinel.dataset.matchingResultsSentinel = 'true';
-            sentinel.setAttribute('role', 'status');
-            sentinel.setAttribute('aria-live', 'polite');
+            await waitForMatchingRenderFrame();
+            if (renderCycle !== matchingResultsRenderCycle) return false;
 
-            const updateSentinel = () => {
-                const remainingCount = Math.max(0, totalMatches - renderedSourceCount);
-                sentinel.innerHTML = remainingCount > 0
-                    ? `<i class="fa-solid fa-spinner fa-spin text-teal-600" aria-hidden="true"></i><span>Cargando más buques · ${renderedSourceCount} de ${totalMatches}</span>`
-                    : '';
-            };
-
-            const appendVisibleMatches = async () => {
-                if (isRenderingBatch || renderCycle !== matchingResultsRenderCycle) return false;
-                isRenderingBatch = true;
-
-                await waitForMatchingRenderFrame();
-                if (renderCycle !== matchingResultsRenderCycle) {
-                    isRenderingBatch = false;
-                    return false;
+            const cardsHtml = [];
+            matches.forEach((match, index) => {
+                let cardHtml = '';
+                try {
+                    cardHtml = renderCard(match, index);
+                } catch (error) {
+                    cardHtml = renderMatchingCardErrorFallback(match, index, error);
                 }
+                if (cardHtml) cardsHtml.push(cardHtml);
+            });
 
-                const visibleMatches = matches.slice(0, matchingResultsVisibleCount);
-                const pendingMatches = visibleMatches.slice(renderedSourceCount);
-                const chunkHtml = [];
-                pendingMatches.forEach((match, pendingIndex) => {
-                    const index = renderedSourceCount + pendingIndex;
-                    let cardHtml = '';
-                    try {
-                        cardHtml = renderCard(match, index);
-                    } catch (error) {
-                        cardHtml = renderMatchingCardErrorFallback(match, index, error);
-                    }
-                    if (cardHtml) chunkHtml.push(cardHtml);
-                });
-
-                if (chunkHtml.length > 0) {
-                    const template = document.createElement('template');
-                    template.innerHTML = chunkHtml.join('');
-                    container.insertBefore(template.content, sentinel);
-                    window.applyMatchingLaycanViabilityFilter?.({ syncDataBridge: false });
-                }
-
-                renderedSourceCount = visibleMatches.length;
-                updateSentinel();
-                isRenderingBatch = false;
-
-                if (renderedSourceCount >= totalMatches) {
-                    matchingResultsObserver?.disconnect();
-                    matchingResultsObserver = null;
-                    sentinel.remove();
-                }
-
-                return true;
-            };
-
-            matchingResultsVisibleCount = Math.min(MATCHING_RESULTS_INITIAL_VISIBLE_COUNT, totalMatches);
-            updateSentinel();
-            container.appendChild(sentinel);
-
-            const initialRenderCompleted = await appendVisibleMatches();
-            if (!initialRenderCompleted) return false;
-
-            if (renderedSourceCount < totalMatches && 'IntersectionObserver' in window) {
-                matchingResultsObserver = new IntersectionObserver((entries) => {
-                    if (!entries.some(entry => entry.isIntersecting) || isRenderingBatch) return;
-                    matchingResultsVisibleCount = Math.min(
-                        matchingResultsVisibleCount + MATCHING_RESULTS_BATCH_SIZE,
-                        totalMatches
-                    );
-                    void appendVisibleMatches();
-                }, {
-                    root: null,
-                    rootMargin: '320px 0px',
-                    threshold: 0.01
-                });
-                matchingResultsObserver.observe(sentinel);
-            } else if (renderedSourceCount < totalMatches) {
-                matchingResultsVisibleCount = totalMatches;
-                await appendVisibleMatches();
-            }
+            const template = document.createElement('template');
+            template.innerHTML = cardsHtml.join('');
+            container.appendChild(template.content);
+            window.applyMatchingLaycanViabilityFilter?.({ syncDataBridge: false });
 
             return true;
         }
@@ -21900,9 +21829,30 @@
                     }
                 });
 
-                // Rank operational candidates by commercial hold fit: DWT proximity first,
-                // laycan/transit second and geographic distance only as the final tie-breaker.
+                // Rank operational candidates by DWT data quality first, then preserve the
+                // existing commercial hold-fit, laycan, transit and distance ordering.
+                const getDwtDataPriority = (match) => {
+                    const dwtStatus = String(
+                        match.dwtStatus
+                        ?? match.vessel?.dwtStatus
+                        ?? match.ais?.dwtStatus
+                        ?? ''
+                    ).trim().toUpperCase();
+                    const vesselDwt = Number(match.vessel?.dwt ?? match.ais?.dwt);
+                    const isUnknownDwt = match.dwtAssessment?.status === 'UNKNOWN'
+                        || ['UNKNOWN', 'MISSING', 'N/A'].includes(dwtStatus)
+                        || !Number.isFinite(vesselDwt)
+                        || vesselDwt <= 0;
+
+                    if (isUnknownDwt) return 2;
+                    if (dwtStatus.includes('ESTIMAT')) return 1;
+                    return 0;
+                };
+
                 deduplicatedMatches.sort((a, b) => {
+                    const dataQualityOrder = getDwtDataPriority(a) - getDwtDataPriority(b);
+                    if (dataQualityOrder !== 0) return dataQualityOrder;
+
                     const getDistanceToPol = (m) => {
                         if (!m.ais) return null;
                         if (m.ais.currentDistanceToLoadPort !== undefined && m.ais.currentDistanceToLoadPort !== null && !isNaN(m.ais.currentDistanceToLoadPort)) {
@@ -22034,7 +21984,10 @@
                     }
                 }
 
-                const displayMatches = setRenderedMatchingVessels(viableMatches, { source: 'matching-execution' });
+                const displayMatches = setRenderedMatchingVessels(viableMatches, {
+                    source: 'matching-execution',
+                    applyTaxonomyFilter: false
+                });
                 window.syncDataBridgeRankingWithMatchingResults?.(displayMatches);
                 const renderedCount = displayMatches.length;
 
@@ -22688,7 +22641,7 @@
                             : 'Sin incompatibilidades técnicas críticas';
                     }
                     window.applyMatchingLaycanViabilityFilter?.({ syncDataBridge: true });
-                    const hiddenByUiCount = Math.max(0, matches.length - renderedCount);
+                    const hiddenByUiCount = Math.max(0, viableMatches.length - renderedCount);
                     if (sourceIntegrity && hiddenByUiCount > 0) {
                         sourceIntegrity.className = 'mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900';
                         sourceIntegrity.innerHTML += ` ${hiddenByUiCount} buque${hiddenByUiCount === 1 ? '' : 's'} evaluado${hiddenByUiCount === 1 ? '' : 's'} no se muestran por los controles de búsqueda o problemas técnicos de la UI.`;
