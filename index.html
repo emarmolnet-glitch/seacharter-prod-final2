@@ -15978,9 +15978,9 @@
                 if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
                 stopRouteGlobeRotation();
 
-                updateDataBridgeTransportStatus('connecting');
+                window.updateDataBridgeTransportStatus?.('connected');
                 void Promise.allSettled([
-                    restorePersistentDataBridgeConnection(),
+                    window.restorePersistentDataBridgeConnection?.() ?? Promise.resolve(false),
                     refreshDataBridgeMasterStatsOnDemand()
                 ]).then(([connectionResult, masterStatsResult]) => {
                     if (connectionResult.status === 'rejected') {
@@ -58834,6 +58834,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (state === 'connecting') updateConnectionStatusBar('fallback');
             if (disconnected) updateConnectionStatusBar('disconnected');
         }
+        window.updateDataBridgeTransportStatus = updateDataBridgeTransportStatus;
 
 	        function retryDataBridgeNorListener() {
 	            dataBridgeRadarLiveRequested = window.RadarGlobalControl?.getState?.().mode === 'live';
@@ -58951,6 +58952,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return false;
             }
         }
+        window.restorePersistentDataBridgeConnection = restorePersistentDataBridgeConnection;
         function updateDataBridgeConnectionIndicator() {
             const isConnected = getVerifiedDataBridgeTimestamp() > 0;
             const dot = document.getElementById('databridge-connection-dot');
