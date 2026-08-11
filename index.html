@@ -55009,58 +55009,51 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             window.setAisRadarStatus('inactive');
         }
 
-        // Update the route display boxes in Real Time Detected Vessels section
+        const formatAisHeaderDate = (value) => {
+            const normalized = String(value || '').trim();
+            if (!normalized) return '-';
+            const isoMatch = normalized.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+            const parsedDate = new Date(normalized);
+            if (Number.isNaN(parsedDate.getTime())) return normalized;
+            return new Intl.DateTimeFormat('es-ES', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                timeZone: 'UTC'
+            }).format(parsedDate);
+        };
+
+        // Update the route and laycan boxes in Real Time Detected Vessels section
         window.updateAisDetectedVesselsRoute = function() {
-            const polInput = document.getElementById('port-pol');
-            const podInput = document.getElementById('port-pod');
+            const voyageState = window.SeaCharterStore?.getState?.() || {};
+            const pol = String(voyageState.pol || document.getElementById('port-pol')?.value || '').trim();
+            const pod = String(voyageState.pod || document.getElementById('port-pod')?.value || '').trim();
+            const laycanStart = voyageState.laycanDate || voyageState.laydays || voyageState.laycan?.laydays;
+            const cancelling = voyageState.cancellingDate || voyageState.cancelling || voyageState.laycan?.cancelling;
             const polBox = document.getElementById('ais-detected-vessels-pol-box');
             const podBox = document.getElementById('ais-detected-vessels-pod-box');
-            if (polBox && polInput) {
-                polBox.innerText = polInput.value.trim() || '-';
-            }
-            if (podBox && podInput) {
-                podBox.innerText = podInput.value.trim() || '-';
-            }
+            const laycanBox = document.getElementById('ais-loading-day-laycan-box');
+            const cancelBox = document.getElementById('ais-arrival-deadline-box');
+            if (polBox) polBox.innerText = pol || '-';
+            if (podBox) podBox.innerText = pod || '-';
+            if (laycanBox) laycanBox.innerText = formatAisHeaderDate(laycanStart);
+            if (cancelBox) cancelBox.innerText = formatAisHeaderDate(cancelling);
         };
 
         window.updateAisDetectedVesselsPol = function() {
             window.updateAisDetectedVesselsRoute();
         };
 
-        // Update the loading day laycan and arrival deadline boxes in Real Time Detected Vessels section
         window.updateAisLaycanAndDeadlineBoxes = function() {
-            const cpStandard = State.charterPartyStandard || (State.cargoType === 'Granel Líquido (Liquid Bulk)' ? 'ASBATANKVOY' : 'GENCON');
-            const getVal = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
-            
-            const formatDateTime = (dId, tId) => {
-                const d = getVal(dId); const t = getVal(tId);
-                if(!d) return "-";
-                const parts = d.split('-');
-                const fmtDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : d;
-                return t ? `${fmtDate} ${t} HRS` : fmtDate;
-            };
-
-            let laycan = "-";
-            let cancel = "-";
-
-            if (cpStandard === 'ASBATANKVOY') {
-                laycan = formatDateTime('asb-laycan-date', 'asb-laycan-time');
-                cancel = formatDateTime('asb-cancel-date', 'asb-cancel-time');
-            } else {
-                laycan = formatDateTime('gc-laycan-date', 'gc-laycan-time');
-                cancel = formatDateTime('gc-cancel-date', 'gc-cancel-time');
-            }
-
-            const laycanBox = document.getElementById('ais-loading-day-laycan-box');
-            const cancelBox = document.getElementById('ais-arrival-deadline-box');
-
-            if (laycanBox) {
-                laycanBox.innerText = laycan;
-            }
-            if (cancelBox) {
-                cancelBox.innerText = cancel;
-            }
+            window.updateAisDetectedVesselsRoute();
         };
+
+        window.SeaCharterStore?.subscribe?.(
+            (state) => [state.pol, state.pod, state.laycanDate, state.cancellingDate, state.laydays, state.cancelling],
+            () => window.updateAisDetectedVesselsRoute(),
+            (current, next) => current.every((value, index) => Object.is(value, next[index]))
+        );
 
         // Search the list of detected vessels for the 6 closest to POL by distance
         window.searchClosestVesselsToPol = async function() {
