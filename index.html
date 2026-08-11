@@ -9408,6 +9408,287 @@
                     </div>
 
 
+                    <!-- FLETE REAL Y BENEFICIO NETO DESGLOSADO -->
+                    <div class="estimator-commercial-close collapsible-section bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg relative overflow-hidden" data-collapsible-section data-default-open="false">
+                        <div class="collapsible-section-header flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
+                            <h2 data-i18n="calc_negotiation_title" class="text-sm font-bold text-blue-400 uppercase">
+                                <i class="fa-solid fa-handshake mr-2"></i> 8. NEGOCIACIÓN COMERCIAL
+                            </h2>
+                        </div>
+                        <div class="absolute top-0 right-0 w-16 h-16 bg-emerald-500/10 rounded-bl-full"></div>
+
+                        <div class="flex flex-col gap-6">
+                            <!-- ZONA SUPERIOR: INPUTS OPERATIVOS -->
+                            <div class="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-6">
+                                <!-- Condiciones de compra / Armador -->
+                                <div class="rounded-xl border border-slate-200 bg-white p-4 text-slate-900 shadow-sm sm:p-5">
+                                    <div class="mb-4 border-b border-slate-200 pb-3">
+                                        <h3 class="text-xs font-black uppercase tracking-wider text-indigo-800">Condiciones de Compra</h3>
+                                        <p class="mt-1 text-[10px] text-slate-500">Costes y condiciones negociadas con el armador.</p>
+                                    </div>
+                                    <div class="grid gap-4">
+                            <!-- Flete Armador -->
+                            <div>
+                                <label id="label-buying-freight" class="mb-1 block text-[10px] font-bold uppercase text-indigo-700">Flete Compra Armador ($)</label>
+                                <div class="flex">
+                                    <input type="number" id="freight-rate" class="input-gc h-9 rounded-r-none border-slate-300 bg-white text-lg font-bold text-slate-900" value="32.50" step="any" oninput="runEngine()">
+                                    <button type="button" id="btn-calc-owner-freight" onclick="handleFreightMasterTrigger('owner', event)" class="border-y border-indigo-700 bg-indigo-700 px-2 text-white transition hover:bg-indigo-800" title="Calcular e iniciar Auto-Flow"><i class="fa-solid fa-calculator"></i></button>
+                                    <button id="btn-spot-owner-freight" onclick="predictSpotMarketLocal()" class="rounded-r-md border border-blue-700 bg-blue-700 px-2 text-white transition hover:bg-blue-800" title="Estimación Algorítmica Spot Real (PMT)"><i class="fa-solid fa-chart-line"></i></button>
+                                </div>
+                            </div>
+
+                            <!-- Lumpsum Opcional -->
+                            <div>
+                                <label id="label-lumpsum-override" class="text-[10px] font-bold text-slate-400 uppercase block mb-1">Lumpsum (Opcional)</label>
+                                <input type="number" id="lumpsum-override" class="input-gc h-9 rounded border border-slate-300 bg-white px-2 text-sm font-bold text-slate-900" placeholder="None" step="any" oninput="runEngine()">
+                            </div>
+
+                            <!-- Demurrage -->
+                            <div>
+                                <label id="label-demurrage-rate" class="mb-1 block text-[10px] font-bold uppercase text-emerald-700 transition-colors duration-300">Demurrage ($/d)</label>
+                                <div class="flex">
+                                    <input type="number" id="demurrage-rate" class="input-gc h-9 rounded-r-none text-sm font-bold text-slate-900 transition-colors duration-300" value="10000" step="any" oninput="updateDemurrageExposureAlert(); runEngine()">
+                                    <button id="btn-estimate-demurrage" onclick="sugerirDemoraAutomatica(true)" class="rounded-r-md border border-red-200 bg-red-50 px-2 text-red-700 transition hover:bg-red-100" title="Sugerir Demurrage desde TCE actual"><i class="fa-solid fa-rotate-right"></i></button>
+                                </div>
+                                <!-- ASBATANKVOY Delay Hours input (only relevant for Liquid Bulk / ASBATANKVOY) -->
+                                <div id="asb-delay-hours-container" class="mt-2 hidden rounded-lg border border-red-200 bg-slate-50 p-2">
+                                    <div class="flex items-center justify-between">
+                                        <label class="cursor-pointer text-[10px] font-bold uppercase text-slate-600">Horas Demora (Delay Hrs)</label>
+                                        <input type="number" id="asb-delay-hours-main" class="h-6 w-14 rounded border border-red-200 bg-white px-1 py-0.5 text-center text-xs font-bold text-red-700 outline-none" value="0" step="0.5" oninput="syncDelayHours('main')">
+                                    </div>
+                                    <p class="mt-1 text-[9px] leading-tight text-slate-500">Horas acumuladas de demora para el flete neto de ASBATANKVOY.</p>
+                                </div>
+                            </div>
+
+                            <!-- Dispatch Calculation Clause -->
+                            <div class="rounded-lg border border-red-200 bg-slate-50 p-3">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-1.5">
+                                            <input type="checkbox" id="dispatch-clause-active" class="h-3.5 w-3.5 cursor-pointer rounded border-slate-300 bg-white text-red-600 focus:ring-red-500" onchange="runEngine()" checked>
+                                            <label for="dispatch-clause-active" id="label-dispatch-clause" class="cursor-pointer text-[10px] font-bold uppercase text-red-700 transition-colors duration-300">Cláusula Despacho</label>
+                                        </div>
+                                        <div class="flex items-center gap-1">
+                                            <input type="number" id="dispatch-pct" class="h-5 w-10 rounded border border-red-200 bg-white px-1 py-0.5 text-center text-[9px] font-bold text-red-700 outline-none transition-colors duration-300" value="50" min="0" max="100" oninput="runEngine()">
+                                            <span class="text-[9px] font-bold text-slate-500">%</span>
+                                        </div>
+                                    </div>
+                                    <p class="mt-1 text-[9px] leading-tight text-slate-500">Recompensa/multa de despacho (50%) si la operation finaliza antes del laytime acordado.</p>
+                                </div>
+                                    </div>
+                                </div>
+
+                                <!-- Condiciones de venta / Fletador -->
+                                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-900 shadow-sm sm:p-5">
+                                    <div class="mb-4 border-b border-slate-200 pb-3">
+                                        <h3 class="text-xs font-black uppercase tracking-wider text-emerald-800">Condiciones de Venta</h3>
+                                        <p class="mt-1 text-[10px] text-slate-500">Precio, modalidad y condiciones ofrecidas al fletador.</p>
+                                    </div>
+                                    <div class="grid gap-4 sm:grid-cols-2">
+                            <!-- Flete Venta Fletador -->
+                            <div class="sm:col-span-2">
+                                <label id="label-selling-freight" class="mb-1 block text-[10px] font-bold uppercase text-emerald-700">Flete Venta Fletador ($)</label>
+                                <div class="flex">
+                                    <input type="number" id="freight-sell" class="input-gc h-9 rounded-r-none border-slate-300 bg-white text-lg font-bold text-slate-900" value="35.00" step="any" oninput="runEngine()">
+                                    <button type="button" id="btn-calc-charter-freight" onclick="handleFreightMasterTrigger('charterer', event)" class="border-y border-emerald-700 bg-emerald-700 px-2 text-white transition hover:bg-emerald-800" title="Calcular e iniciar Auto-Flow"><i class="fa-solid fa-calculator"></i></button>
+                                    <button id="btn-spot-charter-freight" onclick="predictSpotMarketLocal()" class="rounded-r-md border border-teal-700 bg-teal-700 px-2 text-white transition hover:bg-teal-800" title="Estimación Algorítmica Spot Real (PMT)"><i class="fa-solid fa-chart-line"></i></button>
+                                </div>
+                            </div>
+
+                            <!-- Modo Lumpsum explícito + base objetivo en TM -->
+                            <div>
+                                <label id="label-lumpsum-mode" class="mb-1 block text-[10px] font-bold uppercase text-indigo-700">Modo Lumpsum</label>
+                                <label for="lumpsum-mode" class="flex h-9 cursor-pointer items-center gap-2 rounded border border-slate-300 bg-white px-2">
+                                    <input type="checkbox" id="lumpsum-mode" class="accent-indigo-500 w-4 h-4" onchange="runEngine()">
+                                    <span id="label-lumpsum-mode-hint" class="text-[10px] font-bold uppercase text-slate-600">Facturar sobre base fija</span>
+                                </label>
+                            </div>
+                            <div>
+                                <label id="label-lumpsum-base-mt" class="mb-1 block text-[10px] font-bold uppercase text-indigo-700">Base Lumpsum (TM)</label>
+                                <input type="number" id="lumpsum-base-mt" class="input-gc h-9 text-sm text-slate-300 font-bold bg-slate-950/40 border border-slate-700 rounded px-2" value="5000" min="0" step="any" oninput="runEngine()">
+                                <p id="lumpsum-base-cap-note" class="mt-1 hidden text-[9px] font-bold uppercase text-amber-700"></p>
+                            </div>
+
+                            <!-- Comisiones -->
+                            <div class="sm:col-span-2">
+                                <label id="label-brokerage-comm" class="mb-1 block text-[10px] font-bold uppercase text-slate-600">Comisiones (%)</label>
+                                <input type="number" id="comm-pct" class="input-gc h-9 text-sm" value="2.5" step="any" oninput="runEngine()">
+                            </div>
+
+
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ZONA INFERIOR: RESULTADOS / BOTTOM LINE -->
+                            <section class="rounded-2xl border border-slate-600 bg-slate-950/70 p-4 shadow-xl shadow-black/15 sm:p-6" aria-labelledby="negotiation-bottom-line-title">
+                                <div class="mb-5 border-b border-slate-800 pb-3">
+                                    <p class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Bottom Line</p>
+                                    <h3 id="negotiation-bottom-line-title" class="mt-1 text-base font-black text-white">Resultado de la Negociación</h3>
+                                </div>
+
+                                <div class="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
+                                    <article class="min-h-52 rounded-xl border border-indigo-500/40 bg-slate-900 p-5 text-center shadow-lg sm:p-6">
+                                        <div class="mb-2 flex items-center justify-center gap-1.5">
+                                            <div id="label-owner-profit-header" class="text-[11px] text-slate-400 font-bold uppercase">Beneficio Armador</div>
+                                            <span id="owner-profit-tooltip" class="cursor-help text-[11px] text-slate-500" title="El Beneficio Neto descuenta el Coste Total Riesgo global del viaje.">ℹ️</span>
+                                        </div>
+                                        <div class="text-4xl font-bold text-indigo-400 mono leading-none" id="res-net-profit-owner">$0</div>
+                                        <div class="mt-2 text-[10px] text-slate-400" id="res-net-profit-owner-daily">Beneficio Neto Diario: $0 / día</div>
+                                        <button id="btn-open-shadow-estimator" type="button" class="mt-3 inline-flex items-center justify-center gap-2 rounded-md border border-indigo-500/40 bg-indigo-950/30 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-indigo-200 transition hover:border-indigo-400 hover:bg-indigo-900/50 focus:outline-none focus:ring-2 focus:ring-indigo-400/50">
+                                            <i class="fa-solid fa-route"></i>
+                                            Simular Viaje Siguiente (Armador)
+                                        </button>
+                                        <div class="mt-3 border-t border-slate-800 pt-2 transition-all duration-300 text-2xl font-black text-indigo-300" id="res-tce-label">TCE Obtenido: $0 / día (Total: $0)</div>
+                                        <details id="owner-net-breakdown" class="mt-3 border-t border-slate-800 pt-2 text-left">
+                                            <summary class="cursor-pointer text-[10px] font-black uppercase text-indigo-300">Desglose Neto Armador</summary>
+                                            <div class="mt-2 space-y-1 text-[10px] text-slate-400">
+                                                <div class="flex justify-between gap-2"><span>Ingreso Bruto</span><strong id="res-owner-gross-revenue" class="mono text-slate-200">$0</strong></div>
+                                                <div class="flex justify-between gap-2"><span>Viaje + ETS + Ajustes</span><strong id="res-owner-voyage-costs" class="mono text-red-300">$0</strong></div>
+                                                <div class="flex justify-between gap-2"><span>Costes Operativos (OPEX/CAPEX)</span><strong id="res-owner-opex-capex" class="mono text-orange-300">$0</strong></div>
+                                                <div class="flex justify-between gap-2 border-t border-slate-800 pt-1 font-bold"><span>Beneficio Neto Final</span><strong id="res-owner-final-net" class="mono text-emerald-300">$0</strong></div>
+                                            </div>
+                                        </details>
+                                    </article>
+
+                                    <article class="min-h-52 rounded-xl border border-emerald-500/40 bg-slate-900 p-5 text-center shadow-lg sm:p-6">
+                                        <div id="label-charter-profit-header" class="text-[11px] text-slate-400 font-bold uppercase mb-1">Arbitraje Comercial (Fletador)</div>
+                                        <div class="text-4xl font-black text-emerald-400 mono leading-none" id="res-net-profit-charterer">$0</div>
+                                        <div id="label-risk-free-profit" class="text-[10px] text-slate-500 mt-2">Beneficio Libre de Riesgo</div>
+                                        <details id="charterer-net-breakdown" class="mt-3 border-t border-slate-800 pt-2 text-left">
+                                            <summary class="cursor-pointer text-[10px] font-black uppercase text-emerald-300">Desglose Neto Fletador</summary>
+                                            <div class="mt-2 space-y-1 text-[10px] text-slate-400">
+                                                <div class="flex justify-between gap-2"><span>Ingresos Venta (Cliente)</span><strong id="res-charterer-gross-revenue" class="mono text-slate-200">$0</strong></div>
+                                                <div class="flex justify-between gap-2"><span>Coste Fletamento (Pago Armador)</span><strong id="res-charterer-freight-cost" class="mono text-red-300">$0</strong></div>
+                                                <div class="flex justify-between gap-2"><span>Comisiones (Brokerage)</span><strong id="res-charterer-commission-cost" class="mono text-red-300">$0</strong></div>
+                                                <div class="flex justify-between gap-2 border-t border-slate-800 pt-1 font-bold"><span>Beneficio Neto Fletador</span><strong id="res-charterer-final-net" class="mono text-emerald-300">$0</strong></div>
+                                            </div>
+                                        </details>
+                                        <div id="owner-purchase-effectiveness" class="mt-3 rounded-md border border-slate-700 bg-slate-950/40 px-2 py-1.5 text-[10px] font-bold text-slate-400">Efectividad de Compra: -</div>
+                                    </article>
+                                </div>
+                            </section>
+
+                            <!-- BLOQUE 3: REFERENCIA DE MERCADO AIS -->
+                            <section class="w-full rounded-2xl border border-slate-200 bg-white p-4 text-slate-900 shadow-sm sm:p-6" aria-labelledby="negotiation-market-intelligence-title">
+                                <div class="mb-4">
+                                    <p class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Contexto Externo</p>
+                                    <h3 id="negotiation-market-intelligence-title" class="mt-1 text-base font-black text-slate-900">Referencia de Mercado AIS</h3>
+                                </div>
+                                <aside id="ais-market-reference-widget" class="w-full max-w-none"></aside>
+                            </section>
+
+                            <!-- BLOQUE 4: RADAR DE COMPETITIVIDAD UN COMTRADE -->
+                                    <details open class="group w-full min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                                        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 font-semibold text-slate-900 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-500 sm:px-5">
+                                            <span class="min-w-0">
+                                                <span class="block text-sm font-black">Radar de Competitividad UN Comtrade</span>
+                                                <span class="mt-0.5 block text-[10px] font-normal text-slate-500">Comparativa internacional de referencias comerciales</span>
+                                            </span>
+                                            <i class="fa-solid fa-chevron-down shrink-0 text-xs text-slate-500 transition-transform duration-200 group-open:rotate-180" aria-hidden="true"></i>
+                                        </summary>
+                                        <div class="border-t border-slate-200 p-4 sm:p-5">
+                                            <div id="comtrade-competitiveness-radar" aria-busy="false"></div>
+                                        </div>
+                                    </details>
+
+                            <!-- BLOQUE 5: PANEL DE INTELIGENCIA DE MERCADO -->
+                    <section id="market-intelligence-panel" class="no-print w-full min-w-0 overflow-hidden rounded-xl border border-teal-800 bg-slate-50 shadow-lg shadow-slate-950/10" aria-labelledby="market-intelligence-title">
+                        <header class="flex flex-col gap-3 border-b border-teal-800 bg-white px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                                <h2 id="market-intelligence-title" class="text-sm font-black uppercase tracking-wider text-teal-900">
+                                    <i class="fa-solid fa-chart-simple mr-2 text-teal-800" aria-hidden="true"></i>Panel de Inteligencia de Mercado
+                                </h2>
+                                <p class="mt-1 text-xs text-slate-500">Auditoría visual independiente - La oferta se simula aquí y nunca se aplica al cálculo.</p>
+                            </div>
+                            <span class="inline-flex w-fit items-center gap-1.5 rounded-full border border-teal-800 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-teal-900" title="La simulación no modifica el motor de cálculo">
+                                <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>Simulación aislada
+                            </span>
+                        </header>
+
+                        <div class="space-y-4 p-5">
+                            <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                <article class="rounded-lg border border-teal-800 bg-white p-4 shadow-sm">
+                                    <label for="market-intelligence-client-offer" class="text-xs font-bold uppercase tracking-wider text-teal-900">Oferta Cliente</label>
+                                    <div class="mt-2 flex items-end gap-2">
+                                        <span class="pb-1 font-mono text-lg font-bold text-teal-900">$</span>
+                                        <input id="market-intelligence-client-offer" data-mi-offer-input type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" class="min-w-0 flex-1 border-0 border-b-2 border-slate-300 bg-transparent px-0 py-1 font-mono text-2xl font-bold text-teal-900 outline-none transition-colors placeholder:text-slate-300 focus:border-teal-800 focus:ring-0" aria-describedby="market-intelligence-client-offer-unit">
+                                        <span id="market-intelligence-client-offer-unit" class="pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">USD / MT</span>
+                                    </div>
+                                </article>
+                                <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                                    <span class="text-xs font-bold uppercase tracking-wider text-teal-900">Flete Calculado</span>
+                                    <div class="mt-2 flex items-end gap-2">
+                                        <strong class="font-mono text-2xl font-bold text-teal-900" data-mi-value="fleteCalculado">$0.00</strong>
+                                        <span class="pb-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">USD / MT</span>
+                                    </div>
+                                </article>
+                                <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                                    <span class="text-xs font-bold uppercase tracking-wider text-teal-900">Brecha Comercial</span>
+                                    <strong class="mt-2 block font-mono text-2xl font-bold text-teal-900" data-mi-delta-value>-</strong>
+                                    <span class="mt-1 block text-xs text-slate-500" data-mi-delta-caption>Esperando oferta</span>
+                                </article>
+                            </div>
+
+                            <div class="rounded-lg border border-teal-800 bg-white p-4 shadow-sm" aria-label="Mapa de posición del flete">
+                                <div class="mb-5 flex items-center justify-between gap-3">
+                                    <span class="text-xs font-bold uppercase tracking-wider text-teal-900">Mapa de Posición del Flete</span>
+                                    <span class="font-mono text-[10px] text-slate-500" data-mi-scale>Escala pendiente</span>
+                                </div>
+                                <div class="relative h-2 rounded-full bg-gradient-to-r from-red-600 via-yellow-500 to-green-500">
+                                    <span class="absolute top-1/2 hidden h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_3px_rgba(34,211,238,0.35)] transition-transform duration-300" data-mi-marker="fleteCalculado" aria-hidden="true"></span>
+                                </div>
+                                <div class="mt-3 flex justify-between text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                                    <span>Backhaul</span><span>COA</span><span>Spot</span>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-3 lg:grid-cols-3" aria-label="Referencias de mercado marítimo">
+                                <article class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-slate-200 border-l-2 border-l-green-600 bg-white p-4 shadow-sm">
+                                    <span class="grid h-9 w-9 place-items-center rounded-lg border border-green-600 text-green-700"><i class="fa-solid fa-bolt" aria-hidden="true"></i></span>
+                                    <div class="min-w-0">
+                                        <h3 class="text-xs font-bold uppercase tracking-wider text-teal-900">Mercado Spot</h3>
+                                        <p class="mt-1 text-[11px] leading-4 text-slate-500">Disponibilidad inmediata ajustada por búnker y costes.</p>
+                                    </div>
+                                    <strong class="font-mono text-lg font-bold text-teal-900" data-mi-value="spot">$0.00</strong>
+                                </article>
+                                <article class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-slate-200 border-l-2 border-l-yellow-500 bg-white p-4 shadow-sm">
+                                    <span class="grid h-9 w-9 place-items-center rounded-lg border border-yellow-500 text-yellow-700"><i class="fa-solid fa-briefcase" aria-hidden="true"></i></span>
+                                    <div class="min-w-0">
+                                        <h3 class="text-xs font-bold uppercase tracking-wider text-teal-900">Mercado COA</h3>
+                                        <p class="mt-1 text-[11px] leading-4 text-slate-500">Contrato de volumen a largo plazo.</p>
+                                    </div>
+                                    <strong class="font-mono text-lg font-bold text-teal-900" data-mi-value="coa">$0.00</strong>
+                                </article>
+                                <article class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-slate-200 border-l-2 border-l-red-600 bg-white p-4 shadow-sm">
+                                    <span class="grid h-9 w-9 place-items-center rounded-lg border border-red-600 text-red-700"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></span>
+                                    <div class="min-w-0">
+                                        <h3 class="text-xs font-bold uppercase tracking-wider text-teal-900">Mercado Backhaul</h3>
+                                        <p class="mt-1 text-[11px] leading-4 text-slate-500">Viaje de retorno para cobertura de costes.</p>
+                                    </div>
+                                    <strong class="font-mono text-lg font-bold text-teal-900" data-mi-value="backhaul">$0.00</strong>
+                                </article>
+                            </div>
+
+                            <div class="rounded-lg border border-slate-200 border-l-4 border-l-slate-500 bg-white p-4 shadow-sm" data-mi-alert-state="pending" role="status">
+                                <div class="flex items-start gap-3">
+                                    <span class="grid h-9 w-9 flex-none place-items-center rounded-full border border-slate-400 text-slate-600"><i class="fa-solid fa-wave-square" aria-hidden="true"></i></span>
+                                    <div><strong class="text-xs font-black uppercase tracking-wider text-teal-900">Auditoría Pendiente</strong><p class="mt-1 text-xs leading-5 text-slate-600">Introduce la oferta del cliente para activar el semáforo de negociación.</p></div>
+                                </div>
+                            </div>
+                            <div class="hidden rounded-lg border border-slate-200 border-l-4 border-l-red-600 bg-white p-4 shadow-sm" data-mi-alert-state="backhaul" role="status">
+                                <div class="flex items-start gap-3"><span class="grid h-9 w-9 flex-none place-items-center rounded-full border border-red-600 text-red-700"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></span><div><strong class="text-xs font-black uppercase tracking-wider text-red-700">Zona Backhaul</strong><p class="mt-1 text-xs leading-5 text-slate-600">El flete del cliente está en ZONA BACKHAUL. Tu margen de arbitraje está a salvo, el cliente compara con un retorno vacío.</p></div></div>
+                            </div>
+                            <div class="hidden rounded-lg border border-slate-200 border-l-4 border-l-yellow-500 bg-white p-4 shadow-sm" data-mi-alert-state="coa" role="status">
+                                <div class="flex items-start gap-3"><span class="grid h-9 w-9 flex-none place-items-center rounded-full border border-yellow-500 text-yellow-700"><i class="fa-solid fa-briefcase" aria-hidden="true"></i></span><div><strong class="text-xs font-black uppercase tracking-wider text-yellow-700">Zona COA</strong><p class="mt-1 text-xs leading-5 text-slate-600">Oferta en ZONA COA. El cliente exige precios de largo volumen. Destacar inmediatez y disponibilidad.</p></div></div>
+                            </div>
+                            <div class="hidden rounded-lg border border-slate-200 border-l-4 border-l-green-600 bg-white p-4 shadow-sm" data-mi-alert-state="spot" role="status">
+                                <div class="flex items-start gap-3"><span class="grid h-9 w-9 flex-none place-items-center rounded-full border border-green-600 text-green-700"><i class="fa-solid fa-circle-check" aria-hidden="true"></i></span><div><strong class="text-xs font-black uppercase tracking-wider text-green-700">Mercado Spot</strong><p class="mt-1 text-xs leading-5 text-slate-600">La oferta del cliente es competitiva en el mercado SPOT actual.</p></div></div>
+                            </div>
+                        </div>
+                    </section>
+                        </div>
+                    </div>
+
                     <div id="stress-test-panel" class="collapsible-section bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg no-print" data-collapsible-section data-default-open="false">
                         <div class="collapsible-section-header mb-4 flex items-center justify-between gap-3 border-b border-slate-800 pb-2">
                             <div data-collapsible-title>
@@ -9682,288 +9963,6 @@
                         </div>
                     </div>
                 </div>
-
-                    <!-- FLETE REAL Y BENEFICIO NETO DESGLOSADO -->
-                    <div class="estimator-commercial-close collapsible-section bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg relative overflow-hidden" data-collapsible-section data-default-open="false">
-                        <div class="collapsible-section-header flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
-                            <h2 data-i18n="calc_negotiation_title" class="text-sm font-bold text-blue-400 uppercase">
-                                <i class="fa-solid fa-handshake mr-2"></i> 8. NEGOCIACIÓN COMERCIAL
-                            </h2>
-                        </div>
-                        <div class="absolute top-0 right-0 w-16 h-16 bg-emerald-500/10 rounded-bl-full"></div>
-
-                        <div class="grid gap-6">
-                            <!-- ZONA SUPERIOR: INPUTS OPERATIVOS -->
-                            <div class="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-6">
-                                <!-- Condiciones de compra / Armador -->
-                                <div class="rounded-xl border border-slate-700 bg-slate-950/35 p-4 sm:p-5">
-                                    <div class="mb-4 border-b border-slate-800 pb-3">
-                                        <h3 class="text-xs font-black uppercase tracking-wider text-indigo-300">Condiciones de Compra</h3>
-                                        <p class="mt-1 text-[10px] text-slate-500">Costes y condiciones negociadas con el armador.</p>
-                                    </div>
-                                    <div class="grid gap-4">
-                            <!-- Flete Armador -->
-                            <div>
-                                <label id="label-buying-freight" class="text-[10px] font-bold text-indigo-400 uppercase block mb-1">Flete Compra Armador ($)</label>
-                                <div class="flex">
-                                    <input type="number" id="freight-rate" class="input-gc bg-slate-950 border-indigo-500/50 text-white font-bold text-lg h-9 rounded-r-none" value="32.50" step="any" oninput="runEngine()">
-                                    <button type="button" id="btn-calc-owner-freight" onclick="handleFreightMasterTrigger('owner', event)" class="bg-indigo-600/30 border-y border-indigo-500/50 hover:bg-indigo-500/50 px-2 text-indigo-300" title="Calcular e iniciar Auto-Flow"><i class="fa-solid fa-calculator"></i></button>
-                                    <button id="btn-spot-owner-freight" onclick="predictSpotMarketLocal()" class="bg-blue-600/30 border border-blue-500/50 hover:bg-blue-500/50 px-2 rounded-r-md text-blue-300" title="Estimación Algorítmica Spot Real (PMT)"><i class="fa-solid fa-chart-line"></i></button>
-                                </div>
-                            </div>
-
-                            <!-- Lumpsum Opcional -->
-                            <div>
-                                <label id="label-lumpsum-override" class="text-[10px] font-bold text-slate-400 uppercase block mb-1">Lumpsum (Opcional)</label>
-                                <input type="number" id="lumpsum-override" class="input-gc h-9 text-sm text-slate-300 font-bold bg-slate-950/40 border border-slate-700 rounded px-2" placeholder="None" step="any" oninput="runEngine()">
-                            </div>
-
-                            <!-- Demurrage -->
-                            <div>
-                                <label id="label-demurrage-rate" class="text-[10px] font-bold uppercase block mb-1 transition-colors duration-300 text-green-400">Demurrage ($/d)</label>
-                                <div class="flex">
-                                    <input type="number" id="demurrage-rate" class="input-gc font-bold h-9 text-sm rounded-r-none transition-colors duration-300 text-green-300" value="10000" step="any" oninput="updateDemurrageExposureAlert(); runEngine()">
-                                    <button id="btn-estimate-demurrage" onclick="sugerirDemoraAutomatica(true)" class="bg-red-900/30 border border-red-500/50 hover:bg-red-500/30 px-2 rounded-r-md text-red-400 transition" title="Sugerir Demurrage desde TCE actual"><i class="fa-solid fa-rotate-right"></i></button>
-                                </div>
-                                <!-- ASBATANKVOY Delay Hours input (only relevant for Liquid Bulk / ASBATANKVOY) -->
-                                <div id="asb-delay-hours-container" class="mt-2 p-2 bg-slate-950/40 border border-red-500/20 rounded-lg hidden">
-                                    <div class="flex items-center justify-between">
-                                        <label class="text-[10px] text-slate-300 font-bold cursor-pointer uppercase">Horas Demora (Delay Hrs)</label>
-                                        <input type="number" id="asb-delay-hours-main" class="w-14 bg-slate-950 text-red-300 font-bold text-center border border-red-500/30 rounded px-1 py-0.5 outline-none h-6 text-xs" value="0" step="0.5" oninput="syncDelayHours('main')">
-                                    </div>
-                                    <p class="text-[9px] text-slate-400 leading-tight mt-1">Horas acumuladas de demora para el flete neto de ASBATANKVOY.</p>
-                                </div>
-                            </div>
-                                    </div>
-                                </div>
-
-                                <!-- Condiciones de venta / Fletador -->
-                                <div class="rounded-xl border border-slate-700 bg-slate-800/55 p-4 sm:p-5">
-                                    <div class="mb-4 border-b border-slate-700 pb-3">
-                                        <h3 class="text-xs font-black uppercase tracking-wider text-emerald-300">Condiciones de Venta</h3>
-                                        <p class="mt-1 text-[10px] text-slate-400">Precio, modalidad y condiciones ofrecidas al fletador.</p>
-                                    </div>
-                                    <div class="grid gap-4 sm:grid-cols-2">
-                            <!-- Flete Venta Fletador -->
-                            <div class="sm:col-span-2">
-                                <label id="label-selling-freight" class="text-[10px] font-bold text-emerald-400 uppercase block mb-1">Flete Venta Fletador ($)</label>
-                                <div class="flex">
-                                    <input type="number" id="freight-sell" class="input-gc bg-slate-950 border-emerald-500/50 text-white font-bold text-lg h-9 rounded-r-none" value="35.00" step="any" oninput="runEngine()">
-                                    <button type="button" id="btn-calc-charter-freight" onclick="handleFreightMasterTrigger('charterer', event)" class="bg-emerald-600/30 border-y border-emerald-500/50 hover:bg-emerald-500/50 px-2 text-emerald-300" title="Calcular e iniciar Auto-Flow"><i class="fa-solid fa-calculator"></i></button>
-                                    <button id="btn-spot-charter-freight" onclick="predictSpotMarketLocal()" class="bg-teal-600/30 border border-teal-500/50 hover:bg-teal-500/50 px-2 rounded-r-md text-teal-300" title="Estimación Algorítmica Spot Real (PMT)"><i class="fa-solid fa-chart-line"></i></button>
-                                </div>
-                            </div>
-
-                            <!-- Modo Lumpsum explícito + base objetivo en TM -->
-                            <div>
-                                <label id="label-lumpsum-mode" class="text-[10px] font-bold text-indigo-300 uppercase block mb-1">Modo Lumpsum</label>
-                                <label for="lumpsum-mode" class="flex items-center gap-2 h-9 px-2 rounded bg-slate-950/40 border border-slate-700 cursor-pointer">
-                                    <input type="checkbox" id="lumpsum-mode" class="accent-indigo-500 w-4 h-4" onchange="runEngine()">
-                                    <span id="label-lumpsum-mode-hint" class="text-[10px] font-bold text-slate-400 uppercase">Facturar sobre base fija</span>
-                                </label>
-                            </div>
-                            <div>
-                                <label id="label-lumpsum-base-mt" class="text-[10px] font-bold text-indigo-300 uppercase block mb-1">Base Lumpsum (TM)</label>
-                                <input type="number" id="lumpsum-base-mt" class="input-gc h-9 text-sm text-slate-300 font-bold bg-slate-950/40 border border-slate-700 rounded px-2" value="5000" min="0" step="any" oninput="runEngine()">
-                                <p id="lumpsum-base-cap-note" class="hidden mt-1 text-[9px] font-bold text-amber-300 uppercase"></p>
-                            </div>
-
-                            <!-- Comisiones -->
-                            <div class="sm:col-span-2">
-                                <label id="label-brokerage-comm" class="text-[10px] font-bold text-slate-400 uppercase block mb-1">Comisiones (%)</label>
-                                <input type="number" id="comm-pct" class="input-gc h-9 text-sm" value="2.5" step="any" oninput="runEngine()">
-                            </div>
-
-                            <!-- Dispatch Calculation Clause -->
-                            <div class="sm:col-span-2 p-3 bg-slate-950/40 border border-red-500/20 rounded-lg">
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center gap-1.5">
-                                            <input type="checkbox" id="dispatch-clause-active" class="rounded border-slate-700 bg-slate-950 text-red-500 focus:ring-red-500 focus:ring-offset-slate-900 h-3.5 w-3.5 cursor-pointer" onchange="runEngine()" checked>
-                                            <label for="dispatch-clause-active" id="label-dispatch-clause" class="text-[10px] font-bold cursor-pointer uppercase transition-colors duration-300 text-red-400">Cláusula Despacho</label>
-                                        </div>
-                                        <div class="flex items-center gap-1">
-                                            <input type="number" id="dispatch-pct" class="w-8 bg-slate-950 font-bold text-center border rounded px-0.5 py-0.5 outline-none h-5 text-[9px] transition-colors duration-300 text-red-300 border-red-500/30" value="50" min="0" max="100" oninput="runEngine()">
-                                            <span class="text-slate-400 font-bold text-[9px]">%</span>
-                                        </div>
-                                    </div>
-                                    <p class="text-[9px] text-slate-400 leading-tight mt-1">Recompensa/multa de despacho (50%) si la operation finaliza antes del laytime acordado.</p>
-                                </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- ZONA INTERMEDIA: INTELIGENCIA DE MERCADO -->
-                            <section class="rounded-2xl border border-slate-300 bg-slate-50 p-4 text-slate-900 shadow-inner sm:p-6" aria-labelledby="negotiation-market-intelligence-title">
-                                <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                    <div>
-                                        <p class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Contexto Externo</p>
-                                        <h3 id="negotiation-market-intelligence-title" class="mt-1 text-base font-black text-slate-900">Inteligencia de Mercado</h3>
-                                    </div>
-                                    <aside id="ais-market-reference-widget" class="w-full sm:max-w-md"></aside>
-                                </div>
-
-                                <div class="grid grid-cols-1 items-start gap-5 xl:grid-cols-2 xl:gap-6">
-                                    <details open class="group min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                                        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 font-semibold text-slate-900 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-500 sm:px-5">
-                                            <span class="min-w-0">
-                                                <span class="block text-sm font-black">Radar de Competitividad UN Comtrade</span>
-                                                <span class="mt-0.5 block text-[10px] font-normal text-slate-500">Comparativa internacional de referencias comerciales</span>
-                                            </span>
-                                            <i class="fa-solid fa-chevron-down shrink-0 text-xs text-slate-500 transition-transform duration-200 group-open:rotate-180" aria-hidden="true"></i>
-                                        </summary>
-                                        <div class="border-t border-slate-200 p-4 sm:p-5">
-                                            <div id="comtrade-competitiveness-radar" aria-busy="false"></div>
-                                        </div>
-                                    </details>
-
-                    <section id="market-intelligence-panel" class="no-print min-w-0 overflow-hidden rounded-xl border border-teal-800 bg-slate-50 shadow-lg shadow-slate-950/10" aria-labelledby="market-intelligence-title">
-                        <header class="flex flex-col gap-3 border-b border-teal-800 bg-white px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                                <h2 id="market-intelligence-title" class="text-sm font-black uppercase tracking-wider text-teal-900">
-                                    <i class="fa-solid fa-chart-simple mr-2 text-teal-800" aria-hidden="true"></i>Panel de Inteligencia de Mercado
-                                </h2>
-                                <p class="mt-1 text-xs text-slate-500">Auditoría visual independiente - La oferta se simula aquí y nunca se aplica al cálculo.</p>
-                            </div>
-                            <span class="inline-flex w-fit items-center gap-1.5 rounded-full border border-teal-800 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-teal-900" title="La simulación no modifica el motor de cálculo">
-                                <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>Simulación aislada
-                            </span>
-                        </header>
-
-                        <div class="space-y-4 p-5">
-                            <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
-                                <article class="rounded-lg border border-teal-800 bg-white p-4 shadow-sm">
-                                    <label for="market-intelligence-client-offer" class="text-xs font-bold uppercase tracking-wider text-teal-900">Oferta Cliente</label>
-                                    <div class="mt-2 flex items-end gap-2">
-                                        <span class="pb-1 font-mono text-lg font-bold text-teal-900">$</span>
-                                        <input id="market-intelligence-client-offer" data-mi-offer-input type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" class="min-w-0 flex-1 border-0 border-b-2 border-slate-300 bg-transparent px-0 py-1 font-mono text-2xl font-bold text-teal-900 outline-none transition-colors placeholder:text-slate-300 focus:border-teal-800 focus:ring-0" aria-describedby="market-intelligence-client-offer-unit">
-                                        <span id="market-intelligence-client-offer-unit" class="pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">USD / MT</span>
-                                    </div>
-                                </article>
-                                <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                                    <span class="text-xs font-bold uppercase tracking-wider text-teal-900">Flete Calculado</span>
-                                    <div class="mt-2 flex items-end gap-2">
-                                        <strong class="font-mono text-2xl font-bold text-teal-900" data-mi-value="fleteCalculado">$0.00</strong>
-                                        <span class="pb-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">USD / MT</span>
-                                    </div>
-                                </article>
-                                <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                                    <span class="text-xs font-bold uppercase tracking-wider text-teal-900">Brecha Comercial</span>
-                                    <strong class="mt-2 block font-mono text-2xl font-bold text-teal-900" data-mi-delta-value>-</strong>
-                                    <span class="mt-1 block text-xs text-slate-500" data-mi-delta-caption>Esperando oferta</span>
-                                </article>
-                            </div>
-
-                            <div class="rounded-lg border border-teal-800 bg-white p-4 shadow-sm" aria-label="Mapa de posición del flete">
-                                <div class="mb-5 flex items-center justify-between gap-3">
-                                    <span class="text-xs font-bold uppercase tracking-wider text-teal-900">Mapa de Posición del Flete</span>
-                                    <span class="font-mono text-[10px] text-slate-500" data-mi-scale>Escala pendiente</span>
-                                </div>
-                                <div class="relative h-2 rounded-full bg-gradient-to-r from-red-600 via-yellow-500 to-green-500">
-                                    <span class="absolute top-1/2 hidden h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_3px_rgba(34,211,238,0.35)] transition-transform duration-300" data-mi-marker="fleteCalculado" aria-hidden="true"></span>
-                                </div>
-                                <div class="mt-3 flex justify-between text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                                    <span>Backhaul</span><span>COA</span><span>Spot</span>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-3 lg:grid-cols-3" aria-label="Referencias de mercado marítimo">
-                                <article class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-slate-200 border-l-2 border-l-green-600 bg-white p-4 shadow-sm">
-                                    <span class="grid h-9 w-9 place-items-center rounded-lg border border-green-600 text-green-700"><i class="fa-solid fa-bolt" aria-hidden="true"></i></span>
-                                    <div class="min-w-0">
-                                        <h3 class="text-xs font-bold uppercase tracking-wider text-teal-900">Mercado Spot</h3>
-                                        <p class="mt-1 text-[11px] leading-4 text-slate-500">Disponibilidad inmediata ajustada por búnker y costes.</p>
-                                    </div>
-                                    <strong class="font-mono text-lg font-bold text-teal-900" data-mi-value="spot">$0.00</strong>
-                                </article>
-                                <article class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-slate-200 border-l-2 border-l-yellow-500 bg-white p-4 shadow-sm">
-                                    <span class="grid h-9 w-9 place-items-center rounded-lg border border-yellow-500 text-yellow-700"><i class="fa-solid fa-briefcase" aria-hidden="true"></i></span>
-                                    <div class="min-w-0">
-                                        <h3 class="text-xs font-bold uppercase tracking-wider text-teal-900">Mercado COA</h3>
-                                        <p class="mt-1 text-[11px] leading-4 text-slate-500">Contrato de volumen a largo plazo.</p>
-                                    </div>
-                                    <strong class="font-mono text-lg font-bold text-teal-900" data-mi-value="coa">$0.00</strong>
-                                </article>
-                                <article class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-slate-200 border-l-2 border-l-red-600 bg-white p-4 shadow-sm">
-                                    <span class="grid h-9 w-9 place-items-center rounded-lg border border-red-600 text-red-700"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></span>
-                                    <div class="min-w-0">
-                                        <h3 class="text-xs font-bold uppercase tracking-wider text-teal-900">Mercado Backhaul</h3>
-                                        <p class="mt-1 text-[11px] leading-4 text-slate-500">Viaje de retorno para cobertura de costes.</p>
-                                    </div>
-                                    <strong class="font-mono text-lg font-bold text-teal-900" data-mi-value="backhaul">$0.00</strong>
-                                </article>
-                            </div>
-
-                            <div class="rounded-lg border border-slate-200 border-l-4 border-l-slate-500 bg-white p-4 shadow-sm" data-mi-alert-state="pending" role="status">
-                                <div class="flex items-start gap-3">
-                                    <span class="grid h-9 w-9 flex-none place-items-center rounded-full border border-slate-400 text-slate-600"><i class="fa-solid fa-wave-square" aria-hidden="true"></i></span>
-                                    <div><strong class="text-xs font-black uppercase tracking-wider text-teal-900">Auditoría Pendiente</strong><p class="mt-1 text-xs leading-5 text-slate-600">Introduce la oferta del cliente para activar el semáforo de negociación.</p></div>
-                                </div>
-                            </div>
-                            <div class="hidden rounded-lg border border-slate-200 border-l-4 border-l-red-600 bg-white p-4 shadow-sm" data-mi-alert-state="backhaul" role="status">
-                                <div class="flex items-start gap-3"><span class="grid h-9 w-9 flex-none place-items-center rounded-full border border-red-600 text-red-700"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></span><div><strong class="text-xs font-black uppercase tracking-wider text-red-700">Zona Backhaul</strong><p class="mt-1 text-xs leading-5 text-slate-600">El flete del cliente está en ZONA BACKHAUL. Tu margen de arbitraje está a salvo, el cliente compara con un retorno vacío.</p></div></div>
-                            </div>
-                            <div class="hidden rounded-lg border border-slate-200 border-l-4 border-l-yellow-500 bg-white p-4 shadow-sm" data-mi-alert-state="coa" role="status">
-                                <div class="flex items-start gap-3"><span class="grid h-9 w-9 flex-none place-items-center rounded-full border border-yellow-500 text-yellow-700"><i class="fa-solid fa-briefcase" aria-hidden="true"></i></span><div><strong class="text-xs font-black uppercase tracking-wider text-yellow-700">Zona COA</strong><p class="mt-1 text-xs leading-5 text-slate-600">Oferta en ZONA COA. El cliente exige precios de largo volumen. Destacar inmediatez y disponibilidad.</p></div></div>
-                            </div>
-                            <div class="hidden rounded-lg border border-slate-200 border-l-4 border-l-green-600 bg-white p-4 shadow-sm" data-mi-alert-state="spot" role="status">
-                                <div class="flex items-start gap-3"><span class="grid h-9 w-9 flex-none place-items-center rounded-full border border-green-600 text-green-700"><i class="fa-solid fa-circle-check" aria-hidden="true"></i></span><div><strong class="text-xs font-black uppercase tracking-wider text-green-700">Mercado Spot</strong><p class="mt-1 text-xs leading-5 text-slate-600">La oferta del cliente es competitiva en el mercado SPOT actual.</p></div></div>
-                            </div>
-                        </div>
-                    </section>
-
-                                </div>
-                            </section>
-
-                            <!-- ZONA INFERIOR: RESULTADOS / BOTTOM LINE -->
-                            <section class="rounded-2xl border border-slate-600 bg-slate-950/70 p-4 shadow-xl shadow-black/15 sm:p-6" aria-labelledby="negotiation-bottom-line-title">
-                                <div class="mb-5 border-b border-slate-800 pb-3">
-                                    <p class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Bottom Line</p>
-                                    <h3 id="negotiation-bottom-line-title" class="mt-1 text-base font-black text-white">Resultado de la Negociación</h3>
-                                </div>
-
-                                <div class="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
-                                    <article class="min-h-52 rounded-xl border border-indigo-500/40 bg-slate-900 p-5 text-center shadow-lg sm:p-6">
-                                        <div class="mb-2 flex items-center justify-center gap-1.5">
-                                            <div id="label-owner-profit-header" class="text-[11px] text-slate-400 font-bold uppercase">Beneficio Armador</div>
-                                            <span id="owner-profit-tooltip" class="cursor-help text-[11px] text-slate-500" title="El Beneficio Neto descuenta el Coste Total Riesgo global del viaje.">ℹ️</span>
-                                        </div>
-                                        <div class="text-4xl font-bold text-indigo-400 mono leading-none" id="res-net-profit-owner">$0</div>
-                                        <div class="mt-2 text-[10px] text-slate-400" id="res-net-profit-owner-daily">Beneficio Neto Diario: $0 / día</div>
-                                        <button id="btn-open-shadow-estimator" type="button" class="mt-3 inline-flex items-center justify-center gap-2 rounded-md border border-indigo-500/40 bg-indigo-950/30 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-indigo-200 transition hover:border-indigo-400 hover:bg-indigo-900/50 focus:outline-none focus:ring-2 focus:ring-indigo-400/50">
-                                            <i class="fa-solid fa-route"></i>
-                                            Simular Viaje Siguiente (Armador)
-                                        </button>
-                                        <div class="mt-3 border-t border-slate-800 pt-2 transition-all duration-300 text-2xl font-black text-indigo-300" id="res-tce-label">TCE Obtenido: $0 / día (Total: $0)</div>
-                                        <details id="owner-net-breakdown" class="mt-3 border-t border-slate-800 pt-2 text-left">
-                                            <summary class="cursor-pointer text-[10px] font-black uppercase text-indigo-300">Desglose Neto Armador</summary>
-                                            <div class="mt-2 space-y-1 text-[10px] text-slate-400">
-                                                <div class="flex justify-between gap-2"><span>Ingreso Bruto</span><strong id="res-owner-gross-revenue" class="mono text-slate-200">$0</strong></div>
-                                                <div class="flex justify-between gap-2"><span>Viaje + ETS + Ajustes</span><strong id="res-owner-voyage-costs" class="mono text-red-300">$0</strong></div>
-                                                <div class="flex justify-between gap-2"><span>Costes Operativos (OPEX/CAPEX)</span><strong id="res-owner-opex-capex" class="mono text-orange-300">$0</strong></div>
-                                                <div class="flex justify-between gap-2 border-t border-slate-800 pt-1 font-bold"><span>Beneficio Neto Final</span><strong id="res-owner-final-net" class="mono text-emerald-300">$0</strong></div>
-                                            </div>
-                                        </details>
-                                    </article>
-
-                                    <article class="min-h-52 rounded-xl border border-emerald-500/40 bg-slate-900 p-5 text-center shadow-lg sm:p-6">
-                                        <div id="label-charter-profit-header" class="text-[11px] text-slate-400 font-bold uppercase mb-1">Arbitraje Comercial (Fletador)</div>
-                                        <div class="text-4xl font-black text-emerald-400 mono leading-none" id="res-net-profit-charterer">$0</div>
-                                        <div id="label-risk-free-profit" class="text-[10px] text-slate-500 mt-2">Beneficio Libre de Riesgo</div>
-                                        <details id="charterer-net-breakdown" class="mt-3 border-t border-slate-800 pt-2 text-left">
-                                            <summary class="cursor-pointer text-[10px] font-black uppercase text-emerald-300">Desglose Neto Fletador</summary>
-                                            <div class="mt-2 space-y-1 text-[10px] text-slate-400">
-                                                <div class="flex justify-between gap-2"><span>Ingresos Venta (Cliente)</span><strong id="res-charterer-gross-revenue" class="mono text-slate-200">$0</strong></div>
-                                                <div class="flex justify-between gap-2"><span>Coste Fletamento (Pago Armador)</span><strong id="res-charterer-freight-cost" class="mono text-red-300">$0</strong></div>
-                                                <div class="flex justify-between gap-2"><span>Comisiones (Brokerage)</span><strong id="res-charterer-commission-cost" class="mono text-red-300">$0</strong></div>
-                                                <div class="flex justify-between gap-2 border-t border-slate-800 pt-1 font-bold"><span>Beneficio Neto Fletador</span><strong id="res-charterer-final-net" class="mono text-emerald-300">$0</strong></div>
-                                            </div>
-                                        </details>
-                                        <div id="owner-purchase-effectiveness" class="mt-3 rounded-md border border-slate-700 bg-slate-950/40 px-2 py-1.5 text-[10px] font-bold text-slate-400">Efectividad de Compra: -</div>
-                                    </article>
-                                </div>
-                            </section>
-                        </div>
-                    </div>
             </div>
         </div>
 
