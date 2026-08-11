@@ -7750,8 +7750,8 @@
                                     <span id="databridge-connection-dot" class="hidden h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.75)]" aria-hidden="true"></span>
                                     <span>Data Bridge</span>
 	                                    <span id="databridge-http-polling" class="hidden items-center gap-1 text-[9px] font-black uppercase text-slate-500" role="status" aria-live="polite">
-	                                        <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
-	                                        <span data-databridge-transport-label>Polling HTTP</span>
+	                                        <i class="fa-solid fa-hand-pointer" aria-hidden="true"></i>
+	                                        <span data-databridge-transport-label>Bajo demanda</span>
                                     </span>
                                 </span>
                             </button>
@@ -7919,7 +7919,7 @@
                                 <input type="date" id="map-cancelling-date" class="input-gc">
                             </div>
                         </div>
-                        <button id="btn-map-locate-route" onclick="applyMapRouteToCalculator(true)" class="btn-light-action w-full text-xs font-bold py-2 rounded">
+                        <button id="btn-map-locate-route" onclick="runOnDemandMapRouteWorkflow(this)" class="btn-light-action w-full text-xs font-bold py-2 rounded">
                             <i class="fa-solid fa-route mr-1"></i> Calcular ruta marítima y actualizar ecosistema
                         </button>
                     </div>
@@ -15919,6 +15919,92 @@
             window.GlobalFleetGlobe.setAutoRotate(false, 'density');
         }
 
+        async function refreshDataBridgeMasterStatsOnDemand() {
+            const dataBridgeFrame = document.getElementById('web-databridge-iframe');
+            try {
+                const refreshMasterCount = dataBridgeFrame?.contentWindow?.refreshDataBridgeMasterCountOnDemand;
+                return typeof refreshMasterCount === 'function' ? await refreshMasterCount() : null;
+            } catch (error) {
+                console.warn('[Core PRO] Las estadísticas de Data Bridge no están disponibles bajo demanda.', error);
+                return null;
+            }
+        }
+
+        async function runOnDemandMapRouteWorkflow(button) {
+            if (!validateGeographicLaycanDates() || button?.disabled) return;
+
+            const originalContent = button?.innerHTML || '';
+            let routeTimeoutId = null;
+            if (button) {
+                button.disabled = true;
+                button.dataset.calculating = 'true';
+                button.setAttribute('aria-busy', 'true');
+                button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Calculando y actualizando...';
+            }
+
+            try {
+                if (!captureRouteStateFromMapInputs()) return;
+
+                const portBallast = String(document.getElementById('map-port-ballast')?.value || State.portBallast || '').trim();
+                const pol = String(document.getElementById('map-port-pol')?.value || State.pol || '').trim();
+                const pod = String(document.getElementById('map-port-pod')?.value || State.pod || '').trim();
+                if (!pol || !pod) {
+                    throw new Error('POL y POD son obligatorios para calcular la ruta marítima.');
+                }
+
+                stopRouteGlobeRotation();
+                window.CoreNetworkGuard?.close?.('routing');
+                const routeTimeout = new Promise((_, reject) => {
+                    routeTimeoutId = window.setTimeout(() => reject(new Error('La API de rutas excedió el tiempo máximo de respuesta.')), 45_000);
+                });
+                const routeResult = await Promise.race([
+                    calculateVoyageRouteService({ portBallast, pol, pod, geocode: true }),
+                    routeTimeout
+                ]);
+
+                const ladenCoordinates = normalizeMaritimeRouteCoordinates(routeResult?.routes?.laden?.coordinates);
+                if (!routeResult?.coordinates?.pol || !routeResult?.coordinates?.pod || ladenCoordinates.length < 2) {
+                    throw new Error('La API de rutas no devolvió una geometría marítima válida para POL y POD.');
+                }
+
+                applyRouteServiceResult(routeResult);
+                renderMasterRouteMap(routeResult);
+                updateRouteSummary();
+                syncGlobalStateToForms();
+                if (typeof applyPortIntelligenceToSmartCalculations === 'function') applyPortIntelligenceToSmartCalculations();
+                if (typeof runEngine === 'function') runEngine();
+                if (typeof syncGencon === 'function') syncGencon();
+                if (typeof syncAsbatankvoy === 'function') syncAsbatankvoy();
+                if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
+                stopRouteGlobeRotation();
+
+                updateDataBridgeTransportStatus('connecting');
+                void Promise.allSettled([
+                    restorePersistentDataBridgeConnection(),
+                    refreshDataBridgeMasterStatsOnDemand()
+                ]).then(([connectionResult, masterStatsResult]) => {
+                    if (connectionResult.status === 'rejected') {
+                        console.warn('[Core PRO] No se pudo actualizar el estado de Data Bridge bajo demanda.', connectionResult.reason);
+                    }
+                    if (masterStatsResult.status === 'rejected') {
+                        console.warn('[Core PRO] No se pudo actualizar el histórico maestro bajo demanda.', masterStatsResult.reason);
+                    }
+                });
+            } catch (error) {
+                console.error('[Core PRO] Falló la actualización manual de ruta y ecosistema.', error);
+                if (typeof showToast === 'function') showToast(error?.message || 'No se pudo completar la actualización manual.', false, 'error');
+            } finally {
+                if (routeTimeoutId) window.clearTimeout(routeTimeoutId);
+                if (button) {
+                    button.disabled = false;
+                    delete button.dataset.calculating;
+                    button.removeAttribute('aria-busy');
+                    button.innerHTML = originalContent;
+                }
+            }
+        }
+        window.runOnDemandMapRouteWorkflow = runOnDemandMapRouteWorkflow;
+
         async function applyMapRouteToCalculator(forceGeocode = false) {
             if (!validateGeographicLaycanDates()) {
                 return;
@@ -19593,7 +19679,6 @@
                     detail: { state: 'success', syncId, httpStatus: 200, confirmation }
                 }));
             }
-            void window.revalidateDataBridgeConnectionState?.();
             return Response.json({ ...confirmation, sync_id: syncId, syncId }, { status: 200 });
         }
         window.postDataBridgeReceiveVessels = postDataBridgeReceiveVessels;
@@ -19638,7 +19723,6 @@
                 );
                 const persistedReport = await syncCoreProMatchingReport(selectedAuditReport);
                 const persistedCount = Number(persistedReport?.vessel_count) || 0;
-                await window.revalidateDataBridgeConnectionState?.();
                 showToast(`✅ ${persistedCount} buque${persistedCount === 1 ? '' : 's'} persistido${persistedCount === 1 ? '' : 's'}. Data Bridge los descargará desde la API central.`);
                 return persistedReport;
             } catch (err) {
@@ -40768,7 +40852,6 @@
                         window.GlobalStore.calculatorVessel = savedVessel;
                     }
                     await saveVesselToIndexedDB({ ...savedVessel, imo, name: vesselName, gt, loa });
-                    await window.revalidateDataBridgeConnectionState?.();
                 } else {
                     showToast(`⚠️ Error al guardar buque: ${resData.error || (resData.success ? 'No se devolvieron datos' : 'Desconocido')}`);
                 }
@@ -58529,23 +58612,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         const DATA_BRIDGE_CONNECTION_STATE_ENDPOINT = '/api/databridge-connection-state';
         const DATA_BRIDGE_CONNECTION_STATE_FUNCTION_ENDPOINT = '/.netlify/functions/databridge-connection-state';
         const TENDER_NOR_ENDPOINT = '/api/v1/voyage/tender-nor';
-	        const DATA_BRIDGE_HTTP_POLL_ENDPOINT = DATA_BRIDGE_CONNECTION_STATE_ENDPOINT;
-	        const DATA_BRIDGE_HTTP_POLL_INTERVAL_MS = 10_000;
-	        const DATA_BRIDGE_HTTP_POLL_MAX_INTERVAL_MS = 5 * 60_000;
 	        const DATA_BRIDGE_VERIFIED_SESSION_KEY = 'seacharter_databridge_verified_at';
 	        const dataBridgeNorRequests = new Map();
-	        let dataBridgeHttpPollingTimer = null;
-        let dataBridgeHttpPollingActive = false;
-        let dataBridgeHttpPollingRequest = null;
-        let dataBridgeHttpPollingController = null;
-        let dataBridgeHttpPollingFailures = 0;
 	        let dataBridgeNorTransportState = 'connecting';
 	        let dataBridgeRadarLiveRequested = false;
         window.dataBridgePersistentConnectionState = window.dataBridgePersistentConnectionState || null;
         const DATA_BRIDGE_STATUS_LABELS = {
             inactive: 'Inactivo',
 	            secure: 'SYNC: ACTIVE',
-	            fallback: 'SYNC HTTP · 10S',
+	            fallback: 'SYNC BAJO DEMANDA',
             unauthorized: 'Unauthorized',
             disconnected: 'Disconnected'
         };
@@ -58568,8 +58643,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             });
 	            bindDataBridgeLinkForm();
 	            updateDataBridgeConnectionIndicator();
-	            await restorePersistentDataBridgeConnection();
-	            startDataBridgeHttpPolling({ immediate: true });
             
             // Check if we are running in an Electron environment with our API exposed
             if (window.dataBridgeAPI) {
@@ -58606,7 +58679,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const candidates = event.data.candidates || event.data.vessels || event.data.buques || [];
                 window.receiveDataBridgeOpportunities?.(candidates);
             } else if (event.data && event.data.type === 'SEACHARTER_DATABRIDGE_MUTATION') {
-                void revalidateDataBridgeConnectionState();
+                updateDataBridgeConnectionIndicator();
             }
         });
 
@@ -58762,130 +58835,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (disconnected) updateConnectionStatusBar('disconnected');
         }
 
-	        function processDataBridgeHttpPollingPayload(payload) {
-            const messageCandidates = Array.isArray(payload)
-                ? payload
-                : [payload?.events, payload?.messages, payload?.updates, payload?.data]
-                    .find((candidate) => Array.isArray(candidate)) || [payload];
-
-	            messageCandidates.forEach((message) => {
-	                if (extractNorTriggerPayload(message)) processDataBridgeNorMessage(message);
-	            });
-	        }
-
-	        async function pollDataBridgeConnectionState(options = {}) {
-	            const forceRefresh = options.force === true;
-	            if (dataBridgeHttpPollingRequest) {
-	                if (!forceRefresh) return dataBridgeHttpPollingRequest;
-	                await dataBridgeHttpPollingRequest;
-	            }
-
-            dataBridgeHttpPollingController = new AbortController();
-            dataBridgeHttpPollingRequest = (async () => {
-                try {
-	                const requestUrl = forceRefresh
-	                    ? `${DATA_BRIDGE_HTTP_POLL_ENDPOINT}?refresh=${Date.now()}`
-	                    : DATA_BRIDGE_HTTP_POLL_ENDPOINT;
-                    const pollRequest = {
-                        method: 'GET',
-                        headers: { Accept: 'application/json' },
-	                    cache: forceRefresh ? 'no-store' : 'default',
-                        signal: dataBridgeHttpPollingController.signal
-                    };
-                    const dataBridgeFetch = window.__coreProNativeFetch || window.fetch;
-                    let response = window.CoreNetworkGuard && !forceRefresh
-                        ? await window.CoreNetworkGuard.fetch('databridge-status', requestUrl, pollRequest, {
-                            cooldownMs: DATA_BRIDGE_HTTP_POLL_INTERVAL_MS,
-                            fetchImpl: dataBridgeFetch
-                        })
-                        : await dataBridgeFetch(requestUrl, pollRequest);
-	                if (response.status === 404) {
-	                    const fallbackUrl = forceRefresh
-	                        ? `${DATA_BRIDGE_CONNECTION_STATE_FUNCTION_ENDPOINT}?refresh=${Date.now()}`
-	                        : DATA_BRIDGE_CONNECTION_STATE_FUNCTION_ENDPOINT;
-	                    response = await dataBridgeFetch(fallbackUrl, pollRequest);
-	                }
-	                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-	                if (!response.headers.get('content-type')?.includes('application/json')) {
-	                    throw new Error('Invalid Payload');
-	                }
-	                const payload = await response.json();
-	                const hasExpectedHealthPayload = payload?.success === true
-	                    && payload?.connection
-	                    && typeof payload.connection === 'object'
-	                    && typeof payload.connection.connected === 'boolean';
-	                if (!hasExpectedHealthPayload) throw new Error('Invalid Payload');
-	                dataBridgeHttpPollingFailures = 0;
-	                updateDataBridgeTransportStatus(payload.connection.connected ? 'connected' : 'disconnected');
-	                processDataBridgeHttpPollingPayload(payload);
-                    return payload;
-                } catch (error) {
-                    if (error?.name === 'AbortError') return null;
-                    dataBridgeHttpPollingFailures += 1;
-	                    if (dataBridgeHttpPollingFailures >= 3) updateDataBridgeTransportStatus('disconnected');
-	                    console.warn('[Core PRO] Polling HTTP de estado de Data Bridge no disponible.', error);
-                    return null;
-                } finally {
-                    dataBridgeHttpPollingController = null;
-                    dataBridgeHttpPollingRequest = null;
-                }
-            })();
-
-            return dataBridgeHttpPollingRequest;
-        }
-
-        function getDataBridgePollingDelay() {
-            return window.CoreNetworkGuard?.getBackoffDelay(
-                'databridge-status',
-                DATA_BRIDGE_HTTP_POLL_INTERVAL_MS,
-                { maxDelayMs: DATA_BRIDGE_HTTP_POLL_MAX_INTERVAL_MS }
-            ) || DATA_BRIDGE_HTTP_POLL_INTERVAL_MS;
-        }
-
-        function scheduleDataBridgeHttpPoll(delayMs = getDataBridgePollingDelay()) {
-            if (!dataBridgeHttpPollingActive) return;
-            dataBridgeHttpPollingTimer = window.setTimeout(async () => {
-                dataBridgeHttpPollingTimer = null;
-                await pollDataBridgeConnectionState();
-                scheduleDataBridgeHttpPoll();
-            }, Math.max(DATA_BRIDGE_HTTP_POLL_INTERVAL_MS, Number(delayMs) || 0));
-        }
-
-	        function startDataBridgeHttpPolling(options = {}) {
-	            if (dataBridgeHttpPollingActive) return { started: false, reason: 'already-polling' };
-                dataBridgeHttpPollingActive = true;
-	            updateDataBridgeTransportStatus('connecting');
-                if (options.immediate !== false) {
-                    void pollDataBridgeConnectionState().finally(() => scheduleDataBridgeHttpPoll());
-                } else {
-                    scheduleDataBridgeHttpPoll(DATA_BRIDGE_HTTP_POLL_INTERVAL_MS);
-                }
-	            return { started: true, transport: 'http-polling' };
-	        }
-
-	        async function revalidateDataBridgeConnectionState() {
-	            const payload = await pollDataBridgeConnectionState({ force: true });
-	            if (dataBridgeHttpPollingActive && !dataBridgeHttpPollingTimer) scheduleDataBridgeHttpPoll();
-	            return payload;
-	        }
-	        window.revalidateDataBridgeConnectionState = revalidateDataBridgeConnectionState;
-
-        function stopDataBridgeHttpPolling() {
-            dataBridgeHttpPollingActive = false;
-            if (dataBridgeHttpPollingTimer) {
-                window.clearTimeout(dataBridgeHttpPollingTimer);
-                dataBridgeHttpPollingTimer = null;
-            }
-            dataBridgeHttpPollingController?.abort();
-            dataBridgeHttpPollingController = null;
-            dataBridgeHttpPollingRequest = null;
-            dataBridgeHttpPollingFailures = 0;
-        }
-        window.stopDataBridgeHttpPolling = stopDataBridgeHttpPolling;
-
 	        function retryDataBridgeNorListener() {
 	            dataBridgeRadarLiveRequested = window.RadarGlobalControl?.getState?.().mode === 'live';
-	            return startDataBridgeHttpPolling();
+	            return { started: false, transport: 'on-demand', reason: 'manual-route-action-required' };
 	        }
         window.retryDataBridgeNorListener = retryDataBridgeNorListener;
 
@@ -58895,15 +58847,13 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
 	        function activateDataBridgeLiveTracking(source = 'radar-live') {
 	            dataBridgeRadarLiveRequested = true;
-	            const polling = startDataBridgeHttpPolling();
-	            if (dataBridgeNorTransportState !== 'connected') updateDataBridgeTransportStatus('connecting');
-	            return { started: true, transport: 'http-polling', radarVisible: isRadarMapViewActive(), source, polling };
+	            return { started: false, transport: 'on-demand', radarVisible: isRadarMapViewActive(), source };
 	        }
         window.activateDataBridgeLiveTracking = activateDataBridgeLiveTracking;
 
 	        function deactivateDataBridgeLiveTracking(source = 'radar-frozen') {
 	            dataBridgeRadarLiveRequested = false;
-	            return { stopped: false, transport: 'http-polling', source };
+	            return { stopped: true, transport: 'on-demand', source };
         }
         window.deactivateDataBridgeLiveTracking = deactivateDataBridgeLiveTracking;
 
@@ -58920,15 +58870,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
 	        function cleanupDataBridgeNorTransport() {
 	            dataBridgeRadarLiveRequested = false;
-	            stopDataBridgeHttpPolling();
 	        }
         window.stopDataBridgeSecondaryTransport = cleanupDataBridgeNorTransport;
         window.addEventListener('pagehide', cleanupDataBridgeNorTransport);
         window.addEventListener('connection-status:unmount', cleanupDataBridgeNorTransport);
-        window.addEventListener('pageshow', (event) => {
-            if (!event.persisted) return;
-	            startDataBridgeHttpPolling({ immediate: true });
-        });
 
         function getStoredDataBridgeToken() {
             try {
@@ -59006,8 +58951,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return false;
             }
         }
-        window.restorePersistentDataBridgeConnection = restorePersistentDataBridgeConnection;
-
         function updateDataBridgeConnectionIndicator() {
             const isConnected = getVerifiedDataBridgeTimestamp() > 0;
             const dot = document.getElementById('databridge-connection-dot');
@@ -59110,7 +59053,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (!connected) throw new Error('Data Bridge no confirmó el estado conectado.');
                 setDataBridgeVerifiedConnection(true);
                 updateDataBridgeConnectionIndicator();
-                await revalidateDataBridgeConnectionState();
                 closeDataBridgeLinkModal();
                 if (options.silent !== true && typeof showToast === 'function') showToast('Enlace establecido correctamente');
             } catch (requestError) {
@@ -59457,7 +59399,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 t_remolcadores: remolcadoresVal
             };
             const saved = await saveVesselToIndexedDB(vesselData);
-            await window.revalidateDataBridgeConnectionState?.();
             return saved;
         }
 
@@ -62106,7 +62047,6 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     });
                     const payload = await response.json().catch(() => ({}));
                     if (!response.ok || payload.success === false) throw new Error(payload.error || 'No se pudo guardar la auditoría.');
-                    await window.revalidateDataBridgeConnectionState?.();
                     setAuditStatus(`Guardado en historial con ID ${payload.auditId}.`);
                 } catch (error) {
                     setAuditStatus(error.message || 'Error al guardar en base de datos.');
