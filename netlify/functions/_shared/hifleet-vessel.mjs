@@ -130,24 +130,30 @@ function buildRequest(env, imoNumber) {
   const configuredUrl = String(env.HIFLEET_GET_SHIP_DATA_URL ?? "").trim();
   if (!configuredUrl) throw new HifleetConfigurationError("HiFleet endpoint is not configured.");
 
-  const method = String(env.HIFLEET_HTTP_METHOD ?? "GET").trim().toUpperCase();
-  if (method !== "GET" && method !== "POST") {
-    throw new HifleetConfigurationError("HiFleet HTTP method must be GET or POST.");
-  }
-
   const url = new URL(configuredUrl.replaceAll("{imo}", encodeURIComponent(String(imoNumber))));
   const headers = {
     Accept: "application/json",
+    "Content-Type": "application/json",
     ...readCredentialHeaders(env),
   };
-  const options = { method, headers };
-  if (method === "GET" && !configuredUrl.includes("{imo}")) {
-    url.searchParams.set(String(env.HIFLEET_IMO_QUERY_PARAM ?? "imo"), String(imoNumber));
-  }
-  if (method === "POST") {
-    headers["Content-Type"] = "application/json";
-    options.body = JSON.stringify({ [String(env.HIFLEET_IMO_BODY_FIELD ?? "imo")]: imoNumber });
-  }
+  const options = {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      limit: 1,
+      offset: 1,
+      params: {
+        shipname: "",
+        callsign: "",
+        shiptype: "",
+        shipflag: "",
+        keyword: "",
+        mmsi: -1,
+        imo: Number(imoNumber),
+      },
+      _v: "5.3.588",
+    }),
+  };
   return { url, options };
 }
 
@@ -177,7 +183,10 @@ export async function fetchHifleetVessel({ imoNumber, env = process.env, fetchIm
   } catch {
     throw new HifleetUpstreamError("HiFleet returned an invalid JSON payload.");
   }
-  return normalizeHifleetPayload(payload, imoNumber);
+  const vesselRecord = isRecord(payload) && Array.isArray(payload.data)
+    ? payload.data[0]
+    : undefined;
+  return normalizeHifleetPayload(vesselRecord, imoNumber);
 }
 
 export async function resolveVesselByImo({ imoNumber, findCached, fetchRemote, saveRecord }) {

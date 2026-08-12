@@ -59,15 +59,13 @@ test("cache misses fetch, normalize, persist, and return the saved record", asyn
 
 test("HiFleet numeric strings are converted into database-ready numbers", () => {
   const vessel = normalizeHifleetPayload({
-    data: {
-      IMO: "9319466",
-      ShipName: "AUTHENTICATED STAR",
-      DWT: "52,123 MT",
-      GT: "30,200",
-      LOA: "189.5 m",
-      Beam: "32,20 m",
-      Built: "2011",
-    },
+    IMO: "9319466",
+    ShipName: "AUTHENTICATED STAR",
+    DWT: "52,123 MT",
+    GT: "30,200",
+    LOA: "189.5 m",
+    Beam: "32,20 m",
+    Built: "2011",
   }, 9319466);
 
   assert.equal(vessel.imoNumber, 9319466);
@@ -80,12 +78,12 @@ test("HiFleet numeric strings are converted into database-ready numbers", () => 
 
 test("censored HiFleet fields are rejected instead of entering the cache", () => {
   assert.throws(
-    () => normalizeHifleetPayload({ data: { imo: 9319466, vesselName: "MASKED", dwt: "******", gt: "******" } }, 9319466),
+    () => normalizeHifleetPayload({ imo: 9319466, vesselName: "MASKED", dwt: "******", gt: "******" }, 9319466),
     HifleetUpstreamError,
   );
 });
 
-test("HiFleet requests require credentials and send them only as backend headers", async () => {
+test("HiFleet requests require credentials and use the exact getShipDatav3 payload", async () => {
   await assert.rejects(
     fetchHifleetVessel({
       imoNumber: 9319466,
@@ -96,7 +94,7 @@ test("HiFleet requests require credentials and send them only as backend headers
   );
 
   const requests = [];
-  await fetchHifleetVessel({
+  const vessel = await fetchHifleetVessel({
     imoNumber: 9319466,
     env: {
       HIFLEET_GET_SHIP_DATA_URL: "https://provider.test/getShipDatav3",
@@ -105,11 +103,35 @@ test("HiFleet requests require credentials and send them only as backend headers
     },
     fetchImpl: async (url, options) => {
       requests.push({ url: new URL(url), options });
-      return Response.json({ data: { imo: 9319466, vesselName: "AUTHORIZED", dwt: "10000", gt: "7000" } });
+      return Response.json({
+        total: 1,
+        data: [
+          { imo: 9319466, vesselName: "AUTHORIZED", dwt: "10000", gt: "7000" },
+          { imo: 9999999, vesselName: "IGNORED", dwt: "99999", gt: "99999" },
+        ],
+      });
     },
   });
 
-  assert.equal(requests[0].url.searchParams.get("imo"), "9319466");
+  assert.equal(requests[0].url.search, "");
+  assert.equal(requests[0].options.method, "POST");
   assert.equal(requests[0].options.headers.Authorization, "Bearer test-value");
   assert.equal(requests[0].options.headers.Cookie, "session=test-value");
+  assert.equal(requests[0].options.headers["Content-Type"], "application/json");
+  assert.equal(vessel.vesselName, "AUTHORIZED");
+  assert.equal(vessel.imoNumber, 9319466);
+  assert.deepEqual(JSON.parse(requests[0].options.body), {
+    limit: 1,
+    offset: 1,
+    params: {
+      shipname: "",
+      callsign: "",
+      shiptype: "",
+      shipflag: "",
+      keyword: "",
+      mmsi: -1,
+      imo: 9319466,
+    },
+    _v: "5.3.588",
+  });
 });
