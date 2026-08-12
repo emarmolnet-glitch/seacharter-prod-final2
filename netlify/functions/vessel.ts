@@ -6,7 +6,9 @@ import {
 import { createCorsHeaders } from "./_shared/cors.js";
 import {
   fetchHifleetVessel,
+  formatHifleetApiError,
   HifleetConfigurationError,
+  HifleetUpstreamError,
   normalizeImo,
   resolveVesselByImo,
   serializeVesselRecord,
@@ -45,16 +47,20 @@ export default async (request: Request) => {
     }, { headers });
   } catch (error) {
     const configurationError = error instanceof HifleetConfigurationError;
+    const upstreamError = error instanceof HifleetUpstreamError;
     console.error("[vessel] Vessel lookup failed.", {
       imoNumber,
       errorName: error instanceof Error ? error.name : "UnknownError",
+      providerStatus: upstreamError ? error.status : undefined,
     });
     return Response.json({
       success: false,
       error: configurationError
         ? "Vessel data provider is not configured"
-        : "Vessel data provider request failed",
-    }, { status: configurationError ? 503 : 502, headers });
+        : upstreamError
+          ? formatHifleetApiError(error)
+          : "Vessel data provider request failed",
+    }, { status: configurationError ? 503 : upstreamError ? 502 : 500, headers });
   }
 };
 

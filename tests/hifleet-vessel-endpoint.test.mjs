@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   fetchHifleetVessel,
+  formatHifleetApiError,
   HifleetConfigurationError,
   HifleetUpstreamError,
   normalizeHifleetPayload,
@@ -17,6 +18,7 @@ test("the vessel endpoint exposes the dynamic IMO route and uses the local cache
   assert.match(endpointSource, /findVesselTechnicalRecord/);
   assert.match(endpointSource, /fetchHifleetVessel/);
   assert.match(endpointSource, /upsertVesselTechnicalRecord/);
+  assert.match(endpointSource, /formatHifleetApiError/);
 });
 
 test("cache hits never call HiFleet or write the database", async () => {
@@ -83,11 +85,11 @@ test("censored HiFleet fields are rejected instead of entering the cache", () =>
   );
 });
 
-test("HiFleet requests require credentials and use the exact getShipDatav3 payload", async () => {
+test("HiFleet requests require HIFLEET_COOKIE and use the exact getShipDatav3 payload", async () => {
   await assert.rejects(
     fetchHifleetVessel({
       imoNumber: 9319466,
-      env: { HIFLEET_GET_SHIP_DATA_URL: "https://provider.test/getShipDatav3" },
+      env: { HIFLEET_API_URL: "https://provider.test/getShipDatav3" },
       fetchImpl: async () => Response.json({}),
     }),
     HifleetConfigurationError,
@@ -97,9 +99,8 @@ test("HiFleet requests require credentials and use the exact getShipDatav3 paylo
   const vessel = await fetchHifleetVessel({
     imoNumber: 9319466,
     env: {
-      HIFLEET_GET_SHIP_DATA_URL: "https://provider.test/getShipDatav3",
-      HIFLEET_AUTHORIZATION: "Bearer test-value",
-      HIFLEET_SESSION_COOKIE: "session=test-value",
+      HIFLEET_API_URL: "https://provider.test/getShipDatav3",
+      HIFLEET_COOKIE: "session=test-value",
     },
     fetchImpl: async (url, options) => {
       requests.push({ url: new URL(url), options });
@@ -115,8 +116,8 @@ test("HiFleet requests require credentials and use the exact getShipDatav3 paylo
 
   assert.equal(requests[0].url.search, "");
   assert.equal(requests[0].options.method, "POST");
-  assert.equal(requests[0].options.headers.Authorization, "Bearer test-value");
   assert.equal(requests[0].options.headers.Cookie, "session=test-value");
+  assert.equal(requests[0].options.headers.Authorization, undefined);
   assert.equal(requests[0].options.headers["Content-Type"], "application/json");
   assert.equal(vessel.vesselName, "AUTHORIZED");
   assert.equal(vessel.imoNumber, 9319466);
@@ -134,4 +135,72 @@ test("HiFleet requests require credentials and use the exact getShipDatav3 paylo
     },
     _v: "5.3.588",
   });
+});
+
+test("HiFleet ignores legacy provider variable names", async () => {
+  await assert.rejects(
+    fetchHifleetVessel({
+      imoNumber: 9319466,
+      env: {
+        HIFLEET_GET_SHIP_DATA_URL: "https://provider.test/getShipDatav3",
+        HIFLEET_SESSION_COOKIE: "session=legacy-value",
+      },
+      fetchImpl: async () => Response.json({}),
+    }),
+    HifleetConfigurationError,
+  );
+});
+
+test("HiFleet HTTP errors preserve the provider status and response detail", async () => {
+  await assert.rejects(
+    fetchHifleetVessel({
+      imoNumber: 9319466,
+      env: {
+        HIFLEET_API_URL: "https://provider.test/getShipDatav3",
+        HIFLEET_COOKIE: "session=test-value",
+      },
+      fetchImpl: async () => Response.json(
+        { error: "Cookie expired" },
+        { status: 401 },
+      ),
+    }),
+    (error) => {
+      assert.ok(error instanceof HifleetUpstreamError);
+      assert.equal(error.status, 401);
+      assert.equal(error.detail, '{"error":"Cookie expired"}');
+      assert.equal(
+        formatHifleetApiError(error),
+        'HiFleet API Error [401]: {"error":"Cookie expired"}',
+      );
+      return true;
+    },
+  );
+});
+
+test("HiFleet request exceptions extract Axios-style status and data", async () => {
+  await assert.rejects(
+    fetchHifleetVessel({
+      imoNumber: 9319466,
+      env: {
+        HIFLEET_API_URL: "https://provider.test/getShipDatav3",
+        HIFLEET_COOKIE: "session=test-value",
+      },
+      fetchImpl: async () => {
+        throw {
+          response: {
+            status: 400,
+            data: { message: "Malformed payload" },
+          },
+        };
+      },
+    }),
+    (error) => {
+      assert.equal(error.status, 400);
+      assert.equal(
+        formatHifleetApiError(error),
+        'HiFleet API Error [400]: {"message":"Malformed payload"}',
+      );
+      return true;
+    },
+  );
 });
