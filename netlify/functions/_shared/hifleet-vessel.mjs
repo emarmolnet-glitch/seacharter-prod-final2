@@ -24,7 +24,51 @@ const FIELD_ALIASES = {
 };
 
 export class HifleetConfigurationError extends Error {}
-export class HifleetUpstreamError extends Error {}
+export class HifleetUpstreamError extends Error {
+  constructor(message, { status = 502, detail = message } = {}) {
+    super(message);
+    this.name = "HifleetUpstreamError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+function serializeErrorDetail(value) {
+  if (typeof value === "string") return value.trim() || "Unknown provider error";
+  if (value === undefined || value === null) return "Unknown provider error";
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function extractProviderError(error) {
+  const status = Number(error?.response?.status ?? error?.status);
+  const detail = error?.response?.data ?? error?.message;
+  return {
+    status: Number.isInteger(status) && status > 0 ? status : 502,
+    detail: serializeErrorDetail(detail),
+  };
+}
+
+async function readProviderResponseDetail(response) {
+  const contentType = response.headers.get("content-type") ?? "";
+  try {
+    return contentType.includes("application/json")
+      ? serializeErrorDetail(await response.json())
+      : serializeErrorDetail(await response.text());
+  } catch {
+    return response.statusText || "Unknown provider error";
+  }
+}
+
+export function formatHifleetApiError(error) {
+  const { status, detail } = error instanceof HifleetUpstreamError
+    ? error
+    : extractProviderError(error);
+  return `HiFleet API Error [${status}]: ${serializeErrorDetail(detail)}`;
+}
 
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -110,24 +154,13 @@ export function normalizeHifleetPayload(payload, requestedImo) {
 }
 
 function readCredentialHeaders(env) {
-  const authorization = String(env.HIFLEET_AUTHORIZATION ?? "").trim();
-  const sessionCookie = String(env.HIFLEET_SESSION_COOKIE ?? "").trim();
-  const apiToken = String(env.HIFLEET_API_TOKEN ?? "").trim();
-  if (!authorization && !sessionCookie && !apiToken) {
-    throw new HifleetConfigurationError("HiFleet credentials are not configured.");
-  }
-
-  const headers = {};
-  if (authorization) headers.Authorization = authorization;
-  if (sessionCookie) headers.Cookie = sessionCookie;
-  if (apiToken) headers[String(env.HIFLEET_API_TOKEN_HEADER ?? "X-API-Key").trim() || "X-API-Key"] = apiToken;
-  const csrfToken = String(env.HIFLEET_CSRF_TOKEN ?? "").trim();
-  if (csrfToken) headers[String(env.HIFLEET_CSRF_HEADER ?? "X-CSRF-Token").trim() || "X-CSRF-Token"] = csrfToken;
-  return headers;
+  const cookie = String(env.HIFLEET_COOKIE ?? "").trim();
+  if (!cookie) throw new HifleetConfigurationError("HiFleet cookie is not configured.");
+  return { Cookie: cookie };
 }
 
 function buildRequest(env, imoNumber) {
-  const configuredUrl = String(env.HIFLEET_GET_SHIP_DATA_URL ?? "").trim();
+  const configuredUrl = String(env.HIFLEET_API_URL ?? "").trim();
   if (!configuredUrl) throw new HifleetConfigurationError("HiFleet endpoint is not configured.");
 
   const url = new URL(configuredUrl.replaceAll("{imo}", encodeURIComponent(String(imoNumber))));
@@ -157,9 +190,14 @@ function buildRequest(env, imoNumber) {
   return { url, options };
 }
 
-export async function fetchHifleetVessel({ imoNumber, env = process.env, fetchImpl = fetch }) {
-  const { url, options } = buildRequest(env, imoNumber);
-  const configuredTimeout = Number(env.HIFLEET_TIMEOUT_MS);
+export async function fetchHifleetVessel({ imoNumber, env, fetchImpl = fetch }) {
+  const providerEnv = env ?? {
+    HIFLEET_API_URL: process.env.HIFLEET_API_URL,
+    HIFLEET_COOKIE: process.env.HIFLEET_COOKIE,
+    HIFLEET_TIMEOUT_MS: process.env.HIFLEET_TIMEOUT_MS,
+  };
+  const { url, options } = buildRequest(providerEnv, imoNumber);
+  const configuredTimeout = Number(providerEnv.HIFLEET_TIMEOUT_MS);
   const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0
     ? Math.min(configuredTimeout, 30_000)
     : DEFAULT_TIMEOUT_MS;
@@ -168,20 +206,28 @@ export async function fetchHifleetVessel({ imoNumber, env = process.env, fetchIm
   try {
     response = await fetchImpl(url, { ...options, signal: AbortSignal.timeout(timeoutMs) });
   } catch (error) {
-    throw new HifleetUpstreamError(error?.name === "TimeoutError"
-      ? "HiFleet request timed out."
-      : "HiFleet request failed.");
+    const providerError = extractProviderError(error);
+    if (error?.name === "TimeoutError") {
+      providerError.status = 504;
+      providerError.detail = "HiFleet request timed out.";
+    }
+    throw new HifleetUpstreamError("HiFleet request failed.", providerError);
   }
-  if (response.status === 401 || response.status === 403) {
-    throw new HifleetUpstreamError("HiFleet rejected the configured credentials.");
+  if (!response.ok) {
+    const detail = await readProviderResponseDetail(response);
+    throw new HifleetUpstreamError(`HiFleet returned HTTP ${response.status}.`, {
+      status: response.status,
+      detail,
+    });
   }
-  if (!response.ok) throw new HifleetUpstreamError(`HiFleet returned HTTP ${response.status}.`);
 
   let payload;
   try {
     payload = await response.json();
   } catch {
-    throw new HifleetUpstreamError("HiFleet returned an invalid JSON payload.");
+    throw new HifleetUpstreamError("HiFleet returned an invalid JSON payload.", {
+      status: response.status,
+    });
   }
   const vesselRecord = isRecord(payload) && Array.isArray(payload.data)
     ? payload.data[0]
