@@ -12,13 +12,28 @@ import {
 } from "../netlify/functions/_shared/hifleet-vessel.mjs";
 
 const endpointSource = await readFile(new URL("../netlify/functions/vessel.ts", import.meta.url), "utf8");
+const cacheSource = await readFile(new URL("../db/vessel-technical-cache.ts", import.meta.url), "utf8");
 
 test("the vessel endpoint exposes the dynamic IMO route and uses the local cache first", () => {
   assert.match(endpointSource, /path: "\/api\/vessel\/:imo"/);
-  assert.match(endpointSource, /findVesselTechnicalRecord/);
+  assert.match(endpointSource, /findVesselMasterTableByImo/);
   assert.match(endpointSource, /fetchHifleetVessel/);
   assert.match(endpointSource, /upsertVesselTechnicalRecord/);
   assert.match(endpointSource, /formatHifleetApiError/);
+});
+
+test("the endpoint reads the Neon master cache by textual IMO from the exact table", () => {
+  assert.match(endpointSource, /findVesselMasterTableByImo\(String\(imo\)\)/);
+  assert.match(cacheSource, /FROM vessels_master_table/);
+  assert.match(cacheSource, /WHERE imo = \$1::text/);
+  assert.doesNotMatch(cacheSource, /FROM vessels_master_table[\s\S]*WHERE imo = \$1::integer/);
+});
+
+test("local database failures abort the HiFleet fallback and return the database error", () => {
+  assert.match(endpointSource, /try \{[\s\S]*findVesselMasterTableByImo[\s\S]*catch \(error\)/);
+  assert.match(endpointSource, /Local Neon cache lookup failed; HiFleet fallback aborted/);
+  assert.match(endpointSource, /error instanceof LocalDatabaseLookupError/);
+  assert.match(endpointSource, /databaseError: databaseMessage/);
 });
 
 test("cache hits never call HiFleet or write the database", async () => {
