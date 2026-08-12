@@ -8241,7 +8241,7 @@
                         <div id="vessel-identity-meta" class="w-full flex flex-row items-center justify-between gap-4 mt-4 mb-4 col-span-full" aria-label="Especificaciones técnicas editables del buque">
                             <div class="flex-1 flex items-center bg-white border border-gray-300 rounded px-2 py-1 h-9 shadow-sm">
                                 <span class="text-[10px] font-bold text-slate-500 mr-1 uppercase tracking-wider whitespace-nowrap">IMO:</span>
-                                <input type="text" id="vessel-identity-imo" class="w-full text-right text-xs text-slate-800 bg-transparent focus:outline-none" value="" placeholder="-" aria-label="IMO" oninput="handleManualVesselUpdate('imo', this.value)">
+                                <input type="text" id="vessel-identity-imo" class="w-full text-right text-xs text-slate-800 bg-transparent focus:outline-none" value="" placeholder="-" aria-label="IMO" inputmode="numeric" maxlength="7" oninput="handleManualVesselUpdate('imo', this.value)" onblur="fetchVesselByImo(this.value)" onkeydown="handleVesselImoKeyDown(event)">
                             </div>
                             <div class="flex-1 flex items-center bg-white border border-gray-300 rounded px-2 py-1 h-9 shadow-sm">
                                 <span class="text-[10px] font-bold text-slate-500 mr-1 uppercase tracking-wider whitespace-nowrap">BANDERA:</span>
@@ -24368,6 +24368,52 @@
             if (typeof scheduleReactiveEngine === 'function') scheduleReactiveEngine();
         }
         window.handleManualVesselUpdate = handleManualVesselUpdate;
+
+        function handleVesselImoKeyDown(event) {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            event.currentTarget.blur();
+        }
+        window.handleVesselImoKeyDown = handleVesselImoKeyDown;
+
+        async function fetchVesselByImo(value) {
+            const imoInput = document.getElementById('vessel-identity-imo');
+            const imo = String(value ?? imoInput?.value ?? '').trim();
+            if (!/^\d{7}$/.test(imo)) {
+                if (imo) showToast('⚠️ El número IMO debe contener exactamente 7 dígitos.');
+                return false;
+            }
+            if (!imoInput || imoInput.dataset.imoLoading === 'true') return false;
+
+            const previousCursor = imoInput.style.cursor;
+            const previousDisabled = imoInput.disabled;
+            imoInput.dataset.imoLoading = 'true';
+            imoInput.disabled = true;
+            imoInput.style.cursor = 'wait';
+            imoInput.setAttribute('aria-busy', 'true');
+
+            try {
+                const response = await fetch(`/api/vessel/${encodeURIComponent(imo)}`);
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok || payload.success !== true || !payload.vessel) {
+                    throw new Error(payload.error || 'No se pudieron recuperar los datos del buque.');
+                }
+
+                applyDataBridgeHydrationToCalculator(payload.vessel, { imo, imo_number: imo });
+                showToast(`✅ Especificaciones del buque IMO ${imo} cargadas.`);
+                return true;
+            } catch (error) {
+                console.warn('[Vessel IMO Search] No se pudo cargar el buque.', error?.message || error);
+                showToast(`⚠️ ${error?.message || 'No se pudieron recuperar los datos del buque.'}`);
+                return false;
+            } finally {
+                imoInput.disabled = previousDisabled;
+                imoInput.style.cursor = previousCursor;
+                imoInput.removeAttribute('aria-busy');
+                delete imoInput.dataset.imoLoading;
+            }
+        }
+        window.fetchVesselByImo = fetchVesselByImo;
 
         function applyMatchingVesselToCalculator(vesselJsonEscaped, loadPortLat, loadPortLon, unloadPortLat, unloadPortLon, quantity, freightRate, cargoType, loadName, unloadName) {
             try {
