@@ -8230,6 +8230,10 @@
                             <div class="input-group">
                                 <label id="label-spd-ballast" class="flex items-center min-h-[28px]">Velocidad Lastre (Knts)</label>
                                 <input type="number" id="spd-ballast" class="input-gc" value="11.5" step="any" oninput="markSpeedManualOverride(this)">
+                                <div id="spd-ballast-smart-default" class="hidden mt-1.5 w-fit items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-800 shadow-sm" role="status" aria-live="polite">
+                                    <span class="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]" aria-hidden="true"></span>
+                                    <span>Smart Default: Mercado en Vivo</span>
+                                </div>
                             </div>
                         </div>
 
@@ -29239,8 +29243,12 @@
             input.dataset.navigationBase = String(parseFloat(input.value) || 0);
             input.dataset.manualOverride = 'true';
             input.dataset.autoInferred = 'false';
+            input.dataset.marketDefault = 'false';
             input.classList.remove('text-slate-400', 'border-sky-400');
             input.title = '';
+            if (input.id === 'spd-ballast') {
+                setBallastMarketSpeedIndicator(false);
+            }
         }
 
         function markKnownVesselSpeed(inputOrId) {
@@ -29248,8 +29256,22 @@
             if (!input) return;
             input.dataset.manualOverride = 'true';
             input.dataset.autoInferred = 'false';
+            input.dataset.marketDefault = 'false';
             input.classList.remove('text-slate-400', 'border-sky-400');
             input.title = 'Velocidad procedente de la ficha tecnica del buque. Editable manualmente.';
+            if (input.id === 'spd-ballast') {
+                setBallastMarketSpeedIndicator(false);
+            }
+        }
+
+        function setBallastMarketSpeedIndicator(visible, marketSpeed = null) {
+            const indicator = document.getElementById('spd-ballast-smart-default');
+            if (!indicator) return;
+            indicator.classList.toggle('hidden', !visible);
+            indicator.classList.toggle('flex', visible);
+            indicator.title = visible && marketSpeed?.observedAt
+                ? `Media de mercado actualizada: ${marketSpeed.observedAt}`
+                : '';
         }
 
         function applyDetectedSpeedValues(params = {}) {
@@ -29271,11 +29293,13 @@
                 const currentValue = parseFloat(input.value) || 0;
                 const alreadyInferred = input.dataset.autoInferred === 'true';
                 const untouchedDefault = input.dataset.manualOverride !== 'true' && !input.dataset.autoInferred;
-                const canInfer = shouldForce || currentValue <= 0 || alreadyInferred || untouchedDefault;
+                const hasLiveMarketDefault = input.dataset.marketDefault === 'true';
+                const canInfer = shouldForce || (!hasLiveMarketDefault && (currentValue <= 0 || alreadyInferred || untouchedDefault));
                 if (!canInfer) return;
                 input.value = value.toFixed(1);
                 input.dataset.autoInferred = 'true';
                 input.dataset.manualOverride = 'false';
+                input.dataset.marketDefault = 'false';
                 input.dataset.vesselSegment = segment;
                 input.classList.add('text-slate-400', 'border-sky-400');
                 input.title = `Valor inferido por ${source} para segmento ${segment}. Editable manualmente.`;
@@ -60173,6 +60197,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         let costPlusStrategy = 'cost-plus';
         let navigationStrategy = 'eco';
         let navigationStrategyMode = 'auto';
+        let marketSpeedRequestSequence = 0;
+        let lastMarketSpeedVesselClass = '';
+        const marketSpeedCache = new Map();
         const NAVIGATION_STRATEGIES = {
             eco: { seaConsumptionFactor: 0.85 },
             full: { seaConsumptionFactor: 1 }
@@ -60371,14 +60398,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             ['spd-ballast', 'spd-laden'].forEach((id) => {
                 const input = document.getElementById(id);
                 if (!input) return;
-                input.readOnly = isAuto;
+                input.readOnly = false;
                 input.dataset.navigationMode = navigationStrategyMode;
-                input.classList.toggle('cursor-not-allowed', isAuto);
+                input.classList.remove('cursor-not-allowed');
                 input.classList.toggle('border-dashed', isAuto);
                 input.classList.toggle('bg-slate-800', isAuto);
                 input.classList.toggle('text-sky-300', isAuto);
                 input.title = isAuto
-                    ? `Velocidad calculada automaticamente por estrategia ${navigationStrategy.toUpperCase()}.`
+                    ? `Smart Default editable calculado para estrategia ${navigationStrategy.toUpperCase()}.`
                     : 'Velocidad editable manualmente.';
             });
         }
@@ -60408,9 +60435,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             ].forEach(([id, value]) => {
                 const input = document.getElementById(id);
                 if (!input || !Number.isFinite(value) || value <= 0) return;
+                if (id === 'spd-ballast' && input.dataset.marketDefault === 'true') return;
                 input.value = value.toFixed(1);
                 input.dataset.autoInferred = 'true';
                 input.dataset.manualOverride = 'false';
+                input.dataset.marketDefault = 'false';
                 input.dataset.vesselSegment = segmentConfig.segment;
                 input.dataset.navigationStrategy = navigationStrategy;
                 input.dataset.navigationBase = String(value);
@@ -60911,6 +60940,78 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 : { categoryName: 'Handysize / Small Tanker', type: 'TCE Inverso' };
         }
 
+        function getMarketSpeedVesselClass(vesselCategory) {
+            const normalizedCategory = String(vesselCategory || '').trim().toUpperCase();
+            if (normalizedCategory.includes('HANDY')) return 'Handysize';
+            if (normalizedCategory.includes('SUPRAMAX') || normalizedCategory.includes('ULTRAMAX')) return 'Supramax';
+            if (normalizedCategory.includes('PANAMAX') || normalizedCategory.includes('KAMSARMAX')) return 'Panamax';
+            if (normalizedCategory.includes('CAPE') || normalizedCategory.includes('VLOC') || normalizedCategory.includes('VLCC')) return 'Capesize';
+            return null;
+        }
+
+        function clearBallastMarketSpeedDefault() {
+            const input = document.getElementById('spd-ballast');
+            if (input) input.dataset.marketDefault = 'false';
+            setBallastMarketSpeedIndicator(false);
+        }
+
+        function applyBallastMarketSpeed(marketSpeed, vesselCategory) {
+            const input = document.getElementById('spd-ballast');
+            const averageSpeedKnots = Number(marketSpeed?.averageSpeedKnots);
+            if (!input || !Number.isFinite(averageSpeedKnots) || averageSpeedKnots <= 0) return false;
+            if (input.dataset.manualOverride === 'true') return false;
+
+            input.value = averageSpeedKnots.toFixed(2);
+            input.dataset.navigationBase = String(averageSpeedKnots);
+            input.dataset.autoInferred = 'true';
+            input.dataset.manualOverride = 'false';
+            input.dataset.marketDefault = 'true';
+            input.dataset.vesselSegment = vesselCategory;
+            input.title = `Media de mercado en vivo para ${marketSpeed.vesselClass || vesselCategory}. Editable manualmente.`;
+            setBallastMarketSpeedIndicator(true, marketSpeed);
+
+            if (typeof State !== 'undefined') {
+                State.speedBallast = averageSpeedKnots;
+                State.detectedVesselSegment = vesselCategory;
+                State.speedInferenceSource = 'market_average_speeds';
+            }
+            if (typeof runEngine === 'function') runEngine();
+            return true;
+        }
+
+        async function refreshMarketBallastSpeed(vesselCategory) {
+            const marketVesselClass = getMarketSpeedVesselClass(vesselCategory);
+            if (!marketVesselClass) {
+                clearBallastMarketSpeedDefault();
+                return null;
+            }
+
+            const cachedMarketSpeed = marketSpeedCache.get(marketVesselClass);
+            if (cachedMarketSpeed) {
+                applyBallastMarketSpeed(cachedMarketSpeed, vesselCategory);
+                return cachedMarketSpeed;
+            }
+
+            const requestSequence = ++marketSpeedRequestSequence;
+            lastMarketSpeedVesselClass = marketVesselClass;
+            try {
+                const query = new URLSearchParams({ vesselClass: marketVesselClass });
+                const response = await fetch(`/api/market-speed?${query.toString()}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const marketSpeed = await response.json();
+                if (requestSequence !== marketSpeedRequestSequence || marketVesselClass !== lastMarketSpeedVesselClass) return null;
+                marketSpeedCache.set(marketVesselClass, marketSpeed);
+                applyBallastMarketSpeed(marketSpeed, vesselCategory);
+                return marketSpeed;
+            } catch (error) {
+                if (requestSequence === marketSpeedRequestSequence) {
+                    clearBallastMarketSpeedDefault();
+                }
+                console.warn('Using historical ballast speed fallback', error);
+                return null;
+            }
+        }
+
         const getVesselCategory = getVesselClass;
 
         function forceRefreshCalculations(showFeedback = false) {
@@ -60968,6 +61069,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const previousCategory = currentVesselPricingCategory;
             currentVesselPricingCategory = vesselClass.categoryName;
 
+            if (previousCategory !== currentVesselPricingCategory) {
+                marketSpeedRequestSequence += 1;
+                lastMarketSpeedVesselClass = '';
+                clearBallastMarketSpeedDefault();
+            }
+
             if (inverseCard) inverseCard.classList.toggle('hidden', !useReverseTceCalculator);
             if (costPlusCard) costPlusCard.classList.toggle('hidden', useReverseTceCalculator);
 
@@ -60985,6 +61092,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 && (previousCategory !== currentVesselPricingCategory || lastBalticSpotPricingCategory !== currentVesselPricingCategory)
             ) {
                 void handleFetchBalticSpotTce();
+            }
+            const marketSpeedVesselClass = getMarketSpeedVesselClass(vesselClass.categoryName);
+            if (
+                vesselDwt > 0
+                && marketSpeedVesselClass
+                && (
+                    previousCategory !== currentVesselPricingCategory
+                    || lastMarketSpeedVesselClass !== marketSpeedVesselClass
+                )
+            ) {
+                void refreshMarketBallastSpeed(vesselClass.categoryName);
             }
             if (previousCategory !== currentVesselPricingCategory) {
                 forceRefreshCalculations(false);
