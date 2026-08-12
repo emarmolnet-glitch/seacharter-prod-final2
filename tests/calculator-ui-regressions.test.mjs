@@ -3,6 +3,10 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+const balticSpotSource = await readFile(new URL('../src/step7-baltic-spot-reference.js', import.meta.url), 'utf8');
+const tceWorkspaceSource = await readFile(new URL('../TceCalculatorWorkspace.tsx', import.meta.url), 'utf8');
+const marketMapperSource = await readFile(new URL('../src/utils/marketMapper.js', import.meta.url), 'utf8');
+const { getIndexForVessel } = await import(`data:text/javascript,${encodeURIComponent(marketMapperSource)}`);
 
 test('renumbers right column panel headers sequentially (6 to 10)', () => {
   assert.match(indexSource, /6\. RESUMEN DE OPERACIÓN/);
@@ -21,4 +25,101 @@ test('defines explicit light mode styling for select options and input dates', (
 test('uses compact matching header controls', () => {
   assert.match(indexSource, /id="new-estimation-btn"[\s\S]*?class="tools-dropdown-trigger flex items-center justify-center"/);
   assert.doesNotMatch(indexSource, /<span>\+ Nueva Estimación<\/span>/);
+});
+
+test('renders Baltic spot data as an isolated Step 7 reference', () => {
+  assert.match(indexSource, /Baltic Exchange Spot Reference/);
+  assert.match(indexSource, /src="\.\/src\/step7-baltic-spot-reference\.js\?v=20260812-spot-fetch-fix"/);
+  assert.match(balticSpotSource, /fetch\('\/api\/spot-rates'/);
+  assert.match(balticSpotSource, /getIndexForVessel\(vesselType\)/);
+  assert.match(balticSpotSource, /value\.spot_rate/);
+  assert.match(balticSpotSource, /console\.log\('\[Step7 Baltic\] \/api\/spot-rates raw response:'/);
+  assert.match(balticSpotSource, /console\.log\('\[Step7 Baltic\] filtered index:'/);
+  assert.match(balticSpotSource, /refreshBalticSpotReference\(\{ force: true \}\);/);
+  assert.match(balticSpotSource, /No aplica índice global - Modelo Cost-Plus activo/);
+  assert.match(indexSource, /id="baltic-spot-variation"/);
+  assert.doesNotMatch(balticSpotSource, /tceTarget|res-market-benchmark-rate|State\.marketBenchmark/);
+  assert.doesNotMatch(tceWorkspaceSource, /\/api\/spot-rates/);
+});
+
+test('maps vessel classes to their Baltic indices', () => {
+  assert.equal(getIndexForVessel('Capesize / Suezmax'), 'BCI');
+  assert.equal(getIndexForVessel('PANAMAX / Kamsarmax / LR1'), 'BPI');
+  assert.equal(getIndexForVessel('Supramax / MR'), 'BSI');
+  assert.equal(getIndexForVessel('handysize / small tanker'), 'BHSI');
+  assert.deepEqual(getIndexForVessel('Coaster'), {
+    type: 'REGIONAL',
+    label: 'Mercado Regional / Short Sea (Cost-Plus)',
+  });
+  assert.deepEqual(getIndexForVessel('Mini-Bulker'), {
+    type: 'REGIONAL',
+    label: 'Mercado Regional / Short Sea (Cost-Plus)',
+  });
+  assert.deepEqual(getIndexForVessel('MINIBULKER multipurpose'), {
+    type: 'REGIONAL',
+    label: 'Mercado Regional / Short Sea (Cost-Plus)',
+  });
+  assert.equal(getIndexForVessel('Ultramax'), 'BDI');
+});
+
+test('loads BHSI immediately and renders the spot_rate response field', async () => {
+  const elements = new Map([
+    ['vessel-badge', { textContent: 'Handysize / Small Tanker' }],
+    ['port-pol', { value: 'Buenos Aires', addEventListener() {} }],
+    ['port-pod', { value: 'Monopoli', addEventListener() {} }],
+    ['baltic-spot-index', { textContent: '', className: '' }],
+    ['baltic-spot-value', { textContent: '', className: '' }],
+    ['baltic-spot-variation', { textContent: '', className: '', hidden: false }],
+    ['baltic-spot-status', { textContent: '', className: '' }],
+  ]);
+  const originalWindow = globalThis.window;
+  const originalDocument = globalThis.document;
+  const originalFetch = globalThis.fetch;
+  const originalMutationObserver = globalThis.MutationObserver;
+  const originalConsoleLog = console.log;
+  let fetchCalls = 0;
+
+  try {
+    globalThis.window = {
+      addEventListener() {},
+      clearTimeout,
+      setTimeout,
+    };
+    globalThis.document = {
+      readyState: 'complete',
+      getElementById: (id) => elements.get(id) || null,
+    };
+    globalThis.MutationObserver = class {
+      observe() {}
+    };
+    globalThis.fetch = async (url) => {
+      fetchCalls += 1;
+      assert.equal(url, '/api/spot-rates');
+      return {
+        ok: true,
+        json: async () => ({
+          data: [{ name: 'Handysize', spot_rate: 2302, variation: 1.25 }],
+        }),
+      };
+    };
+    console.log = () => {};
+
+    const executableSource = balticSpotSource.replace(
+      /^import[^\n]+\n/,
+      marketMapperSource.replace('export function', 'function'),
+    );
+    await import(`data:text/javascript,${encodeURIComponent(executableSource)}#${Date.now()}`);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(fetchCalls, 1);
+    assert.equal(elements.get('baltic-spot-index').textContent, 'BHSI');
+    assert.equal(elements.get('baltic-spot-value').textContent, '$2,302');
+    assert.equal(elements.get('baltic-spot-variation').textContent, '+1.25%');
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.document = originalDocument;
+    globalThis.fetch = originalFetch;
+    globalThis.MutationObserver = originalMutationObserver;
+    console.log = originalConsoleLog;
+  }
 });
