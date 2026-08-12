@@ -1,0 +1,115 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+import {
+  fetchHifleetVessel,
+  HifleetConfigurationError,
+  HifleetUpstreamError,
+  normalizeHifleetPayload,
+  resolveVesselByImo,
+} from "../netlify/functions/_shared/hifleet-vessel.mjs";
+
+const endpointSource = await readFile(new URL("../netlify/functions/vessel.ts", import.meta.url), "utf8");
+
+test("the vessel endpoint exposes the dynamic IMO route and uses the local cache first", () => {
+  assert.match(endpointSource, /path: "\/api\/vessel\/:imo"/);
+  assert.match(endpointSource, /findVesselTechnicalRecord/);
+  assert.match(endpointSource, /fetchHifleetVessel/);
+  assert.match(endpointSource, /upsertVesselTechnicalRecord/);
+});
+
+test("cache hits never call HiFleet or write the database", async () => {
+  const calls = [];
+  const cached = { imoNumber: 9319466, vesselName: "Cached Vessel" };
+  const result = await resolveVesselByImo({
+    imoNumber: 9319466,
+    findCached: async () => cached,
+    fetchRemote: async () => calls.push("fetch"),
+    saveRecord: async () => calls.push("save"),
+  });
+
+  assert.equal(result.cache, "hit");
+  assert.strictEqual(result.vessel, cached);
+  assert.deepEqual(calls, []);
+});
+
+test("cache misses fetch, normalize, persist, and return the saved record", async () => {
+  const calls = [];
+  const remote = { imoNumber: 9319466, vesselName: "Remote Vessel", dwt: 52123 };
+  const saved = { ...remote, grossTonnage: 30200 };
+  const result = await resolveVesselByImo({
+    imoNumber: 9319466,
+    findCached: async () => null,
+    fetchRemote: async () => {
+      calls.push("fetch");
+      return remote;
+    },
+    saveRecord: async (record) => {
+      calls.push("save");
+      assert.strictEqual(record, remote);
+      return saved;
+    },
+  });
+
+  assert.equal(result.cache, "miss");
+  assert.strictEqual(result.vessel, saved);
+  assert.deepEqual(calls, ["fetch", "save"]);
+});
+
+test("HiFleet numeric strings are converted into database-ready numbers", () => {
+  const vessel = normalizeHifleetPayload({
+    data: {
+      IMO: "9319466",
+      ShipName: "AUTHENTICATED STAR",
+      DWT: "52,123 MT",
+      GT: "30,200",
+      LOA: "189.5 m",
+      Beam: "32,20 m",
+      Built: "2011",
+    },
+  }, 9319466);
+
+  assert.equal(vessel.imoNumber, 9319466);
+  assert.equal(vessel.dwt, 52123);
+  assert.equal(vessel.grossTonnage, 30200);
+  assert.equal(vessel.loaMeters, 189.5);
+  assert.equal(vessel.beamMeters, 32.2);
+  assert.equal(vessel.yearBuilt, 2011);
+});
+
+test("censored HiFleet fields are rejected instead of entering the cache", () => {
+  assert.throws(
+    () => normalizeHifleetPayload({ data: { imo: 9319466, vesselName: "MASKED", dwt: "******", gt: "******" } }, 9319466),
+    HifleetUpstreamError,
+  );
+});
+
+test("HiFleet requests require credentials and send them only as backend headers", async () => {
+  await assert.rejects(
+    fetchHifleetVessel({
+      imoNumber: 9319466,
+      env: { HIFLEET_GET_SHIP_DATA_URL: "https://provider.test/getShipDatav3" },
+      fetchImpl: async () => Response.json({}),
+    }),
+    HifleetConfigurationError,
+  );
+
+  const requests = [];
+  await fetchHifleetVessel({
+    imoNumber: 9319466,
+    env: {
+      HIFLEET_GET_SHIP_DATA_URL: "https://provider.test/getShipDatav3",
+      HIFLEET_AUTHORIZATION: "Bearer test-value",
+      HIFLEET_SESSION_COOKIE: "session=test-value",
+    },
+    fetchImpl: async (url, options) => {
+      requests.push({ url: new URL(url), options });
+      return Response.json({ data: { imo: 9319466, vesselName: "AUTHORIZED", dwt: "10000", gt: "7000" } });
+    },
+  });
+
+  assert.equal(requests[0].url.searchParams.get("imo"), "9319466");
+  assert.equal(requests[0].options.headers.Authorization, "Bearer test-value");
+  assert.equal(requests[0].options.headers.Cookie, "session=test-value");
+});
