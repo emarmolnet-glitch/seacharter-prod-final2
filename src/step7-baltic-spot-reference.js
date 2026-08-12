@@ -198,7 +198,7 @@ async function refreshBalticSpotReference({ force = false } = {}) {
   renderStatus({ marketIndex, label: 'Consultando mercado', tone: 'loading' });
 
   try {
-    const response = await fetch('/api/spot-rates', {
+    const response = await fetch(`/api/spot-rates?vesselCategory=${encodeURIComponent(vesselType)}`, {
       cache: 'no-store',
       signal: activeRequestController.signal,
     });

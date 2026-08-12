@@ -125,19 +125,20 @@ type FleetRegistryRecord = {
 
 type FleetRegistryInput = FleetRegistryRecord[] | Record<string, FleetRegistryRecord> | null | undefined;
 
-type FearnleysCache = {
-  entries: Record<string, FearnleysCacheEntry>;
+type BalticSpotRateEntry = {
+  index_name: string;
+  record_date?: string;
+  spot_rate: number;
+  daily_change_value?: number | null;
+  daily_change_pct?: number | null;
+  monthly_change_pct?: number | null;
 };
 
-type FearnleysCacheEntry = {
-  vesselCategory: string;
-  weekId: string;
-  weekNumber: number;
-  year: number;
-  value: number;
-  sourceDate?: string;
-  sourceRoute?: string;
-  cachedAt?: string;
+type FfaTceTargetEntry = {
+  vessel_class: string;
+  period: string;
+  record_date?: string;
+  rate_usd: number;
 };
 
 type BunkerIndexCache = {
@@ -236,7 +237,6 @@ const SYNCED_REVERSE_FIELDS = new Set<keyof ReverseCalculatorState>([
   'opexDaily',
 ]);
 
-const FEARNLEYS_MARKET_DATA_KEY = 'fearnleysMarketData';
 const BUNKER_INDEX_DATA_KEY = 'bunkerIndexData';
 const DEMURRAGE_TCE_MULTIPLIER = 1.25;
 const BUNKER_INDEX_ADJUSTMENT_SHARE = 0.5;
@@ -244,21 +244,11 @@ const BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT = 5;
 const FLEET_REGISTRY_KEY = 'fleet_registry';
 const ONLY_SHOW_MY_LIST = true;
 
-function getCurrentIsoWeek() {
-  const now = new Date();
-  const utcDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const weekday = utcDate.getUTCDay() || 7;
-  utcDate.setUTCDate(utcDate.getUTCDate() + 4 - weekday);
-  const year = utcDate.getUTCFullYear();
-  const yearStart = new Date(Date.UTC(year, 0, 1));
-  const weekNumber = Math.ceil((((utcDate.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-  return { year, weekNumber, weekId: `week-${weekNumber}-${year}` };
-}
-
-function getFearnleysCacheLabel(entry: FearnleysCacheEntry, cacheHit: boolean) {
-  return cacheHit
-    ? `Datos extraídos de Caché: Week ${entry.weekNumber} - Fearnleys`
-    : `Datos extraídos: Week ${entry.weekNumber} - Fearnleys`;
+function getFfaTceLabel(entry: FfaTceTargetEntry) {
+  const recordDate = entry.record_date
+    ? new Date(entry.record_date).toLocaleDateString('es-ES', { timeZone: 'UTC' })
+    : 'fecha no disponible';
+  return `${entry.vessel_class} · FFA TCA ${entry.period} · ${recordDate}`;
 }
 
 const FLEET_CATEGORY_GROUPS = [
@@ -1199,9 +1189,9 @@ export function ReverseTceCalculator({
   const [vlsfoPrice, setVlsfoPrice] = useState(DEFAULT_VALUES.vlsfoPrice);
   const [ifoPrice, setIfoPrice] = useState(DEFAULT_VALUES.ifoPrice);
   const [mgoPrice, setMgoPrice] = useState(DEFAULT_VALUES.mgoPrice);
-  const [isFetchingFearnleys, setIsFetchingFearnleys] = useState(false);
+  const [isFetchingBalticSpot, setIsFetchingBalticSpot] = useState(false);
   const [isFetchingBunker, setIsFetchingBunker] = useState(false);
-  const [indexWeekLabel, setIndexWeekLabel] = useState('');
+  const [indexSourceLabel, setIndexSourceLabel] = useState('');
   const [bunkerDateLabel, setBunkerDateLabel] = useState('');
   const [bunkerFetchError, setBunkerFetchError] = useState('');
   const [isManualOverride, setIsManualOverride] = useState(false);
@@ -1318,64 +1308,6 @@ export function ReverseTceCalculator({
     contractBunkerIndexBase,
   ]);
 
-  const readMarketRateFromCache = (category: string) => {
-    try {
-      const cached = window.localStorage.getItem(FEARNLEYS_MARKET_DATA_KEY);
-      if (!cached) return null;
-
-      const parsed = JSON.parse(cached) as Partial<FearnleysCache>;
-      const entry = parsed.entries?.[category];
-      const currentWeek = getCurrentIsoWeek();
-
-      if (
-        entry?.weekId === currentWeek.weekId
-        && Number.isFinite(Number(entry.value))
-      ) {
-        return entry;
-      }
-    } catch {
-      window.localStorage.removeItem(FEARNLEYS_MARKET_DATA_KEY);
-    }
-    return null;
-  };
-
-  const applyMarketRateEntry = (entry: FearnleysCacheEntry, cacheHit: boolean) => {
-    setValues((current) => ({
-      ...current,
-      tceTarget: Number(entry.value),
-    }));
-    setIndexWeekLabel(getFearnleysCacheLabel(entry, cacheHit));
-  };
-
-  const applyMarketRateFromCache = (category: string) => {
-    const entry = readMarketRateFromCache(category);
-    if (!entry) return false;
-    applyMarketRateEntry(entry, true);
-    return true;
-  };
-
-  const writeMarketRateToCache = (entry: FearnleysCacheEntry) => {
-    let entries: Record<string, FearnleysCacheEntry> = {};
-    try {
-      const cached = window.localStorage.getItem(FEARNLEYS_MARKET_DATA_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached) as Partial<FearnleysCache>;
-        entries = parsed.entries && typeof parsed.entries === 'object' ? parsed.entries : {};
-      }
-    } catch {
-      entries = {};
-    }
-    window.localStorage.setItem(FEARNLEYS_MARKET_DATA_KEY, JSON.stringify({
-      entries: { ...entries, [entry.vesselCategory]: entry },
-    } satisfies FearnleysCache));
-  };
-
-  useEffect(() => {
-    if (!isManualOverride) {
-      applyMarketRateFromCache(vesselCategory);
-    }
-  }, [vesselCategory, isManualOverride]);
-
   useEffect(() => {
     try {
       const cached = window.localStorage.getItem(BUNKER_INDEX_DATA_KEY);
@@ -1445,44 +1377,51 @@ export function ReverseTceCalculator({
     setValues((current) => ({ ...current, mgoPrice: normalizedValue }));
   };
 
-  const handleFetchFearnleys = async () => {
-    if (isFetchingFearnleys) {
+  const handleFetchBalticSpot = async () => {
+    if (isFetchingBalticSpot) {
       return;
     }
 
     setIsManualOverride(false);
-    if (applyMarketRateFromCache(vesselCategory)) {
-      return;
-    }
-
-    setIsFetchingFearnleys(true);
+    setIsFetchingBalticSpot(true);
     try {
-      const response = await fetch(`/api/fearnleys-tce?vesselCategory=${encodeURIComponent(vesselCategory)}`, {
+      const query = new URLSearchParams({ vesselCategory });
+      const response = await fetch(`/api/spot-rates?${query.toString()}`, {
         cache: 'no-store',
       });
-      const payload = await response.json();
-      if (!response.ok || !payload?.ok || !Number.isFinite(Number(payload.value))) {
-        throw new Error(payload?.error || 'No se pudo obtener el TCE semanal.');
+      const payload = await response.json().catch(() => null);
+      const spotReference = payload?.spotReference as BalticSpotRateEntry | null;
+      const tceTarget = payload?.tceTarget as FfaTceTargetEntry | null;
+      const mapping = payload?.mapping as { spotIndex?: string; ffaVesselClass?: string } | null;
+      if (
+        !response.ok
+        || !spotReference
+        || !Number.isFinite(Number(spotReference.spot_rate))
+        || !tceTarget
+        || !Number.isFinite(Number(tceTarget.rate_usd))
+        || !mapping?.spotIndex
+        || !mapping?.ffaVesselClass
+      ) {
+        throw new Error(payload?.error || `No se pudieron obtener las referencias de ${vesselCategory}.`);
       }
 
-      const entry: FearnleysCacheEntry = {
-        vesselCategory,
-        weekId: String(payload.weekId),
-        weekNumber: Number(payload.weekNumber),
-        year: Number(payload.year),
-        value: Number(payload.value),
-        sourceDate: payload.sourceDate,
-        sourceRoute: payload.sourceRoute,
-        cachedAt: payload.cachedAt,
-      };
-      writeMarketRateToCache(entry);
-      applyMarketRateEntry(entry, Boolean(payload.cacheHit));
+      setValues((current) => ({
+        ...current,
+        tceTarget: Number(tceTarget.rate_usd),
+      }));
+      setIndexSourceLabel(getFfaTceLabel(tceTarget));
     } catch {
-      setIndexWeekLabel('No se pudo actualizar el índice de Fearnleys.');
+      setIndexSourceLabel(`No se pudieron actualizar las referencias de ${vesselCategory} desde Neón.`);
     } finally {
-      setIsFetchingFearnleys(false);
+      setIsFetchingBalticSpot(false);
     }
   };
+
+  useEffect(() => {
+    if (!isManualOverride) {
+      void handleFetchBalticSpot();
+    }
+  }, [vesselCategory]);
 
   const handleFetchBunker = async () => {
     if (isFetchingBunker) {
@@ -1551,7 +1490,7 @@ export function ReverseTceCalculator({
 
   const handleRestoreMarketIndex = () => {
     setIsManualOverride(false);
-    applyMarketRateFromCache(vesselCategory);
+    void handleFetchBalticSpot();
   };
 
   const handleToggleSync = () => {
@@ -1821,18 +1760,18 @@ export function ReverseTceCalculator({
                             <div className="flex justify-end">
                             <button
                               type="button"
-                              onClick={handleFetchFearnleys}
-                              disabled={isFetchingFearnleys}
+                              onClick={handleFetchBalticSpot}
+                              disabled={isFetchingBalticSpot}
                               className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white shadow-sm transition-all duration-200 hover:from-indigo-500 hover:to-violet-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-70"
                             >
-                              {isFetchingFearnleys
-                                ? 'Consultando reporte...'
-                                : '✨ Consultar Fearnleys IA'}
+                              {isFetchingBalticSpot
+                                ? 'Consultando Neón...'
+                                : 'Consultar Baltic / FFA'}
                             </button>
                             </div>
                             <p className="text-right text-xs italic text-gray-500">
-                              {indexWeekLabel
-                                ? indexWeekLabel
+                              {indexSourceLabel
+                                ? indexSourceLabel
                                 : 'Esperando datos del índice...'}
                             </p>
                           </div>

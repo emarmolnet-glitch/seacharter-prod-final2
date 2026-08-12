@@ -62,7 +62,7 @@ test('extracts the latest valid route rate from the Fearnleys response', async (
   });
 });
 
-test('keeps the instant cache-hit message and backend endpoint wired in both interfaces', async () => {
+test('removes Fearnleys wiring from both inverse TCE interfaces', async () => {
   const [indexSource, workspaceSource, functionSource] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
     readFile(new URL('../TceCalculatorWorkspace.tsx', import.meta.url), 'utf8'),
@@ -70,8 +70,9 @@ test('keeps the instant cache-hit message and backend endpoint wired in both int
   ]);
 
   for (const source of [indexSource, workspaceSource]) {
-    assert.match(source, /Datos extraídos de Caché: Week/);
-    assert.match(source, /\/api\/fearnleys-tce\?vesselCategory=/);
+    assert.doesNotMatch(source, /Datos extraídos de Caché: Week/);
+    assert.doesNotMatch(source, /\/api\/fearnleys-tce\?vesselCategory=/);
+    assert.match(source, /\/api\/spot-rates\?/);
   }
   assert.match(functionSource, /consistency: 'strong'/);
   assert.match(functionSource, /isCurrentWeekCacheEntry/);

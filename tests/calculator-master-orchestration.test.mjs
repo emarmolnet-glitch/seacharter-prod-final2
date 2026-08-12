@@ -10,7 +10,7 @@ const branchSource = indexSource.slice(branchStart, branchEnd);
 
 function createBranchHarness({ vesselDwt, centralizedClass, pricingClass }) {
   const calls = {
-    fearnleys: 0,
+    balticSpot: 0,
     inverseSync: 0,
     inverseCalculation: 0,
     normalRouteSync: 0
@@ -30,9 +30,9 @@ function createBranchHarness({ vesselDwt, centralizedClass, pricingClass }) {
     syncInverseTceFromVoyage() {
       calls.inverseSync += 1;
     },
-    async handleFetchFearnleysTce(options) {
+    async handleFetchBalticSpotTce(options) {
       assert.equal(options?.managedByMaster, true);
-      calls.fearnleys += 1;
+      calls.balticSpot += 1;
     },
     calculateInverseTce() {
       calls.inverseCalculation += 1;
@@ -74,7 +74,7 @@ test('master calculation preserves the required sequential workflow', () => {
   assert.doesNotMatch(source, /useEffect\s*\(/);
 });
 
-test('step 4 triggers the inverse TCE button handler for Handysize and larger vessels', async () => {
+test('step 4 triggers the Baltic Spot TCE handler for Handysize and larger vessels', async () => {
   for (const vessel of [
     { vesselDwt: 25000, centralizedClass: 'HANDYSIZE', categoryName: 'Handysize / Small Tanker' },
     { vesselDwt: 55000, centralizedClass: 'SUPRAMAX', categoryName: 'Supramax / MR' }
@@ -86,8 +86,8 @@ test('step 4 triggers the inverse TCE button handler for Handysize and larger ve
 
     const branch = await harness.masterBranch.synchronizeMasterRouteCalculations();
 
-    assert.equal(branch.mode, 'FEARNLEYS_TCE');
-    assert.equal(harness.calls.fearnleys, 1);
+    assert.equal(branch.mode, 'BALTIC_SPOT_TCE');
+    assert.equal(harness.calls.balticSpot, 1);
     assert.equal(harness.calls.inverseSync, 1);
     assert.equal(harness.calls.inverseCalculation, 1);
     assert.equal(harness.calls.normalRouteSync, 0);
@@ -108,14 +108,14 @@ test('step 4 triggers the normal route synchronization handler for smaller vesse
 
     assert.equal(branch.mode, 'COST_PLUS_ROUTE');
     assert.equal(harness.calls.normalRouteSync, 1);
-    assert.equal(harness.calls.fearnleys, 0);
+    assert.equal(harness.calls.balticSpot, 0);
     assert.equal(harness.calls.inverseSync, 0);
     assert.equal(harness.calls.inverseCalculation, 0);
   }
 });
 
-test('Fearnleys failures propagate to the master orchestrator', () => {
-  assert.match(indexSource, /async function handleFetchFearnleysTce\(options = \{\}\)/);
+test('Baltic Spot failures propagate to the master orchestrator', () => {
+  assert.match(indexSource, /async function handleFetchBalticSpotTce\(options = \{\}\)/);
   assert.match(indexSource, /const managedByMaster = options\.managedByMaster === true/);
   assert.match(indexSource, /catch \(error\) \{[\s\S]*if \(managedByMaster\) throw error/);
 });

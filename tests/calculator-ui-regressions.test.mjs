@@ -27,10 +27,10 @@ test('uses compact matching header controls', () => {
   assert.doesNotMatch(indexSource, /<span>\+ Nueva Estimación<\/span>/);
 });
 
-test('renders Baltic spot data as an isolated Step 7 reference', () => {
+test('renders Baltic spot data and feeds the inverse TCE calculator', () => {
   assert.match(indexSource, /Baltic Exchange Spot Reference/);
   assert.match(indexSource, /src="\.\/src\/step7-baltic-spot-reference\.js\?v=20260812-spot-fetch-fix"/);
-  assert.match(balticSpotSource, /fetch\('\/api\/spot-rates'/);
+  assert.match(balticSpotSource, /fetch\(`\/api\/spot-rates\?vesselCategory=\$\{encodeURIComponent\(vesselType\)\}`/);
   assert.match(balticSpotSource, /getIndexForVessel\(vesselType\)/);
   assert.match(balticSpotSource, /value\.spot_rate/);
   assert.match(balticSpotSource, /console\.log\('\[Step7 Baltic\] \/api\/spot-rates raw response:'/);
@@ -38,8 +38,19 @@ test('renders Baltic spot data as an isolated Step 7 reference', () => {
   assert.match(balticSpotSource, /refreshBalticSpotReference\(\{ force: true \}\);/);
   assert.match(balticSpotSource, /No aplica índice global - Modelo Cost-Plus activo/);
   assert.match(indexSource, /id="baltic-spot-variation"/);
-  assert.doesNotMatch(balticSpotSource, /tceTarget|res-market-benchmark-rate|State\.marketBenchmark/);
-  assert.doesNotMatch(tceWorkspaceSource, /\/api\/spot-rates/);
+  assert.match(indexSource, /handleFetchBalticSpotTce/);
+  assert.match(indexSource, /new URLSearchParams\(\{ vesselCategory \}\)/);
+  assert.match(indexSource, /\/api\/spot-rates\?\$\{query\.toString\(\)\}/);
+  assert.match(indexSource, /const spotReference = payload\?\.spotReference/);
+  assert.match(indexSource, /const tceTarget = payload\?\.tceTarget/);
+  assert.match(indexSource, /applyFfaTceMarketData\(tceTarget\)/);
+  assert.match(indexSource, /const marketRate = Number\(entry\?\.rate_usd\)/);
+  assert.doesNotMatch(indexSource, /const marketRate = Number\(entry\?\.spot_rate\)/);
+  assert.match(tceWorkspaceSource, /tceTarget: Number\(tceTarget\.rate_usd\)/);
+  assert.doesNotMatch(indexSource, /function getBalticSpotIndexForPricingCategory|function getFfaVesselClassForPricingCategory/);
+  assert.doesNotMatch(tceWorkspaceSource, /function getBalticSpotIndexForVesselCategory|function getFfaVesselClassForCategory/);
+  assert.doesNotMatch(indexSource, /btn-fetch-fearnleys-tce|handleFetchFearnleysTce|fearnleysMarketData/);
+  assert.doesNotMatch(tceWorkspaceSource, /\/api\/fearnleys-tce|fearnleysMarketData/);
 });
 
 test('maps vessel classes to their Baltic indices', () => {
@@ -59,7 +70,7 @@ test('maps vessel classes to their Baltic indices', () => {
     type: 'REGIONAL',
     label: 'Mercado Regional / Short Sea (Cost-Plus)',
   });
-  assert.equal(getIndexForVessel('Ultramax'), 'BDI');
+  assert.equal(getIndexForVessel('Ultramax'), 'BSI');
 });
 
 test('loads BHSI immediately and renders the spot_rate response field', async () => {
@@ -94,7 +105,7 @@ test('loads BHSI immediately and renders the spot_rate response field', async ()
     };
     globalThis.fetch = async (url) => {
       fetchCalls += 1;
-      assert.equal(url, '/api/spot-rates');
+      assert.equal(url, '/api/spot-rates?vesselCategory=Handysize%20%2F%20Small%20Tanker');
       return {
         ok: true,
         json: async () => ({
