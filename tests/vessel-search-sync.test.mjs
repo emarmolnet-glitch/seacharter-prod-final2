@@ -110,6 +110,9 @@ test('calculator renders seven editable technical badges in a full-width row bet
   assert.match(badgesSource, />GT:<\/span>[\s\S]*>LOA \(m\):<\/span>[\s\S]*>BEAM \(m\):<\/span>[\s\S]*>AÑO:<\/span>/);
   assert.doesNotMatch(badgesSource, /class="grid grid-cols-5 gap-4 mt-3 w-full col-span-full px-2"|w-2\/3|placeholder="N\/A"/);
   assert.match(badgesSource, /handleManualVesselUpdate\('imo', this\.value\)/);
+  assert.match(badgesSource, /onblur="fetchVesselByImo\(this\.value\)"/);
+  assert.match(badgesSource, /onkeydown="handleVesselImoKeyDown\(event\)"/);
+  assert.match(badgesSource, /inputmode="numeric" maxlength="7"/);
   assert.match(badgesSource, /handleManualVesselUpdate\('dwt', this\.value\)/);
   assert.match(badgesSource, /handleManualVesselUpdate\('flag', this\.value\)/);
   assert.match(badgesSource, /handleManualVesselUpdate\('beam', this\.value\)/);
@@ -120,6 +123,8 @@ test('calculator renders seven editable technical badges in a full-width row bet
   assert.match(indexSource, /function updateCalculatorVesselIdentityDisplay\(vessel, fallbackName = ''\)/);
   assert.match(indexSource, /function updateCalculatorDwtBadge\(value\)/);
   assert.match(indexSource, /function handleManualVesselUpdate\(field, value\)/);
+  assert.match(indexSource, /function handleVesselImoKeyDown\(event\)/);
+  assert.match(indexSource, /async function fetchVesselByImo\(value\)/);
   assert.match(indexSource, /if \(nameInput && vesselName\) nameInput\.value = vesselName/);
   assert.match(indexSource, /flagInput\.value = flag/);
   assert.match(indexSource, /imoInput\.value = imo/);
@@ -155,6 +160,22 @@ test('calculator renders seven editable technical badges in a full-width row bet
     indexSource.indexOf('async function searchLocalVesselDataBridge()'),
     indexSource.indexOf('const BUNKER_INDEX_DATA_KEY'),
   ), /const formattedName = `\$\{officialName\}/);
+});
+
+test('manual IMO lookup validates seven digits and exposes a loading state', () => {
+  const lookupStart = indexSource.indexOf('async function fetchVesselByImo(value)');
+  const lookupEnd = indexSource.indexOf('function applyMatchingVesselToCalculator(', lookupStart);
+  const lookupSource = indexSource.slice(lookupStart, lookupEnd);
+
+  assert.match(lookupSource, /if \(!\/\^\\d\{7\}\$\/\.test\(imo\)\)/);
+  assert.match(lookupSource, /imoInput\.disabled = true/);
+  assert.match(lookupSource, /imoInput\.style\.cursor = 'wait'/);
+  assert.match(lookupSource, /imoInput\.setAttribute\('aria-busy', 'true'\)/);
+  assert.match(lookupSource, /fetch\(`\/api\/vessel\/\$\{encodeURIComponent\(imo\)\}`\)/);
+  assert.match(lookupSource, /applyDataBridgeHydrationToCalculator\(payload\.vessel/);
+  assert.match(lookupSource, /finally \{/);
+  assert.match(lookupSource, /imoInput\.disabled = previousDisabled/);
+  assert.match(lookupSource, /imoInput\.removeAttribute\('aria-busy'\)/);
 });
 
 test('manual DWT edits update calculator state and force compatibility recalculation', () => {
