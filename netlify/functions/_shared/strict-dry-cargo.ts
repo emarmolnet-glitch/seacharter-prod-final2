@@ -1,14 +1,10 @@
 type AnyRecord = Record<string, unknown>;
 
-const DRY_CARGO_TEXT = /\b(bulk carrier|bulker|general cargo|dry cargo|cement carrier|clinker carrier|multipurpose|multi purpose|mpp)\b/i;
+const DRY_CARGO_TEXT = /\b(bulk carrier|bulker|general cargo|dry cargo)\b/i;
 const EXCLUDED_TEXT = /\b(passenger|cruise|pleasure|yacht|tug|tanker|fishing|trawler|container|ferry|ropax|ro[- ]?pax|offshore|supply)\b/i;
 
 function asRecord(value: unknown): AnyRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as AnyRecord : {};
-}
-
-function firstValue(...values: unknown[]) {
-  return values.find((value) => value !== undefined && value !== null && String(value).trim() !== "");
 }
 
 export function validImo(value: unknown) {
@@ -21,7 +17,11 @@ export function readAisType(value: unknown) {
   const metadata = asRecord(vessel.MetaData || vessel.metadata);
   const message = asRecord(vessel.Message);
   const staticData = asRecord(vessel.ShipStaticData || message.ShipStaticData);
-  const rawType = firstValue(
+  const nestedVessel = asRecord(vessel.vessel);
+  const nestedAis = asRecord(vessel.ais || vessel.AIS);
+  const sourcePayload = asRecord(vessel.source_payload || vessel.sourcePayload);
+  const sourceMetadata = asRecord(sourcePayload.MetaData || sourcePayload.metadata);
+  const rawTypes = [
     vessel.aisType,
     vessel.ais_type,
     vessel.vesselType,
@@ -32,8 +32,28 @@ export function readAisType(value: unknown) {
     metadata.ShipType,
     metadata.shipType,
     staticData.Type,
-  );
-  const typeText = String(rawType ?? "").trim();
+    nestedVessel.aisType,
+    nestedVessel.ais_type,
+    nestedVessel.vesselType,
+    nestedVessel.vessel_type,
+    nestedVessel.shipType,
+    nestedVessel.ShipType,
+    nestedAis.aisType,
+    nestedAis.ais_type,
+    nestedAis.vesselType,
+    nestedAis.vessel_type,
+    nestedAis.shipType,
+    nestedAis.ShipType,
+    sourcePayload.aisType,
+    sourcePayload.ais_type,
+    sourcePayload.vesselType,
+    sourcePayload.vessel_type,
+    sourcePayload.shipType,
+    sourcePayload.ShipType,
+    sourceMetadata.ShipType,
+    sourceMetadata.shipType,
+  ].filter((candidate) => candidate !== undefined && candidate !== null && String(candidate).trim() !== "");
+  const typeText = rawTypes.map((candidate) => String(candidate).trim()).join(" | ");
   const codeMatch = typeText.match(/(?:^|\D)(7\d)(?:\D|$)/);
   return {
     code: codeMatch ? Number(codeMatch[1]) : null,
@@ -43,8 +63,9 @@ export function readAisType(value: unknown) {
 
 export function isStrictDryCargoVessel(value: unknown) {
   const { code, text } = readAisType(value);
+  if (EXCLUDED_TEXT.test(text)) return false;
   if (code !== null) return code >= 70 && code <= 79;
-  if (!text || EXCLUDED_TEXT.test(text)) return false;
+  if (!text) return false;
   return DRY_CARGO_TEXT.test(text);
 }
 

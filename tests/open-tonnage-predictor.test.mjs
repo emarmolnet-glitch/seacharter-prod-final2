@@ -68,12 +68,18 @@ test('arrivals after cancelling are marked outside dates', () => {
   assert.equal(projection.viable, false);
 });
 
-test('matching UI exposes the Laycan toggle, prediction labels and filtering hooks', () => {
-  assert.match(sourceHtml, /id="laycan-viable-only-toggle"/);
-  assert.match(sourceHtml, /Mostrar solo buques viables para Laycan/);
+test('matching UI exposes the Laycan segmented control, prediction labels and filtering hooks', () => {
+  assert.match(sourceHtml, /id="matching-view-viable"/);
+  assert.match(sourceHtml, /Viables Laycan/);
+  assert.match(sourceHtml, /id="matching-view-compatible"/);
+  assert.match(sourceHtml, /Flota Compatible/);
   assert.match(sourceHtml, /OpenTonnagePredictor\?\.predictOpenTonnage/);
   assert.match(sourceHtml, /data-open-tonnage-viable/);
   assert.match(sourceHtml, /Disponible \/ Viable/);
   assert.match(sourceHtml, /Fuera de fechas/);
-  assert.match(sourceHtml, /applyMatchingLaycanViabilityFilter/);
+  assert.match(sourceHtml, /applyMatchingFleetView/);
+  assert.match(sourceHtml, /setActiveVessels\?\.\(displayedVessels/);
+  assert.match(sourceHtml, /setActiveVessels\?\.\(\[\], \{ source: 'matching-clear' \}\)/);
+  assert.match(sourceHtml, /LATE ETA/);
+  assert.match(sourceHtml, /is-late-eta/);
 });

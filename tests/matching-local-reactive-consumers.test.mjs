@@ -17,41 +17,18 @@ const markerSource = source.slice(markerSourceStart, markerSourceEnd);
 const matchingFocusStart = source.indexOf('async function focusMatchingVesselOnMap');
 const matchingFocusEnd = source.indexOf('window.focusMatchingVesselOnMap', matchingFocusStart);
 const matchingFocusSource = source.slice(matchingFocusStart, matchingFocusEnd);
-const densitySourceFunction = mapSource.slice(0, mapSource.indexOf('window.getDensityMapSourceVessels'));
-
-function createDensitySourceResolver(store, openShipsVesselsCache, isolatedMassiveSources = {}) {
-  const window = {
-    GlobalStore: store,
-    openShipsVesselsCache,
-    ...isolatedMassiveSources,
-    setRenderFleet(vessels) {
-      this.renderFleet = vessels.slice();
-      return this.renderFleet;
-    },
-  };
-  const normalizeDensityVesselCollection = (vessels) => Array.isArray(vessels) ? vessels.filter(Boolean) : [];
-  const resolver = new Function(
-    'window',
-    'normalizeDensityVesselCollection',
-    `${densitySourceFunction}; return getDensityMapSourceVessels;`,
-  )(window, normalizeDensityVesselCollection);
-  return { resolver, window };
-}
-
-test('local matching unlocks calculator without external AIS sweep availability', () => {
+test('AIS calculations consume the canonical active fleet resolver', () => {
   assert.match(calculatorSource, /const renderFleet = typeof getDensityMapSourceVessels === 'function'/);
-  assert.match(calculatorSource, /const hasCommittedMatchingState = renderFleet\.length > 0/);
   assert.match(calculatorSource, /const hasAisData = renderFleet\.length > 0/);
-  assert.match(calculatorSource, /const shouldUseCommittedMatchingState = true/);
-  assert.doesNotMatch(calculatorSource, /backgroundAisData/);
+  assert.match(source, /function getDensityReactiveVessels\(\)[\s\S]*GlobalStore\?\.getActiveVessels/);
 });
 
-test('density map consumes the persistent commercial store without legacy fallbacks', () => {
+test('density map consumes the isolated AIS resolver', () => {
   assert.match(mapSource, /const densityVessels = getDensityReactiveVessels\(\)/);
   assert.match(mapSource, /return window\.setRenderFleet\(densityVessels\)/);
-  assert.doesNotMatch(densitySourceFunction, /openShipsVesselsCache|rawVessels|filteredVessels|compatibleVessels|nearbyVessels/);
   assert.match(markerSource, /const displayVessels = getDensityDisplayVessels\(\)/);
   assert.match(markerSource, /GlobalFleetGlobe\.updateVessels\(displayVessels, 'density'\)/);
+  assert.doesNotMatch(mapSource, /updateOpenShipsRadar|fetch\s*\(/);
 });
 
 test('density source preserves coordinates and previous raw vessels across tab changes', () => {
@@ -60,7 +37,7 @@ test('density source preserves coordinates and previous raw vessels across tab c
   assert.match(source, /normalized\.lng = longitude/);
   assert.match(source, /normalized\.latitude = latitude/);
   assert.match(source, /normalized\.longitude = longitude/);
-  assert.match(source, /if \(nextRawVessels\.length > 0 \|\| !Array\.isArray\(this\.rawVessels\) \|\| this\.rawVessels\.length === 0\)/);
+  assert.match(source, /metadata\.replaceEmpty === true[\s\S]*nextRawVessels\.length > 0/);
 });
 
 test('density initialization awaits the current OpenShips snapshot before mounting', () => {
@@ -98,7 +75,7 @@ test('matching card dispatches the complete vessel and opens the density globe',
   assert.match(source, /else if \(typeof mapAIS\.setView === 'function'\)/);
 });
 
-test('local matching refreshes mounted density map from the state event', () => {
-  assert.match(calculatorSource, /if \(source === 'matching-validation'\) \{/);
-  assert.match(calculatorSource, /event\.detail\.nearbyVessels[\s\S]*initAisMap\(\)[\s\S]*updateAisMarkers\(\)/);
+test('active fleet actions refresh density through the canonical store event', () => {
+  assert.match(source, /new CustomEvent\('active-vessels-updated'/);
+  assert.match(source, /addEventListener\('active-vessels-updated', renderDensitySnapshotFromGlobalStore\)/);
 });

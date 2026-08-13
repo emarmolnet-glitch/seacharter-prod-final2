@@ -657,7 +657,7 @@ export default async (req: Request) => {
       };
       try {
         const enriched = await enrichVesselsWithMarketSpeedDefaults(getPool(), unifiedVessels);
-        scoringVessels = enriched.vessels;
+        scoringVessels = filterStrictDryCargoVessels(enriched.vessels);
         marketSpeedEnrichment = enriched.diagnostics;
       } catch (error) {
         console.error("[matching-local] Market speed defaults unavailable.", {
@@ -725,8 +725,12 @@ export default async (req: Request) => {
       });
       const scoringResponse = await runAiAisFilter(scoringRequest);
       const scoringResult = asRecord(await scoringResponse.json());
-      const evaluatedMatches = Array.isArray(scoringResult.data) ? scoringResult.data : [];
-      const eligibleMatches = Array.isArray(scoringResult.matches) ? scoringResult.matches : [];
+      const evaluatedMatches = filterStrictDryCargoVessels(
+        Array.isArray(scoringResult.data) ? scoringResult.data : [],
+      );
+      const eligibleMatches = filterStrictDryCargoVessels(
+        Array.isArray(scoringResult.matches) ? scoringResult.matches : [],
+      );
       return Response.json({
         ...scoringResult,
         success: scoringResponse.ok && scoringResult.success !== false,
