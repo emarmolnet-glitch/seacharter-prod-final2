@@ -15,7 +15,7 @@ test('matching backend pages allowed sources and sends every page through Core P
   assert.match(matchingSource, /normalizeAllowedMatchingSources\(matchingPayload\.allowedSources \|\| body\.allowedSources\)/);
   assert.match(matchingSource, /findMatchingVessels\(\{/);
   assert.match(matchingSource, /mergeTripleVesselSources\(\[\], dataBridgeVessels, aisVessels, openShipsVessels\)/);
-  assert.match(matchingSource, /radarSnapshot: unifiedVessels/);
+  assert.match(matchingSource, /radarSnapshot: scoringVessels/);
   assert.match(matchingSource, /searchMode: "filtered_source_database"/);
   assert.match(matchingSource, /pagination,/);
 });
@@ -115,4 +115,6 @@ test('strict technical filtering exposes DWT assessment and compact-card penalti
   assert.match(filterSource, /debugUnknownDwtAllowed/);
   assert.match(filterSource, /!strictTechnicalFilter && isUnknownTechnicalValue\(vessel\.shipType\)/);
   assert.match(filterSource, /operationallyEligible = taxonomyCompatibility\.compatible !== false[\s\S]*!strictTechnicalFilter/);
+  assert.match(filterSource, /match\.audit\?\.operationallyEligible === true/);
+  assert.match(filterSource, /match\.dwtAssessment\?\.status === "UNKNOWN"/);
 });

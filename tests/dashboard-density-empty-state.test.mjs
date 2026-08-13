@@ -45,3 +45,19 @@ test('density globe keeps a panoramic POL-centered camera on its initial mount',
   assert.match(globeSource, /altitude: Math\.max\(0\.15, altitude \?\? INITIAL_VIEW\.altitude\)/);
   assert.match(globeSource, /initialViewDuration: Math\.max\(0, toFiniteNumber\(options\.initialViewDuration, 0\) \|\| 0\)/);
 });
+
+test('density and matching modules expose professional AIS empty states', () => {
+  assert.match(indexSource, /data-density-empty-state="true"/);
+  assert.match(indexSource, /Esperando conexión AIS\.\.\./);
+  assert.match(indexSource, /0 buques detectados en el área/);
+  assert.match(indexSource, /id="matching-empty-title"/);
+  assert.match(indexSource, /emptyState\.dataset\.matchingEmptyState = options\.searched === true \? 'search-complete' : 'awaiting-parameters'/);
+  assert.match(indexSource, /Media mercado/);
+});
+
+test('frontend no longer seeds static demo vessel fleets', () => {
+  assert.doesNotMatch(indexSource, /Stella di Mare|Baltic Explorer|Aegean Wave|Acqua Stella|Sea Empress|Pacific Pioneer/);
+  assert.doesNotMatch(indexSource, /function loadScaleVessels\(/);
+  assert.doesNotMatch(indexSource, /const defaultSaved = \[/);
+  assert.match(indexSource, /localStorage\.getItem\('rodahmar_saved_vessels'\) \|\| '\[\]'/);
+});

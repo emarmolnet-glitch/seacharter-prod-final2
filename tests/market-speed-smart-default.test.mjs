@@ -3,8 +3,10 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
+  enrichVesselsWithMarketSpeedDefaults,
   fetchLatestMarketSpeed,
   normalizeMarketSpeedVesselClass,
+  resolveVesselMarketSpeedClass,
 } from '../netlify/functions/lib/market-speed.mjs';
 
 const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
@@ -55,6 +57,38 @@ test('market speed query is parameterized and normalizes the database result', a
   });
 });
 
+test('radar vessels resolve their market class from declared class or DWT', () => {
+  assert.equal(resolveVesselMarketSpeedClass({ vesselClass: 'Handysize Bulk Carrier' }), 'Handysize');
+  assert.equal(resolveVesselMarketSpeedClass({ dwt: 58_000 }), 'Supramax');
+  assert.equal(resolveVesselMarketSpeedClass({ vessel: { dwt: 72_000 } }), 'Panamax');
+  assert.equal(resolveVesselMarketSpeedClass({ MetaData: { DWT: 145_000 } }), 'Capesize');
+  assert.equal(resolveVesselMarketSpeedClass({ dwt: 9_000 }), null);
+});
+
+test('radar vessels without live speed receive a database-backed smart default', async () => {
+  const pool = {
+    async query(_statement, parameters) {
+      return {
+        rows: [{
+          vessel_class: String(parameters[0]).includes('HANDYSIZE') ? 'Handysize' : 'Supramax',
+          average_speed_knots: String(parameters[0]).includes('HANDYSIZE') ? '11.4' : '12.1',
+          observed_at: '2026-08-12',
+        }],
+      };
+    },
+  };
+  const liveVessel = { vesselName: 'LIVE', vesselClass: 'Handysize', speed: 8.2 };
+  const missingSpeedVessel = { vesselName: 'MARKET', dwt: 52_000 };
+
+  const result = await enrichVesselsWithMarketSpeedDefaults(pool, [liveVessel, missingSpeedVessel]);
+
+  assert.equal(result.vessels[0], liveVessel);
+  assert.equal(result.vessels[1].speed, 12.1);
+  assert.equal(result.vessels[1].speedInferenceSource, 'market_average_speeds');
+  assert.equal(result.vessels[1].speedTelemetryAvailable, false);
+  assert.equal(result.diagnostics.defaultedCount, 1);
+});
+
 test('calculator applies a live smart default while preserving manual override', () => {
   assert.match(indexSource, /id="spd-ballast-smart-default"/);
   assert.match(indexSource, /Smart Default: Mercado en Vivo/);
@@ -63,4 +97,16 @@ test('calculator applies a live smart default while preserving manual override',
   assert.match(indexSource, /input\.value = averageSpeedKnots\.toFixed\(2\)/);
   assert.match(indexSource, /input\.readOnly = false/);
   assert.match(indexSource, /input\.dataset\.marketDefault = 'false'/);
+});
+
+test('matching radar uses market speed enrichment instead of a static twelve-knot fallback', async () => {
+  const [matchingSource, filterSource] = await Promise.all([
+    readFile(new URL('../netlify/functions/matching-local.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../netlify/functions/ai-ais-filter.ts', import.meta.url), 'utf8'),
+  ]);
+  assert.match(matchingSource, /enrichVesselsWithMarketSpeedDefaults\(getPool\(\), unifiedVessels\)/);
+  assert.match(matchingSource, /radarSnapshot: scoringVessels/);
+  assert.match(filterSource, /speedInferenceSource/);
+  assert.match(filterSource, /market_average_speeds/);
+  assert.doesNotMatch(filterSource, /position\.SOG, 12\) \|\| 12/);
 });

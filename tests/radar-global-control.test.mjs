@@ -37,7 +37,7 @@ test('matching radar executes a POL-scoped sweep without requiring a full calcul
   assert.match(componentSource, /EJECUTAR BARRIDO RADAR/);
   assert.match(componentSource, /Escaneando zona\.\.\./);
   assert.match(componentSource, /window\.getMatchingRadarPolContext\?\.\(\)\.valid === true/);
-  assert.match(componentSource, /context === 'matching'[\s\S]*window\.executeMatchingRadarSweep\?\.\(\)/);
+  assert.match(componentSource, /context === 'matching'[\s\S]*window\.executeMatchingRadarSweep\?\.\(\{ trigger: 'user' \}\)/);
   assert.match(componentSource, /fetchMatchingRequestFromGlobalStore/);
   assert.doesNotMatch(componentSource, /requiresMatchingRoute && !window\.requireActiveMatchingRoute/);
   assert.match(componentSource, /window\.startRadarLive\(\{ source: `\$\{source\}-global-control`, refresh: true, matchingRequest \}\)/);
@@ -68,9 +68,20 @@ test('matching radar enforces the strict cargo interceptor before rendering or s
   assert.match(source, /'vehicles carrier', 'vehicle carrier', 'ro ro', 'roro', 'container ship'/);
   assert.match(interceptorSource, /selectedTaxonomies\.length === 1 && selectedTaxonomies\[0\] === 'category:cargo'/);
   assert.match(source, /const taxonomyFilter = applyStrictRadarTaxonomyFilter\(enrichedCandidates, response\.selectedTaxonomies\)/);
-  assert.match(source, /const taxonomyFilter = typeof window\.applyStrictRadarTaxonomyFilter === 'function'[\s\S]*window\.GlobalStore\?\.setMatchingFleet/);
+  assert.match(source, /const taxonomyFilter = shouldApplyTaxonomyFilter && typeof window\.applyStrictRadarTaxonomyFilter === 'function'[\s\S]*window\.GlobalStore\?\.setMatchingFleet/);
+  assert.match(source, /const strictTechnicalFilterActive = window\.matchingStrictTechnicalFilter === true/);
+  assert.match(source, /metadata\.applyTaxonomyFilter !== false \|\| strictTechnicalFilterActive/);
+  assert.match(source, /taxonomyCompatibleVessels\.filter\(vessel => vessel\?\.audit\?\.operationallyEligible !== false\)/);
+  assert.match(source, /if \(match\?\.audit\?\.operationallyEligible === false\) return false/);
+  assert.match(source, /function getDensityReactiveVessels\(\)[\s\S]*window\.matchingStrictTechnicalFilter !== true[\s\S]*applyStrictRadarTaxonomyFilter\(matchingVessels\)/);
   assert.match(source, /source: taxonomyRejectedAll \? 'taxonomy-filter' : 'matching-ui'/);
   assert.match(source, /source === 'taxonomy-filter'/);
+});
+
+test('strict technical empty state explains cargo and vessel-class rejection', () => {
+  assert.match(source, /0 buques compatibles con el Filtro Técnico Estricto/);
+  assert.match(source, /su clase o capacidad no coincide con la carga activa/);
+  assert.match(source, /if \(renderedCount === 0\)/);
 });
 
 test('matching radar reports taxonomy exclusions in the shared integrity banner', () => {
