@@ -17,10 +17,10 @@ const markerSource = source.slice(markerSourceStart, markerSourceEnd);
 const matchingFocusStart = source.indexOf('async function focusMatchingVesselOnMap');
 const matchingFocusEnd = source.indexOf('window.focusMatchingVesselOnMap', matchingFocusStart);
 const matchingFocusSource = source.slice(matchingFocusStart, matchingFocusEnd);
-test('AIS calculations consume the canonical active fleet resolver', () => {
+test('AIS calculations consume the canonical matching fleet resolver', () => {
   assert.match(calculatorSource, /const renderFleet = typeof getDensityMapSourceVessels === 'function'/);
   assert.match(calculatorSource, /const hasAisData = renderFleet\.length > 0/);
-  assert.match(source, /function getDensityReactiveVessels\(\)[\s\S]*GlobalStore\?\.getActiveVessels/);
+  assert.match(source, /function getDensityReactiveVessels\(\)[\s\S]*GlobalStore\?\.getCanonicalFleet/);
 });
 
 test('density map consumes the isolated AIS resolver', () => {
@@ -75,7 +75,7 @@ test('matching card dispatches the complete vessel and opens the density globe',
   assert.match(source, /else if \(typeof mapAIS\.setView === 'function'\)/);
 });
 
-test('active fleet actions refresh density through the canonical store event', () => {
-  assert.match(source, /new CustomEvent\('active-vessels-updated'/);
-  assert.match(source, /addEventListener\('active-vessels-updated', renderDensitySnapshotFromGlobalStore\)/);
+test('canonical fleet actions refresh density through one store event', () => {
+  assert.match(source, /new CustomEvent\('canonical-fleet-updated'/);
+  assert.match(source, /addEventListener\('canonical-fleet-updated', renderDensitySnapshotFromGlobalStore\)/);
 });

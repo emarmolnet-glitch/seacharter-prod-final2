@@ -11,13 +11,13 @@ test('density has no matching-cache preflight or OpenShips fallback', () => {
   assert.doesNotMatch(source.slice(start, end), /openShipsVesselsCache|backgroundAisData/);
 });
 
-test('density mount renders its AIS snapshot directly', () => {
+test('density mount renders the canonical matching snapshot directly', () => {
   const switchStart = source.indexOf('function switchTab(tabId)');
   const switchEnd = source.indexOf('function closeMobileSessionMenu()', switchStart);
   const switchSource = source.slice(switchStart, switchEnd);
   assert.match(switchSource, /renderDensitySnapshotFromGlobalStore/);
   assert.doesNotMatch(switchSource, /fetch\s*\(|updateOpenShipsRadar/);
-  assert.match(source, /function renderDensitySnapshotFromGlobalStore\(\)[\s\S]*renderDensityVesselsTable\?\.\(aisVessels\)/);
+  assert.match(source, /function renderDensitySnapshotFromGlobalStore\(\)[\s\S]*renderDensityVesselsTable\?\.\(matchingVessels\)/);
 });
 
 test('matching cards remain sourced from the local matching response state', () => {

@@ -517,5 +517,5 @@ test('cache hydration remains distinct from a successful matching execution', ()
   assert.match(cacheSource, /resultsList\.dataset\.matchingExecutionState = String\(options\.executionState \|\| 'cache-only'\)/);
   assert.doesNotMatch(cacheSource, /MATCHING_EXECUTION_SUCCESS/);
 
-  assert.match(source, /window\.addEventListener\('MATCHING_EXECUTION_SUCCESS',[\s\S]*resultsList\.dataset\.matchingExecutionState = 'success'[\s\S]*updateMatchingExecutionSuccessStick\(matches\)/);
+  assert.match(source, /window\.addEventListener\('MATCHING_EXECUTION_SUCCESS',[\s\S]*resultsList\.dataset\.matchingExecutionState = 'success'[\s\S]*updateMatchingExecutionSuccessStick\(committedEligibleVessels\)/);
 });

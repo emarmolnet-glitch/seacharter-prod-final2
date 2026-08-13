@@ -107,7 +107,7 @@ test('scoring preserves vessel key and combined source origins', () => {
 
 test('strict technical filtering exposes DWT assessment and compact-card penalties', () => {
   assert.match(filterSource, /strictTechnicalFilter/);
-  assert.match(filterSource, /status: "UNKNOWN", label: "DWT Desconocido"/);
+  assert.match(filterSource, /status: "BLOCKED_MISSING", label: "DWT obligatorio no verificado"/);
   assert.match(filterSource, /status: "INSUFFICIENT", label: "DWT Insuficiente \(margen operativo 5%\)"/);
   assert.match(indexSource, /DWT Desconocido/);
   assert.match(indexSource, /DWT Insuficiente/);
@@ -115,10 +115,11 @@ test('strict technical filtering exposes DWT assessment and compact-card penalti
   assert.match(indexSource, /strictTechnicalFilter: window\.matchingStrictTechnicalFilter === true/);
   assert.doesNotMatch(indexSource, /Modo Debug Filtros|matchingDebugIncludeUnknownDwt|debugIncludeUnknownDwt/);
   assert.doesNotMatch(filterSource, /debugUnknownDwtAllowed|debugIncludeUnknownDwt/);
-  assert.match(filterSource, /!strictTechnicalFilter && isUnknownTechnicalValue\(vessel\.shipType\)/);
-  assert.match(filterSource, /operationallyEligible = taxonomyCompatibility\.compatible !== false[\s\S]*!strictTechnicalFilter/);
+  assert.match(filterSource, /!activeTaxonomyRequiresVerifiedData && !strictTechnicalFilter && isUnknownTechnicalValue\(vessel\.shipType\)/);
+  assert.match(filterSource, /operationallyEligible = taxonomyCompatibility\.compatible !== false[\s\S]*!missingCriticalData/);
   assert.match(filterSource, /match\.audit\?\.operationallyEligible === true/);
-  assert.match(filterSource, /match\.dwtAssessment\?\.status === "UNKNOWN"/);
+  assert.match(filterSource, /match\.dwtAssessment\?\.status === "SUFFICIENT"/);
+  assert.match(filterSource, /discardedForMissingData/);
 });
 
 test('matching output reapplies dry-cargo taxonomy after enrichment and scoring', () => {

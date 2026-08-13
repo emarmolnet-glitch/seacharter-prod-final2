@@ -27,7 +27,8 @@ test('successful matching dispatches the visual event and empty runs clear the s
 test('successful matching commits only eligible vessels to the calculator store', () => {
   assert.match(source, /const eligibleMatches = Array\.isArray\(event\?\.detail\?\.eligibleMatches\)[\s\S]*matches\.filter\(match => match\?\.audit\?\.operationallyEligible === true\)/);
   assert.match(source, /const committedEligibleVessels = eligibleMatches\.map\(\(match, index\) => \{[\s\S]*normalizeCoreProVesselCoordinates\(match, index\)/);
-  assert.match(source, /setAisMatchingState\?\.\(committedEligibleVessels, committedEligibleVessels, null,[\s\S]*source: 'matching-validation'/);
+  assert.match(source, /setAisMatchingState\?\.\(\s*committedEligibleVessels,\s*committedEligibleVessels,\s*null,[\s\S]*source: 'matching-validation'/);
+  assert.match(source, /updateMatchingExecutionSuccessStick\(committedEligibleVessels\)/);
   assert.match(source, /evaluateReactiveSyncStatus\(\{ matchingCount: committedEligibleVessels\.length \}\)/);
 });
 

@@ -11,23 +11,24 @@ test('debug commercial modules and controls are permanently removed', async () =
   assert.doesNotMatch(indexSource, /isGlobalDebugActive|matchingDebugIncludeUnknownDwt|debugIncludeUnknownDwt/i);
 });
 
-test('density reads the canonical active fleet from GlobalStore', () => {
+test('density reads the single canonical matching fleet from GlobalStore', () => {
   const start = indexSource.indexOf('function getDensityReactiveVessels()');
   const end = indexSource.indexOf('window.getDensityReactiveVessels', start);
   const densitySource = indexSource.slice(start, end);
-  assert.match(densitySource, /GlobalStore\?\.getActiveVessels/);
-  assert.match(densitySource, /GlobalStore\?\.activeVessels/);
+  assert.match(densitySource, /GlobalStore\?\.getCanonicalFleet/);
+  assert.match(densitySource, /GlobalStore\?\.matchingVessels/);
+  assert.doesNotMatch(densitySource, /GlobalStore[^\n]*activeVessels/);
   assert.doesNotMatch(densitySource, /openShipsVesselsCache|backgroundAisData|fetch\s*\(/);
 });
 
-test('matching fleet buttons dispatch the selected array into GlobalStore', () => {
+test('matching fleet buttons commit the selected array through the canonical renderer', () => {
   const start = indexSource.indexOf('function applyMatchingFleetView');
   const end = indexSource.indexOf('window.applyMatchingFleetView', start);
   const actionSource = indexSource.slice(start, end);
-  assert.match(actionSource, /GlobalStore\?\.setActiveVessels\?\.\(displayedVessels/);
+  assert.match(actionSource, /setRenderedMatchingVessels\(displayedVessels/);
   assert.match(actionSource, /laycan-viable-view/);
   assert.match(actionSource, /compatible-fleet-view/);
-  assert.match(indexSource, /window\.addEventListener\('active-vessels-updated', renderDensitySnapshotFromGlobalStore\)/);
+  assert.match(indexSource, /window\.addEventListener\('canonical-fleet-updated', renderDensitySnapshotFromGlobalStore\)/);
 });
 
 test('density table renders the pure AIS collection without row truncation', () => {
