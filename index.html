@@ -9449,7 +9449,7 @@
                                     <div>
                                         <label id="label-co2-price" class="text-[10px] text-slate-400 font-bold uppercase block mb-1">Precio Carbono UE</label>
                                         <div class="flex items-center bg-slate-950 border border-slate-700 rounded px-1.5">
-                                            <input type="number" id="eu-carbon-price" class="w-full bg-transparent text-white text-xs outline-none py-1 text-right font-mono" value="80" step="any" oninput="handleCarbonPriceInput(this.value)">
+                                            <input type="number" id="eu-carbon-price" class="w-full bg-transparent text-white text-xs outline-none py-1 text-right font-mono" value="80.00" step="any" min="0" data-manual-override="false" oninput="handleCarbonPriceInput(this.value)">
                                             <span class="text-slate-500 text-[10px] ml-1">USD/t</span>
                                         </div>
                                     </div>
@@ -15028,6 +15028,7 @@
         // --- ESTADO Y VARIABLES GLOBALES ---
         const DEFAULT_OWNER_MARGIN = 0.15;
         const DEFAULT_CHARTERER_MARGIN = 0.10;
+        const DEFAULT_EU_CARBON_PRICE = 80;
         const DEFAULT_OWNER_MARGIN_PERCENT = DEFAULT_OWNER_MARGIN * 100;
         const DEFAULT_CHARTERER_MARGIN_PERCENT = DEFAULT_CHARTERER_MARGIN * 100;
         window.DEFAULT_OWNER_MARGIN = DEFAULT_OWNER_MARGIN;
@@ -32968,9 +32969,66 @@
             }, delay);
         }
 
-        function handleCarbonPriceInput(value) {
+        function normalizeEuCarbonPrice(value) {
             const parsedPrice = Number.parseFloat(value);
-            const carbonPrice = Number.isFinite(parsedPrice) && parsedPrice >= 0 ? parsedPrice : 0;
+            return Number.isFinite(parsedPrice) && parsedPrice >= 0 ? parsedPrice : null;
+        }
+
+        function resolveEuCarbonPrice(...candidates) {
+            for (const candidate of candidates) {
+                const normalizedPrice = normalizeEuCarbonPrice(candidate);
+                if (normalizedPrice !== null) return normalizedPrice;
+            }
+            return DEFAULT_EU_CARBON_PRICE;
+        }
+
+        function readEuCarbonPrice() {
+            return resolveEuCarbonPrice(
+                document.getElementById('eu-carbon-price')?.value,
+                State.euCarbonPrice,
+                DEFAULT_EU_CARBON_PRICE
+            );
+        }
+
+        let carbonPriceHydrationStarted = false;
+        async function hydrateLatestEuCarbonPrice() {
+            const input = document.getElementById('eu-carbon-price');
+            if (!input || carbonPriceHydrationStarted) return;
+
+            carbonPriceHydrationStarted = true;
+            input.dataset.marketLoading = 'true';
+
+            try {
+                const response = await fetch('/api/market/carbon-latest', {
+                    headers: { Accept: 'application/json' }
+                });
+                const payload = await response.json().catch(() => null);
+                const marketPrice = normalizeEuCarbonPrice(payload?.priceUsd);
+                if (!response.ok || marketPrice === null) {
+                    throw new Error('Carbon price unavailable');
+                }
+
+                if (input.dataset.manualOverride === 'true') return;
+
+                input.value = marketPrice.toFixed(2);
+                input.dataset.marketDefault = 'true';
+                input.dataset.marketRecordDate = String(payload?.recordDate || '');
+                handleCarbonPriceInput(input.value, { source: 'carbon-market' });
+            } catch (error) {
+                console.warn('[carbon-price] Latest market price unavailable; keeping current calculator value.');
+            } finally {
+                input.dataset.marketLoading = 'false';
+            }
+        }
+
+        function handleCarbonPriceInput(value, options = {}) {
+            const carbonPrice = resolveEuCarbonPrice(value, State.euCarbonPrice, DEFAULT_EU_CARBON_PRICE);
+            const input = document.getElementById('eu-carbon-price');
+            const source = options.source === 'carbon-market' ? 'carbon-market' : 'carbon-price-input';
+            if (input) {
+                input.dataset.manualOverride = source === 'carbon-market' ? 'false' : 'true';
+                input.dataset.marketDefault = source === 'carbon-market' ? 'true' : 'false';
+            }
             const emissionsCO2 = Math.max(0, Number(State.emissionsCO2) || 0);
             const routeFactor = Math.max(0, Number(
                 typeof getEtsRouteFactor === 'function' ? getEtsRouteFactor() : State.etsRouteFactor
@@ -33497,7 +33555,11 @@
 
             // ETS COST CALCULATION:
             // Formula: ETS_Cost = Emissions_tCO₂ * Current_EU_Price
-            const euPrice = parseFloat(document.getElementById('eu-carbon-price')?.value) || 80;
+            const parsedEuPrice = Number.parseFloat(document.getElementById('eu-carbon-price')?.value);
+            const stateEuPrice = Number(State.euCarbonPrice);
+            const euPrice = Number.isFinite(parsedEuPrice) && parsedEuPrice >= 0
+                ? parsedEuPrice
+                : (Number.isFinite(stateEuPrice) && stateEuPrice >= 0 ? stateEuPrice : 80);
             const etsRouteFactor = getEtsRouteFactor();
             const etsGrossCost = isZeroCalculation ? 0 : (emissionsCO2 * euPrice);
             const etsCost = isZeroCalculation ? 0 : (etsGrossCost * etsRouteFactor);
@@ -40788,7 +40850,7 @@
             Beneficio Neto Fletador: $${State.netProfitCharterer.toFixed(0)}
             Demurrage: $${State.demurrage}/día.
             Emisiones CO₂ Calculadas: ${State.emissionsCO2 ? State.emissionsCO2.toFixed(1) : 0} tCO₂
-            Costo ETS Estimado: $${State.etsCost ? State.etsCost.toFixed(2) : 0} (Carbono UE: $${State.euCarbonPrice || 80}/t)
+            Costo ETS Estimado: $${State.etsCost ? State.etsCost.toFixed(2) : 0} (Carbono UE: $${resolveEuCarbonPrice(State.euCarbonPrice)}/t)
             Estrategia de Facturación ETS: ${State.applyEtsSurcharge === 'YES' ? 'Itemizado como "ETS Surcharge"' : 'Consolidado en Flete Total (All-in)'}
             
             Responde en HTML básico (sin markdown \`\`\`html):
@@ -40810,7 +40872,7 @@
                 Charterer Net Profit: $${State.netProfitCharterer.toFixed(0)}
                 Demurrage: $${State.demurrage}/day
                 Calculated CO₂ Emissions: ${State.emissionsCO2 ? State.emissionsCO2.toFixed(1) : 0} tCO₂
-                Estimated ETS Cost: $${State.etsCost ? State.etsCost.toFixed(2) : 0} (EU Carbon Price: $${State.euCarbonPrice || 80}/t)
+                Estimated ETS Cost: $${State.etsCost ? State.etsCost.toFixed(2) : 0} (EU Carbon Price: $${resolveEuCarbonPrice(State.euCarbonPrice)}/t)
                 ETS Billing Strategy: ${State.applyEtsSurcharge === 'YES' ? 'Itemized as "ETS Surcharge"' : 'Consolidated in Total Freight (All-in)'}
                 
                 Respond in basic HTML (without markdown \`\`\`html):
@@ -40831,7 +40893,7 @@
                 Bénéfice net de l'Affréteur : $${State.netProfitCharterer.toFixed(0)}
                 Surestaries : $${State.demurrage}/jour
                 Émissions de CO₂ calculées : ${State.emissionsCO2 ? State.emissionsCO2.toFixed(1) : 0} tCO₂
-                Coût ETS estimé : $${State.etsCost ? State.etsCost.toFixed(2) : 0} (Prix du carbone UE : $${State.euCarbonPrice || 80}/t)
+                Coût ETS estimé : $${State.etsCost ? State.etsCost.toFixed(2) : 0} (Prix du carbone UE : $${resolveEuCarbonPrice(State.euCarbonPrice)}/t)
                 Stratégie de facturation ETS : ${State.applyEtsSurcharge === 'YES' ? 'Détaillé comme "Surtaxe ETS"' : 'Consolidé dans le Fret Total (All-in)'}
                 
                 Répondez en HTML de base (sans markdown \`\`\`html) :
@@ -42384,7 +42446,7 @@
             const stevedoring = parseFloat(document.getElementById('stevedoring-costs')?.value) || 0;
             const pdaMisc = parseFloat(document.getElementById('pda-misc')?.value) || 0;
             const cargoSurcharge = parseFloat(document.getElementById('cargo-surcharge')?.value) || 0;
-            const euCarbonPrice = parseFloat(document.getElementById('eu-carbon-price')?.value) || 80;
+            const euCarbonPrice = readEuCarbonPrice();
             const etsRouteFactor = typeof getEtsRouteFactor === 'function' ? getEtsRouteFactor() : 1;
 
             const totalPDAs = pdaPol + pdaPod + stevedoring + pdaMisc + cargoSurcharge;
@@ -43232,7 +43294,7 @@ Example:
                                         <li><strong>${currentLang === 'es' ? 'Consumo Neto (incluye 5% de margen por mal tiempo)' : (currentLang === 'en' ? 'Net Consumption (includes 5% margin for bad weather)' : 'Consommation nette (comprend 5% de marge pour mauvais temps)')}:</strong> ${(parseFloat(document.getElementById('cons-sea')?.value || 0) * 1.05).toFixed(2)} T/D</li>
                                         <li><strong>${currentLang === 'es' ? 'Días Totales' : 'Total Days'}:</strong> ${State.totalDays.toFixed(2)} d</li>
                                         <li><strong>${currentLang === 'es' ? 'Emisiones Totales' : 'Total Emissions'}:</strong> ${(State.emissionsCO2 || 0).toFixed(1)} tCO₂ <span class="text-slate-500 font-sans">(= Consumo Diario * Días * 3.11)</span></li>
-                                        <li><strong>${currentLang === 'es' ? 'Precio de Carbono UE' : 'EU Carbon Price'}:</strong> $${(parseFloat(document.getElementById('eu-carbon-price')?.value) || 80).toFixed(2)}/tCO₂</li>
+                                        <li><strong>${currentLang === 'es' ? 'Precio de Carbono UE' : 'EU Carbon Price'}:</strong> $${readEuCarbonPrice().toFixed(2)}/tCO₂</li>
                                         <li><strong>${currentLang === 'es' ? 'Coste ETS Estimado' : 'Total Estimated ETS'}:</strong> $${Math.round(State.etsCost || 0).toLocaleString()}</li>
                                     </ul>
                                     <p class="font-sans"><strong>${currentLang === 'es' ? 'Fuentes Reguladoras' : 'Regulatory Reference'}:</strong></p>
@@ -43539,7 +43601,7 @@ Example:
 
             const printEtsBasisEl = document.getElementById('print-ets-basis');
             if (printEtsBasisEl) {
-                printEtsBasisEl.innerText = `${(State.emissionsCO2 || 0).toFixed(1)} tCO₂ @ $${State.euCarbonPrice || 80}/t`;
+                printEtsBasisEl.innerText = `${(State.emissionsCO2 || 0).toFixed(1)} tCO₂ @ $${resolveEuCarbonPrice(State.euCarbonPrice)}/t`;
             }
             const printCostEtsEl = document.getElementById('print-cost-ets');
             if (printCostEtsEl) {
@@ -43866,7 +43928,7 @@ Example:
                                 </tr>
                                 <tr>
                                     <td style="font-weight: 600; padding: 1px 0; color: #475569;">Precio Carbono / Carbon Price:</td>
-                                    <td style="text-align: right; font-family: monospace;">$${(parseFloat(getVal('eu-carbon-price')) || 80).toFixed(2)}/t</td>
+                                    <td style="text-align: right; font-family: monospace;">$${resolveEuCarbonPrice(getVal('eu-carbon-price')).toFixed(2)}/t</td>
                                 </tr>
                                 <tr style="border-top: 1px dashed #cbd5e1; font-weight: 700;">
                                     <td style="padding-top: 4px; color: #4f46e5;">Costo ETS Estimado / Total ETS:</td>
@@ -45389,7 +45451,7 @@ Example:
                     setVal('asb-delay-hours-main', State.delayHours !== undefined ? State.delayHours : 0);
                     setVal('apply-ets-surcharge', State.applyEtsSurcharge !== undefined ? State.applyEtsSurcharge : 'NO');
                     setVal('ets-route-type', State.etsRouteFactor !== undefined ? State.etsRouteFactor : 1);
-                    setVal('eu-carbon-price', State.euCarbonPrice !== undefined ? State.euCarbonPrice : 80);
+                    setVal('eu-carbon-price', resolveEuCarbonPrice(State.euCarbonPrice));
                     setVal('market-calibration-factor', State.marketCalibrationFactor !== undefined ? State.marketCalibrationFactor : 1);
 
                     // Actualizar el distintivo de clase de buque si existe el elemento
@@ -46417,7 +46479,7 @@ ADDITIONAL NOTES:
             setVal('asb-delay-hours-main', State.delayHours !== undefined ? State.delayHours : 0);
             setVal('apply-ets-surcharge', State.applyEtsSurcharge !== undefined ? State.applyEtsSurcharge : 'NO');
             setVal('ets-route-type', State.etsRouteFactor !== undefined ? State.etsRouteFactor : 1);
-            setVal('eu-carbon-price', State.euCarbonPrice !== undefined ? State.euCarbonPrice : 80);
+            setVal('eu-carbon-price', resolveEuCarbonPrice(State.euCarbonPrice));
             setVal('market-calibration-factor', State.marketCalibrationFactor !== undefined ? State.marketCalibrationFactor : 1);
 
             if (document.getElementById('vessel-badge')) {
@@ -58468,7 +58530,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                                         <li><strong>Coste ETS por viaje:</strong> ${formatCoaMoney(coa.etsPorViaje || 0, 0)}</li>
                                         <li><strong>Coste ETS contrato:</strong> ${formatCoaMoney((coa.etsPorViaje || 0) * shipments, 0)}</li>
                                         <li><strong>Emisiones por viaje:</strong> ${(State.emissionsCO2 || 0).toFixed(1)} tCO2</li>
-                                        <li><strong>Precio carbono UE:</strong> $${(parseFloat(document.getElementById('eu-carbon-price')?.value) || 80).toFixed(2)}/tCO2</li>
+                                        <li><strong>Precio carbono UE:</strong> $${readEuCarbonPrice().toFixed(2)}/tCO2</li>
                                     </ul>
                                     <p class="italic text-slate-500 font-sans">Cálculo alineado con el factor ETS detectado para la ruta y el factor de emisión marítimo usado por el módulo MRV/EU ETS.</p>
                                 </div>
@@ -58930,7 +58992,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const totalConsumption = isZeroCalculation ? 0 : ((T_sea * cSea) + (T_portFuel * cPort) + anchorageFuelTons + anchorageAuxFuelTons);
             const emissionsCO2 = isZeroCalculation ? 0 : (totalConsumption * 3.11);
 
-            const euPrice = parseFloat(document.getElementById('eu-carbon-price')?.value) || 80;
+            const parsedEuPrice = Number.parseFloat(document.getElementById('eu-carbon-price')?.value);
+            const stateEuPrice = Number(State.euCarbonPrice);
+            const euPrice = Number.isFinite(parsedEuPrice) && parsedEuPrice >= 0
+                ? parsedEuPrice
+                : (Number.isFinite(stateEuPrice) && stateEuPrice >= 0 ? stateEuPrice : 80);
             const etsRouteFactor = getEtsRouteFactor();
             const etsGrossCost = isZeroCalculation ? 0 : (emissionsCO2 * euPrice);
             const etsCost = isZeroCalculation ? 0 : (etsGrossCost * etsRouteFactor);
@@ -61861,6 +61927,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             actualizarGrabCapacityVisibility();
             initVoyageEstimatorTooltips();
             hydrateBunkerIndexData();
+            void hydrateLatestEuCarbonPrice();
             void loadCoaClientProfiles();
 	            updateManualBalticSpotOverrideUi();
 	            if (!window.costPlusGlobalCostSubscription) {
