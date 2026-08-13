@@ -22,15 +22,16 @@ test('stored taxonomy is validated and auto-loaded through the global provider',
   assert.match(source, /setSelectedFleetTaxonomies\(initialTaxonomies, \{ dispatch: false, persist: false, markPending: false \}\)/);
 });
 
-test('density map waits for an explicit taxonomy but preserves loaded vessels when filters are empty', () => {
+test('density map preserves the canonical fleet without taxonomy-triggered network reads', () => {
   const loaderStart = source.indexOf('window.loadValidatedAisDensityVessels = async function');
   const loaderEnd = source.indexOf('window.runInitialAisRadarLoad', loaderStart);
   const loader = source.slice(loaderStart, loaderEnd);
   const redrawStart = source.indexOf('window.reapplyCentralFiltersAndRedraw = function');
   const redrawEnd = source.indexOf("window.addEventListener('ais:vessels-updated'", redrawStart);
   const redraw = source.slice(redrawStart, redrawEnd);
-  assert.ok(loader.indexOf('if (!selectedTaxonomy)') >= 0);
-  assert.ok(loader.indexOf('if (!selectedTaxonomy)') < loader.indexOf('await fetch(endpoint'));
+  assert.match(loader, /GlobalStore\?\.getCanonicalFleet/);
+  assert.match(loader, /renderDensitySnapshotFromGlobalStore/);
+  assert.doesNotMatch(loader, /selectedTaxonomy|fetch\s*\(/);
   assert.match(redraw, /const hasSelectedVesselTypes = Array\.isArray\(vesselTypes\) && vesselTypes\.length > 0/);
   assert.doesNotMatch(redraw, /vesselTypes\.length === 0[\s\S]{0,300}updateAisMarkers\(\[\]\)/);
 });

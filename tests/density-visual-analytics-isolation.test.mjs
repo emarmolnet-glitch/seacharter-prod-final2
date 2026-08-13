@@ -24,12 +24,10 @@ test('analytical AIS and visual fleet use separate state containers', () => {
   assert.match(source, /window\.setRenderFleet = function/);
 });
 
-test('fair-freight loader preserves its network call without mutating visual stores', () => {
-  assert.match(loaderSource, /await fetch\(endpoint/);
-  assert.match(loaderSource, /window\.setBackgroundAisData\(validatedVessels\)/);
-  assert.match(loaderSource, /ais:background-data-updated/);
-  assert.doesNotMatch(loaderSource, /GlobalStore\.(rawVessels|vessels)\s*=/);
-  assert.doesNotMatch(loaderSource, /ais:vessels-updated/);
+test('density loader reads the canonical fleet without network or secondary stores', () => {
+  assert.match(loaderSource, /GlobalStore\?\.getCanonicalFleet/);
+  assert.match(loaderSource, /renderDensitySnapshotFromGlobalStore/);
+  assert.doesNotMatch(loaderSource, /fetch\s*\(|setBackgroundAisData|backgroundAisData/);
 });
 
 test('commercial OpenShips funnel commits one displayVessels snapshot into renderFleet', () => {

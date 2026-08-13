@@ -14,6 +14,10 @@ const dbIndexSource = await readFile(
   new URL('../db/index.ts', import.meta.url),
   'utf8',
 );
+const migrationSource = await readFile(
+  new URL('../netlify/database/migrations/20260813120000_align_pipeline_inbox_contract/migration.sql', import.meta.url),
+  'utf8',
+);
 
 test('pipeline-inbox serverless function exports handler and config path', () => {
   assert.match(functionSource, /export default async function handler\(req: Request\)/);
@@ -50,6 +54,20 @@ test('db/schema.ts and db/index.ts define and ensure pipeline_inbox table', () =
   assert.match(dbIndexSource, /CREATE TABLE IF NOT EXISTS pipeline_inbox/);
   assert.match(dbIndexSource, /sync_id TEXT/);
   assert.match(dbIndexSource, /payload JSONB NOT NULL/);
+  assert.match(dbIndexSource, /ALTER TABLE pipeline_inbox ADD COLUMN IF NOT EXISTS sync_id TEXT/);
+  assert.match(dbIndexSource, /ALTER TABLE pipeline_inbox ADD COLUMN IF NOT EXISTS payload JSONB/);
+});
+
+test('pipeline_inbox migration aligns legacy Neon rows with the backend contract', () => {
+  assert.match(migrationSource, /ADD COLUMN IF NOT EXISTS "sync_id" text/);
+  assert.match(migrationSource, /ADD COLUMN IF NOT EXISTS "imo_number" text/);
+  assert.match(migrationSource, /ADD COLUMN IF NOT EXISTS "vessel_name" text/);
+  assert.match(migrationSource, /ADD COLUMN IF NOT EXISTS "source" text/);
+  assert.match(migrationSource, /ADD COLUMN IF NOT EXISTS "status" text/);
+  assert.match(migrationSource, /ADD COLUMN IF NOT EXISTS "payload" jsonb/);
+  assert.match(migrationSource, /column_name = 'raw_payload'/);
+  assert.match(migrationSource, /ALTER COLUMN "payload" SET NOT NULL/);
+  assert.match(migrationSource, /pipeline_inbox_status_created_at_idx/);
 });
 
 test('extractVessels correctly parses arrays and wrapped vessel objects', () => {

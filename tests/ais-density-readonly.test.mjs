@@ -12,14 +12,16 @@ const auditFunctionSource = await readFile(new URL('../netlify/functions/audit-v
 const filterFunctionSource = await readFile(new URL('../netlify/functions/vessels-filter.ts', import.meta.url), 'utf8');
 const getVesselsFunctionSource = await readFile(new URL('../netlify/functions/get-vessels.ts', import.meta.url), 'utf8');
 
-test('density map loads validated vessels through the read-only endpoint', () => {
-  assert.match(indexSource, /getAuditAisEndpoint/);
-  assert.match(indexSource, /fetch\(endpoint,[\s\S]*?method: 'GET'/);
-  assert.match(indexSource, /loadValidatedAisDensityVessels/);
-  assert.match(indexSource, /fair-freight-background-readonly/);
+test('density map reads only the canonical matching fleet', () => {
+  const loaderStart = indexSource.indexOf('window.loadValidatedAisDensityVessels = async function');
+  const loaderEnd = indexSource.indexOf('window.runInitialAisRadarLoad', loaderStart);
+  const loaderSource = indexSource.slice(loaderStart, loaderEnd);
+  assert.match(loaderSource, /GlobalStore\?\.getCanonicalFleet/);
+  assert.match(loaderSource, /renderDensitySnapshotFromGlobalStore/);
+  assert.doesNotMatch(loaderSource, /fetch\s*\(|backgroundAisData|getAuditAisEndpoint/);
 });
 
-test('Radar LIVE delegates activation while density keeps an isolated read-only loader', () => {
+test('Radar LIVE delegates activation while density performs no parallel data load', () => {
   const toggleStart = indexSource.indexOf('window.toggleLiveTracking = async function');
   const toggleEnd = indexSource.indexOf('window.isFirstLoad', toggleStart);
   const toggleSource = indexSource.slice(toggleStart, toggleEnd);
@@ -33,13 +35,9 @@ test('Radar LIVE delegates activation while density keeps an isolated read-only 
   assert.match(indexSource, /window\.startRadarLive = async function\(options = \{\}\)/);
   assert.match(indexSource, /const vessels = await window\.updateOpenShipsRadar\(\{/);
   assert.match(indexSource, /Radar LIVE actualizado con/);
-  assert.match(loaderSource, /window\.getAuditAisEndpoint\(selectedTaxonomy, \{ refresh: options\.refresh === true, radarContext, selectedTaxonomies \}\)/);
-  assert.match(loaderSource, /taxonomyMode: 'strict'/);
-  assert.match(loaderSource, /await fetch\(endpoint/);
-  assert.match(loaderSource, /window\.setBackgroundAisData\(validatedVessels\)/);
-  assert.match(loaderSource, /new CustomEvent\('ais:background-data-updated'/);
-  assert.doesNotMatch(loaderSource, /window\.GlobalStore\.rawVessels = validatedVessels/);
-  assert.doesNotMatch(loaderSource, /new CustomEvent\('ais:vessels-updated'/);
+  assert.match(loaderSource, /const canonicalFleet = window\.GlobalStore\?\.getCanonicalFleet/);
+  assert.match(loaderSource, /return canonicalFleet/);
+  assert.doesNotMatch(loaderSource, /fetch\s*\(|setBackgroundAisData|ais:background-data-updated/);
 });
 
 test('density filter enriches AIS rows with one batch master lookup', () => {
@@ -60,15 +58,6 @@ test('density filter enriches AIS rows with one batch master lookup', () => {
 });
 
 test('database ingestion summary groups the raw payload taxonomy before normalization', () => {
-  const loaderStart = indexSource.indexOf('window.loadValidatedAisDensityVessels = async function');
-  const loaderEnd = indexSource.indexOf('window.runInitialAisRadarLoad', loaderStart);
-  const loaderSource = indexSource.slice(loaderStart, loaderEnd);
-  const payloadIndex = loaderSource.indexOf('const validatedVessels = Array.isArray(payload.vessels)');
-  const summaryIndex = loaderSource.indexOf('window.buildAisIngestionTaxonomySummary(validatedVessels)');
-  const normalizationIndex = loaderSource.indexOf('const normalizedVessels = validatedVessels');
-
-  assert.ok(payloadIndex >= 0 && summaryIndex > payloadIndex && normalizationIndex > summaryIndex);
-
   const helperStart = indexSource.indexOf('window.buildAisIngestionTaxonomySummary = function');
   const helperEnd = indexSource.indexOf('window.groupAisVesselsByTaxonomy', helperStart);
   const helperSource = indexSource.slice(helperStart, helperEnd);
@@ -335,10 +324,10 @@ test('density exposes no radar command and consumes the matching snapshot only',
   assert.match(indexSource, /window\.executeMatchingRadarSweep = async function\(options = \{\}\)/);
 });
 
-test('read-only response feeds rendering, counters, and freight calculation', () => {
-  assert.match(indexSource, /const validatedVessels = Array\.isArray\(payload\.vessels\) \? payload\.vessels : \[\]/);
-  assert.match(indexSource, /dispatchEvent\(new CustomEvent\('ais:vessels-updated'/);
-  assert.match(indexSource, /renderFilteredAisCounters\(primaryVisibleVessels\)/);
+test('canonical fleet event feeds density rendering, counters, and freight calculation', () => {
+  assert.match(indexSource, /new CustomEvent\('canonical-fleet-updated'/);
+  assert.match(indexSource, /renderFilteredAisCounters\?\.\(matchingVessels\)/);
+  assert.match(indexSource, /renderDensityVesselsTable\?\.\(matchingVessels\)/);
   assert.match(indexSource, /calculateAndDisplayAisFreight\(\)/);
 });
 

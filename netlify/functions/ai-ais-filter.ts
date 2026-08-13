@@ -366,6 +366,9 @@ export default async (req: Request) => {
     );
     const cargoCode = textValue(cargo.cargoCode, cargo.cargoTypeId, cargo.typeId, body.cargoCode, body.cargoTypeId) || "100";
     const strictTechnicalFilter = body.strictTechnicalFilter === true || cargo.strictTechnicalFilter === true;
+    const activeTaxonomyRequiresVerifiedData = vesselClassValues.length > 0
+      || Boolean(cargoDescription)
+      || cargoCode !== "100";
     const strictRequiredDwt = quantity > 0 ? quantity * 1.05 : 0;
     const methodsRequireShipGear = [cargo.loadMethod, cargo.dischargeMethod].some((value) => {
       const method = textValue(value).toLowerCase();
@@ -398,10 +401,16 @@ export default async (req: Request) => {
       return Response.json({
         success: true,
         degraded: true,
-        filterApplied: false,
-        warning: "No se pudo consultar vessels_master; se devuelve el snapshot bruto del radar.",
-        data: vessels,
-        nearbyVessels: vessels,
+        filterApplied: true,
+        warning: "No se pudo verificar vessels_master; la flota compatible queda bloqueada por seguridad.",
+        data: [],
+        matches: [],
+        nearbyVessels: [],
+        discardedForMissingData: vessels.map((vessel, index) => ({
+          vesselKey: textValue(pickObject(vessel).vesselKey, pickObject(vessel).vessel_key, `unverified-${index}`),
+          reason: "MASTER_DATA_UNAVAILABLE",
+        })),
+        discardedForMissingDataCount: vessels.length,
         snapshot: { frozenAt: body.frozenAt || new Date().toISOString(), vesselCount: vessels.length },
       }, { status: 206, headers: jsonHeaders });
     }
@@ -410,7 +419,7 @@ export default async (req: Request) => {
       .map(normalizeVessel)
       .filter((vessel): vessel is NonNullable<ReturnType<typeof normalizeVessel>> => Boolean(vessel))
       .filter((vessel) => vesselMatchesAnyTaxonomy(vessel, vesselClassValues)
-        || (!strictTechnicalFilter && isUnknownTechnicalValue(vessel.shipType)));
+        || (!activeTaxonomyRequiresVerifiedData && !strictTechnicalFilter && isUnknownTechnicalValue(vessel.shipType)));
 
     const evaluateVessels = (maxDwtToleranceMultiplier: number, isFallbackPass: boolean) => {
       return vessels_buffer
@@ -474,33 +483,40 @@ export default async (req: Request) => {
           const isOversizedUnderStandard = quantity > 0 && vessel.dwt !== null && vessel.dwt > quantity * 1.15;
           const isOversizedFallback = false;
           const activeDwtStatus = vessel.dwtStatus;
-          const dwtAssessment = vessel.dwt === null || vessel.dwt <= 0
-            ? { status: "UNKNOWN", label: "DWT Desconocido" }
+          const hasVerifiedDwt = vessel.dwt !== null && vessel.dwt > 0;
+          const hasVerifiedVesselType = !isUnknownTechnicalValue(vessel.shipType);
+          const missingCriticalData = activeTaxonomyRequiresVerifiedData && (!hasVerifiedDwt || !hasVerifiedVesselType);
+          const missingCriticalReasons = [
+            ...(!hasVerifiedDwt ? ["DWT_MISSING"] : []),
+            ...(!hasVerifiedVesselType ? ["VESSEL_TYPE_MISSING"] : []),
+          ];
+          const dwtAssessment = !hasVerifiedDwt
+            ? { status: "BLOCKED_MISSING", label: "DWT obligatorio no verificado" }
             : strictRequiredDwt > 0 && vessel.dwt < strictRequiredDwt
               ? { status: "INSUFFICIENT", label: "DWT Insuficiente (margen operativo 5%)" }
               : { status: "SUFFICIENT", label: "DWT Validado" };
           const hasTechnicalWarning = !technicalEligibility.eligible
             || technicalEligibility.criticalReasons.length > 0
             || activeDwtStatus === null
-            || vessel.dwt === null
-            || vessel.dwt <= 0;
+            || !hasVerifiedDwt
+            || !hasVerifiedVesselType;
 
           const warningReason = hasTechnicalWarning
             ? [
-                ...(activeDwtStatus === null || !vessel.dwt ? ["Requiere Due Diligence para verificar DWT"] : []),
+                ...(!hasVerifiedDwt ? ["DWT obligatorio no verificado"] : []),
+                ...(!hasVerifiedVesselType ? ["Tipo de buque obligatorio no verificado"] : []),
                 ...technicalEligibility.criticalReasons,
                 ...(taxonomyCompatibility.compatible ? [] : [taxonomyCompatibility.reason]),
               ].filter(Boolean).join("; ") || "Advertencia técnica: Datos AIS incompletos"
             : null;
 
-          const hasKnownDwt = vessel.dwt !== null && vessel.dwt > 0;
           const passesStrictDwtCapacity = !strictTechnicalFilter
-            || !hasKnownDwt
             || strictRequiredDwt <= 0
-            || vessel.dwt >= strictRequiredDwt;
+            || Number(vessel.dwt) >= strictRequiredDwt;
           const operationallyEligible = taxonomyCompatibility.compatible !== false
+            && !missingCriticalData
             && passesStrictDwtCapacity
-            && (!strictTechnicalFilter || technicalEligibility.eligible || !hasKnownDwt);
+            && (!strictTechnicalFilter || technicalEligibility.eligible);
           const idealVessel = operationallyEligible && !hasTechnicalWarning && loadState.ballastReady;
           const commercialRank = buildCommercialVesselRank({
             vesselDwt: vessel.dwt,
@@ -697,6 +713,8 @@ export default async (req: Request) => {
               cargoDescription,
               selectedVesselTaxonomies: vesselClassValues,
               operationallyEligible,
+              blockedForMissingCriticalData: missingCriticalData,
+              missingCriticalData: missingCriticalReasons,
               strictTechnicalFilter,
               hasTechnicalWarning,
               hasWarning: hasTechnicalWarning,
@@ -723,26 +741,32 @@ export default async (req: Request) => {
     };
 
     const evaluatedMatches = evaluateVessels(1.15, false);
-    const matches = evaluatedMatches
+    const discardedForMissingData = evaluatedMatches
+      .filter((match) => match.audit?.blockedForMissingCriticalData === true)
+      .map((match) => ({
+        vesselKey: match.vesselKey,
+        vesselName: match.vessel?.vesselName || null,
+        imo: match.vessel?.imo || null,
+        reasons: match.audit?.missingCriticalData || [],
+      }));
+    const frontendEvaluatedMatches = evaluatedMatches
+      .filter((match) => match.audit?.blockedForMissingCriticalData !== true);
+    const matches = frontendEvaluatedMatches
       .filter((match) => !strictTechnicalFilter || (
         match.audit?.operationallyEligible === true
-        && (
-          match.dwtAssessment?.status === "UNKNOWN"
-          || match.dwtAssessment?.status === "SUFFICIENT"
-        )
+        && match.dwtAssessment?.status === "SUFFICIENT"
       ))
-      .sort((left, right) => {
-        if (!strictTechnicalFilter) return 0;
-        return Number(left.dwtAssessment?.status === "UNKNOWN") - Number(right.dwtAssessment?.status === "UNKNOWN");
-      });
-    const technicalWarnings = evaluatedMatches.filter((match) => match.hasTechnicalWarning || !match.audit.operationallyEligible);
+      .filter((match) => match.audit?.operationallyEligible === true);
+    const technicalWarnings = frontendEvaluatedMatches.filter((match) => match.hasTechnicalWarning || !match.audit.operationallyEligible);
 
     return Response.json({
       success: true,
-      data: evaluatedMatches,
+      data: frontendEvaluatedMatches,
       dataIncludesWarnings: true,
       matches,
       technicalWarnings,
+      discardedForMissingData,
+      discardedForMissingDataCount: discardedForMissingData.length,
       eligibleCount: matches.length,
       compatibleCount: matches.length,
       operationalFilters: {
@@ -753,9 +777,10 @@ export default async (req: Request) => {
         requiredVolumeCbm,
       },
       technicalWarningCount: technicalWarnings.length,
-      evaluatedCount: evaluatedMatches.length,
+      evaluatedCount: frontendEvaluatedMatches.length,
+      totalEvaluatedCount: evaluatedMatches.length,
       snapshot: { frozenAt: body.frozenAt || new Date().toISOString(), vesselCount: vessels_buffer.length },
-      memory: { knownVesselsSaved: evaluatedMatches.length },
+      memory: { knownVesselsSaved: frontendEvaluatedMatches.length },
     }, { headers: jsonHeaders });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Matching engine failed";

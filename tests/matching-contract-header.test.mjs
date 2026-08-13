@@ -52,9 +52,9 @@ test('Neon calculation state normalizes legacy and canonical contract payloads',
   assert.match(indexSource, /syncMatchingRouteSummary\(hydratedCalculation\)/);
 });
 
-test('strict DWT filtering keeps unknown vessels for due diligence and removes undersized vessels', () => {
+test('strict DWT filtering blocks unknown and undersized vessels', () => {
   assert.match(indexSource, /strictRequiredDwt = quantity > 0 \? quantity \* 1\.05 : 0/);
-  assert.match(indexSource, /!Number\.isFinite\(dwt\) \|\| dwt <= 0 \|\| dwt >= strictRequiredDwt/);
-  assert.match(indexSource, /Requiere Due Diligence para verificar DWT/);
+  assert.match(indexSource, /if \(!Number\.isFinite\(dwt\) \|\| dwt <= 0 \|\| missingCriticalType\) return false/);
+  assert.match(indexSource, /return dwt >= strictRequiredDwt/);
   assert.match(indexSource, /isDwtUnknown \? 'opacity-65' : 'opacity-80'/);
 });
