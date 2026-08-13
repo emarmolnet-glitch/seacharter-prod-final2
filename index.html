@@ -12045,7 +12045,7 @@
                                 FILTROS DE AUDITORÍA DE FLOTA
                             </h3>
                             <div class="collapsible-section-actions flex items-center gap-2">
-                                <button id="density-commercial-filter-toggle" type="button" role="switch" aria-checked="false" class="density-commercial-toggle" data-commercial-filter-toggle data-commercial-filter-context="density" title="Alternar entre todo el tráfico OpenShips y los buques viables por DWT">
+                                <button id="density-commercial-filter-toggle" type="button" role="switch" aria-checked="false" class="density-commercial-toggle" data-commercial-filter-toggle data-commercial-filter-context="density" title="Alternar entre el tráfico AIS recibido y los buques viables por DWT">
                                     <span class="density-commercial-toggle__track" aria-hidden="true">
                                         <span class="density-commercial-toggle__thumb"></span>
                                     </span>
@@ -12080,7 +12080,7 @@
                         <div class="collapsible-section-header flex items-center justify-between">
                             <h3 data-collapsible-title data-i18n="density_live_vessels_title" class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                                 <i class="fa-solid fa-list text-emerald-400"></i>
-                                BUQUES DETECTADOS EN TIEMPO REAL (OPENSHIPS)
+                                                BUQUES DETECTADOS EN TIEMPO REAL (AIS LIVE)
                             </h3>
                             <div class="collapsible-section-actions">
                                 <span id="ais-detected-origin-summary" class="hidden rounded-full border border-slate-700 bg-slate-950 px-2.5 py-1 text-[10px] font-black text-slate-300" aria-live="polite"></span>
@@ -13621,7 +13621,7 @@
                                         <span id="openships-radar-ping" class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
                                         <span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-400"></span>
                                     </span>
-                                    <span>OPENSHIPS: <span id="openships-live-counter" class="text-emerald-300">--</span> LIVE</span>
+                                    <span>AIS: <span id="openships-live-counter" class="text-emerald-300">--</span> LIVE</span>
                                 </div>
                             </div>
                         </div>
@@ -14079,8 +14079,8 @@
             "density_map_title": { es: "FILTROS DE AUDITORÍA DE FLOTA", en: "FLEET AUDIT FILTERS", fr: "FILTRES D’AUDIT DE FLOTTE" },
             "MAPA DE DENSIDAD": { es: "MAPA DE DENSIDAD", en: "DENSITY MAP", fr: "CARTE DE DENSITÉ" },
 
-            "density_live_vessels_title": { es: "BUQUES DETECTADOS EN TIEMPO REAL (OPENSHIPS)", en: "REAL-TIME DETECTED VESSELS (OPENSHIPS)", fr: "NAVIRES DÉTECTÉS EN TEMPS RÉEL (OPENSHIPS)" },
-            "BUQUES DETECTADOS EN TIEMPO REAL (OPENSHIPS)": { es: "BUQUES DETECTADOS EN TIEMPO REAL (OPENSHIPS)", en: "REAL-TIME DETECTED VESSELS (OPENSHIPS)", fr: "NAVIRES DÉTECTÉS EN TEMPS RÉEL (OPENSHIPS)" },
+            "density_live_vessels_title": { es: "BUQUES DETECTADOS EN TIEMPO REAL (AIS LIVE)", en: "REAL-TIME DETECTED VESSELS (AIS LIVE)", fr: "NAVIRES DÉTECTÉS EN TEMPS RÉEL (AIS LIVE)" },
+            "BUQUES DETECTADOS EN TIEMPO REAL (AIS LIVE)": { es: "BUQUES DETECTADOS EN TIEMPO REAL (AIS LIVE)", en: "REAL-TIME DETECTED VESSELS (AIS LIVE)", fr: "NAVIRES DÉTECTÉS EN TEMPS RÉEL (AIS LIVE)" },
 
             "databridge_sync_status": { es: "Estado de Sincronización", en: "Synchronization Status", fr: "Statut de Synchronisation" },
             "Estado de Sincronización": { es: "Estado de Sincronización", en: "Synchronization Status", fr: "Statut de Synchronisation" },
@@ -48174,7 +48174,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const normalizedVessels = (Array.isArray(vessels) ? vessels : [])
                     .map(preserveCommercialVesselCoordinates)
                     .filter(Boolean);
-                if (normalizedVessels.length === 0 && this.radarSnapshotPersistent === true && this.radarSweepActive !== true) {
+                if (normalizedVessels.length === 0
+                    && metadata.authoritativeEmpty !== true
+                    && this.radarSnapshotPersistent === true
+                    && this.radarSweepActive !== true) {
                     window.dispatchEvent(new CustomEvent('radar-snapshot-preserved', {
                         detail: {
                             ignoredVesselCount: 0,
@@ -48236,7 +48239,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             setCommercialVesselState(nextState = {}, metadata = {}) {
                 if (Object.prototype.hasOwnProperty.call(nextState, 'rawVessels')) {
                     const nextRawVessels = Array.isArray(nextState.rawVessels) ? nextState.rawVessels : [];
-                    if (nextRawVessels.length > 0 || !Array.isArray(this.rawVessels) || this.rawVessels.length === 0) {
+                    if (metadata.replaceEmpty === true
+                        || nextRawVessels.length > 0
+                        || !Array.isArray(this.rawVessels)
+                        || this.rawVessels.length === 0) {
                         this.rawVessels = nextRawVessels
                             .map(preserveCommercialVesselCoordinates)
                             .filter(Boolean);
@@ -48531,6 +48537,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.aisMatchingCache = [];
         window.openShipsVesselsCache = [];
         window.openShipsVesselsCacheLoaded = false;
+        window.liveAisAuthoritativeSnapshotLoaded = false;
         window.backgroundAisData = [];
         window.renderFleet = [];
         window.setBackgroundAisData = function(vessels) {
@@ -48558,11 +48565,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         window.hasPriorityOpenShipsData = function() {
             return Array.isArray(window.openShipsVesselsCache) && window.openShipsVesselsCache.length > 0;
         };
+        window.hasAuthoritativeLiveAisSnapshot = function() {
+            return window.liveAisAuthoritativeSnapshotLoaded === true
+                && window.openShipsVesselsCacheLoaded === true;
+        };
         window.shouldBlockSecondaryFleetSources = function() {
-            return window.hasPriorityOpenShipsData() || window.openShipsInitialReadCompleted !== true;
+            return window.hasAuthoritativeLiveAisSnapshot() || window.openShipsInitialReadCompleted !== true;
         };
         window.stopSecondaryFleetPolling = function(reason = 'openships-priority') {
-            if (!window.hasPriorityOpenShipsData()) return false;
+            if (!window.hasAuthoritativeLiveAisSnapshot()) return false;
             if (typeof window.stopAisRadarPolling === 'function') window.stopAisRadarPolling();
             if (window.MapLoader && typeof window.MapLoader.stopAisProxyPolling === 'function') {
                 window.MapLoader.stopAisProxyPolling();
@@ -48712,7 +48723,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (window.openShipsInitialReadCompleted !== true && typeof window.updateOpenShipsRadar === 'function') {
                 await window.updateOpenShipsRadar({ refreshGlobe: false });
             }
-            if (window.hasPriorityOpenShipsData?.()) {
+            if (window.hasAuthoritativeLiveAisSnapshot?.()) {
                 window.stopSecondaryFleetPolling?.('openships-blocked-zone-search');
                 return window.openShipsVesselsCache;
             }
@@ -48811,7 +48822,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (window.openShipsInitialReadCompleted !== true && typeof window.updateOpenShipsRadar === 'function') {
                 await window.updateOpenShipsRadar({ refreshGlobe: false });
             }
-            if (window.hasPriorityOpenShipsData?.()) {
+            if (window.hasAuthoritativeLiveAisSnapshot?.()) {
                 window.stopSecondaryFleetPolling?.('openships-blocked-dual-ais');
                 return window.openShipsVesselsCache;
             }
@@ -50363,7 +50374,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const hasReferencePort = getDensityReferencePortCoordinates().length > 0;
                 const emptyTitle = window.GlobalStore?.isGlobalDebugActive === true
                     ? 'No hay buques compatibles con los filtros activos'
-                    : (hasReferencePort ? '0 buques detectados en el área' : 'Esperando conexión AIS...');
+                    : (hasReferencePort ? '0 Buques Detectados' : 'Esperando conexión AIS...');
                 const emptyDescription = hasReferencePort
                     ? 'La fuente AIS no devolvió posiciones que cumplan el tonelaje, la carga y la geocerca seleccionados.'
                     : 'Configure un puerto de carga para iniciar la detección de flota real.';
@@ -63318,6 +63329,77 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             };
         }
 
+        function getActiveAisMacroCategory() {
+            return 'CARGO';
+        }
+
+        function getLiveAisBoundingBox(polCoordinates, radiusNm) {
+            const activeMap = window.mapaAIS || window.mapAIS || window.aisMap || window.map;
+            const mapBounds = activeMap?.getBounds?.();
+            if (mapBounds?.isValid?.()) {
+                const southWest = mapBounds.getSouthWest();
+                const northEast = mapBounds.getNorthEast();
+                if ([southWest.lat, southWest.lng, northEast.lat, northEast.lng].every(Number.isFinite)) {
+                    return {
+                        minLat: Math.max(-90, southWest.lat),
+                        maxLat: Math.min(90, northEast.lat),
+                        minLon: Math.max(-180, southWest.lng),
+                        maxLon: Math.min(180, northEast.lng)
+                    };
+                }
+            }
+            const latitude = Number(polCoordinates?.lat);
+            const longitude = Number(polCoordinates?.lon);
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+            const latitudeDelta = Math.min(40, Math.max(0.25, Number(radiusNm || 200) / 60));
+            const longitudeDelta = Math.min(60, latitudeDelta / Math.max(0.2, Math.cos(latitude * Math.PI / 180)));
+            return {
+                minLat: Math.max(-90, latitude - latitudeDelta),
+                maxLat: Math.min(90, latitude + latitudeDelta),
+                minLon: Math.max(-180, longitude - longitudeDelta),
+                maxLon: Math.min(180, longitude + longitudeDelta)
+            };
+        }
+
+        function normalizeLiveAisVesselForStore(vessel) {
+            if (!vessel || typeof vessel !== 'object') return null;
+            const latitude = Number(vessel.lat);
+            const longitude = Number(vessel.lon);
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+            const vesselName = String(vessel.vessel_name || 'Buque sin nombre').trim();
+            const speed = Number(vessel.speed_sog);
+            return {
+                ...vessel,
+                vesselName,
+                ShipName: vesselName,
+                latitude,
+                longitude,
+                lng: longitude,
+                speed: Number.isFinite(speed) ? speed : null,
+                speed_over_ground: Number.isFinite(speed) ? speed : null,
+                navigationStatus: vessel.nav_status,
+                navigationalStatus: vessel.nav_status,
+                vesselClass: vessel.vessel_type || 'Unknown',
+                shipType: vessel.vessel_type || null,
+                data_source: 'radar_live',
+                source: 'LIVE_AIS'
+            };
+        }
+
+        function isStrictCargoAisVessel(vessel) {
+            const vesselType = String(vessel?.vessel_type || vessel?.vesselType || vessel?.shipType || '').toLowerCase();
+            if (!vesselType) return false;
+            if (/passenger|cruise|pleasure|yacht|tug|tanker|fishing|trawler|container|ferry|ropax|ro[- ]?pax|offshore|supply/.test(vesselType)) {
+                return false;
+            }
+            const codeMatch = vesselType.match(/\b(\d{2})\b/);
+            if (codeMatch) {
+                const aisTypeCode = Number(codeMatch[1]);
+                return aisTypeCode >= 70 && aisTypeCode <= 79;
+            }
+            return /bulk carrier|bulker|general cargo|dry cargo|cement carrier|clinker carrier|multipurpose|multi purpose|mpp/.test(vesselType);
+        }
+
         async function updateOpenShipsRadar(options = {}) {
             const counter = document.getElementById('openships-live-counter');
             const statusPill = document.getElementById('openships-status-pill');
@@ -63342,16 +63424,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const request = (async () => {
                 try {
+                    const radiusNm = options.radiusNm || window.AIS_PROSPECTION_RADII_NM?.POL || 2000;
+                    const boundingBox = getLiveAisBoundingBox(polCoordinates, radiusNm);
+                    if (!boundingBox) throw new Error('No se pudo determinar la Bounding Box AIS activa.');
                     const params = new URLSearchParams({
-                        polLat: String(polCoordinates.lat),
-                        polLon: String(polCoordinates.lon),
-                        radiusNm: String(options.radiusNm || window.AIS_PROSPECTION_RADII_NM?.POL || 2000),
+                        bbox: [boundingBox.minLon, boundingBox.minLat, boundingBox.maxLon, boundingBox.maxLat].join(','),
                         limit: String(Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000),
+                        aisCategory: getActiveAisMacroCategory(),
                         radarContext: requestSignature
                     });
-                    const selectedTaxonomies = window.getActiveRadarTaxonomies?.(options.selectedTaxonomies) || [];
-                    params.set('taxonomyMode', 'strict');
-                    params.set('taxonomies', JSON.stringify(selectedTaxonomies));
                     const laycanStart = document.getElementById('match-laycan-start')?.value
                         || document.getElementById('gc-laycan-date')?.value
                         || document.getElementById('asb-laycan-date')?.value
@@ -63367,7 +63448,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         params.set('cacheBust', String(Date.now()));
                     }
                     if (matchingPolContext?.pol) params.set('polName', matchingPolContext.pol);
-                    const openShipsEndpoint = `/api/openships/live-status?${params.toString()}`;
+                    const openShipsEndpoint = `/api/fleet/live-ais?${params.toString()}`;
                     const openShipsRequest = { headers: { Accept: 'application/json' } };
                     const response = window.CoreNetworkGuard
                         ? await window.CoreNetworkGuard.fetch('openships-radar', openShipsEndpoint, openShipsRequest, { cooldownMs: 60_000 })
@@ -63375,18 +63456,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     let payload = await response.json().catch(() => null);
                     logOpenShipsWarnings(payload);
                     if (!response.ok) {
-                        const upstreamStatus = Number(payload?.upstream?.httpStatus);
-                        if ([400, 403].includes(upstreamStatus) && payload?.clientFallback?.allowed === true) {
-                            payload = await fetchOpenShipsFromBrowser(
-                                payload.clientFallback,
-                                selectedTaxonomies,
-                                polCoordinates,
-                                params.get('radiusNm')
-                            );
-                            logOpenShipsWarnings(payload);
-                        } else {
-                            throw new Error(payload?.message || `OpenShips status request failed (${response.status})`);
-                        }
+                        throw new Error(payload?.message || `OpenShips status request failed (${response.status})`);
                     }
 
                     const recentVessels = Number(payload?.recent_vessels);
@@ -63394,15 +63464,36 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     window.lastOpenShipsRadarPayload = payload;
 
                     window.openShipsVesselsCache = Array.isArray(payload?.vessels)
-                        ? payload.vessels.filter(vessel => vessel && typeof vessel === 'object')
+                        ? payload.vessels.filter(isStrictCargoAisVessel).map(normalizeLiveAisVesselForStore).filter(Boolean)
                         : [];
                     window.openShipsVesselsCacheLoaded = true;
-                    window.dispatchEvent(new CustomEvent('openships:snapshot-updated', {
-                        detail: { vessels: window.openShipsVesselsCache.slice(), polCoordinates }
-                    }));
-                    if (window.openShipsVesselsCache.length > 0) {
-                        window.stopSecondaryFleetPolling?.('openships-snapshot-loaded');
+                    window.liveAisAuthoritativeSnapshotLoaded = true;
+                    window.lastVesselsInArea = window.openShipsVesselsCache.slice();
+                    window.setRenderFleet?.(window.openShipsVesselsCache);
+                    if (window.GlobalStore) {
+                        window.GlobalStore.setCommercialVesselState?.({
+                            rawVessels: window.openShipsVesselsCache,
+                            filteredVessels: window.openShipsVesselsCache
+                        }, {
+                            source: 'live-ais-api',
+                            provider: payload?.provider || 'live-ais',
+                            replaceEmpty: true
+                        });
+                        window.GlobalStore.setRadarVessels?.(window.openShipsVesselsCache, {
+                            source: `live-ais:${payload?.provider || 'provider'}`,
+                            receivedAt: payload?.fetched_at || new Date().toISOString(),
+                            authoritativeEmpty: true
+                        });
                     }
+                    window.dispatchEvent(new CustomEvent('openships:snapshot-updated', {
+                        detail: {
+                            vessels: window.openShipsVesselsCache.slice(),
+                            polCoordinates,
+                            boundingBox,
+                            provider: payload?.provider || null
+                        }
+                    }));
+                    window.stopSecondaryFleetPolling?.('live-ais-authoritative-snapshot-loaded');
                     window.getDensityMapSourceVessels?.();
                     window.renderFilteredAisCounters?.(window.renderFleet);
                     if (counter) counter.innerText = String(recentVessels);
@@ -63419,6 +63510,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     console.warn('[OpenShips Radar] Consulta REST en vivo no disponible; no se reutiliza ningún snapshot anterior.', error);
                     window.openShipsVesselsCache = [];
                     window.openShipsVesselsCacheLoaded = false;
+                    window.liveAisAuthoritativeSnapshotLoaded = false;
                     window.lastOpenShipsRadarPayload = null;
                     if (counter) counter.innerText = 'ERR';
                     statusPill?.classList.remove('bg-emerald-900/80', 'border-emerald-700');
