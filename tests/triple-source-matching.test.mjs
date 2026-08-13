@@ -25,9 +25,11 @@ test('OpenShips technical data is enriched by IMO before source merging', () => 
   assert.match(matchingSource, /findExactVesselsMasterRows\(imoNumbers, \[\], \[\]\)/);
   assert.match(matchingSource, /VERIFIED_VESSELS_MASTER/);
   assert.match(matchingSource, /technicalDataEnrichment/);
-  assert.match(matchingSource, /const openShipsEnrichment = await enrichOpenShipsTechnicalData/);
+  assert.match(matchingSource, /const liveEnrichment = await enrichOpenShipsTechnicalData/);
+  assert.match(matchingSource, /Promise\.allSettled\(\[/);
+  assert.match(matchingSource, /fetchAisStreamBoundingBox/);
   assert.match(matchingSource, /VESSELS_MASTER_LOOKUP_FAILED/);
-  assert.match(matchingSource, /openShipsEnrichment: openShipsEnrichment\.diagnostics/);
+  assert.match(matchingSource, /openShipsEnrichment: liveEnrichment\.diagnostics/);
 });
 
 test('OpenShips live status returns a real POL-scoped vessel snapshot', () => {
@@ -39,7 +41,7 @@ test('OpenShips live status returns a real POL-scoped vessel snapshot', () => {
   assert.match(openShipsStatusSource, /source: "OPENSHIPS_REST_LIVE"/);
   assert.match(openShipsStatusSource, /openshipsCount: vessels\.length/);
   assert.match(openShipsStatusSource, /geofence: \{ polLat: geofence\.latitude/);
-  assert.match(indexSource, /const openShipsEndpoint = `\/api\/openships\/live-status\?\$\{params\.toString\(\)\}`[\s\S]*CoreNetworkGuard\.fetch\('openships-radar'/);
+  assert.match(indexSource, /const openShipsEndpoint = `\/api\/fleet\/live-ais\?\$\{params\.toString\(\)\}`[\s\S]*CoreNetworkGuard\.fetch\('openships-radar'/);
   assert.match(indexSource, /window\.openShipsVesselsCache = Array\.isArray\(payload\?\.vessels\)/);
   assert.match(indexSource, /window\.updateOpenShipsRadar = updateOpenShipsRadar/);
 });
@@ -72,7 +74,7 @@ test('server identity uses IMO, MMSI, and normalized name plus DWT without colla
 });
 
 test('source unification concatenates every selected source and preserves combined origins', () => {
-  assert.match(mergeSource, /mergeList\(dataBridgeRows, "DATABRIDGE"\)[\s\S]*mergeList\(aisRows, "AIS_LIVE"\)[\s\S]*mergeList\(openShipsRows, "OPENSHIPS"\)/);
+  assert.match(mergeSource, /mergeList\(openShipsRows, "OPENSHIPS"\)[\s\S]*mergeList\(masterRows, "MASTER"\)[\s\S]*mergeList\(dataBridgeRows, "DATABRIDGE"\)[\s\S]*mergeList\(aisRows, "AIS_LIVE"\)/);
   assert.match(mergeSource, /existingOrigins[\s\S]*applyOrigins\(merged, \[\.\.\.existingOrigins, origin\]\)/);
   assert.doesNotMatch(mergeSource, /validOpenShipsRows\.length > 0/);
 });

@@ -1,4 +1,5 @@
 import type { Config } from "@netlify/functions";
+import { getPool } from "../../db/index.js";
 import { filterVesselsByTaxonomies, parseRequestedTaxonomies } from "./_shared/ais-taxonomy.js";
 import { parseAisGeofence } from "./_shared/ais-geofence.js";
 import {
@@ -6,8 +7,24 @@ import {
   classifyCandidateMatch,
 } from "./_shared/commercial-vessel-search.mjs";
 import { fetchOpenShipsLive } from "./_shared/openships-rest.mjs";
+import { filterStrictDryCargoVessels, validImo } from "./_shared/strict-dry-cargo.js";
 
 type Vessel = Record<string, unknown>;
+type MasterVesselRow = Vessel & {
+  imo_number?: unknown;
+  vessel_name?: unknown;
+  dwt?: unknown;
+  vessel_type?: unknown;
+  draft_meters?: unknown;
+  gross_tonnage?: unknown;
+  loa_meters?: unknown;
+  beam_meters?: unknown;
+  year_built?: unknown;
+  flag?: unknown;
+  owner_manager?: unknown;
+  has_gears?: unknown;
+  source_payload?: unknown;
+};
 type OpenShipsDiagnostics = {
   httpStatus?: number | null;
   statusText?: string;
@@ -23,8 +40,93 @@ function readOpenShipsDiagnostics(error: unknown): OpenShipsDiagnostics {
 }
 
 function finiteNumber(value: unknown) {
+  if (value === undefined || value === null || value === "") return null;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
+}
+
+function parsePayload(value: unknown): Vessel {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value as Vessel;
+  if (typeof value !== "string" || !value.trim()) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Vessel : {};
+  } catch {
+    return {};
+  }
+}
+
+async function enrichOpenShipsSnapshot(vessels: Vessel[]) {
+  const imoNumbers = [...new Set(vessels
+    .map((vessel) => validImo(vessel.imo ?? vessel.IMO ?? vessel.imo_number))
+    .filter(Boolean)
+    .map(Number))];
+  if (imoNumbers.length === 0) return { vessels, degraded: false, matched: 0 };
+
+  let degraded = false;
+  let rows: MasterVesselRow[] = [];
+  try {
+    const result = await getPool().query<MasterVesselRow>(
+      `
+        SELECT imo_number, vessel_name, dwt, mmsi, vessel_type, draft_meters,
+          gross_tonnage, loa_meters, beam_meters, year_built, flag,
+          owner_manager, has_gears, source_payload
+        FROM vessels_master
+        WHERE imo_number = ANY($1::integer[])
+      `,
+      [imoNumbers],
+    );
+    rows = result.rows;
+  } catch (error) {
+    degraded = true;
+    console.error("[openships-live-status] Batch master lookup failed; raw OpenShips snapshot preserved.", error);
+  }
+  const masterByImo = new Map<string, MasterVesselRow>(rows
+    .map((row) => [validImo(row.imo_number), row] as const)
+    .filter(([imo]) => Boolean(imo)));
+  let matched = 0;
+  const enriched = vessels.flatMap((vessel) => {
+    if (degraded) return [vessel];
+    const imo = validImo(vessel.imo ?? vessel.IMO ?? vessel.imo_number);
+    const master = imo ? masterByImo.get(imo) : null;
+    if (!master) return [vessel];
+    matched += 1;
+    const sourcePayload = parsePayload(master.source_payload);
+    return [{
+      ...vessel,
+      ...sourcePayload,
+      imo,
+      IMO: imo,
+      imo_number: imo,
+      vesselName: master.vessel_name ?? vessel.vesselName ?? vessel.vessel_name,
+      vessel_name: master.vessel_name ?? vessel.vessel_name ?? vessel.vesselName,
+      dwt: finiteNumber(master.dwt) ?? finiteNumber(vessel.dwt ?? vessel.DWT),
+      DWT: finiteNumber(master.dwt) ?? finiteNumber(vessel.DWT ?? vessel.dwt),
+      vesselType: master.vessel_type ?? vessel.vesselType ?? vessel.vessel_type,
+      vessel_type: master.vessel_type ?? vessel.vessel_type ?? vessel.vesselType,
+      draft: finiteNumber(master.draft_meters) ?? finiteNumber(vessel.draft),
+      grossTonnage: finiteNumber(master.gross_tonnage),
+      gross_tonnage: finiteNumber(master.gross_tonnage),
+      loaMeters: finiteNumber(master.loa_meters),
+      loa_meters: finiteNumber(master.loa_meters),
+      beamMeters: finiteNumber(master.beam_meters),
+      yearBuilt: finiteNumber(master.year_built),
+      flag: master.flag ?? vessel.flag,
+      ownerManager: master.owner_manager ?? vessel.ownerManager,
+      hasGears: master.has_gears ?? vessel.hasGears,
+      ballastSpeed: finiteNumber(sourcePayload.ballastSpeed ?? sourcePayload.spd_ballast ?? sourcePayload.speed_ballast),
+      ladenSpeed: finiteNumber(sourcePayload.ladenSpeed ?? sourcePayload.spd_laden ?? sourcePayload.speed_laden),
+      consumptionSea: finiteNumber(sourcePayload.consumptionSea ?? sourcePayload.cons_sea ?? sourcePayload.consumption_sea),
+      consumptionPort: finiteNumber(sourcePayload.consumptionPort ?? sourcePayload.cons_port ?? sourcePayload.consumption_port),
+      latitude: vessel.latitude ?? vessel.lat,
+      lat: vessel.lat ?? vessel.latitude,
+      longitude: vessel.longitude ?? vessel.lon ?? vessel.lng,
+      lon: vessel.lon ?? vessel.longitude ?? vessel.lng,
+      speed: vessel.speed ?? vessel.speed_over_ground ?? vessel.sog,
+      masterTruthApplied: true,
+    }];
+  });
+  return { vessels: enriched, degraded, matched };
 }
 
 function haversineNm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -91,13 +193,15 @@ export default async (req: Request) => {
       latitude: geofence.latitude,
       longitude: geofence.longitude,
       limit: Number.isFinite(requestedProviderLimit) ? requestedProviderLimit : 5000,
+      aisTypes: [70, 71, 72, 73, 74, 75, 76, 77, 78, 79],
     });
+    const strictVessels = filterStrictDryCargoVessels(live.vessels);
     const taxonomyVessels = taxonomies.length > 0
-      ? filterVesselsByTaxonomies(live.vessels, taxonomies)
-      : live.vessels;
+      ? filterVesselsByTaxonomies(strictVessels, taxonomies)
+      : strictVessels;
     const polData = getPolData(url);
     const laycanEnd = url.searchParams.get("laycanEnd") || url.searchParams.get("cancellingDate");
-    const vessels = taxonomyVessels.flatMap((vessel) => {
+    const commercialVessels = taxonomyVessels.flatMap((vessel) => {
       const distanceNm = vesselDistance(vessel, geofence.latitude, geofence.longitude);
       const matchReason = classifyCandidateMatch({
         distanceNm,
@@ -119,6 +223,9 @@ export default async (req: Request) => {
         fetched_at: live.fetchedAt,
       }];
     });
+    const masterEnrichment = await enrichOpenShipsSnapshot(commercialVessels);
+    const vessels = masterEnrichment.vessels;
+    const degraded = masterEnrichment.degraded;
     const warnings = live.count === 0
       ? [{
         code: "OPENSHIPS_EMPTY_PROVIDER_PAYLOAD",
@@ -146,9 +253,10 @@ export default async (req: Request) => {
       geofence: { polLat: geofence.latitude, polLon: geofence.longitude, radiusNm: geofence.radiusNm },
       destinationAliases: polData.aliases,
       providerDiagnostics: live.providerDiagnostics,
+      masterEnrichment: { matched: masterEnrichment.matched, degraded },
       warnings,
       vessels,
-    }, { headers: { "cache-control": "no-store, no-cache, must-revalidate" } });
+    }, { status: degraded ? 206 : 200, headers: { "cache-control": "no-store, no-cache, must-revalidate" } });
   } catch (error) {
     const code = error instanceof Error && "code" in error ? String(error.code) : "OPENSHIPS_UNAVAILABLE";
     const message = error instanceof Error ? error.message : "OpenShips REST request failed";

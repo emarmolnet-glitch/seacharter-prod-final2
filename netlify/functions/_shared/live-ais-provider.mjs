@@ -26,6 +26,7 @@ function firstValue(record, paths) {
 }
 
 function finiteNumber(value) {
+  if (value === undefined || value === null || value === "") return null;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
 }
@@ -131,6 +132,10 @@ export function normalizeLiveAisVessel(value) {
       ["speed_sog"], ["speedOverGround"], ["speed_over_ground"], ["speed"], ["sog"], ["SOG"],
       ["PositionReport", "Sog"], ["Message", "PositionReport", "Sog"],
     ])),
+    dwt: finiteNumber(firstValue(record, [
+      ["dwt"], ["DWT"], ["deadweight"], ["deadweightTonnage"],
+      ["MetaData", "DWT"], ["metadata", "dwt"],
+    ])),
     nav_status: firstValue(record, [
       ["nav_status"], ["navigationalStatus"], ["navigationStatus"], ["NavigationalStatus"], ["status"],
       ["PositionReport", "NavigationalStatus"], ["Message", "PositionReport", "NavigationalStatus"],
@@ -235,12 +240,15 @@ function mergeAisStreamMessage(target, payload) {
   };
 }
 
-export async function fetchAisStreamBoundingBox({ bounds, limit = DEFAULT_LIMIT, env = process.env, WebSocketImpl = WebSocket }) {
+export async function fetchAisStreamBoundingBox({ bounds, limit = DEFAULT_LIMIT, aisTypes = [], env = process.env, WebSocketImpl = WebSocket }) {
   const apiKey = String(env.AISSTREAM_API_KEY || env.AISTREAM_API_KEY || "").trim();
   if (!apiKey) throw Object.assign(new Error("AISStream is not configured"), { code: "AISSTREAM_NOT_CONFIGURED" });
   const endpoint = String(env.AISSTREAM_WS_URL || "wss://stream.aisstream.io/v0/stream").trim();
   const snapshotMs = clamp(Number(env.AISSTREAM_SNAPSHOT_MS) || DEFAULT_AISSTREAM_SNAPSHOT_MS, 1000, MAX_AISSTREAM_SNAPSHOT_MS);
   const normalizedLimit = Math.trunc(clamp(Number(limit) || DEFAULT_LIMIT, 1, MAX_LIMIT));
+  const allowedAisTypes = new Set((Array.isArray(aisTypes) ? aisTypes : [])
+    .map(value => Math.trunc(Number(value)))
+    .filter(value => Number.isFinite(value) && value >= 0 && value <= 99));
   const vesselsByMmsi = new Map();
 
   return await new Promise((resolve, reject) => {
@@ -267,8 +275,19 @@ export async function fetchAisStreamBoundingBox({ bounds, limit = DEFAULT_LIMIT,
         const payload = JSON.parse(String(data));
         const mmsi = digits(payload?.MetaData?.MMSI || payload?.Message?.PositionReport?.UserID || payload?.Message?.ShipStaticData?.UserID);
         if (!mmsi) return;
-        vesselsByMmsi.set(mmsi, mergeAisStreamMessage(vesselsByMmsi.get(mmsi), payload));
-        if (vesselsByMmsi.size >= normalizedLimit) finish();
+        const merged = mergeAisStreamMessage(vesselsByMmsi.get(mmsi), payload);
+        const normalized = normalizeLiveAisVessel(merged);
+        const typeMatch = String(normalized.vessel_type || "").match(/(?:^|\D)(\d{2})(?:\D|$)/);
+        const typeCode = typeMatch ? Number(typeMatch[1]) : null;
+        if (typeCode !== null && allowedAisTypes.size > 0 && !allowedAisTypes.has(typeCode)) {
+          vesselsByMmsi.delete(mmsi);
+          return;
+        }
+        if (typeCode === null && allowedAisTypes.size > 0 && !vesselsByMmsi.has(mmsi) && vesselsByMmsi.size >= normalizedLimit) {
+          return;
+        }
+        vesselsByMmsi.set(mmsi, merged);
+        if (typeCode !== null && vesselsByMmsi.size >= normalizedLimit) finish();
       } catch {}
     });
     socket.on("error", error => finish(Object.assign(new Error("AISStream connection failed"), { code: "AISSTREAM_CONNECTION_ERROR", cause: error })));

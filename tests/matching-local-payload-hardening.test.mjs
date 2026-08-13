@@ -33,7 +33,7 @@ test('matching candidates are stripped to the lightweight mathematical contract'
   });
 
   assert.deepEqual(Object.keys(compacted).sort(), [
-    'candidateId', 'dwt', 'imo', 'lat', 'lon', 'mmsi', 'speed', 'vesselName', 'vesselType',
+    'dwt', 'imo', 'lat', 'lon', 'speed',
   ]);
   assert.equal(compacted.MetaData, undefined);
   assert.equal(compacted.history, undefined);
@@ -44,7 +44,7 @@ test('passenger and cruise candidates are removed before serialization', () => {
 
   assert.equal(stripMatchingCandidate({ vessel_name: 'SUN PRINCESS', vessel_type: 'Passenger (Cruise) Ship' }), null);
   assert.equal(stripMatchingCandidate({ vessel_name: 'OTHER CRUISE', vessel_type: 'Cruise Ship' }), null);
-  assert.equal(stripMatchingCandidate({ vessel_name: 'DRY MERCHANT', vessel_type: 'Bulk Carrier' })?.vesselName, 'DRY MERCHANT');
+  assert.equal(stripMatchingCandidate({ IMO: '1234567', vessel_name: 'DRY MERCHANT', vessel_type: 'Bulk Carrier' })?.imo, '1234567');
 });
 
 test('matching payload excludes filtered AIS vessels and raw nested metadata', () => {
@@ -73,7 +73,8 @@ test('matching request checks HTTP status before parsing JSON and catches failur
   assert.ok(okCheckIndex >= 0);
   assert.ok(jsonParseIndex > okCheckIndex);
   assert.match(requestSource, /try \{[\s\S]*await fetch\('\/api\/matching-local'/);
-  assert.match(requestSource, /catch \(error\) \{[\s\S]*showToast\('Error de cálculo de coincidencia', false, 'error'\)/);
+  assert.match(requestSource, /catch \(error\) \{[\s\S]*showMatchingTransportAlert\('Error de cálculo de coincidencia\. El mapa continúa activo\.'\)/);
+  assert.match(requestSource, /requestBytes > 512 \* 1024/);
   assert.match(requestSource, /matchingError\.matchingLocalHandled = true/);
   assert.match(requestSource, /MATCHING_LOCAL_HTTP_\$\{response\.status\}/);
   assert.match(requestSource, /MATCHING_LOCAL_INVALID_JSON/);

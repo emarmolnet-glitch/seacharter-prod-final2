@@ -211,6 +211,11 @@ export async function fetchOpenShipsLive(options = {}) {
     throw error;
   }
   const url = createOpenShipsPositionUrl(endpoint, latitude, longitude, radiusDegrees);
+  const aisTypes = Array.from(new Set((Array.isArray(options.aisTypes) ? options.aisTypes : [])
+    .map(value => Math.trunc(Number(value)))
+    .filter(value => Number.isFinite(value) && value >= 0 && value <= 99)));
+  url.searchParams.delete("filterAisTypes");
+  aisTypes.forEach(aisType => url.searchParams.append("filterAisTypes", String(aisType)));
   const limitParam = String(env.OPENSHIPS_LIMIT_PARAM || "limit").trim();
   if (limitParam && !url.searchParams.has(limitParam)) url.searchParams.set(limitParam, String(limit));
   const cacheKey = redactOpenShipsUrl(url);
