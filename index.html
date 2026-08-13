@@ -13227,9 +13227,6 @@
                                 <i class="fa-solid fa-ship text-indigo-400"></i> Mis Buques / My Vessels
                             </h4>
                             <div class="flex gap-1.5">
-                                <button onclick="loadScaleVessels()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-[10px] font-bold px-2 py-1 rounded transition flex items-center gap-1" title="Cargar escala de 3,000t a Handysize / Load scale from 3,000t to Handysize">
-                                    <i class="fa-solid fa-scale-balanced text-indigo-400"></i> Cargar Escala (3k-32k)
-                                </button>
                                 <button onclick="toggleAddVesselForm()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold px-2 py-1 rounded transition flex items-center gap-1">
                                     <i class="fa-solid fa-plus"></i> Añadir Buque
                                 </button>
@@ -13831,8 +13828,8 @@
                             <div class="bg-slate-50 p-4 rounded-full border border-slate-200 text-[#004e64] mb-4">
                                 <i class="fa-solid fa-ship text-3xl"></i>
                             </div>
-                            <h4 class="text-slate-700 font-bold text-sm">Esperando parámetros de búsqueda</h4>
-                            <p class="text-slate-400 text-xs max-w-md mt-1 mb-5">Configure la ruta y haga clic en Encontrar Match para buscar buques.</p>
+                            <h4 id="matching-empty-title" class="text-slate-700 font-bold text-sm">Esperando parámetros de búsqueda</h4>
+                            <p id="matching-empty-description" class="text-slate-400 text-xs max-w-md mt-1 mb-5">Configure la ruta y haga clic en Encontrar Match para buscar buques.</p>
                         </div>
 
                         <!-- SKELETON LOADING STATE -->
@@ -18934,10 +18931,15 @@
 
         function setRenderedMatchingVessels(vessels, metadata = {}) {
             const incomingVessels = Array.isArray(vessels) ? vessels.slice() : [];
-            const taxonomyFilter = metadata.applyTaxonomyFilter !== false && typeof window.applyStrictRadarTaxonomyFilter === 'function'
+            const strictTechnicalFilterActive = window.matchingStrictTechnicalFilter === true;
+            const shouldApplyTaxonomyFilter = metadata.applyTaxonomyFilter !== false || strictTechnicalFilterActive;
+            const taxonomyFilter = shouldApplyTaxonomyFilter && typeof window.applyStrictRadarTaxonomyFilter === 'function'
                 ? window.applyStrictRadarTaxonomyFilter(incomingVessels)
                 : { vessels: incomingVessels };
-            const requestedVessels = Array.isArray(taxonomyFilter.vessels) ? taxonomyFilter.vessels : [];
+            const taxonomyCompatibleVessels = Array.isArray(taxonomyFilter.vessels) ? taxonomyFilter.vessels : [];
+            const requestedVessels = strictTechnicalFilterActive
+                ? taxonomyCompatibleVessels.filter(vessel => vessel?.audit?.operationallyEligible !== false)
+                : taxonomyCompatibleVessels;
             const taxonomyRejectedAll = incomingVessels.length > 0 && requestedVessels.length === 0;
             const canonicalVessels = window.GlobalStore?.setMatchingFleet?.(requestedVessels, {
                 source: taxonomyRejectedAll ? 'taxonomy-filter' : 'matching-ui',
@@ -20948,6 +20950,9 @@
                     eta_puerto_carga: ais.eta_puerto_carga || source.eta_puerto_carga || routing.eta || 'N/A',
                     eta: ais.eta || ais.ETA || source.eta || source.ETA || null,
                     speed: Number(ais.speed ?? ais.sog ?? ais.SOG ?? source.speed ?? source.sog ?? source.SOG) || null,
+                    speedInferenceSource: ais.speedInferenceSource || source.speedInferenceSource || null,
+                    speedTelemetryAvailable: ais.speedTelemetryAvailable ?? source.speedTelemetryAvailable ?? null,
+                    marketAverageSpeedKnots: Number(ais.marketAverageSpeedKnots ?? source.marketAverageSpeedKnots) || null,
                     eta_delta: ais.eta_delta || source.eta_delta || 'N/A',
                     dwt: ais.dwt || vessel.dwt || '',
                     currentDraught: Number(ais.currentDraught ?? ais.currentDraft ?? ais.draught ?? source.currentDraught ?? source.currentDraft ?? source.draught ?? ais.draft ?? vessel.draft) || null,
@@ -21744,7 +21749,11 @@
                     }
                     window.setRenderedMatchingVessels?.([], { source: 'matching-empty' });
                     window.syncDataBridgeRankingWithMatchingResults?.([]);
-                    window.showMatchingEmptyState?.();
+                    window.showMatchingEmptyState?.({
+                        title: '0 buques detectados en el área',
+                        description: 'La consulta finalizó sin posiciones AIS compatibles con el tonelaje, la carga y la ruta seleccionados.',
+                        searched: true
+                    });
                     return [];
                 }
 
@@ -21950,7 +21959,9 @@
                 const strictRequiredDwt = quantity > 0 ? quantity * 1.05 : 0;
                 const viableMatches = matches
                     .filter((match) => {
-                        if (!strictTechnicalFilter || strictRequiredDwt <= 0) return true;
+                        if (!strictTechnicalFilter) return true;
+                        if (match?.audit?.operationallyEligible === false) return false;
+                        if (strictRequiredDwt <= 0) return true;
                         const dwt = Number(match?.vessel?.dwt ?? match?.ais?.dwt);
                         return !Number.isFinite(dwt) || dwt <= 0 || dwt >= strictRequiredDwt;
                     })
@@ -22015,15 +22026,14 @@
                 window.syncDataBridgeRankingWithMatchingResults?.(displayMatches);
                 const renderedCount = displayMatches.length;
 
-                if (matches.length === 0) {
+                if (renderedCount === 0) {
                     resultsBadge.innerText = `0 Buques / Vessels`;
-                    resultsBadge.classList.add('hidden');
-                    resultsList.innerHTML = `
-                        <div class="text-center py-12 text-slate-500">
-                            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2 text-amber-500"></i>
-                            <p class="font-bold">No se encontraron buques disponibles.</p>
-                        </div>
-                    `;
+                    resultsBadge.classList.remove('hidden');
+                    window.showMatchingEmptyState?.({
+                        title: '0 buques compatibles con el Filtro Técnico Estricto',
+                        description: 'Los buques detectados fueron excluidos porque su clase o capacidad no coincide con la carga activa.',
+                        searched: true
+                    });
                 } else {
                     loadingState.classList.add('hidden');
                     resultsList.classList.remove('hidden');
@@ -23289,7 +23299,7 @@
         }
         window.hideMatchingSourceIntegrity = hideMatchingSourceIntegrity;
 
-        function showMatchingEmptyState() {
+        function showMatchingEmptyState(options = {}) {
             const persistentFleet = Array.isArray(window.GlobalStore?.matchingVessels)
                 ? window.GlobalStore.matchingVessels
                 : [];
@@ -23301,6 +23311,8 @@
             const emptyState = document.getElementById('matching-empty-state');
             const loadingState = document.getElementById('matching-loading-state');
             const resultsBadge = document.getElementById('match-results-badge');
+            const emptyTitle = document.getElementById('matching-empty-title');
+            const emptyDescription = document.getElementById('matching-empty-description');
             if (resultsList) {
                 resultsList.innerHTML = '';
                 resultsList.dataset.matchingResultCount = '0';
@@ -23309,11 +23321,16 @@
                 resultsList.classList.add('hidden');
             }
             emptyState?.classList.remove('hidden');
-            if (emptyState) emptyState.dataset.matchingResultCount = '0';
+            if (emptyState) {
+                emptyState.dataset.matchingResultCount = '0';
+                emptyState.dataset.matchingEmptyState = options.searched === true ? 'search-complete' : 'awaiting-parameters';
+            }
+            if (emptyTitle) emptyTitle.textContent = String(options.title || 'Esperando parámetros de búsqueda');
+            if (emptyDescription) emptyDescription.textContent = String(options.description || 'Configure la ruta y haga clic en Encontrar Match para buscar buques.');
             loadingState?.classList.add('hidden');
             if (resultsBadge) {
                 resultsBadge.innerText = '0 Buques';
-                resultsBadge.classList.add('hidden');
+                resultsBadge.classList.toggle('hidden', options.searched !== true);
             }
             window.syncDataBridgeRankingWithMatchingResults?.([]);
             hideMatchingSourceIntegrity();
@@ -41329,68 +41346,7 @@
 
             document.getElementById('comp-new-vessel').value = JSON.stringify(currentVessel, null, 2);
 
-            // Saved vessels from localStorage or default list
-            let saved = localStorage.getItem('rodahmar_saved_vessels');
-            if (!saved) {
-                const defaultSaved = [
-                    {
-                        "vessel_name": "Stella di Mare",
-                        "dwt": 3000,
-                        "vessel_class": "Coaster",
-                        "spd_ballast": 10.0,
-                        "spd_laden": 9.0,
-                        "cons_sea": 4.5,
-                        "cons_port": 0.6
-                    },
-                    {
-                        "vessel_name": "Baltic Explorer",
-                        "dwt": 5000,
-                        "vessel_class": "Mini-Bulker",
-                        "spd_ballast": 11.0,
-                        "spd_laden": 10.0,
-                        "cons_sea": 6.0,
-                        "cons_port": 0.8
-                    },
-                    {
-                        "vessel_name": "Aegean Wave",
-                        "dwt": 8000,
-                        "vessel_class": "Mini-Bulker",
-                        "spd_ballast": 11.5,
-                        "spd_laden": 10.5,
-                        "cons_sea": 8.5,
-                        "cons_port": 1.0
-                    },
-                    {
-                        "vessel_name": "Acqua Stella",
-                        "dwt": 10000,
-                        "vessel_class": "Handysize",
-                        "spd_ballast": 12.0,
-                        "spd_laden": 11.0,
-                        "cons_sea": 10.5,
-                        "cons_port": 1.2
-                    },
-                    {
-                        "vessel_name": "Sea Empress",
-                        "dwt": 18000,
-                        "vessel_class": "Handysize",
-                        "spd_ballast": 13.5,
-                        "spd_laden": 12.5,
-                        "cons_sea": 14.0,
-                        "cons_port": 1.5
-                    },
-                    {
-                        "vessel_name": "Pacific Pioneer",
-                        "dwt": 32000,
-                        "vessel_class": "Handysize",
-                        "spd_ballast": 14.0,
-                        "spd_laden": 13.0,
-                        "cons_sea": 22.0,
-                        "cons_port": 2.0
-                    }
-                ];
-                saved = JSON.stringify(defaultSaved, null, 2);
-                localStorage.setItem('rodahmar_saved_vessels', saved);
-            }
+            const saved = localStorage.getItem('rodahmar_saved_vessels') || '[]';
             document.getElementById('comp-saved-vessels').value = saved;
 
             // Render our clean visual vessel list
@@ -41779,73 +41735,6 @@
 
             closeListVesselsModal();
             showToast(`⚓ Buque "${name}" cargado desde el historial.`);
-        }
-
-        function loadScaleVessels() {
-            const confirmMsg = "¿Desea restablecer la lista de buques guardados y cargar la escala completa desde 3,000t hasta Handysize?\n\nDo you want to reset the saved vessels list and load the full scale from 3,000t to Handysize?";
-            if (confirm(confirmMsg)) {
-                const scaleVessels = [
-                    {
-                        "vessel_name": "Stella di Mare",
-                        "dwt": 3000,
-                        "vessel_class": "Coaster",
-                        "spd_ballast": 10.0,
-                        "spd_laden": 9.0,
-                        "cons_sea": 4.5,
-                        "cons_port": 0.6
-                    },
-                    {
-                        "vessel_name": "Baltic Explorer",
-                        "dwt": 5000,
-                        "vessel_class": "Mini-Bulker",
-                        "spd_ballast": 11.0,
-                        "spd_laden": 10.0,
-                        "cons_sea": 6.0,
-                        "cons_port": 0.8
-                    },
-                    {
-                        "vessel_name": "Aegean Wave",
-                        "dwt": 8000,
-                        "vessel_class": "Mini-Bulker",
-                        "spd_ballast": 11.5,
-                        "spd_laden": 10.5,
-                        "cons_sea": 8.5,
-                        "cons_port": 1.0
-                    },
-                    {
-                        "vessel_name": "Acqua Stella",
-                        "dwt": 10000,
-                        "vessel_class": "Handysize",
-                        "spd_ballast": 12.0,
-                        "spd_laden": 11.0,
-                        "cons_sea": 10.5,
-                        "cons_port": 1.2
-                    },
-                    {
-                        "vessel_name": "Sea Empress",
-                        "dwt": 18000,
-                        "vessel_class": "Handysize",
-                        "spd_ballast": 13.5,
-                        "spd_laden": 12.5,
-                        "cons_sea": 14.0,
-                        "cons_port": 1.5
-                    },
-                    {
-                        "vessel_name": "Pacific Pioneer",
-                        "dwt": 32000,
-                        "vessel_class": "Handysize",
-                        "spd_ballast": 14.0,
-                        "spd_laden": 13.0,
-                        "cons_sea": 22.0,
-                        "cons_port": 2.0
-                    }
-                ];
-                const savedStr = JSON.stringify(scaleVessels, null, 2);
-                document.getElementById('comp-saved-vessels').value = savedStr;
-                localStorage.setItem('rodahmar_saved_vessels', savedStr);
-                renderVesselSelector();
-                showToast("📈 Escala de 3,000t a Handysize cargada / Scale loaded");
-            }
         }
 
         async function autoFillVesselSpecsForComparison() {
@@ -50371,9 +50260,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         function getDensityReactiveVessels() {
-            return Array.isArray(window.GlobalStore?.matchingVessels)
+            const matchingVessels = Array.isArray(window.GlobalStore?.matchingVessels)
                 ? window.GlobalStore.matchingVessels
                 : [];
+            if (window.matchingStrictTechnicalFilter !== true) return matchingVessels;
+            const taxonomyFilter = typeof window.applyStrictRadarTaxonomyFilter === 'function'
+                ? window.applyStrictRadarTaxonomyFilter(matchingVessels)
+                : { vessels: matchingVessels };
+            return (Array.isArray(taxonomyFilter.vessels) ? taxonomyFilter.vessels : [])
+                .filter(vessel => vessel?.audit?.operationallyEligible !== false);
         }
         window.getDensityReactiveVessels = getDensityReactiveVessels;
 
@@ -50465,7 +50360,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             if (!tbody) return visibleRows;
             tbody.innerHTML = '';
             if (visibleRows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="12" class="py-8 text-center text-slate-500">${window.GlobalStore?.isGlobalDebugActive === true ? 'No hay barcos compatibles' : 'No se detectaron buques AIS activos.'}</td></tr>`;
+                const hasReferencePort = getDensityReferencePortCoordinates().length > 0;
+                const emptyTitle = window.GlobalStore?.isGlobalDebugActive === true
+                    ? 'No hay buques compatibles con los filtros activos'
+                    : (hasReferencePort ? '0 buques detectados en el área' : 'Esperando conexión AIS...');
+                const emptyDescription = hasReferencePort
+                    ? 'La fuente AIS no devolvió posiciones que cumplan el tonelaje, la carga y la geocerca seleccionados.'
+                    : 'Configure un puerto de carga para iniciar la detección de flota real.';
+                tbody.innerHTML = `<tr data-density-empty-state="true"><td colspan="12" class="px-6 py-12 text-center"><div class="mx-auto flex max-w-md flex-col items-center"><span class="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-300"><i class="fa-solid fa-satellite-dish" aria-hidden="true"></i></span><strong class="text-sm text-slate-200">${emptyTitle}</strong><span class="mt-1 text-[11px] leading-relaxed text-slate-500">${emptyDescription}</span></div></td></tr>`;
                 return visibleRows;
             }
             visibleRows.forEach(vessel => {
@@ -50521,7 +50423,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     <td class="py-3 px-3 font-semibold text-slate-200">${escapeDensityTableText(vesselName)}${commercialRankHtml}</td>
                     <td class="py-3 px-3 text-slate-400 mono">${escapeDensityTableText(imo)}</td>
                     <td class="py-3 px-3 text-slate-400 mono"><span class="block">${escapeDensityTableText(position)}</span>${positionOriginBadge}</td>
-                    <td class="py-3 px-3 text-slate-400 mono">${Number.isFinite(speed) ? `${speed.toFixed(1)} kn` : 'N/D'}<span class="text-[10px] text-emerald-400 block">${escapeDensityTableText(navigationStatus)}</span></td>
+                    <td class="py-3 px-3 text-slate-400 mono">${Number.isFinite(speed) ? `${speed.toFixed(1)} kn` : 'N/D'}${vessel.speedInferenceSource === 'market_average_speeds' || vessel.ais?.speedInferenceSource === 'market_average_speeds' ? '<span class="mt-1 block text-[9px] font-bold uppercase tracking-wide text-cyan-400">Media mercado</span>' : ''}<span class="text-[10px] text-emerald-400 block">${escapeDensityTableText(navigationStatus)}</span></td>
 	                    <td class="py-3 px-3"><span${hasMasterProfile ? ' data-vessel-class-source="VESSELS_MASTER"' : ''} class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700">${escapeDensityTableText(vesselClass)}</span></td>
                     <td class="py-3 px-3 font-bold ${grossTonnage ? 'text-cyan-300' : 'text-amber-400'}">${grossTonnage ? grossTonnage.toLocaleString('es-ES') : 'REQUERIDO'}</td>
                     <td class="py-3 px-3 text-slate-300 mono">${dwt ? dwt.toLocaleString('es-ES') : 'N/D'}</td>

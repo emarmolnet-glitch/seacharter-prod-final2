@@ -1,4 +1,5 @@
 import type { Config } from "@netlify/functions";
+import { getPool } from "../../db/index.js";
 import {
   findExactVesselsMasterRows,
   listVesselsMasterPendingAudit,
@@ -13,6 +14,7 @@ import runAiAisFilter from "./ai-ais-filter.js";
 import { mergeTripleVesselSources } from "./_shared/vessel-source-merge.js";
 import { classifyCandidateMatch } from "./_shared/commercial-vessel-search.mjs";
 import { fetchOpenShipsLive } from "./_shared/openships-rest.mjs";
+import { enrichVesselsWithMarketSpeedDefaults } from "./lib/market-speed.mjs";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -567,6 +569,26 @@ export default async (req: Request) => {
       const openShipsEnrichment = await enrichOpenShipsTechnicalData(serializedOpenShipsVessels);
       const openShipsVessels = openShipsEnrichment.vessels;
       const unifiedVessels = mergeTripleVesselSources([], dataBridgeVessels, aisVessels, openShipsVessels);
+      let scoringVessels = unifiedVessels;
+      let marketSpeedEnrichment: AnyRecord = {
+        requestedClasses: [],
+        resolvedClasses: [],
+        defaultedCount: 0,
+        source: "market_average_speeds",
+      };
+      try {
+        const enriched = await enrichVesselsWithMarketSpeedDefaults(getPool(), unifiedVessels);
+        scoringVessels = enriched.vessels;
+        marketSpeedEnrichment = enriched.diagnostics;
+      } catch (error) {
+        console.error("[matching-local] Market speed defaults unavailable.", {
+          code: asRecord(error).code,
+        });
+        marketSpeedEnrichment = {
+          ...marketSpeedEnrichment,
+          failed: true,
+        };
+      }
       const sourceCounts = {
         master: 0,
         dataBridge: dataBridgeVessels.length,
@@ -589,6 +611,7 @@ export default async (req: Request) => {
           source: "filtered_sources",
           sourceCounts,
           openShipsEnrichment: openShipsEnrichment.diagnostics,
+          marketSpeedEnrichment,
           openShipsFetch: openShipsFetchDiagnostics,
           warnings: Array.isArray(openShipsFetchDiagnostics.warnings) ? openShipsFetchDiagnostics.warnings : [],
           allowedSources,
@@ -611,7 +634,7 @@ export default async (req: Request) => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           ...matchingPayload,
-          radarSnapshot: unifiedVessels,
+          radarSnapshot: scoringVessels,
           searchMode: "filtered_source_database",
           frozenAt: new Date().toISOString(),
         }),
@@ -627,6 +650,7 @@ export default async (req: Request) => {
         source: "filtered_sources",
         sourceCounts,
         openShipsEnrichment: openShipsEnrichment.diagnostics,
+        marketSpeedEnrichment,
         openShipsFetch: openShipsFetchDiagnostics,
         warnings: Array.isArray(openShipsFetchDiagnostics.warnings) ? openShipsFetchDiagnostics.warnings : [],
         allowedSources,

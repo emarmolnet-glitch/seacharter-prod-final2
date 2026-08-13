@@ -255,7 +255,22 @@ function normalizeVessel(value: unknown) {
   }
   if (dwt && dwt > 0 && !dwtStatus) dwtStatus = "SOURCE_REPORTED";
 
-  const speed = numberValue(source.speed_over_ground, source.speedOverGround, source.sog, source.SOG, source.speed, meta.speed_over_ground, meta.speedOverGround, meta.SOG, meta.speed, position.Sog, position.SOG, 12) || 12;
+  const declaredSpeedInferenceSource = textValue(source.speedInferenceSource, meta.speedInferenceSource) || null;
+  const sourceUsesMarketSpeed = declaredSpeedInferenceSource === "market_average_speeds";
+  const reportedSpeed = sourceUsesMarketSpeed
+    ? null
+    : nullableNumberValue(source.speed_over_ground, source.speedOverGround, source.sog, source.SOG, source.speed, meta.speed_over_ground, meta.speedOverGround, meta.SOG, meta.speed, position.Sog, position.SOG);
+  const marketAverageSpeedKnots = nullableNumberValue(
+    source.marketAverageSpeedKnots,
+    meta.marketAverageSpeedKnots,
+    sourceUsesMarketSpeed ? source.speed_over_ground : null,
+    sourceUsesMarketSpeed ? source.speed : null,
+  );
+  const speed = reportedSpeed ?? marketAverageSpeedKnots ?? 0;
+  const speedInferenceSource = reportedSpeed === null && marketAverageSpeedKnots !== null
+    ? "market_average_speeds"
+    : declaredSpeedInferenceSource;
+  const speedTelemetryAvailable = reportedSpeed !== null;
   const destination = textValue(source.destination, source.Destination, source.current_destination, meta.Destination, staticData.Destination, staticData.PortOfDestination) || "N/A";
   const declaredEta = textValue(source.eta, source.ETA, source.Eta, source.estimatedEta, source.etaEstimated, source.eta_calculado, meta.eta, meta.ETA, meta.Eta, meta.estimatedEta, meta.etaEstimated);
   const lastPortOfCall = textValue(source.lastPortOfCall, source.last_port_of_call, source.ultimo_puerto, source.LastPort, source.LastPortOfCall, source.PreviousPort, source.DeparturePort, meta.lastPortOfCall, meta.ultimo_puerto, meta.LastPort, meta.LastPortOfCall, meta.PreviousPort, meta.DeparturePort) || "N/A";
@@ -273,7 +288,7 @@ function normalizeVessel(value: unknown) {
   const sourceDwtDifference = nullableNumberValue(source.dwtDifference, source.dwtDifferenceMt, meta.dwtDifference);
   const estimatedBallastStatus = source.estimatedBallastStatus === true || meta.estimatedBallastStatus === true;
 
-  return { source, vesselName, mmsi, imo, shipType, dwt, dwtStatus, draft, designDraft, loa, beam, speed, destination, declaredEta, lastPortOfCall, latitude, longitude, hasValidPosition, longDistanceTransitToPol, commercialTransitCandidate, matchReason, verifiedDwt, sourceDwtDifference, estimatedBallastStatus, sourceOrigins, sourceOrigin, vesselKey, isOpenShipsSource };
+  return { source, vesselName, mmsi, imo, shipType, dwt, dwtStatus, draft, designDraft, loa, beam, speed, marketAverageSpeedKnots, speedInferenceSource, speedTelemetryAvailable, destination, declaredEta, lastPortOfCall, latitude, longitude, hasValidPosition, longDistanceTransitToPol, commercialTransitCandidate, matchReason, verifiedDwt, sourceDwtDifference, estimatedBallastStatus, sourceOrigins, sourceOrigin, vesselKey, isOpenShipsSource };
 }
 
 function parseLaycanEnd(value: unknown) {
@@ -525,6 +540,9 @@ export default async (req: Request) => {
             matchReason: vessel.matchReason,
             inboundToPol: vessel.matchReason === "INBOUND_TO_POL",
             operationalLabel: vessel.matchReason === "INBOUND_TO_POL" ? "Inbound to POL" : null,
+            speedInferenceSource: vessel.speedInferenceSource,
+            speedTelemetryAvailable: vessel.speedTelemetryAvailable,
+            marketAverageSpeedKnots: vessel.marketAverageSpeedKnots,
             verifiedDwt: vessel.verifiedDwt,
             estimatedBallastStatus: vessel.estimatedBallastStatus,
             debugUnknownDwtAllowed,
@@ -573,6 +591,9 @@ export default async (req: Request) => {
               source_origin: vessel.sourceOrigin,
               sourceOrigin: vessel.sourceOrigin,
               data_source: vessel.sourceOrigin,
+              speedInferenceSource: vessel.speedInferenceSource,
+              speedTelemetryAvailable: vessel.speedTelemetryAvailable,
+              marketAverageSpeedKnots: vessel.marketAverageSpeedKnots,
             },
             ais: {
               mmsi: vessel.mmsi,
@@ -585,6 +606,9 @@ export default async (req: Request) => {
               commercialTransitCandidate: vessel.commercialTransitCandidate,
               daysToLoadPort: daysToLoadPort === null ? null : Math.round(daysToLoadPort * 10) / 10,
               speed_over_ground: speedOverGround,
+              speedInferenceSource: vessel.speedInferenceSource,
+              speedTelemetryAvailable: vessel.speedTelemetryAvailable,
+              marketAverageSpeedKnots: vessel.marketAverageSpeedKnots,
               plannedDestination: vessel.destination,
               destination: vessel.destination,
               Destination: vessel.destination,
@@ -711,9 +735,13 @@ export default async (req: Request) => {
 
     const evaluatedMatches = evaluateVessels(1.15, false);
     const matches = evaluatedMatches
-      .filter((match) => !strictTechnicalFilter
-        || match.dwtAssessment?.status === "UNKNOWN"
-        || match.dwtAssessment?.status === "SUFFICIENT")
+      .filter((match) => !strictTechnicalFilter || (
+        match.audit?.operationallyEligible === true
+        && (
+          match.dwtAssessment?.status === "UNKNOWN"
+          || match.dwtAssessment?.status === "SUFFICIENT"
+        )
+      ))
       .sort((left, right) => {
         if (!strictTechnicalFilter) return 0;
         return Number(left.dwtAssessment?.status === "UNKNOWN") - Number(right.dwtAssessment?.status === "UNKNOWN");

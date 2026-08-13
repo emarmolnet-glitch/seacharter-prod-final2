@@ -331,7 +331,9 @@
             || sourcePayload.ExtendedClassBPositionReport
             || sourcePayload.position
             || {};
-        return [vessel, sourcePayload, message, metadata, position];
+        const nestedVessel = vessel.vessel && typeof vessel.vessel === 'object' ? vessel.vessel : {};
+        const ais = vessel.ais && typeof vessel.ais === 'object' ? vessel.ais : {};
+        return [vessel, nestedVessel, ais, sourcePayload, message, metadata, position];
     }
 
     function readVesselField(vessel, aliases) {
@@ -345,7 +347,7 @@
     }
 
     function readRealVesselSpeed(vessel) {
-        const rawSpeed = readVesselField(vessel, ['speed_over_ground', 'speedOverGround', 'speed', 'Speed', 'sog', 'Sog', 'SOG']);
+        const rawSpeed = readVesselField(vessel, ['speed_over_ground', 'speedOverGround', 'speed', 'Speed', 'sog', 'Sog', 'SOG', 'marketAverageSpeedKnots']);
         if (rawSpeed === null) return null;
         const speed = Number(String(rawSpeed).replace(',', '.'));
         return Number.isFinite(speed) && speed >= 0 ? speed : null;

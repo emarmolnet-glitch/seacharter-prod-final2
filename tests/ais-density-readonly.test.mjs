@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const mapLoaderSource = await readFile(new URL('../map_loader.js', import.meta.url), 'utf8');
+const mapCartographySource = await readFile(new URL('../src/map-cartography-loader.js', import.meta.url), 'utf8');
 const globeSource = await readFile(new URL('../GlobalFleetGlobe.js', import.meta.url), 'utf8');
 const globeCssSource = await readFile(new URL('../assets/css/density-globe.css', import.meta.url), 'utf8');
 const dataBridgeSource = await readFile(new URL('../public/databridge.html', import.meta.url), 'utf8');
@@ -18,7 +19,7 @@ test('density map loads validated vessels through the read-only endpoint', () =>
   assert.match(indexSource, /fair-freight-background-readonly/);
 });
 
-test('Radar LIVE activation loads audited ais_vessels into isolated fair-freight state', () => {
+test('Radar LIVE delegates activation while density keeps an isolated read-only loader', () => {
   const toggleStart = indexSource.indexOf('window.toggleLiveTracking = async function');
   const toggleEnd = indexSource.indexOf('window.isFirstLoad', toggleStart);
   const toggleSource = indexSource.slice(toggleStart, toggleEnd);
@@ -28,10 +29,10 @@ test('Radar LIVE activation loads audited ais_vessels into isolated fair-freight
 
   assert.match(indexSource, /window\.RadarGlobalControl = \(\(\) => \{/);
   assert.match(indexSource, /const activatingLive = state\.mode !== 'live'/);
-  assert.match(toggleSource, /window\.loadValidatedAisDensityVessels\(\{/);
-  assert.match(toggleSource, /liveMode: true/);
-  assert.match(toggleSource, /selectedTaxonomy: selectedTaxonomy \|\| 'All Cargo'/);
-  assert.match(toggleSource, /Radar LIVE actualizado con/);
+  assert.match(toggleSource, /return window\.RadarGlobalControl\.toggle\(source\)/);
+  assert.match(indexSource, /window\.startRadarLive = async function\(options = \{\}\)/);
+  assert.match(indexSource, /const vessels = await window\.updateOpenShipsRadar\(\{/);
+  assert.match(indexSource, /Radar LIVE actualizado con/);
   assert.match(loaderSource, /window\.getAuditAisEndpoint\(selectedTaxonomy, \{ refresh: options\.refresh === true, radarContext, selectedTaxonomies \}\)/);
   assert.match(loaderSource, /taxonomyMode: 'strict'/);
   assert.match(loaderSource, /await fetch\(endpoint/);
@@ -331,7 +332,7 @@ test('density exposes no radar command and consumes the matching snapshot only',
   assert.doesNotMatch(densitySource, /btn-refresh-ais|Barrido de Radar Externo|trigger-ais-sweep/);
   assert.doesNotMatch(indexSource, /ejecutarBarridoManual|executeSweepAIS|waitForManualAisSweepCompletion/);
   assert.match(indexSource, /data-radar-global-control data-radar-context="matching"/);
-  assert.match(indexSource, /window\.executeMatchingRadarSweep = async function\(\)/);
+  assert.match(indexSource, /window\.executeMatchingRadarSweep = async function\(options = \{\}\)/);
 });
 
 test('read-only response feeds rendering, counters, and freight calculation', () => {
@@ -451,9 +452,9 @@ test('filtered AIS state redraws visible globes and defers hidden views', () => 
 });
 
 test('Core PRO and Data Bridge share Globe.gl 2.46.1', () => {
-  assert.ok(indexSource.includes('globe.gl@2.46.1/dist/globe.gl.min.js'));
+  assert.ok(mapCartographySource.includes('globe.gl@2.46.1/dist/globe.gl.min.js'));
   assert.ok(dataBridgeSource.includes('globe.gl@2.46.1/dist/globe.gl.min.js'));
-  assert.ok(indexSource.includes('GlobalFleetGlobe.js'));
+  assert.ok(mapCartographySource.includes('GlobalFleetGlobe.js'));
   assert.ok(dataBridgeSource.includes('GlobalFleetGlobe.js'));
   assert.ok(globeSource.includes('window.Globe({ animateIn: false, waitForGlobeReady: false })(container)'));
   assert.ok(globeSource.includes('window.GlobalFleetGlobe = globalFleetGlobe'));
@@ -485,7 +486,7 @@ test('globe hover styling preserves flat tactical geometry and matches radar too
 test('Core PRO tooltip escapes map clipping and floats above interface overlays', () => {
   assert.match(globeCssSource, /\.global-fleet-globe \.scene-tooltip \{[\s\S]*?z-index: 9999 !important/);
   assert.match(globeCssSource, /#view-map #map-container,[\s\S]*?#view-ais #ais-map \{[\s\S]*?overflow: visible !important/);
-  assert.match(indexSource, /density-globe\.css\?v=[^"']+/);
+  assert.match(mapCartographySource, /density-globe\.css\?v=[^"']+/);
   assert.match(dataBridgeSource, /density-globe\.css\?v=[^"']+/);
 });
 
@@ -677,7 +678,7 @@ test('matching delegates the unified triple-source query independently from the 
   const executionStart = indexSource.indexOf('async function executeMatchingEngine');
   const executionEnd = indexSource.indexOf('window.runMatchingEngine = runMatchingEngine', executionStart);
   const executionSource = indexSource.slice(executionStart, executionEnd);
-  assert.match(executionSource, /requestMatchingLocal\('execute', openShipsCandidates, payload\)/);
+  assert.match(executionSource, /requestMatchingLocal\('execute', \[\], payload\)/);
   assert.match(executionSource, /value: selectedVesselTaxonomies\.slice\(\)/);
   assert.match(executionSource, /values: selectedVesselTaxonomies\.slice\(\)/);
   assert.doesNotMatch(executionSource, /captureRadarSnapshotForFleetMatching\(\)/);
@@ -685,13 +686,14 @@ test('matching delegates the unified triple-source query independently from the 
   assert.match(indexSource, /Integridad verificada/);
 });
 
-test('live vessel endpoint rejects unbounded requests and persists only strict taxonomy matches', () => {
+test('live vessel endpoint rejects unbounded requests and filters stored vessels in read-only mode', () => {
   assert.match(getVesselsFunctionSource, /source: "geofence-required"/);
   assert.match(getVesselsFunctionSource, /status: 400/);
   assert.match(getVesselsFunctionSource, /insidePolGeofence/);
-  assert.match(getVesselsFunctionSource, /filterVesselsByTaxonomies\(completedLiveVessels, requestedTaxonomies\)/);
-  assert.match(getVesselsFunctionSource, /persistVesselMessages\(acceptedLiveVessels\)/);
-  assert.match(getVesselsFunctionSource, /forceLive \? acceptedLiveVessels/);
+  assert.match(getVesselsFunctionSource, /source: "aisstream-client-only"/);
+  assert.match(getVesselsFunctionSource, /status: 410/);
+  assert.match(getVesselsFunctionSource, /filterVesselsByTaxonomies\(storedVessels, requestedTaxonomies\)/);
+  assert.match(getVesselsFunctionSource, /source: "stored-read-only"/);
 });
 
 test('radar taxonomy selector exposes only four saved macro-categories', () => {
