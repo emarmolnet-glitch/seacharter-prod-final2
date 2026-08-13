@@ -20171,33 +20171,124 @@
                 || (left.transitHours ?? Infinity) - (right.transitHours ?? Infinity);
         };
 
+        const MATCHING_EXCLUDED_PASSENGER_VESSEL_NAMES = new Set(['SUN PRINCESS']);
+
+        function compactMatchingRecord(record, allowedKeys) {
+            if (!record || typeof record !== 'object') return undefined;
+            return allowedKeys.reduce((compacted, key) => {
+                const value = record[key];
+                if (value !== undefined && value !== null && typeof value !== 'object') compacted[key] = value;
+                return compacted;
+            }, {});
+        }
+
+        function stripMatchingCandidate(candidate) {
+            if (!candidate || typeof candidate !== 'object') return null;
+            const vesselName = String(candidate.vesselName || candidate.vessel_name || candidate.name || candidate.ShipName || '').trim();
+            const vesselType = candidate.vesselType ?? candidate.vessel_type ?? candidate.shipType ?? candidate.ShipType ?? null;
+            if (MATCHING_EXCLUDED_PASSENGER_VESSEL_NAMES.has(vesselName.toUpperCase())) return null;
+            if (vesselType !== null && vesselType !== '' && typeof isStrictCargoAisVessel === 'function' && !isStrictCargoAisVessel(candidate)) {
+                return null;
+            }
+            return compactMatchingRecord({
+                candidateId: candidate.candidateId ?? candidate.id ?? candidate.storageKey,
+                imo: candidate.imo ?? candidate.IMO ?? candidate.imoNumber ?? candidate.imo_number,
+                mmsi: candidate.mmsi ?? candidate.MMSI,
+                vesselName,
+                vesselType,
+                lat: candidate.lat ?? candidate.latitude,
+                lon: candidate.lon ?? candidate.lng ?? candidate.longitude,
+                dwt: candidate.dwt ?? candidate.DWT,
+                speed: candidate.speed ?? candidate.sog ?? candidate.speed_over_ground
+            }, ['candidateId', 'imo', 'mmsi', 'vesselName', 'vesselType', 'lat', 'lon', 'dwt', 'speed']);
+        }
+
+        function stripMatchingPayload(matchingPayload) {
+            if (!matchingPayload || typeof matchingPayload !== 'object') return undefined;
+            const selectedTaxonomies = Array.isArray(matchingPayload.selectedTaxonomies)
+                ? matchingPayload.selectedTaxonomies.map(value => String(value || '').trim()).filter(Boolean)
+                : [];
+            const taxonomies = Array.isArray(matchingPayload.taxonomies)
+                ? matchingPayload.taxonomies.map(value => String(value || '').trim()).filter(Boolean)
+                : selectedTaxonomies.slice();
+            const vesselClassContext = matchingPayload.vesselClassContext && typeof matchingPayload.vesselClassContext === 'object'
+                ? matchingPayload.vesselClassContext
+                : {};
+            const vesselClassValues = Array.isArray(vesselClassContext.values)
+                ? vesselClassContext.values.map(value => String(value || '').trim()).filter(Boolean)
+                : selectedTaxonomies.slice();
+            return {
+                route: compactMatchingRecord(matchingPayload.route, ['pol', 'pod']),
+                cargo: compactMatchingRecord(matchingPayload.cargo, [
+                    'loadingPortName', 'loadingPortLat', 'loadingPortLon', 'loadingPortUnlocode', 'loadingPortOfficialName',
+                    'unloadingPortName', 'unloadingPortLat', 'unloadingPortLon', 'quantity', 'cargoCode', 'cargoDescription',
+                    'cargoType', 'cargoTypeId', 'cargoTypeLabel', 'specification', 'stowageFactor', 'requiredVolumeCbm',
+                    'laycanStart', 'laycanEnd', 'loadRate', 'dischargeRate', 'maxDraft', 'maxLoa', 'gearedRequired',
+                    'grabRequired', 'loadMethod', 'dischargeMethod', 'requiredGrabCapacityCbm', 'requiredCraneSwlMt',
+                    'freightRate', 'lumpsumFreight', 'targetDwt', 'strictTechnicalFilter', 'debugIncludeUnknownDwt'
+                ]),
+                params: compactMatchingRecord(matchingPayload.params, ['fuelPrice', 'dailyOpex', 'portExpenses']),
+                vesselClassContext: {
+                    value: vesselClassValues.slice(),
+                    values: vesselClassValues.slice(),
+                    primaryValue: String(vesselClassContext.primaryValue || vesselClassValues[0] || ''),
+                    profile: compactMatchingRecord(vesselClassContext.profile, [
+                        'bunkerMultiplier', 'seaConsumptionMultiplier', 'portConsumptionMultiplier', 'riskCoefficient'
+                    ])
+                },
+                selectedTaxonomies,
+                taxonomies,
+                taxonomyMode: matchingPayload.taxonomyMode,
+                searchMode: matchingPayload.searchMode,
+                strictTechnicalFilter: matchingPayload.strictTechnicalFilter === true,
+                debugIncludeUnknownDwt: matchingPayload.debugIncludeUnknownDwt === true,
+                matchRadiusNm: matchingPayload.matchRadiusNm,
+                allowedSources: Array.isArray(matchingPayload.allowedSources) ? matchingPayload.allowedSources.slice() : [],
+                limit: matchingPayload.limit,
+                offset: matchingPayload.offset,
+                matchingRequest: compactMatchingRecord(matchingPayload.matchingRequest, ['requestId', 'calculationId', 'dwt'])
+            };
+        }
+
         async function requestMatchingLocal(operation, candidates, matchingPayload = null) {
             const requestBody = {
                 operation,
-                candidates: Array.isArray(candidates) ? candidates : [],
-                matchingPayload: matchingPayload && typeof matchingPayload === 'object' ? matchingPayload : undefined
+                candidates: Array.isArray(candidates) ? candidates.map(stripMatchingCandidate).filter(Boolean) : [],
+                matchingPayload: stripMatchingPayload(matchingPayload)
             };
             const requestKey = JSON.stringify(requestBody);
             const existingRequest = window.matchingLocalInFlightRequests.get(requestKey);
             if (existingRequest) return existingRequest;
 
             const request = (async () => {
-                const response = await fetch('/api/matching-local', {
-                    method: 'POST',
-                    cache: 'no-store',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Accept: 'application/json',
-                        'Cache-Control': 'no-cache, no-store, must-revalidate'
-                    },
-                    body: requestKey
-                });
-                const payload = await response.json();
-                if (typeof window.logOpenShipsWarnings === 'function') window.logOpenShipsWarnings(payload);
-                if (!response.ok || payload.success === false) {
-                    throw new Error(payload.error || 'No se pudo consultar vessels_master.');
+                try {
+                    const response = await fetch('/api/matching-local', {
+                        method: 'POST',
+                        cache: 'no-store',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Accept: 'application/json',
+                            'Cache-Control': 'no-cache, no-store, must-revalidate'
+                        },
+                        body: requestKey
+                    });
+                    if (!response.ok) {
+                        throw new Error(`MATCHING_LOCAL_HTTP_${response.status}`);
+                    }
+                    const payload = await response.json().catch(() => {
+                        throw new Error('MATCHING_LOCAL_INVALID_JSON');
+                    });
+                    if (typeof window.logOpenShipsWarnings === 'function') window.logOpenShipsWarnings(payload);
+                    if (payload.success === false) {
+                        throw new Error(payload.error || 'No se pudo consultar vessels_master.');
+                    }
+                    return payload;
+                } catch (error) {
+                    const matchingError = error instanceof Error ? error : new Error('MATCHING_LOCAL_REQUEST_FAILED');
+                    matchingError.matchingLocalHandled = true;
+                    if (typeof showToast === 'function') showToast('Error de cálculo de coincidencia', false, 'error');
+                    throw matchingError;
                 }
-                return payload;
             })();
             window.matchingLocalInFlightRequests.set(requestKey, request);
             try {
@@ -20806,7 +20897,9 @@
                 window.setCoreProOperationMode?.(state.previousOperationMode || window.CORE_PRO_OPERATION_MODES?.INACTIVE || 'INACTIVE');
                 state.previousOperationMode = null;
                 renderMatchingAuditVessels([]);
-                showToast(`❌ ${error instanceof Error ? error.message : 'No se pudo completar la auditoría local.'}`);
+                if (error?.matchingLocalHandled !== true) {
+                    showToast(`❌ ${error instanceof Error ? error.message : 'No se pudo completar la auditoría local.'}`);
+                }
             } finally {
                 state.loading = false;
                 updateMatchingAuditModeUi();
@@ -21664,10 +21757,10 @@
                         fuelPrice, dailyOpex, portExpenses
                     },
                     vesselClassContext: {
-                        ...(window.vesselClassContext || {}),
                         value: selectedVesselTaxonomies.slice(),
                         values: selectedVesselTaxonomies.slice(),
-                        sourceTaxonomies: selectedVesselTaxonomies.slice()
+                        primaryValue: selectedVesselTaxonomies[0] || '',
+                        profile: { ...((window.vesselClassContext && window.vesselClassContext.profile) || {}) }
                     },
                     selectedTaxonomies: selectedVesselTaxonomies.slice(),
                     taxonomies: selectedVesselTaxonomies.slice(),
@@ -22818,14 +22911,22 @@
             } catch (err) {
                 console.error("Matching failed:", err);
                 if (!isAppending) renderMatchingSourceCounts([]);
-                if (!isAppending) resultsList.innerHTML = `
-                    <div class="text-center py-12 text-slate-500">
-                        <i class="fa-solid fa-triangle-exclamation text-2xl mb-2 text-red-500"></i>
-                        <p class="font-bold">Error en la simulación del Motor de Coincidencias.</p>
-                        <p class="text-xs text-slate-400 mt-1">${err.message}</p>
-                    </div>
-                `;
-                resultsList.classList.remove('hidden');
+                if (err?.matchingLocalHandled === true) {
+                    if (!isAppending) {
+                        resultsList.innerHTML = '';
+                        resultsList.classList.add('hidden');
+                        emptyState.classList.remove('hidden');
+                    }
+                } else {
+                    if (!isAppending) resultsList.innerHTML = `
+                        <div class="text-center py-12 text-slate-500">
+                            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2 text-red-500"></i>
+                            <p class="font-bold">Error en la simulación del Motor de Coincidencias.</p>
+                            <p class="text-xs text-slate-400 mt-1">${err.message}</p>
+                        </div>
+                    `;
+                    resultsList.classList.remove('hidden');
+                }
             } finally {
                 window.matchingPaginationState.loading = false;
                 updateMatchingLoadMoreControl();
