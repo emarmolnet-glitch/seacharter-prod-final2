@@ -22,6 +22,15 @@ test('defines explicit light mode styling for select options and input dates', (
   assert.match(indexSource, /input\[type="date"\], select, datalist \{\s*color-scheme: light !important;\s*\}/);
 });
 
+test('publishes ETS cost globally and recalculates Cost-Plus from carbon price input', () => {
+  assert.match(indexSource, /emissionsCO2: 0, euCarbonPrice: 80, etsRouteFactor: 0, etsCost: 0, etsCostPMT: 0/);
+  assert.match(indexSource, /oninput="handleCarbonPriceInput\(this\.value\)"/);
+  assert.match(indexSource, /SeaCharterStore\.set\(\{[\s\S]*?emissionsCO2,[\s\S]*?euCarbonPrice: carbonPrice,[\s\S]*?etsCost,[\s\S]*?\}, \{ force: true, source: 'carbon-price-input' \}\)/);
+  assert.match(indexSource, /scheduleDebouncedCalculation\(0\)/);
+  assert.match(indexSource, /voyageCostWithoutEts > 0 \? voyageCostWithoutEts \+ etsCost : 0/);
+  assert.match(tceWorkspaceSource, /syncedVoyageCostWithoutEts > 0 \? syncedVoyageCostWithoutEts \+ syncedEtsCost : 0/);
+});
+
 test('uses compact matching header controls', () => {
   assert.match(indexSource, /id="new-estimation-btn"[\s\S]*?class="tools-dropdown-trigger flex items-center justify-center"/);
   assert.doesNotMatch(indexSource, /<span>\+ Nueva Estimación<\/span>/);
