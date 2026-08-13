@@ -32,6 +32,11 @@ type RouteCalculationData = {
   totalDays?: number;
   distance?: number;
   totalCosts?: number;
+  voyageCostWithoutEts?: number;
+  etsCost?: number;
+  emissionsCO2?: number;
+  euCarbonPrice?: number;
+  etsRouteFactor?: number;
   estimatedBunker?: number;
   estimatedBunkerCost?: number;
 };
@@ -2066,8 +2071,13 @@ export function CostPlusCalculator({
   const syncedBunkerCost = syncedCostData?.bunkerCost || syncedCostData?.estimatedBunkerCost;
   const syncedOpexDaily = syncedCostData?.opexDaily;
   const syncedPortCosts = syncedCostData?.portCosts;
+  const syncedEtsCost = safeNumber(syncedCostData?.etsCost);
+  const syncedVoyageCostWithoutEts = safeNumber(syncedCostData?.voyageCostWithoutEts);
 
-  const sharedTotalCosts = safeNumber(syncedTotalCosts);
+  const sharedTotalCosts = Math.max(
+    safeNumber(syncedTotalCosts),
+    syncedVoyageCostWithoutEts > 0 ? syncedVoyageCostWithoutEts + syncedEtsCost : 0,
+  );
 
   const results = useMemo(
     () => calculateCostPlusResults(values, sharedTotalCosts, priceStrategy),

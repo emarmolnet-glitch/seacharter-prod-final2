@@ -9449,7 +9449,7 @@
                                     <div>
                                         <label id="label-co2-price" class="text-[10px] text-slate-400 font-bold uppercase block mb-1">Precio Carbono UE</label>
                                         <div class="flex items-center bg-slate-950 border border-slate-700 rounded px-1.5">
-                                            <input type="number" id="eu-carbon-price" class="w-full bg-transparent text-white text-xs outline-none py-1 text-right font-mono" value="80" step="any" oninput="runEngine()">
+                                            <input type="number" id="eu-carbon-price" class="w-full bg-transparent text-white text-xs outline-none py-1 text-right font-mono" value="80" step="any" oninput="handleCarbonPriceInput(this.value)">
                                             <span class="text-slate-500 text-[10px] ml-1">USD/t</span>
                                         </div>
                                     </div>
@@ -15048,6 +15048,7 @@
             cargoTypeManual: "Otros",
             charterPartyStandard: "GENCON",
             costBunkers: 0, costOpex: 0, costPda: 0, costTotal: 0, totalCosts: 0,
+            emissionsCO2: 0, euCarbonPrice: 80, etsRouteFactor: 0, etsCost: 0, etsCostPMT: 0,
             breakEven: 0, sugOwner: 0, sugCharterer: 0,
             freightRate: 0, freightSell: 0,
             contractFreightGross: null,
@@ -32967,6 +32968,32 @@
             }, delay);
         }
 
+        function handleCarbonPriceInput(value) {
+            const parsedPrice = Number.parseFloat(value);
+            const carbonPrice = Number.isFinite(parsedPrice) && parsedPrice >= 0 ? parsedPrice : 0;
+            const emissionsCO2 = Math.max(0, Number(State.emissionsCO2) || 0);
+            const routeFactor = Math.max(0, Number(
+                typeof getEtsRouteFactor === 'function' ? getEtsRouteFactor() : State.etsRouteFactor
+            ) || 0);
+            const etsCost = emissionsCO2 * carbonPrice * routeFactor;
+
+            State.euCarbonPrice = carbonPrice;
+            State.etsRouteFactor = routeFactor;
+            State.etsCost = etsCost;
+            State.etsCostPMT = State.freightBaseMT > 0 ? etsCost / State.freightBaseMT : 0;
+
+            SeaCharterStore.set({
+                emissionsCO2,
+                euCarbonPrice: carbonPrice,
+                etsRouteFactor: routeFactor,
+                etsCost,
+                etsCostPMT: State.etsCostPMT
+            }, { force: true, source: 'carbon-price-input' });
+
+            scheduleDebouncedCalculation(0);
+        }
+        window.handleCarbonPriceInput = handleCarbonPriceInput;
+
         function flushDebouncedCalculation() {
             if (pendingCalculationTimer) {
                 clearTimeout(pendingCalculationTimer);
@@ -33017,7 +33044,11 @@
                     stowageFactor: State.stowageFactor,
                     cargoTolerance: State.cargoTolerance,
                     sugOwner: State.sugOwner,
+                    emissionsCO2: State.emissionsCO2,
+                    euCarbonPrice: State.euCarbonPrice,
+                    etsRouteFactor: State.etsRouteFactor,
                     etsCost: State.etsCost,
+                    etsCostPMT: State.etsCostPMT,
                     laycanDate: State.laycanDate,
                     laycanTime: State.laycanTime,
                     cancellingDate: State.cancellingDate,
@@ -34461,7 +34492,11 @@
                     stowageFactor: State.stowageFactor,
                     cargoTolerance: State.cargoTolerance,
                     sugOwner: State.sugOwner,
+                    emissionsCO2: State.emissionsCO2,
+                    euCarbonPrice: State.euCarbonPrice,
+                    etsRouteFactor: State.etsRouteFactor,
                     etsCost: State.etsCost,
+                    etsCostPMT: State.etsCostPMT,
                     laycanDate: State.laycanDate,
                     laycanTime: State.laycanTime,
                     cancellingDate: State.cancellingDate,
@@ -58968,9 +59003,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const grossRevOwner = isZeroCalculation ? 0 : voyageFinancials.ownerFreightCost;
             const voyageRevenues = isZeroCalculation ? 0 : (grossRevOwner + voyageExtras);
-            const voyageExpenses = isZeroCalculation ? 0 : (totalBunkers + pdas);
+            const voyageExpenses = isZeroCalculation ? 0 : Math.max(0, costTotal - ownerOperatingCapitalCosts);
             const tceTotal = isZeroCalculation ? 0 : (voyageRevenues - voyageExpenses);
-            const netProfitOwner = isZeroCalculation ? 0 : (tceTotal - ownerOperatingCapitalCosts);
+            const netProfitOwner = isZeroCalculation ? 0 : (voyageRevenues - costTotal);
             const grossRevCharterer = isZeroCalculation ? 0 : voyageFinancials.grossRevenue;
             const chartererCommissionCost = isZeroCalculation ? 0 : voyageFinancials.commissionCost;
             const totalRevenue = grossRevCharterer;
@@ -60348,12 +60383,20 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const canonical = (typeof getCanonicalVoyageFinancials === 'function')
                 ? getCanonicalVoyageFinancials(sourceState)
                 : null;
-            const totalCosts = Math.max(0, safeCalculationNumber(
+            const canonicalTotalCosts = Math.max(0, safeCalculationNumber(
                 canonical?.totalVoyageCost ?? sourceState?.totalCosts ?? sourceState?.costTotal
             ));
             const breakdown = sourceState?.costBreakdown || {};
+            const etsCost = Math.max(0, safeCalculationNumber(canonical?.etsCost ?? breakdown.ets ?? sourceState?.etsCost));
+            const voyageCostWithoutEts = Math.max(0, safeCalculationNumber(
+                canonical?.voyageCostWithoutEts ?? sourceState?.voyageCostWithoutEts
+            ));
+            const totalCosts = Math.max(
+                canonicalTotalCosts,
+                voyageCostWithoutEts > 0 ? voyageCostWithoutEts + etsCost : 0
+            );
             const includesPositioning = Boolean(breakdown.includesPositioning || safeCalculationNumber(sourceState?.distBallast) > 0);
-            const includesEts = safeCalculationNumber(breakdown.ets ?? sourceState?.etsCost) > 0;
+            const includesEts = etsCost > 0;
             const includedCosts = [];
             if (includesPositioning) includedCosts.push('posicionamiento');
             if (includesEts) includedCosts.push('ETS');

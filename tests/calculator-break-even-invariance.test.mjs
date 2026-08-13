@@ -282,3 +282,13 @@ test('break-even remains finite for very high costs and cargo', () => {
   assertValidBreakEven(5, result);
   assert.ok(result.breakEven > 0);
 });
+
+test('carbon price flows into ETS cost and projected owner profit', () => {
+  const lowCarbon = runCalculator({ 'eu-carbon-price': 40 }).result;
+  const highCarbon = runCalculator({ 'eu-carbon-price': 80 }).result;
+  const etsIncrease = highCarbon.etsCost - lowCarbon.etsCost;
+
+  assert.ok(etsIncrease > 0);
+  assert.equal(highCarbon.costTotal - lowCarbon.costTotal, etsIncrease);
+  assert.equal(lowCarbon.netProfitOwner - highCarbon.netProfitOwner, etsIncrease);
+});
