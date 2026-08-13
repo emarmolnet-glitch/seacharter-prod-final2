@@ -12,6 +12,7 @@ export type NormalizedLiveAisVessel = {
   lat: number | null;
   lon: number | null;
   speed_sog: number | null;
+  dwt: number | null;
   nav_status: unknown;
   vessel_type: string | null;
 };

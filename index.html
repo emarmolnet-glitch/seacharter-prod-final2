@@ -20187,20 +20187,25 @@
             const vesselName = String(candidate.vesselName || candidate.vessel_name || candidate.name || candidate.ShipName || '').trim();
             const vesselType = candidate.vesselType ?? candidate.vessel_type ?? candidate.shipType ?? candidate.ShipType ?? null;
             if (MATCHING_EXCLUDED_PASSENGER_VESSEL_NAMES.has(vesselName.toUpperCase())) return null;
-            if (vesselType !== null && vesselType !== '' && typeof isStrictCargoAisVessel === 'function' && !isStrictCargoAisVessel(candidate)) {
+            if (typeof isStrictCargoAisVessel === 'function' && !isStrictCargoAisVessel(candidate)) {
                 return null;
             }
+            const imo = String(candidate.imo ?? candidate.IMO ?? candidate.imoNumber ?? candidate.imo_number ?? '').replace(/\D/g, '');
+            if (!/^\d{7}$/.test(imo)) return null;
             return compactMatchingRecord({
-                candidateId: candidate.candidateId ?? candidate.id ?? candidate.storageKey,
-                imo: candidate.imo ?? candidate.IMO ?? candidate.imoNumber ?? candidate.imo_number,
-                mmsi: candidate.mmsi ?? candidate.MMSI,
-                vesselName,
-                vesselType,
+                imo,
                 lat: candidate.lat ?? candidate.latitude,
                 lon: candidate.lon ?? candidate.lng ?? candidate.longitude,
                 dwt: candidate.dwt ?? candidate.DWT,
                 speed: candidate.speed ?? candidate.sog ?? candidate.speed_over_ground
-            }, ['candidateId', 'imo', 'mmsi', 'vesselName', 'vesselType', 'lat', 'lon', 'dwt', 'speed']);
+            }, ['imo', 'lat', 'lon', 'speed', 'dwt']);
+        }
+
+        function showMatchingTransportAlert(message) {
+            if (typeof showToast === 'function') showToast(message, false, 'error');
+            window.dispatchEvent(new CustomEvent('matching:transport-warning', {
+                detail: { message, recoverable: true, mapPreserved: true }
+            }));
         }
 
         function stripMatchingPayload(matchingPayload) {
@@ -20253,10 +20258,17 @@
         async function requestMatchingLocal(operation, candidates, matchingPayload = null) {
             const requestBody = {
                 operation,
-                candidates: Array.isArray(candidates) ? candidates.map(stripMatchingCandidate).filter(Boolean) : [],
+                candidates: Array.isArray(candidates) ? candidates.slice(0, 1000).map(stripMatchingCandidate).filter(Boolean) : [],
                 matchingPayload: stripMatchingPayload(matchingPayload)
             };
             const requestKey = JSON.stringify(requestBody);
+            const requestBytes = new TextEncoder().encode(requestKey).byteLength;
+            if (requestBytes > 512 * 1024) {
+                const payloadError = new Error('MATCHING_LOCAL_PAYLOAD_TOO_LARGE');
+                payloadError.matchingLocalHandled = true;
+                showMatchingTransportAlert('Radar activo: la consulta se redujo para evitar un payload excesivo.');
+                throw payloadError;
+            }
             const existingRequest = window.matchingLocalInFlightRequests.get(requestKey);
             if (existingRequest) return existingRequest;
 
@@ -20286,7 +20298,7 @@
                 } catch (error) {
                     const matchingError = error instanceof Error ? error : new Error('MATCHING_LOCAL_REQUEST_FAILED');
                     matchingError.matchingLocalHandled = true;
-                    if (typeof showToast === 'function') showToast('Error de cálculo de coincidencia', false, 'error');
+                    showMatchingTransportAlert('Error de cálculo de coincidencia. El mapa continúa activo.');
                     throw matchingError;
                 }
             })();
@@ -22912,9 +22924,7 @@
                 console.error("Matching failed:", err);
                 if (!isAppending) renderMatchingSourceCounts([]);
                 if (err?.matchingLocalHandled === true) {
-                    if (!isAppending) {
-                        resultsList.innerHTML = '';
-                        resultsList.classList.add('hidden');
+                    if (!isAppending && resultsList.children.length === 0) {
                         emptyState.classList.remove('hidden');
                     }
                 } else {
@@ -50502,7 +50512,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const navigationStatus = typeof window.inferSpatialVesselStatus === 'function'
                     ? window.inferSpatialVesselStatus(vessel, getDensityReferencePortCoordinates())
                     : (vessel.statusLabel || vessel.navigationStatus || vessel.navigationalStatus || vessel.NavigationalStatus || 'Estado N/D');
-	                const grossTonnage = readDensityPositiveNumber(vessel, ['gross_tonnage', 'gt', 'grossTonnage', 'GT']);
+	                const grossTonnage = readDensityPositiveNumber(vessel, ['grossTonnage', 'gross_tonnage', 'gt', 'GT']);
 	                const dwt = readDensityPositiveNumber(vessel, ['dwt', 'DWT', 'deadweight']);
 	                const loaMeters = readDensityPositiveNumber(vessel, ['loa_meters', 'loa', 'loaMeters', 'LOA', 'lengthOverall', 'length_overall', 'length']);
 	                const flag = readDensityTechnicalValue(vessel, ['flag', 'Flag', 'bandera', 'country'])

@@ -182,7 +182,7 @@ export function mergeTripleVesselSources(
       const existingOrigins = [
         ...(Array.isArray(existing?.source_origins) ? existing.source_origins : []),
         ...(Array.isArray(existing?.sourceOrigins) ? existing.sourceOrigins : []),
-      ].filter((value): value is VesselSourceOrigin => value === "DATABRIDGE" || value === "AIS_LIVE" || value === "OPENSHIPS");
+      ].filter((value): value is VesselSourceOrigin => value === "MASTER" || value === "DATABRIDGE" || value === "AIS_LIVE" || value === "OPENSHIPS");
       const tagged = applyOrigins(merged, [...existingOrigins, origin]);
       mergedByKey.set(canonicalKey, tagged);
       keyAliases.set(primaryKey, canonicalKey);
@@ -192,9 +192,9 @@ export function mergeTripleVesselSources(
     });
   };
 
-  void masterRows;
+  mergeList(openShipsRows, "OPENSHIPS");
+  mergeList(masterRows, "MASTER");
   mergeList(dataBridgeRows, "DATABRIDGE");
   mergeList(aisRows, "AIS_LIVE");
-  mergeList(openShipsRows, "OPENSHIPS");
   return Array.from(mergedByKey.values());
 }

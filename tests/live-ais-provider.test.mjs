@@ -20,7 +20,7 @@ test('normalizes provider payloads to the strict live AIS contract', () => {
   });
 
   assert.deepEqual(Object.keys(vessel), [
-    'mmsi', 'imo', 'vessel_name', 'lat', 'lon', 'speed_sog', 'nav_status', 'vessel_type',
+    'mmsi', 'imo', 'vessel_name', 'lat', 'lon', 'speed_sog', 'dwt', 'nav_status', 'vessel_type',
   ]);
   assert.deepEqual(vessel, {
     mmsi: '123456789',
@@ -29,6 +29,7 @@ test('normalizes provider payloads to the strict live AIS contract', () => {
     lat: 36.75,
     lon: 5.08,
     speed_sog: 11.4,
+    dwt: null,
     nav_status: 0,
     vessel_type: 'Bulk Carrier',
   });
