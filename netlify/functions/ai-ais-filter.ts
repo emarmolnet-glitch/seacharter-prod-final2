@@ -367,7 +367,6 @@ export default async (req: Request) => {
     const cargoCode = textValue(cargo.cargoCode, cargo.cargoTypeId, cargo.typeId, body.cargoCode, body.cargoTypeId) || "100";
     const strictTechnicalFilter = body.strictTechnicalFilter === true || cargo.strictTechnicalFilter === true;
     const strictRequiredDwt = quantity > 0 ? quantity * 1.05 : 0;
-    const debugIncludeUnknownDwt = body.debugIncludeUnknownDwt === true || cargo.debugIncludeUnknownDwt === true;
     const methodsRequireShipGear = [cargo.loadMethod, cargo.dischargeMethod].some((value) => {
       const method = textValue(value).toLowerCase();
       return method === "cuchara_grab"
@@ -480,13 +479,6 @@ export default async (req: Request) => {
             : strictRequiredDwt > 0 && vessel.dwt < strictRequiredDwt
               ? { status: "INSUFFICIENT", label: "DWT Insuficiente (margen operativo 5%)" }
               : { status: "SUFFICIENT", label: "DWT Validado" };
-          const strictCriticalReasons = technicalEligibility.criticalReasons.filter((reason) => (
-            reason !== "DWT no disponible para validar capacidad"
-          ));
-          const debugUnknownDwtAllowed = debugIncludeUnknownDwt
-            && dwtAssessment.status === "UNKNOWN"
-            && strictCriticalReasons.length === 0;
-
           const hasTechnicalWarning = !technicalEligibility.eligible
             || technicalEligibility.criticalReasons.length > 0
             || activeDwtStatus === null
@@ -508,7 +500,7 @@ export default async (req: Request) => {
             || vessel.dwt >= strictRequiredDwt;
           const operationallyEligible = taxonomyCompatibility.compatible !== false
             && passesStrictDwtCapacity
-            && (!strictTechnicalFilter || technicalEligibility.eligible || !hasKnownDwt || debugUnknownDwtAllowed);
+            && (!strictTechnicalFilter || technicalEligibility.eligible || !hasKnownDwt);
           const idealVessel = operationallyEligible && !hasTechnicalWarning && loadState.ballastReady;
           const commercialRank = buildCommercialVesselRank({
             vesselDwt: vessel.dwt,
@@ -545,7 +537,6 @@ export default async (req: Request) => {
             marketAverageSpeedKnots: vessel.marketAverageSpeedKnots,
             verifiedDwt: vessel.verifiedDwt,
             estimatedBallastStatus: vessel.estimatedBallastStatus,
-            debugUnknownDwtAllowed,
             isOversizedFallback,
             vessel: {
               vesselName: vessel.vesselName,
@@ -707,8 +698,6 @@ export default async (req: Request) => {
               selectedVesselTaxonomies: vesselClassValues,
               operationallyEligible,
               strictTechnicalFilter,
-              debugIncludeUnknownDwt,
-              debugUnknownDwtAllowed,
               hasTechnicalWarning,
               hasWarning: hasTechnicalWarning,
               warning: warningReason,
@@ -760,7 +749,6 @@ export default async (req: Request) => {
         gearedRequired,
         strictTechnicalFilter,
         strictRequiredDwt,
-        debugIncludeUnknownDwt,
         stowageFactor,
         requiredVolumeCbm,
       },

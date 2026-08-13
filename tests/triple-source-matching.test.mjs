@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [indexSource, matchingSource, matchingDbSource, mergeSource, filterSource, openShipsStatusSource] = await Promise.all([
+const [indexSource, matchingSource, matchingDbSource, mergeSource, filterSource, openShipsStatusSource, strictDryCargoSource] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/functions/matching-local.ts', import.meta.url), 'utf8'),
   readFile(new URL('../db/matching-sources.ts', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/functions/_shared/vessel-source-merge.ts', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/functions/ai-ais-filter.ts', import.meta.url), 'utf8'),
   readFile(new URL('../netlify/functions/openships-live-status.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../netlify/functions/_shared/strict-dry-cargo.ts', import.meta.url), 'utf8'),
 ]);
 
 test('matching backend pages allowed sources and sends every page through Core PRO scoring', () => {
@@ -112,11 +113,21 @@ test('strict technical filtering exposes DWT assessment and compact-card penalti
   assert.match(indexSource, /DWT Insuficiente/);
   assert.match(indexSource, /Vessel Type:/);
   assert.match(indexSource, /strictTechnicalFilter: window\.matchingStrictTechnicalFilter === true/);
-  assert.match(indexSource, /Modo Debug Filtros/);
-  assert.match(indexSource, /debugIncludeUnknownDwt: window\.matchingDebugIncludeUnknownDwt === true/);
-  assert.match(filterSource, /debugUnknownDwtAllowed/);
+  assert.doesNotMatch(indexSource, /Modo Debug Filtros|matchingDebugIncludeUnknownDwt|debugIncludeUnknownDwt/);
+  assert.doesNotMatch(filterSource, /debugUnknownDwtAllowed|debugIncludeUnknownDwt/);
   assert.match(filterSource, /!strictTechnicalFilter && isUnknownTechnicalValue\(vessel\.shipType\)/);
   assert.match(filterSource, /operationallyEligible = taxonomyCompatibility\.compatible !== false[\s\S]*!strictTechnicalFilter/);
   assert.match(filterSource, /match\.audit\?\.operationallyEligible === true/);
   assert.match(filterSource, /match\.dwtAssessment\?\.status === "UNKNOWN"/);
+});
+
+test('matching output reapplies dry-cargo taxonomy after enrichment and scoring', () => {
+  assert.match(matchingSource, /scoringVessels = filterStrictDryCargoVessels\(enriched\.vessels\)/);
+  assert.match(matchingSource, /const evaluatedMatches = filterStrictDryCargoVessels\(/);
+  assert.match(matchingSource, /const eligibleMatches = filterStrictDryCargoVessels\(/);
+  assert.match(strictDryCargoSource, /nestedVessel\.vesselType/);
+  assert.match(strictDryCargoSource, /nestedAis\.vessel_type/);
+  assert.match(strictDryCargoSource, /if \(EXCLUDED_TEXT\.test\(text\)\) return false/);
+  assert.match(strictDryCargoSource, /container/);
+  assert.match(strictDryCargoSource, /tanker/);
 });

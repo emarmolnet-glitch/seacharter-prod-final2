@@ -19,7 +19,7 @@ test('matching execution delegates triple-source reads without starting an exter
   const executionEnd = indexSource.indexOf('window.runMatchingEngine = runMatchingEngine', executionStart);
   const executionSource = indexSource.slice(executionStart, executionEnd);
 
-  assert.match(executionSource, /requestMatchingLocal\('execute', openShipsCandidates, payload\)/);
+  assert.match(executionSource, /requestMatchingLocal\('execute', \[\], payload\)/);
   assert.match(executionSource, /No se encontraron coincidencias en las fuentes disponibles/);
   assert.match(executionSource, /Fuentes Seleccionadas Validadas/);
   assert.doesNotMatch(executionSource, /requestAiAisFilter|ai-ais-filter/);
@@ -143,7 +143,7 @@ test('global radar control replaces the matching manual sweep button', () => {
   assert.match(indexSource, /data-radar-global-control data-radar-context="matching"/);
   assert.doesNotMatch(indexSource, /id="btn-manual-radar-sweep"/);
   assert.doesNotMatch(indexSource, /id="btn-refresh-ais"|ejecutarBarridoManual|executeSweepAIS/);
-  assert.match(indexSource, /window\.executeMatchingRadarSweep = async function\(\)/);
+  assert.match(indexSource, /window\.executeMatchingRadarSweep = async function\(options = \{\}\)/);
 });
 
 test('connection status and contextual radar have no automatic network startup', () => {
