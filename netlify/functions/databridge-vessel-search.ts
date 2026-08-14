@@ -20,6 +20,7 @@ type VesselMasterRow = QueryResultRow & {
   net_tonnage?: number | null;
   loa_meters?: number | null;
   beam_meters?: number | null;
+  service_speed_knots?: number | string | null;
   owner_manager?: string | null;
   has_gears?: boolean | null;
   process_status?: string | null;
@@ -89,6 +90,7 @@ async function loadFreshDataBridgeVesselSearch(req: Request) {
             net_tonnage,
             loa_meters,
             beam_meters,
+            service_speed_knots,
             owner_manager,
             has_gears,
             process_status,
@@ -132,6 +134,9 @@ async function loadFreshDataBridgeVesselSearch(req: Request) {
           loa: row.loa_meters ?? (sourcePayload.loa_meters as number | null) ?? (sourcePayload.loa as number | null) ?? null,
           beam_meters: row.beam_meters ?? (sourcePayload.beam_meters as number | null) ?? (sourcePayload.beam as number | null) ?? null,
           beam: row.beam_meters ?? (sourcePayload.beam_meters as number | null) ?? (sourcePayload.beam as number | null) ?? null,
+          service_speed_knots: row.service_speed_knots ?? null,
+          spd_ballast: row.service_speed_knots ?? sourcePayload.spd_ballast ?? null,
+          spd_laden: row.service_speed_knots ?? sourcePayload.spd_laden ?? null,
           has_scrubber: hasScrubber,
           hasScrubber,
           audit_status: row.audit_status || null,
@@ -182,6 +187,7 @@ async function loadFreshDataBridgeVesselSearch(req: Request) {
           net_tonnage,
           loa_meters,
           beam_meters,
+          service_speed_knots,
           owner_manager,
           has_gears,
           process_status,
@@ -249,6 +255,7 @@ async function loadFreshDataBridgeVesselSearch(req: Request) {
       net_tonnage: row.net_tonnage ?? (sourcePayload.net_tonnage as number | null) ?? (sourcePayload.nt as number | null) ?? null,
       loa_meters: row.loa_meters ?? (sourcePayload.loa_meters as number | null) ?? (sourcePayload.loa as number | null) ?? null,
       beam_meters: row.beam_meters ?? (sourcePayload.beam_meters as number | null) ?? (sourcePayload.beam as number | null) ?? null,
+      service_speed_knots: row.service_speed_knots ?? null,
       has_scrubber: hasScrubber,
       hasScrubber,
       owner_manager: row.owner_manager || null,
@@ -258,8 +265,8 @@ async function loadFreshDataBridgeVesselSearch(req: Request) {
       audit_status: row.audit_status,
       auditStatus: row.audit_status,
       audit_source: row.audit_source,
-      spd_ballast: sourcePayload.spd_ballast || null,
-      spd_laden: sourcePayload.spd_laden || null,
+      spd_ballast: row.service_speed_knots ?? sourcePayload.spd_ballast ?? null,
+      spd_laden: row.service_speed_knots ?? sourcePayload.spd_laden ?? null,
       cons_sea: sourcePayload.cons_sea || null,
       cons_port: sourcePayload.cons_port || null,
       loa: row.loa_meters ?? (sourcePayload.loa_meters as number | null) ?? (sourcePayload.loa as number | null) ?? null,
