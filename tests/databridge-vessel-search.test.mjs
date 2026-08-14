@@ -53,3 +53,11 @@ test('databridge-vessel-search function queries vessels_master for EN_CARTERA an
   assert.match(searchFunctionSource, /COALESCE\(audit_status, ''\)[\s\S]*NOT IN \('PENDING', 'IN_DUE_DILIGENCE', 'REJECTED'\)/);
   assert.match(searchFunctionSource, /COALESCE\(process_status, ''\)[\s\S]*NOT IN \('PENDING_REVIEW', 'DUE_DILIGENCE'\)/);
 });
+
+test('databridge-vessel-search selects service speed and maps it to both calculator speeds', () => {
+  const selectCount = searchFunctionSource.match(/\bservice_speed_knots,\n/g)?.length || 0;
+  assert.equal(selectCount, 2);
+  assert.match(searchFunctionSource, /service_speed_knots: row\.service_speed_knots \?\? null/);
+  assert.match(searchFunctionSource, /spd_ballast: row\.service_speed_knots \?\? sourcePayload\.spd_ballast \?\? null/);
+  assert.match(searchFunctionSource, /spd_laden: row\.service_speed_knots \?\? sourcePayload\.spd_laden \?\? null/);
+});

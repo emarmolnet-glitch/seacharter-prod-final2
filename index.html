@@ -24551,11 +24551,14 @@
                 const loaInput = document.getElementById('vessel-loa');
                 if (loaInput && identity.loa) loaInput.value = String(identity.loa);
 
-                const speedBallastInput = document.getElementById('vessel-speed-ballast');
-                if (speedBallastInput) speedBallastInput.value = vessel.spd_ballast;
+                const serviceSpeed = Number(vessel.service_speed_knots ?? vessel.serviceSpeedKnots);
+                const ballastSpeed = Number(vessel.spd_ballast ?? vessel.speed_ballast ?? serviceSpeed);
+                const ladenSpeed = Number(vessel.spd_laden ?? vessel.speed_laden ?? serviceSpeed);
+                const speedBallastInput = document.getElementById('spd-ballast');
+                if (speedBallastInput && Number.isFinite(ballastSpeed) && ballastSpeed > 0) speedBallastInput.value = String(ballastSpeed);
 
-                const speedLadenInput = document.getElementById('vessel-speed-laden');
-                if (speedLadenInput) speedLadenInput.value = vessel.spd_laden;
+                const speedLadenInput = document.getElementById('spd-laden');
+                if (speedLadenInput && Number.isFinite(ladenSpeed) && ladenSpeed > 0) speedLadenInput.value = String(ladenSpeed);
 
                 const consSeaInput = document.getElementById('vessel-cons-sea');
                 if (consSeaInput) consSeaInput.value = vessel.cons_sea;
@@ -30919,6 +30922,9 @@
             const loa = Number(source.loa ?? source.loa_meters ?? source.loaMeters ?? metadata.LOA);
             const beam = Number(source.beam ?? source.beam_meters ?? source.beamMeters ?? metadata.Beam);
             const dwcc = Number(source.dwcc ?? source.dwcc_mt ?? source.cargo_capacity ?? source.cargo_capacity_mt ?? source.deadweight_cargo_capacity ?? metadata.DWCC);
+            const serviceSpeed = Number(source.service_speed_knots ?? source.serviceSpeedKnots);
+            const ballastSpeed = Number(source.service_speed_knots ?? source.serviceSpeedKnots ?? source.spd_ballast ?? source.speed_ballast ?? source.ballastSpeed);
+            const ladenSpeed = Number(source.service_speed_knots ?? source.serviceSpeedKnots ?? source.spd_laden ?? source.speed_laden ?? source.ladenSpeed);
             const hasScrubber = normalizeVesselBoolean(source.has_scrubber ?? source.hasScrubber ?? source.scrubber ?? metadata.HasScrubber);
             return {
                 ...source,
@@ -30943,6 +30949,9 @@
                 vessel_type: source.vessel_type || source.vesselType || source.shipType || null,
                 vessel_class: source.vessel_class || source.vesselClass || source.vessel_type || source.vesselType || null,
                 specialty_type: source.specialty_type || source.specialtyType || source.vessel_type || source.vesselType || null,
+                service_speed_knots: Number.isFinite(serviceSpeed) && serviceSpeed > 0 ? serviceSpeed : null,
+                spd_ballast: Number.isFinite(ballastSpeed) && ballastSpeed > 0 ? ballastSpeed : null,
+                spd_laden: Number.isFinite(ladenSpeed) && ladenSpeed > 0 ? ladenSpeed : null,
                 has_scrubber: hasScrubber,
                 hasScrubber,
             };
@@ -30990,6 +30999,10 @@
             const resolvedName = String(vessel.vessel_name || fallbackName || '').trim();
             const resolvedYear = Number(vessel.year_built);
             const dwtInput = document.getElementById('vessel-dwt');
+            const speedBindings = [
+                ['spd-ballast', Number(vessel.spd_ballast ?? vessel.service_speed_knots)],
+                ['spd-laden', Number(vessel.spd_laden ?? vessel.service_speed_knots)],
+            ];
 
             if (Number.isFinite(resolvedDwt) && resolvedDwt > 0) {
                 const visualDwt = String(Math.round(resolvedDwt));
@@ -31005,6 +31018,10 @@
                 const yearInput = document.getElementById('vessel-built-year');
                 if (yearInput) yearInput.value = String(resolvedYear);
             }
+            speedBindings.forEach(([inputId, speed]) => {
+                const speedInput = document.getElementById(inputId);
+                if (speedInput && Number.isFinite(speed) && speed > 0) speedInput.value = String(speed);
+            });
 
             updateCalculatorVesselIdentityDisplay(vessel, resolvedName || fallbackName);
             if (window.GlobalStore) {
@@ -31123,8 +31140,8 @@
                 setDataBridgeHydratedValue('vessel-flag', vessel.flag, clearMissing),
                 setDataBridgeHydratedValue('vessel-identity-flag', vessel.flag, clearMissing),
                 setDataBridgeHydratedValue('vessel-identity-year', vessel.year_built, { ...clearMissing, numeric: true, round: true }),
-                setDataBridgeHydratedValue('spd-ballast', vessel.spd_ballast, { ...clearMissing, numeric: true }),
-                setDataBridgeHydratedValue('spd-laden', vessel.spd_laden, { ...clearMissing, numeric: true }),
+                setDataBridgeHydratedValue('spd-ballast', vessel.spd_ballast, { numeric: true }),
+                setDataBridgeHydratedValue('spd-laden', vessel.spd_laden, { numeric: true }),
                 setDataBridgeHydratedValue('cons-sea', vessel.cons_sea, { ...clearMissing, numeric: true }),
                 setDataBridgeHydratedValue('cons-port', vessel.cons_port, { ...clearMissing, numeric: true }),
             ];

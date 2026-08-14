@@ -64,3 +64,13 @@ test('the Data Bridge endpoint returns scrubber metadata with the master profile
   assert.match(endpointSource, /has_scrubber: hasScrubber/);
   assert.match(endpointSource, /hasScrubber,/);
 });
+
+test('service speed hydrates both editable calculator speeds without clearing manual values on null', () => {
+  assert.match(indexSource, /source\.service_speed_knots \?\? source\.serviceSpeedKnots \?\? source\.spd_ballast/);
+  assert.match(indexSource, /source\.service_speed_knots \?\? source\.serviceSpeedKnots \?\? source\.spd_laden/);
+  assert.match(indexSource, /\['spd-ballast', Number\(vessel\.spd_ballast \?\? vessel\.service_speed_knots\)\]/);
+  assert.match(indexSource, /\['spd-laden', Number\(vessel\.spd_laden \?\? vessel\.service_speed_knots\)\]/);
+  assert.match(indexSource, /setDataBridgeHydratedValue\('spd-ballast', vessel\.spd_ballast, \{ numeric: true \}\)/);
+  assert.match(indexSource, /setDataBridgeHydratedValue\('spd-laden', vessel\.spd_laden, \{ numeric: true \}\)/);
+  assert.doesNotMatch(indexSource, /setDataBridgeHydratedValue\('spd-(?:ballast|laden)', vessel\.spd_(?:ballast|laden), \{ \.\.\.clearMissing, numeric: true \}\)/);
+});
