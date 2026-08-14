@@ -1,18 +1,15 @@
 import type { Config } from "@netlify/functions";
 import {
-  findVesselMasterTableByImo,
+  findVesselTechnicalRecord,
   upsertVesselTechnicalRecord,
 } from "../../db/vessel-technical-cache.js";
 import { createCorsHeaders } from "./_shared/cors.js";
+import { AisCoordinatorError, getVesselParticulars } from "./_shared/aisCoordinator.js";
 import {
-  fetchHifleetVessel,
-  formatHifleetApiError,
-  HifleetConfigurationError,
-  HifleetUpstreamError,
   normalizeImo,
   resolveVesselByImo,
   serializeVesselRecord,
-} from "./_shared/hifleet-vessel.mjs";
+} from "./_shared/vessel-lookup.mjs";
 
 const headersFor = (request: Request) => ({
   "cache-control": "no-store",
@@ -45,11 +42,11 @@ export default async (request: Request) => {
   try {
     const result = await resolveVesselByImo({
       imoNumber,
-      findCached: async (imo: number) => {
+      findInDatabase: async (imo: number) => {
         try {
-          return await findVesselMasterTableByImo(String(imo));
+          return await findVesselTechnicalRecord(imo, null, null);
         } catch (error) {
-          console.error("[vessel] Local Neon cache lookup failed; HiFleet fallback aborted.", {
+          console.error("[vessel] Neon lookup failed; Datalastic fallback aborted.", {
             imo: String(imo),
             errorName: error instanceof Error ? error.name : "UnknownError",
             errorMessage: error instanceof Error ? error.message : String(error),
@@ -57,15 +54,17 @@ export default async (request: Request) => {
           throw new LocalDatabaseLookupError(error);
         }
       },
-      fetchRemote: (imo: number) => fetchHifleetVessel({ imoNumber: imo }),
+      fetchFromDatalastic: (imo: number) => getVesselParticulars(String(imo)),
       saveRecord: (record: Parameters<typeof upsertVesselTechnicalRecord>[0]) => (
-        upsertVesselTechnicalRecord(record, undefined, "VERIFIED_HIFLEET")
+        upsertVesselTechnicalRecord(record, undefined, "VERIFIED_DATALASTIC")
       ),
     });
     return Response.json({
       success: true,
       cache: result.cache,
-      source: result.cache === "hit" ? "vessels_master_table" : "hifleet",
+      source: result.cache === "hit" ? "vessels_master" : "datalastic",
+      creditsConsumed: result.cache === "hit" || result.providerMeta?.cacheStatus !== "MISS" ? 0 : 1,
+      providerCacheStatus: result.providerMeta?.cacheStatus ?? null,
       vessel: serializeVesselRecord(result.vessel),
     }, { headers });
   } catch (error) {
@@ -80,14 +79,8 @@ export default async (request: Request) => {
       }, { status: 500, headers });
     }
 
-    const configurationError = error instanceof HifleetConfigurationError;
-    const upstreamError = error instanceof HifleetUpstreamError;
-    const providerStatus = upstreamError
-      && typeof error === "object"
-      && error !== null
-      && "status" in error
-      ? (error as { status?: number }).status
-      : undefined;
+    const coordinatorError = error instanceof AisCoordinatorError;
+    const providerStatus = coordinatorError ? error.status : undefined;
     console.error("[vessel] Vessel lookup failed.", {
       imoNumber,
       errorName: error instanceof Error ? error.name : "UnknownError",
@@ -95,12 +88,8 @@ export default async (request: Request) => {
     });
     return Response.json({
       success: false,
-      error: configurationError
-        ? "Vessel data provider is not configured"
-        : upstreamError
-          ? formatHifleetApiError(error)
-          : "Vessel data provider request failed",
-    }, { status: configurationError ? 503 : upstreamError ? 502 : 500, headers });
+      error: coordinatorError ? error.message : "Vessel lookup or persistence failed",
+    }, { status: coordinatorError ? error.status : 500, headers });
   }
 };
 

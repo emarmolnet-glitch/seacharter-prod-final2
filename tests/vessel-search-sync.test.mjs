@@ -176,6 +176,16 @@ test('manual IMO lookup validates seven digits and exposes a loading state', () 
   assert.match(lookupSource, /finally \{/);
   assert.match(lookupSource, /imoInput\.disabled = previousDisabled/);
   assert.match(lookupSource, /imoInput\.removeAttribute\('aria-busy'\)/);
+  const hydrationStart = indexSource.indexOf('function applyDataBridgeHydrationToCalculator(rawVessel, selectedVessel = {})');
+  const hydrationEnd = indexSource.indexOf('async function fetchDataBridgeVesselProfile', hydrationStart);
+  const hydrationSource = indexSource.slice(hydrationStart, hydrationEnd);
+  assert.match(hydrationSource, /setDataBridgeHydratedValue\('vessel-dwt', vessel\.dwt/);
+  assert.match(hydrationSource, /setDataBridgeHydratedValue\('vessel-draft', vessel\.draft \|\| vessel\.draft_meters/);
+  assert.match(hydrationSource, /setDataBridgeHydratedValue\('vessel-loa', vessel\.loa \|\| vessel\.loa_meters/);
+  assert.match(hydrationSource, /setDataBridgeHydratedValue\('vessel-identity-beam', vessel\.beam \|\| vessel\.beam_meters/);
+  assert.match(hydrationSource, /updateSection2LocalState\('vessel-draft', State\.draft/);
+  assert.match(hydrationSource, /updateSection2LocalState\('vessel-loa', State\.loa/);
+  assert.match(hydrationSource, /updateSection2LocalState\('vessel-identity-beam', State\.beam/);
 });
 
 test('manual DWT edits update calculator state and force compatibility recalculation', () => {
