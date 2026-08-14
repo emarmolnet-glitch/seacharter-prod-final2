@@ -54,9 +54,11 @@ test("typed vessel attribute parsing normalizes text, years, and technical numbe
 
 test("Due Diligence persists extracted loa_meters into vessels_master", () => {
   const diligenceSource = readFileSync(new URL("../netlify/functions/vessel-due-diligence.ts", import.meta.url), "utf8");
+  const coordinatorSource = readFileSync(new URL("../netlify/functions/_shared/aisCoordinator.js", import.meta.url), "utf8");
   const cacheSource = readFileSync(new URL("../db/vessel-technical-cache.ts", import.meta.url), "utf8");
 
-  assert.match(diligenceSource, /loaMeters:\s*data\.loa_meters/);
+  assert.match(coordinatorSource, /loaMeters:\s*finiteNumber\(vessel\.length, vessel\.length_overall, vessel\.loa\)/);
+  assert.match(diligenceSource, /loaMeters:\s*Number\(particulars\.loaMeters\) \|\| null/);
   assert.match(cacheSource, /loa_meters = COALESCE\(\$14::double precision, vessels_master\.loa_meters\)/);
   assert.match(cacheSource, /beam_meters = COALESCE\(\$15::double precision, vessels_master\.beam_meters\)/);
 });

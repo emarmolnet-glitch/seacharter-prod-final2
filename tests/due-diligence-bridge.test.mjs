@@ -87,7 +87,7 @@ test('matching cards gate Calculator but expose external Due Diligence for every
   assert.match(indexSource, /data-matching-render-error="true"/);
 });
 
-test('Due Diligence uses one external search and explicit persistence actions', () => {
+test('Due Diligence uses one database-first lookup and explicit persistence actions', () => {
   assert.match(entrySource, /import \{ discardDueDiligenceVessel, fetchDueDiligence, persistDueDiligenceVessel \} from '.\/services\/dueDiligenceService\.js'/);
   assert.match(entrySource, /addEventListener\('click', handleDueDiligenceClick, true\)/);
   assert.match(entrySource, /event\.preventDefault\(\)/);
@@ -96,7 +96,7 @@ test('Due Diligence uses one external search and explicit persistence actions', 
   assert.match(entrySource, /data-due-diligence-button\]\[data-due-diligence-mode\]/);
   assert.match(entrySource, /\[data-matching-result-card="true"\], \[data-matching-cache-card="true"\], \[data-vessel-recommendation="true"\]/);
   assert.doesNotMatch(entrySource, /fetchLocalDueDiligence|usesLocalCache/);
-  assert.match(entrySource, /Consultando fuentes externas/);
+  assert.match(entrySource, /Consultando ficha técnica/);
   assert.match(entrySource, /persistDueDiligenceVessel\(vessel/);
   assert.match(entrySource, /acceptButton\.setAttribute\('aria-busy', 'true'\)/);
   assert.match(entrySource, /Guardando\.\.\./);
@@ -148,7 +148,7 @@ test('Due Diligence uses one external search and explicit persistence actions', 
   assert.doesNotMatch(entrySource, /\/api\/scrape-vessel/);
   assert.doesNotMatch(entrySource, /IndexedDB|localStorage|saveEditedVesselParams|saveVesselToIndexedDB/);
   assert.doesNotMatch(entrySource, /ais:vessels-updated/);
-  assert.match(indexSource, /dueDiligenceExternalOnlyActive === true/);
+  assert.match(indexSource, /dueDiligenceLookupActive === true/);
   assert.match(indexSource, /dueDiligenceSuppressLocalPersistenceUntil/);
   assert.match(backendSource, /path: "\/api\/vessel-due-diligence"/);
 });
@@ -157,13 +157,13 @@ test('Due Diligence stores successful payloads by normalized IMO', () => {
   const { bridge, events, window } = loadBridge();
   const stored = bridge.setDueDiligenceData(
     { imo: 'IMO 9876543', name: 'REAL VESSEL' },
-    { success: true, persisted: false, source: 'VesselFinder' },
+    { success: true, persisted: true, source: 'Datalastic' },
     { imo: '9876543', dwt: 42_000, flag: 'Spain', yearBuilt: 2018, vesselType: 'General Cargo' },
   );
 
-  assert.equal(stored.persisted, false);
+  assert.equal(stored.persisted, true);
   assert.equal(bridge.dueDiligenceDataByVessel.get('9876543').data.dwt, 42_000);
-  assert.equal(window.dueDiligenceDataByVessel['9876543'].payload.source, 'VesselFinder');
+  assert.equal(window.dueDiligenceDataByVessel['9876543'].payload.source, 'Datalastic');
   assert.ok(events.some(event => event.type === 'vessel:due-diligence-data'));
 });
 
@@ -183,7 +183,8 @@ test('Vite bundles the ES module service and no loose ghost script remains', () 
   assert.doesNotMatch(indexSource, /<script[^>]+src="\.\/due-diligence-bridge\.js/);
   assert.equal(existsSync(new URL('../due-diligence-bridge.js', import.meta.url)), false);
   assert.match(serviceSource, /export async function fetchDueDiligence/);
-  assert.match(serviceSource, /body: JSON\.stringify\(\{ \.\.\.payload, externalOnly: true \}\)/);
+  assert.match(serviceSource, /body: JSON\.stringify\(payload\)/);
+  assert.doesNotMatch(serviceSource, /externalOnly/);
 });
 
 test('fetchDueDiligence posts identity and normalizes the complete technical payload', async () => {
@@ -225,7 +226,6 @@ test('fetchDueDiligence posts identity and normalizes the complete technical pay
     imo: '',
     mmsi: '224123456',
     vesselName: 'TEST VESSEL ALPHA',
-    externalOnly: true,
   });
   assert.deepEqual(result.data, {
     vesselName: 'TEST VESSEL ALPHA',
@@ -248,31 +248,18 @@ test('fetchDueDiligence posts identity and normalizes the complete technical pay
   assert.equal(result.rawData.gross_tonnage, 7_580);
 });
 
-test('backend external audit bypasses cache reads and persists resolved external data', () => {
-  assert.match(backendSource, /body\?\.externalOnly === true/);
-  assert.match(backendSource, /if \(!externalOnly\) \{[\s\S]*findVesselTechnicalRecord/);
-  assert.match(backendSource, /externalOnly \? emptyVesselData\(\) : cachedData/);
-  assert.match(backendSource, /if \(result\.extracted && hasUsefulTechnicalData\(result\.data\) && hasPersistentIdentity\)/);
-  assert.match(backendSource, /await upsertVesselTechnicalRecord\(vesselDataToTechnicalRecord\(result\.data, identity\)\)/);
-  assert.match(backendSource, /persisted,/);
-  assert.match(backendSource, /mode: externalOnly \? "public-source-audit"/);
-  assert.match(backendSource, /requiresAcceptance: externalOnly/);
-  assert.match(backendSource, /externalOnly && !Number\(result\.data\.gross_tonnage\)/);
-  assert.match(backendSource, /grossTonnageRecoveredFromMaster/);
-  assert.match(backendSource, /grossTonnageRequired: !Number\(result\.data\.gross_tonnage\)/);
-});
-
-test('backend appends OpenShips and Google Search after the existing public sources', () => {
-  const vesselFinderIndex = backendSource.indexOf('provider: "VesselFinder"');
-  const balticShippingIndex = backendSource.indexOf('provider: "BalticShipping"');
-  const openShipsIndex = backendSource.indexOf('provider: "OpenShips"');
-  const googleSearchIndex = backendSource.indexOf('provider: "GoogleSearch"');
-  assert.ok(vesselFinderIndex >= 0);
-  assert.ok(balticShippingIndex > vesselFinderIndex);
-  assert.ok(openShipsIndex > balticShippingIndex);
-  assert.ok(googleSearchIndex > openShipsIndex);
-  assert.match(backendSource, /FROM ais_telemetry_buffer/);
-  assert.match(backendSource, /`\$\{identity\.vesselName\} vessel IMO number`/);
+test('backend resolves vessel particulars database-first and persists Datalastic misses', () => {
+  const databaseLookupIndex = backendSource.indexOf('findVesselTechnicalRecord(');
+  const providerLookupIndex = backendSource.indexOf('getVesselParticulars(identity.imo)');
+  const upsertIndex = backendSource.indexOf('upsertVesselTechnicalRecord({');
+  assert.ok(databaseLookupIndex >= 0);
+  assert.ok(providerLookupIndex > databaseLookupIndex);
+  assert.ok(upsertIndex > providerLookupIndex);
+  assert.match(backendSource, /provider: "vessels_master"/);
+  assert.match(backendSource, /provider: "Datalastic"/);
+  assert.match(backendSource, /cacheStatus: "HIT"/);
+  assert.match(backendSource, /persisted: true/);
+  assert.doesNotMatch(backendSource, /cheerio|VesselFinder|MarineTraffic|BalticShipping|GoogleSearch|externalOnly/);
 });
 
 test('Google Search IMO extraction requires vessel context and a valid checksum', () => {
@@ -531,45 +518,19 @@ test('technical consolidation resolves duplicate MMSI through the unified upsert
   assert.doesNotMatch(technicalCacheSource, /vessel\.imoNumber \? upsertByImoSql : upsertByMmsiSql/);
 });
 
-test('backend reads vessels_master first and persists successful waterfall extraction', () => {
+test('backend reads vessels_master first and upserts official vessel particulars', () => {
   assert.match(backendSource, /findVesselTechnicalRecord/);
   assert.match(technicalCacheSource, /LOWER\(BTRIM\(vessel_name\)\) = LOWER\(BTRIM\(\$3::text\)\)/);
-  assert.match(backendSource, /hasCachedMandatoryTechnicalData\(cachedRecord\)/);
-  assert.match(backendSource, /mode: "local-database-cache"/);
-  assert.match(backendSource, /attempts: \[\]/);
-  assert.match(backendSource, /runSourceWaterfall\(identity, deadlineAt, externalOnly \? emptyVesselData\(\) : cachedData\)/);
-  assert.match(backendSource, /await upsertVesselTechnicalRecord\(vesselDataToTechnicalRecord\(result\.data, identity\)\)/);
-  assert.match(backendSource, /let persisted = false/);
-  assert.match(backendSource, /persisted = true/);
-  assert.match(backendSource, /persisted,/);
+  assert.match(backendSource, /if \(cachedRecord\) \{/);
+  assert.match(backendSource, /const datalasticResult = await getVesselParticulars\(identity\.imo\)/);
+  assert.match(backendSource, /const persistedRecord = await upsertVesselTechnicalRecord\(\{/);
+  assert.match(backendSource, /data: responseData\(persistedRecord\)/);
 });
 
-test('backend accepts IMO, MMSI, or vessel name and searches the four public providers', () => {
-  assert.match(backendSource, /const query = imo \|\| mmsi \|\| vesselName/);
+test('backend accepts local identities and requires IMO only for a Datalastic miss', () => {
   assert.match(backendSource, /if \(!identity\)[\s\S]*IMO válido, MMSI o nombre del buque/);
-  const marineVesselTraffic = backendSource.indexOf('provider: "MarineVesselTraffic"');
-  const vesselFinder = backendSource.indexOf('provider: "VesselFinder"');
-  const marineTraffic = backendSource.indexOf('provider: "MarineTraffic"');
-  const balticShipping = backendSource.indexOf('provider: "BalticShipping"');
-  assert.ok(vesselFinder < marineVesselTraffic && marineVesselTraffic < marineTraffic && marineTraffic < balticShipping);
-  assert.match(backendSource, /buildUrls: \(identity\)/);
-  assert.match(backendSource, /encodeURIComponent\(identity\.query\)/);
-  assert.match(backendSource, /runSourceWaterfall\(identity, deadlineAt, externalOnly \? emptyVesselData\(\) : cachedData\)/);
-  assert.match(backendSource, /import \{ mappedVesselField, parseVesselAttribute \}/);
-  assert.match(backendSource, /import \{ extractVesselFinderDetailUrl, extractVesselFinderFields \}/);
-  assert.match(backendSource, /parseVesselAttribute\(rawKey, rawValue\)/);
-  assert.match(backendSource, /provider === "VesselFinder"/);
-  assert.match(backendSource, /extractVesselFinderFields\(html, identity\)/);
-  assert.match(backendSource, /extractVesselFinderDetailUrl\(html, identity\)/);
-  assert.match(backendSource, /pendingUrls\.push\(detailUrl\)/);
-  assert.match(backendSource, /data\.vessel_type = readCell\("vessel_type"\)/);
-  assert.match(backendSource, /data\.call_sign = readCell\("call_sign"\)/);
-  assert.match(backendSource, /findStructuredVesselType/);
-  assert.match(backendSource, /field === "vessel_type"/);
-  assert.match(backendSource, /script\[type='application\/ld\+json'\]/);
-  assert.match(backendSource, /data-field='vessel-type'/);
-  assert.match(backendSource, /hasCompleteDueDiligenceData\(combinedData\)/);
-  assert.match(backendSource, /data: normalizedResponseData\(result\.data\)/);
+  assert.match(backendSource, /if \(!identity\.imo\) \{/);
+  assert.match(backendSource, /Datalastic Vessel Particulars requiere un IMO válido/);
   assert.match(technicalCacheSource, /last_port = COALESCE\(\$16::text, vessels_master\.last_port\)/);
   assert.match(technicalCacheSource, /NULLIF\(\$17::text, ''\)::timestamptz/);
   assert.match(technicalCacheSource, /ON CONFLICT \(\$\{conflictColumn\}\) DO UPDATE SET/);
@@ -578,22 +539,18 @@ test('backend accepts IMO, MMSI, or vessel name and searches the four public pro
   assert.match(persistenceBackendSource, /eta: savedVessel\.eta/);
 });
 
-test('public-source waterfall isolates scraper failures and always reaches Google for unresolved IMO', () => {
-  assert.match(backendSource, /const GOOGLE_FALLBACK_RESERVE_MS = SOURCE_TIMEOUT_MS/);
-  assert.match(backendSource, /try \{\s+result = await fetchDirectSource\(source, identity, nonGoogleDeadlineAt\);[\s\S]*?console\.warn\(`\[vessel-due-diligence\] \$\{source\.provider\} scraper failed`/);
-  assert.match(backendSource, /result = await runSourceBeforeDeadline\(\s*\(\) => fetchOpenShipsSource\(identity, nonGoogleDeadlineAt\),\s*nonGoogleDeadlineAt/);
-  assert.match(backendSource, /if \(!combinedData\.imo_number\) \{\s+let result: SourceResult;\s+try \{\s+result = await fetchGoogleSearchSource\(identity, deadlineAt\);/);
-  assert.doesNotMatch(backendSource, /if \(!combinedData\.imo_number && Date\.now\(\) < deadlineAt\) \{\s+const result = await fetchGoogleSearchSource/);
-  assert.match(backendSource, /const allSourcesFailed = !combinedData\.imo_number[\s\S]*attempts\.every\(\(attempt\) => attempt\.status !== "success"\)/);
-  assert.match(backendSource, /if \(result\.allSourcesFailed\) \{[\s\S]*success: false,[\s\S]*incluida Google Search/);
+test('backend contains no scraping dependencies or public-page fallbacks', () => {
+  assert.doesNotMatch(backendSource, /cheerio|fetchDirectSource|runSourceWaterfall|VesselFinder|MarineTraffic|BalticShipping|GoogleSearch/);
+  assert.match(backendSource, /getVesselParticulars/);
+  assert.match(backendSource, /upsertVesselTechnicalRecord/);
 });
 
-test('external Data Bridge response envelopes resolve to the scraped vessel record', () => {
+test('Data Bridge response envelopes resolve to the normalized vessel record', () => {
   const { bridge } = loadBridge();
   const vessel = { imo: '9876543', dwt: 42_000 };
-  assert.equal(bridge.readExternalScrapeRecord({ vessel }), vessel);
-  assert.equal(bridge.readExternalScrapeRecord({ data: { vessel } }), vessel);
-  assert.equal(bridge.readExternalScrapeRecord({ result: vessel }), vessel);
+  assert.equal(bridge.readDueDiligenceRecord({ vessel }), vessel);
+  assert.equal(bridge.readDueDiligenceRecord({ data: { vessel } }), vessel);
+  assert.equal(bridge.readDueDiligenceRecord({ result: vessel }), vessel);
 });
 
 test('external non-empty values override master data while null values preserve it', () => {

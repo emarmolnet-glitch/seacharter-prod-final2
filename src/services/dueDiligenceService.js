@@ -139,7 +139,7 @@ export async function fetchDueDiligence(
   const response = await fetchImpl(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ ...payload, externalOnly: true }),
+    body: JSON.stringify(payload),
     signal,
   });
   const rawText = await response.text();
