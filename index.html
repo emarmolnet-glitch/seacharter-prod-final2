@@ -15814,6 +15814,25 @@
             if (el.value !== nextValue) el.value = nextValue;
         };
 
+        function readEffectiveBallastDistance() {
+            const input = document.getElementById('dist-ballast');
+            const inputDistance = Number(input?.value);
+            const draft = window.VoyageDraftStore?.getState?.().draft;
+            const retainedDistance = Number(draft?.ballastDistanceNm);
+            const hasRetainedDistance = Boolean(draft?.ballastDistanceSource)
+                && Number.isFinite(retainedDistance)
+                && retainedDistance > 0;
+            const effectiveDistance = hasRetainedDistance
+                && (!Number.isFinite(inputDistance) || inputDistance === 0)
+                ? retainedDistance
+                : (Number.isFinite(inputDistance) && inputDistance >= 0 ? inputDistance : 0);
+            if (input && Number(input.value) !== effectiveDistance) {
+                setInputValue('dist-ballast', effectiveDistance);
+            }
+            return effectiveDistance;
+        }
+        window.readEffectiveBallastDistance = readEffectiveBallastDistance;
+
         const getNormalizedDateInputValue = (id) => normalizeDateInputValue(document.getElementById(id)?.value || '');
 
         const firstNonEmpty = (...values) => {
@@ -15891,7 +15910,7 @@
                 cancelling: firstNonEmpty(preferredCancellingDate, validMapCancellingDate, State.cancelling, State.cancellingDate),
                 cancellingDate: firstNonEmpty(preferredCancellingDate, validMapCancellingDate, State.cancellingDate),
                 cancellingTime: preferAsbatankvoy ? (asbCancellingTime || gcCancellingTime) : (gcCancellingTime || asbCancellingTime),
-                distBallast: parseFloat(document.getElementById('dist-ballast')?.value) || 0,
+                distBallast: readEffectiveBallastDistance(),
                 distLaden: parseFloat(document.getElementById('dist-laden')?.value) || 0,
                 totalMiles: parseFloat(document.getElementById('dist-total')?.value) || 0
             });
@@ -33338,7 +33357,7 @@
                         cargo: parseFloat(document.getElementById('cargo-qty')?.value) || 0,
                         rateLoad: parseFloat(document.getElementById('rate-load')?.value) || 0,
                         rateDisch: parseFloat(document.getElementById('rate-disch')?.value) || 0,
-                        totalMiles: (parseFloat(document.getElementById('dist-ballast')?.value) || 0) + (parseFloat(document.getElementById('dist-laden')?.value) || 0),
+                        totalMiles: readEffectiveBallastDistance() + (parseFloat(document.getElementById('dist-laden')?.value) || 0),
                         opex: parseFloat(document.getElementById('opex-daily')?.value) || 0,
                         pSea: parseFloat(document.getElementById('price-sea')?.value) || 0,
                         pPort: parseFloat(document.getElementById('price-port')?.value) || 0
@@ -33349,7 +33368,9 @@
 
             applyPendingDraftCargoAdjustment();
 
-            const distBal = parseFloat(document.getElementById('dist-ballast').value) || 0;
+            const distBal = typeof readEffectiveBallastDistance === 'function'
+                ? readEffectiveBallastDistance()
+                : (parseFloat(document.getElementById('dist-ballast')?.value) || 0);
             const distLaden = parseFloat(document.getElementById('dist-laden').value) || 0;
             const spdBal = parseFloat(document.getElementById('spd-ballast').value) || 11;
             const spdLaden = parseFloat(document.getElementById('spd-laden').value) || 11;
@@ -40664,7 +40685,7 @@
             // Cálculo Fórmula BAF Exacta para la póliza
             const cSea = parseFloat(document.getElementById('cons-sea').value) || 0;
             const cPort = parseFloat(document.getElementById('cons-port').value) || 0;
-            const dBal = (parseFloat(document.getElementById('dist-ballast').value) || 0) / ((parseFloat(document.getElementById('spd-ballast').value) || 11) * 24);
+            const dBal = readEffectiveBallastDistance() / ((parseFloat(document.getElementById('spd-ballast').value) || 11) * 24);
             const dLaden = (parseFloat(document.getElementById('dist-laden').value) || 0) / ((parseFloat(document.getElementById('spd-laden').value) || 11) * 24);
             const rateLoad = parseFloat(document.getElementById('rate-load').value) || 1000;
             const rateDisch = parseFloat(document.getElementById('rate-disch').value) || 1500;
@@ -42361,7 +42382,7 @@
             document.getElementById('comparison-results').classList.add('hidden');
 
             // Retrieve precise active values from the calculator section to avoid AI estimation discrepancies
-            const distBallast = parseFloat(document.getElementById('dist-ballast')?.value) || 0;
+            const distBallast = readEffectiveBallastDistance();
             const distLaden = parseFloat(document.getElementById('dist-laden')?.value) || 0;
             const rateLoad = parseFloat(document.getElementById('rate-load')?.value) || 1000;
             const rateDisch = parseFloat(document.getElementById('rate-disch')?.value) || 1500;
@@ -43383,7 +43404,7 @@ Example:
             const getTxt = (id) => { const el = document.getElementById(id); return el ? el.innerText : ''; };
 
             State.portBallast = getVal('port-ballast');
-            State.distBallast = parseFloat(getVal('dist-ballast')) || 0;
+            State.distBallast = readEffectiveBallastDistance();
             State.distLaden = parseFloat(getVal('dist-laden')) || 0;
             State.opex = parseFloat(getVal('opex-daily')) || 0;
 
@@ -58632,7 +58653,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         function calcularViaje(datosDelBuqueAislados) {
             // Replicate voyage financial formulas using solely local variables & isolated inputs
             const vessel = datosDelBuqueAislados || {};
-            const distBal = parseFloat(document.getElementById('dist-ballast')?.value) || 0;
+            const distBal = typeof readEffectiveBallastDistance === 'function'
+                ? readEffectiveBallastDistance()
+                : (parseFloat(document.getElementById('dist-ballast')?.value) || 0);
             const distLaden = parseFloat(document.getElementById('dist-laden')?.value) || 0;
             const spdBal = parseFloat(document.getElementById('spd-ballast')?.value) || 11;
             const spdLaden = parseFloat(document.getElementById('spd-laden')?.value) || 11;

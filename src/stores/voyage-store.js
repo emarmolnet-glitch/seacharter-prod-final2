@@ -7,6 +7,7 @@ const EMPTY_DRAFT = Object.freeze({
     laycan: { laydays: '', cancelling: '' },
     cargo: { description: '', quantityMt: 0 },
     ballastDistanceNm: null,
+    ballastDistanceSource: '',
     lastreCoordinates: [],
     distanceNm: null,
     routeGeometry: null,
@@ -22,6 +23,20 @@ function cleanText(value) {
 function cleanNumber(value) {
     const number = Number(value);
     return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function cleanNonNegativeNumber(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const number = Number(value);
+    return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function resolveCalculatorBallastDistance(state, draft) {
+    const incomingDistance = cleanNonNegativeNumber(state?.distBallast);
+    const retainedDistance = cleanNonNegativeNumber(draft?.ballastDistanceNm);
+    if (incomingDistance === null) return retainedDistance;
+    if (incomingDistance === 0 && retainedDistance > 0) return retainedDistance;
+    return incomingDistance;
 }
 
 function normalizePort(port, fallbackName = '') {
@@ -75,40 +90,63 @@ export function hasOperationalDraft(draft) {
 
 export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
     draft: { ...EMPTY_DRAFT, laycan: { ...EMPTY_DRAFT.laycan }, cargo: { ...EMPTY_DRAFT.cargo } },
-    updateFromCalculator: (state = {}) => set((current) => ({
-        draft: {
-            ...current.draft,
-            pol: normalizePort(state.polCoordinates, state.pol) || current.draft.pol,
-            pod: normalizePort(state.podCoordinates, state.pod) || current.draft.pod,
-            laycan: {
-                laydays: cleanText(state.laydays || state.laycan?.laydays || state.laycanDate),
-                cancelling: cleanText(state.cancelling || state.laycan?.cancelling || state.cancellingDate),
+    updateFromCalculator: (state = {}) => set((current) => {
+        const ballastDistanceNm = resolveCalculatorBallastDistance(state, current.draft);
+        const ballastDistanceChanged = ballastDistanceNm !== current.draft.ballastDistanceNm;
+        return {
+            draft: {
+                ...current.draft,
+                pol: normalizePort(state.polCoordinates, state.pol) || current.draft.pol,
+                pod: normalizePort(state.podCoordinates, state.pod) || current.draft.pod,
+                laycan: {
+                    laydays: cleanText(state.laydays || state.laycan?.laydays || state.laycanDate),
+                    cancelling: cleanText(state.cancelling || state.laycan?.cancelling || state.cancellingDate),
+                },
+                cargo: {
+                    description: cleanText(state.cargoProduct || state.cargoType || current.draft.cargo.description),
+                    quantityMt: cleanNumber(state.cargoQuantity || state.cargo),
+                },
+                ballastDistanceNm,
+                ballastDistanceSource: ballastDistanceChanged
+                    ? 'calculator'
+                    : current.draft.ballastDistanceSource,
+                distanceNm: cleanNumber(state.totalMiles ?? state.distanceNm) || current.draft.distanceNm,
+                routeGeometry: state.routeGeometry || current.draft.routeGeometry,
+                vessel: normalizeVessel({
+                    name: state.vesselName || state.vessel,
+                    imo: state.imo,
+                    dwt: state.dwt,
+                    gt: state.gt,
+                    flag: state.flag,
+                    yearBuilt: state.yearBuilt,
+                }) || current.draft.vessel,
+                updatedAt: new Date().toISOString(),
+                lastSource: 'calculator',
             },
-            cargo: {
-                description: cleanText(state.cargoProduct || state.cargoType || current.draft.cargo.description),
-                quantityMt: cleanNumber(state.cargoQuantity || state.cargo),
+        };
+    }),
+    setBallastDistance: ({ ballastDistanceNm, source = 'calculator-manual' } = {}) => set((current) => {
+        const normalizedDistance = cleanNonNegativeNumber(ballastDistanceNm);
+        if (normalizedDistance === null) return current;
+        return {
+            draft: {
+                ...current.draft,
+                ballastDistanceNm: normalizedDistance,
+                ballastDistanceSource: cleanText(source) || 'calculator-manual',
+                updatedAt: new Date().toISOString(),
+                lastSource: cleanText(source) || 'calculator-manual',
             },
-            ballastDistanceNm: cleanNumber(state.distBallast) || current.draft.ballastDistanceNm,
-            distanceNm: cleanNumber(state.totalMiles ?? state.distanceNm) || current.draft.distanceNm,
-            routeGeometry: state.routeGeometry || current.draft.routeGeometry,
-            vessel: normalizeVessel({
-                name: state.vesselName || state.vessel,
-                imo: state.imo,
-                dwt: state.dwt,
-                gt: state.gt,
-                flag: state.flag,
-                yearBuilt: state.yearBuilt,
-            }) || current.draft.vessel,
-            updatedAt: new Date().toISOString(),
-            lastSource: 'calculator',
-        },
-    })),
+        };
+    }),
     applyTrackingAudit: ({ ballastDistanceNm, lastreCoordinates, vessel } = {}) => set((current) => {
         const normalizedCoordinates = normalizeRouteCoordinates(lastreCoordinates);
         return {
             draft: {
                 ...current.draft,
                 ballastDistanceNm: cleanNumber(ballastDistanceNm) || current.draft.ballastDistanceNm,
+                ballastDistanceSource: cleanNumber(ballastDistanceNm) > 0
+                    ? 'tracking-audit'
+                    : current.draft.ballastDistanceSource,
                 lastreCoordinates: normalizedCoordinates.length > 2 ? normalizedCoordinates : current.draft.lastreCoordinates,
                 vessel: normalizeVessel(vessel) || current.draft.vessel,
                 updatedAt: new Date().toISOString(),
@@ -122,6 +160,9 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
             draft: {
                 ...current.draft,
                 ballastDistanceNm: cleanNumber(ballastDistanceNm) || current.draft.ballastDistanceNm,
+                ballastDistanceSource: cleanNumber(ballastDistanceNm) > 0
+                    ? 'tracking-route'
+                    : current.draft.ballastDistanceSource,
                 lastreCoordinates: normalizedCoordinates.length > 2 ? normalizedCoordinates : current.draft.lastreCoordinates,
                 distanceNm: cleanNumber(distanceNm) || current.draft.distanceNm,
                 routeGeometry: routeGeometry && typeof routeGeometry === 'object' ? routeGeometry : current.draft.routeGeometry,

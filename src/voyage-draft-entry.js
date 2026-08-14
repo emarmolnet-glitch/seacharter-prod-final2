@@ -1,5 +1,7 @@
 import { voyageStore } from './stores/voyage-store.js';
 
+let isHydratingBallastDistance = false;
+
 function setValue(id, value) {
     const input = document.getElementById(id);
     if (!input || value === null || value === undefined || value === '') return;
@@ -8,10 +10,29 @@ function setValue(id, value) {
     input.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-function hydrateCalculatorFromAudit(draft) {
+function hydrateCalculatorFromDraft(draft) {
+    const retainedBallastDistance = Number(draft?.ballastDistanceNm);
+    const hasRetainedBallastDistance = Number.isFinite(retainedBallastDistance)
+        && retainedBallastDistance >= 0
+        && Boolean(draft?.ballastDistanceSource);
+    if (hasRetainedBallastDistance) {
+        const input = document.getElementById('dist-ballast');
+        const currentDistance = Number(input?.value);
+        if (!Number.isFinite(currentDistance) || currentDistance !== retainedBallastDistance) {
+            isHydratingBallastDistance = true;
+            try {
+                setValue('dist-ballast', retainedBallastDistance);
+            } finally {
+                isHydratingBallastDistance = false;
+            }
+        }
+        window.SeaCharterStore?.set?.({
+            distBallast: retainedBallastDistance,
+        }, { source: 'voyage-draft-ballast-restore', silent: true });
+    }
+
     if (draft?.lastSource !== 'tracking-audit') return;
     const vessel = draft.vessel || {};
-    setValue('dist-ballast', draft.ballastDistanceNm);
     setValue('nombre-buque-calculadora', vessel.name);
     setValue('vessel-identity-imo', vessel.imo);
     setValue('vessel-dwt', vessel.dwt);
@@ -33,15 +54,25 @@ function hydrateCalculatorFromAudit(draft) {
     window.dispatchEvent(new CustomEvent('voyage-draft:tracking-return', { detail: { draft } }));
 }
 
+function bindManualBallastDistance() {
+    const input = document.getElementById('dist-ballast');
+    if (!input) return;
+    input.addEventListener('input', () => {
+        if (isHydratingBallastDistance) return;
+        const ballastDistanceNm = Number(input.value);
+        if (!Number.isFinite(ballastDistanceNm) || ballastDistanceNm < 0) return;
+        voyageStore.getState().setBallastDistance({
+            ballastDistanceNm,
+            source: 'calculator-manual',
+        });
+    });
+}
+
 function bindCalculatorStore() {
     const calculatorStore = window.SeaCharterStore;
     if (!calculatorStore?.getState || !calculatorStore?.subscribe) return;
     voyageStore.getState().updateFromCalculator(calculatorStore.getState());
     calculatorStore.subscribe((state) => {
-        if (voyageStore.getState().draft.lastSource === 'tracking-audit' && state === calculatorStore.getState()) {
-            const sourceDraft = voyageStore.getState().draft;
-            if (Number(state.distBallast) === Number(sourceDraft.ballastDistanceNm)) return;
-        }
         voyageStore.getState().updateFromCalculator(state);
     });
 }
@@ -50,6 +81,7 @@ window.VoyageDraftStore = voyageStore;
 window.useVoyageStore = voyageStore;
 
 bindCalculatorStore();
+bindManualBallastDistance();
 voyageStore.subscribe((state, previousState) => {
-    if (state.draft !== previousState.draft) hydrateCalculatorFromAudit(state.draft);
+    if (state.draft !== previousState.draft) hydrateCalculatorFromDraft(state.draft);
 });
