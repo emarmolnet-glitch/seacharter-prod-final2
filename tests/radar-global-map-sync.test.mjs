@@ -148,9 +148,10 @@ test('Globe views retain the previous tactical vectors during secondary sync fai
   for (const currentSource of [globeSource, distGlobeSource]) {
     assert.match(currentSource, /Array\.isArray\(window\.GlobalStore\.matchingVessels\)[\s\S]*return window\.GlobalStore\.matchingVessels/);
     assert.match(currentSource, /radarSnapshotStatus === 'empty'[\s\S]*return \[\]/);
-    assert.match(currentSource, /Array\.isArray\(centralRadarVessels\) \? centralRadarVessels : requestedVessels/);
     assert.match(currentSource, /const previousVessels = Array\.isArray\(view\.vessels\) \? view\.vessels\.slice\(\) : \[\]/);
     assert.match(currentSource, /view\.vessels = previousVessels;[\s\S]*renderVesselLayer\(view, previousVessels\)/);
     assert.doesNotMatch(currentSource, /view\.vessels = \[\]/);
   }
+  assert.match(globeSource, /!hasExplicitVessels && Array\.isArray\(centralRadarVessels\) \? centralRadarVessels : requestedVessels/);
+  assert.match(globeSource, /const requestedVessels = hasExplicitVessels \? _vessels : getFilteredVessels\(\)/);
 });

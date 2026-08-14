@@ -858,12 +858,11 @@
         const previousVessels = Array.isArray(view.vessels) ? view.vessels.slice() : [];
         view.hoveredVessel = null;
         const selectedVessel = view.selectedVesselIdentity || view.selectedVessel;
+        const hasExplicitVessels = _vessels !== null && _vessels !== undefined;
         const centralRadarVessels = getCentralRadarVessels();
-        const requestedVessels = _vessels !== null && _vessels !== undefined
-            ? _vessels
-            : getFilteredVessels();
+        const requestedVessels = hasExplicitVessels ? _vessels : getFilteredVessels();
         view.vessels = prepareVessels(
-            Array.isArray(centralRadarVessels) ? centralRadarVessels : requestedVessels,
+            !hasExplicitVessels && Array.isArray(centralRadarVessels) ? centralRadarVessels : requestedVessels,
             getCameraAltitude(view)
         );
         view.selectedVessel = findMatchingVessel(view.vessels, selectedVessel);

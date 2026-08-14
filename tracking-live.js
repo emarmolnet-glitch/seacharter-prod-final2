@@ -15,6 +15,7 @@ let trackingMapMountFrameId = null;
 let trackingMapResizeFrameId = null;
 let trackingMapResizeTimerId = null;
 let trackingMapLifecycleToken = 0;
+let trackingMapVesselRenderSequence = 0;
 const CONTRACT_CONTROL_IDS = [
     'tracking-input-ballast',
     'tracking-input-pol',
@@ -984,7 +985,7 @@ function getManualTrackingContext() {
 }
 
 function getBasicVesselPosition() {
-    return normalizeMapPoint(trackingState.basicVessel?.position);
+    return normalizeMapPoint(trackingState.basicVessel?.position || trackingState.basicVessel);
 }
 
 function basicVesselNavigation(vessel = trackingState.basicVessel) {
@@ -1017,8 +1018,17 @@ function syncBasicVesselMap(focus = false) {
         courseOverGround: vessel.course,
         heading: vessel.heading,
     } : null;
-    window.GlobalFleetGlobe?.updateVessels?.(mapVessel ? [mapVessel] : [], TRACKING_MAP_KEY);
-    if (focus && mapVessel) window.GlobalFleetGlobe?.focusActiveVessel?.(mapVessel, TRACKING_MAP_KEY);
+    replaceTrackingMapVessels(mapVessel ? [mapVessel] : [], focus ? mapVessel : null);
+}
+
+function replaceTrackingMapVessels(vessels, focusedVessel = null) {
+    const renderSequence = ++trackingMapVesselRenderSequence;
+    void ensureTrackingMap().then((instance) => {
+        if (!instance || renderSequence !== trackingMapVesselRenderSequence) return;
+        window.GlobalFleetGlobe?.updateVessels?.([], TRACKING_MAP_KEY);
+        window.GlobalFleetGlobe?.updateVessels?.(vessels, TRACKING_MAP_KEY);
+        if (focusedVessel) window.GlobalFleetGlobe?.focusActiveVessel?.(focusedVessel, TRACKING_MAP_KEY);
+    });
 }
 
 function hydrateTrackingFromActiveVessel(activeVessel, focus = false) {
@@ -1119,6 +1129,13 @@ function getTrackingVesselImo(vessel, fallback = '') {
 
 function mergeCoordinatorTelemetry(vessel, telemetry, meta) {
     if (!vessel || !telemetry) return vessel;
+    const position = {
+        ...(normalizeMapPoint(vessel.position) || {}),
+        lat: telemetry.latitude,
+        lng: telemetry.longitude,
+        latitude: telemetry.latitude,
+        longitude: telemetry.longitude,
+    };
     return {
         ...vessel,
         name: telemetry.name || vessel.name,
@@ -1131,6 +1148,7 @@ function mergeCoordinatorTelemetry(vessel, telemetry, meta) {
         lat: telemetry.latitude,
         lng: telemetry.longitude,
         lon: telemetry.longitude,
+        position,
         speedKnots: telemetry.speedKnots,
         speedOverGround: telemetry.speedKnots,
         course: telemetry.courseDegrees,
@@ -1193,8 +1211,31 @@ async function fetchCoordinatorLivePosition(vessel, fallbackQuery, signal) {
     if (!response.ok || !payload.success || !payload.data) {
         throw new Error(payload.error || 'No fue posible recuperar la posición AIS coordinada.');
     }
+    const latitude = Number(payload.data.latitude);
+    const longitude = Number(payload.data.longitude);
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90
+        || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+        throw new Error('La respuesta AIS no contiene coordenadas válidas.');
+    }
     void refreshAisConsumptionMonitor();
-    return mergeCoordinatorTelemetry(vessel, payload.data, payload.meta);
+    return mergeCoordinatorTelemetry(vessel, { ...payload.data, latitude, longitude }, payload.meta);
+}
+
+function syncCoordinatorPositionState(vessel) {
+    const position = normalizeMapPoint(vessel?.position || vessel);
+    if (!position) return;
+    trackingState.basicVessel = { ...vessel, position };
+    if (trackingState.data) {
+        trackingState.data = {
+            ...trackingState.data,
+            live: {
+                ...trackingState.data.live,
+                position,
+                aisUpdatedAt: vessel.positionUpdatedAt || vessel.timestamp || trackingState.data.live?.aisUpdatedAt,
+                averageSpeedKnots: vessel.speedKnots ?? trackingState.data.live?.averageSpeedKnots,
+            },
+        };
+    }
 }
 
 function startTrackingVesselPolling(query) {
@@ -1270,8 +1311,8 @@ async function loadTrackingVessel(rawQuery, silent = false) {
             return;
         }
         const coordinatedVessel = await fetchCoordinatorLivePosition(payload.vessel, query, controller.signal);
-        trackingState.basicVessel = coordinatedVessel;
-        trackingStore.getState().setVessel(coordinatedVessel);
+        syncCoordinatorPositionState(coordinatedVessel);
+        trackingStore.getState().setVessel(trackingState.basicVessel);
         if (input && coordinatedVessel.name) input.value = coordinatedVessel.name;
         startTrackingVesselPolling(coordinatedVessel.imo || coordinatedVessel.mmsi || coordinatedVessel.name || query);
         syncBasicVesselMap(!silent);
@@ -1280,7 +1321,9 @@ async function loadTrackingVessel(rawQuery, silent = false) {
             renderManualTrackingState();
             if (trackingState.flowMode === 'audit' && getBasicVesselPosition()) await calculateTrackingRoute({ focus: !silent });
         } else {
-            renderBasicVesselCard();
+            renderTrackingMapChrome(trackingState.data);
+            renderTrackingAnalytics(trackingState.data);
+            renderExecutiveDashboard();
             if (getBasicVesselPosition()) {
                 const routeMessage = document.getElementById('tracking-input-message');
                 const previousMessage = routeMessage?.textContent || '';
@@ -1394,7 +1437,7 @@ function syncTrackingMap(data) {
         destination: data.contract?.pod?.name,
     }] : [];
     trackingState.routes = { ballast: asTrackingArray(route.ballast), laden: asTrackingArray(route.laden) };
-    window.GlobalFleetGlobe?.updateVessels?.(vessel, TRACKING_MAP_KEY);
+    replaceTrackingMapVessels(vessel, position ? vessel[0] : null);
     window.GlobalFleetGlobe?.setRouteSegments?.(ports, TRACKING_MAP_KEY, { ballastPortName: ports.ballast?.name || '', focus: true, persist: false }, trackingState.routes);
     if (position && !trackingState.routes.laden.length) window.GlobalFleetGlobe?.focusCoordinates?.(position.lat, position.lng, TRACKING_MAP_KEY, 1.35);
 }

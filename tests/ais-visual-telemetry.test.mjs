@@ -37,6 +37,25 @@ test('tracking marker and Radar fleet consume coordinator endpoints', () => {
   assert.doesNotMatch(radarSource, /\/api\/fleet\/live-ais/);
 });
 
+test('coordinator coordinates replace cached tracking position and marker state', () => {
+  const fetchSource = sliceFunction(trackingSource, 'async function fetchCoordinatorLivePosition', 'function syncCoordinatorPositionState');
+  assert.match(fetchSource, /Number\(payload\.data\.latitude\)/);
+  assert.match(fetchSource, /Number\(payload\.data\.longitude\)/);
+  assert.match(fetchSource, /mergeCoordinatorTelemetry\(vessel, \{ \.\.\.payload\.data, latitude, longitude \}/);
+
+  const mergeSource = sliceFunction(trackingSource, 'function mergeCoordinatorTelemetry', 'async function refreshAisConsumptionMonitor');
+  assert.match(mergeSource, /position = \{[\s\S]*lat: telemetry\.latitude[\s\S]*lng: telemetry\.longitude/);
+
+  const stateSource = sliceFunction(trackingSource, 'function syncCoordinatorPositionState', 'function startTrackingVesselPolling');
+  assert.match(stateSource, /trackingState\.basicVessel = \{ \.\.\.vessel, position \}/);
+  assert.match(stateSource, /trackingState\.data = \{[\s\S]*live:[\s\S]*position/);
+
+  const mapSource = sliceFunction(trackingSource, 'function replaceTrackingMapVessels', 'function hydrateTrackingFromActiveVessel');
+  assert.match(mapSource, /updateVessels\?\.\(\[\], TRACKING_MAP_KEY\)/);
+  assert.match(mapSource, /updateVessels\?\.\(vessels, TRACKING_MAP_KEY\)/);
+  assert.match(mapSource, /focusActiveVessel\?\.\(focusedVessel, TRACKING_MAP_KEY\)/);
+});
+
 test('routing, ETA, and PDA remain isolated from Datalastic telemetry', () => {
   const trackingRouteSource = sliceFunction(trackingSource, 'async function requestTrackingMaritimeLeg', 'function syncTrackingRouteStores');
   for (const source of [trackingRouteSource, routeSource, etaSource, pdaSource, voyageCostSource]) {

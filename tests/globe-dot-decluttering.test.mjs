@@ -141,7 +141,7 @@ test('density view prioritizes the persistent Radar snapshot before secondary so
   assert.match(globeSource, /function getCentralRadarVessels\(\)[\s\S]*GlobalStore\.matchingVessels/);
   const centralSource = globeSource.slice(globeSource.indexOf('function getCentralRadarVessels()'), globeSource.indexOf('function getGlobePointLabel'));
   assert.doesNotMatch(centralSource, /filteredVessels|nearbyVessels|rawVessels/);
-  assert.match(globeSource, /Array\.isArray\(centralRadarVessels\) \? centralRadarVessels : requestedVessels/);
+  assert.match(globeSource, /!hasExplicitVessels && Array\.isArray\(centralRadarVessels\) \? centralRadarVessels : requestedVessels/);
   assert.match(indexSource, /function getDensityReactiveVessels\(\)[\s\S]*GlobalStore\?\.matchingVessels/);
 });
 
