@@ -2,6 +2,7 @@ import type { Handler } from '@netlify/functions';
 
 const COMTRADE_TRADE_ENDPOINT = 'https://comtradeapi.un.org/data/v1/get/C/A/HS';
 const COMTRADE_REPORTERS_ENDPOINT = 'https://comtradeapi.un.org/files/v1/app/reference/Reporters.json';
+const RATE_LIMIT_MESSAGE = 'Límite de peticiones de la ONU alcanzado. Espere unos minutos';
 
 const jsonHeaders = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -76,6 +77,14 @@ export const handler: Handler = async (event) => {
       data = responseText ? JSON.parse(responseText) : {};
     } catch {
       return jsonResponse(502, { error: 'UN Comtrade returned an invalid JSON response.' });
+    }
+
+    if (response.status === 429) {
+      return jsonResponse(429, {
+        error: RATE_LIMIT_MESSAGE,
+        message: RATE_LIMIT_MESSAGE,
+        statusCode: 429,
+      });
     }
 
     if (!response.ok) {

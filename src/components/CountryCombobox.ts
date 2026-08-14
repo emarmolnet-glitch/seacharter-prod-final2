@@ -12,6 +12,7 @@ type CountryComboboxOptions = {
 
 export type CountryComboboxController = {
   destroy: () => void;
+  getM49: () => string;
   getValue: () => string;
   selectIso: (iso: string) => boolean;
 };
@@ -46,7 +47,7 @@ export function createCountryCombobox(options: CountryComboboxOptions): CountryC
   const input = options.root.querySelector<HTMLInputElement>(options.inputSelector);
   const listbox = options.root.querySelector<HTMLElement>(options.listSelector);
   if (!input || !listbox) {
-    return { destroy: () => undefined, getValue: () => '', selectIso: () => false };
+    return { destroy: () => undefined, getM49: () => '', getValue: () => '', selectIso: () => false };
   }
 
   let activeIndex = -1;
@@ -196,6 +197,7 @@ export function createCountryCombobox(options: CountryComboboxOptions): CountryC
       input.removeEventListener('keydown', handleKeydown);
       document.removeEventListener('pointerdown', handleDocumentPointerDown);
     },
+    getM49: () => String(selectedCountry?.m49 ?? input.dataset.countryM49 ?? ''),
     getValue: () => selectedCountry?.iso3 || input.dataset.countryIso3 || input.value.trim().toUpperCase(),
     selectIso,
   };
