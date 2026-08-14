@@ -1,6 +1,7 @@
 import { getStore } from "@netlify/blobs";
 import { getDatabase } from "netlify-database-client";
 
+// PR Trigger: Telemetry, cache, and budget table verified - 2026-08-14.
 const DATALASTIC_BASE_URL = "https://api.datalastic.com/api/v0";
 const TRACKING_TTL_MS = 5 * 60 * 1000;
 const RADAR_TTL_MS = 10 * 60 * 1000;
@@ -13,6 +14,15 @@ const RADAR_COORDINATE_PRECISION = 4;
 
 const memoryCache = new Map();
 const inFlightRequests = new Map();
+const consumptionMonitor = {
+  startedAt: new Date().toISOString(),
+  consumedCredits: 0,
+  providerRequests: 0,
+  cacheHits: 0,
+  staleResponses: 0,
+  budgetBlocks: 0,
+  lastConsumedAt: null,
+};
 
 export class AisCoordinatorError extends Error {
   constructor(code, message, status = 500, details = undefined) {
@@ -66,6 +76,14 @@ function budgetDatabase() {
     );
   }
   return getDatabase({ connectionString });
+}
+
+function getDatalasticApiKey() {
+  const apiKey = env("DATALASTIC_API_KEY");
+  if (!apiKey) {
+    throw new AisCoordinatorError("AIS_PROVIDER_NOT_CONFIGURED", "Datalastic is not configured", 503);
+  }
+  return apiKey;
 }
 
 function normalizeImo(value) {
@@ -219,6 +237,8 @@ async function readCache(store, key, nowMs) {
 }
 
 function responseFromEnvelope(envelope, nowMs, cacheStatus, reason = null, budget = null) {
+  if (cacheStatus === "HIT") consumptionMonitor.cacheHits += 1;
+  if (cacheStatus === "STALE") consumptionMonitor.staleResponses += 1;
   return {
     data: envelope.value,
     meta: {
@@ -235,10 +255,7 @@ function responseFromEnvelope(envelope, nowMs, cacheStatus, reason = null, budge
 }
 
 async function fetchDatalastic(path, parameters, fetchImpl) {
-  const apiKey = env("DATALASTIC_API_KEY");
-  if (!apiKey) {
-    throw new AisCoordinatorError("AIS_PROVIDER_NOT_CONFIGURED", "Datalastic is not configured", 503);
-  }
+  const apiKey = getDatalasticApiKey();
   const baseUrl = String(env("DATALASTIC_API_BASE_URL") || DATALASTIC_BASE_URL).replace(/\/+$/, "");
   const url = new URL(`${baseUrl}/${path}`);
   url.searchParams.set("api-key", apiKey);
@@ -310,7 +327,15 @@ function createBudgetGate() {
         return result;
       } catch (error) {
         await client.query("ROLLBACK").catch(() => undefined);
-        throw error;
+        if (error instanceof AisCoordinatorError) throw error;
+        const databaseCode = typeof error?.code === "string" ? error.code : "UNKNOWN";
+        console.error("[ais-coordinator] Budget database operation failed.", { code: databaseCode });
+        throw new AisCoordinatorError(
+          "AIS_BUDGET_UNAVAILABLE",
+          "AIS budget protection is unavailable",
+          503,
+          { reason: databaseCode === "42P01" ? "BUDGET_TABLE_MISSING" : "DATABASE_ERROR" },
+        );
       } finally {
         client.release();
       }
@@ -332,6 +357,7 @@ export function createAisCoordinator({
     }
 
     if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey);
+    if (!initialEnvelope) getDatalasticApiKey();
 
     const request = budgetGate.withRequestLock(cacheKey, async (budgetSession) => {
       const lockedNow = now();
@@ -343,6 +369,7 @@ export function createAisCoordinator({
       const periodKey = getPeriodKey(new Date(lockedNow));
       const budget = await budgetSession.reserve(periodKey, getBudgetLimit());
       if (!budget.allowed) {
+        consumptionMonitor.budgetBlocks += 1;
         if (lockedEnvelope) {
           return responseFromEnvelope(lockedEnvelope, lockedNow, "STALE", "BUDGET_LIMIT", budget);
         }
@@ -356,8 +383,11 @@ export function createAisCoordinator({
 
       let providerSucceeded = false;
       try {
+        consumptionMonitor.providerRequests += 1;
         const payload = await providerCall(fetchImpl);
         providerSucceeded = true;
+        consumptionMonitor.consumedCredits += 1;
+        consumptionMonitor.lastConsumedAt = new Date(now()).toISOString();
         const value = normalize(payload);
         const storedAt = now();
         const envelope = {
@@ -448,4 +478,12 @@ export async function getLivePosition(imo) {
 
 export async function getRadarTraffic(lat, lon, radius = DEFAULT_RADAR_RADIUS_NM) {
   return coordinator().getRadarTraffic(lat, lon, radius);
+}
+
+export function getAisConsumptionSnapshot() {
+  return {
+    ...consumptionMonitor,
+    activeRequests: inFlightRequests.size,
+    cachedEntries: memoryCache.size,
+  };
 }

@@ -63236,11 +63236,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
         function normalizeLiveAisVesselForStore(vessel) {
             if (!vessel || typeof vessel !== 'object') return null;
-            const latitude = Number(vessel.lat);
-            const longitude = Number(vessel.lon);
+            const latitude = Number(vessel.lat ?? vessel.latitude);
+            const longitude = Number(vessel.lon ?? vessel.lng ?? vessel.longitude);
             if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-            const vesselName = String(vessel.vessel_name || 'Buque sin nombre').trim();
-            const speed = Number(vessel.speed_sog);
+            const vesselName = String(vessel.vessel_name || vessel.name || 'Buque sin nombre').trim();
+            const speed = Number(vessel.speed_sog ?? vessel.speedKnots);
+            const course = Number(vessel.course ?? vessel.courseDegrees);
+            const heading = Number(vessel.heading ?? vessel.headingDegrees);
+            const navigationStatus = vessel.nav_status || vessel.navigationStatus || null;
+            const vesselType = vessel.vessel_type || vessel.vesselType || null;
             return {
                 ...vessel,
                 vesselName,
@@ -63250,10 +63254,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 lng: longitude,
                 speed: Number.isFinite(speed) ? speed : null,
                 speed_over_ground: Number.isFinite(speed) ? speed : null,
-                navigationStatus: vessel.nav_status,
-                navigationalStatus: vessel.nav_status,
-                vesselClass: vessel.vessel_type || 'Unknown',
-                shipType: vessel.vessel_type || null,
+                courseOverGround: Number.isFinite(course) ? course : null,
+                heading: Number.isFinite(heading) ? heading : null,
+                navigationStatus,
+                navigationalStatus: navigationStatus,
+                vesselClass: vesselType || 'Unknown',
+                shipType: vesselType,
                 data_source: 'radar_live',
                 source: 'LIVE_AIS'
             };
@@ -63297,43 +63303,34 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const request = (async () => {
                 try {
-                    const radiusNm = options.radiusNm || window.AIS_PROSPECTION_RADII_NM?.POL || 2000;
+                    const radiusNm = Math.min(50, Math.max(1, Number(options.radiusNm || window.AIS_PROSPECTION_RADII_NM?.POL || 10)));
                     const boundingBox = getLiveAisBoundingBox(polCoordinates, radiusNm);
                     if (!boundingBox) throw new Error('No se pudo determinar la Bounding Box AIS activa.');
                     const params = new URLSearchParams({
-                        bbox: [boundingBox.minLon, boundingBox.minLat, boundingBox.maxLon, boundingBox.maxLat].join(','),
-                        limit: String(Number(window.AIS_DUAL_SWEEP_LIMIT) || 1000),
-                        aisCategory: getActiveAisMacroCategory(),
-                        radarContext: requestSignature
+                        lat: String(polCoordinates.lat),
+                        lon: String(polCoordinates.lon),
+                        radius: String(radiusNm)
                     });
-                    const laycanStart = document.getElementById('match-laycan-start')?.value
-                        || document.getElementById('gc-laycan-date')?.value
-                        || document.getElementById('asb-laycan-date')?.value
-                        || '';
-                    const laycanEnd = document.getElementById('match-laycan-end')?.value
-                        || document.getElementById('gc-cancel-date')?.value
-                        || document.getElementById('asb-cancel-date')?.value
-                        || laycanStart;
-                    if (laycanStart) params.set('laycanStart', laycanStart);
-                    if (laycanEnd) params.set('laycanEnd', laycanEnd);
-                    if (options.refresh === true) {
-                        params.set('refresh', '1');
-                        params.set('cacheBust', String(Date.now()));
-                    }
-                    if (matchingPolContext?.pol) params.set('polName', matchingPolContext.pol);
-                    const openShipsEndpoint = `/api/fleet/live-ais?${params.toString()}`;
+                    const openShipsEndpoint = `/api/internal/ais/radar-traffic?${params.toString()}`;
                     const openShipsRequest = { headers: { Accept: 'application/json' } };
                     const response = window.CoreNetworkGuard
-                        ? await window.CoreNetworkGuard.fetch('openships-radar', openShipsEndpoint, openShipsRequest, { cooldownMs: 60_000 })
+                        ? await window.CoreNetworkGuard.fetch('ais-coordinator-radar', openShipsEndpoint, openShipsRequest, { cooldownMs: 60_000 })
                         : await fetch(openShipsEndpoint, openShipsRequest);
-                    let payload = await response.json().catch(() => null);
-                    logOpenShipsWarnings(payload);
-                    if (!response.ok) {
-                        throw new Error(payload?.message || `OpenShips status request failed (${response.status})`);
+                    const coordinatorPayload = await response.json().catch(() => null);
+                    if (!response.ok || !coordinatorPayload?.success) {
+                        throw new Error(coordinatorPayload?.error || `AIS coordinator request failed (${response.status})`);
                     }
+                    const payload = {
+                        vessels: Array.isArray(coordinatorPayload.data) ? coordinatorPayload.data : [],
+                        recent_vessels: Array.isArray(coordinatorPayload.data) ? coordinatorPayload.data.length : 0,
+                        provider: 'datalastic-cache',
+                        fetched_at: coordinatorPayload.meta?.fetchedAt || new Date().toISOString(),
+                        cache: coordinatorPayload.meta || null
+                    };
+                    window.dispatchEvent(new CustomEvent('ais:consumption-updated'));
 
                     const recentVessels = Number(payload?.recent_vessels);
-                    if (!Number.isFinite(recentVessels)) throw new Error('Invalid OpenShips status response');
+                    if (!Number.isFinite(recentVessels)) throw new Error('Invalid AIS coordinator response');
                     window.lastOpenShipsRadarPayload = payload;
 
                     window.openShipsVesselsCache = Array.isArray(payload?.vessels)
