@@ -1,4 +1,3 @@
-import type { Config } from "@netlify/functions";
 import { AisCoordinatorError, getLivePosition } from "./_shared/aisCoordinator.js";
 
 export default async (req: Request) => {
@@ -25,9 +24,4 @@ export default async (req: Request) => {
       headers: { "cache-control": "no-store" },
     });
   }
-};
-
-export const config: Config = {
-  path: "/api/internal/ais/live-position",
-  method: "GET",
 };

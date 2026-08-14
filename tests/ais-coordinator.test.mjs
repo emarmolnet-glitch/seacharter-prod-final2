@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createAisCoordinator } from "../netlify/functions/_shared/aisCoordinator.js";
+import {
+  createAisCoordinator,
+  getAisConsumptionSnapshot,
+} from "../netlify/functions/_shared/aisCoordinator.js";
 
 const environment = new Map([
   ["DATALASTIC_API_KEY", "test-key"],
@@ -167,4 +170,47 @@ test("failed provider calls release the reserved credit", async () => {
   await assert.rejects(() => coordinator.getLivePosition("3456789"));
   assert.equal(budgetGate.calls.reservations, 1);
   assert.equal(budgetGate.calls.releases, 1);
+});
+
+test("a missing provider key is reported before the budget database is contacted", async () => {
+  const previousKey = environment.get("DATALASTIC_API_KEY");
+  environment.delete("DATALASTIC_API_KEY");
+  let budgetContacted = false;
+  const coordinator = createAisCoordinator({
+    store: createMemoryStore(),
+    budgetGate: {
+      async withRequestLock() {
+        budgetContacted = true;
+        throw new Error("budget should not be contacted");
+      },
+    },
+  });
+
+  try {
+    await assert.rejects(
+      () => coordinator.getLivePosition("9863118"),
+      (error) => error?.code === "AIS_PROVIDER_NOT_CONFIGURED",
+    );
+    assert.equal(budgetContacted, false);
+  } finally {
+    environment.set("DATALASTIC_API_KEY", previousKey);
+  }
+});
+
+test("the in-memory monitor counts provider credits but not cache hits", async () => {
+  const before = getAisConsumptionSnapshot();
+  const coordinator = createAisCoordinator({
+    store: createMemoryStore(),
+    budgetGate: createBudgetGate(),
+    now: () => Date.parse("2026-08-14T15:00:00.000Z"),
+    fetchImpl: async () => jsonResponse({ data: { imo: "4567890", lat: 10, lon: 20 } }),
+  });
+
+  await coordinator.getLivePosition("4567890");
+  await coordinator.getLivePosition("4567890");
+  const after = getAisConsumptionSnapshot();
+
+  assert.equal(after.consumedCredits, before.consumedCredits + 1);
+  assert.equal(after.providerRequests, before.providerRequests + 1);
+  assert.equal(after.cacheHits, before.cacheHits + 1);
 });

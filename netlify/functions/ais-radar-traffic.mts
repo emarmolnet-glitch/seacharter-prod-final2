@@ -1,4 +1,3 @@
-import type { Config } from "@netlify/functions";
 import { AisCoordinatorError, getRadarTraffic } from "./_shared/aisCoordinator.js";
 
 export default async (req: Request) => {
@@ -29,9 +28,4 @@ export default async (req: Request) => {
       headers: { "cache-control": "no-store" },
     });
   }
-};
-
-export const config: Config = {
-  path: "/api/internal/ais/radar-traffic",
-  method: "GET",
 };

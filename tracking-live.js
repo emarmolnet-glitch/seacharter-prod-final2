@@ -52,6 +52,7 @@ const trackingState = {
     activeVoyage: null,
     activeVoyageLoading: false,
     activeVoyageError: '',
+    aisConsumptionRequest: null,
 };
 
 const contractData = {
@@ -338,7 +339,7 @@ function createTrackingOverlay() {
     overlay.setAttribute('aria-label', 'Tracking GIS y Dashboard Ejecutivo');
     overlay.innerHTML = `
         <div class="tracking-live-topbar ecosystem-panel">
-            <div class="tracking-live-context"><span class="tracking-live-connection" id="tracking-live-connection">GIS disponible</span><span id="tracking-live-last-sync">Modo ruta libre</span></div>
+            <div class="tracking-live-context"><span class="tracking-live-connection" id="tracking-live-connection">GIS disponible</span><span id="tracking-live-last-sync">Modo ruta libre</span><span class="tracking-ais-consumption" id="tracking-ais-consumption" title="Créditos Datalastic consumidos por esta instancia del coordinador"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i><strong id="tracking-ais-consumption-count">0</strong><span>créditos AIS</span></span></div>
             <nav class="tracking-live-tabs" role="tablist" aria-label="Vistas del contrato">
                 <button type="button" class="tracking-live-tab is-active" role="tab" aria-selected="true" aria-controls="tracking-gis-view" data-tracking-tab="gis"><i class="fa-solid fa-earth-europe" aria-hidden="true"></i><span>Tracking GIS</span></button>
                 <button type="button" class="tracking-live-tab" role="tab" aria-selected="false" aria-controls="tracking-executive-view" data-tracking-tab="executive" tabindex="-1"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Dashboard Ejecutivo &amp; Laytime</span></button>
@@ -1107,6 +1108,95 @@ function normalizeTrackingVesselQuery(value) {
     return digits.length === 7 || digits.length === 9 ? digits : normalized;
 }
 
+function getTrackingVesselImo(vessel, fallback = '') {
+    const candidates = [vessel?.imo, vessel?.imoNumber, fallback];
+    for (const candidate of candidates) {
+        const digits = String(candidate || '').replace(/\D/g, '');
+        if (digits.length === 7) return digits;
+    }
+    return '';
+}
+
+function mergeCoordinatorTelemetry(vessel, telemetry, meta) {
+    if (!vessel || !telemetry) return vessel;
+    return {
+        ...vessel,
+        name: telemetry.name || vessel.name,
+        imo: telemetry.imo || vessel.imo,
+        mmsi: telemetry.mmsi || vessel.mmsi,
+        flag: telemetry.flag || vessel.flag,
+        vesselType: telemetry.vesselType || vessel.vesselType,
+        latitude: telemetry.latitude,
+        longitude: telemetry.longitude,
+        lat: telemetry.latitude,
+        lng: telemetry.longitude,
+        lon: telemetry.longitude,
+        speedKnots: telemetry.speedKnots,
+        speedOverGround: telemetry.speedKnots,
+        course: telemetry.courseDegrees,
+        courseOverGround: telemetry.courseDegrees,
+        heading: telemetry.headingDegrees,
+        navigationStatus: telemetry.navigationStatus || vessel.navigationStatus,
+        destination: telemetry.destination || vessel.destination,
+        timestamp: telemetry.positionTimestamp || meta?.fetchedAt || vessel.timestamp,
+        positionUpdatedAt: telemetry.positionTimestamp || meta?.fetchedAt || vessel.positionUpdatedAt,
+        aisCacheStatus: meta?.cacheStatus || null,
+    };
+}
+
+async function refreshAisConsumptionMonitor() {
+    const count = document.getElementById('tracking-ais-consumption-count');
+    const widget = document.getElementById('tracking-ais-consumption');
+    if (!count || !widget) return null;
+    if (trackingState.aisConsumptionRequest) return trackingState.aisConsumptionRequest;
+    trackingState.aisConsumptionRequest = (async () => {
+        try {
+            const response = await fetch('/api/internal/ais/consumption', {
+                headers: { Accept: 'application/json' },
+                cache: 'no-store',
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload.success) throw new Error('AIS consumption unavailable');
+            count.textContent = String(Number(payload.data?.consumedCredits) || 0);
+            widget.dataset.state = Number(payload.data?.budgetBlocks) > 0 ? 'limited' : 'healthy';
+            widget.title = `Sesión iniciada ${formatTrackingTime(payload.data?.startedAt)} · caché ${Number(payload.data?.cacheHits) || 0} hits`;
+            return payload.data;
+        } catch {
+            widget.dataset.state = 'unavailable';
+            return null;
+        } finally {
+            trackingState.aisConsumptionRequest = null;
+        }
+    })();
+    return trackingState.aisConsumptionRequest;
+}
+
+function startAisConsumptionMonitor() {
+    void refreshAisConsumptionMonitor();
+}
+
+window.addEventListener('ais:consumption-updated', () => {
+    if (document.getElementById('tracking-live-overlay')?.classList.contains('is-open')) {
+        void refreshAisConsumptionMonitor();
+    }
+});
+
+async function fetchCoordinatorLivePosition(vessel, fallbackQuery, signal) {
+    const imo = getTrackingVesselImo(vessel, fallbackQuery);
+    if (!imo) return vessel;
+    const response = await fetch(`/api/internal/ais/live-position?imo=${encodeURIComponent(imo)}`, {
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+        signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.success || !payload.data) {
+        throw new Error(payload.error || 'No fue posible recuperar la posición AIS coordinada.');
+    }
+    void refreshAisConsumptionMonitor();
+    return mergeCoordinatorTelemetry(vessel, payload.data, payload.meta);
+}
+
 function startTrackingVesselPolling(query) {
     const normalizedQuery = normalizeTrackingVesselQuery(query);
     if (!normalizedQuery) return;
@@ -1149,7 +1239,7 @@ async function loadTrackingVessel(rawQuery, silent = false) {
     trackingStore.getState().beginVesselSearch();
     if (!silent) {
         document.getElementById('tracking-ais-vessel').textContent = query;
-        document.getElementById('tracking-ais-details').textContent = 'Consultando OpenShips y maestro de buques…';
+        document.getElementById('tracking-ais-details').textContent = 'Resolviendo identidad y telemetría AIS coordinada…';
         document.getElementById('tracking-ais-position').textContent = 'Buscando posición disponible';
         document.getElementById('tracking-ais-navigation').textContent = 'Sincronizando velocidad y rumbo…';
         document.getElementById('tracking-ais-time').textContent = 'Sync';
@@ -1179,10 +1269,11 @@ async function loadTrackingVessel(rawQuery, silent = false) {
             document.getElementById('tracking-ais-time').textContent = '';
             return;
         }
-        trackingState.basicVessel = payload.vessel;
-        trackingStore.getState().setVessel(payload.vessel);
-        if (input && payload.vessel.name) input.value = payload.vessel.name;
-        startTrackingVesselPolling(payload.vessel.mmsi || payload.vessel.imo || payload.vessel.name || query);
+        const coordinatedVessel = await fetchCoordinatorLivePosition(payload.vessel, query, controller.signal);
+        trackingState.basicVessel = coordinatedVessel;
+        trackingStore.getState().setVessel(coordinatedVessel);
+        if (input && coordinatedVessel.name) input.value = coordinatedVessel.name;
+        startTrackingVesselPolling(coordinatedVessel.imo || coordinatedVessel.mmsi || coordinatedVessel.name || query);
         syncBasicVesselMap(!silent);
         if (!trackingState.data) {
             setTrackingFlowMode(trackingState.flowMode === 'audit' ? 'audit' : 'free');
@@ -1243,7 +1334,7 @@ function renderManualTrackingState(totalDistance = trackingState.routeDistance) 
     }
 
     document.getElementById('tracking-live-connection').textContent = 'GIS disponible';
-    document.getElementById('tracking-live-last-sync').textContent = hasVoyageData ? 'Viaje activo' : auditMode ? 'DraftVoyage activo' : trackingState.basicVessel ? 'OpenShips activo' : 'Tracking Libre';
+    document.getElementById('tracking-live-last-sync').textContent = hasVoyageData ? 'Viaje activo' : auditMode ? 'DraftVoyage activo' : trackingState.basicVessel ? 'AIS coordinado activo' : 'Tracking Libre';
     document.getElementById('tracking-map-route-label').textContent = routeLabel;
     document.getElementById('tracking-map-route-distance').textContent = routeDistance;
     renderBasicVesselCard();
@@ -1262,7 +1353,7 @@ function renderManualTrackingState(totalDistance = trackingState.routeDistance) 
     count.classList.remove('has-alerts');
     document.getElementById('tracking-alert-list').innerHTML = '<div class="tracking-alerts-empty">Vincula un contrato para activar alertas operativas.</div>';
     document.getElementById('tracking-live-content').innerHTML = `
-        <div class="tracking-state-card ecosystem-panel is-manual"><span class="tracking-state-orbit"><i class="fa-solid fa-route"></i></span><div><h2>${hasVoyageData ? 'Viaje Activo' : auditMode ? 'Auditoría Pre-Fixture' : trackingState.basicVessel ? 'Tracking Libre' : 'Observación Libre'}</h2><p>${hasRoutePorts ? `La navegación ${escapeTrackingHtml(routeLabel)} utiliza los datos del contrato recuperado.` : auditMode ? 'El DraftVoyage aporta POL, POD, Laycan y carga; el IMO activa únicamente el cálculo de lastre real hasta POL.' : trackingState.basicVessel ? `OpenShips centra el mapa en ${escapeTrackingHtml(trackingState.basicVessel.name || 'el buque')} sin rutas ni datos comerciales.` : 'Introduce un IMO para geolocalizar un buque o carga una referencia contractual válida.'}</p></div></div>`;
+        <div class="tracking-state-card ecosystem-panel is-manual"><span class="tracking-state-orbit"><i class="fa-solid fa-route"></i></span><div><h2>${hasVoyageData ? 'Viaje Activo' : auditMode ? 'Auditoría Pre-Fixture' : trackingState.basicVessel ? 'Tracking Libre' : 'Observación Libre'}</h2><p>${hasRoutePorts ? `La navegación ${escapeTrackingHtml(routeLabel)} utiliza los datos del contrato recuperado.` : auditMode ? 'El DraftVoyage aporta POL, POD, Laycan y carga; el IMO activa únicamente el cálculo de lastre real hasta POL.' : trackingState.basicVessel ? `La caché AIS coordinada centra el mapa en ${escapeTrackingHtml(trackingState.basicVessel.name || 'el buque')} sin rutas ni datos comerciales.` : 'Introduce un IMO para geolocalizar un buque o carga una referencia contractual válida.'}</p></div></div>`;
 }
 
 function clearTrackingContract(message = 'Sin viaje activo. Esperando datos desde Neon.') {
@@ -1849,6 +1940,7 @@ function openTrackingLive() {
     trackingStore.getState().setOverlayOpen(true);
     setTrackingActiveTab(trackingState.activeTab);
     document.body.classList.add('tracking-live-open');
+    startAisConsumptionMonitor();
     const lifecycleToken = ++trackingMapLifecycleToken;
     if (trackingMapMountFrameId !== null) window.cancelAnimationFrame(trackingMapMountFrameId);
     trackingMapMountFrameId = window.requestAnimationFrame(async () => {
