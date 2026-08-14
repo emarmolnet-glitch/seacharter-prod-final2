@@ -1,4 +1,5 @@
 import { getTradeMargin, type TradeMarginResult } from '../services/comtradeApi';
+import { getComtradeHsCodeFamily } from '../data/comtradeHsCodes';
 import { findUnCountry } from '../data/unCountries';
 import { createCountryCombobox, type CountryComboboxController } from './CountryCombobox';
 
@@ -21,6 +22,9 @@ type RouteCountryState = {
 };
 
 type RouteAwareWindow = Window & typeof globalThis & {
+  CargoTypeSelector?: {
+    readSelectedId?: () => string;
+  };
   GlobalStore?: RouteCountryState;
   SeaCharterStore?: {
     getState?: () => RouteCountryState;
@@ -41,27 +45,6 @@ const STATUS_BADGE_CLASSES: Record<RadarStatus, string> = {
   red: 'flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg text-sm font-semibold w-full',
   neutral: 'flex items-center gap-2 bg-slate-50 border border-slate-200 text-slate-600 px-4 py-3 rounded-lg text-sm font-semibold w-full',
 };
-
-const COMTRADE_DEBOUNCE_MS = 1500;
-
-type DebouncedCallback = (() => void) & { cancel: () => void };
-
-function debounce(callback: () => void, waitMilliseconds: number): DebouncedCallback {
-  let timeoutId: number | undefined;
-  const debouncedCallback = (() => {
-    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
-    timeoutId = window.setTimeout(() => {
-      timeoutId = undefined;
-      callback();
-    }, waitMilliseconds);
-  }) as DebouncedCallback;
-
-  debouncedCallback.cancel = () => {
-    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
-    timeoutId = undefined;
-  };
-  return debouncedCallback;
-}
 
 function readSeaCharterFreight(): number {
   const freightInput = document.getElementById('freight-sell') as HTMLInputElement | null;
@@ -98,6 +81,40 @@ function getStatusCopy(status: RadarStatus): { title: string; detail: string } {
 function setText(root: HTMLElement, selector: string, value: string): void {
   const element = root.querySelector<HTMLElement>(selector);
   if (element) element.textContent = value;
+}
+
+function readSelectedCargoTypeId(routeWindow: RouteAwareWindow): string {
+  const selector = document.getElementById('cargo-type-manual') as HTMLSelectElement | null;
+  return String(selector?.value || routeWindow.CargoTypeSelector?.readSelectedId?.() || '').trim();
+}
+
+function replaceHsCodeOptions(select: HTMLSelectElement, cargoTypeId: string): boolean {
+  const family = getComtradeHsCodeFamily(cargoTypeId);
+  const fragment = document.createDocumentFragment();
+
+  if (!family) {
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = cargoTypeId === '100'
+      ? 'Sin códigos SA para “Otros”'
+      : 'Selecciona una especificación de carga';
+    fragment.appendChild(placeholder);
+    select.replaceChildren(fragment);
+    select.value = '';
+    select.disabled = true;
+    return false;
+  }
+
+  family.codes.forEach(({ code, label }) => {
+    const option = document.createElement('option');
+    option.value = code;
+    option.textContent = `${code} · ${label}`;
+    fragment.appendChild(option);
+  });
+  select.replaceChildren(fragment);
+  select.disabled = false;
+  select.value = family.defaultCode;
+  return true;
 }
 
 function readCountryIso(...values: unknown[]): string {
@@ -195,11 +212,7 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
         <label class="block md:col-span-2">
           <span class="block text-xs font-medium text-slate-500 mb-1">Código SA</span>
           <select class="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 block w-full p-2.5 transition-colors" data-comtrade-cmd aria-label="Código del Sistema Armonizado">
-            <option value="252310">252310 · Clinker de cemento</option>
-            <option value="252321">252321 · Cemento Portland blanco</option>
-            <option value="252329">252329 · Los demás cementos Portland</option>
-            <option value="252390">252390 · Otros cementos hidráulicos</option>
-            <option value="2523">2523 · Cementos hidráulicos (agregado)</option>
+            <option value="">Selecciona una especificación de carga</option>
           </select>
         </label>
       </div>
@@ -250,6 +263,8 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
   let latestResult: TradeMarginResult | null = null;
   let previousFreight = -1;
   let previousRouteKey = '';
+  let previousCargoTypeId = '';
+  let activeRequestId = 0;
 
   const syncRouteCountries = (state: RouteCountryState = {}) => {
     const { exporterIso, importerIso } = getRouteCountryPair(state);
@@ -267,40 +282,81 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
     renderComparison(root, latestResult);
   };
 
+  const syncCargoHsCodes = (cargoTypeId = '') => {
+    if (!cmdSelect) return;
+    const normalizedCargoTypeId = String(cargoTypeId || readSelectedCargoTypeId(routeWindow)).trim();
+    if (normalizedCargoTypeId === previousCargoTypeId) return;
+    activeRequestId += 1;
+    previousCargoTypeId = normalizedCargoTypeId;
+    const hasCodes = replaceHsCodeOptions(cmdSelect, normalizedCargoTypeId);
+    latestResult = null;
+    renderComparison(root, null);
+    setText(root, '[data-comtrade-period]', 'Precio CIF − Precio FOB');
+    setText(
+      root,
+      '[data-comtrade-message]',
+      hasCodes
+        ? 'Código SA sugerido según la especificación de carga. Puedes elegir otra partida de la misma familia.'
+        : 'Selecciona una especificación de carga compatible para consultar UN Comtrade.',
+    );
+    if (loadButton) {
+      loadButton.disabled = !hasCodes;
+      loadButton.classList.remove('is-loading');
+    }
+  };
+
   const loadMargin = async () => {
     if (!reporterInput || !partnerInput || !cmdSelect || !loadButton) return;
+    if (!cmdSelect.value) {
+      setText(root, '[data-comtrade-message]', 'Selecciona una especificación de carga antes de consultar UN Comtrade.');
+      return;
+    }
+    const requestId = ++activeRequestId;
+    const requestedCmdCode = cmdSelect.value;
     loadButton.disabled = true;
     loadButton.classList.add('is-loading');
     setText(root, '[data-comtrade-message]', 'Consultando datos anuales de UN Comtrade…');
 
     try {
-      latestResult = await getTradeMargin(reporterCombobox.getValue(), partnerCombobox.getValue(), cmdSelect.value);
+      const result = await getTradeMargin(reporterCombobox.getM49(), partnerCombobox.getM49(), requestedCmdCode);
+      if (requestId !== activeRequestId || cmdSelect.value !== requestedCmdCode) return;
+      latestResult = result;
       renderComparison(root, latestResult);
       setText(root, '[data-comtrade-period]', `CIF − FOB · ${latestResult.period} · ${latestResult.netWeightMt.toLocaleString('en-US', { maximumFractionDigits: 0 })} TM`);
       setText(root, '[data-comtrade-message]', `Datos ${latestResult.source} almacenados localmente durante siete días.`);
     } catch (error) {
+      if (requestId !== activeRequestId) return;
       latestResult = null;
       renderComparison(root, null);
       setText(root, '[data-comtrade-period]', 'Precio CIF − Precio FOB');
       setText(root, '[data-comtrade-message]', error instanceof Error ? error.message : 'No se pudo consultar UN Comtrade.');
       root.dataset.radarStatus = 'error';
     } finally {
-      loadButton.disabled = false;
-      loadButton.classList.remove('is-loading');
+      if (requestId === activeRequestId) {
+        loadButton.disabled = !cmdSelect.value;
+        loadButton.classList.remove('is-loading');
+      }
     }
   };
 
-  const debouncedLoadMargin = debounce(() => void loadMargin(), COMTRADE_DEBOUNCE_MS);
   const handleLoadClick = () => {
-    debouncedLoadMargin.cancel();
     void loadMargin();
+  };
+  const resetPendingQuery = () => {
+    activeRequestId += 1;
+    latestResult = null;
+    renderComparison(root, null);
+    setText(root, '[data-comtrade-period]', 'Precio CIF − Precio FOB');
+    setText(root, '[data-comtrade-message]', 'Selección actualizada. Pulsa “Consultar radar” para solicitar datos a UN Comtrade.');
+    loadButton?.classList.remove('is-loading');
+    if (loadButton) loadButton.disabled = !cmdSelect?.value;
   };
   reporterCombobox = createCountryCombobox({
     defaultIso: 'USA',
     inputLabel: 'Mercado importador',
     inputSelector: '[data-comtrade-reporter]',
     listSelector: '[data-comtrade-reporter-options]',
-    onChange: debouncedLoadMargin,
+    onChange: resetPendingQuery,
     root,
   });
   partnerCombobox = createCountryCombobox({
@@ -309,16 +365,26 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
     inputLabel: 'Socio exportador',
     inputSelector: '[data-comtrade-partner]',
     listSelector: '[data-comtrade-partner-options]',
-    onChange: debouncedLoadMargin,
+    onChange: resetPendingQuery,
     root,
   });
 
   loadButton?.addEventListener('click', handleLoadClick);
-  cmdSelect?.addEventListener('change', debouncedLoadMargin);
+  cmdSelect?.addEventListener('change', resetPendingQuery);
   const freightInput = document.getElementById('freight-sell');
   freightInput?.addEventListener('input', refreshFreight);
   freightInput?.addEventListener('change', refreshFreight);
   const routeWindow = window as RouteAwareWindow;
+  const cargoTypeInput = document.getElementById('cargo-type-manual');
+  const handleCargoTypeInput = () => syncCargoHsCodes();
+  const handleCargoTypeChanged = (event: Event) => {
+    const detail = (event as CustomEvent<{ cargoType?: { id?: string } }>).detail;
+    syncCargoHsCodes(detail?.cargoType?.id || '');
+  };
+  cargoTypeInput?.addEventListener('change', handleCargoTypeInput);
+  cargoTypeInput?.addEventListener('input', handleCargoTypeInput);
+  window.addEventListener('CARGO_TYPE_CHANGED', handleCargoTypeChanged);
+  syncCargoHsCodes();
   const handleRouteDefined = (event: Event) => syncRouteCountries((event as CustomEvent<RouteCountryState>).detail || {});
   window.addEventListener('SEA_ROUTE_DEFINED', handleRouteDefined);
   const unsubscribeRouteStore = routeWindow.SeaCharterStore?.subscribe?.(syncRouteCountries);
@@ -328,11 +394,13 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
 
   return () => {
     window.clearInterval(pollingId);
-    debouncedLoadMargin.cancel();
     loadButton?.removeEventListener('click', handleLoadClick);
-    cmdSelect?.removeEventListener('change', debouncedLoadMargin);
+    cmdSelect?.removeEventListener('change', resetPendingQuery);
     freightInput?.removeEventListener('input', refreshFreight);
     freightInput?.removeEventListener('change', refreshFreight);
+    cargoTypeInput?.removeEventListener('change', handleCargoTypeInput);
+    cargoTypeInput?.removeEventListener('input', handleCargoTypeInput);
+    window.removeEventListener('CARGO_TYPE_CHANGED', handleCargoTypeChanged);
     window.removeEventListener('SEA_ROUTE_DEFINED', handleRouteDefined);
     unsubscribeRouteStore?.();
     reporterCombobox.destroy();

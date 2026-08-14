@@ -1,9 +1,8 @@
 const COMTRADE_PROXY_ENDPOINT = '/.netlify/functions/comtrade';
 const CACHE_PREFIX = 'seacharter:comtrade:v3';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const CONSOLIDATED_PERIODS = [2024, 2023] as const;
-const MAX_RATE_LIMIT_RETRIES = 2;
-const RATE_LIMIT_RETRY_DELAY_MS = 1200;
+const LAST_CONSOLIDATED_PERIOD = 2025;
+const RATE_LIMIT_MESSAGE = 'Límite de peticiones de la ONU alcanzado. Espere unos minutos';
 
 const ISO3_TO_M49: Record<string, number> = {
   DZA: 12,
@@ -122,48 +121,38 @@ function normalizeCmdCode(value: string): string {
   return cmdCode;
 }
 
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
-}
-
 async function fetchJson<T>(url: string): Promise<T> {
-  for (let retryAttempt = 0; retryAttempt <= MAX_RATE_LIMIT_RETRIES; retryAttempt += 1) {
-    let response: Response;
-    try {
-      response = await fetch(url);
-    } catch (error) {
-      console.error('[UN Comtrade] La petición al proxy no pudo completarse.', {
-        endpoint: COMTRADE_PROXY_ENDPOINT,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw new Error('No se pudo conectar con el servicio de UN Comtrade.');
-    }
-
-    const payload = await response.json().catch(() => ({})) as T & {
-      error?: string;
-      message?: string;
-      statusCode?: number;
-    };
-    const apiStatusCode = Number(payload.statusCode || 0);
-    const isRateLimited = response.status === 429 || apiStatusCode === 429;
-    if (isRateLimited && retryAttempt < MAX_RATE_LIMIT_RETRIES) {
-      await delay(RATE_LIMIT_RETRY_DELAY_MS);
-      continue;
-    }
-    if (!response.ok || apiStatusCode >= 400) {
-      const message = payload.message || payload.error || `UN Comtrade respondió con estado ${apiStatusCode || response.status}.`;
-      console.error('[UN Comtrade] Error del proxy o del servicio remoto.', {
-        endpoint: COMTRADE_PROXY_ENDPOINT,
-        httpStatus: response.status,
-        apiStatusCode: apiStatusCode || undefined,
-        message,
-      });
-      throw new Error(message);
-    }
-    return payload;
+  let response: Response;
+  try {
+    response = await fetch(url);
+  } catch (error) {
+    console.error('[UN Comtrade] La petición al proxy no pudo completarse.', {
+      endpoint: COMTRADE_PROXY_ENDPOINT,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw new Error('No se pudo conectar con el servicio de UN Comtrade.');
   }
 
-  throw new Error('UN Comtrade agotó los reintentos disponibles.');
+  const payload = await response.json().catch(() => ({})) as T & {
+    error?: string;
+    message?: string;
+    statusCode?: number;
+  };
+  const apiStatusCode = Number(payload.statusCode || 0);
+  if (response.status === 429 || apiStatusCode === 429) {
+    throw new Error(RATE_LIMIT_MESSAGE);
+  }
+  if (!response.ok || apiStatusCode >= 400) {
+    const message = payload.message || payload.error || `UN Comtrade respondió con estado ${apiStatusCode || response.status}.`;
+    console.error('[UN Comtrade] Error del proxy o del servicio remoto.', {
+      endpoint: COMTRADE_PROXY_ENDPOINT,
+      httpStatus: response.status,
+      apiStatusCode: apiStatusCode || undefined,
+      message,
+    });
+    throw new Error(message);
+  }
+  return payload;
 }
 
 async function getReporterReferences(): Promise<ReporterReference[]> {
@@ -201,30 +190,26 @@ async function getTradeRecords(
   cmdCode: string,
   flowCode: 'M' | 'X' = 'M',
 ): Promise<ComtradeRecord[]> {
-  for (const period of CONSOLIDATED_PERIODS) {
-    const responseCacheKey = `response:${flowCode}:${reporterCode}:${partnerCode}:${cmdCode}:${period}`;
-    let response = readCache<ComtradeResponse>(responseCacheKey);
+  const responseCacheKey = `response:${flowCode}:${reporterCode}:${partnerCode}:${cmdCode}:${LAST_CONSOLIDATED_PERIOD}`;
+  let response = readCache<ComtradeResponse>(responseCacheKey);
 
-    if (!response) {
-      const query = new URLSearchParams({
-        flowcode: flowCode,
-        reportercode: String(reporterCode),
-        partnercode: String(partnerCode),
-        cmdcode: cmdCode,
-        period: String(period),
-      });
-      response = await fetchJson<ComtradeResponse>(`${COMTRADE_PROXY_ENDPOINT}?${query}`);
-      writeCache(responseCacheKey, response);
-    }
-
-    if (response.error) throw new Error(response.error);
-    if (response.statusCode && response.statusCode >= 400) {
-      throw new Error(response.message || `UN Comtrade respondió con estado ${response.statusCode}.`);
-    }
-    if (Array.isArray(response.data) && response.data.length) return response.data;
+  if (!response) {
+    const query = new URLSearchParams({
+      flowcode: flowCode,
+      reportercode: String(reporterCode),
+      partnercode: String(partnerCode),
+      cmdcode: cmdCode,
+      period: String(LAST_CONSOLIDATED_PERIOD),
+    });
+    response = await fetchJson<ComtradeResponse>(`${COMTRADE_PROXY_ENDPOINT}?${query}`);
+    writeCache(responseCacheKey, response);
   }
 
-  return [];
+  if (response.error) throw new Error(response.error);
+  if (response.statusCode && response.statusCode >= 400) {
+    throw new Error(response.message || `UN Comtrade respondió con estado ${response.statusCode}.`);
+  }
+  return Array.isArray(response.data) ? response.data : [];
 }
 
 function getTradeValue(record: ComtradeRecord, fields: Array<'cifvalue' | 'fobvalue' | 'primaryValue'>): number | null {
@@ -311,7 +296,7 @@ function calculateMargin(
   };
 }
 
-function calculateWorldFallbackMargin(
+function calculateImportExportMargin(
   importerRecords: ComtradeRecord[],
   exporterRecords: ComtradeRecord[],
   reporterIso: string,
@@ -341,7 +326,7 @@ function calculateWorldFallbackMargin(
     return calculateMargin(importerRecords, reporterIso, partnerIso, cmdCode);
   }
 
-  throw new Error('No hay datos bilaterales ni promedios World comparables para la selección actual.');
+  throw new Error('No hay datos de importación y exportación comparables para la selección actual.');
 }
 
 export async function getTradeMargin(
@@ -360,21 +345,16 @@ export async function getTradeMargin(
     resolveCountryCode(normalizedReporter),
     resolveCountryCode(normalizedPartner),
   ]);
-  const bilateralRecords = await getTradeRecords(reporterCode, partnerCode, normalizedCmdCode, 'M');
   let result: TradeMarginResult;
 
-  if (hasExplicitCifFob(bilateralRecords)) {
-    result = calculateMargin(bilateralRecords, normalizedReporter, normalizedPartner, normalizedCmdCode);
+  const importerRecords = await getTradeRecords(reporterCode, partnerCode, normalizedCmdCode, 'M');
+  if (partnerCode === 0) {
+    result = calculateMargin(importerRecords, normalizedReporter, normalizedPartner, normalizedCmdCode);
   } else {
-    const importerWorldRecords = partnerCode === 0
-      ? bilateralRecords
-      : await getTradeRecords(reporterCode, 0, normalizedCmdCode, 'M');
-    const exporterWorldRecords = partnerCode === 0
-      ? []
-      : await getTradeRecords(partnerCode, 0, normalizedCmdCode, 'X');
-    result = calculateWorldFallbackMargin(
-      importerWorldRecords,
-      exporterWorldRecords,
+    const exporterRecords = await getTradeRecords(partnerCode, reporterCode, normalizedCmdCode, 'X');
+    result = calculateImportExportMargin(
+      importerRecords,
+      exporterRecords,
       normalizedReporter,
       normalizedPartner,
       normalizedCmdCode,
