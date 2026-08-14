@@ -42,17 +42,6 @@ type VesselTechnicalRow = QueryResultRow & {
   eta: string | Date | null;
 };
 
-type VesselMasterTableRow = QueryResultRow & {
-  imo: string;
-  name: string | null;
-  dwt: number | string | null;
-  gt: number | string | null;
-  loa: number | string | null;
-  beam: number | string | null;
-  flag: string | null;
-  year_built: number | null;
-};
-
 const RETURNING_COLUMNS = `
   imo_number, mmsi, vessel_name, dwt, latitude, longitude, vessel_type,
   draft_meters, flag, call_sign, year_built, gross_tonnage, net_tonnage,
@@ -87,40 +76,6 @@ export function hasCachedMandatoryTechnicalData(record: VesselTechnicalRecord | 
     && Number(record.grossTonnage) > 0
     && Number(record.loaMeters) > 0,
   );
-}
-
-export async function findVesselMasterTableByImo(imo: string) {
-  const result = await getPool().query<VesselMasterTableRow>(
-    `
-      SELECT imo, name, dwt, gt, loa, beam, flag, year_built
-      FROM vessels_master_table
-      WHERE imo = $1::text
-      LIMIT 1
-    `,
-    [imo],
-  );
-  const row = result.rows[0];
-  if (!row) return null;
-
-  return {
-    imoNumber: row.imo,
-    mmsi: null,
-    vesselName: row.name,
-    dwt: row.dwt === null ? null : Number(row.dwt),
-    latitude: null,
-    longitude: null,
-    vesselType: null,
-    draftMeters: null,
-    flag: row.flag,
-    callSign: null,
-    yearBuilt: row.year_built,
-    grossTonnage: row.gt === null ? null : Number(row.gt),
-    netTonnage: null,
-    loaMeters: row.loa === null ? null : Number(row.loa),
-    beamMeters: row.beam === null ? null : Number(row.beam),
-    lastPort: null,
-    eta: null,
-  };
 }
 
 export async function findVesselTechnicalRecord(

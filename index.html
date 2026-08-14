@@ -31149,6 +31149,9 @@
             State.hasScrubber = vessel.has_scrubber ?? null;
             State.vesselDwtFixed = State.dwt > 0;
             updateSection2LocalState('vessel-dwt', State.dwt > 0 ? String(State.dwt) : '');
+            updateSection2LocalState('vessel-draft', State.draft > 0 ? String(State.draft) : '');
+            updateSection2LocalState('vessel-loa', State.loa > 0 ? String(State.loa) : '');
+            updateSection2LocalState('vessel-identity-beam', State.beam > 0 ? String(State.beam) : '');
             window.recordVerifiedVesselClass?.(vessel);
             if (window.GlobalStore) {
                 window.GlobalStore.activeVessel = vessel;

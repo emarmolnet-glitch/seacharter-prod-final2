@@ -162,7 +162,7 @@ export default async (request: Request) => {
       beamMeters: Number(particulars.beamMeters) || null,
       lastPort: textValue(particulars.lastPort) || null,
       eta: textValue(particulars.eta) || null,
-    });
+    }, undefined, "VERIFIED_DATALASTIC");
 
     return json({
       success: true,
