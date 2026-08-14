@@ -115,7 +115,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         return merged;
     }
 
-    function readExternalScrapeRecord(payload) {
+    function readDueDiligenceRecord(payload) {
         if (!payload || typeof payload !== 'object') return {};
         return payload.rawData?.vessel
             || payload.rawData?.record
@@ -339,7 +339,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             match.dwtAssessment = {
                 ...(match.dwtAssessment || {}),
                 status: 'SUFFICIENT',
-                source: 'EXTERNAL_DUE_DILIGENCE',
+                source: 'VESSEL_PARTICULARS',
             };
         }
         match.dueDiligenceStatus = 'HYDRATED';
@@ -432,7 +432,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
                 vessel_type: technical.vesselType || '',
                 auditStatus: 'PENDING',
                 audit_status: 'PENDING',
-                source: 'external_due_diligence_validated',
+                source: 'vessel_particulars_validated',
                 source_provenance: 'due_diligence_manual',
             };
             const storedVessels = Array.isArray(globalScope.GlobalStore.dueDiligenceVessels)
@@ -601,8 +601,8 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
                 <div class="flex items-center gap-3 rounded-xl border border-cyan-100 bg-cyan-50 px-3 py-3 text-cyan-900">
                     <i class="fa-solid fa-satellite-dish fa-spin text-cyan-600" aria-hidden="true"></i>
                     <div>
-                        <p class="text-[11px] font-black">Consultando fuentes externas</p>
-                        <p class="mt-0.5 text-[10px] leading-relaxed text-cyan-800">El dossier se actualiza aquí al completar la verificación técnica.</p>
+                        <p class="text-[11px] font-black">Consultando ficha técnica</p>
+                        <p class="mt-0.5 text-[10px] leading-relaxed text-cyan-800">Se prioriza Neon y se completa con Datalastic solo cuando falta el buque.</p>
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-2" aria-hidden="true">
@@ -904,7 +904,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         title.textContent = 'Due Diligence · Validación técnica';
         const subtitle = globalScope.document.createElement('p');
         subtitle.className = 'mt-1 break-words text-[10px] font-semibold text-slate-500';
-        subtitle.textContent = `${safeProposals.length} campo${safeProposals.length === 1 ? '' : 's'} contrastado${safeProposals.length === 1 ? '' : 's'} con fuentes externas.`;
+        subtitle.textContent = `${safeProposals.length} campo${safeProposals.length === 1 ? '' : 's'} contrastado${safeProposals.length === 1 ? '' : 's'} con la ficha técnica consolidada.`;
         heading.append(title, subtitle);
         const stateBadge = globalScope.document.createElement('span');
         stateBadge.className = 'max-w-[9rem] shrink-0 truncate rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-amber-800';
@@ -940,7 +940,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         if (grossTonnageRequired) {
             const warning = globalScope.document.createElement('p');
             warning.className = 'mx-3 mb-3 break-words rounded-lg border-2 border-amber-400 bg-amber-50 px-3 py-2 text-[10px] font-black text-amber-900 sm:col-span-2';
-            warning.textContent = 'GT REQUERIDO: no fue posible recuperarlo de fuentes externas ni de vessels_master. Es obligatorio para calcular costes portuarios.';
+            warning.textContent = 'GT REQUERIDO: no está disponible en vessels_master ni en Datalastic. Es obligatorio para calcular costes portuarios.';
             dictionary.append(warning);
         }
 
@@ -1269,7 +1269,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         }
         const status = card.querySelector('[data-due-diligence-status]');
         if (status) {
-            status.textContent = 'Perfil técnico auditado con fuentes externas. Puedes volver a contrastarlo cuando sea necesario.';
+            status.textContent = 'Perfil técnico consolidado en Neon. Puedes volver a validarlo cuando sea necesario.';
             status.className = 'text-[10px] font-bold text-emerald-700';
         }
     }
@@ -1293,13 +1293,13 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         if (button) {
             button.disabled = true;
             button.setAttribute('aria-busy', 'true');
-            button.innerHTML = '<i class="fa-solid fa-satellite-dish fa-spin"></i> Consultando fuentes externas...';
+            button.innerHTML = '<i class="fa-solid fa-database fa-spin"></i> Consultando ficha técnica...';
         }
         if (status) {
-            status.textContent = 'Buscando el buque por IMO, MMSI o nombre en fuentes públicas...';
+            status.textContent = 'Consultando vessels_master y Datalastic cuando sea necesario...';
             status.className = 'text-[10px] font-bold text-cyan-700';
         }
-        globalScope.dueDiligenceExternalOnlyActive = true;
+        globalScope.dueDiligenceLookupActive = true;
         globalScope.dueDiligenceSuppressLocalPersistenceUntil = Date.now() + 2000;
 
         try {
@@ -1314,7 +1314,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
                 { imo, mmsi, vesselName },
                 { fetchImpl: globalScope.fetch.bind(globalScope), signal: controller.signal },
             );
-            const dueDiligenceData = readExternalScrapeRecord(responsePayload);
+            const dueDiligenceData = readDueDiligenceRecord(responsePayload);
             const technical = normalizeTechnicalRecord({
                 ...dueDiligenceData,
                 imo_number: dueDiligenceData.imo_number || dueDiligenceData.imo || imo,
@@ -1322,7 +1322,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             const review = buildProposals(identity, technical);
             const hasAuditableData = Boolean(technical.imo || technical.dwt || technical.grossTonnage || technical.flag || technical.yearBuilt || technical.vesselType || technical.callSign || technical.lastPort || technical.eta);
             if (!hasAuditableData) {
-                throw new Error('La búsqueda externa no devolvió campos técnicos auditables.');
+                throw new Error('La ficha técnica no devolvió campos auditables.');
             }
             const key = proposalKey({ ...identity, imo: technical.imo || identity.imo });
             setDueDiligenceData({ ...identity, imo: technical.imo || identity.imo }, responsePayload, technical);
@@ -1339,8 +1339,8 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             }
             if (status) {
                 status.textContent = review.changedCount > 0
-                    ? `${review.changedCount} cambios encontrados. Revísalos antes de actualizar Neon.`
-                    : 'Los valores externos coinciden. Puedes confirmar la auditoría en Neon.';
+                    ? `${review.changedCount} cambios encontrados. Revísalos antes de aplicarlos al módulo.`
+                    : 'La ficha consolidada coincide. Puedes confirmar la auditoría del módulo.';
                 status.className = 'text-[10px] font-bold text-cyan-700';
             }
             if (button) button.innerHTML = originalHtml;
@@ -1356,7 +1356,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             if (button) button.innerHTML = '<i class="fa-solid fa-rotate"></i> Reintentar Due Diligence';
             return false;
         } finally {
-            globalScope.dueDiligenceExternalOnlyActive = false;
+            globalScope.dueDiligenceLookupActive = false;
             globalScope.dueDiligenceSuppressLocalPersistenceUntil = Date.now() + 1500;
             if (button && !button.classList.contains('hidden')) {
                 button.disabled = false;
@@ -1431,7 +1431,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
         reevaluateTechnicalMatch,
         refreshMatchingDerivedState,
         rejectPendingProposal,
-        readExternalScrapeRecord,
+        readDueDiligenceRecord,
         run: runVesselDueDiligence,
         setDueDiligenceData,
     });

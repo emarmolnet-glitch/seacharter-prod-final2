@@ -8,8 +8,8 @@ test('live profile uses AISStream single-vessel filtering after resolving MMSI',
   assert.match(source, /AISSTREAM_API_KEY/);
   assert.match(source, /FiltersShipMMSI: \[mmsi\]/);
   assert.match(source, /FilterMessageTypes: \["PositionReport", "ShipStaticData"\]/);
-  assert.match(source, /resolveVesselFinderSnapshot\(resolvedImo\)/);
-  assert.match(source, /liveMmsi = digitsOnly\(resolvedMmsi \|\| openShips\?\.mmsi \|\| ais\?\.mmsi \|\| master\?\.mmsi \|\| vesselFinderSnapshot\?\.mmsi\)/);
+  assert.match(source, /liveMmsi = digitsOnly\(resolvedMmsi \|\| openShips\?\.mmsi \|\| ais\?\.mmsi \|\| master\?\.mmsi\)/);
+  assert.doesNotMatch(source, /VesselFinder|cheerio|text\/html/);
 });
 
 test('live profile searches nested IMO history and does not limit fallback to 24 hours', () => {
@@ -25,5 +25,5 @@ test('live profile always serializes the tracking vessel coordinate contract', (
   assert.match(source, /lat: hasPosition \? Number\(latitude\) : null/);
   assert.match(source, /lon: hasPosition \? Number\(longitude\) : null/);
   assert.match(source, /found: true/);
-  assert.match(source, /VESSELFINDER_LIVE_FALLBACK/);
+  assert.doesNotMatch(source, /VESSELFINDER_LIVE_FALLBACK/);
 });

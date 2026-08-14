@@ -59851,7 +59851,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         }
 
         async function saveEditedVesselParams() {
-            if (window.dueDiligenceExternalOnlyActive === true || Date.now() < Number(window.dueDiligenceSuppressLocalPersistenceUntil || 0)) {
+            if (window.dueDiligenceLookupActive === true || Date.now() < Number(window.dueDiligenceSuppressLocalPersistenceUntil || 0)) {
                 return false;
             }
             const activeImo = State.imo || '';

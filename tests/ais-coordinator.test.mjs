@@ -126,6 +126,56 @@ test("radar shares a normalized zone cache and excludes provider distance fields
   assert.equal("distance" in first.data[0], false);
 });
 
+test("vessel particulars use the official endpoint and normalize technical fields", async () => {
+  const coordinator = createAisCoordinator({
+    store: createMemoryStore(),
+    budgetGate: createBudgetGate(),
+    now: () => Date.parse("2026-08-14T12:10:00.000Z"),
+    fetchImpl: async (url) => {
+      assert.equal(url.pathname, "/api/v0/vessel_info");
+      assert.equal(url.searchParams.get("imo"), "9876543");
+      return jsonResponse({
+        data: {
+          imo: "9876543",
+          mmsi: "224123456",
+          name: "Database First",
+          country_iso: "ES",
+          type_specific: "Bulk Carrier",
+          deadweight: 54_321,
+          gross_tonnage: 31_245,
+          year_built: 2016,
+          length: 189.4,
+          breadth: 30.2,
+          draught_average: 10.7,
+        },
+      });
+    },
+  });
+
+  const result = await coordinator.getVesselParticulars("IMO 9876543");
+
+  assert.equal(result.meta.cacheStatus, "MISS");
+  assert.deepEqual(result.data, {
+    imoNumber: "9876543",
+    mmsi: "224123456",
+    vesselName: "Database First",
+    dwt: 54_321,
+    latitude: null,
+    longitude: null,
+    vesselType: "Bulk Carrier",
+    draftMeters: 10.7,
+    flag: "ES",
+    callSign: null,
+    yearBuilt: 2016,
+    grossTonnage: 31_245,
+    netTonnage: null,
+    loaMeters: 189.4,
+    beamMeters: 30.2,
+    lastPort: null,
+    eta: null,
+  });
+});
+
 test("the circuit breaker serves stale cache without another provider call", async () => {
   let currentTime = Date.parse("2026-08-14T12:00:00.000Z");
   let fetchCount = 0;

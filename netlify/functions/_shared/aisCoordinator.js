@@ -5,8 +5,10 @@ import { getDatabase } from "netlify-database-client";
 const DATALASTIC_BASE_URL = "https://api.datalastic.com/api/v0";
 const TRACKING_TTL_MS = 5 * 60 * 1000;
 const RADAR_TTL_MS = 10 * 60 * 1000;
+const PARTICULARS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const TRACKING_STALE_TTL_MS = 24 * 60 * 60 * 1000;
 const RADAR_STALE_TTL_MS = 60 * 60 * 1000;
+const PARTICULARS_STALE_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 const DEFAULT_RADAR_RADIUS_NM = 10;
 const MAX_RADAR_RADIUS_NM = 50;
 const DEFAULT_MONTHLY_BUDGET = 1000;
@@ -195,6 +197,39 @@ function normalizeRadarTraffic(payload) {
   return candidates
     .map(normalizeTelemetry)
     .filter((vessel) => Number.isFinite(vessel.latitude) && Number.isFinite(vessel.longitude));
+}
+
+function normalizeVesselParticulars(payload) {
+  const root = asRecord(payload);
+  const data = asRecord(root.data);
+  const vessel = Object.keys(data).length > 0 ? data : root;
+  const particulars = {
+    imoNumber: textValue(vessel.imo, vessel.imo_number),
+    mmsi: textValue(vessel.mmsi),
+    vesselName: textValue(vessel.name, vessel.vessel_name, vessel.ship_name),
+    dwt: finiteNumber(vessel.deadweight, vessel.dwt),
+    latitude: finiteNumber(vessel.lat, vessel.latitude),
+    longitude: finiteNumber(vessel.lon, vessel.lng, vessel.longitude),
+    vesselType: textValue(vessel.type_specific, vessel.type, vessel.vessel_type, vessel.ship_type),
+    draftMeters: finiteNumber(vessel.draught_average, vessel.draught_max, vessel.draft, vessel.draught),
+    flag: textValue(vessel.country_iso, vessel.flag_iso, vessel.flag, vessel.country_name),
+    callSign: textValue(vessel.call_sign, vessel.callsign),
+    yearBuilt: finiteNumber(vessel.year_built, vessel.built_year),
+    grossTonnage: finiteNumber(vessel.gross_tonnage, vessel.gt),
+    netTonnage: finiteNumber(vessel.net_tonnage, vessel.nt),
+    loaMeters: finiteNumber(vessel.length, vessel.length_overall, vessel.loa),
+    beamMeters: finiteNumber(vessel.breadth, vessel.beam),
+    lastPort: textValue(vessel.last_port, vessel.last_port_name),
+    eta: textValue(vessel.eta, vessel.estimated_time_of_arrival),
+  };
+  if (!particulars.imoNumber) {
+    throw new AisCoordinatorError(
+      "VESSEL_PARTICULARS_UNAVAILABLE",
+      "Datalastic returned no usable vessel particulars",
+      502,
+    );
+  }
+  return particulars;
 }
 
 function cacheEnvelopeIsValid(envelope) {
@@ -462,6 +497,17 @@ export function createAisCoordinator({
         normalize: normalizeRadarTraffic,
       });
     },
+
+    async getVesselParticulars(imoValue) {
+      const imo = normalizeImo(imoValue);
+      return execute({
+        cacheKey: `particulars/imo-${imo}.json`,
+        ttlMs: configuredTtl("DATALASTIC_PARTICULARS_CACHE_TTL_MS", PARTICULARS_TTL_MS),
+        staleTtlMs: PARTICULARS_STALE_TTL_MS,
+        providerCall: (activeFetch) => fetchDatalastic("vessel_info", { imo }, activeFetch),
+        normalize: normalizeVesselParticulars,
+      });
+    },
   };
 }
 
@@ -478,6 +524,10 @@ export async function getLivePosition(imo) {
 
 export async function getRadarTraffic(lat, lon, radius = DEFAULT_RADAR_RADIUS_NM) {
   return coordinator().getRadarTraffic(lat, lon, radius);
+}
+
+export async function getVesselParticulars(imo) {
+  return coordinator().getVesselParticulars(imo);
 }
 
 export function getAisConsumptionSnapshot() {
