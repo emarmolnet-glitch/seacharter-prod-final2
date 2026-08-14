@@ -16,6 +16,7 @@ export type DraftVoyage = {
   laycan: { laydays: string; cancelling: string };
   cargo: { description: string; quantityMt: number };
   ballastDistanceNm: number | null;
+  ballastDistanceSource: string;
   lastreCoordinates: Array<[number, number]>;
   vessel: VoyageVessel | null;
   updatedAt: string | null;
@@ -24,7 +25,9 @@ export type DraftVoyage = {
 export type VoyageStoreState = {
   draft: DraftVoyage;
   updateFromCalculator: (state?: Record<string, unknown>) => void;
+  setBallastDistance: (payload?: { ballastDistanceNm?: number; source?: string }) => void;
   applyTrackingAudit: (payload?: { ballastDistanceNm?: number; lastreCoordinates?: unknown[]; vessel?: Record<string, unknown> }) => void;
+  applyTrackingRoute: (payload?: { distanceNm?: number; routeGeometry?: unknown; ballastDistanceNm?: number; lastreCoordinates?: unknown[] }) => void;
   clearDraft: () => void;
   hasOperationalDraft: () => boolean;
 };

@@ -19,6 +19,7 @@ test('DraftVoyage centralizes route, laycan, cargo and audited vessel data', () 
   assert.match(storeSource, /laycan:/);
   assert.match(storeSource, /quantityMt/);
   assert.match(storeSource, /ballastDistanceNm/);
+  assert.match(storeSource, /ballastDistanceSource/);
   assert.match(storeSource, /lastreCoordinates: \[\]/);
   assert.match(storeSource, /distanceNm: null/);
   assert.match(storeSource, /routeGeometry: null/);
@@ -27,6 +28,20 @@ test('DraftVoyage centralizes route, laycan, cargo and audited vessel data', () 
   assert.match(storeSource, /lastreCoordinates: normalizedCoordinates\.length > 2/);
   assert.match(entrySource, /window\.VoyageDraftStore = voyageStore/);
   assert.match(entrySource, /calculatorStore\.subscribe/);
+});
+
+test('audited ballast distance survives calculator recalculation until a manual edit', () => {
+  assert.match(storeSource, /if \(incomingDistance === 0 && retainedDistance > 0\) return retainedDistance/);
+  assert.match(storeSource, /setBallastDistance/);
+  assert.match(storeSource, /ballastDistanceSource: cleanNumber\(ballastDistanceNm\) > 0[\s\S]*'tracking-audit'/);
+  assert.match(storeSource, /ballastDistanceSource: cleanNumber\(ballastDistanceNm\) > 0[\s\S]*'tracking-route'/);
+  assert.match(entrySource, /bindManualBallastDistance/);
+  assert.match(entrySource, /source: 'calculator-manual'/);
+  assert.match(entrySource, /source: 'voyage-draft-ballast-restore'/);
+  assert.match(entrySource, /setValue\('dist-ballast', retainedBallastDistance\)/);
+  assert.match(indexSource, /function readEffectiveBallastDistance\(\)/);
+  assert.match(indexSource, /const distBal = typeof readEffectiveBallastDistance === 'function'[\s\S]*\? readEffectiveBallastDistance\(\)/);
+  assert.match(indexSource, /const dBal = readEffectiveBallastDistance\(\) \/ \(\(parseFloat\(document\.getElementById\('spd-ballast'\)\.value\) \|\| 11\) \* 24\)/);
 });
 
 test('Tracking keeps free, audit and contract data paths structurally separate', () => {
