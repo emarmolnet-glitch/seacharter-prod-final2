@@ -436,7 +436,7 @@ test('filtered AIS state redraws visible globes and defers hidden views', () => 
   assert.ok(globeSource.includes("window.addEventListener('ais:filtered-vessels-updated', syncAllViews)"));
   assert.match(globeSource, /views\.forEach\(\(view\) => \{[\s\S]*if \(!isViewVisible\(view\)\)[\s\S]*view\.pendingVesselSync = true[\s\S]*updateVessels\(null, view\.key\)/);
   assert.match(globeSource, /const centralRadarVessels = getCentralRadarVessels\(\)/);
-  assert.match(globeSource, /Array\.isArray\(centralRadarVessels\) \? centralRadarVessels : requestedVessels/);
+  assert.match(globeSource, /!hasExplicitVessels && Array\.isArray\(centralRadarVessels\) \? centralRadarVessels : requestedVessels/);
   assert.doesNotMatch(globeSource, /key === 'density'[\s\S]*getDensityMapSourceVessels/);
 });
 

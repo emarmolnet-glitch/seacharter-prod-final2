@@ -1,7 +1,7 @@
 const GLOBE_SCRIPT_ID = 'global-fleet-globe-runtime';
 const GLOBE_STYLES_ID = 'global-fleet-globe-styles';
 const GLOBE_RUNTIME_URL = 'https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js';
-const GLOBE_MODULE_URL = '/GlobalFleetGlobe.js?v=20260809-lazy-cleanup';
+const GLOBE_MODULE_URL = '/GlobalFleetGlobe.js?v=20260814-tracking-position-sync';
 
 let cartographyPromise = null;
 
