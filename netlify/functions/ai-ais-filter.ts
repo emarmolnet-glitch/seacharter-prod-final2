@@ -236,8 +236,8 @@ function normalizeVessel(value: unknown) {
   const shipType = isUnknownTechnicalValue(declaredShipType) ? "Unknown" : declaredShipType;
   let dwt = numberValue(source.dwt, source.DWT, meta.dwt, meta.DWT, sourcePayload.dwt, sourcePayload.DWT);
   let dwtStatus = textValue(source.dwtStatus, source.dwt_status, meta.dwtStatus) || null;
-  const isOpenShipsSource = textValue(source.source, source.source_origin, source.sourceOrigin).toUpperCase().includes("OPENSHIPS")
-    || (Array.isArray(source.source_origins) && source.source_origins.includes("OPENSHIPS"));
+  const isLiveRadarSource = /DATALASTIC|AIS_LIVE/i.test(textValue(source.source, source.source_origin, source.sourceOrigin))
+    || (Array.isArray(source.source_origins) && source.source_origins.some((origin) => /DATALASTIC|AIS_LIVE/i.test(String(origin))));
   const draft = numberValue(source.draft, source.Draft, source.draft_meters, source.calado, meta.draft, meta.Draft, meta.calado, staticData.MaximumStaticDraught);
   const dimA = numberValue(staticData.DimensionA, source.DimensionA, meta.DimensionA);
   const dimB = numberValue(staticData.DimensionB, source.DimensionB, meta.DimensionB);
@@ -246,7 +246,7 @@ function normalizeVessel(value: unknown) {
   const loa = numberValue(source.loa, source.LOA, source.eslora, source.length, meta.loa, meta.LOA, meta.eslora, meta.length, dimA + dimB > 0 ? dimA + dimB : 0);
   const beam = numberValue(source.beam, source.Beam, source.manga, source.width, meta.beam, meta.Beam, meta.manga, meta.width, dimC + dimD > 0 ? dimC + dimD : 0);
 
-  if (!isOpenShipsSource && (!dwt || dwt <= 0) && loa > 0 && beam > 0 && draft > 0) {
+  if (!isLiveRadarSource && (!dwt || dwt <= 0) && loa > 0 && beam > 0 && draft > 0) {
     const estimated = estimateDwtFromDimensions(loa, beam, draft);
     if (estimated > 0) {
       dwt = estimated;
@@ -288,7 +288,7 @@ function normalizeVessel(value: unknown) {
   const sourceDwtDifference = nullableNumberValue(source.dwtDifference, source.dwtDifferenceMt, meta.dwtDifference);
   const estimatedBallastStatus = source.estimatedBallastStatus === true || meta.estimatedBallastStatus === true;
 
-  return { source, vesselName, mmsi, imo, shipType, dwt, dwtStatus, draft, designDraft, loa, beam, speed, marketAverageSpeedKnots, speedInferenceSource, speedTelemetryAvailable, destination, declaredEta, lastPortOfCall, latitude, longitude, hasValidPosition, longDistanceTransitToPol, commercialTransitCandidate, matchReason, verifiedDwt, sourceDwtDifference, estimatedBallastStatus, sourceOrigins, sourceOrigin, vesselKey, isOpenShipsSource };
+  return { source, vesselName, mmsi, imo, shipType, dwt, dwtStatus, draft, designDraft, loa, beam, speed, marketAverageSpeedKnots, speedInferenceSource, speedTelemetryAvailable, destination, declaredEta, lastPortOfCall, latitude, longitude, hasValidPosition, longDistanceTransitToPol, commercialTransitCandidate, matchReason, verifiedDwt, sourceDwtDifference, estimatedBallastStatus, sourceOrigins, sourceOrigin, vesselKey, isLiveRadarSource };
 }
 
 function parseLaycanEnd(value: unknown) {
@@ -492,10 +492,10 @@ export default async (req: Request) => {
           const activeDwtStatus = vessel.dwtStatus;
           const hasVerifiedDwt = vessel.dwt !== null && vessel.dwt > 0;
           const hasVerifiedVesselType = !isUnknownTechnicalValue(vessel.shipType);
-          const isLiveRadarTelemetry = vessel.isOpenShipsSource
-            || vessel.sourceOrigins.some((origin) => /AIS_LIVE|AISSTREAM|DATALASTIC|OPENSHIPS/i.test(origin))
-            || /AIS_LIVE|AISSTREAM|DATALASTIC|OPENSHIPS/i.test(vessel.sourceOrigin);
-          const telemetryVisibleWithoutDwt = isLiveRadarTelemetry && !hasVerifiedDwt && hasVerifiedVesselType;
+          const isLiveRadarTelemetry = vessel.isLiveRadarSource
+            || vessel.sourceOrigins.some((origin) => /AIS_LIVE|DATALASTIC/i.test(origin))
+            || /AIS_LIVE|DATALASTIC/i.test(vessel.sourceOrigin);
+          const telemetryVisibleWithoutDwt = isLiveRadarTelemetry && !hasVerifiedDwt;
           const missingCriticalData = activeTaxonomyRequiresVerifiedData
             && (!hasVerifiedVesselType || (!hasVerifiedDwt && !telemetryVisibleWithoutDwt));
           const missingCriticalReasons = [
@@ -530,7 +530,8 @@ export default async (req: Request) => {
               ].filter(Boolean).join("; ") || "Advertencia técnica: Datos AIS incompletos"
             : null;
 
-          const passesStrictDwtCapacity = !strictTechnicalFilter
+          const passesStrictDwtCapacity = telemetryVisibleWithoutDwt
+            || !strictTechnicalFilter
             || (strictRequiredDwt > 0
               && strictMaximumDwt > 0
               && Number(vessel.dwt) >= strictRequiredDwt
@@ -538,7 +539,7 @@ export default async (req: Request) => {
           const operationallyEligible = taxonomyCompatibility.compatible !== false
             && !missingCriticalData
             && passesStrictDwtCapacity
-            && (!strictTechnicalFilter || technicalEligibility.eligible);
+            && (!strictTechnicalFilter || technicalEligibility.eligible || telemetryVisibleWithoutDwt);
           const idealVessel = operationallyEligible && !hasTechnicalWarning && loadState.ballastReady;
           const commercialRank = buildCommercialVesselRank({
             vesselDwt: vessel.dwt,

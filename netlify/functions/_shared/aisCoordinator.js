@@ -1,5 +1,6 @@
 import { getStore } from "@netlify/blobs";
 import { getDatabase } from "netlify-database-client";
+import { enrichDatalasticRadarVessels } from "./radar-enrichment.mjs";
 
 // PR Trigger: Telemetry, cache, and budget table verified - 2026-08-14.
 const DATALASTIC_BASE_URL = "https://api.datalastic.com/api/v0";
@@ -523,7 +524,24 @@ export async function getLivePosition(imo) {
 }
 
 export async function getRadarTraffic(lat, lon, radius = DEFAULT_RADAR_RADIUS_NM) {
-  return coordinator().getRadarTraffic(lat, lon, radius);
+  const radar = await coordinator().getRadarTraffic(lat, lon, radius);
+  try {
+    const enriched = await enrichDatalasticRadarVessels(radar.data);
+    return {
+      ...radar,
+      data: enriched.vessels,
+      sourceCounts: enriched.counts,
+    };
+  } catch (error) {
+    console.warn("[ais-coordinator] Neon enrichment unavailable; preserving Datalastic snapshot.", error instanceof Error ? error.message : String(error));
+    return {
+      ...radar,
+      sourceCounts: {
+        liveRadar: Array.isArray(radar.data) ? radar.data.length : 0,
+        technicalMatches: 0,
+      },
+    };
+  }
 }
 
 export async function getVesselParticulars(imo) {

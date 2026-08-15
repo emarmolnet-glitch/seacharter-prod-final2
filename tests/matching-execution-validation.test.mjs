@@ -507,7 +507,7 @@ test('valid clicks synchronize the execution selection without replacing the ren
   assert.equal(windowMock.GlobalStore.matchingSelection.vessels[0], fleet[0]);
   assert.equal(resultsList.dataset.executionFleetCount, '750');
   assert.equal(integrityBanner.dataset.executionFleetCount, '750');
-  assert.match(source, /Integridad verificada:[\s\S]*Cartera Neon\/Data Bridge[\s\S]*Datalastic \(AIS\)\/AISStream[\s\S]*OpenShips REST[\s\S]*candidatos unificados antes de puntuación/);
+  assert.match(source, /Integridad verificada:[\s\S]*Cartera Neon\/Data Bridge[\s\S]*Datalastic \(AIS\)\/AISStream[\s\S]*Datalastic REST[\s\S]*candidatos unificados antes de puntuación/);
 });
 
 test('cache hydration remains distinct from a successful matching execution', () => {

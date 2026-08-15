@@ -466,7 +466,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
                 store[collection] = mergeCollectionImmutable(store[collection], identity, technical, false);
             });
         }
-        globalScope.openShipsVesselsCache = mergeCollectionImmutable(globalScope.openShipsVesselsCache, identity, technical, false);
+        globalScope.datalasticRadarVessels = mergeCollectionImmutable(globalScope.datalasticRadarVessels, identity, technical, false);
         refreshMatchingDerivedState();
         globalScope.dispatchEvent(new CustomEvent('vessel:due-diligence-hydrated', {
             detail: { identity: { ...identity }, technical: { ...technical } },
@@ -808,7 +808,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
                 eligibleVessels: mergeCollection(globalScope.matchingResultsState.eligibleVessels),
             };
         }
-        globalScope.openShipsVesselsCache = mergeCollection(globalScope.openShipsVesselsCache);
+        globalScope.datalasticRadarVessels = mergeCollection(globalScope.datalasticRadarVessels);
         globalScope.syncDensityDisplayConsumers?.({ updateGlobe: false });
         globalScope.dispatchEvent(new CustomEvent('vessel:density-optimistic-update', {
             detail: { vessel: { ...vessel }, identity },
@@ -839,8 +839,8 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
                 if (Array.isArray(store[collection])) store[collection] = store[collection].filter(vessel => !matchesDiscardedIdentity(vessel));
             });
         }
-        if (Array.isArray(globalScope.openShipsVesselsCache)) {
-            globalScope.openShipsVesselsCache = globalScope.openShipsVesselsCache.filter(vessel => !matchesDiscardedIdentity(vessel));
+        if (Array.isArray(globalScope.datalasticRadarVessels)) {
+            globalScope.datalasticRadarVessels = globalScope.datalasticRadarVessels.filter(vessel => !matchesDiscardedIdentity(vessel));
         }
         globalScope.syncDensityDisplayConsumers?.();
         globalScope.dispatchEvent(new CustomEvent('vessel:discarded', {
@@ -1170,7 +1170,7 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
             });
             removeDiscardedVesselFromDensity({ imo, mmsi });
             clearProposalReview(card, key);
-            notify('Buque descartado y excluido del radar OpenShips.');
+            notify('Buque descartado y excluido del snapshot Datalastic.');
             return true;
         } catch (error) {
             if (discardButton) {

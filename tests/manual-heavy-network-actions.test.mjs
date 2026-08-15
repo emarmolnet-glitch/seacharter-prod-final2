@@ -19,7 +19,7 @@ test('route, weather, and Radar requests stay idle until an explicit button clic
 
   assert.doesNotMatch(portSelection, /autoCalculateDistances|calculateVoyageRouteService|fetchMarineWeatherForRoute/);
   assert.doesNotMatch(reactiveInputs, /addEventListener|scheduleAisMatchingRefresh|executeMatchingRadarSweep/);
-  assert.doesNotMatch(dataBridgeReady, /restorePersistentDataBridgeConnection|startDataBridgeHttpPolling|updateOpenShipsRadar/);
+  assert.doesNotMatch(dataBridgeReady, /restorePersistentDataBridgeConnection|startDataBridgeHttpPolling|updateDatalasticRadar/);
   assert.match(source, /id="btn-map-locate-route" onclick="runOnDemandMapRouteWorkflow\(this\)"/);
   const manualRoute = sliceSource('async function runOnDemandMapRouteWorkflow(button)', 'window.runOnDemandMapRouteWorkflow = runOnDemandMapRouteWorkflow;');
   assert.match(manualRoute, /map-port-pol[\s\S]*map-port-pod/);
@@ -28,7 +28,7 @@ test('route, weather, and Radar requests stay idle until an explicit button clic
   assert.match(manualRoute, /finally \{[\s\S]*button\.disabled = false[\s\S]*button\.removeAttribute\('aria-busy'\)[\s\S]*button\.innerHTML = originalContent/);
   assert.match(manualRoute, /void Promise\.allSettled\(\[[\s\S]*restorePersistentDataBridgeConnection\(\)[\s\S]*refreshDataBridgeMasterStatsOnDemand\(\)/);
   assert.match(source, /host\.querySelector\('\[data-radar-global-button\]'\)\?\.addEventListener\('click',[\s\S]*window\.executeMatchingRadarSweep\?\.\(\{ trigger: 'user' \}\)/);
-  assert.match(source, /window\.startOpenShipsRadarPolling = startOpenShipsRadarPolling;[\s\S]*stopOpenShipsRadarPolling\(\)/);
+  assert.match(source, /window\.startDatalasticRadarPolling = startDatalasticRadarPolling;[\s\S]*stopDatalasticRadarPolling\(\)/);
 });
 
 test('switchTab performs UI navigation without network, polling, calculation, or state resets', () => {
@@ -36,7 +36,7 @@ test('switchTab performs UI navigation without network, polling, calculation, or
 
   assert.match(switchSource, /classList\.toggle\('hidden', !isActiveView\)/);
   assert.match(switchSource, /renderDensitySnapshotFromGlobalStore/);
-  assert.doesNotMatch(switchSource, /fetch\s*\(|updateOpenShipsRadar|startDataBridgeHttpPolling|syncDataBridgeRadarTransport|calculateAndDisplayAisFreight|runDensityMapPreflightChecklist|autoCalculateDistances|runEngine|clearRadarSnapshot|resetAisDensityResults|setMatchingFleet/);
+  assert.doesNotMatch(switchSource, /fetch\s*\(|updateDatalasticRadar|startDataBridgeHttpPolling|syncDataBridgeRadarTransport|calculateAndDisplayAisFreight|runDensityMapPreflightChecklist|autoCalculateDistances|runEngine|clearRadarSnapshot|resetAisDensityResults|setMatchingFleet/);
   assert.match(source, /function getDensityReactiveVessels\(\)[\s\S]*Array\.isArray\(window\.GlobalStore\?\.matchingVessels\)[\s\S]*window\.GlobalStore\.matchingVessels/);
   assert.match(source, /function renderDensitySnapshotFromGlobalStore\(\)[\s\S]*const count = matchingVessels\.length[\s\S]*densityCount\.textContent = String\(count\)/);
 });

@@ -18,7 +18,7 @@ test('all primary Density panels are expanded by default', () => {
     'ALGORITMO DE FLETE JUSTO AIS',
     'CENTRO DE MAPA DENSIDAD',
     'MAPA DE DENSIDAD',
-    'BUQUES DETECTADOS EN TIEMPO REAL (OPENSHIPS)',
+    'BUQUES DETECTADOS EN TIEMPO REAL (DATALASTIC)',
   ];
 
   panelTitles.forEach((title) => {

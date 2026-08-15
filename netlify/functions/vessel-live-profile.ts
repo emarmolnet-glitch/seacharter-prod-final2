@@ -34,7 +34,7 @@ type AisVesselRow = QueryResultRow & {
   last_seen_at: Date | string;
 };
 
-type OpenShipsTelemetryRow = QueryResultRow & {
+type BufferedTelemetryRow = QueryResultRow & {
   vessel_key: string;
   mmsi: string | null;
   vessel_name: string | null;
@@ -279,7 +279,7 @@ export default async (request: Request, context: Context) => {
     const resolvedMmsi = String(master?.mmsi || mmsi || "").trim();
     const resolvedName = String(master?.vessel_name || query).trim();
 
-    const openShipsResult = await getPool().query<OpenShipsTelemetryRow>(
+    const bufferedTelemetryResult = await getPool().query<BufferedTelemetryRow>(
       `
         SELECT
           vessel_key,
@@ -350,9 +350,9 @@ export default async (request: Request, context: Context) => {
       [query, resolvedImo, resolvedMmsi, resolvedName],
     );
 
-    const openShips = openShipsResult.rows[0] || null;
+    const bufferedTelemetry = bufferedTelemetryResult.rows[0] || null;
     const ais = aisResult.rows[0] || null;
-    const liveMmsi = digitsOnly(resolvedMmsi || openShips?.mmsi || ais?.mmsi || master?.mmsi);
+    const liveMmsi = digitsOnly(resolvedMmsi || bufferedTelemetry?.mmsi || ais?.mmsi || master?.mmsi);
     let liveAisStream: UnknownRecord | null = null;
     let liveFetchAttempted = false;
 
@@ -368,7 +368,7 @@ export default async (request: Request, context: Context) => {
       }
     }
 
-    if (!master && !liveAisStream && !openShips && !ais) {
+    if (!master && !liveAisStream && !bufferedTelemetry && !ais) {
       return Response.json({
         success: true,
         found: false,
@@ -383,30 +383,30 @@ export default async (request: Request, context: Context) => {
     const masterMessage = asRecord(masterPayload.Message || masterPayload.message);
     const masterPosition = asRecord(masterMessage.PositionReport || masterMessage.positionReport || masterPayload.PositionReport || masterPayload.position);
     const masterStatic = asRecord(masterMessage.ShipStaticData || masterMessage.shipStaticData || masterPayload.ShipStaticData || masterPayload.shipStaticData);
-    const openShipsPayload = asRecord(openShips?.raw_data);
+    const bufferedTelemetryPayload = asRecord(bufferedTelemetry?.raw_data);
     const aisPayload = asRecord(ais?.raw_data);
     const aisMetadata = asRecord(aisPayload.MetaData || aisPayload.metadata);
     const aisMessage = asRecord(aisPayload.Message || aisPayload.message);
     const aisPosition = asRecord(aisMessage.PositionReport || aisMessage.positionReport || aisPayload.position || aisPayload.positionReport);
     const aisStatic = asRecord(aisMessage.ShipStaticData || aisMessage.shipStaticData || aisPayload.ShipStaticData || aisPayload.shipStaticData);
-    const scopes = [liveAisStream || {}, openShipsPayload, aisPosition, aisStatic, aisMessage, aisMetadata, aisPayload, masterPosition, masterStatic, masterMessage, masterMetadata, masterPayload];
+    const scopes = [liveAisStream || {}, bufferedTelemetryPayload, aisPosition, aisStatic, aisMessage, aisMetadata, aisPayload, masterPosition, masterStatic, masterMessage, masterMetadata, masterPayload];
     const latitude = numberValue([liveAisStream || {}], ["latitude", "lat"])
-      ?? openShips?.latitude ?? ais?.latitude ?? master?.latitude
+      ?? bufferedTelemetry?.latitude ?? ais?.latitude ?? master?.latitude
       ?? numberValue(scopes, ["Latitude", "latitude", "lat", "AIS_Live_Lat"]);
     const longitude = numberValue([liveAisStream || {}], ["longitude", "lon", "lng"])
-      ?? openShips?.longitude ?? ais?.longitude ?? master?.longitude
+      ?? bufferedTelemetry?.longitude ?? ais?.longitude ?? master?.longitude
       ?? numberValue(scopes, ["Longitude", "longitude", "lon", "lng", "AIS_Live_Lon"]);
     const hasPosition = Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude));
     const vesselName = textValue([liveAisStream || {}], ["vesselName", "vessel_name", "ShipName", "name"])
-      || openShips?.vessel_name || ais?.vessel_name || master?.vessel_name || textValue(scopes, ["ShipName", "vesselName", "vessel_name", "name"]) || query;
+      || bufferedTelemetry?.vessel_name || ais?.vessel_name || master?.vessel_name || textValue(scopes, ["ShipName", "vesselName", "vessel_name", "name"]) || query;
 
     const positionUpdatedAt = textValue([liveAisStream || {}], ["timestamp", "observedAt", "observed_at", "time"])
-      || isoValue(openShips?.observed_at || openShips?.fetched_at || ais?.last_seen_at || master?.fecha_ultima_actualizacion || null);
+      || isoValue(bufferedTelemetry?.observed_at || bufferedTelemetry?.fetched_at || ais?.last_seen_at || master?.fecha_ultima_actualizacion || null);
     const vessel = {
       name: vesselName,
       imo: textValue([liveAisStream || {}], ["imo", "IMO", "imo_number"]) || ais?.imo_number || master?.imo_number || resolvedImo || textValue(scopes, ["IMO", "imo", "imo_number"]),
-      mmsi: textValue([liveAisStream || {}], ["mmsi", "MMSI"]) || openShips?.mmsi || ais?.mmsi || master?.mmsi || textValue(scopes, ["MMSI", "mmsi"]),
-      vesselType: textValue([liveAisStream || {}], ["vesselType", "vessel_type", "ShipType", "shipType"]) || openShips?.vessel_type || ais?.vessel_type || master?.vessel_type || textValue(scopes, ["ShipType", "vesselType", "vessel_type"]),
+      mmsi: textValue([liveAisStream || {}], ["mmsi", "MMSI"]) || bufferedTelemetry?.mmsi || ais?.mmsi || master?.mmsi || textValue(scopes, ["MMSI", "mmsi"]),
+      vesselType: textValue([liveAisStream || {}], ["vesselType", "vessel_type", "ShipType", "shipType"]) || bufferedTelemetry?.vessel_type || ais?.vessel_type || master?.vessel_type || textValue(scopes, ["ShipType", "vesselType", "vessel_type"]),
       flag: master?.flag || textValue(scopes, ["Flag", "flag"]),
       dwt: master?.dwt ?? numberValue(scopes, ["DWT", "dwt", "deadweight"]),
       gt: master?.gross_tonnage ?? numberValue(scopes, ["GT", "gt", "GrossTonnage", "gross_tonnage"]),
@@ -416,15 +416,15 @@ export default async (request: Request, context: Context) => {
       eta: isoValue(master?.eta || null) || textValue(scopes, ["ETA", "eta"]),
       lat: hasPosition ? Number(latitude) : null,
       lon: hasPosition ? Number(longitude) : null,
-      speed: numberValue([liveAisStream || {}], ["speed", "speed_over_ground", "SpeedOverGround", "SOG", "sog"]) ?? openShips?.speed_over_ground ?? numberValue(scopes, ["SpeedOverGround", "speedOverGround", "speed_over_ground", "SOG", "sog"]),
-      cog: numberValue([liveAisStream || {}], ["course", "course_over_ground", "CourseOverGround", "COG", "cog"]) ?? openShips?.course_over_ground ?? numberValue(scopes, ["CourseOverGround", "courseOverGround", "course_over_ground", "COG", "cog"]),
-      heading: numberValue([liveAisStream || {}], ["heading", "TrueHeading", "trueHeading", "Heading"]) ?? openShips?.heading ?? numberValue(scopes, ["TrueHeading", "trueHeading", "heading", "Heading"]),
+      speed: numberValue([liveAisStream || {}], ["speed", "speed_over_ground", "SpeedOverGround", "SOG", "sog"]) ?? bufferedTelemetry?.speed_over_ground ?? numberValue(scopes, ["SpeedOverGround", "speedOverGround", "speed_over_ground", "SOG", "sog"]),
+      cog: numberValue([liveAisStream || {}], ["course", "course_over_ground", "CourseOverGround", "COG", "cog"]) ?? bufferedTelemetry?.course_over_ground ?? numberValue(scopes, ["CourseOverGround", "courseOverGround", "course_over_ground", "COG", "cog"]),
+      heading: numberValue([liveAisStream || {}], ["heading", "TrueHeading", "trueHeading", "Heading"]) ?? bufferedTelemetry?.heading ?? numberValue(scopes, ["TrueHeading", "trueHeading", "heading", "Heading"]),
       timestamp: positionUpdatedAt,
       position: hasPosition
         ? { lat: Number(latitude), lng: Number(longitude), latitude: Number(latitude), longitude: Number(longitude) }
         : null,
       positionUpdatedAt,
-      positionSource: liveAisStream ? "AISSTREAM_LIVE" : (openShips ? "OPENSHIPS_BUFFER" : (ais?.source || (master && hasPosition ? "vessels_master" : null))),
+      positionSource: liveAisStream ? "AISSTREAM_LIVE" : (bufferedTelemetry ? "AIS_BUFFER" : (ais?.source || (master && hasPosition ? "vessels_master" : null))),
       telemetryLive: Boolean(liveAisStream),
       liveFetchAttempted,
       liveFetchedAt: liveAisStream ? new Date().toISOString() : null,

@@ -238,7 +238,7 @@ export default function DashboardExecutive({ contractData }) {
         <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <div>
             <h2 className="text-base font-bold text-slate-900 print:text-black">Alertas del Sistema (Telemetría)</h2>
-            <p className="mt-1 text-xs text-slate-500 print:text-slate-600">OpenShips, geofencing y señales IoT operativas</p>
+            <p className="mt-1 text-xs text-slate-500 print:text-slate-600">Datalastic, geofencing y señales IoT operativas</p>
           </div>
           <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-widest ${cancellationRisk ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
             {systemAlerts.length} activas

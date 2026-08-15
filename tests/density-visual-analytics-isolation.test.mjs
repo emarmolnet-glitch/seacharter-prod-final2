@@ -30,13 +30,13 @@ test('density loader reads the canonical fleet without network or secondary stor
   assert.doesNotMatch(loaderSource, /fetch\s*\(|setBackgroundAisData|backgroundAisData/);
 });
 
-test('commercial OpenShips funnel commits one displayVessels snapshot into renderFleet', () => {
+test('commercial Datalastic funnel commits one displayVessels snapshot into renderFleet', () => {
   assert.match(densitySource, /const densityVessels = getDensityReactiveVessels\(\)/);
   assert.match(densitySource, /return window\.setRenderFleet\(densityVessels\)/);
-  assert.doesNotMatch(densitySource, /openShipsVesselsCache|backgroundAisData|rawVessels|filteredVessels/);
+  assert.doesNotMatch(densitySource, /datalasticRadarVessels|backgroundAisData|rawVessels|filteredVessels/);
 });
 
-test('GlobalFleetGlobe receives only the OpenShips visual fleet and never backgroundAisData', () => {
+test('GlobalFleetGlobe receives only the Datalastic visual fleet and never backgroundAisData', () => {
   assert.match(source, /const displayVessels = getDensityMapSourceVessels\(\);[\s\S]*vesselsData: displayVessels/);
   assert.match(source, /function getDensityReactiveVessels\(\)[\s\S]*window\.GlobalStore\.matchingVessels/);
   assert.match(markerSource, /const displayVessels = getDensityDisplayVessels\(\)/);

@@ -358,7 +358,7 @@ function createTrackingOverlay() {
                 <aside class="tracking-input-drawer map-floating-panel route-sync-card ecosystem-panel" id="tracking-input-drawer">
                     <button type="button" class="tracking-drawer-toggle map-icon-button" id="tracking-drawer-toggle" aria-label="Contraer panel de entrada"><i class="fa-solid fa-chevron-left"></i></button>
                     <div class="tracking-drawer-scroll">
-                        <div class="tracking-drawer-heading"><span>01 / Voyage input</span><h2>Tracking contractual<br>o búsqueda libre</h2><p>Recupera un viaje completo por referencia o localiza directamente un buque mediante OpenShips.</p></div>
+                        <div class="tracking-drawer-heading"><span>01 / Voyage input</span><h2>Tracking contractual<br>o búsqueda libre</h2><p>Recupera un viaje completo por referencia o localiza directamente un buque mediante telemetría AIS.</p></div>
                         <div class="tracking-flow-status" id="tracking-flow-status" data-mode="free"><span class="tracking-flow-dot"></span><strong>Observación libre</strong><small>Solo posición AIS, sin ruta ni datos comerciales</small></div>
                         <button type="button" id="tracking-free-reset" class="tracking-route-button btn-light-action"><i class="fa-solid fa-location-dot"></i><span>Tracking Libre / Reset</span></button>
                         <form id="tracking-reference-search-form" class="tracking-contract-search input-group">
@@ -368,7 +368,7 @@ function createTrackingOverlay() {
                         <div class="tracking-flow-divider"><span>o</span></div>
                         <form id="tracking-vessel-search-form" class="tracking-contract-search input-group">
                             <label for="tracking-input-vessel">Buque / IMO / MMSI <small>BÁSICO</small></label>
-                            <div><input class="input-gc" id="tracking-input-vessel" type="text" autocomplete="off" spellcheck="false" placeholder="Nombre, IMO o MMSI"><button type="submit" class="btn-light-action" aria-label="Buscar buque en OpenShips"><i class="fa-solid fa-location-crosshairs"></i></button></div>
+                            <div><input class="input-gc" id="tracking-input-vessel" type="text" autocomplete="off" spellcheck="false" placeholder="Nombre, IMO o MMSI"><button type="submit" class="btn-light-action" aria-label="Buscar buque en telemetría AIS"><i class="fa-solid fa-location-crosshairs"></i></button></div>
                         </form>
                         <div class="tracking-input-grid">
                             <label class="input-group"><span>Puerto previo <small>LASTRE</small></span><input class="input-gc" id="tracking-input-ballast" type="text" placeholder="Puerto de procedencia" autocomplete="off" inputmode="text" spellcheck="false"></label>
@@ -1267,7 +1267,7 @@ async function loadTrackingVessel(rawQuery, silent = false) {
     const query = normalizeTrackingVesselQuery(rawQuery);
     if (query.length < 2) {
         const message = document.getElementById('tracking-input-message');
-        message.textContent = 'Introduce un nombre, IMO o MMSI para buscar en OpenShips.';
+        message.textContent = 'Introduce un nombre, IMO o MMSI para buscar en telemetría AIS.';
         message.dataset.state = 'warning';
         return;
     }

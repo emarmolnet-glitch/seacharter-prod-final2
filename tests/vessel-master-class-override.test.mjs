@@ -24,7 +24,7 @@ const {
   translateAisVesselClass,
 } = await import(`data:text/javascript;base64,${Buffer.from(registrySource).toString('base64')}`);
 
-const OPENSHIPS_VESSEL = Object.freeze({
+const DATALASTIC_VESSEL = Object.freeze({
   vesselName: 'MANAS',
   imo: '9447855',
   mmsi: '273345680',
@@ -34,7 +34,7 @@ const OPENSHIPS_VESSEL = Object.freeze({
   MetaData: { ShipType: 'Cargo' },
 });
 
-test('la clase verificada en Data Bridge sobrescribe la clase genérica de OpenShips', () => {
+test('la clase verificada en Data Bridge sobrescribe la clase genérica de Datalastic', () => {
   clearVerifiedVesselClasses();
   recordVerifiedVesselClass({
     imo: '9447855',
@@ -50,7 +50,7 @@ test('la clase verificada en Data Bridge sobrescribe la clase genérica de OpenS
 
   assert.equal(getVerifiedVesselClass({ imo: '9447855' }), 'Chemical/Oil Products Tanker');
 
-  const overridden = applyVerifiedVesselClass(OPENSHIPS_VESSEL);
+  const overridden = applyVerifiedVesselClass(DATALASTIC_VESSEL);
   ['vesselClass', 'vesselType', 'vessel_type', 'shipType', 'ship_type', 'ShipType', 'type'].forEach(alias => {
     assert.equal(overridden[alias], 'Chemical/Oil Products Tanker', `alias ${alias} sin sobrescribir`);
   });
@@ -64,12 +64,12 @@ test('la clase verificada en Data Bridge sobrescribe la clase genérica de OpenS
   assert.equal(overridden.vesselClassVerified, true);
   assert.equal(overridden.vesselClassSource, 'VESSELS_MASTER');
   // El objeto original del feed no se muta.
-  assert.equal(OPENSHIPS_VESSEL.shipType, 'Cargo');
+  assert.equal(DATALASTIC_VESSEL.shipType, 'Cargo');
 });
 
 test('un buque sin registro verificado conserva la clase del feed', () => {
   clearVerifiedVesselClasses();
-  const untouched = applyVerifiedVesselClass(OPENSHIPS_VESSEL);
+  const untouched = applyVerifiedVesselClass(DATALASTIC_VESSEL);
   assert.equal(untouched.shipType, 'Cargo');
   assert.equal(untouched.vesselClassVerified, undefined);
 });
@@ -118,14 +118,14 @@ test('la hidratación consulta vessels_master una sola vez por identificador', a
     };
   };
 
-  const first = await hydrateVerifiedVesselClasses([OPENSHIPS_VESSEL], { fetchImpl });
+  const first = await hydrateVerifiedVesselClasses([DATALASTIC_VESSEL], { fetchImpl });
   assert.equal(first.changed, true);
   assert.equal(requests.length, 1);
   assert.equal(requests[0].endpoint, '/api/vessels-master-classes');
   assert.deepEqual(requests[0].body.imos, ['9447855']);
-  assert.equal(getVerifiedVesselClass(OPENSHIPS_VESSEL), 'Chemical/Oil Products Tanker');
+  assert.equal(getVerifiedVesselClass(DATALASTIC_VESSEL), 'Chemical/Oil Products Tanker');
 
-  const second = await hydrateVerifiedVesselClasses([OPENSHIPS_VESSEL], { fetchImpl });
+  const second = await hydrateVerifiedVesselClasses([DATALASTIC_VESSEL], { fetchImpl });
   assert.equal(second.changed, false);
   assert.equal(requests.length, 1);
 });
@@ -137,9 +137,9 @@ test('un fallo de red no marca el identificador como resuelto', async () => {
     attempts += 1;
     throw new Error('network down');
   };
-  const result = await hydrateVerifiedVesselClasses([OPENSHIPS_VESSEL], { fetchImpl: failingFetch });
+  const result = await hydrateVerifiedVesselClasses([DATALASTIC_VESSEL], { fetchImpl: failingFetch });
   assert.equal(result.changed, false);
-  await hydrateVerifiedVesselClasses([OPENSHIPS_VESSEL], { fetchImpl: failingFetch });
+  await hydrateVerifiedVesselClasses([DATALASTIC_VESSEL], { fetchImpl: failingFetch });
   assert.equal(attempts, 2);
 });
 
@@ -147,15 +147,15 @@ test('el motor de aptitud descarta un tanker verificado en una ruta de carga sec
   clearVerifiedVesselClasses();
   const genericEligibility = evaluateCargoVesselEligibility({
     cargoTypeId: '20',
-    vessel: OPENSHIPS_VESSEL,
-    shipType: OPENSHIPS_VESSEL.shipType,
+    vessel: DATALASTIC_VESSEL,
+    shipType: DATALASTIC_VESSEL.shipType,
     dwt: 12000,
     quantity: 11000,
   });
   assert.equal(genericEligibility.eligible, true);
 
   recordVerifiedVesselClass({ imo: '9447855', vesselClass: 'Chemical/Oil Products Tanker' });
-  const verifiedVessel = applyVerifiedVesselClass(OPENSHIPS_VESSEL);
+  const verifiedVessel = applyVerifiedVesselClass(DATALASTIC_VESSEL);
   const verifiedEligibility = evaluateCargoVesselEligibility({
     cargoTypeId: '20',
     vessel: verifiedVessel,

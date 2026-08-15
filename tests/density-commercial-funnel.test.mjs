@@ -18,7 +18,7 @@ test('density reads the single canonical matching fleet from GlobalStore', () =>
   assert.match(densitySource, /GlobalStore\?\.getCanonicalFleet/);
   assert.match(densitySource, /GlobalStore\?\.matchingVessels/);
   assert.doesNotMatch(densitySource, /GlobalStore[^\n]*activeVessels/);
-  assert.doesNotMatch(densitySource, /openShipsVesselsCache|backgroundAisData|fetch\s*\(/);
+  assert.doesNotMatch(densitySource, /datalasticRadarVessels|backgroundAisData|fetch\s*\(/);
 });
 
 test('matching fleet buttons commit the selected array through the canonical renderer', () => {
