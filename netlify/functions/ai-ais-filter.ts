@@ -370,6 +370,8 @@ export default async (req: Request) => {
       || Boolean(cargoDescription)
       || cargoCode !== "100";
     const strictRequiredDwt = quantity > 0 ? quantity * 1.05 : 0;
+    const strictPreferredMaximumDwt = quantity > 0 ? quantity * 1.15 : 0;
+    const strictMaximumDwt = quantity > 0 ? quantity * 1.40 : 0;
     const methodsRequireShipGear = [cargo.loadMethod, cargo.dischargeMethod].some((value) => {
       const method = textValue(value).toLowerCase();
       return method === "cuchara_grab"
@@ -474,29 +476,46 @@ export default async (req: Request) => {
           const boostedTechnical = technicalEligibility.eligible
             ? boostedTechnicalBeforeEligibility
             : Math.min(20, boostedTechnicalBeforeEligibility);
+          const dwtRatio = quantity > 0 && vessel.dwt !== null ? vessel.dwt / quantity : null;
+          const isOversizedUnderStandard = dwtRatio !== null && dwtRatio > 1.15 && dwtRatio <= 1.40;
+          const oversizePenalty = isOversizedUnderStandard
+            ? Math.max(4, Math.round(((dwtRatio - 1.15) / 0.25) * 12))
+            : 0;
           const economic = distance === null ? 0 : Math.max(0, 100 - distance / 35);
           const risk = daysToLoadPort === null ? 0 : Math.max(0, 100 - Math.max(0, daysToLoadPort - 7) * 8 * riskCoefficient);
-          const overall = Math.round(Math.min(100, boostedTechnical * 0.55 + economic * 0.30 + risk * 0.15));
+          const baseOverall = Math.round(Math.min(100, boostedTechnical * 0.55 + economic * 0.30 + risk * 0.15));
+          const overall = Math.max(0, baseOverall - oversizePenalty);
           const ballastFuelCost = distance === null ? 0 : distance * (fuelPrice / 100);
           const suggestedFreightRate = freightRate > 0 ? freightRate : Math.max(0, (ballastFuelCost + portExpenses + dailyOpex) / Math.max(quantity, 1));
           
-          const isOversizedUnderStandard = quantity > 0 && vessel.dwt !== null && vessel.dwt > quantity * 1.15;
           const isOversizedFallback = false;
           const activeDwtStatus = vessel.dwtStatus;
           const hasVerifiedDwt = vessel.dwt !== null && vessel.dwt > 0;
           const hasVerifiedVesselType = !isUnknownTechnicalValue(vessel.shipType);
-          const missingCriticalData = activeTaxonomyRequiresVerifiedData && (!hasVerifiedDwt || !hasVerifiedVesselType);
+          const isLiveRadarTelemetry = vessel.isOpenShipsSource
+            || vessel.sourceOrigins.some((origin) => /AIS_LIVE|AISSTREAM|DATALASTIC|OPENSHIPS/i.test(origin))
+            || /AIS_LIVE|AISSTREAM|DATALASTIC|OPENSHIPS/i.test(vessel.sourceOrigin);
+          const telemetryVisibleWithoutDwt = isLiveRadarTelemetry && !hasVerifiedDwt && hasVerifiedVesselType;
+          const missingCriticalData = activeTaxonomyRequiresVerifiedData
+            && (!hasVerifiedVesselType || (!hasVerifiedDwt && !telemetryVisibleWithoutDwt));
           const missingCriticalReasons = [
             ...(!hasVerifiedDwt ? ["DWT_MISSING"] : []),
             ...(!hasVerifiedVesselType ? ["VESSEL_TYPE_MISSING"] : []),
           ];
           const dwtAssessment = !hasVerifiedDwt
-            ? { status: "BLOCKED_MISSING", label: "DWT obligatorio no verificado" }
+            ? telemetryVisibleWithoutDwt
+              ? { status: "PENDING_AUDIT", label: "DWT pendiente de auditar" }
+              : { status: "BLOCKED_MISSING", label: "DWT obligatorio no verificado" }
             : strictRequiredDwt > 0 && vessel.dwt < strictRequiredDwt
               ? { status: "INSUFFICIENT", label: "DWT Insuficiente (margen operativo 5%)" }
-              : { status: "SUFFICIENT", label: "DWT Validado" };
+              : strictMaximumDwt > 0 && vessel.dwt > strictMaximumDwt
+                ? { status: "OVERSIZED", label: "DWT Sobredimensionado (máximo comercial +40%)" }
+                : strictPreferredMaximumDwt > 0 && vessel.dwt > strictPreferredMaximumDwt
+                  ? { status: "OVERSIZED_VIABLE", label: "Viable (Sobredimensionado) · penalización comercial" }
+                  : { status: "SUFFICIENT", label: "DWT Validado" };
           const hasTechnicalWarning = !technicalEligibility.eligible
             || technicalEligibility.criticalReasons.length > 0
+            || isOversizedUnderStandard
             || activeDwtStatus === null
             || !hasVerifiedDwt
             || !hasVerifiedVesselType;
@@ -505,14 +524,17 @@ export default async (req: Request) => {
             ? [
                 ...(!hasVerifiedDwt ? ["DWT obligatorio no verificado"] : []),
                 ...(!hasVerifiedVesselType ? ["Tipo de buque obligatorio no verificado"] : []),
+                ...(isOversizedUnderStandard ? ["Viable sobredimensionado: DWT entre +15% y +40%; ranking penalizado"] : []),
                 ...technicalEligibility.criticalReasons,
                 ...(taxonomyCompatibility.compatible ? [] : [taxonomyCompatibility.reason]),
               ].filter(Boolean).join("; ") || "Advertencia técnica: Datos AIS incompletos"
             : null;
 
           const passesStrictDwtCapacity = !strictTechnicalFilter
-            || strictRequiredDwt <= 0
-            || Number(vessel.dwt) >= strictRequiredDwt;
+            || (strictRequiredDwt > 0
+              && strictMaximumDwt > 0
+              && Number(vessel.dwt) >= strictRequiredDwt
+              && Number(vessel.dwt) <= strictMaximumDwt);
           const operationallyEligible = taxonomyCompatibility.compatible !== false
             && !missingCriticalData
             && passesStrictDwtCapacity
@@ -541,6 +563,8 @@ export default async (req: Request) => {
             warningReason,
             dwtStatus: activeDwtStatus,
             dwtAssessment,
+            isCommerciallyOversized: isOversizedUnderStandard,
+            oversizePenalty,
             commercialRank,
             dwtDifferenceMt: commercialRank.dwtDifferenceMt,
             dwtDifference: commercialRank.dwtDifferenceMt,
@@ -713,6 +737,8 @@ export default async (req: Request) => {
               cargoDescription,
               selectedVesselTaxonomies: vesselClassValues,
               operationallyEligible,
+              telemetryVisible: telemetryVisibleWithoutDwt,
+              dwtPendingAudit: telemetryVisibleWithoutDwt,
               blockedForMissingCriticalData: missingCriticalData,
               missingCriticalData: missingCriticalReasons,
               strictTechnicalFilter,
@@ -740,7 +766,7 @@ export default async (req: Request) => {
           || b.scores.overall - a.scores.overall);
     };
 
-    const evaluatedMatches = evaluateVessels(1.15, false);
+    const evaluatedMatches = evaluateVessels(1.40, false);
     const discardedForMissingData = evaluatedMatches
       .filter((match) => match.audit?.blockedForMissingCriticalData === true)
       .map((match) => ({
@@ -752,11 +778,11 @@ export default async (req: Request) => {
     const frontendEvaluatedMatches = evaluatedMatches
       .filter((match) => match.audit?.blockedForMissingCriticalData !== true);
     const matches = frontendEvaluatedMatches
-      .filter((match) => !strictTechnicalFilter || (
-        match.audit?.operationallyEligible === true
-        && match.dwtAssessment?.status === "SUFFICIENT"
-      ))
-      .filter((match) => match.audit?.operationallyEligible === true);
+      .filter((match) => strictTechnicalFilter
+        ? (match.audit?.operationallyEligible === true
+          && ["SUFFICIENT", "OVERSIZED_VIABLE"].includes(String(match.dwtAssessment?.status || "")))
+          || match.audit?.telemetryVisible === true
+        : match.audit?.operationallyEligible === true || match.audit?.telemetryVisible === true);
     const technicalWarnings = frontendEvaluatedMatches.filter((match) => match.hasTechnicalWarning || !match.audit.operationallyEligible);
 
     return Response.json({
@@ -773,6 +799,8 @@ export default async (req: Request) => {
         gearedRequired,
         strictTechnicalFilter,
         strictRequiredDwt,
+        strictPreferredMaximumDwt,
+        strictMaximumDwt,
         stowageFactor,
         requiredVolumeCbm,
       },

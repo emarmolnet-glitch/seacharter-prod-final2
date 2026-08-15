@@ -7,16 +7,28 @@ const filterSource = readFileSync(new URL('../netlify/functions/ai-ais-filter.ts
 const rankingSource = readFileSync(new URL('../netlify/functions/_shared/commercial-vessel-ranking.mjs', import.meta.url), 'utf8');
 const matchingSources = readFileSync(new URL('../db/matching-sources.ts', import.meta.url), 'utf8');
 
-test('strict technical filtering blocks missing data and enforces the five-percent DWT margin', () => {
+test('strict technical filtering preserves live telemetry with pending DWT and enforces known DWT ranges', () => {
   assert.match(indexSource, /window\.matchingStrictTechnicalFilter = false/);
   assert.match(indexSource, /id="hide-technical-problems-toggle"[^>]*aria-disabled="false"[^>]*aria-checked="false"/);
   assert.match(indexSource, /strictTechnicalFilter: window\.matchingStrictTechnicalFilter === true/);
   assert.match(indexSource, /const strictRequiredDwt = quantity > 0 \? quantity \* 1\.05 : 0/);
-  assert.match(indexSource, /if \(!Number\.isFinite\(dwt\) \|\| dwt <= 0 \|\| missingCriticalType\) return false/);
-  assert.match(indexSource, /return dwt >= strictRequiredDwt/);
+  assert.match(indexSource, /const STRICT_RADAR_DWT_PREFERRED_MAX_FACTOR = 1\.15/);
+  assert.match(indexSource, /const strictMaximumDwt = quantity > 0 \? quantity \* 1\.40 : 0/);
+  assert.match(indexSource, /if \(missingCriticalType\) return false/);
+  assert.match(indexSource, /if \(!Number\.isFinite\(dwt\) \|\| dwt <= 0\) return pendingLiveAudit/);
+  assert.match(indexSource, /return dwt >= strictRequiredDwt && dwt <= strictMaximumDwt/);
   assert.match(filterSource, /body\.strictTechnicalFilter === true/);
   assert.match(filterSource, /const strictRequiredDwt = quantity > 0 \? quantity \* 1\.05 : 0/);
+  assert.match(filterSource, /const strictPreferredMaximumDwt = quantity > 0 \? quantity \* 1\.15 : 0/);
+  assert.match(filterSource, /const strictMaximumDwt = quantity > 0 \? quantity \* 1\.40 : 0/);
   assert.match(filterSource, /status: "BLOCKED_MISSING", label: "DWT obligatorio no verificado"/);
+  assert.match(filterSource, /status: "PENDING_AUDIT", label: "DWT pendiente de auditar"/);
+  assert.match(filterSource, /telemetryVisible: telemetryVisibleWithoutDwt/);
+  assert.match(filterSource, /status: "OVERSIZED", label: "DWT Sobredimensionado \(máximo comercial \+40%\)"/);
+  assert.match(filterSource, /status: "OVERSIZED_VIABLE", label: "Viable \(Sobredimensionado\) · penalización comercial"/);
+  assert.match(filterSource, /const oversizePenalty = isOversizedUnderStandard/);
+  assert.match(filterSource, /Number\(vessel\.dwt\) <= strictMaximumDwt/);
+  assert.match(filterSource, /\["SUFFICIENT", "OVERSIZED_VIABLE"\]\.includes/);
   assert.match(filterSource, /blockedForMissingCriticalData: missingCriticalData/);
   assert.match(filterSource, /discardedForMissingDataCount/);
 });

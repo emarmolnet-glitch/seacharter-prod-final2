@@ -42,7 +42,7 @@ export default async function handler(req: Request, _context: Context) {
     });
   }
 
-  let payload: { mmsis?: unknown } = {};
+  let payload: { mmsis?: unknown; imos?: unknown } = {};
   try {
     payload = await req.json();
   } catch {
@@ -55,7 +55,10 @@ export default async function handler(req: Request, _context: Context) {
   const mmsis = Array.from(new Set(
     (Array.isArray(payload.mmsis) ? payload.mmsis : []).map(normalizeMmsi).filter(Boolean),
   )).slice(0, 100);
-  if (mmsis.length === 0) {
+  const imos = Array.from(new Set(
+    (Array.isArray(payload.imos) ? payload.imos : []).map(normalizeImo).filter(Boolean),
+  )).slice(0, 100).map(Number);
+  if (mmsis.length === 0 && imos.length === 0) {
     return Response.json({ success: true, vessels: [] }, {
       headers: { ...corsHeaders, "cache-control": "private, max-age=300" },
     });
@@ -63,7 +66,7 @@ export default async function handler(req: Request, _context: Context) {
 
   const result = await getPool().query<VesselIdentityRow>(
     `
-      SELECT DISTINCT ON (regexp_replace(mmsi, '\\D', '', 'g'))
+      SELECT
         imo_number,
         vessel_name,
         mmsi,
@@ -75,20 +78,24 @@ export default async function handler(req: Request, _context: Context) {
         loa_meters,
         beam_meters
       FROM vessels_master
-      WHERE regexp_replace(mmsi, '\\D', '', 'g') = ANY($1::text[])
+      WHERE imo_number = ANY($1::integer[])
+         OR regexp_replace(COALESCE(mmsi, ''), '\\D', '', 'g') = ANY($2::text[])
       ORDER BY
-        regexp_replace(mmsi, '\\D', '', 'g'),
         CASE WHEN audit_status = 'VALIDATED' THEN 0 ELSE 1 END,
         fecha_ultima_actualizacion DESC NULLS LAST
     `,
-    [mmsis],
+    [imos, mmsis],
   );
 
-  const vessels = result.rows.map((row) => {
+  const seen = new Set<string>();
+  const vessels = result.rows.flatMap((row) => {
     const mmsi = normalizeMmsi(row.mmsi);
     const imo = normalizeImo(row.imo_number);
+    const identityKey = imo ? `imo:${imo}` : mmsi ? `mmsi:${mmsi}` : "";
+    if (!identityKey || seen.has(identityKey)) return [];
+    seen.add(identityKey);
     const vesselName = String(row.vessel_name || "").trim() || null;
-    return {
+    return [{
       mmsi,
       MMSI: mmsi,
       imo,
@@ -113,7 +120,7 @@ export default async function handler(req: Request, _context: Context) {
       loa_meters: numericValue(row.loa_meters),
       beamMeters: numericValue(row.beam_meters),
       beam_meters: numericValue(row.beam_meters),
-    };
+    }];
   });
 
   return Response.json({ success: true, vessels }, {

@@ -30,17 +30,18 @@ test('matching results render the complete filtered array without silent truncat
   assert.doesNotMatch(chunkRendererSource, /IntersectionObserver/);
   assert.match(executionSource, /await renderMatchingResultsInChunks\(resultsList, displayMatches/);
   assert.match(executionSource, /applyTaxonomyFilter: false/);
-  assert.match(executionSource, /viableMatches\.length - renderedCount/);
-  assert.match(cachedRendererSource, /renderMatchingResultsInChunks\(resultsList, matches/);
+  assert.match(executionSource, /compatibleMatches\.length - renderedCount/);
+  assert.match(cachedRendererSource, /renderMatchingResultsInChunks\(resultsList, renderedMatches/);
   assert.match(indexSource, /id="matching-results-list"[^>]*max-h-\[70vh\][^>]*overflow-y-auto/);
 });
 
 test('read-only matching result arrays are shallow-frozen', () => {
   assert.match(executionSource, /const matches = deduplicatedMatches;[\s\S]*Object\.freeze\(matches\);/);
-  assert.match(executionSource, /const strictTechnicalFilter = window\.matchingStrictTechnicalFilter === true;[\s\S]*const viableMatches = matches[\s\S]*Object\.freeze\(viableMatches\);/);
+  assert.match(executionSource, /const strictTechnicalFilter = window\.matchingStrictTechnicalFilter === true;[\s\S]*const compatibleMatches = orderMatchingVesselsForDisplay[\s\S]*Object\.freeze\(compatibleMatches\);/);
   assert.match(cachedRendererSource, /Object\.freeze\(Array\.isArray\(cachedMatches\) \? cachedMatches\.slice\(\) : \[\]\)/);
 });
 
-test('optimized rendering visually penalizes technically unsuitable vessel cards', () => {
-  assert.match(executionSource, /isDwtUnknown \? 'opacity-65' : 'opacity-80'/);
+test('optimized rendering distinguishes pending live telemetry from incompatible cards', () => {
+  assert.match(executionSource, /isPendingRadarDwtAudit \? 'border-amber-300 bg-amber-50\/60/);
+  assert.match(executionSource, /'border-red-200 bg-red-50\/40 opacity-80 cursor-pointer'/);
 });

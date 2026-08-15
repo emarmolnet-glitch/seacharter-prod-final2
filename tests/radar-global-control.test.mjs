@@ -68,13 +68,12 @@ test('matching radar enforces the strict cargo interceptor before rendering or s
   assert.match(source, /'vehicles carrier', 'vehicle carrier', 'ro ro', 'roro', 'container ship'/);
   assert.match(interceptorSource, /selectedTaxonomies\.length === 1 && selectedTaxonomies\[0\] === 'category:cargo'/);
   assert.match(source, /const taxonomyFilter = applyStrictRadarTaxonomyFilter\(enrichedCandidates, response\.selectedTaxonomies\)/);
-  assert.match(source, /const taxonomyFilter = shouldApplyTaxonomyFilter && typeof window\.applyStrictRadarTaxonomyFilter === 'function'[\s\S]*window\.GlobalStore\?\.setMatchingFleet/);
+  assert.match(source, /const taxonomyFilter = shouldApplyTaxonomyFilter && typeof window\.applyStrictRadarTaxonomyFilter === 'function'[\s\S]*window\.GlobalStore\?\.setCanonicalFleet/);
   assert.match(source, /const strictTechnicalFilterActive = window\.matchingStrictTechnicalFilter === true/);
   assert.match(source, /metadata\.applyTaxonomyFilter !== false \|\| strictTechnicalFilterActive/);
-  assert.match(source, /taxonomyCompatibleVessels\.filter\(vessel => vessel\?\.audit\?\.operationallyEligible !== false\)/);
-  assert.match(source, /if \(match\?\.audit\?\.operationallyEligible === false\) return false/);
-  assert.match(source, /function getDensityReactiveVessels\(\)[\s\S]*window\.matchingStrictTechnicalFilter !== true[\s\S]*applyStrictRadarTaxonomyFilter\(matchingVessels\)/);
-  assert.match(source, /source: taxonomyRejectedAll \? 'taxonomy-filter' : 'matching-ui'/);
+  assert.match(source, /taxonomyCompatibleVessels\.filter\(vessel => vessel\?\.audit\?\.operationallyEligible !== false \|\| isPendingLiveRadarAuditCandidate\(vessel\)\)/);
+  assert.match(source, /if \(match\?\.audit\?\.operationallyEligible !== true && !pendingLiveAudit\) return false/);
+  assert.match(source, /function getDensityReactiveVessels\(\)[\s\S]*window\.GlobalStore\?\.getCanonicalFleet\?\.\(\)/);
   assert.match(source, /source === 'taxonomy-filter'/);
 });
 
@@ -84,10 +83,24 @@ test('strict technical empty state explains cargo and vessel-class rejection', (
   assert.match(source, /if \(renderedCount === 0\)/);
 });
 
-test('matching radar reports taxonomy exclusions in the shared integrity banner', () => {
-  assert.match(source, /buques descartados por incompatibilidad de taxonomía \(Filtro Activo:/);
+test('matching radar reports taxonomy and DWT exclusions in the shared integrity banner', () => {
+  assert.match(source, /const STRICT_RADAR_DWT_MIN_FACTOR = 1\.05/);
+  assert.match(source, /const STRICT_RADAR_DWT_PREFERRED_MAX_FACTOR = 1\.15/);
+  assert.match(source, /const STRICT_RADAR_DWT_MAX_FACTOR = 1\.40/);
+  assert.match(source, /taxonomyCompatibleVessels\.flatMap\(candidate => \{/);
+  assert.match(source, /applyStrictRadarDwtAssessment\(candidate, assessment\)/);
+  assert.match(source, /Filtro Activo: \[Taxonomía: \$\{filterLabel \|\| 'Sin selección'\}\] \+ \[Límites DWT: \$\{dwtLabel\}\]/);
   assert.match(source, /console\.log\(`\[Radar Taxonomía\] \$\{message\}`\)/);
   assert.match(source, /window\.renderRadarTaxonomyFilterFeedback\?\.\(taxonomyFilter\)/);
+});
+
+test('Datalastic radar caps only the provider request while matching keeps the master radius', () => {
+  assert.match(source, /const requestedRadiusNm = Math\.min\(5000, Math\.max\(1, Number\(options\.radiusNm \|\| window\.AIS_PROSPECTION_RADII_NM\?\.POL \|\| 1000\)\)\)/);
+  assert.match(source, /const datalasticRadiusNm = Math\.min\(50, requestedRadiusNm\)/);
+  assert.match(source, /radius: String\(datalasticRadiusNm\)/);
+  assert.match(source, /matchRadiusNm: Number\(window\.AIS_PROSPECTION_RADII_NM\?\.POL\) \|\| 2000/);
+  assert.match(source, /Datalastic \(AIS\) \/ AISStream/);
+  assert.match(source, /OpenShips REST/);
 });
 
 test('leaving the radar map freezes LIVE mode and cleans up the on-demand transport', () => {

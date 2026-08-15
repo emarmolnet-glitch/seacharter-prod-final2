@@ -14,33 +14,42 @@ test('estimateDwtFromDimensions calculates DWT using formula LOA * Beam * Draft 
   assert.equal(estimateDwtFromDimensions(120, 18, null), 0);
 });
 
-test('evaluateCargoVesselEligibility enforces strict +/- 15% DWT capacity tolerance', () => {
-  // Strict 15% tolerance (1.15): 25,000 DWT for 7,800 MT cargo -> OVERSIZED (25000 > 7800 * 1.15 = 8970)
+test('evaluateCargoVesselEligibility enforces a 40% hard DWT ceiling', () => {
   const oversizedEvaluation = evaluateCargoVesselEligibility({
     cargoTypeId: '100',
     shipType: 'Bulk Carrier',
     vessel: { vesselType: 'Bulk Carrier' },
     dwt: 25000,
     quantity: 7800,
-    maxDwtTolerance: 1.15,
+    maxDwtTolerance: 1.40,
   });
   assert.equal(oversizedEvaluation.eligible, false);
   assert.match(oversizedEvaluation.criticalReasons.join(' '), /sobredimensionado/i);
 
-  // Real coaster in range (8,500 DWT for 7,800 MT cargo) -> ELIGIBLE (8500 <= 7800 * 1.15 = 8970)
-  const validEvaluation = evaluateCargoVesselEligibility({
+  const preferredEvaluation = evaluateCargoVesselEligibility({
     cargoTypeId: '100',
     shipType: 'Bulk Carrier',
     vessel: { vesselType: 'Bulk Carrier' },
     dwt: 8500,
     quantity: 7800,
-    maxDwtTolerance: 1.15,
+    maxDwtTolerance: 1.40,
   });
-  assert.equal(validEvaluation.eligible, true);
-  assert.deepEqual(validEvaluation.criticalReasons, []);
+  assert.equal(preferredEvaluation.eligible, true);
+  assert.deepEqual(preferredEvaluation.criticalReasons, []);
+
+  const oversizedViableEvaluation = evaluateCargoVesselEligibility({
+    cargoTypeId: '100',
+    shipType: 'Bulk Carrier',
+    vessel: { vesselType: 'Bulk Carrier' },
+    dwt: 10_000,
+    quantity: 7_800,
+    maxDwtTolerance: 1.40,
+  });
+  assert.equal(oversizedViableEvaluation.eligible, true);
+  assert.deepEqual(oversizedViableEvaluation.criticalReasons, []);
 });
 
-test('ai-ais-filter.ts enforces strict 15% DWT tolerance and deactivates elastic fallback pass', async () => {
+test('ai-ais-filter.ts keeps the +15% preferred band and enforces a +40% hard ceiling', async () => {
   const filterSource = await readFile(new URL('../netlify/functions/ai-ais-filter.ts', import.meta.url), 'utf8');
 
   // Verify import of estimateDwtFromDimensions
@@ -49,24 +58,21 @@ test('ai-ais-filter.ts enforces strict 15% DWT tolerance and deactivates elastic
   // Verify heuristic DWT assignment with ESTIMATED_BY_DIMENSIONS
   assert.match(filterSource, /ESTIMATED_BY_DIMENSIONS/);
 
-  // Verify strict 1.15 evaluation pass
-  assert.match(filterSource, /evaluateVessels\(1\.15/);
+  assert.match(filterSource, /strictPreferredMaximumDwt = quantity > 0 \? quantity \* 1\.15 : 0/);
+  assert.match(filterSource, /strictMaximumDwt = quantity > 0 \? quantity \* 1\.40 : 0/);
+  assert.match(filterSource, /evaluateVessels\(1\.40/);
+  assert.match(filterSource, /OVERSIZED_VIABLE/);
 
   // Verify deactivation/removal of 500% elastic fallback pass
   assert.doesNotMatch(filterSource, /evaluateVessels\(5\.00/);
 });
 
-test('index.html and dist/index.html enforce strict 15% DWT tolerance and render DWT ESTIMADO badge', async () => {
+test('index.html renders estimated DWT and the preferred +15% / hard +40% bands', async () => {
   const indexHtml = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-  const distIndexHtml = await readFile(new URL('../dist/index.html', import.meta.url), 'utf8');
-
-  for (const html of [indexHtml, distIndexHtml]) {
-    // Badge: Blue badge for DWT ESTIMADO (Vía Eslora/Manga)
-    assert.match(html, /DWT ESTIMADO \(Vía Eslora\/Manga\)/);
-    assert.match(html, /bg-blue-50 text-blue-700/);
-
-    // Enforce strict 1.15 maxDwtTolerance
-    assert.match(html, /maxDwtTolerance = 1\.15/);
-    assert.match(html, /MÁX 15% DE TOLERANCIA/);
-  }
+  assert.match(indexHtml, /DWT ESTIMADO \(Vía Eslora\/Manga\)/);
+  assert.match(indexHtml, /bg-blue-50 text-blue-700/);
+  assert.match(indexHtml, /const STRICT_RADAR_DWT_PREFERRED_MAX_FACTOR = 1\.15/);
+  assert.match(indexHtml, /const STRICT_RADAR_DWT_MAX_FACTOR = 1\.40/);
+  assert.match(indexHtml, /Viable \(Sobredimensionado\)/);
+  assert.match(indexHtml, /máximo comercial del 40%/);
 });

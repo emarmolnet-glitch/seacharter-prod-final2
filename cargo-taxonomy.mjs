@@ -186,14 +186,14 @@ export function evaluateCargoVesselEligibility({
   draftOk = true,
   loaOk = true,
   dateOk = true,
-  maxDwtTolerance = 1.15,
+  maxDwtTolerance = 1.40,
 }) {
   const normalizedCargoTypeId = resolveCargoTaxonomyId(cargoTypeId);
   const design = classifyVesselDesign(shipType, vessel);
   const vesselDwt = optionalNumber(dwt);
   const cargoQuantity = optionalNumber(quantity) || 0;
   const requiredCargoVolumeCbm = optionalNumber(requiredVolumeCbm) || 0;
-  const effectiveMaxDwtTolerance = Number(maxDwtTolerance) > 0 ? Number(maxDwtTolerance) : 1.15;
+  const effectiveMaxDwtTolerance = Number(maxDwtTolerance) > 0 ? Number(maxDwtTolerance) : 1.40;
   const maxSuitableDwt = cargoQuantity > 0 ? cargoQuantity * effectiveMaxDwtTolerance : null;
   const textParts = [];
   collectText(vessel, textParts);

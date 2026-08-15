@@ -141,7 +141,8 @@ test('technical warnings remain visible for unknown DWT while strict filtering i
   assert.match(indexSource, /DWT Desconocido/);
   assert.match(indexSource, /DWT Insuficiente/);
   assert.match(indexSource, /technicalProblemsToggle\.disabled = false/);
-  assert.match(indexSource, /Requiere Due Diligence para verificar DWT/);
+  assert.match(indexSource, /DWT pendiente de auditar/);
+  assert.match(indexSource, /En radar · Telemetría real/);
 });
 
 test('volumetric eligibility rejects vessels below required grain capacity', () => {
@@ -184,8 +185,7 @@ test('ship crane methods reject vessels classified as gearless', () => {
   assert.match(result.criticalReasons.join(' '), /sin grúas/);
 });
 
-test('capacity compatibility enforces 15% max DWT tolerance and rejects oversized vessels', () => {
-  // Handysize (32k DWT) for 10k MT cargo -> 32,000 > 10,000 * 1.15 (11,500) -> OVERSIZED
+test('capacity compatibility keeps commercially oversized vessels through +40% and rejects above it', () => {
   const oversizedHandysize = evaluateCargoVesselEligibility({
     cargoTypeId: '60',
     shipType: 'Bulk Carrier',
@@ -197,7 +197,6 @@ test('capacity compatibility enforces 15% max DWT tolerance and rejects oversize
   assert.equal(oversizedHandysize.eligible, false);
   assert.match(oversizedHandysize.criticalReasons.join(' '), /sobredimensionado/i);
 
-  // Mini Bulker / Coaster (11k DWT) for 10k MT cargo -> 11,000 <= 10,000 * 1.15 (11,500) -> VALID
   const validCoaster = evaluateCargoVesselEligibility({
     cargoTypeId: '60',
     shipType: 'Bulk Carrier',
@@ -208,4 +207,15 @@ test('capacity compatibility enforces 15% max DWT tolerance and rejects oversize
 
   assert.equal(validCoaster.eligible, true);
   assert.deepEqual(validCoaster.criticalReasons, []);
+
+  const oversizedViable = evaluateCargoVesselEligibility({
+    cargoTypeId: '60',
+    shipType: 'Bulk Carrier',
+    vessel: { vesselType: 'Bulk Carrier' },
+    dwt: 13_000,
+    quantity: 10_000,
+  });
+
+  assert.equal(oversizedViable.eligible, true);
+  assert.deepEqual(oversizedViable.criticalReasons, []);
 });

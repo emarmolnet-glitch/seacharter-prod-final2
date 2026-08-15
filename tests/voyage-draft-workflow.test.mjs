@@ -30,6 +30,12 @@ test('DraftVoyage centralizes route, laycan, cargo and audited vessel data', () 
   assert.match(entrySource, /calculatorStore\.subscribe/);
 });
 
+test('DraftVoyage preserves cancelling when calculator updates omit it and accepts snake-case aliases', () => {
+  assert.match(storeSource, /state\.laycan_start[\s\S]*\|\| current\.draft\.laycan\.laydays/);
+  assert.match(storeSource, /state\.laycan_end[\s\S]*\|\| current\.draft\.laycan\.cancelling/);
+  assert.match(storeSource, /laycan: \{[\s\S]*laydays,[\s\S]*cancelling,/);
+});
+
 test('audited ballast distance survives calculator recalculation until a manual edit', () => {
   assert.match(storeSource, /if \(incomingDistance === 0 && retainedDistance > 0\) return retainedDistance/);
   assert.match(storeSource, /setBallastDistance/);

@@ -78,7 +78,7 @@ test('matching UI exposes the Laycan segmented control, prediction labels and fi
   assert.match(sourceHtml, /Disponible \/ Viable/);
   assert.match(sourceHtml, /Fuera de fechas/);
   assert.match(sourceHtml, /applyMatchingFleetView/);
-  assert.match(sourceHtml, /setActiveVessels\?\.\(displayedVessels/);
+  assert.match(sourceHtml, /setRenderedMatchingVessels\(displayedVessels/);
   assert.match(sourceHtml, /setActiveVessels\?\.\(\[\], \{ source: 'matching-clear' \}\)/);
   assert.match(sourceHtml, /LATE ETA/);
   assert.match(sourceHtml, /is-late-eta/);

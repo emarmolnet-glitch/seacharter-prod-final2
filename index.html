@@ -4318,15 +4318,40 @@
             width: 100% !important;
         }
 
+        #matching-list-toolbar {
+            display: flex;
+            flex: 1 1 auto;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.75rem;
+            width: 100%;
+            min-width: 0;
+            padding: 0.45rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            background: #f8fafc;
+        }
+
+        .matching-list-toolbar__filters {
+            display: flex;
+            flex: 1 1 auto;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.6rem;
+            min-width: 0;
+        }
+
         #matching-action-dock {
             display: flex;
+            flex: 0 1 auto;
             flex-direction: row;
-            flex-wrap: nowrap;
+            flex-wrap: wrap;
             align-items: center;
-            justify-content: flex-start;
+            justify-content: flex-end;
             gap: 0.75rem;
             width: auto;
-            min-width: max-content;
+            min-width: 0;
+            margin-left: auto;
         }
 
         #matching-action-dock .matching-action-button {
@@ -4395,19 +4420,110 @@
             color: #14532d !important;
         }
 
+        #matching-fleet-view-control {
+            flex: 0 0 auto;
+            margin: 0 !important;
+        }
+
+        #matching-fleet-view-control.hidden {
+            display: none !important;
+        }
+
+        #matching-fleet-view-control .matching-fleet-segmented-control {
+            display: inline-flex;
+            grid-template-columns: none;
+            gap: 0.2rem;
+            padding: 0.2rem;
+            border-radius: 0.7rem;
+        }
+
+        #matching-fleet-view-control .matching-fleet-segment {
+            min-height: 2.25rem;
+            padding: 0.4rem 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 0.625rem;
+            white-space: nowrap;
+        }
+
+        .matching-strict-filter {
+            display: inline-flex;
+            flex: 0 0 auto;
+            align-items: center;
+            gap: 0.55rem;
+            min-height: 2.65rem;
+            padding: 0.35rem 0.7rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.7rem;
+            background: #ffffff;
+            color: #475569;
+            cursor: pointer;
+            transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+        }
+
+        .matching-strict-filter:has(input:checked) {
+            border-color: #6ee7b7;
+            background: #ecfdf5;
+            color: #065f46;
+            box-shadow: 0 2px 8px rgba(5, 150, 105, 0.12);
+        }
+
+        .matching-strict-filter__track {
+            position: relative;
+            width: 2.25rem;
+            height: 1.25rem;
+            flex: 0 0 auto;
+            border-radius: 999px;
+            background: #cbd5e1;
+            transition: background-color 160ms ease;
+        }
+
+        .matching-strict-filter__track::after {
+            position: absolute;
+            top: 0.1875rem;
+            left: 0.1875rem;
+            width: 0.875rem;
+            height: 0.875rem;
+            border-radius: 999px;
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.3);
+            content: '';
+            transition: transform 160ms ease;
+        }
+
+        .matching-strict-filter input:checked + .matching-strict-filter__track {
+            background: #059669;
+        }
+
+        .matching-strict-filter input:checked + .matching-strict-filter__track::after {
+            transform: translateX(1rem);
+        }
+
+        .matching-strict-filter input:focus-visible + .matching-strict-filter__track {
+            outline: 2px solid #0f766e;
+            outline-offset: 2px;
+        }
+
+        #strict-technical-filter-label {
+            font-size: 0.625rem;
+            font-weight: 900;
+            letter-spacing: 0.045em;
+            line-height: 1.15;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
         #matching-results-panel .matching-results-collapsible > .collapsible-section__header {
             position: sticky;
             top: 0.75rem;
             z-index: 40;
             display: flex;
             flex-direction: row;
-            flex-wrap: nowrap;
+            flex-wrap: wrap;
             align-items: center;
             justify-content: flex-start;
             gap: 1rem;
             min-height: 3.65rem;
-            overflow-x: auto;
-            overflow-y: hidden;
+            overflow: visible;
             margin: -0.25rem -0.25rem 1rem !important;
             padding: 0.65rem 0.75rem !important;
             background: rgba(255, 255, 255, 0.96) !important;
@@ -4420,13 +4536,13 @@
         #matching-results-panel .collapsible-section__actions {
             min-width: 0;
             display: flex;
-            flex: 0 0 auto;
+            flex: 1 1 100%;
             flex-direction: row;
-            flex-wrap: nowrap;
+            flex-wrap: wrap;
             align-items: center;
-            justify-content: flex-start;
+            justify-content: space-between;
             gap: 0.75rem;
-            width: auto;
+            width: 100%;
         }
 
         #matching-results-panel #match-results-badge {
@@ -4438,21 +4554,10 @@
         }
 
         @media (max-width: 980px) {
-            #matching-results-panel .matching-results-collapsible > .collapsible-section__header {
-                flex-wrap: wrap;
-                overflow-x: visible;
-            }
-
-            #matching-results-panel .collapsible-section__actions {
-                flex-basis: 100%;
-                flex-wrap: wrap;
-                justify-content: flex-start;
-                width: 100%;
-            }
-
             #matching-action-dock {
-                flex-wrap: wrap;
-                min-width: 0;
+                flex: 1 1 100%;
+                justify-content: flex-end;
+                margin-left: 0;
             }
         }
 
@@ -4465,6 +4570,7 @@
                 align-items: stretch;
                 flex-direction: column;
                 flex: 1 1 auto;
+                width: 100%;
             }
 
             #matching-action-dock .matching-action-button {
@@ -4474,6 +4580,26 @@
 
             #matching-results-panel .collapsible-section__actions {
                 align-items: flex-start;
+            }
+
+            #matching-list-toolbar,
+            .matching-list-toolbar__filters {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            #matching-fleet-view-control,
+            #matching-fleet-view-control .matching-fleet-segmented-control,
+            .matching-strict-filter {
+                width: 100%;
+            }
+
+            #matching-fleet-view-control .matching-fleet-segment {
+                flex: 1 1 50%;
+            }
+
+            .matching-strict-filter {
+                justify-content: center;
             }
         }
 
@@ -13610,7 +13736,7 @@
                                         <span id="openships-radar-ping" class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
                                         <span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-400"></span>
                                     </span>
-                                    <span>AIS: <span id="openships-live-counter" class="text-emerald-300">--</span> LIVE</span>
+                                    <span>DATALASTIC (AIS): <span id="openships-live-counter" class="text-emerald-300">--</span> LIVE</span>
                                 </div>
                             </div>
                         </div>
@@ -13676,29 +13802,50 @@
                                     FLOTA CLASIFICADA POR RENTABILIDAD / FLEET RANKED BY PROFITABILITY
                                 </h3>
                             </div>
-                            <div class="collapsible-section-actions flex min-w-0 flex-row flex-nowrap items-center gap-3">
+                            <div class="collapsible-section-actions flex min-w-0 flex-row flex-wrap items-center gap-3">
                                 <span id="match-results-badge" class="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200 hidden">0 Buques</span>
-                                <div id="matching-action-dock" class="flex flex-row flex-nowrap items-center gap-3" aria-label="Acciones del motor de coincidencias">
-                                    <button id="btn-run-matching" onclick="handleMatchingExecutionClick(event)" disabled aria-disabled="true" aria-describedby="matching-execution-validation btn-matching-subtitle" data-matching-ready="false" data-ready-vessel-count="0" data-execution-valid="false" class="matching-action-button whitespace-nowrap px-4 py-2 bg-[#004e64] hover:bg-[#003f52] text-white font-black text-xs uppercase rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-[#004e64] disabled:cursor-not-allowed disabled:opacity-45">
-                                        <i class="fa-solid fa-play"></i>
-                                        Encontrar Match / Find Vessels
-                                    </button>
-                                    <div data-radar-global-control data-radar-context="matching"></div>
-                                    <button id="btnGenerateReport" type="button" onclick="toggleMatchingAuditMode()" aria-pressed="false" class="matching-action-button whitespace-nowrap px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-black text-xs uppercase rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-slate-600 focus:outline-none cursor-pointer">
-                                        <i class="fa-solid fa-database"></i>
-                                        <span>MODO AUDITORÍA</span>
-                                    </button>
-                                    <button id="commercial-nlp-send-btn" onclick="sendCommercialNlpToDataBridge()" disabled aria-disabled="true" data-databridge-transmission="true" title="Ejecuta coincidencias antes de enviar a Data Bridge" class="matching-action-button whitespace-nowrap px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-black text-xs uppercase rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-emerald-800 disabled:cursor-not-allowed disabled:opacity-45">
-                                        <i class="fa-solid fa-paper-plane"></i>
-                                        Enviar a Data Bridge
-                                    </button>
-                                    <div id="sync-container" class="hidden w-64 shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 shadow-sm" role="status" aria-live="polite" aria-atomic="true">
-                                        <div class="flex items-center justify-between gap-3 text-[10px] font-black uppercase tracking-wide text-emerald-900">
-                                            <span id="sync-status-text">Preparando sincronización…</span>
-                                            <span id="sync-percentage">0%</span>
+                                <div id="matching-list-toolbar" role="toolbar" aria-label="Controles de la flota clasificada">
+                                    <div class="matching-list-toolbar__filters" aria-label="Vistas y filtros de flota">
+                                        <div id="matching-fleet-view-control" class="hidden" aria-label="Vista de resultados de coincidencia">
+                                            <div class="matching-fleet-segmented-control" role="tablist" aria-label="Filtrar flota por cumplimiento de Laycan">
+                                                <button id="matching-view-viable" type="button" class="matching-fleet-segment" role="tab" aria-selected="true" aria-controls="matching-results-list" data-matching-fleet-view="viable">
+                                                    Viables Laycan (<span id="matching-viable-count">0</span>)
+                                                </button>
+                                                <button id="matching-view-compatible" type="button" class="matching-fleet-segment" role="tab" aria-selected="false" aria-controls="matching-results-list" data-matching-fleet-view="compatible">
+                                                    Flota Compatible (<span id="matching-compatible-count">0</span>)
+                                                </button>
+                                            </div>
+                                            <span id="matching-fleet-view-status" class="sr-only" aria-live="polite">Mostrando buques con ETA dentro de Laycan.</span>
                                         </div>
-                                        <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-emerald-100">
-                                            <div id="sync-progress-bar" class="h-full w-0 rounded-full bg-emerald-600 transition-[width] duration-200 ease-out" style="width: 0%"></div>
+                                        <label class="matching-strict-filter" for="hide-technical-problems-toggle">
+                                            <input type="checkbox" id="hide-technical-problems-toggle" class="sr-only" aria-disabled="false" aria-checked="false">
+                                            <span class="matching-strict-filter__track" aria-hidden="true"></span>
+                                            <span id="strict-technical-filter-label">Filtro técnico estricto · desactivado</span>
+                                        </label>
+                                        <span id="technical-problems-toggle-status" class="sr-only" aria-live="polite">Todos los candidatos se muestran con sus advertencias técnicas</span>
+                                    </div>
+                                    <div id="matching-action-dock" class="flex flex-row flex-wrap items-center gap-3" aria-label="Acciones del motor de coincidencias">
+                                        <button id="btn-run-matching" onclick="handleMatchingExecutionClick(event)" disabled aria-disabled="true" aria-describedby="matching-execution-validation btn-matching-subtitle" data-matching-ready="false" data-ready-vessel-count="0" data-execution-valid="false" class="matching-action-button whitespace-nowrap px-4 py-2 bg-[#004e64] hover:bg-[#003f52] text-white font-black text-xs uppercase rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-[#004e64] disabled:cursor-not-allowed disabled:opacity-45">
+                                            <i class="fa-solid fa-play"></i>
+                                            Encontrar Match / Find Vessels
+                                        </button>
+                                        <div data-radar-global-control data-radar-context="matching"></div>
+                                        <button id="btnGenerateReport" type="button" onclick="toggleMatchingAuditMode()" aria-pressed="false" class="matching-action-button whitespace-nowrap px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-black text-xs uppercase rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-slate-600 focus:outline-none cursor-pointer">
+                                            <i class="fa-solid fa-database"></i>
+                                            <span>MODO AUDITORÍA</span>
+                                        </button>
+                                        <button id="commercial-nlp-send-btn" onclick="sendCommercialNlpToDataBridge()" disabled aria-disabled="true" data-databridge-transmission="true" title="Ejecuta coincidencias antes de enviar a Data Bridge" class="matching-action-button whitespace-nowrap px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-black text-xs uppercase rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-emerald-800 disabled:cursor-not-allowed disabled:opacity-45">
+                                            <i class="fa-solid fa-paper-plane"></i>
+                                            Enviar a Data Bridge
+                                        </button>
+                                        <div id="sync-container" class="hidden w-64 shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 shadow-sm" role="status" aria-live="polite" aria-atomic="true">
+                                            <div class="flex items-center justify-between gap-3 text-[10px] font-black uppercase tracking-wide text-emerald-900">
+                                                <span id="sync-status-text">Preparando sincronización…</span>
+                                                <span id="sync-percentage">0%</span>
+                                            </div>
+                                            <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-emerald-100">
+                                                <div id="sync-progress-bar" class="h-full w-0 rounded-full bg-emerald-600 transition-[width] duration-200 ease-out" style="width: 0%"></div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -13721,17 +13868,10 @@
                                 <span class="text-[10px] font-semibold text-slate-400">Filtrado antes del cálculo</span>
                             </div>
                             <div class="flex flex-wrap gap-2" id="matching-source-filters">
-                                <label class="cursor-pointer"><input type="checkbox" class="peer sr-only matching-source-toggle" value="DATABRIDGE" checked><span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-500 transition peer-checked:border-cyan-300 peer-checked:bg-cyan-50 peer-checked:text-cyan-800 peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-300"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>DataBridge <span id="matching-source-count-databridge" aria-live="polite">(0)</span></span></label>
-                                <label class="cursor-pointer"><input type="checkbox" class="peer sr-only matching-source-toggle" value="AIS_LIVE" checked><span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-500 transition peer-checked:border-emerald-300 peer-checked:bg-emerald-50 peer-checked:text-emerald-800 peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-300"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>AIS Live <span id="matching-source-count-ais-live" aria-live="polite">(0)</span></span></label>
-                                <label class="cursor-pointer"><input type="checkbox" class="peer sr-only matching-source-toggle" value="OPENSHIPS" checked><span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-500 transition peer-checked:border-violet-300 peer-checked:bg-violet-50 peer-checked:text-violet-800 peer-focus-visible:ring-2 peer-focus-visible:ring-violet-300"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>OpenShips <span id="matching-source-count-openships" aria-live="polite">(0)</span></span></label>
+                                <label class="cursor-pointer"><input type="checkbox" class="peer sr-only matching-source-toggle" value="DATABRIDGE" checked><span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-500 transition peer-checked:border-cyan-300 peer-checked:bg-cyan-50 peer-checked:text-cyan-800 peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-300"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Cartera Neon / Data Bridge <span id="matching-source-count-databridge" aria-live="polite">(0)</span></span></label>
+                                <label class="cursor-pointer"><input type="checkbox" class="peer sr-only matching-source-toggle" value="AIS_LIVE" checked><span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-500 transition peer-checked:border-emerald-300 peer-checked:bg-emerald-50 peer-checked:text-emerald-800 peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-300"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Datalastic (AIS) / AISStream <span id="matching-source-count-ais-live" aria-live="polite">(0)</span></span></label>
+                                <label class="cursor-pointer"><input type="checkbox" class="peer sr-only matching-source-toggle" value="OPENSHIPS" checked><span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-500 transition peer-checked:border-violet-300 peer-checked:bg-violet-50 peer-checked:text-violet-800 peer-focus-visible:ring-2 peer-focus-visible:ring-violet-300"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>OpenShips REST <span id="matching-source-count-openships" aria-live="polite">(0)</span></span></label>
                             </div>
-                        </div>
-                        <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 mb-4">
-                            <label class="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-slate-600 cursor-pointer">
-                                <input type="checkbox" id="hide-technical-problems-toggle" class="rounded border-slate-300 text-[#004e64] focus:ring-[#004e64]" aria-disabled="false" aria-checked="false">
-                                <span id="strict-technical-filter-label">Filtro técnico estricto · desactivado</span>
-                            </label>
-                            <span id="technical-problems-toggle-status" class="text-[10px] font-semibold text-slate-400">Todos los candidatos se muestran con sus advertencias técnicas</span>
                         </div>
                         <div id="matching-source-integrity" class="hidden mb-4 rounded-lg border px-3 py-2 text-[11px]" role="status" aria-live="polite"></div>
 
@@ -13791,18 +13931,6 @@
                                 </aside>
                             </div>
                         </section>
-
-                        <div id="matching-fleet-view-control" class="hidden mb-4" aria-label="Vista de resultados de coincidencia">
-                            <div class="matching-fleet-segmented-control" role="tablist" aria-label="Filtrar flota por cumplimiento de Laycan">
-                                <button id="matching-view-viable" type="button" class="matching-fleet-segment" role="tab" aria-selected="true" aria-controls="matching-results-list" data-matching-fleet-view="viable">
-                                    Viables Laycan (<span id="matching-viable-count">0</span>)
-                                </button>
-                                <button id="matching-view-compatible" type="button" class="matching-fleet-segment" role="tab" aria-selected="false" aria-controls="matching-results-list" data-matching-fleet-view="compatible">
-                                    Flota Compatible (<span id="matching-compatible-count">0</span>)
-                                </button>
-                            </div>
-                            <p id="matching-fleet-view-status" class="mt-2 text-[10px] font-semibold text-slate-500" aria-live="polite">Mostrando buques con ETA dentro de Laycan.</p>
-                        </div>
 
                         <!-- EMPTY STATE -->
                         <div id="matching-empty-state" class="flex-1 flex flex-col items-center justify-center text-center py-16 px-4">
@@ -15076,18 +15204,32 @@
                 source.laycan?.laydays,
                 source.laycan?.start,
                 source.laycanDate,
+                source.laycan_start,
+                source.route?.laydays,
+                source.route?.laycan_start,
+                source.route?.laycan,
                 base.laydays,
                 base.laycan?.laydays,
-                base.laycanDate
+                base.laycanDate,
+                base.laycan_start,
+                base.route?.laydays,
+                base.route?.laycan_start,
+                base.route?.laycan
             );
             const cancelling = firstText(
                 source.cancelling,
                 source.laycan?.cancelling,
                 source.laycan?.end,
                 source.cancellingDate,
+                source.laycan_end,
+                source.route?.cancelling,
+                source.route?.laycan_end,
                 base.cancelling,
                 base.laycan?.cancelling,
-                base.cancellingDate
+                base.cancellingDate,
+                base.laycan_end,
+                base.route?.cancelling,
+                base.route?.laycan_end
             );
             const cargoQuantity = firstPositiveNumber(
                 source.cargoQuantity,
@@ -15131,6 +15273,8 @@
                 cancelling,
                 laycanDate: laydays,
                 cancellingDate: cancelling,
+                laycan_start: laydays,
+                laycan_end: cancelling,
                 cargoQuantity,
                 cargo: cargoQuantity,
                 cargoQty: cargoQuantity,
@@ -15200,7 +15344,9 @@
                     cancelling: normalized.cancelling,
                     start: normalized.laydays,
                     end: normalized.cancelling
-                }
+                },
+                laycan_start: normalized.laydays,
+                laycan_end: normalized.cancelling
             };
         }
         window.buildCanonicalVoyageParams = buildCanonicalVoyageParams;
@@ -16035,8 +16181,16 @@
                 portBallast: firstNonEmpty(document.getElementById('map-port-ballast')?.value, State.portBallast),
                 pol: firstNonEmpty(document.getElementById('map-port-pol')?.value, State.pol),
                 pod: firstNonEmpty(document.getElementById('map-port-pod')?.value, State.pod),
+                laydays: firstNonEmpty(getNormalizedDateInputValue('map-laycan-date'), State.laydays, State.laycanDate),
+                cancelling: firstNonEmpty(getNormalizedDateInputValue('map-cancelling-date'), State.cancelling, State.cancellingDate),
                 laycanDate: firstNonEmpty(getNormalizedDateInputValue('map-laycan-date'), State.laycanDate),
-                cancellingDate: firstNonEmpty(getNormalizedDateInputValue('map-cancelling-date'), State.cancellingDate)
+                cancellingDate: firstNonEmpty(getNormalizedDateInputValue('map-cancelling-date'), State.cancellingDate),
+                laycan_start: firstNonEmpty(getNormalizedDateInputValue('map-laycan-date'), State.laycan_start, State.laycanDate),
+                laycan_end: firstNonEmpty(getNormalizedDateInputValue('map-cancelling-date'), State.laycan_end, State.cancellingDate),
+                laycan: {
+                    laydays: firstNonEmpty(getNormalizedDateInputValue('map-laycan-date'), State.laydays, State.laycanDate),
+                    cancelling: firstNonEmpty(getNormalizedDateInputValue('map-cancelling-date'), State.cancelling, State.cancellingDate)
+                }
             });
             syncGlobalStateToForms();
             if (typeof autoFillNlpFromEstimator === 'function') autoFillNlpFromEstimator();
@@ -18480,7 +18634,7 @@
         window.evaluateReactiveSyncStatus = evaluateReactiveSyncStatus;
 
 	        window.SeaCharterStore?.subscribe?.(
-	            (state) => [state.pol, state.pod, state.laycanDate],
+	            (state) => [state.pol, state.pod, state.laycanDate, state.cancellingDate, state.laydays, state.cancelling, state.laycan?.laydays, state.laycan?.cancelling],
 	            () => {
 	            evaluateReactiveSyncStatus();
 	            syncMatchingRouteSummary?.(window.GlobalStore?.calculatedState || window.CalculatedState || null);
@@ -18500,6 +18654,12 @@
                 input.dataset.reactiveSyncBound = 'true';
             });
             evaluateReactiveSyncStatus();
+            const hydrateMatchingRouteSummaryOnMount = () => {
+                const activeCalculation = window.GlobalStore?.calculatedState || window.CalculatedState || null;
+                syncMatchingRouteSummary?.(activeCalculation);
+            };
+            hydrateMatchingRouteSummaryOnMount();
+            window.requestAnimationFrame?.(hydrateMatchingRouteSummaryOnMount);
         });
 
         window.externalRadarSweepState = Object.assign({
@@ -18939,9 +19099,9 @@
                 : { vessels: incomingVessels };
             const taxonomyCompatibleVessels = Array.isArray(taxonomyFilter.vessels) ? taxonomyFilter.vessels : [];
             const requestedVessels = strictTechnicalFilterActive
-                ? taxonomyCompatibleVessels.filter(vessel => vessel?.audit?.operationallyEligible !== false)
+                ? taxonomyCompatibleVessels.filter(vessel => vessel?.audit?.operationallyEligible !== false || isPendingLiveRadarAuditCandidate(vessel))
                 : taxonomyCompatibleVessels;
-            const renderedVessels = requestedVessels.slice();
+            const renderedVessels = orderMatchingVesselsForDisplay(requestedVessels, strictTechnicalFilterActive);
             const canonicalVessels = window.GlobalStore?.setCanonicalFleet?.(renderedVessels, {
                 source: String(metadata.source || 'matching-ui')
             }) || renderedVessels;
@@ -20082,7 +20242,8 @@
 
         function getLaycanViableMatchingVessels(vessels) {
             const candidates = Array.isArray(vessels) ? vessels : [];
-            return candidates.filter(match => match?.openTonnageProjection?.viable === true);
+            return candidates.filter(match => match?.openTonnageProjection?.viable === true
+                || isPendingLiveRadarAuditCandidate(match));
         }
         window.getLaycanViableMatchingVessels = getLaycanViableMatchingVessels;
 
@@ -20991,7 +21152,7 @@
             sourceValues.forEach((value) => {
                 const normalizedSource = String(value || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
                 if (normalizedSource.includes('OPENSHIPS')) sourceOrigins.add('OPENSHIPS');
-                if (normalizedSource === 'AIS' || normalizedSource.includes('AIS_LIVE')) sourceOrigins.add('AIS_LIVE');
+                if (normalizedSource === 'AIS' || normalizedSource.includes('AIS_LIVE') || normalizedSource.includes('LIVE_AIS') || normalizedSource.includes('DATALASTIC')) sourceOrigins.add('AIS_LIVE');
                 if (normalizedSource === 'DATA_BRIDGE' || normalizedSource.includes('DATABRIDGE')) sourceOrigins.add('DATABRIDGE');
             });
             const hasLocalMasterMetadata = sourceRecords.some(record => Boolean(
@@ -21019,6 +21180,72 @@
             };
         }
         window.normalizeMatchingSourceMetadata = normalizeMatchingSourceMetadata;
+
+        function isLiveRadarMatchingVessel(match) {
+            const metadata = normalizeMatchingSourceMetadata(match, match?.vessel, match?.ais);
+            return metadata.source_origins.includes('AIS_LIVE') || metadata.source_origins.includes('OPENSHIPS');
+        }
+        window.isLiveRadarMatchingVessel = isLiveRadarMatchingVessel;
+
+        function hasPendingMatchingDwt(match) {
+            const dwt = Number(match?.vessel?.dwt ?? match?.ais?.dwt ?? match?.dwt);
+            return !Number.isFinite(dwt) || dwt <= 0;
+        }
+        window.hasPendingMatchingDwt = hasPendingMatchingDwt;
+
+        function isPendingLiveRadarAuditCandidate(match) {
+            return isLiveRadarMatchingVessel(match) && hasPendingMatchingDwt(match);
+        }
+        window.isPendingLiveRadarAuditCandidate = isPendingLiveRadarAuditCandidate;
+
+        function getMatchingFleetSegment(match) {
+            const metadata = normalizeMatchingSourceMetadata(match, match?.vessel, match?.ais);
+            if (metadata.source_origins.includes('AIS_LIVE') || metadata.source_origins.includes('OPENSHIPS')) return 'LIVE';
+            if (metadata.source_origins.includes('DATABRIDGE')) return 'HISTORICAL';
+            return 'OTHER';
+        }
+        window.getMatchingFleetSegment = getMatchingFleetSegment;
+
+        function getMatchingDistanceToPol(match) {
+            const distance = Number(match?.ais?.currentDistanceToLoadPort ?? match?.distanceNm ?? match?.distance_nm);
+            return Number.isFinite(distance) && distance >= 0 ? distance : Number.POSITIVE_INFINITY;
+        }
+
+        function orderMatchingVesselsForDisplay(vessels, strictTechnicalFilter = window.matchingStrictTechnicalFilter === true) {
+            const candidates = Array.isArray(vessels) ? vessels.slice() : [];
+            if (strictTechnicalFilter) return candidates;
+            const segmentPriority = { LIVE: 0, HISTORICAL: 1, OTHER: 2 };
+            return candidates.sort((left, right) => {
+                const segmentOrder = segmentPriority[getMatchingFleetSegment(left)] - segmentPriority[getMatchingFleetSegment(right)];
+                if (segmentOrder !== 0) return segmentOrder;
+                const distanceOrder = getMatchingDistanceToPol(left) - getMatchingDistanceToPol(right);
+                if (distanceOrder !== 0) return distanceOrder;
+                return (Number(right?.scores?.overall) || 0) - (Number(left?.scores?.overall) || 0);
+            });
+        }
+        window.orderMatchingVesselsForDisplay = orderMatchingVesselsForDisplay;
+
+        function renderMatchingFleetSegmentHeader(match, index, vessels) {
+            if (window.matchingStrictTechnicalFilter === true) return '';
+            const segment = getMatchingFleetSegment(match);
+            const previousSegment = index > 0 ? getMatchingFleetSegment(vessels[index - 1]) : null;
+            if (segment === previousSegment) return '';
+            const segmentCount = vessels.filter(candidate => getMatchingFleetSegment(candidate) === segment).length;
+            if (segment === 'LIVE') {
+                return `<div data-matching-fleet-segment="LIVE" class="rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-cyan-50 px-4 py-3 shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-2"><strong class="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-emerald-900"><i class="fa-solid fa-satellite-dish text-emerald-600"></i> En radar (Live)</strong><span class="rounded-full border border-emerald-200 bg-white/80 px-2.5 py-1 text-[10px] font-black text-emerald-800">${segmentCount} buque${segmentCount === 1 ? '' : 's'}</span></div>
+                    <p class="mt-1 text-[10px] font-semibold text-emerald-800">Telemetría física actual ordenada por proximidad al POL. Los DWT pendientes permanecen visibles para auditoría.</p>
+                </div>`;
+            }
+            if (segment === 'HISTORICAL') {
+                return `<div data-matching-fleet-segment="HISTORICAL" class="mt-2 rounded-xl border border-cyan-200 bg-gradient-to-r from-slate-50 to-cyan-50 px-4 py-3 shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-2"><strong class="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-cyan-950"><i class="fa-solid fa-box-archive text-cyan-700"></i> En cartera (Histórico)</strong><span class="rounded-full border border-cyan-200 bg-white/80 px-2.5 py-1 text-[10px] font-black text-cyan-900">${segmentCount} buque${segmentCount === 1 ? '' : 's'}</span></div>
+                    <p class="mt-1 text-[10px] font-semibold text-cyan-900">Portfolio de Data Bridge separado de la flota detectada en vivo y ordenado por distancia conocida.</p>
+                </div>`;
+            }
+            return '';
+        }
+        window.renderMatchingFleetSegmentHeader = renderMatchingFleetSegmentHeader;
 
         function normalizeAiAisFilterMatch(match) {
             const normalizedMatch = typeof window.normalizeCommercialVesselIdentity === 'function'
@@ -21911,8 +22138,8 @@
                         ? 'border-amber-300 bg-amber-50 text-amber-900'
                         : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`;
                     sourceIntegrity.innerHTML = hasExclusions
-                        ? `<strong>Integridad de fuentes:</strong> DATABRIDGE ${dataBridgeVesselCount} · AIS_LIVE ${aisVesselCount} · OPENSHIPS ${openShipsVesselCount} · unificados ${unifiedVesselCount} · normalizados ${engineInputCount} · evaluados ${evaluatedResponseCount} · idóneos ${eligibleResponseCount} · advertencias ${technicalWarningResponseCount}. ${excludedBeforeScoring ? `${excludedBeforeScoring} excluidos por posición/identidad inválida. ` : ''}${excludedAfterScoring ? `${excludedAfterScoring} fuera del radio o sin puntuación operativa. ` : ''}${missingDwtCount ? `${missingDwtCount} sin DWT quedaron sujetos a incompatibilidad técnica estricta.` : ''}${enrichmentSummary}`
-                        : `<strong>Integridad verificada:</strong> DATABRIDGE ${dataBridgeVesselCount} · AIS_LIVE ${aisVesselCount} · OPENSHIPS ${openShipsVesselCount} · ${unifiedVesselCount} candidatos unificados antes de puntuación.${missingDwtCount ? ` ${missingDwtCount} sin DWT quedaron sujetos a incompatibilidad técnica estricta.` : ''}${enrichmentSummary}`;
+                        ? `<strong>Integridad de fuentes:</strong> Cartera Neon/Data Bridge ${dataBridgeVesselCount} · Datalastic (AIS)/AISStream ${aisVesselCount} · OpenShips REST ${openShipsVesselCount} · unificados ${unifiedVesselCount} · normalizados ${engineInputCount} · evaluados ${evaluatedResponseCount} · idóneos ${eligibleResponseCount} · advertencias ${technicalWarningResponseCount}. ${excludedBeforeScoring ? `${excludedBeforeScoring} excluidos por posición/identidad inválida. ` : ''}${excludedAfterScoring ? `${excludedAfterScoring} fuera del radio o sin puntuación operativa. ` : ''}${missingDwtCount ? `${missingDwtCount} contactos AIS sin DWT permanecen visibles como pendientes de auditar.` : ''}${enrichmentSummary}`
+                        : `<strong>Integridad verificada:</strong> Cartera Neon/Data Bridge ${dataBridgeVesselCount} · Datalastic (AIS)/AISStream ${aisVesselCount} · OpenShips REST ${openShipsVesselCount} · ${unifiedVesselCount} candidatos unificados antes de puntuación.${missingDwtCount ? ` ${missingDwtCount} contactos AIS sin DWT permanecen visibles como pendientes de auditar.` : ''}${enrichmentSummary}`;
                 } else {
                     window.hideMatchingSourceIntegrity?.();
                 }
@@ -22077,11 +22304,13 @@
                 Object.freeze(matches);
                 const strictTechnicalFilter = window.matchingStrictTechnicalFilter === true;
                 const strictRequiredDwt = quantity > 0 ? quantity * 1.05 : 0;
-                const compatibleMatches = matches
+                const strictMaximumDwt = quantity > 0 ? quantity * 1.40 : 0;
+                const compatibleMatches = orderMatchingVesselsForDisplay(matches
                     .filter((match) => {
-                        if (match?.audit?.operationallyEligible !== true) return false;
+                        const pendingLiveAudit = isPendingLiveRadarAuditCandidate(match);
+                        if (match?.audit?.operationallyEligible !== true && !pendingLiveAudit) return false;
                         if (match?.compatibility?.taxonomyCompatible === false) return false;
-                        if (Number(match?.scores?.overall) <= 0) return false;
+                        if (Number(match?.scores?.overall) <= 0 && !pendingLiveAudit) return false;
                         const dwt = Number(match?.vessel?.dwt ?? match?.ais?.dwt);
                         const vesselType = String(
                             match?.vessel?.vesselType
@@ -22092,11 +22321,12 @@
                         ).trim().toLowerCase();
                         const missingCriticalType = !vesselType
                             || ['unknown', 'n/a', 'na', 'null', 'undefined', 'desconocido'].includes(vesselType);
-                        if (!Number.isFinite(dwt) || dwt <= 0 || missingCriticalType) return false;
+                        if (missingCriticalType) return false;
+                        if (!Number.isFinite(dwt) || dwt <= 0) return pendingLiveAudit;
                         if (!strictTechnicalFilter) return true;
-                        if (strictRequiredDwt <= 0) return true;
-                        return dwt >= strictRequiredDwt;
-                    })
+                        if (strictRequiredDwt <= 0 || strictMaximumDwt <= 0) return false;
+                        return dwt >= strictRequiredDwt && dwt <= strictMaximumDwt;
+                    }), strictTechnicalFilter)
                     .sort((left, right) => {
                         if (!strictTechnicalFilter) return 0;
                         const leftDwt = Number(left?.vessel?.dwt ?? left?.ais?.dwt);
@@ -22227,7 +22457,8 @@
                         const hasCurrentCoordinates = Number.isFinite(currentLatitude) && Number.isFinite(currentLongitude);
                         const hasProjectedCoordinates = ais.positionProjected === true && Number.isFinite(projectedLatitude) && Number.isFinite(projectedLongitude);
 
-                        const maxDwtTolerance = 1.15;
+                        const preferredMaxDwtTolerance = 1.15;
+                        const maxDwtTolerance = 1.40;
                         const requiredCargo = quantity;
                         const vesselDwt = Number(v.dwt);
                         const vesselGt = Number(v.gt ?? v.gross_tonnage ?? v.grossTonnage);
@@ -22236,14 +22467,18 @@
                         const vesselDraft = Number(v.draft ?? v.draft_meters ?? v.draught);
                         const hasKnownDwt = Number.isFinite(vesselDwt) && vesselDwt > 0;
                         const dwtAssessmentStatus = m.dwtAssessment?.status || v.dwtAssessment?.status || comp.dwtAssessment?.status || (!hasKnownDwt ? 'UNKNOWN' : requiredCargo > 0 && vesselDwt < requiredCargo ? 'INSUFFICIENT' : 'SUFFICIENT');
-                        const isOversized = hasKnownDwt && requiredCargo > 0 && vesselDwt > requiredCargo * maxDwtTolerance;
+                        const isOversized = hasKnownDwt && requiredCargo > 0
+                            && vesselDwt > requiredCargo * preferredMaxDwtTolerance
+                            && vesselDwt <= requiredCargo * maxDwtTolerance;
+                        const isHardOversized = hasKnownDwt && requiredCargo > 0 && vesselDwt > requiredCargo * maxDwtTolerance;
                         const isBelowStrictSafetyDwt = strictTechnicalFilter
                             && requiredCargo > 0
                             && hasKnownDwt
                             && vesselDwt < requiredCargo * 1.05;
                         const isUndersized = dwtAssessmentStatus === 'INSUFFICIENT' || isBelowStrictSafetyDwt;
-                        const isDwtUnknown = dwtAssessmentStatus === 'UNKNOWN';
-                        const isValidCapacity = dwtAssessmentStatus === 'SUFFICIENT' && (requiredCargo <= 0 || vesselDwt <= requiredCargo * maxDwtTolerance);
+                        const isDwtUnknown = ['UNKNOWN', 'PENDING_AUDIT', 'BLOCKED_MISSING'].includes(dwtAssessmentStatus);
+                        const isValidCapacity = ['SUFFICIENT', 'OVERSIZED_VIABLE'].includes(dwtAssessmentStatus)
+                            && (requiredCargo <= 0 || vesselDwt <= requiredCargo * maxDwtTolerance);
                         const commercialRank = m.commercialRank || window.buildCommercialVesselRank({
                             vesselDwt,
                             targetCargoDwt: requiredCargo,
@@ -22263,6 +22498,8 @@
                         const hasDueDiligenceIdentity = window.hasDueDiligenceIdentity?.(v) === true;
                         const sourceMetadata = normalizeMatchingSourceMetadata(m, v, m.ais);
                         const sourceOrigins = [...sourceMetadata.source_origins];
+                        const isLiveRadarVessel = sourceOrigins.includes('AIS_LIVE') || sourceOrigins.includes('OPENSHIPS');
+                        const isPendingRadarDwtAudit = isLiveRadarVessel && isDwtUnknown;
                         const isDataBridgeVessel = sourceOrigins.includes('DATABRIDGE');
                         const requiresDueDiligence = requiresIdentityDueDiligence || (isDataBridgeVessel && !profileCompleteness.complete);
                         if (sourceOrigins.length === 0) sourceOrigins.push('MASTER');
@@ -22274,9 +22511,9 @@
                         };
                         const sourceBadgeLabels = {
                             MASTER: 'Master V2',
-                            DATABRIDGE: 'Data Bridge',
-                            AIS_LIVE: 'AIS Live',
-                            OPENSHIPS: 'OpenShips'
+                            DATABRIDGE: 'Cartera Neon / Data Bridge',
+                            AIS_LIVE: 'Datalastic (AIS) / AISStream',
+                            OPENSHIPS: 'OpenShips REST'
                         };
                         const sourceBadgesHtml = sourceOrigins.map(origin => `
                             <span class="inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-black tracking-wide ${sourceBadgeClasses[origin]}">${sourceBadgeLabels[origin]}</span>
@@ -22301,7 +22538,7 @@
                         const declaredVesselType = comp.declaredVesselType || v.vesselType || v.vessel_type || v.vesselClass || v.specialtyType || 'Desconocido';
                         const vesselTypeCompatible = comp.taxonomyCompatible !== false;
                         const dwtPenaltyBadge = isDwtUnknown
-                            ? '<span data-missing-technical-warning="true" class="bg-amber-50 text-amber-800 border border-amber-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1" title="Requiere Due Diligence para verificar DWT"><i class="fa-solid fa-shield-halved"></i> Requiere Due Diligence para verificar DWT</span>'
+                            ? '<span data-missing-technical-warning="true" class="bg-amber-50 text-amber-900 border border-amber-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1" title="El buque permanece visible porque existe telemetría AIS real; el DWT requiere auditoría"><i class="fa-solid fa-satellite-dish"></i> DWT pendiente de auditar</span>'
                             : isUndersized
                                 ? '<span class="bg-red-50 text-red-700 border border-red-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-circle-xmark"></i> DWT Insuficiente</span>'
                                 : '';
@@ -22314,12 +22551,14 @@
                         let compBadge = '';
                         if (isOversizedFallback) {
                             compBadge = '<span class="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1 font-bold" title="Mostrado por escasez de mercado al expandir la capacidad hasta un 500%"><i class="fa-solid fa-triangle-exclamation"></i> ADVERTENCIA: BUQUE SOBREDIMENSIONADO (MOSTRADO POR ESCASEZ DE MERCADO)</span>';
+                        } else if (isPendingRadarDwtAudit) {
+                            compBadge = '<span class="bg-emerald-50 text-emerald-800 border border-emerald-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-location-crosshairs"></i> En radar · Telemetría real</span>';
                         } else if (isDwtUnknown || isUndersized || !vesselTypeCompatible) {
                             compBadge = '';
                         } else if (isComp) {
                             compBadge = '<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> Compatible (100%)</span>';
                         } else if (isOversized) {
-                            compBadge = '<span class="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1" title="El DWT del buque excede la tolerancia del 15% sobre la carga requerida"><i class="fa-solid fa-up-right-and-down-left-from-center"></i> OVERSIZED (Sobredimensionado)</span>';
+                            compBadge = '<span class="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1" title="El DWT supera la banda preferida del 15%, pero permanece dentro del máximo comercial del 40%"><i class="fa-solid fa-up-right-and-down-left-from-center"></i> Viable (Sobredimensionado)</span>';
                         } else {
                             compBadge = `<span ${requiresDueDiligence ? 'data-missing-technical-warning="true"' : ''} class="bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> Advertencia técnica</span>`;
                         }
@@ -22327,11 +22566,11 @@
                         const estimatedDwtBadge = isEstimatedDwt ?
                             '<span class="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1" title="DWT estimado a partir de las dimensiones AIS (LOA * Beam * Draft * 0.70 * 1.025)"><i class="fa-solid fa-ruler-combined"></i> DWT ESTIMADO (Vía Eslora/Manga)</span>' : '';
 
-                        const overallScoreClass = isComp ? 'text-indigo-600 font-black' : 'text-red-600 font-bold';
+                        const overallScoreClass = isComp ? 'text-indigo-600 font-black' : isPendingRadarDwtAudit ? 'text-amber-700 font-black' : 'text-red-600 font-bold';
 
                         // Compile incompatibility reasons
                         let reasonHtml = '';
-                        if (!isComp) {
+                        if (!isComp && !isPendingRadarDwtAudit) {
                             reasonHtml = '<div data-technical-reasons class="mt-3 p-3 bg-rose-50/50 border border-rose-100 rounded-lg text-[11px] text-red-700 space-y-1 font-mono">';
                             const criticalReasons = Array.isArray(m.technicalEligibility?.criticalReasons)
                                 ? m.technicalEligibility.criticalReasons
@@ -22620,8 +22859,9 @@
                             `<a href="https://www.vesselfinder.com/vessels?name=${v.imo}" target="_blank" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] uppercase py-1.5 rounded transition flex items-center justify-center gap-1 shadow-sm text-center">
                                 <i class="fa-solid fa-circle-info"></i> Ver Ficha Técnica / View Data Sheet
                              </a>` : '';
+                        const segmentHeaderHtml = renderMatchingFleetSegmentHeader(m, idx, displayMatches);
                         const cardHtml = `
-                            <div class="matching-vessel-card ${openTonnage.viable ? 'open-tonnage-card-viable' : openTonnage.laycanStatus === 'LATE' ? 'open-tonnage-card-late is-late-eta' : ''} border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : `border-red-200 bg-red-50/40 ${isDwtUnknown ? 'opacity-65' : 'opacity-80'} cursor-pointer`} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-open-tonnage-viable="${openTonnage.viable === true}" data-open-tonnage-status="${openTonnage.laycanStatus}" data-requires-due-diligence="${requiresDueDiligence}" data-vessel-profile-state="${profileCompleteness.complete ? 'complete' : 'partial'}" data-vessel-imo="${v.imo || ''}" data-source-origin="${sourceOriginLabel}" data-map-focus-id="${mapFocusId}" onclick="handleMatchingVesselCardClick(event)">
+                            <div class="matching-vessel-card ${openTonnage.viable ? 'open-tonnage-card-viable' : openTonnage.laycanStatus === 'LATE' ? 'open-tonnage-card-late is-late-eta' : ''} border ${isComp ? 'border-slate-200 hover:border-indigo-300 bg-white shadow-sm cursor-pointer' : isPendingRadarDwtAudit ? 'border-amber-300 bg-amber-50/60 hover:border-emerald-300 shadow-sm cursor-pointer' : 'border-red-200 bg-red-50/40 opacity-80 cursor-pointer'} rounded-xl p-5 transition relative overflow-hidden" data-matching-result-card="true" data-open-tonnage-viable="${openTonnage.viable === true}" data-open-tonnage-status="${openTonnage.laycanStatus}" data-requires-due-diligence="${requiresDueDiligence}" data-vessel-profile-state="${profileCompleteness.complete ? 'complete' : 'partial'}" data-vessel-imo="${v.imo || ''}" data-source-origin="${sourceOriginLabel}" data-map-focus-id="${mapFocusId}" onclick="handleMatchingVesselCardClick(event)">
                                 <!-- Rank Ribbon -->
                                 <div class="absolute top-4 right-5 flex items-center gap-2">
                                     ${estimatedDwtBadge}
@@ -22677,7 +22917,7 @@
 
                                         <p class="text-[11px] text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-1">
                                             <span>Vessel Type: <strong data-vessel-field="vesselType" class="${vesselTypeCompatible ? 'text-slate-700' : 'text-red-700'}">${declaredVesselType}</strong></span>
-                                            <span>DWT: <strong data-vessel-field="dwt" class="${isDwtUnknown || isUndersized ? 'text-red-700' : 'text-slate-700'}">${hasKnownDwt ? `${vesselDwt.toLocaleString()} MT` : 'Desconocido'}</strong></span>
+                                            <span>DWT: <strong data-vessel-field="dwt" class="${isPendingRadarDwtAudit ? 'text-amber-800' : isDwtUnknown || isUndersized ? 'text-red-700' : 'text-slate-700'}">${hasKnownDwt ? `${vesselDwt.toLocaleString()} MT` : 'Pendiente de auditar'}</strong></span>
                                             <span>Bandera / Flag: <strong data-vessel-field="flag" class="text-slate-700">${flag || 'N/A'}</strong></span>
                                             <span>Año / Built: <strong data-vessel-field="yearBuilt" class="text-slate-700">${yearBuiltValue || 'N/A'}</strong></span>
                                         </p>
@@ -22702,7 +22942,7 @@
                                                 </div>
                                                 <div class="flex items-center justify-between text-xs">
                                                     <span data-vessel-capacity-comparison class="text-slate-500">Capacidad (${hasKnownDwt ? `${vesselDwt.toLocaleString()} MT` : 'DWT desconocido'} vs ${quantity} MT):</span>
-                                                    <span data-vessel-capacity-status class="font-bold ${isValidCapacity ? 'text-emerald-600' : 'text-rose-600'}">${isValidCapacity ? 'OK' : (isDwtUnknown ? 'Desconocido' : isOversized ? 'Sobredimensionado (OVERSIZED)' : 'Insuficiente')}</span>
+                                                    <span data-vessel-capacity-status class="font-bold ${isOversized ? 'text-amber-600' : isValidCapacity ? 'text-emerald-600' : 'text-rose-600'}">${isOversized ? 'Viable (Sobredimensionado)' : isValidCapacity ? 'OK' : (isDwtUnknown ? 'Desconocido' : isHardOversized ? 'Sobredimensionado (+40%)' : 'Insuficiente')}</span>
                                                 </div>
                                             </div>
 
@@ -22778,7 +23018,7 @@
                                 </div>
                             </div>
                         `;
-                        return cardHtml;
+                        return `${segmentHeaderHtml}${cardHtml}`;
                     }, matchingRenderCycle);
                     if (!renderCompleted) return false;
 
@@ -23279,7 +23519,13 @@
                 window.matchingStrictTechnicalFilter = technicalProblemsToggle.checked === true;
                 technicalProblemsToggle.setAttribute('aria-checked', window.matchingStrictTechnicalFilter ? 'true' : 'false');
                 const label = document.getElementById('strict-technical-filter-label');
-                if (label) label.textContent = `Filtro técnico estricto · ${window.matchingStrictTechnicalFilter ? 'activado' : 'desactivado'}`;
+                if (label) label.textContent = window.matchingStrictTechnicalFilter
+                    ? 'Filtro técnico estricto · Taxonomía + límites DWT'
+                    : 'Filtro técnico estricto · desactivado';
+                const status = document.getElementById('technical-problems-toggle-status');
+                if (status) status.textContent = window.matchingStrictTechnicalFilter
+                    ? 'DWT válido entre +5% y +40%; por encima de +15% se mantiene con penalización comercial'
+                    : 'Todos los candidatos se muestran con sus advertencias técnicas';
                 rerunMatchingAfterFilterChange();
             });
         }
@@ -23466,7 +23712,21 @@
         window.clearMatchingCandidateState = clearMatchingCandidateState;
 
         function syncMatchingRouteSummary(calculatedState = null) {
-            const voyageParams = getGlobalVoyageParams();
+            const globalVoyageParams = getGlobalVoyageParams();
+            const calculationRoute = calculatedState?.route || {};
+            const voyageParams = calculatedState && typeof calculatedState === 'object'
+                ? buildCanonicalVoyageParams({
+                    ...calculatedState,
+                    ...calculationRoute,
+                    pol: calculationRoute.pol || calculatedState.pol,
+                    pod: calculationRoute.pod || calculatedState.pod,
+                    polCoordinates: calculatedState.pol_coordinates || calculationRoute.pol_coordinates,
+                    podCoordinates: calculatedState.pod_coordinates || calculationRoute.pod_coordinates,
+                    laycan: calculatedState.laycan,
+                    laydays: calculatedState.laycan?.laydays || calculatedState.laycan?.start || calculatedState.laycan_start || calculationRoute.laydays || calculationRoute.laycan_start || calculationRoute.laycan,
+                    cancelling: calculatedState.laycan?.cancelling || calculatedState.laycan?.end || calculatedState.laycan_end || calculationRoute.cancelling || calculationRoute.laycan_end
+                }, globalVoyageParams)
+                : globalVoyageParams;
             const route = voyageParams.pol && voyageParams.pod ? {
                 pol: voyageParams.pol,
                 pod: voyageParams.pod,
@@ -23681,8 +23941,8 @@
                 polCoordinates: request.pol_coordinates || requestRoute.pol_coordinates,
                 podCoordinates: request.pod_coordinates || requestRoute.pod_coordinates,
                 laycan: request.laycan,
-                laydays: request.laycan?.laydays || request.laycan?.start || requestRoute.laydays || requestRoute.laycan,
-                cancelling: request.laycan?.cancelling || request.laycan?.end || requestRoute.cancelling,
+                laydays: request.laycan?.laydays || request.laycan?.start || request.laycanStart || request.laycan_start || requestRoute.laydays || requestRoute.laycan_start || requestRoute.laycan,
+                cancelling: request.laycan?.cancelling || request.laycan?.end || request.laycanEnd || request.laycan_end || requestRoute.cancelling || requestRoute.laycan_end,
                 cargoTypeCode: requestCargo.cargoCode || requestCargo.typeId || requestCargo.type,
                 cargoType: requestCargo.cargoDescription || requestCargo.specification || requestCargo.typeLabel,
                 cargoQuantity: requestCargo.quantity ?? requestCargo.cargoQuantity,
@@ -23699,6 +23959,8 @@
                 laydays: voyageParams.laydays,
                 cancelling: voyageParams.cancelling,
                 laycan: voyageParams.laydays,
+                laycan_start: voyageParams.laydays,
+                laycan_end: voyageParams.cancelling,
                 pol_coordinates: voyageParams.polCoordinates,
                 pod_coordinates: voyageParams.podCoordinates,
                 lat: { pol: voyageParams.polCoordinates?.lat ?? null, pod: voyageParams.podCoordinates?.lat ?? null },
@@ -23710,9 +23972,15 @@
                 pol_coordinates: voyageParams.polCoordinates,
                 pod_coordinates: voyageParams.podCoordinates,
                 laycan: { ...voyageParams.laycan },
+                laycanStart: voyageParams.laydays,
+                laycanEnd: voyageParams.cancelling,
+                laycan_start: voyageParams.laydays,
+                laycan_end: voyageParams.cancelling,
                 cargo: normalizeMatchingCargoPayload({
                     ...requestCargo,
                     ...voyageParams.cargo,
+                    laycanStart: voyageParams.laydays,
+                    laycanEnd: voyageParams.cancelling,
                     loadMethod: voyageParams.loadMethod || requestCargo.loadMethod || '',
                     dischargeMethod: voyageParams.dischargeMethod || requestCargo.dischargeMethod || ''
                 }),
@@ -23753,8 +24021,8 @@
             const podCoordinates = request.pod_coordinates || route.pod_coordinates || { lat: route.lat?.pod, lon: route.lon?.pod };
             setInputValue('match-load-port', route.pol);
             setInputValue('match-unload-port', route.pod);
-            setInputValue('match-laycan-start', request.laycan?.start || route.laycan);
-            setInputValue('match-laycan-end', request.laycan?.end);
+            setInputValue('match-laycan-start', request.laycan?.start || request.laycanStart || request.laycan_start || route.laydays || route.laycan_start || route.laycan);
+            setInputValue('match-laycan-end', request.laycan?.end || request.laycanEnd || request.laycan_end || route.cancelling || route.laycan_end);
             setInputValue('match-load-lat', polCoordinates.lat);
             setInputValue('match-load-lon', polCoordinates.lon);
             setInputValue('match-unload-lat', podCoordinates.lat);
@@ -23767,7 +24035,8 @@
             window.coreProMatchingRouteContext = {
                 pol: { lat: polCoordinates.lat ?? null, lon: polCoordinates.lon ?? null },
                 pod: { lat: podCoordinates.lat ?? null, lon: podCoordinates.lon ?? null },
-                laycan: request.laycan?.start || route.laycan || ''
+                laycan: request.laycan?.start || request.laycanStart || request.laycan_start || route.laydays || route.laycan_start || route.laycan || '',
+                cancelling: request.laycan?.end || request.laycanEnd || request.laycan_end || route.cancelling || route.laycan_end || ''
             };
             return request;
         }
@@ -23786,7 +24055,47 @@
             const currentRequest = candidates.find(isMatchingRequestCurrent);
             const resolveRequest = request => {
                 if (!request || typeof request !== 'object') return null;
-                const resolvedRequest = options.persist === false ? request : persistMatchingRequest(request);
+                const requestRoute = request.route || {};
+                const calculationRoute = calculatedState?.route || {};
+                const activeVoyage = normalizeActiveVoyageState({
+                    ...getGlobalVoyageParams(),
+                    ...(calculatedState || {}),
+                    ...calculationRoute,
+                    laycan: {
+                        ...(calculatedState?.laycan || {}),
+                        ...(request.laycan || {})
+                    },
+                    laydays: request.laycan?.start || request.laycan?.laydays || request.laycanStart || request.laycan_start || requestRoute.laydays || requestRoute.laycan_start || calculatedState?.laycan?.start || calculatedState?.laycan?.laydays || calculatedState?.laycan_start || calculationRoute.laydays || calculationRoute.laycan_start || calculationRoute.laycan,
+                    cancelling: request.laycan?.end || request.laycan?.cancelling || request.laycanEnd || request.laycan_end || requestRoute.cancelling || requestRoute.laycan_end || calculatedState?.laycan?.end || calculatedState?.laycan?.cancelling || calculatedState?.laycan_end || calculationRoute.cancelling || calculationRoute.laycan_end
+                });
+                const hydratedRequest = {
+                    ...request,
+                    route: {
+                        ...requestRoute,
+                        laydays: activeVoyage.laydays,
+                        cancelling: activeVoyage.cancelling,
+                        laycan: activeVoyage.laydays,
+                        laycan_start: activeVoyage.laydays,
+                        laycan_end: activeVoyage.cancelling
+                    },
+                    laycan: {
+                        ...(request.laycan || {}),
+                        laydays: activeVoyage.laydays,
+                        cancelling: activeVoyage.cancelling,
+                        start: activeVoyage.laydays,
+                        end: activeVoyage.cancelling
+                    },
+                    laycanStart: activeVoyage.laydays,
+                    laycanEnd: activeVoyage.cancelling,
+                    laycan_start: activeVoyage.laydays,
+                    laycan_end: activeVoyage.cancelling,
+                    cargo: {
+                        ...(request.cargo || {}),
+                        laycanStart: activeVoyage.laydays,
+                        laycanEnd: activeVoyage.cancelling
+                    }
+                };
+                const resolvedRequest = options.persist === false ? hydratedRequest : persistMatchingRequest(hydratedRequest);
                 return options.applyToContext === false
                     ? resolvedRequest
                     : applyMatchingRequestToContext(resolvedRequest);
@@ -26509,7 +26818,7 @@
 
             const targetCargoDwt = window.getCommercialTargetCargoDwt?.() || 0;
             const frozenCachedMatches = Object.freeze(Array.isArray(cachedMatches) ? cachedMatches.slice() : []);
-            const rankedCachedMatches = frozenCachedMatches
+            const rankedCachedMatches = orderMatchingVesselsForDisplay(frozenCachedMatches
                 .map(match => {
                     const vessel = match?.vessel || {};
                     const ais = match?.ais || {};
@@ -26523,8 +26832,10 @@
                         distanceNm: ais.currentDistanceToLoadPort
                     });
                     return { ...match, commercialRank };
-                })
-                .sort((a, b) => window.compareCommercialVesselRanks(a.commercialRank, b.commercialRank))
+                }), window.matchingStrictTechnicalFilter === true)
+                .sort((a, b) => window.matchingStrictTechnicalFilter === true
+                    ? window.compareCommercialVesselRanks(a.commercialRank, b.commercialRank)
+                    : 0)
                 .map((match, index) => ({ ...match, commercialRank: { ...match.commercialRank, position: index + 1 } }));
             const matches = Object.freeze(rankedCachedMatches);
             const renderedMatches = setRenderedMatchingVessels(matches, { source: 'matching-cache' });
@@ -26543,13 +26854,14 @@
             const renderCycle = beginMatchingResultsRender();
             resultsList.classList.add('hidden');
             loadingState?.classList.remove('hidden');
-            void renderMatchingResultsInChunks(resultsList, matches, (match, index) => {
+            void renderMatchingResultsInChunks(resultsList, renderedMatches, (match, index) => {
                 const vessel = match.vessel || {};
                 const ais = match.ais || {};
                 const scores = match.scores || {};
                 const vesselName = vessel.vesselName || vessel.vessel_name || 'Unknown';
                 const imo = vessel.imo || ais.imo || 'PENDING';
                 const dwt = Number(vessel.dwt) || 0;
+                const segmentHeaderHtml = renderMatchingFleetSegmentHeader(match, index, renderedMatches);
                 const distance = Number(ais.currentDistanceToLoadPort);
                 const score = Number(scores.overall) || 0;
                 const dwtDifference = Number(match.commercialRank?.dwtDifferenceMt);
@@ -26576,13 +26888,13 @@
                 window.matchingMapFocusPayloads = window.matchingMapFocusPayloads || {};
                 const mapFocusId = `matching-cache-focus-${index}-${String(imo || vesselName).replace(/[^a-z0-9_-]/gi, '')}`;
                 window.matchingMapFocusPayloads[mapFocusId] = match;
-                return `
+                return `${segmentHeaderHtml}
                     <article class="matching-vessel-card cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-teal-300 hover:shadow-md" data-matching-cache-card="true" data-map-focus-id="${mapFocusId}" onclick="handleMatchingVesselCardClick(event)">
                         <div class="flex items-start justify-between gap-4">
                             <div class="min-w-0">
                                 <p class="text-[10px] font-black uppercase tracking-wider text-[#004e64]">Resultado #${index + 1} · ${escapeHtml(resultSourceLabel)}</p>
                                 <h4 class="mt-1 truncate text-sm font-black text-slate-800">${escapeHtml(vesselName)}</h4>
-                                <p class="mt-1 text-[11px] text-slate-500">IMO ${escapeHtml(imo)} · DWT ${dwt > 0 ? dwt.toLocaleString() : 'N/D'} MT</p>
+                                <p class="mt-1 text-[11px] text-slate-500">IMO ${escapeHtml(imo)} · DWT ${dwt > 0 ? `${dwt.toLocaleString()} MT` : 'Pendiente de auditar'}</p>
                                 <p data-commercial-dwt-rank="true" class="mt-1 text-[10px] font-black text-cyan-700">#${match.commercialRank?.position || index + 1} ajuste DWT · ${Number.isFinite(dwtDifference) ? `Δ ${dwtDifference.toLocaleString()} MT` : 'DWT objetivo N/D'}</p>
                             </div>
                             <div class="shrink-0 text-right">
@@ -29759,8 +30071,11 @@
             if (vesselDwtVal > 0 && cargo > 0 && vesselDwtVal < cargo) {
                 warningEl.innerText = "NOTICE: THIS VESSEL IS NOT COMPATIBLE DUE TO EXCESS WEIGHT.";
                 warningEl.classList.remove('hidden');
+            } else if (vesselDwtVal > 0 && cargo > 0 && vesselDwtVal > cargo * 1.40) {
+                warningEl.innerText = "AVISO: EL BUQUE SUPERA EL MÁXIMO COMERCIAL DE +40% PARA ESTA CARGA.";
+                warningEl.classList.remove('hidden');
             } else if (vesselDwtVal > 0 && cargo > 0 && vesselDwtVal > cargo * 1.15) {
-                warningEl.innerText = "AVISO: EL BUQUE ESTÁ SOBREDIMENSIONADO (OVERSIZED) PARA ESTA CARGA (MÁX 15% DE TOLERANCIA).";
+                warningEl.innerText = "VIABLE (SOBREDIMENSIONADO): DWT ENTRE +15% Y +40%; APLICAR PENALIZACIÓN COMERCIAL.";
                 warningEl.classList.remove('hidden');
             } else if (currentCargoType === 'Granel Líquido (Liquid Bulk)' && (vesselPurpose.includes('bulker') || vesselPurpose.includes('bulk carrier') || vesselPurpose.includes('general cargo'))) {
                 warningEl.innerText = "NOTICE: THIS VESSEL TYPE IS NOT COMPATIBLE WITH LIQUID BULK CARGO (REQUIRES TANKER).";
@@ -31894,6 +32209,8 @@
                     laydays: voyageParams.laydays,
                     cancelling: voyageParams.cancelling,
                     laycan: voyageParams.laydays,
+                    laycan_start: voyageParams.laydays,
+                    laycan_end: voyageParams.cancelling,
                     pol_coordinates: { lat: Number(polCoordinates.lat), lon: Number(polCoordinates.lon) },
                     pod_coordinates: { lat: Number(podCoordinates.lat), lon: Number(podCoordinates.lon) },
                     lat: { pol: Number(polCoordinates.lat), pod: Number(podCoordinates.lat) },
@@ -31905,6 +32222,10 @@
                     start: voyageParams.laydays,
                     end: voyageParams.cancelling
                 },
+                laycanStart: voyageParams.laydays,
+                laycanEnd: voyageParams.cancelling,
+                laycan_start: voyageParams.laydays,
+                laycan_end: voyageParams.cancelling,
                 cargo: {
                     cargoCode: voyageParams.cargoTypeCode,
                     cargoDescription: voyageParams.cargoType,
@@ -31913,6 +32234,8 @@
                     typeId: voyageParams.cargoTypeCode,
                     quantity: voyageParams.cargoQuantity,
                     cargoQuantity: voyageParams.cargoQuantity,
+                    laycanStart: voyageParams.laydays,
+                    laycanEnd: voyageParams.cancelling,
                     stowageFactor: readNumber('cargo-sf'),
                     requiredVolumeCbm: voyageParams.cargoQuantity * readNumber('cargo-sf'),
                     loadMethod: voyageParams.loadMethod || '',
@@ -49347,6 +49670,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         const RADAR_CARGO_REFINED_BLOCKED_TERMS = Object.freeze([
             'vehicles carrier', 'vehicle carrier', 'ro ro', 'roro', 'container ship'
         ]);
+        const STRICT_RADAR_DWT_MIN_FACTOR = 1.05;
+        const STRICT_RADAR_DWT_PREFERRED_MAX_FACTOR = 1.15;
+        const STRICT_RADAR_DWT_MAX_FACTOR = 1.40;
 
         function getActiveRadarTaxonomies(explicitTaxonomies = []) {
             const candidates = [
@@ -49385,11 +49711,82 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             return ` ${typeText} `.includes(` ${term} `);
         }
 
+        function parseStrictRadarNumber(value) {
+            if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+            const compact = String(value ?? '').trim().replace(/\s+/g, '').replace(/[^0-9.,-]/g, '');
+            if (!compact) return null;
+            const normalized = /^-?\d{1,3}([.,]\d{3})+$/.test(compact)
+                ? compact.replace(/[.,]/g, '')
+                : compact.replace(/,/g, '.');
+            const numericValue = Number(normalized);
+            return Number.isFinite(numericValue) ? numericValue : null;
+        }
+
+        function resolveStrictRadarVesselDwt(candidate) {
+            const source = candidate && typeof candidate === 'object' ? candidate : {};
+            const records = [
+                source,
+                source.vessel,
+                source.ais,
+                source.MetaData,
+                source.metadata,
+                source.vessel?.MetaData,
+                source.vessel?.metadata,
+                source.ais?.MetaData,
+                source.ais?.metadata,
+                source.technicalDataEnrichment,
+                source.vessel?.technicalDataEnrichment
+            ].filter(record => record && typeof record === 'object');
+            const fields = ['dwt', 'DWT', 'deadweight', 'deadweightTonnage', 'deadweight_tonnage', 'verifiedDwt', 'dwt_ajustado'];
+            for (const record of records) {
+                for (const field of fields) {
+                    const numericValue = parseStrictRadarNumber(record[field]);
+                    if (numericValue !== null && numericValue > 0) return numericValue;
+                }
+            }
+            return null;
+        }
+
+        function evaluateStrictRadarDwt(candidate, cargoQuantity = window.resolveGlobalTargetCargoDwt?.() || 0) {
+            const quantity = Number(cargoQuantity);
+            const vesselDwt = resolveStrictRadarVesselDwt(candidate);
+            const minimumDwt = Number.isFinite(quantity) && quantity > 0 ? quantity * STRICT_RADAR_DWT_MIN_FACTOR : 0;
+            const preferredMaximumDwt = Number.isFinite(quantity) && quantity > 0 ? quantity * STRICT_RADAR_DWT_PREFERRED_MAX_FACTOR : 0;
+            const maximumDwt = Number.isFinite(quantity) && quantity > 0 ? quantity * STRICT_RADAR_DWT_MAX_FACTOR : 0;
+            const compatible = minimumDwt > 0
+                && maximumDwt > 0
+                && vesselDwt !== null
+                && vesselDwt >= minimumDwt
+                && vesselDwt <= maximumDwt;
+            const commerciallyOversized = compatible && preferredMaximumDwt > 0 && vesselDwt > preferredMaximumDwt;
+            return { compatible, commerciallyOversized, vesselDwt, cargoQuantity: quantity, minimumDwt, preferredMaximumDwt, maximumDwt };
+        }
+        window.evaluateStrictRadarDwt = evaluateStrictRadarDwt;
+
+        function applyStrictRadarDwtAssessment(candidate, assessment) {
+            if (!assessment?.commerciallyOversized) return candidate;
+            const dwtAssessment = {
+                status: 'OVERSIZED_VIABLE',
+                label: 'Viable (Sobredimensionado) · penalización comercial'
+            };
+            return {
+                ...candidate,
+                isCommerciallyOversized: true,
+                hasTechnicalWarning: true,
+                hasWarning: true,
+                warning: 'Viable sobredimensionado: DWT entre +15% y +40%; ranking penalizado',
+                warningReason: 'Viable sobredimensionado: DWT entre +15% y +40%; ranking penalizado',
+                dwtAssessment,
+                vessel: candidate?.vessel ? { ...candidate.vessel, dwtAssessment, isCommerciallyOversized: true } : candidate?.vessel,
+                ais: candidate?.ais ? { ...candidate.ais, dwtAssessment, isCommerciallyOversized: true } : candidate?.ais
+            };
+        }
+
         function applyStrictRadarTaxonomyFilter(vessels, explicitTaxonomies = []) {
             const source = Array.isArray(vessels) ? vessels : [];
             const selectedTaxonomies = getActiveRadarTaxonomies(explicitTaxonomies);
             const cargoOnly = selectedTaxonomies.length === 1 && selectedTaxonomies[0] === 'category:cargo';
-            const filteredVessels = source.filter(candidate => {
+            const taxonomyCompatibleVessels = source.filter(candidate => {
                 const typeText = getRadarTaxonomyTypeText(candidate);
                 if (cargoOnly) {
                     if (RADAR_CARGO_BLOCKED_TERMS.some(term => hasRadarTaxonomyTerm(typeText, term))) return false;
@@ -49402,9 +49799,39 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 if (selectedTaxonomies.length === 0 || typeof window.filterVessels !== 'function') return false;
                 return window.filterVessels([{ vessel_type: typeText }], selectedTaxonomies).length > 0;
             });
+            const strictTechnicalFilter = window.matchingStrictTechnicalFilter === true;
+            const cargoQuantity = window.resolveGlobalTargetCargoDwt?.() || 0;
+            const filteredVessels = strictTechnicalFilter
+                ? taxonomyCompatibleVessels.flatMap(candidate => {
+                    const assessment = evaluateStrictRadarDwt(candidate, cargoQuantity);
+                    if (assessment.vesselDwt === null && isLiveRadarMatchingVessel(candidate)) {
+                        const dwtAssessment = { status: 'PENDING_AUDIT', label: 'DWT pendiente de auditar' };
+                        return [{
+                            ...candidate,
+                            hasTechnicalWarning: true,
+                            hasWarning: true,
+                            warning: 'Telemetría AIS real con DWT pendiente de auditar',
+                            warningReason: 'Telemetría AIS real con DWT pendiente de auditar',
+                            dwtAssessment,
+                            audit: { ...(candidate?.audit || {}), telemetryVisible: true, dwtPendingAudit: true },
+                            vessel: candidate?.vessel ? { ...candidate.vessel, dwtAssessment } : candidate?.vessel,
+                            ais: candidate?.ais ? { ...candidate.ais, dwtAssessment } : candidate?.ais
+                        }];
+                    }
+                    return assessment.compatible ? [applyStrictRadarDwtAssessment(candidate, assessment)] : [];
+                })
+                : taxonomyCompatibleVessels;
+            const dwtLimits = evaluateStrictRadarDwt(null, cargoQuantity);
             return {
                 vessels: filteredVessels,
                 discardedCount: Math.max(0, source.length - filteredVessels.length),
+                taxonomyDiscardedCount: Math.max(0, source.length - taxonomyCompatibleVessels.length),
+                dwtDiscardedCount: Math.max(0, taxonomyCompatibleVessels.length - filteredVessels.length),
+                strictTechnicalFilter,
+                cargoQuantity: dwtLimits.cargoQuantity,
+                minimumDwt: dwtLimits.minimumDwt,
+                preferredMaximumDwt: dwtLimits.preferredMaximumDwt,
+                maximumDwt: dwtLimits.maximumDwt,
                 selectedTaxonomies
             };
         }
@@ -49417,7 +49844,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 ? window.getFleetTaxonomyLabels(selectedTaxonomies)
                 : selectedTaxonomies;
             const filterLabel = selectedLabels.length > 0 ? selectedLabels.join(', ') : selectedTaxonomies.join(', ');
-            const message = `${discardedCount} buques descartados por incompatibilidad de taxonomía (Filtro Activo: [${filterLabel || 'Sin selección'}])`;
+            const minimumDwt = Number(filterResult.minimumDwt);
+            const preferredMaximumDwt = Number(filterResult.preferredMaximumDwt);
+            const maximumDwt = Number(filterResult.maximumDwt);
+            const dwtLabel = minimumDwt > 0 && maximumDwt > 0
+                ? `${Math.round(minimumDwt).toLocaleString('es-ES')}–${Math.round(maximumDwt).toLocaleString('es-ES')} MT (preferente hasta ${Math.round(preferredMaximumDwt).toLocaleString('es-ES')} MT)`
+                : 'carga operativa no definida';
+            const taxonomyDiscardedCount = Math.max(0, Number(filterResult.taxonomyDiscardedCount) || 0);
+            const dwtDiscardedCount = Math.max(0, Number(filterResult.dwtDiscardedCount) || 0);
+            const message = `${discardedCount} buques descartados (${taxonomyDiscardedCount} por taxonomía, ${dwtDiscardedCount} por DWT) (Filtro Activo: [Taxonomía: ${filterLabel || 'Sin selección'}] + [Límites DWT: ${dwtLabel}])`;
             console.log(`[Radar Taxonomía] ${message}`);
             const banner = document.getElementById('matching-source-integrity');
             if (banner) {
@@ -49459,7 +49894,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return false;
             }
             banner.className = 'mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-900';
-            banner.innerHTML = `<strong>Integridad de fuentes:</strong> DATABRIDGE ${Number(counts.DATABRIDGE) || 0} · AIS_LIVE ${Number(counts.AIS_LIVE) || 0} · OPENSHIPS ${Number(counts.OPENSHIPS) || 0} · unificados ${vesselCount} · POL ${escapeHtml(polContext?.pol || 'N/D')}.`;
+            banner.innerHTML = `<strong>Integridad de fuentes:</strong> Cartera Neon/Data Bridge ${Number(counts.DATABRIDGE) || 0} · Datalastic (AIS)/AISStream ${Number(counts.AIS_LIVE) || 0} · OpenShips REST ${Number(counts.OPENSHIPS) || 0} · unificados ${vesselCount} · POL ${escapeHtml(polContext?.pol || 'N/D')}.`;
             return true;
         }
         window.renderMatchingRadarSourceIntegrity = renderMatchingRadarSourceIntegrity;
@@ -49473,29 +49908,48 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const normalizedVessels = (Array.isArray(vessels) ? vessels : [])
                 .map(normalizeCommercialVesselIdentity)
                 .filter(Boolean);
+            const requiresMasterEnrichment = vessel => {
+                const dwt = Number(vessel?.dwt ?? vessel?.DWT ?? vessel?.vessel?.dwt ?? vessel?.ais?.dwt);
+                return !Number.isFinite(dwt)
+                    || dwt <= 0
+                    || !isUsableVesselIdentityText(vessel.vesselName)
+                    || !normalizeVesselImo(vessel.imo);
+            };
             const pendingMmsis = Array.from(new Set(normalizedVessels
-                .filter(vessel => normalizeVesselMmsi(vessel.mmsi)
-                    && (!isUsableVesselIdentityText(vessel.vesselName) || !normalizeVesselImo(vessel.imo)))
-                .map(vessel => normalizeVesselMmsi(vessel.mmsi))))
-                .filter(mmsi => !vesselIdentityByMmsiCache.has(mmsi));
+                .filter(requiresMasterEnrichment)
+                .map(vessel => normalizeVesselMmsi(vessel.mmsi))
+                .filter(Boolean)))
+                .filter(mmsi => !vesselIdentityByMmsiCache.has(`mmsi:${mmsi}`));
+            const pendingImos = Array.from(new Set(normalizedVessels
+                .filter(requiresMasterEnrichment)
+                .map(vessel => normalizeVesselImo(vessel.imo))
+                .filter(Boolean)))
+                .filter(imo => !vesselIdentityByMmsiCache.has(`imo:${imo}`));
 
-            if (pendingMmsis.length > 0) {
+            if (pendingMmsis.length > 0 || pendingImos.length > 0) {
                 try {
                     const response = await fetch('/api/vessel-identity-batch', {
                         method: 'POST',
                         cache: 'no-store',
                         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                        body: JSON.stringify({ mmsis: pendingMmsis })
+                        body: JSON.stringify({ mmsis: pendingMmsis, imos: pendingImos })
                     });
                     if (response.ok) {
                         const payload = await response.json();
                         (Array.isArray(payload?.vessels) ? payload.vessels : []).forEach(masterVessel => {
                             const normalizedMaster = normalizeCommercialVesselIdentity(masterVessel);
                             const masterMmsi = normalizeVesselMmsi(normalizedMaster?.mmsi);
-                            if (masterMmsi) vesselIdentityByMmsiCache.set(masterMmsi, normalizedMaster);
+                            const masterImo = normalizeVesselImo(normalizedMaster?.imo);
+                            if (masterMmsi) vesselIdentityByMmsiCache.set(`mmsi:${masterMmsi}`, normalizedMaster);
+                            if (masterImo) vesselIdentityByMmsiCache.set(`imo:${masterImo}`, normalizedMaster);
                         });
                         pendingMmsis.forEach(mmsi => {
-                            if (!vesselIdentityByMmsiCache.has(mmsi)) vesselIdentityByMmsiCache.set(mmsi, null);
+                            const key = `mmsi:${mmsi}`;
+                            if (!vesselIdentityByMmsiCache.has(key)) vesselIdentityByMmsiCache.set(key, null);
+                        });
+                        pendingImos.forEach(imo => {
+                            const key = `imo:${imo}`;
+                            if (!vesselIdentityByMmsiCache.has(key)) vesselIdentityByMmsiCache.set(key, null);
                         });
                     }
                 } catch (error) {
@@ -49505,10 +49959,17 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             return normalizedVessels.map(vessel => {
                 const mmsi = normalizeVesselMmsi(vessel.mmsi);
-                const master = mmsi ? vesselIdentityByMmsiCache.get(mmsi) : null;
+                const existingImo = normalizeVesselImo(vessel.imo);
+                const master = (mmsi ? vesselIdentityByMmsiCache.get(`mmsi:${mmsi}`) : null)
+                    || (existingImo ? vesselIdentityByMmsiCache.get(`imo:${existingImo}`) : null);
                 if (!master) return vessel;
                 const vesselName = isUsableVesselIdentityText(vessel.vesselName) ? vessel.vesselName : master.vesselName;
-                const imo = normalizeVesselImo(vessel.imo) || normalizeVesselImo(master.imo);
+                const imo = existingImo || normalizeVesselImo(master.imo);
+                const vesselDwt = Number(vessel?.dwt ?? vessel?.DWT ?? vessel?.vessel?.dwt ?? vessel?.ais?.dwt);
+                const masterDwt = Number(master?.dwt ?? master?.DWT);
+                const dwt = Number.isFinite(vesselDwt) && vesselDwt > 0
+                    ? vesselDwt
+                    : Number.isFinite(masterDwt) && masterDwt > 0 ? masterDwt : null;
                 return normalizeCommercialVesselIdentity({
                     ...master,
                     ...vessel,
@@ -49523,10 +49984,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     imo_number: imo,
                     mmsi,
                     MMSI: mmsi,
+                    dwt,
+                    DWT: dwt,
                     vesselTechnicalProfileVerified: true,
                     vesselClassSource: vessel.vesselClassSource || 'VESSELS_MASTER',
-                    vessel: vessel.vessel ? { ...master, ...vessel.vessel, vesselName, name: vesselName, imo, IMO: imo, mmsi, MMSI: mmsi } : vessel.vessel,
-                    ais: vessel.ais ? { ...master, ...vessel.ais, vesselName, name: vesselName, imo, IMO: imo, mmsi, MMSI: mmsi } : vessel.ais
+                    vessel: vessel.vessel ? { ...master, ...vessel.vessel, vesselName, name: vesselName, imo, IMO: imo, mmsi, MMSI: mmsi, dwt, DWT: dwt } : vessel.vessel,
+                    ais: vessel.ais ? { ...master, ...vessel.ais, vesselName, name: vesselName, imo, IMO: imo, mmsi, MMSI: mmsi, dwt, DWT: dwt } : vessel.ais
                 });
             });
         };
@@ -49542,14 +50005,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 normalizeMatchingRadarCandidates([...polScopedAisVessels, ...openShipsVessels, ...predictiveVessels])
             );
             const taxonomyFilter = applyStrictRadarTaxonomyFilter(enrichedCandidates, response.selectedTaxonomies);
-            const matches = taxonomyFilter.vessels.sort((first, second) => {
-                    const firstDistance = Number(first?.ais?.currentDistanceToLoadPort);
-                    const secondDistance = Number(second?.ais?.currentDistanceToLoadPort);
-                    if (Number.isFinite(firstDistance) && Number.isFinite(secondDistance)) return firstDistance - secondDistance;
-                    if (Number.isFinite(firstDistance)) return -1;
-                    if (Number.isFinite(secondDistance)) return 1;
-                    return (Number(second?.scores?.overall) || 0) - (Number(first?.scores?.overall) || 0);
-                });
+            const matches = orderMatchingVesselsForDisplay(taxonomyFilter.vessels, window.matchingStrictTechnicalFilter === true);
             const sourceCounts = window.renderMatchingSourceCounts?.(matches)
                 || window.deriveMatchingSourceCounts?.(matches)
                 || { DATABRIDGE: 0, AIS_LIVE: 0, OPENSHIPS: 0 };
@@ -49591,7 +50047,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 source: 'matching-radar-sweep',
                 executionState: 'radar-sweep',
                 hydratedBy: 'matching-radar-button',
-                resultSourceLabel: 'Ranking Radar AIS / OpenShips',
+                resultSourceLabel: 'Ranking Datalastic (AIS) / AISStream / OpenShips REST',
                 scoreFallbackLabel: 'Telemetría real',
                 showDueDiligence: true
             });
@@ -49829,7 +50285,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 return vessels;
             })().catch(error => {
                 window.RadarGlobalControl.setState({ mode: 'frozen', status: 'error', frozenAt: new Date().toISOString(), source: options.source || 'radar-live' });
-                const message = error && error.message ? error.message : 'No se pudo completar la consulta REST en vivo de OpenShips.';
+                const message = error && error.message ? error.message : 'No se pudo completar la consulta Datalastic (AIS) en vivo.';
                 if (typeof showToast === 'function') showToast(message, false, 'error');
                 window.openShipsVesselsCache = [];
                 window.openShipsVesselsCacheLoaded = false;
@@ -63304,7 +63760,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 vesselClass: vesselType || 'Unknown',
                 shipType: vesselType,
                 data_source: 'radar_live',
-                source: 'LIVE_AIS'
+                source: 'DATALASTIC_AIS',
+                source_origin: 'DATALASTIC_AIS',
+                source_origins: ['DATALASTIC_AIS']
             };
         }
 
@@ -63346,13 +63804,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
 
             const request = (async () => {
                 try {
-                    const radiusNm = Math.min(50, Math.max(1, Number(options.radiusNm || window.AIS_PROSPECTION_RADII_NM?.POL || 10)));
-                    const boundingBox = getLiveAisBoundingBox(polCoordinates, radiusNm);
+                    const requestedRadiusNm = Math.min(5000, Math.max(1, Number(options.radiusNm || window.AIS_PROSPECTION_RADII_NM?.POL || 1000)));
+                    const datalasticRadiusNm = Math.min(50, requestedRadiusNm);
+                    const boundingBox = getLiveAisBoundingBox(polCoordinates, datalasticRadiusNm);
                     if (!boundingBox) throw new Error('No se pudo determinar la Bounding Box AIS activa.');
                     const params = new URLSearchParams({
                         lat: String(polCoordinates.lat),
                         lon: String(polCoordinates.lon),
-                        radius: String(radiusNm)
+                        radius: String(datalasticRadiusNm)
                     });
                     const openShipsEndpoint = `/api/internal/ais/radar-traffic?${params.toString()}`;
                     const openShipsRequest = { headers: { Accept: 'application/json' } };
@@ -63420,7 +63879,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     }
                     return window.openShipsVesselsCache;
                 } catch (error) {
-                    console.warn('[OpenShips Radar] Consulta REST en vivo no disponible; no se reutiliza ningún snapshot anterior.', error);
+                    console.warn('[Datalastic Radar] Consulta AIS en vivo no disponible; no se reutiliza ningún snapshot anterior.', error);
                     window.openShipsVesselsCache = [];
                     window.openShipsVesselsCacheLoaded = false;
                     window.liveAisAuthoritativeSnapshotLoaded = false;

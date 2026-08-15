@@ -27,16 +27,22 @@ function normalizeCalculationContractFields(value: Record<string, unknown>) {
     const match = values.map(Number).find((item) => Number.isFinite(item) && item > 0);
     return match || 0;
   };
-  const laydays = firstText(laycan.laydays, laycan.start, route.laydays, route.laycan, value.laydays, value.laycanDate);
-  const cancelling = firstText(laycan.cancelling, laycan.end, route.cancelling, value.cancelling, value.cancellingDate);
+  const laydays = firstText(laycan.laydays, laycan.start, route.laydays, route.laycan_start, route.laycan, value.laydays, value.laycanDate, value.laycan_start);
+  const cancelling = firstText(laycan.cancelling, laycan.end, route.cancelling, route.laycan_end, value.cancelling, value.cancellingDate, value.laycan_end);
   const cargoQuantity = firstPositiveNumber(cargo.cargoQuantity, cargo.quantity, value.cargoQuantity, value.cargoQty, value.cargo);
   const cargoType = firstText(cargo.typeLabel, cargo.cargoDescription, value.cargoType, value.cargoProduct, value.cargoTypeManual);
   const loadRate = firstPositiveNumber(cargo.loadRate, value.loadRate);
   const dischargeRate = firstPositiveNumber(cargo.dischargeRate, value.dischargeRate, value.dischRate);
   return {
     ...value,
-    route: { ...route, laydays, cancelling, laycan: laydays },
+    route: { ...route, laydays, cancelling, laycan: laydays, laycan_start: laydays, laycan_end: cancelling },
     laycan: { laydays, cancelling },
+    laydays,
+    cancelling,
+    laycanDate: laydays,
+    cancellingDate: cancelling,
+    laycan_start: laydays,
+    laycan_end: cancelling,
     cargo: {
       ...cargo,
       quantity: cargoQuantity,
