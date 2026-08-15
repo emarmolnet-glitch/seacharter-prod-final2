@@ -69,7 +69,11 @@ test('ranking checkbox activates the estimator and synchronized vessel detail', 
   assert.match(indexSource, /accent-color: #0891b2/);
   assert.match(indexSource, /data-active-estimator-vessel="\$\{isActive\}"/);
   assert.match(indexSource, /window\.GlobalStore\.calculatorVessel = vessel/);
-  assert.match(indexSource, /applyResolvedVesselToCalculator\(vessel, vessel\.vessel_name\)/);
+  assert.match(indexSource, /calculateDataBridgeRecommendationBallast\(vessel\)/);
+  assert.match(indexSource, /calculateRouteWithChokepoints\(origin, destination, \{ allowGeodesicFallback: false \}\)/);
+  assert.match(indexSource, /applyResolvedVesselToCalculator\(vesselWithRoute, vesselWithRoute\.vessel_name\)/);
+  assert.match(indexSource, /applyMatchingCandidate\?\.\(\{/);
+  assert.match(indexSource, /lastreCoordinates: ballastRoute\.coordinates/);
   assert.match(indexSource, /new CustomEvent\('vessel-selection:changed'/);
   assert.match(indexSource, /card\.dataset\.activeEstimatorVessel = String\(isActive\)/);
 });

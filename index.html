@@ -4406,16 +4406,6 @@
             border-radius: 7px !important;
         }
 
-        #matching-action-dock #commercial-nlp-send-btn {
-            background: #047857 !important;
-            border-color: #065f46 !important;
-            color: #ffffff !important;
-        }
-
-        #matching-action-dock #commercial-nlp-send-btn:hover:not(:disabled) {
-            background: #065f46 !important;
-        }
-
         #matching-action-dock #btnGenerateReport[aria-pressed="true"] {
             background: #bbf7d0 !important;
             border-color: #4ade80 !important;
@@ -13789,9 +13779,9 @@
                                 <div id="matching-databridge-status-block" class="min-h-[78px] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600 transition-colors duration-200" role="status" aria-live="polite" data-telemetry-state="pending" data-http-status="">
                                     <div class="flex items-center gap-1.5 font-black text-slate-700">
                                         <i class="fa-regular fa-circle text-slate-400" data-telemetry-icon aria-hidden="true"></i>
-                                        <strong>Data Bridge</strong>
+                                        <strong>Neon DB</strong>
                                     </div>
-                                    <span id="matching-databridge-status-text" class="mt-1 block text-[11px] font-semibold leading-snug" data-telemetry-value>Esperando envío</span>
+                                    <span id="matching-databridge-status-text" class="mt-1 block text-[11px] font-semibold leading-snug" data-telemetry-value>Candidatos disponibles para sincronizar</span>
                                 </div>
                             </div>
                         </div>
@@ -13828,17 +13818,12 @@
                                     </div>
                                     <div id="matching-action-dock" class="flex flex-row flex-wrap items-center gap-3" aria-label="Acciones del motor de coincidencias">
                                         <button id="btn-run-matching" onclick="handleMatchingExecutionClick(event)" disabled aria-disabled="true" aria-describedby="matching-execution-validation btn-matching-subtitle" data-matching-ready="false" data-ready-vessel-count="0" data-execution-valid="false" class="matching-action-button whitespace-nowrap px-4 py-2 bg-[#004e64] hover:bg-[#003f52] text-white font-black text-xs uppercase rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-[#004e64] disabled:cursor-not-allowed disabled:opacity-45">
-                                            <i class="fa-solid fa-play"></i>
-                                            Encontrar Match / Find Vessels
+                                            <i class="fa-solid fa-rotate"></i>
+                                            <span>SINCRONIZAR CANDIDATOS (NEON DB)</span>
                                         </button>
-                                        <div data-radar-global-control data-radar-context="matching"></div>
                                         <button id="btnGenerateReport" type="button" onclick="toggleMatchingAuditMode()" aria-pressed="false" class="matching-action-button whitespace-nowrap px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-black text-xs uppercase rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-slate-600 focus:outline-none cursor-pointer">
                                             <i class="fa-solid fa-database"></i>
                                             <span>MODO AUDITORÍA</span>
-                                        </button>
-                                        <button id="commercial-nlp-send-btn" onclick="sendCommercialNlpToDataBridge()" disabled aria-disabled="true" data-databridge-transmission="true" title="Ejecuta coincidencias antes de enviar a Data Bridge" class="matching-action-button whitespace-nowrap px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-black text-xs uppercase rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-emerald-800 disabled:cursor-not-allowed disabled:opacity-45">
-                                            <i class="fa-solid fa-paper-plane"></i>
-                                            Enviar a Data Bridge
                                         </button>
                                         <div class="shrink-0 md:ml-auto" data-datalastic-credit-counter data-credit-variant="toolbar" aria-live="polite"></div>
                                         <div id="sync-container" class="hidden w-64 shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 shadow-sm" role="status" aria-live="polite" aria-atomic="true">
@@ -18891,7 +18876,7 @@
                     ? 'Sincronizado'
                     : state === 'error'
                         ? `Error de Red${httpStatus ? ` / ${httpStatus}` : ''}`
-                        : 'Esperando envío';
+                        : 'Candidatos disponibles para sincronizar';
             updateSequentialTelemetryBlock(
                 'matching-databridge-status-block',
                 state,
@@ -20625,11 +20610,52 @@
                 draft: Number.isFinite(draftMeters) ? draftMeters : 0,
                 draft_meters: Number.isFinite(draftMeters) ? draftMeters : 0,
                 speed: Number.isFinite(speedKnots) ? speedKnots : 0,
+                latitude: Number.isFinite(parseRecommendationNumber(readRecommendationValue(recommendation, ['latitude', 'lat', 'Latitude'], Number.NaN)))
+                    ? parseRecommendationNumber(readRecommendationValue(recommendation, ['latitude', 'lat', 'Latitude'], Number.NaN))
+                    : null,
+                longitude: Number.isFinite(parseRecommendationNumber(readRecommendationValue(recommendation, ['longitude', 'lon', 'lng', 'Longitude'], Number.NaN)))
+                    ? parseRecommendationNumber(readRecommendationValue(recommendation, ['longitude', 'lon', 'lng', 'Longitude'], Number.NaN))
+                    : null,
                 navigation_status: String(navigationStatus || ''),
                 eta,
                 distance_nm: Number.isFinite(distanceNm) ? distanceNm : null,
                 source: recommendation?.source || 'DATABRIDGE'
             };
+        }
+
+        function getDataBridgeRecommendationPol() {
+            const draftPol = window.VoyageDraftStore?.getState?.().draft?.pol;
+            const route = window.getActiveMatchingRoutingRoute?.() || {};
+            const routeCoordinates = route.pol_coordinates || route.polCoordinates || {};
+            const latitude = Number(draftPol?.lat ?? routeCoordinates.lat ?? routeCoordinates.latitude ?? route.lat?.pol);
+            const longitude = Number(draftPol?.lng ?? routeCoordinates.lon ?? routeCoordinates.lng ?? routeCoordinates.longitude ?? route.lon?.pol);
+            const name = String(draftPol?.name || route.pol || document.getElementById('port-pol')?.value || '').trim();
+            return name && Number.isFinite(latitude) && Number.isFinite(longitude)
+                ? { name, lat: latitude, lon: longitude }
+                : null;
+        }
+
+        async function calculateDataBridgeRecommendationBallast(vessel) {
+            const latitude = Number(vessel?.latitude ?? vessel?.lat);
+            const longitude = Number(vessel?.longitude ?? vessel?.lon ?? vessel?.lng);
+            const destination = getDataBridgeRecommendationPol();
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+                throw new Error('El candidato Neon DB no dispone de una posición AIS válida.');
+            }
+            if (!destination) {
+                throw new Error('Configura un POL con coordenadas válidas antes de sincronizar el candidato.');
+            }
+            const origin = {
+                name: vessel?.vessel_name || vessel?.name || 'Posición AIS del candidato',
+                lat: latitude,
+                lon: longitude,
+            };
+            const route = await calculateRouteWithChokepoints(origin, destination, { allowGeodesicFallback: false });
+            const coordinates = normalizeMaritimeRouteCoordinates(route?.coordinates);
+            if (route?.success !== true || coordinates.length < 3 || !Number.isFinite(Number(route?.distance)) || Number(route.distance) <= 0) {
+                throw new Error('El motor marítimo no devolvió un corredor navegable hasta el POL.');
+            }
+            return { ...route, coordinates, origin, destination };
         }
 
         function syncDataBridgeRecommendationSelectionUi(activeKey, vessel) {
@@ -20651,7 +20677,7 @@
             });
         }
 
-        function handleDataBridgeRecommendationSelection(event, index) {
+        async function handleDataBridgeRecommendationSelection(event, index) {
             const checkbox = event?.currentTarget;
             const recommendation = window.lastDataBridgeRecommendations?.[Number(index)];
             if (!checkbox || !recommendation) return false;
@@ -20660,29 +20686,74 @@
                 return false;
             }
 
-            const vessel = normalizeDataBridgeRecommendationForEstimator(recommendation);
-            const activeKey = getDataBridgeRecommendationKey(recommendation, Number(index));
-            window.activeDataBridgeRecommendationKey = activeKey;
-            window.activeVessel = vessel;
-            window.objetoCalculadoraPrincipal = vessel;
-            if (window.GlobalStore) {
-                window.GlobalStore.activeVessel = vessel;
-                window.GlobalStore.calculatorVessel = vessel;
+            checkbox.disabled = true;
+            try {
+                const vessel = normalizeDataBridgeRecommendationForEstimator(recommendation);
+                const ballastRoute = await calculateDataBridgeRecommendationBallast(vessel);
+                const ballastDistanceNm = Math.round(Number(ballastRoute.distance));
+                const activeKey = getDataBridgeRecommendationKey(recommendation, Number(index));
+                const vesselWithRoute = {
+                    ...vessel,
+                    ballastDistanceNm,
+                    ballastRouteSource: ballastRoute.source,
+                };
+                window.activeDataBridgeRecommendationKey = activeKey;
+                window.activeVessel = vesselWithRoute;
+                window.objetoCalculadoraPrincipal = vesselWithRoute;
+                if (window.GlobalStore) {
+                    window.GlobalStore.activeVessel = vesselWithRoute;
+                    window.GlobalStore.calculatorVessel = vesselWithRoute;
+                }
+
+                applyResolvedVesselToCalculator(vesselWithRoute, vesselWithRoute.vessel_name);
+                const draftInput = document.getElementById('vessel-draft');
+                if (draftInput && vesselWithRoute.draft > 0) draftInput.value = String(vesselWithRoute.draft);
+                const ballastInput = document.getElementById('dist-ballast');
+                if (ballastInput) {
+                    ballastInput.value = String(ballastDistanceNm);
+                    ballastInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    ballastInput.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                if (typeof State !== 'undefined') State.distBallast = ballastDistanceNm;
+                window.SeaCharterStore?.set?.({
+                    distBallast: ballastDistanceNm,
+                    portBallast: ballastRoute.origin.name,
+                }, { source: 'matching-neon-maritime', force: true });
+                window.VoyageDraftStore?.getState?.().applyMatchingCandidate?.({
+                    ballastDistanceNm,
+                    lastreCoordinates: ballastRoute.coordinates,
+                    vessel: vesselWithRoute,
+                });
+                const liveBallastKey = String(vesselWithRoute.imo || vesselWithRoute.vessel_name || '').trim().toUpperCase();
+                window.matchingLiveBallastResults = window.matchingLiveBallastResults || {};
+                window.matchingLiveBallastResults[liveBallastKey] = {
+                    distance: ballastDistanceNm,
+                    coordinates: ballastRoute.coordinates,
+                    source: ballastRoute.source,
+                    eta: vesselWithRoute.eta,
+                };
+                if (vesselWithRoute.eta && typeof setEtaRadarFromSystem === 'function') setEtaRadarFromSystem(vesselWithRoute.eta, 'databridge-ranking');
+                syncDataBridgeRecommendationSelectionUi(activeKey, vesselWithRoute);
+
+                window.dispatchEvent(new CustomEvent('vessel-selection:changed', {
+                    detail: {
+                        activeVessel: vesselWithRoute,
+                        ballastDistanceNm,
+                        ballastCoordinates: ballastRoute.coordinates,
+                        source: 'databridge-ranking',
+                    }
+                }));
+                if (typeof scheduleReactiveEngine === 'function') scheduleReactiveEngine();
+                else if (typeof runEngine === 'function') runEngine();
+                if (typeof showToast === 'function') showToast(`${vesselWithRoute.vessel_name} sincronizado con ${ballastDistanceNm} NM de lastre marítimo`);
+                return true;
+            } catch (error) {
+                checkbox.checked = false;
+                if (typeof showToast === 'function') showToast(error?.message || 'No fue posible sincronizar el candidato Neon DB.', false, 'error');
+                return false;
+            } finally {
+                checkbox.disabled = false;
             }
-
-            applyResolvedVesselToCalculator(vessel, vessel.vessel_name);
-            const draftInput = document.getElementById('vessel-draft');
-            if (draftInput && vessel.draft > 0) draftInput.value = String(vessel.draft);
-            if (vessel.eta && typeof setEtaRadarFromSystem === 'function') setEtaRadarFromSystem(vessel.eta, 'databridge-ranking');
-            syncDataBridgeRecommendationSelectionUi(activeKey, vessel);
-
-            window.dispatchEvent(new CustomEvent('vessel-selection:changed', {
-                detail: { activeVessel: vessel, source: 'databridge-ranking' }
-            }));
-            if (typeof scheduleReactiveEngine === 'function') scheduleReactiveEngine();
-            else if (typeof runEngine === 'function') runEngine();
-            if (typeof showToast === 'function') showToast(`${vessel.vessel_name} seleccionado para estimación financiera`);
-            return true;
         }
         window.handleDataBridgeRecommendationSelection = handleDataBridgeRecommendationSelection;
 
@@ -27795,7 +27866,7 @@
          * @param {Object} destination - Puerto de destino { name: string, lat: number, lon: number }
          * @returns {Object} { distance: number, coordinates: Array, nodes: Array, success: boolean }
          */
-        async function calculateRouteWithChokepoints(origin, destination) {
+        async function calculateRouteWithChokepoints(origin, destination, options = {}) {
             if (!origin || !destination) {
                 return { distance: 0, coordinates: [], nodes: [], success: false };
             }
@@ -27844,6 +27915,9 @@
                         segmentRoute = await calculateLocalSeaRouteSegment(segStart, segEnd);
                         usedLocalFallback = true;
                     } catch (localError) {
+                        if (options.allowGeodesicFallback === false) {
+                            throw new Error(`No existe una ruta marítima navegable para ${segStart.name} → ${segEnd.name}.`);
+                        }
                         segmentRoute = buildGeodesicFallbackRouteSegment(segStart, segEnd, localError);
                         usedGeodesicFallback = true;
                     }

@@ -25,6 +25,8 @@ test('DraftVoyage centralizes route, laycan, cargo and audited vessel data', () 
   assert.match(storeSource, /routeGeometry: null/);
   assert.match(storeSource, /applyTrackingAudit/);
   assert.match(storeSource, /applyTrackingRoute/);
+  assert.match(storeSource, /applyMatchingCandidate/);
+  assert.match(storeSource, /matching-neon-maritime/);
   assert.match(storeSource, /lastreCoordinates: normalizedCoordinates\.length > 2/);
   assert.match(entrySource, /window\.VoyageDraftStore = voyageStore/);
   assert.match(entrySource, /calculatorStore\.subscribe/);
@@ -67,7 +69,11 @@ test('calculator confirms the final snapshot in Neon and clears the draft', () =
   assert.match(routeConfiguratorSource, /draftVoyage\.ballastDistanceNm/);
   assert.match(routeConfiguratorSource, /const sanitizedPayload: CharterPartyPayload = \{/);
   assert.match(routeConfiguratorSource, /body: JSON\.stringify\(sanitizedPayload\)/);
-  assert.doesNotMatch(routeConfiguratorSource, /vesselDwt:|vesselGt:|vesselFlag:|vesselYearBuilt:|mmsi:/);
+  assert.match(routeConfiguratorSource, /vesselDwt: payload\.vesselDwt/);
+  assert.match(routeConfiguratorSource, /vesselGt: payload\.vesselGt/);
+  assert.match(routeConfiguratorSource, /vesselFlag: payload\.vesselFlag/);
+  assert.match(routeConfiguratorSource, /vesselYearBuilt: payload\.vesselYearBuilt/);
+  assert.match(routeConfiguratorSource, /mmsi: payload\.mmsi/);
   assert.match(routeConfiguratorSource, /voyageStore\.getState\(\)\.clearDraft\(\)/);
   assert.doesNotMatch(entrySource, /fetch\('\/api\/v1\/charter-party'/);
   assert.doesNotMatch(charterSource, /vesselTechnical|draftSnapshot/);

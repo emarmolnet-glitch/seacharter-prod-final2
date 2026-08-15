@@ -75,6 +75,11 @@ interface CharterPartyPayload {
   cargoName: string;
   cargoQuantityMt: number;
   ballastDistanceNm: number;
+  vesselDwt: number;
+  vesselGt: number;
+  vesselFlag: string;
+  vesselYearBuilt: number;
+  mmsi: string;
 }
 
 interface SeaCharterStore {
@@ -141,10 +146,10 @@ function readCharterPartyPayload(validation: DraftValidationResponse): CharterPa
   const cargoState = asRecord(calculatorWindow.readValidatedCargoOperationState?.());
   const routeContext = asRecord(calculatorWindow.coreProMatchingRouteContext);
   const polCoordinates = readCoordinates(
-    calculatorState.polCoordinates || globalStore.polCoordinates || routeContext.polCoordinates,
+    draftVoyage.pol || calculatorState.polCoordinates || globalStore.polCoordinates || routeContext.polCoordinates,
   );
   const podCoordinates = readCoordinates(
-    calculatorState.podCoordinates || globalStore.podCoordinates || routeContext.podCoordinates,
+    draftVoyage.pod || calculatorState.podCoordinates || globalStore.podCoordinates || routeContext.podCoordinates,
   );
   const imoNumber = firstText(
     readTextValue("vessel-identity-imo"),
@@ -177,23 +182,26 @@ function readCharterPartyPayload(validation: DraftValidationResponse): CharterPa
     ).toUpperCase(),
     imoNumber,
     vesselName,
-    polName: firstText(readTextValue("port-pol"), calculatorState.pol),
+    polName: firstText(draftVoyage.pol?.name, readTextValue("port-pol"), calculatorState.pol),
     polLatitude: polCoordinates.latitude,
     polLongitude: polCoordinates.longitude,
-    podName: firstText(readTextValue("port-pod"), calculatorState.pod),
+    podName: firstText(draftVoyage.pod?.name, readTextValue("port-pod"), calculatorState.pod),
     podLatitude: podCoordinates.latitude,
     podLongitude: podCoordinates.longitude,
     laydaysStartAt: firstText(
+      draftVoyage.laycan?.laydays,
       calculatorState.laydays,
       calculatorState.laycanDate,
       readTextValue("map-laycan-date", "gc-laycan-date", "asb-laycan-date"),
     ),
     cancellingAt: firstText(
+      draftVoyage.laycan?.cancelling,
       calculatorState.cancelling,
       calculatorState.cancellingDate,
       readTextValue("map-cancelling-date", "gc-cancel-date", "asb-cancel-date"),
     ),
     cargoName: firstText(
+      draftVoyage.cargo?.description,
       cargoState.cargoProduct,
       cargoState.cargoType,
       calculatorState.cargoProduct,
@@ -201,8 +209,13 @@ function readCharterPartyPayload(validation: DraftValidationResponse): CharterPa
       readTextValue("cargo-product", "cargo-type"),
       "Carga contractual",
     ),
-    cargoQuantityMt: Number.isFinite(cargoQuantityMt) && cargoQuantityMt > 0 ? cargoQuantityMt : 0,
+    cargoQuantityMt: draftVoyage.cargo?.quantityMt || (Number.isFinite(cargoQuantityMt) && cargoQuantityMt > 0 ? cargoQuantityMt : 0),
     ballastDistanceNm: Number.isFinite(ballastDistanceNm) && ballastDistanceNm > 0 ? ballastDistanceNm : 0,
+    vesselDwt: Number(activeVessel.dwt) || 0,
+    vesselGt: Number(activeVessel.gt ?? activeVessel.grossTonnage ?? activeVessel.gross_tonnage) || 0,
+    vesselFlag: firstText(activeVessel.flag),
+    vesselYearBuilt: Number(activeVessel.yearBuilt ?? activeVessel.year_built ?? activeVessel.builtYear ?? activeVessel.built_year) || 0,
+    mmsi: firstText(activeVessel.mmsi).replace(/\D/g, ""),
   };
 }
 
@@ -426,6 +439,11 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
         cargoName: payload.cargoName,
         cargoQuantityMt: payload.cargoQuantityMt,
         ballastDistanceNm: payload.ballastDistanceNm,
+        vesselDwt: payload.vesselDwt,
+        vesselGt: payload.vesselGt,
+        vesselFlag: payload.vesselFlag,
+        vesselYearBuilt: payload.vesselYearBuilt,
+        mmsi: payload.mmsi,
       };
       const missingFields = [
         ["referencia contractual", payload.contractRef],

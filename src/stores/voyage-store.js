@@ -57,6 +57,9 @@ function normalizeVessel(vessel) {
     const imo = cleanText(vessel.imo || vessel.imoNumber || vessel.imo_number).replace(/\D/g, '');
     const name = cleanText(vessel.name || vessel.vesselName || vessel.vessel_name);
     if (!imo && !name) return null;
+    const latitude = Number(vessel.latitude ?? vessel.lat ?? vessel.position?.latitude ?? vessel.position?.lat);
+    const longitude = Number(vessel.longitude ?? vessel.lon ?? vessel.lng ?? vessel.position?.longitude ?? vessel.position?.lon ?? vessel.position?.lng);
+    const speedKnots = Number(vessel.speedKnots ?? vessel.speed_over_ground ?? vessel.speedOverGround ?? vessel.speed ?? vessel.sog);
     return {
         name,
         imo,
@@ -65,6 +68,10 @@ function normalizeVessel(vessel) {
         gt: cleanNumber(vessel.gt ?? vessel.grossTonnage ?? vessel.gross_tonnage),
         flag: cleanText(vessel.flag),
         yearBuilt: cleanNumber(vessel.yearBuilt ?? vessel.year_built ?? vessel.builtYear ?? vessel.built_year),
+        latitude: Number.isFinite(latitude) ? latitude : null,
+        longitude: Number.isFinite(longitude) ? longitude : null,
+        speedKnots: Number.isFinite(speedKnots) && speedKnots >= 0 ? speedKnots : null,
+        positionUpdatedAt: cleanText(vessel.positionUpdatedAt || vessel.position_updated_at || vessel.timestamp || vessel.updatedAt) || null,
     };
 }
 
@@ -165,6 +172,23 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
                 vessel: normalizeVessel(vessel) || current.draft.vessel,
                 updatedAt: new Date().toISOString(),
                 lastSource: 'tracking-audit',
+            },
+        };
+    }),
+    applyMatchingCandidate: ({ ballastDistanceNm, lastreCoordinates, vessel } = {}) => set((current) => {
+        const normalizedDistance = cleanNonNegativeNumber(ballastDistanceNm);
+        const normalizedCoordinates = normalizeRouteCoordinates(lastreCoordinates);
+        return {
+            draft: {
+                ...current.draft,
+                ballastDistanceNm: normalizedDistance ?? current.draft.ballastDistanceNm,
+                ballastDistanceSource: normalizedDistance !== null
+                    ? 'matching-neon-maritime'
+                    : current.draft.ballastDistanceSource,
+                lastreCoordinates: normalizedCoordinates.length > 2 ? normalizedCoordinates : current.draft.lastreCoordinates,
+                vessel: normalizeVessel(vessel) || current.draft.vessel,
+                updatedAt: new Date().toISOString(),
+                lastSource: 'matching-neon-maritime',
             },
         };
     }),
