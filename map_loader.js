@@ -962,7 +962,7 @@
     function startAisProxyPolling(endpoint, mapInstance, options) {
         if (typeof window !== 'undefined' && window.shouldBlockSecondaryFleetSources?.()) {
             stopAisProxyPolling();
-            return { started: false, reason: window.hasPriorityOpenShipsData?.() ? 'openships-priority-active' : 'openships-priority-pending' };
+            return { started: false, reason: window.hasPriorityDatalasticData?.() ? 'datalastic-priority-active' : 'datalastic-priority-pending' };
         }
         const opts = options || {};
         aisProxyPollingState.endpoint = endpoint || aisProxyPollingState.endpoint;

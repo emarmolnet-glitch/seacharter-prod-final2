@@ -157,7 +157,6 @@
             if (/^\/api\/route\/?$/i.test(path)) return 'routing';
             if (/^\/api\/get-bunker-prices\/?$/i.test(path)) return 'bunker-prices';
             if (/^\/(?:api|\.netlify\/functions)\/databridge-/i.test(path)) return 'databridge';
-            if (/^\/api\/openships\/live-status\/?$/i.test(path)) return 'openships-radar';
             if (/^\/(?:api|\.netlify\/functions)\/(?:get-vessels|vessels-filter|audit-vessels|matching-local|trigger-ais-sweep)\/?$/i.test(path)) return 'radar';
             return '';
         } catch (_) {

@@ -28,7 +28,7 @@ test('density map consumes the isolated AIS resolver', () => {
   assert.match(mapSource, /return window\.setRenderFleet\(densityVessels\)/);
   assert.match(markerSource, /const displayVessels = getDensityDisplayVessels\(\)/);
   assert.match(markerSource, /GlobalFleetGlobe\.updateVessels\(displayVessels, 'density'\)/);
-  assert.doesNotMatch(mapSource, /updateOpenShipsRadar|fetch\s*\(/);
+  assert.doesNotMatch(mapSource, /updateDatalasticRadar|fetch\s*\(/);
 });
 
 test('density source preserves coordinates and previous raw vessels across tab changes', () => {
@@ -40,12 +40,12 @@ test('density source preserves coordinates and previous raw vessels across tab c
   assert.match(source, /metadata\.replaceEmpty === true[\s\S]*nextRawVessels\.length > 0/);
 });
 
-test('density initialization awaits the current OpenShips snapshot before mounting', () => {
+test('density initialization awaits the current Datalastic snapshot before mounting', () => {
   const initStart = mapSource.indexOf('function initAisMap()');
   const initEnd = mapSource.indexOf('function cancelAisMapAnimationFrame()', initStart);
   const initSource = mapSource.slice(initStart, initEnd);
-  assert.doesNotMatch(mapSource, /ensureOpenShipsDensitySnapshot/);
-  assert.doesNotMatch(initSource, /updateOpenShipsRadar|fetch\s*\(|setTimeout\(async/);
+  assert.doesNotMatch(mapSource, /ensureDatalasticDensitySnapshot/);
+  assert.doesNotMatch(initSource, /updateDatalasticRadar|fetch\s*\(|setTimeout\(async/);
   assert.match(initSource, /const displayVessels = getDensityMapSourceVessels\(\)/);
 });
 

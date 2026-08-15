@@ -8,7 +8,7 @@ export default async (req: Request) => {
   return Response.json({
     success: false,
     error: "AISSTREAM_BACKEND_DISABLED",
-    message: "AISStream se ejecuta exclusivamente en el navegador para el MMSI activo de Tracking. Radar utiliza OpenShips REST.",
+    message: "AISStream se ejecuta exclusivamente en el navegador para el MMSI activo de Tracking. Radar utiliza exclusivamente Datalastic.",
   }, {
     status: 410,
     headers: { "cache-control": "no-store" },

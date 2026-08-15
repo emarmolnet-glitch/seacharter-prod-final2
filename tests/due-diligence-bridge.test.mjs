@@ -413,7 +413,7 @@ test('discarding a Density vessel without IMO falls back to MMSI and removes it 
   let persistedVessel = null;
   let densityRefreshes = 0;
   const { bridge, events, window } = loadBridge({
-    openShipsVesselsCache: [{ ...rawVessel }],
+    datalasticRadarVessels: [{ ...rawVessel }],
     GlobalStore: {
       rawVessels: [{ ...rawVessel }],
       filteredVessels: [{ ...rawVessel }],
@@ -442,7 +442,7 @@ test('discarding a Density vessel without IMO falls back to MMSI and removes it 
   assert.equal(persistedVessel.status, 'discarded');
   assert.equal(window.GlobalStore.rawVessels.length, 0);
   assert.equal(window.GlobalStore.filteredVessels.length, 0);
-  assert.equal(window.openShipsVesselsCache.length, 0);
+  assert.equal(window.datalasticRadarVessels.length, 0);
   assert.deepEqual(window.GlobalStore.discardedVesselMmsis, ['224123456']);
   assert.equal(densityRefreshes, 1);
   assert.ok(events.some(event => event.type === 'vessel:discarded' && event.detail.mmsi === '224123456'));
@@ -564,11 +564,11 @@ test('external non-empty values override master data while null values preserve 
   assert.equal(merged.year_built, 2010);
 });
 
-test('technical merge enriches fields without changing OpenShips coordinates', () => {
+test('technical merge enriches fields without changing Datalastic coordinates', () => {
   const { bridge } = loadBridge();
   const vessel = {
     mmsi: '224123456',
-    vesselName: 'OPENSHIPS RAW',
+    vesselName: 'DATALASTIC RAW',
     latitude: 36.1234,
     longitude: -5.4321,
     MetaData: { latitude: 36.1234, longitude: -5.4321 },
@@ -633,7 +633,7 @@ test('Density optimistic save replaces raw AIS technical values without touching
   const rawVessel = {
     imo: '9876543',
     mmsi: '224123456',
-    vesselName: 'OPENSHIPS RAW',
+    vesselName: 'DATALASTIC RAW',
     vesselClass: '70',
     vesselType: '70',
     shipType: '70',
@@ -645,7 +645,7 @@ test('Density optimistic save replaces raw AIS technical values without touching
   };
   let densityRefreshes = 0;
   const { bridge, events, window } = loadBridge({
-    openShipsVesselsCache: [{ ...rawVessel }],
+    datalasticRadarVessels: [{ ...rawVessel }],
     GlobalStore: {
       rawVessels: [{ ...rawVessel }],
       filteredVessels: [{ ...rawVessel }],
@@ -680,8 +680,8 @@ test('Density optimistic save replaces raw AIS technical values without touching
   assert.equal(window.GlobalStore.filteredVessels[0].vesselClass, 'Bulk Carrier');
   assert.equal(window.GlobalStore.vessels[0].vesselClass, 'Bulk Carrier');
   assert.equal(window.GlobalStore.renderedAisVessels[0].vesselClass, 'Bulk Carrier');
-  assert.equal(window.openShipsVesselsCache[0].vesselClass, 'Bulk Carrier');
-  assert.equal(window.openShipsVesselsCache[0].MetaData.ShipType, 'Bulk Carrier');
+  assert.equal(window.datalasticRadarVessels[0].vesselClass, 'Bulk Carrier');
+  assert.equal(window.datalasticRadarVessels[0].MetaData.ShipType, 'Bulk Carrier');
   assert.equal(window.GlobalStore.rawVessels[0].vesselClassSource, 'VESSELS_MASTER');
   assert.equal(window.GlobalStore.rawVessels[0].gross_tonnage, 25_000);
   assert.equal(window.GlobalStore.rawVessels[0].loa_meters, 155.4);
@@ -698,10 +698,10 @@ test('Density optimistic save replaces raw AIS technical values without touching
   assert.ok(events.some(event => event.type === 'vessel:density-optimistic-update'));
 });
 
-test('store hydration updates matching and OpenShips records and clears missing-data warnings', () => {
+test('store hydration updates matching and Datalastic records and clears missing-data warnings', () => {
   const rawVessel = {
     mmsi: '224123456',
-    vesselName: 'OPENSHIPS RAW',
+    vesselName: 'DATALASTIC RAW',
     latitude: 36.1234,
     longitude: -5.4321,
   };
@@ -713,14 +713,14 @@ test('store hydration updates matching and OpenShips records and clears missing-
     audit: { reasons: ['DWT no disponible'] },
   };
   const { bridge, events, window } = loadBridge({
-    openShipsVesselsCache: [rawVessel],
+    datalasticRadarVessels: [rawVessel],
     lastMatchingEngineResults: [match],
     matchingResultsState: { vessels: [match], eligibleVessels: [] },
     GlobalStore: { rawVessels: [rawVessel], vessels: [], filteredVessels: [], renderedAisVessels: [], matchingVessels: [match] },
   });
 
   bridge.hydrateStores(
-    { mmsi: '224123456', name: 'OPENSHIPS RAW' },
+    { mmsi: '224123456', name: 'DATALASTIC RAW' },
     { imo: '9876543', dwt: 42_000, flag: 'Spain', yearBuilt: 2018, draft: 9.4 },
   );
 

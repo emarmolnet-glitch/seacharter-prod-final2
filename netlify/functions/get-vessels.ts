@@ -1094,7 +1094,7 @@ export async function handleGetVessels(req: Request) {
       vessels: [],
       source: "aisstream-client-only",
       error: "AISSTREAM_BACKEND_DISABLED",
-      message: "Los barridos AISStream desde backend están deshabilitados. Radar usa OpenShips REST y Tracking abre AISStream en el navegador.",
+      message: "Los barridos AISStream desde backend están deshabilitados. Radar usa exclusivamente Datalastic y Tracking abre AISStream en el navegador.",
     }, { status: 410 });
   }
 

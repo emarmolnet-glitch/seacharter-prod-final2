@@ -41,7 +41,7 @@ test('tracking header switches between GIS and the executive laytime dashboard',
   assert.match(executiveSource, /text-cyan-600/);
   assert.match(executiveSource, /text-emerald-600/);
   assert.match(executiveSource, /Auditoría de Plancha & Tiempos de Puerto/);
-  assert.doesNotMatch(executiveSource, /allowedHours: 72|openships-geofence|iot-performance/);
+  assert.doesNotMatch(executiveSource, /allowedHours: 72|datalastic-geofence|iot-performance/);
   assert.match(executiveSource, /Array\.isArray\(voyageData\?\.alerts\)/);
   assert.match(executiveSource, /if \(isLoading\) return <DashboardLoading \/>/);
   assert.match(executiveSource, /estimatedDemurrageUSD/);
@@ -200,7 +200,7 @@ test('tracking resolves vessel master and AIS without requiring a contract', () 
   assert.match(scriptSource, /heading/);
   assert.doesNotMatch(scriptSource, /async function loadTrackingVessel\(rawQuery, silent = false\) \{\s*if \(!hasTrackingVoyageData\(\)\)/);
   assert.match(scriptSource, /Tracking Libre no calcula rutas/);
-  assert.match(scriptSource, /OpenShips centra el mapa/);
+  assert.match(scriptSource, /Datalastic centra el mapa/);
 });
 
 test('tracking hydrates contractual fields and publishes changes through Zustand', () => {
@@ -281,7 +281,7 @@ test('pre-fixture tracking draws an ephemeral ballast route while free mode stay
   assert.match(scriptSource, /ruta efímera/);
   assert.match(scriptSource, /routeKind === 'ballast'/);
   assert.match(scriptSource, /Tracking Libre solo geolocaliza/);
-  assert.match(scriptSource, /OPENSHIPS_REST_LIVE|OpenShips/);
+  assert.match(scriptSource, /DATALASTIC_REST_LIVE|Datalastic/);
   assert.doesNotMatch(scriptSource, /No hay un viaje activo en Neon para calcular la ruta/);
 });
 
@@ -315,7 +315,7 @@ test('vessel live profile combines master data with the latest AIS position', ()
   assert.match(vesselEndpointSource, /speed_over_ground/);
   assert.match(vesselEndpointSource, /course_over_ground/);
   assert.match(vesselEndpointSource, /telemetryLive/);
-  assert.match(vesselEndpointSource, /"OPENSHIPS_(?:REST_LIVE|BUFFER)"/);
+  assert.match(vesselEndpointSource, /"DATALASTIC_(?:REST_LIVE|BUFFER)"/);
   assert.match(vesselEndpointSource, /last_seen_at DESC/);
   assert.match(vesselEndpointSource, /positionSource/);
   assert.match(vesselEndpointSource, /found: false/);

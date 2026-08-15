@@ -23,7 +23,7 @@ test('density module blocks automatic AIS reads until POL coordinates exist', ()
   const initEnd = indexSource.indexOf('function destroyAisMap()', initStart);
   const initSource = indexSource.slice(initStart, initEnd);
   assert.ok(initStart >= 0 && initEnd > initStart);
-  assert.doesNotMatch(initSource, /fetch\s*\(|updateOpenShipsRadar|ensureOpenShipsDensitySnapshot/);
+  assert.doesNotMatch(initSource, /fetch\s*\(|updateDatalasticRadar|ensureDatalasticDensitySnapshot/);
   assert.match(initSource, /const displayVessels = getDensityMapSourceVessels\(\)/);
   assert.match(indexSource, /function getDensityReactiveVessels\(\)[\s\S]*GlobalStore\?\.matchingVessels/);
 });

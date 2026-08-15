@@ -28,7 +28,7 @@ export type AisMatchingRow = QueryResultRow & {
   distance_nm: number;
 };
 
-export type MatchingSourceSystem = "DATABRIDGE" | "AIS_LIVE" | "OPENSHIPS";
+export type MatchingSourceSystem = "DATABRIDGE" | "AIS_LIVE";
 
 export type PaginatedMatchingSourceRow = QueryResultRow & {
   source_system: MatchingSourceSystem;
@@ -83,14 +83,14 @@ export type FindMatchingVesselsRequest = {
   offset?: number;
 };
 
-const MATCHING_SOURCE_SYSTEMS = new Set<MatchingSourceSystem>(["DATABRIDGE", "AIS_LIVE", "OPENSHIPS"]);
+const MATCHING_SOURCE_SYSTEMS = new Set<MatchingSourceSystem>(["DATABRIDGE", "AIS_LIVE"]);
 
 export function normalizeAllowedMatchingSources(value: unknown): MatchingSourceSystem[] {
-  if (!Array.isArray(value)) return ["DATABRIDGE", "AIS_LIVE", "OPENSHIPS"];
+  if (!Array.isArray(value)) return ["DATABRIDGE", "AIS_LIVE"];
   const normalized = [...new Set(value
     .map((source) => String(source || "").trim().toUpperCase())
     .filter((source): source is MatchingSourceSystem => MATCHING_SOURCE_SYSTEMS.has(source as MatchingSourceSystem)))];
-  return normalized.length > 0 ? normalized : ["DATABRIDGE", "AIS_LIVE", "OPENSHIPS"];
+  return normalized.length > 0 ? normalized : ["DATABRIDGE", "AIS_LIVE"];
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

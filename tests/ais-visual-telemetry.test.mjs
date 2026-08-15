@@ -32,7 +32,7 @@ test('tracking marker and Radar fleet consume coordinator endpoints', () => {
   assert.doesNotMatch(trackingSource, /setInterval\(refreshAisConsumptionMonitor/);
   assert.match(trackingSource, /ais:consumption-updated/);
 
-  const radarSource = sliceFunction(indexSource, 'async function updateOpenShipsRadar', 'window.updateOpenShipsRadar = updateOpenShipsRadar');
+  const radarSource = sliceFunction(indexSource, 'async function updateDatalasticRadar', 'window.updateDatalasticRadar = updateDatalasticRadar');
   assert.match(radarSource, /\/api\/internal\/ais\/radar-traffic/);
   assert.doesNotMatch(radarSource, /\/api\/fleet\/live-ais/);
 });

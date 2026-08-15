@@ -44,15 +44,15 @@ test('circuits are isolated by service and critical Radar requests are auto-clas
   const calls = [];
   const window = loadGuard(async input => {
     calls.push(String(input));
-    const status = String(input).includes('openships') ? 429 : 200;
+    const status = String(input).includes('datalastic') ? 429 : 200;
     return { ok: status === 200, status, headers: { get: () => null } };
   });
 
-  await window.fetch('/api/openships/live-status?polLat=1&polLon=2');
+  await window.fetch('/api/datalastic/live-status?polLat=1&polLon=2');
   const routeResponse = await window.fetch('/api/route');
 
   assert.equal(routeResponse.ok, true);
-  assert.equal(window.CoreNetworkGuard.getState('openships-radar').isOpen, true);
+  assert.equal(window.CoreNetworkGuard.getState('datalastic-radar').isOpen, true);
   assert.equal(window.CoreNetworkGuard.getState('routing').isOpen, false);
   assert.equal(window.CoreNetworkGuard.resolveServiceForRequest('/.netlify/functions/get-vessels'), 'radar');
   assert.equal(window.CoreNetworkGuard.resolveServiceForRequest('/api/vessels-filter?radiusNm=2000'), 'radar');
@@ -61,9 +61,9 @@ test('circuits are isolated by service and critical Radar requests are auto-clas
 
 test('polling, bunker caching and Globe fallback use resilient contracts', () => {
   assert.match(indexSource, /DATA_BRIDGE_HTTP_POLL_INTERVAL_MS = 10_000/);
-  assert.match(indexSource, /OPENSHIPS_RADAR_POLL_INTERVAL_MS = 120_000/);
+  assert.match(indexSource, /DATALASTIC_RADAR_POLL_INTERVAL_MS = 120_000/);
   assert.match(indexSource, /getBackoffDelay\([\s\S]*DATA_BRIDGE_HTTP_POLL_MAX_INTERVAL_MS/);
-  assert.match(indexSource, /getBackoffDelay\([\s\S]*OPENSHIPS_RADAR_POLL_MAX_INTERVAL_MS/);
+  assert.match(indexSource, /getBackoffDelay\([\s\S]*DATALASTIC_RADAR_POLL_MAX_INTERVAL_MS/);
   assert.match(indexSource, /BUNKER_INDEX_CACHE_MAX_AGE_MS = 24 \* 60 \* 60 \* 1000/);
   assert.match(indexSource, /network-resilience\.js\?v=20260807-circuit-breaker/);
   assert.match(distIndexSource, /network-resilience\.js\?v=20260807-circuit-breaker/);

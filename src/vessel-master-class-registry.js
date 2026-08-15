@@ -1,7 +1,7 @@
 /**
  * Registro de clases verificadas de buque (vessels_master / Data Bridge).
  *
- * La API de OpenShips entrega una clasificación genérica ("Cargo", "70", ...).
+ * La telemetría AIS puede entregar una clasificación genérica ("Cargo", "70", ...).
  * Cuando un buque ya pasó Due Diligence y quedó guardado en vessels_master con su
  * clase comercial real (ej. "Chemical/Oil Products Tanker"), ese valor es la única
  * fuente de verdad: se sobrescribe la clase del feed tanto en la tabla del radar
