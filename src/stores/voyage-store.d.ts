@@ -9,6 +9,10 @@ export type VoyageVessel = {
   gt: number;
   flag: string;
   yearBuilt: number;
+  latitude: number | null;
+  longitude: number | null;
+  speedKnots: number | null;
+  positionUpdatedAt: string | null;
 };
 export type DraftVoyage = {
   pol: VoyagePort | null;
@@ -27,6 +31,7 @@ export type VoyageStoreState = {
   updateFromCalculator: (state?: Record<string, unknown>) => void;
   setBallastDistance: (payload?: { ballastDistanceNm?: number; source?: string }) => void;
   applyTrackingAudit: (payload?: { ballastDistanceNm?: number; lastreCoordinates?: unknown[]; vessel?: Record<string, unknown> }) => void;
+  applyMatchingCandidate: (payload?: { ballastDistanceNm?: number; lastreCoordinates?: unknown[]; vessel?: Record<string, unknown> }) => void;
   applyTrackingRoute: (payload?: { distanceNm?: number; routeGeometry?: unknown; ballastDistanceNm?: number; lastreCoordinates?: unknown[] }) => void;
   clearDraft: () => void;
   hasOperationalDraft: () => boolean;

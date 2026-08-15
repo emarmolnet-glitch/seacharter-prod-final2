@@ -596,6 +596,16 @@ function populateDraftVoyageInputs(draft = getVoyageDraft()) {
     document.getElementById('tracking-input-cancelling').value = toDateInputValue(draft?.laycan?.cancelling);
     document.getElementById('tracking-input-vessel').value = draft?.vessel?.imo || '';
     document.getElementById('tracking-input-cargo').value = [draft?.cargo?.description, draft?.cargo?.quantityMt && `${formatTrackingNumber(draft.cargo.quantityMt)} MT`].filter(Boolean).join(' · ');
+    if (draft?.vessel) {
+        const hasPosition = Number.isFinite(Number(draft.vessel.latitude)) && Number.isFinite(Number(draft.vessel.longitude));
+        trackingState.basicVessel = {
+            ...draft.vessel,
+            position: hasPosition
+                ? { lat: Number(draft.vessel.latitude), lng: Number(draft.vessel.longitude) }
+                : null,
+            positionSource: 'draft-voyage',
+        };
+    }
     setContractFieldsReadOnly(false);
 }
 
@@ -1040,7 +1050,7 @@ function replaceTrackingMapVessels(vessels, focusedVessel = null) {
 }
 
 function hydrateTrackingFromActiveVessel(activeVessel, focus = false) {
-    if (!hasTrackingVoyageData()) return false;
+    if (!hasTrackingVoyageData() && trackingState.flowMode !== 'audit') return false;
     if (!activeVessel || typeof activeVessel !== 'object') return false;
     const normalized = typeof window.normalizeVesselSelectionPayload === 'function'
         ? window.normalizeVesselSelectionPayload(activeVessel)

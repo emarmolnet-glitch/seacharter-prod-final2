@@ -24,6 +24,8 @@ test("Charter Party endpoint validates contractual identity, route and laycan", 
 });
 
 test("Charter Party endpoint receives a flat technical and ballast payload", () => {
+  assert.match(functionSource, /Object\.values\(body\)\.some\(\(value\) => isRecord\(value\) \|\| Array\.isArray\(value\)\)/);
+  assert.match(functionSource, /exclusivamente campos planos/);
   assert.match(functionSource, /body\.ballastDistanceNm/);
   assert.match(functionSource, /body\.vesselDwt/);
   assert.match(functionSource, /body\.vesselGt/);

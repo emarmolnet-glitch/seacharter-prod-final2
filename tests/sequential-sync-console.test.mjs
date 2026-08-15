@@ -45,8 +45,12 @@ test('matching block consumes MATCHING_EXECUTION_SUCCESS', () => {
   assert.match(source, /`\$\{vessels\.length\} Buque\$\{vessels\.length === 1 \? '' : 's'\} en Caché`/);
 });
 
-test('Data Bridge send control depends only on the matching vessel array', () => {
-  assert.match(source, /id="commercial-nlp-send-btn"[^>]*disabled[^>]*aria-disabled="true"[^>]*data-databridge-transmission="true"/);
+test('Coincidencia removes local radar and Data Bridge send controls without deleting shared services', () => {
+  assert.doesNotMatch(source, /data-radar-global-control data-radar-context="matching"/);
+  assert.doesNotMatch(source, /id="commercial-nlp-send-btn"/);
+  assert.match(source, /SINCRONIZAR CANDIDATOS \(NEON DB\)/);
+  assert.match(source, /window\.executeMatchingRadarSweep/);
+  assert.match(source, /window\.RadarGlobalControl/);
   assert.match(source, /function getDataBridgeTransmissionVessels\(\)[\s\S]*window\.renderedMatchingVessels/);
   assert.match(source, /function setRenderedMatchingVessels\(vessels, metadata = \{\}\)[\s\S]*setDataBridgeTransmissionAvailability\(canonicalVessels\)/);
   assert.match(source, /function setDataBridgeTransmissionAvailability\(matchedVessels = getDataBridgeTransmissionVessels\(\)\)/);
@@ -64,6 +68,7 @@ test('Data Bridge telemetry exposes processing, success and network error states
   assert.match(source, /state === 'processing'[\s\S]*'Sincronizando\.\.\.'/);
   assert.match(source, /state === 'success'[\s\S]*'Sincronizado'/);
   assert.match(source, /`Error de Red\$\{httpStatus \? ` \/ \$\{httpStatus\}` : ''\}`/);
+  assert.doesNotMatch(source, /Esperando envío/);
   assert.match(source, /if \(!visualSyncSucceeded\)/);
 });
 

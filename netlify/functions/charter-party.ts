@@ -60,6 +60,9 @@ export default async (request: Request, context: Context) => {
 
   const body = await request.json().catch(() => null);
   if (!isRecord(body)) return errorResponse(request, 400, "El body debe ser un JSON válido.");
+  if (Object.values(body).some((value) => isRecord(value) || Array.isArray(value))) {
+    return errorResponse(request, 400, "El payload del Charter Party debe contener exclusivamente campos planos.");
+  }
 
   const contractRef = cleanText(body.contractRef, 80).toUpperCase();
   const imoNumber = cleanText(body.imoNumber, 16).replace(/\D/g, "");
@@ -147,8 +150,6 @@ export default async (request: Request, context: Context) => {
     return Response.json({
       success: false,
       error: "Fallo DB",
-      details: error instanceof Error ? error.message : String(error),
-      meta: isRecord(error) ? error.meta ?? null : null,
     }, {
       status: 500,
       headers: headersFor(request),
