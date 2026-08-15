@@ -1,4 +1,4 @@
-import type { Config } from "@netlify/functions";
+import type { Config, Context } from "@netlify/functions";
 import {
   AisCoordinatorError,
   getDatalasticCreditSnapshot,
@@ -20,7 +20,7 @@ function errorResponse(error: unknown) {
   });
 }
 
-export default async (req: Request) => {
+export default async (req: Request, context: Context) => {
   if (req.method !== "GET") {
     return Response.json({ success: false, error: "Method not allowed" }, { status: 405 });
   }
@@ -43,6 +43,7 @@ export default async (req: Request) => {
         url.searchParams.get("lat"),
         url.searchParams.get("lon"),
         url.searchParams.get("radius") || undefined,
+        { scheduleRefresh: (promise: Promise<unknown>) => context.waitUntil(promise) },
       );
       return Response.json({ success: true, ...result }, {
         headers: { "cache-control": "no-store" },

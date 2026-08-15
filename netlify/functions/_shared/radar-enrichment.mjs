@@ -104,9 +104,9 @@ export async function enrichDatalasticRadarVessels(vessels) {
   const result = await database.pool.query(
     `SELECT imo_number, mmsi, vessel_name, dwt, vessel_type, draft_meters, flag,
             call_sign, year_built, gross_tonnage, loa_meters, beam_meters
-       FROM vessels_master
+      FROM vessels_master
       WHERE imo_number = ANY($1::integer[])
-         OR REGEXP_REPLACE(COALESCE(mmsi, ''), '[^0-9]', '', 'g') = ANY($2::text[])`,
+         OR (mmsi IS NOT NULL AND mmsi = ANY($2::text[]))`,
     [imoNumbers, mmsiNumbers],
   );
   return mergeRadarTechnicalData(snapshot, result.rows);

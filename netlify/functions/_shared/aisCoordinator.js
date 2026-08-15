@@ -6,6 +6,7 @@ import { enrichDatalasticRadarVessels } from "./radar-enrichment.mjs";
 const DATALASTIC_BASE_URL = "https://api.datalastic.com/api/v0";
 const TRACKING_TTL_MS = 5 * 60 * 1000;
 const RADAR_TTL_MS = 10 * 60 * 1000;
+const RADAR_SOFT_STALE_WINDOW_MS = 5 * 60 * 1000;
 const PARTICULARS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const TRACKING_STALE_TTL_MS = 24 * 60 * 60 * 1000;
 const RADAR_STALE_TTL_MS = 60 * 60 * 1000;
@@ -13,7 +14,7 @@ const PARTICULARS_STALE_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 const DEFAULT_RADAR_RADIUS_NM = 10;
 const MAX_RADAR_RADIUS_NM = 50;
 const DEFAULT_MONTHLY_BUDGET = 1000;
-const RADAR_COORDINATE_PRECISION = 4;
+const RADAR_COORDINATE_PRECISION = 3;
 
 const memoryCache = new Map();
 const inFlightRequests = new Map();
@@ -242,6 +243,10 @@ function cacheEnvelopeIsValid(envelope) {
     && "value" in envelope;
 }
 
+function softStaleUntil(envelope) {
+  return Number.isFinite(envelope?.softStaleUntil) ? envelope.softStaleUntil : envelope?.expiresAt;
+}
+
 async function readPersistentEnvelope(store, key) {
   try {
     const envelope = await store.get(key, { type: "json" });
@@ -260,10 +265,12 @@ async function writePersistentEnvelope(store, key, envelope) {
   }
 }
 
-async function readCache(store, key, nowMs) {
-  const memoryEnvelope = memoryCache.get(key);
-  if (cacheEnvelopeIsValid(memoryEnvelope) && memoryEnvelope.staleUntil > nowMs) {
-    return memoryEnvelope;
+async function readCache(store, key, nowMs, { bypassMemory = false } = {}) {
+  if (!bypassMemory) {
+    const memoryEnvelope = memoryCache.get(key);
+    if (cacheEnvelopeIsValid(memoryEnvelope) && memoryEnvelope.staleUntil > nowMs) {
+      return memoryEnvelope;
+    }
   }
   memoryCache.delete(key);
   const persistentEnvelope = await readPersistentEnvelope(store, key);
@@ -272,11 +279,18 @@ async function readCache(store, key, nowMs) {
   return persistentEnvelope;
 }
 
-function responseFromEnvelope(envelope, nowMs, cacheStatus, reason = null, budget = null) {
+function responseFromEnvelope(
+  envelope,
+  nowMs,
+  cacheStatus,
+  reason = null,
+  budget = null,
+  formatValue = (value) => ({ data: value }),
+) {
   if (cacheStatus === "HIT") consumptionMonitor.cacheHits += 1;
   if (cacheStatus === "STALE") consumptionMonitor.staleResponses += 1;
   return {
-    data: envelope.value,
+    ...formatValue(envelope.value),
     meta: {
       source: "datalastic",
       cacheStatus,
@@ -288,6 +302,34 @@ function responseFromEnvelope(envelope, nowMs, cacheStatus, reason = null, budge
       budget,
     },
   };
+}
+
+function scheduleBackgroundRefresh(promise, scheduleRefresh, cacheKey) {
+  const guardedPromise = promise.catch((error) => {
+    console.warn(
+      "[ais-coordinator] Background cache refresh failed.",
+      { cacheKey, error: error instanceof Error ? error.message : String(error) },
+    );
+  });
+
+  try {
+    if (typeof scheduleRefresh === "function") {
+      scheduleRefresh(guardedPromise);
+      return;
+    }
+    const context = globalThis.Netlify?.context;
+    if (typeof context?.waitUntil === "function") {
+      context.waitUntil(guardedPromise);
+      return;
+    }
+  } catch (error) {
+    console.warn(
+      "[ais-coordinator] Background refresh scheduling unavailable.",
+      { cacheKey, error: error instanceof Error ? error.message : String(error) },
+    );
+  }
+
+  void guardedPromise;
 }
 
 async function fetchDatalastic(path, parameters, fetchImpl) {
@@ -383,23 +425,18 @@ export function createAisCoordinator({
   fetchImpl = fetch,
   store = cacheStore(),
   budgetGate = createBudgetGate(),
+  enrichRadarVessels = enrichDatalasticRadarVessels,
   now = () => Date.now(),
 } = {}) {
-  async function execute({ cacheKey, ttlMs, staleTtlMs, providerCall, normalize }) {
-    const initialNow = now();
-    const initialEnvelope = await readCache(store, cacheKey, initialNow);
-    if (initialEnvelope?.expiresAt > initialNow) {
-      return responseFromEnvelope(initialEnvelope, initialNow, "HIT");
-    }
-
+  async function refresh({ cacheKey, ttlMs, softStaleTtlMs, staleTtlMs, providerCall, normalize, formatValue }, initialEnvelope) {
     if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey);
     if (!initialEnvelope) getDatalasticApiKey();
 
     const request = budgetGate.withRequestLock(cacheKey, async (budgetSession) => {
       const lockedNow = now();
-      const lockedEnvelope = await readCache(store, cacheKey, lockedNow);
+      const lockedEnvelope = await readCache(store, cacheKey, lockedNow, { bypassMemory: true });
       if (lockedEnvelope?.expiresAt > lockedNow) {
-        return responseFromEnvelope(lockedEnvelope, lockedNow, "HIT");
+        return responseFromEnvelope(lockedEnvelope, lockedNow, "HIT", null, null, formatValue);
       }
 
       const periodKey = getPeriodKey(new Date(lockedNow));
@@ -407,7 +444,7 @@ export function createAisCoordinator({
       if (!budget.allowed) {
         consumptionMonitor.budgetBlocks += 1;
         if (lockedEnvelope) {
-          return responseFromEnvelope(lockedEnvelope, lockedNow, "STALE", "BUDGET_LIMIT", budget);
+          return responseFromEnvelope(lockedEnvelope, lockedNow, "STALE", "BUDGET_LIMIT", budget, formatValue);
         }
         throw new AisCoordinatorError(
           "AIS_BUDGET_EXCEEDED",
@@ -424,17 +461,18 @@ export function createAisCoordinator({
         providerSucceeded = true;
         consumptionMonitor.consumedCredits += 1;
         consumptionMonitor.lastConsumedAt = new Date(now()).toISOString();
-        const value = normalize(payload);
+        const value = await normalize(payload);
         const storedAt = now();
         const envelope = {
           storedAt,
           expiresAt: storedAt + ttlMs,
+          softStaleUntil: storedAt + softStaleTtlMs,
           staleUntil: storedAt + staleTtlMs,
           value,
         };
         memoryCache.set(cacheKey, envelope);
         await writePersistentEnvelope(store, cacheKey, envelope);
-        return responseFromEnvelope(envelope, storedAt, "MISS", null, budget);
+        return responseFromEnvelope(envelope, storedAt, "MISS", null, budget, formatValue);
       } catch (error) {
         if (!providerSucceeded) await budgetSession.release(periodKey);
         if (lockedEnvelope) {
@@ -444,13 +482,14 @@ export function createAisCoordinator({
             "STALE",
             providerSucceeded ? "INVALID_PROVIDER_RESPONSE" : "PROVIDER_FAILURE",
             budget,
+            formatValue,
           );
         }
         throw error;
       }
     }).catch((error) => {
       if (initialEnvelope) {
-        return responseFromEnvelope(initialEnvelope, now(), "STALE", "COORDINATOR_FAILURE");
+        return responseFromEnvelope(initialEnvelope, now(), "STALE", "COORDINATOR_FAILURE", null, formatValue);
       }
       if (error instanceof AisCoordinatorError) throw error;
       throw new AisCoordinatorError(
@@ -468,6 +507,39 @@ export function createAisCoordinator({
     }
   }
 
+  async function execute({
+    cacheKey,
+    ttlMs,
+    softStaleTtlMs = ttlMs,
+    staleTtlMs,
+    providerCall,
+    normalize,
+    formatValue = (value) => ({ data: value }),
+    scheduleRefresh,
+  }) {
+    const initialNow = now();
+    const initialEnvelope = await readCache(store, cacheKey, initialNow);
+    if (initialEnvelope?.expiresAt > initialNow) {
+      return responseFromEnvelope(initialEnvelope, initialNow, "HIT", null, null, formatValue);
+    }
+
+    const refreshOptions = {
+      cacheKey,
+      ttlMs,
+      softStaleTtlMs,
+      staleTtlMs,
+      providerCall,
+      normalize,
+      formatValue,
+    };
+    if (initialEnvelope && softStaleUntil(initialEnvelope) > initialNow) {
+      scheduleBackgroundRefresh(refresh(refreshOptions, initialEnvelope), scheduleRefresh, cacheKey);
+      return responseFromEnvelope(initialEnvelope, initialNow, "STALE", "SOFT_STALE", null, formatValue);
+    }
+
+    return refresh(refreshOptions, initialEnvelope);
+  }
+
   return {
     async getLivePosition(imoValue) {
       const imo = normalizeImo(imoValue);
@@ -480,22 +552,50 @@ export function createAisCoordinator({
       });
     },
 
-    async getRadarTraffic(latitudeValue, longitudeValue, radiusValue = DEFAULT_RADAR_RADIUS_NM) {
+    async getRadarTraffic(latitudeValue, longitudeValue, radiusValue = DEFAULT_RADAR_RADIUS_NM, options = {}) {
       const latitude = normalizeCoordinate(latitudeValue, "Latitude", -90, 90);
       const longitude = normalizeCoordinate(longitudeValue, "Longitude", -180, 180);
       const radius = normalizeRadius(radiusValue);
       const zoneLatitude = Number(latitude.toFixed(RADAR_COORDINATE_PRECISION));
       const zoneLongitude = Number(longitude.toFixed(RADAR_COORDINATE_PRECISION));
+      const radarTtlMs = configuredTtl("DATALASTIC_RADAR_CACHE_TTL_MS", RADAR_TTL_MS);
       return execute({
-        cacheKey: `radar/${zoneLatitude}_${zoneLongitude}_${radius}nm.json`,
-        ttlMs: configuredTtl("DATALASTIC_RADAR_CACHE_TTL_MS", RADAR_TTL_MS),
+        cacheKey: `radar/v2/${zoneLatitude}_${zoneLongitude}_${radius}nm.json`,
+        ttlMs: radarTtlMs,
+        softStaleTtlMs: radarTtlMs + RADAR_SOFT_STALE_WINDOW_MS,
         staleTtlMs: RADAR_STALE_TTL_MS,
         providerCall: (activeFetch) => fetchDatalastic("vessel_inradius", {
           lat: zoneLatitude,
           lon: zoneLongitude,
           radius,
         }, activeFetch),
-        normalize: normalizeRadarTraffic,
+        normalize: async (payload) => {
+          const radarVessels = normalizeRadarTraffic(payload);
+          try {
+            const enriched = await enrichRadarVessels(radarVessels);
+            return {
+              data: enriched.vessels,
+              sourceCounts: enriched.counts,
+            };
+          } catch (error) {
+            console.warn(
+              "[ais-coordinator] Neon enrichment unavailable; caching Datalastic snapshot.",
+              error instanceof Error ? error.message : String(error),
+            );
+            return {
+              data: radarVessels,
+              sourceCounts: {
+                liveRadar: radarVessels.length,
+                technicalMatches: 0,
+              },
+            };
+          }
+        },
+        formatValue: (value) => ({
+          data: Array.isArray(value?.data) ? value.data : [],
+          sourceCounts: value?.sourceCounts ?? { liveRadar: 0, technicalMatches: 0 },
+        }),
+        scheduleRefresh: options.scheduleRefresh,
       });
     },
 
@@ -523,25 +623,8 @@ export async function getLivePosition(imo) {
   return coordinator().getLivePosition(imo);
 }
 
-export async function getRadarTraffic(lat, lon, radius = DEFAULT_RADAR_RADIUS_NM) {
-  const radar = await coordinator().getRadarTraffic(lat, lon, radius);
-  try {
-    const enriched = await enrichDatalasticRadarVessels(radar.data);
-    return {
-      ...radar,
-      data: enriched.vessels,
-      sourceCounts: enriched.counts,
-    };
-  } catch (error) {
-    console.warn("[ais-coordinator] Neon enrichment unavailable; preserving Datalastic snapshot.", error instanceof Error ? error.message : String(error));
-    return {
-      ...radar,
-      sourceCounts: {
-        liveRadar: Array.isArray(radar.data) ? radar.data.length : 0,
-        technicalMatches: 0,
-      },
-    };
-  }
+export async function getRadarTraffic(lat, lon, radius = DEFAULT_RADAR_RADIUS_NM, options = {}) {
+  return coordinator().getRadarTraffic(lat, lon, radius, options);
 }
 
 export async function getVesselParticulars(imo) {

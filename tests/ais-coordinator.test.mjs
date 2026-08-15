@@ -22,6 +22,7 @@ globalThis.Netlify = {
 function createMemoryStore() {
   const values = new Map();
   return {
+    values,
     async get(key) {
       return values.get(key) ?? null;
     },
@@ -92,15 +93,26 @@ test("tracking reuses the five-minute cache and spends one credit", async () => 
   assert.equal("eta_UTC" in first.data, false);
 });
 
-test("radar shares a normalized zone cache and excludes provider distance fields", async () => {
+test("radar caches the enriched payload and shares a three-decimal zone", async () => {
   let fetchCount = 0;
+  let enrichmentCount = 0;
+  const store = createMemoryStore();
   const coordinator = createAisCoordinator({
-    store: createMemoryStore(),
+    store,
     budgetGate: createBudgetGate(),
     now: () => Date.parse("2026-08-14T12:05:00.000Z"),
+    enrichRadarVessels: async (vessels) => {
+      enrichmentCount += 1;
+      return {
+        vessels: vessels.map((vessel) => ({ ...vessel, dwt: 42_000, technicalMatch: true })),
+        counts: { liveRadar: vessels.length, technicalMatches: vessels.length },
+      };
+    },
     fetchImpl: async (url) => {
       fetchCount += 1;
       assert.equal(url.pathname, "/api/v0/vessel_inradius");
+      assert.equal(url.searchParams.get("lat"), "40.123");
+      assert.equal(url.searchParams.get("lon"), "-7.987");
       assert.equal(url.searchParams.get("radius"), "10");
       return jsonResponse({
         data: {
@@ -116,14 +128,83 @@ test("radar shares a normalized zone cache and excludes provider distance fields
     },
   });
 
-  const first = await coordinator.getRadarTraffic(40.12341, -7.98761);
-  const second = await coordinator.getRadarTraffic(40.12342, -7.98762, 10);
+  const first = await coordinator.getRadarTraffic(40.1231, -7.9871);
+  const second = await coordinator.getRadarTraffic(40.1234, -7.9874, 10);
+  const cachedEnvelope = store.values.get("radar/v2/40.123_-7.987_10nm.json");
 
   assert.equal(first.meta.cacheStatus, "MISS");
   assert.equal(second.meta.cacheStatus, "HIT");
   assert.equal(fetchCount, 1);
+  assert.equal(enrichmentCount, 1);
   assert.equal(first.data.length, 1);
+  assert.equal(first.data[0].dwt, 42_000);
+  assert.deepEqual(first.sourceCounts, { liveRadar: 1, technicalMatches: 1 });
   assert.equal("distance" in first.data[0], false);
+  assert.equal(cachedEnvelope.value.data[0].dwt, 42_000);
+  assert.deepEqual(cachedEnvelope.value.sourceCounts, { liveRadar: 1, technicalMatches: 1 });
+});
+
+test("radar serves soft-stale immediately and refreshes the enriched payload in background", async () => {
+  let currentTime = Date.parse("2026-08-14T13:00:00.000Z");
+  let fetchCount = 0;
+  let enrichmentCount = 0;
+  let releaseRefresh;
+  let scheduledRefresh;
+  let signalRefreshStarted;
+  const refreshStarted = new Promise((resolve) => {
+    signalRefreshStarted = resolve;
+  });
+  const coordinator = createAisCoordinator({
+    store: createMemoryStore(),
+    budgetGate: createBudgetGate(),
+    now: () => currentTime,
+    enrichRadarVessels: async (vessels) => {
+      enrichmentCount += 1;
+      return {
+        vessels: vessels.map((vessel) => ({ ...vessel, enrichmentVersion: enrichmentCount })),
+        counts: { liveRadar: vessels.length, technicalMatches: enrichmentCount },
+      };
+    },
+    fetchImpl: async () => {
+      fetchCount += 1;
+      if (fetchCount === 2) {
+        signalRefreshStarted();
+        await new Promise((resolve) => {
+          releaseRefresh = resolve;
+        });
+      }
+      return jsonResponse({
+        data: {
+          vessels: [{ name: `Radar Vessel ${fetchCount}`, imo: "7000002", lat: 41.2, lon: -8.6 }],
+        },
+      });
+    },
+  });
+
+  const first = await coordinator.getRadarTraffic(41.201, -8.601, 25);
+  currentTime += 11 * 60 * 1000;
+  const stale = await coordinator.getRadarTraffic(41.2012, -8.6012, 25, {
+    scheduleRefresh(promise) {
+      scheduledRefresh = promise;
+    },
+  });
+
+  assert.equal(first.meta.cacheStatus, "MISS");
+  assert.equal(stale.meta.cacheStatus, "STALE");
+  assert.equal(stale.meta.circuitBreaker, "SOFT_STALE");
+  assert.equal(stale.data[0].enrichmentVersion, 1);
+  assert.ok(scheduledRefresh);
+
+  await refreshStarted;
+  assert.equal(fetchCount, 2);
+  releaseRefresh();
+  await scheduledRefresh;
+  const refreshed = await coordinator.getRadarTraffic(41.201, -8.601, 25);
+
+  assert.equal(refreshed.meta.cacheStatus, "HIT");
+  assert.equal(refreshed.data[0].enrichmentVersion, 2);
+  assert.equal(fetchCount, 2);
+  assert.equal(enrichmentCount, 2);
 });
 
 test("vessel particulars use the official endpoint and normalize technical fields", async () => {
