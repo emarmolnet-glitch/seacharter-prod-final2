@@ -1,6 +1,7 @@
+import type { Context } from "@netlify/functions";
 import { AisCoordinatorError, getRadarTraffic } from "./_shared/aisCoordinator.js";
 
-export default async (req: Request) => {
+export default async (req: Request, context: Context) => {
   if (req.method !== "GET") {
     return Response.json({ success: false, error: "Method not allowed" }, { status: 405 });
   }
@@ -11,6 +12,7 @@ export default async (req: Request) => {
       parameters.get("lat"),
       parameters.get("lon"),
       parameters.get("radius") || undefined,
+      { scheduleRefresh: (promise: Promise<unknown>) => context.waitUntil(promise) },
     );
     return Response.json({ success: true, ...result }, {
       headers: { "cache-control": "no-store" },

@@ -43,3 +43,10 @@ test('production sources contain no legacy provider references', async () => {
   assert.doesNotMatch(sources.join('\n'), /open[ -]?ships/i);
   assert.doesNotMatch(sources.join('\n'), /predictiveVessels|filtered_source_database/);
 });
+
+test('radar enrichment uses the indexed MMSI comparison without column transforms', async () => {
+  const source = await readFile(new URL('../netlify/functions/_shared/radar-enrichment.mjs', import.meta.url), 'utf8');
+
+  assert.match(source, /mmsi IS NOT NULL AND mmsi = ANY\(\$2::text\[\]\)/);
+  assert.doesNotMatch(source, /REGEXP_REPLACE\(COALESCE\(mmsi/);
+});
