@@ -6,6 +6,8 @@ import { calculateDynamicEta, calculateLaytimeProjection } from './src/executive
 import { trackingStore } from './src/stores/tracking-store.js';
 import { voyageStore, hasOperationalDraft } from './src/stores/voyage-store.js';
 import { normalizeAisDestination } from './src/tracking-destination.mjs';
+import { mountDatalasticCreditCounter } from './src/components/DatalasticCreditCounter.js';
+import { datalasticCreditStore } from './src/stores/datalastic-credit-store.js';
 
 const TRACKING_POLL_INTERVAL = 30_000;
 const TRACKING_AIS_POLL_INTERVAL = 30_000;
@@ -340,7 +342,7 @@ function createTrackingOverlay() {
     overlay.setAttribute('aria-label', 'Tracking GIS y Dashboard Ejecutivo');
     overlay.innerHTML = `
         <div class="tracking-live-topbar ecosystem-panel">
-            <div class="tracking-live-context"><span class="tracking-live-connection" id="tracking-live-connection">GIS disponible</span><span id="tracking-live-last-sync">Modo ruta libre</span><span class="tracking-ais-consumption" id="tracking-ais-consumption" title="Créditos Datalastic consumidos por esta instancia del coordinador"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i><strong id="tracking-ais-consumption-count">0</strong><span>créditos AIS</span></span></div>
+            <div class="tracking-live-context"><span class="tracking-live-connection" id="tracking-live-connection">GIS disponible</span><span id="tracking-live-last-sync">Modo ruta libre</span><span data-tracking-datalastic-credit></span></div>
             <nav class="tracking-live-tabs" role="tablist" aria-label="Vistas del contrato">
                 <button type="button" class="tracking-live-tab is-active" role="tab" aria-selected="true" aria-controls="tracking-gis-view" data-tracking-tab="gis"><i class="fa-solid fa-earth-europe" aria-hidden="true"></i><span>Tracking GIS</span></button>
                 <button type="button" class="tracking-live-tab" role="tab" aria-selected="false" aria-controls="tracking-executive-view" data-tracking-tab="executive" tabindex="-1"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Dashboard Ejecutivo &amp; Laytime</span></button>
@@ -411,6 +413,12 @@ function createTrackingOverlay() {
             </section>
         </main>`;
     (document.querySelector('main.app-main') || document.body).appendChild(overlay);
+    mountDatalasticCreditCounter(overlay.querySelector('[data-tracking-datalastic-credit]'), {
+        rootId: 'tracking-ais-consumption',
+        valueId: 'tracking-ais-consumption-count',
+        variant: 'tracking',
+        showLimit: true,
+    });
     const contractInput = document.getElementById('tracking-live-contract-ref');
     if (contractInput) contractInput.value = '';
 
@@ -1163,25 +1171,12 @@ function mergeCoordinatorTelemetry(vessel, telemetry, meta) {
 }
 
 async function refreshAisConsumptionMonitor() {
-    const count = document.getElementById('tracking-ais-consumption-count');
     const widget = document.getElementById('tracking-ais-consumption');
-    if (!count || !widget) return null;
+    if (!widget) return null;
     if (trackingState.aisConsumptionRequest) return trackingState.aisConsumptionRequest;
     trackingState.aisConsumptionRequest = (async () => {
         try {
-            const response = await fetch('/api/internal/ais/consumption', {
-                headers: { Accept: 'application/json' },
-                cache: 'no-store',
-            });
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok || !payload.success) throw new Error('AIS consumption unavailable');
-            count.textContent = String(Number(payload.data?.consumedCredits) || 0);
-            widget.dataset.state = Number(payload.data?.budgetBlocks) > 0 ? 'limited' : 'healthy';
-            widget.title = `Sesión iniciada ${formatTrackingTime(payload.data?.startedAt)} · caché ${Number(payload.data?.cacheHits) || 0} hits`;
-            return payload.data;
-        } catch {
-            widget.dataset.state = 'unavailable';
-            return null;
+            return await datalasticCreditStore.getState().refresh();
         } finally {
             trackingState.aisConsumptionRequest = null;
         }

@@ -1,7 +1,7 @@
 import type { Config } from "@netlify/functions";
 import {
   AisCoordinatorError,
-  getAisConsumptionSnapshot,
+  getDatalasticCreditSnapshot,
   getLivePosition,
   getRadarTraffic,
 } from "./_shared/aisCoordinator.js";
@@ -28,7 +28,7 @@ export default async (req: Request) => {
   const url = new URL(req.url);
   try {
     if (url.pathname.endsWith("/consumption")) {
-      return Response.json({ success: true, data: getAisConsumptionSnapshot() }, {
+      return Response.json({ success: true, data: await getDatalasticCreditSnapshot() }, {
         headers: { "cache-control": "no-store" },
       });
     }

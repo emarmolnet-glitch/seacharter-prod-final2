@@ -274,6 +274,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <!-- El renderer cartográfico se carga bajo demanda al abrir Mapa, Radar AIS o Tracking. -->
     <link rel="stylesheet" href="./assets/css/contextual-feedback.css?v=20260717-ui-hotfix">
+    <link rel="stylesheet" href="./assets/css/datalastic-credit-counter.css?v=20260815-shared-balance">
     <link rel="stylesheet" href="./ais-market-reference-widget.css?v=20260721">
     <script defer src="./network-resilience.js?v=20260807-circuit-breaker"></script>
     <script type="module" src="./cargo-taxonomy.mjs"></script>
@@ -285,6 +286,7 @@
     <script type="module" src="./market-intelligence-panel.mjs?v=20260810"></script>
     <script type="module" src="./map_loader.js?v=20260802-ais-heading"></script>
     <script type="module" src="./src/global-splash-screen.js?v=20260810-global-startup"></script>
+    <script type="module" src="./src/datalastic-credit-entry.js?v=20260815-shared-balance"></script>
     <script defer src="/aisstream-draft.js"></script>
     <!-- Maritime Routing Library -->
     <script type="module">
@@ -13838,6 +13840,7 @@
                                             <i class="fa-solid fa-paper-plane"></i>
                                             Enviar a Data Bridge
                                         </button>
+                                        <div class="shrink-0 md:ml-auto" data-datalastic-credit-counter data-credit-variant="toolbar" aria-live="polite"></div>
                                         <div id="sync-container" class="hidden w-64 shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 shadow-sm" role="status" aria-live="polite" aria-atomic="true">
                                             <div class="flex items-center justify-between gap-3 text-[10px] font-black uppercase tracking-wide text-emerald-900">
                                                 <span id="sync-status-text">Preparando sincronización…</span>
@@ -63625,6 +63628,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         fetched_at: coordinatorPayload.meta?.fetchedAt || new Date().toISOString(),
                         cache: coordinatorPayload.meta || null
                     };
+                    window.dispatchEvent(new CustomEvent('datalastic:radar-success', {
+                        detail: { meta: coordinatorPayload.meta || {} }
+                    }));
                     window.dispatchEvent(new CustomEvent('ais:consumption-updated'));
 
                     const recentVessels = Number(payload?.recent_vessels);
