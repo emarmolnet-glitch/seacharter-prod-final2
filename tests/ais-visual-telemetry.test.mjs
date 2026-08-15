@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const coordinatorFunction = await readFile(new URL('../netlify/functions/ais-coordinator.mts', import.meta.url), 'utf8');
 const trackingSource = await readFile(new URL('../tracking-live.js', import.meta.url), 'utf8');
+const creditStoreSource = await readFile(new URL('../src/stores/datalastic-credit-store.js', import.meta.url), 'utf8');
 const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const routeSource = await readFile(new URL('../netlify/functions/route.ts', import.meta.url), 'utf8');
 const etaSource = await readFile(new URL('../src/executive-predictive-metrics.mjs', import.meta.url), 'utf8');
@@ -22,12 +23,12 @@ test('one coordinator function owns live, radar, and in-memory consumption route
   assert.match(coordinatorFunction, /\/api\/internal\/ais\/live-position/);
   assert.match(coordinatorFunction, /\/api\/internal\/ais\/radar-traffic/);
   assert.match(coordinatorFunction, /\/api\/internal\/ais\/consumption/);
-  assert.match(coordinatorFunction, /getAisConsumptionSnapshot/);
+  assert.match(coordinatorFunction, /getDatalasticCreditSnapshot/);
 });
 
 test('tracking marker and Radar fleet consume coordinator endpoints', () => {
   assert.match(trackingSource, /\/api\/internal\/ais\/live-position\?imo=/);
-  assert.match(trackingSource, /\/api\/internal\/ais\/consumption/);
+  assert.match(creditStoreSource, /\/api\/internal\/ais\/consumption/);
   assert.match(trackingSource, /tracking-ais-consumption-count/);
   assert.doesNotMatch(trackingSource, /setInterval\(refreshAisConsumptionMonitor/);
   assert.match(trackingSource, /ais:consumption-updated/);

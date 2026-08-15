@@ -555,3 +555,33 @@ export function getAisConsumptionSnapshot() {
     cachedEntries: memoryCache.size,
   };
 }
+
+export async function getDatalasticCreditSnapshot() {
+  const snapshot = getAisConsumptionSnapshot();
+  const limit = getBudgetLimit();
+  const period = getPeriodKey(new Date());
+
+  try {
+    const database = budgetDatabase();
+    const result = await database.pool.query(
+      `SELECT used_credits
+       FROM datalastic_credit_budget
+       WHERE period_key = $1
+       LIMIT 1`,
+      [period],
+    );
+    const usedCredits = Math.max(0, Number(result.rows[0]?.used_credits) || 0);
+    return {
+      ...snapshot,
+      budget: {
+        period,
+        limit,
+        usedCredits,
+        remainingCredits: Math.max(0, limit - usedCredits),
+      },
+    };
+  } catch {
+    console.warn("[ais-coordinator] Datalastic credit snapshot unavailable.");
+    return { ...snapshot, budget: null };
+  }
+}

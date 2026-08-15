@@ -1,0 +1,44 @@
+.datalastic-credit-counter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-height: 2.25rem;
+    width: fit-content;
+    padding: 0.35rem 0.7rem;
+    border: 1px solid #a7f3d0;
+    border-radius: 0.65rem;
+    background: linear-gradient(135deg, #ecfdf5 0%, #f8fafc 100%);
+    color: #065f46;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.datalastic-credit-counter__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.5rem;
+    background: #047857;
+    color: #fff;
+}
+
+.datalastic-credit-counter__copy { display: grid; gap: 0.18rem; }
+.datalastic-credit-counter__eyebrow { color: #64748b; font-size: 0.55rem; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; }
+.datalastic-credit-counter__balance { display: inline-flex; align-items: baseline; gap: 0.22rem; font-size: 0.64rem; font-weight: 800; }
+.datalastic-credit-counter__balance strong { color: #064e3b; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; }
+.datalastic-credit-counter[data-state="loading"] { opacity: 0.72; }
+.datalastic-credit-counter[data-state="degraded"],
+.datalastic-credit-counter[data-state="unavailable"] { border-color: #cbd5e1; background: #f8fafc; color: #64748b; }
+.datalastic-credit-counter[data-state="unavailable"] .datalastic-credit-counter__icon { background: #64748b; }
+.datalastic-credit-counter--tracking { min-height: 1.75rem; padding: 0.22rem 0.5rem; border-radius: 999px; box-shadow: none; }
+.datalastic-credit-counter--tracking .datalastic-credit-counter__icon { width: 1.3rem; height: 1.3rem; border-radius: 999px; font-size: 0.58rem; }
+.datalastic-credit-counter--tracking .datalastic-credit-counter__eyebrow { display: none; }
+.datalastic-credit-counter--tracking .datalastic-credit-counter__balance { font-size: 0.58rem; }
+.datalastic-credit-counter--tracking .datalastic-credit-counter__balance strong { font-size: 0.72rem; }
+
+@media (max-width: 767px) {
+    .datalastic-credit-counter--toolbar { width: 100%; justify-content: center; }
+}

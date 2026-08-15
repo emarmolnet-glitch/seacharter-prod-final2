@@ -10,6 +10,7 @@ const legacyAssets = [
   "npl-secret-module.js",
   "GlobalFleetGlobe.js",
   "assets/css/density-globe.css",
+  "assets/css/datalastic-credit-counter.css",
   "contextual-feedback.js",
   "session-draft.js",
   "wpi.csv",
