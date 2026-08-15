@@ -159,7 +159,7 @@ test('connection status and contextual radar have no automatic network startup',
   assert.doesNotMatch(contextualSource, /setTimeout|fetch\s*\(|ejecutarRadarDualAIS|addEventListener/);
 });
 
-test('matching action dock groups the four primary controls on the left', () => {
+test('matching action dock groups the four primary controls on the right', () => {
   const dockStart = indexSource.indexOf('<div id="matching-action-dock"');
   const dockEnd = indexSource.indexOf('<div id="matching-action-feedback"', dockStart);
   const dockSource = indexSource.slice(dockStart, dockEnd);
@@ -168,6 +168,24 @@ test('matching action dock groups the four primary controls on the left', () => 
   assert.match(dockSource, /id="btnGenerateReport"/);
   assert.match(dockSource, /id="commercial-nlp-send-btn"/);
   assert.equal((indexSource.match(/id="commercial-nlp-send-btn"/g) || []).length, 1);
+});
+
+test('matching list toolbar unifies fleet views, strict filter, and primary actions', () => {
+  const toolbarStart = indexSource.indexOf('<div id="matching-list-toolbar"');
+  const toolbarEnd = indexSource.indexOf('<div id="matching-action-feedback"', toolbarStart);
+  const toolbarSource = indexSource.slice(toolbarStart, toolbarEnd);
+  assert.ok(toolbarStart > 0);
+  assert.match(toolbarSource, /role="toolbar"/);
+  assert.match(toolbarSource, /id="matching-fleet-view-control"/);
+  assert.match(toolbarSource, /id="matching-view-viable"/);
+  assert.match(toolbarSource, /id="matching-view-compatible"/);
+  assert.match(toolbarSource, /class="matching-strict-filter"/);
+  assert.match(toolbarSource, /id="hide-technical-problems-toggle"/);
+  assert.match(toolbarSource, /id="matching-action-dock"/);
+  assert.ok(toolbarSource.indexOf('id="matching-fleet-view-control"') < toolbarSource.indexOf('id="matching-action-dock"'));
+  assert.ok(toolbarSource.indexOf('id="hide-technical-problems-toggle"') < toolbarSource.indexOf('id="matching-action-dock"'));
+  assert.equal((indexSource.match(/id="matching-list-toolbar"/g) || []).length, 1);
+  assert.equal((indexSource.match(/id="hide-technical-problems-toggle"/g) || []).length, 1);
 });
 
 test('matching toolbar exposes one Data Bridge button and inline sync progress', () => {
@@ -181,14 +199,15 @@ test('matching toolbar exposes one Data Bridge button and inline sync progress',
   assert.equal((dockSource.match(/Enviar a Data Bridge/g) || []).length, 1);
 });
 
-test('matching header uses one compact desktop row and standardized controls', () => {
-  const styleStart = indexSource.indexOf('#matching-action-dock {');
+test('matching header uses one responsive control level and right-aligned actions', () => {
+  const styleStart = indexSource.indexOf('#matching-list-toolbar {');
   const styleEnd = indexSource.indexOf('#matching-results-panel .collapsible-section__chevron', styleStart);
   const styleSource = indexSource.slice(styleStart, styleEnd);
-  assert.match(styleSource, /justify-content: flex-start/);
-  assert.match(styleSource, /flex-wrap: nowrap/);
-  assert.match(styleSource, /gap: 0\.75rem/);
+  assert.match(styleSource, /#matching-list-toolbar \{[\s\S]*display: flex[\s\S]*flex-wrap: wrap[\s\S]*width: 100%/);
+  assert.match(styleSource, /#matching-action-dock \{[\s\S]*flex-wrap: wrap[\s\S]*justify-content: flex-end[\s\S]*margin-left: auto/);
   assert.match(styleSource, /\.matching-action-button \{[\s\S]*flex: 0 0 auto[\s\S]*padding: 0\.5rem 1rem !important[\s\S]*white-space: nowrap/);
-  assert.match(styleSource, /matching-results-collapsible > \.collapsible-section__header \{[\s\S]*display: flex[\s\S]*flex-direction: row[\s\S]*flex-wrap: nowrap[\s\S]*align-items: center/);
-  assert.match(styleSource, /\.collapsible-section__actions \{[\s\S]*flex-direction: row[\s\S]*flex-wrap: nowrap[\s\S]*align-items: center/);
+  assert.match(styleSource, /#matching-fleet-view-control \.matching-fleet-segmented-control \{[\s\S]*display: inline-flex/);
+  assert.match(styleSource, /\.matching-strict-filter \{[\s\S]*display: inline-flex/);
+  assert.match(styleSource, /matching-results-collapsible > \.collapsible-section__header \{[\s\S]*display: flex[\s\S]*flex-direction: row[\s\S]*flex-wrap: wrap[\s\S]*align-items: center/);
+  assert.match(styleSource, /\.collapsible-section__actions \{[\s\S]*flex: 1 1 100%[\s\S]*flex-wrap: wrap[\s\S]*width: 100%/);
 });

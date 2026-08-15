@@ -93,14 +93,28 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
     updateFromCalculator: (state = {}) => set((current) => {
         const ballastDistanceNm = resolveCalculatorBallastDistance(state, current.draft);
         const ballastDistanceChanged = ballastDistanceNm !== current.draft.ballastDistanceNm;
+        const laydays = cleanText(
+            state.laydays
+            || state.laycan?.laydays
+            || state.laycan?.start
+            || state.laycanDate
+            || state.laycan_start
+        ) || current.draft.laycan.laydays;
+        const cancelling = cleanText(
+            state.cancelling
+            || state.laycan?.cancelling
+            || state.laycan?.end
+            || state.cancellingDate
+            || state.laycan_end
+        ) || current.draft.laycan.cancelling;
         return {
             draft: {
                 ...current.draft,
                 pol: normalizePort(state.polCoordinates, state.pol) || current.draft.pol,
                 pod: normalizePort(state.podCoordinates, state.pod) || current.draft.pod,
                 laycan: {
-                    laydays: cleanText(state.laydays || state.laycan?.laydays || state.laycanDate),
-                    cancelling: cleanText(state.cancelling || state.laycan?.cancelling || state.cancellingDate),
+                    laydays,
+                    cancelling,
                 },
                 cargo: {
                     description: cleanText(state.cargoProduct || state.cargoType || current.draft.cargo.description),

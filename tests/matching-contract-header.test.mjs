@@ -11,6 +11,8 @@ test('matching header consolidates route, laycan and cargo operations', () => {
   assert.match(indexSource, /Carga y Operativa/);
   assert.match(indexSource, /id="matching-cargo-type-text"/);
   assert.match(indexSource, /id="matching-cargo-rates-text"/);
+  assert.match(indexSource, /buildCanonicalVoyageParams\(\{[\s\S]*calculatedState\.laycan_end[\s\S]*calculationRoute\.laycan_end/);
+  assert.match(indexSource, /const laycanRange = \[formatContractDate\(route\.laydays\), formatContractDate\(route\.cancelling\)\]\.filter\(Boolean\)\.join\(' - '\)/);
   assert.match(indexSource, /function\(candidateState = null\)[\s\S]*quantityMt:[\s\S]*loadRateMt:[\s\S]*dischargeRateMt:/);
   assert.match(indexSource, /`\$\{formatNumber\(operation\.quantityMt\)\} MT de \$\{operation\.cargoType\}`/);
   assert.match(indexSource, /`Carga: \$\{formatNumber\(operation\.loadRateMt\)\} \/ Descarga: \$\{formatNumber\(operation\.dischargeRateMt\)\}`/);
@@ -47,14 +49,18 @@ test('Neon calculation state normalizes legacy and canonical contract payloads',
   assert.match(calculationStateSource, /const cargoQuantity = firstPositiveNumber\(cargo\.cargoQuantity, cargo\.quantity/);
   assert.match(calculationStateSource, /const calculation = isRecord\(parsedCalculation\) \? normalizeCalculationContractFields/);
   assert.match(calculationStateSource, /const persistedCalculation = normalizeCalculationContractFields/);
+  assert.match(calculationStateSource, /laycan_start: laydays/);
+  assert.match(calculationStateSource, /laycan_end: cancelling/);
   assert.match(indexSource, /const hydratedVoyageState = normalizeActiveVoyageState\(quote\.calculation_data \|\| \{\}\)/);
   assert.match(indexSource, /const hydratedCalculation = injectCalculatedState\(\{/);
   assert.match(indexSource, /syncMatchingRouteSummary\(hydratedCalculation\)/);
 });
 
-test('strict DWT filtering blocks unknown and undersized vessels', () => {
+test('strict DWT filtering preserves live unknown DWT and blocks incompatible known capacities', () => {
   assert.match(indexSource, /strictRequiredDwt = quantity > 0 \? quantity \* 1\.05 : 0/);
-  assert.match(indexSource, /if \(!Number\.isFinite\(dwt\) \|\| dwt <= 0 \|\| missingCriticalType\) return false/);
-  assert.match(indexSource, /return dwt >= strictRequiredDwt/);
-  assert.match(indexSource, /isDwtUnknown \? 'opacity-65' : 'opacity-80'/);
+  assert.match(indexSource, /const STRICT_RADAR_DWT_PREFERRED_MAX_FACTOR = 1\.15/);
+  assert.match(indexSource, /strictMaximumDwt = quantity > 0 \? quantity \* 1\.40 : 0/);
+  assert.match(indexSource, /if \(!Number\.isFinite\(dwt\) \|\| dwt <= 0\) return pendingLiveAudit/);
+  assert.match(indexSource, /return dwt >= strictRequiredDwt && dwt <= strictMaximumDwt/);
+  assert.match(indexSource, /Pendiente de auditar/);
 });

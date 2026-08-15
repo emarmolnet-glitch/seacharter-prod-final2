@@ -26,8 +26,8 @@ test('matching radar fetches AIS and OpenShips then commits dynamic results', ()
   const handlerSource = source.slice(handlerStart, handlerEnd);
 
   assert.match(handlerSource, /window\.addEventListener\('ais:matching-state-updated', captureMatchingState\)/);
-  assert.match(handlerSource, /Promise\.all\(\[[\s\S]*window\.startRadarLive\(\{ source: 'matching-radar-sweep', refresh: true, radarContext \}\)/);
-  assert.match(handlerSource, /window\.updateOpenShipsRadar\?\.\(\{ refreshGlobe: false, refresh: true, polContext, radarContext \}\)/);
+  assert.match(handlerSource, /Promise\.all\(\[[\s\S]*window\.startRadarLive\(\{ source: 'matching-radar-sweep', refresh: true, radarContext, selectedTaxonomies, polContext \}\)/);
+  assert.match(handlerSource, /window\.startRadarLive\(\{ source: 'matching-radar-sweep', refresh: true, radarContext, selectedTaxonomies, polContext \}\)/);
   assert.match(handlerSource, /window\.aisMatchingExecutionState\.forceNextExecution = true/);
   assert.match(handlerSource, /calculateAndDisplayAisFreight\(\)/);
   assert.match(handlerSource, /latestMatchingDetail\?\.nearbyVessels/);
@@ -38,11 +38,11 @@ test('matching radar fetches AIS and OpenShips then commits dynamic results', ()
   assert.match(processorSource, /window\.matchingResultsState = \{[\s\S]*vessels: matches\.slice\(\)/);
   assert.match(processorSource, /window\.GlobalStore\.setRadarVessels\?\.\(matches, \{[\s\S]*source: 'matching-radar-sweep'/);
   assert.match(processorSource, /renderCachedMatchingResults\(matches, \{[\s\S]*allowPolOnly: true/);
-  assert.match(processorSource, /resultSourceLabel: 'Ranking Radar AIS \/ OpenShips'/);
+  assert.match(processorSource, /resultSourceLabel: 'Ranking Datalastic \(AIS\) \/ AISStream \/ OpenShips REST'/);
   assert.match(processorSource, /showDueDiligence: true/);
   assert.match(processorSource, /renderMatchingRadarSourceIntegrity\(sourceCounts, matches\.length, polContext\)/);
   assert.match(processorSource, /syncMatchingButtonWithCachedResults\?\.\(matches\.length\)/);
-  assert.match(processorSource, /sort\(\(first, second\) =>/);
+  assert.match(processorSource, /orderMatchingVesselsForDisplay\(taxonomyFilter\.vessels, window\.matchingStrictTechnicalFilter === true\)/);
   assert.match(processorSource, /window\.expandMatchingResultsRanking\?\.\(\)/);
 });
 

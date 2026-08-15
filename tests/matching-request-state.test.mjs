@@ -4,6 +4,21 @@ import test from 'node:test';
 
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
+test('matching request carries cancelling through canonical aliases and backend cargo payload', () => {
+  const buildStart = source.indexOf('function buildMatchingRequest');
+  const buildEnd = source.indexOf('window.buildMatchingRequest = buildMatchingRequest;', buildStart);
+  const buildSource = source.slice(buildStart, buildEnd);
+  const fetchStart = source.indexOf('function fetchMatchingRequestFromGlobalStore');
+  const fetchEnd = source.indexOf('window.fetchMatchingRequestFromGlobalStore = fetchMatchingRequestFromGlobalStore;', fetchStart);
+  const fetchSource = source.slice(fetchStart, fetchEnd);
+
+  assert.match(buildSource, /laycan_end: voyageParams\.cancelling/);
+  assert.match(buildSource, /laycanEnd: voyageParams\.cancelling/);
+  assert.match(buildSource, /cargo: \{[\s\S]*laycanEnd: voyageParams\.cancelling/);
+  assert.match(fetchSource, /calculatedState\?\.laycan_end/);
+  assert.match(fetchSource, /laycanEnd: activeVoyage\.cancelling/);
+});
+
 test('calculator builds a complete matchingRequest before publishing CALCULATION_EVENT', () => {
   const builderStart = source.indexOf('function buildMatchingRequest');
   const builderEnd = source.indexOf('window.buildMatchingRequest = buildMatchingRequest;', builderStart);
