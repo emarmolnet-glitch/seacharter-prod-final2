@@ -15,6 +15,9 @@ test('Neon candidate synchronization bypasses route and radar frontend guards', 
 
 test('calculator draft starts with no committed cargo rates', () => {
   assert.match(source, /cargo: 0, cargoQuantity: 0,[^\n]*loadRate: 0, dischRate: 0, dischargeRate: 0/);
+  assert.match(source, /id="rate-load"[^>]*value=""/);
+  assert.match(source, /id="rate-disch"[^>]*value=""/);
+  assert.doesNotMatch(source, /id="rate-(?:load|disch)"[^>]*placeholder="0"/);
   assert.match(source, /<option value="" selected>Selecciona una categoría<\/option>/);
   assert.match(source, /<option value="" selected>Selecciona una mercancía<\/option>/);
   assert.match(source, /if \(!cargoSelectionCommitted\) \{[\s\S]*?rateInput\.value = ''[\s\S]*?window\.State\.loadRate = 0/);
