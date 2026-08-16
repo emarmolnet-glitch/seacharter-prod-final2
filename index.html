@@ -8367,6 +8367,10 @@
                             <div class="flex-1 flex items-center bg-white border border-gray-300 rounded px-2 py-1 h-9 shadow-sm">
                                 <span class="text-[10px] font-bold text-slate-500 mr-1 uppercase tracking-wider whitespace-nowrap">IMO:</span>
                                 <input type="text" id="vessel-identity-imo" class="w-full text-right text-xs text-slate-800 bg-transparent focus:outline-none" value="" placeholder="-" aria-label="IMO" inputmode="numeric" maxlength="7" oninput="handleManualVesselUpdate('imo', this.value)" onblur="fetchVesselByImo(this.value)" onkeydown="handleVesselImoKeyDown(event)">
+                                <span id="vessel-imo-loading-indicator" class="hidden ml-2 text-sky-600" role="status" aria-live="polite">
+                                    <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                                    <span class="sr-only">Cargando datos del buque</span>
+                                </span>
                             </div>
                             <div class="flex-1 flex items-center bg-white border border-gray-300 rounded px-2 py-1 h-9 shadow-sm">
                                 <span class="text-[10px] font-bold text-slate-500 mr-1 uppercase tracking-wider whitespace-nowrap">BANDERA:</span>
@@ -25017,6 +25021,11 @@
         }
         window.handleVesselImoKeyDown = handleVesselImoKeyDown;
 
+        function setVesselImoLoading(isLoading) {
+            const loadingIndicator = document.getElementById('vessel-imo-loading-indicator');
+            loadingIndicator?.classList.toggle('hidden', !isLoading);
+        }
+
         async function fetchVesselByImo(value) {
             const imoInput = document.getElementById('vessel-identity-imo');
             const imo = String(value ?? imoInput?.value ?? '').trim();
@@ -25032,6 +25041,7 @@
             imoInput.disabled = true;
             imoInput.style.cursor = 'wait';
             imoInput.setAttribute('aria-busy', 'true');
+            setVesselImoLoading(true);
 
             try {
                 const response = await fetch(`/api/vessel/${encodeURIComponent(imo)}`);
@@ -25052,9 +25062,33 @@
                 imoInput.style.cursor = previousCursor;
                 imoInput.removeAttribute('aria-busy');
                 delete imoInput.dataset.imoLoading;
+                setVesselImoLoading(false);
             }
         }
         window.fetchVesselByImo = fetchVesselByImo;
+
+        async function hydrateCalculatorVesselFromUrl() {
+            const imo = new URLSearchParams(window.location.search).get('imo')?.trim() || '';
+            if (!imo) return false;
+            if (!/^\d{7}$/.test(imo)) {
+                showToast('⚠️ El parámetro IMO de la URL debe contener exactamente 7 dígitos.');
+                return false;
+            }
+
+            const imoInput = document.getElementById('vessel-identity-imo');
+            if (!imoInput || imoInput.dataset.urlHydrationStarted === 'true') return false;
+            imoInput.dataset.urlHydrationStarted = 'true';
+            imoInput.value = imo;
+            handleManualVesselUpdate('imo', imo);
+            return fetchVesselByImo(imo);
+        }
+        window.hydrateCalculatorVesselFromUrl = hydrateCalculatorVesselFromUrl;
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', hydrateCalculatorVesselFromUrl, { once: true });
+        } else {
+            void hydrateCalculatorVesselFromUrl();
+        }
 
         function applyMatchingVesselToCalculator(vesselJsonEscaped, loadPortLat, loadPortLon, unloadPortLat, unloadPortLon, quantity, freightRate, cargoType, loadName, unloadName) {
             try {
