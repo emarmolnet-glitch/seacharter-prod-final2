@@ -9,9 +9,9 @@ import { normalizeAisDestination } from './src/tracking-destination.mjs';
 import { mountDatalasticCreditCounter } from './src/components/DatalasticCreditCounter.js';
 import { datalasticCreditStore } from './src/stores/datalastic-credit-store.js';
 
-const TRACKING_POLL_INTERVAL = 30_000;
-const TRACKING_AIS_POLL_INTERVAL = 30_000;
 const TRACKING_MAP_KEY = 'tracking';
+const hasFetchedMapData = { current: new Set() };
+const hasCalculatedMapRoute = { current: new Set() };
 const trackingTelemetryFetchRef = { current: new Map() };
 const trackingTelemetryCache = new Map();
 let trackingMapLoadPromise = null;
@@ -35,12 +35,9 @@ const trackingState = {
     activeTab: 'gis',
     contractRef: '',
     loading: false,
-    pollTimer: null,
     contractLookupTimer: null,
     vesselLookupTimer: null,
     vesselLookupController: null,
-    vesselPollTimer: null,
-    vesselPollQuery: '',
     mapMounted: false,
     data: null,
     basicVessel: null,
@@ -430,12 +427,12 @@ function createTrackingOverlay() {
         const vesselQuery = document.getElementById('tracking-input-vessel')?.value.trim();
         if (trackingState.data && trackingState.contractRef) {
             stopLaytimeRequest();
-            loadTrackingContract(trackingState.contractRef, true);
+            loadTrackingContract(trackingState.contractRef, true, { forceRefresh: true, forceRoute: true, forceTelemetry: true });
         } else if (vesselQuery) {
             void loadTrackingVessel(vesselQuery, true, { forceRefresh: true });
         } else {
             const context = getManualTrackingContext();
-            if (context.pol && context.pod) void calculateTrackingRoute();
+            if (context.pol && context.pod) void calculateTrackingRoute({ forceRefresh: true });
             else renderManualTrackingState();
         }
     });
@@ -448,7 +445,7 @@ function createTrackingOverlay() {
             if (trackingState.contractRef) clearTrackingContract();
         }
     });
-    document.getElementById('tracking-calculate-route')?.addEventListener('click', calculateTrackingRoute);
+    document.getElementById('tracking-calculate-route')?.addEventListener('click', () => calculateTrackingRoute({ forceRefresh: true }));
     document.getElementById('tracking-drawer-toggle')?.addEventListener('click', toggleTrackingDrawer);
     ['ballast', 'pol', 'pod'].forEach((field) => document.getElementById(`tracking-input-${field}`)?.addEventListener('change', handleTrackingPortChange));
     ['laydays', 'cancelling', 'cargo'].forEach((field) => document.getElementById(`tracking-input-${field}`)?.addEventListener('change', () => {
@@ -460,7 +457,7 @@ function createTrackingOverlay() {
 
 function onSearchReference(event) {
     event?.preventDefault?.();
-    return loadTrackingContract(document.getElementById('tracking-live-contract-ref')?.value);
+    return loadTrackingContract(document.getElementById('tracking-live-contract-ref')?.value, false, { forceRefresh: true });
 }
 
 function onSearchVessel(event) {
@@ -490,6 +487,19 @@ function handleTrackingPortChange() {
         ? 'Completa POL y POD del viaje activo para calcular.'
         : 'Esperando viaje activo desde Neon.';
     message.dataset.state = 'neutral';
+}
+
+function createTrackingRouteKey(context, vesselPosition) {
+    const vesselId = trackingState.basicVessel?.imo || trackingState.basicVessel?.mmsi || '';
+    return [
+        trackingState.flowMode,
+        normalizeTrackingRef(trackingState.contractRef),
+        normalizeTrackingVesselQuery(vesselId),
+        context.ballast,
+        context.pol,
+        context.pod,
+        trackingState.flowMode === 'audit' ? `${vesselPosition?.lat ?? ''},${vesselPosition?.lng ?? ''}` : '',
+    ].map((value) => String(value || '').trim().toUpperCase()).join('|');
 }
 
 function toggleTrackingDrawer() {
@@ -953,6 +963,9 @@ async function calculateTrackingRoute(options = {}) {
             message.dataset.state = 'warning';
             return;
         }
+        const routeKey = createTrackingRouteKey(context, vesselPosition);
+        if (!options.forceRefresh && hasCalculatedMapRoute.current.has(routeKey)) return;
+        hasCalculatedMapRoute.current.add(routeKey);
         button?.classList.add('is-loading');
         message.textContent = 'Calculando lastre real desde la posición viva hasta POL…';
         message.dataset.state = 'loading';
@@ -983,6 +996,9 @@ async function calculateTrackingRoute(options = {}) {
         message.dataset.state = 'error';
         return;
     }
+    const routeKey = createTrackingRouteKey(context, vesselPosition);
+    if (!options.forceRefresh && hasCalculatedMapRoute.current.has(routeKey)) return;
+    hasCalculatedMapRoute.current.add(routeKey);
     button?.classList.add('is-loading');
     message.textContent = 'Calculando corredores marítimos…';
     message.dataset.state = 'loading';
@@ -1161,12 +1177,6 @@ function renderBasicVesselCard() {
     document.getElementById('tracking-ais-time').textContent = vessel?.positionUpdatedAt ? formatTrackingTime(vessel.positionUpdatedAt) : '';
 }
 
-function stopTrackingVesselPolling() {
-    window.clearInterval(trackingState.vesselPollTimer);
-    trackingState.vesselPollTimer = null;
-    trackingState.vesselPollQuery = '';
-}
-
 function normalizeTrackingVesselQuery(value) {
     const normalized = String(value || '')
         .normalize('NFKC')
@@ -1279,8 +1289,12 @@ function cacheTrackingTelemetry(query, vessel) {
 
 async function fetchTrackingTelemetry(query, { forceRefresh = false } = {}) {
     const cacheKey = normalizeTrackingVesselQuery(query);
+    const requestKey = `telemetry:${cacheKey}`;
     if (!forceRefresh && trackingTelemetryCache.has(cacheKey)) {
         return { found: true, vessel: trackingTelemetryCache.get(cacheKey) };
+    }
+    if (!forceRefresh && hasFetchedMapData.current.has(requestKey)) {
+        return { found: true, vessel: trackingState.basicVessel };
     }
     const pendingRequest = trackingTelemetryFetchRef.current.get(cacheKey);
     if (pendingRequest) return pendingRequest;
@@ -1296,6 +1310,7 @@ async function fetchTrackingTelemetry(query, { forceRefresh = false } = {}) {
         if (payload.found === false || !payload.vessel) return payload;
         const vessel = await fetchCoordinatorLivePosition(payload.vessel, query);
         cacheTrackingTelemetry(query, vessel);
+        hasFetchedMapData.current.add(requestKey);
         return { ...payload, vessel };
     })();
 
@@ -1326,30 +1341,16 @@ function syncCoordinatorPositionState(vessel) {
     }
 }
 
-function startTrackingVesselPolling(query) {
-    const normalizedQuery = normalizeTrackingVesselQuery(query);
-    if (!normalizedQuery) return;
-    if (trackingState.vesselPollTimer && trackingState.vesselPollQuery === normalizedQuery) return;
-    stopTrackingVesselPolling();
-    trackingState.vesselPollQuery = normalizedQuery;
-    trackingState.vesselPollTimer = window.setInterval(
-        () => loadTrackingVessel(normalizedQuery, true, { forceRefresh: true }),
-        TRACKING_AIS_POLL_INTERVAL,
-    );
-}
-
 function scheduleTrackingVesselLookup(event) {
     window.clearTimeout(trackingState.vesselLookupTimer);
     const query = normalizeTrackingVesselQuery(event?.currentTarget?.value);
     if (!query) {
         trackingState.vesselLookupController?.abort();
-        stopTrackingVesselPolling();
         trackingState.basicVessel = null;
         syncBasicVesselMap();
         if (!trackingState.data) renderManualTrackingState();
         return;
     }
-    stopTrackingVesselPolling();
     if (query.length < 2) return;
     trackingState.vesselLookupTimer = window.setTimeout(() => loadTrackingVessel(query), 550);
 }
@@ -1381,7 +1382,6 @@ async function loadTrackingVessel(rawQuery, silent = false, options = {}) {
         const payload = await fetchTrackingTelemetry(query, options);
         if (controller.signal.aborted) return;
         if (payload.found === false || !payload.vessel) {
-            stopTrackingVesselPolling();
             trackingState.basicVessel = null;
             trackingStore.getState().failVesselSearch(payload.message || 'No se encontró el buque solicitado.');
             if (!trackingState.data) {
@@ -1399,17 +1399,16 @@ async function loadTrackingVessel(rawQuery, silent = false, options = {}) {
         syncCoordinatorPositionState(coordinatedVessel);
         trackingStore.getState().setVessel(trackingState.basicVessel);
         if (input && coordinatedVessel.name) input.value = coordinatedVessel.name;
-        startTrackingVesselPolling(coordinatedVessel.imo || coordinatedVessel.mmsi || coordinatedVessel.name || query);
         syncBasicVesselMap(!silent);
         if (!trackingState.data) {
             setTrackingFlowMode(trackingState.flowMode === 'audit' ? 'audit' : 'free');
             renderManualTrackingState();
-            if (trackingState.flowMode === 'audit' && getBasicVesselPosition()) await calculateTrackingRoute({ focus: !silent });
+            if (options.calculateRoute !== false && trackingState.flowMode === 'audit' && getBasicVesselPosition()) await calculateTrackingRoute({ focus: !silent });
         } else {
             renderTrackingMapChrome(trackingState.data);
             renderTrackingAnalytics(trackingState.data);
             renderExecutiveDashboard();
-            if (getBasicVesselPosition()) {
+            if (options.calculateRoute !== false && getBasicVesselPosition()) {
                 const routeMessage = document.getElementById('tracking-input-message');
                 const previousMessage = routeMessage?.textContent || '';
                 const previousState = routeMessage?.dataset.state || '';
@@ -1430,7 +1429,6 @@ async function loadTrackingVessel(rawQuery, silent = false, options = {}) {
     } catch (error) {
         if (error?.name === 'AbortError') return;
         if (silent && trackingState.basicVessel) return;
-        stopTrackingVesselPolling();
         trackingState.basicVessel = null;
         trackingStore.getState().failVesselSearch(error?.message || 'No fue posible consultar el buque.');
         if (!trackingState.data) syncBasicVesselMap();
@@ -1492,8 +1490,6 @@ function clearTrackingContract(message = 'Sin viaje activo. Esperando datos desd
     trackingState.laytimeIncidents = [];
     trackingState.basicVessel = null;
     trackingStore.getState().reset();
-    window.clearInterval(trackingState.pollTimer);
-    trackingState.pollTimer = null;
     clearTrackingMapVisuals();
     const contractInput = document.getElementById('tracking-live-contract-ref');
     if (contractInput) contractInput.value = '';
@@ -1738,7 +1734,7 @@ function renderLaytimeWorkspace(data, operation = 'LOAD') {
         previewLaytime();
     });
     refreshLaytimeIncidentList();
-    form?.addEventListener('submit', (event) => saveLaytimeStatement(event, data));
+    form?.addEventListener('submit', (event) => saveLaytimeStatementFromUserAction(event, data));
     renderLaytimeResult(statement?.calculation || calculateLaytime(collectLaytimeForm()));
 }
 
@@ -1803,7 +1799,8 @@ async function ensureLaytimeStatements(data) {
     }
 }
 
-async function saveLaytimeStatement(event, data) {
+async function saveLaytimeStatementFromUserAction(event, data) {
+    if (event?.type !== 'submit' || event.isTrusted !== true) return;
     event.preventDefault();
     const payload = collectLaytimeForm();
     const message = document.getElementById('tracking-laytime-message');
@@ -1896,7 +1893,7 @@ async function loadActiveVoyage() {
     }
 }
 
-async function loadTrackingContract(rawRef, silent = false) {
+async function loadTrackingContract(rawRef, silent = false, options = {}) {
     if (trackingState.loading) return;
     const contractRef = normalizeTrackingRef(rawRef ?? trackingState.contractRef);
     if (!contractRef) {
@@ -1906,6 +1903,9 @@ async function loadTrackingContract(rawRef, silent = false) {
         if (pol && pod) calculateTrackingRoute();
         return;
     }
+    const requestKey = `reference:${contractRef}`;
+    if (!options.forceRefresh && hasFetchedMapData.current.has(requestKey)) return;
+    hasFetchedMapData.current.add(requestKey);
     if (!/^[A-Z0-9][A-Z0-9/_-]{2,79}$/.test(contractRef)) {
         const inputMessage = document.getElementById('tracking-input-message');
         inputMessage.textContent = hasTrackingVoyageData()
@@ -1971,22 +1971,20 @@ async function loadTrackingContract(rawRef, silent = false) {
         renderTrackingMapChrome(payload);
         renderTrackingAnalytics(payload);
         renderExecutiveDashboard();
+        const vesselQuery = payload.contract?.vesselMmsi || payload.contract?.vesselImo || payload.contract?.vesselName;
+        if (vesselQuery) await loadTrackingVessel(vesselQuery, true, { forceRefresh: options.forceTelemetry === true, calculateRoute: false });
         let routeError = null;
         if (payload.contract?.pol && payload.contract?.pod) {
             try {
-                await calculateTrackingRoute({ focus: !silent, throwOnError: true });
+                await calculateTrackingRoute({ focus: !silent, throwOnError: true, forceRefresh: options.forceRoute === true });
             } catch (error) {
                 routeError = error;
             }
         }
-        const vesselQuery = payload.contract?.vesselMmsi || payload.contract?.vesselImo || payload.contract?.vesselName;
-        if (vesselQuery) void loadTrackingVessel(vesselQuery, true);
         document.getElementById('tracking-live-last-sync').textContent = `Sync ${formatTrackingTime(payload.generatedAt)}`;
         const message = document.getElementById('tracking-input-message');
         message.textContent = routeError?.message || 'Contrato, ruta y analítica sincronizados.';
         message.dataset.state = routeError ? 'error' : 'success';
-        window.clearInterval(trackingState.pollTimer);
-        trackingState.pollTimer = window.setInterval(() => loadTrackingContract(contractRef, true), TRACKING_POLL_INTERVAL);
     } catch (error) {
         trackingStore.getState().failReferenceSearch(error?.message || 'No fue posible recuperar el contrato.');
         if (silent && trackingState.data) {
@@ -2002,8 +2000,6 @@ async function loadTrackingContract(rawRef, silent = false) {
             } else {
                 setTrackingFlowMode('free');
             }
-            window.clearInterval(trackingState.pollTimer);
-            trackingState.pollTimer = null;
             renderManualTrackingState();
             const contractInput = document.getElementById('tracking-live-contract-ref');
             if (contractInput) contractInput.value = contractRef;
@@ -2026,9 +2022,8 @@ function resetTrackingViewState({ mode = 'free' } = {}) {
     trackingState.vesselLookupTimer = null;
     trackingState.vesselLookupController?.abort();
     trackingState.vesselLookupController = null;
-    window.clearInterval(trackingState.pollTimer);
-    trackingState.pollTimer = null;
-    stopTrackingVesselPolling();
+    hasFetchedMapData.current.clear();
+    hasCalculatedMapRoute.current.clear();
     stopLaytimeRequest({ clearStatements: true });
     trackingState.activeTab = 'gis';
     trackingState.contractRef = '';
