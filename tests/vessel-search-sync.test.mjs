@@ -125,6 +125,7 @@ test('calculator renders seven editable technical badges in a full-width row bet
   assert.match(indexSource, /function handleManualVesselUpdate\(field, value\)/);
   assert.match(indexSource, /function handleVesselImoKeyDown\(event\)/);
   assert.match(indexSource, /async function fetchVesselByImo\(value\)/);
+  assert.match(indexSource, /id="vessel-imo-loading-indicator" class="hidden ml-2 text-sky-600" role="status" aria-live="polite"/);
   assert.match(indexSource, /if \(nameInput && vesselName\) nameInput\.value = vesselName/);
   assert.match(indexSource, /flagInput\.value = flag/);
   assert.match(indexSource, /imoInput\.value = imo/);
@@ -171,11 +172,13 @@ test('manual IMO lookup validates seven digits and exposes a loading state', () 
   assert.match(lookupSource, /imoInput\.disabled = true/);
   assert.match(lookupSource, /imoInput\.style\.cursor = 'wait'/);
   assert.match(lookupSource, /imoInput\.setAttribute\('aria-busy', 'true'\)/);
+  assert.match(lookupSource, /setVesselImoLoading\(true\)/);
   assert.match(lookupSource, /fetch\(`\/api\/vessel\/\$\{encodeURIComponent\(imo\)\}`\)/);
   assert.match(lookupSource, /applyDataBridgeHydrationToCalculator\(payload\.vessel/);
   assert.match(lookupSource, /finally \{/);
   assert.match(lookupSource, /imoInput\.disabled = previousDisabled/);
   assert.match(lookupSource, /imoInput\.removeAttribute\('aria-busy'\)/);
+  assert.match(lookupSource, /setVesselImoLoading\(false\)/);
   const hydrationStart = indexSource.indexOf('function applyDataBridgeHydrationToCalculator(rawVessel, selectedVessel = {})');
   const hydrationEnd = indexSource.indexOf('async function fetchDataBridgeVesselProfile', hydrationStart);
   const hydrationSource = indexSource.slice(hydrationStart, hydrationEnd);
@@ -186,6 +189,19 @@ test('manual IMO lookup validates seven digits and exposes a loading state', () 
   assert.match(hydrationSource, /updateSection2LocalState\('vessel-draft', State\.draft/);
   assert.match(hydrationSource, /updateSection2LocalState\('vessel-loa', State\.loa/);
   assert.match(hydrationSource, /updateSection2LocalState\('vessel-identity-beam', State\.beam/);
+});
+
+test('calculator deep link hydrates a valid IMO through the existing vessel lookup', () => {
+  const hydrationStart = indexSource.indexOf('async function hydrateCalculatorVesselFromUrl()');
+  const hydrationEnd = indexSource.indexOf('function applyMatchingVesselToCalculator(', hydrationStart);
+  const hydrationSource = indexSource.slice(hydrationStart, hydrationEnd);
+
+  assert.match(hydrationSource, /new URLSearchParams\(window\.location\.search\)\.get\('imo'\)/);
+  assert.match(hydrationSource, /if \(!\/\^\\d\{7\}\$\/\.test\(imo\)\)/);
+  assert.match(hydrationSource, /imoInput\.value = imo/);
+  assert.ok(hydrationSource.indexOf("handleManualVesselUpdate('imo', imo)") < hydrationSource.indexOf('return fetchVesselByImo(imo)'));
+  assert.match(hydrationSource, /document\.addEventListener\('DOMContentLoaded', hydrateCalculatorVesselFromUrl, \{ once: true \}\)/);
+  assert.match(hydrationSource, /void hydrateCalculatorVesselFromUrl\(\)/);
 });
 
 test('manual DWT edits update calculator state and force compatibility recalculation', () => {
