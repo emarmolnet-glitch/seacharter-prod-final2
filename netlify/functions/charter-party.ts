@@ -93,7 +93,7 @@ export default async (request: Request, context: Context) => {
   const savedAt = new Date();
   const charterPartyDetails = {
     charterPartyGeneratedAt: savedAt.toISOString(),
-    ballastDistanceNm: Number.isFinite(ballastDistanceNm) && ballastDistanceNm > 0 ? ballastDistanceNm : null,
+    ballastDistanceNm: Number.isFinite(ballastDistanceNm) && ballastDistanceNm >= 0 ? ballastDistanceNm : null,
     vesselDwt: Number.isFinite(vesselDwt) && vesselDwt > 0 ? vesselDwt : null,
     vesselGt: Number.isFinite(vesselGt) && vesselGt > 0 ? vesselGt : null,
     vesselFlag: cleanText(body.vesselFlag, 80) || null,
