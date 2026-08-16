@@ -160,15 +160,16 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
         };
     }),
     applyTrackingAudit: ({ ballastDistanceNm, lastreCoordinates, vessel } = {}) => set((current) => {
+        const normalizedDistance = cleanNonNegativeNumber(ballastDistanceNm);
         const normalizedCoordinates = normalizeRouteCoordinates(lastreCoordinates);
         return {
             draft: {
                 ...current.draft,
-                ballastDistanceNm: cleanNumber(ballastDistanceNm) || current.draft.ballastDistanceNm,
-                ballastDistanceSource: cleanNumber(ballastDistanceNm) > 0
+                ballastDistanceNm: normalizedDistance ?? current.draft.ballastDistanceNm,
+                ballastDistanceSource: normalizedDistance !== null
                     ? 'tracking-audit'
                     : current.draft.ballastDistanceSource,
-                lastreCoordinates: normalizedCoordinates.length > 2 ? normalizedCoordinates : current.draft.lastreCoordinates,
+                lastreCoordinates: normalizedCoordinates.length >= 2 ? normalizedCoordinates : current.draft.lastreCoordinates,
                 vessel: normalizeVessel(vessel) || current.draft.vessel,
                 updatedAt: new Date().toISOString(),
                 lastSource: 'tracking-audit',
@@ -185,7 +186,7 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
                 ballastDistanceSource: normalizedDistance !== null
                     ? 'matching-neon-maritime'
                     : current.draft.ballastDistanceSource,
-                lastreCoordinates: normalizedCoordinates.length > 2 ? normalizedCoordinates : current.draft.lastreCoordinates,
+                lastreCoordinates: normalizedCoordinates.length >= 2 ? normalizedCoordinates : current.draft.lastreCoordinates,
                 vessel: normalizeVessel(vessel) || current.draft.vessel,
                 updatedAt: new Date().toISOString(),
                 lastSource: 'matching-neon-maritime',
@@ -193,15 +194,16 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
         };
     }),
     applyTrackingRoute: ({ distanceNm, routeGeometry, ballastDistanceNm, lastreCoordinates } = {}) => set((current) => {
+        const normalizedBallastDistance = cleanNonNegativeNumber(ballastDistanceNm);
         const normalizedCoordinates = normalizeRouteCoordinates(lastreCoordinates);
         return {
             draft: {
                 ...current.draft,
-                ballastDistanceNm: cleanNumber(ballastDistanceNm) || current.draft.ballastDistanceNm,
-                ballastDistanceSource: cleanNumber(ballastDistanceNm) > 0
+                ballastDistanceNm: normalizedBallastDistance ?? current.draft.ballastDistanceNm,
+                ballastDistanceSource: normalizedBallastDistance !== null
                     ? 'tracking-route'
                     : current.draft.ballastDistanceSource,
-                lastreCoordinates: normalizedCoordinates.length > 2 ? normalizedCoordinates : current.draft.lastreCoordinates,
+                lastreCoordinates: normalizedCoordinates.length >= 2 ? normalizedCoordinates : current.draft.lastreCoordinates,
                 distanceNm: cleanNumber(distanceNm) || current.draft.distanceNm,
                 routeGeometry: routeGeometry && typeof routeGeometry === 'object' ? routeGeometry : current.draft.routeGeometry,
                 updatedAt: new Date().toISOString(),

@@ -27,7 +27,7 @@ test('DraftVoyage centralizes route, laycan, cargo and audited vessel data', () 
   assert.match(storeSource, /applyTrackingRoute/);
   assert.match(storeSource, /applyMatchingCandidate/);
   assert.match(storeSource, /matching-neon-maritime/);
-  assert.match(storeSource, /lastreCoordinates: normalizedCoordinates\.length > 2/);
+  assert.match(storeSource, /lastreCoordinates: normalizedCoordinates\.length >= 2/);
   assert.match(entrySource, /window\.VoyageDraftStore = voyageStore/);
   assert.match(entrySource, /calculatorStore\.subscribe/);
 });
@@ -41,8 +41,8 @@ test('DraftVoyage preserves cancelling when calculator updates omit it and accep
 test('audited ballast distance survives calculator recalculation until a manual edit', () => {
   assert.match(storeSource, /if \(incomingDistance === 0 && retainedDistance > 0\) return retainedDistance/);
   assert.match(storeSource, /setBallastDistance/);
-  assert.match(storeSource, /ballastDistanceSource: cleanNumber\(ballastDistanceNm\) > 0[\s\S]*'tracking-audit'/);
-  assert.match(storeSource, /ballastDistanceSource: cleanNumber\(ballastDistanceNm\) > 0[\s\S]*'tracking-route'/);
+  assert.match(storeSource, /ballastDistanceSource: normalizedDistance !== null[\s\S]*'tracking-audit'/);
+  assert.match(storeSource, /ballastDistanceSource: normalizedBallastDistance !== null[\s\S]*'tracking-route'/);
   assert.match(entrySource, /bindManualBallastDistance/);
   assert.match(entrySource, /source: 'calculator-manual'/);
   assert.match(entrySource, /source: 'voyage-draft-ballast-restore'/);
@@ -93,7 +93,7 @@ test('pre-fixture ballast uses the shared maritime routing engine', () => {
   assert.match(trackingSource, /\[origin\.lng, origin\.lat\]/);
   assert.match(trackingSource, /\[destination\.lng, destination\.lat\]/);
   assert.match(trackingSource, /coordinateOrder: 'lonLat'/);
-  assert.match(trackingSource, /payload\.coordinates\.length < 3/);
+  assert.match(trackingSource, /payload\.coordinates\.length < minimumCoordinateCount/);
   assert.doesNotMatch(indexSource, /window\.calculateMaritimeRouteBetweenPoints/);
 });
 

@@ -8,6 +8,23 @@ type RoutePoint = {
   lon: number;
 };
 
+const ANCHORAGE_RADIUS_NM = 15;
+
+function toRadians(value: number): number {
+  return value * (Math.PI / 180);
+}
+
+export function haversineDistanceNm(origin: RoutePoint, destination: RoutePoint): number {
+  const earthRadiusNm = 3440.065;
+  const latitudeDelta = toRadians(destination.lat - origin.lat);
+  const longitudeDelta = toRadians(destination.lon - origin.lon);
+  const originLatitude = toRadians(origin.lat);
+  const destinationLatitude = toRadians(destination.lat);
+  const haversine = Math.sin(latitudeDelta / 2) ** 2
+    + Math.cos(originLatitude) * Math.cos(destinationLatitude) * Math.sin(longitudeDelta / 2) ** 2;
+  return earthRadiusNm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+
 function pickObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -96,6 +113,45 @@ function pinEndpoints(coordinates: number[][], origin: RoutePoint, destination: 
   return pinned.filter((coord) => Number.isFinite(coord[0]) && Number.isFinite(coord[1]));
 }
 
+function isBallastRoute(body: Record<string, unknown>): boolean {
+  const routeKind = String(body.routeKind ?? body.legType ?? body.routeType ?? "").trim().toLowerCase();
+  return routeKind === "ballast" || routeKind === "lastre";
+}
+
+function createZeroBallastRoute(origin: RoutePoint, destination: RoutePoint, directDistanceNm: number) {
+  const coordinates = [[origin.lat, origin.lon], [destination.lat, destination.lon]];
+  return {
+    success: true,
+    distance: 0,
+    distance_nm: 0,
+    duration_hours: 0,
+    coordinates,
+    geojson: {
+      type: "Feature",
+      properties: {
+        distance: 0,
+        distance_nm: 0,
+        duration_hours: 0,
+        units: "nauticalmiles",
+        passages: [],
+        zeroBallast: true,
+      },
+      geometry: {
+        type: "LineString",
+        coordinates: coordinates.map(([lat, lon]) => [lon, lat]),
+      },
+    },
+    nodes: [origin, destination],
+    passages: [],
+    units: "nauticalmiles",
+    coordinateOrder: "latLon",
+    zeroBallast: true,
+    fallbackReason: "anchorage-radius",
+    directDistanceNm,
+    anchorageRadiusNm: ANCHORAGE_RADIUS_NM,
+  };
+}
+
 export default async (req: Request) => {
   if (req.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
@@ -116,6 +172,13 @@ export default async (req: Request) => {
         acceptedAliases: ["origin/destination", "from/to", "start/end", "coordinates: [[lon, lat], [lon, lat]]"],
         receivedKeys: Object.keys(body),
       }, { status: 400 });
+    }
+
+    const directDistanceNm = haversineDistanceNm(origin, destination);
+    if (isBallastRoute(body) && directDistanceNm < ANCHORAGE_RADIUS_NM) {
+      return Response.json(createZeroBallastRoute(origin, destination, directDistanceNm), {
+        headers: { "Cache-Control": "private, no-store" },
+      });
     }
 
     const cachedRoute = await getOrSetCachedJson({

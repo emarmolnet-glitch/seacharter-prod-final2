@@ -717,8 +717,42 @@ async function applyBasicAisDestination(rawDestination) {
     return { ...point, name: destination.name, locode: destination.locode };
 }
 
+function calculateDirectDistanceNm(origin, destination) {
+    const earthRadiusNm = 3440.065;
+    const toRadians = (value) => Number(value) * (Math.PI / 180);
+    const latitudeDelta = toRadians(destination.lat - origin.lat);
+    const longitudeDelta = toRadians(destination.lng - origin.lng);
+    const originLatitude = toRadians(origin.lat);
+    const destinationLatitude = toRadians(destination.lat);
+    const haversine = Math.sin(latitudeDelta / 2) ** 2
+        + Math.cos(originLatitude) * Math.cos(destinationLatitude) * Math.sin(longitudeDelta / 2) ** 2;
+    return earthRadiusNm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+
+function createZeroBallastRoute(origin, destination, directDistanceNm) {
+    const coordinates = [[origin.lat, origin.lng], [destination.lat, destination.lng]];
+    return {
+        success: true,
+        distance: 0,
+        distance_nm: 0,
+        duration_hours: 0,
+        coordinates,
+        units: 'nauticalmiles',
+        coordinateOrder: 'latLon',
+        zeroBallast: true,
+        fallbackReason: 'anchorage-radius',
+        directDistanceNm,
+        anchorageRadiusNm: 15,
+    };
+}
+
 async function calculateEphemeralTrackingRoute(origin, destination, options = {}) {
-    const response = await fetch('/api/route', {
+    const isBallastAudit = options.routeKind === 'ballast';
+    const directDistanceNm = calculateDirectDistanceNm(origin, destination);
+    const zeroBallastRoute = isBallastAudit && directDistanceNm < 15
+        ? createZeroBallastRoute(origin, destination, directDistanceNm)
+        : null;
+    const response = zeroBallastRoute ? null : await fetch('/api/route', {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -727,13 +761,14 @@ async function calculateEphemeralTrackingRoute(origin, destination, options = {}
                 [destination.lng, destination.lat],
             ],
             coordinateOrder: 'lonLat',
+            routeKind: options.routeKind,
         }),
     });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload?.success || !Array.isArray(payload.coordinates) || payload.coordinates.length < 3) {
+    const payload = zeroBallastRoute || await response.json().catch(() => ({}));
+    const minimumCoordinateCount = payload?.zeroBallast ? 2 : 3;
+    if ((!zeroBallastRoute && !response.ok) || !payload?.success || !Array.isArray(payload.coordinates) || payload.coordinates.length < minimumCoordinateCount) {
         throw new Error('El motor marítimo no devolvió una polilínea navegable por agua.');
     }
-    const isBallastAudit = options.routeKind === 'ballast';
     const result = {
         portBallast: isBallastAudit ? `POS - ${origin.name}` : '',
         pol: isBallastAudit ? `POL - ${destination.name}` : origin.name,
@@ -761,21 +796,28 @@ async function calculateEphemeralTrackingRoute(origin, destination, options = {}
     return result;
 }
 
-async function requestTrackingMaritimeLeg(origin, destination) {
+async function requestTrackingMaritimeLeg(origin, destination, options = {}) {
     console.log('Coordinates:', { origin, destination });
-    const response = await fetch('/api/route', {
+    const isBallastRoute = options.routeKind === 'ballast';
+    const directDistanceNm = calculateDirectDistanceNm(origin, destination);
+    const zeroBallastRoute = isBallastRoute && directDistanceNm < 15
+        ? createZeroBallastRoute(origin, destination, directDistanceNm)
+        : null;
+    const response = zeroBallastRoute ? null : await fetch('/api/route', {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify({
             origin: { name: origin.name, lat: origin.lat, lon: origin.lng },
             destination: { name: destination.name, lat: destination.lat, lon: destination.lng },
+            routeKind: options.routeKind,
         }),
     });
-    const payload = await response.json().catch(() => ({}));
+    const payload = zeroBallastRoute || await response.json().catch(() => ({}));
     console.log('Routing Response:', payload);
     const distance = Number(payload?.distance);
     const routeGeometry = asTrackingArray(payload?.coordinates);
-    if (!response.ok || !payload?.success || !Number.isFinite(distance) || distance <= 0 || routeGeometry.length < 3) {
+    const validZeroBallast = isBallastRoute && payload?.zeroBallast === true && distance === 0 && routeGeometry.length >= 2;
+    if ((!zeroBallastRoute && !response.ok) || !payload?.success || !Number.isFinite(distance) || (!validZeroBallast && (distance <= 0 || routeGeometry.length < 3))) {
         throw new Error('El motor marítimo no devolvió distancia y geometría navegable válidas.');
     }
     return { ...payload, distance, coordinates: routeGeometry };
@@ -802,8 +844,8 @@ async function calculateContractualTrackingRoute(context) {
     }
 
     const [ballastRoute, ladenRoute] = await Promise.all([
-        ballast ? requestTrackingMaritimeLeg(ballast, pol) : null,
-        requestTrackingMaritimeLeg(pol, pod),
+        ballast ? requestTrackingMaritimeLeg(ballast, pol, { routeKind: 'ballast' }) : null,
+        requestTrackingMaritimeLeg(pol, pod, { routeKind: 'laden' }),
     ]);
     const distBallast = ballastRoute ? Number(ballastRoute.distance) : 0;
     const distLaden = Number(ladenRoute.distance);
