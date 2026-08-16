@@ -129,9 +129,12 @@ test('tracking opens from DraftVoyage or free mode and never auto-fetches a cont
   assert.match(scriptSource, /function closeTrackingLive[\s\S]*resetTrackingViewState\(\)/);
 });
 
-test('tracking supports contract lookup, live polling and detailed analytics', () => {
+test('tracking loads contract data once and keeps detailed analytics read-only', () => {
   assert.match(scriptSource, /\/api\/v1\/voyage\/tracking\/\$\{encodeURIComponent\(contractRef\)\}/);
-  assert.match(scriptSource, /TRACKING_POLL_INTERVAL = 30_000/);
+  assert.match(scriptSource, /const hasFetchedMapData = \{ current: new Set\(\) \}/);
+  assert.match(scriptSource, /const requestKey = `reference:\$\{contractRef\}`/);
+  assert.match(scriptSource, /hasFetchedMapData\.current\.has\(requestKey\)/);
+  assert.doesNotMatch(scriptSource, /TRACKING_POLL_INTERVAL|pollTimer|setInterval/);
   assert.match(scriptSource, /Alertas en tiempo real/);
   assert.match(scriptSource, /Trazabilidad de punta a punta/);
   assert.match(scriptSource, /Asset Trail/);
@@ -154,10 +157,17 @@ test('laytime fetching runs once per contract reference and stops after errors',
   assert.match(scriptSource, /trackingState\.laytimeErrorRef = contractRef/);
   assert.match(scriptSource, /function stopLaytimeRequest/);
   assert.match(scriptSource, /trackingState\.laytimeRequestController\?\.abort\(\)/);
-  assert.match(scriptSource, /stopLaytimeRequest\(\);[\s\S]*stopTrackingVesselPolling\(\);/);
-  assert.match(scriptSource, /TRACKING_POLL_INTERVAL = 30_000/);
-  assert.match(scriptSource, /window\.clearInterval\(trackingState\.pollTimer\)/);
+  assert.match(scriptSource, /hasFetchedMapData\.current\.clear\(\)/);
+  assert.doesNotMatch(scriptSource, /stopTrackingVesselPolling|TRACKING_POLL_INTERVAL|pollTimer/);
   assert.doesNotMatch(scriptSource, /async function loadLaytimeStatements/);
+});
+
+test('laytime persistence only runs from a trusted manual submit', () => {
+  assert.match(scriptSource, /form\?\.addEventListener\('submit', \(event\) => saveLaytimeStatementFromUserAction\(event, data\)\)/);
+  assert.match(scriptSource, /async function saveLaytimeStatementFromUserAction\(event, data\)/);
+  assert.match(scriptSource, /event\?\.type !== 'submit' \|\| event\.isTrusted !== true/);
+  assert.match(scriptSource, /method: 'PUT'/);
+  assert.equal((scriptSource.match(/method: 'PUT'/g) || []).length, 1);
 });
 
 test('tracking exposes independent contract, audit and free triggers', () => {
@@ -189,7 +199,8 @@ test('tracking resolves vessel master and AIS without requiring a contract', () 
   assert.match(scriptSource, /NOVI\b/);
   assert.match(scriptSource, /digits\.length === 7 \|\| digits\.length === 9/);
   assert.match(scriptSource, /payload.found === false/);
-  assert.match(scriptSource, /TRACKING_AIS_POLL_INTERVAL = 30_000/);
+  assert.match(scriptSource, /const requestKey = `telemetry:\$\{cacheKey\}`/);
+  assert.doesNotMatch(scriptSource, /TRACKING_AIS_POLL_INTERVAL|vesselPollTimer|startTrackingVesselPolling/);
   assert.match(scriptSource, /\/api\/v1\/vessel\/live-profile\?q=\$\{encodeURIComponent\(query\)\}/);
   assert.match(scriptSource, /function syncBasicVesselMap/);
   assert.match(scriptSource, /focusActiveVessel/);
@@ -200,7 +211,16 @@ test('tracking resolves vessel master and AIS without requiring a contract', () 
   assert.match(scriptSource, /heading/);
   assert.doesNotMatch(scriptSource, /async function loadTrackingVessel\(rawQuery, silent = false\) \{\s*if \(!hasTrackingVoyageData\(\)\)/);
   assert.match(scriptSource, /Tracking Libre no calcula rutas/);
-  assert.match(scriptSource, /Datalastic centra el mapa/);
+  assert.match(scriptSource, /mountDatalasticCreditCounter/);
+});
+
+test('maritime routes are calculated once per immutable tracking context', () => {
+  assert.match(scriptSource, /const hasCalculatedMapRoute = \{ current: new Set\(\) \}/);
+  assert.match(scriptSource, /function createTrackingRouteKey\(context, vesselPosition\)/);
+  assert.match(scriptSource, /normalizeTrackingRef\(trackingState\.contractRef\)/);
+  assert.match(scriptSource, /trackingState\.basicVessel\?\.imo \|\| trackingState\.basicVessel\?\.mmsi/);
+  assert.match(scriptSource, /if \(!options\.forceRefresh && hasCalculatedMapRoute\.current\.has\(routeKey\)\) return/);
+  assert.match(scriptSource, /loadTrackingVessel\(vesselQuery, true, \{ forceRefresh: options\.forceTelemetry === true, calculateRoute: false \}\)/);
 });
 
 test('tracking hydrates contractual fields and publishes changes through Zustand', () => {
@@ -244,7 +264,7 @@ test('tracking reuses MAPA port search and maritime routing services', () => {
 });
 
 test('contract route refresh hydrates shared stores and executive metrics', () => {
-  assert.match(scriptSource, /async function requestTrackingMaritimeLeg\(origin, destination\)/);
+  assert.match(scriptSource, /async function requestTrackingMaritimeLeg\(origin, destination, options = \{\}\)/);
   assert.match(scriptSource, /origin: \{ name: origin\.name, lat: origin\.lat, lon: origin\.lng \}/);
   assert.match(scriptSource, /destination: \{ name: destination\.name, lat: destination\.lat, lon: destination\.lng \}/);
   assert.match(scriptSource, /routeGeometry = asTrackingArray\(payload\?\.coordinates\)/);
@@ -260,7 +280,7 @@ test('contract route refresh hydrates shared stores and executive metrics', () =
   assert.match(scriptSource, /const aisPosition = getBasicVesselPosition\(\)/);
   assert.match(scriptSource, /: contractBallast/);
   assert.match(scriptSource, /setOperationalMetrics\?\.\(\{/);
-  assert.match(scriptSource, /await calculateTrackingRoute\(\{ focus: !silent, throwOnError: true \}\)/);
+  assert.match(scriptSource, /await calculateTrackingRoute\(\{ focus: !silent, throwOnError: true, forceRefresh: options\.forceRoute === true \}\)/);
   assert.match(scriptSource, /if \(options\.throwOnError\) throw error/);
   assert.match(trackingStoreSource, /operationalMetrics: \{ \.\.\.EMPTY_OPERATIONAL_METRICS \}/);
   assert.match(trackingStoreSource, /setOperationalMetrics:/);
@@ -335,8 +355,9 @@ test('tracking deduplicates telemetry fetches across executive dashboard mounts'
   assert.match(scriptSource, /const trackingTelemetryCache = new Map\(\)/);
   assert.match(scriptSource, /trackingTelemetryFetchRef\.current\.get\(cacheKey\)/);
   assert.match(scriptSource, /trackingTelemetryCache\.has\(cacheKey\)/);
-  assert.match(scriptSource, /loadTrackingVessel\(normalizedQuery, true, \{ forceRefresh: true \}\)/);
-  assert.match(scriptSource, /loadTrackingVessel\(vesselQuery, true, \{ forceRefresh: true \}\)/);
+  assert.match(scriptSource, /hasFetchedMapData\.current\.add\(requestKey\)/);
+  assert.match(scriptSource, /loadTrackingVessel\(vesselQuery, true, \{ forceRefresh: options\.forceTelemetry === true, calculateRoute: false \}\)/);
+  assert.doesNotMatch(scriptSource, /loadTrackingVessel\(normalizedQuery, true, \{ forceRefresh: true \}\)/);
 });
 
 test('voyages_tracking schema persists GIS, AIS, commercial and audit data', () => {

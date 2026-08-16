@@ -47,7 +47,7 @@ test('coordinator coordinates replace cached tracking position and marker state'
   const mergeSource = sliceFunction(trackingSource, 'function mergeCoordinatorTelemetry', 'async function refreshAisConsumptionMonitor');
   assert.match(mergeSource, /position = \{[\s\S]*lat: telemetry\.latitude[\s\S]*lng: telemetry\.longitude/);
 
-  const stateSource = sliceFunction(trackingSource, 'function syncCoordinatorPositionState', 'function startTrackingVesselPolling');
+  const stateSource = sliceFunction(trackingSource, 'function syncCoordinatorPositionState', 'function scheduleTrackingVesselLookup');
   assert.match(stateSource, /trackingState\.basicVessel = \{ \.\.\.vessel, position \}/);
   assert.match(stateSource, /trackingState\.data = \{[\s\S]*live:[\s\S]*position/);
 
