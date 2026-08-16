@@ -12,6 +12,8 @@ import { datalasticCreditStore } from './src/stores/datalastic-credit-store.js';
 const TRACKING_POLL_INTERVAL = 30_000;
 const TRACKING_AIS_POLL_INTERVAL = 30_000;
 const TRACKING_MAP_KEY = 'tracking';
+const trackingTelemetryFetchRef = { current: new Map() };
+const trackingTelemetryCache = new Map();
 let trackingMapLoadPromise = null;
 let trackingMapMountFrameId = null;
 let trackingMapResizeFrameId = null;
@@ -430,7 +432,7 @@ function createTrackingOverlay() {
             stopLaytimeRequest();
             loadTrackingContract(trackingState.contractRef, true);
         } else if (vesselQuery) {
-            void loadTrackingVessel(vesselQuery, true);
+            void loadTrackingVessel(vesselQuery, true, { forceRefresh: true });
         } else {
             const context = getManualTrackingContext();
             if (context.pol && context.pod) void calculateTrackingRoute();
@@ -1268,6 +1270,45 @@ async function fetchCoordinatorLivePosition(vessel, fallbackQuery, signal) {
     return mergeCoordinatorTelemetry(vessel, { ...payload.data, latitude, longitude }, payload.meta);
 }
 
+function cacheTrackingTelemetry(query, vessel) {
+    [query, vessel?.imo, vessel?.mmsi, vessel?.name]
+        .map(normalizeTrackingVesselQuery)
+        .filter(Boolean)
+        .forEach((key) => trackingTelemetryCache.set(key, vessel));
+}
+
+async function fetchTrackingTelemetry(query, { forceRefresh = false } = {}) {
+    const cacheKey = normalizeTrackingVesselQuery(query);
+    if (!forceRefresh && trackingTelemetryCache.has(cacheKey)) {
+        return { found: true, vessel: trackingTelemetryCache.get(cacheKey) };
+    }
+    const pendingRequest = trackingTelemetryFetchRef.current.get(cacheKey);
+    if (pendingRequest) return pendingRequest;
+
+    const request = (async () => {
+        const response = await fetch(`/api/v1/vessel/live-profile?q=${encodeURIComponent(query)}`, {
+            headers: { Accept: 'application/json' },
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) {
+            throw new Error(payload.error || 'No se encontró el buque solicitado.');
+        }
+        if (payload.found === false || !payload.vessel) return payload;
+        const vessel = await fetchCoordinatorLivePosition(payload.vessel, query);
+        cacheTrackingTelemetry(query, vessel);
+        return { ...payload, vessel };
+    })();
+
+    trackingTelemetryFetchRef.current.set(cacheKey, request);
+    try {
+        return await request;
+    } finally {
+        if (trackingTelemetryFetchRef.current.get(cacheKey) === request) {
+            trackingTelemetryFetchRef.current.delete(cacheKey);
+        }
+    }
+}
+
 function syncCoordinatorPositionState(vessel) {
     const position = normalizeMapPoint(vessel?.position || vessel);
     if (!position) return;
@@ -1291,7 +1332,10 @@ function startTrackingVesselPolling(query) {
     if (trackingState.vesselPollTimer && trackingState.vesselPollQuery === normalizedQuery) return;
     stopTrackingVesselPolling();
     trackingState.vesselPollQuery = normalizedQuery;
-    trackingState.vesselPollTimer = window.setInterval(() => loadTrackingVessel(normalizedQuery, true), TRACKING_AIS_POLL_INTERVAL);
+    trackingState.vesselPollTimer = window.setInterval(
+        () => loadTrackingVessel(normalizedQuery, true, { forceRefresh: true }),
+        TRACKING_AIS_POLL_INTERVAL,
+    );
 }
 
 function scheduleTrackingVesselLookup(event) {
@@ -1310,7 +1354,7 @@ function scheduleTrackingVesselLookup(event) {
     trackingState.vesselLookupTimer = window.setTimeout(() => loadTrackingVessel(query), 550);
 }
 
-async function loadTrackingVessel(rawQuery, silent = false) {
+async function loadTrackingVessel(rawQuery, silent = false, options = {}) {
     const query = normalizeTrackingVesselQuery(rawQuery);
     if (query.length < 2) {
         const message = document.getElementById('tracking-input-message');
@@ -1334,14 +1378,8 @@ async function loadTrackingVessel(rawQuery, silent = false) {
     }
 
     try {
-        const response = await fetch(`/api/v1/vessel/live-profile?q=${encodeURIComponent(query)}`, {
-            headers: { Accept: 'application/json' },
-            signal: controller.signal,
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok || !payload.success) {
-            throw new Error(payload.error || 'No se encontró el buque solicitado.');
-        }
+        const payload = await fetchTrackingTelemetry(query, options);
+        if (controller.signal.aborted) return;
         if (payload.found === false || !payload.vessel) {
             stopTrackingVesselPolling();
             trackingState.basicVessel = null;
@@ -1357,7 +1395,7 @@ async function loadTrackingVessel(rawQuery, silent = false) {
             document.getElementById('tracking-ais-time').textContent = '';
             return;
         }
-        const coordinatedVessel = await fetchCoordinatorLivePosition(payload.vessel, query, controller.signal);
+        const coordinatedVessel = payload.vessel;
         syncCoordinatorPositionState(coordinatedVessel);
         trackingStore.getState().setVessel(trackingState.basicVessel);
         if (input && coordinatedVessel.name) input.value = coordinatedVessel.name;

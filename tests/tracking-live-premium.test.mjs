@@ -330,6 +330,15 @@ test('vessel live profile combines master data with the latest AIS position', ()
   assert.doesNotMatch(vesselEndpointSource, /(?:password|secret)\s*[:=]\s*["'][^"']+|APIKey:\s*["'][^"']+/i);
 });
 
+test('tracking deduplicates telemetry fetches across executive dashboard mounts', () => {
+  assert.match(scriptSource, /const trackingTelemetryFetchRef = \{ current: new Map\(\) \}/);
+  assert.match(scriptSource, /const trackingTelemetryCache = new Map\(\)/);
+  assert.match(scriptSource, /trackingTelemetryFetchRef\.current\.get\(cacheKey\)/);
+  assert.match(scriptSource, /trackingTelemetryCache\.has\(cacheKey\)/);
+  assert.match(scriptSource, /loadTrackingVessel\(normalizedQuery, true, \{ forceRefresh: true \}\)/);
+  assert.match(scriptSource, /loadTrackingVessel\(vesselQuery, true, \{ forceRefresh: true \}\)/);
+});
+
 test('voyages_tracking schema persists GIS, AIS, commercial and audit data', () => {
   assert.match(schemaSource, /export const voyagesTracking = pgTable/);
   assert.match(schemaSource, /"voyages_tracking"/);
