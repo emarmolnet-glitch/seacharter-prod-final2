@@ -153,6 +153,7 @@ test('Motor de Ritmos Híbrido: Cinta Transportadora computes 6000 TM/D for Mini
   const contextMini = {
     window: {
       State: { cargo: 5000, vesselType: 'Mini Bulker' },
+      hasCommittedCargoSelection: () => true,
       getSelectedMethodLabel: () => 'Cinta Transportadora',
       recalcularDiasPuerto: () => {}
     },
@@ -180,6 +181,7 @@ test('Motor de Ritmos Híbrido: Cinta Transportadora computes 6000 TM/D for Mini
   const contextCement = {
     window: {
       State: { cargo: 15000, vesselType: 'Cement Carrier' },
+      hasCommittedCargoSelection: () => true,
       getSelectedMethodLabel: () => 'Cinta Transportadora',
       recalcularDiasPuerto: () => {}
     },

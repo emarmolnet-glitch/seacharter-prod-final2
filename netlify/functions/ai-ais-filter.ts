@@ -236,8 +236,8 @@ function normalizeVessel(value: unknown) {
   const shipType = isUnknownTechnicalValue(declaredShipType) ? "Unknown" : declaredShipType;
   let dwt = numberValue(source.dwt, source.DWT, meta.dwt, meta.DWT, sourcePayload.dwt, sourcePayload.DWT);
   let dwtStatus = textValue(source.dwtStatus, source.dwt_status, meta.dwtStatus) || null;
-  const isLiveRadarSource = /DATALASTIC|AIS_LIVE/i.test(textValue(source.source, source.source_origin, source.sourceOrigin))
-    || (Array.isArray(source.source_origins) && source.source_origins.some((origin) => /DATALASTIC|AIS_LIVE/i.test(String(origin))));
+  const isLiveRadarSource = /DATALASTIC|AIS_LIVE|NEON_(?:ACTIVE_SCAN|SCAN_RESULTS)/i.test(textValue(source.source, source.source_origin, source.sourceOrigin))
+    || (Array.isArray(source.source_origins) && source.source_origins.some((origin) => /DATALASTIC|AIS_LIVE|NEON_(?:ACTIVE_SCAN|SCAN_RESULTS)/i.test(String(origin))));
   const draft = numberValue(source.draft, source.Draft, source.draft_meters, source.calado, meta.draft, meta.Draft, meta.calado, staticData.MaximumStaticDraught);
   const dimA = numberValue(staticData.DimensionA, source.DimensionA, meta.DimensionA);
   const dimB = numberValue(staticData.DimensionB, source.DimensionB, meta.DimensionB);
@@ -493,8 +493,8 @@ export default async (req: Request) => {
           const hasVerifiedDwt = vessel.dwt !== null && vessel.dwt > 0;
           const hasVerifiedVesselType = !isUnknownTechnicalValue(vessel.shipType);
           const isLiveRadarTelemetry = vessel.isLiveRadarSource
-            || vessel.sourceOrigins.some((origin) => /AIS_LIVE|DATALASTIC/i.test(origin))
-            || /AIS_LIVE|DATALASTIC/i.test(vessel.sourceOrigin);
+            || vessel.sourceOrigins.some((origin) => /AIS_LIVE|DATALASTIC|NEON_(?:ACTIVE_SCAN|SCAN_RESULTS)/i.test(origin))
+            || /AIS_LIVE|DATALASTIC|NEON_(?:ACTIVE_SCAN|SCAN_RESULTS)/i.test(vessel.sourceOrigin);
           const telemetryVisibleWithoutDwt = isLiveRadarTelemetry && !hasVerifiedDwt;
           const missingCriticalData = activeTaxonomyRequiresVerifiedData
             && (!hasVerifiedVesselType || (!hasVerifiedDwt && !telemetryVisibleWithoutDwt));

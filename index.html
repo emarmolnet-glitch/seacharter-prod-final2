@@ -8409,9 +8409,9 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-type" class="text-action-required flex items-center min-h-[24px]">Categoría de Carga</label>
-                                <select id="cargo-type" class="input-gc action-required-field required-use-highlight text-action-required" required aria-required="true" onchange="updateSection2LocalState('cargo-type', this.value); handleCargoCategoryChange(); populateCargoProducts(); autoPopulateRouteLimits();">
-                                    <option value="">Selecciona una categoría</option>
-                                    <option value="Minerales y Construcción" selected>Minerales y Construcción</option>
+                                <select id="cargo-type" class="input-gc action-required-field required-use-highlight text-action-required" required aria-required="true" onchange="markCargoSelectionCommitted(); updateSection2LocalState('cargo-type', this.value); handleCargoCategoryChange(); populateCargoProducts(); autoPopulateRouteLimits();">
+                                    <option value="" selected>Selecciona una categoría</option>
+                                    <option value="Minerales y Construcción">Minerales y Construcción</option>
                                     <option value="Biomasa y Combustibles Sólidos">Biomasa y Combustibles Sólidos</option>
                                     <option value="Carga Siderúrgica y Metales">Carga Siderúrgica y Metales</option>
                                     <option value="Carga Unitizada / Envasada">Carga Unitizada / Envasada</option>
@@ -8420,8 +8420,9 @@
                             </div>
                             <div class="input-group">
                                 <label id="label-cargo-product" class="text-action-required flex items-center min-h-[24px]">Producto Específico</label>
-                                <select id="cargo-product" class="input-gc action-required-field required-use-highlight text-action-required" required aria-required="true" onchange="updateSection2LocalState('cargo-product', this.value); applySelectedCargoProduct(false);">
-                                    <option value="Cemento a granel" selected>Cemento a granel</option>
+                                <select id="cargo-product" class="input-gc action-required-field required-use-highlight text-action-required" required aria-required="true" onchange="markCargoSelectionCommitted(); updateSection2LocalState('cargo-product', this.value); applySelectedCargoProduct(true);">
+                                    <option value="" selected>Selecciona una mercancía</option>
+                                    <option value="Cemento a granel">Cemento a granel</option>
                                     <option value="Clínker">Clínker</option>
                                     <option value="Yeso">Yeso</option>
                                 </select>
@@ -13767,7 +13768,7 @@
                                         <i class="fa-regular fa-circle text-slate-400" data-telemetry-icon aria-hidden="true"></i>
                                         <strong>Flota</strong>
                                     </div>
-                                    <span id="matching-fleet-status-text" class="mt-1 block text-[11px] font-semibold leading-snug" data-telemetry-value>Inactivo</span>
+                                    <span id="matching-fleet-status-text" class="mt-1 block text-[11px] font-semibold leading-snug" data-telemetry-value>Esperando importación de candidatos</span>
                                 </div>
                                 <div id="matching-execution-success-stick" class="min-h-[78px] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600 transition-colors duration-200" role="status" aria-live="polite" data-telemetry-state="pending" data-matching-result-count="0">
                                     <div class="flex items-center gap-1.5 font-black text-slate-700">
@@ -13817,7 +13818,7 @@
                                         <span id="technical-problems-toggle-status" class="sr-only" aria-live="polite">Todos los candidatos se muestran con sus advertencias técnicas</span>
                                     </div>
                                     <div id="matching-action-dock" class="flex flex-row flex-wrap items-center gap-3" aria-label="Acciones del motor de coincidencias">
-                                        <button id="btn-run-matching" onclick="handleMatchingExecutionClick(event)" disabled aria-disabled="true" aria-describedby="matching-execution-validation btn-matching-subtitle" data-matching-ready="false" data-ready-vessel-count="0" data-execution-valid="false" class="matching-action-button whitespace-nowrap px-4 py-2 bg-[#004e64] hover:bg-[#003f52] text-white font-black text-xs uppercase rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-[#004e64] disabled:cursor-not-allowed disabled:opacity-45">
+                                        <button id="btn-run-matching" onclick="handleMatchingExecutionClick(event)" aria-disabled="false" aria-describedby="matching-execution-validation btn-matching-subtitle" data-neon-candidates-available="true" data-matching-ready="true" data-ready-vessel-count="0" data-execution-valid="true" class="matching-action-button whitespace-nowrap px-4 py-2 bg-[#004e64] hover:bg-[#003f52] text-white font-black text-xs uppercase rounded-lg shadow-md transition flex items-center justify-center gap-2 tracking-wider border border-[#004e64] disabled:cursor-not-allowed disabled:opacity-45">
                                             <i class="fa-solid fa-rotate"></i>
                                             <span>SINCRONIZAR CANDIDATOS (NEON DB)</span>
                                         </button>
@@ -15403,6 +15404,9 @@
                 .map(Number)
                 .find(value => Number.isFinite(value) && value > 0) || 0;
             const selectedProduct = String(document.getElementById('cargo-product')?.value || '').trim();
+            const cargoSelectionCommitted = typeof window.hasCommittedCargoSelection === 'function'
+                ? window.hasCommittedCargoSelection()
+                : Boolean(selectedProduct);
             const selectedCargoCode = document.getElementById('cargo-type-manual')?.value || window.CargoTypeSelector?.readSelectedId?.() || '';
             const cargoType = selectedProduct
                 || window.getCargoTaxonomyLabel?.(selectedCargoCode)
@@ -15418,8 +15422,12 @@
                 cargoProduct: selectedProduct,
                 loadMethod: String(document.getElementById('metodo_carga')?.value || State.loadMethod || '').trim(),
                 dischargeMethod: String(document.getElementById('metodo_descarga_pod')?.value || State.dischargeMethod || '').trim(),
-                loadRate: readPositive(effectiveLoadRate, document.getElementById('rate-load')?.value, document.getElementById('ritmo_nominal_pol')?.value, State.loadRate),
-                dischargeRate: readPositive(effectiveDischargeRate, document.getElementById('rate-disch')?.value, document.getElementById('ritmo_nominal_pod')?.value, State.dischargeRate, State.dischRate)
+                loadRate: cargoSelectionCommitted
+                    ? readPositive(effectiveLoadRate, document.getElementById('rate-load')?.value, document.getElementById('ritmo_nominal_pol')?.value, State.loadRate)
+                    : 0,
+                dischargeRate: cargoSelectionCommitted
+                    ? readPositive(effectiveDischargeRate, document.getElementById('rate-disch')?.value, document.getElementById('ritmo_nominal_pod')?.value, State.dischargeRate, State.dischRate)
+                    : 0
             });
         }
         window.readValidatedCargoOperationState = readValidatedCargoOperationState;
@@ -15861,7 +15869,7 @@
                 window.renderAisNearbyCount(0);
             }
             if (typeof window.updateSequentialTelemetryBlock === 'function') {
-                window.updateSequentialTelemetryBlock('matching-fleet-status-block', 'pending', 'Inactivo · requiere Barrido de Radar');
+                window.updateSequentialTelemetryBlock('matching-fleet-status-block', 'pending', 'Esperando importación de candidatos');
                 window.updateSequentialTelemetryBlock('matching-execution-success-stick', 'pending', 'Sin ejecuciones activas');
             }
 
@@ -15967,6 +15975,49 @@
         window.readEffectiveBallastDistance = readEffectiveBallastDistance;
 
         const getNormalizedDateInputValue = (id) => normalizeDateInputValue(document.getElementById(id)?.value || '');
+
+        const LAYCAN_COMMERCIAL_MARGIN_DAYS = 3;
+        const LAYCAN_DATE_PAIRS = Object.freeze({
+            'gc-laycan-date': 'gc-cancel-date',
+            'asb-laycan-date': 'asb-cancel-date',
+            'map-laycan-date': 'map-cancelling-date',
+            'match-laycan-start': 'match-laycan-end'
+        });
+
+        function addLaycanCommercialMargin(dateValue, days = LAYCAN_COMMERCIAL_MARGIN_DAYS) {
+            const normalized = normalizeDateInputValue(dateValue);
+            const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) return '';
+            const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+            if (Number.isNaN(date.getTime())) return '';
+            date.setUTCDate(date.getUTCDate() + Math.max(0, Number(days) || 0));
+            return date.toISOString().slice(0, 10);
+        }
+        window.addLaycanCommercialMargin = addLaycanCommercialMargin;
+
+        function autofillCancellingFromLaydays(laydaysInputId) {
+            const cancellingInputId = LAYCAN_DATE_PAIRS[laydaysInputId];
+            const laydaysInput = document.getElementById(laydaysInputId);
+            const cancellingInput = cancellingInputId ? document.getElementById(cancellingInputId) : null;
+            if (!laydaysInput || !cancellingInput) return false;
+            const laydays = normalizeDateInputValue(laydaysInput.value);
+            if (!laydays) return false;
+            const canAutofill = !normalizeDateInputValue(cancellingInput.value)
+                || cancellingInput.dataset.autoFromLaydays === 'true';
+            if (!canAutofill) return false;
+            const cancelling = addLaycanCommercialMargin(laydays);
+            if (!cancelling) return false;
+            cancellingInput.value = cancelling;
+            cancellingInput.dataset.autoFromLaydays = 'true';
+            cancellingInput.dataset.autoMarginDays = String(LAYCAN_COMMERCIAL_MARGIN_DAYS);
+            return true;
+        }
+        window.autofillCancellingFromLaydays = autofillCancellingFromLaydays;
+
+        function markCancellingDateManual(cancellingInputId) {
+            const input = document.getElementById(cancellingInputId);
+            if (input) input.dataset.autoFromLaydays = 'false';
+        }
 
         const firstNonEmpty = (...values) => {
             for (const value of values) {
@@ -18684,7 +18735,7 @@
                 return restoreMatchingSynchronizationFromCache();
             }
             window.syncMatchingRouteSummary?.(null);
-            updateSequentialTelemetryBlock('matching-fleet-status-block', 'pending', 'Inactivo · requiere Barrido de Radar');
+            updateSequentialTelemetryBlock('matching-fleet-status-block', 'pending', 'Esperando importación de candidatos');
             const syncBadge = document.getElementById('matching-route-sync-badge');
             if (syncBadge) {
                 syncBadge.textContent = 'Local-Only';
@@ -18847,7 +18898,7 @@
                 taxonomies.length > 0 ? 'success' : 'pending',
                 taxonomies.length > 0
                     ? `${vesselCount} ${formatFleetTelemetryLabel(taxonomies, vesselCount)}`
-                    : 'Esperando filtro',
+                    : 'Esperando importación de candidatos',
                 {
                     vesselCount,
                     taxonomyCount: taxonomies.length,
@@ -18870,6 +18921,11 @@
         window.addEventListener('DATABRIDGE_SYNC_STATUS', (event) => {
             const state = String(event?.detail?.state || 'pending');
             const httpStatus = Number(event?.detail?.httpStatus) || 0;
+            const syncButton = document.getElementById('btn-run-matching');
+            if (syncButton && state === 'success') {
+                syncButton.dataset.neonCandidatesAvailable = event?.detail?.confirmation?.available === false ? 'false' : 'true';
+                window.syncMatchingButtonWithCachedResults?.(Number(syncButton.dataset.matchingResultCount) || 0);
+            }
             const value = state === 'processing'
                 ? 'Sincronizando...'
                 : state === 'success'
@@ -19079,7 +19135,7 @@
 
         function setRenderedMatchingVessels(vessels, metadata = {}) {
             const incomingVessels = Array.isArray(vessels) ? vessels.slice() : [];
-            const strictTechnicalFilterActive = window.matchingStrictTechnicalFilter === true;
+            const strictTechnicalFilterActive = metadata.bypassAllFilters !== true && window.matchingStrictTechnicalFilter === true;
             const shouldApplyTaxonomyFilter = metadata.applyTaxonomyFilter !== false || strictTechnicalFilterActive;
             const taxonomyFilter = shouldApplyTaxonomyFilter && typeof window.applyStrictRadarTaxonomyFilter === 'function'
                 ? window.applyStrictRadarTaxonomyFilter(incomingVessels)
@@ -20399,7 +20455,7 @@
                 cargo: compactMatchingRecord(matchingPayload.cargo, [
                     'loadingPortName', 'loadingPortLat', 'loadingPortLon', 'loadingPortUnlocode', 'loadingPortOfficialName',
                     'unloadingPortName', 'unloadingPortLat', 'unloadingPortLon', 'quantity', 'cargoCode', 'cargoDescription',
-                    'cargoType', 'cargoTypeId', 'cargoTypeLabel', 'specification', 'stowageFactor', 'requiredVolumeCbm',
+                    'cargoType', 'cargoTypeId', 'cargoTypeLabel', 'cargoProduct', 'specification', 'stowageFactor', 'requiredVolumeCbm',
                     'laycanStart', 'laycanEnd', 'loadRate', 'dischargeRate', 'maxDraft', 'maxLoa', 'gearedRequired',
                     'grabRequired', 'loadMethod', 'dischargeMethod', 'requiredGrabCapacityCbm', 'requiredCraneSwlMt',
                     'freightRate', 'lumpsumFreight', 'targetDwt', 'strictTechnicalFilter'
@@ -20417,6 +20473,8 @@
                 taxonomies,
                 taxonomyMode: matchingPayload.taxonomyMode,
                 searchMode: matchingPayload.searchMode,
+                candidateSource: matchingPayload.candidateSource,
+                requireFreshScan: matchingPayload.requireFreshScan === true,
                 strictTechnicalFilter: matchingPayload.strictTechnicalFilter === true,
                 matchRadiusNm: matchingPayload.matchRadiusNm,
                 allowedSources: Array.isArray(matchingPayload.allowedSources) ? matchingPayload.allowedSources.slice() : [],
@@ -22091,7 +22149,9 @@
                     selectedTaxonomies: selectedVesselTaxonomies.slice(),
                     taxonomies: selectedVesselTaxonomies.slice(),
                     taxonomyMode: 'strict',
-                    searchMode: 'local_database',
+                    searchMode: 'neon_active_scan',
+                    candidateSource: 'NEON_ACTIVE_SCAN',
+                    requireFreshScan: executionOptions.requireFreshScan === true,
                     strictTechnicalFilter: window.matchingStrictTechnicalFilter === true,
                     matchRadiusNm: (window.AIS_PROSPECTION_RADII_NM && Number(window.AIS_PROSPECTION_RADII_NM.POL)) || 2000,
                     allowedSources: getAllowedMatchingSources(),
@@ -23504,8 +23564,110 @@
         }
         window.enforceLocalOnlyMatchingMode = enforceLocalOnlyMatchingMode;
 
+        function normalizeNeonCandidateForMatchingList(candidate, index = 0) {
+            const source = candidate && typeof candidate === 'object' ? candidate : {};
+            if (source.vessel || source.ais) return source;
+            const vesselName = String(source.vesselName || source.vessel_name || source.ShipName || source.name || `Candidato ${index + 1}`).trim();
+            const imo = String(source.imo || source.IMO || source.imo_number || '').trim();
+            const mmsi = String(source.mmsi || source.MMSI || '').trim();
+            const dwt = Number(source.dwt ?? source.DWT);
+            const latitude = Number(source.latitude ?? source.lat);
+            const longitude = Number(source.longitude ?? source.lon ?? source.lng);
+            return {
+                ...source,
+                vessel: {
+                    ...source,
+                    vesselName,
+                    vessel_name: vesselName,
+                    imo: imo || 'PENDING',
+                    mmsi: mmsi || null,
+                    dwt: Number.isFinite(dwt) ? dwt : null
+                },
+                ais: {
+                    ...source,
+                    imo: imo || 'PENDING',
+                    mmsi: mmsi || null,
+                    dwt: Number.isFinite(dwt) ? dwt : null,
+                    latitude: Number.isFinite(latitude) ? latitude : null,
+                    longitude: Number.isFinite(longitude) ? longitude : null,
+                    source_origin: 'NEON_SCAN_RESULTS',
+                    source_origins: ['NEON_SCAN_RESULTS']
+                },
+                routing: source.routing && typeof source.routing === 'object' ? source.routing : {},
+                compatibility: source.compatibility && typeof source.compatibility === 'object' ? source.compatibility : {},
+                scores: source.scores && typeof source.scores === 'object' ? source.scores : { overall: Number(source.score) || 0 },
+                audit: source.audit && typeof source.audit === 'object'
+                    ? source.audit
+                    : { operationallyEligible: true, telemetryVisible: true }
+            };
+        }
+
+        async function syncMatchingCandidatesFromNeon() {
+            const button = document.getElementById('btn-run-matching');
+            const originalContent = button?.innerHTML || '';
+            if (button) {
+                button.disabled = true;
+                button.setAttribute('aria-disabled', 'true');
+                button.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span>IMPORTANDO DESDE NEON DB</span>';
+            }
+            try {
+                const cargoState = typeof window.readValidatedCargoOperationState === 'function'
+                    ? window.readValidatedCargoOperationState()
+                    : {};
+                const payload = await requestMatchingLocal('snapshot', [], {
+                    cargo: {
+                        cargoType: cargoState.cargoType,
+                        cargoTypeLabel: cargoState.cargoType,
+                        cargoDescription: cargoState.cargoProduct || cargoState.cargoType,
+                        cargoProduct: cargoState.cargoProduct
+                    },
+                    selectedTaxonomies: Array.isArray(window.GlobalStore?.selectedTaxonomies)
+                        ? window.GlobalStore.selectedTaxonomies.slice()
+                        : []
+                });
+                const candidates = Array.isArray(payload?.vessels)
+                    ? payload.vessels.map(normalizeNeonCandidateForMatchingList)
+                    : [];
+                if (candidates.length === 0) {
+                    if (button) button.dataset.neonCandidatesAvailable = 'false';
+                    throw new Error('Neon DB no contiene candidatos en la última búsqueda activa.');
+                }
+                if (button) button.dataset.neonCandidatesAvailable = 'true';
+                window.currentCoreProSyncId = payload.scanId || payload.scan_id || null;
+                const rendered = renderCachedMatchingResults(candidates, {
+                    allowPolOnly: true,
+                    applyTaxonomyFilter: false,
+                    bypassAllFilters: true,
+                    resultSourceLabel: 'Neon DB · última búsqueda activa',
+                    scoreFallbackLabel: 'Neon DB',
+                    executionState: 'neon-sync',
+                    showDueDiligence: true
+                });
+                updateSequentialTelemetryBlock(
+                    'matching-fleet-status-block',
+                    'success',
+                    `${candidates.length} candidatos importados desde Neon DB`,
+                    { vesselCount: candidates.length, syncId: window.currentCoreProSyncId || '' }
+                );
+                return rendered;
+            } catch (error) {
+                if (typeof showToast === 'function') showToast(error?.message || 'No fue posible importar candidatos desde Neon DB.', false, 'error');
+                return false;
+            } finally {
+                if (button) {
+                    button.innerHTML = originalContent;
+                    syncMatchingButtonWithCachedResults(Number(button.dataset.matchingResultCount) || 0);
+                }
+            }
+        }
+        window.syncMatchingCandidatesFromNeon = syncMatchingCandidatesFromNeon;
+
         async function handleMatchingExecutionClick(event, routeOverride = null) {
             event?.preventDefault?.();
+            const syncButton = document.getElementById('btn-run-matching');
+            if (syncButton?.dataset.neonCandidatesAvailable === 'true') {
+                return syncMatchingCandidatesFromNeon();
+            }
             const capturedRoute = getMatchingExecutionRouteOverride(routeOverride);
             const calculatedState = typeof window.rehydrateCalculatedState === 'function'
                 ? await window.rehydrateCalculatedState({ applyToContext: false })
@@ -23531,7 +23693,11 @@
             const validation = getMatchingExecutionValidation(hydratedRoute);
             if (!renderMatchingExecutionValidation(validation)) return false;
             syncGlobalMatchingExecutionFleet();
-            return runMatchingEngine(hydratedRoute, { manual: true });
+            return runMatchingEngine(hydratedRoute, {
+                manual: true,
+                requireFreshScan: true,
+                candidateSource: 'NEON_ACTIVE_SCAN'
+            });
         }
         window.handleMatchingExecutionClick = handleMatchingExecutionClick;
 
@@ -26776,7 +26942,6 @@
             const button = document.getElementById('btn-run-matching');
             if (!button) return;
             const count = Math.max(0, Number(resultCount) || 0);
-            const hasActiveCalculation = Boolean(window.getActiveMatchingCalculationState?.());
             if (typeof window.refreshMatchingTaxonomySelectionState === 'function') {
                 window.refreshMatchingTaxonomySelectionState({ syncControl: false });
             }
@@ -26787,19 +26952,18 @@
                 { applyToContext: false, persist: false }
             );
             const readyVesselCount = Math.max(0, Number(window.GlobalStore?.matchingSelection?.vesselCount) || 0);
-            button.disabled = !hasActiveCalculation || matchingSelectionPending || count === 0;
+            const neonCandidatesAvailable = button.dataset.neonCandidatesAvailable !== 'false';
+            button.disabled = !neonCandidatesAvailable;
             button.setAttribute('aria-disabled', String(button.disabled));
             button.dataset.matchingReady = matchingReady ? 'true' : 'false';
             button.dataset.readyVesselCount = String(readyVesselCount);
             button.dataset.matchingResultCount = String(count);
             button.dataset.hasCachedResults = count > 0 ? 'true' : 'false';
-            button.setAttribute('aria-label', !hasActiveCalculation
-                ? (window.MATCHING_ROUTE_REQUIRED_MESSAGE || 'Configure una ruta en el Input Geográfico antes de buscar coincidencias')
-                : matchingSelectionPending
-                ? 'Ejecutar Coincidencias. Guarda los cambios de taxonomía para activar el motor.'
+            button.setAttribute('aria-label', !neonCandidatesAvailable
+                ? 'No hay candidatos disponibles en Neon DB.'
                 : count > 0
-                ? `Ejecutar Coincidencias. ${count} resultados reales disponibles.`
-                : 'Ejecute un barrido Radar para cargar buques antes de buscar coincidencias.');
+                ? `Sincronizar candidatos desde Neon DB. ${count} resultados renderizados actualmente.`
+                : 'Sincronizar los candidatos frescos de la última búsqueda activa en Neon DB.');
         }
         window.syncMatchingButtonWithCachedResults = syncMatchingButtonWithCachedResults;
 
@@ -26886,7 +27050,11 @@
                     : 0)
                 .map((match, index) => ({ ...match, commercialRank: { ...match.commercialRank, position: index + 1 } }));
             const matches = Object.freeze(rankedCachedMatches);
-            const renderedMatches = setRenderedMatchingVessels(matches, { source: 'matching-cache' });
+            const renderedMatches = setRenderedMatchingVessels(matches, {
+                source: String(options.source || 'matching-cache'),
+                applyTaxonomyFilter: options.applyTaxonomyFilter !== false,
+                bypassAllFilters: options.bypassAllFilters === true
+            });
             renderMatchingSourceCounts(renderedMatches);
             const cachedCount = renderedMatches.length;
             const renderedCount = Number(resultsList.dataset.matchingResultCount) || 0;
@@ -29296,6 +29464,34 @@
             return (cargoDictionary[category] || []).find((product) => product.nombre === productName) || null;
         }
 
+        function markCargoSelectionCommitted() {
+            const categoryEl = document.getElementById('cargo-type');
+            const productEl = document.getElementById('cargo-product');
+            if (categoryEl) categoryEl.dataset.userSelected = 'true';
+            if (productEl) productEl.dataset.userSelected = 'true';
+            if (!window.State) window.State = {};
+            window.State.cargoSelectionCommitted = true;
+        }
+        window.markCargoSelectionCommitted = markCargoSelectionCommitted;
+
+        function hasCommittedCargoSelection() {
+            const categoryEl = document.getElementById('cargo-type');
+            const productEl = document.getElementById('cargo-product');
+            const category = String(categoryEl?.value || '').trim();
+            const product = String(productEl?.value || '').trim();
+            return Boolean(
+                category
+                && product
+                && (
+                    window.State?.cargoSelectionCommitted === true
+                    || categoryEl?.dataset.userSelected === 'true'
+                    || productEl?.dataset.userSelected === 'true'
+                    || String(window.State?.cargoProduct || '').trim()
+                )
+            );
+        }
+        window.hasCommittedCargoSelection = hasCommittedCargoSelection;
+
         function populateCargoProducts(preferredProduct = '') {
             const categoryEl = document.getElementById('cargo-type');
             const productEl = document.getElementById('cargo-product');
@@ -29303,9 +29499,12 @@
             enforceTurnTimeOptions();
             const products = (cargoDictionary[categoryEl.value] || []).map((product) => ({ ...product }));
             const selectedProduct = preferredProduct || productEl.value;
-            replaceSelectOptions(productEl, products.map((product) => ({ value: product.nombre, label: product.nombre })));
+            replaceSelectOptions(productEl, [
+                { value: '', label: 'Selecciona una mercancía' },
+                ...products.map((product) => ({ value: product.nombre, label: product.nombre }))
+            ]);
             productEl.disabled = products.length === 0;
-            if (products.some((product) => product.nombre === selectedProduct)) productEl.value = selectedProduct;
+            productEl.value = products.some((product) => product.nombre === selectedProduct) ? selectedProduct : '';
             applySelectedCargoProduct();
         }
 
@@ -29332,7 +29531,8 @@
             populateCargoProducts(resolvedProduct);
         }
 
-        function applySelectedCargoProduct() {
+        function applySelectedCargoProduct(userInitiated = false) {
+            if (userInitiated === true) markCargoSelectionCommitted();
             const product = getSelectedCargoProduct();
             const sfInput = document.getElementById('cargo-sf');
             if (sfInput && product) sfInput.value = product.sf.toFixed(2);
@@ -55815,7 +56015,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         initializeSharedGenconSelectors();
 
         const methodBaseRates = Object.freeze({
-            'Cinta Transportadora': 3600,
+            'Cinta Transportadora': 150 * 24,
             'Bombas Neumáticas': 8000,
             'Grúa Portuaria 30MT': 2500,
             'Cuchara (Grab) - Grúa Barco': 1500,
@@ -55852,7 +56052,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             Object.entries(METHOD_LABEL_BY_VALUE).map(([methodValue, methodLabel]) => [methodLabel, methodValue])
         ));
         const OPERATIONAL_METHOD_DEFAULTS = Object.freeze({
-            cinta_transportadora: Object.freeze({ rate: 3600, turnTimeHours: 12 }),
+            cinta_transportadora: Object.freeze({ rate: 150 * 24, turnTimeHours: 12 }),
             bombas_neumaticas: Object.freeze({ rate: 8000, turnTimeHours: 10 })
         });
         const equipmentMatrix = Object.freeze({
@@ -57227,6 +57427,10 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
                 actualizarDesviacionDeltaManual(s);
             });
+
+            if (targetMode === 'auto' && typeof applyMethodAndProductConditions === 'function') {
+                applyMethodAndProductConditions(side);
+            }
 
             if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
             if (typeof runEngine === 'function') runEngine();
@@ -61614,6 +61818,9 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const cargoQty = parseFloat(document.getElementById('cargo-qty')?.value) || parseFloat(window.State?.cargo) || 0;
             const category = document.getElementById('cargo-type')?.value || '';
             const product = typeof window.getSelectedCargoProduct === 'function' ? window.getSelectedCargoProduct() : null;
+            const cargoSelectionCommitted = typeof window.hasCommittedCargoSelection === 'function'
+                ? window.hasCommittedCargoSelection()
+                : Boolean(product || String(document.getElementById('cargo-product')?.value || '').trim());
 
             if (!window.State) window.State = {};
 
@@ -61669,6 +61876,18 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     ? window.isRitmoModoManual(s)
                     : ((window.State[modeKey] === 'manual' || (s !== 'pod' && window.State.ritmoMode === 'manual'))
                         || (rateInput && rateInput.dataset.manualOverride === 'true'));
+
+                if (!cargoSelectionCommitted) {
+                    if (rateInput && !isManual) rateInput.value = '';
+                    if (s === 'pol') window.State.loadRate = 0;
+                    else {
+                        window.State.dischRate = 0;
+                        window.State.dischargeRate = 0;
+                    }
+                    if (s === 'pol') window.State.portDaysLoad = 0;
+                    else window.State.portDaysDischarge = 0;
+                    return;
+                }
 
                 if (!isManual && rateInput) {
                     let estimatedTpd = 0;
@@ -61772,7 +61991,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                             || cargoProductStr.includes('cemento')
                             || cargoProductStr.includes('cement');
 
-                        let beltTasaTonHour = 150; // Base Mini-Bulker (150 t/h -> 3600 TM/D)
+                        let beltTasaTonHour = 150;
                         if (isCementCarrier) {
                             beltTasaTonHour = 600; // Cementero Especializado / Alta capacidad (600 t/h -> 14400 TM/D)
                         } else if (cargoQty > 20000) {
@@ -62251,11 +62470,15 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                         scheduleReactiveEngine();
                         return;
                     }
+                    if (id === 'map-laycan-date') autofillCancellingFromLaydays(id);
+                    if (id === 'map-cancelling-date') markCancellingDateManual(id);
                     if (typeof validateGeographicLaycanDates === 'function') validateGeographicLaycanDates();
                     captureRouteStateFromMapInputs();
                     scheduleReactiveEngine();
                 });
                 el.addEventListener('change', () => {
+                    if (id === 'map-laycan-date') autofillCancellingFromLaydays(id);
+                    if (id === 'map-cancelling-date') markCancellingDateManual(id);
                     if (typeof validateGeographicLaycanDates === 'function') validateGeographicLaycanDates();
                     captureRouteStateFromMapInputs();
                     scheduleReactiveEngine();
@@ -62265,6 +62488,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.addEventListener('input', () => {
+                    if (id === 'gc-laycan-date' || id === 'asb-laycan-date') autofillCancellingFromLaydays(id);
+                    if (id === 'gc-cancel-date' || id === 'asb-cancel-date') markCancellingDateManual(id);
                     SeaCharterStore.set(readRouteStateFromCalculator());
                     if (['port-ballast', 'port-pol', 'port-pod'].includes(id)) {
                         scheduleReactiveEngine();
@@ -62274,6 +62499,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     scheduleReactiveEngine();
                 });
                 el.addEventListener('change', () => {
+                    if (id === 'gc-laycan-date' || id === 'asb-laycan-date') autofillCancellingFromLaydays(id);
+                    if (id === 'gc-cancel-date' || id === 'asb-cancel-date') markCancellingDateManual(id);
                     SeaCharterStore.set(readRouteStateFromCalculator());
                     syncGlobalStateToForms();
                     scheduleReactiveEngine();
