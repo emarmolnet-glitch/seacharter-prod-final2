@@ -19,14 +19,16 @@ const corsHeaders = {
   "Access-Control-Max-Age": "86400",
 };
 
+const CACHE_SECONDS = 60 * 60;
+
 function jsonResponse(body, status = 200, cacheable = false) {
   return {
     statusCode: status,
     headers: {
       ...corsHeaders,
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": cacheable ? "public, max-age=3600, stale-while-revalidate=86400" : "no-store, max-age=0",
-      ...(cacheable ? { "Netlify-CDN-Cache-Control": "public, durable, max-age=3600, stale-while-revalidate=86400" } : {}),
+      "Cache-Control": cacheable ? `public, max-age=${CACHE_SECONDS}, stale-while-revalidate=86400` : "no-store, max-age=0",
+      ...(cacheable ? { "Netlify-CDN-Cache-Control": `public, durable, max-age=${CACHE_SECONDS}, stale-while-revalidate=86400` } : {}),
     },
     body: JSON.stringify(body),
   };

@@ -37,6 +37,7 @@ test('UX Operativas Cemento: Cinta Transportadora sets 3600 TM/D and 12h turn ti
   const context = {
     window: {
       State: { cargo: 10000, vesselType: 'Mini Bulker' },
+      hasCommittedCargoSelection: () => true,
       getSelectedMethodLabel: () => 'Cinta Transportadora',
       recalcularDiasPuerto: () => {}
     },
@@ -70,6 +71,7 @@ test('UX Operativas Cemento: Bombas Neumáticas sets 8000 TM/D and 10h turn time
   const context = {
     window: {
       State: { cargo: 10000, vesselType: 'Mini Bulker' },
+      hasCommittedCargoSelection: () => true,
       getSelectedMethodLabel: () => 'Bombas Neumáticas',
       recalcularDiasPuerto: () => {}
     },
