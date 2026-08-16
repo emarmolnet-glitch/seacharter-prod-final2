@@ -21,6 +21,19 @@ test('density reads the single canonical matching fleet from GlobalStore', () =>
   assert.doesNotMatch(densitySource, /datalasticRadarVessels|backgroundAisData|fetch\s*\(/);
 });
 
+test('canonical matching normalization preserves nested technical vessel data for density', () => {
+  const start = indexSource.indexOf('window.normalizeAisVesselForRadar = function(v)');
+  const end = indexSource.indexOf('window.actualizarVistaRadar', start);
+  const normalizationSource = indexSource.slice(start, end);
+  assert.match(normalizationSource, /const nestedVessel = v\.vessel/);
+  assert.match(normalizationSource, /const nestedAis = v\.ais/);
+  assert.match(normalizationSource, /'deadweightTonnage'/);
+  assert.match(normalizationSource, /'vesselClass', 'vessel_class', 'class', 'clase'/);
+  assert.match(normalizationSource, /'yearBuilt', 'year_built', 'builtYear', 'built_year'/);
+  assert.match(normalizationSource, /vessel_class: canonicalVesselClass/);
+  assert.match(normalizationSource, /year_built: canonicalYearBuilt/);
+});
+
 test('matching fleet buttons commit the selected array through the canonical renderer', () => {
   const start = indexSource.indexOf('function applyMatchingFleetView');
   const end = indexSource.indexOf('window.applyMatchingFleetView', start);

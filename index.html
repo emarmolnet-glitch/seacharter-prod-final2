@@ -8541,7 +8541,7 @@
                                         <button type="button" id="btn-ritmo-manual-pol" data-ritmo-mode-btn="manual" onclick="setRitmoMode('manual', 'pol')" class="px-2 py-0.5 rounded-r-md font-bold transition cursor-pointer bg-gray-100 text-gray-500 hover:bg-gray-200" aria-pressed="false">Manual</button>
                                     </div>
                                 </div>
-                                <input type="number" id="rate-load" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="0" placeholder="0" step="any" oninput="marcarRitmoManual('pol')">
+                                <input type="number" id="rate-load" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="" step="any" oninput="marcarRitmoManual('pol')">
                                 <div id="pol-opex-impact-alert" class="hidden flex items-center p-2 mt-2 text-red-700 bg-red-100 border border-red-300 rounded text-sm font-semibold shadow-sm" role="alert" aria-live="polite"></div>
                                 <div id="delta-dias-badge-pol" class="hidden mt-1 text-[11px] font-bold"></div>
                                 <div id="rate-ref-helper-pol" class="mt-1 text-[10px] text-slate-500 font-medium leading-tight">
@@ -8557,7 +8557,7 @@
                                         <button type="button" id="btn-ritmo-manual-pod" data-ritmo-mode-btn="manual" data-pod-calc-mode="manual" onclick="setRitmoMode('manual', 'pod')" class="px-2 py-0.5 rounded-r-md font-bold transition cursor-pointer bg-gray-100 text-gray-500 hover:bg-gray-200" aria-pressed="false">Manual</button>
                                     </div>
                                 </div>
-                                <input type="number" id="rate-disch" class="input-gc action-required-field required-use-highlight text-action-required font-bold bg-gray-100 border-gray-200 cursor-not-allowed" value="0" placeholder="0" step="any" readonly aria-readonly="true" data-pod-calc-mode="auto" title="Ritmo Real POD derivado automáticamente (solo lectura). Cambia a Manual para editarlo." oninput="marcarRitmoManual('pod')">
+                                <input type="number" id="rate-disch" class="input-gc action-required-field required-use-highlight text-action-required font-bold bg-gray-100 border-gray-200 cursor-not-allowed" value="" step="any" readonly aria-readonly="true" data-pod-calc-mode="auto" title="Ritmo Real POD derivado automáticamente (solo lectura). Cambia a Manual para editarlo." oninput="marcarRitmoManual('pod')">
                                 <div id="pod-opex-impact-alert" class="hidden flex items-center p-2 mt-2 text-red-700 bg-red-100 border border-red-300 rounded text-sm font-semibold shadow-sm" role="alert" aria-live="polite"></div>
                                 <div id="delta-dias-badge-pod" class="hidden mt-1 text-[11px] font-bold"></div>
                                 <div id="rate-ref-helper-pod" class="mt-1 text-[10px] text-slate-500 font-medium leading-tight">
@@ -48458,8 +48458,24 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 }
             }
             if (!sourcePayload || typeof sourcePayload !== 'object' || Array.isArray(sourcePayload)) sourcePayload = {};
-            const meta = v.MetaData || v.metadata || sourcePayload.MetaData || sourcePayload.metadata || {};
+            const nestedVessel = v.vessel && typeof v.vessel === 'object' ? v.vessel : {};
+            const nestedAis = v.ais && typeof v.ais === 'object' ? v.ais : {};
+            const sourceVessel = sourcePayload.vessel && typeof sourcePayload.vessel === 'object' ? sourcePayload.vessel : {};
+            const sourceAis = sourcePayload.ais && typeof sourcePayload.ais === 'object' ? sourcePayload.ais : {};
+            const meta = v.MetaData || v.metadata || nestedVessel.MetaData || nestedVessel.metadata
+                || nestedAis.MetaData || nestedAis.metadata || sourcePayload.MetaData || sourcePayload.metadata || {};
             const position = v.PositionReport || v.position || sourcePayload.PositionReport || sourcePayload.position || {};
+            const technicalScopes = [v, nestedVessel, nestedAis, sourcePayload, sourceVessel, sourceAis, meta]
+                .filter(scope => scope && typeof scope === 'object');
+            const readTechnicalValue = aliases => {
+                for (const scope of technicalScopes) {
+                    for (const alias of aliases) {
+                        const value = scope[alias];
+                        if (value !== null && value !== undefined && String(value).trim() !== '') return value;
+                    }
+                }
+                return undefined;
+            };
             const name = v.vesselName || 'Desconocido';
             const mmsi = normalizeVesselMmsi(v.mmsi);
             const imo = normalizeVesselImo(v.imo);
@@ -48474,17 +48490,27 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     const parsedSpeed = rawSpeed === null || rawSpeed === undefined || rawSpeed === '' ? Number.NaN : Number(rawSpeed);
                     return Number.isFinite(parsedSpeed) && parsedSpeed >= 0 ? parsedSpeed : null;
                 })();
-            const rawDwtVal = v.DWT || v.dwt || sourcePayload.DWT || sourcePayload.dwt || meta.DWT || meta.dwt;
+            const rawDwtVal = readTechnicalValue(['dwt', 'DWT', 'deadweight', 'deadweightTonnage', 'deadweight_tonnage']);
             const dwt = (rawDwtVal !== undefined && rawDwtVal !== null && rawDwtVal !== "N/A" && rawDwtVal !== "Unknown")
                 ? parseFloat(rawDwtVal)
                 : "N/A";
-            const shipTypeVal = v.ShipType || v.shipType || v.vessel_type || sourcePayload.ShipType || sourcePayload.shipType || sourcePayload.vessel_type || meta.ShipType || meta.shipType;
+            const shipTypeVal = readTechnicalValue([
+                'ShipType', 'shipType', 'ship_type', 'vesselType', 'vessel_type', 'type', 'specialtyType'
+            ]);
+            const vesselClassVal = readTechnicalValue([
+                'vesselClass', 'vessel_class', 'class', 'clase', 'className', 'class_name'
+            ]);
+            const yearBuiltVal = readTechnicalValue([
+                'yearBuilt', 'year_built', 'builtYear', 'built_year', 'buildYear', 'build_year', 'year'
+            ]);
             const statusVal = v.NavigationalStatus !== undefined
                 ? v.NavigationalStatus
                 : (meta.NavigationalStatus !== undefined ? meta.NavigationalStatus : undefined);
             const classification = (typeof classifyBulkCarrierRealTime === 'function')
                 ? classifyBulkCarrierRealTime(dwt, name, mmsi, imo, shipTypeVal)
-                : { vClass: v.vesselClass || v.vessel_type || meta.vesselClass || "General Cargo Vessel", dwt };
+                : { vClass: vesselClassVal || shipTypeVal || "General Cargo Vessel", dwt };
+            const canonicalVesselClass = vesselClassVal || classification.vClass || shipTypeVal || "General Cargo Vessel";
+            const canonicalYearBuilt = yearBuiltVal === undefined ? undefined : String(yearBuiltVal).trim();
 
             const normalizedVessel = {
                 ...v,
@@ -48512,8 +48538,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 speed: speed === null ? undefined : speed,
                 shipType: shipTypeVal,
                 ShipType: v.ShipType || shipTypeVal,
-                vesselClass: v.vesselClass || classification.vClass,
+                vesselClass: canonicalVesselClass,
+                vessel_class: canonicalVesselClass,
+                class: canonicalVesselClass,
                 dwt: classification.dwt !== undefined ? classification.dwt : dwt,
+                DWT: classification.dwt !== undefined ? classification.dwt : dwt,
+                yearBuilt: canonicalYearBuilt,
+                year_built: canonicalYearBuilt,
+                built_year: canonicalYearBuilt,
                 NavigationalStatus: statusVal,
                 timestamp: v.timestamp || v.lastSeen || v.created_at || v.createdAt || Date.now()
             };
