@@ -130,20 +130,15 @@ type FleetRegistryRecord = {
 
 type FleetRegistryInput = FleetRegistryRecord[] | Record<string, FleetRegistryRecord> | null | undefined;
 
-type BalticSpotRateEntry = {
-  index_name: string;
+type MarketLatestRecord = {
+  capesize_tc: number;
+  panamax_tc: number;
+  supramax_tc: number;
+  handysize_tc: number;
+  bdi_index: number;
+  source?: string;
+  updated_at?: string;
   record_date?: string;
-  spot_rate: number;
-  daily_change_value?: number | null;
-  daily_change_pct?: number | null;
-  monthly_change_pct?: number | null;
-};
-
-type FfaTceTargetEntry = {
-  vessel_class: string;
-  period: string;
-  record_date?: string;
-  rate_usd: number;
 };
 
 type BunkerIndexCache = {
@@ -249,11 +244,23 @@ const BUNKER_INDEX_VARIATION_THRESHOLD_PERCENT = 5;
 const FLEET_REGISTRY_KEY = 'fleet_registry';
 const ONLY_SHOW_MY_LIST = true;
 
-function getFfaTceLabel(entry: FfaTceTargetEntry) {
-  const recordDate = entry.record_date
-    ? new Date(entry.record_date).toLocaleDateString('es-ES', { timeZone: 'UTC' })
+function getMarketLatestTceField(vesselCategory: string): keyof Pick<MarketLatestRecord, 'capesize_tc' | 'panamax_tc' | 'supramax_tc' | 'handysize_tc'> | null {
+  const normalizedCategory = vesselCategory.trim().toUpperCase();
+  if (normalizedCategory.includes('HANDY')) return 'handysize_tc';
+  if (normalizedCategory.includes('SUPRAMAX') || normalizedCategory.includes('ULTRAMAX') || normalizedCategory.includes('MR')) return 'supramax_tc';
+  if (normalizedCategory.includes('PANAMAX') || normalizedCategory.includes('KAMSARMAX') || normalizedCategory.includes('LR1')) return 'panamax_tc';
+  if (normalizedCategory.includes('CAPE') || normalizedCategory.includes('VLOC') || normalizedCategory.includes('VLCC') || normalizedCategory.includes('AFRAMAX') || normalizedCategory.includes('LR2')) return 'capesize_tc';
+  return null;
+}
+
+function getMarketLatestLabel(vesselCategory: string, entry: MarketLatestRecord) {
+  const recordDateValue = entry.updated_at || entry.record_date;
+  const recordDate = recordDateValue
+    ? new Date(recordDateValue).toLocaleDateString('es-ES', { timeZone: 'UTC' })
     : 'fecha no disponible';
-  return `${entry.vessel_class} · FFA TCA ${entry.period} · ${recordDate}`;
+  const vesselClass = getMarketLatestTceField(vesselCategory)?.replace('_tc', '') || vesselCategory;
+  const sourceLabel = /manual/i.test(String(entry.source || '')) ? 'Manual Data' : 'Fearnleys Data';
+  return `${vesselClass.charAt(0).toUpperCase()}${vesselClass.slice(1)} 1Y T/C - ${sourceLabel} - ${recordDate}`;
 }
 
 const FLEET_CATEGORY_GROUPS = [
@@ -1390,33 +1397,29 @@ export function ReverseTceCalculator({
     setIsManualOverride(false);
     setIsFetchingBalticSpot(true);
     try {
-      const query = new URLSearchParams({ vesselCategory });
-      const response = await fetch(`/api/spot-rates?${query.toString()}`, {
+      const response = await fetch('/api/market/latest', {
         cache: 'no-store',
       });
       const payload = await response.json().catch(() => null);
-      const spotReference = payload?.spotReference as BalticSpotRateEntry | null;
-      const tceTarget = payload?.tceTarget as FfaTceTargetEntry | null;
-      const mapping = payload?.mapping as { spotIndex?: string; ffaVesselClass?: string } | null;
-      if (
-        !response.ok
-        || !spotReference
-        || !Number.isFinite(Number(spotReference.spot_rate))
-        || !tceTarget
-        || !Number.isFinite(Number(tceTarget.rate_usd))
-        || !mapping?.spotIndex
-        || !mapping?.ffaVesselClass
-      ) {
+      const marketRecord = (payload?.data || payload?.latest || payload?.market || payload) as MarketLatestRecord | null;
+      const tceField = getMarketLatestTceField(vesselCategory);
+      const tceTarget = tceField ? Number(marketRecord?.[tceField]) : Number.NaN;
+      const bdiIndex = Number(marketRecord?.bdi_index);
+      if (!response.ok || !marketRecord || !tceField || !Number.isFinite(tceTarget) || !Number.isFinite(bdiIndex)) {
         throw new Error(payload?.error || `No se pudieron obtener las referencias de ${vesselCategory}.`);
       }
 
       setValues((current) => ({
         ...current,
-        tceTarget: Number(tceTarget.rate_usd),
+        tceTarget,
       }));
-      setIndexSourceLabel(getFfaTceLabel(tceTarget));
+      setIndexSourceLabel(getMarketLatestLabel(vesselCategory, marketRecord));
+      const bdiValueElement = document.getElementById('baltic-spot-value');
+      const bdiIndexElement = document.getElementById('baltic-spot-index');
+      if (bdiValueElement) bdiValueElement.textContent = bdiIndex.toLocaleString('en-US', { maximumFractionDigits: 2 });
+      if (bdiIndexElement) bdiIndexElement.textContent = 'BDI';
     } catch {
-      setIndexSourceLabel(`No se pudieron actualizar las referencias de ${vesselCategory} desde Neón.`);
+      setIndexSourceLabel(`No se pudieron actualizar las referencias de ${vesselCategory}.`);
     } finally {
       setIsFetchingBalticSpot(false);
     }
@@ -1770,7 +1773,7 @@ export function ReverseTceCalculator({
                               className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white shadow-sm transition-all duration-200 hover:from-indigo-500 hover:to-violet-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-70"
                             >
                               {isFetchingBalticSpot
-                                ? 'Consultando Neón...'
+                                ? 'Consultando mercado...'
                                 : 'Consultar Baltic / FFA'}
                             </button>
                             </div>

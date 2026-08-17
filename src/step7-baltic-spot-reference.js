@@ -1,10 +1,4 @@
-import { getIndexForVessel } from './utils/marketMapper.js?v=20260812-spot-fetch-fix';
-
-const currencyFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-});
+const indexFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 
 let activeRequestController = null;
 let refreshTimer = null;
@@ -67,7 +61,7 @@ const INDEX_ALIASES = {
   BPI: ['BPI', 'PANAMAX'],
   BSI: ['BSI', 'SUPRAMAX'],
   BHSI: ['BHSI', 'HANDY', 'HANDYSIZE'],
-  BDI: ['BDI', 'BALTICDRYINDEX'],
+  BDI: ['BDI', 'BDIINDEX', 'BALTICDRYINDEX'],
 };
 
 function normalizeIndexLabel(value) {
@@ -120,13 +114,10 @@ function getSelectedVesselType() {
 
 function getCurrentReference() {
   const vesselType = getSelectedVesselType();
-  const marketReference = getIndexForVessel(vesselType);
-  const pol = String(document.getElementById('port-pol')?.value || '').trim();
-  const pod = String(document.getElementById('port-pod')?.value || '').trim();
   return {
     vesselType,
-    marketReference,
-    requestKey: `${vesselType}|${pol}|${pod}`,
+    marketReference: 'BDI',
+    requestKey: 'market-latest-bdi',
   };
 }
 
@@ -143,7 +134,7 @@ function renderStatus({ marketIndex, value = null, variation = null, label, tone
   if (!indexElement || !valueElement || !variationElement || !statusElement) return;
 
   indexElement.textContent = marketIndex;
-  valueElement.textContent = value === null ? 'N/A' : currencyFormatter.format(value);
+  valueElement.textContent = value === null ? 'N/A' : indexFormatter.format(value);
   valueElement.className = OCEAN_VALUE_CLASS;
   variationElement.hidden = false;
   variationElement.textContent = variation === null
@@ -187,26 +178,20 @@ async function refreshBalticSpotReference({ force = false } = {}) {
   };
 
   activeRequestController?.abort();
-  if (typeof marketReference === 'object' && marketReference.type === 'REGIONAL') {
-    activeRequestController = null;
-    renderRegionalReference(marketReference);
-    return;
-  }
-
   const marketIndex = marketReference;
   activeRequestController = new AbortController();
   renderStatus({ marketIndex, label: 'Consultando mercado', tone: 'loading' });
 
   try {
-    const response = await fetch(`/api/spot-rates?vesselCategory=${encodeURIComponent(vesselType)}`, {
+    const response = await fetch('/api/market/latest', {
       cache: 'no-store',
       signal: activeRequestController.signal,
     });
     const payload = await response.json().catch(() => null);
     balticSpotState.rawPayload = payload;
-    console.log('[Step7 Baltic] /api/spot-rates raw response:', payload);
-    const spotEntry = findMarketEntryByIndex(payload, marketIndex);
-    console.log('[Step7 Baltic] filtered index:', marketIndex, spotEntry);
+    console.log('[Step7 Baltic] /api/market/latest raw response:', payload);
+    const spotEntry = findMarketEntryByIndex(payload, 'BDI');
+    console.log('[Step7 Baltic] filtered index:', 'BDI', spotEntry);
     if (!response.ok) throw new Error('Spot rate unavailable');
 
     if (spotEntry === null) {
@@ -221,7 +206,7 @@ async function refreshBalticSpotReference({ force = false } = {}) {
       marketIndex,
       value: balticSpotState.spotRate,
       variation: balticSpotState.variation,
-      label: 'Dato spot en vivo',
+      label: 'Market Latest',
       tone: 'success',
     });
   } catch (error) {
