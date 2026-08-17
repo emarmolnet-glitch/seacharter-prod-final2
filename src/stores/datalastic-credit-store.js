@@ -72,23 +72,18 @@ export const datalasticCreditStore = createStore((set, get) => ({
             const authoritativeBudget = meta.budget && typeof meta.budget === 'object'
                 ? normalizeBudget(meta.budget, state)
                 : null;
-            const usedCredits = authoritativeBudget?.usedCredits
-                ?? Math.max(0, (nonNegativeNumber(state.usedCredits, 0) || 0) + requestCost);
-            const remainingCredits = authoritativeBudget?.remainingCredits
-                ?? (Number.isFinite(state.remainingCredits) ? Math.max(0, state.remainingCredits - requestCost) : null);
             return {
                 ...(authoritativeBudget || {}),
-                usedCredits,
-                remainingCredits,
-                sessionConsumedCredits: Math.max(0, state.sessionConsumedCredits + requestCost),
+                sessionConsumedCredits: state.sessionConsumedCredits,
                 cacheStatus,
                 lastRequestCost: requestCost,
-                status: 'ready',
+                status: authoritativeBudget ? 'ready' : state.status,
                 lastUpdatedAt: new Date().toISOString(),
                 error: null,
             };
         });
         publishCreditState(get());
+        void get().refresh();
     },
 
     markUnavailable(error = null) {
@@ -99,7 +94,7 @@ export const datalasticCreditStore = createStore((set, get) => ({
         if (get().status === 'loading') return null;
         set({ status: 'loading', error: null });
         try {
-            const response = await fetch('/api/internal/ais/consumption', {
+            const response = await fetch('/api/credits/status', {
                 headers: { Accept: 'application/json' },
                 cache: 'no-store',
             });

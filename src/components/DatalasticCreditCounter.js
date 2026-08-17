@@ -6,12 +6,12 @@ function formatCreditValue(value) {
 
 function renderCounter(host, state, options) {
     const hasBudget = Number.isFinite(state.limit) && Number.isFinite(state.remainingCredits);
-    const primaryValue = hasBudget ? state.remainingCredits : state.sessionConsumedCredits;
-    const label = hasBudget ? 'créditos disponibles' : 'créditos AIS usados';
+    const primaryValue = hasBudget ? state.usedCredits : state.sessionConsumedCredits;
+    const label = 'créditos consumidos';
     host.dataset.state = state.status;
     host.title = hasBudget
-        ? `${formatCreditValue(state.usedCredits)} usados de ${formatCreditValue(state.limit)} · periodo ${state.period || 'actual'}`
-        : 'Saldo mensual no disponible; mostrando consumo de la sesión';
+        ? `${formatCreditValue(state.usedCredits)} consumidos de ${formatCreditValue(state.limit)} · periodo ${state.period || 'actual'}`
+        : 'Consumo mensual no disponible; mostrando consumo confirmado de la sesión';
     host.setAttribute('aria-label', `${formatCreditValue(primaryValue)} ${label}`);
     const value = host.querySelector('[data-datalastic-credit-value]');
     const text = host.querySelector('[data-datalastic-credit-label]');
@@ -40,7 +40,7 @@ export function mountDatalasticCreditCounter(host, options = {}) {
             <span class="datalastic-credit-counter__balance">
                 <strong ${resolvedOptions.valueId ? `id="${resolvedOptions.valueId}"` : ''} data-datalastic-credit-value>—</strong>
                 <span data-datalastic-credit-limit></span>
-                <span data-datalastic-credit-label>créditos disponibles</span>
+                <span data-datalastic-credit-label>créditos consumidos</span>
             </span>
         </span>`;
     host.dataset.datalasticCreditMounted = 'true';

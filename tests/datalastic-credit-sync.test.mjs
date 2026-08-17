@@ -12,7 +12,9 @@ test('Datalastic credit balance stays authoritative across radar responses', () 
   assert.match(creditStoreSource, /recordRadarSuccess\(meta = \{\}\)/);
   assert.match(creditStoreSource, /cacheStatus === 'MISS' \? 1 : 0/);
   assert.match(creditStoreSource, /normalizeBudget\(meta\.budget, state\)/);
-  assert.match(creditStoreSource, /Math\.max\(0, state\.remainingCredits - requestCost\)/);
+  assert.match(creditStoreSource, /fetch\('\/api\/credits\/status'/);
+  assert.doesNotMatch(creditStoreSource, /state\.remainingCredits - requestCost/);
+  assert.match(creditStoreSource, /void get\(\)\.refresh\(\)/);
   assert.match(creditStoreSource, /BroadcastChannel/);
 });
 
