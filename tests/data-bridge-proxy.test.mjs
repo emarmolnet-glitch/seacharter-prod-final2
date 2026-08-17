@@ -31,7 +31,14 @@ test('external redirects no longer bypass the controlled proxy function', () => 
   for (const source of [netlifyConfig, rootRedirects, publicRedirects]) {
     assert.doesNotMatch(source, /calm-shortbread-55bcfc\.netlify\.app\/api\/:splat/);
   }
-  assert.match(proxySource, /path: "\/api\/databridge\/\*"/);
+  assert.match(proxySource, /"\/api\/databridge\/\*"/);
+  assert.match(proxySource, /"\/api\/market\/\*"/);
+  assert.match(proxySource, /"\/api\/routing\/\*"/);
+});
+
+test('Data Bridge proxy preserves market and routing API namespaces', () => {
+  assert.match(proxySource, /PROXY_PATH_PREFIXES/);
+  assert.match(proxySource, /return `\$\{matchedPrefix\.slice\(5, -1\)\}\/\$\{relativePath\}`/);
 });
 
 test('Netlify API rewrites preserve function-native routes and precede the SPA fallback', () => {
