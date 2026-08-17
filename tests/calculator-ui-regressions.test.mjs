@@ -36,30 +36,35 @@ test('uses compact matching header controls', () => {
   assert.doesNotMatch(indexSource, /<span>\+ Nueva Estimación<\/span>/);
 });
 
-test('renders Baltic spot data and feeds the inverse TCE calculator', () => {
-  assert.match(indexSource, /Baltic Exchange Spot Reference/);
-  assert.match(indexSource, /src="\.\/src\/step7-baltic-spot-reference\.js\?v=20260812-spot-fetch-fix"/);
-  assert.match(balticSpotSource, /fetch\(`\/api\/spot-rates\?vesselCategory=\$\{encodeURIComponent\(vesselType\)\}`/);
-  assert.match(balticSpotSource, /getIndexForVessel\(vesselType\)/);
-  assert.match(balticSpotSource, /value\.spot_rate/);
-  assert.match(balticSpotSource, /console\.log\('\[Step7 Baltic\] \/api\/spot-rates raw response:'/);
-  assert.match(balticSpotSource, /console\.log\('\[Step7 Baltic\] filtered index:'/);
-  assert.match(balticSpotSource, /refreshBalticSpotReference\(\{ force: true \}\);/);
-  assert.match(balticSpotSource, /No aplica índice global - Modelo Cost-Plus activo/);
-  assert.match(indexSource, /id="baltic-spot-variation"/);
-  assert.match(indexSource, /handleFetchBalticSpotTce/);
-  assert.match(indexSource, /new URLSearchParams\(\{ vesselCategory \}\)/);
-  assert.match(indexSource, /\/api\/spot-rates\?\$\{query\.toString\(\)\}/);
-  assert.match(indexSource, /const spotReference = payload\?\.spotReference/);
-  assert.match(indexSource, /const tceTarget = payload\?\.tceTarget/);
-  assert.match(indexSource, /applyFfaTceMarketData\(tceTarget\)/);
-  assert.match(indexSource, /const marketRate = Number\(entry\?\.rate_usd\)/);
-  assert.doesNotMatch(indexSource, /const marketRate = Number\(entry\?\.spot_rate\)/);
-  assert.match(tceWorkspaceSource, /tceTarget: Number\(tceTarget\.rate_usd\)/);
-  assert.doesNotMatch(indexSource, /function getBalticSpotIndexForPricingCategory|function getFfaVesselClassForPricingCategory/);
-  assert.doesNotMatch(tceWorkspaceSource, /function getBalticSpotIndexForVesselCategory|function getFfaVesselClassForCategory/);
-  assert.doesNotMatch(indexSource, /btn-fetch-fearnleys-tce|handleFetchFearnleysTce|fearnleysMarketData/);
-  assert.doesNotMatch(tceWorkspaceSource, /\/api\/fearnleys-tce|fearnleysMarketData/);
+test('renders Market Intel data and feeds the inverse TCE calculator', () => {
+  assert.match(indexSource, /Market Intel · Dry Bulk/);
+  assert.match(indexSource, /🔄 Forzar Sincronización/);
+  assert.match(indexSource, /✏️ Editar Manualmente/);
+  assert.match(indexSource, /data-market-field="capesize_tc"/);
+  assert.match(indexSource, /data-market-field="panamax_tc"/);
+  assert.match(indexSource, /data-market-field="supramax_tc"/);
+  assert.match(indexSource, /data-market-field="handysize_tc"/);
+  assert.match(indexSource, /data-market-field="bdi_index"/);
+  assert.match(indexSource, /fetch\('\/api\/market\/latest'/);
+  assert.match(indexSource, /fetch\('\/api\/market\/sync-fearnleys', \{ method: 'POST' \}\)/);
+  assert.match(indexSource, /fetch\('\/api\/market\/manual-update'/);
+  assert.match(indexSource, /body: JSON\.stringify\(manualValues\)/);
+  assert.match(indexSource, /MARKET_TCE_FIELD_BY_CLASS/);
+  assert.match(indexSource, /applyMarketLatestToInverseTce\(record, vesselCategory\)/);
+  assert.match(indexSource, /record\?\.bdi_index/);
+  assert.match(indexSource, /1Y T\/C - \$\{sourceMeta\.dataLabel\} - \$\{recordDate\}/);
+  assert.doesNotMatch(indexSource, /fetch\(`\/api\/spot-rates\?\$\{query\.toString\(\)\}`/);
+
+  assert.match(indexSource, /src="\.\/src\/step7-baltic-spot-reference\.js\?v=20260817-market-latest"/);
+  assert.match(balticSpotSource, /fetch\('\/api\/market\/latest'/);
+  assert.match(balticSpotSource, /BDIINDEX/);
+  assert.match(balticSpotSource, /findMarketEntryByIndex\(payload, 'BDI'\)/);
+  assert.doesNotMatch(balticSpotSource, /\/api\/spot-rates/);
+
+  assert.match(tceWorkspaceSource, /fetch\('\/api\/market\/latest'/);
+  assert.match(tceWorkspaceSource, /getMarketLatestTceField\(vesselCategory\)/);
+  assert.match(tceWorkspaceSource, /bdiIndexElement\.textContent = 'BDI'/);
+  assert.doesNotMatch(tceWorkspaceSource, /\/api\/spot-rates/);
 });
 
 test('maps vessel classes to their Baltic indices', () => {
@@ -82,7 +87,7 @@ test('maps vessel classes to their Baltic indices', () => {
   assert.equal(getIndexForVessel('Ultramax'), 'BSI');
 });
 
-test('loads BHSI immediately and renders the spot_rate response field', async () => {
+test('loads BDI immediately from the market latest response', async () => {
   const elements = new Map([
     ['vessel-badge', { textContent: 'Handysize / Small Tanker' }],
     ['port-pol', { value: 'Buenos Aires', addEventListener() {} }],
@@ -114,12 +119,10 @@ test('loads BHSI immediately and renders the spot_rate response field', async ()
     };
     globalThis.fetch = async (url) => {
       fetchCalls += 1;
-      assert.equal(url, '/api/spot-rates?vesselCategory=Handysize%20%2F%20Small%20Tanker');
+      assert.equal(url, '/api/market/latest');
       return {
         ok: true,
-        json: async () => ({
-          data: [{ name: 'Handysize', spot_rate: 2302, variation: 1.25 }],
-        }),
+        json: async () => ({ bdi_index: 2302 }),
       };
     };
     console.log = () => {};
@@ -132,9 +135,9 @@ test('loads BHSI immediately and renders the spot_rate response field', async ()
     await new Promise((resolve) => setImmediate(resolve));
 
     assert.equal(fetchCalls, 1);
-    assert.equal(elements.get('baltic-spot-index').textContent, 'BHSI');
-    assert.equal(elements.get('baltic-spot-value').textContent, '$2,302');
-    assert.equal(elements.get('baltic-spot-variation').textContent, '+1.25%');
+    assert.equal(elements.get('baltic-spot-index').textContent, 'BDI');
+    assert.equal(elements.get('baltic-spot-value').textContent, '2,302');
+    assert.equal(elements.get('baltic-spot-variation').textContent, 'Variación N/D');
   } finally {
     globalThis.window = originalWindow;
     globalThis.document = originalDocument;

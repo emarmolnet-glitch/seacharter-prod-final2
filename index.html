@@ -325,7 +325,7 @@
     <script type="module" src="./src/voyage-draft-entry.js"></script>
     <script type="module" src="./src/header-workflow-progress.js"></script>
     <script type="module" src="./src/comtrade-radar-entry.ts"></script>
-    <script type="module" src="./src/step7-baltic-spot-reference.js?v=20260812-spot-fetch-fix"></script>
+    <script type="module" src="./src/step7-baltic-spot-reference.js?v=20260817-market-latest"></script>
     <script type="module" src="./dual-mode-overlay.js"></script>
 
     <style>
@@ -9459,6 +9459,43 @@
                                         <div id="res-market-benchmark-alert" class="mt-1 inline-flex rounded px-2 py-1 text-[10px] font-black uppercase bg-slate-200 text-slate-600">Sin referencia</div>
                                     </div>
                                 </div>
+                                <section id="market-intel-dashboard" class="mt-3 rounded-xl border border-slate-800 bg-slate-950 p-3 text-white shadow-lg shadow-slate-950/10" aria-labelledby="market-intel-dashboard-title">
+                                    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                        <div class="min-w-0">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <h3 id="market-intel-dashboard-title" class="text-[10px] font-black uppercase tracking-[0.2em] text-sky-300">Market Intel · Dry Bulk</h3>
+                                                <span id="market-intel-update-badge" class="inline-flex rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-slate-400">Esperando actualización</span>
+                                            </div>
+                                            <p id="market-intel-status" class="mt-1 text-[10px] font-semibold text-slate-400" aria-live="polite">Consultando la última referencia disponible.</p>
+                                        </div>
+                                        <div class="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Controles de actualización de Market Intel">
+                                            <button id="btn-market-force-sync" type="button" onclick="forceMarketIntelSync()" class="inline-flex items-center justify-center rounded-lg border border-sky-500/60 bg-sky-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-sky-200 transition hover:bg-sky-500/20 focus:outline-none focus:ring-2 focus:ring-sky-400/40 disabled:cursor-wait disabled:opacity-60">🔄 Forzar Sincronización</button>
+                                            <button id="btn-market-manual-edit" type="button" onclick="toggleMarketIntelManualEdit()" class="inline-flex items-center justify-center rounded-lg border border-amber-400/60 bg-amber-400/10 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-amber-200 transition hover:bg-amber-400/20 focus:outline-none focus:ring-2 focus:ring-amber-300/40 disabled:cursor-wait disabled:opacity-60">✏️ Editar Manualmente</button>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-5">
+                                        <label class="group rounded-lg border border-slate-800 bg-slate-900/80 p-2 transition focus-within:border-sky-400">
+                                            <span class="block text-[9px] font-black uppercase tracking-wider text-slate-400">Capesize</span>
+                                            <span class="mt-1 flex items-baseline gap-1"><span class="text-[10px] font-bold text-slate-500">$</span><input id="market-intel-capesize-tc" data-market-field="capesize_tc" type="number" min="0" step="any" readonly class="min-w-0 w-full bg-transparent text-right font-mono text-sm font-black text-white outline-none read-only:cursor-default"><span class="text-[8px] font-bold uppercase text-slate-500">/día</span></span>
+                                        </label>
+                                        <label class="group rounded-lg border border-slate-800 bg-slate-900/80 p-2 transition focus-within:border-sky-400">
+                                            <span class="block text-[9px] font-black uppercase tracking-wider text-slate-400">Panamax</span>
+                                            <span class="mt-1 flex items-baseline gap-1"><span class="text-[10px] font-bold text-slate-500">$</span><input id="market-intel-panamax-tc" data-market-field="panamax_tc" type="number" min="0" step="any" readonly class="min-w-0 w-full bg-transparent text-right font-mono text-sm font-black text-white outline-none read-only:cursor-default"><span class="text-[8px] font-bold uppercase text-slate-500">/día</span></span>
+                                        </label>
+                                        <label class="group rounded-lg border border-slate-800 bg-slate-900/80 p-2 transition focus-within:border-sky-400">
+                                            <span class="block text-[9px] font-black uppercase tracking-wider text-slate-400">Supramax</span>
+                                            <span class="mt-1 flex items-baseline gap-1"><span class="text-[10px] font-bold text-slate-500">$</span><input id="market-intel-supramax-tc" data-market-field="supramax_tc" type="number" min="0" step="any" readonly class="min-w-0 w-full bg-transparent text-right font-mono text-sm font-black text-white outline-none read-only:cursor-default"><span class="text-[8px] font-bold uppercase text-slate-500">/día</span></span>
+                                        </label>
+                                        <label class="group rounded-lg border border-slate-800 bg-slate-900/80 p-2 transition focus-within:border-sky-400">
+                                            <span class="block text-[9px] font-black uppercase tracking-wider text-slate-400">Handysize</span>
+                                            <span class="mt-1 flex items-baseline gap-1"><span class="text-[10px] font-bold text-slate-500">$</span><input id="market-intel-handysize-tc" data-market-field="handysize_tc" type="number" min="0" step="any" readonly class="min-w-0 w-full bg-transparent text-right font-mono text-sm font-black text-white outline-none read-only:cursor-default"><span class="text-[8px] font-bold uppercase text-slate-500">/día</span></span>
+                                        </label>
+                                        <label class="group col-span-2 rounded-lg border border-sky-500/30 bg-sky-500/10 p-2 transition focus-within:border-sky-300 lg:col-span-1">
+                                            <span class="block text-[9px] font-black uppercase tracking-wider text-sky-300">BDI Index</span>
+                                            <span class="mt-1 flex items-baseline gap-1"><input id="market-intel-bdi-index" data-market-field="bdi_index" type="number" min="0" step="any" readonly class="min-w-0 w-full bg-transparent text-right font-mono text-sm font-black text-white outline-none read-only:cursor-default"><span class="text-[8px] font-bold uppercase text-sky-300/70">pts</span></span>
+                                        </label>
+                                    </div>
+                                </section>
                                 <div id="baltic-spot-reference-card" class="mt-3 rounded-lg border border-sky-200 bg-white p-3 shadow-sm" aria-live="polite">
                                     <div class="flex items-start justify-between gap-4">
                                         <div>
@@ -9466,7 +9503,7 @@
                                                 <span class="inline-flex h-5 w-5 items-center justify-center rounded bg-sky-100 text-sky-700" aria-hidden="true"><i class="fa-solid fa-chart-line text-[9px]"></i></span>
                                                 Baltic Exchange Spot Reference
                                             </div>
-                                            <div class="mt-1 max-w-md text-[10px] font-semibold leading-relaxed text-slate-500">Referencia Baltic Spot en puntos para comparación visual. El TCE objetivo y el flete mínimo usan por separado el TCA monetario de FFA.</div>
+                                            <div class="mt-1 max-w-md text-[10px] font-semibold leading-relaxed text-slate-500">Referencia BDI Spot en puntos para comparación visual. El TCE objetivo toma la referencia T/C de la clase detectada.</div>
                                         </div>
                                         <div class="shrink-0 text-right">
                                             <div id="baltic-spot-index" class="text-[10px] font-black uppercase tracking-[0.18em] text-sky-700">BDI</div>
@@ -61495,18 +61532,235 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             sourceEl.textContent = sourceLabel || 'Esperando datos del índice...';
         }
 
-        function applyFfaTceMarketData(entry) {
+        const MARKET_INTEL_FIELDS = Object.freeze([
+            'capesize_tc',
+            'panamax_tc',
+            'supramax_tc',
+            'handysize_tc',
+            'bdi_index'
+        ]);
+        const MARKET_TCE_FIELD_BY_CLASS = Object.freeze({
+            Capesize: 'capesize_tc',
+            Panamax: 'panamax_tc',
+            Supramax: 'supramax_tc',
+            Handysize: 'handysize_tc'
+        });
+        let marketIntelLatestSnapshot = null;
+        let isMarketIntelManualEdit = false;
+
+        function normalizeMarketLatestPayload(payload) {
+            const candidates = [payload, payload?.data, payload?.latest, payload?.market, payload?.result]
+                .filter(candidate => candidate && typeof candidate === 'object');
+            const record = candidates.find(candidate => MARKET_INTEL_FIELDS.some(field => candidate[field] !== undefined));
+            if (!record) return null;
+
+            const normalized = Object.fromEntries(MARKET_INTEL_FIELDS.map(field => {
+                const numericValue = Number(record[field]);
+                return [field, Number.isFinite(numericValue) ? numericValue : null];
+            }));
+            normalized.source = record.source
+                ?? record.update_source
+                ?? record.source_type
+                ?? payload?.source
+                ?? payload?.update_source
+                ?? payload?.source_type
+                ?? '';
+            normalized.updated_at = record.updated_at
+                ?? record.updatedAt
+                ?? record.record_date
+                ?? record.date
+                ?? record.timestamp
+                ?? payload?.updated_at
+                ?? payload?.updatedAt
+                ?? payload?.record_date
+                ?? payload?.date
+                ?? payload?.timestamp
+                ?? '';
+            return normalized;
+        }
+
+        function formatMarketIntelDate(value) {
+            if (!value) return 'Fecha no disponible';
+            const date = new Date(value);
+            return Number.isNaN(date.getTime())
+                ? String(value)
+                : date.toLocaleDateString('es-ES', { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric' });
+        }
+
+        function getMarketIntelSourceMeta(record) {
+            const rawSource = String(record?.source || '').trim();
+            const isManual = /manual/i.test(rawSource);
+            return {
+                badge: isManual ? 'Manual' : 'Automático',
+                dataLabel: isManual ? 'Manual Data' : 'Fearnleys Data',
+                tone: isManual ? 'manual' : 'automatic'
+            };
+        }
+
+        function renderBalticSpotFromMarketLatest(record) {
+            const value = Number(record?.bdi_index);
+            if (!Number.isFinite(value)) return false;
+            const indexElement = document.getElementById('baltic-spot-index');
+            const valueElement = document.getElementById('baltic-spot-value');
+            const variationElement = document.getElementById('baltic-spot-variation');
+            const statusElement = document.getElementById('baltic-spot-status');
+            const sourceMeta = getMarketIntelSourceMeta(record);
+            const dateLabel = formatMarketIntelDate(record?.updated_at);
+            if (indexElement) indexElement.textContent = 'BDI';
+            if (valueElement) valueElement.textContent = value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+            if (variationElement) {
+                variationElement.hidden = false;
+                variationElement.textContent = `Actualizado ${dateLabel}`;
+            }
+            if (statusElement) {
+                statusElement.textContent = sourceMeta.badge;
+                statusElement.className = `mt-1 inline-flex rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${
+                    sourceMeta.tone === 'manual'
+                        ? 'border-amber-200 bg-amber-50 text-amber-700'
+                        : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                }`;
+            }
+            return true;
+        }
+
+        function renderMarketIntelDashboard(record) {
+            if (!record) return;
+            marketIntelLatestSnapshot = record;
+            MARKET_INTEL_FIELDS.forEach(field => {
+                const input = document.querySelector(`[data-market-field="${field}"]`);
+                if (!input) return;
+                input.value = Number.isFinite(record[field]) ? String(record[field]) : '';
+                input.placeholder = '—';
+            });
+            const sourceMeta = getMarketIntelSourceMeta(record);
+            const dateLabel = formatMarketIntelDate(record.updated_at);
+            const badge = document.getElementById('market-intel-update-badge');
+            const status = document.getElementById('market-intel-status');
+            if (badge) {
+                badge.textContent = `${sourceMeta.badge} - ${dateLabel}`;
+                badge.className = `inline-flex rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-wide ${
+                    sourceMeta.tone === 'manual'
+                        ? 'border-amber-400/40 bg-amber-400/10 text-amber-200'
+                        : 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200'
+                }`;
+            }
+            if (status) status.textContent = 'Referencias de mercado listas para la Calculadora Inversa TCE.';
+            renderBalticSpotFromMarketLatest(record);
+        }
+
+        function setMarketIntelBusy(isBusy, message = '') {
+            const syncButton = document.getElementById('btn-market-force-sync');
+            const editButton = document.getElementById('btn-market-manual-edit');
+            const status = document.getElementById('market-intel-status');
+            if (syncButton) syncButton.disabled = isBusy;
+            if (editButton) editButton.disabled = isBusy;
+            if (status && message) status.textContent = message;
+        }
+
+        async function loadMarketIntelLatest() {
+            const response = await fetch('/api/market/latest', { cache: 'no-store' });
+            const payload = await response.json().catch(() => null);
+            const record = normalizeMarketLatestPayload(payload);
+            if (!response.ok || !record || MARKET_INTEL_FIELDS.some(field => !Number.isFinite(record[field]))) {
+                throw new Error(payload?.error || 'La referencia de mercado está incompleta o no disponible.');
+            }
+            renderMarketIntelDashboard(record);
+            return record;
+        }
+
+        async function forceMarketIntelSync() {
+            setMarketIntelBusy(true, 'Forzando sincronización con Fearnleys…');
+            try {
+                const response = await fetch('/api/market/sync-fearnleys', { method: 'POST' });
+                const payload = await response.json().catch(() => null);
+                if (!response.ok) throw new Error(payload?.error || 'No se pudo completar la sincronización.');
+                await loadMarketIntelLatest();
+            } catch (error) {
+                const status = document.getElementById('market-intel-status');
+                if (status) status.textContent = error?.message || 'No se pudo sincronizar Market Intel.';
+            } finally {
+                setMarketIntelBusy(false);
+            }
+        }
+
+        function setMarketIntelManualEdit(enabled) {
+            isMarketIntelManualEdit = enabled;
+            document.querySelectorAll('[data-market-field]').forEach(input => {
+                input.readOnly = !enabled;
+                input.classList.toggle('text-amber-200', enabled);
+            });
+            const button = document.getElementById('btn-market-manual-edit');
+            const status = document.getElementById('market-intel-status');
+            if (button) button.textContent = enabled ? '💾 Guardar Manualmente' : '✏️ Editar Manualmente';
+            if (status && enabled) status.textContent = 'Edita las cinco referencias y guarda la actualización manual.';
+        }
+
+        async function toggleMarketIntelManualEdit() {
+            if (!isMarketIntelManualEdit) {
+                setMarketIntelManualEdit(true);
+                document.querySelector('[data-market-field]')?.focus();
+                return;
+            }
+
+            const manualValues = Object.fromEntries(MARKET_INTEL_FIELDS.map(field => {
+                const input = document.querySelector(`[data-market-field="${field}"]`);
+                return [field, Number(input?.value)];
+            }));
+            if (Object.values(manualValues).some(value => !Number.isFinite(value) || value < 0)) {
+                const status = document.getElementById('market-intel-status');
+                if (status) status.textContent = 'Todos los valores deben ser números válidos mayores o iguales a cero.';
+                return;
+            }
+
+            setMarketIntelBusy(true, 'Guardando la actualización manual…');
+            try {
+                const response = await fetch('/api/market/manual-update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(manualValues)
+                });
+                const payload = await response.json().catch(() => null);
+                if (!response.ok) throw new Error(payload?.error || 'No se pudo guardar la actualización manual.');
+                setMarketIntelManualEdit(false);
+                await loadMarketIntelLatest();
+            } catch (error) {
+                const status = document.getElementById('market-intel-status');
+                if (status) status.textContent = error?.message || 'No se pudo guardar Market Intel.';
+            } finally {
+                setMarketIntelBusy(false);
+            }
+        }
+
+        function applyMarketLatestToInverseTce(record, vesselCategory = currentVesselPricingCategory) {
             const tceInput = document.getElementById('inverse-tce-target');
-            const marketRate = Number(entry?.rate_usd);
+            const vesselClass = getMarketSpeedVesselClass(vesselCategory);
+            const marketField = MARKET_TCE_FIELD_BY_CLASS[vesselClass];
+            const marketRate = Number(record?.[marketField]);
             if (!tceInput || !Number.isFinite(marketRate)) return false;
 
             tceInput.value = String(marketRate);
-            const recordDate = entry?.record_date
-                ? new Date(entry.record_date).toLocaleDateString('es-ES', { timeZone: 'UTC' })
-                : 'fecha no disponible';
-            updateBalticSpotSourceLabel(`${entry.vessel_class} · FFA TCA ${entry.period} · ${recordDate}`);
+            const sourceMeta = getMarketIntelSourceMeta(record);
+            const recordDate = formatMarketIntelDate(record?.updated_at);
+            updateBalticSpotSourceLabel(`${vesselClass} 1Y T/C - ${sourceMeta.dataLabel} - ${recordDate}`);
+            renderBalticSpotFromMarketLatest(record);
             calculateInverseTce();
             return true;
+        }
+
+        function initializeMarketIntelDashboard() {
+            setMarketIntelBusy(true, 'Consultando la última referencia disponible…');
+            void loadMarketIntelLatest()
+                .catch(error => {
+                    const status = document.getElementById('market-intel-status');
+                    if (status) status.textContent = error?.message || 'Market Intel no está disponible.';
+                })
+                .finally(() => setMarketIntelBusy(false));
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeMarketIntelDashboard, { once: true });
+        } else {
+            initializeMarketIntelDashboard();
         }
 
         function updateManualBalticSpotOverrideUi() {
@@ -62279,43 +62533,24 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const vesselCategory = currentVesselPricingCategory;
             if (button && !managedByMaster) {
                 button.disabled = true;
-                button.textContent = 'Consultando Neón...';
+                button.textContent = 'Consultando mercado...';
             }
             if (status) status.textContent = 'Market';
 
             const activeRequest = (async () => {
-                const query = new URLSearchParams({ vesselCategory });
-                const response = await fetch(`/api/spot-rates?${query.toString()}`, {
-                    cache: 'no-store'
-                });
-                const payload = await response.json().catch(() => null);
-                const spotReference = payload?.spotReference;
-                const tceTarget = payload?.tceTarget;
-                const mapping = payload?.mapping;
-                if (
-                    !response.ok
-                    || !spotReference
-                    || !Number.isFinite(Number(spotReference.spot_rate))
-                    || !tceTarget
-                    || !Number.isFinite(Number(tceTarget.rate_usd))
-                    || !mapping?.spotIndex
-                    || !mapping?.ffaVesselClass
-                ) {
-                    throw new Error(payload?.error || `No se pudieron obtener las referencias de ${vesselCategory}.`);
-                }
-
-                if (!applyFfaTceMarketData(tceTarget)) {
-                    throw new Error(`El TCA ${mapping.ffaVesselClass} no contiene una tarifa monetaria válida.`);
+                const record = await loadMarketIntelLatest();
+                if (!applyMarketLatestToInverseTce(record, vesselCategory)) {
+                    throw new Error(`No existe una referencia T/C válida para ${vesselCategory}.`);
                 }
                 lastBalticSpotPricingCategory = vesselCategory;
-                return { spotReference, tceTarget, mapping };
+                return record;
             })();
             balticSpotTceRequest = activeRequest;
 
             try {
                 return await activeRequest;
             } catch (error) {
-                updateBalticSpotSourceLabel(`No se pudieron actualizar las referencias de ${vesselCategory} desde Neón.`);
+                updateBalticSpotSourceLabel(`No se pudieron actualizar las referencias de ${vesselCategory}: ${error?.message || 'dato no disponible'}.`);
                 if (managedByMaster) throw error;
                 return null;
             } finally {
