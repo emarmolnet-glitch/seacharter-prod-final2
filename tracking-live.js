@@ -1276,6 +1276,11 @@ async function fetchCoordinatorLivePosition(vessel, fallbackQuery, signal) {
         || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
         throw new Error('La respuesta AIS no contiene coordenadas válidas.');
     }
+    window.DatalasticConsumptionLog?.recordFromMeta({
+        module: 'Tracking',
+        action: 'Consultar posición AIS en vivo',
+        meta: payload.meta || {},
+    });
     void refreshAisConsumptionMonitor();
     return mergeCoordinatorTelemetry(vessel, { ...payload.data, latitude, longitude }, payload.meta);
 }

@@ -25442,6 +25442,13 @@
                     throw new Error(payload.error || 'No se pudieron recuperar los datos del buque.');
                 }
 
+                window.DatalasticConsumptionLog?.recordFromMeta({
+                    module: 'Cálculo de Rutas',
+                    action: 'Autocompletar especificaciones por IMO',
+                    meta: { cacheStatus: payload.providerCacheStatus },
+                    creditsConsumed: payload.creditsConsumed,
+                });
+
                 applyDataBridgeHydrationToCalculator(payload.vessel, { imo, imo_number: imo });
                 showToast(`✅ Especificaciones del buque IMO ${imo} cargadas.`);
                 return true;
@@ -65707,6 +65714,14 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     if (!response.ok || !coordinatorPayload?.success) {
                         throw new Error(coordinatorPayload?.error || `AIS coordinator request failed (${response.status})`);
                     }
+                    const radarContext = String(options.radarContext || options.source || 'radar-live');
+                    window.DatalasticConsumptionLog?.recordFromMeta({
+                        module: radarContext === 'core-pro-voyage-time' ? 'Cálculo de Rutas' : 'Tracking / Radar',
+                        action: radarContext === 'core-pro-voyage-time'
+                            ? 'Consultar ETA desde radar AIS'
+                            : `Ejecutar barrido AIS (${radarContext})`,
+                        meta: coordinatorPayload.meta || {},
+                    });
                     const payload = {
                         vessels: Array.isArray(coordinatorPayload.data) ? coordinatorPayload.data : [],
                         recent_vessels: Array.isArray(coordinatorPayload.data) ? coordinatorPayload.data.length : 0,

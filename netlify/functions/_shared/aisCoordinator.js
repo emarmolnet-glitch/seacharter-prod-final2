@@ -428,7 +428,16 @@ export function createAisCoordinator({
   enrichRadarVessels = enrichDatalasticRadarVessels,
   now = () => Date.now(),
 } = {}) {
-  async function refresh({ cacheKey, ttlMs, softStaleTtlMs, staleTtlMs, providerCall, normalize, formatValue }, initialEnvelope) {
+  async function refresh({
+    cacheKey,
+    ttlMs,
+    softStaleTtlMs,
+    staleTtlMs,
+    providerCall,
+    normalize,
+    formatValue,
+    consumption = { module: "Core PRO", action: "Consulta API" },
+  }, initialEnvelope) {
     if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey);
     if (!initialEnvelope) getDatalasticApiKey();
 
@@ -461,6 +470,7 @@ export function createAisCoordinator({
         providerSucceeded = true;
         consumptionMonitor.consumedCredits += 1;
         consumptionMonitor.lastConsumedAt = new Date(now()).toISOString();
+        console.info(`Crédito Datalastic consumido por [${consumption.module}]: [${consumption.action}]`);
         const value = await normalize(payload);
         const storedAt = now();
         const envelope = {
@@ -516,6 +526,7 @@ export function createAisCoordinator({
     normalize,
     formatValue = (value) => ({ data: value }),
     scheduleRefresh,
+    consumption,
   }) {
     const initialNow = now();
     const initialEnvelope = await readCache(store, cacheKey, initialNow);
@@ -531,6 +542,7 @@ export function createAisCoordinator({
       providerCall,
       normalize,
       formatValue,
+      consumption,
     };
     if (initialEnvelope && softStaleUntil(initialEnvelope) > initialNow) {
       scheduleBackgroundRefresh(refresh(refreshOptions, initialEnvelope), scheduleRefresh, cacheKey);
@@ -549,6 +561,7 @@ export function createAisCoordinator({
         staleTtlMs: TRACKING_STALE_TTL_MS,
         providerCall: (activeFetch) => fetchDatalastic("vessel", { imo }, activeFetch),
         normalize: normalizeLivePosition,
+        consumption: { module: "Tracking", action: "Consultar posición AIS en vivo" },
       });
     },
 
@@ -596,6 +609,7 @@ export function createAisCoordinator({
           sourceCounts: value?.sourceCounts ?? { liveRadar: 0, technicalMatches: 0 },
         }),
         scheduleRefresh: options.scheduleRefresh,
+        consumption: { module: "Tracking / Radar", action: "Ejecutar barrido AIS por radio" },
       });
     },
 
@@ -607,6 +621,7 @@ export function createAisCoordinator({
         staleTtlMs: PARTICULARS_STALE_TTL_MS,
         providerCall: (activeFetch) => fetchDatalastic("vessel_info", { imo }, activeFetch),
         normalize: normalizeVesselParticulars,
+        consumption: { module: "Auditoría / Cálculo de Rutas", action: "Consultar ficha técnica por IMO" },
       });
     },
   };

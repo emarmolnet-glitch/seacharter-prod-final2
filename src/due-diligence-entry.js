@@ -1314,6 +1314,11 @@ import { evaluateCargoVesselEligibility } from '../cargo-taxonomy.mjs';
                 { imo, mmsi, vesselName },
                 { fetchImpl: globalScope.fetch.bind(globalScope), signal: controller.signal },
             );
+            globalScope.DatalasticConsumptionLog?.recordFromMeta({
+                module: 'Auditoría',
+                action: 'Consultar ficha técnica del buque',
+                meta: responsePayload.metadata || {},
+            });
             const dueDiligenceData = readDueDiligenceRecord(responsePayload);
             const technical = normalizeTechnicalRecord({
                 ...dueDiligenceData,
