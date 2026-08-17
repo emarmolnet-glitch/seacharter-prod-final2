@@ -2,7 +2,7 @@ import type { Config } from "@netlify/functions";
 
 declare const process: { env: Record<string, string | undefined> };
 
-const PROXY_PATH_PREFIX = "/api/databridge/";
+const PROXY_PATH_PREFIXES = ["/api/databridge/", "/api/market/", "/api/routing/"];
 const DEFAULT_DATA_BRIDGE_ORIGIN = "https://calm-shortbread-55bcfc.netlify.app";
 const MAX_REDIRECTS = 5;
 
@@ -24,10 +24,12 @@ function isValidHttpUrl(value: string) {
 }
 
 function getForwardPath(requestUrl: URL) {
-  const relativePath = requestUrl.pathname.startsWith(PROXY_PATH_PREFIX)
-    ? requestUrl.pathname.slice(PROXY_PATH_PREFIX.length)
-    : "";
-  return relativePath.replace(/^\/+/, "");
+  const matchedPrefix = PROXY_PATH_PREFIXES.find((prefix) => requestUrl.pathname.startsWith(prefix));
+  if (!matchedPrefix) return "";
+
+  const relativePath = requestUrl.pathname.slice(matchedPrefix.length).replace(/^\/+/, "");
+  if (matchedPrefix === "/api/databridge/") return relativePath;
+  return `${matchedPrefix.slice(5, -1)}/${relativePath}`;
 }
 
 function resolveTargetUrl(requestUrl: URL) {
@@ -149,5 +151,5 @@ export default async (req: Request) => {
 };
 
 export const config: Config = {
-  path: "/api/databridge/*",
+  path: ["/api/databridge/*", "/api/market/*", "/api/routing/*"],
 };
