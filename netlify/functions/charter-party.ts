@@ -42,6 +42,44 @@ function cleanTimestamp(value: unknown) {
   return Number.isNaN(safeDate.getTime()) ? null : safeDate;
 }
 
+function cleanWeatherSnapshot(value: unknown) {
+  const text = cleanText(value, 5000);
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text);
+    if (!isRecord(parsed) || !isRecord(parsed.ports)) return null;
+    const cleanPort = (port: unknown) => {
+      if (!isRecord(port)) return null;
+      const temperatureC = Number(port.temperatureC);
+      const windKnots = Number(port.windKnots);
+      return {
+        role: cleanText(port.role, 3),
+        portName: cleanText(port.portName),
+        temperatureC: Number.isFinite(temperatureC) ? temperatureC : null,
+        windKnots: Number.isFinite(windKnots) ? windKnots : null,
+        operationalStatus: cleanText(port.operationalStatus, 80),
+        condition: cleanText(port.condition, 80),
+      };
+    };
+    return {
+      source: cleanText(parsed.source, 80),
+      mode: cleanText(parsed.mode, 30),
+      targetDate: cleanText(parsed.targetDate, 40),
+      laydays: cleanText(parsed.laydays, 40),
+      cancelling: cleanText(parsed.cancelling, 40),
+      daysUntilLaycan: parsed.daysUntilLaycan !== null && Number.isFinite(Number(parsed.daysUntilLaycan))
+        ? Number(parsed.daysUntilLaycan)
+        : null,
+      ports: {
+        pol: cleanPort(parsed.ports.pol),
+        pod: cleanPort(parsed.ports.pod),
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 function emptyStringsToNull<T>(value: T): T {
   if (value === "") return null as T;
   if (value instanceof Date) return value;
@@ -90,6 +128,7 @@ export default async (request: Request, context: Context) => {
   const vesselDwt = Number(body.vesselDwt);
   const vesselGt = Number(body.vesselGt);
   const vesselYearBuilt = Number(body.vesselYearBuilt);
+  const maritimeWeather = cleanWeatherSnapshot(body.weatherSnapshotJson);
   const savedAt = new Date();
   const charterPartyDetails = {
     charterPartyGeneratedAt: savedAt.toISOString(),
@@ -98,6 +137,7 @@ export default async (request: Request, context: Context) => {
     vesselGt: Number.isFinite(vesselGt) && vesselGt > 0 ? vesselGt : null,
     vesselFlag: cleanText(body.vesselFlag, 80) || null,
     vesselYearBuilt: Number.isFinite(vesselYearBuilt) && vesselYearBuilt > 0 ? Math.round(vesselYearBuilt) : null,
+    maritimeWeather,
   };
   const values = {
     contractRef,

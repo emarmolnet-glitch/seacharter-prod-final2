@@ -80,6 +80,7 @@ interface CharterPartyPayload {
   vesselFlag: string;
   vesselYearBuilt: number;
   mmsi: string;
+  weatherSnapshotJson: string;
 }
 
 interface SeaCharterStore {
@@ -216,6 +217,7 @@ function readCharterPartyPayload(validation: DraftValidationResponse): CharterPa
     vesselFlag: firstText(activeVessel.flag),
     vesselYearBuilt: Number(activeVessel.yearBuilt ?? activeVessel.year_built ?? activeVessel.builtYear ?? activeVessel.built_year) || 0,
     mmsi: firstText(activeVessel.mmsi).replace(/\D/g, ""),
+    weatherSnapshotJson: draftVoyage.weather ? JSON.stringify(draftVoyage.weather) : "",
   };
 }
 
@@ -444,6 +446,7 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
         vesselFlag: payload.vesselFlag,
         vesselYearBuilt: payload.vesselYearBuilt,
         mmsi: payload.mmsi,
+        weatherSnapshotJson: payload.weatherSnapshotJson,
       };
       const missingFields = [
         ["referencia contractual", payload.contractRef],

@@ -11,6 +11,7 @@ const EMPTY_DRAFT = Object.freeze({
     lastreCoordinates: [],
     distanceNm: null,
     routeGeometry: null,
+    weather: null,
     vessel: null,
     updatedAt: null,
     lastSource: '',
@@ -208,6 +209,17 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
                 routeGeometry: routeGeometry && typeof routeGeometry === 'object' ? routeGeometry : current.draft.routeGeometry,
                 updatedAt: new Date().toISOString(),
                 lastSource: 'tracking-route',
+            },
+        };
+    }),
+    setWeatherSnapshot: (weather = null) => set((current) => {
+        const normalizedWeather = weather && typeof weather === 'object' ? weather : null;
+        if (JSON.stringify(current.draft.weather) === JSON.stringify(normalizedWeather)) return current;
+        return {
+            draft: {
+                ...current.draft,
+                weather: normalizedWeather,
+                updatedAt: new Date().toISOString(),
             },
         };
     }),
