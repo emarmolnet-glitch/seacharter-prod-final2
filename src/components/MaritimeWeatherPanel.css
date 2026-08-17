@@ -1,0 +1,231 @@
+.maritime-weather-panel {
+  --weather-ink: #334155;
+  --weather-strong: #1e293b;
+  --weather-muted: #475569;
+  position: absolute;
+  top: 50%;
+  right: 30px;
+  z-index: 28;
+  display: grid;
+  width: min(300px, calc(100vw - 60px));
+  gap: 12px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-family: inherit;
+}
+
+.maritime-weather-card {
+  position: relative;
+  overflow: hidden;
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  background-color: #ffffff;
+  box-shadow: var(--panel-shadow, 0 4px 10px -6px rgba(15, 23, 42, 0.22));
+  color: var(--weather-ink);
+  font-family: inherit;
+  animation: maritime-weather-arrival 360ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.maritime-weather-card:nth-child(2) { animation-delay: 70ms; }
+
+.maritime-weather-card__rail {
+  display: none;
+}
+
+.maritime-weather-card__header,
+.maritime-weather-card__status,
+.maritime-weather-card__mode {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.maritime-weather-card__role {
+  display: block;
+  margin-bottom: 2px;
+  color: #334155;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.maritime-weather-card--pod .maritime-weather-card__role { color: #334155; }
+
+.maritime-weather-card h3 {
+  max-width: 215px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--weather-strong);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.maritime-weather-card__icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #002060;
+}
+
+.maritime-weather-card__icon svg {
+  width: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.maritime-weather-card__mode {
+  margin: 8px 0;
+  padding: 6px 0;
+  border-block: 1px solid #e2e8f0;
+}
+
+.maritime-weather-card__mode span {
+  color: #334155;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.maritime-weather-card__mode small {
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.maritime-weather-card__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.maritime-weather-card__metrics > div {
+  padding: 7px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.maritime-weather-card__metrics dt,
+.maritime-weather-card__status small {
+  color: #334155;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.maritime-weather-card__metrics dd {
+  margin: 2px 0 0;
+  color: var(--weather-strong);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.maritime-weather-card__metrics dd span {
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.maritime-weather-card__status {
+  justify-content: flex-start;
+}
+
+.maritime-weather-card__signal {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #25a18e;
+  box-shadow: 0 0 0 3px rgba(37, 161, 142, 0.1);
+}
+
+.maritime-weather-card__signal.is-caution {
+  background: #f4bd58;
+  box-shadow: 0 0 0 4px rgba(244, 189, 88, 0.1), 0 0 12px rgba(244, 189, 88, 0.5);
+}
+
+.maritime-weather-card__status div { display: grid; gap: 1px; }
+.maritime-weather-card__status strong { color: var(--weather-strong); font-size: 0.75rem; font-weight: 700; }
+.maritime-weather-card__status em {
+  margin-left: auto;
+  color: #475569;
+  font-size: 0.68rem;
+  font-style: normal;
+  text-align: right;
+}
+
+.maritime-weather-panel__disclaimer {
+  margin: -3px 4px 0 0;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-align: right;
+  box-shadow: var(--panel-shadow, 0 4px 10px -6px rgba(15, 23, 42, 0.22));
+}
+
+@keyframes maritime-weather-arrival {
+  from { opacity: 0; transform: translateX(14px) scale(0.98); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@media (max-width: 1024px) {
+  .maritime-weather-panel {
+    top: auto;
+    right: 0.75rem;
+    bottom: 8.8rem;
+    width: min(260px, calc(100vw - 1.5rem));
+    transform: none;
+  }
+
+  .maritime-weather-card { padding: 10px; }
+  .maritime-weather-card__metrics { margin-bottom: 7px; }
+}
+
+@media (max-width: 640px) {
+  .maritime-weather-panel {
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 8.8rem;
+    width: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .maritime-weather-card { min-width: 0; padding: 8px; }
+  .maritime-weather-card__icon, .maritime-weather-card__status em { display: none; }
+  .maritime-weather-card h3 { max-width: 100%; font-size: 0.78rem; }
+  .maritime-weather-card__mode { align-items: flex-start; margin: 8px 0; }
+  .maritime-weather-card__mode small { display: none; }
+  .maritime-weather-card__mode span { font-size: 0.65rem; }
+  .maritime-weather-card__metrics { gap: 4px; }
+  .maritime-weather-card__metrics > div { padding: 5px 6px; }
+  .maritime-weather-card__metrics dd { font-size: 0.85rem; }
+  .maritime-weather-panel__disclaimer { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maritime-weather-card { animation: none; }
+}

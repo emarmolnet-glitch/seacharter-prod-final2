@@ -323,6 +323,7 @@
     <script type="module" src="./src/tracking-aisstream-entry.tsx"></script>
     <script defer src="./session-draft.js"></script>
     <script type="module" src="./src/voyage-draft-entry.js"></script>
+    <script type="module" src="./src/maritime-weather-entry.jsx"></script>
     <script type="module" src="./src/header-workflow-progress.js"></script>
     <script type="module" src="./src/comtrade-radar-entry.ts"></script>
     <script type="module" src="./src/step7-baltic-spot-reference.js?v=20260817-market-latest"></script>
@@ -1030,41 +1031,6 @@
             top: 18px;
         }
 
-        .map-route-legend {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            min-height: 38px;
-            padding: 0 13px;
-            border: 1px solid rgba(224, 232, 240, 0.82);
-            border-radius: 8px;
-            background: rgba(7, 21, 34, 0.86);
-            color: #e7f8f6;
-            box-shadow: 0 12px 28px rgba(0, 35, 48, 0.18);
-            backdrop-filter: blur(10px);
-            pointer-events: none;
-        }
-
-        .map-route-legend span {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 0.66rem;
-            font-weight: 800;
-            letter-spacing: 0.07em;
-            text-transform: uppercase;
-            white-space: nowrap;
-        }
-
-        .map-route-legend i {
-            width: 24px;
-            height: 2px;
-            background: repeating-linear-gradient(90deg, var(--route-color) 0 6px, transparent 6px 10px);
-        }
-
-        .map-route-legend .ballast { --route-color: #F59E0B; }
-        .map-route-legend .laden { --route-color: #20d69b; }
-
         .map-icon-button {
             width: 38px;
             height: 38px;
@@ -1509,9 +1475,6 @@
             }
             body.route-map-fullscreen .map-control-stack {
                 top: auto;
-            }
-            .map-route-legend {
-                display: none;
             }
             .map-route-summary-overlay {
                 left: 12px;
@@ -8367,10 +8330,6 @@
                     </div>
                 </div>
                 <div class="map-control-stack">
-                    <div class="map-route-legend" aria-label="Leyenda de rutas">
-                        <span class="ballast"><i></i> Lastre</span>
-                        <span class="laden"><i></i> Carga</span>
-                    </div>
                     <button id="btn-map-toggle-input" onclick="toggleRouteInputPanel()" class="map-icon-button" title="Mostrar u ocultar input geográfico" aria-label="Mostrar u ocultar input geográfico">
                         <i class="fa-solid fa-sliders"></i>
                     </button>
@@ -8416,6 +8375,7 @@
                         </button>
                     </div>
                 </section>
+                <div id="maritime-weather-panel-root"></div>
                 <div id="map-route-summary" class="map-route-summary-overlay grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 text-xs">
                         <div class="w-full border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">Lastre</span><strong id="sync-ballast-label">TBA</strong></div>
                         <div class="w-full border border-slate-200 rounded p-3"><span class="block text-slate-500 uppercase">POL</span><strong id="sync-pol-label">TBA</strong></div>

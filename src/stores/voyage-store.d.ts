@@ -14,6 +14,23 @@ export type VoyageVessel = {
   speedKnots: number | null;
   positionUpdatedAt: string | null;
 };
+export type MaritimePortWeather = {
+  role: "POL" | "POD";
+  portName: string;
+  temperatureC: number;
+  windKnots: number;
+  operationalStatus: string;
+  condition: string;
+};
+export type MaritimeWeatherSnapshot = {
+  source: string;
+  mode: "short-term" | "seasonal";
+  targetDate: string;
+  laydays: string;
+  cancelling: string;
+  daysUntilLaycan: number | null;
+  ports: { pol: MaritimePortWeather | null; pod: MaritimePortWeather | null };
+};
 export type DraftVoyage = {
   pol: VoyagePort | null;
   pod: VoyagePort | null;
@@ -22,6 +39,7 @@ export type DraftVoyage = {
   ballastDistanceNm: number | null;
   ballastDistanceSource: string;
   lastreCoordinates: Array<[number, number]>;
+  weather: MaritimeWeatherSnapshot | null;
   vessel: VoyageVessel | null;
   updatedAt: string | null;
   lastSource: string;
@@ -33,6 +51,7 @@ export type VoyageStoreState = {
   applyTrackingAudit: (payload?: { ballastDistanceNm?: number; lastreCoordinates?: unknown[]; vessel?: Record<string, unknown> }) => void;
   applyMatchingCandidate: (payload?: { ballastDistanceNm?: number; lastreCoordinates?: unknown[]; vessel?: Record<string, unknown> }) => void;
   applyTrackingRoute: (payload?: { distanceNm?: number; routeGeometry?: unknown; ballastDistanceNm?: number; lastreCoordinates?: unknown[] }) => void;
+  setWeatherSnapshot: (weather?: MaritimeWeatherSnapshot | null) => void;
   clearDraft: () => void;
   hasOperationalDraft: () => boolean;
 };

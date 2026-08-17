@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [storeSource, entrySource, trackingSource, indexSource, charterSource, routeConfiguratorSource, globeSource] = await Promise.all([
+const [storeSource, entrySource, trackingSource, indexSource, charterSource, routeConfiguratorSource, globeSource, weatherPanelSource, weatherCssSource, weatherEntrySource] = await Promise.all([
   readFile(new URL('../src/stores/voyage-store.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/voyage-draft-entry.js', import.meta.url), 'utf8'),
   readFile(new URL('../tracking-live.js', import.meta.url), 'utf8'),
@@ -10,7 +10,35 @@ const [storeSource, entrySource, trackingSource, indexSource, charterSource, rou
   readFile(new URL('../netlify/functions/charter-party.ts', import.meta.url), 'utf8'),
   readFile(new URL('../src/components/RouteConfigurator.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../GlobalFleetGlobe.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/components/MaritimeWeatherPanel.jsx', import.meta.url), 'utf8'),
+  readFile(new URL('../src/components/MaritimeWeatherPanel.css', import.meta.url), 'utf8'),
+  readFile(new URL('../src/maritime-weather-entry.jsx', import.meta.url), 'utf8'),
 ]);
+
+test('map weather panel derives Laycan mode from DraftVoyage without changing maritime routing', () => {
+  assert.match(indexSource, /id="maritime-weather-panel-root"/);
+  assert.match(indexSource, /src="\.\/src\/maritime-weather-entry\.jsx"/);
+  assert.match(weatherEntrySource, /pol=\{draft\.pol\}/);
+  assert.match(weatherEntrySource, /laydays=\{draft\.laycan\?\.laydays\}/);
+  assert.match(weatherPanelSource, /daysUntilLaycan !== null && daysUntilLaycan <= 10/);
+  assert.match(weatherPanelSource, /Previsión a Corto Plazo/);
+  assert.match(weatherPanelSource, /Climatología Estacional/);
+  assert.match(weatherPanelSource, /setWeatherSnapshot\(snapshot\)/);
+  assert.match(weatherCssSource, /right: 30px/);
+  assert.match(weatherCssSource, /transform: translateY\(-50%\)/);
+  assert.match(weatherCssSource, /font-family: inherit/);
+  assert.match(weatherCssSource, /border: 0/);
+  assert.match(weatherCssSource, /border-radius: 8px/);
+  assert.match(weatherCssSource, /background-color: #ffffff/);
+  assert.match(weatherCssSource, /box-shadow: var\(--panel-shadow/);
+  assert.match(weatherCssSource, /font-size: 0\.75rem/);
+  assert.match(weatherCssSource, /font-weight: 700/);
+  assert.match(weatherCssSource, /font-size: 0\.95rem/);
+  assert.match(weatherCssSource, /pointer-events: none/);
+  assert.doesNotMatch(indexSource, /map-route-legend/);
+  assert.doesNotMatch(indexSource, /Leyenda de rutas/);
+  assert.doesNotMatch(weatherPanelSource, /\/api\/route/);
+});
 
 test('DraftVoyage centralizes route, laycan, cargo and audited vessel data', () => {
   assert.match(storeSource, /export const voyageStore = createStore/);
@@ -74,6 +102,8 @@ test('calculator confirms the final snapshot in Neon and clears the draft', () =
   assert.match(routeConfiguratorSource, /vesselFlag: payload\.vesselFlag/);
   assert.match(routeConfiguratorSource, /vesselYearBuilt: payload\.vesselYearBuilt/);
   assert.match(routeConfiguratorSource, /mmsi: payload\.mmsi/);
+  assert.match(routeConfiguratorSource, /weatherSnapshotJson: payload\.weatherSnapshotJson/);
+  assert.match(charterSource, /maritimeWeather/);
   assert.match(routeConfiguratorSource, /voyageStore\.getState\(\)\.clearDraft\(\)/);
   assert.doesNotMatch(entrySource, /fetch\('\/api\/v1\/charter-party'/);
   assert.doesNotMatch(charterSource, /vesselTechnical|draftSnapshot/);
