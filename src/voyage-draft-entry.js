@@ -84,4 +84,7 @@ bindCalculatorStore();
 bindManualBallastDistance();
 voyageStore.subscribe((state, previousState) => {
     if (state.draft !== previousState.draft) hydrateCalculatorFromDraft(state.draft);
+    if (state.draft?.weather !== previousState.draft?.weather && typeof window.runEngine === 'function') {
+        window.runEngine();
+    }
 });

@@ -103,7 +103,12 @@ test('calculator confirms the final snapshot in Neon and clears the draft', () =
   assert.match(routeConfiguratorSource, /vesselYearBuilt: payload\.vesselYearBuilt/);
   assert.match(routeConfiguratorSource, /mmsi: payload\.mmsi/);
   assert.match(routeConfiguratorSource, /weatherSnapshotJson: payload\.weatherSnapshotJson/);
+  assert.match(routeConfiguratorSource, /meteoceanRiskJson: payload\.meteoceanRiskJson/);
+  assert.match(routeConfiguratorSource, /voyageFinancialsJson: payload\.voyageFinancialsJson/);
+  assert.equal((indexSource.match(/meteoceanRisk: State\.meteoceanRisk/g) || []).length, 2);
   assert.match(charterSource, /maritimeWeather/);
+  assert.match(charterSource, /meteoceanRisk/);
+  assert.match(charterSource, /voyageFinancials/);
   assert.match(routeConfiguratorSource, /voyageStore\.getState\(\)\.clearDraft\(\)/);
   assert.doesNotMatch(entrySource, /fetch\('\/api\/v1\/charter-party'/);
   assert.doesNotMatch(charterSource, /vesselTechnical|draftSnapshot/);

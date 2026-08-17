@@ -80,6 +80,68 @@ function cleanWeatherSnapshot(value: unknown) {
   }
 }
 
+function cleanNonNegativeNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : 0;
+}
+
+function parseJsonRecord(value: unknown) {
+  if (typeof value !== "string" || !value.trim() || value.length > 20000) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function cleanMeteoceanRisk(value: unknown) {
+  const parsed = parseJsonRecord(value);
+  if (!parsed) return null;
+  const rawRisks = Array.isArray(parsed.risks) ? parsed.risks : [];
+  return {
+    source: cleanText(parsed.source, 120) || null,
+    hasWeatherData: Boolean(parsed.hasWeatherData),
+    hasRisk: Boolean(parsed.hasRisk),
+    laytimeDays: cleanNonNegativeNumber(parsed.laytimeDays),
+    maneuverBufferDays: cleanNonNegativeNumber(parsed.maneuverBufferDays),
+    operationalBufferDays: cleanNonNegativeNumber(parsed.operationalBufferDays),
+    totalBufferDays: cleanNonNegativeNumber(parsed.totalBufferDays),
+    demurrageRate: cleanNonNegativeNumber(parsed.demurrageRate),
+    financialImpact: cleanNonNegativeNumber(parsed.financialImpact),
+    risks: rawRisks.slice(0, 6).map((risk) => {
+      const record = isRecord(risk) ? risk : {};
+      return {
+        type: cleanText(record.type, 32) || null,
+        role: cleanText(record.role, 8) || null,
+        portName: cleanText(record.portName, 160) || null,
+        windKnots: cleanNonNegativeNumber(record.windKnots),
+        status: cleanText(record.status, 80) || null,
+        message: cleanText(record.message, 300) || null,
+        addedDays: cleanNonNegativeNumber(record.addedDays),
+      };
+    }),
+  };
+}
+
+function cleanVoyageFinancials(value: unknown) {
+  const parsed = parseJsonRecord(value);
+  if (!parsed) return null;
+  return {
+    totalVoyageCost: cleanNonNegativeNumber(parsed.totalVoyageCost),
+    baseVoyageCost: cleanNonNegativeNumber(parsed.baseVoyageCost),
+    voyageCostWithoutEts: cleanNonNegativeNumber(parsed.voyageCostWithoutEts),
+    etsCost: cleanNonNegativeNumber(parsed.etsCost),
+    breakEvenFreight: cleanNonNegativeNumber(parsed.breakEvenFreight),
+    breakEvenArmador: cleanNonNegativeNumber(parsed.breakEvenArmador),
+    breakEvenTotal: cleanNonNegativeNumber(parsed.breakEvenTotal),
+    cargoQty: cleanNonNegativeNumber(parsed.cargoQty),
+    meteoceanPenaltyCost: cleanNonNegativeNumber(parsed.meteoceanPenaltyCost),
+    meteoceanBufferDays: cleanNonNegativeNumber(parsed.meteoceanBufferDays),
+    source: cleanText(parsed.source, 80) || null,
+  };
+}
+
 function emptyStringsToNull<T>(value: T): T {
   if (value === "") return null as T;
   if (value instanceof Date) return value;
@@ -129,6 +191,8 @@ export default async (request: Request, context: Context) => {
   const vesselGt = Number(body.vesselGt);
   const vesselYearBuilt = Number(body.vesselYearBuilt);
   const maritimeWeather = cleanWeatherSnapshot(body.weatherSnapshotJson);
+  const meteoceanRisk = cleanMeteoceanRisk(body.meteoceanRiskJson);
+  const voyageFinancials = cleanVoyageFinancials(body.voyageFinancialsJson);
   const savedAt = new Date();
   const charterPartyDetails = {
     charterPartyGeneratedAt: savedAt.toISOString(),
@@ -138,6 +202,8 @@ export default async (request: Request, context: Context) => {
     vesselFlag: cleanText(body.vesselFlag, 80) || null,
     vesselYearBuilt: Number.isFinite(vesselYearBuilt) && vesselYearBuilt > 0 ? Math.round(vesselYearBuilt) : null,
     maritimeWeather,
+    meteoceanRisk,
+    voyageFinancials,
   };
   const values = {
     contractRef,
