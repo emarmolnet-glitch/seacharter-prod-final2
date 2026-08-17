@@ -8869,21 +8869,21 @@
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                                 <div class="input-group">
                                     <label class="flex justify-between items-center w-full">
-                                        <span id="label-price-vlsfo" class="text-emerald-400 font-bold">PRECIO VLSFO (MAR)</span>
+                                        <span id="label-price-vlsfo" class="text-emerald-400 font-bold">PRECIO VLSFO (WORLD)</span>
                                         <a href="https://www.bunkerindex.com/" target="_blank" class="text-indigo-400 hover:text-indigo-300" title="Ver en Bunker Index"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
                                     </label>
                                     <input type="number" id="price-sea" class="input-gc required-use-highlight text-emerald-300 font-bold" value="610" step="any" oninput="markManualBunkerPrice(this); runEngine()">
                                 </div>
                                 <div class="input-group">
                                     <label class="flex justify-between items-center w-full">
-                                        <span id="label-price-ifo" class="text-emerald-400 font-bold">PRECIO IFO 380 (SCRUBBER)</span>
+                                        <span id="label-price-ifo" class="text-emerald-400 font-bold">PRECIO IFO 380 (WORLD)</span>
                                         <a href="https://www.bunkerindex.com/" target="_blank" class="text-indigo-400 hover:text-indigo-300" title="Ver en Bunker Index"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
                                     </label>
                                     <input type="number" id="price-ifo" class="input-gc required-use-highlight text-emerald-300 font-bold" value="0" step="any" oninput="markManualBunkerPrice(this); runEngine()">
                                 </div>
                                 <div class="input-group">
                                     <label class="flex justify-between items-center w-full">
-                                        <span id="label-price-mgo" class="text-emerald-400 font-bold">PRECIO MGO (PUERTO)</span>
+                                        <span id="label-price-mgo" class="text-emerald-400 font-bold">PRECIO MGO (WORLD)</span>
                                         <a href="https://www.bunkerindex.com/" target="_blank" class="text-indigo-400 hover:text-indigo-300" title="Ver en Bunker Index"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
                                     </label>
                                     <input type="number" id="price-port" class="input-gc required-use-highlight text-emerald-300 font-bold" value="830" step="any" oninput="markManualBunkerPrice(this); runEngine()">
@@ -15336,8 +15336,8 @@
             daysMargin: 0,
             bunkerArbitrageExtraDays: 0,
             bunkerArbitrageSelection: null,
-            consSea: 0, priceSea: 0,
-            consPort: 0, pricePort: 0,
+            consSea: 0, priceSea: 0, priceIfo: 0,
+            consPort: 0, pricePort: 0, bunkerRegion: 'World', bunkerDetectedRegion: 'World', bunkerInterregional: false,
             pdaPol: 0, pdaPod: 0,
             pdaPolBreakdown: [],
             pdaPodBreakdown: [],
@@ -32665,9 +32665,172 @@
             ifo380: 'price-ifo',
             mgo: 'price-port'
         });
+        const BUNKER_REGION_NAMES = Object.freeze(['Americas', 'EMEA', 'APAC', 'World']);
+        const BUNKER_REGION_COUNTRY_CODES = Object.freeze({
+            Americas: new Set([
+                'AG', 'AI', 'AR', 'AW', 'BB', 'BL', 'BM', 'BO', 'BQ', 'BR', 'BS', 'BZ', 'CA', 'CL', 'CO',
+                'CR', 'CU', 'CW', 'DM', 'DO', 'EC', 'FK', 'GD', 'GF', 'GL', 'GP', 'GS', 'GT', 'GY', 'HN',
+                'HT', 'JM', 'KN', 'KY', 'LC', 'MF', 'MQ', 'MS', 'MX', 'NI', 'PA', 'PE', 'PM', 'PR', 'PY',
+                'SR', 'SV', 'SX', 'TC', 'TT', 'US', 'UY', 'VC', 'VE', 'VG', 'VI'
+            ]),
+            EMEA: new Set([
+                'AD', 'AE', 'AL', 'AM', 'AO', 'AT', 'AX', 'AZ', 'BA', 'BE', 'BF', 'BG', 'BH', 'BI', 'BJ',
+                'BW', 'BY', 'CD', 'CF', 'CG', 'CH', 'CI', 'CM', 'CV', 'CY', 'CZ', 'DE', 'DJ', 'DK', 'DZ',
+                'EE', 'EG', 'EH', 'ER', 'ES', 'ET', 'FI', 'FO', 'FR', 'GA', 'GB', 'GE', 'GG', 'GH', 'GI',
+                'GM', 'GN', 'GQ', 'GR', 'GW', 'HR', 'HU', 'IE', 'IL', 'IM', 'IQ', 'IR', 'IS', 'IT', 'JE',
+                'JO', 'KE', 'KW', 'LB', 'LI', 'LR', 'LS', 'LT', 'LU', 'LV', 'LY', 'MA', 'MC', 'MD', 'ME',
+                'MG', 'MK', 'ML', 'MR', 'MT', 'MU', 'MW', 'MZ', 'NA', 'NE', 'NG', 'NL', 'NO', 'OM', 'PL',
+                'PS', 'PT', 'QA', 'RE', 'RO', 'RS', 'RU', 'RW', 'SA', 'SC', 'SD', 'SE', 'SH', 'SI', 'SJ',
+                'SK', 'SL', 'SM', 'SN', 'SO', 'SS', 'ST', 'SY', 'SZ', 'TD', 'TG', 'TN', 'TR', 'TZ', 'UA',
+                'UG', 'VA', 'XK', 'YE', 'YT', 'ZA', 'ZM', 'ZW'
+            ]),
+            APAC: new Set([
+                'AF', 'AQ', 'AS', 'AU', 'BD', 'BN', 'BT', 'BV', 'CC', 'CK', 'CN', 'CX', 'FJ', 'FM', 'GU',
+                'HK', 'HM', 'ID', 'IN', 'IO', 'JP', 'KG', 'KH', 'KI', 'KP', 'KR', 'KZ', 'LA', 'LK', 'MH',
+                'MM', 'MN', 'MO', 'MP', 'MV', 'MY', 'NC', 'NF', 'NP', 'NR', 'NU', 'NZ', 'PF', 'PG', 'PH',
+                'PK', 'PN', 'PW', 'SB', 'SG', 'TF', 'TH', 'TJ', 'TK', 'TL', 'TM', 'TO', 'TV', 'TW', 'UZ',
+                'VN', 'VU', 'WF', 'WS'
+            ])
+        });
         let isFetchingBunker = false;
         let isSearchingBunkerArbitrage = false;
         let bunkerDateLabel = '';
+
+        function getRegionFromCountry(countryCode) {
+            const normalizedCode = String(countryCode || '')
+                .trim()
+                .toUpperCase()
+                .match(/\b[A-Z]{2}\b/)?.[0] || '';
+            if (!normalizedCode) return 'World';
+            return BUNKER_REGION_NAMES.find(region => BUNKER_REGION_COUNTRY_CODES[region]?.has(normalizedCode)) || 'World';
+        }
+        window.getRegionFromCountry = getRegionFromCountry;
+
+        function resolveBunkerPortRecord(portName = '') {
+            const resolved = typeof resolvePortRecordForSmartCalculations === 'function'
+                ? resolvePortRecordForSmartCalculations(portName)
+                : null;
+            if (resolved) return resolved;
+            const normalizedName = String(portName || '').trim().toUpperCase();
+            const countryCode = normalizedName.match(/\(([A-Z]{2})\)\s*$/)?.[1] || '';
+            return countryCode ? { name: portName, countryCode } : null;
+        }
+
+        function getBunkerRegionForVoyage(polName = '', podName = '') {
+            const polRecord = resolveBunkerPortRecord(polName);
+            const podRecord = resolveBunkerPortRecord(podName);
+            const polRegion = getRegionFromCountry(polRecord?.countryCode || polRecord?.country_code || polRecord?.iso2);
+            const podRegion = getRegionFromCountry(podRecord?.countryCode || podRecord?.country_code || podRecord?.iso2);
+            return {
+                region: polRegion,
+                polRegion,
+                podRegion,
+                isInterregional: polRegion !== 'World' && podRegion !== 'World' && polRegion !== podRegion
+            };
+        }
+        window.getBunkerRegionForVoyage = getBunkerRegionForVoyage;
+
+        function getCurrentBunkerRegionContext() {
+            const polName = document.getElementById('port-pol')?.value || (typeof State !== 'undefined' ? State.pol : '') || '';
+            const podName = document.getElementById('port-pod')?.value || (typeof State !== 'undefined' ? State.pod : '') || '';
+            return getBunkerRegionForVoyage(polName, podName);
+        }
+
+        function normalizeBunkerRegionName(regionName) {
+            const normalized = String(regionName || '').trim().toLowerCase();
+            return BUNKER_REGION_NAMES.find(region => region.toLowerCase() === normalized) || 'World';
+        }
+
+        function readBunkerPriceTriplet(source = {}) {
+            const market = source?.prices && !Array.isArray(source.prices) ? source.prices : source;
+            return {
+                vlsfo: Number(market?.vlsfo ?? market?.VLSFO ?? market?.vlsfo_price),
+                ifo380: Number(market?.ifo380 ?? market?.IFO380 ?? market?.ifo_380 ?? market?.ifo380_price),
+                mgo: Number(market?.mgo ?? market?.MGO ?? market?.mgo_price)
+            };
+        }
+
+        function hasPositiveBunkerPrice(prices = {}) {
+            return ['vlsfo', 'ifo380', 'mgo'].some(key => Number(prices?.[key]) > 0);
+        }
+
+        function collectRegionalBunkerPrices(payload = {}) {
+            const regionalPrices = {};
+            const mergeRegion = (regionName, prices) => {
+                const region = normalizeBunkerRegionName(regionName);
+                const current = regionalPrices[region] || {};
+                const next = { ...current };
+                Object.entries(prices || {}).forEach(([key, value]) => {
+                    if (Number(value) > 0) next[key] = Number(value);
+                });
+                if (hasPositiveBunkerPrice(next)) regionalPrices[region] = next;
+            };
+            const consumeRecord = (record) => {
+                if (!record || typeof record !== 'object' || Array.isArray(record)) return;
+                const region = record.hub_name ?? record.hubName ?? record.region ?? record.market_region ?? record.marketRegion;
+                const directPrices = readBunkerPriceTriplet(record);
+                if (region && hasPositiveBunkerPrice(directPrices)) mergeRegion(region, directPrices);
+
+                const fuelName = String(record.fuel_type ?? record.fuelType ?? record.fuel_grade ?? record.grade ?? record.product ?? record.name ?? '').toUpperCase();
+                const price = Number(record.price ?? record.value ?? record.latest_price ?? record.usd_per_mt ?? record.price_usd_mt);
+                if (region && price > 0 && fuelName) {
+                    if (fuelName.includes('VLSFO')) mergeRegion(region, { vlsfo: price });
+                    else if (fuelName.includes('IFO') || fuelName.includes('380')) mergeRegion(region, { ifo380: price });
+                    else if (fuelName.includes('MGO') || fuelName.includes('LSMGO')) mergeRegion(region, { mgo: price });
+                }
+            };
+
+            const containers = [
+                payload,
+                payload?.prices,
+                payload?.data,
+                payload?.data?.prices,
+                payload?.results,
+                payload?.hubs,
+                payload?.bunkers,
+                payload?.bunker_indices,
+                payload?.data?.bunker_indices
+            ];
+            containers.forEach(container => {
+                if (Array.isArray(container)) {
+                    container.forEach(consumeRecord);
+                    return;
+                }
+                if (!container || typeof container !== 'object') return;
+                BUNKER_REGION_NAMES.forEach(region => {
+                    const keyed = container[region] ?? container[region.toLowerCase()] ?? container[region.toUpperCase()];
+                    if (keyed) mergeRegion(region, readBunkerPriceTriplet(keyed));
+                });
+                consumeRecord(container);
+            });
+            return regionalPrices;
+        }
+
+        function resolveRegionalBunkerSelection(source = {}, requestedRegion = 'World') {
+            const regionalPrices = source?.regionalPrices || collectRegionalBunkerPrices(source);
+            const detectedRegion = normalizeBunkerRegionName(requestedRegion);
+            const selectedRegion = hasPositiveBunkerPrice(regionalPrices?.[detectedRegion])
+                ? detectedRegion
+                : (hasPositiveBunkerPrice(regionalPrices?.World) ? 'World' : detectedRegion);
+            const directPrices = readBunkerPriceTriplet(source);
+            const prices = hasPositiveBunkerPrice(regionalPrices?.[selectedRegion])
+                ? regionalPrices[selectedRegion]
+                : directPrices;
+            return { detectedRegion, selectedRegion, prices, regionalPrices };
+        }
+
+        function updateBunkerRegionLabels(regionName = 'World') {
+            const region = normalizeBunkerRegionName(regionName).toUpperCase();
+            const labels = {
+                'label-price-vlsfo': `PRECIO VLSFO (${region})`,
+                'label-price-ifo': `PRECIO IFO 380 (${region})`,
+                'label-price-mgo': `PRECIO MGO (${region})`
+            };
+            Object.entries(labels).forEach(([id, text]) => {
+                const label = document.getElementById(id);
+                if (label) label.textContent = text;
+            });
+        }
 
         function getTodayBunkerLabel() {
             return new Date().toLocaleDateString();
@@ -32769,22 +32932,42 @@
         }
 
         function applyBunkerIndexData(cache = {}, options = {}) {
+            const routeRegion = getCurrentBunkerRegionContext();
+            const selection = resolveRegionalBunkerSelection(cache, routeRegion.region);
+            const marketPrices = selection.prices;
             const resolved = {
-                vlsfo: resolveSafeBunkerPrice(BUNKER_INPUT_BINDINGS.vlsfo, cache?.vlsfo, HISTORICAL_BUNKER_FALLBACK_USD.vlsfo),
-                ifo380: resolveSafeBunkerPrice(BUNKER_INPUT_BINDINGS.ifo380, cache?.ifo380, HISTORICAL_BUNKER_FALLBACK_USD.ifo380),
-                mgo: resolveSafeBunkerPrice(BUNKER_INPUT_BINDINGS.mgo, cache?.mgo, HISTORICAL_BUNKER_FALLBACK_USD.mgo)
+                vlsfo: resolveSafeBunkerPrice(BUNKER_INPUT_BINDINGS.vlsfo, marketPrices?.vlsfo, HISTORICAL_BUNKER_FALLBACK_USD.vlsfo),
+                ifo380: resolveSafeBunkerPrice(BUNKER_INPUT_BINDINGS.ifo380, marketPrices?.ifo380, HISTORICAL_BUNKER_FALLBACK_USD.ifo380),
+                mgo: resolveSafeBunkerPrice(BUNKER_INPUT_BINDINGS.mgo, marketPrices?.mgo, HISTORICAL_BUNKER_FALLBACK_USD.mgo)
             };
             const fallbackUsed = Boolean(cache?.fallbackUsed) || Object.keys(BUNKER_INPUT_BINDINGS)
-                .some((key) => !Number.isFinite(Number(cache?.[key])) || Number(cache?.[key]) <= 0);
+                .some((key) => !Number.isFinite(Number(marketPrices?.[key])) || Number(marketPrices?.[key]) <= 0);
             Object.entries(BUNKER_INPUT_BINDINGS).forEach(([key, inputId]) => {
                 const input = document.getElementById(inputId);
                 if (input) input.value = resolved[key].toFixed(2);
             });
+            updateBunkerRegionLabels(selection.selectedRegion);
+            if (typeof State !== 'undefined') {
+                State.bunkerRegion = selection.selectedRegion;
+                State.bunkerDetectedRegion = selection.detectedRegion;
+                State.bunkerInterregional = routeRegion.isInterregional;
+                State.priceSea = resolved.vlsfo;
+                State.priceIfo = resolved.ifo380;
+                State.pricePort = resolved.mgo;
+            }
             bunkerDateLabel = cache?.date || '';
             updateBunkerIndexCacheLabel(bunkerDateLabel);
             updateBunkerMarketSyncStatus(cache);
             if (options.deferEngine !== true && typeof runEngine === 'function') runEngine();
-            return { ...cache, ...resolved, fallbackUsed };
+            return {
+                ...cache,
+                ...resolved,
+                regionalPrices: selection.regionalPrices,
+                detectedRegion: selection.detectedRegion,
+                selectedRegion: selection.selectedRegion,
+                isInterregional: routeRegion.isInterregional,
+                fallbackUsed
+            };
         }
 
         function ensureSafeBunkerPrices(options = {}) {
@@ -32821,7 +33004,10 @@
         }
 
         function normalizeBunkerMarketPayload(payload) {
-            const market = payload?.prices || payload?.data?.prices || payload?.data || payload || {};
+            const routeRegion = getCurrentBunkerRegionContext();
+            const regionalPrices = collectRegionalBunkerPrices(payload);
+            const selection = resolveRegionalBunkerSelection({ ...payload, regionalPrices }, routeRegion.region);
+            const market = selection.prices;
             const rawPrices = {
                 vlsfo: Number(market.vlsfo ?? market.VLSFO ?? market.vlsfo_price),
                 ifo380: Number(market.ifo380 ?? market.IFO380 ?? market.ifo_380 ?? market.ifo380_price),
@@ -32837,9 +33023,26 @@
                 mgo: rawPrices.mgo > 0 ? rawPrices.mgo : HISTORICAL_BUNKER_FALLBACK_USD.mgo,
                 date: payload?.sourceDate || market.sourceDate || market.date || getTodayBunkerLabel(),
                 cachedAt: Number.isFinite(parsedSyncedAt) ? parsedSyncedAt : Date.now(),
+                regionalPrices,
+                detectedRegion: selection.detectedRegion,
+                selectedRegion: selection.selectedRegion,
                 fallbackUsed
             };
         }
+
+        function refreshBunkerRegionSelection(options = {}) {
+            const cache = readBunkerIndexCache({ allowStale: true });
+            if (cache) return applyBunkerIndexData(cache, options);
+            const routeRegion = getCurrentBunkerRegionContext();
+            updateBunkerRegionLabels(routeRegion.region);
+            if (typeof State !== 'undefined') {
+                State.bunkerRegion = routeRegion.region;
+                State.bunkerDetectedRegion = routeRegion.region;
+                State.bunkerInterregional = routeRegion.isInterregional;
+            }
+            return null;
+        }
+        window.refreshBunkerRegionSelection = refreshBunkerRegionSelection;
 
         async function autoFillBunkers(options = {}) {
             if (isFetchingBunker) return;
@@ -32895,7 +33098,7 @@
                     updateBunkerMarketSyncStatus(appliedPrices, { warning: 'Bunkerindex no disponible · fallback histórico activo' });
                     if (typeof showToast === 'function') showToast('Aviso: Bunkerindex no disponible; usando bunker histórico de seguridad.', 'warning');
                 } else if (!managedByMaster) {
-                    showToast("Precios sincronizados en tiempo real con BunkerIndex (Índice Mundo)");
+                    showToast(`Precios sincronizados para ${appliedPrices.selectedRegion || 'World'} según el POL`);
                 }
                 return appliedPrices;
             } catch (error) {
@@ -34634,6 +34837,12 @@
             if (typeof isInputInteraction === 'function' && isInputInteraction()) {
                 scheduleDebouncedCalculation(300);
                 return;
+            }
+            if (typeof getCurrentBunkerRegionContext === 'function' && typeof refreshBunkerRegionSelection === 'function') {
+                const bunkerRegionContext = getCurrentBunkerRegionContext();
+                if (State.bunkerDetectedRegion !== bunkerRegionContext.region || State.bunkerInterregional !== bunkerRegionContext.isInterregional) {
+                    refreshBunkerRegionSelection({ deferEngine: true });
+                }
             }
             ensureDetectedSpeedsBeforeCalculation();
             // Lumpsum simétrico: la base facturable llega resuelta (explícita y topada por DWT)
@@ -63486,6 +63695,12 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             actualizarGrabCapacityVisibility();
             initVoyageEstimatorTooltips();
             hydrateBunkerIndexData();
+            ['port-pol', 'port-pod'].forEach((id) => {
+                const portInput = document.getElementById(id);
+                if (!portInput) return;
+                portInput.addEventListener('change', () => refreshBunkerRegionSelection());
+                portInput.addEventListener('blur', () => refreshBunkerRegionSelection());
+            });
             void hydrateLatestEuCarbonPrice();
             void loadCoaClientProfiles();
 	            updateManualBalticSpotOverrideUi();

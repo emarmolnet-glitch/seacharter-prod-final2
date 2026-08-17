@@ -19,7 +19,12 @@ function buildHarness() {
   const elements = new Map([
     ['price-sea', fakeInput(720, true)],
     ['price-ifo', fakeInput(0, false)],
-    ['price-port', fakeInput(830, false)]
+    ['price-port', fakeInput(830, false)],
+    ['port-pol', { value: 'Santos (BR)' }],
+    ['port-pod', { value: 'Shanghai (CN)' }],
+    ['label-price-vlsfo', { textContent: '' }],
+    ['label-price-ifo', { textContent: '' }],
+    ['label-price-mgo', { textContent: '' }]
   ]);
   let engineCalls = 0;
   const context = {
@@ -56,6 +61,24 @@ test('emergency normalization preserves positive form values and only replaces z
   assert.equal(elements.get('price-ifo').value, '600.00');
   assert.equal(elements.get('price-port').value, '830.00');
   assert.equal(getEngineCalls(), 0);
+});
+
+test('regional cache injects POL hub prices while preserving manual overrides', () => {
+  const { context, elements } = buildHarness();
+  const applied = context.bunkerApi.applyBunkerIndexData({
+    regionalPrices: {
+      Americas: { vlsfo: 610, ifo380: 520, mgo: 790 },
+      APAC: { vlsfo: 640, ifo380: 550, mgo: 810 },
+      World: { vlsfo: 600, ifo380: 500, mgo: 780 }
+    }
+  });
+
+  assert.equal(elements.get('price-sea').value, '720.00');
+  assert.equal(elements.get('price-ifo').value, '520.00');
+  assert.equal(elements.get('price-port').value, '790.00');
+  assert.equal(elements.get('label-price-vlsfo').textContent, 'PRECIO VLSFO (AMERICAS)');
+  assert.equal(applied.selectedRegion, 'Americas');
+  assert.equal(applied.isInterregional, true);
 });
 
 test('zero backend payloads no longer use the blocking invalid-price exception', () => {
