@@ -873,6 +873,74 @@
         };
     }
 
+    function calculateMeteoceanRisk({ draftVoyage, laytimeDays, demurrageRate } = {}) {
+        const draft = draftVoyage && typeof draftVoyage === 'object'
+            ? draftVoyage
+            : (root.VoyageDraftStore?.getState?.()?.draft || {});
+        const ports = draft?.weather?.ports || {};
+        const normalizedLaytimeDays = Math.max(0, toNumber(laytimeDays));
+        const normalizedDemurrageRate = Math.max(0, toNumber(demurrageRate));
+        const risks = [];
+        let maneuverBufferDays = 0;
+        let operationalRiskDetected = false;
+
+        ['pol', 'pod'].forEach((key) => {
+            const weather = ports[key];
+            if (!weather || typeof weather !== 'object') return;
+            const role = toText(weather.role || key).toUpperCase();
+            const portName = toText(weather.portName);
+            const windKnots = Math.max(0, toNumber(weather.windKnots));
+            const operationalStatus = normalizeText(weather.operationalStatus);
+            const condition = normalizeText(weather.condition);
+            const hasOperationalRisk = operationalStatus === 'RIESGO'
+                || operationalStatus === 'LLUVIA'
+                || condition === 'RIESGO'
+                || condition === 'LLUVIA'
+                || condition.includes('LLUVIA');
+
+            if (windKnots > 25) {
+                maneuverBufferDays += 0.5;
+                risks.push({
+                    type: 'wind',
+                    role,
+                    portName,
+                    windKnots,
+                    message: `Viento fuerte detectado en ${role}${portName ? ` · ${portName}` : ''} (${windKnots.toFixed(0)} kn)`,
+                    addedDays: 0.5
+                });
+            }
+
+            if (hasOperationalRisk) {
+                operationalRiskDetected = true;
+                risks.push({
+                    type: 'operational',
+                    role,
+                    portName,
+                    status: toText(weather.operationalStatus || weather.condition),
+                    message: `${toText(weather.operationalStatus || weather.condition) || 'Riesgo operativo'} detectado en ${role}${portName ? ` · ${portName}` : ''}`,
+                    addedDays: 0
+                });
+            }
+        });
+
+        const operationalBufferDays = operationalRiskDetected ? normalizedLaytimeDays * 0.20 : 0;
+        const totalBufferDays = maneuverBufferDays + operationalBufferDays;
+        const financialImpact = totalBufferDays * normalizedDemurrageRate;
+
+        return {
+            source: draft?.weather?.source || '',
+            hasWeatherData: Boolean(ports.pol || ports.pod),
+            hasRisk: totalBufferDays > 0,
+            risks,
+            laytimeDays: normalizedLaytimeDays,
+            maneuverBufferDays,
+            operationalBufferDays,
+            totalBufferDays,
+            demurrageRate: normalizedDemurrageRate,
+            financialImpact
+        };
+    }
+
     function buildFixtureClauseAdvice(baseResult, forecast) {
         const pod = escapeHtml(baseResult.pod || 'POD no informado');
         const referenceWave = forecast.podWaveHeight || forecast.maxWaveHeight;
@@ -899,7 +967,12 @@
         const tbody = documentRef.getElementById('risk-matrix-body');
         const tooltip = documentRef.getElementById('auto-risk-tooltip');
         const forecast = readMarineForecast(hydratedBaseResult);
+        const meteoceanRisk = hydratedBaseResult.meteoceanRisk || calculateMeteoceanRisk({
+            laytimeDays: hydratedBaseResult.smartAdjustments?.laytimeDays,
+            demurrageRate: hydratedBaseResult.demurrage
+        });
         batch.forecast = forecast;
+        batch.meteoceanRisk = meteoceanRisk;
         const statusClasses = {
             green: 'rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-[10px] font-black uppercase text-emerald-800',
             yellow: 'rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-black uppercase text-amber-800',
@@ -930,6 +1003,27 @@
             const thermometerRange = Math.max(0.01, stressBreakEven - bestBreakEven);
             const basePosition = Math.min(92, Math.max(8, ((baseBreakEven - bestBreakEven) / thermometerRange) * 100));
             const clauseAdvice = buildFixtureClauseAdvice(hydratedBaseResult, forecast);
+            const meteoceanRiskItems = meteoceanRisk.risks.map((item) => `
+                <li class="meteocean-impact__risk-item">
+                    <i class="fa-solid ${item.type === 'wind' ? 'fa-wind' : 'fa-cloud-showers-heavy'}" aria-hidden="true"></i>
+                    <span>${escapeHtml(item.message)}</span>
+                </li>
+            `).join('');
+            const meteoceanContent = meteoceanRisk.hasRisk
+                ? `
+                    <ul class="meteocean-impact__risks">${meteoceanRiskItems}</ul>
+                    <div class="meteocean-impact__metrics">
+                        <div><span>Buffer de demora</span><strong>+${meteoceanRisk.totalBufferDays.toFixed(2)} días</strong></div>
+                        <div><span>Impacto financiero</span><strong>${moneyFormatter.format(meteoceanRisk.financialImpact)}</strong></div>
+                        <div><span>Tarifa aplicada</span><strong>${moneyFormatter.format(meteoceanRisk.demurrageRate)}/día</strong></div>
+                    </div>
+                `
+                : `
+                    <div class="meteocean-impact__empty">
+                        <i class="fa-solid ${meteoceanRisk.hasWeatherData ? 'fa-circle-check' : 'fa-cloud-arrow-down'}" aria-hidden="true"></i>
+                        <span>${meteoceanRisk.hasWeatherData ? 'Sin penalización climática según los umbrales operativos.' : 'Sin datos meteorológicos POL/POD en el DraftVoyage.'}</span>
+                    </div>
+                `;
             const scenarioCards = [
                 {
                     scenario: batch.best,
@@ -978,6 +1072,16 @@
                         <span>Base ${moneyFormatter.format(baseBreakEven)}</span>
                         <span>Estrés ${moneyFormatter.format(stressBreakEven)}</span>
                     </div>
+                </section>
+                <section class="meteocean-impact ${meteoceanRisk.hasRisk ? 'meteocean-impact--alert' : ''}" aria-label="Impacto Meteoceánico">
+                    <div class="meteocean-impact__heading">
+                        <div>
+                            <span class="meteocean-impact__eyebrow">Buffer operativo automático</span>
+                            <h3>Impacto Meteoceánico</h3>
+                        </div>
+                        <span class="meteocean-impact__badge">${meteoceanRisk.hasRisk ? 'Penalización activa' : 'Sin impacto'}</span>
+                    </div>
+                    ${meteoceanContent}
                 </section>
                 <aside class="fixture-clause-advice">
                     <span class="fixture-clause-advice__icon"><i class="fa-solid fa-file-signature" aria-hidden="true"></i></span>
@@ -1432,6 +1536,7 @@
         analyzeStressFactor,
         renderSmartAdvisor,
         evaluateRisk,
+        calculateMeteoceanRisk,
         renderAutomaticRiskMatrix,
         VoyageCostDomController
     };

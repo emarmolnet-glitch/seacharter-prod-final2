@@ -51,6 +51,8 @@ interface CalculatorState {
   cargoType?: string;
   cargoProduct?: string;
   distBallast?: number;
+  meteoceanRisk?: unknown;
+  voyageFinancials?: unknown;
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -81,6 +83,8 @@ interface CharterPartyPayload {
   vesselYearBuilt: number;
   mmsi: string;
   weatherSnapshotJson: string;
+  meteoceanRiskJson: string;
+  voyageFinancialsJson: string;
 }
 
 interface SeaCharterStore {
@@ -218,6 +222,12 @@ function readCharterPartyPayload(validation: DraftValidationResponse): CharterPa
     vesselYearBuilt: Number(activeVessel.yearBuilt ?? activeVessel.year_built ?? activeVessel.builtYear ?? activeVessel.built_year) || 0,
     mmsi: firstText(activeVessel.mmsi).replace(/\D/g, ""),
     weatherSnapshotJson: draftVoyage.weather ? JSON.stringify(draftVoyage.weather) : "",
+    meteoceanRiskJson: Object.keys(asRecord(calculatorState.meteoceanRisk)).length > 0
+      ? JSON.stringify(calculatorState.meteoceanRisk)
+      : "",
+    voyageFinancialsJson: Object.keys(asRecord(calculatorState.voyageFinancials)).length > 0
+      ? JSON.stringify(calculatorState.voyageFinancials)
+      : "",
   };
 }
 
@@ -447,6 +457,8 @@ export default function RouteConfigurator({ onConfirm }: RouteConfiguratorProps)
         vesselYearBuilt: payload.vesselYearBuilt,
         mmsi: payload.mmsi,
         weatherSnapshotJson: payload.weatherSnapshotJson,
+        meteoceanRiskJson: payload.meteoceanRiskJson,
+        voyageFinancialsJson: payload.voyageFinancialsJson,
       };
       const missingFields = [
         ["referencia contractual", payload.contractRef],

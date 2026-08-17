@@ -69,6 +69,8 @@ test("Charter Party confirmation persists the required voyage fields and reports
   assert.match(routeConfiguratorSource, /vesselFlag: payload\.vesselFlag/);
   assert.match(routeConfiguratorSource, /vesselYearBuilt: payload\.vesselYearBuilt/);
   assert.match(routeConfiguratorSource, /mmsi: payload\.mmsi/);
+  assert.match(routeConfiguratorSource, /meteoceanRiskJson: payload\.meteoceanRiskJson/);
+  assert.match(routeConfiguratorSource, /voyageFinancialsJson: payload\.voyageFinancialsJson/);
   assert.doesNotMatch(routeConfiguratorSource, /draftValidationJson|JSON\.stringify\(validation\)/);
   assert.match(routeConfiguratorSource, /voyageStore\.getState\(\)\.clearDraft\(\)/);
   assert.match(routeConfiguratorSource, /Charter Party \$\{savedReference\} generado y guardado con éxito/);

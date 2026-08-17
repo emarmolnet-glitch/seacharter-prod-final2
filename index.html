@@ -3365,10 +3365,122 @@
             color: #A35C08;
         }
 
+        .meteocean-impact {
+            margin-top: 1rem;
+            border: 1px solid #CBD5E1;
+            border-left: 4px solid #0F766E;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #F8FAFC 0%, #ECFEFF 100%);
+            padding: 1rem;
+            color: #0F172A;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+        }
+
+        .meteocean-impact--alert {
+            border-color: #F59E0B;
+            border-left-color: #D97706;
+            background: linear-gradient(135deg, #FFFBEB 0%, #FFF7ED 100%);
+        }
+
+        .meteocean-impact__heading {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .meteocean-impact__eyebrow {
+            display: block;
+            color: #64748B;
+            font-size: 0.625rem;
+            font-weight: 900;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .meteocean-impact h3 {
+            margin-top: 0.2rem;
+            color: #0F766E;
+            font-size: 0.95rem;
+            font-weight: 900;
+        }
+
+        .meteocean-impact--alert h3 { color: #92400E; }
+
+        .meteocean-impact__badge {
+            flex: none;
+            border: 1px solid #99F6E4;
+            border-radius: 999px;
+            background: #F0FDFA;
+            padding: 0.3rem 0.55rem;
+            color: #115E59;
+            font-size: 0.625rem;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .meteocean-impact--alert .meteocean-impact__badge {
+            border-color: #FCD34D;
+            background: #FEF3C7;
+            color: #92400E;
+        }
+
+        .meteocean-impact__risks {
+            display: grid;
+            gap: 0.5rem;
+            margin-top: 0.9rem;
+        }
+
+        .meteocean-impact__risk-item,
+        .meteocean-impact__empty {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 0.75rem;
+            font-weight: 800;
+        }
+
+        .meteocean-impact__risk-item i { color: #D97706; }
+        .meteocean-impact__empty { margin-top: 0.9rem; color: #475569; }
+        .meteocean-impact__empty i { color: #0F766E; }
+
+        .meteocean-impact__metrics {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.65rem;
+            margin-top: 0.9rem;
+        }
+
+        .meteocean-impact__metrics div {
+            border: 1px solid rgba(217, 119, 6, 0.25);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.76);
+            padding: 0.7rem;
+        }
+
+        .meteocean-impact__metrics span {
+            display: block;
+            color: #78716C;
+            font-size: 0.58rem;
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .meteocean-impact__metrics strong {
+            display: block;
+            margin-top: 0.25rem;
+            color: #7C2D12;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.82rem;
+        }
+
         @media (max-width: 900px) {
             .sensitivity-scenario-grid { grid-template-columns: 1fr; }
             .sensitivity-card--base,
             .sensitivity-card--base:hover { transform: none; }
+            .meteocean-impact__heading { flex-direction: column; }
+            .meteocean-impact__metrics { grid-template-columns: 1fr; }
         }
 
         #stress-test-panel > .collapsible-section__collapse > .collapsible-section__inner > .mt-4 {
@@ -35118,6 +35230,7 @@
                     costTotal: State.costTotal,
                     costBreakdown: State.costBreakdown,
                     voyageFinancials: State.voyageFinancials,
+                    meteoceanRisk: State.meteoceanRisk,
                     breakEven: State.breakEven,
                     breakEvenArmador: State.breakEvenArmador,
                     baseVoyageCosts: State.baseVoyageCosts,
@@ -35513,6 +35626,24 @@
             const dPortDisch = isZeroCalculation ? 0 : Math.max(0, calcularDiasPuertoPorEstiba(cargo, rateDisch, metodoDescarga, readNumeroGruasPuerto('pod')) || 0);
             const dPort = isZeroCalculation ? 0 : Math.max(0, dPortLoad + dPortDisch);
             const laytimeDays = isZeroCalculation ? 0 : Math.max(0, dPortLoad + dPortDisch + turnTimeDays);
+            const demurrageRate = isZeroCalculation ? 0 : Math.max(0, parseFloat(document.getElementById('demurrage-rate')?.value) || 0);
+            const meteoceanRisk = isZeroCalculation
+                ? {
+                    source: '', hasWeatherData: false, hasRisk: false, risks: [], laytimeDays: 0,
+                    maneuverBufferDays: 0, operationalBufferDays: 0, totalBufferDays: 0,
+                    demurrageRate: 0, financialImpact: 0
+                }
+                : (window.SeaCharterVoyageCostEngine?.calculateMeteoceanRisk?.({
+                    draftVoyage: window.VoyageDraftStore?.getState?.()?.draft,
+                    laytimeDays,
+                    demurrageRate
+                }) || {
+                    source: '', hasWeatherData: false, hasRisk: false, risks: [], laytimeDays,
+                    maneuverBufferDays: 0, operationalBufferDays: 0, totalBufferDays: 0,
+                    demurrageRate, financialImpact: 0
+                });
+            const meteoceanBufferDays = Math.max(0, Number(meteoceanRisk.totalBufferDays) || 0);
+            const meteoceanPenaltyCost = Math.max(0, Number(meteoceanRisk.financialImpact) || 0);
             const dPortTotal = isZeroCalculation ? 0 : Math.max(0, laytimeDays + diasPreparacionProyecto);
             const boundedSmartDeltaDays = Math.min(50, Math.max(0, smartDeltaDays || 0));
             const boundedSmartAnchorageDays = Math.min(50, Math.max(0, smartAnchorageDays || 0));
@@ -35525,7 +35656,7 @@
             const bunkerArbitrageExtraDays = isZeroCalculation ? 0 : Math.max(0, Number(State.bunkerArbitrageExtraDays) || 0);
             const T_sea = isZeroCalculation ? 0 : Math.max(0, dBal + dLaden + marginDays + bunkerArbitrageExtraDays);
             // T_port (base port operations plus Smart Adjustments & Rate Penalties that extend port stay)
-            const T_port = isZeroCalculation ? 0 : Math.max(0, adjustedPortDays + extraRatePenaltyDays);
+            const T_port = isZeroCalculation ? 0 : Math.max(0, adjustedPortDays + extraRatePenaltyDays + meteoceanBufferDays);
             const T_portFuel = isZeroCalculation ? 0 : T_port;
             const totalDays = isZeroCalculation ? 0 : (T_sea + T_port);
 
@@ -35586,7 +35717,8 @@
             const totalBunkers = isZeroCalculation ? 0 : (routeConsumptionCost + portConsumptionCost + anchorageConsumptionCost + extraEcaCost);
             const ownerClassAnalysis = typeof buildExecutiveShipClassAnalysis === 'function' ? buildExecutiveShipClassAnalysis() : null;
             const capexDaily = isZeroCalculation ? 0 : Math.max(0, Number(ownerClassAnalysis?.capexDaily) || 0);
-            const totalOpex = isZeroCalculation ? 0 : (totalDays * opex);
+            const baseOpexCost = isZeroCalculation ? 0 : (totalDays * opex);
+            const totalOpex = isZeroCalculation ? 0 : (baseOpexCost + meteoceanPenaltyCost);
             const totalCapex = isZeroCalculation ? 0 : (totalDays * capexDaily);
             const ownerOperatingCapitalCosts = totalOpex + totalCapex;
 
@@ -35635,7 +35767,7 @@
 
             document.getElementById('dist-total').value = Math.round(distBal + distLaden);
             document.getElementById('res-days-total').innerText = totalDays.toFixed(2);
-            document.getElementById('res-days-total').title = `Días Mar + Puerto + Margen Clima = ${(dBal + dLaden).toFixed(2)} + ${T_port.toFixed(2)} + ${marginDays.toFixed(2)} = ${totalDays.toFixed(2)} d`;
+            document.getElementById('res-days-total').title = `Días Mar + Puerto + Margen Clima + Buffer Meteoceánico = ${(dBal + dLaden).toFixed(2)} + ${(T_port - meteoceanBufferDays).toFixed(2)} + ${marginDays.toFixed(2)} + ${meteoceanBufferDays.toFixed(2)} = ${totalDays.toFixed(2)} d`;
             
             if (document.getElementById('res-days-ballast')) {
                 document.getElementById('res-days-ballast').innerText = `${dBal.toFixed(2)} d`;
@@ -36334,6 +36466,8 @@
                 contingencyBunker: costPlusContingency.bunkerCost,
                 demurrageExposure: demurrageExposureCost,
                 demurrageExposureDays: Math.max(0, Number(demurrageExposure.exposedDays) || 0),
+                meteoceanPenalty: meteoceanPenaltyCost,
+                meteoceanBufferDays,
                 includesPositioning: distBal > 0,
                 total: adjustedCostTotal,
                 baseTotal: costTotal,
@@ -36361,6 +36495,8 @@
                 turnTimeHours,
                 turnTimeDays,
                 laytimeDays,
+                meteoceanBufferDays,
+                meteoceanPenaltyCost,
                 fixedCosts,
                 basicEtsCost,
                 baseVoyageCosts: costTotal,
@@ -36385,6 +36521,7 @@
                 laycanFreeDays: historicalRisk.laycanFreeDays,
                 demurrageRisk: historicalRisk.isDemurrageRisk
             };
+            State.meteoceanRisk = meteoceanRisk;
             
             State.netProfitOwner = netProfitOwner;
             State.netProfitOwnerDaily = netProfitOwnerDaily;
@@ -36468,6 +36605,8 @@
                 cargoQty: cargo,
                 multiplier,
                 commissionFactor,
+                meteoceanPenaltyCost,
+                meteoceanBufferDays,
                 source: 'runEngine'
             };
             syncInverseTceFromVoyage(cargo, T_sea, T_port);
@@ -36589,6 +36728,7 @@
                     costTotal: State.costTotal,
                     costBreakdown: State.costBreakdown,
                     voyageFinancials: State.voyageFinancials,
+                    meteoceanRisk: State.meteoceanRisk,
                     breakEven: State.breakEven,
                     breakEvenArmador: State.breakEvenArmador,
                     baseVoyageCosts: State.baseVoyageCosts,
