@@ -62,7 +62,7 @@ test('secondary bunker failures warn and allow PDA synchronization to continue',
   const pdaCalls = [];
   const warnings = [];
   const context = {
-    async autoFillBunkers() {
+    async ensureRegionalBunkersForCalculation() {
       throw new Error('HTTP 500');
     },
     async autoFillPDA(side) {
@@ -85,8 +85,8 @@ test('secondary bunker failures warn and allow PDA synchronization to continue',
 });
 
 test('bunker synchronization applies fallback values without throwing in managed mode', () => {
-  const start = indexSource.indexOf('async function autoFillBunkers');
-  const end = indexSource.indexOf('function syncBunkerIndexMarket', start);
+  const start = indexSource.indexOf('async function performRegionalBunkerFetch');
+  const end = indexSource.indexOf('function fetchRegionalBunkers', start);
   const source = indexSource.slice(start, end);
   const catchIndex = source.indexOf('} catch (error) {');
   const fallbackIndex = source.indexOf("readBunkerIndexCache({ allowStale: true })", catchIndex);
@@ -213,7 +213,7 @@ test('master calculation batches store notifications across awaited work', () =>
   assert.match(indexSource, /async batchAsync\(fn\)[\s\S]*this\.isBatching = true;[\s\S]*return await fn\(\);[\s\S]*this\.flushBatch\(\)/);
   assert.match(indexSource, /flushBatch\(\)[\s\S]*if \(shouldNotify\) this\.notify\(\)/);
   assert.match(indexSource, /await SeaCharterStore\.batchAsync\(async \(\) => \{/);
-  assert.match(indexSource, /\(\) => autoFillBunkers\(\{ managedByMaster: true \}\)/);
+  assert.match(indexSource, /\(\) => ensureRegionalBunkersForCalculation\(\)/);
   assert.match(indexSource, /\(\) => autoFillPDA\('pol', false, \{ deferEngine: true \}\)/);
   assert.match(indexSource, /\(\) => autoFillPDA\('pod', false, \{ deferEngine: true \}\)/);
 });
