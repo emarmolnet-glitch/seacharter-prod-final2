@@ -139,5 +139,5 @@ export default async (req: Request) => {
 };
 
 export const config: Config = {
-  path: "/api/port-risk-history",
+  path: ["/api/risk/history", "/api/port-risk-history"],
 };
