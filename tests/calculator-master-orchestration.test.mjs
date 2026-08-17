@@ -55,6 +55,89 @@ test('section 2 button runs the complete calculation orchestrator', () => {
   assert.match(indexSource, /finally \{[\s\S]*isCalculatingMaster = false;[\s\S]*setMasterCalculationLoading\(false\)/);
 });
 
+test('secondary bunker failures warn and allow PDA synchronization to continue', async () => {
+  const start = indexSource.indexOf('async function consultCurrentCostsAndPdasForMaster');
+  const end = indexSource.indexOf('function resolveMasterVesselCalculationBranch', start);
+  const source = indexSource.slice(start, end);
+  const pdaCalls = [];
+  const warnings = [];
+  const context = {
+    async autoFillBunkers() {
+      throw new Error('HTTP 500');
+    },
+    async autoFillPDA(side) {
+      pdaCalls.push(side);
+      return true;
+    },
+    showToast(message, tone) {
+      warnings.push({ message, tone });
+    },
+    console: { warn() {} }
+  };
+
+  vm.runInNewContext(`${source}\nglobalThis.consultCurrentCostsAndPdasForMaster = consultCurrentCostsAndPdasForMaster;`, context);
+  const result = await context.consultCurrentCostsAndPdasForMaster();
+
+  assert.deepEqual(pdaCalls, ['pol', 'pod']);
+  assert.equal(result.warnings.length, 1);
+  assert.match(result.warnings[0], /usando último precio guardado/);
+  assert.equal(warnings[0].tone, 'warning');
+});
+
+test('bunker synchronization applies fallback values without throwing in managed mode', () => {
+  const start = indexSource.indexOf('async function autoFillBunkers');
+  const end = indexSource.indexOf('function syncBunkerIndexMarket', start);
+  const source = indexSource.slice(start, end);
+  const catchIndex = source.indexOf('} catch (error) {');
+  const fallbackIndex = source.indexOf("readBunkerIndexCache({ allowStale: true })", catchIndex);
+  const applyIndex = source.indexOf('applyBunkerIndexData(staleCache)', fallbackIndex);
+  const safeFallbackIndex = source.indexOf('ensureSafeBunkerPrices()', applyIndex);
+
+  assert.ok(catchIndex >= 0 && catchIndex < fallbackIndex);
+  assert.ok(fallbackIndex < applyIndex && applyIndex < safeFallbackIndex);
+  assert.doesNotMatch(source, /if \(managedByMaster\) throw error/);
+  assert.match(source, /Bunkerindex no disponible/);
+  assert.match(source, /'warning'/);
+});
+
+test('the master pipeline still returns the local financial result when optional stages fail', async () => {
+  const helperStart = indexSource.indexOf('async function runMasterOptionalStage');
+  const helperEnd = indexSource.indexOf('function resolveMasterVesselCalculationBranch', helperStart);
+  const handlerStart = indexSource.indexOf('async function handleMasterValidationAndCalculate');
+  const handlerEnd = indexSource.indexOf('window.handleMasterValidationAndCalculate = handleMasterValidationAndCalculate;', handlerStart);
+  const helperSource = indexSource.slice(helperStart, helperEnd);
+  const handlerSource = indexSource.slice(handlerStart, handlerEnd);
+  const warnings = [];
+  let localBatchCalls = 0;
+  const context = {
+    State: { breakEven: 321.5 },
+    SeaCharterStore: { async batchAsync(task) { return task(); } },
+    async validarYCalcularSeccion2() { return true; },
+    ensureSafeBunkerPrices() { return { vlsfo: 600, ifo380: 600, mgo: 600 }; },
+    async consultCurrentCostsAndPdasForMaster() { return { warnings: [] }; },
+    async recalculateAdjustedAndSave() { throw new Error('adjustments offline'); },
+    async synchronizeMasterRouteCalculations() { throw new Error('market offline'); },
+    calculateMasterFreightAndDemurrage() { throw new Error('suggestions unavailable'); },
+    executeBatchedCalculationsCore() {
+      localBatchCalls += 1;
+      return { breakEven: 321.5, totalCosts: 1000 };
+    },
+    evaluateReactiveSyncStatus() {},
+    setMasterCalculationLoading() {},
+    showToast(message, tone) { warnings.push({ message, tone }); },
+    console: { warn() {}, error() {} }
+  };
+
+  vm.runInNewContext(`let isCalculatingMaster = false;\n${helperSource}\n${handlerSource}\nglobalThis.runMaster = handleMasterValidationAndCalculate;`, context);
+  const result = await context.runMaster({ preventDefault() {} });
+
+  assert.equal(localBatchCalls, 1);
+  assert.equal(result.breakEven, 321.5);
+  assert.equal(result.totalCosts, 1000);
+  assert.equal(warnings.filter((entry) => entry.tone === 'warning').length, 3);
+  assert.equal(warnings.at(-1).tone, 'success');
+});
+
 test('master calculation preserves the required sequential workflow', () => {
   const start = indexSource.indexOf('async function handleMasterValidationAndCalculate');
   const end = indexSource.indexOf('window.handleMasterValidationAndCalculate = handleMasterValidationAndCalculate;', start);
@@ -62,15 +145,21 @@ test('master calculation preserves the required sequential workflow', () => {
 
   const validation = source.indexOf('await validarYCalcularSeccion2');
   const costsAndPdas = source.indexOf('await consultCurrentCostsAndPdasForMaster');
-  const adjustments = source.indexOf('await recalculateAdjustedAndSave');
-  const route = source.indexOf('await synchronizeMasterRouteCalculations();');
-  const freightAndDemurrage = source.indexOf('calculateMasterFreightAndDemurrage();');
+  const firstBunkerSafety = source.indexOf('ensureSafeBunkerPrices({ deferEngine: true })');
+  const secondBunkerSafety = source.indexOf('ensureSafeBunkerPrices({ deferEngine: true })', firstBunkerSafety + 1);
+  const adjustments = source.indexOf('() => recalculateAdjustedAndSave');
+  const route = source.indexOf('() => synchronizeMasterRouteCalculations()');
+  const freightAndDemurrage = source.indexOf('() => Promise.resolve(calculateMasterFreightAndDemurrage())');
+  const localBatch = source.indexOf('const localCalculation = executeBatchedCalculationsCore()');
 
   assert.ok(validation >= 0);
-  assert.ok(validation < costsAndPdas);
+  assert.ok(validation < firstBunkerSafety && firstBunkerSafety < costsAndPdas);
+  assert.ok(costsAndPdas < secondBunkerSafety && secondBunkerSafety < adjustments);
   assert.ok(costsAndPdas < adjustments);
   assert.ok(adjustments < route);
   assert.ok(route < freightAndDemurrage);
+  assert.ok(freightAndDemurrage < localBatch);
+  assert.match(source, /try \{[\s\S]*SeaCharterStore\.batchAsync[\s\S]*\} catch \(error\) \{[\s\S]*finally \{/);
   assert.doesNotMatch(source, /useEffect\s*\(/);
 });
 
@@ -124,7 +213,7 @@ test('master calculation batches store notifications across awaited work', () =>
   assert.match(indexSource, /async batchAsync\(fn\)[\s\S]*this\.isBatching = true;[\s\S]*return await fn\(\);[\s\S]*this\.flushBatch\(\)/);
   assert.match(indexSource, /flushBatch\(\)[\s\S]*if \(shouldNotify\) this\.notify\(\)/);
   assert.match(indexSource, /await SeaCharterStore\.batchAsync\(async \(\) => \{/);
-  assert.match(indexSource, /await autoFillBunkers\(\{ managedByMaster: true \}\)/);
-  assert.match(indexSource, /await autoFillPDA\('pol', false, \{ deferEngine: true \}\)/);
-  assert.match(indexSource, /await autoFillPDA\('pod', false, \{ deferEngine: true \}\)/);
+  assert.match(indexSource, /\(\) => autoFillBunkers\(\{ managedByMaster: true \}\)/);
+  assert.match(indexSource, /\(\) => autoFillPDA\('pol', false, \{ deferEngine: true \}\)/);
+  assert.match(indexSource, /\(\) => autoFillPDA\('pod', false, \{ deferEngine: true \}\)/);
 });

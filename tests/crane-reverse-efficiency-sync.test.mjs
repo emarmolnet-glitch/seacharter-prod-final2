@@ -263,12 +263,15 @@ test('en modo Auto la eficiencia sigue siendo un input y el ritmo el resultado',
   assert.equal(elements.get('gruas-eficiencia-slider-pol').disabled, false);
 });
 
-test('el input de Ritmo Real dispara el vínculo inverso desde el DOM', () => {
-  assert.match(indexSource, /oninput="marcarRitmoManual\('pol'\)"/);
-  assert.match(indexSource, /oninput="marcarRitmoManual\('pod'\)"/);
-  // marcarRitmoManual debe llamar al cálculo inverso.
-  const marcar = extractDeclaration('marcarRitmoManual');
-  assert.match(marcar, /sincronizarEficienciaInversa\(side\)/);
+test('el input de Ritmo Real conserva el vínculo inverso para la confirmación', () => {
+  assert.match(indexSource, /oninput="updateRealRateDraft\('pol', this\.value\)"/);
+  assert.match(indexSource, /oninput="updateRealRateDraft\('pod', this\.value\)"/);
+  const draftHandler = extractDeclaration('updateRealRateDraft');
+  assert.doesNotMatch(draftHandler, /sincronizarEficienciaInversa|recalcularDiasPuerto|runEngine|SeaCharterStore|window\.State/);
+  const calcularStart = indexSource.indexOf("function calcularRitmoGrua(side = 'pol', options = {})");
+  const calcularEnd = indexSource.indexOf('// ==========================================', calcularStart);
+  const calcular = indexSource.slice(calcularStart, calcularEnd);
+  assert.match(calcular, /sincronizarEficienciaInversa\(side\)/);
   // Los sliders admiten el rango completo 0-100 que exige el acotado.
   assert.match(indexSource, /id="gruas-eficiencia-slider-pol"[^>]*min="0"[^>]*max="100"/);
   assert.match(indexSource, /id="gruas-eficiencia-slider-pod"[^>]*min="0"[^>]*max="100"/);
