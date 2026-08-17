@@ -57,6 +57,15 @@ test('competitiveness radar mounts inside commercial negotiation', () => {
   assert.doesNotMatch(componentSource, /onChange: (?:loadMargin|debouncedLoadMargin)/);
 });
 
+test('competitiveness radar clarifies the destination differential', () => {
+  assert.match(componentSource, /Diferencial absorbido en destino/i);
+  assert.match(componentSource, /Este valor NO es un flete marítimo/);
+  assert.match(componentSource, /role="tooltip"/);
+  assert.match(componentSource, /bg-slate-900/);
+  assert.match(componentSource, /max-w-\[calc\(100vw-2rem\)\]/);
+  assert.match(componentSource, /Brecha CIF-FOB \| Volumen Anual Total \(\$\{latestResult\.period\}\):/);
+});
+
 test('HS codes follow the calculator cargo specification and select a family default', () => {
   assert.match(componentSource, /getElementById\('cargo-type-manual'\)/);
   assert.match(componentSource, /addEventListener\('CARGO_TYPE_CHANGED'/);

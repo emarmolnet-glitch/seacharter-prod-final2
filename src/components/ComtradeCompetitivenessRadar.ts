@@ -231,9 +231,13 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
           <small class="mt-1 block text-xs text-slate-500">Venta calculada, solo lectura</small>
         </div>
         <div class="rounded-lg border border-cyan-100 bg-cyan-50/60 px-4 py-3">
-          <span class="block text-xs font-medium uppercase tracking-wide text-cyan-700">Margen logístico estimado</span>
+          <span class="relative inline-flex max-w-full items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-cyan-700 group">
+            Diferencial absorbido en destino
+            <button class="shrink-0 cursor-help text-[11px] leading-none opacity-70 transition-opacity hover:opacity-100 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-600 focus-visible:ring-offset-2 focus-visible:ring-offset-cyan-50" type="button" aria-describedby="comtrade-destination-differential-tooltip" aria-label="Aclaración sobre el diferencial absorbido en destino">ℹ️</button>
+            <span id="comtrade-destination-differential-tooltip" class="invisible absolute right-0 top-full z-40 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-lg bg-slate-900 px-3 py-2.5 text-left text-xs font-normal normal-case leading-5 tracking-normal text-slate-100 opacity-0 shadow-xl transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100" role="tooltip">⚠️ Este valor NO es un flete marítimo. Es el diferencial histórico (CIF-FOB) que el importador absorbió en destino para cubrir toda su logística. Tu flete debe ser inferior a este límite. El volumen mostrado en TM representa la suma total de todo el año, útil para medir tu cuota de mercado en este viaje.</span>
+          </span>
           <strong class="mt-1 block font-mono text-lg font-bold text-slate-900" data-comtrade-margin>—</strong>
-          <small class="mt-1 block text-xs text-slate-500" data-comtrade-period>Precio CIF − Precio FOB</small>
+          <small class="mt-1 block text-xs text-slate-500" data-comtrade-period>Brecha CIF-FOB | Volumen Anual Total</small>
         </div>
         <div class="md:col-span-2">
           <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 text-slate-600 px-4 py-3 rounded-lg text-sm font-semibold w-full" data-comtrade-signal data-status="neutral">
@@ -291,7 +295,7 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
     const hasCodes = replaceHsCodeOptions(cmdSelect, normalizedCargoTypeId);
     latestResult = null;
     renderComparison(root, null);
-    setText(root, '[data-comtrade-period]', 'Precio CIF − Precio FOB');
+    setText(root, '[data-comtrade-period]', 'Brecha CIF-FOB | Volumen Anual Total');
     setText(
       root,
       '[data-comtrade-message]',
@@ -322,13 +326,13 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
       if (requestId !== activeRequestId || cmdSelect.value !== requestedCmdCode) return;
       latestResult = result;
       renderComparison(root, latestResult);
-      setText(root, '[data-comtrade-period]', `CIF − FOB · ${latestResult.period} · ${latestResult.netWeightMt.toLocaleString('en-US', { maximumFractionDigits: 0 })} TM`);
+      setText(root, '[data-comtrade-period]', `Brecha CIF-FOB | Volumen Anual Total (${latestResult.period}): ${latestResult.netWeightMt.toLocaleString('en-US', { maximumFractionDigits: 0 })} TM`);
       setText(root, '[data-comtrade-message]', `Datos ${latestResult.source} almacenados localmente durante siete días.`);
     } catch (error) {
       if (requestId !== activeRequestId) return;
       latestResult = null;
       renderComparison(root, null);
-      setText(root, '[data-comtrade-period]', 'Precio CIF − Precio FOB');
+      setText(root, '[data-comtrade-period]', 'Brecha CIF-FOB | Volumen Anual Total');
       setText(root, '[data-comtrade-message]', error instanceof Error ? error.message : 'No se pudo consultar UN Comtrade.');
       root.dataset.radarStatus = 'error';
     } finally {
@@ -346,7 +350,7 @@ export function ComtradeCompetitivenessRadar(root: HTMLElement): () => void {
     activeRequestId += 1;
     latestResult = null;
     renderComparison(root, null);
-    setText(root, '[data-comtrade-period]', 'Precio CIF − Precio FOB');
+    setText(root, '[data-comtrade-period]', 'Brecha CIF-FOB | Volumen Anual Total');
     setText(root, '[data-comtrade-message]', 'Selección actualizada. Pulsa “Consultar radar” para solicitar datos a UN Comtrade.');
     loadButton?.classList.remove('is-loading');
     if (loadButton) loadButton.disabled = !cmdSelect?.value;
