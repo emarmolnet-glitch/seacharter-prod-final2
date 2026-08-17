@@ -3202,6 +3202,212 @@
             accent-color: #1E3A8A !important;
         }
 
+        #stress-test-panel.is-analysis-ready {
+            border-color: #93C5FD !important;
+            box-shadow: 0 16px 36px -24px rgba(30, 58, 138, 0.55), 0 0 0 1px rgba(147, 197, 253, 0.35) !important;
+        }
+
+        .sensitivity-scenario-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.15fr) minmax(0, 0.95fr);
+            gap: 0.75rem;
+            align-items: stretch;
+        }
+
+        .sensitivity-card {
+            position: relative;
+            overflow: hidden;
+            min-height: 172px;
+            padding: 1rem;
+            border: 1px solid #E2E8F0;
+            border-radius: 14px;
+            background: #FFFFFF;
+            box-shadow: 0 10px 24px -22px rgba(15, 23, 42, 0.65);
+            transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+        }
+
+        .sensitivity-card::before {
+            content: '';
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 4px;
+            background: var(--scenario-accent, #64748B);
+        }
+
+        .sensitivity-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--scenario-border, #CBD5E1);
+            box-shadow: 0 18px 30px -24px rgba(15, 23, 42, 0.72);
+        }
+
+        .sensitivity-card--best {
+            --scenario-accent: #16845B;
+            --scenario-border: #86D4B4;
+            background: linear-gradient(145deg, #F3FBF7 0%, #FFFFFF 72%);
+        }
+
+        .sensitivity-card--base {
+            --scenario-accent: #1E3A8A;
+            --scenario-border: #93B4E8;
+            min-height: 188px;
+            transform: translateY(-4px);
+            background: linear-gradient(145deg, #EFF6FF 0%, #FFFFFF 70%);
+            box-shadow: 0 18px 34px -25px rgba(30, 58, 138, 0.7);
+        }
+
+        .sensitivity-card--base:hover {
+            transform: translateY(-6px);
+        }
+
+        .sensitivity-card--stress {
+            --scenario-accent: #B54747;
+            --scenario-border: #E6AAAA;
+            background: linear-gradient(145deg, #FFF6F5 0%, #FFFFFF 72%);
+        }
+
+        .sensitivity-card__eyebrow {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            color: #475569;
+            font-size: 0.625rem;
+            font-weight: 900;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .sensitivity-card__dot {
+            width: 0.55rem;
+            height: 0.55rem;
+            flex: 0 0 auto;
+            border-radius: 999px;
+            background: var(--scenario-accent, #64748B);
+            box-shadow: 0 0 0 4px color-mix(in srgb, var(--scenario-accent, #64748B) 13%, transparent);
+        }
+
+        .sensitivity-card__value {
+            margin-top: 0.75rem;
+            color: #0F254A !important;
+            font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: clamp(1.55rem, 2.5vw, 2.25rem);
+            font-weight: 800;
+            letter-spacing: -0.055em;
+            line-height: 1;
+        }
+
+        .sensitivity-card__unit {
+            margin-left: 0.25rem;
+            color: #64748B;
+            font-size: 0.7rem;
+            font-weight: 800;
+            letter-spacing: 0;
+        }
+
+        .sensitivity-card__formula {
+            margin-top: 0.75rem;
+            color: #334155;
+            font-size: 0.7rem;
+            font-weight: 700;
+            line-height: 1.45;
+        }
+
+        .sensitivity-card__delta {
+            display: inline-flex;
+            margin-top: 0.75rem;
+            padding: 0.25rem 0.45rem;
+            border: 1px solid color-mix(in srgb, var(--scenario-accent, #64748B) 26%, white);
+            border-radius: 6px;
+            background: color-mix(in srgb, var(--scenario-accent, #64748B) 8%, white);
+            color: var(--scenario-accent, #475569);
+            font-size: 0.625rem;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .negotiation-thermometer {
+            margin-top: 1rem;
+            padding: 1rem;
+            border: 1px solid #D9E2EC;
+            border-radius: 14px;
+            background: #F8FAFC;
+        }
+
+        .negotiation-thermometer__track {
+            position: relative;
+            height: 0.75rem;
+            margin: 1.6rem 0 0.65rem;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #B8DEC9 0%, #E8E3C5 52%, #E7B9B4 100%);
+            box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.16);
+        }
+
+        .negotiation-thermometer__marker {
+            position: absolute;
+            top: 50%;
+            left: var(--base-position, 50%);
+            width: 1.15rem;
+            height: 1.15rem;
+            border: 3px solid #FFFFFF;
+            border-radius: 999px;
+            background: #1E3A8A;
+            box-shadow: 0 2px 8px rgba(30, 58, 138, 0.38);
+            transform: translate(-50%, -50%);
+        }
+
+        .negotiation-thermometer__marker::before {
+            content: 'HOY';
+            position: absolute;
+            bottom: calc(100% + 0.45rem);
+            left: 50%;
+            padding: 0.2rem 0.35rem;
+            border-radius: 4px;
+            background: #1E3A8A;
+            color: #FFFFFF;
+            font-size: 0.52rem;
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            transform: translateX(-50%);
+        }
+
+        .negotiation-thermometer__labels {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            color: #64748B;
+            font-size: 0.625rem;
+            font-weight: 800;
+        }
+
+        .fixture-clause-advice {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 0.8rem;
+            margin-top: 0.75rem;
+            padding: 0.95rem 1rem;
+            border: 1px solid #F1C98F;
+            border-left-width: 4px;
+            border-radius: 12px;
+            background: #FFF9ED;
+            color: #633D13;
+        }
+
+        .fixture-clause-advice__icon {
+            display: grid;
+            width: 2.35rem;
+            height: 2.35rem;
+            place-items: center;
+            border: 1px solid #E7B96F;
+            border-radius: 10px;
+            background: #FFFFFF;
+            color: #A35C08;
+        }
+
+        @media (max-width: 900px) {
+            .sensitivity-scenario-grid { grid-template-columns: 1fr; }
+            .sensitivity-card--base,
+            .sensitivity-card--base:hover { transform: none; }
+        }
+
         #stress-test-panel > .collapsible-section__collapse > .collapsible-section__inner > .mt-4 {
             border-top-color: #E2E8F0 !important;
             color: #475569 !important;
@@ -8854,9 +9060,9 @@
                                     </p>
                                 </div>
                                 <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
-                                    <button id="btn-consult-bunker" type="button" onclick="syncBunkerIndexMarket()" class="inline-flex items-center gap-2 rounded-lg border border-sky-700 bg-slate-950 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-sky-300 shadow-sm transition hover:border-sky-500 hover:bg-sky-950/50 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:cursor-wait disabled:opacity-60" title="Sincronizar manualmente los precios de mercado">
+                                    <button id="btn-consult-bunker" type="button" onclick="syncBunkerIndexMarket()" class="inline-flex items-center gap-2 rounded-lg border border-sky-700 bg-slate-950 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-sky-300 shadow-sm transition hover:border-sky-500 hover:bg-sky-950/50 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:cursor-wait disabled:opacity-60" title="Sincronizar los precios regionales guardados en Market Latest">
                                         <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
-                                        <span>Sincronizar Mercado (Bunkerindex)</span>
+                                        <span>Sincronizar Mercado Regional</span>
                                     </button>
                                     <button id="btn-search-bunker-arbitrage" type="button" onclick="searchProfitableBunkerDiversions()" class="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-[10px] font-black uppercase tracking-wide text-slate-950 shadow-lg shadow-emerald-950/30 transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:cursor-wait disabled:opacity-60">
                                         <i class="fa-solid fa-route" aria-hidden="true"></i>
@@ -10119,28 +10325,17 @@
                                 <h2 data-i18n="calc_risk_title" class="text-sm font-bold text-amber-300 uppercase">
                                     <i class="fa-solid fa-triangle-exclamation mr-2"></i> 9. MATRIZ DE RIESGO
                                 </h2>
-                                <div class="mt-0.5 text-[10px] text-slate-500">Analisis automatico de sensibilidad sobre el escenario base calculado</div>
+                                <div class="mt-0.5 text-[10px] text-slate-500">Simulador multi-variable de velocidad, clima y bunker sobre el break-even oficial</div>
                             </div>
                             <div class="collapsible-section-actions flex items-center gap-2">
                                 <span id="auto-risk-tooltip" class="hidden cursor-help text-[11px] font-black text-amber-200" title="Margen insuficiente">Margen insuficiente</span>
                                 <span id="auto-risk-status" class="rounded-md border border-slate-600 bg-slate-950 px-2 py-1 text-[10px] font-black uppercase text-slate-300">Sin analisis</span>
                             </div>
                         </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full min-w-[620px] text-[10px] text-slate-400">
-                                <thead class="text-[9px] uppercase tracking-wide text-slate-500">
-                                    <tr>
-                                        <th class="pb-2 pr-3 text-left">Escenario</th>
-                                        <th class="px-3 pb-2 text-right">Bunker</th>
-                                        <th class="px-3 pb-2 text-right">Dias</th>
-                                        <th class="px-3 pb-2 text-right">Beneficio neto</th>
-                                        <th class="pb-2 pl-3 text-right">Delta</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="risk-matrix-body">
-                                    <tr><td colspan="5" class="border-t border-slate-800 py-3 text-center text-slate-500">Ejecute una cotizacion para calcular la matriz.</td></tr>
-                                </tbody>
-                            </table>
+                        <div id="risk-matrix-body" aria-live="polite">
+                            <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-xs font-bold text-slate-500">
+                                Valide las especificaciones para generar los escenarios de sensibilidad.
+                            </div>
                         </div>
                         <div id="auto-risk-alert" class="hidden"></div>
                     </div>
@@ -16131,13 +16326,29 @@
             return '';
         }
 
+        function notifyBunkerRouteChanged(source = 'programmatic') {
+            if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function' || typeof CustomEvent !== 'function') return;
+            window.dispatchEvent(new CustomEvent('seacharter:bunker-route-change', {
+                detail: {
+                    source,
+                    pol: document.getElementById('port-pol')?.value || '',
+                    pod: document.getElementById('port-pod')?.value || ''
+                }
+            }));
+        }
+        window.notifyBunkerRouteChanged = notifyBunkerRouteChanged;
+
         const setInputValue = (id, value) => {
             const el = document.getElementById(id);
             if (!el) return;
             const nextValue = el.type === 'date'
                 ? normalizeDateInputValue(value)
                 : String(value ?? '');
-            if (el.value !== nextValue) el.value = nextValue;
+            const valueChanged = el.value !== nextValue;
+            if (valueChanged) el.value = nextValue;
+            if (valueChanged && (id === 'port-pol' || id === 'port-pod')) {
+                notifyBunkerRouteChanged('setInputValue');
+            }
         };
 
         function readEffectiveBallastDistance() {
@@ -29137,6 +29348,7 @@
         class CollapsibleSection {
             constructor(root, options = {}) {
                 this.root = root;
+                this.root.collapsibleSection = this;
                 this.options = options;
                 this.header = root.querySelector(':scope > .collapsible-section-header');
                 this.title = this.resolveTitle(options.title, options.icon);
@@ -29451,6 +29663,23 @@
                 });
 
                 const results = await Promise.all(weatherPromises);
+                const validWaveHeights = results
+                    .map((result) => Number(result.waveHeight))
+                    .filter((value) => Number.isFinite(value));
+                window.SeaCharterMarineForecast = {
+                    updatedAt: new Date().toISOString(),
+                    maxWaveHeight: validWaveHeights.length ? Math.max(...validWaveHeights) : null,
+                    podWaveHeight: Number.isFinite(Number(results.at(-1)?.waveHeight)) ? Number(results.at(-1).waveHeight) : null,
+                    points: results.map((result) => ({
+                        label: result.label,
+                        waveHeight: result.waveHeight,
+                        windKnots: result.windKnots,
+                        douglas: result.douglas
+                    }))
+                };
+                if (typeof State !== 'undefined' && window.SeaCharterVoyageCostEngine?.renderAutomaticRiskMatrix) {
+                    State.sensitivityAnalysis = window.SeaCharterVoyageCostEngine.renderAutomaticRiskMatrix(State);
+                }
 
                 const labels = {
                     es: {
@@ -30488,7 +30717,7 @@
 
             await runMasterOptionalStage(
                 'Bunkerindex',
-                () => autoFillBunkers({ managedByMaster: true }),
+                () => ensureRegionalBunkersForCalculation(),
                 'Aviso: No se pudo sincronizar el precio del bunker actual, usando último precio guardado.',
                 warnings
             );
@@ -30632,6 +30861,17 @@
 
                 if (typeof showToast === 'function') {
                     showToast('Operación completa calculada: costes, PDAs, ajustes, ruta, fletes y demoras.', 'success');
+                }
+                const sensitivityPanel = typeof document !== 'undefined' ? document.getElementById('stress-test-panel') : null;
+                if (sensitivityPanel) {
+                    sensitivityPanel.classList.add('is-analysis-ready');
+                    if (sensitivityPanel.collapsibleSection) {
+                        sensitivityPanel.collapsibleSection.isOpen = true;
+                        sensitivityPanel.collapsibleSection.update();
+                    } else {
+                        const toggle = sensitivityPanel.querySelector('.collapsible-section__toggle[aria-expanded="false"]');
+                        toggle?.click();
+                    }
                 }
                 return calculationResult;
             } catch (error) {
@@ -32653,7 +32893,7 @@
 
         const BUNKER_INDEX_DATA_KEY = 'bunkerIndexData';
         const BUNKER_INDEX_CACHE_MAX_AGE_MS = 48 * 60 * 60 * 1000;
-        const BUNKER_MARKET_SYNC_ENDPOINT = '/api/market/sync-bunkerindex';
+        const BUNKER_MARKET_LATEST_ENDPOINT = '/api/market/bunkers-latest';
         const BUNKER_ARBITRAGE_ENDPOINT = '/api/routing/bunker-arbitrage';
         const HISTORICAL_BUNKER_FALLBACK_USD = Object.freeze({
             vlsfo: 600,
@@ -32693,6 +32933,10 @@
             ])
         });
         let isFetchingBunker = false;
+        let bunkerFetchPromise = null;
+        let bunkerFetchRegion = '';
+        let bunkerRegionSyncTimer = null;
+        let lastAutomaticallyFetchedBunkerRegion = '';
         let isSearchingBunkerArbitrage = false;
         let bunkerDateLabel = '';
 
@@ -32733,7 +32977,12 @@
         function getCurrentBunkerRegionContext() {
             const polName = document.getElementById('port-pol')?.value || (typeof State !== 'undefined' ? State.pol : '') || '';
             const podName = document.getElementById('port-pod')?.value || (typeof State !== 'undefined' ? State.pod : '') || '';
-            return getBunkerRegionForVoyage(polName, podName);
+            return {
+                ...getBunkerRegionForVoyage(polName, podName),
+                polName: String(polName || '').trim(),
+                podName: String(podName || '').trim(),
+                hasPol: Boolean(String(polName || '').trim())
+            };
         }
 
         function normalizeBunkerRegionName(regionName) {
@@ -32741,17 +32990,70 @@
             return BUNKER_REGION_NAMES.find(region => region.toLowerCase() === normalized) || 'World';
         }
 
+        function parseBunkerMarketPrice(value) {
+            if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
+            const normalized = String(value ?? '').replace(/[^0-9.-]/g, '');
+            const parsed = Number(normalized);
+            return Number.isFinite(parsed) ? parsed : NaN;
+        }
+
         function readBunkerPriceTriplet(source = {}) {
             const market = source?.prices && !Array.isArray(source.prices) ? source.prices : source;
             return {
-                vlsfo: Number(market?.vlsfo ?? market?.VLSFO ?? market?.vlsfo_price),
-                ifo380: Number(market?.ifo380 ?? market?.IFO380 ?? market?.ifo_380 ?? market?.ifo380_price),
-                mgo: Number(market?.mgo ?? market?.MGO ?? market?.mgo_price)
+                vlsfo: parseBunkerMarketPrice(market?.vlsfo ?? market?.VLSFO ?? market?.vlsfo_price),
+                ifo380: parseBunkerMarketPrice(market?.ifo380 ?? market?.IFO380 ?? market?.ifo_380 ?? market?.ifo380_price),
+                mgo: parseBunkerMarketPrice(market?.mgo ?? market?.MGO ?? market?.mgo_price)
             };
         }
 
         function hasPositiveBunkerPrice(prices = {}) {
             return ['vlsfo', 'ifo380', 'mgo'].some(key => Number(prices?.[key]) > 0);
+        }
+
+        function extractBunkersArray(apiResponse) {
+            const parseCandidate = (candidate) => {
+                if (Array.isArray(candidate)) return candidate;
+                if (typeof candidate !== 'string') return null;
+                try {
+                    const parsed = JSON.parse(candidate);
+                    return Array.isArray(parsed) ? parsed : null;
+                } catch (_) {
+                    return null;
+                }
+            };
+            const candidates = [
+                apiResponse,
+                apiResponse?.data,
+                apiResponse?.bunkers,
+                apiResponse?.results,
+                apiResponse?.records,
+                apiResponse?.items,
+                apiResponse?.data?.bunkers,
+                apiResponse?.data?.results,
+                apiResponse?.data?.records,
+                apiResponse?.data?.items,
+                apiResponse?.data?.data
+            ];
+            for (const candidate of candidates) {
+                const parsed = parseCandidate(candidate);
+                if (parsed) return parsed;
+            }
+            return [];
+        }
+
+        function normalizeBunkerMatchToken(value) {
+            return String(value || '').trim().toUpperCase().replace(/\s+/g, '');
+        }
+
+        function findRegionalBunkerRecord(bunkersArray, regionName, fuelGrades) {
+            const normalizedRegion = normalizeBunkerMatchToken(regionName || 'World');
+            const normalizedGrades = new Set(fuelGrades.map(normalizeBunkerMatchToken));
+            return bunkersArray.find((record) => {
+                if (!record || typeof record !== 'object') return false;
+                const recordRegion = normalizeBunkerMatchToken(record.hub_name ?? record.hubName ?? record.region);
+                const recordGrade = normalizeBunkerMatchToken(record.fuel_grade ?? record.fuel_type ?? record.grade ?? record.product);
+                return recordRegion === normalizedRegion && normalizedGrades.has(recordGrade);
+            }) || null;
         }
 
         function collectRegionalBunkerPrices(payload = {}) {
@@ -32772,7 +33074,7 @@
                 if (region && hasPositiveBunkerPrice(directPrices)) mergeRegion(region, directPrices);
 
                 const fuelName = String(record.fuel_type ?? record.fuelType ?? record.fuel_grade ?? record.grade ?? record.product ?? record.name ?? '').toUpperCase();
-                const price = Number(record.price ?? record.value ?? record.latest_price ?? record.usd_per_mt ?? record.price_usd_mt);
+                const price = parseBunkerMarketPrice(record.price ?? record.value ?? record.latest_price ?? record.usd_per_mt ?? record.price_usd_mt ?? record.price_usd);
                 if (region && price > 0 && fuelName) {
                     if (fuelName.includes('VLSFO')) mergeRegion(region, { vlsfo: price });
                     else if (fuelName.includes('IFO') || fuelName.includes('380')) mergeRegion(region, { ifo380: price });
@@ -32780,29 +33082,27 @@
                 }
             };
 
-            const containers = [
-                payload,
-                payload?.prices,
-                payload?.data,
-                payload?.data?.prices,
-                payload?.results,
-                payload?.hubs,
-                payload?.bunkers,
-                payload?.bunker_indices,
-                payload?.data?.bunker_indices
-            ];
-            containers.forEach(container => {
+            const bunkersArray = extractBunkersArray(payload);
+            bunkersArray.forEach(consumeRecord);
+            const visited = new Set();
+            const consumeContainer = (container, depth = 0) => {
+                if (!container || typeof container !== 'object' || visited.has(container) || depth > 6) return;
+                visited.add(container);
                 if (Array.isArray(container)) {
-                    container.forEach(consumeRecord);
+                    container.forEach(entry => {
+                        consumeRecord(entry);
+                        consumeContainer(entry, depth + 1);
+                    });
                     return;
                 }
-                if (!container || typeof container !== 'object') return;
                 BUNKER_REGION_NAMES.forEach(region => {
                     const keyed = container[region] ?? container[region.toLowerCase()] ?? container[region.toUpperCase()];
                     if (keyed) mergeRegion(region, readBunkerPriceTriplet(keyed));
                 });
                 consumeRecord(container);
-            });
+                Object.values(container).forEach(value => consumeContainer(value, depth + 1));
+            };
+            consumeContainer(payload);
             return regionalPrices;
         }
 
@@ -32897,6 +33197,25 @@
             warning.classList.add('text-amber-400');
             status.classList.remove('text-red-300', 'text-slate-500', 'text-amber-300');
             status.classList.add(isStale ? 'text-amber-300' : 'text-slate-400');
+        }
+
+        function setBunkerMarketLoading(regionName, isLoading) {
+            const status = document.getElementById('bunker-market-sync-status');
+            const label = document.getElementById('bunker-market-sync-label');
+            const warning = document.getElementById('bunker-market-stale-warning');
+            const normalizedRegion = normalizeBunkerRegionName(regionName).toUpperCase();
+            if (status) status.setAttribute('aria-busy', String(isLoading));
+            Object.values(BUNKER_INPUT_BINDINGS).forEach((inputId) => {
+                const input = document.getElementById(inputId);
+                if (!input) return;
+                input.setAttribute('aria-busy', String(isLoading));
+                input.classList.toggle('opacity-70', isLoading);
+            });
+            if (!isLoading || !label || !status) return;
+            label.textContent = `Obteniendo precios de ${normalizedRegion}...`;
+            warning?.classList.add('hidden');
+            status.classList.remove('text-amber-300', 'text-red-300');
+            status.classList.add('text-slate-400');
         }
 
         function updateBunkerIndexErrorLabel(message) {
@@ -33003,29 +33322,53 @@
             return false;
         }
 
-        function normalizeBunkerMarketPayload(payload) {
-            const routeRegion = getCurrentBunkerRegionContext();
+        function normalizeBunkerMarketPayload(payload, options = {}) {
+            const routeRegion = options.routeRegion || getCurrentBunkerRegionContext();
+            const requestedRegion = normalizeBunkerRegionName(options.detectedRegion || routeRegion.region || 'World');
+            const bunkersArray = options.bunkersArray || extractBunkersArray(payload);
             const regionalPrices = collectRegionalBunkerPrices(payload);
-            const selection = resolveRegionalBunkerSelection({ ...payload, regionalPrices }, routeRegion.region);
+            const regionRecords = {
+                vlsfo: findRegionalBunkerRecord(bunkersArray, requestedRegion, ['VLSFO']),
+                ifo380: findRegionalBunkerRecord(bunkersArray, requestedRegion, ['IFO380', 'IFO 380']),
+                mgo: findRegionalBunkerRecord(bunkersArray, requestedRegion, ['MGO'])
+            };
+            const strictRegionPrices = {
+                vlsfo: parseBunkerMarketPrice(regionRecords.vlsfo?.price ?? regionRecords.vlsfo?.value ?? regionRecords.vlsfo?.latest_price),
+                ifo380: parseBunkerMarketPrice(regionRecords.ifo380?.price ?? regionRecords.ifo380?.value ?? regionRecords.ifo380?.latest_price),
+                mgo: parseBunkerMarketPrice(regionRecords.mgo?.price ?? regionRecords.mgo?.value ?? regionRecords.mgo?.latest_price)
+            };
+            if (hasPositiveBunkerPrice(strictRegionPrices)) {
+                regionalPrices[requestedRegion] = {
+                    ...(regionalPrices[requestedRegion] || {}),
+                    ...Object.fromEntries(Object.entries(strictRegionPrices).filter(([, price]) => Number(price) > 0))
+                };
+            }
+            const directPayload = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+            const selection = resolveRegionalBunkerSelection({ ...directPayload, regionalPrices }, requestedRegion);
             const market = selection.prices;
             const rawPrices = {
                 vlsfo: Number(market.vlsfo ?? market.VLSFO ?? market.vlsfo_price),
                 ifo380: Number(market.ifo380 ?? market.IFO380 ?? market.ifo_380 ?? market.ifo380_price),
                 mgo: Number(market.mgo ?? market.MGO ?? market.mgo_price)
             };
+            const marketDataFound = Object.values(regionRecords).some(Boolean) || hasPositiveBunkerPrice(rawPrices);
             const fallbackUsed = Object.values(rawPrices).some((price) => !Number.isFinite(price) || price <= 0);
 
-            const syncedAtValue = payload?.syncedAt || payload?.lastSyncedAt || payload?.updatedAt || market.syncedAt;
+            const firstRecord = Array.isArray(payload)
+                ? payload[0]
+                : (Array.isArray(payload?.data) ? payload.data[0] : null);
+            const syncedAtValue = payload?.syncedAt || payload?.lastSyncedAt || payload?.updatedAt || firstRecord?.updated_at || firstRecord?.updatedAt || market.syncedAt;
             const parsedSyncedAt = Date.parse(String(syncedAtValue || ''));
             return {
                 vlsfo: rawPrices.vlsfo > 0 ? rawPrices.vlsfo : HISTORICAL_BUNKER_FALLBACK_USD.vlsfo,
                 ifo380: rawPrices.ifo380 > 0 ? rawPrices.ifo380 : HISTORICAL_BUNKER_FALLBACK_USD.ifo380,
                 mgo: rawPrices.mgo > 0 ? rawPrices.mgo : HISTORICAL_BUNKER_FALLBACK_USD.mgo,
-                date: payload?.sourceDate || market.sourceDate || market.date || getTodayBunkerLabel(),
+                date: payload?.sourceDate || firstRecord?.source_date || firstRecord?.record_date || firstRecord?.date || market.sourceDate || market.date || getTodayBunkerLabel(),
                 cachedAt: Number.isFinite(parsedSyncedAt) ? parsedSyncedAt : Date.now(),
                 regionalPrices,
                 detectedRegion: selection.detectedRegion,
                 selectedRegion: selection.selectedRegion,
+                marketDataFound,
                 fallbackUsed
             };
         }
@@ -33044,22 +33387,13 @@
         }
         window.refreshBunkerRegionSelection = refreshBunkerRegionSelection;
 
-        async function autoFillBunkers(options = {}) {
-            if (isFetchingBunker) return;
-            const freshCache = options.forceRefresh === true ? null : readBunkerIndexCache();
-            if (freshCache) {
-                const appliedCache = applyBunkerIndexData(freshCache);
-                if (appliedCache.fallbackUsed) {
-                    updateBunkerIndexErrorLabel('Bunkerindex no disponible · fallback histórico activo');
-                    updateBunkerMarketSyncStatus(appliedCache, { warning: 'Bunkerindex no disponible' });
-                }
-                return appliedCache;
-            }
-
+        async function performRegionalBunkerFetch(detectedRegion, options = {}) {
+            const routeRegion = options.routeRegion || getCurrentBunkerRegionContext();
             const btn = document.getElementById('btn-consult-bunker');
             const originalText = btn ? btn.innerHTML : '';
             const managedByMaster = options.managedByMaster === true;
             isFetchingBunker = true;
+            setBunkerMarketLoading(detectedRegion, true);
 
             if (btn && !managedByMaster) {
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Consultando...';
@@ -33069,11 +33403,11 @@
             if (!managedByMaster) showToast("Actualizando VLSFO, IFO 380 y MGO del día...", true);
 
             try {
-                const bunkerEndpoint = BUNKER_MARKET_SYNC_ENDPOINT;
+                const bunkerEndpoint = BUNKER_MARKET_LATEST_ENDPOINT;
                 const bunkerRequest = {
-                    method: 'POST',
+                    method: 'GET',
                     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ source: 'seacharter-core-pro', requestedAt: new Date().toISOString() })
+                    cache: 'no-store'
                 };
                 const response = window.CoreNetworkGuard
                     ? await window.CoreNetworkGuard.fetch('bunker-market-sync', bunkerEndpoint, bunkerRequest, { cooldownMs: 15_000 })
@@ -33086,23 +33420,28 @@
                     throw new Error(`${extractionError}${extractionDetails}`);
                 }
 
-                const nextCache = normalizeBunkerMarketPayload(data);
+                const bunkersArray = extractBunkersArray(data);
+                console.info('[Bunker Market] Raw Bunkers Array extraído:', bunkersArray);
+                const nextCache = normalizeBunkerMarketPayload(data, { bunkersArray, detectedRegion, routeRegion });
+                if (!nextCache.marketDataFound) {
+                    throw new Error(`Market Latest no devolvió registros de bunker para ${detectedRegion}.`);
+                }
 
                 if (typeof localStorage !== 'undefined') {
                     localStorage.setItem(BUNKER_INDEX_DATA_KEY, JSON.stringify(nextCache));
                 }
 
-                const appliedPrices = applyBunkerIndexData(nextCache);
+                const appliedPrices = applyBunkerIndexData(nextCache, { deferEngine: options.deferEngine });
                 if (nextCache.fallbackUsed) {
-                    updateBunkerIndexErrorLabel('Bunkerindex no disponible · usando bunker histórico de seguridad');
-                    updateBunkerMarketSyncStatus(appliedPrices, { warning: 'Bunkerindex no disponible · fallback histórico activo' });
-                    if (typeof showToast === 'function') showToast('Aviso: Bunkerindex no disponible; usando bunker histórico de seguridad.', 'warning');
+                    updateBunkerIndexErrorLabel(`Market Latest parcial para ${detectedRegion} · completando grados ausentes con valores seguros`);
+                    updateBunkerMarketSyncStatus(appliedPrices, { warning: `Cotización regional parcial para ${detectedRegion}` });
+                    if (typeof showToast === 'function') showToast(`Aviso: cotización regional parcial para ${detectedRegion}; se completaron grados ausentes.`, 'warning');
                 } else if (!managedByMaster) {
                     showToast(`Precios sincronizados para ${appliedPrices.selectedRegion || 'World'} según el POL`);
                 }
                 return appliedPrices;
             } catch (error) {
-                console.error('Error extrayendo Bunkers:', error);
+                console.error('Error fatal extrayendo datos del array de Bunkers:', error);
                 const staleCache = readBunkerIndexCache({ allowStale: true });
                 let appliedPrices;
                 if (staleCache) {
@@ -33117,6 +33456,7 @@
                 return appliedPrices;
             } finally {
                 isFetchingBunker = false;
+                setBunkerMarketLoading(detectedRegion, false);
                 if (btn && !managedByMaster) {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
@@ -33124,8 +33464,98 @@
             }
         }
 
+        function fetchRegionalBunkers(regionName, options = {}) {
+            const detectedRegion = normalizeBunkerRegionName(regionName || 'World');
+            if (bunkerFetchPromise) {
+                if (bunkerFetchRegion === detectedRegion) return bunkerFetchPromise;
+                return bunkerFetchPromise.finally(() => fetchRegionalBunkers(detectedRegion, options));
+            }
+            bunkerFetchRegion = detectedRegion;
+            bunkerFetchPromise = performRegionalBunkerFetch(detectedRegion, options)
+                .finally(() => {
+                    bunkerFetchPromise = null;
+                    bunkerFetchRegion = '';
+                });
+            return bunkerFetchPromise;
+        }
+        window.fetchRegionalBunkers = fetchRegionalBunkers;
+
+        async function autoFillBunkers(options = {}) {
+            const routeRegion = getCurrentBunkerRegionContext();
+            const detectedRegion = normalizeBunkerRegionName(options.detectedRegion || routeRegion.region || 'World');
+            if (!routeRegion.hasPol && options.allowWithoutPol !== true) {
+                updateBunkerRegionLabels('World');
+                updateBunkerMarketSyncStatus(null);
+                if (options.managedByMaster !== true && typeof showToast === 'function') {
+                    showToast('Introduce primero el POL para detectar la región de bunker.', 'warning');
+                }
+                return null;
+            }
+            const freshCache = options.forceRefresh === true ? null : readBunkerIndexCache();
+            if (freshCache) {
+                const appliedCache = applyBunkerIndexData(freshCache, { deferEngine: options.deferEngine });
+                if (appliedCache.fallbackUsed) {
+                    updateBunkerIndexErrorLabel('Bunkerindex no disponible · fallback histórico activo');
+                    updateBunkerMarketSyncStatus(appliedCache, { warning: 'Bunkerindex no disponible' });
+                }
+                return appliedCache;
+            }
+            return fetchRegionalBunkers(detectedRegion, { ...options, routeRegion });
+        }
+
+        function hasValidRegionalBunkerPrices() {
+            const routeRegion = getCurrentBunkerRegionContext();
+            if (!routeRegion.hasPol) return false;
+            const cache = readBunkerIndexCache({ allowStale: true });
+            const selection = resolveRegionalBunkerSelection(cache || {}, routeRegion.region);
+            const inputPrices = Object.fromEntries(Object.entries(BUNKER_INPUT_BINDINGS).map(([key, inputId]) => [
+                key,
+                Number(document.getElementById(inputId)?.value)
+            ]));
+            const knownFallbacks = { vlsfo: new Set([600]), ifo380: new Set([600]), mgo: new Set([600, 800]) };
+            const validInputs = Object.entries(inputPrices).every(([key, price]) => (
+                Number.isFinite(price)
+                && price > 0
+                && !knownFallbacks[key].has(price)
+            ));
+            const validMarketSelection = ['vlsfo', 'ifo380', 'mgo'].every((key) => Number(selection.prices?.[key]) > 0);
+            return validInputs && validMarketSelection && cache?.marketDataFound === true;
+        }
+
+        async function ensureRegionalBunkersForCalculation() {
+            if (hasValidRegionalBunkerPrices()) {
+                return applyBunkerIndexData(readBunkerIndexCache({ allowStale: true }) || {}, { deferEngine: true });
+            }
+            const routeRegion = getCurrentBunkerRegionContext();
+            return autoFillBunkers({
+                forceRefresh: true,
+                managedByMaster: true,
+                deferEngine: true,
+                detectedRegion: routeRegion.region
+            });
+        }
+
+        function scheduleRegionalBunkerSync(options = {}) {
+            clearTimeout(bunkerRegionSyncTimer);
+            bunkerRegionSyncTimer = setTimeout(() => {
+                const routeRegion = getCurrentBunkerRegionContext();
+                if (!routeRegion.hasPol || routeRegion.region === 'World') return;
+                if (options.force !== true && routeRegion.region === lastAutomaticallyFetchedBunkerRegion && hasValidRegionalBunkerPrices()) return;
+                lastAutomaticallyFetchedBunkerRegion = routeRegion.region;
+                void autoFillBunkers({
+                    forceRefresh: true,
+                    managedByMaster: true,
+                    detectedRegion: routeRegion.region
+                });
+            }, options.immediate === true ? 0 : 280);
+        }
+
         function syncBunkerIndexMarket() {
-            return autoFillBunkers({ forceRefresh: true });
+            const routeRegion = getCurrentBunkerRegionContext();
+            return autoFillBunkers({
+                forceRefresh: true,
+                detectedRegion: routeRegion.region
+            });
         }
 
         function readBunkerArbitrageRoute() {
@@ -46921,7 +47351,9 @@ Example:
                     syncClausesFromState();
                     
                     // Rellenar campos de entrada en la UI si existen, para permitir re-calcular/re-visualizar
-                    const setVal = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.value = val; };
+                    const setVal = (id, val) => {
+                        if (val !== undefined) setInputValue(id, val);
+                    };
                     
                     setVal('vessel-name', State.vessel);
                     setVal('vessel-dwt', State.dwt);
@@ -47922,12 +48354,17 @@ ADDITIONAL NOTES:
         function setImportedFieldValue(el, val) {
             if (!el || el.type === 'file' || el.type === 'password') return;
 
+            const previousValue = el.type === 'checkbox' || el.type === 'radio' ? el.checked : el.value;
             if (el.type === 'checkbox') {
                 el.checked = Boolean(val);
             } else if (el.type === 'radio') {
                 el.checked = el.value === String(val);
             } else {
                 el.value = val ?? '';
+            }
+            const nextValue = el.type === 'checkbox' || el.type === 'radio' ? el.checked : el.value;
+            if (previousValue !== nextValue && (el.id === 'port-pol' || el.id === 'port-pod')) {
+                notifyBunkerRouteChanged('session-restore');
             }
         }
 
@@ -62073,10 +62510,22 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
         let marketIntelLatestSnapshot = null;
         let isMarketIntelManualEdit = false;
 
+        function findMarketLatestRecord(payload, visited = new Set()) {
+            if (!payload || typeof payload !== 'object' || visited.has(payload)) return null;
+            visited.add(payload);
+            if (!Array.isArray(payload) && MARKET_INTEL_FIELDS.some(field => payload[field] !== undefined)) {
+                return payload;
+            }
+            const nestedValues = Array.isArray(payload) ? payload : Object.values(payload);
+            for (const value of nestedValues) {
+                const record = findMarketLatestRecord(value, visited);
+                if (record) return record;
+            }
+            return null;
+        }
+
         function normalizeMarketLatestPayload(payload) {
-            const candidates = [payload, payload?.data, payload?.latest, payload?.market, payload?.result]
-                .filter(candidate => candidate && typeof candidate === 'object');
-            const record = candidates.find(candidate => MARKET_INTEL_FIELDS.some(field => candidate[field] !== undefined));
+            const record = findMarketLatestRecord(payload);
             if (!record) return null;
 
             const normalized = Object.fromEntries(MARKET_INTEL_FIELDS.map(field => {
@@ -63698,9 +64147,30 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             ['port-pol', 'port-pod'].forEach((id) => {
                 const portInput = document.getElementById(id);
                 if (!portInput) return;
-                portInput.addEventListener('change', () => refreshBunkerRegionSelection());
-                portInput.addEventListener('blur', () => refreshBunkerRegionSelection());
+                portInput.addEventListener('change', () => {
+                    refreshBunkerRegionSelection();
+                    if (id === 'port-pol' && String(portInput.value || '').trim()) {
+                        scheduleRegionalBunkerSync({ immediate: true });
+                    }
+                });
+                portInput.addEventListener('input', () => {
+                    if (id === 'port-pol') scheduleRegionalBunkerSync();
+                });
+                portInput.addEventListener('blur', () => {
+                    refreshBunkerRegionSelection();
+                    if (id === 'port-pol') scheduleRegionalBunkerSync({ immediate: true });
+                });
             });
+            window.addEventListener('seacharter:bunker-route-change', () => {
+                refreshBunkerRegionSelection();
+                if (String(document.getElementById('port-pol')?.value || '').trim()) {
+                    scheduleRegionalBunkerSync({ immediate: true });
+                }
+            });
+            const initialBunkerRegion = getCurrentBunkerRegionContext();
+            if (initialBunkerRegion.hasPol) {
+                scheduleRegionalBunkerSync({ immediate: true });
+            }
             void hydrateLatestEuCarbonPrice();
             void loadCoaClientProfiles();
 	            updateManualBalticSpotOverrideUi();

@@ -16,6 +16,15 @@
         return String(value || '').trim();
     }
 
+    function escapeHtml(value) {
+        return toText(value)
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+    }
+
     const RITMOS_BASE_PUERTO = {
         cinta_transportadora: 2500,
         camion_tolva: 1500,
@@ -587,9 +596,9 @@
     }
 
     const RISK_SCENARIOS = Object.freeze([
-        { key: 'base', label: 'Base', bunkerVolatility: 0, portDelayFactor: 1, offHireDays: 0 },
-        { key: 'moderate', label: 'Moderado', bunkerVolatility: 0.10, portDelayFactor: 1.2, offHireDays: 1 },
-        { key: 'critical', label: 'Critico', bunkerVolatility: 0.25, portDelayFactor: 1.5, offHireDays: 3 }
+        { key: 'best', label: 'Escenario Óptimo', speedFactor: 1.10, bunkerFactor: 0.95, portDelayDays: 0 },
+        { key: 'base', label: 'Escenario Base', speedFactor: 1, bunkerFactor: 1, portDelayDays: 0 },
+        { key: 'stress', label: 'Escenario Estrés', speedFactor: 1, bunkerFactor: 1.05, portDelayDays: 2 }
     ]);
 
     function roundMoney(value) {
@@ -619,12 +628,23 @@
     function pickSensitivityBase(baseResult = {}) {
         const fuelBreakdown = baseResult.fuelBreakdown || {};
         const ownerBreakdown = baseResult.ownerNetBreakdown || {};
+        const voyageFinancials = baseResult.voyageFinancials || {};
         const daysSea = Math.max(0, toNumber(baseResult.daysSea));
         const daysPort = Math.max(0, toNumber(baseResult.daysPort));
         const totalDays = Math.max(0, toNumber(baseResult.totalDays) || (daysSea + daysPort));
         const totalBunkers = Math.max(0, toNumber(baseResult.totalBunkers || fuelBreakdown.totalCost));
         const dailyOpex = Math.max(0, toNumber(baseResult.opex || baseResult.smartAdjustments?.opexDaily));
         const dailyCapex = Math.max(0, toNumber(baseResult.capexDaily || ownerBreakdown.capexDaily || baseResult.smartAdjustments?.capexDaily));
+        const cargo = Math.max(0, toNumber(baseResult.cargo || voyageFinancials.cargoQty));
+        const breakEven = Math.max(0, toNumber(baseResult.breakEvenArmador || voyageFinancials.breakEvenArmador || baseResult.breakEven));
+        const loadRate = Math.max(0, toNumber(baseResult.loadRate));
+        const dischargeRate = Math.max(0, toNumber(baseResult.dischRate));
+        const calculatedPortOperationDays = cargo > 0
+            ? ((loadRate > 0 ? cargo / loadRate : 0) + (dischargeRate > 0 ? cargo / dischargeRate : 0))
+            : 0;
+        const portOperationDays = calculatedPortOperationDays > 0
+            ? Math.min(daysPort || calculatedPortOperationDays, calculatedPortOperationDays)
+            : daysPort;
         const grossFreight = readCurrentFreightRevenue(baseResult);
         const knownVoyageCosts = Math.max(0, toNumber(ownerBreakdown.bunkerAndPortCosts));
         const knownOperatingCosts = Math.max(0, toNumber(ownerBreakdown.operatingCapitalCosts));
@@ -639,6 +659,9 @@
             daysPort,
             totalDays,
             totalBunkers,
+            cargo,
+            breakEven,
+            portOperationDays,
             dailyOperatingCapitalCost: dailyOpex + dailyCapex,
             beneficioNeto: calculatedNetProfit,
             netProfitOwner: calculatedNetProfit,
@@ -649,15 +672,15 @@
 
     function calculateSensitivityScenario(baseResult, scenario) {
         const base = pickSensitivityBase(baseResult);
-        const appState = typeof root.SeaCharterStore?.getState === 'function' ? root.SeaCharterStore.getState() : {};
-        const demurrageExposure = scenario.key === 'moderate'
-            ? Math.max(0, toNumber(baseResult.demurrageExposure?.financialExposure || appState.demurrageExposure?.financialExposure))
-            : 0;
         if (scenario.key === 'base') {
             return {
                 ...base,
                 key: scenario.key,
                 label: scenario.label,
+                projectedBreakEven: roundMoney(base.breakEven),
+                breakEvenDelta: 0,
+                savedPortDays: 0,
+                addedPortDelayDays: 0,
                 beneficioNeto: roundMoney(base.netProfitOwner),
                 netProfitOwner: roundMoney(base.netProfitOwner),
                 deltaBeneficio: 0,
@@ -667,55 +690,69 @@
             };
         }
 
-        const volatilityFactor = 1 + Math.max(0, toNumber(scenario.bunkerVolatility));
-        const portDelayFactor = Math.max(1, toNumber(scenario.portDelayFactor, 1));
         const fuelBreakdown = base.fuelBreakdown || {};
         const navigationCost = Math.max(0, toNumber(fuelBreakdown.navigation?.cost));
         const portCost = Math.max(0, toNumber(fuelBreakdown.port?.cost));
         const anchorageCost = Math.max(0, toNumber(fuelBreakdown.anchorage?.cost)) + Math.max(0, toNumber(fuelBreakdown.anchorageAuxiliary?.cost));
         const knownFuelCost = navigationCost + portCost + anchorageCost;
         const totalFuelCost = knownFuelCost > 0 ? knownFuelCost : base.totalBunkers;
-        const effectivePortCost = portCost > 0 ? portCost : Math.max(0, totalFuelCost - navigationCost - anchorageCost);
-        const stressedFuelCost = ((navigationCost + anchorageCost) + (effectivePortCost * portDelayFactor)) * volatilityFactor;
-        const bunkerDelta = stressedFuelCost - totalFuelCost;
-        const stressedPortDays = base.daysPort * portDelayFactor;
-        const addedPortDelayDays = Math.max(0, stressedPortDays - base.daysPort);
-        const offHireDays = Math.max(0, toNumber(scenario.offHireDays));
-        const portDelayOperatingCost = addedPortDelayDays * base.dailyOperatingCapitalCost;
-        const lostProfit = offHireDays * base.dailyOperatingCapitalCost;
-        const totalStressImpact = bunkerDelta + portDelayOperatingCost + lostProfit + demurrageExposure;
-        const netProfitOwner = base.netProfitOwner - totalStressImpact;
+        const effectivePortCost = portCost > 0 ? portCost : (base.daysPort > 0 ? totalFuelCost * (base.daysPort / Math.max(1, base.totalDays)) : 0);
+        const portBunkerDailyCost = base.daysPort > 0 ? effectivePortCost / base.daysPort : 0;
+        const speedFactor = Math.max(1, toNumber(scenario.speedFactor) || 1);
+        const savedPortDays = scenario.key === 'best'
+            ? Math.max(0, base.portOperationDays - (base.portOperationDays / speedFactor))
+            : 0;
+        const addedPortDelayDays = Math.max(0, toNumber(scenario.portDelayDays));
+        const adjustedPortFuelCost = Math.max(0, effectivePortCost - (savedPortDays * portBunkerDailyCost) + (addedPortDelayDays * portBunkerDailyCost));
+        const bunkerFactor = Math.max(0, toNumber(scenario.bunkerFactor) || 1);
+        const projectedBunkerCost = Math.max(0, ((totalFuelCost - effectivePortCost) + adjustedPortFuelCost) * bunkerFactor);
+        const bunkerDelta = projectedBunkerCost - totalFuelCost;
+        const dayDelta = addedPortDelayDays - savedPortDays;
+        const operatingCostDelta = dayDelta * base.dailyOperatingCapitalCost;
+        const totalCostDelta = bunkerDelta + operatingCostDelta;
+        const projectedBreakEven = base.cargo > 0
+            ? Math.max(0, base.breakEven + (totalCostDelta / base.cargo))
+            : base.breakEven;
+        const netProfitOwner = base.netProfitOwner - totalCostDelta;
 
         return {
             ...base,
             key: scenario.key,
             label: scenario.label,
+            projectedBreakEven: roundMoney(projectedBreakEven),
+            breakEvenDelta: roundMoney(projectedBreakEven - base.breakEven),
+            savedPortDays: roundMoney(savedPortDays),
+            addedPortDelayDays: roundMoney(addedPortDelayDays),
             beneficioNeto: roundMoney(netProfitOwner),
             netProfitOwner: roundMoney(netProfitOwner),
             deltaBeneficio: roundMoney(netProfitOwner - base.netProfitOwner),
-            totalBunkers: roundMoney(stressedFuelCost),
-            totalDays: roundMoney(base.daysSea + stressedPortDays + offHireDays),
+            totalBunkers: roundMoney(projectedBunkerCost),
+            totalDays: roundMoney(base.totalDays + dayDelta),
             stressImpact: {
                 bunkerDelta: roundMoney(bunkerDelta),
-                portDelayOperatingCost: roundMoney(portDelayOperatingCost),
-                lostProfit: roundMoney(lostProfit),
-                demurrageExposure: roundMoney(demurrageExposure),
-                total: roundMoney(totalStressImpact),
+                portDelayOperatingCost: roundMoney(operatingCostDelta),
+                lostProfit: 0,
+                demurrageExposure: 0,
+                total: roundMoney(totalCostDelta),
                 addedPortDelayDays: roundMoney(addedPortDelayDays),
-                offHireDays: roundMoney(offHireDays)
+                offHireDays: 0
             }
         };
     }
 
     function runSensitivityBatch(baseResult) {
         const scenarios = RISK_SCENARIOS.map((scenario) => calculateSensitivityScenario(baseResult, scenario));
-        const [base, moderate, critical] = scenarios;
+        const best = scenarios.find((scenario) => scenario.key === 'best');
+        const base = scenarios.find((scenario) => scenario.key === 'base');
+        const stress = scenarios.find((scenario) => scenario.key === 'stress');
         return {
+            best,
             base,
-            moderate,
-            critical,
+            stress,
+            moderate: stress,
+            critical: stress,
             scenarios,
-            risk: evaluateRisk(base, moderate, critical)
+            risk: evaluateRisk(base, stress, stress)
         };
     }
 
@@ -771,7 +808,7 @@
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <h2 class="text-sm font-black uppercase tracking-wide text-slate-900">Recomendaciones Activas</h2>
-                            <p class="mt-1 text-xs font-semibold text-slate-600">Smart Advisor para escenario moderado no viable.</p>
+                            <p class="mt-1 text-xs font-semibold text-slate-600">Smart Advisor para escenario de estrés no viable.</p>
                         </div>
                         <span class="inline-flex w-fit items-center rounded-md border border-red-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase text-red-700">NO VIABLE</span>
                     </div>
@@ -802,7 +839,7 @@
                 label: 'NO VIABLE',
                 severity: 'blocking',
                 blocksSave: true,
-                message: 'Escenario moderado en perdida. Revise flete, bunker, dias de puerto u OPEX antes de guardar la cotizacion.'
+                message: 'El escenario de estrés entra en pérdida. Revise flete, bunker, días de puerto u OPEX antes de guardar la cotización.'
             };
         }
         if (marginRatio < 0.05) {
@@ -811,7 +848,7 @@
                 label: 'MARGEN INSUFICIENTE',
                 severity: 'warning',
                 blocksSave: false,
-                message: 'Margen insuficiente: el beneficio moderado queda por debajo del 5% del flete bruto.'
+                message: 'Margen insuficiente: el beneficio bajo estrés queda por debajo del 5% del flete bruto.'
             };
         }
         return {
@@ -819,8 +856,30 @@
             label: 'VIABLE',
             severity: 'ok',
             blocksSave: false,
-            message: 'El escenario moderado mantiene beneficio positivo con margen suficiente.'
+            message: 'El escenario de estrés mantiene beneficio positivo con margen suficiente.'
         };
+    }
+
+    function readMarineForecast(baseResult = {}) {
+        const forecast = baseResult.marineForecast || root.SeaCharterMarineForecast || {};
+        const points = Array.isArray(forecast.points) ? forecast.points : [];
+        const pointWaves = points.map((point) => toNumber(point?.waveHeight)).filter((value) => value > 0);
+        const maxWaveHeight = Math.max(0, toNumber(forecast.maxWaveHeight), ...pointWaves);
+        const podWaveHeight = Math.max(0, toNumber(forecast.podWaveHeight || points.at(-1)?.waveHeight));
+        return {
+            maxWaveHeight,
+            podWaveHeight,
+            weatherRiskDetected: maxWaveHeight > 2 || podWaveHeight > 2
+        };
+    }
+
+    function buildFixtureClauseAdvice(baseResult, forecast) {
+        const pod = escapeHtml(baseResult.pod || 'POD no informado');
+        const referenceWave = forecast.podWaveHeight || forecast.maxWaveHeight;
+        if (forecast.weatherRiskDetected) {
+            return `Riesgo climático detectado en POD (${pod})${referenceWave > 0 ? `, con oleaje previsto de hasta ${referenceWave.toFixed(1)} m` : ''}. Sugerencia: añadir cláusula WWD (Weather Working Days) estricta, protección WIPON/WIBON y BAF para absorber la variación del bunker.`;
+        }
+        return `Escenario preventivo para POD (${pod}): reservar +2 días por demora portuaria y +5% de bunker. Sugerencia: incorporar BAF y definir WWD/WIPON-WIBON antes de cerrar el Fixture Recap.`;
     }
 
     function renderAutomaticRiskMatrix(baseResult, documentRef = root.document) {
@@ -839,10 +898,12 @@
         const alert = documentRef.getElementById('auto-risk-alert');
         const tbody = documentRef.getElementById('risk-matrix-body');
         const tooltip = documentRef.getElementById('auto-risk-tooltip');
+        const forecast = readMarineForecast(hydratedBaseResult);
+        batch.forecast = forecast;
         const statusClasses = {
-            green: 'rounded-md border border-emerald-500/50 bg-emerald-950/50 px-2 py-1 text-[10px] font-black uppercase text-emerald-200',
-            yellow: 'rounded-md border border-amber-500/50 bg-amber-950/50 px-2 py-1 text-[10px] font-black uppercase text-amber-200',
-            red: 'rounded-md border border-red-500/60 bg-red-950/50 px-2 py-1 text-[10px] font-black uppercase text-red-200'
+            green: 'rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-[10px] font-black uppercase text-emerald-800',
+            yellow: 'rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-black uppercase text-amber-800',
+            red: 'rounded-md border border-red-300 bg-red-50 px-2 py-1 text-[10px] font-black uppercase text-red-800'
         };
 
         if (badge) {
@@ -857,25 +918,75 @@
         if (alert) {
             alert.textContent = risk.message;
             alert.className = risk.status === 'red'
-                ? 'mt-3 rounded-lg border border-red-500/50 bg-red-950/45 px-3 py-2 text-xs font-bold text-red-100'
+                ? 'mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-800'
                 : (risk.status === 'yellow'
-                    ? 'mt-3 rounded-lg border border-amber-500/45 bg-amber-950/35 px-3 py-2 text-xs font-bold text-amber-100'
+                    ? 'mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800'
                     : 'hidden');
         }
         if (tbody) {
-            tbody.innerHTML = batch.scenarios.map((scenario) => {
-                const profitClass = scenario.beneficioNeto >= 0 ? 'text-emerald-300' : 'text-red-300';
-                const deltaClass = scenario.deltaBeneficio >= 0 ? 'text-emerald-300' : 'text-red-300';
-                return `
-                    <tr class="border-t border-slate-800">
-                        <td class="py-2 pr-3 font-black text-slate-200">${scenario.label}</td>
-                        <td class="px-3 py-2 text-right mono text-slate-300">${moneyFormatter.format(scenario.totalBunkers)}</td>
-                        <td class="px-3 py-2 text-right mono text-slate-300">${toNumber(scenario.totalDays).toFixed(1)} d</td>
-                        <td class="px-3 py-2 text-right mono ${profitClass}">${moneyFormatter.format(scenario.beneficioNeto)}</td>
-                        <td class="py-2 pl-3 text-right mono ${deltaClass}">${moneyFormatter.format(scenario.deltaBeneficio)}</td>
-                    </tr>
-                `;
-            }).join('');
+            const bestBreakEven = toNumber(batch.best?.projectedBreakEven);
+            const baseBreakEven = toNumber(batch.base?.projectedBreakEven);
+            const stressBreakEven = toNumber(batch.stress?.projectedBreakEven);
+            const thermometerRange = Math.max(0.01, stressBreakEven - bestBreakEven);
+            const basePosition = Math.min(92, Math.max(8, ((baseBreakEven - bestBreakEven) / thermometerRange) * 100));
+            const clauseAdvice = buildFixtureClauseAdvice(hydratedBaseResult, forecast);
+            const scenarioCards = [
+                {
+                    scenario: batch.best,
+                    variant: 'best',
+                    eyebrow: 'Escenario Óptimo · Best Case',
+                    formula: `+10% ritmo carga/descarga · -5% bunker`,
+                    delta: `${batch.best.savedPortDays.toFixed(2)} días ahorrados · ${moneyFormatter.format(Math.abs(batch.best.breakEvenDelta))}/MT menos`
+                },
+                {
+                    scenario: batch.base,
+                    variant: 'base',
+                    eyebrow: 'Escenario Base · Base Case',
+                    formula: 'Datos validados actualmente · Break-even oficial',
+                    delta: 'Punto central de negociación'
+                },
+                {
+                    scenario: batch.stress,
+                    variant: 'stress',
+                    eyebrow: 'Escenario Estrés · Worst Case',
+                    formula: `+2 días en puerto · +5% bunker${forecast.weatherRiskDetected ? ' · alerta de oleaje' : ''}`,
+                    delta: `+${moneyFormatter.format(Math.max(0, batch.stress.breakEvenDelta))}/MT vs. base`
+                }
+            ];
+            tbody.innerHTML = `
+                <div class="sensitivity-scenario-grid">
+                    ${scenarioCards.map(({ scenario, variant, eyebrow, formula, delta }) => `
+                        <article class="sensitivity-card sensitivity-card--${variant}">
+                            <div class="sensitivity-card__eyebrow"><span class="sensitivity-card__dot"></span>${eyebrow}</div>
+                            <div class="sensitivity-card__value">${moneyFormatter.format(scenario.projectedBreakEven)}<span class="sensitivity-card__unit">/ MT</span></div>
+                            <div class="sensitivity-card__formula">${formula}</div>
+                            <div class="sensitivity-card__delta">${delta}</div>
+                        </article>
+                    `).join('')}
+                </div>
+                <section class="negotiation-thermometer" style="--base-position: ${basePosition.toFixed(2)}%" aria-label="Termómetro de negociación entre escenario óptimo y escenario de estrés">
+                    <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                            <div class="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Termómetro de negociación</div>
+                            <div class="mt-1 text-xs font-bold text-slate-700">Posición actual frente al coste máximo proyectado</div>
+                        </div>
+                        <div class="font-mono text-xs font-black text-red-700">Exposición: +${moneyFormatter.format(Math.max(0, stressBreakEven - baseBreakEven))}/MT</div>
+                    </div>
+                    <div class="negotiation-thermometer__track"><span class="negotiation-thermometer__marker" aria-hidden="true"></span></div>
+                    <div class="negotiation-thermometer__labels">
+                        <span>Óptimo ${moneyFormatter.format(bestBreakEven)}</span>
+                        <span>Base ${moneyFormatter.format(baseBreakEven)}</span>
+                        <span>Estrés ${moneyFormatter.format(stressBreakEven)}</span>
+                    </div>
+                </section>
+                <aside class="fixture-clause-advice">
+                    <span class="fixture-clause-advice__icon"><i class="fa-solid fa-file-signature" aria-hidden="true"></i></span>
+                    <div>
+                        <div class="text-[10px] font-black uppercase tracking-[0.12em] text-amber-800">Generador de cláusulas · Fixture Recap</div>
+                        <p class="mt-1 text-xs font-bold leading-5">${clauseAdvice}</p>
+                    </div>
+                </aside>
+            `;
         }
         renderSmartAdvisor(batch, hydratedBaseResult, documentRef);
         root.SeaCharterSensitivityAnalysis = batch;
