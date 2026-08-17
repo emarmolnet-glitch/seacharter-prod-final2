@@ -588,6 +588,20 @@
             color: #14532d !important;
             cursor: text;
         }
+        #rate-disch[data-draft-calc-mode="auto"],
+        #rate-disch[data-draft-calc-mode="auto"].required-use-highlight {
+            background-color: #f3f4f6 !important;
+            border-color: #e5e7eb !important;
+            color: #475569 !important;
+            cursor: not-allowed !important;
+        }
+        #rate-disch[data-draft-calc-mode="manual"],
+        #rate-disch[data-draft-calc-mode="manual"].required-use-highlight {
+            background-color: #dcfce7 !important;
+            border-color: #86efac !important;
+            color: #14532d !important;
+            cursor: text !important;
+        }
 
         /* Restauración de visibilidad en desplegables select, opciones e inputs de fecha/calendario */
         select option {
@@ -8528,22 +8542,22 @@
                                     <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                                         <div>
                                             <label id="label-gruas-swl-pol" for="gruas-swl-pol" class="block text-[10px] font-semibold text-slate-600 mb-0.5">SWL Grúa (MT)</label>
-                                            <input type="number" id="gruas-swl-pol" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="0.1" oninput="calcularRitmoGrua('pol')">
+                                            <input type="number" id="gruas-swl-pol" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="0.1" oninput="updateCargoOperationDraft(this.id, this.value)">
                                         </div>
                                         <div>
                                             <label for="gruas-tara-pol" class="block text-[10px] font-semibold text-slate-600 mb-0.5">Tara Accesorio (MT)</label>
-                                            <input type="number" id="gruas-tara-pol" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="0.1" oninput="calcularRitmoGrua('pol')">
+                                            <input type="number" id="gruas-tara-pol" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="0.1" oninput="updateCargoOperationDraft(this.id, this.value)">
                                         </div>
                                         <div>
                                             <label for="gruas-ciclos-pol" class="block text-[10px] font-semibold text-slate-600 mb-0.5">Ciclos/Hora</label>
-                                            <input type="number" id="gruas-ciclos-pol" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="1" oninput="calcularRitmoGrua('pol')">
+                                            <input type="number" id="gruas-ciclos-pol" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="1" oninput="updateCargoOperationDraft(this.id, this.value)">
                                         </div>
                                         <div>
                                             <div class="flex justify-between items-center mb-0.5">
                                                 <label for="gruas-eficiencia-num-pol" class="block text-[10px] font-semibold text-slate-600">Eficiencia (%)<span id="gruas-eficiencia-riesgo-pol" class="hidden ml-1 align-middle rounded px-1 text-[9px] font-black uppercase tracking-wide"></span></label>
-                                                <input type="number" id="gruas-eficiencia-num-pol" class="input-gc font-bold text-slate-800 text-[11px] py-0 px-1 w-12 text-right" value="0" placeholder="0" min="0" max="100" step="1" oninput="syncEficienciaGrua('pol', 'num')">
+                                                <input type="number" id="gruas-eficiencia-num-pol" class="input-gc font-bold text-slate-800 text-[11px] py-0 px-1 w-12 text-right" value="0" placeholder="0" min="0" max="100" step="1" oninput="updateCraneEfficiencyDraft('pol', 'num', this.value)">
                                             </div>
-                                            <input type="range" id="gruas-eficiencia-slider-pol" class="w-full accent-blue-600 h-1.5 cursor-pointer mt-1" value="100" min="0" max="100" step="1" aria-describedby="gruas-eficiencia-riesgo-pol" oninput="syncEficienciaGrua('pol', 'slider')">
+                                            <input type="range" id="gruas-eficiencia-slider-pol" class="w-full accent-blue-600 h-1.5 cursor-pointer mt-1" value="100" min="0" max="100" step="1" aria-describedby="gruas-eficiencia-riesgo-pol" oninput="updateCraneEfficiencyDraft('pol', 'slider', this.value)">
                                         </div>
                                     </div>
                                     <div id="gruas-derivacion-pol" class="mt-2 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-[10px] font-semibold text-blue-800">
@@ -8576,22 +8590,22 @@
                                     <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                                         <div>
                                             <label id="label-gruas-swl-pod" for="gruas-swl-pod" class="block text-[10px] font-semibold text-slate-600 mb-0.5">SWL Grúa (MT)</label>
-                                            <input type="number" id="gruas-swl-pod" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="0.1" oninput="calcularRitmoGrua('pod')">
+                                            <input type="number" id="gruas-swl-pod" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="0.1" oninput="updateCargoOperationDraft(this.id, this.value)">
                                         </div>
                                         <div>
                                             <label for="gruas-tara-pod" class="block text-[10px] font-semibold text-slate-600 mb-0.5">Tara Accesorio (MT)</label>
-                                            <input type="number" id="gruas-tara-pod" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="0.1" oninput="calcularRitmoGrua('pod')">
+                                            <input type="number" id="gruas-tara-pod" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="0.1" oninput="updateCargoOperationDraft(this.id, this.value)">
                                         </div>
                                         <div>
                                             <label for="gruas-ciclos-pod" class="block text-[10px] font-semibold text-slate-600 mb-0.5">Ciclos/Hora</label>
-                                            <input type="number" id="gruas-ciclos-pod" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="1" oninput="calcularRitmoGrua('pod')">
+                                            <input type="number" id="gruas-ciclos-pod" class="input-gc font-bold text-slate-800 text-xs py-1 px-2 w-full" value="0" placeholder="0" min="0" step="1" oninput="updateCargoOperationDraft(this.id, this.value)">
                                         </div>
                                         <div>
                                             <div class="flex justify-between items-center mb-0.5">
                                                 <label for="gruas-eficiencia-num-pod" class="block text-[10px] font-semibold text-slate-600">Eficiencia (%)<span id="gruas-eficiencia-riesgo-pod" class="hidden ml-1 align-middle rounded px-1 text-[9px] font-black uppercase tracking-wide"></span></label>
-                                                <input type="number" id="gruas-eficiencia-num-pod" class="input-gc font-bold text-slate-800 text-[11px] py-0 px-1 w-12 text-right" value="0" placeholder="0" min="0" max="100" step="1" oninput="syncEficienciaGrua('pod', 'num')">
+                                                <input type="number" id="gruas-eficiencia-num-pod" class="input-gc font-bold text-slate-800 text-[11px] py-0 px-1 w-12 text-right" value="0" placeholder="0" min="0" max="100" step="1" oninput="updateCraneEfficiencyDraft('pod', 'num', this.value)">
                                             </div>
-                                            <input type="range" id="gruas-eficiencia-slider-pod" class="w-full accent-blue-600 h-1.5 cursor-pointer mt-1" value="100" min="0" max="100" step="1" aria-describedby="gruas-eficiencia-riesgo-pod" oninput="syncEficienciaGrua('pod', 'slider')">
+                                            <input type="range" id="gruas-eficiencia-slider-pod" class="w-full accent-blue-600 h-1.5 cursor-pointer mt-1" value="100" min="0" max="100" step="1" aria-describedby="gruas-eficiencia-riesgo-pod" oninput="updateCraneEfficiencyDraft('pod', 'slider', this.value)">
                                         </div>
                                     </div>
                                     <div id="gruas-derivacion-pod" class="mt-2 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-[10px] font-semibold text-blue-800">
@@ -8607,7 +8621,7 @@
                                         <button type="button" id="btn-ritmo-manual-pol" data-ritmo-mode-btn="manual" onclick="setRitmoMode('manual', 'pol')" class="px-2 py-0.5 rounded-r-md font-bold transition cursor-pointer bg-gray-100 text-gray-500 hover:bg-gray-200" aria-pressed="false">Manual</button>
                                     </div>
                                 </div>
-                                <input type="number" id="rate-load" class="input-gc action-required-field required-use-highlight text-action-required font-bold" value="" step="any" oninput="marcarRitmoManual('pol')">
+                                <input type="number" id="rate-load" class="input-gc action-required-field required-use-highlight text-action-required font-bold bg-slate-100 cursor-not-allowed" value="" step="any" readonly aria-readonly="true" data-draft-calc-mode="auto" title="Ritmo Real derivado automáticamente de las grúas (solo lectura)." onfocus="captureRateDraftStandard('pol')" oninput="updateRealRateDraft('pol', this.value)">
                                 <div id="pol-opex-impact-alert" class="hidden flex items-center p-2 mt-2 text-red-700 bg-red-100 border border-red-300 rounded text-sm font-semibold shadow-sm" role="alert" aria-live="polite"></div>
                                 <div id="delta-dias-badge-pol" class="hidden mt-1 text-[11px] font-bold"></div>
                                 <div id="rate-ref-helper-pol" class="mt-1 text-[10px] text-slate-500 font-medium leading-tight">
@@ -8623,7 +8637,7 @@
                                         <button type="button" id="btn-ritmo-manual-pod" data-ritmo-mode-btn="manual" data-pod-calc-mode="manual" onclick="setRitmoMode('manual', 'pod')" class="px-2 py-0.5 rounded-r-md font-bold transition cursor-pointer bg-gray-100 text-gray-500 hover:bg-gray-200" aria-pressed="false">Manual</button>
                                     </div>
                                 </div>
-                                <input type="number" id="rate-disch" class="input-gc action-required-field required-use-highlight text-action-required font-bold bg-gray-100 border-gray-200 cursor-not-allowed" value="" step="any" readonly aria-readonly="true" data-pod-calc-mode="auto" title="Ritmo Real POD derivado automáticamente (solo lectura). Cambia a Manual para editarlo." oninput="marcarRitmoManual('pod')">
+                                <input type="number" id="rate-disch" class="input-gc action-required-field required-use-highlight text-action-required font-bold bg-gray-100 border-gray-200 cursor-not-allowed" value="" step="any" readonly aria-readonly="true" data-pod-calc-mode="auto" data-draft-calc-mode="auto" title="Ritmo Real POD derivado automáticamente (solo lectura). Cambia a Manual para editarlo." onfocus="captureRateDraftStandard('pod')" oninput="updateRealRateDraft('pod', this.value)">
                                 <div id="pod-opex-impact-alert" class="hidden flex items-center p-2 mt-2 text-red-700 bg-red-100 border border-red-300 rounded text-sm font-semibold shadow-sm" role="alert" aria-live="polite"></div>
                                 <div id="delta-dias-badge-pod" class="hidden mt-1 text-[11px] font-bold"></div>
                                 <div id="rate-ref-helper-pod" class="mt-1 text-[10px] text-slate-500 font-medium leading-tight">
@@ -8633,11 +8647,11 @@
                             </div>
                             <div id="contenedor-gruas-pol" class="input-group">
                                 <label id="label-ritmo-nominal-pol" class="text-action-required flex items-center min-h-[24px]">Nº Grúas POL</label>
-                                <input type="number" id="ritmo_nominal_pol" class="input-gc action-required-field text-action-required font-bold" value="0" placeholder="0" min="0" step="1" required oninput="marcarGruasManual('pol')">
+                                <input type="number" id="ritmo_nominal_pol" class="input-gc action-required-field text-action-required font-bold" value="0" placeholder="0" min="0" step="1" required oninput="updateCraneCountDraft('pol', this.value)">
                             </div>
                             <div id="contenedor-gruas-pod" class="input-group">
                                 <label id="label-ritmo-nominal-pod" class="text-action-required flex items-center min-h-[24px]">Nº Grúas POD</label>
-                                <input type="number" id="ritmo_nominal_pod" class="input-gc action-required-field text-action-required font-bold" value="0" placeholder="0" min="0" step="1" required oninput="marcarGruasManual('pod')">
+                                <input type="number" id="ritmo_nominal_pod" class="input-gc action-required-field text-action-required font-bold" value="0" placeholder="0" min="0" step="1" required oninput="updateCraneCountDraft('pod', this.value)">
                             </div>
                         </div>
 
@@ -8858,21 +8872,21 @@
                                         <span id="label-price-vlsfo" class="text-emerald-400 font-bold">PRECIO VLSFO (MAR)</span>
                                         <a href="https://www.bunkerindex.com/" target="_blank" class="text-indigo-400 hover:text-indigo-300" title="Ver en Bunker Index"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
                                     </label>
-                                    <input type="number" id="price-sea" class="input-gc required-use-highlight text-emerald-300 font-bold" value="610" step="any" oninput="runEngine()">
+                                    <input type="number" id="price-sea" class="input-gc required-use-highlight text-emerald-300 font-bold" value="610" step="any" oninput="markManualBunkerPrice(this); runEngine()">
                                 </div>
                                 <div class="input-group">
                                     <label class="flex justify-between items-center w-full">
                                         <span id="label-price-ifo" class="text-emerald-400 font-bold">PRECIO IFO 380 (SCRUBBER)</span>
                                         <a href="https://www.bunkerindex.com/" target="_blank" class="text-indigo-400 hover:text-indigo-300" title="Ver en Bunker Index"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
                                     </label>
-                                    <input type="number" id="price-ifo" class="input-gc required-use-highlight text-emerald-300 font-bold" value="0" step="any" oninput="runEngine()">
+                                    <input type="number" id="price-ifo" class="input-gc required-use-highlight text-emerald-300 font-bold" value="0" step="any" oninput="markManualBunkerPrice(this); runEngine()">
                                 </div>
                                 <div class="input-group">
                                     <label class="flex justify-between items-center w-full">
                                         <span id="label-price-mgo" class="text-emerald-400 font-bold">PRECIO MGO (PUERTO)</span>
                                         <a href="https://www.bunkerindex.com/" target="_blank" class="text-indigo-400 hover:text-indigo-300" title="Ver en Bunker Index"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
                                     </label>
-                                    <input type="number" id="price-port" class="input-gc required-use-highlight text-emerald-300 font-bold" value="830" step="any" oninput="runEngine()">
+                                    <input type="number" id="price-port" class="input-gc required-use-highlight text-emerald-300 font-bold" value="830" step="any" oninput="markManualBunkerPrice(this); runEngine()">
                                 </div>
                             </div>
                             <p id="bunker-index-cache-label" class="-mt-2 mb-4 text-xs italic text-slate-500">Esperando cotización del día...</p>
@@ -30236,6 +30250,137 @@
         }
         window.updateSection2LocalState = updateSection2LocalState;
 
+        const CARGO_OPERATION_DRAFT_IDS = Object.freeze([
+            'gruas-swl-pol',
+            'gruas-tara-pol',
+            'gruas-ciclos-pol',
+            'gruas-eficiencia-num-pol',
+            'gruas-eficiencia-slider-pol',
+            'gruas-swl-pod',
+            'gruas-tara-pod',
+            'gruas-ciclos-pod',
+            'gruas-eficiencia-num-pod',
+            'gruas-eficiencia-slider-pod',
+            'rate-load',
+            'rate-disch',
+            'ritmo_nominal_pol',
+            'ritmo_nominal_pod'
+        ]);
+
+        function updateCargoOperationDraft(id, value) {
+            if (!CARGO_OPERATION_DRAFT_IDS.includes(id)) return;
+            updateSection2LocalState(id, value);
+            window.section2LocalState[`manualInput_${id}`] = true;
+        }
+        window.updateCargoOperationDraft = updateCargoOperationDraft;
+
+        function updateCraneEfficiencyDraft(side = 'pol', source = 'num', value = '') {
+            const numId = side === 'pod' ? 'gruas-eficiencia-num-pod' : 'gruas-eficiencia-num-pol';
+            const sliderId = side === 'pod' ? 'gruas-eficiencia-slider-pod' : 'gruas-eficiencia-slider-pol';
+            const normalizedValue = String(value ?? '');
+            const peerId = source === 'slider' ? numId : sliderId;
+            const peer = document.getElementById(peerId);
+            if (peer) peer.value = normalizedValue;
+            updateCargoOperationDraft(numId, normalizedValue);
+            updateCargoOperationDraft(sliderId, normalizedValue);
+        }
+        window.updateCraneEfficiencyDraft = updateCraneEfficiencyDraft;
+
+        function updateCraneCountDraft(side = 'pol', value = '') {
+            const inputId = side === 'pod' ? 'ritmo_nominal_pod' : 'ritmo_nominal_pol';
+            updateCargoOperationDraft(inputId, value);
+            window.section2LocalState[`craneCountManual_${side}`] = true;
+        }
+        window.updateCraneCountDraft = updateCraneCountDraft;
+
+        function updateRealRateDraft(side = 'pol', value = '') {
+            const inputId = side === 'pod' ? 'rate-disch' : 'rate-load';
+            updateCargoOperationDraft(inputId, value);
+            window.section2LocalState[`ritmoMode_${side}`] = 'manual';
+            renderRateDraftFeedback(side, value);
+        }
+        window.updateRealRateDraft = updateRealRateDraft;
+
+        function resolveRateDraftStandard(side = 'pol') {
+            const localKey = `rateStandard_${side}`;
+            const localValue = Number(window.section2LocalState[localKey]);
+            if (Number.isFinite(localValue) && localValue > 0) return localValue;
+
+            const inputId = side === 'pod' ? 'rate-disch' : 'rate-load';
+            const shadowKey = side === 'pod' ? 'tpdAutoSombraPod' : 'tpdAutoSombraPol';
+            const input = document.getElementById(inputId);
+            const stateValue = Number(window.State?.[shadowKey]);
+            const datasetValue = Number(input?.dataset?.tpdAutoSombra);
+            const visibleValue = Number(input?.value);
+            const standard = [stateValue, datasetValue, visibleValue]
+                .find((candidate) => Number.isFinite(candidate) && candidate > 0) || 0;
+            if (standard > 0) window.section2LocalState[localKey] = standard;
+            return standard;
+        }
+
+        function captureRateDraftStandard(side = 'pol') {
+            return resolveRateDraftStandard(side);
+        }
+        window.captureRateDraftStandard = captureRateDraftStandard;
+
+        function renderRateDraftFeedback(side = 'pol', value = '', options = {}) {
+            const badgeId = side === 'pod' ? 'delta-dias-badge-pod' : 'delta-dias-badge-pol';
+            const badgeEl = document.getElementById(badgeId);
+            const cargo = Math.max(0, Number(document.getElementById('cargo-qty')?.value) || 0);
+            const standardRate = resolveRateDraftStandard(side);
+            const draftRate = Math.max(0, Number(value) || 0);
+            const delta = options.pristine === true
+                ? 0
+                : (calcularDeltaDias(cargo, standardRate, draftRate) ?? 0);
+            const negativeImpact = delta > 0.001;
+
+            renderOpexImpactAlert(side, negativeImpact ? delta : 0);
+            if (badgeEl) {
+                badgeEl.className = 'mt-1 text-[11px] font-bold inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200';
+                badgeEl.textContent = negativeImpact ? '' : 'Sin desviación vs. Estándar';
+                badgeEl.classList.toggle('hidden', negativeImpact);
+            }
+            return delta;
+        }
+        window.renderRateDraftFeedback = renderRateDraftFeedback;
+
+        function commitCargoOperationDraft() {
+            CARGO_OPERATION_DRAFT_IDS.forEach((id) => {
+                if (!Object.prototype.hasOwnProperty.call(window.section2LocalState, id)) return;
+                const input = document.getElementById(id);
+                if (input) {
+                    input.value = window.section2LocalState[id];
+                    if (window.section2LocalState[`manualInput_${id}`] === true && id.startsWith('gruas-')) {
+                        input.dataset.manualOverride = 'true';
+                    }
+                }
+            });
+
+            ['pol', 'pod'].forEach((side) => {
+                const modeKey = `ritmoMode_${side}`;
+                const committedMode = window.section2LocalState[modeKey]
+                    || (isRitmoModoManual(side) ? 'manual' : 'auto');
+                setRitmoMode(committedMode, side, { commit: true, deferCalculations: true });
+
+                if (window.section2LocalState[`craneCountManual_${side}`] === true) {
+                    const inputId = side === 'pod' ? 'ritmo_nominal_pod' : 'ritmo_nominal_pol';
+                    const input = document.getElementById(inputId);
+                    if (input) input.dataset.manualOverride = 'true';
+                }
+            });
+
+            CARGO_OPERATION_DRAFT_IDS.forEach((id) => {
+                delete window.section2LocalState[id];
+                delete window.section2LocalState[`manualInput_${id}`];
+            });
+            ['pol', 'pod'].forEach((side) => {
+                delete window.section2LocalState[`ritmoMode_${side}`];
+                delete window.section2LocalState[`craneCountManual_${side}`];
+                delete window.section2LocalState[`rateStandard_${side}`];
+            });
+        }
+        window.commitCargoOperationDraft = commitCargoOperationDraft;
+
         async function validarYCalcularSeccion2(options = {}) {
             const deferDependentCalculations = options.deferDependentCalculations === true;
             const showFeedback = options.showFeedback !== false;
@@ -30245,6 +30390,8 @@
 
             const cargoQty = num('cargo-qty');
             const centralizedClass = typeof getCentralizedVesselClass === 'function' ? getCentralizedVesselClass() : '';
+
+            commitCargoOperationDraft();
 
             if (window.State) {
                 window.State.vesselName = val('nombre-buque-calculadora');
@@ -30278,13 +30425,15 @@
                         if (ciclosEl && ciclosEl.dataset.manualOverride !== 'true' && typeof getCiclosForMethod === 'function') {
                             ciclosEl.value = String(getCiclosForMethod(label, centralizedClass));
                         }
-                        if (typeof getAutoEficienciaForMethodAndCategory === 'function' && typeof setEficienciaGruaValor === 'function') {
+                        const eficienciaId = side === 'pod' ? 'gruas-eficiencia-num-pod' : 'gruas-eficiencia-num-pol';
+                        const eficienciaEl = el(eficienciaId);
+                        if (eficienciaEl?.dataset.manualOverride !== 'true' && typeof getAutoEficienciaForMethodAndCategory === 'function' && typeof setEficienciaGruaValor === 'function') {
                             const category = typeof getActiveCargoCategory === 'function' ? getActiveCargoCategory() : val('cargo-type');
                             const autoEficiencia = getAutoEficienciaForMethodAndCategory(label, category, centralizedClass);
                             setEficienciaGruaValor(side, autoEficiencia);
                         }
                         if (typeof calcularRitmoGrua === 'function') {
-                            calcularRitmoGrua(side);
+                            calcularRitmoGrua(side, { deferEngine: true });
                         }
                     }
                 }
@@ -30335,9 +30484,38 @@
         }
 
         async function consultCurrentCostsAndPdasForMaster() {
-            await autoFillBunkers({ managedByMaster: true });
-            await autoFillPDA('pol', false, { deferEngine: true });
-            await autoFillPDA('pod', false, { deferEngine: true });
+            const warnings = [];
+
+            await runMasterOptionalStage(
+                'Bunkerindex',
+                () => autoFillBunkers({ managedByMaster: true }),
+                'Aviso: No se pudo sincronizar el precio del bunker actual, usando último precio guardado.',
+                warnings
+            );
+            await runMasterOptionalStage(
+                'PDA POL',
+                () => autoFillPDA('pol', false, { deferEngine: true }),
+                'Aviso: No se pudo actualizar la PDA POL; se mantiene el valor disponible.',
+                warnings
+            );
+            await runMasterOptionalStage(
+                'PDA POD',
+                () => autoFillPDA('pod', false, { deferEngine: true }),
+                'Aviso: No se pudo actualizar la PDA POD; se mantiene el valor disponible.',
+                warnings
+            );
+            return { warnings };
+        }
+
+        async function runMasterOptionalStage(label, task, warningMessage, warnings = null) {
+            try {
+                return await task();
+            } catch (error) {
+                console.warn(`${label} no disponible; el cálculo continúa con valores existentes.`, error);
+                if (Array.isArray(warnings)) warnings.push(warningMessage);
+                if (typeof showToast === 'function') showToast(warningMessage, 'warning');
+                return null;
+            }
         }
 
         function resolveMasterVesselCalculationBranch() {
@@ -30429,13 +30607,27 @@
             try {
                 const calculationResult = await SeaCharterStore.batchAsync(async () => {
                     await validarYCalcularSeccion2({ deferDependentCalculations: true, showFeedback: false });
+                    ensureSafeBunkerPrices({ deferEngine: true });
                     await consultCurrentCostsAndPdasForMaster();
-                    await recalculateAdjustedAndSave({ managedByMaster: true });
-                    await synchronizeMasterRouteCalculations();
-                    calculateMasterFreightAndDemurrage();
-                    executeBatchedCalculationsCore();
+                    ensureSafeBunkerPrices({ deferEngine: true });
+                    await runMasterOptionalStage(
+                        'Ajustes inteligentes',
+                        () => recalculateAdjustedAndSave({ managedByMaster: true }),
+                        'Aviso: No se pudieron actualizar todos los ajustes remotos; se usan los datos actuales del viaje.'
+                    );
+                    await runMasterOptionalStage(
+                        'Referencia de mercado',
+                        () => synchronizeMasterRouteCalculations(),
+                        'Aviso: La referencia externa de mercado no está disponible; se continúa con el cálculo local.'
+                    );
+                    await runMasterOptionalStage(
+                        'Flete y demoras sugeridos',
+                        () => Promise.resolve(calculateMasterFreightAndDemurrage()),
+                        'Aviso: No se pudieron actualizar todas las sugerencias; se calcula con los valores disponibles.'
+                    );
+                    const localCalculation = executeBatchedCalculationsCore();
                     if (typeof evaluateReactiveSyncStatus === 'function') evaluateReactiveSyncStatus();
-                    return { ...State };
+                    return { ...State, ...(localCalculation || {}) };
                 });
 
                 if (typeof showToast === 'function') {
@@ -32463,6 +32655,16 @@
         const BUNKER_INDEX_CACHE_MAX_AGE_MS = 48 * 60 * 60 * 1000;
         const BUNKER_MARKET_SYNC_ENDPOINT = '/api/market/sync-bunkerindex';
         const BUNKER_ARBITRAGE_ENDPOINT = '/api/routing/bunker-arbitrage';
+        const HISTORICAL_BUNKER_FALLBACK_USD = Object.freeze({
+            vlsfo: 600,
+            ifo380: 600,
+            mgo: 600
+        });
+        const BUNKER_INPUT_BINDINGS = Object.freeze({
+            vlsfo: 'price-sea',
+            ifo380: 'price-ifo',
+            mgo: 'price-port'
+        });
         let isFetchingBunker = false;
         let isSearchingBunkerArbitrage = false;
         let bunkerDateLabel = '';
@@ -32477,7 +32679,7 @@
             label.textContent = dateLabel
                 ? `Datos registrados: ${dateLabel}`
                 : 'Esperando cotización del día...';
-            label.classList.remove('text-red-400');
+            label.classList.remove('text-red-400', 'text-amber-400');
             label.classList.add('text-slate-500');
         }
 
@@ -32502,13 +32704,13 @@
             const warning = document.getElementById('bunker-market-stale-warning');
             if (!status || !label || !warning) return;
 
-            if (options.error) {
-                label.textContent = options.error;
+            if (options.error || options.warning) {
+                label.textContent = options.warning || options.error;
                 warning.classList.remove('hidden');
-                warning.classList.remove('text-amber-400');
-                warning.classList.add('text-red-400');
-                status.classList.remove('text-slate-500', 'text-amber-300');
-                status.classList.add('text-red-300');
+                warning.classList.remove('text-red-400');
+                warning.classList.add('text-amber-400');
+                status.classList.remove('text-slate-500', 'text-red-300');
+                status.classList.add('text-amber-300');
                 return;
             }
 
@@ -32537,32 +32739,58 @@
         function updateBunkerIndexErrorLabel(message) {
             const label = document.getElementById('bunker-index-cache-label');
             if (!label) return;
-            label.textContent = message || 'Error al consultar Bunkerindex.';
-            label.classList.remove('text-slate-500');
-            label.classList.add('text-red-400');
+            label.textContent = message || 'Bunkerindex no disponible';
+            label.classList.remove('text-slate-500', 'text-red-400');
+            label.classList.add('text-amber-400');
         }
 
-        function applyBunkerIndexData(cache) {
-            const vlsfoPrice = Number(cache?.vlsfo);
-            const ifoPrice = Number(cache?.ifo380);
-            const mgoPrice = Number(cache?.mgo);
-            if (Number.isFinite(vlsfoPrice)) {
-                const vlsfoInput = document.getElementById('price-sea');
-                if (vlsfoInput) vlsfoInput.value = vlsfoPrice.toFixed(2);
-            }
-            if (Number.isFinite(ifoPrice)) {
-                const ifoInput = document.getElementById('price-ifo');
-                if (ifoInput) ifoInput.value = ifoPrice.toFixed(2);
-            }
-            if (Number.isFinite(mgoPrice)) {
-                const mgoInput = document.getElementById('price-port');
-                if (mgoInput) mgoInput.value = mgoPrice.toFixed(2);
-            }
+        function markManualBunkerPrice(input) {
+            if (!input) return false;
+            const value = Number(input.value);
+            input.dataset.userOverride = Number.isFinite(value) && value > 0 ? 'true' : 'false';
+            return input.dataset.userOverride === 'true';
+        }
+        window.markManualBunkerPrice = markManualBunkerPrice;
+
+        function resolveSafeBunkerPrice(inputId, marketValue, fallbackValue = 600) {
+            const input = document.getElementById(inputId);
+            const currentValue = Number(input?.value);
+            const hasManualOverride = input?.dataset?.userOverride === 'true'
+                && Number.isFinite(currentValue)
+                && currentValue > 0;
+            if (hasManualOverride) return currentValue;
+
+            const synchronizedValue = Number(marketValue);
+            if (Number.isFinite(synchronizedValue) && synchronizedValue > 0) return synchronizedValue;
+            if (Number.isFinite(currentValue) && currentValue > 0) return currentValue;
+            return Number.isFinite(Number(fallbackValue)) && Number(fallbackValue) > 0
+                ? Number(fallbackValue)
+                : 600;
+        }
+
+        function applyBunkerIndexData(cache = {}, options = {}) {
+            const resolved = {
+                vlsfo: resolveSafeBunkerPrice(BUNKER_INPUT_BINDINGS.vlsfo, cache?.vlsfo, HISTORICAL_BUNKER_FALLBACK_USD.vlsfo),
+                ifo380: resolveSafeBunkerPrice(BUNKER_INPUT_BINDINGS.ifo380, cache?.ifo380, HISTORICAL_BUNKER_FALLBACK_USD.ifo380),
+                mgo: resolveSafeBunkerPrice(BUNKER_INPUT_BINDINGS.mgo, cache?.mgo, HISTORICAL_BUNKER_FALLBACK_USD.mgo)
+            };
+            const fallbackUsed = Boolean(cache?.fallbackUsed) || Object.keys(BUNKER_INPUT_BINDINGS)
+                .some((key) => !Number.isFinite(Number(cache?.[key])) || Number(cache?.[key]) <= 0);
+            Object.entries(BUNKER_INPUT_BINDINGS).forEach(([key, inputId]) => {
+                const input = document.getElementById(inputId);
+                if (input) input.value = resolved[key].toFixed(2);
+            });
             bunkerDateLabel = cache?.date || '';
             updateBunkerIndexCacheLabel(bunkerDateLabel);
             updateBunkerMarketSyncStatus(cache);
-            runEngine();
+            if (options.deferEngine !== true && typeof runEngine === 'function') runEngine();
+            return { ...cache, ...resolved, fallbackUsed };
         }
+
+        function ensureSafeBunkerPrices(options = {}) {
+            return applyBunkerIndexData({}, options);
+        }
+        window.ensureSafeBunkerPrices = ensureSafeBunkerPrices;
 
         function readBunkerIndexCache(options = {}) {
             if (typeof localStorage === 'undefined') return null;
@@ -32594,21 +32822,22 @@
 
         function normalizeBunkerMarketPayload(payload) {
             const market = payload?.prices || payload?.data?.prices || payload?.data || payload || {};
-            const vlsfo = Number(market.vlsfo ?? market.VLSFO ?? market.vlsfo_price);
-            const ifo380 = Number(market.ifo380 ?? market.IFO380 ?? market.ifo_380 ?? market.ifo380_price);
-            const mgo = Number(market.mgo ?? market.MGO ?? market.mgo_price);
-            if (![vlsfo, ifo380, mgo].every((price) => Number.isFinite(price) && price > 0)) {
-                throw new Error('La respuesta de Bunkerindex no contiene precios válidos.');
-            }
+            const rawPrices = {
+                vlsfo: Number(market.vlsfo ?? market.VLSFO ?? market.vlsfo_price),
+                ifo380: Number(market.ifo380 ?? market.IFO380 ?? market.ifo_380 ?? market.ifo380_price),
+                mgo: Number(market.mgo ?? market.MGO ?? market.mgo_price)
+            };
+            const fallbackUsed = Object.values(rawPrices).some((price) => !Number.isFinite(price) || price <= 0);
 
             const syncedAtValue = payload?.syncedAt || payload?.lastSyncedAt || payload?.updatedAt || market.syncedAt;
             const parsedSyncedAt = Date.parse(String(syncedAtValue || ''));
             return {
-                vlsfo,
-                ifo380,
-                mgo,
+                vlsfo: rawPrices.vlsfo > 0 ? rawPrices.vlsfo : HISTORICAL_BUNKER_FALLBACK_USD.vlsfo,
+                ifo380: rawPrices.ifo380 > 0 ? rawPrices.ifo380 : HISTORICAL_BUNKER_FALLBACK_USD.ifo380,
+                mgo: rawPrices.mgo > 0 ? rawPrices.mgo : HISTORICAL_BUNKER_FALLBACK_USD.mgo,
                 date: payload?.sourceDate || market.sourceDate || market.date || getTodayBunkerLabel(),
-                cachedAt: Number.isFinite(parsedSyncedAt) ? parsedSyncedAt : Date.now()
+                cachedAt: Number.isFinite(parsedSyncedAt) ? parsedSyncedAt : Date.now(),
+                fallbackUsed
             };
         }
 
@@ -32616,8 +32845,12 @@
             if (isFetchingBunker) return;
             const freshCache = options.forceRefresh === true ? null : readBunkerIndexCache();
             if (freshCache) {
-                applyBunkerIndexData(freshCache);
-                return freshCache;
+                const appliedCache = applyBunkerIndexData(freshCache);
+                if (appliedCache.fallbackUsed) {
+                    updateBunkerIndexErrorLabel('Bunkerindex no disponible · fallback histórico activo');
+                    updateBunkerMarketSyncStatus(appliedCache, { warning: 'Bunkerindex no disponible' });
+                }
+                return appliedCache;
             }
 
             const btn = document.getElementById('btn-consult-bunker');
@@ -32656,14 +32889,29 @@
                     localStorage.setItem(BUNKER_INDEX_DATA_KEY, JSON.stringify(nextCache));
                 }
 
-                applyBunkerIndexData(nextCache);
-                if (!managedByMaster) showToast("Precios sincronizados en tiempo real con BunkerIndex (Índice Mundo)");
+                const appliedPrices = applyBunkerIndexData(nextCache);
+                if (nextCache.fallbackUsed) {
+                    updateBunkerIndexErrorLabel('Bunkerindex no disponible · usando bunker histórico de seguridad');
+                    updateBunkerMarketSyncStatus(appliedPrices, { warning: 'Bunkerindex no disponible · fallback histórico activo' });
+                    if (typeof showToast === 'function') showToast('Aviso: Bunkerindex no disponible; usando bunker histórico de seguridad.', 'warning');
+                } else if (!managedByMaster) {
+                    showToast("Precios sincronizados en tiempo real con BunkerIndex (Índice Mundo)");
+                }
+                return appliedPrices;
             } catch (error) {
                 console.error('Error extrayendo Bunkers:', error);
-                updateBunkerIndexErrorLabel('Error extrayendo Bunkers');
-                updateBunkerMarketSyncStatus(null, { error: 'No se pudo sincronizar Bunkerindex' });
-                if (managedByMaster) throw error;
-                showToast(`Error extrayendo Bunkers: ${error?.message || 'fallo desconocido'}`, 'error');
+                const staleCache = readBunkerIndexCache({ allowStale: true });
+                let appliedPrices;
+                if (staleCache) {
+                    appliedPrices = applyBunkerIndexData(staleCache);
+                    updateBunkerIndexErrorLabel('Bunkerindex no disponible · usando último precio guardado');
+                } else {
+                    appliedPrices = ensureSafeBunkerPrices();
+                    updateBunkerIndexErrorLabel('Bunkerindex no disponible · usando bunker histórico de seguridad');
+                }
+                updateBunkerMarketSyncStatus(appliedPrices, { warning: 'Bunkerindex no disponible' });
+                if (typeof showToast === 'function') showToast('Aviso: Bunkerindex no disponible; el cálculo continúa con valores manuales, guardados o históricos.', 'warning');
+                return appliedPrices;
             } finally {
                 isFetchingBunker = false;
                 if (btn && !managedByMaster) {
@@ -57455,7 +57703,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 + notaCuelloBotella;
         }
 
-        function calcularRitmoGrua(side = 'pol') {
+        function calcularRitmoGrua(side = 'pol', options = {}) {
+            const deferEngine = options.deferEngine === true;
             const label = getSelectedMethodLabel(side);
             if (!isCraneMethod(label)) return;
 
@@ -57503,8 +57752,8 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                 craneSwlMtEl.value = String(swl);
             }
 
-            if (typeof updateDemurrageExposureAlert === 'function') updateDemurrageExposureAlert();
-            if (typeof runEngine === 'function') runEngine();
+            if (!deferEngine && typeof updateDemurrageExposureAlert === 'function') updateDemurrageExposureAlert();
+            if (!deferEngine && typeof runEngine === 'function') runEngine();
         }
 
         // ==========================================
@@ -57947,9 +58196,75 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             }
         }
 
-        function setRitmoMode(mode = 'auto', side = null) {
+        function aplicarEstadoInputRitmoDraft(side = 'pol', mode = 'auto') {
+            const inputId = side === 'pod' ? 'rate-disch' : 'rate-load';
+            const input = document.getElementById(inputId);
+            if (!input) return null;
+
+            const isManual = mode === 'manual';
+            input.dataset.draftCalcMode = isManual ? 'manual' : 'auto';
+            input.readOnly = !isManual;
+            input.disabled = false;
+            input.setAttribute('aria-readonly', String(!isManual));
+            if (isManual) {
+                input.removeAttribute('readonly');
+                input.removeAttribute('disabled');
+            } else {
+                input.setAttribute('readonly', 'readonly');
+            }
+
+            input.classList.toggle('cursor-not-allowed', !isManual);
+            input.classList.toggle('bg-slate-100', !isManual);
+            input.classList.toggle('bg-green-100', isManual);
+            input.classList.toggle('text-green-900', isManual);
+            input.classList.toggle('border-green-300', isManual);
+            input.title = isManual
+                ? 'Ritmo Real editable en TM/D (modo Manual).'
+                : 'Ritmo Real derivado automáticamente de las grúas (solo lectura).';
+            return input;
+        }
+
+        function derivarRitmoAutoDraft(side = 'pol') {
+            const inputId = side === 'pod' ? 'rate-disch' : 'rate-load';
+            const input = document.getElementById(inputId);
+            if (!input) return 0;
+
+            const craneRate = typeof calcularRitmoGruaTeorico === 'function'
+                ? Number(calcularRitmoGruaTeorico(side))
+                : 0;
+            const fallbackRate = resolveRateDraftStandard(side);
+            const autoRate = craneRate > 0 ? craneRate : fallbackRate;
+            if (autoRate > 0) {
+                input.value = String(Math.round(autoRate));
+                window.section2LocalState[inputId] = input.value;
+                window.section2LocalState[`rateStandard_${side}`] = autoRate;
+                window.section2LocalState[`manualInput_${inputId}`] = false;
+                if (craneRate > 0 && typeof renderDerivacionGrua === 'function') {
+                    renderDerivacionGrua(side, craneRate);
+                }
+            }
+            return autoRate;
+        }
+
+        function setRitmoMode(mode = 'auto', side = null, options = {}) {
             const sides = side ? [side] : ['pol', 'pod'];
             const targetMode = mode === 'manual' ? 'manual' : 'auto';
+            const commit = options.commit === true;
+            const deferCalculations = options.deferCalculations === true;
+
+            if (!commit) {
+                sides.forEach((draftSide) => {
+                    window.section2LocalState[`ritmoMode_${draftSide}`] = targetMode;
+                    const inputId = draftSide === 'pod' ? 'rate-disch' : 'rate-load';
+                    if (targetMode === 'manual') resolveRateDraftStandard(draftSide);
+                    const input = aplicarEstadoInputRitmoDraft(draftSide, targetMode);
+                    if (targetMode === 'auto') derivarRitmoAutoDraft(draftSide);
+                    setEficienciaGruaBloqueada(draftSide, targetMode === 'manual');
+                    aplicarEstadoBotonesRitmo(draftSide, targetMode);
+                    renderRateDraftFeedback(draftSide, input?.value || '', { pristine: true });
+                });
+                return targetMode;
+            }
 
             sides.forEach(s => {
                 const key = `ritmoMode_${s}`;
@@ -57979,7 +58294,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     if (s === 'pod') aplicarEstiloRitmoPod('manual');
                     setRitmoManualIndicator(s, true);
                     // Congelar el slider de eficiencia y despejar su valor implícito.
-                    sincronizarEficienciaInversa(s);
+                    if (!deferCalculations) sincronizarEficienciaInversa(s);
                 } else {
                     if (input) {
                         input.dataset.manualOverride = 'false';
@@ -57988,20 +58303,21 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
                     setRitmoManualIndicator(s, false);
                     // Al volver a Auto la eficiencia recupera su condición de input.
                     setEficienciaGruaBloqueada(s, false);
-                    if (typeof actualizarSubmoduloGruas === 'function') {
+                    if (!deferCalculations && typeof actualizarSubmoduloGruas === 'function') {
                         actualizarSubmoduloGruas(s);
                     }
                     if (s === 'pod') aplicarEstiloRitmoPod('auto');
                 }
-                actualizarDesviacionDeltaManual(s);
+                if (!deferCalculations) actualizarDesviacionDeltaManual(s);
             });
 
-            if (targetMode === 'auto' && typeof applyMethodAndProductConditions === 'function') {
+            if (!deferCalculations && targetMode === 'auto' && typeof applyMethodAndProductConditions === 'function') {
                 applyMethodAndProductConditions(side);
             }
 
-            if (typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
-            if (typeof runEngine === 'function') runEngine();
+            if (!deferCalculations && typeof recalcularDiasPuerto === 'function') recalcularDiasPuerto();
+            if (!deferCalculations && typeof runEngine === 'function') runEngine();
+            return targetMode;
         }
         window.setRitmoMode = setRitmoMode;
         window.getPodCalcMode = getPodCalcMode;
