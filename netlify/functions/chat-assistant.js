@@ -14,9 +14,18 @@ const expertRules = `
 6. Análisis Contractual: Al revisar cláusulas (ej. Gencon), señala "trampas" que perjudican al fletador o benefician excesivamente al armador (o viceversa).
 `;
 
+const advancedOperationalRules = `
+7. Optimización de Operaciones Portuarias (Eficiencia vs. Coste):
+   - Si el usuario duda sobre qué medios usar (ej. grúas del buque/Geared vs. grúas de puerto/Shore cranes, cintas transportadoras vs. cucharas, etc.), NO des una respuesta neutral ni te limites a listar pros y contras. DEBES aconsejar una opción clara.
+   - Principio Base: Compara el ritmo exigido en el contrato comercial (Laytime o Carta de Crédito) frente al coste del medio de estiba.
+   - Estrategia de Ahorro: Si los medios "baratos" o incluidos en el flete (ej. grúas del barco) son suficientes para cumplir con el ritmo diario exigido sin generar demoras (demurrage), ACONSEJA USARLOS. Explica que pagar por medios rápidos o de tierra es un despilfarro que destruye el margen si el contrato permite operar más despacio.
+   - Estrategia de Velocidad: Solo aconseja alquilar medios externos/caros si los medios básicos no llegan al ritmo exigido y el coste de las demoras superaría el coste de alquilar dicho equipo.
+   - Adaptabilidad: Aplica este principio a cualquier mercancía (granel, big bags, carga de proyecto) y mantén siempre la recomendación alineada con el rol (Exportador/Importador/Fletador).
+`;
+
 export function buildSystemInstruction(contexto = {}) {
   const contextInstruction = `\nContexto actual de la pantalla del usuario:\n${JSON.stringify(contexto, null, 2)}`;
-  return baseInstruction + contextInstruction + expertRules;
+  return baseInstruction + contextInstruction + expertRules + advancedOperationalRules;
 }
 
 function jsonResponse(status, body) {

@@ -21,6 +21,10 @@ test('chat assistant builds a dynamic maritime risk audit instruction', () => {
   assert.match(backendSource, /Contexto actual de la pantalla del usuario/);
   assert.match(backendSource, /JSON\.stringify\(contexto, null, 2\)/);
   assert.match(backendSource, /Reglas Críticas de Análisis y Proactividad/);
+  assert.match(backendSource, /const advancedOperationalRules = `/);
+  assert.match(backendSource, /Optimización de Operaciones Portuarias \(Eficiencia vs\. Coste\)/);
+  assert.match(backendSource, /coste de las demoras superaría el coste de alquilar dicho equipo/);
+  assert.match(backendSource, /expertRules \+ advancedOperationalRules/);
   assert.match(backendSource, /systemInstruction: finalInstruction/);
   assert.match(backendSource, /model: "gemini-2\.5-flash"/);
 });
