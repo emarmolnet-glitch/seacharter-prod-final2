@@ -225,8 +225,12 @@
   border-radius: 15px;
   font-size: 0.88rem;
   line-height: 1.48;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.sca-message--user .sca-bubble,
+.sca-message--error .sca-bubble {
+  white-space: pre-wrap;
 }
 
 .sca-message--assistant .sca-bubble {
@@ -248,6 +252,126 @@
   border-color: #f0c8c6;
   color: #8d3330;
   background: #fff7f6;
+}
+
+.sca-markdown > :first-child {
+  margin-top: 0;
+}
+
+.sca-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.sca-markdown p {
+  margin: 0 0 0.65rem;
+}
+
+.sca-markdown h1,
+.sca-markdown h2,
+.sca-markdown h3,
+.sca-markdown h4 {
+  margin: 0.9rem 0 0.4rem;
+  color: #102f46;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+
+.sca-markdown h1 {
+  font-size: 1.1rem;
+}
+
+.sca-markdown h2 {
+  font-size: 1.02rem;
+}
+
+.sca-markdown h3,
+.sca-markdown h4 {
+  font-size: 0.95rem;
+}
+
+.sca-markdown strong {
+  color: #123e57;
+  font-weight: 800;
+}
+
+.sca-markdown ul,
+.sca-markdown ol {
+  margin: 0.55rem 0 0.7rem;
+  padding-left: 1.3rem;
+}
+
+.sca-markdown ul {
+  list-style: disc;
+}
+
+.sca-markdown ol {
+  list-style: decimal;
+}
+
+.sca-markdown li {
+  margin: 0.28rem 0;
+  padding-left: 0.12rem;
+}
+
+.sca-markdown li::marker {
+  color: var(--sca-teal-dark);
+  font-weight: 800;
+}
+
+.sca-markdown a {
+  color: #087f72;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: rgba(8, 127, 114, 0.35);
+  text-underline-offset: 2px;
+}
+
+.sca-markdown a:hover {
+  color: #075e58;
+  text-decoration-color: currentColor;
+}
+
+.sca-markdown blockquote {
+  margin: 0.7rem 0;
+  padding: 0.55rem 0.7rem;
+  border-left: 3px solid var(--sca-teal);
+  border-radius: 0 8px 8px 0;
+  color: #3c5667;
+  background: #f1f8f7;
+}
+
+.sca-markdown code {
+  padding: 0.12rem 0.3rem;
+  border-radius: 5px;
+  color: #7b2e2a;
+  background: #f5ece9;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.8em;
+}
+
+.sca-markdown pre {
+  max-width: 100%;
+  margin: 0.7rem 0;
+  overflow-x: auto;
+  padding: 0.75rem;
+  border: 1px solid #193a50;
+  border-radius: 10px;
+  color: #e7f4f6;
+  background: #0b2538;
+}
+
+.sca-markdown pre code {
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font-size: 0.78rem;
+}
+
+.sca-markdown hr {
+  margin: 0.85rem 0;
+  border: 0;
+  border-top: 1px solid var(--sca-line);
 }
 
 .sca-meta {
