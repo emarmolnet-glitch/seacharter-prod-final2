@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { validateScenarioPortsWithWpi } from "../wpi-catalog-client.js";
+import {
+  applyVoyageScenarioDefaults,
+  hasMinimumVoyageRoute,
+} from "../../shared/voyage-scenario-policy.mjs";
 
 const CARGO_PRODUCTS = Object.freeze({
   "Minerales y Construcción": ["Cemento a granel", "Clínker", "Yeso"],
@@ -22,11 +26,6 @@ const CARGO_PRODUCTS = Object.freeze({
 const CRITICAL_FIELDS = Object.freeze([
   ["pol", "Puerto de carga (POL)", "text"],
   ["pod", "Puerto de descarga (POD)", "text"],
-  ["laydays", "Laydays (Inicio)", "date"],
-  ["cancelling", "Cancelación (Cancelling)", "date"],
-  ["cargo_qty", "Carga a Transportar (TM)", "number"],
-  ["loading_rate", "Ritmo Real POL (TM/d)", "number"],
-  ["discharge_rate", "Ritmo Real POD (TM/d)", "number"],
 ]);
 
 const MONTHS = Object.freeze({
@@ -168,7 +167,8 @@ function extractScenario(text) {
 
 function normalizeScenarioPayload(payload) {
   const source = payload?.scenario || payload?.extraction || payload?.data || payload || {};
-  return {
+  return applyVoyageScenarioDefaults({
+    ...source,
     pol: cleanCapture(source.pol ?? source.port_of_loading ?? source.loading_port ?? ""),
     pod: cleanCapture(source.pod ?? source.port_of_discharge ?? source.discharge_port ?? ""),
     laydays: normalizeDate(source.laydays ?? source.layday ?? source.laycan_start ?? ""),
@@ -177,7 +177,7 @@ function normalizeScenarioPayload(payload) {
     cargo_type: cleanCapture(source.cargo_type ?? source.cargoType ?? source.commodity ?? ""),
     loading_rate: parsePositiveNumber(source.loading_rate ?? source.loadingRate ?? source.load_rate ?? ""),
     discharge_rate: parsePositiveNumber(source.discharge_rate ?? source.dischargeRate ?? source.disch_rate ?? ""),
-  };
+  });
 }
 
 async function requestScenarioExtraction(text) {
@@ -305,6 +305,14 @@ function optimizeCargoHandlingMethods(category, product, specification, loadingR
   const profile = getCargoHandlingProfile(category, product, specification);
   const selectMethod = (requiredRate) => {
     const numericRate = parsePositiveNumber(requiredRate);
+    if (!numericRate) {
+      return {
+        value: "",
+        equipment: "custom",
+        requiredRate: 0,
+        shipEfficientCapacity: profile.shipEfficientCapacity,
+      };
+    }
     const useShipCrane = numericRate > 0 && numericRate <= profile.shipEfficientCapacity;
     return {
       value: useShipCrane ? profile.shipMethod : profile.portMethod,
@@ -422,18 +430,12 @@ function NLPInputWidget() {
     });
 
     const missing = CRITICAL_FIELDS.filter(([field]) => !scenario[field]).map(([field]) => field);
-    const missingSelections = [
-      ["cargo_category", "Categoría de Carga"],
-      ["cargo_product", "Producto Específico"],
-      ["cargo_specification", "Especificación Carga"],
-    ].filter(([field]) => !scenario[field]);
     setManualValues((current) => ({ ...extracted, ...current }));
     setMissingFields(missing);
 
-    if (missing.length || missingSelections.length) {
+    if (missing.length || !hasMinimumVoyageRoute(scenario)) {
       const labels = CRITICAL_FIELDS.filter(([field]) => missing.includes(field)).map(([, label]) => label);
-      const selectionLabels = missingSelections.map(([, label]) => label);
-      showValidationAlert(`Faltan datos críticos: ${[...labels, ...selectionLabels].join(", ")}.`);
+      showValidationAlert(`Faltan los datos mínimos de ruta: ${labels.join(", ")}.`);
       return;
     }
     if (scenario.cancelling < scenario.laydays) {
@@ -455,44 +457,62 @@ function NLPInputWidget() {
     await typeIntoControl("map-laycan-date", scenario.laydays);
     await typeIntoControl("map-cancelling-date", scenario.cancelling);
     await typeIntoControl("cargo-qty", scenario.cargo_qty);
-    await typeIntoControl("cargo-type", category);
-    await typeIntoControl("cargo-product", product);
-    await typeIntoControl("cargo-type-manual", specification);
+    if (category) await typeIntoControl("cargo-type", category);
+    if (product) await typeIntoControl("cargo-product", product);
+    if (specification) await typeIntoControl("cargo-type-manual", specification);
 
     const specificationLabel = specificationOptions.find((option) => option.value === specification)?.label || "";
-    const optimizedMethods = optimizeCargoHandlingMethods(
-      category,
-      product,
-      specificationLabel,
-      scenario.loading_rate,
-      scenario.discharge_rate,
-    );
-    scenario.loadMethod = optimizedMethods.pol.value;
-    scenario.dischargeMethod = optimizedMethods.pod.value;
-    await typeIntoControl("metodo_carga", scenario.loadMethod);
-    await typeIntoControl("metodo_descarga_pod", scenario.dischargeMethod);
+    const hasOperationalRates = scenario.loading_rate > 0 || scenario.discharge_rate > 0;
+    const optimizedMethods = hasOperationalRates
+      ? optimizeCargoHandlingMethods(
+        category,
+        product,
+        specificationLabel,
+        scenario.loading_rate,
+        scenario.discharge_rate,
+      )
+      : null;
+    scenario.loadMethod = optimizedMethods?.pol.value || "";
+    scenario.dischargeMethod = optimizedMethods?.pod.value || "";
+    if (scenario.loadMethod) await typeIntoControl("metodo_carga", scenario.loadMethod);
+    if (scenario.dischargeMethod) await typeIntoControl("metodo_descarga_pod", scenario.dischargeMethod);
+    await typeIntoControl("laytime-load-condition", scenario.loading_terms);
+    await typeIntoControl("laytime-disch-condition", scenario.discharge_terms);
 
     window.setRitmoMode?.("manual", "pol", { commit: true, deferCalculations: true });
     window.setRitmoMode?.("manual", "pod", { commit: true, deferCalculations: true });
     await typeIntoControl("rate-load", scenario.loading_rate);
     await typeIntoControl("rate-disch", scenario.discharge_rate);
 
-    window.syncCalculatorAndMatching?.("calculator", { force: true });
-    window.syncMatchingViewFromGlobalOperationalState?.();
+    if (!scenario.is_partial) {
+      window.syncCalculatorAndMatching?.("calculator", { force: true });
+      window.syncMatchingViewFromGlobalOperationalState?.();
+    }
     const operationalPayload = {
-      ...(window.readValidatedCargoOperationState?.() || {}),
-      loadMethod: scenario.loadMethod,
-      dischargeMethod: scenario.dischargeMethod,
+      ...(scenario.is_partial ? {
+        pol: scenario.pol,
+        pod: scenario.pod,
+        laydays: scenario.laydays,
+        cancelling: scenario.cancelling,
+        cargoQuantity: scenario.cargo_qty,
+        cargoProduct: scenario.cargo_type,
+      } : (window.readValidatedCargoOperationState?.() || {})),
+      ...(scenario.loadMethod ? { loadMethod: scenario.loadMethod } : {}),
+      ...(scenario.dischargeMethod ? { dischargeMethod: scenario.dischargeMethod } : {}),
+      laytimeLoadCondition: scenario.loading_terms,
+      laytimeDischCondition: scenario.discharge_terms,
     };
     window.SeaCharterStore?.set?.(operationalPayload, { force: true, source: "nlp-input-widget" });
     if (scenario.port_validation?.valid) {
       await window.runOnDemandMapRouteWorkflow?.(document.getElementById("btn-map-locate-route"));
     }
-    const usesPortCrane = optimizedMethods.pol.equipment === "port-crane"
-      || optimizedMethods.pod.equipment === "port-crane";
+    const usesPortCrane = optimizedMethods?.pol.equipment === "port-crane"
+      || optimizedMethods?.pod.equipment === "port-crane";
     window.showToast?.(
       !scenario.port_validation?.valid
         ? "Datos extraídos. Selecciona los puertos pendientes en el desplegable WPI."
+        : scenario.is_partial
+        ? "Ruta preliminar generada. Laycan provisional, carga 0/TBA y términos CQD aplicados."
         : usesPortCrane
         ? "Escenario generado con métodos optimizados por capacidad y OPEX."
         : "Escenario generado con Grúa Barco para minimizar el OPEX.",
@@ -554,7 +574,6 @@ function NLPInputWidget() {
               id="nlp-cargo-category"
               className="input-gc action-required-field required-use-highlight text-action-required bg-white text-gray-800"
               style={{ colorScheme: "light" }}
-              required
               value={category}
               onChange={(event) => {
                 setCategory(event.target.value);
@@ -575,7 +594,6 @@ function NLPInputWidget() {
               id="nlp-cargo-product"
               className="input-gc action-required-field required-use-highlight text-action-required bg-white text-gray-800"
               style={{ colorScheme: "light" }}
-              required
               value={product}
               onChange={(event) => setProduct(event.target.value)}
             >
@@ -592,7 +610,6 @@ function NLPInputWidget() {
               id="nlp-cargo-specification"
               className="input-gc action-required-field required-use-highlight text-action-required font-bold cursor-pointer bg-white text-gray-800"
               style={{ colorScheme: "light" }}
-              required
               value={specification}
               onChange={(event) => setSpecification(event.target.value)}
             >
@@ -606,7 +623,7 @@ function NLPInputWidget() {
 
           {missingFields.length > 0 && (
             <div className="flex items-center p-2 mt-2 text-red-700 bg-red-100 border border-red-300 rounded text-sm font-semibold shadow-sm" role="alert" aria-live="polite">
-              Completa manualmente los datos críticos que no se pudieron extraer.
+              Completa manualmente POL y POD para poder calcular la ruta.
             </div>
           )}
 

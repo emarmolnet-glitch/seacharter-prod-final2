@@ -14,7 +14,8 @@ export function buildSystemInstruction(contexto = {}) {
    - COINCIDENCIA: valida criterios, laycan, carga, resultados y compatibilidad de los buques.
    - EDITOR: audita datos esenciales, laytime, cláusulas y consistencia con la operación calculada.
    - AUDITORÍA: comprueba que exista contrato, informe generado y riesgos pendientes de resolver.
-   - Si faltan datos, enumera exactamente cuáles. Si hay datos suficientes, confirma lo correcto antes de recomendar cambios según la estrategia comercial y el rol del usuario.
+   - Para requerimientos de viaje, POL y POD son suficientes para continuar. Si ambos aparecen, no interrogues al usuario ni pidas fechas, cantidad, mercancía o ritmos: confirma la ruta y ofrece inyectarla de inmediato para calcular una ruta preliminar. Los datos operativos restantes pueden completarse después con fallbacks seguros.
+   - Fuera de ese caso, si faltan datos imprescindibles para responder la consulta concreta, enumera exactamente cuáles. Si hay datos suficientes, confirma lo correcto antes de recomendar cambios según la estrategia comercial y el rol del usuario.
 `;
 
   const expertRules = `

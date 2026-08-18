@@ -8,6 +8,8 @@ const storeSource = await readFile(new URL('../src/stores/voyage-store.js', impo
 const extractorSource = await readFile(new URL('../netlify/functions/nlp-voyage-extract.ts', import.meta.url), 'utf8');
 const dictionarySource = await readFile(new URL('../netlify/functions/_shared/nlp-voyage-dictionary.mjs', import.meta.url), 'utf8');
 const wpiClientSource = await readFile(new URL('../src/wpi-catalog-client.js', import.meta.url), 'utf8');
+const assistantFunctionSource = await readFile(new URL('../netlify/functions/chat-assistant.js', import.meta.url), 'utf8');
+const scenarioPolicySource = await readFile(new URL('../shared/voyage-scenario-policy.mjs', import.meta.url), 'utf8');
 
 test('assistant extracts voyage intent and renders an explicit injection action', () => {
   assert.match(assistantSource, /const NLP_ENDPOINT = "\/api\/nlp-voyage-extract"/);
@@ -17,6 +19,11 @@ test('assistant extracts voyage intent and renders an explicit injection action'
   assert.match(assistantSource, /validateScenarioPortsWithWpi/);
   assert.match(assistantSource, /Inyectar datos y revisar puertos/);
   assert.match(assistantSource, /sca-voyage-action__warning/);
+  assert.match(assistantSource, /hasMinimumVoyageRoute\(scenario\)/);
+  assert.match(assistantSource, /He detectado tu ruta/);
+  assert.match(assistantSource, /ruta preliminar y calculamos el resto después/);
+  assert.match(assistantFunctionSource, /POL y POD son suficientes para continuar/);
+  assert.match(assistantFunctionSource, /no interrogues al usuario ni pidas fechas, cantidad, mercancía o ritmos/);
 });
 
 test('voyage injection updates DraftVoyage, calculator fields and starts the engine', () => {
@@ -33,6 +40,11 @@ test('voyage injection updates DraftVoyage, calculator fields and starts the eng
   assert.match(draftEntrySource, /window\.SeaCharterStore\?\.set/);
   assert.match(draftEntrySource, /window\.runEngine\(\)/);
   assert.match(storeSource, /officialLabel: cleanText\(source\.officialLabel\)/);
+  assert.match(storeSource, /scenario\.cargo_qty !== undefined \|\| scenario\.cargoQty !== undefined/);
+  assert.match(draftEntrySource, /applyVoyageScenarioDefaults\(scenario\)/);
+  assert.match(draftEntrySource, /scenario\.is_partial/);
+  assert.match(draftEntrySource, /runOnDemandMapRouteWorkflow/);
+  assert.match(scenarioPolicySource, /loading_terms: "CQD"/);
 });
 
 test('NLP schema includes cargo type and supports Spanish natural dates', () => {
