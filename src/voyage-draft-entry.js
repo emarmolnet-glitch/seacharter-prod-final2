@@ -149,6 +149,81 @@ function injectVoyageScenario(scenario = {}) {
     return { draft: voyageStore.getState().draft, requiresPortSelection, routeOnly: scenario.is_partial };
 }
 
+function applyAssistantCalculatorAutofill(payload = {}) {
+    const loadingRate = Number(payload.loading_rate ?? payload.loadingRate) || 0;
+    const dischargeRate = Number(payload.discharge_rate ?? payload.dischargeRate) || 0;
+    const requiredDwt = Number(payload.required_dwt ?? payload.requiredDwt) || 0;
+    const vesselClass = String(payload.vessel_class || payload.vesselClass || '').trim();
+    const loadingMethod = payload.loading_method || payload.loadingMethod || {};
+    const dischargeMethod = payload.discharge_method || payload.dischargeMethod || {};
+    const requestedCargoQuantity = Number(payload.cargo_qty ?? payload.cargoQty) || 0;
+    const cargoInput = document.getElementById('cargo-qty');
+    const currentCargoQuantity = Number(cargoInput?.value) || 0;
+    const cargoQuantity = currentCargoQuantity > 0 ? currentCargoQuantity : requestedCargoQuantity;
+    const cargoPreserved = currentCargoQuantity > 0;
+
+    if (!loadingRate || !dischargeRate || !requiredDwt || !vesselClass) {
+        throw new Error('Payload de autocompletado incompleto');
+    }
+
+    const applyUpdates = () => {
+        if (!cargoPreserved && cargoQuantity > 0) setValue('cargo-qty', cargoQuantity);
+        if (!readElementText('cargo-product') && payload.cargo_type) setSelectValue('cargo-product', payload.cargo_type);
+
+        setValue('vessel-dwt', requiredDwt);
+        setSelectValue('metodo_carga', loadingMethod.value || loadingMethod.label);
+        setSelectValue('metodo_descarga_pod', dischargeMethod.value || dischargeMethod.label);
+        window.setRitmoMode?.('manual', 'pol', { commit: true, deferCalculations: true });
+        window.setRitmoMode?.('manual', 'pod', { commit: true, deferCalculations: true });
+        setValue('rate-load', loadingRate);
+        setValue('rate-disch', dischargeRate);
+
+        const vesselBadge = document.getElementById('vessel-badge');
+        if (vesselBadge) vesselBadge.textContent = vesselClass;
+        const cargoClassDisplay = document.getElementById('cargo-vessel-class-display');
+        if (cargoClassDisplay) cargoClassDisplay.textContent = `Clasificado como: ${vesselClass}`;
+
+        window.SeaCharterStore?.set?.({
+            cargoQuantity,
+            cargoQty: cargoQuantity,
+            cargo: cargoQuantity,
+            cargoProduct: String(payload.cargo_type || '').trim(),
+            cargoType: String(payload.cargo_type || '').trim(),
+            dwt: requiredDwt,
+            vesselDwt: requiredDwt,
+            class: vesselClass,
+            loadRate: loadingRate,
+            dischargeRate,
+            dischRate: dischargeRate,
+            loadMethod: String(loadingMethod.label || loadingMethod.value || '').trim(),
+            dischargeMethod: String(dischargeMethod.label || dischargeMethod.value || '').trim(),
+            ritmoMode: 'manual',
+            ritmoMode_pol: 'manual',
+            ritmoMode_pod: 'manual',
+            podCalcMode: 'manual',
+        }, { force: true, source: 'assistant-calculator-autofill' });
+    };
+    if (typeof window.SeaCharterStore?.batch === 'function') {
+        window.SeaCharterStore.batch(applyUpdates);
+    } else {
+        applyUpdates();
+    }
+
+    window.updateCargoVesselClassDisplay?.();
+    window.syncGlobalStateToForms?.();
+    window.recalcularDiasPuerto?.();
+    window.runEngine?.();
+    window.dispatchEvent(new CustomEvent('calculator:assistant-autofilled', {
+        detail: { payload, cargoQuantity, cargoPreserved },
+    }));
+    return { applied: true, cargoQuantity, cargoPreserved };
+}
+
+function readElementText(id) {
+    const element = document.getElementById(id);
+    return String(element?.value || element?.textContent || '').trim();
+}
+
 function hydrateCalculatorFromDraft(draft) {
     const retainedBallastDistance = Number(draft?.ballastDistanceNm);
     const hasRetainedBallastDistance = Number.isFinite(retainedBallastDistance)
@@ -219,6 +294,11 @@ function bindCalculatorStore() {
 window.VoyageDraftStore = voyageStore;
 window.useVoyageStore = voyageStore;
 window.injectVoyageScenario = injectVoyageScenario;
+window.applyAssistantCalculatorAutofill = applyAssistantCalculatorAutofill;
+window.addEventListener('sea-assistant:calculator-autofill', (event) => {
+    if (!event?.detail?.payload) return;
+    event.detail.result = applyAssistantCalculatorAutofill(event.detail.payload);
+});
 
 bindCalculatorStore();
 bindManualBallastDistance();
