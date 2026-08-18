@@ -86,7 +86,15 @@ function createThinkingMessage() {
   return message;
 }
 
-function normalizeVoyageScenario(value = {}) {
+function normalizeWpiPortRecord(value) {
+  if (!value || value.source !== "WPI") return null;
+  const latitude = Number(value.latitude);
+  const longitude = Number(value.longitude);
+  if (!value.officialLabel || !value.countryCode || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { ...value, latitude, longitude, source: "WPI" };
+}
+
+function normalizeVoyageScenario(value = {}, portValidation = {}) {
   return {
     pol: String(value.pol || "").trim(),
     pod: String(value.pod || "").trim(),
@@ -96,11 +104,22 @@ function normalizeVoyageScenario(value = {}) {
     cargo_type: String(value.cargo_type || value.cargoType || "").trim(),
     loading_rate: Number(value.loading_rate ?? value.loadingRate) || 0,
     discharge_rate: Number(value.discharge_rate ?? value.dischargeRate) || 0,
+    pol_port: normalizeWpiPortRecord(value.pol_port),
+    pod_port: normalizeWpiPortRecord(value.pod_port),
+    port_validation: {
+      valid: portValidation?.valid === true,
+      clarification: String(portValidation?.clarification || "").trim(),
+    },
   };
 }
 
 function hasInjectableVoyage(scenario) {
-  return Boolean(scenario.pol && scenario.pod && scenario.cargo_qty > 0);
+  return Boolean(
+    scenario.port_validation?.valid
+    && scenario.pol === scenario.pol_port?.officialLabel
+    && scenario.pod === scenario.pod_port?.officialLabel
+    && scenario.cargo_qty > 0,
+  );
 }
 
 async function extractVoyageScenario(text, signal) {
@@ -112,8 +131,11 @@ async function extractVoyageScenario(text, signal) {
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.success) return null;
-  const scenario = normalizeVoyageScenario(payload.scenario);
-  return hasInjectableVoyage(scenario) ? scenario : null;
+  const scenario = normalizeVoyageScenario(payload.scenario, payload.port_validation);
+  return {
+    scenario: hasInjectableVoyage(scenario) ? scenario : null,
+    clarification: String(payload.port_validation?.clarification || "").trim(),
+  };
 }
 
 function createVoyageActionCard(scenario) {
@@ -762,7 +784,7 @@ function mountSeaAssistant() {
         signal: controller.signal,
       });
       const extractionRequest = extractVoyageScenario(userText, controller.signal).catch(() => null);
-      const [response, scenario] = await Promise.all([chatRequest, extractionRequest]);
+      const [response, voyageExtraction] = await Promise.all([chatRequest, extractionRequest]);
 
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.success || typeof payload.respuesta !== "string") {
@@ -770,7 +792,11 @@ function mountSeaAssistant() {
       }
 
       thinkingMessage.replaceWith(createMessage("assistant", payload.respuesta.trim(), { meta: formatTime() }));
-      if (scenario) history.appendChild(createVoyageActionCard(scenario));
+      if (voyageExtraction?.scenario) {
+        history.appendChild(createVoyageActionCard(voyageExtraction.scenario));
+      } else if (voyageExtraction?.clarification) {
+        history.appendChild(createMessage("assistant", voyageExtraction.clarification, { meta: "Validación WPI" }));
+      }
     } catch (error) {
       const errorText = error?.name === "AbortError"
         ? "La respuesta está tardando más de lo esperado. Inténtalo de nuevo en unos segundos."

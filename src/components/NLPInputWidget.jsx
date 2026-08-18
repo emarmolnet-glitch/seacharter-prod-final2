@@ -167,6 +167,14 @@ function extractScenario(text) {
 
 function normalizeScenarioPayload(payload) {
   const source = payload?.scenario || payload?.extraction || payload?.data || payload || {};
+  const normalizePortRecord = (port) => {
+    if (!port || port.source !== "WPI") return null;
+    const latitude = Number(port.latitude);
+    const longitude = Number(port.longitude);
+    if (!port.officialLabel || !port.countryCode || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    return { ...port, latitude, longitude, source: "WPI" };
+  };
+  const portValidation = payload?.port_validation || source.port_validation || null;
   return {
     pol: cleanCapture(source.pol ?? source.port_of_loading ?? source.loading_port ?? ""),
     pod: cleanCapture(source.pod ?? source.port_of_discharge ?? source.discharge_port ?? ""),
@@ -175,6 +183,12 @@ function normalizeScenarioPayload(payload) {
     cargo_qty: parsePositiveNumber(source.cargo_qty ?? source.cargoQty ?? source.quantity ?? source.qty ?? ""),
     loading_rate: parsePositiveNumber(source.loading_rate ?? source.loadingRate ?? source.load_rate ?? ""),
     discharge_rate: parsePositiveNumber(source.discharge_rate ?? source.dischargeRate ?? source.disch_rate ?? ""),
+    pol_port: normalizePortRecord(source.pol_port),
+    pod_port: normalizePortRecord(source.pod_port),
+    port_validation: {
+      valid: portValidation?.valid === true,
+      clarification: cleanCapture(portValidation?.clarification || ""),
+    },
   };
 }
 
@@ -188,8 +202,14 @@ async function requestScenarioExtraction(text) {
     if (!response.ok) throw new Error(`NLP voyage extraction HTTP ${response.status}`);
     return normalizeScenarioPayload(await response.json());
   } catch (error) {
-    console.warn("NLP voyage endpoint unavailable; using deterministic parser.", error);
-    return normalizeScenarioPayload(extractScenario(text));
+    console.warn("NLP voyage endpoint unavailable; WPI validation is required.", error);
+    return {
+      ...normalizeScenarioPayload(extractScenario(text)),
+      port_validation: {
+        valid: false,
+        clarification: "No se pudo consultar el catálogo WPI. Inténtalo de nuevo antes de inyectar el viaje.",
+      },
+    };
   }
 }
 
@@ -220,27 +240,25 @@ async function typeIntoControl(id, value) {
   return true;
 }
 
-async function resolveAndSelectWpiPort(portName, inputId) {
-  const normalizedName = cleanCapture(portName);
+async function resolveAndSelectWpiPort(portRecord, inputId) {
   const input = document.getElementById(inputId);
-  if (!normalizedName || !(input instanceof HTMLInputElement)) return null;
+  if (!portRecord || portRecord.source !== "WPI" || !(input instanceof HTMLInputElement)) return null;
 
   await window.ensureWpiLoadedOnDemand?.();
-  const queries = Array.from(new Set([
-    normalizedName,
-    normalizedName.split(",")[0]?.trim(),
-    normalizedName.replace(/\s*\([^)]*\)\s*$/, "").trim(),
-  ].filter(Boolean)));
-
-  let selectedPort = null;
-  for (const query of queries) {
-    const results = window.searchLocalWpiPorts?.(query, 1) || [];
-    if (results[0]) {
-      selectedPort = results[0];
-      break;
-    }
-  }
-
+  const selectedPort = {
+    label: portRecord.officialLabel,
+    placeName: portRecord.name,
+    countryCode: portRecord.countryCode,
+    lat: Number(portRecord.latitude),
+    lon: Number(portRecord.longitude),
+    source: "WPI",
+    port: {
+      indexNo: Number(portRecord.indexNo) || null,
+      regionNo: Number(portRecord.regionNo) || null,
+      countryCode: portRecord.countryCode,
+      source: "WPI",
+    },
+  };
   if (!selectedPort || !window.selectUniversalPortSuggestion?.(input, selectedPort)) return null;
   return {
     name: input.value,
@@ -412,10 +430,21 @@ function NLPInputWidget() {
       showValidationAlert("Cancelling no puede ser anterior a Laydays.");
       return;
     }
+    if (
+      !scenario.port_validation?.valid
+      || scenario.pol !== scenario.pol_port?.officialLabel
+      || scenario.pod !== scenario.pod_port?.officialLabel
+    ) {
+      showValidationAlert(
+        scenario.port_validation?.clarification
+        || "POL y POD deben coincidir con registros oficiales del índice WPI.",
+      );
+      return;
+    }
 
     setMissingFields([]);
-    const polPort = await resolveAndSelectWpiPort(scenario.pol, "map-port-pol");
-    const podPort = await resolveAndSelectWpiPort(scenario.pod, "map-port-pod");
+    const polPort = await resolveAndSelectWpiPort(scenario.pol_port, "map-port-pol");
+    const podPort = await resolveAndSelectWpiPort(scenario.pod_port, "map-port-pod");
     if (!polPort || !podPort) {
       showValidationAlert("No se pudieron consolidar POL y POD mediante la base WPI.");
       return;

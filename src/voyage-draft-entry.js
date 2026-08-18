@@ -27,6 +27,25 @@ function setSelectValue(id, value) {
     return true;
 }
 
+function selectValidatedWpiPort(inputId, port) {
+    const input = document.getElementById(inputId);
+    if (!input || !port || port.source !== 'WPI' || typeof window.selectUniversalPortSuggestion !== 'function') return false;
+    return window.selectUniversalPortSuggestion(input, {
+        label: port.officialLabel,
+        placeName: port.name,
+        countryCode: port.countryCode,
+        lat: Number(port.latitude),
+        lon: Number(port.longitude),
+        source: 'WPI',
+        port: {
+            indexNo: Number(port.indexNo) || null,
+            regionNo: Number(port.regionNo) || null,
+            countryCode: port.countryCode,
+            source: 'WPI',
+        },
+    });
+}
+
 function injectVoyageScenario(scenario = {}) {
     const pol = String(scenario.pol || '').trim();
     const pod = String(scenario.pod || '').trim();
@@ -36,6 +55,20 @@ function injectVoyageScenario(scenario = {}) {
     const cancelling = String(scenario.cancelling || laydays).trim();
     const loadingRate = Number(scenario.loading_rate ?? scenario.loadingRate) || 0;
     const dischargeRate = Number(scenario.discharge_rate ?? scenario.dischargeRate) || 0;
+    if (
+        scenario.port_validation?.valid !== true
+        || pol !== scenario.pol_port?.officialLabel
+        || pod !== scenario.pod_port?.officialLabel
+    ) {
+        throw new Error('POL y POD no están validados contra WPI.');
+    }
+    const selectedPorts = [
+        selectValidatedWpiPort('port-pol', scenario.pol_port),
+        selectValidatedWpiPort('map-port-pol', scenario.pol_port),
+        selectValidatedWpiPort('port-pod', scenario.pod_port),
+        selectValidatedWpiPort('map-port-pod', scenario.pod_port),
+    ];
+    if (selectedPorts.some((selected) => !selected)) throw new Error('No se pudieron consolidar los puertos WPI.');
 
     voyageStore.getState().applyNlpScenario({
         pol,
@@ -46,10 +79,6 @@ function injectVoyageScenario(scenario = {}) {
         cancelling,
     });
 
-    setValue('port-pol', pol);
-    setValue('map-port-pol', pol);
-    setValue('port-pod', pod);
-    setValue('map-port-pod', pod);
     window.syncSelectedRoutePort?.('POL', pol);
     window.syncSelectedRoutePort?.('POD', pod);
     setValue('cargo-qty', cargoQuantity);
