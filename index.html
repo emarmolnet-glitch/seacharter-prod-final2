@@ -7918,12 +7918,27 @@
                 justify-self: end !important;
             }
 
-            header.app-header > .header-actions-right > :not(#session-actions) {
+            header.app-header > .header-actions-right > :not(#session-actions):not(#sea-assistant-toggle) {
                 display: none !important;
             }
 
             header.app-header #session-actions {
                 display: flex !important;
+            }
+
+            header.app-header #sea-assistant-toggle {
+                display: inline-flex !important;
+                width: 34px !important;
+                height: 34px !important;
+                min-height: 34px !important;
+                padding: 0 !important;
+                justify-content: center !important;
+                border-radius: 7px !important;
+                flex: 0 0 auto !important;
+            }
+
+            header.app-header #sea-assistant-toggle span {
+                display: none !important;
             }
         }
 
@@ -8334,6 +8349,20 @@
                     </ul>
                 </div>
             </div>
+
+            <!-- Asistente SeaCharter -->
+            <button
+                id="sea-assistant-toggle"
+                type="button"
+                class="sea-assistant-header-btn flex items-center gap-1.5 bg-slate-950 hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-800 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
+                title="Abrir Asistente SeaCharter"
+                aria-label="Abrir Asistente SeaCharter"
+                aria-expanded="false"
+                aria-controls="sea-assistant-panel"
+            >
+                <i class="fa-solid fa-comments text-teal-400 text-xs" aria-hidden="true"></i>
+                <span>Asistente</span>
+            </button>
 
             <!-- Botón FAQ / Manual -->
             <button

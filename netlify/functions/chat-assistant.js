@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const systemInstruction =
-  "Eres el asistente inteligente de SeaCharter (Core PRO y Data Bridge). Eres un experto en logística marítima, fletamentos y cálculo de rutas. Responde de forma concisa, profesional y directa.";
+  "Eres el asistente inteligente de SeaCharter (Core PRO y Data Bridge). Eres un experto en logística marítima, fletamentos y cálculo de rutas.";
 
 function jsonResponse(status, body) {
   return new Response(JSON.stringify(body), {
@@ -16,55 +16,53 @@ function jsonResponse(status, body) {
 }
 
 export default async (req) => {
-  // Manejo de preflight CORS
   if (req.method === "OPTIONS") {
-    return new Response("OK", {
-      status: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-      },
-    });
+    return jsonResponse(200, { ok: true });
   }
 
   if (req.method !== "POST") {
-    return jsonResponse(405, {
-      success: false,
-      error: "Método no permitido. Usa POST.",
-    });
+    return jsonResponse(405, { error: "Método no permitido" });
   }
 
   try {
     const { mensaje } = await req.json();
+    const apiKey = process.env.GEMINI_API_KEY;
 
-    if (typeof mensaje !== "string" || !mensaje.trim()) {
-      return jsonResponse(400, {
-        success: false,
-        error: "El campo mensaje es obligatorio y debe ser un string.",
-      });
-    }
-
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-    // AQUÍ SE SOLUCIONA EL ERROR 404:
+    const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-pro",
+      model: "gemini-1.5-flash",
       systemInstruction,
     });
 
     const result = await model.generateContent(mensaje.trim());
-    const respuesta = result.response.text();
-
     return jsonResponse(200, {
       success: true,
-      respuesta,
+      respuesta: result.response.text(),
     });
   } catch (error) {
-    console.error("Error en Gemini API:", error);
-    return jsonResponse(500, {
-      success: false,
-      error: error instanceof Error ? error.message : "Error interno del servidor.",
-    });
+    try {
+      const modelsResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GEMINI_API_KEY}`,
+      );
+      const modelsData = await modelsResponse.json();
+
+      const validModels = modelsData.models
+        ? modelsData.models
+          .filter((model) => model.supportedGenerationMethods?.includes("generateContent"))
+          .map((model) => model.name)
+        : "Error listando";
+
+      return jsonResponse(500, {
+        success: false,
+        errorOriginal: error instanceof Error ? error.message : String(error),
+        modelosDisponibles: validModels,
+      });
+    } catch (fetchError) {
+      const fetchErrorMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
+      return jsonResponse(500, {
+        success: false,
+        error: `Fallo de red listando modelos: ${fetchErrorMessage}`,
+      });
+    }
   }
 };

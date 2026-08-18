@@ -79,10 +79,7 @@ function mountSeaAssistant() {
         <textarea class="sca-input" rows="1" maxlength="2000" placeholder="Escribe tu consulta marítima..." aria-label="Mensaje para el asistente" required></textarea>
         <button class="sca-send" type="submit" aria-label="Enviar mensaje" disabled>${icons.send}</button>
       </form>
-    </div>
-    <button class="sca-toggle" type="button" aria-label="Abrir Asistente SeaCharter" aria-expanded="false" aria-controls="sea-assistant-panel">
-      ${icons.assistant}
-    </button>`;
+    </div>`;
 
   document.body.appendChild(root);
 
@@ -92,8 +89,12 @@ function mountSeaAssistant() {
   const form = root.querySelector(".sca-form");
   const input = root.querySelector(".sca-input");
   const sendButton = root.querySelector(".sca-send");
-  const toggleButton = root.querySelector(".sca-toggle");
+  const toggleButton = document.querySelector("#sea-assistant-toggle");
   const closeButton = root.querySelector(".sca-close");
+  if (!toggleButton) {
+    root.remove();
+    return;
+  }
   let pending = false;
   let isDragging = false;
   let hasCustomPosition = false;
