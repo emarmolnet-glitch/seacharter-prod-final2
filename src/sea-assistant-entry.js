@@ -63,6 +63,8 @@ const icons = {
 function createMessage(role, text, options = {}) {
   const message = document.createElement("article");
   message.className = `sca-message sca-message--${role}${options.error ? " sca-message--error" : ""}`;
+  message.dataset.role = role;
+  message.dataset.messageText = String(text || "");
 
   const bubble = document.createElement("div");
   bubble.className = "sca-bubble";
@@ -90,6 +92,17 @@ function createMessage(role, text, options = {}) {
   }
 
   return message;
+}
+
+function collectConversationHistory(historyElement) {
+  return Array.from(historyElement?.querySelectorAll?.("[data-role][data-message-text]") || [])
+    .filter((message) => message.dataset.thinking !== "true")
+    .slice(-12)
+    .map((message) => ({
+      role: message.dataset.role === "assistant" ? "assistant" : "user",
+      content: String(message.dataset.messageText || "").trim(),
+    }))
+    .filter((entry) => entry.content);
 }
 
 function createThinkingMessage() {
@@ -188,6 +201,61 @@ function createVoyageActionCard(scenario) {
   return card;
 }
 
+function createCalculatorAutofillActionCard(action) {
+  const cargoQuantity = Number(action.cargo_qty) || 0;
+  const requiredDwt = Number(action.required_dwt) || 0;
+  const loadingRate = Number(action.loading_rate) || 0;
+  const dischargeRate = Number(action.discharge_rate) || 0;
+  const cargoType = String(action.cargo_type || "Carga").trim();
+  const vesselClass = String(action.vessel_class || "Buque estándar").trim();
+  const methodSummary = String(action.method_summary || action.loading_method?.family || "método recomendado").trim();
+  const summary = `He registrado los ritmos (${loadingRate.toLocaleString("es-ES")} TM/día carga, ${dischargeRate.toLocaleString("es-ES")} TM/día descarga). Para tus ${cargoQuantity.toLocaleString("es-ES")} MT de ${cargoType}, he calculado que necesitas un buque ${vesselClass} de al menos ${requiredDwt.toLocaleString("es-ES")} DWT, y sugiero operar con ${methodSummary}.`;
+  const card = document.createElement("article");
+  card.className = "sca-voyage-action sca-calculator-action";
+  card.dataset.role = "assistant";
+  card.dataset.messageText = `${summary} ¿Configuramos todos estos parámetros en la calculadora de una vez?`;
+  card.innerHTML = `
+    <div class="sca-voyage-action__eyebrow">Autocompletado deductivo</div>
+    <p>${DOMPurify.sanitize(summary)}</p>
+    <p class="sca-calculator-action__question">¿Configuramos todos estos parámetros en la calculadora de una vez?</p>
+    <dl class="sca-voyage-action__details">
+      <div><dt>POL</dt><dd>${loadingRate.toLocaleString("es-ES")} TM/día · ${DOMPurify.sanitize(action.loading_method?.label || "")}</dd></div>
+      <div><dt>POD</dt><dd>${dischargeRate.toLocaleString("es-ES")} TM/día · ${DOMPurify.sanitize(action.discharge_method?.label || "")}</dd></div>
+      <div><dt>Buque</dt><dd>${DOMPurify.sanitize(vesselClass)} · ${requiredDwt.toLocaleString("es-ES")} DWT</dd></div>
+    </dl>
+    <button type="button" class="sca-voyage-action__button">⚡ Autocompletar: Ritmos, Grúas y Buque</button>
+    <p class="sca-voyage-action__status" role="status" aria-live="polite"></p>`;
+
+  const button = card.querySelector(".sca-voyage-action__button");
+  const status = card.querySelector(".sca-voyage-action__status");
+  button.addEventListener("click", () => {
+    if (typeof window.applyAssistantCalculatorAutofill !== "function") {
+      status.textContent = "La Calculadora todavía no está disponible.";
+      card.classList.add("is-error");
+      return;
+    }
+    button.disabled = true;
+    try {
+      const autofillEvent = new CustomEvent("sea-assistant:calculator-autofill", {
+        detail: { payload: action, result: null },
+      });
+      window.dispatchEvent(autofillEvent);
+      const result = autofillEvent.detail.result;
+      if (!result?.applied) throw new Error("Calculator autofill was not handled");
+      card.classList.add("is-injected");
+      button.textContent = "Parámetros aplicados en bloque";
+      status.textContent = result?.cargoPreserved
+        ? "Ritmos, métodos, DWT y clase actualizados; se conservó la carga ya indicada."
+        : "Carga, ritmos, métodos, DWT y clase actualizados simultáneamente.";
+    } catch {
+      button.disabled = false;
+      card.classList.add("is-error");
+      status.textContent = "No se pudieron aplicar los parámetros. Revisa la Calculadora e inténtalo de nuevo.";
+    }
+  });
+  return card;
+}
+
 function formatTime() {
   return new Intl.DateTimeFormat("es", {
     hour: "2-digit",
@@ -280,6 +348,13 @@ function collectModuleScreenContext(moduleId = getActiveModuleDescriptor().id) {
     voyageDraft.cargo?.quantity,
     readElementValue("cargo-qty", "cargo-quantity", "cargo-tonnage", "matching-cargo-quantity"),
   );
+  const cargoType = firstText(
+    state.cargoProduct,
+    state.cargoType,
+    voyageDraft.cargo?.type,
+    voyageDraft.cargo?.product,
+    readElementValue("cargo-product", "cargo-type", "matching-cargo-type"),
+  );
   const densityCount = firstNumber(readElementValue("ais-density-count", "buques-count"));
   const matchingResultCount = firstNumber(
     document.getElementById("btn-sync-neon-matching")?.dataset?.matchingResultCount,
@@ -293,6 +368,7 @@ function collectModuleScreenContext(moduleId = getActiveModuleDescriptor().id) {
     pod,
     distanceNm,
     cargoQuantity,
+    cargoType,
     laycanStart: firstText(state.laydays, state.laycan?.laydays, voyageDraft.laycan?.laydays, readElementValue("map-laycan-date", "match-laycan-start", "gc-laycan-date")),
     laycanEnd: firstText(state.cancelling, state.laycan?.cancelling, voyageDraft.laycan?.cancelling, readElementValue("map-cancelling-date", "match-laycan-end", "gc-cancel-date")),
     freightRate: firstNumber(readElementValue("freight-sell", "ais-rate-fair"), state.freightSell, calculatedState.freightSell),
@@ -336,6 +412,32 @@ function collectChatContext() {
     state.charterPartyStandard,
     "GENCON",
   ).toUpperCase();
+  const cargoQuantity = firstNumber(
+    state.cargoQty,
+    state.cargoQuantity,
+    voyageDraft.cargo?.quantity,
+    readElementValue("cargo-qty", "cargo-quantity", "cargo-tonnage"),
+  );
+  const cargoType = firstText(
+    state.cargoProduct,
+    state.cargoType,
+    voyageDraft.cargo?.type,
+    voyageDraft.cargo?.product,
+    readElementValue("cargo-product", "cargo-type", "matching-cargo-type"),
+  );
+  const loadMethodSelect = document.getElementById("metodo_carga");
+  const dischargeMethodSelect = document.getElementById("metodo_descarga_pod");
+
+  const draftVoyageContext = {
+    POL: firstText(state.pol, voyageDraft.pol?.name, readElementValue("port-pol", "map-port-pol")),
+    POD: firstText(state.pod, voyageDraft.pod?.name, readElementValue("port-pod", "map-port-pod")),
+    cantidadMT: cargoQuantity,
+    tipoCarga: cargoType,
+    dwt: firstNumber(state.dwt, state.vesselDwt, voyageDraft.vessel?.dwt, readElementValue("vessel-dwt")),
+    claseBuque: firstText(state.class, voyageDraft.vessel?.vesselClass, readElementValue("vessel-badge")),
+    metodoCargaPOL: firstText(loadMethodSelect?.selectedOptions?.[0]?.textContent, state.loadMethod),
+    metodoDescargaPOD: firstText(dischargeMethodSelect?.selectedOptions?.[0]?.textContent, state.dischargeMethod),
+  };
 
   return {
     modulo: activeModule,
@@ -343,6 +445,7 @@ function collectChatContext() {
     rol: roleMode === "charterer" ? "Fletador/Charterer" : "Armador/Shipowner",
     datosModulo: moduleScreenContext,
     sugerenciasProactivas: proactiveEvaluation.issues,
+    draftVoyage: draftVoyageContext,
     operativos: {
       puertos: {
         POL: firstText(state.pol, voyageDraft.pol?.name, readElementValue("port-pol", "map-port-pol")),
@@ -356,6 +459,10 @@ function collectChatContext() {
       ritmosToneladasDia: {
         carga: firstNumber(readElementValue("rate-load", "gc-laytime-load-val"), state.loadRate, calculatedState.loadRate),
         descarga: firstNumber(readElementValue("rate-disch", "gc-laytime-disch-val"), state.dischRate, state.dischargeRate, calculatedState.dischRate),
+      },
+      carga: {
+        cantidadMT: cargoQuantity,
+        tipo: cargoType,
       },
       terminosTiempoPlancha: {
         POL: firstText(readElementValue("laytime-load-condition", "gc-laytime-load-cond"), state.laytimeLoadCondition),
@@ -869,10 +976,13 @@ function mountSeaAssistant() {
 
     try {
       const contexto = collectChatContext();
+      const historial = collectConversationHistory(history);
+      contexto.historialChat = historial;
+      const baseRequestPayload = JSON.parse(JSON.stringify({ mensaje: userText, contexto }));
       const chatRequest = fetch(CHAT_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mensaje: userText, contexto }),
+        body: JSON.stringify({ ...baseRequestPayload, historial }),
         signal: controller.signal,
       });
       const extractionRequest = extractVoyageScenario(userText, controller.signal).catch(() => null);
@@ -883,10 +993,16 @@ function mountSeaAssistant() {
         throw new Error("Invalid assistant response");
       }
 
-      replaceWithAssistantMessage(thinkingMessage, payload.respuesta.trim(), { meta: formatTime() });
-      if (voyageExtraction?.scenario) {
+      if (payload.action?.type === "calculator_autofill") {
+        const actionCard = createCalculatorAutofillActionCard(payload.action);
+        thinkingMessage.replaceWith(actionCard);
+        speakText(actionCard.dataset.messageText);
+      } else {
+        replaceWithAssistantMessage(thinkingMessage, payload.respuesta.trim(), { meta: formatTime() });
+      }
+      if (!payload.action && voyageExtraction?.scenario) {
         history.appendChild(createVoyageActionCard(voyageExtraction.scenario));
-      } else if (voyageExtraction?.clarification) {
+      } else if (!payload.action && voyageExtraction?.clarification) {
         createAndSpeakAssistantMessage(voyageExtraction.clarification, { meta: "Validación WPI" });
       }
     } catch (error) {

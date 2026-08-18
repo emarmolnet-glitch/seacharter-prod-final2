@@ -480,6 +480,22 @@
   line-height: 1.5;
 }
 
+.sca-calculator-action {
+  width: min(96%, 390px);
+  border-left-color: #d49a2a;
+  background: linear-gradient(145deg, #fffdf7, #f5f8f6);
+}
+
+.sca-calculator-action .sca-calculator-action__question {
+  margin-top: 9px;
+  color: #163f4d;
+  font-weight: 800;
+}
+
+.sca-calculator-action .sca-voyage-action__details div {
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
 .sca-voyage-action__details {
   display: grid;
   gap: 5px;

@@ -1,8 +1,10 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-export function buildSystemInstruction(contexto = {}) {
+import { buildCalculatorAutofillAction, normalizeChatHistory } from "./_shared/calculator-autofill-reasoning.mjs";
+
+export function buildSystemInstruction(contexto = {}, historial = []) {
   const baseInstruction = "Eres el asistente inteligente de SeaCharter (Core PRO y Data Bridge). Actúas como un Consultor Marítimo Senior, Bróker y Auditor de Riesgos.";
-  const contextInstruction = `\nContexto actual de la pantalla del usuario:\n${JSON.stringify(contexto, null, 2)}`;
+  const contextInstruction = `\nContexto actual de la pantalla del usuario (incluye siempre DraftVoyage e historial):\n${JSON.stringify(contexto, null, 2)}\nHistorial reciente normalizado:\n${JSON.stringify(normalizeChatHistory(historial), null, 2)}`;
   const moduleInstruction = `
 \nAnálisis Universal por Módulo:
    - Identifica primero contexto.modulo y contexto.moduloId. Usa contexto.datosModulo como fuente operativa de la vista activa y contexto.sugerenciasProactivas como lista inicial de comprobaciones, sin limitarte a ella.
@@ -31,6 +33,12 @@ export function buildSystemInstruction(contexto = {}) {
    - Si el usuario duda sobre qué medios usar (ej. grúas del buque/Geared vs. grúas de puerto/Shore cranes), NO des una respuesta neutral.
    - Principio Base: Compara el ritmo de carga/descarga exigido en el contrato comercial (Laytime o L/C) frente al coste del medio de estiba.
    - Estrategia: Si los medios "baratos" o incluidos en el flete (ej. grúas del barco) son suficientes para cumplir con el ritmo diario exigido sin generar demoras, ACONSEJA USARLOS para proteger el margen. Solo recomienda alquilar medios externos si los básicos no llegan al ritmo y las demoras superarían el coste del alquiler.
+
+4.1 Regla Buque (deducción obligatoria): Si conoces la Cantidad de Carga (MT), calcula el DWT Requerido sumando un margen del 8-10% (Bunkers/Constantes). Clasifica el buque: <15k DWT = Mini-Bulker, 15k-39k = Handysize, 40k-64k = Supramax, 65k-84k = Panamax.
+
+4.2 Regla Método (Grúas, deducción obligatoria): Al recibir ritmos de carga/descarga, evalúa la Mercancía. Para carga unitizada (Big Bags/Pallets) con ritmos estándar, prioriza "Grúa Barco" (Ship's Cranes) por rentabilidad, salvo que los ritmos sean excepcionalmente altos, requiriendo "Grúa Portuaria".
+
+4.3 Autocompletado integral: Cuando el usuario indique los ritmos de carga y descarga y el contexto ya contenga toneladas y mercancía, NO pidas más datos. Confirma ambos ritmos, deduce DWT, clase y métodos de POL/POD, y ofrece aplicar todos los parámetros en una única acción.
 
 5. Defensa en Negociaciones Comerciales (Llamar el Farol):
    - Si el usuario indica que su cliente presiona agresivamente afirmando tener una oferta mucho más barata, ACTÚA COMO UN BRÓKER EXPERTO. No aconsejes bajar el precio. En su lugar, detalla SIEMPRE estas 3 opciones para empoderar al usuario y desmontar el argumento de su cliente:
@@ -76,14 +84,16 @@ export default async (req) => {
     if (typeof mensaje !== "string" || !mensaje.trim()) return jsonResponse(400, { success: false, error: "Mensaje requerido" });
     if (!apiKey) return jsonResponse(500, { success: false, error: "Servicio de IA no configurado" });
     const normalizedContext = contexto && typeof contexto === "object" && !Array.isArray(contexto) ? contexto : {};
-    const finalInstruction = buildSystemInstruction(normalizedContext);
+    const normalizedHistory = normalizeChatHistory(normalizedContext.historialChat);
+    const finalInstruction = buildSystemInstruction(normalizedContext, normalizedHistory);
+    const action = buildCalculatorAutofillAction(mensaje, normalizedContext);
 
     const genAI = new GoogleGenerativeAI(apiKey);
 
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash", systemInstruction: finalInstruction });
 
     const result = await model.generateContent(mensaje.trim());
-    return jsonResponse(200, { success: true, respuesta: result.response.text() });
+    return jsonResponse(200, { success: true, respuesta: result.response.text(), action });
 
   } catch (error) {
     console.error("Error en Gemini API:", error);
