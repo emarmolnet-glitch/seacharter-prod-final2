@@ -6030,8 +6030,7 @@
                 gap: 0.5rem !important;
             }
 
-            header #language-selector,
-            header #gemini-api-key {
+            header #language-selector {
                 min-width: 0 !important;
             }
 
@@ -6177,10 +6176,6 @@
         header .header-actions-right > .flex.items-center.bg-slate-950.border {
             flex: 1 1 9rem !important;
             max-width: 12rem !important;
-        }
-
-        header #gemini-api-key {
-            width: 100% !important;
         }
 
         .tools-dropdown-menu {
@@ -8386,11 +8381,6 @@
                     <option value="fr" class="bg-slate-900 text-white">Français</option>
                 </select>
             </div>
-            <div class="flex items-center bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 flex-1 lg:flex-none max-w-xs" title="Opcional si estás en Netlify">
-                <i class="fa-solid fa-key text-slate-500 mr-2 text-xs"></i>
-                <input type="password" id="gemini-api-key" placeholder="API Key (Opcional en Netlify)..." class="bg-transparent border-none outline-none text-xs text-white w-full lg:w-40" autocomplete="off" spellcheck="false" autocapitalize="none" oninput="saveApiKey()">
-            </div>
-
             <!-- Interruptor de contexto de negocio: solo cambia la capa de presentación.
                  Va al final del rail derecho a propósito: el rail es nowrap y desborda
                  hacia la izquierda, así que el último hijo es la única posición donde el
@@ -14526,7 +14516,7 @@
                 "Flete PMT Spot Actualizado: Calculado sobre un Break-Even base de": "Spot Freight PMT Updated: Calculated on a base Break-Even of",
                 "Por favor, introduce el Nombre Corto de Carga primero.": "Please enter the Cargo Short Name first.",
                 "Clasificación del buque actualizada mediante IA.": "Vessel classification updated via AI.",
-                "Error al clasificar el buque. Revisa tu API Key o conexión.": "Error classifying vessel. Check your API Key or connection.",
+                "Error al clasificar el buque. Revisa la conexión con el servicio de IA.": "Error classifying vessel. Check the connection to the AI service.",
                 "Margen de": "Margin of",
                 "días aplicado": "days applied",
                 "Error al estimar el clima con IA. Usando margen por defecto.": "Error estimating weather with AI. Using default margin.",
@@ -14579,7 +14569,7 @@
                 "Flete PMT Spot Actualizado: Calculado sobre un Break-Even base de": "Fret PMT Spot mis à jour : Calculé sur un Break-Even de base de",
                 "Por favor, introduce el Nombre Corto de Carga primero.": "Veuillez d'abord saisir le nom court de la cargaison.",
                 "Clasificación del buque actualizada mediante IA.": "Classification du navire mise à jour par l'IA.",
-                "Error al clasificar el buque. Revisa tu API Key o conexión.": "Erreur lors de la classification du navire. Vérifiez votre clé API ou votre connexion.",
+                "Error al clasificar el buque. Revisa la conexión con el servicio de IA.": "Erreur lors de la classification du navire. Vérifiez la connexion au service d’IA.",
                 "Margen de": "Marge de",
                 "días aplicado": "jours appliquée",
                 "Error al estimar el clima con IA. Usando margen por defecto.": "Erreur lors d'estimation météo par IA. Marge par défaut utilisée.",
@@ -18093,11 +18083,6 @@
             } else if (typeof window.setAisRadarStatus === 'function') {
                 window.setAisRadarStatus('inactive');
             }
-            const savedKey = localStorage.getItem('rodahmar_gemini_api_key');
-            if (savedKey) {
-                document.getElementById('gemini-api-key').value = savedKey;
-            }
-
             let ultimaIAData = null;
             window.datosContratoIA = null;
 
@@ -18702,15 +18687,6 @@
             }, 900);
         }
         window.scheduleMatchingLiveUpdate = scheduleMatchingLiveUpdate;
-
-        function saveApiKey() {
-            const key = document.getElementById('gemini-api-key').value.trim();
-            if (key) {
-                localStorage.setItem('rodahmar_gemini_api_key', key);
-            } else {
-                localStorage.removeItem('rodahmar_gemini_api_key');
-            }
-        }
 
         // --- MOTOR DE COINCIDENCIAS / MATCHING ENGINE CLIENT ---
         function updateMatchPortCoords(type) {
@@ -41662,16 +41638,15 @@
         window.updateChartererNegotiationSimulator = updateChartererNegotiationSimulator;
         window.applySuggestedNegotiationTarget = applySuggestedNegotiationTarget;
 
-        // --- SISTEMA ROBUSTO API GEMINI (CON RETRIES Y SIN FALLOS JSON) ---
+        // --- SISTEMA ROBUSTO DE IA BACKEND (CON RETRIES Y SIN FALLOS JSON) ---
         async function executeGeminiRequest(payload) {
-            const inputKey = document.getElementById('gemini-api-key').value.trim();
             const delays = [1000, 2000, 4000, 8000, 16000];
             let lastError = null;
 
-            // 1. Intentar primero con la ruta aislada de auditoría legal/comercial.
+            // Todas las credenciales se resuelven exclusivamente en la Function de Netlify.
             for (let i = 0; i <= delays.length; i++) {
                 try {
-                    const response = await fetch('/api/ai-legal-audit', {
+                    const response = await fetch('/.netlify/functions/ai-legal-audit', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
@@ -41679,9 +41654,6 @@
                     
                     if (response.ok) {
                         return await response.json();
-                    } else if (response.status === 404) {
-                        // Si es 404, la función no está disponible, romper el bucle y probar fallback directo
-                        break;
                     } else {
                         const errData = await response.json().catch(() => ({}));
                         const requestError = new Error(errData.error?.message || `Error HTTP ${response.status}`);
@@ -41691,12 +41663,8 @@
                 } catch (error) {
                     lastError = error;
                     if (error?.code === 'AUDIT_GATE_BLOCKED') throw error;
-                    // Si es error de red (no 404) y no hay inputKey para fallback, reintentar con delay
-                    if (!inputKey && i < delays.length) {
+                    if (i < delays.length) {
                         await new Promise(resolve => setTimeout(resolve, delays[i]));
-                    } else if (inputKey) {
-                        // Si hay inputKey, salir del bucle de reintentos e intentar fallback directo inmediatamente
-                        break;
                     }
                 }
             }
@@ -41707,37 +41675,8 @@
                 );
             }
 
-            // 2. Fallback: Llamada directa a Gemini si el usuario ha introducido una API Key
-            if (inputKey) {
-                const model = "gemini-2.5-flash";
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${inputKey}`;
-                
-                for (let i = 0; i <= delays.length; i++) {
-                    try {
-                        const response = await fetch(url, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload)
-                        });
-                        
-                        if (!response.ok) {
-                            const errData = await response.json().catch(() => ({}));
-                            throw new Error(errData.error?.message || `Error HTTP ${response.status}`);
-                        }
-                        
-                        return await response.json();
-                    } catch (error) {
-                        lastError = error;
-                        if (i < delays.length) {
-                            await new Promise(resolve => setTimeout(resolve, delays[i]));
-                        }
-                    }
-                }
-            }
-
-            // Si falló todo y no hay API Key de fallback
             throw new Error(
-                lastError ? lastError.message : "Por favor, introduce tu API Key del motor de IA en la barra superior o despliega la aplicación en Netlify para usar el backend automatizado."
+                lastError ? lastError.message : "No se pudo conectar con el servicio seguro de IA. Inténtalo de nuevo más tarde."
             );
         }
 
@@ -42360,7 +42299,7 @@
 
             } catch (error) {
                 console.error(error);
-                showToast("⚠️ Error al clasificar el buque. Revisa tu API Key o conexión.");
+                showToast("⚠️ Error al clasificar el buque. Revisa la conexión con el servicio de IA.");
             } finally {
                 btn.innerHTML = originalIcon;
                 btn.disabled = false;
