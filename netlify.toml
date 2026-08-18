@@ -20,6 +20,9 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
+[functions."nlp-voyage-extract"]
+  included_files = ["wpi.csv"]
+
 [dev]
   command = "npm run dev"
   targetPort = 5173

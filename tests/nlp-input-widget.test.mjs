@@ -30,11 +30,13 @@ test("voyage extractor uses Netlify AI Gateway with strict JSON schema", () => {
 
 test("NLPInputWidget consolidates WPI ports before dispatch and triggers the native route workflow", () => {
   assert.match(widgetSource, /await window\.ensureWpiLoadedOnDemand\?\.\(\)/);
-  assert.match(widgetSource, /window\.searchLocalWpiPorts\?\.\(query, 1\)/);
+  assert.doesNotMatch(widgetSource, /searchLocalWpiPorts/);
+  assert.match(widgetSource, /portRecord\.source !== "WPI"/);
+  assert.match(widgetSource, /scenario\.port_validation\?\.valid/);
   assert.match(widgetSource, /window\.selectUniversalPortSuggestion\?\.\(input, selectedPort\)/);
   assert.match(widgetSource, /await window\.runOnDemandMapRouteWorkflow\?\.\(document\.getElementById\("btn-map-locate-route"\)\)/);
 
-  const wpiIndex = widgetSource.indexOf("await resolveAndSelectWpiPort(scenario.pol");
+  const wpiIndex = widgetSource.indexOf("await resolveAndSelectWpiPort(scenario.pol_port");
   const storeIndex = widgetSource.indexOf("window.SeaCharterStore?.set?.(");
   const routeIndex = widgetSource.indexOf("await window.runOnDemandMapRouteWorkflow");
   assert.ok(wpiIndex >= 0 && storeIndex > wpiIndex && routeIndex > storeIndex);
