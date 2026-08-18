@@ -402,6 +402,106 @@
   letter-spacing: 0.02em;
 }
 
+.sca-voyage-action {
+  align-self: flex-start;
+  width: min(94%, 360px);
+  padding: 14px;
+  border: 1px solid rgba(20, 126, 111, 0.28);
+  border-left: 4px solid var(--sca-teal);
+  border-radius: 14px;
+  color: #25364a;
+  background: linear-gradient(145deg, #f7fbfa, #edf7f5);
+  box-shadow: 0 8px 22px rgba(7, 49, 54, 0.09);
+  animation: sca-message-in 180ms ease-out both;
+}
+
+.sca-voyage-action__eyebrow {
+  margin-bottom: 7px;
+  color: #0c6f65;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sca-voyage-action p {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.sca-voyage-action__details {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0;
+}
+
+.sca-voyage-action__details div {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 8px;
+  font-size: 0.72rem;
+}
+
+.sca-voyage-action__details dt {
+  color: var(--sca-muted);
+  font-weight: 800;
+}
+
+.sca-voyage-action__details dd {
+  margin: 0;
+  color: #163f4d;
+  font-weight: 800;
+}
+
+.sca-voyage-action__button {
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  color: #ffffff;
+  background: var(--sca-teal-dark);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background 150ms ease, transform 150ms ease, opacity 150ms ease;
+}
+
+.sca-voyage-action__button:hover:not(:disabled) {
+  background: #075e58;
+  transform: translateY(-1px);
+}
+
+.sca-voyage-action__button:disabled {
+  cursor: default;
+  opacity: 0.78;
+}
+
+.sca-voyage-action__status {
+  min-height: 1em;
+  margin-top: 7px !important;
+  color: #16705f;
+  font-size: 0.69rem !important;
+  font-weight: 800;
+}
+
+.sca-voyage-action.is-injected {
+  border-color: rgba(22, 112, 95, 0.42);
+  background: #eef8f3;
+}
+
+.sca-voyage-action.is-error {
+  border-color: #d69a94;
+  border-left-color: #b94d45;
+  background: #fff7f6;
+}
+
+.sca-voyage-action.is-error .sca-voyage-action__status {
+  color: #8d3330;
+}
+
 .sca-thinking {
   display: flex;
   align-items: center;

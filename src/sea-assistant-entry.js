@@ -4,6 +4,7 @@ import { evaluateBasicRisks } from "./basic-risk-evaluator.js";
 import { evaluateModuleSuggestions, SUPPORTED_MODULES } from "./universal-module-suggestions.js";
 
 const CHAT_ENDPOINT = "/.netlify/functions/chat-assistant";
+const NLP_ENDPOINT = "/api/nlp-voyage-extract";
 const REQUEST_TIMEOUT_MS = 45_000;
 const MODULE_LABELS = Object.freeze({
   map: "Mapa",
@@ -83,6 +84,72 @@ function createThinkingMessage() {
       <span class="sca-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>
     </div>`;
   return message;
+}
+
+function normalizeVoyageScenario(value = {}) {
+  return {
+    pol: String(value.pol || "").trim(),
+    pod: String(value.pod || "").trim(),
+    laydays: String(value.laydays || "").trim(),
+    cancelling: String(value.cancelling || value.laydays || "").trim(),
+    cargo_qty: Number(value.cargo_qty ?? value.cargoQty) || 0,
+    cargo_type: String(value.cargo_type || value.cargoType || "").trim(),
+    loading_rate: Number(value.loading_rate ?? value.loadingRate) || 0,
+    discharge_rate: Number(value.discharge_rate ?? value.dischargeRate) || 0,
+  };
+}
+
+function hasInjectableVoyage(scenario) {
+  return Boolean(scenario.pol && scenario.pod && scenario.cargo_qty > 0);
+}
+
+async function extractVoyageScenario(text, signal) {
+  const response = await fetch(NLP_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+    signal,
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.success) return null;
+  const scenario = normalizeVoyageScenario(payload.scenario);
+  return hasInjectableVoyage(scenario) ? scenario : null;
+}
+
+function createVoyageActionCard(scenario) {
+  const card = document.createElement("article");
+  card.className = "sca-voyage-action";
+  card.innerHTML = `
+    <div class="sca-voyage-action__eyebrow"><span aria-hidden="true">⚡</span> Motor NLP listo</div>
+    <p>He extraído los datos de tu ruta (<strong>POL: ${DOMPurify.sanitize(scenario.pol)}</strong>, <strong>POD: ${DOMPurify.sanitize(scenario.pod)}</strong>, <strong>Cantidad: ${scenario.cargo_qty.toLocaleString("es-ES")} MT</strong>). ¿Quieres que los inyecte automáticamente en el Motor NLP para calcular la ruta y los costes?</p>
+    <dl class="sca-voyage-action__details">
+      ${scenario.cargo_type ? `<div><dt>Carga</dt><dd>${DOMPurify.sanitize(scenario.cargo_type)}</dd></div>` : ""}
+      ${scenario.laydays ? `<div><dt>Laycan</dt><dd>${DOMPurify.sanitize(scenario.laydays === scenario.cancelling ? scenario.laydays : `${scenario.laydays} / ${scenario.cancelling}`)}</dd></div>` : ""}
+    </dl>
+    <button type="button" class="sca-voyage-action__button">Sí, inyectar y calcular</button>
+    <p class="sca-voyage-action__status" role="status" aria-live="polite"></p>`;
+
+  const button = card.querySelector(".sca-voyage-action__button");
+  const status = card.querySelector(".sca-voyage-action__status");
+  button.addEventListener("click", () => {
+    if (typeof window.injectVoyageScenario !== "function") {
+      status.textContent = "El motor de viaje todavía no está disponible.";
+      card.classList.add("is-error");
+      return;
+    }
+    button.disabled = true;
+    try {
+      window.injectVoyageScenario(scenario);
+      card.classList.add("is-injected");
+      button.textContent = "Datos inyectados · cálculo iniciado";
+      status.textContent = "DraftVoyage y módulos operativos actualizados correctamente.";
+    } catch {
+      button.disabled = false;
+      card.classList.add("is-error");
+      status.textContent = "No se pudieron inyectar los datos. Revisa los campos e inténtalo de nuevo.";
+    }
+  });
+  return card;
 }
 
 function formatTime() {
@@ -688,12 +755,14 @@ function mountSeaAssistant() {
 
     try {
       const contexto = collectChatContext();
-      const response = await fetch(CHAT_ENDPOINT, {
+      const chatRequest = fetch(CHAT_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mensaje: userText, contexto }),
         signal: controller.signal,
       });
+      const extractionRequest = extractVoyageScenario(userText, controller.signal).catch(() => null);
+      const [response, scenario] = await Promise.all([chatRequest, extractionRequest]);
 
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.success || typeof payload.respuesta !== "string") {
@@ -701,6 +770,7 @@ function mountSeaAssistant() {
       }
 
       thinkingMessage.replaceWith(createMessage("assistant", payload.respuesta.trim(), { meta: formatTime() }));
+      if (scenario) history.appendChild(createVoyageActionCard(scenario));
     } catch (error) {
       const errorText = error?.name === "AbortError"
         ? "La respuesta está tardando más de lo esperado. Inténtalo de nuevo en unos segundos."
