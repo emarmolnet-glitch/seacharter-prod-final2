@@ -1,5 +1,9 @@
 import DOMPurify from "dompurify";
 import { validateScenarioPortsWithWpi } from "./wpi-catalog-client.js";
+import {
+  applyVoyageScenarioDefaults,
+  hasMinimumVoyageRoute,
+} from "../shared/voyage-scenario-policy.mjs";
 import { marked } from "marked";
 import { evaluateBasicRisks } from "./basic-risk-evaluator.js";
 import { evaluateModuleSuggestions, SUPPORTED_MODULES } from "./universal-module-suggestions.js";
@@ -101,24 +105,21 @@ function createThinkingMessage() {
 }
 
 function normalizeVoyageScenario(value = {}) {
-  return {
+  return applyVoyageScenarioDefaults({
+    ...value,
     pol: String(value.pol || "").trim(),
     pod: String(value.pod || "").trim(),
     laydays: String(value.laydays || "").trim(),
-    cancelling: String(value.cancelling || value.laydays || "").trim(),
+    cancelling: String(value.cancelling || "").trim(),
     cargo_qty: Number(value.cargo_qty ?? value.cargoQty) || 0,
     cargo_type: String(value.cargo_type || value.cargoType || "").trim(),
     loading_rate: Number(value.loading_rate ?? value.loadingRate) || 0,
     discharge_rate: Number(value.discharge_rate ?? value.dischargeRate) || 0,
-  };
+  });
 }
 
 function hasInjectableVoyage(scenario) {
-  return Boolean(
-    scenario.pol
-    && scenario.pod
-    && scenario.cargo_qty > 0,
-  );
+  return hasMinimumVoyageRoute(scenario);
 }
 
 async function extractVoyageScenario(text, signal) {
@@ -138,17 +139,22 @@ async function extractVoyageScenario(text, signal) {
 }
 
 function createVoyageActionCard(scenario) {
+  const isPartial = scenario.is_partial || scenario.defaults_applied?.length > 0;
+  const safePol = DOMPurify.sanitize(scenario.pol);
+  const safePod = DOMPurify.sanitize(scenario.pod);
   const card = document.createElement("article");
   card.className = "sca-voyage-action";
   card.innerHTML = `
     <div class="sca-voyage-action__eyebrow"><span aria-hidden="true">⚡</span> Motor NLP listo</div>
-    <p>He extraído los datos de tu ruta (<strong>POL: ${DOMPurify.sanitize(scenario.pol)}</strong>, <strong>POD: ${DOMPurify.sanitize(scenario.pod)}</strong>, <strong>Cantidad: ${scenario.cargo_qty.toLocaleString("es-ES")} MT</strong>). ¿Quieres que los inyecte automáticamente en el Motor NLP para calcular la ruta y los costes?</p>
+    <p>${isPartial
+      ? `He detectado tu ruta (<strong>${safePol} ➔ ${safePod}</strong>). ¿Quieres inyectarla ya en el motor para ver la ruta preliminar y calculamos el resto después?`
+      : `He extraído los datos de tu ruta (<strong>POL: ${safePol}</strong>, <strong>POD: ${safePod}</strong>, <strong>Cantidad: ${scenario.cargo_qty.toLocaleString("es-ES")} MT</strong>). ¿Quieres que los inyecte automáticamente en el Motor NLP para calcular la ruta y los costes?`}</p>
     <dl class="sca-voyage-action__details">
-      ${scenario.cargo_type ? `<div><dt>Carga</dt><dd>${DOMPurify.sanitize(scenario.cargo_type)}</dd></div>` : ""}
+      ${scenario.cargo_type && scenario.cargo_type !== "TBA" ? `<div><dt>Carga</dt><dd>${DOMPurify.sanitize(scenario.cargo_type)}</dd></div>` : ""}
       ${scenario.laydays ? `<div><dt>Laycan</dt><dd>${DOMPurify.sanitize(scenario.laydays === scenario.cancelling ? scenario.laydays : `${scenario.laydays} / ${scenario.cancelling}`)}</dd></div>` : ""}
     </dl>
     ${scenario.port_validation?.clarification ? `<p class="sca-voyage-action__warning"><span aria-hidden="true">⚠</span> ${DOMPurify.sanitize(scenario.port_validation.clarification)}</p>` : ""}
-    <button type="button" class="sca-voyage-action__button">${scenario.port_validation?.valid ? "Sí, inyectar y calcular" : "Inyectar datos y revisar puertos"}</button>
+    <button type="button" class="sca-voyage-action__button">${scenario.port_validation?.valid ? (isPartial ? "Inyectar ruta preliminar" : "Sí, inyectar y calcular") : "Inyectar datos y revisar puertos"}</button>
     <p class="sca-voyage-action__status" role="status" aria-live="polite"></p>`;
 
   const button = card.querySelector(".sca-voyage-action__button");
@@ -163,10 +169,16 @@ function createVoyageActionCard(scenario) {
     try {
       const result = window.injectVoyageScenario(scenario);
       card.classList.add("is-injected");
-      button.textContent = result?.requiresPortSelection ? "Datos inyectados · selección pendiente" : "Datos inyectados · cálculo iniciado";
+      button.textContent = result?.requiresPortSelection
+        ? "Datos inyectados · selección pendiente"
+        : result?.routeOnly
+          ? "Ruta preliminar en cálculo"
+          : "Datos inyectados · cálculo iniciado";
       status.textContent = result?.requiresPortSelection
         ? "DraftVoyage actualizado. Selecciona el puerto correcto en los desplegables resaltados."
-        : "DraftVoyage y módulos operativos actualizados correctamente.";
+        : result?.routeOnly
+          ? "Ruta y fallbacks seguros inyectados. Los datos operativos pueden completarse después."
+          : "DraftVoyage y módulos operativos actualizados correctamente.";
     } catch {
       button.disabled = false;
       card.classList.add("is-error");

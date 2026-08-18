@@ -16,6 +16,16 @@ test("NLPInputWidget awaits the real voyage extractor before validation", () => 
   assert.ok(extractionIndex >= 0 && validationIndex > extractionIndex);
 });
 
+test("NLPInputWidget accepts partial voyages with POL and POD only", () => {
+  assert.match(widgetSource, /const CRITICAL_FIELDS = Object\.freeze\(\[\s*\["pol"[\s\S]*\["pod"/);
+  assert.doesNotMatch(widgetSource, /\["laydays", "Laydays \(Inicio\)"/);
+  assert.match(widgetSource, /hasMinimumVoyageRoute\(scenario\)/);
+  assert.match(widgetSource, /applyVoyageScenarioDefaults/);
+  assert.match(widgetSource, /scenario\.is_partial/);
+  assert.match(widgetSource, /runOnDemandMapRouteWorkflow/);
+  assert.match(widgetSource, /Laycan provisional, carga 0\/TBA y términos CQD aplicados/);
+});
+
 test("voyage extraction normalizes the exact DraftVoyage validation keys", () => {
   for (const field of ["pol", "pod", "laydays", "cancelling", "cargo_qty", "loading_rate", "discharge_rate"]) {
     assert.match(widgetSource, new RegExp(`${field}:`));
@@ -28,6 +38,8 @@ test("voyage extractor uses Netlify AI Gateway with strict JSON schema", () => {
   assert.match(functionSource, /model: "gpt-5\.4-mini"/);
   assert.match(functionSource, /type: "json_schema"/);
   assert.match(functionSource, /path: "\/api\/nlp-voyage-extract"/);
+  assert.match(functionSource, /Un requerimiento es procesable desde que contiene POL y POD/);
+  assert.match(functionSource, /valid: hasMinimumVoyageRoute\(scenario\)/);
 });
 
 test("NLPInputWidget validates extracted port strings against the global WPI catalog", () => {
@@ -66,12 +78,12 @@ test("NLPInputWidget optimizes POL and POD methods independently before global d
   assert.match(widgetSource, /pol: selectMethod\(loadingRate\)/);
   assert.match(widgetSource, /pod: selectMethod\(dischargeRate\)/);
   assert.match(widgetSource, /numericRate <= profile\.shipEfficientCapacity/);
-  assert.match(widgetSource, /scenario\.loadMethod = optimizedMethods\.pol\.value/);
-  assert.match(widgetSource, /scenario\.dischargeMethod = optimizedMethods\.pod\.value/);
+  assert.match(widgetSource, /scenario\.loadMethod = optimizedMethods\?\.pol\.value \|\| ""/);
+  assert.match(widgetSource, /scenario\.dischargeMethod = optimizedMethods\?\.pod\.value \|\| ""/);
   assert.match(widgetSource, /loadMethod: scenario\.loadMethod/);
   assert.match(widgetSource, /dischargeMethod: scenario\.dischargeMethod/);
 
-  const optimizationIndex = widgetSource.indexOf("const optimizedMethods = optimizeCargoHandlingMethods");
+  const optimizationIndex = widgetSource.indexOf("const optimizedMethods = hasOperationalRates");
   const methodDispatchIndex = widgetSource.indexOf('await typeIntoControl("metodo_carga"');
   const globalDispatchIndex = widgetSource.indexOf("window.SeaCharterStore?.set?.(operationalPayload");
   assert.ok(optimizationIndex >= 0 && methodDispatchIndex > optimizationIndex && globalDispatchIndex > methodDispatchIndex);

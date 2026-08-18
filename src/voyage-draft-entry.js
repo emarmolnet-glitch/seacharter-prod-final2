@@ -1,4 +1,5 @@
 import { voyageStore } from './stores/voyage-store.js';
+import { applyVoyageScenarioDefaults } from '../shared/voyage-scenario-policy.mjs';
 
 let isHydratingBallastDistance = false;
 
@@ -73,6 +74,7 @@ function setPortSelectionWarning(inputId, value, needsSelection) {
 }
 
 function injectVoyageScenario(scenario = {}) {
+    scenario = applyVoyageScenarioDefaults(scenario);
     const pol = String(scenario.pol || '').trim();
     const pod = String(scenario.pod || '').trim();
     const cargoQuantity = Number(scenario.cargo_qty ?? scenario.cargoQty) || 0;
@@ -113,6 +115,8 @@ function injectVoyageScenario(scenario = {}) {
     setValue('ritmo_nominal_pol', loadingRate);
     setValue('rate-disch', dischargeRate);
     setValue('ritmo_nominal_pod', dischargeRate);
+    ['laytime-load-condition', 'gc-laytime-load-cond'].forEach((id) => setSelectValue(id, scenario.loading_terms));
+    ['laytime-disch-condition', 'gc-laytime-disch-cond'].forEach((id) => setSelectValue(id, scenario.discharge_terms));
 
     const calculatorState = {
         pol,
@@ -127,6 +131,8 @@ function injectVoyageScenario(scenario = {}) {
         cargo: cargoQuantity,
         cargoProduct: cargoType,
         cargoType,
+        laytimeLoadCondition: scenario.loading_terms,
+        laytimeDischCondition: scenario.discharge_terms,
         ...(loadingRate > 0 ? { loadRate: loadingRate } : {}),
         ...(dischargeRate > 0 ? { dischargeRate, dischRate: dischargeRate } : {}),
     };
@@ -135,8 +141,12 @@ function injectVoyageScenario(scenario = {}) {
     window.dispatchEvent(new CustomEvent('voyage-draft:nlp-injected', { detail: { scenario, draft: voyageStore.getState().draft } }));
     if (typeof window.syncGlobalStateToForms === 'function') window.syncGlobalStateToForms();
     const requiresPortSelection = !hasValidatedPol || !hasValidatedPod;
-    if (!requiresPortSelection && typeof window.runEngine === 'function') window.runEngine();
-    return { draft: voyageStore.getState().draft, requiresPortSelection };
+    if (!requiresPortSelection && scenario.is_partial) {
+        void window.runOnDemandMapRouteWorkflow?.(document.getElementById('btn-map-locate-route'));
+    } else if (!requiresPortSelection && typeof window.runEngine === 'function') {
+        window.runEngine();
+    }
+    return { draft: voyageStore.getState().draft, requiresPortSelection, routeOnly: scenario.is_partial };
 }
 
 function hydrateCalculatorFromDraft(draft) {

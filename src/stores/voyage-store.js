@@ -119,7 +119,9 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
             },
             cargo: {
                 description: cleanText(scenario.cargo_type || scenario.cargoType) || current.draft.cargo.description,
-                quantityMt: cleanNumber(scenario.cargo_qty ?? scenario.cargoQty) || current.draft.cargo.quantityMt,
+                quantityMt: scenario.cargo_qty !== undefined || scenario.cargoQty !== undefined
+                    ? cleanNumber(scenario.cargo_qty ?? scenario.cargoQty)
+                    : current.draft.cargo.quantityMt,
             },
             updatedAt: new Date().toISOString(),
             lastSource: 'assistant-nlp',

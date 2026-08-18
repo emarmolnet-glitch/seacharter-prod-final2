@@ -5,6 +5,7 @@ import {
   maritimeDictionaryPrompt,
   normalizeNaturalDate,
 } from "./_shared/nlp-voyage-dictionary.mjs";
+import { hasMinimumVoyageRoute } from "../../shared/voyage-scenario-policy.mjs";
 
 type VoyageExtractionRequest = {
   text?: string;
@@ -78,7 +79,7 @@ async function extractVoyageScenario(text: string) {
     input: [
       {
         role: "system",
-        content: `Eres un extractor marítimo de SeaCharter Core PRO. Convierte el requerimiento en las ocho claves exactas del esquema. No inventes puertos, mercancías, cantidades ni ritmos. Aplica este diccionario de equivalencias coloquiales: ${maritimeDictionaryPrompt()}. POL y POD deben conservar únicamente el nombre de puerto expresado por el usuario; no los geocodifiques, traduzcas ni completes con ubicaciones externas. La validación oficial se realiza después contra World Port Index. cargo_type es la mercancía descrita, incluyendo materiales cotidianos como cemento, grano o clinker. laydays y cancelling deben usar YYYY-MM-DD; interpreta rangos como "entre el día X y el Y" o "desde el [Fecha] hasta el [Fecha]" como inicio y fin del laycan. La fecha actual es ${new Date().toISOString().slice(0, 10)}; si el usuario da día y mes sin año, usa la siguiente ocurrencia futura. Si sólo indica una fecha operativa, úsala como laydays y cancelling para representar un laycan de un día. cargo_qty, loading_rate y discharge_rate son números positivos en toneladas métricas o toneladas métricas por día. Si un dato no aparece, devuelve string vacío o 0 según el tipo.`,
+        content: `Eres un extractor marítimo de SeaCharter Core PRO. Convierte el requerimiento en las ocho claves exactas del esquema. Un requerimiento es procesable desde que contiene POL y POD; laycan, mercancía, cantidad y ritmos son opcionales en esta fase. No inventes puertos, mercancías, cantidades ni ritmos. Aplica este diccionario de equivalencias coloquiales: ${maritimeDictionaryPrompt()}. POL y POD deben conservar únicamente el nombre de puerto expresado por el usuario; no los geocodifiques, traduzcas ni completes con ubicaciones externas. La validación oficial se realiza después contra World Port Index. cargo_type es la mercancía descrita, incluyendo materiales cotidianos como cemento, grano o clinker. laydays y cancelling deben usar YYYY-MM-DD; interpreta rangos como "entre el día X y el Y" o "desde el [Fecha] hasta el [Fecha]" como inicio y fin del laycan. La fecha actual es ${new Date().toISOString().slice(0, 10)}; si el usuario da día y mes sin año, usa la siguiente ocurrencia futura. Si sólo indica una fecha operativa, úsala como laydays y cancelling para representar un laycan de un día. cargo_qty, loading_rate y discharge_rate son números positivos en toneladas métricas o toneladas métricas por día. Si un dato no aparece, devuelve string vacío o 0 según el tipo.`,
       },
       { role: "user", content: text },
     ],
@@ -124,12 +125,21 @@ export default async (req: Request) => {
 
   try {
     const scenario = await extractVoyageScenario(text);
-    return responseJson({ success: true, scenario, source: "netlify-ai-gateway" });
-  } catch {
-    console.error("NLP voyage extraction failed; using deterministic fallback.");
     return responseJson({
       success: true,
-      scenario: extractFallback(text),
+      valid: hasMinimumVoyageRoute(scenario),
+      minimum_required: ["pol", "pod"],
+      scenario,
+      source: "netlify-ai-gateway",
+    });
+  } catch {
+    console.error("NLP voyage extraction failed; using deterministic fallback.");
+    const scenario = extractFallback(text);
+    return responseJson({
+      success: true,
+      valid: hasMinimumVoyageRoute(scenario),
+      minimum_required: ["pol", "pod"],
+      scenario,
       source: "deterministic-fallback",
     });
   }
