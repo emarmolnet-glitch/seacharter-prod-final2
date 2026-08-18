@@ -143,6 +143,7 @@
 }
 
 .sca-mark svg,
+.sca-mic svg,
 .sca-send svg {
   width: 22px;
   height: 22px;
@@ -430,7 +431,7 @@
 
 .sca-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: end;
   gap: 10px;
   padding: 13px;
@@ -471,6 +472,7 @@
   opacity: 0.66;
 }
 
+.sca-mic,
 .sca-send {
   display: grid;
   width: 46px;
@@ -486,20 +488,72 @@
   transition: background 150ms ease, transform 150ms ease, opacity 150ms ease;
 }
 
+.sca-mic {
+  position: relative;
+  border: 1px solid #c8d6e1;
+  color: var(--sca-navy-soft);
+  background: #f8fafc;
+  box-shadow: none;
+}
+
+.sca-mic[hidden] {
+  display: none;
+}
+
+.sca-mic::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border: 2px solid rgba(193, 52, 52, 0.45);
+  border-radius: 17px;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.88);
+}
+
+.sca-mic:hover:not(:disabled) {
+  border-color: var(--sca-teal);
+  color: var(--sca-teal-dark);
+  background: #ffffff;
+}
+
+.sca-mic.is-listening {
+  border-color: #a92f2f;
+  color: #ffffff;
+  background: #bd3a3a;
+  box-shadow: 0 7px 18px rgba(142, 34, 34, 0.24);
+}
+
+.sca-mic.is-listening::after {
+  animation: sca-listening-ring 1.35s ease-out infinite;
+}
+
 .sca-send:hover:not(:disabled) {
   background: var(--sca-teal-dark);
 }
 
+.sca-mic:disabled,
 .sca-send:disabled {
   cursor: not-allowed;
   opacity: 0.42;
   box-shadow: none;
 }
 
+.sca-mic:focus-visible,
 .sca-send:focus-visible,
 .sca-input:focus-visible {
   outline: 3px solid rgba(37, 161, 142, 0.34);
   outline-offset: 2px;
+}
+
+.sca-voice-feedback {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 @keyframes sca-message-in {
@@ -520,6 +574,17 @@
   }
 }
 
+@keyframes sca-listening-ring {
+  0% {
+    opacity: 0.72;
+    transform: scale(0.88);
+  }
+  75%, 100% {
+    opacity: 0;
+    transform: scale(1.16);
+  }
+}
+
 @media (max-width: 560px) {
   .sca-panel {
     right: 12px;
@@ -534,6 +599,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sca-panel,
+  .sca-mic,
+  .sca-mic::after,
   .sca-send,
   .sca-message,
   .sca-thinking-dots span {

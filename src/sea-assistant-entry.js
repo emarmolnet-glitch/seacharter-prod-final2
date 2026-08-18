@@ -32,6 +32,13 @@ const icons = {
       <path d="m4 12 16-7-5.8 14-2.8-5.7L4 12Z" />
       <path d="m11.4 13.3 3.5-3.4" />
     </svg>`,
+  microphone: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M6.5 11.5a5.5 5.5 0 0 0 11 0" />
+      <path d="M12 17v4" />
+      <path d="M9 21h6" />
+    </svg>`,
 };
 
 function createMessage(role, text, options = {}) {
@@ -409,7 +416,9 @@ function mountSeaAssistant() {
       <div class="sca-history" aria-live="polite" aria-relevant="additions text"></div>
       <form class="sca-form">
         <textarea class="sca-input" rows="1" maxlength="2000" placeholder="Escribe tu consulta marítima..." aria-label="Mensaje para el asistente" required></textarea>
+        <button class="sca-mic" id="sea-assistant-mic-btn" type="button" aria-label="Iniciar dictado por voz" aria-pressed="false" title="Dictar consulta" hidden>${icons.microphone}</button>
         <button class="sca-send" type="submit" aria-label="Enviar mensaje" disabled>${icons.send}</button>
+        <span class="sca-voice-feedback" role="status" aria-live="polite"></span>
       </form>
     </div>`;
 
@@ -420,7 +429,9 @@ function mountSeaAssistant() {
   const history = root.querySelector(".sca-history");
   const form = root.querySelector(".sca-form");
   const input = root.querySelector(".sca-input");
+  const micButton = root.querySelector(".sca-mic");
   const sendButton = root.querySelector(".sca-send");
+  const voiceFeedback = root.querySelector(".sca-voice-feedback");
   const status = root.querySelector(".sca-status");
   const toggleButton = document.querySelector("#sea-assistant-toggle");
   if (!toggleButton) {
@@ -435,6 +446,9 @@ function mountSeaAssistant() {
   let hasCustomPosition = false;
   let position = { x: 0, y: 0 };
   let dragStart = { x: 0, y: 0 };
+  let recognition = null;
+  let isListening = false;
+  let recognitionHadError = false;
 
   const scrollToLatest = () => {
     history.scrollTo({ top: history.scrollHeight, behavior: "smooth" });
@@ -448,6 +462,96 @@ function mountSeaAssistant() {
   const syncSendState = () => {
     sendButton.disabled = pending || !input.value.trim();
   };
+
+  const setListening = (nextListening) => {
+    isListening = nextListening;
+    micButton.classList.toggle("is-listening", nextListening);
+    micButton.setAttribute("aria-pressed", String(nextListening));
+    micButton.setAttribute("aria-label", nextListening ? "Detener dictado por voz" : "Iniciar dictado por voz");
+    micButton.title = nextListening ? "Detener dictado" : "Dictar consulta";
+  };
+
+  const insertTranscript = (transcript) => {
+    const spokenText = String(transcript || "").trim();
+    if (!spokenText) return;
+
+    const selectionStart = input.selectionStart ?? input.value.length;
+    const selectionEnd = input.selectionEnd ?? input.value.length;
+    const before = input.value.slice(0, selectionStart);
+    const after = input.value.slice(selectionEnd);
+    const leadingSpace = before && !/\s$/.test(before) ? " " : "";
+    const trailingSpace = after && !/^\s/.test(after) ? " " : "";
+    const insertedText = `${leadingSpace}${spokenText}${trailingSpace}`;
+    const nextValue = `${before}${insertedText}${after}`.slice(0, input.maxLength);
+    const cursorPosition = Math.min(before.length + leadingSpace.length + spokenText.length, nextValue.length);
+
+    input.value = nextValue;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.focus();
+    input.setSelectionRange(cursorPosition, cursorPosition);
+  };
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = "es-ES";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    micButton.hidden = false;
+
+    recognition.onstart = () => {
+      recognitionHadError = false;
+      setListening(true);
+      voiceFeedback.textContent = "Escuchando tu consulta marítima.";
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .slice(event.resultIndex)
+        .map((result) => result[0]?.transcript || "")
+        .join(" ");
+      insertTranscript(transcript);
+      voiceFeedback.textContent = "Dictado añadido al mensaje.";
+    };
+
+    recognition.onerror = (event) => {
+      recognitionHadError = true;
+      setListening(false);
+      const errorMessages = {
+        "not-allowed": "El navegador no tiene permiso para usar el micrófono.",
+        "service-not-allowed": "El reconocimiento de voz está bloqueado en este navegador.",
+        "audio-capture": "No se detectó un micrófono disponible.",
+        "no-speech": "No se detectó voz. Inténtalo de nuevo.",
+        network: "El servicio de reconocimiento de voz no está disponible.",
+        aborted: "Dictado cancelado.",
+      };
+      voiceFeedback.textContent = errorMessages[event.error] || "No se pudo completar el dictado por voz.";
+    };
+
+    recognition.onend = () => {
+      setListening(false);
+      if (!recognitionHadError && voiceFeedback.textContent === "Escuchando tu consulta marítima.") {
+        voiceFeedback.textContent = "Dictado finalizado.";
+      }
+    };
+
+    micButton.addEventListener("click", () => {
+      if (isListening) {
+        recognition.stop();
+        return;
+      }
+
+      recognitionHadError = false;
+      try {
+        recognition.start();
+        setListening(true);
+      } catch {
+        setListening(false);
+        voiceFeedback.textContent = "No se pudo iniciar el dictado. Inténtalo de nuevo.";
+      }
+    });
+  }
 
   const clampPosition = (x, y) => ({
     x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - panel.offsetWidth)),
@@ -489,6 +593,7 @@ function mountSeaAssistant() {
       });
       scrollToLatest();
     } else {
+      if (isListening) recognition?.stop();
       toggleButton.focus();
     }
   };
@@ -507,6 +612,8 @@ function mountSeaAssistant() {
   const setPending = (nextPending) => {
     pending = nextPending;
     input.disabled = nextPending;
+    micButton.disabled = nextPending;
+    if (nextPending && isListening) recognition?.stop();
     syncSendState();
   };
 
