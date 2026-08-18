@@ -98,6 +98,23 @@ export function hasOperationalDraft(draft) {
 
 export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
     draft: { ...EMPTY_DRAFT, laycan: { ...EMPTY_DRAFT.laycan }, cargo: { ...EMPTY_DRAFT.cargo } },
+    applyNlpScenario: (scenario = {}) => set((current) => ({
+        draft: {
+            ...current.draft,
+            pol: normalizePort(scenario.pol, cleanText(scenario.pol)) || current.draft.pol,
+            pod: normalizePort(scenario.pod, cleanText(scenario.pod)) || current.draft.pod,
+            laycan: {
+                laydays: cleanText(scenario.laydays) || current.draft.laycan.laydays,
+                cancelling: cleanText(scenario.cancelling) || current.draft.laycan.cancelling,
+            },
+            cargo: {
+                description: cleanText(scenario.cargo_type || scenario.cargoType) || current.draft.cargo.description,
+                quantityMt: cleanNumber(scenario.cargo_qty ?? scenario.cargoQty) || current.draft.cargo.quantityMt,
+            },
+            updatedAt: new Date().toISOString(),
+            lastSource: 'assistant-nlp',
+        },
+    })),
     updateFromCalculator: (state = {}) => set((current) => {
         const ballastDistanceNm = resolveCalculatorBallastDistance(state, current.draft);
         const ballastDistanceChanged = ballastDistanceNm !== current.draft.ballastDistanceNm;
