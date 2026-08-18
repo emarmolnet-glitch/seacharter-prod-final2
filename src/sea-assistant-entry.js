@@ -1,20 +1,20 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { evaluateBasicRisks } from "./basic-risk-evaluator.js";
+import { evaluateModuleSuggestions, SUPPORTED_MODULES } from "./universal-module-suggestions.js";
 
 const CHAT_ENDPOINT = "/.netlify/functions/chat-assistant";
 const REQUEST_TIMEOUT_MS = 45_000;
-const PROACTIVE_RISK_MESSAGE = "¡Hola! He estado revisando los datos que acabas de introducir y he detectado algunas áreas de riesgo que podrían afectar a tu rentabilidad. ¿Quieres que analicemos los términos del puerto o los ritmos de carga?";
-
 const MODULE_LABELS = Object.freeze({
-  map: "MAPA",
-  estimator: "CALCULADORA",
-  decisiones: "DECISIONES",
-  ais: "DENSIDAD AIS",
-  matching: "COINCIDENCIA",
-  gencon: "EDITOR",
+  map: "Mapa",
+  estimator: "Calculadora",
+  decisiones: "Decisiones",
+  tracking: "Tracking",
+  ais: "Densidad",
+  matching: "Coincidencia",
+  gencon: "Editor",
   asbatankvoy: "EDITOR ASBATANKVOY",
-  auditor: "AUDITORIA",
+  auditor: "Auditoría",
   fcl: "FCL",
   cbam: "CBAM",
 });
@@ -113,12 +113,19 @@ function firstNumber(...values) {
   return null;
 }
 
-function getActiveModule() {
-  if (document.getElementById("dual-mode-overlay")) return "MODO DUAL";
+function getActiveModuleDescriptor() {
+  if (document.getElementById("tracking-live-overlay")?.classList.contains("is-open")) {
+    return { id: "tracking", name: MODULE_LABELS.tracking };
+  }
+  if (document.getElementById("dual-mode-overlay")) return { id: "dual", name: "MODO DUAL" };
 
   const activeView = document.querySelector(".view-section.active-block, .view-section.active-flex");
   const moduleId = activeView?.id?.replace(/^view-/, "") || "map";
-  return MODULE_LABELS[moduleId] || moduleId.toUpperCase();
+  return { id: moduleId, name: MODULE_LABELS[moduleId] || moduleId.toUpperCase() };
+}
+
+function getActiveModule() {
+  return getActiveModuleDescriptor().name;
 }
 
 function getDualModeContext() {
@@ -140,12 +147,77 @@ function getHighlightedClauses(contractType) {
     .filter(Boolean);
 }
 
+function collectModuleScreenContext(moduleId = getActiveModuleDescriptor().id) {
+  const state = window.SeaCharterStore?.getState?.() || window.State || {};
+  const calculatedState = window.GlobalStore?.calculatedState || window.CalculatedState || {};
+  const voyageDraft = window.VoyageDraftStore?.getState?.().draft || {};
+  const trackingState = window.TrackingStore?.getState?.() || {};
+  const workflowState = window.HeaderWorkflowStore?.getState?.() || {};
+  const basicRiskResult = evaluateBasicRisks(collectBasicRiskContext());
+  const pol = firstText(state.pol, voyageDraft.pol?.name, readElementValue("port-pol", "map-port-pol", "sync-pol-label"));
+  const pod = firstText(state.pod, voyageDraft.pod?.name, readElementValue("port-pod", "map-port-pod", "sync-pod-label"));
+  const distanceNm = firstNumber(
+    calculatedState.totalDistance,
+    calculatedState.totalDistanceNm,
+    window.GlobalStore?.routeResult?.totalDistance,
+    trackingState.operationalMetrics?.totalDistanceNm,
+    readElementValue("sync-miles-label"),
+  );
+  const cargoQuantity = firstNumber(
+    state.cargoQty,
+    state.cargoQuantity,
+    state.quantity,
+    voyageDraft.cargo?.quantity,
+    readElementValue("cargo-qty", "cargo-quantity", "cargo-tonnage", "matching-cargo-quantity"),
+  );
+  const densityCount = firstNumber(readElementValue("ais-density-count", "buques-count"));
+  const matchingResultCount = firstNumber(
+    document.getElementById("btn-sync-neon-matching")?.dataset?.matchingResultCount,
+    readElementValue("matching-viable-count", "matching-compatible-count"),
+  );
+  const matchingValidation = document.getElementById("matching-execution-validation");
+
+  return {
+    moduleId,
+    pol,
+    pod,
+    distanceNm,
+    cargoQuantity,
+    laycanStart: firstText(state.laydays, state.laycan?.laydays, voyageDraft.laycan?.laydays, readElementValue("map-laycan-date", "match-laycan-start", "gc-laycan-date")),
+    laycanEnd: firstText(state.cancelling, state.laycan?.cancelling, voyageDraft.laycan?.cancelling, readElementValue("map-cancelling-date", "match-laycan-end", "gc-cancel-date")),
+    freightRate: firstNumber(readElementValue("freight-sell", "ais-rate-fair"), state.freightSell, calculatedState.freightSell),
+    tce: firstNumber(state.tceOwner, calculatedState.tce, readElementValue("res-tce-label", "print-tce-owner")),
+    loadRate: firstNumber(readElementValue("rate-load", "gc-laytime-load-val"), state.loadRate, calculatedState.loadRate),
+    dischargeRate: firstNumber(readElementValue("rate-disch", "gc-laytime-disch-val"), state.dischRate, state.dischargeRate, calculatedState.dischRate),
+    analysisReady: Boolean(document.querySelector("#view-decisiones [data-analysis-ready='true'], #view-decisiones .dss-results:not([hidden])")),
+    hasRisks: basicRiskResult.alerts > 0,
+    basicRisks: basicRiskResult.risks,
+    hasVessel: Boolean(trackingState.vessel),
+    hasContract: Boolean(trackingState.contractPayload || trackingState.referenceValidated),
+    positionUpdatedAt: trackingState.operationalMetrics?.aisUpdatedAt || "",
+    densityCalculated: densityCount !== null && densityCount >= 0 && readElementValue("ais-density-count", "buques-count") !== "--",
+    densityCount,
+    supplyCoefficient: firstNumber(readElementValue("ais-supply-coefficient", "coeficiente-oferta")),
+    validationMessage: matchingValidation && !matchingValidation.classList.contains("hidden")
+      ? firstText(matchingValidation.dataset.missingFields, matchingValidation.textContent)
+      : "",
+    resultCount: matchingResultCount,
+    contractGenerated: Boolean(workflowState.charterPartyGenerated),
+    contractAccepted: Boolean(workflowState.contractAccepted),
+    contractReference: firstText(workflowState.charterPartyReference, state.contractReference, readElementValue("contract-reference", "audit-contract-reference")),
+    auditReportGenerated: Boolean(workflowState.auditReportGenerated),
+  };
+}
+
 function collectChatContext() {
   const state = window.SeaCharterStore?.getState?.() || window.State || {};
   const calculatedState = window.GlobalStore?.calculatedState || window.CalculatedState || {};
   const voyageDraft = window.VoyageDraftStore?.getState?.().draft || {};
   const roleMode = window.getGlobalViewMode?.() || window.globalViewMode;
+  const activeModuleDescriptor = getActiveModuleDescriptor();
   const activeModule = getActiveModule();
+  const moduleScreenContext = collectModuleScreenContext(activeModuleDescriptor.id);
+  const proactiveEvaluation = evaluateModuleSuggestions(activeModuleDescriptor.id, moduleScreenContext);
   const dualModeContext = getDualModeContext();
   const contractType = firstText(
     activeModule === "EDITOR ASBATANKVOY" ? "ASBATANKVOY" : "",
@@ -157,7 +229,10 @@ function collectChatContext() {
 
   return {
     modulo: activeModule,
+    moduloId: activeModuleDescriptor.id,
     rol: roleMode === "charterer" ? "Fletador/Charterer" : "Armador/Shipowner",
+    datosModulo: moduleScreenContext,
+    sugerenciasProactivas: proactiveEvaluation.issues,
     operativos: {
       puertos: {
         POL: firstText(state.pol, voyageDraft.pol?.name, readElementValue("port-pol", "map-port-pol")),
@@ -215,15 +290,20 @@ function createAiAlertsStore(toggleButton) {
   const badge = toggleButton.querySelector(".sea-assistant-alert-badge");
   let aiAlerts = 0;
 
+  let currentEvaluation = { moduleId: "map", moduleName: MODULE_LABELS.map, alerts: 0, issues: [] };
+
   const render = () => {
     const hasAlerts = aiAlerts > 0;
     toggleButton.dataset.aiAlerts = String(aiAlerts);
     toggleButton.classList.toggle("has-ai-alerts", hasAlerts);
     if (badge) {
       badge.hidden = !hasAlerts;
-      badge.textContent = aiAlerts > 9 ? "9+" : String(aiAlerts);
+      badge.textContent = hasAlerts ? `💡 ${aiAlerts > 9 ? "9+" : aiAlerts}` : "";
       badge.setAttribute("aria-label", `${aiAlerts} sugerencia${aiAlerts === 1 ? "" : "s"} de riesgo`);
     }
+    toggleButton.title = hasAlerts
+      ? `💡 Sugerencia disponible en ${currentEvaluation.moduleName}`
+      : "Abrir Asistente SeaCharter";
   };
 
   const setAlerts = (value) => {
@@ -247,10 +327,68 @@ function createAiAlertsStore(toggleButton) {
       return result;
     },
     evaluateCurrentContext: () => store.evaluateBasicRisks(collectBasicRiskContext()),
+    evaluateModule: (moduleId = getActiveModuleDescriptor().id) => {
+      const moduleName = MODULE_LABELS[moduleId] || moduleId.toUpperCase();
+      const data = collectModuleScreenContext(moduleId);
+      const result = evaluateModuleSuggestions(moduleId, data);
+      currentEvaluation = { moduleId, moduleName, ...result, data };
+      setAlerts(result.alerts);
+      return currentEvaluation;
+    },
+    getCurrentEvaluation: () => currentEvaluation,
   };
+
+  store.evaluateCurrentContext = () => store.evaluateModule();
 
   render();
   return store;
+}
+
+function createProactiveGreeting(moduleName) {
+  return `¡Hola! Veo que estás trabajando en la sección de ${moduleName}. ¿Quieres que analicemos si falta algún dato, comprobemos si todo es correcto, o velemos por lo que deberías modificar según tu estrategia comercial?`;
+}
+
+function monitorActiveModule(aiAlertsStore, statusElement) {
+  let activeModuleId = "";
+  let evaluationFrame = 0;
+
+  const evaluateActiveModule = () => {
+    evaluationFrame = 0;
+    const descriptor = getActiveModuleDescriptor();
+    if (!SUPPORTED_MODULES.has(descriptor.id)) return;
+    const moduleChanged = descriptor.id !== activeModuleId;
+    activeModuleId = descriptor.id;
+    const evaluation = aiAlertsStore.evaluateModule(descriptor.id);
+    if (statusElement) {
+      statusElement.textContent = evaluation.alerts > 0
+        ? `💡 Sugerencia en ${descriptor.name}`
+        : `Disponible en ${descriptor.name}`;
+    }
+    if (moduleChanged) {
+      window.dispatchEvent(new CustomEvent("seaassistantmodulechange", { detail: evaluation }));
+    }
+  };
+
+  const scheduleEvaluation = () => {
+    if (evaluationFrame) window.cancelAnimationFrame(evaluationFrame);
+    evaluationFrame = window.requestAnimationFrame(evaluateActiveModule);
+  };
+
+  const observer = new MutationObserver((mutations) => {
+    if (mutations.some(({ target }) => target instanceof Element && (target.matches(".view-section") || target.id === "tracking-live-overlay"))) {
+      scheduleEvaluation();
+    }
+  });
+  observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class"] });
+  document.addEventListener("click", (event) => {
+    if (event.target instanceof Element && event.target.closest("[data-module-id]")) scheduleEvaluation();
+  }, true);
+  document.addEventListener("tracking-live:open", scheduleEvaluation);
+  document.addEventListener("tracking-live:close", scheduleEvaluation);
+  window.addEventListener("seaassistant:refresh-suggestions", scheduleEvaluation);
+  scheduleEvaluation();
+
+  return () => observer.disconnect();
 }
 
 function mountSeaAssistant() {
@@ -283,6 +421,7 @@ function mountSeaAssistant() {
   const form = root.querySelector(".sca-form");
   const input = root.querySelector(".sca-input");
   const sendButton = root.querySelector(".sca-send");
+  const status = root.querySelector(".sca-status");
   const toggleButton = document.querySelector("#sea-assistant-toggle");
   if (!toggleButton) {
     root.remove();
@@ -290,6 +429,7 @@ function mountSeaAssistant() {
   }
   const aiAlertsStore = createAiAlertsStore(toggleButton);
   window.SeaAssistantAlerts = aiAlertsStore;
+  monitorActiveModule(aiAlertsStore, status);
   let pending = false;
   let isDragging = false;
   let hasCustomPosition = false;
@@ -334,7 +474,8 @@ function mountSeaAssistant() {
     toggleButton.setAttribute("aria-label", open ? "Ocultar Asistente SeaCharter" : "Abrir Asistente SeaCharter");
     if (open) {
       if (aiAlertsStore.getAlerts() > 0) {
-        history.appendChild(createMessage("assistant", PROACTIVE_RISK_MESSAGE, { meta: formatTime() }));
+        const evaluation = aiAlertsStore.getCurrentEvaluation();
+        history.appendChild(createMessage("assistant", createProactiveGreeting(evaluation.moduleName), { meta: formatTime() }));
         aiAlertsStore.resetAlerts();
       } else if (!history.children.length) {
         history.appendChild(createMessage(
