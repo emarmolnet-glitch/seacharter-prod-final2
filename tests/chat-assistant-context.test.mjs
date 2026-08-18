@@ -26,7 +26,13 @@ test('chat assistant builds a dynamic maritime risk audit instruction', () => {
   assert.match(backendSource, /Defensa en Negociaciones Comerciales \(Llamar el Farol\)/);
   assert.match(backendSource, /Precio COA \(Contract of Affreightment\)/);
   assert.match(backendSource, /Precio Backhaul \(Viaje de Retorno\)/);
-  assert.match(backendSource, /baseInstruction \+ contextInstruction \+ expertRules/);
+  assert.match(backendSource, /Asesoramiento en Modo Dual \(Trading & Chartering - Margen y Competitividad\)/);
+  assert.match(backendSource, /Palanca FOB \(Compra\)/);
+  assert.match(backendSource, /Palanca de Flete/);
+  assert.match(backendSource, /Palanca CIF \(Venta\)/);
+  assert.match(backendSource, /Columna A \(Trading: FOB, CIF, Tolerancia\)/);
+  assert.match(backendSource, /Columna B \(Fletamento: Margen Bruto y Flete\)/);
+  assert.match(backendSource, /baseInstruction \+ contextInstruction \+ expertRules \+ dualModeRules/);
   assert.match(backendSource, /systemInstruction: finalInstruction/);
   assert.match(backendSource, /model: "gemini-2\.5-flash"/);
 });
