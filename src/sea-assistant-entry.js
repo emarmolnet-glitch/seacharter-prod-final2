@@ -118,9 +118,17 @@ function firstNumber(...values) {
 }
 
 function getActiveModule() {
+  if (document.getElementById("dual-mode-overlay")) return "MODO DUAL";
+
   const activeView = document.querySelector(".view-section.active-block, .view-section.active-flex");
   const moduleId = activeView?.id?.replace(/^view-/, "") || "map";
   return MODULE_LABELS[moduleId] || moduleId.toUpperCase();
+}
+
+function getDualModeContext() {
+  const dualView = document.querySelector("#dual-mode-overlay dual-trading-chartering-view");
+  const context = dualView?.getAssistantContext?.();
+  return context && typeof context === "object" ? context : null;
 }
 
 function getHighlightedClauses(contractType) {
@@ -142,6 +150,7 @@ function collectChatContext() {
   const voyageDraft = window.VoyageDraftStore?.getState?.().draft || {};
   const roleMode = window.getGlobalViewMode?.() || window.globalViewMode;
   const activeModule = getActiveModule();
+  const dualModeContext = getDualModeContext();
   const contractType = firstText(
     activeModule === "EDITOR ASBATANKVOY" ? "ASBATANKVOY" : "",
     activeModule === "EDITOR" ? "GENCON" : "",
@@ -181,6 +190,7 @@ function collectChatContext() {
         beneficioArmadorUsd: firstNumber(state.netProfitOwner, calculatedState.netProfitOwner),
         beneficioFletadorUsd: firstNumber(state.netProfitCharterer, calculatedState.netProfitCharterer),
       },
+      ...(dualModeContext ? { modoDual: dualModeContext } : {}),
     },
     contrato: {
       tipo: contractType,
@@ -348,6 +358,17 @@ function mountSeaAssistant() {
     }
   };
 
+  const openFromContext = (event) => {
+    const prompt = String(event?.detail?.prompt || "").trim();
+    setOpen(true);
+    if (prompt) {
+      input.value = prompt;
+      resizeInput();
+      syncSendState();
+      requestAnimationFrame(() => input.setSelectionRange(input.value.length, input.value.length));
+    }
+  };
+
   const setPending = (nextPending) => {
     pending = nextPending;
     input.disabled = nextPending;
@@ -355,6 +376,7 @@ function mountSeaAssistant() {
   };
 
   toggleButton.addEventListener("click", () => setOpen(panel.hidden));
+  window.addEventListener("sea-assistant:open", openFromContext);
   closeButton.addEventListener("mousedown", (event) => event.stopPropagation());
   closeButton.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -405,6 +427,7 @@ function mountSeaAssistant() {
 
   input.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
+      event.stopPropagation();
       setOpen(false);
       return;
     }

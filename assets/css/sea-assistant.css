@@ -12,7 +12,7 @@
   position: fixed;
   right: max(24px, env(safe-area-inset-right));
   bottom: max(24px, env(safe-area-inset-bottom));
-  z-index: 2147482000;
+  z-index: 2147483500;
   display: grid;
   justify-items: end;
   gap: 14px;

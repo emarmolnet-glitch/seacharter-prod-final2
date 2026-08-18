@@ -148,6 +148,7 @@ function ensureOverlayStyles() {
 }
 
 function handleOverlayKeydown(event) {
+    if (event.target instanceof Element && event.target.closest('.sca-root')) return;
     if (event.key === 'Escape') closeDualModeOverlay();
 }
 

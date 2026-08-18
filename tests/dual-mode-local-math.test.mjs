@@ -168,6 +168,32 @@ test('Dual Mode imports fair freight as read-only data and calculates positive n
     assert.equal(component.outputs['dual-net-margin'].classList.contains('is-positive'), true);
 });
 
+test('Dual Mode exposes live Trading and Chartering values to the assistant', () => {
+    const component = mountDualComponent({
+        fleteJustoCalculado: 24.5,
+        toneladasTotales: 18500,
+        factorDeEstiba: 1.35,
+        toleranciaCarga: 10,
+    });
+
+    component.input('fobPrice', '80');
+    component.input('cifPrice', '112');
+
+    assert.deepEqual({ ...component.component.getAssistantContext() }, {
+        precioFOBUsdPorTonelada: 80,
+        precioCIFUsdPorTonelada: 112,
+        fleteJustoUsdPorTonelada: 24.5,
+        margenBrutoUsdPorTonelada: 32,
+        margenNetoUsdPorTonelada: 7.5,
+        toneladasTotales: 18500,
+        factorDeEstiba: 1.35,
+        toleranciaCargaPct: 10,
+    });
+    assert.match(componentSource, /id="consult-dual-copilot"/);
+    assert.match(componentSource, /new CustomEvent\('sea-assistant:open'/);
+    assert.match(componentSource, /Consultar márgenes con el Copiloto/);
+});
+
 test('Dual Mode marks a negative operating margin as a loss', () => {
     const component = mountDualComponent({ fleteJustoCalculado: 24.5 });
 
