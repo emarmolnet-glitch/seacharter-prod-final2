@@ -1,5 +1,21 @@
+import DOMPurify from "dompurify";
+import { marked } from "marked";
+
 const CHAT_ENDPOINT = "/.netlify/functions/chat-assistant";
 const REQUEST_TIMEOUT_MS = 45_000;
+
+const MODULE_LABELS = Object.freeze({
+  map: "MAPA",
+  estimator: "CALCULADORA",
+  decisiones: "DECISIONES",
+  ais: "DENSIDAD AIS",
+  matching: "COINCIDENCIA",
+  gencon: "EDITOR",
+  asbatankvoy: "EDITOR ASBATANKVOY",
+  auditor: "AUDITORIA",
+  fcl: "FCL",
+  cbam: "CBAM",
+});
 
 const icons = {
   assistant: `
@@ -24,9 +40,22 @@ function createMessage(role, text, options = {}) {
   const message = document.createElement("article");
   message.className = `sca-message sca-message--${role}${options.error ? " sca-message--error" : ""}`;
 
-  const bubble = document.createElement("p");
+  const bubble = document.createElement("div");
   bubble.className = "sca-bubble";
-  bubble.textContent = text;
+  if (role === "assistant" && !options.error) {
+    bubble.classList.add("sca-markdown");
+    bubble.innerHTML = DOMPurify.sanitize(marked.parse(text, {
+      async: false,
+      breaks: true,
+      gfm: true,
+    }));
+    bubble.querySelectorAll("a[href]").forEach((link) => {
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+    });
+  } else {
+    bubble.textContent = text;
+  }
   message.appendChild(bubble);
 
   if (options.meta) {
@@ -56,6 +85,106 @@ function formatTime() {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date());
+}
+
+function readElementValue(...ids) {
+  for (const id of ids) {
+    const element = document.getElementById(id);
+    if (!element) continue;
+    const value = "value" in element ? element.value : element.textContent;
+    const normalized = String(value ?? "").trim();
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
+function firstText(...values) {
+  return values
+    .map((value) => String(value ?? "").trim())
+    .find(Boolean) || "";
+}
+
+function firstNumber(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
+    const match = String(value).match(/-?\d[\d,.]*/);
+    if (!match) continue;
+    const number = Number(match[0].replace(/,/g, ""));
+    if (Number.isFinite(number)) return number;
+  }
+  return null;
+}
+
+function getActiveModule() {
+  const activeView = document.querySelector(".view-section.active-block, .view-section.active-flex");
+  const moduleId = activeView?.id?.replace(/^view-/, "") || "map";
+  return MODULE_LABELS[moduleId] || moduleId.toUpperCase();
+}
+
+function getHighlightedClauses(contractType) {
+  const prefix = contractType === "ASBATANKVOY" ? "asb" : "gc";
+  const container = document.getElementById(`${prefix}-clauses-selector-container`);
+  if (!container) return [];
+
+  return Array.from(container.querySelectorAll('input[type="checkbox"]:checked'))
+    .map((checkbox) => {
+      const label = container.querySelector(`label[for="${checkbox.id}"]`);
+      return String(label?.textContent || "").trim();
+    })
+    .filter(Boolean);
+}
+
+function collectChatContext() {
+  const state = window.SeaCharterStore?.getState?.() || window.State || {};
+  const calculatedState = window.GlobalStore?.calculatedState || window.CalculatedState || {};
+  const voyageDraft = window.VoyageDraftStore?.getState?.().draft || {};
+  const roleMode = window.getGlobalViewMode?.() || window.globalViewMode;
+  const activeModule = getActiveModule();
+  const contractType = firstText(
+    activeModule === "EDITOR ASBATANKVOY" ? "ASBATANKVOY" : "",
+    activeModule === "EDITOR" ? "GENCON" : "",
+    readElementValue("charter-party-standard"),
+    state.charterPartyStandard,
+    "GENCON",
+  ).toUpperCase();
+
+  return {
+    modulo: activeModule,
+    rol: roleMode === "charterer" ? "Fletador/Charterer" : "Armador/Shipowner",
+    operativos: {
+      puertos: {
+        POL: firstText(state.pol, voyageDraft.pol?.name, readElementValue("port-pol", "map-port-pol")),
+        POD: firstText(state.pod, voyageDraft.pod?.name, readElementValue("port-pod", "map-port-pod")),
+        lastre: firstText(state.portBallast, readElementValue("port-ballast", "map-port-ballast")),
+      },
+      laycan: {
+        inicio: firstText(state.laydays, state.laycan?.laydays, voyageDraft.laycan?.laydays, readElementValue("map-laycan-date", "match-laycan-start")),
+        fin: firstText(state.cancelling, state.laycan?.cancelling, voyageDraft.laycan?.cancelling, readElementValue("map-cancelling-date", "match-laycan-end")),
+      },
+      ritmosToneladasDia: {
+        carga: firstNumber(readElementValue("rate-load", "gc-laytime-load-val"), state.loadRate, calculatedState.loadRate),
+        descarga: firstNumber(readElementValue("rate-disch", "gc-laytime-disch-val"), state.dischRate, state.dischargeRate, calculatedState.dischRate),
+      },
+      terminosTiempoPlancha: {
+        POL: firstText(readElementValue("laytime-load-condition", "gc-laytime-load-cond"), state.laytimeLoadCondition),
+        POD: firstText(readElementValue("laytime-disch-condition", "gc-laytime-disch-cond"), state.laytimeDischCondition),
+      },
+    },
+    financieros: {
+      precioFinalUsdPorTonelada: firstNumber(readElementValue("freight-sell"), state.freightSell, state.sugCharterer, calculatedState.freightSell),
+      tceUsdDia: firstNumber(state.tceOwner, calculatedState.tce, readElementValue("res-tce-label", "print-tce-owner")),
+      margenes: {
+        armadorPct: firstNumber(readElementValue("margin-owner"), state.marginOwner),
+        fletadorPct: firstNumber(readElementValue("margin-charterer"), state.marginCharterer),
+        beneficioArmadorUsd: firstNumber(state.netProfitOwner, calculatedState.netProfitOwner),
+        beneficioFletadorUsd: firstNumber(state.netProfitCharterer, calculatedState.netProfitCharterer),
+      },
+    },
+    contrato: {
+      tipo: contractType,
+      clausulasDestacadas: getHighlightedClauses(contractType),
+    },
+  };
 }
 
 function mountSeaAssistant() {
@@ -238,10 +367,11 @@ function mountSeaAssistant() {
     const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
+      const contexto = collectChatContext();
       const response = await fetch(CHAT_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mensaje: userText }),
+        body: JSON.stringify({ mensaje: userText, contexto }),
         signal: controller.signal,
       });
 
