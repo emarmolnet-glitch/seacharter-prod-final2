@@ -27,10 +27,6 @@ const icons = {
       <path d="M12 4v3.8" />
       <path d="m9.8 5.3 2.2-2 2.2 2" />
     </svg>`,
-  close: `
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="m7 7 10 10M17 7 7 17" />
-    </svg>`,
   send: `
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="m4 12 16-7-5.8 14-2.8-5.7L4 12Z" />
@@ -271,7 +267,6 @@ function mountSeaAssistant() {
           <h2 class="sca-title" id="sea-assistant-title">Asistente SeaCharter</h2>
           <p class="sca-status">Disponible para consultas</p>
         </div>
-        <button class="sca-close" type="button" aria-label="Cerrar asistente">${icons.close}</button>
       </header>
       <div class="sca-history" aria-live="polite" aria-relevant="additions text"></div>
       <form class="sca-form">
@@ -289,7 +284,6 @@ function mountSeaAssistant() {
   const input = root.querySelector(".sca-input");
   const sendButton = root.querySelector(".sca-send");
   const toggleButton = document.querySelector("#sea-assistant-toggle");
-  const closeButton = root.querySelector(".sca-close");
   if (!toggleButton) {
     root.remove();
     return;
@@ -377,11 +371,6 @@ function mountSeaAssistant() {
 
   toggleButton.addEventListener("click", () => setOpen(panel.hidden));
   window.addEventListener("sea-assistant:open", openFromContext);
-  closeButton.addEventListener("mousedown", (event) => event.stopPropagation());
-  closeButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    setOpen(false);
-  });
 
   header.addEventListener("mousedown", (event) => {
     if (event.button !== 0) return;
@@ -426,12 +415,6 @@ function mountSeaAssistant() {
   });
 
   input.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      event.stopPropagation();
-      setOpen(false);
-      return;
-    }
-
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       if (!sendButton.disabled) form.requestSubmit();
