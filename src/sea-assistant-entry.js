@@ -87,6 +87,7 @@ function mountSeaAssistant() {
   document.body.appendChild(root);
 
   const panel = root.querySelector(".sca-panel");
+  const header = root.querySelector(".sca-header");
   const history = root.querySelector(".sca-history");
   const form = root.querySelector(".sca-form");
   const input = root.querySelector(".sca-input");
@@ -94,6 +95,10 @@ function mountSeaAssistant() {
   const toggleButton = root.querySelector(".sca-toggle");
   const closeButton = root.querySelector(".sca-close");
   let pending = false;
+  let isDragging = false;
+  let hasCustomPosition = false;
+  let position = { x: 0, y: 0 };
+  let dragStart = { x: 0, y: 0 };
 
   history.appendChild(createMessage(
     "assistant",
@@ -113,12 +118,34 @@ function mountSeaAssistant() {
     sendButton.disabled = pending || !input.value.trim();
   };
 
+  const clampPosition = (x, y) => ({
+    x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - panel.offsetWidth)),
+    y: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - panel.offsetHeight)),
+  });
+
+  const applyPosition = () => {
+    panel.style.left = `${position.x}px`;
+    panel.style.top = `${position.y}px`;
+    panel.style.right = "auto";
+    panel.style.bottom = "auto";
+  };
+
+  const initializePosition = () => {
+    const rect = panel.getBoundingClientRect();
+    position = clampPosition(rect.left, rect.top);
+    hasCustomPosition = true;
+    applyPosition();
+  };
+
   const setOpen = (open) => {
     panel.hidden = !open;
     toggleButton.setAttribute("aria-expanded", String(open));
     toggleButton.setAttribute("aria-label", open ? "Ocultar Asistente SeaCharter" : "Abrir Asistente SeaCharter");
     if (open) {
-      requestAnimationFrame(() => input.focus());
+      requestAnimationFrame(() => {
+        if (!hasCustomPosition) initializePosition();
+        input.focus();
+      });
       scrollToLatest();
     } else {
       toggleButton.focus();
@@ -132,7 +159,48 @@ function mountSeaAssistant() {
   };
 
   toggleButton.addEventListener("click", () => setOpen(panel.hidden));
-  closeButton.addEventListener("click", () => setOpen(false));
+  closeButton.addEventListener("mousedown", (event) => event.stopPropagation());
+  closeButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setOpen(false);
+  });
+
+  header.addEventListener("mousedown", (event) => {
+    if (event.button !== 0) return;
+
+    if (!hasCustomPosition) initializePosition();
+    isDragging = true;
+    dragStart = {
+      x: event.clientX - position.x,
+      y: event.clientY - position.y,
+    };
+    panel.classList.add("is-dragging");
+    event.preventDefault();
+  });
+
+  window.addEventListener("mousemove", (event) => {
+    if (!isDragging) return;
+
+    position = clampPosition(
+      event.clientX - dragStart.x,
+      event.clientY - dragStart.y,
+    );
+    applyPosition();
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!isDragging) return;
+
+    isDragging = false;
+    panel.classList.remove("is-dragging");
+  });
+
+  window.addEventListener("resize", () => {
+    if (!hasCustomPosition) return;
+
+    position = clampPosition(position.x, position.y);
+    applyPosition();
+  });
 
   input.addEventListener("input", () => {
     resizeInput();
