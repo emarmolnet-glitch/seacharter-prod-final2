@@ -1,8 +1,10 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
+import { evaluateBasicRisks } from "./basic-risk-evaluator.js";
 
 const CHAT_ENDPOINT = "/.netlify/functions/chat-assistant";
 const REQUEST_TIMEOUT_MS = 45_000;
+const PROACTIVE_RISK_MESSAGE = "¡Hola! He estado revisando los datos que acabas de introducir y he detectado algunas áreas de riesgo que podrían afectar a tu rentabilidad. ¿Quieres que analicemos los términos del puerto o los ritmos de carga?";
 
 const MODULE_LABELS = Object.freeze({
   map: "MAPA",
@@ -187,6 +189,64 @@ function collectChatContext() {
   };
 }
 
+function collectBasicRiskContext() {
+  const state = window.SeaCharterStore?.getState?.() || window.State || {};
+  const calculatedState = window.GlobalStore?.calculatedState || window.CalculatedState || {};
+  const voyageDraft = window.VoyageDraftStore?.getState?.().draft || {};
+
+  return {
+    pol: firstText(state.pol, voyageDraft.pol?.name, readElementValue("port-pol", "map-port-pol")),
+    pod: firstText(state.pod, voyageDraft.pod?.name, readElementValue("port-pod", "map-port-pod")),
+    loadRate: firstNumber(readElementValue("rate-load", "gc-laytime-load-val"), state.loadRate, calculatedState.loadRate),
+    dischargeRate: firstNumber(readElementValue("rate-disch", "gc-laytime-disch-val"), state.dischRate, state.dischargeRate, calculatedState.dischRate),
+    role: window.getGlobalViewMode?.() || window.globalViewMode,
+    loadTerms: firstText(readElementValue("laytime-load-condition", "gc-laytime-load-cond"), state.laytimeLoadCondition),
+    dischargeTerms: firstText(readElementValue("laytime-disch-condition", "gc-laytime-disch-cond"), state.laytimeDischCondition),
+  };
+}
+
+function createAiAlertsStore(toggleButton) {
+  const badge = toggleButton.querySelector(".sea-assistant-alert-badge");
+  let aiAlerts = 0;
+
+  const render = () => {
+    const hasAlerts = aiAlerts > 0;
+    toggleButton.dataset.aiAlerts = String(aiAlerts);
+    toggleButton.classList.toggle("has-ai-alerts", hasAlerts);
+    if (badge) {
+      badge.hidden = !hasAlerts;
+      badge.textContent = aiAlerts > 9 ? "9+" : String(aiAlerts);
+      badge.setAttribute("aria-label", `${aiAlerts} sugerencia${aiAlerts === 1 ? "" : "s"} de riesgo`);
+    }
+  };
+
+  const setAlerts = (value) => {
+    const normalized = Number.isFinite(Number(value)) ? Math.max(0, Math.trunc(Number(value))) : 0;
+    aiAlerts = normalized;
+    render();
+    window.dispatchEvent(new CustomEvent("seaassistantalertschange", { detail: { aiAlerts } }));
+    return aiAlerts;
+  };
+
+  const store = {
+    get aiAlerts() {
+      return aiAlerts;
+    },
+    getAlerts: () => aiAlerts,
+    setAlerts,
+    resetAlerts: () => setAlerts(0),
+    evaluateBasicRisks: (context) => {
+      const result = evaluateBasicRisks(context);
+      setAlerts(result.alerts);
+      return result;
+    },
+    evaluateCurrentContext: () => store.evaluateBasicRisks(collectBasicRiskContext()),
+  };
+
+  render();
+  return store;
+}
+
 function mountSeaAssistant() {
   if (document.querySelector(".sca-root")) return;
 
@@ -224,16 +284,13 @@ function mountSeaAssistant() {
     root.remove();
     return;
   }
+  const aiAlertsStore = createAiAlertsStore(toggleButton);
+  window.SeaAssistantAlerts = aiAlertsStore;
   let pending = false;
   let isDragging = false;
   let hasCustomPosition = false;
   let position = { x: 0, y: 0 };
   let dragStart = { x: 0, y: 0 };
-
-  history.appendChild(createMessage(
-    "assistant",
-    "Hola. Soy el Asistente SeaCharter. Puedo ayudarte con consultas sobre logística marítima, fletamentos y rutas.",
-  ));
 
   const scrollToLatest = () => {
     history.scrollTo({ top: history.scrollHeight, behavior: "smooth" });
@@ -272,6 +329,15 @@ function mountSeaAssistant() {
     toggleButton.setAttribute("aria-expanded", String(open));
     toggleButton.setAttribute("aria-label", open ? "Ocultar Asistente SeaCharter" : "Abrir Asistente SeaCharter");
     if (open) {
+      if (aiAlertsStore.getAlerts() > 0) {
+        history.appendChild(createMessage("assistant", PROACTIVE_RISK_MESSAGE, { meta: formatTime() }));
+        aiAlertsStore.resetAlerts();
+      } else if (!history.children.length) {
+        history.appendChild(createMessage(
+          "assistant",
+          "Hola. Soy el Asistente SeaCharter. Puedo ayudarte con consultas sobre logística marítima, fletamentos y rutas.",
+        ));
+      }
       requestAnimationFrame(() => {
         if (!hasCustomPosition) initializePosition();
         input.focus();
