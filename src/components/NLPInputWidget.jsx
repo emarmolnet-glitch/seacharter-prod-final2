@@ -326,7 +326,7 @@ function optimizeCargoHandlingMethods(category, product, specification, loadingR
 }
 
 function NLPInputWidget() {
-  const [collapsed, setCollapsed] = useState(true);
+  const [isNlpEngineOpen, setIsNlpEngineOpen] = useState(false);
   const [requestText, setRequestText] = useState("");
   const [category, setCategory] = useState("");
   const [product, setProduct] = useState("");
@@ -361,27 +361,42 @@ function NLPInputWidget() {
     const shell = document.getElementById("map-command-shell");
     if (!sourcePanel || !shell) return undefined;
 
-    const alignRightOfSource = () => {
-      const top = sourcePanel.offsetTop;
-      const left = sourcePanel.offsetLeft + sourcePanel.offsetWidth + 16;
+    const alignWithSource = () => {
+      const isGeoInputOpen = !shell.classList.contains("input-collapsed");
+      const isMobileLayout = window.matchMedia("(max-width: 767px)").matches;
+      const top = isMobileLayout && isGeoInputOpen
+        ? sourcePanel.offsetTop + sourcePanel.offsetHeight + 12
+        : sourcePanel.offsetTop;
+      const left = isMobileLayout || !isGeoInputOpen
+        ? sourcePanel.offsetLeft
+        : sourcePanel.offsetLeft + sourcePanel.offsetWidth + 16;
       sectionRef.current?.style.setProperty("top", `${top}px`, "important");
       sectionRef.current?.style.setProperty("left", `${left}px`, "important");
       sectionRef.current?.style.setProperty("right", "auto", "important");
       sectionRef.current?.style.setProperty("width", `${sourcePanel.offsetWidth}px`, "important");
-      sectionRef.current?.style.setProperty("max-height", `${sourcePanel.offsetHeight}px`, "important");
+      sectionRef.current?.style.setProperty(
+        "max-height",
+        isMobileLayout
+          ? `max(10rem, calc(100% - ${top + 116}px))`
+          : `${sourcePanel.offsetHeight}px`,
+        "important",
+      );
       setPanelStyle({
         visibility: "visible",
       });
     };
 
-    alignRightOfSource();
-    const observer = new ResizeObserver(alignRightOfSource);
-    observer.observe(sourcePanel);
-    observer.observe(shell);
-    window.addEventListener("resize", alignRightOfSource);
+    alignWithSource();
+    const resizeObserver = new ResizeObserver(alignWithSource);
+    resizeObserver.observe(sourcePanel);
+    resizeObserver.observe(shell);
+    const collapseObserver = new MutationObserver(alignWithSource);
+    collapseObserver.observe(shell, { attributes: true, attributeFilter: ["class"] });
+    window.addEventListener("resize", alignWithSource);
     return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", alignRightOfSource);
+      resizeObserver.disconnect();
+      collapseObserver.disconnect();
+      window.removeEventListener("resize", alignWithSource);
     };
   }, []);
 
@@ -509,12 +524,12 @@ function NLPInputWidget() {
           <button
             type="button"
             className="map-icon-button !w-8 !h-8 !shadow-none"
-            title={collapsed ? "Expandir panel" : "Colapsar panel"}
-            aria-label={collapsed ? "Expandir Motor NLP" : "Colapsar Motor NLP"}
-            aria-expanded={!collapsed}
-            onClick={() => setCollapsed((current) => !current)}
+            title={isNlpEngineOpen ? "Colapsar panel" : "Expandir panel"}
+            aria-label={isNlpEngineOpen ? "Colapsar Motor NLP" : "Expandir Motor NLP"}
+            aria-expanded={isNlpEngineOpen}
+            onClick={() => setIsNlpEngineOpen((current) => !current)}
           >
-            <i className={`fa-solid ${collapsed ? "fa-chevron-down" : "fa-chevron-up"} text-xs`} />
+            <i className={`fa-solid ${isNlpEngineOpen ? "fa-chevron-up" : "fa-chevron-down"} text-xs`} />
           </button>
         </div>
         <p className="text-xs text-slate-600 mt-1">
@@ -522,7 +537,7 @@ function NLPInputWidget() {
         </p>
       </div>
 
-      {!collapsed && (
+      {isNlpEngineOpen && (
         <div className="space-y-3">
           <div className="input-group">
             <label htmlFor="nlp-scenario-request">Requerimiento</label>
