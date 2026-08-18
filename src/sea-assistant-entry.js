@@ -1,4 +1,5 @@
 import DOMPurify from "dompurify";
+import { validateScenarioPortsWithWpi } from "./wpi-catalog-client.js";
 import { marked } from "marked";
 import { evaluateBasicRisks } from "./basic-risk-evaluator.js";
 import { evaluateModuleSuggestions, SUPPORTED_MODULES } from "./universal-module-suggestions.js";
@@ -99,15 +100,7 @@ function createThinkingMessage() {
   return message;
 }
 
-function normalizeWpiPortRecord(value) {
-  if (!value || value.source !== "WPI") return null;
-  const latitude = Number(value.latitude);
-  const longitude = Number(value.longitude);
-  if (!value.officialLabel || !value.countryCode || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-  return { ...value, latitude, longitude, source: "WPI" };
-}
-
-function normalizeVoyageScenario(value = {}, portValidation = {}) {
+function normalizeVoyageScenario(value = {}) {
   return {
     pol: String(value.pol || "").trim(),
     pod: String(value.pod || "").trim(),
@@ -117,20 +110,13 @@ function normalizeVoyageScenario(value = {}, portValidation = {}) {
     cargo_type: String(value.cargo_type || value.cargoType || "").trim(),
     loading_rate: Number(value.loading_rate ?? value.loadingRate) || 0,
     discharge_rate: Number(value.discharge_rate ?? value.dischargeRate) || 0,
-    pol_port: normalizeWpiPortRecord(value.pol_port),
-    pod_port: normalizeWpiPortRecord(value.pod_port),
-    port_validation: {
-      valid: portValidation?.valid === true,
-      clarification: String(portValidation?.clarification || "").trim(),
-    },
   };
 }
 
 function hasInjectableVoyage(scenario) {
   return Boolean(
-    scenario.port_validation?.valid
-    && scenario.pol === scenario.pol_port?.officialLabel
-    && scenario.pod === scenario.pod_port?.officialLabel
+    scenario.pol
+    && scenario.pod
     && scenario.cargo_qty > 0,
   );
 }
@@ -144,10 +130,10 @@ async function extractVoyageScenario(text, signal) {
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.success) return null;
-  const scenario = normalizeVoyageScenario(payload.scenario, payload.port_validation);
+  const scenario = await validateScenarioPortsWithWpi(normalizeVoyageScenario(payload.scenario));
   return {
     scenario: hasInjectableVoyage(scenario) ? scenario : null,
-    clarification: String(payload.port_validation?.clarification || "").trim(),
+    clarification: String(scenario.port_validation?.clarification || "").trim(),
   };
 }
 
@@ -161,7 +147,8 @@ function createVoyageActionCard(scenario) {
       ${scenario.cargo_type ? `<div><dt>Carga</dt><dd>${DOMPurify.sanitize(scenario.cargo_type)}</dd></div>` : ""}
       ${scenario.laydays ? `<div><dt>Laycan</dt><dd>${DOMPurify.sanitize(scenario.laydays === scenario.cancelling ? scenario.laydays : `${scenario.laydays} / ${scenario.cancelling}`)}</dd></div>` : ""}
     </dl>
-    <button type="button" class="sca-voyage-action__button">Sí, inyectar y calcular</button>
+    ${scenario.port_validation?.clarification ? `<p class="sca-voyage-action__warning"><span aria-hidden="true">⚠</span> ${DOMPurify.sanitize(scenario.port_validation.clarification)}</p>` : ""}
+    <button type="button" class="sca-voyage-action__button">${scenario.port_validation?.valid ? "Sí, inyectar y calcular" : "Inyectar datos y revisar puertos"}</button>
     <p class="sca-voyage-action__status" role="status" aria-live="polite"></p>`;
 
   const button = card.querySelector(".sca-voyage-action__button");
@@ -174,10 +161,12 @@ function createVoyageActionCard(scenario) {
     }
     button.disabled = true;
     try {
-      window.injectVoyageScenario(scenario);
+      const result = window.injectVoyageScenario(scenario);
       card.classList.add("is-injected");
-      button.textContent = "Datos inyectados · cálculo iniciado";
-      status.textContent = "DraftVoyage y módulos operativos actualizados correctamente.";
+      button.textContent = result?.requiresPortSelection ? "Datos inyectados · selección pendiente" : "Datos inyectados · cálculo iniciado";
+      status.textContent = result?.requiresPortSelection
+        ? "DraftVoyage actualizado. Selecciona el puerto correcto en los desplegables resaltados."
+        : "DraftVoyage y módulos operativos actualizados correctamente.";
     } catch {
       button.disabled = false;
       card.classList.add("is-error");

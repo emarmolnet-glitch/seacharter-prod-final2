@@ -4,6 +4,8 @@ import test from "node:test";
 
 const widgetSource = fs.readFileSync("src/components/NLPInputWidget.jsx", "utf8");
 const functionSource = fs.readFileSync("netlify/functions/nlp-voyage-extract.ts", "utf8");
+const indexSource = fs.readFileSync("index.html", "utf8");
+const wpiClientSource = fs.readFileSync("src/wpi-catalog-client.js", "utf8");
 
 test("NLPInputWidget awaits the real voyage extractor before validation", () => {
   assert.match(widgetSource, /await requestScenarioExtraction\(requestText\)/);
@@ -28,18 +30,35 @@ test("voyage extractor uses Netlify AI Gateway with strict JSON schema", () => {
   assert.match(functionSource, /path: "\/api\/nlp-voyage-extract"/);
 });
 
-test("NLPInputWidget consolidates WPI ports before dispatch and triggers the native route workflow", () => {
-  assert.match(widgetSource, /await window\.ensureWpiLoadedOnDemand\?\.\(\)/);
+test("NLPInputWidget validates extracted port strings against the global WPI catalog", () => {
+  assert.match(widgetSource, /validateScenarioPortsWithWpi/);
+  assert.match(wpiClientSource, /await window\.ensureWpiCatalogLoaded\?\.\(\)/);
+  assert.match(wpiClientSource, /catalog\?\.findExactPort\?\.\(polText\)/);
   assert.doesNotMatch(widgetSource, /searchLocalWpiPorts/);
   assert.match(widgetSource, /portRecord\.source !== "WPI"/);
   assert.match(widgetSource, /scenario\.port_validation\?\.valid/);
   assert.match(widgetSource, /window\.selectUniversalPortSuggestion\?\.\(input, selectedPort\)/);
   assert.match(widgetSource, /await window\.runOnDemandMapRouteWorkflow\?\.\(document\.getElementById\("btn-map-locate-route"\)\)/);
+  assert.match(widgetSource, /setPortWarning\(scenario\.port_validation\?\.clarification/);
+  assert.match(widgetSource, /applyNlpScenario\?\.\(scenario\)/);
 
-  const wpiIndex = widgetSource.indexOf("await resolveAndSelectWpiPort(scenario.pol_port");
+  const wpiIndex = widgetSource.indexOf("const polPort = scenario.pol_port");
   const storeIndex = widgetSource.indexOf("window.SeaCharterStore?.set?.(");
   const routeIndex = widgetSource.indexOf("await window.runOnDemandMapRouteWorkflow");
   assert.ok(wpiIndex >= 0 && storeIndex > wpiIndex && routeIndex > storeIndex);
+});
+
+test("WPI catalog preloads globally during application initialization", () => {
+  assert.match(indexSource, /window\.WpiCatalogStore = WpiCatalogStore/);
+  assert.match(indexSource, /void ensureWpiCatalogLoaded\(\)\.catch/);
+  assert.match(indexSource, /WpiCatalogStore\.replaceCatalog\(PORT_DB\)/);
+  assert.doesNotMatch(indexSource, /addEventListener\('focus', trigger/);
+});
+
+test("voyage extraction function stays isolated from WPI files and validation", () => {
+  assert.doesNotMatch(functionSource, /wpi-port-resolver|validateWpiVoyagePorts|WPI\.csv|readFileSync|\bfs\b/);
+  assert.match(functionSource, /source: "netlify-ai-gateway"/);
+  assert.match(functionSource, /source: "deterministic-fallback"/);
 });
 
 test("NLPInputWidget optimizes POL and POD methods independently before global dispatch", () => {

@@ -47,9 +47,19 @@ function normalizePort(port, fallbackName = '') {
     const lat = Number(source.lat ?? source.latitude);
     const lng = Number(source.lng ?? source.lon ?? source.longitude);
     return {
+        ...source,
         name,
         lat: Number.isFinite(lat) ? lat : null,
         lng: Number.isFinite(lng) ? lng : null,
+        ...(source.source === 'WPI' ? {
+            indexNo: Number(source.indexNo) || null,
+            regionNo: Number(source.regionNo) || null,
+            officialLabel: cleanText(source.officialLabel),
+            countryCode: cleanText(source.countryCode).toUpperCase(),
+            latitude: Number.isFinite(lat) ? lat : null,
+            longitude: Number.isFinite(lng) ? lng : null,
+            source: 'WPI',
+        } : {}),
     };
 }
 
@@ -101,8 +111,8 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
     applyNlpScenario: (scenario = {}) => set((current) => ({
         draft: {
             ...current.draft,
-            pol: normalizePort(scenario.pol, cleanText(scenario.pol)) || current.draft.pol,
-            pod: normalizePort(scenario.pod, cleanText(scenario.pod)) || current.draft.pod,
+            pol: normalizePort(scenario.pol_port || scenario.pol, cleanText(scenario.pol)) || current.draft.pol,
+            pod: normalizePort(scenario.pod_port || scenario.pod, cleanText(scenario.pod)) || current.draft.pod,
             laycan: {
                 laydays: cleanText(scenario.laydays) || current.draft.laycan.laydays,
                 cancelling: cleanText(scenario.cancelling) || current.draft.laycan.cancelling,

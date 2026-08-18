@@ -46,6 +46,32 @@ function selectValidatedWpiPort(inputId, port) {
     });
 }
 
+function setPortSelectionWarning(inputId, value, needsSelection) {
+    const input = document.getElementById(inputId);
+    if (!input) return false;
+    const anchor = input.closest('.port-autocomplete-anchor') || input.parentElement;
+    const warningId = `${inputId}-nlp-port-warning`;
+    let warning = document.getElementById(warningId);
+    input.classList.toggle('border-amber-400', needsSelection);
+    input.classList.toggle('bg-amber-50', needsSelection);
+    input.setAttribute('aria-invalid', needsSelection ? 'true' : 'false');
+    if (!needsSelection) {
+        warning?.remove();
+        return true;
+    }
+    setValue(inputId, value);
+    if (!warning) {
+        warning = document.createElement('small');
+        warning.id = warningId;
+        warning.className = 'nlp-port-validation-warning mt-1 block text-xs font-semibold text-amber-700';
+        warning.setAttribute('role', 'alert');
+        anchor?.appendChild(warning);
+    }
+    warning.textContent = 'Puerto no validado exactamente. Selecciona una opción del catálogo WPI.';
+    input.focus();
+    return true;
+}
+
 function injectVoyageScenario(scenario = {}) {
     const pol = String(scenario.pol || '').trim();
     const pod = String(scenario.pod || '').trim();
@@ -55,24 +81,22 @@ function injectVoyageScenario(scenario = {}) {
     const cancelling = String(scenario.cancelling || laydays).trim();
     const loadingRate = Number(scenario.loading_rate ?? scenario.loadingRate) || 0;
     const dischargeRate = Number(scenario.discharge_rate ?? scenario.dischargeRate) || 0;
-    if (
-        scenario.port_validation?.valid !== true
-        || pol !== scenario.pol_port?.officialLabel
-        || pod !== scenario.pod_port?.officialLabel
-    ) {
-        throw new Error('POL y POD no están validados contra WPI.');
-    }
-    const selectedPorts = [
-        selectValidatedWpiPort('port-pol', scenario.pol_port),
-        selectValidatedWpiPort('map-port-pol', scenario.pol_port),
-        selectValidatedWpiPort('port-pod', scenario.pod_port),
-        selectValidatedWpiPort('map-port-pod', scenario.pod_port),
-    ];
-    if (selectedPorts.some((selected) => !selected)) throw new Error('No se pudieron consolidar los puertos WPI.');
+    const hasValidatedPol = Boolean(scenario.pol_port);
+    const hasValidatedPod = Boolean(scenario.pod_port);
+    ['port-pol', 'map-port-pol'].forEach((inputId) => {
+        if (hasValidatedPol) selectValidatedWpiPort(inputId, scenario.pol_port);
+        setPortSelectionWarning(inputId, pol, !hasValidatedPol);
+    });
+    ['port-pod', 'map-port-pod'].forEach((inputId) => {
+        if (hasValidatedPod) selectValidatedWpiPort(inputId, scenario.pod_port);
+        setPortSelectionWarning(inputId, pod, !hasValidatedPod);
+    });
 
     voyageStore.getState().applyNlpScenario({
         pol,
         pod,
+        pol_port: scenario.pol_port,
+        pod_port: scenario.pod_port,
         cargo_qty: cargoQuantity,
         cargo_type: cargoType,
         laydays,
@@ -110,8 +134,9 @@ function injectVoyageScenario(scenario = {}) {
     window.updateGlobalVoyageParams?.(calculatorState, { source: 'assistant-nlp' });
     window.dispatchEvent(new CustomEvent('voyage-draft:nlp-injected', { detail: { scenario, draft: voyageStore.getState().draft } }));
     if (typeof window.syncGlobalStateToForms === 'function') window.syncGlobalStateToForms();
-    if (typeof window.runEngine === 'function') window.runEngine();
-    return voyageStore.getState().draft;
+    const requiresPortSelection = !hasValidatedPol || !hasValidatedPod;
+    if (!requiresPortSelection && typeof window.runEngine === 'function') window.runEngine();
+    return { draft: voyageStore.getState().draft, requiresPortSelection };
 }
 
 function hydrateCalculatorFromDraft(draft) {

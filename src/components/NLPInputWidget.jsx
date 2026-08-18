@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { validateScenarioPortsWithWpi } from "../wpi-catalog-client.js";
 
 const CARGO_PRODUCTS = Object.freeze({
   "Minerales y Construcción": ["Cemento a granel", "Clínker", "Yeso"],
@@ -167,32 +168,20 @@ function extractScenario(text) {
 
 function normalizeScenarioPayload(payload) {
   const source = payload?.scenario || payload?.extraction || payload?.data || payload || {};
-  const normalizePortRecord = (port) => {
-    if (!port || port.source !== "WPI") return null;
-    const latitude = Number(port.latitude);
-    const longitude = Number(port.longitude);
-    if (!port.officialLabel || !port.countryCode || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-    return { ...port, latitude, longitude, source: "WPI" };
-  };
-  const portValidation = payload?.port_validation || source.port_validation || null;
   return {
     pol: cleanCapture(source.pol ?? source.port_of_loading ?? source.loading_port ?? ""),
     pod: cleanCapture(source.pod ?? source.port_of_discharge ?? source.discharge_port ?? ""),
     laydays: normalizeDate(source.laydays ?? source.layday ?? source.laycan_start ?? ""),
     cancelling: normalizeDate(source.cancelling ?? source.canceling ?? source.laycan_end ?? ""),
     cargo_qty: parsePositiveNumber(source.cargo_qty ?? source.cargoQty ?? source.quantity ?? source.qty ?? ""),
+    cargo_type: cleanCapture(source.cargo_type ?? source.cargoType ?? source.commodity ?? ""),
     loading_rate: parsePositiveNumber(source.loading_rate ?? source.loadingRate ?? source.load_rate ?? ""),
     discharge_rate: parsePositiveNumber(source.discharge_rate ?? source.dischargeRate ?? source.disch_rate ?? ""),
-    pol_port: normalizePortRecord(source.pol_port),
-    pod_port: normalizePortRecord(source.pod_port),
-    port_validation: {
-      valid: portValidation?.valid === true,
-      clarification: cleanCapture(portValidation?.clarification || ""),
-    },
   };
 }
 
 async function requestScenarioExtraction(text) {
+  let scenario;
   try {
     const response = await fetch("/api/nlp-voyage-extract", {
       method: "POST",
@@ -200,14 +189,20 @@ async function requestScenarioExtraction(text) {
       body: JSON.stringify({ text }),
     });
     if (!response.ok) throw new Error(`NLP voyage extraction HTTP ${response.status}`);
-    return normalizeScenarioPayload(await response.json());
+    scenario = normalizeScenarioPayload(await response.json());
   } catch (error) {
-    console.warn("NLP voyage endpoint unavailable; WPI validation is required.", error);
+    console.warn("NLP voyage endpoint unavailable; using deterministic extraction.", error);
+    scenario = normalizeScenarioPayload(extractScenario(text));
+  }
+  try {
+    return await validateScenarioPortsWithWpi(scenario);
+  } catch (error) {
+    console.warn("WPI catalog is not ready for frontend validation.", error);
     return {
-      ...normalizeScenarioPayload(extractScenario(text)),
+      ...scenario,
       port_validation: {
         valid: false,
-        clarification: "No se pudo consultar el catálogo WPI. Inténtalo de nuevo antes de inyectar el viaje.",
+        clarification: "El catálogo WPI todavía no está disponible. Revisa POL y POD en los desplegables.",
       },
     };
   }
@@ -335,6 +330,7 @@ function NLPInputWidget() {
   const [specificationOptions, setSpecificationOptions] = useState([]);
   const [missingFields, setMissingFields] = useState([]);
   const [manualValues, setManualValues] = useState({});
+  const [portWarning, setPortWarning] = useState("");
   const [panelStyle, setPanelStyle] = useState({ visibility: "hidden" });
   const sectionRef = useRef(null);
 
@@ -445,25 +441,17 @@ function NLPInputWidget() {
       showValidationAlert("Cancelling no puede ser anterior a Laydays.");
       return;
     }
-    if (
-      !scenario.port_validation?.valid
-      || scenario.pol !== scenario.pol_port?.officialLabel
-      || scenario.pod !== scenario.pod_port?.officialLabel
-    ) {
-      showValidationAlert(
-        scenario.port_validation?.clarification
-        || "POL y POD deben coincidir con registros oficiales del índice WPI.",
-      );
-      return;
-    }
+    setPortWarning(scenario.port_validation?.clarification || "");
 
     setMissingFields([]);
-    const polPort = await resolveAndSelectWpiPort(scenario.pol_port, "map-port-pol");
-    const podPort = await resolveAndSelectWpiPort(scenario.pod_port, "map-port-pod");
-    if (!polPort || !podPort) {
-      showValidationAlert("No se pudieron consolidar POL y POD mediante la base WPI.");
-      return;
-    }
+    const polPort = scenario.pol_port
+      ? await resolveAndSelectWpiPort(scenario.pol_port, "map-port-pol")
+      : await typeIntoControl("map-port-pol", scenario.pol);
+    const podPort = scenario.pod_port
+      ? await resolveAndSelectWpiPort(scenario.pod_port, "map-port-pod")
+      : await typeIntoControl("map-port-pod", scenario.pod);
+    window.VoyageDraftStore?.getState?.().applyNlpScenario?.(scenario);
+    if (!polPort || !podPort) showValidationAlert("Revisa POL y POD en los desplegables antes de calcular la ruta.");
     await typeIntoControl("map-laycan-date", scenario.laydays);
     await typeIntoControl("map-cancelling-date", scenario.cancelling);
     await typeIntoControl("cargo-qty", scenario.cargo_qty);
@@ -497,15 +485,19 @@ function NLPInputWidget() {
       dischargeMethod: scenario.dischargeMethod,
     };
     window.SeaCharterStore?.set?.(operationalPayload, { force: true, source: "nlp-input-widget" });
-    await window.runOnDemandMapRouteWorkflow?.(document.getElementById("btn-map-locate-route"));
+    if (scenario.port_validation?.valid) {
+      await window.runOnDemandMapRouteWorkflow?.(document.getElementById("btn-map-locate-route"));
+    }
     const usesPortCrane = optimizedMethods.pol.equipment === "port-crane"
       || optimizedMethods.pod.equipment === "port-crane";
     window.showToast?.(
-      usesPortCrane
+      !scenario.port_validation?.valid
+        ? "Datos extraídos. Selecciona los puertos pendientes en el desplegable WPI."
+        : usesPortCrane
         ? "Escenario generado con métodos optimizados por capacidad y OPEX."
         : "Escenario generado con Grúa Barco para minimizar el OPEX.",
       false,
-      "success",
+      scenario.port_validation?.valid ? "success" : "warning",
     );
   };
 
@@ -550,6 +542,7 @@ function NLPInputWidget() {
                 setRequestText(event.target.value);
                 setMissingFields([]);
                 setManualValues({});
+                setPortWarning("");
               }}
               placeholder="Pega aquí el requerimiento del viaje"
             />
@@ -614,6 +607,13 @@ function NLPInputWidget() {
           {missingFields.length > 0 && (
             <div className="flex items-center p-2 mt-2 text-red-700 bg-red-100 border border-red-300 rounded text-sm font-semibold shadow-sm" role="alert" aria-live="polite">
               Completa manualmente los datos críticos que no se pudieron extraer.
+            </div>
+          )}
+
+          {portWarning && (
+            <div className="flex items-start gap-2 rounded border border-amber-300 bg-amber-50 p-2 text-sm font-semibold text-amber-800" role="alert" aria-live="polite">
+              <i className="fa-solid fa-triangle-exclamation mt-0.5" aria-hidden="true" />
+              <span>{portWarning}</span>
             </div>
           )}
 

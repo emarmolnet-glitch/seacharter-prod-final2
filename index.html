@@ -15165,6 +15165,66 @@
             "Algeciras (ES)": { lat: 36.1268, lon: -5.4385, countryCode: 'ES', source: 'WPI' }
         };
 
+        const WpiCatalogStore = (() => {
+            let state = { status: 'idle', ports: [], error: '', loadedAt: null };
+            let exactIndex = new Map();
+            const listeners = new Set();
+            const normalizeKey = value => String(value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toUpperCase()
+                .replace(/\s+/g, ' ')
+                .trim();
+            const emit = () => listeners.forEach(listener => listener(state));
+            const setState = patch => {
+                state = { ...state, ...patch };
+                emit();
+                return state;
+            };
+            const replaceCatalog = portDb => {
+                const nextIndex = new Map();
+                const ports = Object.entries(portDb || {}).map(([officialLabel, port]) => {
+                    const name = officialLabel.replace(/\s*\([A-Za-z]{2,3}\)\s*$/, '').trim();
+                    const record = {
+                        ...port,
+                        indexNo: Number(port?.indexNo) || null,
+                        regionNo: Number(port?.regionNo) || null,
+                        name,
+                        officialLabel,
+                        countryCode: String(port?.countryCode || '').trim().toUpperCase(),
+                        latitude: Number(port?.lat),
+                        longitude: Number(port?.lon),
+                        source: 'WPI'
+                    };
+                    [officialLabel, name].forEach(value => {
+                        const key = normalizeKey(value);
+                        if (!key) return;
+                        const matches = nextIndex.get(key) || [];
+                        matches.push(record);
+                        nextIndex.set(key, matches);
+                    });
+                    return record;
+                }).filter(port => Number.isFinite(port.latitude) && Number.isFinite(port.longitude));
+                exactIndex = nextIndex;
+                return setState({ status: 'ready', ports, error: '', loadedAt: new Date().toISOString() });
+            };
+            return {
+                getState: () => state,
+                subscribe: listener => {
+                    listeners.add(listener);
+                    return () => listeners.delete(listener);
+                },
+                setLoading: () => setState({ status: 'loading', error: '' }),
+                setError: error => setState({ status: 'error', error: String(error?.message || error || 'WPI unavailable') }),
+                replaceCatalog,
+                findExactPort: query => {
+                    const matches = exactIndex.get(normalizeKey(query)) || [];
+                    return matches.length === 1 ? matches[0] : null;
+                }
+            };
+        })();
+        window.WpiCatalogStore = WpiCatalogStore;
+
         const PORT_INTELLIGENCE_DB = {
             "BEJAIA (DZ)": {
                 clima_dias: 0.5,
@@ -18592,8 +18652,7 @@
                 // Ejecución única consolidada del motor de cálculo inicial
                 if (typeof runEngine === 'function') runEngine();
 
-                // Configurar carga bajo demanda de WPI y cláusulas contractuales
-                if (typeof bindOnDemandWpiLoaders === 'function') bindOnDemandWpiLoaders();
+                // Configurar cláusulas contractuales diferidas
                 if (typeof executeDeferredIdle === 'function') {
                     executeDeferredIdle(() => {
                         initContractClauses();
@@ -25786,6 +25845,7 @@
                 
                 PORT_DB = {}; // Vaciamos la DB estática pequeña para meter la mundial
                 const added = await parseWPIInChunks(lines);
+                WpiCatalogStore.replaceCatalog(PORT_DB);
 
                 refreshPortDatalist();
                 if (typeof syncEtsRouteSelectorFromPorts === 'function') syncEtsRouteSelectorFromPorts();
@@ -25806,10 +25866,11 @@
 
         async function autoLoadWPI() {
             const btn = document.getElementById('btn-wpi');
-            if (!btn) return;
-            const origHtml = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cargando WPI Aut...';
-            btn.disabled = true;
+            const origHtml = btn?.innerHTML || '';
+            if (btn) {
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cargando WPI Aut...';
+                btn.disabled = true;
+            }
 
             try {
                 const wpiPaths = ['/WPI.csv'];
@@ -25826,60 +25887,50 @@
                 
                 PORT_DB = {}; // Vaciamos la DB estática pequeña para meter la mundial
                 const added = await parseWPIInChunks(lines);
+                WpiCatalogStore.replaceCatalog(PORT_DB);
 
                 refreshPortDatalist();
                 if (typeof syncEtsRouteSelectorFromPorts === 'function') syncEtsRouteSelectorFromPorts();
-                showToast(`✅ Base de datos Mundial WPI cargada automáticamente: ${added.toLocaleString()} puertos.`);
-                btn.innerHTML = `<i class="fa-solid fa-check"></i> WPI Activo`;
-                btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');
-                btn.classList.remove('bg-emerald-900/50', 'text-emerald-300', 'border-emerald-700/50');
+                if (btn) {
+                    btn.innerHTML = `<i class="fa-solid fa-check"></i> WPI Activo`;
+                    btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');
+                    btn.classList.remove('bg-emerald-900/50', 'text-emerald-300', 'border-emerald-700/50');
+                }
+                return added;
             } catch (error) {
                 console.error("No se pudo cargar WPI.csv automáticamente:", error);
-                btn.innerHTML = origHtml;
+                WpiCatalogStore.setError(error);
+                if (btn) btn.innerHTML = origHtml;
+                throw error;
             } finally {
-                btn.disabled = false;
+                if (btn) btn.disabled = false;
             }
         }
 
         let wpiLoaded = false;
         let wpiLoadingPromise = null;
 
-        function ensureWpiLoadedOnDemand() {
+        function ensureWpiCatalogLoaded() {
             if (wpiLoaded) return Promise.resolve();
             if (wpiLoadingPromise) return wpiLoadingPromise;
+            WpiCatalogStore.setLoading();
             wpiLoadingPromise = autoLoadWPI().then(() => {
                 wpiLoaded = true;
             }).catch((err) => {
-                console.warn("WPI on-demand load error:", err);
+                console.warn("WPI global preload error:", err);
                 wpiLoadingPromise = null;
+                throw err;
             });
             return wpiLoadingPromise;
         }
-        window.ensureWpiLoadedOnDemand = ensureWpiLoadedOnDemand;
+        window.ensureWpiCatalogLoaded = ensureWpiCatalogLoaded;
+        window.ensureWpiLoadedOnDemand = ensureWpiCatalogLoaded;
 
         function bindOnDemandWpiLoaders() {
-            const targets = [
-                'port-pol', 'port-pod', 'port-ballast',
-                'map-port-pol', 'map-port-pod', 'map-port-ballast',
-                'nlp-cargo-input'
-            ];
-            const trigger = () => {
-                ensureWpiLoadedOnDemand();
-            };
-            targets.forEach(id => {
-                const el = document.getElementById(id);
-                if (el) {
-                    el.addEventListener('focus', trigger, { once: true });
-                    el.addEventListener('click', trigger, { once: true });
-                }
-            });
-            document.addEventListener('focusin', (e) => {
-                if (e.target && e.target.tagName === 'INPUT' && (e.target.id?.toLowerCase().includes('port') || e.target.name?.toLowerCase().includes('port'))) {
-                    trigger();
-                }
-            }, { once: true });
+            return ensureWpiCatalogLoaded();
         }
         window.bindOnDemandWpiLoaders = bindOnDemandWpiLoaders;
+        void ensureWpiCatalogLoaded().catch(() => {});
 
         const UNIVERSAL_PORT_INPUT_IDS = [
             'port-ballast', 'port-pol', 'port-pod',

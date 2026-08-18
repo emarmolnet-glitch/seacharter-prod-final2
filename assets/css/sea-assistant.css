@@ -504,6 +504,17 @@
   font-weight: 800;
 }
 
+.sca-voyage-action .sca-voyage-action__warning {
+  margin: 9px 0;
+  padding: 8px 9px;
+  border: 1px solid #f1c96c;
+  border-radius: 9px;
+  color: #7a4b08;
+  background: #fff8df;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
 .sca-voyage-action__button {
   width: 100%;
   margin-top: 4px;
