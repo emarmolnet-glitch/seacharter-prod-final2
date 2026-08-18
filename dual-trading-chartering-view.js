@@ -83,6 +83,36 @@ class DualTradingCharteringView extends HTMLElement {
         });
     }
 
+    getAssistantContext() {
+        const readLiveNumber = (id) => {
+            const rawValue = String(this.shadowRoot.getElementById(id)?.value ?? '').trim();
+            if (!rawValue) return null;
+            const normalizedValue = Number(rawValue);
+            return Number.isFinite(normalizedValue) ? normalizedValue : null;
+        };
+        const precioFOBUsdPorTonelada = readLiveNumber('dual-fob-price');
+        const precioCIFUsdPorTonelada = readLiveNumber('dual-cif-price');
+        const margenBrutoUsdPorTonelada = precioFOBUsdPorTonelada !== null && precioCIFUsdPorTonelada !== null
+            ? precioCIFUsdPorTonelada - precioFOBUsdPorTonelada
+            : null;
+        const fleteJustoUsdPorTonelada = this.#fleteJustoCalculado > 0
+            ? this.#fleteJustoCalculado
+            : null;
+
+        return Object.freeze({
+            precioFOBUsdPorTonelada,
+            precioCIFUsdPorTonelada,
+            fleteJustoUsdPorTonelada,
+            margenBrutoUsdPorTonelada,
+            margenNetoUsdPorTonelada: margenBrutoUsdPorTonelada !== null && fleteJustoUsdPorTonelada !== null
+                ? margenBrutoUsdPorTonelada - fleteJustoUsdPorTonelada
+                : null,
+            toneladasTotales: this.#toneladasTotales === '' ? null : this.#toneladasTotales,
+            factorDeEstiba: this.#factorDeEstiba === '' ? null : this.#factorDeEstiba,
+            toleranciaCargaPct: this.#toleranciaCarga === '' ? null : this.#toleranciaCarga,
+        });
+    }
+
     connectedCallback() {
         this.render();
         this.shadowRoot.querySelectorAll('[data-dual-input]').forEach((input) => {
@@ -101,6 +131,13 @@ class DualTradingCharteringView extends HTMLElement {
             void import('./dataBridgeSyncService.js')
                 .then(({ syncDualTradingChartering }) => syncDualTradingChartering(snapshot))
                 .catch(() => false);
+        });
+        this.shadowRoot.getElementById('consult-dual-copilot')?.addEventListener('click', () => {
+            this.ownerDocument.defaultView?.dispatchEvent(new CustomEvent('sea-assistant:open', {
+                detail: {
+                    prompt: 'Analiza los márgenes actuales de Trading y Fletamento del Modo Dual. Señala el margen bruto, el coste de flete, el margen neto y cualquier riesgo comercial.',
+                },
+            }));
         });
         this.#renderEditableInputs();
         this.#renderReadOnlyCargoInputs();
@@ -469,6 +506,99 @@ class DualTradingCharteringView extends HTMLElement {
                     color: #64748b;
                 }
 
+                .copilot-card {
+                    position: relative;
+                    display: grid;
+                    grid-template-columns: auto minmax(0, 1fr) auto;
+                    align-items: center;
+                    gap: 12px;
+                    margin: 0 0 18px;
+                    padding: 14px;
+                    overflow: hidden;
+                    border: 1px solid #99f6e4;
+                    border-radius: 8px;
+                    color: #134e4a;
+                    background: linear-gradient(135deg, #f0fdfa 0%, #ecfeff 100%);
+                    box-shadow: 0 8px 20px rgba(15, 118, 110, 0.08);
+                }
+
+                .copilot-card::after {
+                    position: absolute;
+                    right: -22px;
+                    bottom: -28px;
+                    width: 84px;
+                    height: 84px;
+                    border: 1px solid rgba(13, 148, 136, 0.14);
+                    border-radius: 50%;
+                    content: "";
+                    pointer-events: none;
+                }
+
+                .copilot-card__icon {
+                    display: grid;
+                    width: 38px;
+                    height: 38px;
+                    place-items: center;
+                    border: 1px solid rgba(13, 148, 136, 0.28);
+                    border-radius: 7px;
+                    color: #0f766e;
+                    background: rgba(255, 255, 255, 0.82);
+                }
+
+                .copilot-card__icon svg {
+                    width: 21px;
+                    height: 21px;
+                }
+
+                .copilot-card__copy {
+                    position: relative;
+                    z-index: 1;
+                    min-width: 0;
+                }
+
+                .copilot-card__copy strong {
+                    display: block;
+                    color: #115e59;
+                    font-size: 0.76rem;
+                    letter-spacing: 0.025em;
+                }
+
+                .copilot-card__copy span {
+                    display: block;
+                    margin-top: 3px;
+                    color: #47706d;
+                    font-size: 0.68rem;
+                    line-height: 1.4;
+                }
+
+                .copilot-card__button {
+                    position: relative;
+                    z-index: 1;
+                    min-height: 36px;
+                    padding: 0 12px;
+                    border: 1px solid #0f766e;
+                    border-radius: 7px;
+                    color: #ffffff;
+                    background: #0f766e;
+                    font-size: 0.66rem;
+                    font-weight: 800;
+                    letter-spacing: 0.04em;
+                    white-space: nowrap;
+                    cursor: pointer;
+                    transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+                }
+
+                .copilot-card__button:hover {
+                    background: #115e59;
+                    box-shadow: 0 6px 14px rgba(15, 118, 110, 0.2);
+                    transform: translateY(-1px);
+                }
+
+                .copilot-card__button:focus-visible {
+                    outline: 3px solid rgba(37, 161, 142, 0.3);
+                    outline-offset: 3px;
+                }
+
                 .fields {
                     display: grid;
                     gap: 14px;
@@ -781,6 +911,15 @@ class DualTradingCharteringView extends HTMLElement {
                         min-height: auto;
                     }
 
+                    .copilot-card {
+                        grid-template-columns: auto minmax(0, 1fr);
+                    }
+
+                    .copilot-card__button {
+                        grid-column: 1 / -1;
+                        width: 100%;
+                    }
+
                     .export-recap-button {
                         width: 100%;
                     }
@@ -892,6 +1031,21 @@ class DualTradingCharteringView extends HTMLElement {
                         <span class="section-index">COLUMNA B · 02</span>
                         <h2>Fletamento</h2>
                         <p class="section-description">Resultados comerciales combinados con el Flete Justo de la sesión activa, sin modificar la calculadora principal.</p>
+
+                        <aside class="copilot-card" aria-label="Consulta contextual de márgenes con el Copiloto">
+                            <span class="copilot-card__icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M4 15.5c3.2-5.1 6.2-7.7 9-7.7 2.6 0 4.9 1.7 7 5.2"/>
+                                    <path d="M4 18.5c3.1-2 6-3 8.8-3 2.4 0 4.8.7 7.2 2.2"/>
+                                    <path d="M12 4v3.8"/>
+                                </svg>
+                            </span>
+                            <span class="copilot-card__copy">
+                                <strong>Consultar márgenes con el Copiloto</strong>
+                                <span>Usa los valores actuales de FOB, CIF y Flete Justo.</span>
+                            </span>
+                            <button id="consult-dual-copilot" class="copilot-card__button" type="button">Abrir consulta</button>
+                        </aside>
 
                         <div class="fields">
                             <div class="placeholder" role="status" aria-live="polite">

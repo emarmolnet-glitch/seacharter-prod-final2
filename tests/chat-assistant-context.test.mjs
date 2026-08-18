@@ -4,6 +4,8 @@ import test from 'node:test';
 
 const frontendSource = await readFile(new URL('../src/sea-assistant-entry.js', import.meta.url), 'utf8');
 const backendSource = await readFile(new URL('../netlify/functions/chat-assistant.js', import.meta.url), 'utf8');
+const assistantStyles = await readFile(new URL('../assets/css/sea-assistant.css', import.meta.url), 'utf8');
+const overlaySource = await readFile(new URL('../dual-mode-overlay.js', import.meta.url), 'utf8');
 
 test('chat assistant sends the complete screen context with each message', () => {
   assert.match(frontendSource, /function collectChatContext\(\)/);
@@ -14,6 +16,17 @@ test('chat assistant sends the complete screen context with each message', () =>
   assert.match(frontendSource, /financieros: \{/);
   assert.match(frontendSource, /contrato: \{/);
   assert.match(frontendSource, /JSON\.stringify\(\{ mensaje: userText, contexto \}\)/);
+});
+
+test('chat assistant stays operable and contextual while Dual Mode is open', () => {
+  assert.match(frontendSource, /function getDualModeContext\(\)/);
+  assert.match(frontendSource, /#dual-mode-overlay dual-trading-chartering-view/);
+  assert.match(frontendSource, /dualView\?\.getAssistantContext\?\.\(\)/);
+  assert.match(frontendSource, /\.\.\.\(dualModeContext \? \{ modoDual: dualModeContext \} : \{\}\)/);
+  assert.match(frontendSource, /window\.addEventListener\("sea-assistant:open", openFromContext\)/);
+  assert.match(frontendSource, /input\.setSelectionRange\(input\.value\.length, input\.value\.length\)/);
+  assert.match(assistantStyles, /z-index:\s*2147483500/);
+  assert.match(overlaySource, /event\.target instanceof Element && event\.target\.closest\('\.sca-root'\)/);
 });
 
 test('chat assistant builds a dynamic maritime risk audit instruction', () => {
