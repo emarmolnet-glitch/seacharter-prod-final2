@@ -1000,7 +1000,7 @@
             transition: transform 220ms ease, opacity 220ms ease;
         }
 
-        .map-command-shell.input-collapsed .map-floating-panel {
+        .map-command-shell.input-collapsed #map-input-overlay {
             transform: translateX(calc(-100% - 24px));
             opacity: 0;
             pointer-events: none;
@@ -6358,7 +6358,7 @@
                 padding: 0.85rem !important;
             }
 
-            .map-command-shell.input-collapsed .map-floating-panel {
+            .map-command-shell.input-collapsed #map-input-overlay {
                 transform: translateY(calc(-100% - 1rem));
             }
 
@@ -8450,18 +8450,18 @@
                     </div>
                 </div>
                 <div class="map-control-stack">
-                    <button id="btn-map-toggle-input" onclick="toggleRouteInputPanel()" class="map-icon-button" title="Mostrar u ocultar input geográfico" aria-label="Mostrar u ocultar input geográfico">
+                    <button id="btn-map-toggle-input" onclick="toggleRouteInputPanel()" class="map-icon-button" title="Ocultar input geográfico" aria-label="Ocultar input geográfico" aria-expanded="true" aria-controls="map-input-overlay">
                         <i class="fa-solid fa-sliders"></i>
                     </button>
                     <button id="btn-map-fullscreen" onclick="toggleRouteMapFullscreen()" class="map-icon-button" title="Pantalla completa" aria-label="Pantalla completa">
                         <i class="fa-solid fa-expand"></i>
                     </button>
                 </div>
-                <section id="map-input-overlay" class="map-floating-panel route-sync-card ecosystem-panel space-y-4">
+                <section id="map-input-overlay" class="map-floating-panel route-sync-card ecosystem-panel space-y-4" aria-label="Input geográfico" aria-hidden="false">
                     <div>
                         <div class="flex items-center justify-between gap-3">
                             <h2 class="text-sm font-bold uppercase text-[#002060]" data-i18n="map_input_header"><i class="fa-solid fa-map-location-dot mr-2"></i> Input geográfico</h2>
-                            <button onclick="toggleRouteInputPanel(true)" class="map-icon-button !w-8 !h-8 !shadow-none" title="Colapsar panel" aria-label="Colapsar panel">
+                            <button id="btn-map-collapse-input" onclick="toggleRouteInputPanel(true)" class="map-icon-button !w-8 !h-8 !shadow-none" title="Colapsar Input geográfico" aria-label="Colapsar Input geográfico" aria-expanded="true" aria-controls="map-input-overlay">
                                 <i class="fa-solid fa-chevron-left text-xs"></i>
                             </button>
                         </div>
@@ -28064,13 +28064,38 @@
             }, delay);
         }
 
-        function toggleRouteInputPanel(forceCollapsed) {
+        let isGeoInputOpen = true;
+
+        function setRouteInputPanelOpen(nextOpen) {
             const shell = document.getElementById('map-command-shell');
             if (!shell) return;
-            const shouldCollapse = typeof forceCollapsed === 'boolean'
-                ? forceCollapsed
-                : !shell.classList.contains('input-collapsed');
-            shell.classList.toggle('input-collapsed', shouldCollapse);
+            isGeoInputOpen = Boolean(nextOpen);
+            shell.classList.toggle('input-collapsed', !isGeoInputOpen);
+
+            const panel = document.getElementById('map-input-overlay');
+            if (panel) panel.setAttribute('aria-hidden', String(!isGeoInputOpen));
+
+            const externalToggle = document.getElementById('btn-map-toggle-input');
+            if (externalToggle) {
+                externalToggle.setAttribute('aria-expanded', String(isGeoInputOpen));
+                externalToggle.setAttribute('aria-label', isGeoInputOpen ? 'Ocultar input geográfico' : 'Mostrar input geográfico');
+                externalToggle.setAttribute('title', isGeoInputOpen ? 'Ocultar input geográfico' : 'Mostrar input geográfico');
+            }
+
+            const collapseToggle = document.getElementById('btn-map-collapse-input');
+            if (collapseToggle) {
+                collapseToggle.setAttribute('aria-expanded', String(isGeoInputOpen));
+                const icon = collapseToggle.querySelector('i');
+                icon?.classList.toggle('fa-chevron-left', isGeoInputOpen);
+                icon?.classList.toggle('fa-chevron-right', !isGeoInputOpen);
+            }
+        }
+
+        function toggleRouteInputPanel(forceCollapsed) {
+            const nextOpen = typeof forceCollapsed === 'boolean'
+                ? !forceCollapsed
+                : !isGeoInputOpen;
+            setRouteInputPanelOpen(nextOpen);
             scheduleRouteMapRedraw(180);
         }
         window.toggleRouteInputPanel = toggleRouteInputPanel;
@@ -28078,8 +28103,7 @@
         function toggleRouteMapFullscreen() {
             const entering = !document.body.classList.contains('route-map-fullscreen');
             document.body.classList.toggle('route-map-fullscreen', entering);
-            const shell = document.getElementById('map-command-shell');
-            if (shell) shell.classList.toggle('input-collapsed', entering);
+            setRouteInputPanelOpen(!entering);
             const icon = document.querySelector('#btn-map-fullscreen i');
             if (icon) {
                 icon.classList.toggle('fa-expand', !entering);
