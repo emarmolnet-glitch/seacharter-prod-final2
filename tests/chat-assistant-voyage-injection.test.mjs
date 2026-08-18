@@ -41,8 +41,14 @@ test('voyage injection updates DraftVoyage, calculator fields and starts the eng
   assert.match(draftEntrySource, /window\.runEngine\(\)/);
   assert.match(storeSource, /officialLabel: cleanText\(source\.officialLabel\)/);
   assert.match(storeSource, /scenario\.cargo_qty !== undefined \|\| scenario\.cargoQty !== undefined/);
-  assert.match(draftEntrySource, /applyVoyageScenarioDefaults\(scenario\)/);
+  assert.match(storeSource, /cleanNumber\(scenario\.cargo_qty \?\? scenario\.cargoQty\) \|\| current\.draft\.cargo\.quantityMt/);
+  assert.match(storeSource, /normalizeNlpPort/);
+  assert.match(draftEntrySource, /applyVoyageScenarioDefaults\(incomingScenario\)/);
   assert.match(draftEntrySource, /scenario\.is_partial/);
+  assert.match(draftEntrySource, /\.\.\.previousCalculatorState/);
+  assert.match(draftEntrySource, /ritmoRealPol: loadingRate/);
+  assert.match(draftEntrySource, /ritmoRealPod: dischargeRate/);
+  assert.match(extractorSource, /Las palabras literales "POL" y "POD" son etiquetas de campo/);
   assert.match(draftEntrySource, /runOnDemandMapRouteWorkflow/);
   assert.match(scenarioPolicySource, /loading_terms: "CQD"/);
 });

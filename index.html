@@ -25937,13 +25937,7 @@
             'map-port-ballast', 'map-port-pol', 'map-port-pod',
             'tracking-input-ballast', 'tracking-input-pol', 'tracking-input-pod'
         ];
-        const NOMINATIM_SEARCH_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
-        const NOMINATIM_DEBOUNCE_MS = 400;
-        const NOMINATIM_CACHE_STORAGE_KEY = 'seacharter:nominatim-port-cache:v1';
-        const NOMINATIM_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-        const NOMINATIM_CACHE_MAX_ENTRIES = 50;
-        const nominatimPortSearchCache = new Map();
-        const portAutocompleteControllers = new WeakMap();
+        const WPI_SEARCH_DEBOUNCE_MS = 300;
         const portAutocompleteTimers = new WeakMap();
         const portAutocompleteOptions = new WeakMap();
         const portAutocompleteActiveIndexes = new WeakMap();
@@ -25989,92 +25983,7 @@
                 .slice(0, limit);
         }
 
-        function readNominatimBrowserCache(cacheKey) {
-            try {
-                const storedCache = JSON.parse(localStorage.getItem(NOMINATIM_CACHE_STORAGE_KEY) || '{}');
-                const cachedEntry = storedCache?.[cacheKey];
-                if (!cachedEntry || !Array.isArray(cachedEntry.results)) return null;
-                if ((Date.now() - Number(cachedEntry.cachedAt || 0)) > NOMINATIM_CACHE_TTL_MS) {
-                    delete storedCache[cacheKey];
-                    localStorage.setItem(NOMINATIM_CACHE_STORAGE_KEY, JSON.stringify(storedCache));
-                    return null;
-                }
-                return cachedEntry.results.map(result => ({ ...result }));
-            } catch (error) {
-                console.warn('No se pudo leer la caché local de Nominatim:', error);
-                return null;
-            }
-        }
-
-        function writeNominatimBrowserCache(cacheKey, results) {
-            try {
-                const storedCache = JSON.parse(localStorage.getItem(NOMINATIM_CACHE_STORAGE_KEY) || '{}');
-                storedCache[cacheKey] = {
-                    cachedAt: Date.now(),
-                    results: results.map(result => ({ ...result }))
-                };
-                const compactCache = Object.fromEntries(
-                    Object.entries(storedCache)
-                        .sort(([, left], [, right]) => Number(right?.cachedAt || 0) - Number(left?.cachedAt || 0))
-                        .slice(0, NOMINATIM_CACHE_MAX_ENTRIES)
-                );
-                localStorage.setItem(NOMINATIM_CACHE_STORAGE_KEY, JSON.stringify(compactCache));
-            } catch (error) {
-                console.warn('No se pudo guardar la caché local de Nominatim:', error);
-            }
-        }
-
-        async function searchNominatimPortSuggestions(query, options = {}) {
-            const normalizedQuery = normalizePortSearchText(query);
-            if (normalizedQuery.length < 2) return [];
-            const limit = Math.min(10, Math.max(1, Number(options.limit) || 8));
-            const cacheKey = `${normalizedQuery}:${limit}`;
-            if (nominatimPortSearchCache.has(cacheKey)) {
-                return nominatimPortSearchCache.get(cacheKey).map(result => ({ ...result }));
-            }
-            const browserCachedResults = readNominatimBrowserCache(cacheKey);
-            if (browserCachedResults) {
-                nominatimPortSearchCache.set(cacheKey, browserCachedResults.map(result => ({ ...result })));
-                return browserCachedResults;
-            }
-
-            const params = new URLSearchParams({
-                q: String(query).trim(),
-                format: 'json',
-                addressdetails: '1',
-                limit: String(limit)
-            });
-            const response = await fetch(`${NOMINATIM_SEARCH_ENDPOINT}?${params.toString()}`, {
-                method: 'GET',
-                headers: { Accept: 'application/json' },
-                signal: options.signal
-            });
-            if (!response.ok) throw new Error(`Nominatim respondió ${response.status}`);
-            const payload = await response.json();
-            const results = (Array.isArray(payload) ? payload : [])
-                .map(item => {
-                    const countryCode = String(item?.address?.country_code || '').trim().toUpperCase();
-                    const lat = parseFloat(item?.lat);
-                    const lon = parseFloat(item?.lon);
-                    const placeName = String(item?.name || item?.display_name || '').split(',')[0].trim();
-                    if (!placeName || !/^[A-Z]{2}$/.test(countryCode) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-                    return {
-                        label: `${placeName} (${countryCode})`,
-                        placeName,
-                        countryCode,
-                        lat,
-                        lon,
-                        source: 'Nominatim',
-                        displayName: String(item.display_name || placeName)
-                    };
-                })
-                .filter(Boolean);
-            nominatimPortSearchCache.set(cacheKey, results.map(result => ({ ...result })));
-            writeNominatimBrowserCache(cacheKey, results);
-            return results;
-        }
         window.searchLocalWpiPorts = searchLocalWpiPorts;
-        window.searchNominatimPortSuggestions = searchNominatimPortSuggestions;
 
         function getUniversalPortRole(inputId) {
             if (String(inputId).includes('ballast')) return 'BALLAST';
@@ -26303,39 +26212,18 @@
                 return;
             }
 
-            const localResults = searchLocalWpiPorts(query);
-            if (localResults.length > 0) {
-                setPortSearchState(input, false);
-                renderPortAutocomplete(input, localResults);
-                return;
-            }
-
-            const cacheKey = `${normalizedQuery}:8`;
-            const cachedResults = nominatimPortSearchCache.has(cacheKey)
-                ? nominatimPortSearchCache.get(cacheKey).map(result => ({ ...result }))
-                : readNominatimBrowserCache(cacheKey);
-            if (cachedResults) {
-                nominatimPortSearchCache.set(cacheKey, cachedResults.map(result => ({ ...result })));
-                setPortSearchState(input, false);
-                renderPortAutocomplete(input, cachedResults, cachedResults.length ? '' : 'Sin resultados para esta búsqueda.');
-                return;
-            }
-
-            portAutocompleteControllers.get(input)?.abort();
-            const controller = new AbortController();
-            portAutocompleteControllers.set(input, controller);
-            setPortSearchState(input, true);
-            renderPortAutocomplete(input, [], 'Buscando ubicación...');
+            setPortSearchState(input, true, 'Buscando en WPI...');
+            renderPortAutocomplete(input, [], 'Buscando en WPI...');
             try {
-                const remoteResults = await searchNominatimPortSuggestions(query, { signal: controller.signal, limit: 8 });
+                await ensureWpiCatalogLoaded();
                 if (input.value !== query) return;
+                const localResults = searchLocalWpiPorts(query);
                 setPortSearchState(input, false);
-                renderPortAutocomplete(input, remoteResults, remoteResults.length ? '' : 'Sin resultados para esta búsqueda.');
+                renderPortAutocomplete(input, localResults, localResults.length ? '' : 'Sin coincidencias en WPI');
             } catch (error) {
-                if (error?.name === 'AbortError') return;
-                console.warn('[Input Geográfico] Nominatim no respondió.', error);
+                console.warn('[Input Geográfico] No se pudo cargar el catálogo WPI.', error);
                 setPortSearchState(input, false);
-                renderPortAutocomplete(input, [], 'No se pudo consultar el buscador global.');
+                renderPortAutocomplete(input, [], 'Sin coincidencias en WPI');
             }
         }
 
@@ -26352,7 +26240,6 @@
             }
 
             clearTimeout(portAutocompleteTimers.get(input));
-            portAutocompleteControllers.get(input)?.abort();
 
             const normalizedQuery = normalizePortSearchText(input.value);
             if (normalizedQuery.length < 2) {
@@ -26364,7 +26251,7 @@
             // Aplicar siempre debouncing de 300ms al escribir para evitar stuttering y sobrecarga de CPU
             if (event.type === 'input') {
                 setPortSearchState(input, true);
-                const timer = setTimeout(() => runUniversalPortSearch(input), NOMINATIM_DEBOUNCE_MS);
+                const timer = setTimeout(() => runUniversalPortSearch(input), WPI_SEARCH_DEBOUNCE_MS);
                 portAutocompleteTimers.set(input, timer);
             } else if (event.type === 'focus' && input.value.trim().length >= 2) {
                 // Al hacer foco con texto existente, mostrar opciones sin sobrescribir el input
@@ -28311,29 +28198,14 @@
                 };
             }
 
-            try {
-                let results = await searchNominatimPortSuggestions(query, { limit: 1 });
-                if (results.length === 0 && query.includes(',')) {
-                    results = await searchNominatimPortSuggestions(query.split(',')[0].trim(), { limit: 1 });
-                }
-                const result = results[0];
-                if (result) {
-                    const lat = parseFloat(result.lat);
-                    const lon = parseFloat(result.lon);
-                    PORT_DB[result.label] = {
-                        lat,
-                        lon,
-                        countryCode: result.countryCode,
-                        source: 'Nominatim',
-                        displayName: result.displayName
-                    };
-                    return { lat, lon, name: result.label, countryCode: result.countryCode };
-                }
-                return null;
-            } catch(e) {
-                console.error("Error buscando coordenadas:", e); 
-                return null;
+            await ensureWpiCatalogLoaded().catch(() => {});
+            const result = searchLocalWpiPorts(query, 1)[0];
+            if (result) {
+                const lat = result.lat;
+                const lon = result.lon;
+                return { lat, lon, name: result.label, countryCode: result.countryCode };
             }
+            return null;
         }
 
         function haversine(lat1, lon1, lat2, lon2) {

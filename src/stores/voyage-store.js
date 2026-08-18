@@ -6,6 +6,8 @@ const EMPTY_DRAFT = Object.freeze({
     pod: null,
     laycan: { laydays: '', cancelling: '' },
     cargo: { description: '', quantityMt: 0 },
+    loadingRate: 0,
+    dischargeRate: 0,
     ballastDistanceNm: null,
     ballastDistanceSource: '',
     lastreCoordinates: [],
@@ -63,6 +65,12 @@ function normalizePort(port, fallbackName = '') {
     };
 }
 
+function normalizeNlpPort(port, fallbackName = '') {
+    const normalizedName = cleanText(port?.name || port?.id || fallbackName);
+    if (/^(?:POL|POD)$/i.test(normalizedName)) return null;
+    return normalizePort(port, fallbackName);
+}
+
 function normalizeVessel(vessel) {
     if (!vessel || typeof vessel !== 'object') return null;
     const imo = cleanText(vessel.imo || vessel.imoNumber || vessel.imo_number).replace(/\D/g, '');
@@ -111,8 +119,8 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
     applyNlpScenario: (scenario = {}) => set((current) => ({
         draft: {
             ...current.draft,
-            pol: normalizePort(scenario.pol_port || scenario.pol, cleanText(scenario.pol)) || current.draft.pol,
-            pod: normalizePort(scenario.pod_port || scenario.pod, cleanText(scenario.pod)) || current.draft.pod,
+            pol: normalizeNlpPort(scenario.pol_port || scenario.pol, cleanText(scenario.pol)) || current.draft.pol,
+            pod: normalizeNlpPort(scenario.pod_port || scenario.pod, cleanText(scenario.pod)) || current.draft.pod,
             laycan: {
                 laydays: cleanText(scenario.laydays) || current.draft.laycan.laydays,
                 cancelling: cleanText(scenario.cancelling) || current.draft.laycan.cancelling,
@@ -120,9 +128,15 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
             cargo: {
                 description: cleanText(scenario.cargo_type || scenario.cargoType) || current.draft.cargo.description,
                 quantityMt: scenario.cargo_qty !== undefined || scenario.cargoQty !== undefined
-                    ? cleanNumber(scenario.cargo_qty ?? scenario.cargoQty)
+                    ? cleanNumber(scenario.cargo_qty ?? scenario.cargoQty) || current.draft.cargo.quantityMt
                     : current.draft.cargo.quantityMt,
             },
+            loadingRate: scenario.loading_rate !== undefined || scenario.loadingRate !== undefined
+                ? cleanNumber(scenario.loading_rate ?? scenario.loadingRate) || current.draft.loadingRate
+                : current.draft.loadingRate,
+            dischargeRate: scenario.discharge_rate !== undefined || scenario.dischargeRate !== undefined
+                ? cleanNumber(scenario.discharge_rate ?? scenario.dischargeRate) || current.draft.dischargeRate
+                : current.draft.dischargeRate,
             updatedAt: new Date().toISOString(),
             lastSource: 'assistant-nlp',
         },

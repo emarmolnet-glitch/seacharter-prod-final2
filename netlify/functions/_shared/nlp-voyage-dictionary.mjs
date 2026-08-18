@@ -65,6 +65,11 @@ function cleanCapture(value) {
     .trim();
 }
 
+export function normalizePortReference(value) {
+  const port = cleanCapture(value);
+  return /^(?:POL|POD)$/i.test(port) ? "" : port;
+}
+
 function captureFirst(text, patterns) {
   for (const pattern of patterns) {
     const match = text.match(pattern);
@@ -220,8 +225,8 @@ export function extractNaturalVoyageEntities(text, referenceDate = new Date()) {
   const laycan = extractLaycan(source, referenceDate);
   const cargo = extractCargo(source);
   return {
-    pol: route.pol,
-    pod: route.pod,
+    pol: normalizePortReference(route.pol),
+    pod: normalizePortReference(route.pod),
     laydays: laycan.laydays,
     cancelling: laycan.cancelling,
     cargo_qty: cargo.cargo_qty,

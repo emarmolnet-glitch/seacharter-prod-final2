@@ -30,45 +30,26 @@ test('geographic inputs allow natural text and spaces without per-keystroke rout
   assert.match(autocompleteSource, /event\.type === 'input'[\s\S]*clearUniversalPortCoordinates\(input\)/);
 });
 
-test('universal autocomplete searches WPI before Nominatim', () => {
+test('universal autocomplete searches only the preloaded WPI catalog', () => {
   const cascadeStart = autocompleteSource.indexOf('async function runUniversalPortSearch(input)');
   const cascadeEnd = autocompleteSource.indexOf('function handlePortAutocomplete(event)', cascadeStart);
   const cascadeSource = autocompleteSource.slice(cascadeStart, cascadeEnd);
   assert.match(autocompleteSource, /function searchLocalWpiPorts\(query, limit = 12\)/);
-  assert.match(cascadeSource, /const localResults = searchLocalWpiPorts\(query\);[\s\S]*if \(localResults\.length > 0\) \{[\s\S]*renderPortAutocomplete\(input, localResults\);[\s\S]*return;/);
-  assert.ok(cascadeSource.indexOf('const localResults = searchLocalWpiPorts(query);') < cascadeSource.indexOf('searchNominatimPortSuggestions(query'));
+  assert.match(cascadeSource, /await ensureWpiCatalogLoaded\(\)/);
+  assert.match(cascadeSource, /const localResults = searchLocalWpiPorts\(query\)/);
+  assert.match(cascadeSource, /Sin coincidencias en WPI/);
+  assert.doesNotMatch(cascadeSource, /Nominatim|openstreetmap\.org|fetch\(/i);
 });
 
-test('Nominatim request includes address details and renders uppercase two-letter country codes', () => {
-  assert.match(autocompleteSource, /NOMINATIM_SEARCH_ENDPOINT = 'https:\/\/nominatim\.openstreetmap\.org\/search'/);
-  assert.match(autocompleteSource, /format: 'json',[\s\S]*addressdetails: '1',[\s\S]*limit: String\(limit\)/);
-  assert.match(autocompleteSource, /item\?\.address\?\.country_code \|\| ''\)\.trim\(\)\.toUpperCase\(\)/);
-  assert.match(autocompleteSource, /!\/\^\[A-Z\]\{2\}\$\/\.test\(countryCode\)/);
-  assert.match(autocompleteSource, /label: `\$\{placeName\} \(\$\{countryCode\}\)`/);
-});
-
-test('Nominatim searches are debounced and cancel stale work', () => {
+test('WPI searches are debounced without external request controllers', () => {
   const handlerStart = autocompleteSource.indexOf('function handlePortAutocomplete(event)');
   const handlerEnd = autocompleteSource.indexOf('function bindUniversalPortAutocomplete(input)', handlerStart);
   const handlerSource = autocompleteSource.slice(handlerStart, handlerEnd);
-  assert.match(autocompleteSource, /const NOMINATIM_DEBOUNCE_MS = 400;/);
+  assert.match(autocompleteSource, /const WPI_SEARCH_DEBOUNCE_MS = 300;/);
   assert.match(handlerSource, /clearTimeout\(portAutocompleteTimers\.get\(input\)\)/);
-  assert.match(handlerSource, /portAutocompleteControllers\.get\(input\)\?\.abort\(\)/);
-  assert.match(handlerSource, /setPortSearchState\(input, true\);[\s\S]*setTimeout\(\(\) => runUniversalPortSearch\(input\), NOMINATIM_DEBOUNCE_MS\)/);
+  assert.doesNotMatch(autocompleteSource, /AbortController|NOMINATIM_/);
+  assert.match(handlerSource, /setPortSearchState\(input, true\);[\s\S]*setTimeout\(\(\) => runUniversalPortSearch\(input\), WPI_SEARCH_DEBOUNCE_MS\)/);
   assert.doesNotMatch(handlerSource, /setTimeout\([^,]+,\s*450\)/);
-});
-
-test('Nominatim results persist locally and cached searches bypass the external request', () => {
-  assert.match(autocompleteSource, /NOMINATIM_CACHE_STORAGE_KEY = 'seacharter:nominatim-port-cache:v1'/);
-  assert.match(autocompleteSource, /function readNominatimBrowserCache\(cacheKey\)/);
-  assert.match(autocompleteSource, /function writeNominatimBrowserCache\(cacheKey, results\)/);
-  assert.match(autocompleteSource, /localStorage\.getItem\(NOMINATIM_CACHE_STORAGE_KEY\)/);
-  assert.match(autocompleteSource, /localStorage\.setItem\(NOMINATIM_CACHE_STORAGE_KEY/);
-  assert.ok(
-    autocompleteSource.indexOf('const browserCachedResults = readNominatimBrowserCache(cacheKey);')
-      < autocompleteSource.indexOf('const response = await fetch(`${NOMINATIM_SEARCH_ENDPOINT}'),
-  );
-  assert.match(autocompleteSource, /if \(cachedResults\) \{[\s\S]*renderPortAutocomplete\(input, cachedResults/);
 });
 
 test('geographic autocomplete exposes reactive loading state and visual feedback', () => {
@@ -103,6 +84,6 @@ test('selected suggestions inject parsed coordinates into route and global state
   assert.match(autocompleteSource, /window\.GlobalStore\[coordinateKey\] = null/);
   assert.match(autocompleteSource, /lat: parseFloat\(input\.dataset\.selectedLatitude\)/);
   assert.match(autocompleteSource, /lon: parseFloat\(input\.dataset\.selectedLongitude\)/);
-  assert.match(geocoderSource, /searchNominatimPortSuggestions\(query, \{ limit: 1 \}\)/);
+  assert.match(geocoderSource, /searchLocalWpiPorts\(query, 1\)/);
   assert.match(geocoderSource, /return \{ lat, lon, name: result\.label, countryCode: result\.countryCode \}/);
 });

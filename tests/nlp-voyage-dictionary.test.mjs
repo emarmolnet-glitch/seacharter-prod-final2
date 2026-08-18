@@ -109,3 +109,15 @@ test('keeps the requested maritime synonym groups explicit', () => {
   assert.ok(MARITIME_ENTITY_DICTIONARY.cargoQuantity.includes('tm'));
   assert.ok(MARITIME_ENTITY_DICTIONARY.cargoType.includes('cemento'));
 });
+
+test('does not promote literal POL or POD labels to port names', () => {
+  const scenario = extractNaturalVoyageEntities(
+    'Ajusta ritmo de carga 1500 en POL y ritmo de descarga 2000 en POD.',
+    referenceDate,
+  );
+
+  assert.equal(scenario.pol, '');
+  assert.equal(scenario.pod, '');
+  assert.equal(scenario.loading_rate, 1500);
+  assert.equal(scenario.discharge_rate, 2000);
+});

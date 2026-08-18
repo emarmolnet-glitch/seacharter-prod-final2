@@ -53,6 +53,9 @@ test("NLPInputWidget validates extracted port strings against the global WPI cat
   assert.match(widgetSource, /await window\.runOnDemandMapRouteWorkflow\?\.\(document\.getElementById\("btn-map-locate-route"\)\)/);
   assert.match(widgetSource, /setPortWarning\(scenario\.port_validation\?\.clarification/);
   assert.match(widgetSource, /applyNlpScenario\?\.\(scenario\)/);
+  assert.match(widgetSource, /\.\.\.previousOperationalState/);
+  assert.match(widgetSource, /ritmoRealPol: scenario\.loading_rate/);
+  assert.match(widgetSource, /ritmoRealPod: scenario\.discharge_rate/);
 
   const wpiIndex = widgetSource.indexOf("const polPort = scenario.pol_port");
   const storeIndex = widgetSource.indexOf("window.SeaCharterStore?.set?.(");
