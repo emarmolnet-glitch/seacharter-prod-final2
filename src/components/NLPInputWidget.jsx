@@ -488,7 +488,9 @@ function NLPInputWidget() {
       window.syncCalculatorAndMatching?.("calculator", { force: true });
       window.syncMatchingViewFromGlobalOperationalState?.();
     }
+    const previousOperationalState = window.SeaCharterStore?.getState?.() || {};
     const operationalPayload = {
+      ...previousOperationalState,
       ...(scenario.is_partial ? {
         pol: scenario.pol,
         pod: scenario.pod,
@@ -499,6 +501,15 @@ function NLPInputWidget() {
       } : (window.readValidatedCargoOperationState?.() || {})),
       ...(scenario.loadMethod ? { loadMethod: scenario.loadMethod } : {}),
       ...(scenario.dischargeMethod ? { dischargeMethod: scenario.dischargeMethod } : {}),
+      ...(scenario.loading_rate > 0 ? {
+        loadRate: scenario.loading_rate,
+        ritmoRealPol: scenario.loading_rate,
+      } : {}),
+      ...(scenario.discharge_rate > 0 ? {
+        dischargeRate: scenario.discharge_rate,
+        dischRate: scenario.discharge_rate,
+        ritmoRealPod: scenario.discharge_rate,
+      } : {}),
       laytimeLoadCondition: scenario.loading_terms,
       laytimeDischCondition: scenario.discharge_terms,
     };

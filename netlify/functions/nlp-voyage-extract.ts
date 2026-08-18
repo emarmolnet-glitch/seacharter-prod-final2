@@ -4,6 +4,7 @@ import {
   extractNaturalVoyageEntities,
   maritimeDictionaryPrompt,
   normalizeNaturalDate,
+  normalizePortReference,
 } from "./_shared/nlp-voyage-dictionary.mjs";
 import { hasMinimumVoyageRoute } from "../../shared/voyage-scenario-policy.mjs";
 
@@ -60,8 +61,8 @@ function extractFallback(text: string): VoyageScenario {
 
 function normalizeScenario(value: Record<string, unknown>, fallback: VoyageScenario): VoyageScenario {
   return {
-    pol: cleanCapture(value.pol ?? value.port_of_loading ?? value.loading_port) || fallback.pol,
-    pod: cleanCapture(value.pod ?? value.port_of_discharge ?? value.discharge_port) || fallback.pod,
+    pol: normalizePortReference(value.pol ?? value.port_of_loading ?? value.loading_port) || fallback.pol,
+    pod: normalizePortReference(value.pod ?? value.port_of_discharge ?? value.discharge_port) || fallback.pod,
     laydays: normalizeNaturalDate(value.laydays ?? value.layday ?? value.laycan_start) || fallback.laydays,
     cancelling: normalizeNaturalDate(value.cancelling ?? value.canceling ?? value.laycan_end) || fallback.cancelling,
     cargo_qty: parsePositiveNumber(value.cargo_qty ?? value.cargoQty ?? value.quantity ?? value.qty) || fallback.cargo_qty,
@@ -79,7 +80,7 @@ async function extractVoyageScenario(text: string) {
     input: [
       {
         role: "system",
-        content: `Eres un extractor marítimo de SeaCharter Core PRO. Convierte el requerimiento en las ocho claves exactas del esquema. Un requerimiento es procesable desde que contiene POL y POD; laycan, mercancía, cantidad y ritmos son opcionales en esta fase. No inventes puertos, mercancías, cantidades ni ritmos. Aplica este diccionario de equivalencias coloquiales: ${maritimeDictionaryPrompt()}. POL y POD deben conservar únicamente el nombre de puerto expresado por el usuario; no los geocodifiques, traduzcas ni completes con ubicaciones externas. La validación oficial se realiza después contra World Port Index. cargo_type es la mercancía descrita, incluyendo materiales cotidianos como cemento, grano o clinker. laydays y cancelling deben usar YYYY-MM-DD; interpreta rangos como "entre el día X y el Y" o "desde el [Fecha] hasta el [Fecha]" como inicio y fin del laycan. La fecha actual es ${new Date().toISOString().slice(0, 10)}; si el usuario da día y mes sin año, usa la siguiente ocurrencia futura. Si sólo indica una fecha operativa, úsala como laydays y cancelling para representar un laycan de un día. cargo_qty, loading_rate y discharge_rate son números positivos en toneladas métricas o toneladas métricas por día. Si un dato no aparece, devuelve string vacío o 0 según el tipo.`,
+        content: `Eres un extractor marítimo de SeaCharter Core PRO. Convierte el requerimiento en las ocho claves exactas del esquema. Un requerimiento es procesable desde que contiene POL y POD; laycan, mercancía, cantidad y ritmos son opcionales en esta fase. No inventes puertos, mercancías, cantidades ni ritmos. Aplica este diccionario de equivalencias coloquiales: ${maritimeDictionaryPrompt()}. POL y POD deben conservar únicamente el nombre de puerto expresado por el usuario; no los geocodifiques, traduzcas ni completes con ubicaciones externas. Las palabras literales "POL" y "POD" son etiquetas de campo, nunca nombres de puerto: si no aparece un puerto después de ellas, devuelve el campo vacío. La validación oficial se realiza después contra World Port Index. En actualizaciones parciales devuelve vacíos o cero para los campos no mencionados, sin copiar etiquetas ni inventar valores del contexto. cargo_type es la mercancía descrita, incluyendo materiales cotidianos como cemento, grano o clinker. laydays y cancelling deben usar YYYY-MM-DD; interpreta rangos como "entre el día X y el Y" o "desde el [Fecha] hasta el [Fecha]" como inicio y fin del laycan. La fecha actual es ${new Date().toISOString().slice(0, 10)}; si el usuario da día y mes sin año, usa la siguiente ocurrencia futura. Si sólo indica una fecha operativa, úsala como laydays y cancelling para representar un laycan de un día. cargo_qty, loading_rate y discharge_rate son números positivos en toneladas métricas o toneladas métricas por día. Si un dato no aparece, devuelve string vacío o 0 según el tipo.`,
       },
       { role: "user", content: text },
     ],

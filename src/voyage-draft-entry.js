@@ -73,80 +73,135 @@ function setPortSelectionWarning(inputId, value, needsSelection) {
     return true;
 }
 
-function injectVoyageScenario(scenario = {}) {
-    scenario = applyVoyageScenarioDefaults(scenario);
-    const pol = String(scenario.pol || '').trim();
-    const pod = String(scenario.pod || '').trim();
-    const cargoQuantity = Number(scenario.cargo_qty ?? scenario.cargoQty) || 0;
-    const cargoType = String(scenario.cargo_type || scenario.cargoType || '').trim();
-    const laydays = String(scenario.laydays || '').trim();
-    const cancelling = String(scenario.cancelling || laydays).trim();
+function cleanNlpPortName(value) {
+    const name = String(value || '').trim();
+    return /^(?:POL|POD)$/i.test(name) ? '' : name;
+}
+
+function hasScenarioTextValue(scenario, keys) {
+    return keys.some((key) => String(scenario?.[key] ?? '').trim().length > 0);
+}
+
+function hasScenarioPositiveNumber(scenario, keys) {
+    return keys.some((key) => Number(scenario?.[key]) > 0);
+}
+
+function injectVoyageScenario(incomingScenario = {}) {
+    const previousDraft = voyageStore.getState().draft;
+    const incomingPol = cleanNlpPortName(incomingScenario.pol);
+    const incomingPod = cleanNlpPortName(incomingScenario.pod);
+    const hasIncomingRoute = Boolean(incomingPol || incomingPod || incomingScenario.pol_port || incomingScenario.pod_port);
+    const shouldApplyRouteDefaults = Boolean(incomingPol && incomingPod);
+    const scenario = shouldApplyRouteDefaults
+        ? applyVoyageScenarioDefaults(incomingScenario)
+        : { ...incomingScenario, is_partial: true };
+    const shouldApplyCargoQuantity = shouldApplyRouteDefaults || hasScenarioPositiveNumber(incomingScenario, ['cargo_qty', 'cargoQty']);
+    const shouldApplyCargoType = shouldApplyRouteDefaults || hasScenarioTextValue(incomingScenario, ['cargo_type', 'cargoType']);
+    const shouldApplyLaydays = shouldApplyRouteDefaults || hasScenarioTextValue(incomingScenario, ['laydays']);
+    const shouldApplyCancelling = shouldApplyRouteDefaults || hasScenarioTextValue(incomingScenario, ['cancelling']);
+    const shouldApplyLoadingRate = hasScenarioPositiveNumber(incomingScenario, ['loading_rate', 'loadingRate']);
+    const shouldApplyDischargeRate = hasScenarioPositiveNumber(incomingScenario, ['discharge_rate', 'dischargeRate']);
+    const pol = cleanNlpPortName(scenario.pol) || previousDraft.pol?.name || '';
+    const pod = cleanNlpPortName(scenario.pod) || previousDraft.pod?.name || '';
+    const cargoQuantity = shouldApplyCargoQuantity
+        ? Number(scenario.cargo_qty ?? scenario.cargoQty) || 0
+        : Number(previousDraft.cargo?.quantityMt) || 0;
+    const cargoType = shouldApplyCargoType
+        ? String(scenario.cargo_type || scenario.cargoType || '').trim()
+        : String(previousDraft.cargo?.description || '').trim();
+    const laydays = shouldApplyLaydays
+        ? String(scenario.laydays || '').trim()
+        : String(previousDraft.laycan?.laydays || '').trim();
+    const cancelling = shouldApplyCancelling
+        ? String(scenario.cancelling || laydays).trim()
+        : String(previousDraft.laycan?.cancelling || laydays).trim();
     const loadingRate = Number(scenario.loading_rate ?? scenario.loadingRate) || 0;
     const dischargeRate = Number(scenario.discharge_rate ?? scenario.dischargeRate) || 0;
     const hasValidatedPol = Boolean(scenario.pol_port);
     const hasValidatedPod = Boolean(scenario.pod_port);
-    ['port-pol', 'map-port-pol'].forEach((inputId) => {
-        if (hasValidatedPol) selectValidatedWpiPort(inputId, scenario.pol_port);
-        setPortSelectionWarning(inputId, pol, !hasValidatedPol);
-    });
-    ['port-pod', 'map-port-pod'].forEach((inputId) => {
-        if (hasValidatedPod) selectValidatedWpiPort(inputId, scenario.pod_port);
-        setPortSelectionWarning(inputId, pod, !hasValidatedPod);
-    });
+    if (incomingPol || scenario.pol_port) {
+        ['port-pol', 'map-port-pol'].forEach((inputId) => {
+            if (hasValidatedPol) selectValidatedWpiPort(inputId, scenario.pol_port);
+            setPortSelectionWarning(inputId, pol, !hasValidatedPol);
+        });
+    }
+    if (incomingPod || scenario.pod_port) {
+        ['port-pod', 'map-port-pod'].forEach((inputId) => {
+            if (hasValidatedPod) selectValidatedWpiPort(inputId, scenario.pod_port);
+            setPortSelectionWarning(inputId, pod, !hasValidatedPod);
+        });
+    }
 
     voyageStore.getState().applyNlpScenario({
-        pol,
-        pod,
-        pol_port: scenario.pol_port,
-        pod_port: scenario.pod_port,
-        cargo_qty: cargoQuantity,
-        cargo_type: cargoType,
-        laydays,
-        cancelling,
+        ...(incomingPol || scenario.pol_port ? { pol: incomingPol, pol_port: scenario.pol_port } : {}),
+        ...(incomingPod || scenario.pod_port ? { pod: incomingPod, pod_port: scenario.pod_port } : {}),
+        ...(shouldApplyCargoQuantity ? { cargo_qty: cargoQuantity } : {}),
+        ...(shouldApplyCargoType ? { cargo_type: cargoType } : {}),
+        ...(shouldApplyLaydays ? { laydays } : {}),
+        ...(shouldApplyCancelling ? { cancelling } : {}),
+        ...(shouldApplyLoadingRate ? { loading_rate: loadingRate } : {}),
+        ...(shouldApplyDischargeRate ? { discharge_rate: dischargeRate } : {}),
     });
 
-    window.syncSelectedRoutePort?.('POL', pol);
-    window.syncSelectedRoutePort?.('POD', pod);
-    setValue('cargo-qty', cargoQuantity);
-    setSelectValue('cargo-product', cargoType);
-    ['map-laycan-date', 'gc-laycan-date', 'asb-laycan-date', 'match-laycan-start'].forEach((id) => setValue(id, laydays));
-    ['map-cancelling-date', 'gc-cancel-date', 'asb-cancel-date', 'match-laycan-end'].forEach((id) => setValue(id, cancelling));
-    setValue('rate-load', loadingRate);
-    setValue('ritmo_nominal_pol', loadingRate);
-    setValue('rate-disch', dischargeRate);
-    setValue('ritmo_nominal_pod', dischargeRate);
-    ['laytime-load-condition', 'gc-laytime-load-cond'].forEach((id) => setSelectValue(id, scenario.loading_terms));
-    ['laytime-disch-condition', 'gc-laytime-disch-cond'].forEach((id) => setSelectValue(id, scenario.discharge_terms));
+    if (incomingPol || scenario.pol_port) window.syncSelectedRoutePort?.('POL', pol);
+    if (incomingPod || scenario.pod_port) window.syncSelectedRoutePort?.('POD', pod);
+    if (shouldApplyCargoQuantity) setValue('cargo-qty', cargoQuantity);
+    if (shouldApplyCargoType) setSelectValue('cargo-product', cargoType);
+    if (shouldApplyLaydays) {
+        ['map-laycan-date', 'gc-laycan-date', 'asb-laycan-date', 'match-laycan-start'].forEach((id) => setValue(id, laydays));
+    }
+    if (shouldApplyCancelling) {
+        ['map-cancelling-date', 'gc-cancel-date', 'asb-cancel-date', 'match-laycan-end'].forEach((id) => setValue(id, cancelling));
+    }
+    if (shouldApplyLoadingRate) {
+        setValue('rate-load', loadingRate);
+        setValue('ritmo_nominal_pol', loadingRate);
+    }
+    if (shouldApplyDischargeRate) {
+        setValue('rate-disch', dischargeRate);
+        setValue('ritmo_nominal_pod', dischargeRate);
+    }
+    if (scenario.loading_terms) {
+        ['laytime-load-condition', 'gc-laytime-load-cond'].forEach((id) => setSelectValue(id, scenario.loading_terms));
+    }
+    if (scenario.discharge_terms) {
+        ['laytime-disch-condition', 'gc-laytime-disch-cond'].forEach((id) => setSelectValue(id, scenario.discharge_terms));
+    }
 
+    const previousCalculatorState = window.SeaCharterStore?.getState?.() || {};
     const calculatorState = {
-        pol,
-        pod,
-        laydays,
-        laycanDate: laydays,
-        cancelling,
-        cancellingDate: cancelling,
-        laycan: { laydays, cancelling },
-        cargoQuantity,
-        cargoQty: cargoQuantity,
-        cargo: cargoQuantity,
-        cargoProduct: cargoType,
-        cargoType,
-        laytimeLoadCondition: scenario.loading_terms,
-        laytimeDischCondition: scenario.discharge_terms,
-        ...(loadingRate > 0 ? { loadRate: loadingRate } : {}),
-        ...(dischargeRate > 0 ? { dischargeRate, dischRate: dischargeRate } : {}),
+        ...previousCalculatorState,
+        ...(incomingPol || scenario.pol_port ? { pol } : {}),
+        ...(incomingPod || scenario.pod_port ? { pod } : {}),
+        ...(shouldApplyLaydays ? { laydays, laycanDate: laydays } : {}),
+        ...(shouldApplyCancelling ? { cancelling, cancellingDate: cancelling } : {}),
+        laycan: {
+            ...(previousCalculatorState.laycan || {}),
+            ...(shouldApplyLaydays ? { laydays } : {}),
+            ...(shouldApplyCancelling ? { cancelling } : {}),
+        },
+        ...(shouldApplyCargoQuantity
+            ? { cargoQuantity, cargoQty: cargoQuantity, cargo: cargoQuantity }
+            : {}),
+        ...(shouldApplyCargoType
+            ? { cargoProduct: cargoType, cargoType }
+            : {}),
+        ...(scenario.loading_terms ? { laytimeLoadCondition: scenario.loading_terms } : {}),
+        ...(scenario.discharge_terms ? { laytimeDischCondition: scenario.discharge_terms } : {}),
+        ...(shouldApplyLoadingRate ? { loadRate: loadingRate, ritmoRealPol: loadingRate } : {}),
+        ...(shouldApplyDischargeRate ? { dischargeRate, dischRate: dischargeRate, ritmoRealPod: dischargeRate } : {}),
     };
     window.SeaCharterStore?.set?.(calculatorState, { force: true, source: 'assistant-nlp' });
     window.updateGlobalVoyageParams?.(calculatorState, { source: 'assistant-nlp' });
     window.dispatchEvent(new CustomEvent('voyage-draft:nlp-injected', { detail: { scenario, draft: voyageStore.getState().draft } }));
     if (typeof window.syncGlobalStateToForms === 'function') window.syncGlobalStateToForms();
-    const requiresPortSelection = !hasValidatedPol || !hasValidatedPod;
-    if (!requiresPortSelection && scenario.is_partial) {
+    const requiresPortSelection = hasIncomingRoute && (!hasValidatedPol || !hasValidatedPod);
+    if (hasIncomingRoute && !requiresPortSelection && scenario.is_partial) {
         void window.runOnDemandMapRouteWorkflow?.(document.getElementById('btn-map-locate-route'));
     } else if (!requiresPortSelection && typeof window.runEngine === 'function') {
         window.runEngine();
     }
-    return { draft: voyageStore.getState().draft, requiresPortSelection, routeOnly: scenario.is_partial };
+    return { draft: voyageStore.getState().draft, requiresPortSelection, routeOnly: hasIncomingRoute && scenario.is_partial };
 }
 
 function applyAssistantCalculatorAutofill(payload = {}) {
@@ -193,8 +248,10 @@ function applyAssistantCalculatorAutofill(payload = {}) {
             vesselDwt: requiredDwt,
             class: vesselClass,
             loadRate: loadingRate,
+            ritmoRealPol: loadingRate,
             dischargeRate,
             dischRate: dischargeRate,
+            ritmoRealPod: dischargeRate,
             loadMethod: String(loadingMethod.label || loadingMethod.value || '').trim(),
             dischargeMethod: String(dischargeMethod.label || dischargeMethod.value || '').trim(),
             ritmoMode: 'manual',
@@ -295,6 +352,20 @@ window.VoyageDraftStore = voyageStore;
 window.useVoyageStore = voyageStore;
 window.injectVoyageScenario = injectVoyageScenario;
 window.applyAssistantCalculatorAutofill = applyAssistantCalculatorAutofill;
+if (typeof window.SeaCharterStore?.subscribe === 'function' && !window.assistantOperationalDeductionSubscription) {
+    window.assistantOperationalDeductionSubscription = window.SeaCharterStore.subscribe(
+        (state) => [
+            state.cargoQuantity ?? state.cargoQty ?? state.cargo,
+            state.ritmoRealPol ?? state.loadRate,
+            state.ritmoRealPod ?? state.dischargeRate ?? state.dischRate,
+        ],
+        () => {
+            window.updateCargoVesselClassDisplay?.();
+            window.recalcularDiasPuerto?.();
+        },
+        (current, next) => current.every((value, index) => Object.is(value, next[index])),
+    );
+}
 window.addEventListener('sea-assistant:calculator-autofill', (event) => {
     if (!event?.detail?.payload) return;
     event.detail.result = applyAssistantCalculatorAutofill(event.detail.payload);

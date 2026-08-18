@@ -61,6 +61,9 @@ test('calculator handler applies cargo, DWT, class, methods and both rates in on
   assert.match(draftEntrySource, /setSelectValue\('metodo_descarga_pod'/);
   assert.match(draftEntrySource, /setValue\('rate-load', loadingRate\)/);
   assert.match(draftEntrySource, /setValue\('rate-disch', dischargeRate\)/);
+  assert.match(draftEntrySource, /ritmoRealPol: loadingRate/);
+  assert.match(draftEntrySource, /ritmoRealPod: dischargeRate/);
+  assert.match(draftEntrySource, /assistantOperationalDeductionSubscription/);
   assert.match(draftEntrySource, /setValue\('vessel-dwt', requiredDwt\)/);
   assert.match(draftEntrySource, /class: vesselClass/);
   assert.match(draftEntrySource, /source: 'assistant-calculator-autofill'/);

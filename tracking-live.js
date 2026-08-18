@@ -703,8 +703,11 @@ async function resolveTrackingPort(value) {
     const localPort = typeof window.findPortData === 'function' ? window.findPortData(name) : null;
     const localPoint = normalizeMapPoint(localPort && { ...localPort, name });
     if (localPoint) return localPoint;
-    if (typeof window.searchNominatimPortSuggestions !== 'function') return null;
-    const suggestions = await window.searchNominatimPortSuggestions(name, { limit: 1 });
+    if (typeof window.ensureWpiCatalogLoaded === 'function') {
+        await window.ensureWpiCatalogLoaded().catch(() => {});
+    }
+    if (typeof window.searchLocalWpiPorts !== 'function') return null;
+    const suggestions = window.searchLocalWpiPorts(name, 1);
     const result = suggestions?.[0];
     return normalizeMapPoint(result && {
         name: result.label || name,

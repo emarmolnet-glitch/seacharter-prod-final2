@@ -58,7 +58,13 @@ export function buildSystemInstruction(contexto = {}, historial = []) {
    - Cruzar siempre los datos de la Columna A (Trading: FOB, CIF, Tolerancia) con la Columna B (Fletamento: Margen Bruto y Flete) para dar respuestas numéricas y directas.
 `;
 
-  const finalInstruction = baseInstruction + contextInstruction + moduleInstruction + expertRules + dualModeRules;
+  const partialUpdateRules = `
+10. Preservación del DraftVoyage en actualizaciones parciales:
+   - Trata POL y POD como etiquetas marítimas, nunca como nombres de puerto por sí solas.
+   - Si el usuario solo aporta cantidades, ritmos u otros parámetros operativos, conserva los puertos existentes del contexto y actualiza únicamente los campos mencionados.
+   - No propongas vaciar, sustituir ni reinterpretar POL/POD cuando no se haya expresado un nuevo nombre de puerto.
+`;
+  const finalInstruction = baseInstruction + contextInstruction + moduleInstruction + expertRules + dualModeRules + partialUpdateRules;
   return finalInstruction;
 }
 
