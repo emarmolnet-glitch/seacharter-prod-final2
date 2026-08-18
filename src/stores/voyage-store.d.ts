@@ -1,6 +1,17 @@
 import type { StoreApi } from "zustand/vanilla";
 
-export type VoyagePort = { name: string; lat: number | null; lng: number | null };
+export type VoyagePort = {
+  name: string;
+  lat: number | null;
+  lng: number | null;
+  indexNo?: number | null;
+  regionNo?: number | null;
+  officialLabel?: string;
+  countryCode?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  source?: "WPI";
+};
 export type VoyageVessel = {
   name: string;
   imo: string;
@@ -46,6 +57,7 @@ export type DraftVoyage = {
 };
 export type VoyageStoreState = {
   draft: DraftVoyage;
+  applyNlpScenario: (scenario?: Record<string, unknown>) => void;
   updateFromCalculator: (state?: Record<string, unknown>) => void;
   setBallastDistance: (payload?: { ballastDistanceNm?: number; source?: string }) => void;
   applyTrackingAudit: (payload?: { ballastDistanceNm?: number; lastreCoordinates?: unknown[]; vessel?: Record<string, unknown> }) => void;

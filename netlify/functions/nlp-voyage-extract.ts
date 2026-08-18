@@ -5,7 +5,6 @@ import {
   maritimeDictionaryPrompt,
   normalizeNaturalDate,
 } from "./_shared/nlp-voyage-dictionary.mjs";
-import { validateWpiVoyagePorts } from "./_shared/wpi-port-resolver.mjs";
 
 type VoyageExtractionRequest = {
   text?: string;
@@ -20,19 +19,6 @@ type VoyageScenario = {
   cargo_type: string;
   loading_rate: number;
   discharge_rate: number;
-  pol_port?: WpiPortRecord;
-  pod_port?: WpiPortRecord;
-};
-
-type WpiPortRecord = {
-  indexNo: number | null;
-  regionNo: number | null;
-  name: string;
-  officialLabel: string;
-  countryCode: string;
-  latitude: number;
-  longitude: number;
-  source: "WPI";
 };
 
 const jsonHeaders = { "content-type": "application/json; charset=utf-8" };
@@ -81,22 +67,6 @@ function normalizeScenario(value: Record<string, unknown>, fallback: VoyageScena
     cargo_type: cleanCapture(value.cargo_type ?? value.cargoType ?? value.commodity) || fallback.cargo_type,
     loading_rate: parsePositiveNumber(value.loading_rate ?? value.loadingRate ?? value.load_rate) || fallback.loading_rate,
     discharge_rate: parsePositiveNumber(value.discharge_rate ?? value.dischargeRate ?? value.disch_rate) || fallback.discharge_rate,
-  };
-}
-
-async function validateScenarioPorts(scenario: VoyageScenario) {
-  const portValidation = await validateWpiVoyagePorts(scenario.pol, scenario.pod);
-  const polPort = portValidation.pol.match as WpiPortRecord | undefined;
-  const podPort = portValidation.pod.match as WpiPortRecord | undefined;
-  return {
-    scenario: {
-      ...scenario,
-      pol: polPort?.officialLabel || scenario.pol,
-      pod: podPort?.officialLabel || scenario.pod,
-      ...(polPort ? { pol_port: polPort } : {}),
-      ...(podPort ? { pod_port: podPort } : {}),
-    },
-    port_validation: portValidation,
   };
 }
 
@@ -153,20 +123,15 @@ export default async (req: Request) => {
   if (!text) return responseJson({ error: "El requerimiento esta vacio." }, 400);
 
   try {
-    const validated = await validateScenarioPorts(await extractVoyageScenario(text));
-    return responseJson({ success: true, ...validated, source: "netlify-ai-gateway+wpi" });
+    const scenario = await extractVoyageScenario(text);
+    return responseJson({ success: true, scenario, source: "netlify-ai-gateway" });
   } catch {
     console.error("NLP voyage extraction failed; using deterministic fallback.");
-    try {
-      const validated = await validateScenarioPorts(extractFallback(text));
-      return responseJson({ success: true, ...validated, source: "deterministic-fallback+wpi" });
-    } catch {
-      console.error("WPI port validation failed.");
-      return responseJson({
-        success: false,
-        error: "No se pudo validar POL y POD contra el catalogo WPI.",
-      }, 503);
-    }
+    return responseJson({
+      success: true,
+      scenario: extractFallback(text),
+      source: "deterministic-fallback",
+    });
   }
 };
 

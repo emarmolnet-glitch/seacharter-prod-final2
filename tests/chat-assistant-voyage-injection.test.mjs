@@ -7,27 +7,32 @@ const draftEntrySource = await readFile(new URL('../src/voyage-draft-entry.js', 
 const storeSource = await readFile(new URL('../src/stores/voyage-store.js', import.meta.url), 'utf8');
 const extractorSource = await readFile(new URL('../netlify/functions/nlp-voyage-extract.ts', import.meta.url), 'utf8');
 const dictionarySource = await readFile(new URL('../netlify/functions/_shared/nlp-voyage-dictionary.mjs', import.meta.url), 'utf8');
+const wpiClientSource = await readFile(new URL('../src/wpi-catalog-client.js', import.meta.url), 'utf8');
 
 test('assistant extracts voyage intent and renders an explicit injection action', () => {
   assert.match(assistantSource, /const NLP_ENDPOINT = "\/api\/nlp-voyage-extract"/);
   assert.match(assistantSource, /Promise\.all\(\[chatRequest, extractionRequest\]\)/);
   assert.match(assistantSource, /Sí, inyectar y calcular/);
   assert.match(assistantSource, /window\.injectVoyageScenario\(scenario\)/);
-  assert.match(assistantSource, /port_validation:\s*\{/);
-  assert.match(assistantSource, /Validación WPI/);
+  assert.match(assistantSource, /validateScenarioPortsWithWpi/);
+  assert.match(assistantSource, /Inyectar datos y revisar puertos/);
+  assert.match(assistantSource, /sca-voyage-action__warning/);
 });
 
 test('voyage injection updates DraftVoyage, calculator fields and starts the engine', () => {
   assert.match(storeSource, /applyNlpScenario/);
+  assert.match(storeSource, /scenario\.pol_port \|\| scenario\.pol/);
   assert.match(storeSource, /lastSource: 'assistant-nlp'/);
   assert.match(draftEntrySource, /window\.injectVoyageScenario = injectVoyageScenario/);
-  assert.match(draftEntrySource, /selectValidatedWpiPort\('port-pol', scenario\.pol_port\)/);
-  assert.match(draftEntrySource, /scenario\.port_validation\?\.valid !== true/);
+  assert.match(draftEntrySource, /selectValidatedWpiPort\(inputId, scenario\.pol_port\)/);
+  assert.match(draftEntrySource, /setPortSelectionWarning/);
+  assert.match(draftEntrySource, /requiresPortSelection/);
   assert.match(draftEntrySource, /window\.syncSelectedRoutePort\?\.\('POL', pol\)/);
   assert.match(draftEntrySource, /window\.syncSelectedRoutePort\?\.\('POD', pod\)/);
   assert.match(draftEntrySource, /setValue\('cargo-qty', cargoQuantity\)/);
   assert.match(draftEntrySource, /window\.SeaCharterStore\?\.set/);
   assert.match(draftEntrySource, /window\.runEngine\(\)/);
+  assert.match(storeSource, /officialLabel: cleanText\(source\.officialLabel\)/);
 });
 
 test('NLP schema includes cargo type and supports Spanish natural dates', () => {
@@ -35,6 +40,7 @@ test('NLP schema includes cargo type and supports Spanish natural dates', () => 
   assert.match(dictionarySource, /const MONTHS/);
   assert.match(extractorSource, /siguiente ocurrencia futura/);
   assert.match(dictionarySource, /toneladas/);
-  assert.match(extractorSource, /validateWpiVoyagePorts/);
-  assert.match(extractorSource, /netlify-ai-gateway\+wpi/);
+  assert.doesNotMatch(extractorSource, /validateWpiVoyagePorts|wpi-port-resolver|WPI\.csv/);
+  assert.match(wpiClientSource, /findExactPort/);
+  assert.match(extractorSource, /netlify-ai-gateway/);
 });
