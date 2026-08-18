@@ -6,6 +6,7 @@ const assistantSource = await readFile(new URL('../src/sea-assistant-entry.js', 
 const draftEntrySource = await readFile(new URL('../src/voyage-draft-entry.js', import.meta.url), 'utf8');
 const storeSource = await readFile(new URL('../src/stores/voyage-store.js', import.meta.url), 'utf8');
 const extractorSource = await readFile(new URL('../netlify/functions/nlp-voyage-extract.ts', import.meta.url), 'utf8');
+const dictionarySource = await readFile(new URL('../netlify/functions/_shared/nlp-voyage-dictionary.mjs', import.meta.url), 'utf8');
 
 test('assistant extracts voyage intent and renders an explicit injection action', () => {
   assert.match(assistantSource, /const NLP_ENDPOINT = "\/api\/nlp-voyage-extract"/);
@@ -28,7 +29,7 @@ test('voyage injection updates DraftVoyage, calculator fields and starts the eng
 
 test('NLP schema includes cargo type and supports Spanish natural dates', () => {
   assert.match(extractorSource, /cargo_type: string/);
-  assert.match(extractorSource, /SPANISH_MONTHS/);
+  assert.match(dictionarySource, /const MONTHS/);
   assert.match(extractorSource, /siguiente ocurrencia futura/);
-  assert.match(extractorSource, /toneladas\?/);
+  assert.match(dictionarySource, /toneladas/);
 });

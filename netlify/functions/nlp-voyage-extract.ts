@@ -1,5 +1,10 @@
 import type { Config } from "@netlify/functions";
 import OpenAI from "openai";
+import {
+  extractNaturalVoyageEntities,
+  maritimeDictionaryPrompt,
+  normalizeNaturalDate,
+} from "./_shared/nlp-voyage-dictionary.mjs";
 
 type VoyageExtractionRequest = {
   text?: string;
@@ -48,108 +53,16 @@ function cleanCapture(value: unknown) {
     .trim();
 }
 
-function captureFirst(text: string, patterns: RegExp[]) {
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match?.[1]) return cleanCapture(match[1]);
-  }
-  return "";
-}
-
-const SPANISH_MONTHS: Record<string, number> = {
-  enero: 1,
-  febrero: 2,
-  marzo: 3,
-  abril: 4,
-  mayo: 5,
-  junio: 6,
-  julio: 7,
-  agosto: 8,
-  septiembre: 9,
-  setiembre: 9,
-  octubre: 10,
-  noviembre: 11,
-  diciembre: 12,
-};
-
-function toIsoDate(year: number, month: number, day: number) {
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return "";
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-function normalizeDate(value: unknown, referenceDate = new Date()) {
-  const raw = cleanCapture(value);
-  const isoMatch = raw.match(/\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b/);
-  if (isoMatch) return toIsoDate(Number(isoMatch[1]), Number(isoMatch[2]), Number(isoMatch[3]));
-  const numericMatch = raw.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](20\d{2})\b/);
-  if (numericMatch) return toIsoDate(Number(numericMatch[3]), Number(numericMatch[2]), Number(numericMatch[1]));
-
-  const naturalMatch = raw.toLocaleLowerCase("es-ES").match(
-    /\b(\d{1,2})(?:\s+de)?\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)(?:\s+de\s+(20\d{2}))?\b/i,
-  );
-  if (naturalMatch) {
-    const day = Number(naturalMatch[1]);
-    const month = SPANISH_MONTHS[naturalMatch[2].toLocaleLowerCase("es-ES")];
-    let year = Number(naturalMatch[3]) || referenceDate.getUTCFullYear();
-    let normalized = toIsoDate(year, month, day);
-    const today = toIsoDate(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth() + 1, referenceDate.getUTCDate());
-    if (!naturalMatch[3] && normalized && normalized < today) normalized = toIsoDate(++year, month, day);
-    return normalized;
-  }
-  return "";
-}
-
 function extractFallback(text: string): VoyageScenario {
-  const laycanText = text.match(/(?:laycan|laydays\s*\/\s*cancelling)\s*[:\-]?\s*([^\n;]+)/i)?.[1] || "";
-  const laycanDates = Array.from(laycanText.matchAll(
-    /\b(?:20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]20\d{2})\b/g,
-  )).map((match) => normalizeDate(match[0])).filter(Boolean);
-
-  const explicitDate = normalizeDate(captureFirst(text, [
-    /(?:para|el|fecha|laycan)\s+(?:el\s+)?(\d{1,2}(?:\s+de)?\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)(?:\s+de\s+20\d{2})?)/i,
-  ]));
-  const laydays = normalizeDate(captureFirst(text, [
-    /(?:laydays|laycan\s+(?:start|inicio))\s*[:\-]?\s*([^\n;,]+)/i,
-  ])) || laycanDates[0] || explicitDate;
-  const cancelling = normalizeDate(captureFirst(text, [
-    /(?:cancelling|cancelaci[oó]n|laycan\s+end|laycan\s+fin)\s*[:\-]?\s*([^\n;,]+)/i,
-  ])) || laycanDates[1] || (explicitDate ? laydays : "");
-
-  return {
-    pol: captureFirst(text, [
-      /(?:^|[\n;,])\s*(?:pol|puerto\s+de\s+carga|load(?:ing)?\s+port)\s*[:\-]\s*([^\n;,]+)/im,
-      /(?:from|desde)\s+([^\n;,]+?)\s+(?:to|hasta|a)\s+/i,
-    ]),
-    pod: captureFirst(text, [
-      /(?:^|[\n;,])\s*(?:pod|puerto\s+de\s+descarga|discharge\s+port)\s*[:\-]\s*([^\n;,]+)/im,
-      /(?:from|desde)\s+[^\n;,]+?\s+(?:to|hasta|a)\s+([^\n;,]+?)(?=\s+(?:para|con|laycan|cargando|descargando)\b|[;,]|$)/i,
-    ]),
-    laydays,
-    cancelling,
-    cargo_qty: parsePositiveNumber(captureFirst(text, [
-      /(?:cargo(?:_qty)?|cantidad(?:\s+de\s+carga)?|quantity|qty)\s*[:\-]?\s*([\d.,\s]+)/i,
-      /([\d.,\s]+)\s*(?:mt|tm|tons?|tonnes?|toneladas?)\s+(?:of|de)\s+/i,
-    ])),
-    cargo_type: captureFirst(text, [
-      /[\d.,\s]+\s*(?:mt|tm|tons?|tonnes?|toneladas?)\s+(?:of|de)\s+(.+?)(?=\s+(?:from|desde)\b|[;,]|$)/i,
-      /(?:carga|mercanc[ií]a|producto|cargo\s+type)\s*[:\-]\s*([^\n;,]+)/i,
-    ]),
-    loading_rate: parsePositiveNumber(captureFirst(text, [
-      /(?:loading(?:\s+rate)?|load\s+rate|ritmo\s+(?:de\s+)?carga|loading_rate)\s*[:\-]?\s*([\d.,\s]+)/i,
-    ])),
-    discharge_rate: parsePositiveNumber(captureFirst(text, [
-      /(?:discharg(?:e|ing)(?:\s+rate)?|ritmo\s+(?:de\s+)?descarga|discharge_rate)\s*[:\-]?\s*([\d.,\s]+)/i,
-    ])),
-  };
+  return extractNaturalVoyageEntities(text) as VoyageScenario;
 }
 
 function normalizeScenario(value: Record<string, unknown>, fallback: VoyageScenario): VoyageScenario {
   return {
     pol: cleanCapture(value.pol ?? value.port_of_loading ?? value.loading_port) || fallback.pol,
     pod: cleanCapture(value.pod ?? value.port_of_discharge ?? value.discharge_port) || fallback.pod,
-    laydays: normalizeDate(value.laydays ?? value.layday ?? value.laycan_start) || fallback.laydays,
-    cancelling: normalizeDate(value.cancelling ?? value.canceling ?? value.laycan_end) || fallback.cancelling,
+    laydays: normalizeNaturalDate(value.laydays ?? value.layday ?? value.laycan_start) || fallback.laydays,
+    cancelling: normalizeNaturalDate(value.cancelling ?? value.canceling ?? value.laycan_end) || fallback.cancelling,
     cargo_qty: parsePositiveNumber(value.cargo_qty ?? value.cargoQty ?? value.quantity ?? value.qty) || fallback.cargo_qty,
     cargo_type: cleanCapture(value.cargo_type ?? value.cargoType ?? value.commodity) || fallback.cargo_type,
     loading_rate: parsePositiveNumber(value.loading_rate ?? value.loadingRate ?? value.load_rate) || fallback.loading_rate,
@@ -165,7 +78,7 @@ async function extractVoyageScenario(text: string) {
     input: [
       {
         role: "system",
-        content: `Eres un extractor marítimo de SeaCharter Core PRO. Convierte el requerimiento en las ocho claves exactas del esquema. No inventes puertos, mercancías, cantidades ni ritmos. POL y POD son nombres de puertos. cargo_type es la mercancía descrita. laydays y cancelling deben usar YYYY-MM-DD. La fecha actual es ${new Date().toISOString().slice(0, 10)}; si el usuario da día y mes sin año, usa la siguiente ocurrencia futura. Si sólo indica una fecha operativa, úsala como laydays y cancelling para representar un laycan de un día. cargo_qty, loading_rate y discharge_rate son números positivos en toneladas métricas o toneladas métricas por día. Si un dato no aparece, devuelve string vacío o 0 según el tipo.`,
+        content: `Eres un extractor marítimo de SeaCharter Core PRO. Convierte el requerimiento en las ocho claves exactas del esquema. No inventes puertos, mercancías, cantidades ni ritmos. Aplica este diccionario de equivalencias coloquiales: ${maritimeDictionaryPrompt()}. POL y POD son nombres de puertos. cargo_type es la mercancía descrita, incluyendo materiales cotidianos como cemento, grano o clinker. laydays y cancelling deben usar YYYY-MM-DD; interpreta rangos como "entre el día X y el Y" o "desde el [Fecha] hasta el [Fecha]" como inicio y fin del laycan. La fecha actual es ${new Date().toISOString().slice(0, 10)}; si el usuario da día y mes sin año, usa la siguiente ocurrencia futura. Si sólo indica una fecha operativa, úsala como laydays y cancelling para representar un laycan de un día. cargo_qty, loading_rate y discharge_rate son números positivos en toneladas métricas o toneladas métricas por día. Si un dato no aparece, devuelve string vacío o 0 según el tipo.`,
       },
       { role: "user", content: text },
     ],
