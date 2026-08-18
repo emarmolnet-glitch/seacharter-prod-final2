@@ -6,6 +6,7 @@ import { evaluateModuleSuggestions, SUPPORTED_MODULES } from "./universal-module
 const CHAT_ENDPOINT = "/.netlify/functions/chat-assistant";
 const NLP_ENDPOINT = "/api/nlp-voyage-extract";
 const REQUEST_TIMEOUT_MS = 45_000;
+const SPEECH_PREFERENCE_KEY = "seacharter-assistant-voice-enabled";
 const MODULE_LABELS = Object.freeze({
   map: "Mapa",
   estimator: "Calculadora",
@@ -39,6 +40,18 @@ const icons = {
       <path d="M6.5 11.5a5.5 5.5 0 0 0 11 0" />
       <path d="M12 17v4" />
       <path d="M9 21h6" />
+    </svg>`,
+  speaker: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M11 5 6.8 8.5H3.5v7h3.3L11 19V5Z" />
+      <path d="M15 9a4.2 4.2 0 0 1 0 6" />
+      <path d="M17.7 6.4a8 8 0 0 1 0 11.2" />
+    </svg>`,
+  speakerMuted: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M11 5 6.8 8.5H3.5v7h3.3L11 19V5Z" />
+      <path d="m15.5 9.5 5 5" />
+      <path d="m20.5 9.5-5 5" />
     </svg>`,
 };
 
@@ -501,6 +514,7 @@ function mountSeaAssistant() {
           <h2 class="sca-title" id="sea-assistant-title">Asistente SeaCharter</h2>
           <p class="sca-status">Disponible para consultas</p>
         </div>
+        <button class="sca-speech-toggle" type="button" aria-label="Activar respuestas por voz" aria-pressed="false" title="Activar voz">${icons.speakerMuted}</button>
       </header>
       <div class="sca-history" aria-live="polite" aria-relevant="additions text"></div>
       <form class="sca-form">
@@ -519,6 +533,7 @@ function mountSeaAssistant() {
   const form = root.querySelector(".sca-form");
   const input = root.querySelector(".sca-input");
   const micButton = root.querySelector(".sca-mic");
+  const speechToggle = root.querySelector(".sca-speech-toggle");
   const sendButton = root.querySelector(".sca-send");
   const voiceFeedback = root.querySelector(".sca-voice-feedback");
   const status = root.querySelector(".sca-status");
@@ -538,6 +553,79 @@ function mountSeaAssistant() {
   let recognition = null;
   let isListening = false;
   let recognitionHadError = false;
+  const speechSynthesis = window.speechSynthesis;
+  const supportsSpeechSynthesis = Boolean(speechSynthesis && window.SpeechSynthesisUtterance);
+  let speechEnabled = false;
+
+  try {
+    speechEnabled = supportsSpeechSynthesis && window.localStorage.getItem(SPEECH_PREFERENCE_KEY) === "true";
+  } catch {
+    speechEnabled = false;
+  }
+
+  const cancelSpeech = () => {
+    if (supportsSpeechSynthesis) speechSynthesis.cancel();
+  };
+
+  const syncSpeechToggle = () => {
+    speechToggle.innerHTML = speechEnabled ? icons.speaker : icons.speakerMuted;
+    speechToggle.classList.toggle("is-active", speechEnabled);
+    speechToggle.setAttribute("aria-pressed", String(speechEnabled));
+    speechToggle.setAttribute("aria-label", speechEnabled ? "Desactivar respuestas por voz" : "Activar respuestas por voz");
+    speechToggle.title = speechEnabled ? "Silenciar voz" : "Activar voz";
+    speechToggle.disabled = !supportsSpeechSynthesis;
+    if (!supportsSpeechSynthesis) {
+      speechToggle.setAttribute("aria-label", "Síntesis de voz no disponible en este navegador");
+      speechToggle.title = "Síntesis de voz no disponible";
+    }
+  };
+
+  const setSpeechEnabled = (enabled) => {
+    speechEnabled = supportsSpeechSynthesis && Boolean(enabled);
+    if (!speechEnabled) cancelSpeech();
+    try {
+      window.localStorage.setItem(SPEECH_PREFERENCE_KEY, String(speechEnabled));
+    } catch {}
+    syncSpeechToggle();
+  };
+
+  const cleanTextForSpeech = (text) => {
+    const container = document.createElement("div");
+    container.innerHTML = DOMPurify.sanitize(marked.parse(String(text || ""), {
+      async: false,
+      breaks: true,
+      gfm: true,
+    }));
+    return (container.textContent || "").replace(/\s+/g, " ").trim();
+  };
+
+  const speakText = (text) => {
+    if (!speechEnabled || !supportsSpeechSynthesis || panel.hidden) return;
+    const cleanText = cleanTextForSpeech(text);
+    if (!cleanText) return;
+
+    const utterance = new window.SpeechSynthesisUtterance(cleanText);
+    utterance.lang = "es-ES";
+    utterance.rate = 1.1;
+    utterance.pitch = 1;
+    speechSynthesis.speak(utterance);
+  };
+
+  const createAndSpeakAssistantMessage = (text, options = {}) => {
+    const message = createMessage("assistant", text, options);
+    history.appendChild(message);
+    if (!options.error) speakText(text);
+    return message;
+  };
+
+  const replaceWithAssistantMessage = (target, text, options = {}) => {
+    const message = createMessage("assistant", text, options);
+    target.replaceWith(message);
+    if (!options.error) speakText(text);
+    return message;
+  };
+
+  syncSpeechToggle();
 
   const scrollToLatest = () => {
     history.scrollTo({ top: history.scrollHeight, behavior: "smooth" });
@@ -683,6 +771,7 @@ function mountSeaAssistant() {
       scrollToLatest();
     } else {
       if (isListening) recognition?.stop();
+      cancelSpeech();
       toggleButton.focus();
     }
   };
@@ -707,10 +796,11 @@ function mountSeaAssistant() {
   };
 
   toggleButton.addEventListener("click", () => setOpen(panel.hidden));
+  speechToggle.addEventListener("click", () => setSpeechEnabled(!speechEnabled));
   window.addEventListener("sea-assistant:open", openFromContext);
 
   header.addEventListener("mousedown", (event) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || event.target.closest("button")) return;
 
     if (!hasCustomPosition) initializePosition();
     isDragging = true;
@@ -763,6 +853,7 @@ function mountSeaAssistant() {
     const userText = input.value.trim();
     if (!userText || pending) return;
 
+    cancelSpeech();
     history.appendChild(createMessage("user", userText, { meta: formatTime() }));
     input.value = "";
     resizeInput();
@@ -791,11 +882,11 @@ function mountSeaAssistant() {
         throw new Error("Invalid assistant response");
       }
 
-      thinkingMessage.replaceWith(createMessage("assistant", payload.respuesta.trim(), { meta: formatTime() }));
+      replaceWithAssistantMessage(thinkingMessage, payload.respuesta.trim(), { meta: formatTime() });
       if (voyageExtraction?.scenario) {
         history.appendChild(createVoyageActionCard(voyageExtraction.scenario));
       } else if (voyageExtraction?.clarification) {
-        history.appendChild(createMessage("assistant", voyageExtraction.clarification, { meta: "Validación WPI" }));
+        createAndSpeakAssistantMessage(voyageExtraction.clarification, { meta: "Validación WPI" });
       }
     } catch (error) {
       const errorText = error?.name === "AbortError"
