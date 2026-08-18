@@ -21,6 +21,10 @@
 }
 
 .sca-panel {
+  position: fixed;
+  right: max(24px, env(safe-area-inset-right));
+  bottom: calc(max(24px, env(safe-area-inset-bottom)) + 76px);
+  z-index: 9999;
   width: min(390px, calc(100vw - 32px));
   height: min(610px, calc(100vh - 118px));
   min-height: 420px;
@@ -51,9 +55,15 @@
   padding: 18px 16px;
   overflow: hidden;
   color: #f7fbff;
+  cursor: grab;
+  user-select: none;
   background:
     radial-gradient(circle at 88% -30%, rgba(143, 199, 208, 0.34), transparent 48%),
     linear-gradient(145deg, var(--sca-navy) 0%, var(--sca-navy-soft) 100%);
+}
+
+.sca-panel.is-dragging .sca-header {
+  cursor: grabbing;
 }
 
 .sca-header::after {
@@ -402,6 +412,8 @@
   }
 
   .sca-panel {
+    right: 12px;
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 72px);
     width: calc(100vw - 24px);
     height: min(680px, calc(100dvh - 96px));
     min-height: 360px;

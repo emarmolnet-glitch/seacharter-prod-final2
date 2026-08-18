@@ -8,11 +8,26 @@ function jsonResponse(status, body) {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
     },
   });
 }
 
 export default async (req) => {
+  // Manejo de preflight CORS
+  if (req.method === "OPTIONS") {
+    return new Response("OK", {
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
+    });
+  }
+
   if (req.method !== "POST") {
     return jsonResponse(405, {
       success: false,
@@ -31,8 +46,10 @@ export default async (req) => {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+    // AQUÍ SE SOLUCIONA EL ERROR 404:
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-pro",
+      model: "gemini-pro",
       systemInstruction,
     });
 
@@ -44,6 +61,7 @@ export default async (req) => {
       respuesta,
     });
   } catch (error) {
+    console.error("Error en Gemini API:", error);
     return jsonResponse(500, {
       success: false,
       error: error instanceof Error ? error.message : "Error interno del servidor.",
