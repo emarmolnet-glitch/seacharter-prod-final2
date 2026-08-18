@@ -7932,7 +7932,7 @@
                 flex: 0 0 auto !important;
             }
 
-            header.app-header #sea-assistant-toggle span {
+            header.app-header #sea-assistant-toggle span:not(.sea-assistant-alert-badge) {
                 display: none !important;
             }
         }
@@ -8357,6 +8357,7 @@
             >
                 <i class="fa-solid fa-comments text-teal-400 text-xs" aria-hidden="true"></i>
                 <span>Asistente</span>
+                <span class="sea-assistant-alert-badge" hidden aria-live="polite"></span>
             </button>
 
             <!-- Botón FAQ / Manual -->
@@ -16775,6 +16776,7 @@
                 if (typeof syncAsbatankvoy === 'function') syncAsbatankvoy();
                 if (typeof syncCalculatorAndMatching === 'function') syncCalculatorAndMatching('calculator');
                 stopRouteGlobeRotation();
+                window.SeaAssistantAlerts?.evaluateCurrentContext?.();
 
                 window.updateDataBridgeTransportStatus?.('connected');
                 void Promise.allSettled([
@@ -27748,6 +27750,9 @@
             }
             if (tabId === 'decisiones') {
                 ensureDecisionSupportModule(targetView);
+            }
+            if (tabId === 'estimator') {
+                window.SeaAssistantAlerts?.evaluateCurrentContext?.();
             }
             return true;
         }
