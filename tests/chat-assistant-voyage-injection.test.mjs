@@ -61,6 +61,11 @@ test('NLP schema includes cargo type and supports Spanish natural dates', () => 
   assert.match(extractorSource, /cargo_type: string/);
   assert.match(dictionarySource, /const MONTHS/);
   assert.match(extractorSource, /siguiente ocurrencia futura/);
+  for (const field of ['dwt', 'methodPOL', 'methodPOD', 'ratePOL', 'ratePOD']) {
+    assert.match(extractorSource, new RegExp(`${field}:`));
+  }
+  assert.match(draftEntrySource, /resolveBigBagsMethod/);
+  assert.match(draftEntrySource, /applyManualOperationalRate/);
   assert.match(dictionarySource, /toneladas/);
   assert.doesNotMatch(extractorSource, /validateWpiVoyagePorts|wpi-port-resolver|WPI\.csv/);
   assert.match(wpiClientSource, /findExactPort/);

@@ -203,12 +203,14 @@ function createVoyageActionCard(scenario) {
 
 function createCalculatorAutofillActionCard(action) {
   const cargoQuantity = Number(action.cargo_qty) || 0;
-  const requiredDwt = Number(action.required_dwt) || 0;
-  const loadingRate = Number(action.loading_rate) || 0;
-  const dischargeRate = Number(action.discharge_rate) || 0;
+  const requiredDwt = Number(action.dwt ?? action.required_dwt) || 0;
+  const loadingRate = Number(action.ratePOL ?? action.loading_rate) || 0;
+  const dischargeRate = Number(action.ratePOD ?? action.discharge_rate) || 0;
   const cargoType = String(action.cargo_type || "Carga").trim();
   const vesselClass = String(action.vessel_class || "Buque estándar").trim();
-  const methodSummary = String(action.method_summary || action.loading_method?.family || "método recomendado").trim();
+  const loadingMethodLabel = String(action.loading_method?.label || action.methodPOL || "").trim();
+  const dischargeMethodLabel = String(action.discharge_method?.label || action.methodPOD || "").trim();
+  const methodSummary = String(action.method_summary || action.loading_method?.family || loadingMethodLabel || "método recomendado").trim();
   const summary = `He registrado los ritmos (${loadingRate.toLocaleString("es-ES")} TM/día carga, ${dischargeRate.toLocaleString("es-ES")} TM/día descarga). Para tus ${cargoQuantity.toLocaleString("es-ES")} MT de ${cargoType}, he calculado que necesitas un buque ${vesselClass} de al menos ${requiredDwt.toLocaleString("es-ES")} DWT, y sugiero operar con ${methodSummary}.`;
   const card = document.createElement("article");
   card.className = "sca-voyage-action sca-calculator-action";
@@ -219,8 +221,8 @@ function createCalculatorAutofillActionCard(action) {
     <p>${DOMPurify.sanitize(summary)}</p>
     <p class="sca-calculator-action__question">¿Configuramos todos estos parámetros en la calculadora de una vez?</p>
     <dl class="sca-voyage-action__details">
-      <div><dt>POL</dt><dd>${loadingRate.toLocaleString("es-ES")} TM/día · ${DOMPurify.sanitize(action.loading_method?.label || "")}</dd></div>
-      <div><dt>POD</dt><dd>${dischargeRate.toLocaleString("es-ES")} TM/día · ${DOMPurify.sanitize(action.discharge_method?.label || "")}</dd></div>
+      <div><dt>POL</dt><dd>${loadingRate.toLocaleString("es-ES")} TM/día · ${DOMPurify.sanitize(loadingMethodLabel)}</dd></div>
+      <div><dt>POD</dt><dd>${dischargeRate.toLocaleString("es-ES")} TM/día · ${DOMPurify.sanitize(dischargeMethodLabel)}</dd></div>
       <div><dt>Buque</dt><dd>${DOMPurify.sanitize(vesselClass)} · ${requiredDwt.toLocaleString("es-ES")} DWT</dd></div>
     </dl>
     <button type="button" class="sca-voyage-action__button">⚡ Autocompletar: Ritmos, Grúas y Buque</button>

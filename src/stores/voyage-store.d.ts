@@ -47,6 +47,13 @@ export type DraftVoyage = {
   pod: VoyagePort | null;
   laycan: { laydays: string; cancelling: string };
   cargo: { description: string; quantityMt: number };
+  loadingRate: number;
+  dischargeRate: number;
+  dwt: number;
+  methodPOL: string;
+  methodPOD: string;
+  ratePOL: number;
+  ratePOD: number;
   ballastDistanceNm: number | null;
   ballastDistanceSource: string;
   lastreCoordinates: Array<[number, number]>;

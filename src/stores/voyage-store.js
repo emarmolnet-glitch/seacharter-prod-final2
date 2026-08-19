@@ -8,6 +8,11 @@ const EMPTY_DRAFT = Object.freeze({
     cargo: { description: '', quantityMt: 0 },
     loadingRate: 0,
     dischargeRate: 0,
+    dwt: 0,
+    methodPOL: '',
+    methodPOD: '',
+    ratePOL: 0,
+    ratePOD: 0,
     ballastDistanceNm: null,
     ballastDistanceSource: '',
     lastreCoordinates: [],
@@ -32,6 +37,11 @@ function cleanNonNegativeNumber(value) {
     if (value === null || value === undefined || value === '') return null;
     const number = Number(value);
     return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function cleanMethod(value) {
+    if (value && typeof value === 'object') return cleanText(value.value || value.label);
+    return cleanText(value);
 }
 
 function resolveCalculatorBallastDistance(state, draft) {
@@ -131,12 +141,17 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
                     ? cleanNumber(scenario.cargo_qty ?? scenario.cargoQty) || current.draft.cargo.quantityMt
                     : current.draft.cargo.quantityMt,
             },
-            loadingRate: scenario.loading_rate !== undefined || scenario.loadingRate !== undefined
-                ? cleanNumber(scenario.loading_rate ?? scenario.loadingRate) || current.draft.loadingRate
+            loadingRate: scenario.ratePOL !== undefined || scenario.loading_rate !== undefined || scenario.loadingRate !== undefined
+                ? cleanNumber(scenario.ratePOL ?? scenario.loading_rate ?? scenario.loadingRate) || current.draft.loadingRate
                 : current.draft.loadingRate,
-            dischargeRate: scenario.discharge_rate !== undefined || scenario.dischargeRate !== undefined
-                ? cleanNumber(scenario.discharge_rate ?? scenario.dischargeRate) || current.draft.dischargeRate
+            dischargeRate: scenario.ratePOD !== undefined || scenario.discharge_rate !== undefined || scenario.dischargeRate !== undefined
+                ? cleanNumber(scenario.ratePOD ?? scenario.discharge_rate ?? scenario.dischargeRate) || current.draft.dischargeRate
                 : current.draft.dischargeRate,
+            dwt: cleanNumber(scenario.dwt ?? scenario.required_dwt ?? scenario.requiredDwt) || current.draft.dwt,
+            methodPOL: cleanMethod(scenario.methodPOL ?? scenario.loading_method ?? scenario.loadingMethod ?? scenario.loadMethod) || current.draft.methodPOL,
+            methodPOD: cleanMethod(scenario.methodPOD ?? scenario.discharge_method ?? scenario.dischargeMethod) || current.draft.methodPOD,
+            ratePOL: cleanNumber(scenario.ratePOL ?? scenario.loading_rate ?? scenario.loadingRate) || current.draft.ratePOL,
+            ratePOD: cleanNumber(scenario.ratePOD ?? scenario.discharge_rate ?? scenario.dischargeRate) || current.draft.ratePOD,
             updatedAt: new Date().toISOString(),
             lastSource: 'assistant-nlp',
         },
@@ -171,6 +186,13 @@ export const voyageStore = createStore(subscribeWithSelector((set, get) => ({
                     description: cleanText(state.cargoProduct || state.cargoType || current.draft.cargo.description),
                     quantityMt: cleanNumber(state.cargoQuantity || state.cargo),
                 },
+                loadingRate: cleanNumber(state.ratePOL ?? state.ritmoRealPol ?? state.loadRate) || current.draft.loadingRate,
+                dischargeRate: cleanNumber(state.ratePOD ?? state.ritmoRealPod ?? state.dischargeRate ?? state.dischRate) || current.draft.dischargeRate,
+                dwt: cleanNumber(state.dwt ?? state.vesselDwt) || current.draft.dwt,
+                methodPOL: cleanMethod(state.methodPOL ?? state.loadMethod) || current.draft.methodPOL,
+                methodPOD: cleanMethod(state.methodPOD ?? state.dischargeMethod) || current.draft.methodPOD,
+                ratePOL: cleanNumber(state.ratePOL ?? state.ritmoRealPol ?? state.loadRate) || current.draft.ratePOL,
+                ratePOD: cleanNumber(state.ratePOD ?? state.ritmoRealPod ?? state.dischargeRate ?? state.dischRate) || current.draft.ratePOD,
                 ballastDistanceNm,
                 ballastDistanceSource: ballastDistanceChanged
                     ? 'calculator'
