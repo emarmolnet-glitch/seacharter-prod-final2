@@ -61,6 +61,15 @@ const icons = {
       <path d="m15.5 9.5 5 5" />
       <path d="m20.5 9.5-5 5" />
     </svg>`,
+  stop: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="7" y="7" width="10" height="10" rx="2" />
+    </svg>`,
+  close: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m7 7 10 10" />
+      <path d="m17 7-10 10" />
+    </svg>`,
 };
 
 function isWizardConfirmation(value) {
@@ -656,8 +665,12 @@ function mountSeaAssistant() {
           <p class="sca-status">Disponible para consultas</p>
         </div>
         <button class="sca-speech-toggle" type="button" aria-label="Activar respuestas por voz" aria-pressed="false" title="Activar voz">${icons.speakerMuted}</button>
+        <button class="sca-stop" type="button" aria-label="Detener respuesta" title="Detener respuesta" hidden>${icons.stop}</button>
+        <button class="sca-close" type="button" aria-label="Cerrar asistente" title="Cerrar asistente">${icons.close}</button>
       </header>
-      <div class="sca-history" aria-live="polite" aria-relevant="additions text"></div>
+      <div class="sca-history" aria-live="polite" aria-relevant="additions text">
+        <div class="sca-messages-end" aria-hidden="true"></div>
+      </div>
       <form class="sca-form">
         <textarea class="sca-input" rows="1" maxlength="2000" placeholder="Escribe tu consulta marítima..." aria-label="Mensaje para el asistente" required></textarea>
         <button class="sca-mic" id="sea-assistant-mic-btn" type="button" aria-label="Iniciar dictado por voz" aria-pressed="false" title="Dictar consulta" hidden>${icons.microphone}</button>
@@ -675,6 +688,9 @@ function mountSeaAssistant() {
   const input = root.querySelector(".sca-input");
   const micButton = root.querySelector(".sca-mic");
   const speechToggle = root.querySelector(".sca-speech-toggle");
+  const stopButton = root.querySelector(".sca-stop");
+  const closeButton = root.querySelector(".sca-close");
+  const messagesEndRef = root.querySelector(".sca-messages-end");
   const sendButton = root.querySelector(".sca-send");
   const voiceFeedback = root.querySelector(".sca-voice-feedback");
   const status = root.querySelector(".sca-status");
@@ -701,6 +717,9 @@ function mountSeaAssistant() {
   const speechSynthesis = window.speechSynthesis;
   const supportsSpeechSynthesis = Boolean(speechSynthesis && window.SpeechSynthesisUtterance);
   let speechEnabled = false;
+  let isSpeaking = false;
+  let activeRequestController = null;
+  let stoppedByUser = false;
 
   try {
     speechEnabled = supportsSpeechSynthesis && window.localStorage.getItem(SPEECH_PREFERENCE_KEY) === "true";
@@ -708,8 +727,14 @@ function mountSeaAssistant() {
     speechEnabled = false;
   }
 
+  const syncStopControl = () => {
+    stopButton.hidden = !pending && !isSpeaking;
+  };
+
   const cancelSpeech = () => {
     if (supportsSpeechSynthesis) speechSynthesis.cancel();
+    isSpeaking = false;
+    syncStopControl();
   };
 
   const syncSpeechToggle = () => {
@@ -753,12 +778,26 @@ function mountSeaAssistant() {
     utterance.lang = "es-ES";
     utterance.rate = 1.1;
     utterance.pitch = 1;
+    utterance.onstart = () => {
+      isSpeaking = true;
+      syncStopControl();
+    };
+    utterance.onend = () => {
+      isSpeaking = false;
+      syncStopControl();
+    };
+    utterance.onerror = utterance.onend;
     speechSynthesis.speak(utterance);
+  };
+
+  const appendMessage = (message) => {
+    history.insertBefore(message, messagesEndRef);
+    return message;
   };
 
   const createAndSpeakAssistantMessage = (text, options = {}) => {
     const message = createMessage("assistant", text, options);
-    history.appendChild(message);
+    appendMessage(message);
     if (!options.error) speakText(text);
     return message;
   };
@@ -773,8 +812,11 @@ function mountSeaAssistant() {
   syncSpeechToggle();
 
   const scrollToLatest = () => {
-    history.scrollTo({ top: history.scrollHeight, behavior: "smooth" });
+    messagesEndRef.scrollIntoView({ behavior: "smooth", block: "end" });
   };
+
+  const messagesObserver = new MutationObserver(scrollToLatest);
+  messagesObserver.observe(history, { childList: true, subtree: true });
 
   const resizeInput = () => {
     input.style.height = "auto";
@@ -901,10 +943,10 @@ function mountSeaAssistant() {
     if (open) {
       if (aiAlertsStore.getAlerts() > 0) {
         const evaluation = aiAlertsStore.getCurrentEvaluation();
-        history.appendChild(createMessage("assistant", createProactiveGreeting(evaluation.moduleName), { meta: formatTime() }));
+        appendMessage(createMessage("assistant", createProactiveGreeting(evaluation.moduleName), { meta: formatTime() }));
         aiAlertsStore.resetAlerts();
-      } else if (!history.children.length) {
-        history.appendChild(createMessage(
+      } else if (!history.querySelector(".sca-message")) {
+        appendMessage(createMessage(
           "assistant",
           "Hola. Soy el Asistente SeaCharter. Puedo ayudarte con consultas sobre logística marítima, fletamentos y rutas.",
         ));
@@ -938,10 +980,17 @@ function mountSeaAssistant() {
     micButton.disabled = nextPending;
     if (nextPending && isListening) recognition?.stop();
     syncSendState();
+    syncStopControl();
   };
 
   toggleButton.addEventListener("click", () => setOpen(panel.hidden));
   speechToggle.addEventListener("click", () => setSpeechEnabled(!speechEnabled));
+  closeButton.addEventListener("click", () => setOpen(false));
+  stopButton.addEventListener("click", () => {
+    stoppedByUser = Boolean(activeRequestController);
+    activeRequestController?.abort();
+    cancelSpeech();
+  });
   window.addEventListener("sea-assistant:open", openFromContext);
 
   header.addEventListener("mousedown", (event) => {
@@ -999,7 +1048,7 @@ function mountSeaAssistant() {
     if (!userText || pending) return;
 
     cancelSpeech();
-    history.appendChild(createMessage("user", userText, { meta: formatTime() }));
+    appendMessage(createMessage("user", userText, { meta: formatTime() }));
     input.value = "";
     resizeInput();
 
@@ -1088,10 +1137,11 @@ function mountSeaAssistant() {
     setPending(true);
 
     const thinkingMessage = createThinkingMessage();
-    history.appendChild(thinkingMessage);
-    scrollToLatest();
+    appendMessage(thinkingMessage);
 
     const controller = new AbortController();
+    activeRequestController = controller;
+    stoppedByUser = false;
     const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
@@ -1106,11 +1156,15 @@ function mountSeaAssistant() {
       replaceWithAssistantMessage(thinkingMessage, formatWizardPayloadSummary(pendingWizardPayload), { meta: formatTime() });
     } catch (error) {
       const errorText = error?.name === "AbortError"
-        ? "La respuesta está tardando más de lo esperado. Inténtalo de nuevo en unos segundos."
+        ? stoppedByUser
+          ? "Generación detenida. Puedes reformular la consulta cuando quieras."
+          : "La respuesta está tardando más de lo esperado. Inténtalo de nuevo en unos segundos."
         : error?.message || "No pude conectar con el asistente en este momento. Revisa tu conexión e inténtalo de nuevo.";
       thinkingMessage.replaceWith(createMessage("assistant", errorText, { error: true }));
     } finally {
       window.clearTimeout(timeoutId);
+      if (activeRequestController === controller) activeRequestController = null;
+      stoppedByUser = false;
       setPending(false);
       input.focus();
       scrollToLatest();

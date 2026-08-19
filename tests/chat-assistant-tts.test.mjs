@@ -21,8 +21,8 @@ test('speech is cleaned and cancelled on mute or close', () => {
   assert.match(frontendSource, /speechSynthesis\.cancel\(\)/);
   assert.match(frontendSource, /if \(!speechEnabled\) cancelSpeech\(\)/);
   assert.match(frontendSource, /if \(isListening\) recognition\?\.stop\(\);\s+cancelSpeech\(\)/s);
-  assert.match(frontendSource, /replaceWithAssistantMessage\(thinkingMessage, payload\.respuesta\.trim\(\)/);
-  assert.match(frontendSource, /history\.appendChild\(message\);\s+if \(!options\.error\) speakText\(text\)/s);
+  assert.match(frontendSource, /replaceWithAssistantMessage\(thinkingMessage, formatWizardPayloadSummary\(pendingWizardPayload\)/);
+  assert.match(frontendSource, /appendMessage\(message\);\s+if \(!options\.error\) speakText\(text\)/s);
 });
 
 test('speech control has active, disabled, and focus styles', () => {
