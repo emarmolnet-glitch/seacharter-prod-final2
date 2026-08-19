@@ -5,6 +5,7 @@ import test from 'node:test';
 const frontendSource = await readFile(new URL('../src/sea-assistant-entry.js', import.meta.url), 'utf8');
 const backendSource = await readFile(new URL('../netlify/functions/chat-assistant.js', import.meta.url), 'utf8');
 const dataBridgeToolingSource = await readFile(new URL('../netlify/functions/_shared/data-bridge-tooling.mjs', import.meta.url), 'utf8');
+const weatherToolingSource = await readFile(new URL('../netlify/functions/_shared/weather-tooling.mjs', import.meta.url), 'utf8');
 const assistantStyles = await readFile(new URL('../assets/css/sea-assistant.css', import.meta.url), 'utf8');
 const overlaySource = await readFile(new URL('../dual-mode-overlay.js', import.meta.url), 'utf8');
 
@@ -19,6 +20,7 @@ test('chat assistant sends the complete screen context with each message', () =>
   assert.match(frontendSource, /operativos: \{/);
   assert.match(frontendSource, /financieros: \{/);
   assert.match(frontendSource, /contrato: \{/);
+  assert.match(frontendSource, /meteorologia: weatherSnapshot/);
   assert.match(frontendSource, /JSON\.stringify\(\{ mensaje: userText, contexto \}\)/);
 });
 
@@ -52,6 +54,11 @@ test('chat assistant builds a dynamic maritime risk audit instruction', () => {
   assert.match(backendSource, /Columna A \(Trading: FOB, CIF, Tolerancia\)/);
   assert.match(backendSource, /Columna B \(Fletamento: Margen Bruto y Flete\)/);
   assert.match(backendSource, /DATA_BRIDGE_SYSTEM_PROMPT/);
+  assert.match(backendSource, /Eres un Consultor Marítimo integral/);
+  assert.match(backendSource, /Tienes acceso directo a los datos meteorológicos de la plataforma/);
+  assert.match(backendSource, /Nunca rechaces una consulta meteorológica por restricciones de rol/);
+  assert.match(backendSource, /posibles demoras o suspensiones de laytime por lluvia/);
+  assert.match(backendSource, /contexto\.meteorologia/);
   assert.match(backendSource, /systemInstruction: finalInstruction/);
   assert.match(backendSource, /model: "gemini-2\.5-flash"/);
 });
@@ -72,7 +79,11 @@ test('chat assistant injects the Neon ecosystem dictionary and exposes safe tool
   assert.match(dataBridgeToolingSource, /name: "consultar_data_bridge"/);
   assert.match(dataBridgeToolingSource, /vessels_master SOLAMENTE/);
   assert.match(dataBridgeToolingSource, /market_average_speeds SOLAMENTE/);
-  assert.match(backendSource, /tools: DATA_BRIDGE_TOOLS/);
+  assert.match(backendSource, /tools: \[\.\.\.DATA_BRIDGE_TOOLS, \.\.\.WEATHER_TOOLS\]/);
   assert.match(backendSource, /result\.response\.functionCalls\(\)/);
   assert.match(backendSource, /executeDataBridgeTool\(functionCall\)/);
+  assert.match(weatherToolingSource, /name: "getWeatherForecast"/);
+  assert.match(weatherToolingSource, /impacto meteorológico en carga, descarga, demoras o laytime/);
+  assert.match(backendSource, /tools: \[\.\.\.DATA_BRIDGE_TOOLS, \.\.\.WEATHER_TOOLS\]/);
+  assert.match(backendSource, /executeWeatherTool\(functionCall, normalizedContext\)/);
 });

@@ -429,6 +429,9 @@ function collectChatContext() {
   );
   const loadMethodSelect = document.getElementById("metodo_carga");
   const dischargeMethodSelect = document.getElementById("metodo_descarga_pod");
+  const weatherSnapshot = voyageDraft.weather && typeof voyageDraft.weather === "object"
+    ? voyageDraft.weather
+    : null;
 
   const draftVoyageContext = {
     POL: firstText(state.pol, voyageDraft.pol?.name, readElementValue("port-pol", "map-port-pol")),
@@ -448,6 +451,7 @@ function collectChatContext() {
     datosModulo: moduleScreenContext,
     sugerenciasProactivas: proactiveEvaluation.issues,
     draftVoyage: draftVoyageContext,
+    meteorologia: weatherSnapshot,
     operativos: {
       puertos: {
         POL: firstText(state.pol, voyageDraft.pol?.name, readElementValue("port-pol", "map-port-pol")),
