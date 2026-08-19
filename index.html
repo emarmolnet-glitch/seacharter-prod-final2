@@ -58008,7 +58008,7 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             const container = document.getElementById(containerId);
             if (!container) return;
 
-            const allowedLabels = equipmentMatrix[category] || Object.values(METHOD_LABEL_BY_VALUE);
+            const allowedLabels = [...new Set(equipmentMatrix[category] || Object.values(METHOD_LABEL_BY_VALUE))];
             const currentLabel = getSelectedMethodLabel(side);
 
             container.innerHTML = allowedLabels.map((label) => {

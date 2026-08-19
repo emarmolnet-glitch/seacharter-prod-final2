@@ -29,6 +29,85 @@ function setSelectValue(id, value) {
     return true;
 }
 
+function replaceOperationalMethod(side, method) {
+    const normalizedMethod = String(method || '').trim();
+    if (!normalizedMethod) return false;
+    const isPod = side === 'pod';
+    const selectId = isPod ? 'metodo_descarga_pod' : 'metodo_carga';
+    const stateValues = isPod
+        ? { methodPOD: normalizedMethod, dischargeMethod: normalizedMethod, metodo_descarga_pod: normalizedMethod }
+        : { methodPOL: normalizedMethod, loadMethod: normalizedMethod, metodo_carga: normalizedMethod };
+
+    if (!window.State) window.State = {};
+    Object.assign(window.State, stateValues);
+    if (!window.section2LocalState || typeof window.section2LocalState !== 'object') window.section2LocalState = {};
+    Object.assign(window.section2LocalState, stateValues, { [selectId]: normalizedMethod });
+
+    const replaced = setSelectValue(selectId, normalizedMethod);
+    window.renderMethodPills?.(side);
+    return replaced;
+}
+
+function replaceCargoHierarchySelection(category, product) {
+    const normalizedCategory = String(category || '').trim();
+    const normalizedProduct = String(product || '').trim();
+    if (!normalizedCategory || !normalizedProduct) return false;
+    const stateValues = {
+        cargoCategory: normalizedCategory,
+        cargoType: normalizedCategory,
+        categoriaCarga: normalizedCategory,
+        cargoProduct: normalizedProduct,
+        productoEspecifico: normalizedProduct,
+    };
+
+    if (!window.State) window.State = {};
+    Object.assign(window.State, stateValues);
+    if (!window.section2LocalState || typeof window.section2LocalState !== 'object') window.section2LocalState = {};
+    Object.assign(window.section2LocalState, stateValues, {
+        'cargo-type': normalizedCategory,
+        'cargo-product': normalizedProduct,
+    });
+
+    if (typeof window.restoreCargoSelection === 'function') {
+        window.restoreCargoSelection(normalizedCategory, normalizedProduct);
+    } else {
+        setSelectValue('cargo-type', normalizedCategory);
+        window.populateCargoProducts?.(normalizedProduct);
+        setSelectValue('cargo-product', normalizedProduct);
+    }
+    return document.getElementById('cargo-type')?.value === normalizedCategory
+        && document.getElementById('cargo-product')?.value === normalizedProduct;
+}
+
+function waitForUiStateCommit() {
+    return new Promise((resolve) => {
+        const schedule = typeof window.requestAnimationFrame === 'function'
+            ? window.requestAnimationFrame.bind(window)
+            : (callback) => window.setTimeout(callback, 0);
+        schedule(() => schedule(resolve));
+    });
+}
+
+async function finalizeAssistantVoyageInjection(injectionResult = {}) {
+    await Promise.resolve();
+    await waitForUiStateCommit();
+    window.renderMethodPills?.('pol');
+    window.renderMethodPills?.('pod');
+
+    if (injectionResult.hasIncomingRoute && !injectionResult.requiresPortSelection) {
+        await window.runOnDemandMapRouteWorkflow?.(document.getElementById('btn-map-locate-route'));
+    }
+
+    await waitForUiStateCommit();
+    if (typeof window.handleMasterValidationAndCalculate === 'function') {
+        await window.handleMasterValidationAndCalculate();
+    } else {
+        window.recalcularDiasPuerto?.();
+        window.runEngine?.();
+    }
+    return injectionResult;
+}
+
 function selectValidatedWpiPort(inputId, port) {
     const input = document.getElementById(inputId);
     if (!input || !port || port.source !== 'WPI' || typeof window.selectUniversalPortSuggestion !== 'function') return false;
@@ -132,7 +211,7 @@ function applyManualOperationalRate(side, rate) {
     return true;
 }
 
-function injectVoyageScenario(incomingScenario = {}) {
+function injectVoyageScenario(incomingScenario = {}, options = {}) {
     incomingScenario = normalizeNlpVoyagePayload(incomingScenario);
     const previousDraft = voyageStore.getState().draft;
     const incomingPol = cleanNlpPortName(incomingScenario.pol);
@@ -216,8 +295,6 @@ function injectVoyageScenario(incomingScenario = {}) {
     if (incomingPol || scenario.pol_port) window.syncSelectedRoutePort?.('POL', pol);
     if (incomingPod || scenario.pod_port) window.syncSelectedRoutePort?.('POD', pod);
     if (shouldApplyCargoQuantity) setValue('cargo-qty', cargoQuantity);
-    if (shouldApplyCargoClassification && cargoCategory) setSelectValue('cargo-type', cargoCategory);
-    if (shouldApplyCargoClassification && cargoProduct) setSelectValue('cargo-product', cargoProduct);
     if (shouldApplyCargoClassification && cargoSpecification) setSelectValue('cargo-type-manual', cargoSpecification);
     if (shouldApplyLaydays) {
         ['map-laycan-date', 'gc-laycan-date', 'asb-laycan-date', 'match-laycan-start'].forEach((id) => setValue(id, laydays));
@@ -226,8 +303,6 @@ function injectVoyageScenario(incomingScenario = {}) {
         ['map-cancelling-date', 'gc-cancel-date', 'asb-cancel-date', 'match-laycan-end'].forEach((id) => setValue(id, cancelling));
     }
     if (shouldApplyDwt) setValue('vessel-dwt', dwt);
-    if (methodPOL) setSelectValue('metodo_carga', methodPOL);
-    if (methodPOD) setSelectValue('metodo_descarga_pod', methodPOD);
     if (shouldApplyLoadingRate) applyManualOperationalRate('pol', loadingRate);
     if (shouldApplyDischargeRate) applyManualOperationalRate('pod', dischargeRate);
     if (shouldApplyLoadingRate) setValue('ritmo_nominal_pol', loadingRate);
@@ -254,12 +329,10 @@ function injectVoyageScenario(incomingScenario = {}) {
         ...(shouldApplyCargoQuantity
             ? { cargoQuantity, cargoQty: cargoQuantity, cargo: cargoQuantity }
             : {}),
-        ...(shouldApplyCargoType
-            ? { cargoProduct: cargoType, cargoType }
-            : {}),
+        ...(shouldApplyCargoType ? { cargoDescription: cargoType } : {}),
         ...(scenario.laytimePOL || scenario.loading_terms ? { laytimePOL: scenario.laytimePOL || scenario.loading_terms, laytimeLoadCondition: scenario.laytimePOL || scenario.loading_terms } : {}),
         ...(scenario.laytimePOD || scenario.discharge_terms ? { laytimePOD: scenario.laytimePOD || scenario.discharge_terms, laytimeDischCondition: scenario.laytimePOD || scenario.discharge_terms } : {}),
-        ...(shouldApplyCargoClassification && cargoCategory ? { cargoCategory } : {}),
+        ...(shouldApplyCargoClassification && cargoCategory ? { cargoCategory, cargoType: cargoCategory } : {}),
         ...(shouldApplyCargoClassification && cargoProduct ? { cargoProduct } : {}),
         ...(shouldApplyCargoClassification && cargoSpecification ? { cargoSpecification } : {}),
         ...(shouldApplyLoadingRate ? { loadRate: loadingRate, ritmoRealPol: loadingRate } : {}),
@@ -274,17 +347,18 @@ function injectVoyageScenario(incomingScenario = {}) {
     window.updateGlobalVoyageParams?.(calculatorState, { source: 'assistant-nlp' });
     window.dispatchEvent(new CustomEvent('voyage-draft:nlp-injected', { detail: { scenario, draft: voyageStore.getState().draft } }));
     if (typeof window.syncGlobalStateToForms === 'function') window.syncGlobalStateToForms();
-    if (methodPOL) setSelectValue('metodo_carga', methodPOL);
-    if (methodPOD) setSelectValue('metodo_descarga_pod', methodPOD);
+    if (shouldApplyCargoClassification && cargoCategory && cargoProduct) replaceCargoHierarchySelection(cargoCategory, cargoProduct);
+    if (methodPOL) replaceOperationalMethod('pol', methodPOL);
+    if (methodPOD) replaceOperationalMethod('pod', methodPOD);
     if (shouldApplyLoadingRate) applyManualOperationalRate('pol', loadingRate);
     if (shouldApplyDischargeRate) applyManualOperationalRate('pod', dischargeRate);
     const requiresPortSelection = hasIncomingRoute && (!hasValidatedPol || !hasValidatedPod);
-    if (hasIncomingRoute && !requiresPortSelection) {
+    if (!options.deferFinalActions && hasIncomingRoute && !requiresPortSelection) {
         void window.runOnDemandMapRouteWorkflow?.(document.getElementById('btn-map-locate-route'));
-    } else if (!requiresPortSelection && typeof window.runEngine === 'function') {
+    } else if (!options.deferFinalActions && !requiresPortSelection && typeof window.runEngine === 'function') {
         window.runEngine();
     }
-    return { draft: voyageStore.getState().draft, requiresPortSelection, routeOnly: hasIncomingRoute && scenario.is_partial };
+    return { draft: voyageStore.getState().draft, hasIncomingRoute, requiresPortSelection, routeOnly: hasIncomingRoute && scenario.is_partial };
 }
 
 function applyAssistantCalculatorAutofill(payload = {}) {
@@ -456,6 +530,7 @@ function bindCalculatorStore() {
 window.VoyageDraftStore = voyageStore;
 window.useVoyageStore = voyageStore;
 window.injectVoyageScenario = injectVoyageScenario;
+window.finalizeAssistantVoyageInjection = finalizeAssistantVoyageInjection;
 window.applyAssistantCalculatorAutofill = applyAssistantCalculatorAutofill;
 if (typeof window.SeaCharterStore?.subscribe === 'function' && !window.assistantOperationalDeductionSubscription) {
     window.assistantOperationalDeductionSubscription = window.SeaCharterStore.subscribe(

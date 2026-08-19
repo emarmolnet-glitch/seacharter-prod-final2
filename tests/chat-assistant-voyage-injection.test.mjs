@@ -12,9 +12,14 @@ const assistantFunctionSource = await readFile(new URL('../netlify/functions/cha
 const scenarioPolicySource = await readFile(new URL('../shared/voyage-scenario-policy.mjs', import.meta.url), 'utf8');
 const cargoMapperSource = await readFile(new URL('../shared/cargo-mapper.mjs', import.meta.url), 'utf8');
 
-test('assistant extracts voyage intent and renders an explicit injection action', () => {
+test('assistant retains the validated payload until explicit human confirmation', () => {
   assert.match(assistantSource, /const NLP_ENDPOINT = "\/api\/nlp-voyage-extract"/);
-  assert.match(assistantSource, /Promise\.all\(\[chatRequest, extractionRequest\]\)/);
+  assert.match(assistantSource, /await extractVoyageScenario\(wizardPrompt, controller\.signal\)/);
+  assert.match(assistantSource, /validateSixStepWizardPayload/);
+  assert.match(assistantSource, /pendingWizardPayload = validatedScenario/);
+  assert.match(assistantSource, /window\.injectVoyageScenario\(pendingWizardPayload, \{ deferFinalActions: true \}\)/);
+  assert.match(assistantSource, /await window\.finalizeAssistantVoyageInjection\(injectionResult\)/);
+  assert.match(assistantSource, /WIZARD_CONFIRMATION_STATUS = "esperando_confirmacion"/);
   assert.match(assistantSource, /Sí, inyectar y calcular/);
   assert.match(assistantSource, /window\.injectVoyageScenario\(scenario\)/);
   assert.match(assistantSource, /validateScenarioPortsWithWpi/);
@@ -32,6 +37,16 @@ test('voyage injection updates DraftVoyage, calculator fields and starts the eng
   assert.match(storeSource, /scenario\.pol_port \|\| scenario\.pol/);
   assert.match(storeSource, /lastSource: 'assistant-nlp'/);
   assert.match(draftEntrySource, /window\.injectVoyageScenario = injectVoyageScenario/);
+  assert.match(draftEntrySource, /window\.finalizeAssistantVoyageInjection = finalizeAssistantVoyageInjection/);
+  assert.match(draftEntrySource, /replaceOperationalMethod\('pol', methodPOL\)/);
+  assert.match(draftEntrySource, /replaceOperationalMethod\('pod', methodPOD\)/);
+  assert.match(draftEntrySource, /replaceCargoHierarchySelection\(cargoCategory, cargoProduct\)/);
+  assert.match(draftEntrySource, /cargoCategory, cargoType: cargoCategory/);
+  assert.match(draftEntrySource, /window\.restoreCargoSelection\(normalizedCategory, normalizedProduct\)/);
+  assert.match(draftEntrySource, /Object\.assign\(window\.section2LocalState, stateValues/);
+  assert.match(draftEntrySource, /await window\.runOnDemandMapRouteWorkflow/);
+  assert.match(draftEntrySource, /await window\.handleMasterValidationAndCalculate\(\)/);
+  assert.match(draftEntrySource, /await waitForUiStateCommit\(\)/);
   assert.match(draftEntrySource, /selectValidatedWpiPort\(inputId, scenario\.pol_port\)/);
   assert.match(draftEntrySource, /setPortSelectionWarning/);
   assert.match(draftEntrySource, /requiresPortSelection/);
@@ -55,11 +70,24 @@ test('voyage injection updates DraftVoyage, calculator fields and starts the eng
   assert.match(draftEntrySource, /ritmoRealPod: dischargeRate/);
   assert.match(extractorSource, /Las palabras literales "POL" y "POD" son etiquetas de campo/);
   assert.match(draftEntrySource, /runOnDemandMapRouteWorkflow/);
-  assert.match(draftEntrySource, /if \(hasIncomingRoute && !requiresPortSelection\)/);
+  assert.match(draftEntrySource, /if \(!options\.deferFinalActions && hasIncomingRoute && !requiresPortSelection\)/);
   assert.doesNotMatch(draftEntrySource, /hasIncomingRoute && !requiresPortSelection && scenario\.is_partial/);
   assert.match(scenarioPolicySource, /loading_terms: "CQD"/);
   assert.match(scenarioPolicySource, /DEFAULT_LAYDAYS_OFFSET_DAYS = 4/);
   assert.match(scenarioPolicySource, /DEFAULT_LAYCAN_WINDOW_DAYS = 5/);
+});
+
+test('assistant finalization replaces methods and runs route before master calculation', () => {
+  const replacementStart = draftEntrySource.indexOf('function replaceOperationalMethod');
+  const finalizerStart = draftEntrySource.indexOf('async function finalizeAssistantVoyageInjection');
+  const routeStart = draftEntrySource.indexOf('await window.runOnDemandMapRouteWorkflow', finalizerStart);
+  const calculationStart = draftEntrySource.indexOf('await window.handleMasterValidationAndCalculate()', finalizerStart);
+
+  assert.ok(replacementStart >= 0);
+  assert.equal(draftEntrySource.slice(replacementStart, finalizerStart).includes('.push('), false);
+  assert.match(draftEntrySource.slice(replacementStart, finalizerStart), /Object\.assign\(window\.State, stateValues\)/);
+  assert.ok(routeStart > finalizerStart);
+  assert.ok(calculationStart > routeStart);
 });
 
 test('NLP schema includes cargo type and supports Spanish natural dates', () => {
