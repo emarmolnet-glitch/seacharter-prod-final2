@@ -62,11 +62,16 @@ test('chat assistant injects the Neon ecosystem dictionary and exposes safe tool
   assert.match(dataBridgeToolingSource, /bunker_prices_log/);
   assert.match(dataBridgeToolingSource, /market_spot_rates/);
   assert.match(dataBridgeToolingSource, /market_ffa_rates/);
+  assert.match(dataBridgeToolingSource, /Eficiencia_Mercado/);
+  assert.match(dataBridgeToolingSource, /market_average_speeds/);
+  assert.match(dataBridgeToolingSource, /average_speed_knots/);
   assert.match(dataBridgeToolingSource, /ais_vessels/);
   assert.match(dataBridgeToolingSource, /vessels_master/);
   assert.match(dataBridgeToolingSource, /voyages_tracking/);
   assert.match(dataBridgeToolingSource, /pda_vessel_confirmations/);
   assert.match(dataBridgeToolingSource, /name: "consultar_data_bridge"/);
+  assert.match(dataBridgeToolingSource, /vessels_master SOLAMENTE/);
+  assert.match(dataBridgeToolingSource, /market_average_speeds SOLAMENTE/);
   assert.match(backendSource, /tools: DATA_BRIDGE_TOOLS/);
   assert.match(backendSource, /result\.response\.functionCalls\(\)/);
   assert.match(backendSource, /executeDataBridgeTool\(functionCall\)/);
