@@ -7,6 +7,14 @@ import {
   normalizePortReference,
 } from "./_shared/nlp-voyage-dictionary.mjs";
 import { applyVoyageScenarioDefaults, hasMinimumVoyageRoute } from "../../shared/voyage-scenario-policy.mjs";
+import {
+  CARGO_CATEGORIES,
+  CARGO_METHODS,
+  CARGO_PRODUCTS,
+  CARGO_SPECIFICATION_IDS,
+  LAYTIME_TERMS,
+  normalizeNlpVoyagePayload,
+} from "../../shared/cargo-mapper.mjs";
 
 type VoyageExtractionRequest = {
   text?: string;
@@ -19,6 +27,9 @@ type VoyageScenario = {
   cancelling: string;
   cargo_qty: number;
   cargo_type: string;
+  cargo_category: string;
+  cargo_product: string;
+  cargo_specification: string;
   loading_rate: number;
   discharge_rate: number;
   dwt: number;
@@ -26,6 +37,10 @@ type VoyageScenario = {
   methodPOD: string;
   ratePOL: number;
   ratePOD: number;
+  laytimePOL: string;
+  laytimePOD: string;
+  loading_terms: string;
+  discharge_terms: string;
 };
 
 const jsonHeaders = { "content-type": "application/json; charset=utf-8" };
@@ -79,17 +94,23 @@ function inferBigBagsMethod(cargoType: string) {
   return /big\s*bags?/i.test(cargoType) ? "big_bags_barco" : "";
 }
 
-function normalizeScenario(value: Record<string, unknown>, fallback: VoyageScenario): VoyageScenario {
+function normalizeScenario(value: Record<string, unknown>, fallback: VoyageScenario, sourceText = ""): VoyageScenario {
   const cargoQty = parsePositiveNumber(value.cargo_qty ?? value.cargoQty ?? value.quantity ?? value.qty) || fallback.cargo_qty;
   const cargoType = cleanCapture(value.cargo_type ?? value.cargoType ?? value.commodity) || fallback.cargo_type;
   const loadingRate = parsePositiveNumber(value.ratePOL ?? value.loading_rate ?? value.loadingRate ?? value.load_rate) || fallback.loading_rate;
   const dischargeRate = parsePositiveNumber(value.ratePOD ?? value.discharge_rate ?? value.dischargeRate ?? value.disch_rate) || fallback.discharge_rate;
   const dwt = parsePositiveNumber(value.dwt ?? value.required_dwt ?? value.requiredDwt)
     || (cargoQty > 0 ? Math.ceil((cargoQty * 1.1) / 100) * 100 : 0);
-  const defaultMethod = inferBigBagsMethod(cargoType);
-  const methodPOL = normalizeMethod(value.methodPOL ?? value.loading_method ?? value.loadingMethod) || defaultMethod;
-  const methodPOD = normalizeMethod(value.methodPOD ?? value.discharge_method ?? value.dischargeMethod) || defaultMethod;
+  const normalizedPayload = normalizeNlpVoyagePayload({
+    ...fallback,
+    ...value,
+    cargo_type: cargoType,
+  }, sourceText);
+  const defaultMethod = inferBigBagsMethod(`${cargoType} ${normalizedPayload.cargo_product}`);
+  const methodPOL = normalizeMethod(normalizedPayload.methodPOL) || defaultMethod;
+  const methodPOD = normalizeMethod(normalizedPayload.methodPOD) || methodPOL;
   return applyVoyageScenarioDefaults({
+    ...normalizedPayload,
     pol: normalizePortReference(value.pol ?? value.port_of_loading ?? value.loading_port) || fallback.pol,
     pod: normalizePortReference(value.pod ?? value.port_of_discharge ?? value.discharge_port) || fallback.pod,
     laydays: normalizeNaturalDate(value.laydays ?? value.layday ?? value.laycan_start) || fallback.laydays,
@@ -114,7 +135,7 @@ async function extractVoyageScenario(text: string) {
     input: [
       {
         role: "system",
-        content: `Eres un extractor marítimo de SeaCharter Core PRO. Convierte el requerimiento en las trece claves exactas del esquema. Un requerimiento es procesable desde que contiene POL y POD; laycan, mercancía, cantidad y ritmos son opcionales en esta fase. No inventes puertos, mercancías, cantidades ni ritmos. Aplica este diccionario de equivalencias coloquiales: ${maritimeDictionaryPrompt()}. POL y POD deben conservar únicamente el nombre de puerto expresado por el usuario; no los geocodifiques, traduzcas ni completes con ubicaciones externas. Las palabras literales "POL" y "POD" son etiquetas de campo, nunca nombres de puerto: si no aparece un puerto después de ellas, devuelve el campo vacío. La validación oficial se realiza después contra World Port Index. En actualizaciones parciales devuelve vacíos o cero para los campos no mencionados, sin copiar etiquetas ni inventar valores del contexto. cargo_type es la mercancía descrita, incluyendo materiales cotidianos como cemento, grano o clinker. laydays y cancelling deben usar YYYY-MM-DD; interpreta rangos como "entre el día X y el Y" o "desde el [Fecha] hasta el [Fecha]" como inicio y fin del laycan. La fecha actual es ${new Date().toISOString().slice(0, 10)}; si el usuario da día y mes sin año, usa la siguiente ocurrencia futura. Si sólo indica una fecha operativa, úsala como laydays y calcula cancelling cinco días después. Si no indica fechas, deja ambos campos vacíos para que la política operativa aplique una ventana prudencial. cargo_qty, dwt, ratePOL y ratePOD son números positivos. methodPOL y methodPOD contienen el valor del método operativo; para Big Bags con grúas del buque usa big_bags_barco. loading_rate y discharge_rate deben repetir ratePOL y ratePOD por compatibilidad. Si un dato no aparece, devuelve string vacío o 0 según el tipo.`,
+        content: `Eres un extractor marítimo de SeaCharter Core PRO. Convierte el requerimiento en las claves exactas del esquema. Un requerimiento es procesable desde que contiene POL y POD; laycan, mercancía, cantidad y ritmos son opcionales en esta fase. No inventes puertos, mercancías, cantidades ni ritmos. Aplica este diccionario de equivalencias coloquiales: ${maritimeDictionaryPrompt()}. POL y POD deben conservar únicamente el nombre de puerto expresado por el usuario; no los geocodifiques, traduzcas ni completes con ubicaciones externas. Las palabras literales "POL" y "POD" son etiquetas de campo, nunca nombres de puerto: si no aparece un puerto después de ellas, devuelve el campo vacío. La validación oficial se realiza después contra World Port Index. En actualizaciones parciales devuelve vacíos o cero para los campos no mencionados, sin copiar etiquetas ni inventar valores del contexto. cargo_type es la mercancía descrita. cargo_category, cargo_product y cargo_specification deben usar exclusivamente los enums del esquema. Para Big Bags usa cargo_product Big Bags (Minerales/Cemento) y methodPOL big_bags_barco. Si methodPOD no se especifica, repite methodPOL. laydays y cancelling deben usar YYYY-MM-DD. La fecha actual es ${new Date().toISOString().slice(0, 10)}; si el usuario da día y mes sin año, usa la siguiente ocurrencia futura. Si sólo indica una fecha operativa, úsala como laydays y calcula cancelling cinco días después. Si no indica fechas, deja ambos campos vacíos. cargo_qty, dwt, ratePOL y ratePOD son números positivos. laytimePOL y laytimePOD deben contener el término exacto detectado, por ejemplo SHEX o FHEX; loading_terms y discharge_terms deben repetirlos por compatibilidad. loading_rate y discharge_rate deben repetir ratePOL y ratePOD. Si un dato no aparece, devuelve string vacío o 0 según el tipo.`,
       },
       { role: "user", content: text },
     ],
@@ -126,7 +147,7 @@ async function extractVoyageScenario(text: string) {
         schema: {
           type: "object",
           additionalProperties: false,
-          required: ["pol", "pod", "laydays", "cancelling", "cargo_qty", "cargo_type", "loading_rate", "discharge_rate", "dwt", "methodPOL", "methodPOD", "ratePOL", "ratePOD"],
+          required: ["pol", "pod", "laydays", "cancelling", "cargo_qty", "cargo_type", "cargo_category", "cargo_product", "cargo_specification", "loading_rate", "discharge_rate", "dwt", "methodPOL", "methodPOD", "ratePOL", "ratePOD", "laytimePOL", "laytimePOD", "loading_terms", "discharge_terms"],
           properties: {
             pol: { type: "string" },
             pod: { type: "string" },
@@ -134,20 +155,27 @@ async function extractVoyageScenario(text: string) {
             cancelling: { type: "string" },
             cargo_qty: { type: "number" },
             cargo_type: { type: "string" },
+            cargo_category: { type: "string", enum: ["", ...CARGO_CATEGORIES] },
+            cargo_product: { type: "string", enum: ["", ...CARGO_PRODUCTS] },
+            cargo_specification: { type: "string", enum: CARGO_SPECIFICATION_IDS },
             loading_rate: { type: "number" },
             discharge_rate: { type: "number" },
             dwt: { type: "number" },
-            methodPOL: { type: "string" },
-            methodPOD: { type: "string" },
+            methodPOL: { type: "string", enum: CARGO_METHODS },
+            methodPOD: { type: "string", enum: CARGO_METHODS },
             ratePOL: { type: "number" },
             ratePOD: { type: "number" },
+            laytimePOL: { type: "string", enum: LAYTIME_TERMS },
+            laytimePOD: { type: "string", enum: LAYTIME_TERMS },
+            loading_terms: { type: "string", enum: LAYTIME_TERMS },
+            discharge_terms: { type: "string", enum: LAYTIME_TERMS },
           },
         },
       },
     },
   });
 
-  return normalizeScenario(JSON.parse(response.output_text || "{}"), fallback);
+  return normalizeScenario(JSON.parse(response.output_text || "{}"), fallback, text);
 }
 
 export default async (req: Request) => {
@@ -175,7 +203,7 @@ export default async (req: Request) => {
   } catch {
     console.error("NLP voyage extraction failed; using deterministic fallback.");
     const fallback = extractFallback(text);
-    const scenario = normalizeScenario({}, fallback);
+    const scenario = normalizeScenario({}, fallback, text);
     return responseJson({
       success: true,
       valid: hasMinimumVoyageRoute(scenario),

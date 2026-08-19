@@ -10,6 +10,7 @@ const dictionarySource = await readFile(new URL('../netlify/functions/_shared/nl
 const wpiClientSource = await readFile(new URL('../src/wpi-catalog-client.js', import.meta.url), 'utf8');
 const assistantFunctionSource = await readFile(new URL('../netlify/functions/chat-assistant.js', import.meta.url), 'utf8');
 const scenarioPolicySource = await readFile(new URL('../shared/voyage-scenario-policy.mjs', import.meta.url), 'utf8');
+const cargoMapperSource = await readFile(new URL('../shared/cargo-mapper.mjs', import.meta.url), 'utf8');
 
 test('assistant extracts voyage intent and renders an explicit injection action', () => {
   assert.match(assistantSource, /const NLP_ENDPOINT = "\/api\/nlp-voyage-extract"/);
@@ -43,7 +44,11 @@ test('voyage injection updates DraftVoyage, calculator fields and starts the eng
   assert.match(storeSource, /scenario\.cargo_qty !== undefined \|\| scenario\.cargoQty !== undefined/);
   assert.match(storeSource, /cleanNumber\(scenario\.cargo_qty \?\? scenario\.cargoQty\) \|\| current\.draft\.cargo\.quantityMt/);
   assert.match(storeSource, /normalizeNlpPort/);
+  assert.match(draftEntrySource, /normalizeNlpVoyagePayload\(incomingScenario\)/);
   assert.match(draftEntrySource, /applyVoyageScenarioDefaults\(incomingScenario\)/);
+  assert.match(draftEntrySource, /setSelectValue\('cargo-type-manual', cargoSpecification\)/);
+  assert.match(draftEntrySource, /setSelectValue\('laytime-load-condition', payload\.laytimePOL\)/);
+  assert.match(draftEntrySource, /setSelectValue\('laytime-disch-condition', payload\.laytimePOD\)/);
   assert.match(draftEntrySource, /scenario\.is_partial/);
   assert.match(draftEntrySource, /\.\.\.previousCalculatorState/);
   assert.match(draftEntrySource, /ritmoRealPol: loadingRate/);
@@ -64,6 +69,15 @@ test('NLP schema includes cargo type and supports Spanish natural dates', () => 
   for (const field of ['dwt', 'methodPOL', 'methodPOD', 'ratePOL', 'ratePOD']) {
     assert.match(extractorSource, new RegExp(`${field}:`));
   }
+  for (const field of ['cargo_category', 'cargo_product', 'cargo_specification', 'laytimePOL', 'laytimePOD']) {
+    assert.match(extractorSource, new RegExp(`${field}:`));
+  }
+  assert.match(extractorSource, /enum: \["", \.\.\.CARGO_CATEGORIES\]/);
+  assert.match(extractorSource, /enum: CARGO_SPECIFICATION_IDS/);
+  assert.match(extractorSource, /enum: CARGO_METHODS/);
+  assert.match(extractorSource, /enum: LAYTIME_TERMS/);
+  assert.match(cargoMapperSource, /methodPOD[\s\S]*\|\| methodPOL/);
+  assert.match(cargoMapperSource, /"100": "100 - Otros \(N\/A\)"/);
   assert.match(draftEntrySource, /resolveBigBagsMethod/);
   assert.match(draftEntrySource, /applyManualOperationalRate/);
   assert.match(dictionarySource, /toneladas/);

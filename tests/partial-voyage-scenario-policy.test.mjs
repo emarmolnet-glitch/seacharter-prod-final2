@@ -31,6 +31,8 @@ test('partial voyage defaults keep calculators safe', () => {
     discharge_rate: 0,
     loading_terms: 'CQD',
     discharge_terms: 'CQD',
+    laytimePOL: 'CQD',
+    laytimePOD: 'CQD',
     defaults_applied: [
       'laydays',
       'cancelling',
