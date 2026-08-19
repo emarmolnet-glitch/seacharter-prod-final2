@@ -14,6 +14,10 @@ test('Fase 1: equipmentMatrix uses exact refactored categories without generic 3
   assert.match(indexSource, /"Carga de Proyecto \(Breakbulk\)": \["Hierro\/Acero - Grúa Barco", "Hierro\/Acero - Grúa Portuaria", "Cuchara \(Grab\) - Grúa Barco", "Cuchara \(Grab\) - Grúa Portuaria"\]/);
 });
 
+test('method pills remove duplicate labels before rendering', () => {
+  assert.match(indexSource, /const allowedLabels = \[\.\.\.new Set\(equipmentMatrix\[category\] \|\| Object\.values\(METHOD_LABEL_BY_VALUE\)\)\];/);
+});
+
 test('Fase 2: Dynamic SWL label text rendering for Big Bags and Paletizado', () => {
   assert.match(indexSource, /function updateSwlLabelText/);
   assert.match(indexSource, /Carga Bruta por Izada \(MT\)/);
@@ -293,4 +297,3 @@ test('POL and POD method calculations are completely decoupled', () => {
   assert.match(indexSource, /function handlePortMethodChange\(side = 'pol'\) \{[\s\S]*?applyMethodAndProductConditions\(side\);/);
   assert.match(indexSource, /function recalcularDiasPuerto\(targetSide = null\) \{/);
 });
-

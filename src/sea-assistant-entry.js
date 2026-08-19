@@ -7,11 +7,14 @@ import {
 import { marked } from "marked";
 import { evaluateBasicRisks } from "./basic-risk-evaluator.js";
 import { evaluateModuleSuggestions, SUPPORTED_MODULES } from "./universal-module-suggestions.js";
+import { getCargoMethodLabel, validateSixStepWizardPayload } from "../shared/cargo-mapper.mjs";
 
 const CHAT_ENDPOINT = "/.netlify/functions/chat-assistant";
 const NLP_ENDPOINT = "/api/nlp-voyage-extract";
 const REQUEST_TIMEOUT_MS = 45_000;
 const SPEECH_PREFERENCE_KEY = "seacharter-assistant-voice-enabled";
+const WIZARD_CONFIRMATION_STATUS = "esperando_confirmacion";
+const WIZARD_CONFIRMATION_CTA = 'Datos pre-grabados. ¿Estás conforme? Escribe "sí", "ok" o "calcular" para validar y lanzar la simulación.';
 const MODULE_LABELS = Object.freeze({
   map: "Mapa",
   estimator: "Calculadora",
@@ -59,6 +62,30 @@ const icons = {
       <path d="m20.5 9.5-5 5" />
     </svg>`,
 };
+
+function isWizardConfirmation(value) {
+  const normalizedValue = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+  return ["si", "ok", "calcular"].includes(normalizedValue);
+}
+
+function formatWizardPayloadSummary(payload) {
+  const cargoSpecification = payload.especificacionCarga || payload.cargo_specification || "N/D";
+  const loadingRate = Number(payload.ratePOL ?? payload.loading_rate) || 0;
+  const dischargeRate = Number(payload.ratePOD ?? payload.discharge_rate) || 0;
+  return [
+    `- 📍 Ruta: ${payload.pol} -> ${payload.pod}`,
+    `- 📦 Mercancía: ${payload.cargo_category} > ${payload.cargo_product} > ${cargoSpecification}`,
+    `- ⚙️ Método Carga (POL): ${getCargoMethodLabel(payload.methodPOL)} a ${loadingRate.toLocaleString("es-ES")} MT/día`,
+    `- ⚙️ Método Descarga (POD): ${getCargoMethodLabel(payload.methodPOD)} a ${dischargeRate.toLocaleString("es-ES")} MT/día`,
+    `- ⏱️ Laytime: ${payload.laytimePOL} / ${payload.laytimePOD}`,
+    "",
+    WIZARD_CONFIRMATION_CTA,
+  ].join("\n");
+}
 
 function createMessage(role, text, options = {}) {
   const message = document.createElement("article");
@@ -662,6 +689,8 @@ function mountSeaAssistant() {
   let pending = false;
   let wizardStep = 1;
   const wizardData = {};
+  let wizardStatus = "recopilando";
+  let pendingWizardPayload = null;
   let isDragging = false;
   let hasCustomPosition = false;
   let position = { x: 0, y: 0 };
@@ -974,36 +1003,87 @@ function mountSeaAssistant() {
     input.value = "";
     resizeInput();
 
+    if (wizardStatus === WIZARD_CONFIRMATION_STATUS) {
+      if (!isWizardConfirmation(userText)) {
+        createAndSpeakAssistantMessage(WIZARD_CONFIRMATION_CTA, { meta: formatTime() });
+        input.focus();
+        return;
+      }
+      if (!pendingWizardPayload || typeof window.injectVoyageScenario !== "function") {
+        createAndSpeakAssistantMessage("No pude validar el payload retenido. Reinicia el flujo para intentarlo de nuevo.", { meta: formatTime(), error: true });
+        input.focus();
+        return;
+      }
+
+      setPending(true);
+      try {
+        const injectionResult = window.injectVoyageScenario(pendingWizardPayload, { deferFinalActions: true });
+        if (injectionResult?.requiresPortSelection) {
+          throw new Error("Los puertos requieren validación WPI antes de lanzar la simulación.");
+        }
+        if (typeof window.finalizeAssistantVoyageInjection !== "function") {
+          throw new Error("No pude iniciar los cálculos finales de la operación.");
+        }
+
+        await window.finalizeAssistantVoyageInjection(injectionResult);
+        createAndSpeakAssistantMessage("¡Datos inyectados! Mapa y Calculadora actualizados.", { meta: formatTime() });
+        pendingWizardPayload = null;
+        wizardStatus = "recopilando";
+        Object.keys(wizardData).forEach((key) => delete wizardData[key]);
+        wizardStep = 1;
+      } catch (error) {
+        createAndSpeakAssistantMessage(error?.message || "No pude completar los cálculos finales de la operación.", { meta: formatTime(), error: true });
+      } finally {
+        setPending(false);
+        input.focus();
+      }
+      return;
+    }
+
     if (wizardStep === 1) {
-      wizardData.routeAndTonnage = userText;
+      wizardData.routeAndVolume = userText;
       wizardStep = 2;
-      createAndSpeakAssistantMessage("¿Cuál es el formato de la carga?", { meta: formatTime() });
+      createAndSpeakAssistantMessage("¿Cuáles son los ritmos de carga en POL y descarga en POD?", { meta: formatTime() });
       input.focus();
       return;
     }
 
     if (wizardStep === 2) {
-      wizardData.cargoFormat = userText;
+      wizardData.rates = userText;
+      wizardData.rateMode = "manual";
       wizardStep = 3;
-      createAndSpeakAssistantMessage("Indica los ritmos de carga y descarga, junto con la maquinaria disponible.", { meta: formatTime() });
+      createAndSpeakAssistantMessage("¿Qué mercancía transportas: acero, tubos, chatarra, biomasa, pellets, astillas, cemento, clinker, yeso, maquinaria o piezas?", { meta: formatTime() });
       input.focus();
       return;
     }
 
     if (wizardStep === 3) {
-      wizardData.ratesAndMachinery = userText;
+      wizardData.cargoDescription = userText;
       wizardStep = 4;
-      createAndSpeakAssistantMessage("¿Cuál es la mercancía exacta?", { meta: formatTime() });
+      createAndSpeakAssistantMessage("¿Cómo va presentada la carga: a granel, en big bags, paletizada o por piezas?", { meta: formatTime() });
       input.focus();
       return;
     }
 
-    wizardData.exactCargo = userText;
+    if (wizardStep === 4) {
+      wizardData.packaging = userText;
+      wizardStep = 5;
+      createAndSpeakAssistantMessage("Si conoces la maquinaria de POL o POD, indícala (grúa del barco, grúa portuaria, cinta o camión tolva). Si no, responde “no especificada” y aplicaré la opción marítima recomendada.", { meta: formatTime() });
+      input.focus();
+      return;
+    }
+
+    if (wizardStep === 5) {
+      wizardData.craneDetails = userText;
+      wizardStep = 6;
+    }
+
     const wizardPrompt = [
-      `Ruta y toneladas: ${wizardData.routeAndTonnage}`,
-      `Formato de carga: ${wizardData.cargoFormat}`,
-      `Ritmos y maquinaria: ${wizardData.ratesAndMachinery}`,
-      `Mercancía exacta: ${wizardData.exactCargo}`,
+      `Ruta y toneladas: ${wizardData.routeAndVolume}`,
+      `Ritmos POL y POD: ${wizardData.rates}`,
+      `Mercancía: ${wizardData.cargoDescription}`,
+      `Empaquetado: ${wizardData.packaging}`,
+      `Grúas POL y POD: ${wizardData.craneDetails}`,
     ].join("\n");
     setPending(true);
 
@@ -1015,40 +1095,19 @@ function mountSeaAssistant() {
     const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
-      const contexto = collectChatContext();
-      const historial = collectConversationHistory(history);
-      contexto.historialChat = historial;
-      const baseRequestPayload = JSON.parse(JSON.stringify({ mensaje: wizardPrompt, contexto }));
-      const chatRequest = fetch(CHAT_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...baseRequestPayload, historial }),
-        signal: controller.signal,
-      });
-      const extractionRequest = extractVoyageScenario(wizardPrompt, controller.signal).catch(() => null);
-      const [response, voyageExtraction] = await Promise.all([chatRequest, extractionRequest]);
-
-      const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload?.success || typeof payload.respuesta !== "string") {
-        throw new Error("Invalid assistant response");
+      const voyageExtraction = await extractVoyageScenario(wizardPrompt, controller.signal);
+      if (!voyageExtraction?.scenario) throw new Error(voyageExtraction?.clarification || "Invalid voyage extraction");
+      const validatedScenario = validateSixStepWizardPayload(wizardData, voyageExtraction.scenario);
+      if (!validatedScenario.port_validation?.valid) {
+        throw new Error(validatedScenario.port_validation?.clarification || "Los puertos requieren validación WPI.");
       }
-
-      if (payload.action?.type === "calculator_autofill") {
-        const actionCard = createCalculatorAutofillActionCard(payload.action);
-        thinkingMessage.replaceWith(actionCard);
-        speakText(actionCard.dataset.messageText);
-      } else {
-        replaceWithAssistantMessage(thinkingMessage, payload.respuesta.trim(), { meta: formatTime() });
-      }
-      if (!payload.action && voyageExtraction?.scenario) {
-        history.appendChild(createVoyageActionCard(voyageExtraction.scenario));
-      } else if (!payload.action && voyageExtraction?.clarification) {
-        createAndSpeakAssistantMessage(voyageExtraction.clarification, { meta: "Validación WPI" });
-      }
+      pendingWizardPayload = validatedScenario;
+      wizardStatus = WIZARD_CONFIRMATION_STATUS;
+      replaceWithAssistantMessage(thinkingMessage, formatWizardPayloadSummary(pendingWizardPayload), { meta: formatTime() });
     } catch (error) {
       const errorText = error?.name === "AbortError"
         ? "La respuesta está tardando más de lo esperado. Inténtalo de nuevo en unos segundos."
-        : "No pude conectar con el asistente en este momento. Revisa tu conexión e inténtalo de nuevo.";
+        : error?.message || "No pude conectar con el asistente en este momento. Revisa tu conexión e inténtalo de nuevo.";
       thinkingMessage.replaceWith(createMessage("assistant", errorText, { error: true }));
     } finally {
       window.clearTimeout(timeoutId);
