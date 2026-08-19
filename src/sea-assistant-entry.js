@@ -1,4 +1,10 @@
 import DOMPurify from "dompurify";
+import {
+  CHAT_INTENTS,
+  classifyChatIntent,
+  hasOperationalSimulationUpdate,
+  hasSimulationRouteAndVolume,
+} from "../shared/chat-intent-router.mjs";
 import { validateScenarioPortsWithWpi } from "./wpi-catalog-client.js";
 import {
   applyVoyageScenarioDefaults,
@@ -13,6 +19,7 @@ const CHAT_ENDPOINT = "/.netlify/functions/chat-assistant";
 const NLP_ENDPOINT = "/api/nlp-voyage-extract";
 const REQUEST_TIMEOUT_MS = 45_000;
 const SPEECH_PREFERENCE_KEY = "seacharter-assistant-voice-enabled";
+const WIZARD_ACTIVE_STATUS = "simulacion_flete_activa";
 const WIZARD_CONFIRMATION_STATUS = "esperando_confirmacion";
 const WIZARD_CONFIRMATION_CTA = 'Datos pre-grabados. ¿Estás conforme? Escribe "sí", "ok" o "calcular" para validar y lanzar la simulación.';
 const MODULE_LABELS = Object.freeze({
@@ -185,6 +192,23 @@ async function extractVoyageScenario(text, signal) {
     scenario: hasInjectableVoyage(scenario) ? scenario : null,
     clarification: String(scenario.port_validation?.clarification || "").trim(),
   };
+}
+
+async function requestAssistantResponse(userText, historyElement, signal) {
+  const historial = collectConversationHistory(historyElement);
+  const contexto = { ...collectChatContext(), historialChat: historial };
+  const baseRequestPayload = { mensaje: userText, contexto };
+  const response = await fetch(CHAT_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...baseRequestPayload, historial }),
+    signal,
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.success) {
+    throw new Error(payload?.error || "No pude conectar con el asistente en este momento.");
+  }
+  return payload;
 }
 
 function createVoyageActionCard(scenario) {
@@ -705,7 +729,7 @@ function mountSeaAssistant() {
   let pending = false;
   let wizardStep = 1;
   const wizardData = {};
-  let wizardStatus = "recopilando";
+  let wizardStatus = "conversacional";
   let pendingWizardPayload = null;
   let isDragging = false;
   let hasCustomPosition = false;
@@ -1077,7 +1101,7 @@ function mountSeaAssistant() {
         await window.finalizeAssistantVoyageInjection(injectionResult);
         createAndSpeakAssistantMessage("¡Datos inyectados! Mapa y Calculadora actualizados.", { meta: formatTime() });
         pendingWizardPayload = null;
-        wizardStatus = "recopilando";
+        wizardStatus = "conversacional";
         Object.keys(wizardData).forEach((key) => delete wizardData[key]);
         wizardStep = 1;
       } catch (error) {
@@ -1085,6 +1109,63 @@ function mountSeaAssistant() {
       } finally {
         setPending(false);
         input.focus();
+      }
+      return;
+    }
+
+    const contexto = collectChatContext();
+    const intent = classifyChatIntent(userText, {
+      context: contexto,
+      conversationState: wizardStatus === WIZARD_ACTIVE_STATUS ? WIZARD_ACTIVE_STATUS : "",
+    });
+
+    if (
+      wizardStatus !== WIZARD_ACTIVE_STATUS
+      && intent === CHAT_INTENTS.SIMULATION
+      && !hasOperationalSimulationUpdate(userText, contexto)
+    ) {
+      wizardStatus = WIZARD_ACTIVE_STATUS;
+      if (hasSimulationRouteAndVolume(userText)) {
+        wizardData.routeAndVolume = userText;
+        wizardStep = 2;
+        createAndSpeakAssistantMessage("He identificado una simulación de flete. ¿Cuáles son los ritmos de carga en POL y descarga en POD?", { meta: formatTime() });
+      } else {
+        wizardStep = 1;
+        createAndSpeakAssistantMessage("He identificado una simulación de flete. Indica POL, POD y toneladas a transportar para preparar el escenario.", { meta: formatTime() });
+      }
+      input.focus();
+      return;
+    }
+
+    if (intent !== CHAT_INTENTS.SIMULATION || wizardStatus !== WIZARD_ACTIVE_STATUS) {
+      setPending(true);
+      const thinkingMessage = createThinkingMessage();
+      appendMessage(thinkingMessage);
+      const controller = new AbortController();
+      activeRequestController = controller;
+      stoppedByUser = false;
+      const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+      try {
+        const payload = await requestAssistantResponse(userText, history, controller.signal);
+        replaceWithAssistantMessage(thinkingMessage, payload.respuesta || "No encontré información suficiente para responder.", { meta: formatTime() });
+        if (payload.action?.type === "calculator_autofill") {
+          appendMessage(createCalculatorAutofillActionCard(payload.action));
+        }
+      } catch (error) {
+        const errorText = error?.name === "AbortError"
+          ? stoppedByUser
+            ? "Generación detenida. Puedes reformular la consulta cuando quieras."
+            : "La respuesta está tardando más de lo esperado. Inténtalo de nuevo en unos segundos."
+          : error?.message || "No pude conectar con el asistente en este momento.";
+        thinkingMessage.replaceWith(createMessage("assistant", errorText, { error: true }));
+      } finally {
+        window.clearTimeout(timeoutId);
+        if (activeRequestController === controller) activeRequestController = null;
+        stoppedByUser = false;
+        setPending(false);
+        input.focus();
+        scrollToLatest();
       }
       return;
     }
