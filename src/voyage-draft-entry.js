@@ -196,7 +196,7 @@ function injectVoyageScenario(incomingScenario = {}) {
     window.dispatchEvent(new CustomEvent('voyage-draft:nlp-injected', { detail: { scenario, draft: voyageStore.getState().draft } }));
     if (typeof window.syncGlobalStateToForms === 'function') window.syncGlobalStateToForms();
     const requiresPortSelection = hasIncomingRoute && (!hasValidatedPol || !hasValidatedPod);
-    if (hasIncomingRoute && !requiresPortSelection && scenario.is_partial) {
+    if (hasIncomingRoute && !requiresPortSelection) {
         void window.runOnDemandMapRouteWorkflow?.(document.getElementById('btn-map-locate-route'));
     } else if (!requiresPortSelection && typeof window.runEngine === 'function') {
         window.runEngine();

@@ -30,7 +30,7 @@ test('maps origin, destination, cargo and deadline into standard fields', () => 
     pol: 'Valencia',
     pod: 'Casablanca',
     laydays: '2026-10-03',
-    cancelling: '2026-10-03',
+    cancelling: '2026-10-08',
     cargo_qty: 12500,
     cargo_type: 'cemento',
     loading_rate: 0,
@@ -87,7 +87,7 @@ test('understands origin-to-destination phrasing without technical acronyms', ()
   assert.equal(scenario.pod, 'Génova');
   assert.equal(scenario.cargo_type, 'grano');
   assert.equal(scenario.laydays, '2026-10-08');
-  assert.equal(scenario.cancelling, '2026-10-08');
+  assert.equal(scenario.cancelling, '2026-10-13');
 });
 
 test('infers a shared month in between-day expressions', () => {
