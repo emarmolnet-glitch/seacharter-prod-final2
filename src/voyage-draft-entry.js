@@ -1,5 +1,6 @@
 import { voyageStore } from './stores/voyage-store.js';
 import { applyVoyageScenarioDefaults } from '../shared/voyage-scenario-policy.mjs';
+import { normalizeNlpVoyagePayload } from '../shared/cargo-mapper.mjs';
 
 let isHydratingBallastDistance = false;
 
@@ -132,6 +133,7 @@ function applyManualOperationalRate(side, rate) {
 }
 
 function injectVoyageScenario(incomingScenario = {}) {
+    incomingScenario = normalizeNlpVoyagePayload(incomingScenario);
     const previousDraft = voyageStore.getState().draft;
     const incomingPol = cleanNlpPortName(incomingScenario.pol);
     const incomingPod = cleanNlpPortName(incomingScenario.pod);
@@ -142,6 +144,17 @@ function injectVoyageScenario(incomingScenario = {}) {
         : { ...incomingScenario, is_partial: true };
     const shouldApplyCargoQuantity = shouldApplyRouteDefaults || hasScenarioPositiveNumber(incomingScenario, ['cargo_qty', 'cargoQty']);
     const shouldApplyCargoType = shouldApplyRouteDefaults || hasScenarioTextValue(incomingScenario, ['cargo_type', 'cargoType']);
+    const shouldApplyCargoClassification = shouldApplyCargoType || hasScenarioTextValue(incomingScenario, [
+        'cargo_category',
+        'cargoCategory',
+        'categoriaCarga',
+        'cargo_product',
+        'cargoProduct',
+        'productoEspecifico',
+        'cargo_specification',
+        'cargoSpecification',
+        'especificacionCargaId',
+    ]);
     const shouldApplyLaydays = shouldApplyRouteDefaults || hasScenarioTextValue(incomingScenario, ['laydays']);
     const shouldApplyCancelling = shouldApplyRouteDefaults || hasScenarioTextValue(incomingScenario, ['cancelling']);
     const shouldApplyLoadingRate = hasScenarioPositiveNumber(incomingScenario, ['ratePOL', 'loading_rate', 'loadingRate']);
@@ -155,6 +168,9 @@ function injectVoyageScenario(incomingScenario = {}) {
     const cargoType = shouldApplyCargoType
         ? String(scenario.cargo_type || scenario.cargoType || '').trim()
         : String(previousDraft.cargo?.description || '').trim();
+    const cargoCategory = String(scenario.cargo_category || scenario.categoriaCarga || '').trim();
+    const cargoProduct = String(scenario.cargo_product || scenario.productoEspecifico || cargoType).trim();
+    const cargoSpecification = String(scenario.cargo_specification || scenario.especificacionCargaId || '100').trim();
     const laydays = shouldApplyLaydays
         ? String(scenario.laydays || '').trim()
         : String(previousDraft.laycan?.laydays || '').trim();
@@ -164,8 +180,8 @@ function injectVoyageScenario(incomingScenario = {}) {
     const loadingRate = readPositiveNumber(scenario, ['ratePOL', 'loading_rate', 'loadingRate']);
     const dischargeRate = readPositiveNumber(scenario, ['ratePOD', 'discharge_rate', 'dischargeRate']);
     const dwt = readPositiveNumber(scenario, ['dwt', 'required_dwt', 'requiredDwt']);
-    const methodPOL = resolveBigBagsMethod(cargoType, readMethodValue(scenario.methodPOL ?? scenario.loading_method ?? scenario.loadingMethod ?? scenario.loadMethod));
-    const methodPOD = resolveBigBagsMethod(cargoType, readMethodValue(scenario.methodPOD ?? scenario.discharge_method ?? scenario.dischargeMethod));
+    const methodPOL = resolveBigBagsMethod(`${cargoType} ${cargoProduct}`, readMethodValue(scenario.methodPOL ?? scenario.loading_method ?? scenario.loadingMethod ?? scenario.loadMethod));
+    const methodPOD = readMethodValue(scenario.methodPOD ?? scenario.discharge_method ?? scenario.dischargeMethod) || methodPOL;
     const hasValidatedPol = Boolean(scenario.pol_port);
     const hasValidatedPod = Boolean(scenario.pod_port);
     if (incomingPol || scenario.pol_port) {
@@ -185,7 +201,7 @@ function injectVoyageScenario(incomingScenario = {}) {
         ...(incomingPol || scenario.pol_port ? { pol: incomingPol, pol_port: scenario.pol_port } : {}),
         ...(incomingPod || scenario.pod_port ? { pod: incomingPod, pod_port: scenario.pod_port } : {}),
         ...(shouldApplyCargoQuantity ? { cargo_qty: cargoQuantity } : {}),
-        ...(shouldApplyCargoType ? { cargo_type: cargoType } : {}),
+        ...(shouldApplyCargoType ? { cargo_type: cargoProduct || cargoType } : {}),
         ...(shouldApplyLaydays ? { laydays } : {}),
         ...(shouldApplyCancelling ? { cancelling } : {}),
         ...(shouldApplyLoadingRate ? { loading_rate: loadingRate } : {}),
@@ -200,7 +216,9 @@ function injectVoyageScenario(incomingScenario = {}) {
     if (incomingPol || scenario.pol_port) window.syncSelectedRoutePort?.('POL', pol);
     if (incomingPod || scenario.pod_port) window.syncSelectedRoutePort?.('POD', pod);
     if (shouldApplyCargoQuantity) setValue('cargo-qty', cargoQuantity);
-    if (shouldApplyCargoType) setSelectValue('cargo-product', cargoType);
+    if (shouldApplyCargoClassification && cargoCategory) setSelectValue('cargo-type', cargoCategory);
+    if (shouldApplyCargoClassification && cargoProduct) setSelectValue('cargo-product', cargoProduct);
+    if (shouldApplyCargoClassification && cargoSpecification) setSelectValue('cargo-type-manual', cargoSpecification);
     if (shouldApplyLaydays) {
         ['map-laycan-date', 'gc-laycan-date', 'asb-laycan-date', 'match-laycan-start'].forEach((id) => setValue(id, laydays));
     }
@@ -214,11 +232,11 @@ function injectVoyageScenario(incomingScenario = {}) {
     if (shouldApplyDischargeRate) applyManualOperationalRate('pod', dischargeRate);
     if (shouldApplyLoadingRate) setValue('ritmo_nominal_pol', loadingRate);
     if (shouldApplyDischargeRate) setValue('ritmo_nominal_pod', dischargeRate);
-    if (scenario.loading_terms) {
-        ['laytime-load-condition', 'gc-laytime-load-cond'].forEach((id) => setSelectValue(id, scenario.loading_terms));
+    if (scenario.laytimePOL || scenario.loading_terms) {
+        ['laytime-load-condition', 'gc-laytime-load-cond'].forEach((id) => setSelectValue(id, scenario.laytimePOL || scenario.loading_terms));
     }
-    if (scenario.discharge_terms) {
-        ['laytime-disch-condition', 'gc-laytime-disch-cond'].forEach((id) => setSelectValue(id, scenario.discharge_terms));
+    if (scenario.laytimePOD || scenario.discharge_terms) {
+        ['laytime-disch-condition', 'gc-laytime-disch-cond'].forEach((id) => setSelectValue(id, scenario.laytimePOD || scenario.discharge_terms));
     }
 
     const previousCalculatorState = window.SeaCharterStore?.getState?.() || {};
@@ -239,8 +257,11 @@ function injectVoyageScenario(incomingScenario = {}) {
         ...(shouldApplyCargoType
             ? { cargoProduct: cargoType, cargoType }
             : {}),
-        ...(scenario.loading_terms ? { laytimeLoadCondition: scenario.loading_terms } : {}),
-        ...(scenario.discharge_terms ? { laytimeDischCondition: scenario.discharge_terms } : {}),
+        ...(scenario.laytimePOL || scenario.loading_terms ? { laytimePOL: scenario.laytimePOL || scenario.loading_terms, laytimeLoadCondition: scenario.laytimePOL || scenario.loading_terms } : {}),
+        ...(scenario.laytimePOD || scenario.discharge_terms ? { laytimePOD: scenario.laytimePOD || scenario.discharge_terms, laytimeDischCondition: scenario.laytimePOD || scenario.discharge_terms } : {}),
+        ...(shouldApplyCargoClassification && cargoCategory ? { cargoCategory } : {}),
+        ...(shouldApplyCargoClassification && cargoProduct ? { cargoProduct } : {}),
+        ...(shouldApplyCargoClassification && cargoSpecification ? { cargoSpecification } : {}),
         ...(shouldApplyLoadingRate ? { loadRate: loadingRate, ritmoRealPol: loadingRate } : {}),
         ...(shouldApplyDischargeRate ? { dischargeRate, dischRate: dischargeRate, ritmoRealPod: dischargeRate } : {}),
         ...(shouldApplyDwt ? { dwt, vesselDwt: dwt } : {}),
@@ -267,6 +288,7 @@ function injectVoyageScenario(incomingScenario = {}) {
 }
 
 function applyAssistantCalculatorAutofill(payload = {}) {
+    payload = normalizeNlpVoyagePayload(payload);
     const loadingRate = readPositiveNumber(payload, ['ratePOL', 'loading_rate', 'loadingRate']);
     const dischargeRate = readPositiveNumber(payload, ['ratePOD', 'discharge_rate', 'dischargeRate']);
     const requiredDwt = readPositiveNumber(payload, ['dwt', 'required_dwt', 'requiredDwt']);
@@ -277,8 +299,11 @@ function applyAssistantCalculatorAutofill(payload = {}) {
     const cargoQuantity = currentCargoQuantity > 0 ? currentCargoQuantity : requestedCargoQuantity;
     const cargoPreserved = currentCargoQuantity > 0;
     const cargoType = String(payload.cargo_type || payload.cargoType || '').trim();
-    const loadingMethod = resolveBigBagsMethod(cargoType, readMethodValue(payload.methodPOL ?? payload.loading_method ?? payload.loadingMethod));
-    const dischargeMethod = resolveBigBagsMethod(cargoType, readMethodValue(payload.methodPOD ?? payload.discharge_method ?? payload.dischargeMethod));
+    const cargoCategory = String(payload.cargo_category || payload.categoriaCarga || '').trim();
+    const cargoProduct = String(payload.cargo_product || payload.productoEspecifico || cargoType).trim();
+    const cargoSpecification = String(payload.cargo_specification || payload.especificacionCargaId || '100').trim();
+    const loadingMethod = resolveBigBagsMethod(`${cargoType} ${cargoProduct}`, readMethodValue(payload.methodPOL ?? payload.loading_method ?? payload.loadingMethod));
+    const dischargeMethod = readMethodValue(payload.methodPOD ?? payload.discharge_method ?? payload.dischargeMethod) || loadingMethod;
 
     if (!loadingRate || !dischargeRate || !requiredDwt) {
         throw new Error('Payload de autocompletado incompleto');
@@ -286,11 +311,15 @@ function applyAssistantCalculatorAutofill(payload = {}) {
 
     const applyUpdates = () => {
         if (!cargoPreserved && cargoQuantity > 0) setValue('cargo-qty', cargoQuantity);
-        if (!readElementText('cargo-product') && cargoType) setSelectValue('cargo-product', cargoType);
+        if (cargoCategory) setSelectValue('cargo-type', cargoCategory);
+        if (cargoProduct) setSelectValue('cargo-product', cargoProduct);
+        if (cargoSpecification) setSelectValue('cargo-type-manual', cargoSpecification);
 
         setValue('vessel-dwt', requiredDwt);
         setSelectValue('metodo_carga', loadingMethod);
         setSelectValue('metodo_descarga_pod', dischargeMethod);
+        if (payload.laytimePOL) setSelectValue('laytime-load-condition', payload.laytimePOL);
+        if (payload.laytimePOD) setSelectValue('laytime-disch-condition', payload.laytimePOD);
         applyManualOperationalRate('pol', loadingRate);
         applyManualOperationalRate('pod', dischargeRate);
 
@@ -303,7 +332,9 @@ function applyAssistantCalculatorAutofill(payload = {}) {
             cargoQuantity,
             cargoQty: cargoQuantity,
             cargo: cargoQuantity,
-            cargoProduct: cargoType,
+            cargoCategory,
+            cargoProduct,
+            cargoSpecification,
             cargoType,
             dwt: requiredDwt,
             vesselDwt: requiredDwt,
@@ -317,6 +348,10 @@ function applyAssistantCalculatorAutofill(payload = {}) {
             methodPOD: dischargeMethod,
             loadMethod: loadingMethod,
             dischargeMethod,
+            laytimePOL: payload.laytimePOL,
+            laytimePOD: payload.laytimePOD,
+            laytimeLoadCondition: payload.laytimePOL,
+            laytimeDischCondition: payload.laytimePOD,
             ratePOL: loadingRate,
             ratePOD: dischargeRate,
             ritmoMode: 'manual',

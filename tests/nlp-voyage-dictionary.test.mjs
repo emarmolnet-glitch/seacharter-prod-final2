@@ -5,8 +5,21 @@ import {
   extractNaturalVoyageEntities,
   MARITIME_ENTITY_DICTIONARY,
 } from '../netlify/functions/_shared/nlp-voyage-dictionary.mjs';
+import { normalizeNlpVoyagePayload } from '../shared/cargo-mapper.mjs';
 
 const referenceDate = new Date('2026-08-18T00:00:00Z');
+
+test('semantic middleware enriches deterministic voyage extraction', () => {
+  const text = 'Desde Valencia hasta Dakar con 12000 TM de cemento en big bags, SHEX';
+  const normalized = normalizeNlpVoyagePayload(extractNaturalVoyageEntities(text, referenceDate), text);
+
+  assert.equal(normalized.cargo_specification, '10');
+  assert.equal(normalized.cargo_product, 'Big Bags (Minerales/Cemento)');
+  assert.equal(normalized.methodPOL, 'big_bags_barco');
+  assert.equal(normalized.methodPOD, 'big_bags_barco');
+  assert.equal(normalized.laytimePOL, 'SHEX');
+  assert.equal(normalized.laytimePOD, 'SHEX');
+});
 
 test('extracts colloquial loading and discharge ports', () => {
   const scenario = extractNaturalVoyageEntities(

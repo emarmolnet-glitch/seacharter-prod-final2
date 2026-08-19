@@ -4,9 +4,10 @@ import {
   applyVoyageScenarioDefaults,
   hasMinimumVoyageRoute,
 } from "../../shared/voyage-scenario-policy.mjs";
+import { normalizeNlpVoyagePayload } from "../../shared/cargo-mapper.mjs";
 
 const CARGO_PRODUCTS = Object.freeze({
-  "Minerales y Construcción": ["Cemento a granel", "Clínker", "Yeso"],
+  "Minerales y Construcción": ["Cemento a granel", "Clínker", "Yeso", "Big Bags (Minerales/Cemento)"],
   "Biomasa y Combustibles Sólidos": [
     "Biomasa (Grignon, Astillas, Pellets)",
     "Carbón mineral",
@@ -422,12 +423,12 @@ function NLPInputWidget() {
     }
 
     const extracted = await requestScenarioExtraction(requestText);
-    const scenario = {
+    const scenario = normalizeNlpVoyagePayload({
       ...extracted,
-      cargo_category: category,
-      cargo_product: product,
-      cargo_specification: specification,
-    };
+      cargo_category: category || extracted.cargo_category,
+      cargo_product: product || extracted.cargo_product,
+      cargo_specification: specification || extracted.cargo_specification,
+    }, requestText);
     CRITICAL_FIELDS.forEach(([field]) => {
       if ((!scenario[field] || missingFields.includes(field)) && manualValues[field]) {
         scenario[field] = field.includes("rate") || field === "cargo_qty"
@@ -464,17 +465,17 @@ function NLPInputWidget() {
     await typeIntoControl("map-laycan-date", scenario.laydays);
     await typeIntoControl("map-cancelling-date", scenario.cancelling);
     await typeIntoControl("cargo-qty", scenario.cargo_qty);
-    if (category) await typeIntoControl("cargo-type", category);
-    if (product) await typeIntoControl("cargo-product", product);
-    if (specification) await typeIntoControl("cargo-type-manual", specification);
+    if (scenario.cargo_category) await typeIntoControl("cargo-type", scenario.cargo_category);
+    if (scenario.cargo_product) await typeIntoControl("cargo-product", scenario.cargo_product);
+    if (scenario.cargo_specification) await typeIntoControl("cargo-type-manual", scenario.cargo_specification);
     if (scenario.dwt > 0) await typeIntoControl("vessel-dwt", scenario.dwt);
 
-    const specificationLabel = specificationOptions.find((option) => option.value === specification)?.label || "";
+    const specificationLabel = specificationOptions.find((option) => option.value === scenario.cargo_specification)?.label || scenario.especificacionCarga || "";
     const hasOperationalRates = scenario.loading_rate > 0 || scenario.discharge_rate > 0;
     const optimizedMethods = hasOperationalRates
       ? optimizeCargoHandlingMethods(
-        category,
-        product,
+        scenario.cargo_category,
+        scenario.cargo_product,
         specificationLabel,
         scenario.loading_rate,
         scenario.discharge_rate,
@@ -525,6 +526,11 @@ function NLPInputWidget() {
       ...(scenario.discharge_rate > 0 ? { ratePOD: scenario.discharge_rate, ritmoMode_pod: "manual", podCalcMode: "manual" } : {}),
       laytimeLoadCondition: scenario.loading_terms,
       laytimeDischCondition: scenario.discharge_terms,
+      laytimePOL: scenario.laytimePOL,
+      laytimePOD: scenario.laytimePOD,
+      cargoCategory: scenario.cargo_category,
+      cargoProduct: scenario.cargo_product || scenario.cargo_type,
+      cargoSpecification: scenario.cargo_specification,
     };
     window.SeaCharterStore?.set?.(operationalPayload, { force: true, source: "nlp-input-widget" });
     if (scenario.loadMethod) await typeIntoControl("metodo_carga", scenario.loadMethod);

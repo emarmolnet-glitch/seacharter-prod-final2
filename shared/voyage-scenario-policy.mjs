@@ -67,8 +67,10 @@ export function applyVoyageScenarioDefaults(value = {}, referenceDate = new Date
     cargo_type: cleanText(source.cargo_type ?? source.cargoType ?? source.commodity) || VOYAGE_SCENARIO_DEFAULTS.cargo_type,
     loading_rate: nonNegativeNumber(source.loading_rate ?? source.loadingRate ?? source.load_rate),
     discharge_rate: nonNegativeNumber(source.discharge_rate ?? source.dischargeRate ?? source.disch_rate),
-    loading_terms: cleanText(source.loading_terms ?? source.loadingTerms) || VOYAGE_SCENARIO_DEFAULTS.loading_terms,
-    discharge_terms: cleanText(source.discharge_terms ?? source.dischargeTerms) || VOYAGE_SCENARIO_DEFAULTS.discharge_terms,
+    loading_terms: cleanText(source.laytimePOL ?? source.loading_terms ?? source.loadingTerms) || VOYAGE_SCENARIO_DEFAULTS.loading_terms,
+    discharge_terms: cleanText(source.laytimePOD ?? source.discharge_terms ?? source.dischargeTerms) || VOYAGE_SCENARIO_DEFAULTS.discharge_terms,
+    laytimePOL: cleanText(source.laytimePOL ?? source.loading_terms ?? source.loadingTerms) || VOYAGE_SCENARIO_DEFAULTS.loading_terms,
+    laytimePOD: cleanText(source.laytimePOD ?? source.discharge_terms ?? source.dischargeTerms) || VOYAGE_SCENARIO_DEFAULTS.discharge_terms,
     defaults_applied: defaultsApplied,
     is_partial: defaultsApplied.length > 0,
   };
