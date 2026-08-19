@@ -144,6 +144,8 @@
 
 .sca-mark svg,
 .sca-speech-toggle svg,
+.sca-stop svg,
+.sca-close svg,
 .sca-mic svg,
 .sca-send svg {
   width: 22px;
@@ -166,7 +168,9 @@
   line-height: 1.1;
 }
 
-.sca-speech-toggle {
+.sca-speech-toggle,
+.sca-stop,
+.sca-close {
   position: relative;
   z-index: 1;
   display: grid;
@@ -183,15 +187,35 @@
   transition: color 150ms ease, background 150ms ease, border-color 150ms ease, transform 150ms ease;
 }
 
-.sca-speech-toggle svg {
+.sca-speech-toggle svg,
+.sca-stop svg,
+.sca-close svg {
   width: 20px;
   height: 20px;
 }
 
-.sca-speech-toggle:hover:not(:disabled) {
+.sca-speech-toggle:hover:not(:disabled),
+.sca-close:hover {
   border-color: rgba(82, 216, 189, 0.72);
   color: #ffffff;
   background: rgba(82, 216, 189, 0.14);
+}
+
+.sca-stop {
+  border-color: rgba(255, 184, 184, 0.5);
+  color: #ffd0d0;
+  background: rgba(190, 52, 52, 0.16);
+  animation: sca-stop-arrival 160ms ease both;
+}
+
+.sca-stop[hidden] {
+  display: none;
+}
+
+.sca-stop:hover {
+  border-color: rgba(255, 184, 184, 0.82);
+  color: #ffffff;
+  background: rgba(210, 62, 62, 0.3);
 }
 
 .sca-speech-toggle.is-active {
@@ -201,7 +225,9 @@
   box-shadow: inset 0 0 0 1px rgba(82, 216, 189, 0.08);
 }
 
-.sca-speech-toggle:active:not(:disabled) {
+.sca-speech-toggle:active:not(:disabled),
+.sca-stop:active,
+.sca-close:active {
   transform: scale(0.94);
 }
 
@@ -210,7 +236,9 @@
   opacity: 0.42;
 }
 
-.sca-speech-toggle:focus-visible {
+.sca-speech-toggle:focus-visible,
+.sca-stop:focus-visible,
+.sca-close:focus-visible {
   outline: 3px solid rgba(82, 216, 189, 0.34);
   outline-offset: 2px;
 }
@@ -271,6 +299,12 @@
   background-size: 24px 24px;
   scrollbar-color: #b9cad7 transparent;
   scrollbar-width: thin;
+}
+
+.sca-messages-end {
+  width: 100%;
+  height: 1px;
+  flex: 0 0 1px;
 }
 
 .sca-message {
@@ -740,6 +774,13 @@
   }
 }
 
+@keyframes sca-stop-arrival {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+}
+
 @keyframes sca-pulse {
   0%, 100% {
     opacity: 0.32;
@@ -777,6 +818,8 @@
 @media (prefers-reduced-motion: reduce) {
   .sca-panel,
   .sca-speech-toggle,
+  .sca-stop,
+  .sca-close,
   .sca-mic,
   .sca-mic::after,
   .sca-send,
