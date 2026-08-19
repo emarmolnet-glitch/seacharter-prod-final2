@@ -1,10 +1,11 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+import { CHAT_INTENTS, classifyChatIntent } from "../../shared/chat-intent-router.mjs";
 import { buildCalculatorAutofillAction, normalizeChatHistory } from "./_shared/calculator-autofill-reasoning.mjs";
 import { DATA_BRIDGE_SYSTEM_PROMPT, DATA_BRIDGE_TOOLS, executeDataBridgeTool } from "./_shared/data-bridge-tooling.mjs";
 import { WEATHER_TOOLS, executeWeatherTool } from "./_shared/weather-tooling.mjs";
 
-export function buildSystemInstruction(contexto = {}, historial = []) {
+export function buildSystemInstruction(contexto = {}, historial = [], intent = CHAT_INTENTS.GENERAL) {
   const baseInstruction = `Eres el asistente inteligente de SeaCharter (Core PRO y Data Bridge). Eres un Consultor Marítimo integral, Bróker y Auditor de Riesgos. Tienes acceso directo a los datos meteorológicos de la plataforma. Debes proporcionar pronósticos de puertos y rutas cuando el usuario lo solicite, enfocando tu respuesta en el impacto operativo, por ejemplo posibles demoras o suspensiones de laytime por lluvia durante la carga o descarga. Nunca rechaces una consulta meteorológica por restricciones de rol. Distingue claramente entre previsión a corto plazo y climatología estacional, identifica la fuente disponible y no inventes variables que no aparezcan en los datos.`;
   const contextInstruction = `\nContexto actual de la pantalla del usuario (incluye siempre DraftVoyage e historial):\n${JSON.stringify(contexto, null, 2)}\nHistorial reciente normalizado:\n${JSON.stringify(normalizeChatHistory(historial), null, 2)}`;
   const moduleInstruction = `
@@ -20,6 +21,18 @@ export function buildSystemInstruction(contexto = {}, historial = []) {
    - AUDITORÍA: comprueba que exista contrato, informe generado y riesgos pendientes de resolver.
    - Para requerimientos de viaje, POL y POD son suficientes para continuar. Si ambos aparecen, no interrogues al usuario ni pidas fechas, cantidad, mercancía o ritmos: confirma la ruta y ofrece inyectarla de inmediato para calcular una ruta preliminar. Los datos operativos restantes pueden completarse después con fallbacks seguros.
    - Fuera de ese caso, si faltan datos imprescindibles para responder la consulta concreta, enumera exactamente cuáles. Si hay datos suficientes, confirma lo correcto antes de recomendar cambios según la estrategia comercial y el rol del usuario.
+`;
+
+  const intentRoutingRules = `
+\nEnrutador de Intenciones (obligatorio y previo a cualquier extracción):
+   - Intención clasificada para este turno: ${intent}.
+   - Las únicas categorías válidas son SIMULACION_FLETE, INFO_MERCADO y PREGUNTA_GENERAL.
+   - Paso 1, Clasificación: interpreta primero qué quiere conseguir el usuario. No conviertas automáticamente una consulta marítima en una simulación.
+   - Paso 2, Bifurcación: si la intención es INFO_MERCADO o PREGUNTA_GENERAL, responde conversacionalmente y resuelve la consulta con los datos y herramientas disponibles.
+   - En INFO_MERCADO o PREGUNTA_GENERAL queda terminantemente prohibido pedir variables de la calculadora, ritmos de carga o descarga, grúas, tonelaje, laycan o cualquier dato para completar un fletamento.
+   - SOLO con intención SIMULACION_FLETE puedes extraer datos operativos, validar el escenario, proponer una inyección al store y solicitar variables faltantes.
+   - Una consulta sobre búnker, meteorología, posición AIS, disponibilidad de buques, índices o fletes generales sigue siendo informativa aunque el contexto de pantalla contenga un DraftVoyage incompleto.
+   - No cambies de una intención informativa a SIMULACION_FLETE salvo que el usuario lo solicite explícitamente o aporte una ruta y un volumen para calcular/cotizar el viaje.
 `;
 
   const expertRules = `
@@ -68,7 +81,7 @@ export function buildSystemInstruction(contexto = {}, historial = []) {
    - Si el usuario solo aporta cantidades, ritmos u otros parámetros operativos, conserva los puertos existentes del contexto y actualiza únicamente los campos mencionados.
    - No propongas vaciar, sustituir ni reinterpretar POL/POD cuando no se haya expresado un nuevo nombre de puerto.
 `;
-  const finalInstruction = `${baseInstruction}\n\n${DATA_BRIDGE_SYSTEM_PROMPT}${contextInstruction}${moduleInstruction}${expertRules}${dualModeRules}${partialUpdateRules}`;
+  const finalInstruction = `${baseInstruction}\n\n${DATA_BRIDGE_SYSTEM_PROMPT}${contextInstruction}${intentRoutingRules}${moduleInstruction}${expertRules}${dualModeRules}${partialUpdateRules}`;
   return finalInstruction;
 }
 
@@ -95,8 +108,11 @@ export default async (req) => {
     if (!apiKey) return jsonResponse(500, { success: false, error: "Servicio de IA no configurado" });
     const normalizedContext = contexto && typeof contexto === "object" && !Array.isArray(contexto) ? contexto : {};
     const normalizedHistory = normalizeChatHistory(normalizedContext.historialChat);
-    const finalInstruction = buildSystemInstruction(normalizedContext, normalizedHistory);
-    const action = buildCalculatorAutofillAction(mensaje, normalizedContext);
+    const intent = classifyChatIntent(mensaje, { context: normalizedContext });
+    const finalInstruction = buildSystemInstruction(normalizedContext, normalizedHistory, intent);
+    const action = intent === CHAT_INTENTS.SIMULATION
+      ? buildCalculatorAutofillAction(mensaje, normalizedContext)
+      : null;
 
     const genAI = new GoogleGenerativeAI(apiKey);
 
@@ -122,7 +138,7 @@ export default async (req) => {
       result = await chat.sendMessage(functionResponses);
     }
 
-    return jsonResponse(200, { success: true, respuesta: result.response.text(), action });
+    return jsonResponse(200, { success: true, intent, respuesta: result.response.text(), action });
 
   } catch (error) {
     console.error("Error en Gemini API:", error);

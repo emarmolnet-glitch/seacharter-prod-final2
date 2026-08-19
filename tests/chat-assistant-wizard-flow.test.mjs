@@ -13,7 +13,8 @@ test('chat assistant captures six strict wizard phases in local state', () => {
   assert.match(frontendSource, /wizardData\.cargoDescription = userText;[\s\S]*wizardStep = 4;/);
   assert.match(frontendSource, /wizardData\.packaging = userText;[\s\S]*wizardStep = 5;/);
   assert.match(frontendSource, /wizardData\.craneDetails = userText;[\s\S]*wizardStep = 6;/);
-  assert.match(frontendSource, /let wizardStatus = "recopilando";/);
+  assert.match(frontendSource, /let wizardStatus = "conversacional";/);
+  assert.match(frontendSource, /const WIZARD_ACTIVE_STATUS = "simulacion_flete_activa";/);
   assert.match(frontendSource, /let pendingWizardPayload = null;/);
 });
 

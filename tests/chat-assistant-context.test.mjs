@@ -21,7 +21,8 @@ test('chat assistant sends the complete screen context with each message', () =>
   assert.match(frontendSource, /financieros: \{/);
   assert.match(frontendSource, /contrato: \{/);
   assert.match(frontendSource, /meteorologia: weatherSnapshot/);
-  assert.match(frontendSource, /JSON\.stringify\(\{ mensaje: userText, contexto \}\)/);
+  assert.match(frontendSource, /const contexto = \{ \.\.\.collectChatContext\(\), historialChat: historial \};/);
+  assert.match(frontendSource, /JSON\.stringify\(\{ \.\.\.baseRequestPayload, historial \}\)/);
 });
 
 test('chat assistant stays operable and contextual while Dual Mode is open', () => {
