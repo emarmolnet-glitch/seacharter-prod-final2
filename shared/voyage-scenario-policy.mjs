@@ -7,6 +7,9 @@ export const VOYAGE_SCENARIO_DEFAULTS = Object.freeze({
   discharge_terms: "CQD",
 });
 
+export const DEFAULT_LAYDAYS_OFFSET_DAYS = 4;
+export const DEFAULT_LAYCAN_WINDOW_DAYS = 5;
+
 function cleanText(value) {
   return String(value ?? "").trim();
 }
@@ -16,11 +19,21 @@ function nonNegativeNumber(value) {
   return Number.isFinite(numeric) && numeric >= 0 ? numeric : 0;
 }
 
+function addUtcDays(value, days) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 export function getDefaultLaycan(referenceDate = new Date()) {
   const date = new Date(referenceDate);
   if (Number.isNaN(date.getTime())) return "TBA";
-  date.setUTCDate(date.getUTCDate() + 15);
-  return date.toISOString().slice(0, 10);
+  return addUtcDays(date, DEFAULT_LAYDAYS_OFFSET_DAYS);
+}
+
+export function getDefaultCancelling(laydays) {
+  return addUtcDays(laydays, DEFAULT_LAYCAN_WINDOW_DAYS) || "TBA";
 }
 
 export function hasMinimumVoyageRoute(scenario = {}) {
@@ -30,12 +43,15 @@ export function hasMinimumVoyageRoute(scenario = {}) {
 export function applyVoyageScenarioDefaults(value = {}, referenceDate = new Date()) {
   const source = value && typeof value === "object" ? value : {};
   const fallbackLaycan = getDefaultLaycan(referenceDate);
-  const laydays = cleanText(source.laydays ?? source.layday ?? source.laycan_start) || fallbackLaycan;
-  const cancelling = cleanText(source.cancelling ?? source.canceling ?? source.laycan_end) || laydays;
+  const sourceLaydays = cleanText(source.laydays ?? source.layday ?? source.laycan_start);
+  const sourceCancelling = cleanText(source.cancelling ?? source.canceling ?? source.laycan_end);
+  const laydays = sourceLaydays || sourceCancelling || fallbackLaycan;
+  const shouldExpandLaycan = !sourceLaydays || !sourceCancelling || sourceLaydays === sourceCancelling;
+  const cancelling = shouldExpandLaycan ? getDefaultCancelling(laydays) : sourceCancelling;
   const defaultsApplied = [];
 
-  if (!cleanText(source.laydays ?? source.layday ?? source.laycan_start)) defaultsApplied.push("laydays");
-  if (!cleanText(source.cancelling ?? source.canceling ?? source.laycan_end)) defaultsApplied.push("cancelling");
+  if (!sourceLaydays) defaultsApplied.push("laydays");
+  if (shouldExpandLaycan) defaultsApplied.push("cancelling");
   if (!nonNegativeNumber(source.cargo_qty ?? source.cargoQty ?? source.quantity ?? source.qty)) defaultsApplied.push("cargo_qty");
   if (!cleanText(source.cargo_type ?? source.cargoType ?? source.commodity)) defaultsApplied.push("cargo_type");
   if (!nonNegativeNumber(source.loading_rate ?? source.loadingRate ?? source.load_rate)) defaultsApplied.push("loading_rate");

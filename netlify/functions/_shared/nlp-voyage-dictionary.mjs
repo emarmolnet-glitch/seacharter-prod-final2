@@ -1,3 +1,5 @@
+import { getDefaultCancelling } from "../../../shared/voyage-scenario-policy.mjs";
+
 export const MARITIME_ENTITY_DICTIONARY = Object.freeze({
   pol: Object.freeze([
     "POL",
@@ -193,12 +195,21 @@ function extractLaycan(text, referenceDate) {
   const cancelling = normalizeNaturalDate(captureFirst(text, [
     new RegExp(`(?:cancelling|cancelaci[oó]n|fecha\\s+l[ií]mite|laycan\\s+(?:end|fin))\\s*[:\\-]?\\s*(?:el\\s+)?(${DATE_TOKEN_PATTERN})`, "i"),
   ]), referenceDate);
-  if (laydays || cancelling) return { laydays: laydays || cancelling, cancelling: cancelling || laydays };
+  if (laydays || cancelling) {
+    const operationalDate = laydays || cancelling;
+    return {
+      laydays: operationalDate,
+      cancelling: laydays && cancelling ? cancelling : getDefaultCancelling(operationalDate),
+    };
+  }
 
   const singleDate = normalizeNaturalDate(captureFirst(text, [
     new RegExp(`(?:el\\s+barco\\s+tiene\\s+que\\s+estar|barco\\s+debe\\s+estar|para|fecha|laycan|plazo)\\s+(?:el\\s+)?(${DATE_TOKEN_PATTERN})`, "i"),
   ]), referenceDate);
-  return { laydays: singleDate, cancelling: singleDate };
+  return {
+    laydays: singleDate,
+    cancelling: singleDate ? getDefaultCancelling(singleDate) : "",
+  };
 }
 
 function extractCargo(text) {

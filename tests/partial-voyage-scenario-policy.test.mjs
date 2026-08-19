@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   applyVoyageScenarioDefaults,
+  getDefaultCancelling,
   getDefaultLaycan,
   hasMinimumVoyageRoute,
 } from '../shared/voyage-scenario-policy.mjs';
@@ -17,12 +18,13 @@ test('a voyage becomes injectable with POL and POD only', () => {
 test('partial voyage defaults keep calculators safe', () => {
   const scenario = applyVoyageScenarioDefaults({ pol: 'Bejaia', pod: 'Aveiro' }, referenceDate);
 
-  assert.equal(getDefaultLaycan(referenceDate), '2026-09-02');
+  assert.equal(getDefaultLaycan(referenceDate), '2026-08-22');
+  assert.equal(getDefaultCancelling('2026-08-22'), '2026-08-27');
   assert.deepEqual(scenario, {
     pol: 'Bejaia',
     pod: 'Aveiro',
-    laydays: '2026-09-02',
-    cancelling: '2026-09-02',
+    laydays: '2026-08-22',
+    cancelling: '2026-08-27',
     cargo_qty: 0,
     cargo_type: 'TBA',
     loading_rate: 0,
@@ -39,6 +41,30 @@ test('partial voyage defaults keep calculators safe', () => {
     ],
     is_partial: true,
   });
+});
+
+test('a single operational date expands into a valid five-day laycan window', () => {
+  const scenario = applyVoyageScenarioDefaults({
+    pol: 'Bilbao',
+    pod: 'Rotterdam',
+    laydays: '2026-09-10',
+    cancelling: '2026-09-10',
+  }, referenceDate);
+
+  assert.equal(scenario.laydays, '2026-09-10');
+  assert.equal(scenario.cancelling, '2026-09-15');
+  assert.ok(scenario.defaults_applied.includes('cancelling'));
+});
+
+test('a lone cancelling date is treated as the start of the default window', () => {
+  const scenario = applyVoyageScenarioDefaults({
+    pol: 'Bilbao',
+    pod: 'Rotterdam',
+    cancelling: '2026-09-10',
+  }, referenceDate);
+
+  assert.equal(scenario.laydays, '2026-09-10');
+  assert.equal(scenario.cancelling, '2026-09-15');
 });
 
 test('provided operational data is preserved without partial mode', () => {

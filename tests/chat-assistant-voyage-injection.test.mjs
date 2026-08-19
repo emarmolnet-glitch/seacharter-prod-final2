@@ -50,7 +50,11 @@ test('voyage injection updates DraftVoyage, calculator fields and starts the eng
   assert.match(draftEntrySource, /ritmoRealPod: dischargeRate/);
   assert.match(extractorSource, /Las palabras literales "POL" y "POD" son etiquetas de campo/);
   assert.match(draftEntrySource, /runOnDemandMapRouteWorkflow/);
+  assert.match(draftEntrySource, /if \(hasIncomingRoute && !requiresPortSelection\)/);
+  assert.doesNotMatch(draftEntrySource, /hasIncomingRoute && !requiresPortSelection && scenario\.is_partial/);
   assert.match(scenarioPolicySource, /loading_terms: "CQD"/);
+  assert.match(scenarioPolicySource, /DEFAULT_LAYDAYS_OFFSET_DAYS = 4/);
+  assert.match(scenarioPolicySource, /DEFAULT_LAYCAN_WINDOW_DAYS = 5/);
 });
 
 test('NLP schema includes cargo type and supports Spanish natural dates', () => {
