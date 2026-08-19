@@ -167,6 +167,8 @@ function extractScenario(text) {
 
 function normalizeScenarioPayload(payload) {
   const source = payload?.scenario || payload?.extraction || payload?.data || payload || {};
+  const loadingRate = parsePositiveNumber(source.ratePOL ?? source.loading_rate ?? source.loadingRate ?? source.load_rate ?? "");
+  const dischargeRate = parsePositiveNumber(source.ratePOD ?? source.discharge_rate ?? source.dischargeRate ?? source.disch_rate ?? "");
   return applyVoyageScenarioDefaults({
     ...source,
     pol: cleanCapture(source.pol ?? source.port_of_loading ?? source.loading_port ?? ""),
@@ -175,8 +177,13 @@ function normalizeScenarioPayload(payload) {
     cancelling: normalizeDate(source.cancelling ?? source.canceling ?? source.laycan_end ?? ""),
     cargo_qty: parsePositiveNumber(source.cargo_qty ?? source.cargoQty ?? source.quantity ?? source.qty ?? ""),
     cargo_type: cleanCapture(source.cargo_type ?? source.cargoType ?? source.commodity ?? ""),
-    loading_rate: parsePositiveNumber(source.loading_rate ?? source.loadingRate ?? source.load_rate ?? ""),
-    discharge_rate: parsePositiveNumber(source.discharge_rate ?? source.dischargeRate ?? source.disch_rate ?? ""),
+    loading_rate: loadingRate,
+    discharge_rate: dischargeRate,
+    dwt: parsePositiveNumber(source.dwt ?? source.required_dwt ?? source.requiredDwt ?? ""),
+    methodPOL: cleanCapture(source.methodPOL ?? source.loading_method?.value ?? source.loadingMethod?.value ?? source.loading_method ?? source.loadingMethod ?? ""),
+    methodPOD: cleanCapture(source.methodPOD ?? source.discharge_method?.value ?? source.dischargeMethod?.value ?? source.discharge_method ?? source.dischargeMethod ?? ""),
+    ratePOL: loadingRate,
+    ratePOD: dischargeRate,
   });
 }
 
@@ -460,6 +467,7 @@ function NLPInputWidget() {
     if (category) await typeIntoControl("cargo-type", category);
     if (product) await typeIntoControl("cargo-product", product);
     if (specification) await typeIntoControl("cargo-type-manual", specification);
+    if (scenario.dwt > 0) await typeIntoControl("vessel-dwt", scenario.dwt);
 
     const specificationLabel = specificationOptions.find((option) => option.value === specification)?.label || "";
     const hasOperationalRates = scenario.loading_rate > 0 || scenario.discharge_rate > 0;
@@ -472,8 +480,8 @@ function NLPInputWidget() {
         scenario.discharge_rate,
       )
       : null;
-    scenario.loadMethod = optimizedMethods?.pol.value || "";
-    scenario.dischargeMethod = optimizedMethods?.pod.value || "";
+    scenario.loadMethod = scenario.methodPOL || optimizedMethods?.pol.value || "";
+    scenario.dischargeMethod = scenario.methodPOD || optimizedMethods?.pod.value || "";
     if (scenario.loadMethod) await typeIntoControl("metodo_carga", scenario.loadMethod);
     if (scenario.dischargeMethod) await typeIntoControl("metodo_descarga_pod", scenario.dischargeMethod);
     await typeIntoControl("laytime-load-condition", scenario.loading_terms);
@@ -510,10 +518,25 @@ function NLPInputWidget() {
         dischRate: scenario.discharge_rate,
         ritmoRealPod: scenario.discharge_rate,
       } : {}),
+      ...(scenario.dwt > 0 ? { dwt: scenario.dwt, vesselDwt: scenario.dwt } : {}),
+      ...(scenario.loadMethod ? { methodPOL: scenario.loadMethod } : {}),
+      ...(scenario.dischargeMethod ? { methodPOD: scenario.dischargeMethod } : {}),
+      ...(scenario.loading_rate > 0 ? { ratePOL: scenario.loading_rate, ritmoMode: "manual", ritmoMode_pol: "manual" } : {}),
+      ...(scenario.discharge_rate > 0 ? { ratePOD: scenario.discharge_rate, ritmoMode_pod: "manual", podCalcMode: "manual" } : {}),
       laytimeLoadCondition: scenario.loading_terms,
       laytimeDischCondition: scenario.discharge_terms,
     };
     window.SeaCharterStore?.set?.(operationalPayload, { force: true, source: "nlp-input-widget" });
+    if (scenario.loadMethod) await typeIntoControl("metodo_carga", scenario.loadMethod);
+    if (scenario.dischargeMethod) await typeIntoControl("metodo_descarga_pod", scenario.dischargeMethod);
+    if (scenario.loading_rate > 0) {
+      window.setRitmoMode?.("manual", "pol", { commit: true, deferCalculations: true });
+      await typeIntoControl("rate-load", scenario.loading_rate);
+    }
+    if (scenario.discharge_rate > 0) {
+      window.setRitmoMode?.("manual", "pod", { commit: true, deferCalculations: true });
+      await typeIntoControl("rate-disch", scenario.discharge_rate);
+    }
     if (scenario.port_validation?.valid) {
       await window.runOnDemandMapRouteWorkflow?.(document.getElementById("btn-map-locate-route"));
     }

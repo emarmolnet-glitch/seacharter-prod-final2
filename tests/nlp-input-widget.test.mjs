@@ -27,7 +27,7 @@ test("NLPInputWidget accepts partial voyages with POL and POD only", () => {
 });
 
 test("voyage extraction normalizes the exact DraftVoyage validation keys", () => {
-  for (const field of ["pol", "pod", "laydays", "cancelling", "cargo_qty", "loading_rate", "discharge_rate"]) {
+  for (const field of ["pol", "pod", "laydays", "cancelling", "cargo_qty", "loading_rate", "discharge_rate", "dwt", "methodPOL", "methodPOD", "ratePOL", "ratePOD"]) {
     assert.match(widgetSource, new RegExp(`${field}:`));
     assert.match(functionSource, new RegExp(`required: \\[.*[\"']${field}[\"']`, "s"));
   }
@@ -81,8 +81,8 @@ test("NLPInputWidget optimizes POL and POD methods independently before global d
   assert.match(widgetSource, /pol: selectMethod\(loadingRate\)/);
   assert.match(widgetSource, /pod: selectMethod\(dischargeRate\)/);
   assert.match(widgetSource, /numericRate <= profile\.shipEfficientCapacity/);
-  assert.match(widgetSource, /scenario\.loadMethod = optimizedMethods\?\.pol\.value \|\| ""/);
-  assert.match(widgetSource, /scenario\.dischargeMethod = optimizedMethods\?\.pod\.value \|\| ""/);
+  assert.match(widgetSource, /scenario\.loadMethod = scenario\.methodPOL \|\| optimizedMethods\?\.pol\.value \|\| ""/);
+  assert.match(widgetSource, /scenario\.dischargeMethod = scenario\.methodPOD \|\| optimizedMethods\?\.pod\.value \|\| ""/);
   assert.match(widgetSource, /loadMethod: scenario\.loadMethod/);
   assert.match(widgetSource, /dischargeMethod: scenario\.dischargeMethod/);
 

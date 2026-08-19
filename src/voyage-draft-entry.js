@@ -86,6 +86,51 @@ function hasScenarioPositiveNumber(scenario, keys) {
     return keys.some((key) => Number(scenario?.[key]) > 0);
 }
 
+function readPositiveNumber(source, keys) {
+    for (const key of keys) {
+        const value = Number(source?.[key]);
+        if (Number.isFinite(value) && value > 0) return value;
+    }
+    return 0;
+}
+
+function readMethodValue(value) {
+    if (value && typeof value === 'object') return String(value.value || value.label || '').trim();
+    return String(value || '').trim();
+}
+
+function resolveBigBagsMethod(cargoType, method) {
+    return method || (/big\s*bags?/i.test(String(cargoType || '')) ? 'big_bags_barco' : '');
+}
+
+function applyManualOperationalRate(side, rate) {
+    if (!(Number(rate) > 0)) return false;
+    const isPod = side === 'pod';
+    const inputId = isPod ? 'rate-disch' : 'rate-load';
+    window.setRitmoMode?.('manual', side, { commit: true, deferCalculations: true });
+    const input = document.getElementById(inputId);
+    if (input) {
+        input.readOnly = false;
+        input.disabled = false;
+        input.removeAttribute('readonly');
+        input.removeAttribute('disabled');
+        input.dataset.manualOverride = 'true';
+        input.dataset.draftCalcMode = 'manual';
+        if (isPod) input.dataset.podCalcMode = 'manual';
+    }
+    if (!window.State) window.State = {};
+    window.State[`ritmoMode_${side}`] = 'manual';
+    if (isPod) {
+        window.State.podCalcMode = 'manual';
+        window.State.dischRate = Number(rate);
+    } else {
+        window.State.ritmoMode = 'manual';
+        window.State.loadRate = Number(rate);
+    }
+    setValue(inputId, rate);
+    return true;
+}
+
 function injectVoyageScenario(incomingScenario = {}) {
     const previousDraft = voyageStore.getState().draft;
     const incomingPol = cleanNlpPortName(incomingScenario.pol);
@@ -99,8 +144,9 @@ function injectVoyageScenario(incomingScenario = {}) {
     const shouldApplyCargoType = shouldApplyRouteDefaults || hasScenarioTextValue(incomingScenario, ['cargo_type', 'cargoType']);
     const shouldApplyLaydays = shouldApplyRouteDefaults || hasScenarioTextValue(incomingScenario, ['laydays']);
     const shouldApplyCancelling = shouldApplyRouteDefaults || hasScenarioTextValue(incomingScenario, ['cancelling']);
-    const shouldApplyLoadingRate = hasScenarioPositiveNumber(incomingScenario, ['loading_rate', 'loadingRate']);
-    const shouldApplyDischargeRate = hasScenarioPositiveNumber(incomingScenario, ['discharge_rate', 'dischargeRate']);
+    const shouldApplyLoadingRate = hasScenarioPositiveNumber(incomingScenario, ['ratePOL', 'loading_rate', 'loadingRate']);
+    const shouldApplyDischargeRate = hasScenarioPositiveNumber(incomingScenario, ['ratePOD', 'discharge_rate', 'dischargeRate']);
+    const shouldApplyDwt = hasScenarioPositiveNumber(incomingScenario, ['dwt', 'required_dwt', 'requiredDwt']);
     const pol = cleanNlpPortName(scenario.pol) || previousDraft.pol?.name || '';
     const pod = cleanNlpPortName(scenario.pod) || previousDraft.pod?.name || '';
     const cargoQuantity = shouldApplyCargoQuantity
@@ -115,8 +161,11 @@ function injectVoyageScenario(incomingScenario = {}) {
     const cancelling = shouldApplyCancelling
         ? String(scenario.cancelling || laydays).trim()
         : String(previousDraft.laycan?.cancelling || laydays).trim();
-    const loadingRate = Number(scenario.loading_rate ?? scenario.loadingRate) || 0;
-    const dischargeRate = Number(scenario.discharge_rate ?? scenario.dischargeRate) || 0;
+    const loadingRate = readPositiveNumber(scenario, ['ratePOL', 'loading_rate', 'loadingRate']);
+    const dischargeRate = readPositiveNumber(scenario, ['ratePOD', 'discharge_rate', 'dischargeRate']);
+    const dwt = readPositiveNumber(scenario, ['dwt', 'required_dwt', 'requiredDwt']);
+    const methodPOL = resolveBigBagsMethod(cargoType, readMethodValue(scenario.methodPOL ?? scenario.loading_method ?? scenario.loadingMethod ?? scenario.loadMethod));
+    const methodPOD = resolveBigBagsMethod(cargoType, readMethodValue(scenario.methodPOD ?? scenario.discharge_method ?? scenario.dischargeMethod));
     const hasValidatedPol = Boolean(scenario.pol_port);
     const hasValidatedPod = Boolean(scenario.pod_port);
     if (incomingPol || scenario.pol_port) {
@@ -141,6 +190,11 @@ function injectVoyageScenario(incomingScenario = {}) {
         ...(shouldApplyCancelling ? { cancelling } : {}),
         ...(shouldApplyLoadingRate ? { loading_rate: loadingRate } : {}),
         ...(shouldApplyDischargeRate ? { discharge_rate: dischargeRate } : {}),
+        ...(shouldApplyDwt ? { dwt } : {}),
+        ...(methodPOL ? { methodPOL } : {}),
+        ...(methodPOD ? { methodPOD } : {}),
+        ...(shouldApplyLoadingRate ? { ratePOL: loadingRate } : {}),
+        ...(shouldApplyDischargeRate ? { ratePOD: dischargeRate } : {}),
     });
 
     if (incomingPol || scenario.pol_port) window.syncSelectedRoutePort?.('POL', pol);
@@ -153,14 +207,13 @@ function injectVoyageScenario(incomingScenario = {}) {
     if (shouldApplyCancelling) {
         ['map-cancelling-date', 'gc-cancel-date', 'asb-cancel-date', 'match-laycan-end'].forEach((id) => setValue(id, cancelling));
     }
-    if (shouldApplyLoadingRate) {
-        setValue('rate-load', loadingRate);
-        setValue('ritmo_nominal_pol', loadingRate);
-    }
-    if (shouldApplyDischargeRate) {
-        setValue('rate-disch', dischargeRate);
-        setValue('ritmo_nominal_pod', dischargeRate);
-    }
+    if (shouldApplyDwt) setValue('vessel-dwt', dwt);
+    if (methodPOL) setSelectValue('metodo_carga', methodPOL);
+    if (methodPOD) setSelectValue('metodo_descarga_pod', methodPOD);
+    if (shouldApplyLoadingRate) applyManualOperationalRate('pol', loadingRate);
+    if (shouldApplyDischargeRate) applyManualOperationalRate('pod', dischargeRate);
+    if (shouldApplyLoadingRate) setValue('ritmo_nominal_pol', loadingRate);
+    if (shouldApplyDischargeRate) setValue('ritmo_nominal_pod', dischargeRate);
     if (scenario.loading_terms) {
         ['laytime-load-condition', 'gc-laytime-load-cond'].forEach((id) => setSelectValue(id, scenario.loading_terms));
     }
@@ -190,11 +243,20 @@ function injectVoyageScenario(incomingScenario = {}) {
         ...(scenario.discharge_terms ? { laytimeDischCondition: scenario.discharge_terms } : {}),
         ...(shouldApplyLoadingRate ? { loadRate: loadingRate, ritmoRealPol: loadingRate } : {}),
         ...(shouldApplyDischargeRate ? { dischargeRate, dischRate: dischargeRate, ritmoRealPod: dischargeRate } : {}),
+        ...(shouldApplyDwt ? { dwt, vesselDwt: dwt } : {}),
+        ...(methodPOL ? { methodPOL, loadMethod: methodPOL } : {}),
+        ...(methodPOD ? { methodPOD, dischargeMethod: methodPOD } : {}),
+        ...(shouldApplyLoadingRate ? { ratePOL: loadingRate, ritmoMode: 'manual', ritmoMode_pol: 'manual' } : {}),
+        ...(shouldApplyDischargeRate ? { ratePOD: dischargeRate, ritmoMode_pod: 'manual', podCalcMode: 'manual' } : {}),
     };
     window.SeaCharterStore?.set?.(calculatorState, { force: true, source: 'assistant-nlp' });
     window.updateGlobalVoyageParams?.(calculatorState, { source: 'assistant-nlp' });
     window.dispatchEvent(new CustomEvent('voyage-draft:nlp-injected', { detail: { scenario, draft: voyageStore.getState().draft } }));
     if (typeof window.syncGlobalStateToForms === 'function') window.syncGlobalStateToForms();
+    if (methodPOL) setSelectValue('metodo_carga', methodPOL);
+    if (methodPOD) setSelectValue('metodo_descarga_pod', methodPOD);
+    if (shouldApplyLoadingRate) applyManualOperationalRate('pol', loadingRate);
+    if (shouldApplyDischargeRate) applyManualOperationalRate('pod', dischargeRate);
     const requiresPortSelection = hasIncomingRoute && (!hasValidatedPol || !hasValidatedPod);
     if (hasIncomingRoute && !requiresPortSelection) {
         void window.runOnDemandMapRouteWorkflow?.(document.getElementById('btn-map-locate-route'));
@@ -205,33 +267,32 @@ function injectVoyageScenario(incomingScenario = {}) {
 }
 
 function applyAssistantCalculatorAutofill(payload = {}) {
-    const loadingRate = Number(payload.loading_rate ?? payload.loadingRate) || 0;
-    const dischargeRate = Number(payload.discharge_rate ?? payload.dischargeRate) || 0;
-    const requiredDwt = Number(payload.required_dwt ?? payload.requiredDwt) || 0;
-    const vesselClass = String(payload.vessel_class || payload.vesselClass || '').trim();
-    const loadingMethod = payload.loading_method || payload.loadingMethod || {};
-    const dischargeMethod = payload.discharge_method || payload.dischargeMethod || {};
+    const loadingRate = readPositiveNumber(payload, ['ratePOL', 'loading_rate', 'loadingRate']);
+    const dischargeRate = readPositiveNumber(payload, ['ratePOD', 'discharge_rate', 'dischargeRate']);
+    const requiredDwt = readPositiveNumber(payload, ['dwt', 'required_dwt', 'requiredDwt']);
+    const vesselClass = String(payload.vessel_class || payload.vesselClass || 'Buque recomendado').trim();
     const requestedCargoQuantity = Number(payload.cargo_qty ?? payload.cargoQty) || 0;
     const cargoInput = document.getElementById('cargo-qty');
     const currentCargoQuantity = Number(cargoInput?.value) || 0;
     const cargoQuantity = currentCargoQuantity > 0 ? currentCargoQuantity : requestedCargoQuantity;
     const cargoPreserved = currentCargoQuantity > 0;
+    const cargoType = String(payload.cargo_type || payload.cargoType || '').trim();
+    const loadingMethod = resolveBigBagsMethod(cargoType, readMethodValue(payload.methodPOL ?? payload.loading_method ?? payload.loadingMethod));
+    const dischargeMethod = resolveBigBagsMethod(cargoType, readMethodValue(payload.methodPOD ?? payload.discharge_method ?? payload.dischargeMethod));
 
-    if (!loadingRate || !dischargeRate || !requiredDwt || !vesselClass) {
+    if (!loadingRate || !dischargeRate || !requiredDwt) {
         throw new Error('Payload de autocompletado incompleto');
     }
 
     const applyUpdates = () => {
         if (!cargoPreserved && cargoQuantity > 0) setValue('cargo-qty', cargoQuantity);
-        if (!readElementText('cargo-product') && payload.cargo_type) setSelectValue('cargo-product', payload.cargo_type);
+        if (!readElementText('cargo-product') && cargoType) setSelectValue('cargo-product', cargoType);
 
         setValue('vessel-dwt', requiredDwt);
-        setSelectValue('metodo_carga', loadingMethod.value || loadingMethod.label);
-        setSelectValue('metodo_descarga_pod', dischargeMethod.value || dischargeMethod.label);
-        window.setRitmoMode?.('manual', 'pol', { commit: true, deferCalculations: true });
-        window.setRitmoMode?.('manual', 'pod', { commit: true, deferCalculations: true });
-        setValue('rate-load', loadingRate);
-        setValue('rate-disch', dischargeRate);
+        setSelectValue('metodo_carga', loadingMethod);
+        setSelectValue('metodo_descarga_pod', dischargeMethod);
+        applyManualOperationalRate('pol', loadingRate);
+        applyManualOperationalRate('pod', dischargeRate);
 
         const vesselBadge = document.getElementById('vessel-badge');
         if (vesselBadge) vesselBadge.textContent = vesselClass;
@@ -242,8 +303,8 @@ function applyAssistantCalculatorAutofill(payload = {}) {
             cargoQuantity,
             cargoQty: cargoQuantity,
             cargo: cargoQuantity,
-            cargoProduct: String(payload.cargo_type || '').trim(),
-            cargoType: String(payload.cargo_type || '').trim(),
+            cargoProduct: cargoType,
+            cargoType,
             dwt: requiredDwt,
             vesselDwt: requiredDwt,
             class: vesselClass,
@@ -252,8 +313,12 @@ function applyAssistantCalculatorAutofill(payload = {}) {
             dischargeRate,
             dischRate: dischargeRate,
             ritmoRealPod: dischargeRate,
-            loadMethod: String(loadingMethod.label || loadingMethod.value || '').trim(),
-            dischargeMethod: String(dischargeMethod.label || dischargeMethod.value || '').trim(),
+            methodPOL: loadingMethod,
+            methodPOD: dischargeMethod,
+            loadMethod: loadingMethod,
+            dischargeMethod,
+            ratePOL: loadingRate,
+            ratePOD: dischargeRate,
             ritmoMode: 'manual',
             ritmoMode_pol: 'manual',
             ritmoMode_pod: 'manual',
@@ -268,6 +333,11 @@ function applyAssistantCalculatorAutofill(payload = {}) {
 
     window.updateCargoVesselClassDisplay?.();
     window.syncGlobalStateToForms?.();
+    setValue('vessel-dwt', requiredDwt);
+    setSelectValue('metodo_carga', loadingMethod);
+    setSelectValue('metodo_descarga_pod', dischargeMethod);
+    applyManualOperationalRate('pol', loadingRate);
+    applyManualOperationalRate('pod', dischargeRate);
     window.recalcularDiasPuerto?.();
     window.runEngine?.();
     window.dispatchEvent(new CustomEvent('calculator:assistant-autofilled', {
