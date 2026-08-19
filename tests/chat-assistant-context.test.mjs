@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const frontendSource = await readFile(new URL('../src/sea-assistant-entry.js', import.meta.url), 'utf8');
 const backendSource = await readFile(new URL('../netlify/functions/chat-assistant.js', import.meta.url), 'utf8');
+const dataBridgeToolingSource = await readFile(new URL('../netlify/functions/_shared/data-bridge-tooling.mjs', import.meta.url), 'utf8');
 const assistantStyles = await readFile(new URL('../assets/css/sea-assistant.css', import.meta.url), 'utf8');
 const overlaySource = await readFile(new URL('../dual-mode-overlay.js', import.meta.url), 'utf8');
 
@@ -50,7 +51,23 @@ test('chat assistant builds a dynamic maritime risk audit instruction', () => {
   assert.match(backendSource, /Palanca CIF \(Venta\)/);
   assert.match(backendSource, /Columna A \(Trading: FOB, CIF, Tolerancia\)/);
   assert.match(backendSource, /Columna B \(Fletamento: Margen Bruto y Flete\)/);
-  assert.match(backendSource, /baseInstruction \+ contextInstruction \+ moduleInstruction \+ expertRules \+ dualModeRules/);
+  assert.match(backendSource, /DATA_BRIDGE_SYSTEM_PROMPT/);
   assert.match(backendSource, /systemInstruction: finalInstruction/);
   assert.match(backendSource, /model: "gemini-2\.5-flash"/);
+});
+
+test('chat assistant injects the Neon ecosystem dictionary and exposes safe tool calling', () => {
+  assert.match(dataBridgeToolingSource, /Eres el cerebro analítico de SeaCharter Core PRO/);
+  assert.match(dataBridgeToolingSource, /Data Bridge \(Neon PostgreSQL\)/);
+  assert.match(dataBridgeToolingSource, /bunker_prices_log/);
+  assert.match(dataBridgeToolingSource, /market_spot_rates/);
+  assert.match(dataBridgeToolingSource, /market_ffa_rates/);
+  assert.match(dataBridgeToolingSource, /ais_vessels/);
+  assert.match(dataBridgeToolingSource, /vessels_master/);
+  assert.match(dataBridgeToolingSource, /voyages_tracking/);
+  assert.match(dataBridgeToolingSource, /pda_vessel_confirmations/);
+  assert.match(dataBridgeToolingSource, /name: "consultar_data_bridge"/);
+  assert.match(backendSource, /tools: DATA_BRIDGE_TOOLS/);
+  assert.match(backendSource, /result\.response\.functionCalls\(\)/);
+  assert.match(backendSource, /executeDataBridgeTool\(functionCall\)/);
 });
