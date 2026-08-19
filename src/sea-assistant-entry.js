@@ -660,6 +660,8 @@ function mountSeaAssistant() {
   window.SeaAssistantAlerts = aiAlertsStore;
   monitorActiveModule(aiAlertsStore, status);
   let pending = false;
+  let wizardStep = 1;
+  const wizardData = {};
   let isDragging = false;
   let hasCustomPosition = false;
   let position = { x: 0, y: 0 };
@@ -971,6 +973,38 @@ function mountSeaAssistant() {
     history.appendChild(createMessage("user", userText, { meta: formatTime() }));
     input.value = "";
     resizeInput();
+
+    if (wizardStep === 1) {
+      wizardData.routeAndTonnage = userText;
+      wizardStep = 2;
+      createAndSpeakAssistantMessage("¿Cuál es el formato de la carga?", { meta: formatTime() });
+      input.focus();
+      return;
+    }
+
+    if (wizardStep === 2) {
+      wizardData.cargoFormat = userText;
+      wizardStep = 3;
+      createAndSpeakAssistantMessage("Indica los ritmos de carga y descarga, junto con la maquinaria disponible.", { meta: formatTime() });
+      input.focus();
+      return;
+    }
+
+    if (wizardStep === 3) {
+      wizardData.ratesAndMachinery = userText;
+      wizardStep = 4;
+      createAndSpeakAssistantMessage("¿Cuál es la mercancía exacta?", { meta: formatTime() });
+      input.focus();
+      return;
+    }
+
+    wizardData.exactCargo = userText;
+    const wizardPrompt = [
+      `Ruta y toneladas: ${wizardData.routeAndTonnage}`,
+      `Formato de carga: ${wizardData.cargoFormat}`,
+      `Ritmos y maquinaria: ${wizardData.ratesAndMachinery}`,
+      `Mercancía exacta: ${wizardData.exactCargo}`,
+    ].join("\n");
     setPending(true);
 
     const thinkingMessage = createThinkingMessage();
@@ -984,14 +1018,14 @@ function mountSeaAssistant() {
       const contexto = collectChatContext();
       const historial = collectConversationHistory(history);
       contexto.historialChat = historial;
-      const baseRequestPayload = JSON.parse(JSON.stringify({ mensaje: userText, contexto }));
+      const baseRequestPayload = JSON.parse(JSON.stringify({ mensaje: wizardPrompt, contexto }));
       const chatRequest = fetch(CHAT_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...baseRequestPayload, historial }),
         signal: controller.signal,
       });
-      const extractionRequest = extractVoyageScenario(userText, controller.signal).catch(() => null);
+      const extractionRequest = extractVoyageScenario(wizardPrompt, controller.signal).catch(() => null);
       const [response, voyageExtraction] = await Promise.all([chatRequest, extractionRequest]);
 
       const payload = await response.json().catch(() => null);
