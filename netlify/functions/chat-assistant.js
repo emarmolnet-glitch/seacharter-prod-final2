@@ -2,9 +2,10 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 import { buildCalculatorAutofillAction, normalizeChatHistory } from "./_shared/calculator-autofill-reasoning.mjs";
 import { DATA_BRIDGE_SYSTEM_PROMPT, DATA_BRIDGE_TOOLS, executeDataBridgeTool } from "./_shared/data-bridge-tooling.mjs";
+import { WEATHER_TOOLS, executeWeatherTool } from "./_shared/weather-tooling.mjs";
 
 export function buildSystemInstruction(contexto = {}, historial = []) {
-  const baseInstruction = "Eres el asistente inteligente de SeaCharter (Core PRO y Data Bridge). Actúas como un Consultor Marítimo Senior, Bróker y Auditor de Riesgos.";
+  const baseInstruction = `Eres el asistente inteligente de SeaCharter (Core PRO y Data Bridge). Eres un Consultor Marítimo integral, Bróker y Auditor de Riesgos. Tienes acceso directo a los datos meteorológicos de la plataforma. Debes proporcionar pronósticos de puertos y rutas cuando el usuario lo solicite, enfocando tu respuesta en el impacto operativo, por ejemplo posibles demoras o suspensiones de laytime por lluvia durante la carga o descarga. Nunca rechaces una consulta meteorológica por restricciones de rol. Distingue claramente entre previsión a corto plazo y climatología estacional, identifica la fuente disponible y no inventes variables que no aparezcan en los datos.`;
   const contextInstruction = `\nContexto actual de la pantalla del usuario (incluye siempre DraftVoyage e historial):\n${JSON.stringify(contexto, null, 2)}\nHistorial reciente normalizado:\n${JSON.stringify(normalizeChatHistory(historial), null, 2)}`;
   const moduleInstruction = `
 \nAnálisis Universal por Módulo:
@@ -27,6 +28,8 @@ export function buildSystemInstruction(contexto = {}, historial = []) {
 1. Contexto Dinámico y Financiero: Basa tus respuestas en los datos en pantalla. Core PRO calcula distancias y rutas reales. Evalúa la rentabilidad y advierte de costes ocultos diferenciando SIEMPRE si el usuario actúa como Armador o Fletador.
 
 2. Inteligencia Geopolítica y Laytime (SHINC/SHEX/FHEX): Evalúa los puertos. En países musulmanes (ej. Argelia), advierte sobre el uso de FHEX. Para el Fletador, recomienda maximizar tiempo excluido (SHEX/FHEX) para evitar demoras. Para el Armador, sugiere negociar SHINC.
+
+2.1 Meteorología Operativa: Cuando el usuario pregunte por el clima de un puerto o de la ruta, usa primero contexto.meteorologia o la herramienta getWeatherForecast. Resume temperatura, viento, condición y estado operativo disponibles. Relaciona el pronóstico con seguridad de maniobra, productividad de carga/descarga, riesgo de demora y tratamiento del laytime. Si no existe un dato de lluvia, oleaje o visibilidad, indícalo expresamente en vez de asumirlo.
 
 3. Análisis Contractual y Riesgos: Al analizar cláusulas, señala explícitamente qué partes perjudican o benefician desproporcionadamente al fletador o al armador. No seas pasivo, si un parámetro por defecto perjudica el margen del usuario, sugiere cambiarlo de inmediato.
 
@@ -100,7 +103,7 @@ export default async (req) => {
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
       systemInstruction: finalInstruction,
-      tools: DATA_BRIDGE_TOOLS,
+      tools: [...DATA_BRIDGE_TOOLS, ...WEATHER_TOOLS],
     });
 
     const chat = model.startChat();
@@ -111,7 +114,9 @@ export default async (req) => {
       const functionResponses = await Promise.all(functionCalls.map(async (functionCall) => ({
         functionResponse: {
           name: functionCall.name,
-          response: await executeDataBridgeTool(functionCall),
+          response: functionCall.name === "getWeatherForecast"
+            ? await executeWeatherTool(functionCall, normalizedContext)
+            : await executeDataBridgeTool(functionCall),
         },
       })));
       result = await chat.sendMessage(functionResponses);
