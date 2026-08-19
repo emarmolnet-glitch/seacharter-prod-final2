@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 import { buildCalculatorAutofillAction, normalizeChatHistory } from "./_shared/calculator-autofill-reasoning.mjs";
+import { DATA_BRIDGE_SYSTEM_PROMPT, DATA_BRIDGE_TOOLS, executeDataBridgeTool } from "./_shared/data-bridge-tooling.mjs";
 
 export function buildSystemInstruction(contexto = {}, historial = []) {
   const baseInstruction = "Eres el asistente inteligente de SeaCharter (Core PRO y Data Bridge). Actúas como un Consultor Marítimo Senior, Bróker y Auditor de Riesgos.";
@@ -64,7 +65,7 @@ export function buildSystemInstruction(contexto = {}, historial = []) {
    - Si el usuario solo aporta cantidades, ritmos u otros parámetros operativos, conserva los puertos existentes del contexto y actualiza únicamente los campos mencionados.
    - No propongas vaciar, sustituir ni reinterpretar POL/POD cuando no se haya expresado un nuevo nombre de puerto.
 `;
-  const finalInstruction = baseInstruction + contextInstruction + moduleInstruction + expertRules + dualModeRules + partialUpdateRules;
+  const finalInstruction = `${baseInstruction}\n\n${DATA_BRIDGE_SYSTEM_PROMPT}${contextInstruction}${moduleInstruction}${expertRules}${dualModeRules}${partialUpdateRules}`;
   return finalInstruction;
 }
 
@@ -96,9 +97,26 @@ export default async (req) => {
 
     const genAI = new GoogleGenerativeAI(apiKey);
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash", systemInstruction: finalInstruction });
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      systemInstruction: finalInstruction,
+      tools: DATA_BRIDGE_TOOLS,
+    });
 
-    const result = await model.generateContent(mensaje.trim());
+    const chat = model.startChat();
+    let result = await chat.sendMessage(mensaje.trim());
+    const functionCalls = result.response.functionCalls() || [];
+
+    if (functionCalls.length > 0) {
+      const functionResponses = await Promise.all(functionCalls.map(async (functionCall) => ({
+        functionResponse: {
+          name: functionCall.name,
+          response: await executeDataBridgeTool(functionCall),
+        },
+      })));
+      result = await chat.sendMessage(functionResponses);
+    }
+
     return jsonResponse(200, { success: true, respuesta: result.response.text(), action });
 
   } catch (error) {
