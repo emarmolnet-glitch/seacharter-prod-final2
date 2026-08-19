@@ -6,6 +6,9 @@ export const DATA_BRIDGE_DICTIONARY = Object.freeze({
     market_spot_rates: ["index_name", "spot_rate", "daily_change_pct"],
     market_ffa_rates: ["vessel_class", "period", "rate_usd"],
   },
+  Eficiencia_Mercado: {
+    market_average_speeds: ["vessel_class", "average_speed_knots", "record_date"],
+  },
   Vessel_Tracking: {
     ais_vessels: ["imo_number", "vessel_name", "latitude", "longitude", "destination", "speed", "status"],
     vessels_master: ["imo_number", "dwt", "vessel_type", "draft_meters", "has_gears"],
@@ -23,7 +26,11 @@ export const DATA_BRIDGE_SYSTEM_PROMPT = `Eres el cerebro analítico de SeaChart
 \`\`\`json
 ${JSON.stringify(DATA_BRIDGE_DICTIONARY)}
 \`\`\`
-Regla de comportamiento: Si el usuario te pregunta por precios de bunker, índices de mercado, características técnicas de un puerto (ej. si tiene grúas) o posiciones de buques, DEBES saber que esa información reside en tu Data Bridge. Si no tienes el dato en tu contexto inmediato, informa al usuario que vas a consultar la base de datos de Data Bridge y prepara el payload de búsqueda.`;
+Reglas de enrutamiento semántico:
+- Usa vessels_master SOLAMENTE cuando el usuario proporcione un nombre de buque específico o un número IMO para consultar características técnicas como DWT, grúas o calado. Nunca uses vessels_master para calcular o responder promedios de mercado.
+- Usa market_average_speeds SOLAMENTE cuando el usuario pregunte por "velocidad media", "promedio del mercado" o velocidades agrupadas por clase, por ejemplo Capesize, Panamax, Supramax o Handysize. Envía target="market_average_speeds" y vessel_class con la clase solicitada.
+- Si el usuario pregunta por precios de bunker, índices de mercado, características técnicas de un puerto o posiciones de buques, consulta la entidad correspondiente de Data Bridge.
+Si no tienes el dato en tu contexto inmediato, informa al usuario que vas a consultar la base de datos de Data Bridge y prepara el payload de búsqueda.`;
 
 const TABLES = Object.freeze({
   bunker_prices_log: {
@@ -40,6 +47,11 @@ const TABLES = Object.freeze({
     select: "vessel_class, period, rate_usd::double precision AS rate_usd",
     search: ["vessel_class", "period"],
     orderBy: "record_date DESC, created_at DESC, id DESC",
+  },
+  market_average_speeds: {
+    select: "average_speed_knots::double precision AS average_speed_knots",
+    search: ["vessel_class"],
+    orderBy: "record_date DESC NULLS LAST",
   },
   ais_vessels: {
     select: `imo_number, vessel_name, latitude, longitude,
@@ -74,38 +86,47 @@ const TABLES = Object.freeze({
 export const DATA_BRIDGE_TOOLS = [{
   functionDeclarations: [{
     name: "consultar_data_bridge",
-    description: "Consulta de forma segura una entidad permitida de Data Bridge (Neon PostgreSQL) para obtener datos marítimos actuales.",
+    description: "Consulta una entidad permitida de Data Bridge. Usa vessels_master solo para un buque individual identificado por nombre o IMO y market_average_speeds solo para velocidades medias o promedios del mercado por clase.",
     parameters: {
       type: "object",
       properties: {
-        table: {
+        target: {
           type: "string",
           format: "enum",
           enum: Object.keys(TABLES),
-          description: "Tabla concreta del diccionario dinámico que contiene la información solicitada.",
+          description: "Tabla objetivo. Usa vessels_master SOLAMENTE cuando el usuario proporcione un nombre de buque específico o un número IMO para consultar características técnicas (DWT, grúas, calado). Usa market_average_speeds SOLAMENTE cuando pregunte por velocidad media, promedio del mercado o velocidades agrupadas por clase (Capesize, Panamax, Supramax, Handysize).",
         },
         query: {
           type: "string",
-          description: "Texto de búsqueda, por ejemplo un puerto, hub, índice, clase de buque, IMO o nombre de buque.",
+          description: "Texto de búsqueda para las demás tablas, por ejemplo un puerto, hub, índice, IMO o nombre de buque. No lo uses para sustituir vessel_class al consultar market_average_speeds.",
+        },
+        vessel_class: {
+          type: "string",
+          description: "Clase de buque requerida al consultar market_average_speeds, por ejemplo Capesize, Panamax, Supramax o Handysize. No identifica un buque individual.",
         },
         limit: {
           type: "integer",
           description: "Número máximo de registros a devolver, entre 1 y 20.",
         },
       },
-      required: ["table"],
+      required: ["target"],
     },
   }],
 }];
 
 export function buildDataBridgeQuery(payload = {}) {
-  const table = typeof payload.table === "string" ? payload.table : "";
+  const requestedTarget = typeof payload.target === "string" ? payload.target : payload.table;
+  const table = typeof requestedTarget === "string" ? requestedTarget : "";
   const tableConfig = TABLES[table];
   if (!tableConfig) throw new Error("Tabla de Data Bridge no permitida.");
 
-  const query = typeof payload.query === "string" ? payload.query.trim().slice(0, 160) : "";
+  const requestedQuery = table === "market_average_speeds" && typeof payload.vessel_class === "string"
+    ? payload.vessel_class
+    : payload.query;
+  const query = typeof requestedQuery === "string" ? requestedQuery.trim().slice(0, 160) : "";
   const requestedLimit = Number.parseInt(payload.limit, 10);
-  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 20) : 10;
+  const defaultLimit = table === "market_average_speeds" && query ? 1 : 10;
+  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 20) : defaultLimit;
   const params = [];
   let whereClause = "";
 
@@ -132,6 +153,9 @@ export async function executeDataBridgeTool(functionCall, database) {
     const dataBridge = database || getDatabase();
     const query = buildDataBridgeQuery(functionCall.args);
     const result = await dataBridge.pool.query(query.text, query.params);
+    const marketAverageSpeed = query.table === "market_average_speeds"
+      ? result.rows[0]?.average_speed_knots ?? null
+      : undefined;
     return {
       success: true,
       source: "Data Bridge (Neon PostgreSQL)",
@@ -139,6 +163,7 @@ export async function executeDataBridgeTool(functionCall, database) {
       query: query.query || null,
       count: result.rows.length,
       rows: result.rows,
+      ...(query.table === "market_average_speeds" ? { value: marketAverageSpeed } : {}),
     };
   } catch (error) {
     console.error("[chat-assistant] Data Bridge tool failed", error);
