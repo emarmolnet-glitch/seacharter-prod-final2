@@ -9,7 +9,7 @@ const weatherToolingSource = await readFile(new URL('../netlify/functions/_share
 const assistantStyles = await readFile(new URL('../assets/css/sea-assistant.css', import.meta.url), 'utf8');
 const overlaySource = await readFile(new URL('../dual-mode-overlay.js', import.meta.url), 'utf8');
 
-test('chat assistant sends the complete screen context with each message', () => {
+test('chat assistant sends the unified Data Bridge context with each message', () => {
   assert.match(frontendSource, /function collectChatContext\(\)/);
   assert.match(frontendSource, /const activeModule = getActiveModule\(\)/);
   assert.match(frontendSource, /modulo: activeModule/);
@@ -21,8 +21,22 @@ test('chat assistant sends the complete screen context with each message', () =>
   assert.match(frontendSource, /financieros: \{/);
   assert.match(frontendSource, /contrato: \{/);
   assert.match(frontendSource, /meteorologia: weatherSnapshot/);
-  assert.match(frontendSource, /const contexto = \{ \.\.\.collectChatContext\(\), historialChat: historial \};/);
-  assert.match(frontendSource, /JSON\.stringify\(\{ \.\.\.baseRequestPayload, historial \}\)/);
+  assert.match(frontendSource, /function collectCalculationData\(\)/);
+  assert.match(frontendSource, /function collectMarketData\(\)/);
+  assert.match(frontendSource, /packaging: firstText/);
+  assert.match(frontendSource, /freightSellUsdTon: firstNumber/);
+  assert.match(frontendSource, /loadingLaytime: firstText/);
+  assert.match(frontendSource, /bdi: firstNumber/);
+  assert.match(frontendSource, /vlsfoUsdTon: firstNumber/);
+  assert.match(frontendSource, /mgoUsdTon: firstNumber/);
+  assert.match(frontendSource, /CalculationData: collectCalculationData\(\)/);
+  assert.match(frontendSource, /MarketData: collectMarketData\(\)/);
+  assert.match(frontendSource, /UserContext: userText/);
+  assert.match(frontendSource, /const userText = input\.value;/);
+  assert.match(frontendSource, /ConversationHistory: historial/);
+  assert.match(frontendSource, /JSON\.stringify\(requestPayload\)/);
+  assert.match(frontendSource, /\.netlify\/functions\/cerebro-ia/);
+  assert.doesNotMatch(frontendSource, /const CHAT_ENDPOINT = "\/\.netlify\/functions\/chat-assistant"/);
 });
 
 test('chat assistant stays operable and contextual while Dual Mode is open', () => {

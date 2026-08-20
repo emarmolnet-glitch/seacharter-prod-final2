@@ -15,7 +15,7 @@ import { evaluateBasicRisks } from "./basic-risk-evaluator.js";
 import { evaluateModuleSuggestions, SUPPORTED_MODULES } from "./universal-module-suggestions.js";
 import { getCargoMethodLabel, validateSixStepWizardPayload } from "../shared/cargo-mapper.mjs";
 
-const CHAT_ENDPOINT = "/.netlify/functions/chat-assistant";
+const DEFAULT_DATA_BRIDGE_AI_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia";
 const NLP_ENDPOINT = "/api/nlp-voyage-extract";
 const REQUEST_TIMEOUT_MS = 45_000;
 const SPEECH_PREFERENCE_KEY = "seacharter-assistant-voice-enabled";
@@ -200,19 +200,60 @@ async function extractVoyageScenario(text, signal) {
 
 async function requestAssistantResponse(userText, historyElement, signal) {
   const historial = collectConversationHistory(historyElement);
-  const contexto = { ...collectChatContext(), historialChat: historial };
-  const baseRequestPayload = { mensaje: userText, contexto };
-  const response = await fetch(CHAT_ENDPOINT, {
+  const requestPayload = {
+    CalculationData: collectCalculationData(),
+    MarketData: collectMarketData(),
+    UserContext: userText,
+    ConversationHistory: historial,
+  };
+  const response = await fetch(getDataBridgeAssistantEndpoint(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...baseRequestPayload, historial }),
+    body: JSON.stringify(requestPayload),
     signal,
   });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || !payload?.success) {
+  const responseText = await response.text();
+  let payload = null;
+  try {
+    payload = responseText ? JSON.parse(responseText) : null;
+  } catch {
+    payload = responseText;
+  }
+  if (!response.ok || payload?.success === false) {
     throw new Error(payload?.error || "No pude conectar con el asistente en este momento.");
   }
-  return payload;
+  return normalizeDataBridgeAssistantResponse(payload);
+}
+
+function getDataBridgeAssistantEndpoint() {
+  const runtimeEndpoint = String(window.SeaCharterDataBridgeAIEndpoint || "").trim();
+  const buildEndpoint = String(import.meta.env?.VITE_DATA_BRIDGE_AI_URL || "").trim();
+  return runtimeEndpoint || buildEndpoint || DEFAULT_DATA_BRIDGE_AI_ENDPOINT;
+}
+
+function normalizeDataBridgeAssistantResponse(payload) {
+  const candidates = [
+    payload?.respuesta,
+    payload?.response,
+    payload?.answer,
+    payload?.message,
+    payload?.content,
+    payload?.result,
+    payload?.data?.respuesta,
+    payload?.data?.response,
+    payload?.data?.answer,
+    payload?.data?.message,
+    payload?.data?.content,
+    payload?.data?.result,
+    typeof payload === "string" ? payload : null,
+  ];
+  const respuesta = candidates.find((candidate) => typeof candidate === "string" && candidate.trim());
+  if (!respuesta) throw new Error("Data Bridge no devolvió una respuesta analítica para el chat.");
+  return {
+    success: true,
+    respuesta,
+    action: payload?.action || payload?.data?.action || null,
+  };
 }
 
 function createVoyageActionCard(scenario) {
@@ -355,6 +396,100 @@ function firstNumber(...values) {
     if (Number.isFinite(number)) return number;
   }
   return null;
+}
+
+function toSerializableSnapshot(value) {
+  const visited = new WeakSet();
+  const serialized = JSON.stringify(value, (_key, entry) => {
+    if (typeof entry === "function" || typeof entry === "symbol") return undefined;
+    if (!entry || typeof entry !== "object") return entry;
+    if (entry instanceof Date) return entry.toISOString();
+    if (typeof File !== "undefined" && entry instanceof File) {
+      return { name: entry.name, size: entry.size, type: entry.type, lastModified: entry.lastModified };
+    }
+    if (visited.has(entry)) return undefined;
+    visited.add(entry);
+    return entry;
+  });
+  return serialized ? JSON.parse(serialized) : {};
+}
+
+function collectCalculationData() {
+  const calculatorState = window.SeaCharterStore?.getState?.() || window.State || {};
+  const calculatedState = window.GlobalStore?.calculatedState || window.CalculatedState || {};
+  const voyageDraft = window.VoyageDraftStore?.getState?.().draft || {};
+  const activeModule = getActiveModuleDescriptor();
+  const screenContext = collectChatContext();
+
+  return toSerializableSnapshot({
+    generatedAt: new Date().toISOString(),
+    activeCalculator: activeModule,
+    route: {
+      pol: firstText(calculatorState.pol, calculatedState.route?.pol, voyageDraft.pol?.name, readElementValue("port-pol", "map-port-pol")),
+      pod: firstText(calculatorState.pod, calculatedState.route?.pod, voyageDraft.pod?.name, readElementValue("port-pod", "map-port-pod")),
+      ballastPort: firstText(calculatorState.portBallast, calculatedState.route?.ballastPort, readElementValue("port-ballast", "map-port-ballast")),
+      distanceNm: firstNumber(calculatorState.totalMiles, calculatedState.totalDistance, calculatedState.totalDistanceNm, readElementValue("sync-miles-label")),
+      laycanStart: firstText(calculatorState.laydays, calculatorState.laycan?.laydays, calculatedState.laycan?.laydays, voyageDraft.laycan?.laydays),
+      laycanEnd: firstText(calculatorState.cancelling, calculatorState.laycan?.cancelling, calculatedState.laycan?.cancelling, voyageDraft.laycan?.cancelling),
+    },
+    cargo: {
+      tonnes: firstNumber(calculatorState.cargoQty, calculatorState.cargoQuantity, calculatorState.cargo, calculatedState.cargoQuantity, calculatedState.cargo?.quantity, voyageDraft.cargo?.quantity, readElementValue("cargo-qty", "cargo-quantity", "cargo-tonnage")),
+      type: firstText(calculatorState.cargoProduct, calculatorState.cargoType, calculatedState.cargoType, calculatedState.cargo?.typeLabel, voyageDraft.cargo?.product, voyageDraft.cargo?.type, readElementValue("cargo-product", "cargo-type")),
+      packaging: firstText(calculatorState.packaging, calculatorState.packageType, calculatedState.cargo?.packaging, voyageDraft.cargo?.packaging, readElementValue("cargo-packaging", "packaging-type", "tipo-empaque")),
+      stowageFactor: firstNumber(calculatorState.stowageFactor, calculatedState.cargo?.stowageFactor, readElementValue("stowage-factor")),
+      tolerancePercent: firstNumber(calculatorState.cargoTolerance, calculatedState.cargo?.tolerance, readElementValue("cargo-tolerance")),
+    },
+    operations: {
+      loadingMethod: firstText(document.getElementById("metodo_carga")?.selectedOptions?.[0]?.textContent, calculatorState.loadMethod),
+      dischargeMethod: firstText(document.getElementById("metodo_descarga_pod")?.selectedOptions?.[0]?.textContent, calculatorState.dischargeMethod),
+      loadingRateTonnesDay: firstNumber(readElementValue("rate-load", "gc-laytime-load-val"), calculatorState.loadRate, calculatedState.loadRate),
+      dischargeRateTonnesDay: firstNumber(readElementValue("rate-disch", "gc-laytime-disch-val"), calculatorState.dischRate, calculatorState.dischargeRate, calculatedState.dischargeRate),
+      loadingLaytime: firstText(readElementValue("laytime-load-condition", "gc-laytime-load-cond"), calculatorState.laytimeLoadCondition),
+      dischargeLaytime: firstText(readElementValue("laytime-disch-condition", "gc-laytime-disch-cond"), calculatorState.laytimeDischCondition),
+      totalDays: firstNumber(calculatorState.totalDays, calculatedState.totalDays, readElementValue("print-total-days")),
+      portDays: firstNumber(calculatorState.totalPortDays, calculatedState.totalPortDays, readElementValue("print-port-days")),
+      ballastSpeedKnots: firstNumber(calculatorState.spdBallast, readElementValue("speed-ballast")),
+      ladenSpeedKnots: firstNumber(calculatorState.spdLaden, readElementValue("speed-laden")),
+    },
+    commercial: {
+      freightBuyUsdTon: firstNumber(calculatorState.freightBuy, calculatedState.freightBuy, readElementValue("freight-buy")),
+      freightSellUsdTon: firstNumber(calculatorState.freightSell, calculatedState.freightSell, readElementValue("freight-sell")),
+      breakEvenUsdTon: firstNumber(calculatorState.breakEven, calculatedState.breakEven, readElementValue("res-break-even")),
+      tceUsdDay: firstNumber(calculatorState.tceOwner, calculatedState.tce, readElementValue("res-tce-label", "print-tce-owner")),
+      ownerMarginPercent: firstNumber(calculatorState.marginOwner, readElementValue("margin-owner")),
+      chartererMarginPercent: firstNumber(calculatorState.marginCharterer, readElementValue("margin-charterer")),
+      commissionPercent: firstNumber(calculatorState.commPct, readElementValue("commission-pct")),
+    },
+    screenContext,
+    calculatorState,
+    calculatedState,
+    voyageDraft,
+  });
+}
+
+function collectMarketData() {
+  const calculatorState = window.SeaCharterStore?.getState?.() || window.State || {};
+  const referenceData = window.SeaCharterMarketReferenceData || {};
+  const intelligencePanel = window.SeaCharterMarketIntelligencePanel?.getData?.() || {};
+  const aisFreightRates = window.aisMarketFreightRates || {};
+
+  return toSerializableSnapshot({
+    generatedAt: new Date().toISOString(),
+    bdi: firstNumber(referenceData.bdi, referenceData.BDI, referenceData.bdiIndex, referenceData.bdi_index, readElementValue("baltic-spot-value")),
+    bunkers: {
+      region: firstText(calculatorState.bunkerRegion, calculatorState.bunkerDetectedRegion),
+      vlsfoUsdTon: firstNumber(referenceData.vlsfo, referenceData.VLSFO, referenceData.vlsfoPrice, calculatorState.priceSea, readElementValue("price-sea")),
+      ifo380UsdTon: firstNumber(referenceData.ifo380, referenceData.IFO380, referenceData.ifo380Price, calculatorState.priceIfo, readElementValue("price-ifo")),
+      mgoUsdTon: firstNumber(referenceData.mgo, referenceData.MGO, referenceData.mgoPrice, calculatorState.pricePort, readElementValue("price-port")),
+    },
+    carbon: {
+      euAllowanceEurTon: firstNumber(referenceData.euCarbonPrice, referenceData.eua, calculatorState.euCarbonPrice, readElementValue("eu-carbon-price")),
+      etsRouteFactor: firstNumber(calculatorState.etsRouteFactor),
+    },
+    freightBenchmarks: intelligencePanel,
+    aisFreightRates,
+    referenceData,
+  });
 }
 
 function getActiveModuleDescriptor() {
@@ -1122,8 +1257,8 @@ function mountSeaAssistant() {
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const userText = input.value.trim();
-    if (!userText || pending) return;
+    const userText = input.value;
+    if (!userText.trim() || pending) return;
 
     cancelSpeech();
     appendMessage(createMessage("user", userText, { meta: formatTime() }));
