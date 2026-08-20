@@ -72,6 +72,10 @@ const icons = {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <rect x="7" y="7" width="10" height="10" rx="2" />
     </svg>`,
+  minimize: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 12h12" />
+    </svg>`,
   close: `
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="m7 7 10 10" />
@@ -685,11 +689,13 @@ function mountSeaAssistant() {
       <header class="sca-header">
         <span class="sca-mark">${icons.assistant}</span>
         <div class="sca-heading">
+          <span class="sca-window-label">CORE PRO · DATA BRIDGE UI</span>
           <h2 class="sca-title" id="sea-assistant-title">Asistente SeaCharter</h2>
           <p class="sca-status">Disponible para consultas</p>
         </div>
         <button class="sca-speech-toggle" type="button" aria-label="Activar respuestas por voz" aria-pressed="false" title="Activar voz">${icons.speakerMuted}</button>
         <button class="sca-stop" type="button" aria-label="Detener respuesta" title="Detener respuesta" hidden>${icons.stop}</button>
+        <button class="sca-minimize" type="button" aria-label="Minimizar asistente" aria-expanded="true" title="Minimizar asistente">${icons.minimize}</button>
         <button class="sca-close" type="button" aria-label="Cerrar asistente" title="Cerrar asistente">${icons.close}</button>
       </header>
       <div class="sca-history" aria-live="polite" aria-relevant="additions text">
@@ -713,6 +719,7 @@ function mountSeaAssistant() {
   const micButton = root.querySelector(".sca-mic");
   const speechToggle = root.querySelector(".sca-speech-toggle");
   const stopButton = root.querySelector(".sca-stop");
+  const minimizeButton = root.querySelector(".sca-minimize");
   const closeButton = root.querySelector(".sca-close");
   const messagesEndRef = root.querySelector(".sca-messages-end");
   const sendButton = root.querySelector(".sca-send");
@@ -736,8 +743,14 @@ function mountSeaAssistant() {
   let position = { x: 0, y: 0 };
   let dragStart = { x: 0, y: 0 };
   let recognition = null;
-  let isListening = false;
-  let recognitionHadError = false;
+  const recognitionStateRef = {
+    current: {
+      isListening: false,
+      isStarting: false,
+      hadError: false,
+      shouldSubmit: false,
+    },
+  };
   const speechSynthesis = window.speechSynthesis;
   const supportsSpeechSynthesis = Boolean(speechSynthesis && window.SpeechSynthesisUtterance);
   let speechEnabled = false;
@@ -852,11 +865,23 @@ function mountSeaAssistant() {
   };
 
   const setListening = (nextListening) => {
-    isListening = nextListening;
+    recognitionStateRef.current.isListening = nextListening;
+    if (nextListening) recognitionStateRef.current.isStarting = false;
     micButton.classList.toggle("is-listening", nextListening);
     micButton.setAttribute("aria-pressed", String(nextListening));
     micButton.setAttribute("aria-label", nextListening ? "Detener dictado por voz" : "Iniciar dictado por voz");
     micButton.title = nextListening ? "Detener dictado" : "Dictar consulta";
+  };
+
+  const stopRecognition = () => {
+    if (!recognition) return;
+    recognitionStateRef.current.shouldSubmit = false;
+    try {
+      recognition.stop();
+    } catch {
+      recognitionStateRef.current.isStarting = false;
+      setListening(false);
+    }
   };
 
   const insertTranscript = (transcript) => {
@@ -889,7 +914,7 @@ function mountSeaAssistant() {
     micButton.hidden = false;
 
     recognition.onstart = () => {
-      recognitionHadError = false;
+      recognitionStateRef.current.hadError = false;
       setListening(true);
       voiceFeedback.textContent = "Escuchando tu consulta marítima.";
     };
@@ -900,11 +925,14 @@ function mountSeaAssistant() {
         .map((result) => result[0]?.transcript || "")
         .join(" ");
       insertTranscript(transcript);
-      voiceFeedback.textContent = "Dictado añadido al mensaje.";
+      recognitionStateRef.current.shouldSubmit = Boolean(input.value.trim());
+      voiceFeedback.textContent = "Dictado transcrito. Enviando consulta.";
     };
 
     recognition.onerror = (event) => {
-      recognitionHadError = true;
+      recognitionStateRef.current.hadError = true;
+      recognitionStateRef.current.isStarting = false;
+      recognitionStateRef.current.shouldSubmit = false;
       setListening(false);
       const errorMessages = {
         "not-allowed": "El navegador no tiene permiso para usar el micrófono.",
@@ -918,23 +946,32 @@ function mountSeaAssistant() {
     };
 
     recognition.onend = () => {
+      const shouldSubmit = recognitionStateRef.current.shouldSubmit;
+      const hadError = recognitionStateRef.current.hadError;
+      recognitionStateRef.current.isStarting = false;
+      recognitionStateRef.current.shouldSubmit = false;
       setListening(false);
-      if (!recognitionHadError && voiceFeedback.textContent === "Escuchando tu consulta marítima.") {
+      if (!hadError && voiceFeedback.textContent === "Escuchando tu consulta marítima.") {
         voiceFeedback.textContent = "Dictado finalizado.";
+      }
+      if (shouldSubmit && !hadError && !pending && input.value.trim()) {
+        window.requestAnimationFrame(() => form.requestSubmit());
       }
     };
 
     micButton.addEventListener("click", () => {
-      if (isListening) {
-        recognition.stop();
+      if (recognitionStateRef.current.isListening || recognitionStateRef.current.isStarting) {
+        stopRecognition();
         return;
       }
 
-      recognitionHadError = false;
+      recognitionStateRef.current.hadError = false;
+      recognitionStateRef.current.shouldSubmit = false;
+      recognitionStateRef.current.isStarting = true;
       try {
         recognition.start();
-        setListening(true);
       } catch {
+        recognitionStateRef.current.isStarting = false;
         setListening(false);
         voiceFeedback.textContent = "No se pudo iniciar el dictado. Inténtalo de nuevo.";
       }
@@ -965,6 +1002,10 @@ function mountSeaAssistant() {
     toggleButton.setAttribute("aria-expanded", String(open));
     toggleButton.setAttribute("aria-label", open ? "Ocultar Asistente SeaCharter" : "Abrir Asistente SeaCharter");
     if (open) {
+      panel.classList.remove("is-minimized");
+      minimizeButton.setAttribute("aria-expanded", "true");
+      minimizeButton.setAttribute("aria-label", "Minimizar asistente");
+      minimizeButton.title = "Minimizar asistente";
       if (aiAlertsStore.getAlerts() > 0) {
         const evaluation = aiAlertsStore.getCurrentEvaluation();
         appendMessage(createMessage("assistant", createProactiveGreeting(evaluation.moduleName), { meta: formatTime() }));
@@ -981,7 +1022,7 @@ function mountSeaAssistant() {
       });
       scrollToLatest();
     } else {
-      if (isListening) recognition?.stop();
+      if (recognitionStateRef.current.isListening || recognitionStateRef.current.isStarting) stopRecognition();
       cancelSpeech();
       toggleButton.focus();
     }
@@ -1002,13 +1043,25 @@ function mountSeaAssistant() {
     pending = nextPending;
     input.disabled = nextPending;
     micButton.disabled = nextPending;
-    if (nextPending && isListening) recognition?.stop();
+    if (nextPending && (recognitionStateRef.current.isListening || recognitionStateRef.current.isStarting)) stopRecognition();
     syncSendState();
     syncStopControl();
   };
 
   toggleButton.addEventListener("click", () => setOpen(panel.hidden));
   speechToggle.addEventListener("click", () => setSpeechEnabled(!speechEnabled));
+  minimizeButton.addEventListener("click", () => {
+    const minimized = panel.classList.toggle("is-minimized");
+    minimizeButton.setAttribute("aria-expanded", String(!minimized));
+    minimizeButton.setAttribute("aria-label", minimized ? "Restaurar asistente" : "Minimizar asistente");
+    minimizeButton.title = minimized ? "Restaurar asistente" : "Minimizar asistente";
+    if (minimized && (recognitionStateRef.current.isListening || recognitionStateRef.current.isStarting)) stopRecognition();
+    if (!minimized) {
+      position = clampPosition(position.x, position.y);
+      applyPosition();
+      requestAnimationFrame(() => input.focus());
+    }
+  });
   closeButton.addEventListener("click", () => setOpen(false));
   stopButton.addEventListener("click", () => {
     stoppedByUser = Boolean(activeRequestController);

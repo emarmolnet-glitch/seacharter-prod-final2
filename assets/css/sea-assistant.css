@@ -1,12 +1,12 @@
 .sca-root {
-  --sca-navy: #071a32;
-  --sca-navy-soft: #0a2947;
-  --sca-teal: #25a18e;
-  --sca-teal-dark: #16796d;
-  --sca-cyan: #8fc7d0;
-  --sca-ink: #17263a;
-  --sca-muted: #617287;
-  --sca-line: #d8e3ec;
+  --sca-navy: #0f172a;
+  --sca-navy-soft: #1e293b;
+  --sca-teal: #0f9f84;
+  --sca-teal-dark: #087966;
+  --sca-cyan: #0f9f84;
+  --sca-ink: #1e293b;
+  --sca-muted: #64748b;
+  --sca-line: #e2e8f0;
   --sca-surface: #ffffff;
   --sca-surface-soft: #f3f7fa;
   position: fixed;
@@ -17,24 +17,24 @@
   justify-items: end;
   gap: 14px;
   color: var(--sca-ink);
-  font-family: "Segoe UI", Aptos, sans-serif;
+  font-family: Inter, "Segoe UI", Aptos, sans-serif;
 }
 
 .sca-panel {
   position: fixed;
   right: max(24px, env(safe-area-inset-right));
   bottom: max(24px, env(safe-area-inset-bottom));
-  z-index: 9999;
-  width: min(390px, calc(100vw - 32px));
-  height: min(610px, calc(100vh - 118px));
+  z-index: 2147483501;
+  width: min(410px, calc(100vw - 32px));
+  height: min(640px, calc(100vh - 92px));
   min-height: 420px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
-  border: 1px solid rgba(143, 199, 208, 0.72);
-  border-radius: 22px;
+  border: 1px solid #dbe3ec;
+  border-radius: 16px;
   background: var(--sca-surface);
-  box-shadow: 0 24px 70px rgba(7, 26, 50, 0.26), 0 8px 24px rgba(7, 26, 50, 0.14);
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.22), 0 8px 24px rgba(15, 23, 42, 0.1);
   transform-origin: bottom right;
   transition: opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
 }
@@ -104,31 +104,17 @@
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
-  padding: 18px 16px;
+  padding: 13px 12px;
   overflow: hidden;
-  color: #f7fbff;
+  color: var(--sca-ink);
   cursor: grab;
   user-select: none;
-  background:
-    radial-gradient(circle at 88% -30%, rgba(143, 199, 208, 0.34), transparent 48%),
-    linear-gradient(145deg, var(--sca-navy) 0%, var(--sca-navy-soft) 100%);
+  border-bottom: 1px solid var(--sca-line);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .sca-panel.is-dragging .sca-header {
   cursor: grabbing;
-}
-
-.sca-header::after {
-  content: "";
-  position: absolute;
-  right: 20px;
-  bottom: -28px;
-  width: 110px;
-  height: 58px;
-  border: 1px solid rgba(143, 199, 208, 0.16);
-  border-radius: 50%;
-  transform: rotate(-9deg);
-  pointer-events: none;
 }
 
 .sca-mark {
@@ -136,15 +122,16 @@
   width: 42px;
   height: 42px;
   place-items: center;
-  border: 1px solid rgba(143, 199, 208, 0.45);
-  border-radius: 14px;
+  border: 1px solid #cfe7e2;
+  border-radius: 11px;
   color: var(--sca-cyan);
-  background: rgba(255, 255, 255, 0.08);
+  background: #effaf7;
 }
 
 .sca-mark svg,
 .sca-speech-toggle svg,
 .sca-stop svg,
+.sca-minimize svg,
 .sca-close svg,
 .sca-mic svg,
 .sca-send svg {
@@ -163,13 +150,14 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
   line-height: 1.1;
 }
 
 .sca-speech-toggle,
 .sca-stop,
+.sca-minimize,
 .sca-close {
   position: relative;
   z-index: 1;
@@ -178,10 +166,10 @@
   height: 36px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid rgba(143, 199, 208, 0.42);
-  border-radius: 12px;
-  color: #b8d5de;
-  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid #dbe3ec;
+  border-radius: 9px;
+  color: #64748b;
+  background: #ffffff;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: color 150ms ease, background 150ms ease, border-color 150ms ease, transform 150ms ease;
@@ -189,16 +177,18 @@
 
 .sca-speech-toggle svg,
 .sca-stop svg,
+.sca-minimize svg,
 .sca-close svg {
   width: 20px;
   height: 20px;
 }
 
 .sca-speech-toggle:hover:not(:disabled),
+.sca-minimize:hover,
 .sca-close:hover {
-  border-color: rgba(82, 216, 189, 0.72);
-  color: #ffffff;
-  background: rgba(82, 216, 189, 0.14);
+  border-color: #99d3c8;
+  color: var(--sca-teal-dark);
+  background: #effaf7;
 }
 
 .sca-stop {
@@ -219,14 +209,15 @@
 }
 
 .sca-speech-toggle.is-active {
-  border-color: rgba(82, 216, 189, 0.76);
-  color: #70ead0;
-  background: rgba(37, 161, 142, 0.2);
-  box-shadow: inset 0 0 0 1px rgba(82, 216, 189, 0.08);
+  border-color: #99d3c8;
+  color: var(--sca-teal-dark);
+  background: #e4f7f2;
+  box-shadow: inset 0 0 0 1px rgba(15, 159, 132, 0.08);
 }
 
 .sca-speech-toggle:active:not(:disabled),
 .sca-stop:active,
+.sca-minimize:active,
 .sca-close:active {
   transform: scale(0.94);
 }
@@ -238,16 +229,25 @@
 
 .sca-speech-toggle:focus-visible,
 .sca-stop:focus-visible,
+.sca-minimize:focus-visible,
 .sca-close:focus-visible {
   outline: 3px solid rgba(82, 216, 189, 0.34);
   outline-offset: 2px;
+}
+
+.sca-window-label {
+  color: var(--sca-teal-dark);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1;
 }
 
 .sca-title {
   margin: 0;
   overflow: hidden;
   color: inherit;
-  font-size: 0.98rem;
+  font-size: 0.92rem;
   font-weight: 750;
   letter-spacing: 0.01em;
   line-height: 1.1;
@@ -261,8 +261,8 @@
   margin: 0;
   padding-left: 14px;
   overflow: hidden;
-  color: #b8d5de;
-  font-size: 0.75rem;
+  color: var(--sca-muted);
+  font-size: 0.7rem;
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -276,8 +276,8 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #52d8bd;
-  box-shadow: 0 0 0 3px rgba(82, 216, 189, 0.14);
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12);
   transform: translateY(-50%);
 }
 
@@ -292,11 +292,7 @@
   gap: 14px;
   overflow-y: auto;
   padding: 20px 16px;
-  background:
-    linear-gradient(rgba(7, 26, 50, 0.022) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(7, 26, 50, 0.022) 1px, transparent 1px),
-    var(--sca-surface-soft);
-  background-size: 24px 24px;
+  background: #f8fafc;
   scrollbar-color: #b9cad7 transparent;
   scrollbar-width: thin;
 }
@@ -645,9 +641,20 @@
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: end;
   gap: 10px;
-  padding: 13px;
+  padding: 12px;
   border-top: 1px solid var(--sca-line);
-  background: var(--sca-surface);
+  background: #ffffff;
+}
+
+.sca-panel.is-minimized {
+  height: auto;
+  min-height: 0;
+  grid-template-rows: auto 0 0;
+}
+
+.sca-panel.is-minimized .sca-history,
+.sca-panel.is-minimized .sca-form {
+  display: none;
 }
 
 .sca-input {
@@ -819,6 +826,7 @@
   .sca-panel,
   .sca-speech-toggle,
   .sca-stop,
+  .sca-minimize,
   .sca-close,
   .sca-mic,
   .sca-mic::after,
