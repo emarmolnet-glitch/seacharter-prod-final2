@@ -52,7 +52,10 @@ test('exceptionally high unitized rates escalate only the affected operation to 
 
 test('frontend renders one unified card and dispatches one global calculator action', () => {
   assert.match(frontendSource, /function collectConversationHistory\(historyElement\)/);
-  assert.match(frontendSource, /JSON\.stringify\(\{ \.\.\.baseRequestPayload, historial \}\)/);
+  assert.match(frontendSource, /CalculationData: collectCalculationData\(\)/);
+  assert.match(frontendSource, /MarketData: collectMarketData\(\)/);
+  assert.match(frontendSource, /UserContext: userText/);
+  assert.match(frontendSource, /JSON\.stringify\(requestPayload\)/);
   assert.match(frontendSource, /function createCalculatorAutofillActionCard\(action\)/);
   assert.match(frontendSource, /Autocompletar: Ritmos, Grúas y Buque/);
   assert.match(frontendSource, /new CustomEvent\("sea-assistant:calculator-autofill"/);
