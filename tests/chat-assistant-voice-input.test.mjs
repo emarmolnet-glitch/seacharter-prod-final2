@@ -19,6 +19,19 @@ test('voice transcripts remain editable and synchronize the composer state', () 
   assert.match(frontendSource, /insertTranscript\(transcript\)/);
   assert.match(frontendSource, /input\.dispatchEvent\(new Event\("input", \{ bubbles: true \}\)\)/);
   assert.match(frontendSource, /input\.setSelectionRange\(cursorPosition, cursorPosition\)/);
+  assert.match(frontendSource, /window\.requestAnimationFrame\(\(\) => form\.requestSubmit\(\)\)/);
+});
+
+test('speech recognition lifecycle uses one stable mutable reference', () => {
+  assert.match(frontendSource, /const recognitionStateRef = \{/);
+  assert.match(frontendSource, /recognitionStateRef\.current\.isStarting/);
+  assert.match(frontendSource, /recognitionStateRef\.current\.shouldSubmit/);
+});
+
+test('assistant exposes Data Bridge style window controls', () => {
+  assert.match(frontendSource, /class="sca-minimize"/);
+  assert.match(frontendSource, /panel\.classList\.toggle\("is-minimized"\)/);
+  assert.match(stylesheet, /\.sca-panel\.is-minimized/);
 });
 
 test('microphone communicates listening and error states accessibly', () => {

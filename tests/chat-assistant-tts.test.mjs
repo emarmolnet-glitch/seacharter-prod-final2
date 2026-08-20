@@ -20,7 +20,7 @@ test('speech is cleaned and cancelled on mute or close', () => {
   assert.match(frontendSource, /container\.textContent/);
   assert.match(frontendSource, /speechSynthesis\.cancel\(\)/);
   assert.match(frontendSource, /if \(!speechEnabled\) cancelSpeech\(\)/);
-  assert.match(frontendSource, /if \(isListening\) recognition\?\.stop\(\);\s+cancelSpeech\(\)/s);
+  assert.match(frontendSource, /if \(recognitionStateRef\.current\.isListening \|\| recognitionStateRef\.current\.isStarting\) stopRecognition\(\);\s+cancelSpeech\(\)/s);
   assert.match(frontendSource, /replaceWithAssistantMessage\(thinkingMessage, formatWizardPayloadSummary\(pendingWizardPayload\)/);
   assert.match(frontendSource, /appendMessage\(message\);\s+if \(!options\.error\) speakText\(text\)/s);
 });

@@ -15,7 +15,7 @@ test('chat header exposes an accessible close control', () => {
 test('chat header uses a compact single-row layout with truncated text', () => {
   assert.match(stylesheet, /\.sca-header\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*flex-start;[^}]*gap:\s*8px;/s);
   assert.match(stylesheet, /\.sca-heading\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*line-height:\s*1\.1;/s);
-  assert.match(stylesheet, /\.sca-status\s*\{[^}]*font-size:\s*0\.75rem;[^}]*white-space:\s*nowrap;/s);
+  assert.match(stylesheet, /\.sca-status\s*\{[^}]*font-size:\s*0\.7rem;[^}]*white-space:\s*nowrap;/s);
   assert.match(stylesheet, /\.sca-status\s*\{[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;/s);
 });
 
