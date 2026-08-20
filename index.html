@@ -46698,11 +46698,14 @@ Example:
                 || Object.keys(masterReportWorkflowState.portInfoReports || {}).length
             );
             const message = hasStrictData
-                ? 'Elige el tipo de Informe Master:\n\n1 = Standard: informe actual.\n2 = Estricto: Standard + Port Info IA (POL/POD) + Análisis de Viabilidad IA consultados.'
-                : 'Elige el tipo de Informe Master:\n\n1 = Standard: informe actual.\n2 = Estricto: Standard + evidencias IA recopiladas. No hay consultas Port Info/Viabilidad IA registradas todavía.';
+                ? 'Elige el tipo de Informe Master:\n\n1 = Standard: informe actual.\n2 = Estricto: Standard + Port Info IA (POL/POD) + Análisis de Viabilidad IA consultados.\n3 = Informe del Asistente / IA: generación inmediata sin exigir Addendum.'
+                : 'Elige el tipo de Informe Master:\n\n1 = Standard: informe actual.\n2 = Estricto: Standard + evidencias IA recopiladas. No hay consultas Port Info/Viabilidad IA registradas todavía.\n3 = Informe del Asistente / IA: generación inmediata sin exigir Addendum.';
             const choice = window.prompt(message, hasStrictData ? '2' : '1');
             if (choice === null) return null;
             const normalized = String(choice).trim().toLowerCase();
+            if (normalized === '3' || normalized === 'asistente' || normalized === 'assistant' || normalized === 'ia') {
+                return 'assistant';
+            }
             return normalized === '2' || normalized === 'estricto' || normalized === 'strict'
                 ? 'strict'
                 : 'standard';
@@ -46765,14 +46768,14 @@ Example:
             registerMasterReportCalculatorHooks();
         }
 
-        function validarInformeMaster() {
+        function validarInformeMaster(reportMode = masterReportWorkflowState.selectedReportMode) {
             const faltantes = [];
 
             if (!hasValidMasterCalculatorData()) {
                 faltantes.push('Calculadora (Tab 2): introduce ruta/carga/flete y pulsa Calculadora o PMT');
             }
 
-            if (!hasValidMasterLegalAudit()) {
+            if (reportMode !== 'assistant' && !hasValidMasterLegalAudit()) {
                 faltantes.push('Auditoría IA (Tab 6): carga Addendum GENCON/ASBATANKVOY y genera el informe legal comercial');
             }
 
@@ -47284,10 +47287,17 @@ Example:
 
         async function generarInformeMasterOnClick() {
             const btn = document.getElementById('btn-master-executive-report') || document.getElementById('btn-generar-informe');
-            if (!validarInformeMaster()) return false;
             const reportMode = chooseMasterReportMode();
             if (!reportMode) return false;
             masterReportWorkflowState.selectedReportMode = reportMode;
+
+            if (reportMode === 'assistant') {
+                renderMasterReportPreview(gatherMasterAuditData());
+                showToast?.('Informe del Asistente / IA generado. Ya puedes revisarlo o descargarlo.');
+                return true;
+            }
+
+            if (!validarInformeMaster(reportMode)) return false;
 
             const contenidoOriginal = btn?.innerHTML;
             const tituloOriginal = btn?.getAttribute('title');
