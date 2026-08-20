@@ -63,3 +63,26 @@ test('Addendum validation only applies to standard and strict reports', () => {
 
   assert.match(validationSource, /reportMode !== 'assistant' && !hasValidMasterLegalAudit\(\)/);
 });
+
+test('Master Report removes Markdown markers before preview, printing, and PDF export', () => {
+  const formatterStart = source.indexOf('function formatMasterReportMarkdownText');
+  const formatterEnd = source.indexOf('function sanitizeDataBridgeMasterReport', formatterStart);
+  const formatterSource = source.slice(formatterStart, formatterEnd);
+
+  assert.match(formatterSource, /#\{1,6\}/);
+  assert.match(formatterSource, /master-markdown-heading/);
+  assert.match(formatterSource, /toUpperCase\(\)/);
+  assert.match(formatterSource, /<strong>\$1<\/strong>/);
+  assert.match(formatterSource, /replace\(\/\\\*\\\*\/g, ''\)/);
+
+  const sanitizerStart = source.indexOf('function sanitizeDataBridgeMasterReport');
+  const sanitizerEnd = source.indexOf('function extractDataBridgeMasterReport', sanitizerStart);
+  const sanitizerSource = source.slice(sanitizerStart, sanitizerEnd);
+  assert.match(sanitizerSource, /formatMasterReportMarkdownText\(report\)/);
+  assert.match(sanitizerSource, /cleanMasterReportMarkdown\(template\.content\)/);
+
+  const previewStart = source.indexOf('function renderMasterReportPreview');
+  const previewEnd = source.indexOf('async function exportarInformeMasterPDF', previewStart);
+  const previewSource = source.slice(previewStart, previewEnd);
+  assert.match(previewSource, /cleanMasterReportMarkdown\(wrapper\.querySelector\('#informe-master-container'\)\)/);
+});

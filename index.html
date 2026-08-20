@@ -46920,11 +46920,47 @@ Example:
             return configuredEndpoint || 'https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia';
         }
 
+        function formatMasterReportMarkdownText(content) {
+            return escapeMasterReportHtml(String(content || '').replace(/\r\n?/g, '\n'))
+                .replace(/^\s*#{1,6}\s+(.+?)\s*$/gm, (_, title) => {
+                    const cleanTitle = title.replace(/\*\*/g, '').trim().toUpperCase();
+                    return `<span class="master-markdown-heading">${cleanTitle}</span>`;
+                })
+                .replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*\*/g, '')
+                .replace(/\n{2,}/g, '<br><br>')
+                .replace(/\n/g, '<br>');
+        }
+
+        function cleanMasterReportMarkdown(root) {
+            if (!root) return root;
+            const textNodes = [];
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            let currentNode = walker.nextNode();
+
+            while (currentNode) {
+                const parentTag = currentNode.parentElement?.tagName;
+                const content = currentNode.nodeValue || '';
+                if (!['SCRIPT', 'STYLE', 'PRE', 'CODE', 'TEXTAREA'].includes(parentTag)
+                    && (/\*\*/.test(content) || /(^|\n)\s*#{1,6}\s+/.test(content))) {
+                    textNodes.push(currentNode);
+                }
+                currentNode = walker.nextNode();
+            }
+
+            textNodes.forEach((textNode) => {
+                const template = document.createElement('template');
+                template.innerHTML = formatMasterReportMarkdownText(textNode.nodeValue);
+                textNode.replaceWith(template.content);
+            });
+            return root;
+        }
+
         function sanitizeDataBridgeMasterReport(content) {
             const report = String(content || '').trim();
             if (!report) return '';
             if (!/<\/?[a-z][\s\S]*>/i.test(report)) {
-                return `<div class="master-verdict">${escapeMasterReportHtml(report).replace(/\n/g, '<br>')}</div>`;
+                return `<div class="master-verdict">${formatMasterReportMarkdownText(report)}</div>`;
             }
 
             const template = document.createElement('template');
@@ -46939,6 +46975,7 @@ Example:
                     }
                 });
             });
+            cleanMasterReportMarkdown(template.content);
             return template.innerHTML;
         }
 
@@ -47223,6 +47260,7 @@ Example:
                 .master-executive-report-copy .page-break { break-before: page; page-break-before: always; }
                 .master-executive-report-copy table { max-width: 100%; }
                 .master-executive-report-copy [style*="position: fixed"] { position: static !important; }
+                .master-markdown-heading { display: block; margin: 14px 0 7px; color: #1e3a8a; font-size: 10pt; font-weight: 800; line-height: 1.25; text-transform: uppercase; break-after: avoid; page-break-after: avoid; }
                 .master-audit-footer { margin-top: 30px; border-top: 1px solid #cbd5e1; padding-top: 10px; font-size: 7.2pt; color: #64748b; line-height: 1.3; text-align: justify; break-inside: avoid; page-break-inside: avoid; }
                 @media print { .master-report-preview-toolbar { display: none; } .master-report-preview-backdrop { position: static; padding: 0; background: #fff; } .master-report-shell { box-shadow: none; width: auto; min-height: auto; padding: 0; } }
             `;
@@ -47259,6 +47297,7 @@ Example:
                 </div>
                 ${reportContent}
             `;
+            cleanMasterReportMarkdown(wrapper.querySelector('#informe-master-container'));
             document.body.appendChild(wrapper);
             return wrapper.querySelector('#informe-master-container');
         }
