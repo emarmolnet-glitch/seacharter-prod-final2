@@ -33,3 +33,33 @@ test('Master Report posts to the configurable cerebro-ia endpoint', () => {
   assert.match(handlerSource, /AbortController/);
   assert.doesNotMatch(handlerSource, /fetch\('\/api\/generar-informe'/);
 });
+
+test('Master Report option 3 opens the assistant report without validation or Data Bridge', () => {
+  const chooserStart = source.indexOf('function chooseMasterReportMode');
+  const chooserEnd = source.indexOf('function hasValidMasterCalculatorData', chooserStart);
+  const chooserSource = source.slice(chooserStart, chooserEnd);
+  assert.match(chooserSource, /3 = Informe del Asistente \/ IA/);
+  assert.match(chooserSource, /normalized === '3'/);
+  assert.match(chooserSource, /return 'assistant'/);
+
+  const handlerStart = source.indexOf('async function generarInformeMasterOnClick');
+  const handlerEnd = source.indexOf('async function generateMasterExecutiveReport', handlerStart);
+  const handlerSource = source.slice(handlerStart, handlerEnd);
+  const assistantBranch = handlerSource.indexOf("if (reportMode === 'assistant')");
+  const validationCall = handlerSource.indexOf('validarInformeMaster(reportMode)');
+  const dataBridgeFetch = handlerSource.indexOf('fetch(getDataBridgeMasterReportEndpoint()');
+
+  assert.ok(assistantBranch >= 0, 'option 3 has a dedicated assistant branch');
+  assert.ok(assistantBranch < validationCall, 'assistant report opens before mandatory-module validation');
+  assert.ok(validationCall < dataBridgeFetch, 'standard and strict reports remain validated before Data Bridge');
+  assert.match(handlerSource.slice(assistantBranch, validationCall), /renderMasterReportPreview\(gatherMasterAuditData\(\)\)/);
+  assert.match(handlerSource.slice(assistantBranch, validationCall), /return true/);
+});
+
+test('Addendum validation only applies to standard and strict reports', () => {
+  const validationStart = source.indexOf('function validarInformeMaster');
+  const validationEnd = source.indexOf('function recopilarDatosParaInformeMaster', validationStart);
+  const validationSource = source.slice(validationStart, validationEnd);
+
+  assert.match(validationSource, /reportMode !== 'assistant' && !hasValidMasterLegalAudit\(\)/);
+});
