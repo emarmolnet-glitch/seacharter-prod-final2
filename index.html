@@ -46800,7 +46800,7 @@ Example:
             const localTariffRisk = Math.max(0, Number(data.financial.grossChartererRevenue || data.financial.grossOwnerRevenue || 0) * 0.035);
             const rawLegalText = document.getElementById('resultsContent')?.innerText.replace(/\s+/g, ' ').trim() || '';
             const rawCbamText = document.getElementById('cbam-module-result')?.innerText.replace(/\s+/g, ' ').trim() || '';
-            return {
+            const dossier = {
                 ...payload,
                 disparadores: {
                     calculadora_activada: masterReportWorkflowState.calculatorTriggered,
@@ -46877,6 +46877,96 @@ Example:
                     validacion_estrategica: data.marketComparison.verdict
                 }
             };
+
+            return {
+                CalculationData: {
+                    generatedAt: data.generatedAt,
+                    Operational: data.operational,
+                    Financial: data.financial,
+                    Viability: dossier.viabilidad,
+                    Regulatory: {
+                        ...data.regulatory,
+                        cbam: dossier.cbam,
+                        localTariffRisk: dossier.riesgo_arancelario_local
+                    }
+                },
+                MarketData: {
+                    Comparison: dossier.comparativa,
+                    RawComparison: data.marketComparison,
+                    Intelligence: data.intelligence,
+                    CollectedAI: dossier.inteligencia_ia_recopilada
+                },
+                UserContext: {
+                    source: 'SeaCharter Core PRO',
+                    generatedAt: new Date().toISOString(),
+                    locale: document.documentElement.lang || 'es',
+                    reportMode: dossier.modo_informe,
+                    strictReport: dossier.informe_estricto,
+                    voyageReference: getSafeActiveContractRef(),
+                    jurisdiction: dossier.riesgo_arancelario_local.jurisdiccion_detectada,
+                    Workflow: dossier.disparadores,
+                    Legal: dossier.legal,
+                    ExecutiveReport: dossier.reporte_ejecutivo,
+                    AuditPayload: payload
+                }
+            };
+        }
+
+        function getDataBridgeMasterReportEndpoint() {
+            const configuredEndpoint = String(window.SeaCharterDataBridgeAIEndpoint || '').trim();
+            return configuredEndpoint || 'https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia';
+        }
+
+        function sanitizeDataBridgeMasterReport(content) {
+            const report = String(content || '').trim();
+            if (!report) return '';
+            if (!/<\/?[a-z][\s\S]*>/i.test(report)) {
+                return `<div class="master-verdict">${escapeMasterReportHtml(report).replace(/\n/g, '<br>')}</div>`;
+            }
+
+            const template = document.createElement('template');
+            template.innerHTML = report;
+            template.content.querySelectorAll('script, iframe, object, embed, form, meta, link').forEach((node) => node.remove());
+            template.content.querySelectorAll('*').forEach((node) => {
+                Array.from(node.attributes).forEach((attribute) => {
+                    const name = attribute.name.toLowerCase();
+                    const value = attribute.value.trim().toLowerCase();
+                    if (name.startsWith('on') || name === 'srcdoc' || ((name === 'href' || name === 'src') && value.startsWith('javascript:'))) {
+                        node.removeAttribute(attribute.name);
+                    }
+                });
+            });
+            return template.innerHTML;
+        }
+
+        function extractDataBridgeMasterReport(responsePayload) {
+            const candidates = [
+                responsePayload?.reportHtml,
+                responsePayload?.informe_master_html,
+                responsePayload?.informeAnalitico,
+                responsePayload?.informe_analitico,
+                responsePayload?.informe,
+                responsePayload?.analyticalReport,
+                responsePayload?.analysis,
+                responsePayload?.report,
+                responsePayload?.content,
+                responsePayload?.result,
+                responsePayload?.data?.reportHtml,
+                responsePayload?.data?.informeAnalitico,
+                responsePayload?.data?.informe,
+                responsePayload?.data?.analysis,
+                responsePayload?.data?.report,
+                responsePayload?.data?.content,
+                responsePayload?.data?.result
+            ];
+            const report = candidates.find((candidate) => typeof candidate === 'string' && candidate.trim());
+            if (report) return sanitizeDataBridgeMasterReport(report);
+
+            const structuredReport = candidates.find((candidate) => candidate && typeof candidate === 'object');
+            if (structuredReport) {
+                return `<pre class="master-verdict">${escapeMasterReportHtml(JSON.stringify(structuredReport, null, 2))}</pre>`;
+            }
+            throw new Error('Data Bridge no devolvió contenido analítico para el informe.');
         }
 
         function sanitizeMasterExecutiveReportHTML(html) {
@@ -47214,33 +47304,42 @@ Example:
 
             try {
                 const datos = recopilarDatosParaInformeMaster();
-                let reportRendered = false;
+                const abortController = new AbortController();
+                const timeoutId = window.setTimeout(() => abortController.abort(), 45000);
+                let respuesta;
                 try {
-                    const respuesta = await fetch('/api/generar-informe', {
+                    respuesta = await fetch(getDataBridgeMasterReportEndpoint(), {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(datos)
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(datos),
+                        signal: abortController.signal
                     });
-                    const resultado = await respuesta.json().catch(() => ({}));
-                    if (!respuesta.ok || resultado.success === false) {
-                        throw new Error(resultado.error || 'Servidor ocupado');
-                    }
-                    renderMasterReportPreview(resultado.reportHtml || resultado.informe_master_html || datos);
-                    reportRendered = true;
-                } catch (apiError) {
-                    console.warn('Informe Master IA no disponible; usando informe local:', apiError);
-                    renderMasterReportPreview(gatherMasterAuditData());
-                    reportRendered = true;
-                    showToast?.('Informe Master cargado en modo local. Revisa la conexión IA para el dossier avanzado.');
+                } finally {
+                    window.clearTimeout(timeoutId);
                 }
 
-                if (reportRendered) {
-                    showToast?.('Informe Master cargado. Puedes imprimirlo o descargar el PDF desde la vista del informe.');
+                const resultado = await respuesta.json().catch(() => {
+                    throw new Error('Data Bridge devolvió una respuesta JSON inválida.');
+                });
+                if (!respuesta.ok || resultado.success === false) {
+                    throw new Error(resultado.error || resultado.message || `Data Bridge respondió con HTTP ${respuesta.status}.`);
                 }
-                return reportRendered;
+
+                renderMasterReportPreview(extractDataBridgeMasterReport(resultado));
+                showToast?.('Informe Master generado por Data Bridge. Ya puedes revisarlo o descargarlo.');
+                return true;
             } catch (error) {
                 console.error('Error generando Informe Master:', error);
-                alert(`No se pudo cargar el Informe Master: ${error?.message || 'error desconocido'}.`);
+                const errorMessage = error?.name === 'AbortError'
+                    ? 'Data Bridge no respondió en 45 segundos. Comprueba la conexión e inténtalo de nuevo.'
+                    : (error instanceof TypeError
+                        ? 'No se pudo conectar con Data Bridge. Comprueba la red y la configuración del endpoint.'
+                        : (error?.message || 'Error desconocido al generar el informe.'));
+                showToast?.(`No se pudo generar el Informe Master: ${errorMessage}`);
+                alert(`No se pudo generar el Informe Master con Data Bridge:\n\n${errorMessage}`);
                 return false;
             } finally {
                 if (btn) {
@@ -61284,6 +61383,11 @@ Compara el documento suministrado (que puede ser un contrato, carta de crédito 
             resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_FRONTEND_URL, VITE_ENV.VITE_DATA_BRIDGE_URL),
             DEFAULT_DATA_BRIDGE_FRONTEND_URL
         );
+        const DATA_BRIDGE_AI_ENDPOINT = resolveViteEnvValue(
+            VITE_ENV.VITE_DATA_BRIDGE_AI_URL,
+            `${DATA_BRIDGE_FRONTEND_URL.replace(/\/$/, '')}/.netlify/functions/cerebro-ia`
+        );
+        window.SeaCharterDataBridgeAIEndpoint = DATA_BRIDGE_AI_ENDPOINT;
         const DATA_BRIDGE_API_URL = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_API_URL, '');
         const DATA_BRIDGE_API_SECRET = resolveViteEnvValue(VITE_ENV.VITE_DATA_BRIDGE_API_SECRET, '');
 	        const HAS_VALID_DATA_BRIDGE_API_URL = isValidDataBridgeApiUrl(DATA_BRIDGE_API_URL);
