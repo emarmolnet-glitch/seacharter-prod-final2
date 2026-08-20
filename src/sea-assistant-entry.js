@@ -685,7 +685,7 @@ function mountSeaAssistant() {
   root.className = "sca-root";
   root.setAttribute("aria-label", "Asistente inteligente de SeaCharter");
   root.innerHTML = `
-    <div class="sca-panel w-96 max-w-[calc(100vw-2rem)]" id="sea-assistant-panel" role="dialog" aria-labelledby="sea-assistant-title" hidden>
+    <div class="sca-panel w-[400px] h-[550px] flex flex-col bg-white rounded-xl shadow-2xl overflow-hidden" id="sea-assistant-panel" role="dialog" aria-labelledby="sea-assistant-title" hidden>
       <header class="sca-header flex justify-between items-center p-3 border-b bg-white rounded-t-xl">
         <div class="sca-header-main flex items-center gap-2 min-w-0">
           <span class="sca-presence-dot w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" aria-hidden="true"></span>
@@ -697,14 +697,14 @@ function mountSeaAssistant() {
           <button class="sca-close w-8 h-8 flex items-center justify-center rounded-md hover:bg-gray-100 text-gray-600 transition-colors border-0 shrink-0" type="button" aria-label="Cerrar asistente" title="Cerrar asistente">${icons.close}</button>
         </div>
       </header>
-      <div class="sca-history flex-1 overflow-y-auto p-4 flex flex-col gap-4" aria-live="polite" aria-relevant="additions text">
+      <div class="sca-history flex-1 overflow-y-auto p-4" aria-live="polite" aria-relevant="additions text">
         <div class="sca-messages-end" aria-hidden="true"></div>
       </div>
-      <form class="sca-form flex items-center gap-2 p-3 border-t bg-white rounded-b-xl">
-        <textarea class="sca-input flex-1 text-[13px] bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none" rows="1" maxlength="2000" placeholder="Escribe tu consulta marítima..." aria-label="Mensaje para el asistente" required></textarea>
-        <button class="sca-mic w-8 h-8 flex items-center justify-center shrink-0" id="sea-assistant-mic-btn" type="button" aria-label="Iniciar dictado por voz" aria-pressed="false" title="Dictar consulta" hidden>${icons.microphone}</button>
+      <form class="sca-form w-full min-h-[70px] p-4 bg-gray-50 border-t flex flex-row items-center gap-3 shrink-0">
+        <textarea class="sca-input flex-1 h-10 px-3 border border-gray-300 rounded-lg text-[14px] outline-none" rows="1" maxlength="2000" placeholder="Escribe tu consulta marítima..." aria-label="Mensaje para el asistente" required></textarea>
+        <button class="sca-mic w-10 h-10 shrink-0 flex items-center justify-center rounded-lg bg-[#0e1b2a] text-white hover:bg-gray-800 transition-colors" id="sea-assistant-mic-btn" type="button" aria-label="Iniciar dictado por voz" aria-pressed="false" title="Dictar consulta" hidden>${icons.microphone}</button>
         <button class="sca-stop" type="button" aria-label="Detener respuesta" title="Detener respuesta" hidden>${icons.stop}</button>
-        <button class="sca-send w-8 h-8 flex items-center justify-center bg-[#0e1b2a] text-white rounded-md hover:bg-gray-800 shrink-0" type="submit" aria-label="Enviar mensaje" disabled>${icons.send}</button>
+        <button class="sca-send w-10 h-10 shrink-0 flex items-center justify-center rounded-lg bg-[#0e1b2a] text-white hover:bg-gray-800 transition-colors" type="submit" aria-label="Enviar mensaje" disabled>${icons.send}</button>
         <span class="sca-status">Disponible para consultas</span>
         <span class="sca-voice-feedback" role="status" aria-live="polite"></span>
       </form>
