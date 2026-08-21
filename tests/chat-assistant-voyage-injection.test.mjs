@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import vm from 'node:vm';
 
 const assistantSource = await readFile(new URL('../src/sea-assistant-entry.js', import.meta.url), 'utf8');
 const draftEntrySource = await readFile(new URL('../src/voyage-draft-entry.js', import.meta.url), 'utf8');
@@ -11,6 +12,14 @@ const wpiClientSource = await readFile(new URL('../src/wpi-catalog-client.js', i
 const assistantFunctionSource = await readFile(new URL('../netlify/functions/chat-assistant.js', import.meta.url), 'utf8');
 const scenarioPolicySource = await readFile(new URL('../shared/voyage-scenario-policy.mjs', import.meta.url), 'utf8');
 const cargoMapperSource = await readFile(new URL('../shared/cargo-mapper.mjs', import.meta.url), 'utf8');
+
+function normalizeCompleteFormDate(value) {
+  const start = draftEntrySource.indexOf('function normalizeAssistantFormDate');
+  const end = draftEntrySource.indexOf('function selectValidatedWpiPort', start);
+  const sandbox = { value, result: null, Date };
+  vm.runInNewContext(`${draftEntrySource.slice(start, end)}\nresult = normalizeAssistantFormDate(value);`, sandbox);
+  return sandbox.result;
+}
 
 test('assistant retains the validated payload until explicit human confirmation', () => {
   assert.match(assistantSource, /const NLP_ENDPOINT = "\/api\/nlp-voyage-extract"/);
@@ -88,6 +97,24 @@ test('assistant finalization replaces methods and runs route before master calcu
   assert.match(draftEntrySource.slice(replacementStart, finalizerStart), /Object\.assign\(window\.State, stateValues\)/);
   assert.ok(routeStart > finalizerStart);
   assert.ok(calculationStart > routeStart);
+});
+
+test('complete-form action maps every field and forces route plus cost calculation', () => {
+  assert.equal(normalizeCompleteFormDate('24/08/2026'), '2026-08-24');
+  assert.equal(normalizeCompleteFormDate('28/08/2026'), '2026-08-28');
+  assert.equal(normalizeCompleteFormDate('31/02/2026'), '');
+  assert.match(draftEntrySource, /async function applyAssistantCompleteForm\(payload = \{\}\)/);
+  assert.match(draftEntrySource, /cargo_qty: tonnage/);
+  assert.match(draftEntrySource, /cargo_category: category/);
+  assert.match(draftEntrySource, /cargo_product: product/);
+  assert.match(draftEntrySource, /laydays,/);
+  assert.match(draftEntrySource, /cancelling,/);
+  assert.match(draftEntrySource, /methodPOL: loadingMethod/);
+  assert.match(draftEntrySource, /loading_rate: Number\(payload\.loadingRate/);
+  assert.match(draftEntrySource, /discharge_rate: Number\(payload\.dischargeRate/);
+  assert.match(draftEntrySource, /injectVoyageScenario\(scenario, \{ deferFinalActions: true \}\)/);
+  assert.match(draftEntrySource, /forceRouteCalculation: true/);
+  assert.match(draftEntrySource, /window\.applyAssistantCompleteForm = applyAssistantCompleteForm/);
 });
 
 test('NLP schema includes cargo type and supports Spanish natural dates', () => {

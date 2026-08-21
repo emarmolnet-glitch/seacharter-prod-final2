@@ -88,13 +88,13 @@ function waitForUiStateCommit() {
     });
 }
 
-async function finalizeAssistantVoyageInjection(injectionResult = {}) {
+async function finalizeAssistantVoyageInjection(injectionResult = {}, options = {}) {
     await Promise.resolve();
     await waitForUiStateCommit();
     window.renderMethodPills?.('pol');
     window.renderMethodPills?.('pod');
 
-    if (injectionResult.hasIncomingRoute && !injectionResult.requiresPortSelection) {
+    if (injectionResult.hasIncomingRoute && (!injectionResult.requiresPortSelection || options.forceRouteCalculation)) {
         await window.runOnDemandMapRouteWorkflow?.(document.getElementById('btn-map-locate-route'));
     }
 
@@ -106,6 +106,24 @@ async function finalizeAssistantVoyageInjection(injectionResult = {}) {
         window.runEngine?.();
     }
     return injectionResult;
+}
+
+function normalizeAssistantFormDate(value) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    const match = text.match(/^(\d{1,4})[\/-](\d{1,2})[\/-](\d{1,4})$/);
+    if (!match) return '';
+    const isIsoOrder = match[1].length === 4;
+    const year = Number(isIsoOrder ? match[1] : match[3]);
+    const month = Number(match[2]);
+    const day = Number(isIsoOrder ? match[3] : match[1]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (
+        date.getUTCFullYear() !== year
+        || date.getUTCMonth() !== month - 1
+        || date.getUTCDate() !== day
+    ) return '';
+    return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 function selectValidatedWpiPort(inputId, port) {
@@ -361,6 +379,44 @@ function injectVoyageScenario(incomingScenario = {}, options = {}) {
     return { draft: voyageStore.getState().draft, hasIncomingRoute, requiresPortSelection, routeOnly: hasIncomingRoute && scenario.is_partial };
 }
 
+async function applyAssistantCompleteForm(payload = {}) {
+    const tonnage = Number(payload.tonnage ?? payload.cargo_qty ?? payload.cargoQty);
+    const pol = String(payload.pol || '').trim();
+    const pod = String(payload.pod || '').trim();
+    if (!pol || !pod || !Number.isFinite(tonnage) || tonnage <= 0) {
+        return { applied: false, reason: 'missing_route_or_tonnage' };
+    }
+
+    const laydays = normalizeAssistantFormDate(payload.laydayStart ?? payload.laydays);
+    const cancelling = normalizeAssistantFormDate(payload.cancelling);
+    const category = String(payload.category ?? payload.cargo_category ?? payload.cargoCategory ?? '').trim();
+    const product = String(payload.product ?? payload.cargo_product ?? payload.cargoProduct ?? '').trim();
+    const loadingMethod = payload.loadingMethod ?? payload.loading_method ?? payload.methodPOL;
+    const dischargeMethod = payload.dischargeMethod ?? payload.discharge_method ?? payload.methodPOD ?? loadingMethod;
+    const scenario = {
+        ...payload,
+        pol,
+        pod,
+        cargo_qty: tonnage,
+        cargoQty: tonnage,
+        cargo_type: product || category,
+        cargo_category: category,
+        cargo_product: product,
+        laydays,
+        cancelling,
+        methodPOL: loadingMethod,
+        methodPOD: dischargeMethod,
+        loading_rate: Number(payload.loadingRate ?? payload.loading_rate) || 0,
+        discharge_rate: Number(payload.dischargeRate ?? payload.discharge_rate) || 0,
+    };
+    const injectionResult = injectVoyageScenario(scenario, { deferFinalActions: true });
+    await finalizeAssistantVoyageInjection(injectionResult, { forceRouteCalculation: true });
+    window.dispatchEvent(new CustomEvent('calculator:assistant-complete-form-applied', {
+        detail: { payload: scenario, draft: injectionResult.draft },
+    }));
+    return { ...injectionResult, applied: true };
+}
+
 function applyAssistantCalculatorAutofill(payload = {}) {
     payload = normalizeNlpVoyagePayload(payload);
     const loadingRate = readPositiveNumber(payload, ['ratePOL', 'loading_rate', 'loadingRate']);
@@ -531,6 +587,7 @@ window.VoyageDraftStore = voyageStore;
 window.useVoyageStore = voyageStore;
 window.injectVoyageScenario = injectVoyageScenario;
 window.finalizeAssistantVoyageInjection = finalizeAssistantVoyageInjection;
+window.applyAssistantCompleteForm = applyAssistantCompleteForm;
 window.applyAssistantCalculatorAutofill = applyAssistantCalculatorAutofill;
 if (typeof window.SeaCharterStore?.subscribe === 'function' && !window.assistantOperationalDeductionSubscription) {
     window.assistantOperationalDeductionSubscription = window.SeaCharterStore.subscribe(
