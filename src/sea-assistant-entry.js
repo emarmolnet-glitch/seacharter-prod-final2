@@ -411,7 +411,7 @@ function executeActionableAiUpdate(action) {
 
 async function executeActionableAiUpdateFields(action) {
   if (action?.action !== "update_fields" || !action.payload) return false;
-  const { payload } = action;
+  const payload = action.payload ? action.payload : action;
   const updateInputs = (ids, value) => {
     if (value === undefined || value === null) return;
     ids.forEach((id) => {
