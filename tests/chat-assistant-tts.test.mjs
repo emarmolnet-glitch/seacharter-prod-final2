@@ -6,7 +6,7 @@ const frontendSource = await readFile(new URL('/opt/build/repo/src/sea-assistant
 const stylesheet = await readFile(new URL('/opt/build/repo/assets/css/sea-assistant.css', import.meta.url), 'utf8');
 
 test('assistant exposes a persistent speech synthesis toggle', () => {
-  assert.match(frontendSource, /class="sca-speech-toggle"/);
+  assert.match(frontendSource, /class="sca-speech-toggle[^\"]*"/);
   assert.match(frontendSource, /SPEECH_PREFERENCE_KEY/);
   assert.match(frontendSource, /window\.speechSynthesis/);
   assert.match(frontendSource, /new window\.SpeechSynthesisUtterance\(cleanText\)/);
@@ -21,7 +21,7 @@ test('speech is cleaned and cancelled on mute or close', () => {
   assert.match(frontendSource, /speechSynthesis\.cancel\(\)/);
   assert.match(frontendSource, /if \(!speechEnabled\) cancelSpeech\(\)/);
   assert.match(frontendSource, /if \(recognitionStateRef\.current\.isListening \|\| recognitionStateRef\.current\.isStarting\) stopRecognition\(\);\s+cancelSpeech\(\)/s);
-  assert.match(frontendSource, /replaceWithAssistantMessage\(thinkingMessage, formatWizardPayloadSummary\(pendingWizardPayload\)/);
+  assert.match(frontendSource, /replaceWithAssistantMessage\(thinkingMessage, checklistResult\.prompt/);
   assert.match(frontendSource, /appendMessage\(message\);\s+if \(!options\.error\) speakText\(text\)/s);
 });
 
