@@ -428,12 +428,12 @@ async function executeActionableAiUpdateFields(action) {
   updateInputs(["cargo-qty", "cargo-quantity", "cargo-tonnage"], payload.tonnage);
   updateInputs(["map-laycan-date", "match-laycan-start", "gc-laycan-date"], payload.laydayStart);
   updateInputs(["map-cancelling-date", "match-laycan-end", "gc-cancel-date"], payload.cancelling);
-  updateInputs(["cargo-type", "input-categoria"], payload.category);
-  updateInputs(["cargo-product", "input-producto"], payload.product);
+  updateInputs(["cargo-type", "nlp-cargo-category", "input-categoria"], payload.category);
+  updateInputs(["cargo-product", "nlp-cargo-product", "input-producto"], payload.product);
+  updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val"], payload.loadingRate);
+  updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val"], payload.dischargeRate);
   updateInputs(["metodo_carga"], payload.loadingMethod);
   updateInputs(["metodo_descarga_pod"], payload.dischargeMethod ?? payload.loadingMethod);
-  updateInputs(["rate-load", "gc-laytime-load-val"], payload.loadingRate);
-  updateInputs(["rate-disch", "gc-laytime-disch-val"], payload.dischargeRate);
 
   if (payload.pol !== undefined && payload.pol !== null
     && payload.pod !== undefined && payload.pod !== null
