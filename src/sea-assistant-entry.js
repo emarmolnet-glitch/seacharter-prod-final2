@@ -472,14 +472,34 @@ async function executeActionableAiUpdateFields(actionObj) {
     updateInputs(["metodo_carga"], p.loadingMethod);
     updateInputs(["metodo_descarga_pod"], p.dischargeMethod ?? p.loadingMethod);
 
+    // 1. Forzar modo MANUAL en los ritmos y hacer clic en el botón manual
+    document.querySelectorAll('button, span, label, div').forEach(el => {
+        if (el.textContent.trim() === 'Manual') el.click();
+    });
     document.querySelectorAll('[data-rate-mode="manual"], #btn-rate-load-manual, .rate-mode-manual')?.forEach(btn => btn.click());
 
+    // 2. Selección inteligente de las píldoras de Método de Carga/Descarga (Priorizando Grúa Barco por economía)
+    document.querySelectorAll('button, .btn-pill, .pill-option, [role="button"]').forEach(btn => {
+        const text = btn.textContent.toLowerCase();
+        if (text.includes('big bags') && text.includes('grúa barco')) {
+            btn.click();
+        }
+    });
+
+    // 3. Calcular DWT estimado si viene a 0
     const estimatedDwt = (p.target_dwt && p.target_dwt > 0) ? p.target_dwt : Math.round(Number(p.tonnage || 10000) * 1.05);
     updateInputs(["target-dwt", "cargo-dwt", "vessel-dwt", "input-dwt", "dwt-capacity"], estimatedDwt);
 
-    if (p.product && p.product.toLowerCase().includes('cemento')) {
-        updateInputs(["cargo-specification", "input-especificacion-carga", "cbam-spec", "spec-carga"], "10");
-    }
+    // 4. Mapear Especificación de Carga para Cemento (Busca la opción en cualquier desplegable <select>)
+    document.querySelectorAll('select').forEach(sel => {
+        for (let opt of sel.options) {
+            if (opt.text.toLowerCase().includes('cemento') || opt.value === '10') {
+                sel.value = opt.value;
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+                break;
+            }
+        }
+    });
 
     // 5. Autocompletado del estado global y disparo del cálculo (tu código original)
     if (p.pol && p.pod && p.tonnage) {
