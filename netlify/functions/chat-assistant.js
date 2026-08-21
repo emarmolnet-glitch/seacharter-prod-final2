@@ -99,7 +99,7 @@ Para configurar un viaje completo (ruta y toneladas):
 { "action": "calculate_route", "pol": "NombrePuerto", "pod": "NombrePuerto", "tonnage": 12000 }
 
 Prohibido dar explicaciones largas o añadir formato Markdown a la respuesta después de una confirmación de ejecución.`;
-  const finalInstruction = `${baseInstruction}\n\n${DATA_BRIDGE_SYSTEM_PROMPT}${contextInstruction}${intentRoutingRules}${moduleInstruction}${expertRules}${dualModeRules}${partialUpdateRules}${actionExecutionDirective}`;
+  const finalInstruction = `${baseInstruction}\n\n${contextInstruction}\n\n${intentRoutingRules}\n\n${actionExecutionDirective}`;
   return finalInstruction;
 }
 
