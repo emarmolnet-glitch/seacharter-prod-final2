@@ -375,20 +375,65 @@ function normalizeActionFieldName(value) {
     .replace(/^_+|_+$/g, "");
 }
 
+function findActionableAiJsonObject(responseText) {
+  const text = String(responseText || "");
+  for (let start = 0; start < text.length; start += 1) {
+    if (text[start] !== "{") continue;
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let end = start; end < text.length; end += 1) {
+      const character = text[end];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (character === "\\") escaped = true;
+        else if (character === '"') inString = false;
+        continue;
+      }
+      if (character === '"') {
+        inString = true;
+        continue;
+      }
+      if (character === "{") depth += 1;
+      if (character !== "}") continue;
+
+      depth -= 1;
+      if (depth !== 0) continue;
+      const rawJson = text.slice(start, end + 1);
+      try {
+        const parsed = JSON.parse(rawJson);
+        if (["update_field", "calculate_route", "fill_complete_form"].includes(parsed?.action)) {
+          return { action: parsed, start, end: end + 1 };
+        }
+      } catch {}
+      break;
+    }
+  }
+  return null;
+}
+
 function extractActionableAiResponse(responseText) {
   const originalText = String(responseText || "");
   const jsonBlock = originalText.match(ACTIONABLE_AI_JSON_BLOCK);
-  if (!jsonBlock) return { visibleText: originalText, action: null };
+  if (jsonBlock) {
+    try {
+      const action = JSON.parse(jsonBlock[1]);
+      if (["update_field", "calculate_route", "fill_complete_form"].includes(action?.action)) {
+        return {
+          visibleText: originalText.replace(jsonBlock[0], "").trim(),
+          action,
+        };
+      }
+    } catch {}
+  }
 
-  let action = null;
-  try {
-    const parsed = JSON.parse(jsonBlock[1]);
-    if (["update_field", "calculate_route"].includes(parsed?.action)) action = parsed;
-  } catch {}
+  const inlineJson = findActionableAiJsonObject(originalText);
+  if (!inlineJson) return { visibleText: originalText, action: null };
 
   return {
-    visibleText: originalText.replace(jsonBlock[0], "").trim(),
-    action,
+    visibleText: `${originalText.slice(0, inlineJson.start)}${originalText.slice(inlineJson.end)}`.trim(),
+    action: inlineJson.action,
   };
 }
 
@@ -482,7 +527,28 @@ function executeActionableAiRoute(action) {
   return true;
 }
 
+function executeActionableAiCompleteForm(action) {
+  if (action?.action !== "fill_complete_form") return false;
+  const pol = String(action.pol || "").trim();
+  const pod = String(action.pod || "").trim();
+  const tonnage = Number(action.tonnage);
+  if (!pol || !pod || !Number.isFinite(tonnage) || tonnage <= 0) return false;
+  if (typeof window.applyAssistantCompleteForm !== "function") return false;
+
+  const result = window.applyAssistantCompleteForm(action);
+  Promise.resolve(result).catch((error) => {
+    window.dispatchEvent(new CustomEvent("sea-assistant:complete-form-error", {
+      detail: { message: error?.message || "No se pudo completar el formulario automáticamente." },
+    }));
+  });
+  window.dispatchEvent(new CustomEvent("sea-assistant:complete-form-requested", {
+    detail: { pol, pod, tonnage },
+  }));
+  return true;
+}
+
 function executeActionableAiAction(action) {
+  if (action?.action === "fill_complete_form") return executeActionableAiCompleteForm(action);
   if (action?.action === "calculate_route") return executeActionableAiRoute(action);
   return executeActionableAiUpdate(action);
 }
@@ -1571,7 +1637,7 @@ function mountSeaAssistant() {
         const actionableResponse = extractActionableAiResponse(payload.respuesta);
         if (actionableResponse.action) executeActionableAiAction(actionableResponse.action);
         const assistantText = actionableResponse.visibleText
-          || (actionableResponse.action ? "Cambio aplicado en la calculadora." : "No encontré información suficiente para responder.");
+          || (actionableResponse.action ? "¡Hecho!" : "No encontré información suficiente para responder.");
         replaceWithAssistantMessage(thinkingMessage, assistantText, { meta: formatTime() });
         if (payload.action?.type === "calculator_autofill") {
           appendMessage(createCalculatorAutofillActionCard(payload.action));
