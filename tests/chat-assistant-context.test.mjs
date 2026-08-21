@@ -34,9 +34,16 @@ test('chat assistant sends the unified Data Bridge context with each message', (
   assert.match(frontendSource, /UserContext: userText/);
   assert.match(frontendSource, /const userText = input\.value;/);
   assert.match(frontendSource, /ConversationHistory: historial/);
-  assert.match(frontendSource, /JSON\.stringify\(requestPayload\)/);
+  assert.match(frontendSource, /const sanitizedPayload = sanitizePayloadForAI\(requestPayload\)/);
+  assert.match(frontendSource, /JSON\.stringify\(sanitizedPayload\)/);
   assert.match(frontendSource, /\.netlify\/functions\/cerebro-ia/);
   assert.doesNotMatch(frontendSource, /const CHAT_ENDPOINT = "\/\.netlify\/functions\/chat-assistant"/);
+});
+
+test('chat assistant prioritizes informe while preserving response key compatibility', () => {
+  assert.match(frontendSource, /const candidates = \[\s*payload\?\.informe,\s*payload\?\.reply,\s*payload\?\.message,/);
+  assert.match(frontendSource, /payload\?\.data\?\.informe/);
+  assert.match(frontendSource, /const respuesta = candidates\.find/);
 });
 
 test('chat assistant stays operable and contextual while Dual Mode is open', () => {

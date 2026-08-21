@@ -18,6 +18,10 @@ import { getCargoMethodLabel, validateSixStepWizardPayload } from "../shared/car
 const DEFAULT_DATA_BRIDGE_AI_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia";
 const NLP_ENDPOINT = "/api/nlp-voyage-extract";
 const REQUEST_TIMEOUT_MS = 45_000;
+const AI_HISTORY_LIMIT = 6;
+const AI_HISTORY_MESSAGE_MAX_CHARS = 2_000;
+const AI_USER_CONTEXT_MAX_CHARS = 8_000;
+const AI_DATA_TEXT_MAX_CHARS = 1_000;
 const SPEECH_PREFERENCE_KEY = "seacharter-assistant-voice-enabled";
 const WIZARD_ACTIVE_STATUS = "simulacion_flete_activa";
 const WIZARD_CONFIRMATION_STATUS = "esperando_confirmacion";
@@ -152,6 +156,84 @@ function collectConversationHistory(historyElement) {
     .filter((entry) => entry.content);
 }
 
+function sanitizeAiText(value, maxLength = AI_DATA_TEXT_MAX_CHARS) {
+  const text = String(value ?? "").trim();
+  if (/^data:[^;]+;base64,/i.test(text)) return "[contenido binario omitido]";
+  return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;
+}
+
+function sanitizeAiScalar(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "boolean" || value === null) return value;
+  if (typeof value === "string") return sanitizeAiText(value);
+  return undefined;
+}
+
+function pickAiFields(source, fieldNames) {
+  const record = source && typeof source === "object" && !Array.isArray(source) ? source : {};
+  return Object.fromEntries(fieldNames.flatMap((fieldName) => {
+    const value = sanitizeAiScalar(record[fieldName]);
+    return value === undefined ? [] : [[fieldName, value]];
+  }));
+}
+
+function sanitizePayloadForAI(payload = {}) {
+  const calculationData = payload.CalculationData && typeof payload.CalculationData === "object"
+    ? payload.CalculationData
+    : {};
+  const marketData = payload.MarketData && typeof payload.MarketData === "object"
+    ? payload.MarketData
+    : {};
+  const conversationHistory = Array.isArray(payload.ConversationHistory)
+    ? payload.ConversationHistory
+    : [];
+
+  return {
+    CalculationData: {
+      ...pickAiFields(calculationData, ["generatedAt"]),
+      activeCalculator: pickAiFields(calculationData.activeCalculator, ["id", "name"]),
+      route: pickAiFields(calculationData.route, ["pol", "pod", "ballastPort", "distanceNm", "laycanStart", "laycanEnd"]),
+      cargo: pickAiFields(calculationData.cargo, ["tonnes", "type", "packaging", "stowageFactor", "tolerancePercent"]),
+      operations: pickAiFields(calculationData.operations, [
+        "loadingMethod",
+        "dischargeMethod",
+        "loadingRateTonnesDay",
+        "dischargeRateTonnesDay",
+        "loadingLaytime",
+        "dischargeLaytime",
+        "totalDays",
+        "portDays",
+        "ballastSpeedKnots",
+        "ladenSpeedKnots",
+      ]),
+      commercial: pickAiFields(calculationData.commercial, [
+        "freightBuyUsdTon",
+        "freightSellUsdTon",
+        "breakEvenUsdTon",
+        "tceUsdDay",
+        "ownerMarginPercent",
+        "chartererMarginPercent",
+        "commissionPercent",
+      ]),
+    },
+    MarketData: {
+      ...pickAiFields(marketData, ["generatedAt", "bdi"]),
+      bunkers: pickAiFields(marketData.bunkers, ["region", "vlsfoUsdTon", "ifo380UsdTon", "mgoUsdTon"]),
+      carbon: pickAiFields(marketData.carbon, ["euAllowanceEurTon", "etsRouteFactor"]),
+      freightBenchmarks: pickAiFields(marketData.freightBenchmarks, ["fleteCalculado", "ofertaCliente", "spot", "coa", "backhaul"]),
+      aisFreightRates: pickAiFields(marketData.aisFreightRates, ["fair", "standard", "offmarket"]),
+    },
+    UserContext: sanitizeAiText(payload.UserContext, AI_USER_CONTEXT_MAX_CHARS),
+    ConversationHistory: conversationHistory
+      .slice(-AI_HISTORY_LIMIT)
+      .map((entry) => ({
+        role: entry?.role === "assistant" ? "assistant" : "user",
+        content: sanitizeAiText(entry?.content, AI_HISTORY_MESSAGE_MAX_CHARS),
+      }))
+      .filter((entry) => entry.content),
+  };
+}
+
 function createThinkingMessage() {
   const message = document.createElement("article");
   message.className = "sca-message sca-message--assistant";
@@ -206,10 +288,11 @@ async function requestAssistantResponse(userText, historyElement, signal) {
     UserContext: userText,
     ConversationHistory: historial,
   };
+  const sanitizedPayload = sanitizePayloadForAI(requestPayload);
   const response = await fetch(getDataBridgeAssistantEndpoint(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(requestPayload),
+    body: JSON.stringify(sanitizedPayload),
     signal,
   });
   const responseText = await response.text();
@@ -233,16 +316,20 @@ function getDataBridgeAssistantEndpoint() {
 
 function normalizeDataBridgeAssistantResponse(payload) {
   const candidates = [
+    payload?.informe,
+    payload?.reply,
+    payload?.message,
     payload?.respuesta,
     payload?.response,
     payload?.answer,
-    payload?.message,
     payload?.content,
     payload?.result,
+    payload?.data?.informe,
+    payload?.data?.reply,
+    payload?.data?.message,
     payload?.data?.respuesta,
     payload?.data?.response,
     payload?.data?.answer,
-    payload?.data?.message,
     payload?.data?.content,
     payload?.data?.result,
     typeof payload === "string" ? payload : null,
@@ -254,6 +341,150 @@ function normalizeDataBridgeAssistantResponse(payload) {
     respuesta,
     action: payload?.action || payload?.data?.action || null,
   };
+}
+
+const ACTIONABLE_AI_JSON_BLOCK = /```json\s*(\{[\s\S]*?\})\s*```/i;
+const ACTIONABLE_AI_FIELD_IDS = Object.freeze({
+  pol_rate: "rate-load",
+  rate_pol: "rate-load",
+  loading_rate: "rate-load",
+  load_rate: "rate-load",
+  ritmo_carga: "rate-load",
+  pod_rate: "rate-disch",
+  rate_pod: "rate-disch",
+  discharge_rate: "rate-disch",
+  disch_rate: "rate-disch",
+  ritmo_descarga: "rate-disch",
+  freight_rate: "freight-rate",
+  cargo_qty: "cargo-qty",
+  cargo_quantity: "cargo-qty",
+  sea_bunker_price: "price-sea",
+  port_bunker_price: "price-port",
+  owner_margin: "margin-owner",
+  charterer_margin: "margin-charterer",
+  commission_percent: "commission-pct",
+});
+
+function normalizeActionFieldName(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function extractActionableAiResponse(responseText) {
+  const originalText = String(responseText || "");
+  const jsonBlock = originalText.match(ACTIONABLE_AI_JSON_BLOCK);
+  if (!jsonBlock) return { visibleText: originalText, action: null };
+
+  let action = null;
+  try {
+    const parsed = JSON.parse(jsonBlock[1]);
+    if (["update_field", "calculate_route"].includes(parsed?.action)) action = parsed;
+  } catch {}
+
+  return {
+    visibleText: originalText.replace(jsonBlock[0], "").trim(),
+    action,
+  };
+}
+
+function findActionableAiField(fieldName) {
+  const normalizedField = normalizeActionFieldName(fieldName);
+  const mappedId = ACTIONABLE_AI_FIELD_IDS[normalizedField];
+  if (mappedId) return document.getElementById(mappedId);
+
+  const normalizedId = normalizedField.replace(/_/g, "-");
+  const directMatch = document.getElementById(normalizedId);
+  if (directMatch) return directMatch;
+
+  return Array.from(document.querySelectorAll("input, select, textarea")).find((element) => (
+    [element.id, element.getAttribute("name"), element.dataset.field]
+      .some((candidate) => normalizeActionFieldName(candidate) === normalizedField)
+  )) || null;
+}
+
+function executeActionableAiUpdate(action) {
+  if (action?.action !== "update_field") return false;
+  const numericValue = Number(action.value);
+  if (!Number.isFinite(numericValue)) return false;
+
+  const field = findActionableAiField(action.field);
+  if (!field) return false;
+
+  if (field.id === "rate-load" || field.id === "rate-disch") {
+    const side = field.id === "rate-disch" ? "pod" : "pol";
+    window.setRitmoMode?.("manual", side, { commit: true, deferCalculations: true });
+    field.readOnly = false;
+    field.disabled = false;
+    field.removeAttribute("readonly");
+    field.removeAttribute("disabled");
+    field.dataset.manualOverride = "true";
+    field.dataset.draftCalcMode = "manual";
+    if (side === "pod") field.dataset.podCalcMode = "manual";
+  }
+
+  field.value = String(numericValue);
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+  field.dispatchEvent(new Event("change", { bubbles: true }));
+  if (field.id === "rate-load" || field.id === "rate-disch") window.recalcularDiasPuerto?.();
+  window.runEngine?.();
+  window.dispatchEvent(new CustomEvent("sea-assistant:field-updated", {
+    detail: { field: normalizeActionFieldName(action.field), value: numericValue, inputId: field.id },
+  }));
+  return true;
+}
+
+function setActionableAiInputValue(input, value) {
+  input.value = String(value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function executeActionableAiRoute(action) {
+  if (action?.action !== "calculate_route") return false;
+  const pol = String(action.pol || "").trim().slice(0, 200);
+  const pod = String(action.pod || "").trim().slice(0, 200);
+  const tonnage = Number(action.tonnage);
+  if (!pol || !pod || !Number.isFinite(tonnage) || tonnage <= 0) return false;
+
+  const mapPolInput = document.getElementById("map-port-pol");
+  const mapPodInput = document.getElementById("map-port-pod");
+  const cargoInput = document.getElementById("cargo-qty");
+  const routeButton = document.getElementById("btn-map-locate-route");
+  if (!mapPolInput || !mapPodInput || !cargoInput || !routeButton) return false;
+
+  const routeState = {
+    pol,
+    pod,
+    cargoQty: tonnage,
+    cargoQuantity: tonnage,
+    quantity: tonnage,
+  };
+  if (!window.State) window.State = {};
+  Object.assign(window.State, routeState);
+  window.SeaCharterStore?.set?.(routeState, { force: true, source: "assistant-calculate-route" });
+  window.updateGlobalVoyageParams?.(routeState, { source: "assistant-calculate-route" });
+
+  [mapPolInput, document.getElementById("port-pol")].filter(Boolean)
+    .forEach((input) => setActionableAiInputValue(input, pol));
+  [mapPodInput, document.getElementById("port-pod")].filter(Boolean)
+    .forEach((input) => setActionableAiInputValue(input, pod));
+  setActionableAiInputValue(cargoInput, tonnage);
+
+  routeButton.click();
+  window.dispatchEvent(new CustomEvent("sea-assistant:route-calculation-requested", {
+    detail: { pol, pod, tonnage },
+  }));
+  return true;
+}
+
+function executeActionableAiAction(action) {
+  if (action?.action === "calculate_route") return executeActionableAiRoute(action);
+  return executeActionableAiUpdate(action);
 }
 
 function createVoyageActionCard(scenario) {
@@ -1337,7 +1568,11 @@ function mountSeaAssistant() {
 
       try {
         const payload = await requestAssistantResponse(userText, history, controller.signal);
-        replaceWithAssistantMessage(thinkingMessage, payload.respuesta || "No encontré información suficiente para responder.", { meta: formatTime() });
+        const actionableResponse = extractActionableAiResponse(payload.respuesta);
+        if (actionableResponse.action) executeActionableAiAction(actionableResponse.action);
+        const assistantText = actionableResponse.visibleText
+          || (actionableResponse.action ? "Cambio aplicado en la calculadora." : "No encontré información suficiente para responder.");
+        replaceWithAssistantMessage(thinkingMessage, assistantText, { meta: formatTime() });
         if (payload.action?.type === "calculator_autofill") {
           appendMessage(createCalculatorAutofillActionCard(payload.action));
         }

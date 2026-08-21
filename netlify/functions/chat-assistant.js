@@ -81,7 +81,22 @@ export function buildSystemInstruction(contexto = {}, historial = [], intent = C
    - Si el usuario solo aporta cantidades, ritmos u otros parámetros operativos, conserva los puertos existentes del contexto y actualiza únicamente los campos mencionados.
    - No propongas vaciar, sustituir ni reinterpretar POL/POD cuando no se haya expresado un nuevo nombre de puerto.
 `;
-  const finalInstruction = `${baseInstruction}\n\n${DATA_BRIDGE_SYSTEM_PROMPT}${contextInstruction}${intentRoutingRules}${moduleInstruction}${expertRules}${dualModeRules}${partialUpdateRules}`;
+  const actionExecutionDirective = `
+Nueva directiva de ejecución: Si el usuario te pide cambiar un valor de la calculadora (ej. 'pon el flete a 25' o 'cambia el ritmo de carga a 4000'), pregúntale de forma natural si quiere que ejecutes el cambio en pantalla. Si el usuario confirma (ej. 'sí', 'ok', 'hazlo'), respóndele confirmando la acción y AÑADE OBLIGATORIAMENTE al final de tu mensaje un bloque JSON oculto con este formato exacto:
+\`\`\`json
+{ "action": "update_field", "field": "nombre_del_campo", "value": nuevo_valor }
+\`\`\`
+Deduce el 'nombre_del_campo' lógico (ej. 'pol_rate', 'freight_rate') según lo que el usuario pida.
+
+REGLAS FINALES DE MÁXIMA PRIORIDAD (prevalecen ante cualquier instrucción anterior incompatible):
+- CONCISIÓN EXTREMA: Evita monólogos y charlas largas. Ve directo al grano.
+- PASO A PASO: No asumas ritmos de carga/descarga ni otros datos operativos. Si faltan datos clave (puertos, toneladas, ritmos), pregúntalos de uno en uno de forma directa ANTES de lanzar análisis tácticos largos.
+- EJECUCIÓN INMEDIATA (ACTIONABLE AI): Si ofreces actualizar la pantalla y el usuario confirma (ej. 'ok', 'sí'), TU ÚNICA RESPUESTA debe ser una breve confirmación (máximo 1 línea) seguida INMEDIATAMENTE del bloque JSON. Prohibido volver a analizar o dar explicaciones tras un 'ok'.
+- Para configurar un viaje completo, usa exactamente este bloque JSON en una nueva línea:
+\`\`\`json
+{ "action": "calculate_route", "pol": "NombrePuerto", "pod": "NombrePuerto", "tonnage": 12000 }
+\`\`\``;
+  const finalInstruction = `${baseInstruction}\n\n${DATA_BRIDGE_SYSTEM_PROMPT}${contextInstruction}${intentRoutingRules}${moduleInstruction}${expertRules}${dualModeRules}${partialUpdateRules}${actionExecutionDirective}`;
   return finalInstruction;
 }
 

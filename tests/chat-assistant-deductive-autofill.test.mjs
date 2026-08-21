@@ -55,7 +55,8 @@ test('frontend renders one unified card and dispatches one global calculator act
   assert.match(frontendSource, /CalculationData: collectCalculationData\(\)/);
   assert.match(frontendSource, /MarketData: collectMarketData\(\)/);
   assert.match(frontendSource, /UserContext: userText/);
-  assert.match(frontendSource, /JSON\.stringify\(requestPayload\)/);
+  assert.match(frontendSource, /sanitizePayloadForAI\(requestPayload\)/);
+  assert.match(frontendSource, /JSON\.stringify\(sanitizedPayload\)/);
   assert.match(frontendSource, /function createCalculatorAutofillActionCard\(action\)/);
   assert.match(frontendSource, /Autocompletar: Ritmos, Grúas y Buque/);
   assert.match(frontendSource, /new CustomEvent\("sea-assistant:calculator-autofill"/);
