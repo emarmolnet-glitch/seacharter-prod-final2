@@ -427,18 +427,34 @@ async function executeActionableAiUpdateFields(actionObj) {
         return false;
     }
 
-    const updateInputs = (ids, value) => {
-        if (value === undefined || value === null || value === "") return; // No inyectar vacíos
+    const updateInputs = (ids, value, type = 'text') => {
+        if (value === undefined || value === null || value === "") return;
         
         ids.forEach((id) => {
-            // Buscamos TODOS los elementos con ese ID o nombre (versión PC y versión móvil)
-            const inputs = document.querySelectorAll(`#${id}, [name="${id}"]`);
+            const elements = document.querySelectorAll(`#${id}, [name="${id}"], .${id}`);
             
-            inputs.forEach((input) => {
-                input.value = String(value); // Asegurar que es string
+            elements.forEach((input) => {
+                if (input.tagName === 'SELECT') {
+                    // Búsqueda inteligente en desplegables por texto o valor parcial
+                    let matched = false;
+                    const valStr = String(value).toLowerCase();
+                    for (let option of input.options) {
+                        if (option.value.toLowerCase() === valStr || option.text.toLowerCase().includes(valStr)) {
+                            input.value = option.value;
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if (!matched && input.options.length > 0) {
+                        input.selectedIndex = 0; // fallback seguro
+                    }
+                } else {
+                    input.value = String(value);
+                }
+                
                 input.dispatchEvent(new Event("input", { bubbles: true }));
                 input.dispatchEvent(new Event("change", { bubbles: true }));
-                input.dispatchEvent(new Event("blur", { bubbles: true })); // Salir de la casilla
+                input.dispatchEvent(new Event("blur", { bubbles: true }));
             });
         });
     };
@@ -451,10 +467,19 @@ async function executeActionableAiUpdateFields(actionObj) {
     updateInputs(["map-cancelling-date", "match-laycan-end", "gc-cancel-date"], p.cancelling);
     updateInputs(["cargo-type", "nlp-cargo-category", "input-categoria"], p.category);
     updateInputs(["cargo-product", "nlp-cargo-product", "input-producto", "producto-especifico", "product-select", "input-product"], p.product);
-    updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val", "load-rate", "ritmo-carga", "ritmo-pol", "ritmo-carga-pol", "input-loading-rate", "loadingRate"], p.loadingRate);
-    updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val", "ritmo-descarga", "ritmo-pod", "ritmo-descarga-pod", "input-discharge-rate", "dischargeRate"], p.dischargeRate);
+    updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val", "load-rate"], p.loadingRate);
+    updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val"], p.dischargeRate);
     updateInputs(["metodo_carga"], p.loadingMethod);
     updateInputs(["metodo_descarga_pod"], p.dischargeMethod ?? p.loadingMethod);
+
+    document.querySelectorAll('[data-rate-mode="manual"], #btn-rate-load-manual, .rate-mode-manual')?.forEach(btn => btn.click());
+
+    const estimatedDwt = (p.target_dwt && p.target_dwt > 0) ? p.target_dwt : Math.round(Number(p.tonnage || 10000) * 1.05);
+    updateInputs(["target-dwt", "cargo-dwt", "vessel-dwt", "input-dwt", "dwt-capacity"], estimatedDwt);
+
+    if (p.product && p.product.toLowerCase().includes('cemento')) {
+        updateInputs(["cargo-specification", "input-especificacion-carga", "cbam-spec", "spec-carga"], "10");
+    }
 
     // 5. Autocompletado del estado global y disparo del cálculo (tu código original)
     if (p.pol && p.pod && p.tonnage) {
