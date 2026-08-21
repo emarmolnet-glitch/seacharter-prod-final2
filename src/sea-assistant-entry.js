@@ -1,31 +1,15 @@
 import DOMPurify from "dompurify";
-import {
-  CHAT_INTENTS,
-  classifyChatIntent,
-  hasOperationalSimulationUpdate,
-  hasSimulationRouteAndVolume,
-} from "../shared/chat-intent-router.mjs";
-import { validateScenarioPortsWithWpi } from "./wpi-catalog-client.js";
-import {
-  applyVoyageScenarioDefaults,
-  hasMinimumVoyageRoute,
-} from "../shared/voyage-scenario-policy.mjs";
 import { marked } from "marked";
 import { evaluateBasicRisks } from "./basic-risk-evaluator.js";
 import { evaluateModuleSuggestions, SUPPORTED_MODULES } from "./universal-module-suggestions.js";
-import { getCargoMethodLabel, validateSixStepWizardPayload } from "../shared/cargo-mapper.mjs";
 
 const DEFAULT_DATA_BRIDGE_AI_ENDPOINT = "https://calm-shortbread-55bcfc.netlify.app/.netlify/functions/cerebro-ia";
-const NLP_ENDPOINT = "/api/nlp-voyage-extract";
 const REQUEST_TIMEOUT_MS = 45_000;
 const AI_HISTORY_LIMIT = 6;
 const AI_HISTORY_MESSAGE_MAX_CHARS = 2_000;
 const AI_USER_CONTEXT_MAX_CHARS = 8_000;
 const AI_DATA_TEXT_MAX_CHARS = 1_000;
 const SPEECH_PREFERENCE_KEY = "seacharter-assistant-voice-enabled";
-const WIZARD_ACTIVE_STATUS = "simulacion_flete_activa";
-const WIZARD_CONFIRMATION_STATUS = "esperando_confirmacion";
-const WIZARD_CONFIRMATION_CTA = 'Datos pre-grabados. ¿Estás conforme? Escribe "sí", "ok" o "calcular" para validar y lanzar la simulación.';
 const MODULE_LABELS = Object.freeze({
   map: "Mapa",
   estimator: "Calculadora",
@@ -86,30 +70,6 @@ const icons = {
       <path d="m17 7-10 10" />
     </svg>`,
 };
-
-function isWizardConfirmation(value) {
-  const normalizedValue = String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
-  return ["si", "ok", "calcular"].includes(normalizedValue);
-}
-
-function formatWizardPayloadSummary(payload) {
-  const cargoSpecification = payload.especificacionCarga || payload.cargo_specification || "N/D";
-  const loadingRate = Number(payload.ratePOL ?? payload.loading_rate) || 0;
-  const dischargeRate = Number(payload.ratePOD ?? payload.discharge_rate) || 0;
-  return [
-    `- 📍 Ruta: ${payload.pol} -> ${payload.pod}`,
-    `- 📦 Mercancía: ${payload.cargo_category} > ${payload.cargo_product} > ${cargoSpecification}`,
-    `- ⚙️ Método Carga (POL): ${getCargoMethodLabel(payload.methodPOL)} a ${loadingRate.toLocaleString("es-ES")} MT/día`,
-    `- ⚙️ Método Descarga (POD): ${getCargoMethodLabel(payload.methodPOD)} a ${dischargeRate.toLocaleString("es-ES")} MT/día`,
-    `- ⏱️ Laytime: ${payload.laytimePOL} / ${payload.laytimePOD}`,
-    "",
-    WIZARD_CONFIRMATION_CTA,
-  ].join("\n");
-}
 
 function createMessage(role, text, options = {}) {
   const message = document.createElement("article");
@@ -244,40 +204,6 @@ function createThinkingMessage() {
       <span class="sca-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>
     </div>`;
   return message;
-}
-
-function normalizeVoyageScenario(value = {}) {
-  return applyVoyageScenarioDefaults({
-    ...value,
-    pol: String(value.pol || "").trim(),
-    pod: String(value.pod || "").trim(),
-    laydays: String(value.laydays || "").trim(),
-    cancelling: String(value.cancelling || "").trim(),
-    cargo_qty: Number(value.cargo_qty ?? value.cargoQty) || 0,
-    cargo_type: String(value.cargo_type || value.cargoType || "").trim(),
-    loading_rate: Number(value.loading_rate ?? value.loadingRate) || 0,
-    discharge_rate: Number(value.discharge_rate ?? value.dischargeRate) || 0,
-  });
-}
-
-function hasInjectableVoyage(scenario) {
-  return hasMinimumVoyageRoute(scenario);
-}
-
-async function extractVoyageScenario(text, signal) {
-  const response = await fetch(NLP_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
-    signal,
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || !payload?.success) return null;
-  const scenario = await validateScenarioPortsWithWpi(normalizeVoyageScenario(payload.scenario));
-  return {
-    scenario: hasInjectableVoyage(scenario) ? scenario : null,
-    clarification: String(scenario.port_validation?.clarification || "").trim(),
-  };
 }
 
 async function requestAssistantResponse(userText, historyElement, signal) {
@@ -1275,10 +1201,6 @@ function mountSeaAssistant() {
   window.SeaAssistantAlerts = aiAlertsStore;
   monitorActiveModule(aiAlertsStore, status);
   let pending = false;
-  let wizardStep = 1;
-  const wizardData = {};
-  let wizardStatus = "conversacional";
-  let pendingWizardPayload = null;
   let isDragging = false;
   let hasCustomPosition = false;
   let position = { x: 0, y: 0 };
@@ -1669,184 +1591,30 @@ function mountSeaAssistant() {
     appendMessage(createMessage("user", userText, { meta: formatTime() }));
     input.value = "";
     resizeInput();
-
-    if (wizardStatus === WIZARD_CONFIRMATION_STATUS) {
-      if (!isWizardConfirmation(userText)) {
-        createAndSpeakAssistantMessage(WIZARD_CONFIRMATION_CTA, { meta: formatTime() });
-        input.focus();
-        return;
-      }
-      if (!pendingWizardPayload || typeof window.injectVoyageScenario !== "function") {
-        createAndSpeakAssistantMessage("No pude validar el payload retenido. Reinicia el flujo para intentarlo de nuevo.", { meta: formatTime(), error: true });
-        input.focus();
-        return;
-      }
-
-      setPending(true);
-      try {
-        const selectedPorts = await selectActionableAiWpiRoute(pendingWizardPayload.pol, pendingWizardPayload.pod);
-        const validatedPayload = {
-          ...pendingWizardPayload,
-          pol: selectedPorts.pol.officialLabel,
-          pod: selectedPorts.pod.officialLabel,
-          pol_port: selectedPorts.pol,
-          pod_port: selectedPorts.pod,
-        };
-        const injectionResult = window.injectVoyageScenario(validatedPayload, { deferFinalActions: true });
-        if (injectionResult?.requiresPortSelection) {
-          throw new Error("Los puertos requieren validación WPI antes de lanzar la simulación.");
-        }
-        if (typeof window.finalizeAssistantVoyageInjection !== "function") {
-          throw new Error("No pude iniciar los cálculos finales de la operación.");
-        }
-
-        await window.finalizeAssistantVoyageInjection(injectionResult);
-        createAndSpeakAssistantMessage("¡Datos inyectados! Mapa y Calculadora actualizados.", { meta: formatTime() });
-        pendingWizardPayload = null;
-        wizardStatus = "conversacional";
-        Object.keys(wizardData).forEach((key) => delete wizardData[key]);
-        wizardStep = 1;
-      } catch (error) {
-        createAndSpeakAssistantMessage(error?.message || "No pude completar los cálculos finales de la operación.", { meta: formatTime(), error: true });
-      } finally {
-        setPending(false);
-        input.focus();
-      }
-      return;
-    }
-
-    const contexto = collectChatContext();
-    const intent = classifyChatIntent(userText, {
-      context: contexto,
-      conversationState: wizardStatus === WIZARD_ACTIVE_STATUS ? WIZARD_ACTIVE_STATUS : "",
-    });
-
-    if (
-      wizardStatus !== WIZARD_ACTIVE_STATUS
-      && intent === CHAT_INTENTS.SIMULATION
-      && !hasOperationalSimulationUpdate(userText, contexto)
-    ) {
-      wizardStatus = WIZARD_ACTIVE_STATUS;
-      if (hasSimulationRouteAndVolume(userText)) {
-        wizardData.routeAndVolume = userText;
-        wizardStep = 2;
-        createAndSpeakAssistantMessage("He identificado una simulación de flete. ¿Cuáles son los ritmos de carga en POL y descarga en POD?", { meta: formatTime() });
-      } else {
-        wizardStep = 1;
-        createAndSpeakAssistantMessage("He identificado una simulación de flete. Indica POL, POD y toneladas a transportar para preparar el escenario.", { meta: formatTime() });
-      }
-      input.focus();
-      return;
-    }
-
-    if (intent !== CHAT_INTENTS.SIMULATION || wizardStatus !== WIZARD_ACTIVE_STATUS) {
-      setPending(true);
-      const thinkingMessage = createThinkingMessage();
-      appendMessage(thinkingMessage);
-      const controller = new AbortController();
-      activeRequestController = controller;
-      stoppedByUser = false;
-      const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-      try {
-        const payload = await requestAssistantResponse(userText, history, controller.signal);
-        const actionableResponse = extractActionableAiResponse(payload.respuesta);
-        if (actionableResponse.action) await executeActionableAiAction(actionableResponse.action);
-        const assistantText = actionableResponse.visibleText
-          || (actionableResponse.action ? "¡Hecho!" : "No encontré información suficiente para responder.");
-        replaceWithAssistantMessage(thinkingMessage, assistantText, { meta: formatTime() });
-        if (payload.action?.type === "calculator_autofill") {
-          appendMessage(createCalculatorAutofillActionCard(payload.action));
-        }
-      } catch (error) {
-        const errorText = error?.name === "AbortError"
-          ? stoppedByUser
-            ? "Generación detenida. Puedes reformular la consulta cuando quieras."
-            : "La respuesta está tardando más de lo esperado. Inténtalo de nuevo en unos segundos."
-          : error?.message || "No pude conectar con el asistente en este momento.";
-        thinkingMessage.replaceWith(createMessage("assistant", errorText, { error: true }));
-      } finally {
-        window.clearTimeout(timeoutId);
-        if (activeRequestController === controller) activeRequestController = null;
-        stoppedByUser = false;
-        setPending(false);
-        input.focus();
-        scrollToLatest();
-      }
-      return;
-    }
-
-    if (wizardStep === 1) {
-      wizardData.routeAndVolume = userText;
-      wizardStep = 2;
-      createAndSpeakAssistantMessage("¿Cuáles son los ritmos de carga en POL y descarga en POD?", { meta: formatTime() });
-      input.focus();
-      return;
-    }
-
-    if (wizardStep === 2) {
-      wizardData.rates = userText;
-      wizardData.rateMode = "manual";
-      wizardStep = 3;
-      createAndSpeakAssistantMessage("¿Qué mercancía transportas: acero, tubos, chatarra, biomasa, pellets, astillas, cemento, clinker, yeso, maquinaria o piezas?", { meta: formatTime() });
-      input.focus();
-      return;
-    }
-
-    if (wizardStep === 3) {
-      wizardData.cargoDescription = userText;
-      wizardStep = 4;
-      createAndSpeakAssistantMessage("¿Cómo va presentada la carga: a granel, en big bags, paletizada o por piezas?", { meta: formatTime() });
-      input.focus();
-      return;
-    }
-
-    if (wizardStep === 4) {
-      wizardData.packaging = userText;
-      wizardStep = 5;
-      createAndSpeakAssistantMessage("Si conoces la maquinaria de POL o POD, indícala (grúa del barco, grúa portuaria, cinta o camión tolva). Si no, responde “no especificada” y aplicaré la opción marítima recomendada.", { meta: formatTime() });
-      input.focus();
-      return;
-    }
-
-    if (wizardStep === 5) {
-      wizardData.craneDetails = userText;
-      wizardStep = 6;
-    }
-
-    const wizardPrompt = [
-      `Ruta y toneladas: ${wizardData.routeAndVolume}`,
-      `Ritmos POL y POD: ${wizardData.rates}`,
-      `Mercancía: ${wizardData.cargoDescription}`,
-      `Empaquetado: ${wizardData.packaging}`,
-      `Grúas POL y POD: ${wizardData.craneDetails}`,
-    ].join("\n");
     setPending(true);
-
     const thinkingMessage = createThinkingMessage();
     appendMessage(thinkingMessage);
-
     const controller = new AbortController();
     activeRequestController = controller;
     stoppedByUser = false;
     const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
-      const voyageExtraction = await extractVoyageScenario(wizardPrompt, controller.signal);
-      if (!voyageExtraction?.scenario) throw new Error(voyageExtraction?.clarification || "Invalid voyage extraction");
-      const validatedScenario = validateSixStepWizardPayload(wizardData, voyageExtraction.scenario);
-      if (!validatedScenario.port_validation?.valid) {
-        throw new Error(validatedScenario.port_validation?.clarification || "Los puertos requieren validación WPI.");
+      const payload = await requestAssistantResponse(userText, history, controller.signal);
+      const actionableResponse = extractActionableAiResponse(payload.respuesta);
+      if (actionableResponse.action) await executeActionableAiAction(actionableResponse.action);
+      const assistantText = actionableResponse.visibleText
+        || (actionableResponse.action ? "¡Hecho!" : "No encontré información suficiente para responder.");
+      replaceWithAssistantMessage(thinkingMessage, assistantText, { meta: formatTime() });
+      if (payload.action?.type === "calculator_autofill") {
+        appendMessage(createCalculatorAutofillActionCard(payload.action));
       }
-      pendingWizardPayload = validatedScenario;
-      wizardStatus = WIZARD_CONFIRMATION_STATUS;
-      replaceWithAssistantMessage(thinkingMessage, formatWizardPayloadSummary(pendingWizardPayload), { meta: formatTime() });
     } catch (error) {
       const errorText = error?.name === "AbortError"
         ? stoppedByUser
           ? "Generación detenida. Puedes reformular la consulta cuando quieras."
           : "La respuesta está tardando más de lo esperado. Inténtalo de nuevo en unos segundos."
-        : error?.message || "No pude conectar con el asistente en este momento. Revisa tu conexión e inténtalo de nuevo.";
+        : error?.message || "No pude conectar con el asistente en este momento.";
       thinkingMessage.replaceWith(createMessage("assistant", errorText, { error: true }));
     } finally {
       window.clearTimeout(timeoutId);
