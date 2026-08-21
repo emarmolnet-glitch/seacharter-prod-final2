@@ -590,12 +590,27 @@ async function executeActionableAiCompleteForm(action) {
   return true;
 }
 
-async function executeActionableAiAction(action) {
-  if (action?.action === "update_fields") return executeActionableAiUpdateFields(action);
-  if (action?.action === "search_vessel") return executeActionableAiSearchVessel(action);
-  if (action?.action === "fill_complete_form") return executeActionableAiCompleteForm(action);
-  if (action?.action === "calculate_route") return executeActionableAiRoute(action);
-  return executeActionableAiUpdate(action);
+async function executeActionableAiAction(actionObj) {
+    // 1. CHIVATO GIGANTE EN CONSOLA para ver qué llega realmente
+    console.log("🤖 [MOTOR AI] Datos crudos recibidos del servidor:", actionObj);
+    
+    if (!actionObj) return false;
+
+    // 2. Extraer la acción, venga en el formato que venga
+    const actionName = actionObj.action || actionObj.intent || actionObj.type || actionObj.name;
+    
+    // 3. Forzar la inyección si vemos que es update_fields O si simplemente trae puertos
+    if (actionName === "update_fields" || actionObj.pol || actionObj.payload?.pol) {
+        console.log("🚀 [MOTOR AI] Acción reconocida. Disparando inyección de campos...");
+        return executeActionableAiUpdateFields(actionObj);
+    }
+
+    if (actionName === "search_vessel") return executeActionableAiSearchVessel(actionObj);
+    if (actionName === "fill_complete_form") return executeActionableAiCompleteForm(actionObj);
+    if (actionName === "calculate_route") return executeActionableAiRoute(actionObj);
+    
+    console.warn("⚠️ [MOTOR AI] Acción descartada o redirigida al motor antiguo:", actionName);
+    return executeActionableAiUpdate(actionObj);
 }
 
 function createVoyageActionCard(scenario) {
