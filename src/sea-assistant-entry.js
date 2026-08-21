@@ -472,13 +472,18 @@ async function executeActionableAiUpdateFields(actionObj) {
     updateInputs(["metodo_carga"], p.loadingMethod);
     updateInputs(["metodo_descarga_pod"], p.dischargeMethod ?? p.loadingMethod);
 
-    // 1. Forzar modo MANUAL en los ritmos y hacer clic en el botón manual
+    // 1. Forzar modo MANUAL de forma agresiva en todos los selectores de ritmo
     document.querySelectorAll('button, span, label, div').forEach(el => {
-        if (el.textContent.trim() === 'Manual') el.click();
+        const txt = el.textContent.trim().toLowerCase();
+        if (txt === 'manual' || txt === 'auto / manual') el.click();
     });
-    document.querySelectorAll('[data-rate-mode="manual"], #btn-rate-load-manual, .rate-mode-manual')?.forEach(btn => btn.click());
+    document.querySelectorAll('[data-rate-mode="manual"], #btn-rate-load-manual, #btn-rate-disch-manual, .rate-mode-manual, button[id*="manual"]')?.forEach(btn => btn.click());
 
-    // 2. Selección inteligente de las píldoras de Método de Carga/Descarga (Priorizando Grúa Barco por economía)
+    // 2. Inyectar ritmos de carga y descarga asegurando el valor numérico exacto
+    updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val", "load-rate"], p.loadingRate);
+    updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val", "dischargeRate"], p.dischargeRate);
+
+    // 3. Selección inteligente del Método de Carga (Priorizando Grúa Barco)
     document.querySelectorAll('button, .btn-pill, .pill-option, [role="button"]').forEach(btn => {
         const text = btn.textContent.toLowerCase();
         if (text.includes('big bags') && text.includes('grúa barco')) {
@@ -486,11 +491,38 @@ async function executeActionableAiUpdateFields(actionObj) {
         }
     });
 
-    // 3. Calcular DWT estimado si viene a 0
+    // 4. Calcular DWT estimado si viene a 0
     const estimatedDwt = (p.target_dwt && p.target_dwt > 0) ? p.target_dwt : Math.round(Number(p.tonnage || 10000) * 1.05);
     updateInputs(["target-dwt", "cargo-dwt", "vessel-dwt", "input-dwt", "dwt-capacity"], estimatedDwt);
 
-    // 4. Mapear Especificación de Carga para Cemento (Busca la opción en cualquier desplegable <select>)
+    // 5. Mapear Producto Específico (Priorizando "Big Bags" antes que términos genéricos)
+    document.querySelectorAll('select').forEach(sel => {
+        const prodText = (p.product || 'big bags').toLowerCase();
+        let matched = false;
+        
+        // Primero buscamos coincidencia exacta con el producto (Big Bags)
+        for (let opt of sel.options) {
+            if (opt.text.toLowerCase().includes(prodText) || opt.value.toLowerCase().includes(prodText)) {
+                sel.value = opt.value;
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+                matched = true;
+                break;
+            }
+        }
+        
+        // Si no, buscamos cemento (excluyendo granel si buscábamos big bags)
+        if (!matched) {
+            for (let opt of sel.options) {
+                if (opt.text.toLowerCase().includes('cemento') && !opt.text.toLowerCase().includes('granel')) {
+                    sel.value = opt.value;
+                    sel.dispatchEvent(new Event('change', { bubbles: true }));
+                    break;
+                }
+            }
+        }
+    });
+
+    // 6. Mapear Especificación de Carga para Cemento (Código 10)
     document.querySelectorAll('select').forEach(sel => {
         for (let opt of sel.options) {
             if (opt.text.toLowerCase().includes('cemento') || opt.value === '10') {
