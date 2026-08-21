@@ -48,16 +48,13 @@ test('informational questions can interrupt an active simulation without consumi
   );
 });
 
-test('frontend branches on intent before collecting wizard variables', () => {
-  const routerBranch = frontendSource.indexOf('const intent = classifyChatIntent(userText');
-  const firstWizardStep = frontendSource.indexOf('if (wizardStep === 1)', routerBranch);
-
-  assert.ok(routerBranch >= 0);
-  assert.ok(firstWizardStep > routerBranch);
-  assert.match(frontendSource, /intent === CHAT_INTENTS\.SIMULATION/);
-  assert.match(frontendSource, /!hasOperationalSimulationUpdate\(userText, contexto\)/);
+test('frontend sends every message directly without local intent routing', () => {
+  assert.doesNotMatch(frontendSource, /classifyChatIntent/);
+  assert.doesNotMatch(frontendSource, /CHAT_INTENTS\.SIMULATION/);
+  assert.doesNotMatch(frontendSource, /hasSimulationRouteAndVolume/);
+  assert.doesNotMatch(frontendSource, /hasOperationalSimulationUpdate/);
+  assert.doesNotMatch(frontendSource, /wizardStatus|wizardStep|nlpChecklistStep/);
   assert.match(frontendSource, /await requestAssistantResponse\(userText, history, controller\.signal\)/);
-  assert.match(frontendSource, /Indica POL, POD y toneladas a transportar/);
 });
 
 test('backend gates extraction actions and instructs the model not to demand calculator data', () => {
