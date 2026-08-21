@@ -427,18 +427,19 @@ async function executeActionableAiUpdateFields(actionObj) {
         return false;
     }
 
-    console.log("Inyectando datos del Asistente:", p); // ¡Añadimos un log para ver qué llega!
-
     const updateInputs = (ids, value) => {
         if (value === undefined || value === null || value === "") return; // No inyectar vacíos
         
         ids.forEach((id) => {
-            const input = document.getElementById(id);
-            if (input) {
+            // Buscamos TODOS los elementos con ese ID o nombre (versión PC y versión móvil)
+            const inputs = document.querySelectorAll(`#${id}, [name="${id}"]`);
+            
+            inputs.forEach((input) => {
                 input.value = String(value); // Asegurar que es string
                 input.dispatchEvent(new Event("input", { bubbles: true }));
                 input.dispatchEvent(new Event("change", { bubbles: true }));
-            }
+                input.dispatchEvent(new Event("blur", { bubbles: true })); // Salir de la casilla
+            });
         });
     };
 
