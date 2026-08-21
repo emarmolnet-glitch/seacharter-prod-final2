@@ -409,50 +409,69 @@ function executeActionableAiUpdate(action) {
   return true;
 }
 
-async function executeActionableAiUpdateFields(action) {
-  if (action?.action !== "update_fields" || !action.payload) return false;
-  const payload = action.payload ? action.payload : action;
-  const updateInputs = (ids, value) => {
-    if (value === undefined || value === null) return;
-    ids.forEach((id) => {
-      const input = document.getElementById(id);
-      if (!input) return;
-      input.value = String(value);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-  };
+async function executeActionableAiUpdateFields(actionObj) {
+    // 1. Verificación robusta: Asegurarse de que actionObj existe.
+    if (!actionObj) {
+        console.warn("executeActionableAiUpdateFields: Se recibió un actionObj nulo o indefinido.");
+        return false;
+    }
 
-  updateInputs(["map-port-pol", "port-pol"], payload.pol);
-  updateInputs(["map-port-pod", "port-pod"], payload.pod);
-  updateInputs(["cargo-qty", "cargo-quantity", "cargo-tonnage"], payload.tonnage);
-  updateInputs(["map-laycan-date", "match-laycan-start", "gc-laycan-date"], payload.laydayStart);
-  updateInputs(["map-cancelling-date", "match-laycan-end", "gc-cancel-date"], payload.cancelling);
-  updateInputs(["cargo-type", "nlp-cargo-category", "input-categoria"], payload.category);
-  updateInputs(["cargo-product", "nlp-cargo-product", "input-producto"], payload.product);
-  updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val"], payload.loadingRate);
-  updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val"], payload.dischargeRate);
-  updateInputs(["metodo_carga"], payload.loadingMethod);
-  updateInputs(["metodo_descarga_pod"], payload.dischargeMethod ?? payload.loadingMethod);
+    // 2. Extracción del Payload (La Llave Maestra):
+    // El servidor puede enviar { action: "...", payload: {...} } 
+    // o simplemente enviar el payload directamente si hubo algún parseo intermedio.
+    let p = actionObj.payload || actionObj; 
+    
+    // 3. Verificación del Payload: Si el payload está vacío (por ejemplo, es un string vacío), abortamos.
+    if (!p || typeof p !== 'object' || Object.keys(p).length === 0) {
+        console.warn("executeActionableAiUpdateFields: Payload vacío o inválido.", actionObj);
+        return false;
+    }
 
-  if (payload.pol !== undefined && payload.pol !== null
-    && payload.pod !== undefined && payload.pod !== null
-    && payload.tonnage !== undefined && payload.tonnage !== null) {
-    if (!window.State) window.State = {};
-    Object.assign(window.State, {
-      pol: payload.pol,
-      pod: payload.pod,
-      tonnage: payload.tonnage,
-    });
-    document.getElementById("btn-map-locate-route")?.click();
-  }
+    console.log("Inyectando datos del Asistente:", p); // ¡Añadimos un log para ver qué llega!
 
-  if ((payload.loadingRate !== undefined && payload.loadingRate !== null)
-    || (payload.dischargeRate !== undefined && payload.dischargeRate !== null)) {
-    window.recalcularDiasPuerto?.();
-  }
-  window.runEngine?.();
-  return true;
+    const updateInputs = (ids, value) => {
+        if (value === undefined || value === null || value === "") return; // No inyectar vacíos
+        
+        ids.forEach((id) => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.value = String(value); // Asegurar que es string
+                input.dispatchEvent(new Event("input", { bubbles: true }));
+                input.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+        });
+    };
+
+    // 4. Inyección de datos
+    updateInputs(["map-port-pol", "port-pol"], p.pol);
+    updateInputs(["map-port-pod", "port-pod"], p.pod);
+    updateInputs(["cargo-qty", "cargo-quantity", "cargo-tonnage"], p.tonnage);
+    updateInputs(["map-laycan-date", "match-laycan-start", "gc-laycan-date"], p.laydayStart);
+    updateInputs(["map-cancelling-date", "match-laycan-end", "gc-cancel-date"], p.cancelling);
+    updateInputs(["cargo-type", "nlp-cargo-category", "input-categoria"], p.category);
+    updateInputs(["cargo-product", "nlp-cargo-product", "input-producto"], p.product);
+    updateInputs(["rate-load", "loading-rate", "gc-laytime-load-val"], p.loadingRate);
+    updateInputs(["rate-disch", "discharge-rate", "gc-laytime-disch-val"], p.dischargeRate);
+    updateInputs(["metodo_carga"], p.loadingMethod);
+    updateInputs(["metodo_descarga_pod"], p.dischargeMethod ?? p.loadingMethod);
+
+    // 5. Autocompletado del estado global y disparo del cálculo (tu código original)
+    if (p.pol && p.pod && p.tonnage) {
+        if (!window.State) window.State = {};
+        Object.assign(window.State, {
+            pol: p.pol,
+            pod: p.pod,
+            tonnage: p.tonnage,
+        });
+        document.getElementById("btn-map-locate-route")?.click();
+    }
+
+    if (p.loadingRate || p.dischargeRate) {
+        window.recalcularDiasPuerto?.();
+    }
+    
+    window.runEngine?.();
+    return true;
 }
 
 async function executeActionableAiSearchVessel(action) {
