@@ -26227,6 +26227,26 @@
             }
         }
 
+        async function selectFirstWpiAutocompleteMatch(inputOrId, value) {
+            const input = typeof inputOrId === 'string' ? document.getElementById(inputOrId) : inputOrId;
+            const query = String(value || '').trim();
+            if (!input || query.length < 2) return null;
+
+            bindUniversalPortAutocomplete(input);
+            input.value = query;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            clearTimeout(portAutocompleteTimers.get(input));
+            portAutocompleteTimers.delete(input);
+            await runUniversalPortSearch(input);
+
+            const results = portAutocompleteOptions.get(input) || [];
+            const firstOption = getPortAutocompleteMenu(input)?.querySelector('.port-autocomplete-option');
+            if (!results[0] || !firstOption) return null;
+            firstOption.click();
+            return input.dataset.selectedPortLabel ? results[0] : null;
+        }
+        window.selectFirstWpiAutocompleteMatch = selectFirstWpiAutocompleteMatch;
+
         function handlePortAutocomplete(event) {
             const input = event.currentTarget || event.target;
             if (!input) return;

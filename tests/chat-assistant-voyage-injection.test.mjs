@@ -26,11 +26,11 @@ test('assistant retains the validated payload until explicit human confirmation'
   assert.match(assistantSource, /await extractVoyageScenario\(wizardPrompt, controller\.signal\)/);
   assert.match(assistantSource, /validateSixStepWizardPayload/);
   assert.match(assistantSource, /pendingWizardPayload = validatedScenario/);
-  assert.match(assistantSource, /window\.injectVoyageScenario\(pendingWizardPayload, \{ deferFinalActions: true \}\)/);
+  assert.match(assistantSource, /window\.injectVoyageScenario\(validatedPayload, \{ deferFinalActions: true \}\)/);
   assert.match(assistantSource, /await window\.finalizeAssistantVoyageInjection\(injectionResult\)/);
   assert.match(assistantSource, /WIZARD_CONFIRMATION_STATUS = "esperando_confirmacion"/);
   assert.match(assistantSource, /Sí, inyectar y calcular/);
-  assert.match(assistantSource, /window\.injectVoyageScenario\(scenario\)/);
+  assert.match(assistantSource, /window\.injectVoyageScenario\(validatedScenario\)/);
   assert.match(assistantSource, /validateScenarioPortsWithWpi/);
   assert.match(assistantSource, /Inyectar datos y revisar puertos/);
   assert.match(assistantSource, /sca-voyage-action__warning/);
@@ -97,6 +97,14 @@ test('assistant finalization replaces methods and runs route before master calcu
   assert.match(draftEntrySource.slice(replacementStart, finalizerStart), /Object\.assign\(window\.State, stateValues\)/);
   assert.ok(routeStart > finalizerStart);
   assert.ok(calculationStart > routeStart);
+});
+
+test('assistant route cards select WPI dropdown options before injecting the voyage', () => {
+  assert.match(assistantSource, /button\.addEventListener\("click", async \(\) => \{/);
+  assert.match(assistantSource, /const selectedPorts = await selectActionableAiWpiRoute\(scenario\.pol, scenario\.pod\)/);
+  assert.match(assistantSource, /const result = window\.injectVoyageScenario\(validatedScenario\)/);
+  assert.match(assistantSource, /const selectedPorts = await selectActionableAiWpiRoute\(pendingWizardPayload\.pol, pendingWizardPayload\.pod\)/);
+  assert.match(assistantSource, /window\.injectVoyageScenario\(validatedPayload, \{ deferFinalActions: true \}\)/);
 });
 
 test('complete-form action maps every field and forces route plus cost calculation', () => {

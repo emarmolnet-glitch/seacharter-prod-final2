@@ -56,8 +56,22 @@ test('Core PRO executes hidden calculate_route actions through the existing map 
   assert.match(frontendSource, /document\.getElementById\("map-port-pod"\)/);
   assert.match(frontendSource, /document\.getElementById\("cargo-qty"\)/);
   assert.match(frontendSource, /document\.getElementById\("btn-map-locate-route"\)/);
+  assert.match(frontendSource, /async function selectActionableAiWpiRoute\(pol, pod\)/);
+  assert.match(frontendSource, /await window\.selectFirstWpiAutocompleteMatch\(inputId, value\)/);
+  assert.match(frontendSource, /const selectedPorts = await selectActionableAiWpiRoute\(pol, pod\)/);
+  assert.doesNotMatch(frontendSource, /forEach\(\(input\) => setActionableAiInputValue\(input, pol\)\)/);
+  assert.doesNotMatch(frontendSource, /forEach\(\(input\) => setActionableAiInputValue\(input, pod\)\)/);
   assert.match(frontendSource, /setActionableAiInputValue\(cargoInput, tonnage\)/);
   assert.match(frontendSource, /routeButton\.click\(\)/);
+  assert.match(frontendSource, /await executeActionableAiAction\(actionableResponse\.action\)/);
+});
+
+test('complete-form chat actions validate both ports through WPI autocomplete before injection', () => {
+  assert.match(frontendSource, /async function executeActionableAiCompleteForm\(action\)/);
+  assert.match(frontendSource, /const selectedPorts = await selectActionableAiWpiRoute\(pol, pod\)/);
+  assert.match(frontendSource, /pol_port: selectedPorts\.pol/);
+  assert.match(frontendSource, /pod_port: selectedPorts\.pod/);
+  assert.match(frontendSource, /await window\.applyAssistantCompleteForm\(validatedAction\)/);
 });
 
 test('Core PRO extracts a plain calculate_route JSON object without showing it in chat', () => {
@@ -97,7 +111,7 @@ test('Core PRO hides and forwards the complete-form action from a JSON block', (
   assert.equal(result.action.laydayStart, '24/08/2026');
   assert.equal(result.action.loadingRate, 1500);
   assert.match(frontendSource, /function executeActionableAiCompleteForm\(action\)/);
-  assert.match(frontendSource, /window\.applyAssistantCompleteForm\(action\)/);
+  assert.match(frontendSource, /await window\.applyAssistantCompleteForm\(validatedAction\)/);
   assert.match(frontendSource, /action\?\.action === "fill_complete_form"/);
 });
 
