@@ -489,7 +489,50 @@ function setActionableAiInputValue(input, value) {
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-function executeActionableAiRoute(action) {
+function normalizeSelectedWpiPort(result) {
+  if (!result) return null;
+  const latitude = Number(result.lat);
+  const longitude = Number(result.lon);
+  const officialLabel = String(result.label || "").trim();
+  const name = String(result.placeName || officialLabel.replace(/\s*\([A-Za-z]{2,3}\)\s*$/, "")).trim();
+  const countryCode = String(result.countryCode || "").trim().toUpperCase();
+  if (!officialLabel || !name || !countryCode || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return {
+    ...(result.port || {}),
+    indexNo: Number(result.port?.indexNo) || null,
+    regionNo: Number(result.port?.regionNo) || null,
+    name,
+    officialLabel,
+    countryCode,
+    latitude,
+    longitude,
+    source: "WPI",
+  };
+}
+
+async function selectActionableAiWpiRoute(pol, pod) {
+  if (typeof window.selectFirstWpiAutocompleteMatch !== "function") {
+    throw new Error("El catálogo WPI todavía no está disponible.");
+  }
+
+  const selections = {};
+  for (const [role, value, inputIds] of [
+    ["pol", pol, ["map-port-pol", "port-pol"]],
+    ["pod", pod, ["map-port-pod", "port-pod"]],
+  ]) {
+    let primaryResult = null;
+    for (const inputId of inputIds) {
+      const result = await window.selectFirstWpiAutocompleteMatch(inputId, value);
+      if (!result) throw new Error(`No hay coincidencias WPI para ${role.toUpperCase()}: ${value}`);
+      primaryResult ||= result;
+    }
+    selections[role] = normalizeSelectedWpiPort(primaryResult);
+    if (!selections[role]) throw new Error(`La selección WPI de ${role.toUpperCase()} no contiene coordenadas válidas.`);
+  }
+  return selections;
+}
+
+async function executeActionableAiRoute(action) {
   if (action?.action !== "calculate_route") return false;
   const pol = String(action.pol || "").trim().slice(0, 200);
   const pod = String(action.pod || "").trim().slice(0, 200);
@@ -502,9 +545,13 @@ function executeActionableAiRoute(action) {
   const routeButton = document.getElementById("btn-map-locate-route");
   if (!mapPolInput || !mapPodInput || !cargoInput || !routeButton) return false;
 
+  const selectedPorts = await selectActionableAiWpiRoute(pol, pod);
+  const selectedPol = selectedPorts.pol.officialLabel;
+  const selectedPod = selectedPorts.pod.officialLabel;
+
   const routeState = {
-    pol,
-    pod,
+    pol: selectedPol,
+    pod: selectedPod,
     cargoQty: tonnage,
     cargoQuantity: tonnage,
     quantity: tonnage,
@@ -514,20 +561,16 @@ function executeActionableAiRoute(action) {
   window.SeaCharterStore?.set?.(routeState, { force: true, source: "assistant-calculate-route" });
   window.updateGlobalVoyageParams?.(routeState, { source: "assistant-calculate-route" });
 
-  [mapPolInput, document.getElementById("port-pol")].filter(Boolean)
-    .forEach((input) => setActionableAiInputValue(input, pol));
-  [mapPodInput, document.getElementById("port-pod")].filter(Boolean)
-    .forEach((input) => setActionableAiInputValue(input, pod));
   setActionableAiInputValue(cargoInput, tonnage);
 
   routeButton.click();
   window.dispatchEvent(new CustomEvent("sea-assistant:route-calculation-requested", {
-    detail: { pol, pod, tonnage },
+    detail: { pol: selectedPol, pod: selectedPod, tonnage },
   }));
   return true;
 }
 
-function executeActionableAiCompleteForm(action) {
+async function executeActionableAiCompleteForm(action) {
   if (action?.action !== "fill_complete_form") return false;
   const pol = String(action.pol || "").trim();
   const pod = String(action.pod || "").trim();
@@ -535,19 +578,22 @@ function executeActionableAiCompleteForm(action) {
   if (!pol || !pod || !Number.isFinite(tonnage) || tonnage <= 0) return false;
   if (typeof window.applyAssistantCompleteForm !== "function") return false;
 
-  const result = window.applyAssistantCompleteForm(action);
-  Promise.resolve(result).catch((error) => {
-    window.dispatchEvent(new CustomEvent("sea-assistant:complete-form-error", {
-      detail: { message: error?.message || "No se pudo completar el formulario automáticamente." },
-    }));
-  });
+  const selectedPorts = await selectActionableAiWpiRoute(pol, pod);
+  const validatedAction = {
+    ...action,
+    pol: selectedPorts.pol.officialLabel,
+    pod: selectedPorts.pod.officialLabel,
+    pol_port: selectedPorts.pol,
+    pod_port: selectedPorts.pod,
+  };
+  await window.applyAssistantCompleteForm(validatedAction);
   window.dispatchEvent(new CustomEvent("sea-assistant:complete-form-requested", {
-    detail: { pol, pod, tonnage },
+    detail: { pol: validatedAction.pol, pod: validatedAction.pod, tonnage },
   }));
   return true;
 }
 
-function executeActionableAiAction(action) {
+async function executeActionableAiAction(action) {
   if (action?.action === "fill_complete_form") return executeActionableAiCompleteForm(action);
   if (action?.action === "calculate_route") return executeActionableAiRoute(action);
   return executeActionableAiUpdate(action);
@@ -574,7 +620,7 @@ function createVoyageActionCard(scenario) {
 
   const button = card.querySelector(".sca-voyage-action__button");
   const status = card.querySelector(".sca-voyage-action__status");
-  button.addEventListener("click", () => {
+  button.addEventListener("click", async () => {
     if (typeof window.injectVoyageScenario !== "function") {
       status.textContent = "El motor de viaje todavía no está disponible.";
       card.classList.add("is-error");
@@ -582,7 +628,15 @@ function createVoyageActionCard(scenario) {
     }
     button.disabled = true;
     try {
-      const result = window.injectVoyageScenario(scenario);
+      const selectedPorts = await selectActionableAiWpiRoute(scenario.pol, scenario.pod);
+      const validatedScenario = {
+        ...scenario,
+        pol: selectedPorts.pol.officialLabel,
+        pod: selectedPorts.pod.officialLabel,
+        pol_port: selectedPorts.pol,
+        pod_port: selectedPorts.pod,
+      };
+      const result = window.injectVoyageScenario(validatedScenario);
       card.classList.add("is-injected");
       button.textContent = result?.requiresPortSelection
         ? "Datos inyectados · selección pendiente"
@@ -1576,7 +1630,15 @@ function mountSeaAssistant() {
 
       setPending(true);
       try {
-        const injectionResult = window.injectVoyageScenario(pendingWizardPayload, { deferFinalActions: true });
+        const selectedPorts = await selectActionableAiWpiRoute(pendingWizardPayload.pol, pendingWizardPayload.pod);
+        const validatedPayload = {
+          ...pendingWizardPayload,
+          pol: selectedPorts.pol.officialLabel,
+          pod: selectedPorts.pod.officialLabel,
+          pol_port: selectedPorts.pol,
+          pod_port: selectedPorts.pod,
+        };
+        const injectionResult = window.injectVoyageScenario(validatedPayload, { deferFinalActions: true });
         if (injectionResult?.requiresPortSelection) {
           throw new Error("Los puertos requieren validación WPI antes de lanzar la simulación.");
         }
@@ -1635,7 +1697,7 @@ function mountSeaAssistant() {
       try {
         const payload = await requestAssistantResponse(userText, history, controller.signal);
         const actionableResponse = extractActionableAiResponse(payload.respuesta);
-        if (actionableResponse.action) executeActionableAiAction(actionableResponse.action);
+        if (actionableResponse.action) await executeActionableAiAction(actionableResponse.action);
         const assistantText = actionableResponse.visibleText
           || (actionableResponse.action ? "¡Hecho!" : "No encontré información suficiente para responder.");
         replaceWithAssistantMessage(thinkingMessage, assistantText, { meta: formatTime() });

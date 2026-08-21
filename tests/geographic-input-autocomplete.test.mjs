@@ -41,6 +41,19 @@ test('universal autocomplete searches only the preloaded WPI catalog', () => {
   assert.doesNotMatch(cascadeSource, /Nominatim|openstreetmap\.org|fetch\(/i);
 });
 
+test('programmatic WPI injection types, searches, and clicks the first rendered option', () => {
+  const selectorStart = autocompleteSource.indexOf('async function selectFirstWpiAutocompleteMatch(inputOrId, value)');
+  const selectorEnd = autocompleteSource.indexOf('function handlePortAutocomplete(event)', selectorStart);
+  const selectorSource = autocompleteSource.slice(selectorStart, selectorEnd);
+  assert.ok(selectorStart >= 0, 'missing programmatic WPI selector');
+  assert.match(selectorSource, /input\.value = query/);
+  assert.match(selectorSource, /input\.dispatchEvent\(new Event\('input', \{ bubbles: true \}\)\)/);
+  assert.match(selectorSource, /await runUniversalPortSearch\(input\)/);
+  assert.match(selectorSource, /querySelector\('\.port-autocomplete-option'\)/);
+  assert.match(selectorSource, /firstOption\.click\(\)/);
+  assert.match(autocompleteSource, /window\.selectFirstWpiAutocompleteMatch = selectFirstWpiAutocompleteMatch/);
+});
+
 test('WPI searches are debounced without external request controllers', () => {
   const handlerStart = autocompleteSource.indexOf('function handlePortAutocomplete(event)');
   const handlerEnd = autocompleteSource.indexOf('function bindUniversalPortAutocomplete(input)', handlerStart);
